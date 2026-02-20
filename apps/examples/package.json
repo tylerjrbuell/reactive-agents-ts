@@ -1,0 +1,23 @@
+{
+  "name": "@reactive-agents/examples",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "simple": "bun run src/01-simple-agent.ts",
+    "hooks": "bun run src/02-lifecycle-hooks.ts",
+    "multi-turn": "bun run src/03-multi-turn-agent.ts"
+  },
+  "dependencies": {
+    "effect": "^3.10.0",
+    "@reactive-agents/core": "workspace:*",
+    "@reactive-agents/llm-provider": "workspace:*",
+    "@reactive-agents/memory": "workspace:*",
+    "@reactive-agents/runtime": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "bun-types": "latest"
+  }
+}

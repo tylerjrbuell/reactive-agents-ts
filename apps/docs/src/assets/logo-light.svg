@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36" width="36" height="36">
+  <!-- Orbital rings -->
+  <ellipse cx="18" cy="18" rx="16" ry="6" fill="none" stroke="#7c3aed" stroke-width="1.2" transform="rotate(-30 18 18)" opacity="0.6"/>
+  <ellipse cx="18" cy="18" rx="16" ry="6" fill="none" stroke="#6d28d9" stroke-width="1.2" transform="rotate(30 18 18)" opacity="0.6"/>
+  <ellipse cx="18" cy="18" rx="16" ry="6" fill="none" stroke="#5b21b6" stroke-width="1.2" transform="rotate(90 18 18)" opacity="0.6"/>
+  <!-- Core -->
+  <circle cx="18" cy="18" r="4" fill="url(#gl)"/>
+  <!-- Electron dots -->
+  <circle cx="33" cy="14" r="1.5" fill="#7c3aed"/>
+  <circle cx="3" cy="22" r="1.5" fill="#7c3aed"/>
+  <circle cx="18" cy="2" r="1.5" fill="#6d28d9"/>
+  <defs>
+    <radialGradient id="gl">
+      <stop offset="0%" stop-color="#8b5cf6"/>
+      <stop offset="100%" stop-color="#4c1d95"/>
+    </radialGradient>
+  </defs>
+</svg>
