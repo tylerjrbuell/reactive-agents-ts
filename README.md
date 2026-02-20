@@ -7,7 +7,7 @@
 Type-safe from prompt to production.
 
 [![CI](https://github.com/reactive-agents/reactive-agents-ts/actions/workflows/ci.yml/badge.svg)](https://github.com/reactive-agents/reactive-agents-ts/actions/workflows/ci.yml)
-[![npm](https://img.shields.io/npm/v/@reactive-agents/core)](https://www.npmjs.com/package/@reactive-agents/core)
+[![npm](https://img.shields.io/npm/v/reactive-agents)](https://www.npmjs.com/package/reactive-agents)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 [Documentation](https://reactive-agents.github.io/reactive-agents-ts/) | [Getting Started](#quick-start) | [Architecture](#architecture)
@@ -28,15 +28,11 @@ Most AI agent frameworks are dynamically typed, monolithic, and opaque. Reactive
 ## Quick Start
 
 ```bash
-# Install
-bun add @reactive-agents/core @reactive-agents/runtime @reactive-agents/llm-provider effect
-
-# Or use the CLI
-bunx rax init my-agent-app --template standard
+bun add reactive-agents
 ```
 
 ```typescript
-import { ReactiveAgents } from "@reactive-agents/runtime";
+import { ReactiveAgents } from "reactive-agents";
 
 const agent = await ReactiveAgents.create()
   .withName("research-assistant")
@@ -152,6 +148,8 @@ EMBEDDING_MODEL=text-embedding-3-small
 The framework includes a built-in test LLM provider for deterministic tests:
 
 ```typescript
+import { ReactiveAgents } from "reactive-agents";
+
 const agent = await ReactiveAgents.create()
   .withProvider("test")
   .withTestResponses({
