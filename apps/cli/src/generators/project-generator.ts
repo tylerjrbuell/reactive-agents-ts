@@ -53,7 +53,7 @@ export function generateProject(config: ProjectConfig): { files: string[] } {
   const deps = Object.fromEntries(TEMPLATE_DEPS[template].map((d) => [d, "latest"]));
   const packageJson = {
     name,
-    version: "0.1.0",
+    version: "0.1.3",
     type: "module",
     scripts: {
       dev: "bun run src/index.ts",

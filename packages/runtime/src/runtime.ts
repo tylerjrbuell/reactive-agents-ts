@@ -24,6 +24,7 @@ import { createOrchestrationLayer } from "@reactive-agents/orchestration";
 export interface RuntimeOptions {
   agentId: string;
   provider?: "anthropic" | "openai" | "ollama" | "gemini" | "test";
+  model?: string;
   memoryTier?: "1" | "2";
   maxIterations?: number;
   testResponses?: Record<string, string>;
@@ -60,6 +61,7 @@ export interface RuntimeOptions {
 export const createRuntime = (options: RuntimeOptions) => {
   const config: ReactiveAgentsConfig = {
     ...defaultReactiveAgentsConfig(options.agentId),
+    defaultModel: options.model,
     memoryTier: options.memoryTier ?? "1",
     maxIterations: options.maxIterations ?? 10,
     enableGuardrails: options.enableGuardrails ?? false,

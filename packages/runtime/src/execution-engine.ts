@@ -241,6 +241,14 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
             );
           } else {
             // ── Minimal direct-LLM loop ──
+            // Seed messages with the user's prompt before the first LLM call
+            ctx = {
+              ...ctx,
+              messages: [
+                { role: "user", content: String((task.input as any).question ?? JSON.stringify(task.input)) },
+              ],
+            };
+
             let isComplete = false;
 
             while (!isComplete && ctx.iteration < ctx.maxIterations) {
@@ -258,8 +266,8 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   }>("LLMService");
 
                   const systemPrompt = c.memoryContext
-                    ? `${String((c.memoryContext as any).semanticContext ?? "")}\n\nComplete the task: ${JSON.stringify(task.input)}`
-                    : `Complete the task: ${JSON.stringify(task.input)}`;
+                    ? `${String((c.memoryContext as any).semanticContext ?? "")}\n\nYou are a helpful AI assistant.`
+                    : `You are a helpful AI assistant.`;
 
                   const response = yield* llm.complete({
                     messages: c.messages,
