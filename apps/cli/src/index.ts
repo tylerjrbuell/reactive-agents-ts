@@ -1,5 +1,3 @@
-#!/usr/bin/env bun
-
 import { runInit } from "./commands/init.js";
 import { runCreateAgent } from "./commands/create-agent.js";
 import { runDev } from "./commands/dev.js";
