@@ -193,6 +193,31 @@
         "typescript": "^5.7.0",
       },
     },
+    "packages/reactive-agents": {
+      "name": "reactive-agents",
+      "version": "0.1.0",
+      "dependencies": {
+        "@reactive-agents/core": "workspace:*",
+        "@reactive-agents/cost": "workspace:*",
+        "@reactive-agents/guardrails": "workspace:*",
+        "@reactive-agents/identity": "workspace:*",
+        "@reactive-agents/interaction": "workspace:*",
+        "@reactive-agents/llm-provider": "workspace:*",
+        "@reactive-agents/memory": "workspace:*",
+        "@reactive-agents/observability": "workspace:*",
+        "@reactive-agents/orchestration": "workspace:*",
+        "@reactive-agents/prompts": "workspace:*",
+        "@reactive-agents/reasoning": "workspace:*",
+        "@reactive-agents/runtime": "workspace:*",
+        "@reactive-agents/tools": "workspace:*",
+        "@reactive-agents/verification": "workspace:*",
+        "effect": "^3.10.0",
+      },
+      "devDependencies": {
+        "bun-types": "latest",
+        "typescript": "^5.7.0",
+      },
+    },
     "packages/reasoning": {
       "name": "@reactive-agents/reasoning",
       "version": "0.1.0",
@@ -1068,6 +1093,8 @@
     "pure-rand": ["pure-rand@6.1.0", "", {}, "sha512-bVWawvoZoBYpp6yIoQtQXHZjmz35RSVHnUOTefl8Vcjr8snTPY1wnpSPMWekcFwbxI6gtmT7rSYPFvz71ldiOA=="],
 
     "radix3": ["radix3@1.1.2", "", {}, "sha512-b484I/7b8rDEdSDKckSSBA8knMpcdsXudlE/LNL639wFoHKwLbEkQFZHWEYwDC0wa0FKUcCY+GAF73Z7wxNVFA=="],
+
+    "reactive-agents": ["reactive-agents@workspace:packages/reactive-agents"],
 
     "readdirp": ["readdirp@5.0.0", "", {}, "sha512-9u/XQ1pvrQtYyMpZe7DXKv2p5CNvyVwzUB6uhLAnQwHMSgKMBR62lc7AHljaeteeHXn11XTAaLLUVZYVZyuRBQ=="],
 

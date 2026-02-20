@@ -48,6 +48,7 @@ jobs:
             "packages/orchestration"
             "packages/prompts"
             "packages/runtime"
+            "packages/reactive-agents"
             "apps/cli"
           )
 
