@@ -70,8 +70,9 @@ export {
 } from "./services/strategy-registry.js";
 export type { StrategyFn } from "./services/strategy-registry.js";
 
-// ─── Strategy Functions (Phase 1: reactive only) ───
+// ─── Strategy Functions ───
 export { executeReactive } from "./strategies/reactive.js";
+export { executeReflexion } from "./strategies/reflexion.js";
 
 // ─── Runtime ───
 export { createReasoningLayer } from "./runtime.js";
