@@ -2,9 +2,9 @@
   "name": "reactive-agents",
   "version": "0.1.0",
   "type": "module",
-  "main": "src/index.ts",
-  "types": "src/index.ts",
-  "description": "The composable AI agent framework built on Effect-TS. Type-safe from prompt to production.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "description": "The composable AI agent framework built on Effect-TS — install everything with one package",
   "keywords": [
     "ai",
     "agents",
@@ -17,19 +17,23 @@
     "guardrails"
   ],
   "scripts": {
-    "build": "tsc --noEmit",
+    "build": "tsup --config ../../tsup.config.base.ts",
     "typecheck": "tsc --noEmit"
   },
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/reactive-agents/reactive-agents-ts.git",
+    "url": "https://github.com/tylerjrbuell/reactive-agents-ts.git",
     "directory": "packages/reactive-agents"
   },
   "publishConfig": {
     "access": "public"
   },
-  "files": ["src", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "dependencies": {
     "effect": "^3.10.0",
     "@reactive-agents/core": "workspace:*",
@@ -53,9 +57,9 @@
   },
   "exports": {
     ".": {
-      "types": "./src/index.ts",
-      "import": "./src/index.ts",
-      "default": "./src/index.ts"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
     },
     "./core": {
       "types": "@reactive-agents/core",
@@ -105,5 +109,9 @@
       "types": "@reactive-agents/prompts",
       "import": "@reactive-agents/prompts"
     }
+  },
+  "homepage": "https://tylerjrbuell.github.io/reactive-agents-ts/",
+  "bugs": {
+    "url": "https://github.com/tylerjrbuell/reactive-agents-ts/issues"
   }
 }

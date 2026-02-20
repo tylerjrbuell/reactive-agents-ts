@@ -2,10 +2,10 @@
   "name": "@reactive-agents/prompts",
   "version": "0.1.0",
   "type": "module",
-  "main": "src/index.ts",
-  "types": "src/index.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "scripts": {
-    "build": "tsc --noEmit",
+    "build": "tsup --config ../../tsup.config.base.ts",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
     "test:watch": "bun test --watch"
@@ -21,18 +21,27 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/reactive-agents/reactive-agents-ts.git",
+    "url": "https://github.com/tylerjrbuell/reactive-agents-ts.git",
     "directory": "packages/prompts"
   },
   "publishConfig": {
     "access": "public"
   },
-  "files": ["src", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "exports": {
     ".": {
-      "types": "./src/index.ts",
-      "import": "./src/index.ts",
-      "default": "./src/index.ts"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
     }
+  },
+  "description": "Prompt management for Reactive Agents — template engine and built-in prompt library",
+  "homepage": "https://tylerjrbuell.github.io/reactive-agents-ts/",
+  "bugs": {
+    "url": "https://github.com/tylerjrbuell/reactive-agents-ts/issues"
   }
 }
