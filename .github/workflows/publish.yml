@@ -31,7 +31,9 @@ jobs:
 
       - name: Publish packages in dependency order
         env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          # NPM_CONFIG_TOKEN is the env var bun publish reads (supported since v1.1.33)
+          # BUN_AUTH_TOKEN and NODE_AUTH_TOKEN are NOT read by bun publish
+          NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           PACKAGES=(
             "packages/core"
@@ -55,10 +57,7 @@ jobs:
           for pkg in "${PACKAGES[@]}"; do
             echo "Publishing $pkg..."
             cd "$pkg"
-            # Write .npmrc into the package dir so bun publish finds the token
-            echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > .npmrc
             # bun publish resolves workspace:* → real version numbers automatically
             bun publish --access public --no-git-checks || echo "⚠️  $pkg: already published or error, skipping"
-            rm -f .npmrc
             cd "$GITHUB_WORKSPACE"
           done
