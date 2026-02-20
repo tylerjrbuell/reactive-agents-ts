@@ -114,6 +114,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
             toolResults: [],
             cost: 0,
             startedAt: now,
+            selectedModel: config.defaultModel,
             metadata: {},
           };
 

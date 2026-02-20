@@ -82,7 +82,9 @@ export const OpenAIProviderLive = Layer.effect(
       complete: (request) =>
         Effect.gen(function* () {
           const client = getClient();
-          const model = request.model?.model ?? defaultModel;
+          const model = typeof request.model === 'string'
+            ? request.model
+            : request.model?.model ?? defaultModel;
 
           const response = yield* Effect.tryPromise({
             try: () =>
@@ -116,7 +118,9 @@ export const OpenAIProviderLive = Layer.effect(
       stream: (request) =>
         Effect.gen(function* () {
           const client = getClient();
-          const model = request.model?.model ?? defaultModel;
+          const model = typeof request.model === 'string'
+            ? request.model
+            : request.model?.model ?? defaultModel;
 
           return Stream.async<StreamEvent, LLMErrors>((emit) => {
             const doStream = async () => {
@@ -225,7 +229,9 @@ export const OpenAIProviderLive = Layer.effect(
             const completeResult = yield* Effect.tryPromise({
               try: () =>
                 (client as { chat: { completions: { create: (opts: unknown) => Promise<unknown> } } }).chat.completions.create({
-                  model: request.model?.model ?? defaultModel,
+                  model: typeof request.model === 'string'
+                    ? request.model
+                    : request.model?.model ?? defaultModel,
                   max_tokens:
                     request.maxTokens ?? config.defaultMaxTokens,
                   temperature:
@@ -237,7 +243,9 @@ export const OpenAIProviderLive = Layer.effect(
 
             const response = mapOpenAIResponse(
               completeResult as OpenAIRawResponse,
-              request.model?.model ?? defaultModel,
+              typeof request.model === 'string'
+                ? request.model
+                : request.model?.model ?? defaultModel,
             );
 
             try {

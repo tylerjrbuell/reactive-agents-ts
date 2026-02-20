@@ -3,9 +3,11 @@ import { ReactiveAgents } from "@reactive-agents/runtime";
 export async function runAgent(args: string[]): Promise<void> {
   // Parse arguments
   const promptParts: string[] = [];
-  let provider: "anthropic" | "openai" | "ollama" | "test" = "anthropic";
+  let provider: "anthropic" | "openai" | "ollama" | "gemini" | "test" = "anthropic";
   let model: string | undefined;
   let name = "cli-agent";
+  let enableTools = false;
+  let enableReasoning = false;
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -15,6 +17,10 @@ export async function runAgent(args: string[]): Promise<void> {
       model = args[++i];
     } else if (arg === "--name" && args[i + 1]) {
       name = args[++i];
+    } else if (arg === "--tools") {
+      enableTools = true;
+    } else if (arg === "--reasoning") {
+      enableReasoning = true;
     } else if (!arg.startsWith("--")) {
       promptParts.push(arg);
     }
@@ -22,7 +28,7 @@ export async function runAgent(args: string[]): Promise<void> {
 
   const prompt = promptParts.join(" ");
   if (!prompt) {
-    console.error("Usage: reactive-agents run <prompt> [--provider anthropic|openai|ollama|test] [--model <model>] [--name <name>]");
+    console.error("Usage: rax run <prompt> [--provider anthropic|openai|ollama|gemini|test] [--model <model>] [--name <name>] [--tools] [--reasoning]");
     process.exit(1);
   }
 
@@ -34,6 +40,14 @@ export async function runAgent(args: string[]): Promise<void> {
 
   if (model) {
     builder = builder.withModel(model);
+  }
+
+  if (enableTools) {
+    builder = builder.withTools();
+  }
+
+  if (enableReasoning) {
+    builder = builder.withReasoning();
   }
 
   try {

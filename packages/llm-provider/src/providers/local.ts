@@ -49,7 +49,9 @@ export const LocalProviderLive = Layer.effect(
     return LLMService.of({
       complete: (request) =>
         Effect.gen(function* () {
-          const model = request.model?.model ?? defaultModel;
+          const model = typeof request.model === 'string'
+            ? request.model
+            : request.model?.model ?? defaultModel;
 
           const response = yield* Effect.tryPromise({
             try: async () => {
@@ -123,7 +125,9 @@ export const LocalProviderLive = Layer.effect(
 
       stream: (request) =>
         Effect.gen(function* () {
-          const model = request.model?.model ?? defaultModel;
+          const model = typeof request.model === 'string'
+            ? request.model
+            : request.model?.model ?? defaultModel;
 
           return Stream.async<StreamEvent, LLMErrors>((emit) => {
             const doStream = async () => {

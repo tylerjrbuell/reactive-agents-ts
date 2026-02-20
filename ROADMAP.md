@@ -39,7 +39,18 @@ What's shipping in v0.1.0:
 - ✅ Prompt template engine + versioning
 - ✅ `rax` CLI (init, create, run, inspect)
 - ✅ **Compiled ESM + DTS output** — works in Node.js, Bun, and edge runtimes
-- ✅ **Google Gemini provider** — Gemini 2.0 Flash, 2.5 Pro, embeddings, streaming
+- ✅ **Google Gemini provider** — Gemini 2.5 Flash (default), Pro, Flash-Lite, embeddings, streaming
+- ✅ **Full LLM provider support** — Anthropic, OpenAI, Gemini, Ollama all working with custom model selection
+- ✅ **Tools system** — Dynamic tool registration, execution, sandboxing, risk levels (low/medium/high/critical)
+- ✅ **CLI enhancements** — `--tools`, `--reasoning`, `--model` flags for `rax run`
+- ✅ **ExecutionEngine fixes** — Reliable model parameter flow from builder → runtime → providers
+
+### Recent Fixes (v0.1.1-v0.1.5)
+- ✅ ExecutionEngine now reliably initializes `selectedModel` from config in bootstrap phase
+- ✅ All 4 LLM providers (Anthropic, OpenAI, Gemini, Ollama) handle both string and ModelConfig model parameters
+- ✅ Gemini provider defaults to `gemini-2.5-flash` with fallback logic for non-Gemini models
+- ✅ Model parameter plumbing verified: builder → runtime config → execution context → LLM complete() call
+- ✅ All 300 regression tests passing across 54 test files
 
 What's scaffolded but not production-complete:
 - ⚠️ MCP tool client (interface defined, implementation shallow)
@@ -56,6 +67,28 @@ What's scaffolded but not production-complete:
 
 With Node.js compatibility and Gemini shipped in v0.1.0, v0.2.0 closes the critical ecosystem gaps.
 
+**Priority Work Order:**
+1. **Wire tools into ReAct** — Tools are registered/executable but not yet called during reasoning. Add `availableTools` to ReAct step selection logic so agents can actually use tools.
+2. **Complete MCP client** — Tool discovery, stdio/HTTP server support, schema auto-conversion
+3. **Full Eval implementation** — LLM-as-judge, regression detection, dataset loading
+4. **Add Mistral & Cohere** — Expand provider palette
+5. **Performance baseline** — Ensure ExecutionEngine stays <50ms overhead
+
+---
+
+### Wire Tools into Reasoning (v0.2.0 Phase 1)
+Currently: Tools register, validation works, execution responds. Missing: Agents actually *call* tools during reasoning.
+
+**What's needed:**
+- Update ReAct strategy's step selection: when availableTools provided, add **think→tool-call→result** cycles
+- Update Plan-Execute strategy to support tool invocation in plan steps
+- Create integration tests: Agent with tool succeeds where tool-less agent fails (e.g., "Find the price of XRP" with web-search tool vs. without)
+- Add `--tools` CLI experiments: compare outputs with/without tool access
+
+**Expected Impact:** Closes the "agents have tools but can't use them" gap. Real multi-hop reasoning becomes possible.
+
+---
+
 ### `@reactive-agents/eval` — Full Implementation
 Evaluation is becoming table stakes (AWS Strands ships 7+ evaluator types; Google ADK has built-in eval). Ours is stubbed.
 
@@ -69,10 +102,19 @@ Evaluation is becoming table stakes (AWS Strands ships 7+ evaluator types; Googl
 ### MCP Full Implementation
 MCP is now universal (97M+ monthly SDK downloads, Linux Foundation). Currently our `createToolsLayer` has the interface but shallow implementation.
 
+**Status: Foundation complete (v0.1.0+)**
+- ✅ ToolService with dynamic registration, execution, sandboxing
+- ✅ Tool input validation with risk-level gates (low/medium/high/critical)
+- ✅ Sandbox with timeout enforcement and error handling
+- ✅ Function-to-tool auto-adaptation (convert any TS function)
+- ⚠️ MCP client implementation still shallow
+
+**v0.2.0 Focus:**
 - Complete the MCP client: tool discovery, invocation, result mapping
 - Support both local stdio and remote HTTP MCP servers
 - Auto-convert MCP tool schemas to our typed `defineTool()` format
 - Test with real MCP servers (Filesystem, GitHub, Brave Search)
+- Wire tools into ReAct strategy's `availableTools` parameter (currently passed but not executed)
 
 ### Provider Expansion: Mistral & Cohere
 Broaden the provider ecosystem beyond OpenAI/Anthropic/Gemini.

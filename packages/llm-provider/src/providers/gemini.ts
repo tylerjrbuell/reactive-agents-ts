@@ -153,6 +153,8 @@ const mapGeminiResponse = (
 
 // ─── Gemini Provider Layer ───
 
+const GEMINI_DEFAULT_MODEL = "gemini-2.5-flash";
+
 export const GeminiProviderLive = Layer.effect(
   LLMService,
   Effect.gen(function* () {
@@ -213,7 +215,13 @@ export const GeminiProviderLive = Layer.effect(
       complete: (request) =>
         Effect.gen(function* () {
           const client = yield* Effect.promise(() => getClient());
-          const model = request.model?.model ?? config.defaultModel;
+          let model = typeof request.model === 'string' 
+            ? request.model 
+            : request.model?.model ?? config.defaultModel;
+          // If using non-Gemini default (e.g., Anthropic), fall back to Gemini default
+          if (!model || model.startsWith("claude") || model.startsWith("gpt-")) {
+            model = GEMINI_DEFAULT_MODEL;
+          }
           const contents = toGeminiContents(request.messages);
           const systemPrompt =
             extractSystemPrompt(request.messages) ?? request.systemPrompt;
@@ -251,7 +259,13 @@ export const GeminiProviderLive = Layer.effect(
 
       stream: (request) =>
         Effect.gen(function* () {
-          const model = request.model?.model ?? config.defaultModel;
+          let model = typeof request.model === 'string'
+            ? request.model
+            : request.model?.model ?? config.defaultModel;
+          // If using non-Gemini default (e.g., Anthropic), fall back to Gemini default
+          if (!model || model.startsWith("claude") || model.startsWith("gpt-")) {
+            model = GEMINI_DEFAULT_MODEL;
+          }
           const contents = toGeminiContents(request.messages);
           const systemPrompt =
             extractSystemPrompt(request.messages) ?? request.systemPrompt;
@@ -347,7 +361,13 @@ export const GeminiProviderLive = Layer.effect(
                   ];
 
             const client = yield* Effect.promise(() => getClient());
-            const model = request.model?.model ?? config.defaultModel;
+            let model = typeof request.model === 'string'
+              ? request.model
+              : request.model?.model ?? config.defaultModel;
+            // If using non-Gemini default (e.g., Anthropic), fall back to Gemini default
+            if (!model || model.startsWith("claude") || model.startsWith("gpt-")) {
+              model = GEMINI_DEFAULT_MODEL;
+            }
 
             const response = yield* Effect.tryPromise({
               try: () =>
