@@ -6,11 +6,11 @@
 
 Type-safe from prompt to production.
 
-[![CI](https://github.com/reactive-agents/reactive-agents-ts/actions/workflows/ci.yml/badge.svg)](https://github.com/reactive-agents/reactive-agents-ts/actions/workflows/ci.yml)
+[![CI](https://github.com/tylerjrbuell/reactive-agents-ts/actions/workflows/ci.yml/badge.svg)](https://github.com/tylerjrbuell/reactive-agents-ts/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/reactive-agents)](https://www.npmjs.com/package/reactive-agents)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-[Documentation](https://reactive-agents.github.io/reactive-agents-ts/) | [Getting Started](#quick-start) | [Architecture](#architecture)
+[Documentation](https://tylerjrbuell.github.io/reactive-agents-ts/) | [Getting Started](#quick-start) | [Architecture](#architecture)
 
 </div>
 
@@ -132,6 +132,11 @@ rax run "Explain quantum computing" --provider anthropic  # Run an agent
 bun install              # Install dependencies
 bun test                 # Run all tests (283 tests, 52 files)
 bun run build            # Type-check all packages
+
+# Docs
+bun run docs:dev         # Start docs dev server (http://localhost:4321)
+bun run docs:build       # Build docs for production
+bun run docs:preview     # Preview built docs locally
 ```
 
 ## Environment Variables

@@ -3,24 +3,30 @@ title: Installation
 description: How to install and configure Reactive Agents.
 ---
 
-## Package Manager
+## Simple Install
 
-Reactive Agents is distributed as a set of npm packages. Use any package manager:
+The easiest way to get started is with the `reactive-agents` meta-package, which bundles everything:
 
 ```bash
 # Bun (recommended)
-bun add @reactive-agents/core @reactive-agents/runtime effect
+bun add reactive-agents effect
 
 # npm
-npm install @reactive-agents/core @reactive-agents/runtime effect
+npm install reactive-agents effect
 
 # pnpm
-pnpm add @reactive-agents/core @reactive-agents/runtime effect
+pnpm add reactive-agents effect
 ```
 
-## Packages
+Then import from a single entry point:
 
-The framework is modular. Install only what you need:
+```typescript
+import { ReactiveAgents } from "reactive-agents";
+```
+
+## Modular Install
+
+The framework is modular — install only the packages you need:
 
 | Package | Description | Required? |
 |---------|-------------|-----------|
@@ -40,16 +46,8 @@ The framework is modular. Install only what you need:
 | `@reactive-agents/orchestration` | Multi-agent workflows | Optional |
 | `@reactive-agents/prompts` | Template engine, built-in prompt library | Optional |
 
-## Install Everything
-
-For a full-featured setup:
-
 ```bash
-bun add @reactive-agents/core @reactive-agents/runtime @reactive-agents/llm-provider \
-  @reactive-agents/memory @reactive-agents/reasoning @reactive-agents/tools \
-  @reactive-agents/guardrails @reactive-agents/verification @reactive-agents/cost \
-  @reactive-agents/identity @reactive-agents/observability @reactive-agents/interaction \
-  @reactive-agents/orchestration @reactive-agents/prompts effect
+bun add @reactive-agents/core @reactive-agents/runtime @reactive-agents/llm-provider effect
 ```
 
 ## Environment Variables

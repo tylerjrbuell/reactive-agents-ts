@@ -12,12 +12,15 @@
     "test:watch": "bun test --watch",
     "typecheck": "bun run --filter '*' typecheck",
     "clean": "find packages apps -name 'dist' -type d -exec rm -rf {} + 2>/dev/null || true",
-    "rax": "bun ./apps/cli/src/index.ts"
+    "rax": "bun ./apps/cli/src/index.ts",
+    "docs:dev": "cd apps/docs && npx astro dev",
+    "docs:build": "cd apps/docs && npx astro build",
+    "docs:preview": "cd apps/docs && npx astro preview"
   },
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/reactive-agents/reactive-agents-ts.git"
+    "url": "https://github.com/tylerjrbuell/reactive-agents-ts.git"
   },
   "devDependencies": {
     "typescript": "^5.7.0",

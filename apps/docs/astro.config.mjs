@@ -1,7 +1,13 @@
 import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
 
+// Use a subpath base only when deploying to GitHub Pages.
+// Set GITHUB_PAGES=true in CI to enable it.
+const isGitHubPages = process.env.GITHUB_PAGES === "true";
+
 export default defineConfig({
+  site: "https://tylerjrbuell.github.io",
+  base: isGitHubPages ? "/reactive-agents-ts" : "/",
   legacy: { collections: true },
   integrations: [
     starlight({
@@ -12,7 +18,7 @@ export default defineConfig({
         {
           icon: "github",
           label: "GitHub",
-          href: "https://github.com/reactive-agents/reactive-agents-ts",
+          href: "https://github.com/tylerjrbuell/reactive-agents-ts",
         },
       ],
       logo: {

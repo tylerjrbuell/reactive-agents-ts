@@ -13,7 +13,7 @@ description: Build your first Reactive Agent in 5 minutes.
 Using the CLI:
 
 ```bash
-bunx reactive-agents init my-agent-app --template standard
+bunx rax init my-agent-app --template standard
 cd my-agent-app
 bun install
 ```
@@ -23,7 +23,7 @@ Or manually:
 ```bash
 mkdir my-agent-app && cd my-agent-app
 bun init -y
-bun add @reactive-agents/core @reactive-agents/runtime @reactive-agents/llm-provider @reactive-agents/memory effect
+bun add reactive-agents effect
 ```
 
 ## 2. Set Up Environment
@@ -37,7 +37,7 @@ echo 'ANTHROPIC_API_KEY=sk-ant-...' > .env
 Create `src/agent.ts`:
 
 ```typescript
-import { ReactiveAgents } from "@reactive-agents/runtime";
+import { ReactiveAgents } from "reactive-agents";
 
 async function main() {
   const agent = await ReactiveAgents.create()
