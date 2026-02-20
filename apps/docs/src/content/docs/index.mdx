@@ -1,0 +1,75 @@
+---
+title: Reactive Agents
+description: Build autonomous AI agents with Effect-TS. Type-safe, composable, observable.
+template: splash
+hero:
+  tagline: The composable AI agent framework built on Effect-TS. Type-safe from prompt to production.
+  image:
+    file: ../../assets/logo-dark.svg
+  actions:
+    - text: Get Started
+      link: /guides/quickstart/
+      icon: right-arrow
+      variant: primary
+    - text: View on GitHub
+      link: https://github.com/reactive-agents/reactive-agents-ts
+      icon: external
+---
+
+import { Card, CardGrid } from "@astrojs/starlight/components";
+
+## Why Reactive Agents?
+
+<CardGrid stagger>
+  <Card title="Type-Safe Agents" icon="seti:typescript">
+    Every agent, tool, and memory operation is fully typed with Effect-TS
+    schemas. Catch errors at compile time, not in production.
+  </Card>
+  <Card title="Composable Layers" icon="puzzle">
+    Mix and match capabilities — memory, reasoning, guardrails, cost tracking —
+    using Effect's Layer system. Only pay for what you use.
+  </Card>
+  <Card title="Observable by Default" icon="magnifier">
+    Built-in tracing, metrics, and structured logging. Every agent decision is
+    inspectable through the 10-phase execution engine.
+  </Card>
+  <Card title="5 Interaction Modes" icon="setting">
+    From fully autonomous to human-in-the-loop collaborative. Agents
+    dynamically escalate and de-escalate based on confidence.
+  </Card>
+</CardGrid>
+
+## Quick Example
+
+```typescript
+import { ReactiveAgents } from "@reactive-agents/runtime";
+
+const agent = await ReactiveAgents.create()
+  .withName("research-assistant")
+  .withProvider("anthropic")
+  .withModel("claude-sonnet-4-20250514")
+  .withMemory("1")
+  .withReasoning()
+  .withGuardrails()
+  .build();
+
+const result = await agent.run("Summarize the key findings from this paper");
+console.log(result.output);
+```
+
+## Architecture at a Glance
+
+```
+ReactiveAgentBuilder
+  -> createRuntime()
+    -> CoreServices (EventBus, AgentService, TaskService)
+    -> LLMProvider  (Anthropic, OpenAI, Ollama)
+    -> Memory       (Working, Semantic, Episodic, Procedural)
+    -> Reasoning    (ReAct, Plan-Execute, Tree-of-Thought)
+    -> Tools        (Registry, Sandbox, MCP)
+    -> Guardrails   (Injection, PII, Toxicity, Contracts)
+    -> Verification (Semantic Entropy, Fact Decomposition)
+    -> Cost         (Complexity Router, Budget Enforcer)
+    -> Interaction  (5 Modes, Checkpoints, Collaboration)
+    -> ExecutionEngine (10-phase lifecycle with hooks)
+```
