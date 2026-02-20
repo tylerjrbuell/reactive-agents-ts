@@ -6,6 +6,7 @@ export const LLMProviderType = Schema.Literal(
   "anthropic",
   "openai",
   "ollama",
+  "gemini",
   "custom",
 );
 export type LLMProvider = Schema.Schema.Type<typeof LLMProviderType>;
@@ -91,6 +92,22 @@ export const ModelPresets = {
     costPer1MOutput: 10.0,
     maxContext: 128_000,
     quality: 0.8,
+  },
+  "gemini-2.0-flash": {
+    provider: "gemini" as const,
+    model: "gemini-2.0-flash",
+    costPer1MInput: 0.1,
+    costPer1MOutput: 0.4,
+    maxContext: 1_000_000,
+    quality: 0.75,
+  },
+  "gemini-2.5-pro": {
+    provider: "gemini" as const,
+    model: "gemini-2.5-pro-preview-03-25",
+    costPer1MInput: 1.25,
+    costPer1MOutput: 10.0,
+    maxContext: 1_000_000,
+    quality: 0.95,
   },
 } as const;
 

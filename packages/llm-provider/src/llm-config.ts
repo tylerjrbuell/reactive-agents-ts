@@ -11,6 +11,7 @@ export class LLMConfig extends Context.Tag("LLMConfig")<
     readonly defaultModel: string;
     readonly anthropicApiKey?: string;
     readonly openaiApiKey?: string;
+    readonly googleApiKey?: string;
     readonly ollamaEndpoint?: string;
     /**
      * Embedding configuration. Anthropic has no embeddings API;
@@ -42,6 +43,7 @@ export const LLMConfigFromEnv = Layer.succeed(
       process.env.LLM_DEFAULT_MODEL ?? "claude-sonnet-4-20250514",
     anthropicApiKey: process.env.ANTHROPIC_API_KEY,
     openaiApiKey: process.env.OPENAI_API_KEY,
+    googleApiKey: process.env.GOOGLE_API_KEY,
     ollamaEndpoint:
       process.env.OLLAMA_ENDPOINT ?? "http://localhost:11434",
     embeddingConfig: {

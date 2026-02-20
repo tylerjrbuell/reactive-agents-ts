@@ -51,6 +51,9 @@ export const calculateCost = (
     "claude-opus-4-20250514": { input: 15.0, output: 75.0 },
     "gpt-4o-mini": { input: 0.15, output: 0.6 },
     "gpt-4o": { input: 2.5, output: 10.0 },
+    "gemini-2.0-flash": { input: 0.1, output: 0.4 },
+    "gemini-2.5-pro-preview-03-25": { input: 1.25, output: 10.0 },
+    "gemini-embedding-001": { input: 0.0, output: 0.0 },
   };
 
   const costs = costMap[model] ?? { input: 3.0, output: 15.0 };

@@ -32,7 +32,7 @@ export const ReactiveAgents = {
 
 export class ReactiveAgentBuilder {
   private _name: string = "agent";
-  private _provider: "anthropic" | "openai" | "ollama" | "test" = "test";
+  private _provider: "anthropic" | "openai" | "ollama" | "gemini" | "test" = "test";
   private _model?: string;
   private _memoryTier: "1" | "2" = "1";
   private _hooks: LifecycleHook[] = [];
@@ -66,7 +66,7 @@ export class ReactiveAgentBuilder {
   }
 
   withProvider(
-    provider: "anthropic" | "openai" | "ollama" | "test",
+    provider: "anthropic" | "openai" | "ollama" | "gemini" | "test",
   ): this {
     this._provider = provider;
     return this;

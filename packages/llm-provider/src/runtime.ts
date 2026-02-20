@@ -3,6 +3,7 @@ import { LLMConfig, LLMConfigFromEnv } from "./llm-config.js";
 import { AnthropicProviderLive } from "./providers/anthropic.js";
 import { OpenAIProviderLive } from "./providers/openai.js";
 import { LocalProviderLive } from "./providers/local.js";
+import { GeminiProviderLive } from "./providers/gemini.js";
 import { PromptManagerLive } from "./prompt-manager.js";
 import { TestLLMServiceLayer } from "./testing.js";
 
@@ -11,7 +12,7 @@ import { TestLLMServiceLayer } from "./testing.js";
  * Uses env vars for configuration by default.
  */
 export const createLLMProviderLayer = (
-  provider: "anthropic" | "openai" | "ollama" | "test" = "anthropic",
+  provider: "anthropic" | "openai" | "ollama" | "gemini" | "test" = "anthropic",
   testResponses?: Record<string, string>,
 ) => {
   if (provider === "test") {
@@ -28,7 +29,9 @@ export const createLLMProviderLayer = (
       ? AnthropicProviderLive
       : provider === "openai"
         ? OpenAIProviderLive
-        : LocalProviderLive;
+        : provider === "gemini"
+          ? GeminiProviderLive
+          : LocalProviderLive;
 
   return Layer.mergeAll(
     providerLayer.pipe(Layer.provide(configLayer)),
@@ -41,7 +44,7 @@ export const createLLMProviderLayer = (
  */
 export const createLLMProviderLayerWithConfig = (
   config: typeof LLMConfig.Service,
-  provider: "anthropic" | "openai" | "ollama" = "anthropic",
+  provider: "anthropic" | "openai" | "ollama" | "gemini" = "anthropic",
 ) => {
   const configLayer = Layer.succeed(LLMConfig, config);
 
@@ -50,7 +53,9 @@ export const createLLMProviderLayerWithConfig = (
       ? AnthropicProviderLive
       : provider === "openai"
         ? OpenAIProviderLive
-        : LocalProviderLive;
+        : provider === "gemini"
+          ? GeminiProviderLive
+          : LocalProviderLive;
 
   return Layer.mergeAll(
     providerLayer.pipe(Layer.provide(configLayer)),
