@@ -1,0 +1,7 @@
+node_modules/
+dist/
+bun.lockb
+.env
+.env.local
+.reactive-agents/
+*.tsbuildinfo

@@ -1,0 +1,26 @@
+{
+  "name": "reactive-agents",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "bun run --filter '*' build",
+    "test": "bun test",
+    "test:watch": "bun test --watch",
+    "typecheck": "bun run --filter '*' typecheck",
+    "clean": "find packages apps -name 'dist' -type d -exec rm -rf {} + 2>/dev/null || true",
+    "rax": "bun ./apps/cli/src/index.ts"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/reactive-agents/reactive-agents-ts.git"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "bun-types": "latest"
+  }
+}
