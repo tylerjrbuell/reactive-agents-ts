@@ -9,11 +9,11 @@ const BOLD = "\x1b[1m";
 export const BANNER = `
 ${PURPLE}  ╔══════════════════════════════════════════╗${RESET}
 ${PURPLE}  ║${RESET}                                          ${PURPLE}║${RESET}
-${PURPLE}  ║${RESET}   ${INDIGO}┏━┓  ${VIOLET}╻ ╻${RESET}   ${LAVENDER}┏━┓  ╻ ╻${RESET}                 ${PURPLE}║${RESET}
-${PURPLE}  ║${RESET}   ${INDIGO}┣┳┛  ${VIOLET}┣━┫${RESET}   ${LAVENDER}┏╋┛  ┏╋┛${RESET}                 ${PURPLE}║${RESET}
-${PURPLE}  ║${RESET}   ${INDIGO}╹┗╸  ${VIOLET}╹ ╹${RESET}   ${LAVENDER}╹    ╹${RESET}                   ${PURPLE}║${RESET}
+${PURPLE}  ║${RESET}       ${INDIGO}┏━┓  ${VIOLET}┏━┓${RESET}   ${LAVENDER}┏━┓  ╻${RESET}                  ${PURPLE}║${RESET}
+${PURPLE}  ║${RESET}       ${INDIGO}┣┳┛  ${VIOLET}┣━┫${RESET}   ${LAVENDER}┏╋┛┏╋┛${RESET}                  ${PURPLE}║${RESET}
+${PURPLE}  ║${RESET}       ${INDIGO}╹┗╸  ${VIOLET}╹ ╹${RESET}   ${LAVENDER}╹   ╹ ${RESET}                  ${PURPLE}║${RESET}
 ${PURPLE}  ║${RESET}                                          ${PURPLE}║${RESET}
-${PURPLE}  ║${RESET}   ${BOLD}${INDIGO}R${VIOLET}eactive ${INDIGO}A${VIOLET}gents e${INDIGO}X${VIOLET}ecutable${RESET}         ${PURPLE}║${RESET}
+${PURPLE}  ║${RESET}   ${BOLD}${INDIGO}R${VIOLET}eactive ${INDIGO}A${VIOLET}gents e${INDIGO}X${VIOLET}ecutable${RESET}             ${PURPLE}║${RESET}
 ${PURPLE}  ║${RESET}   ${DIM}Type-safe AI agents on Effect-TS${RESET}       ${PURPLE}║${RESET}
 ${PURPLE}  ║${RESET}                                          ${PURPLE}║${RESET}
 ${PURPLE}  ╚══════════════════════════════════════════╝${RESET}
