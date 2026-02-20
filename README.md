@@ -9,8 +9,8 @@
 Type-safe from prompt to production.
 
 [![CI](https://github.com/tylerjrbuell/reactive-agents-ts/actions/workflows/ci.yml/badge.svg)](https://github.com/tylerjrbuell/reactive-agents-ts/actions/workflows/ci.yml)
-[![npm](https://img.shields.io/npm/v/reactive-agents)](https://www.npmjs.com/package/reactive-agents)
-[![npm downloads](https://img.shields.io/npm/dm/reactive-agents?label=downloads)](https://www.npmjs.com/package/reactive-agents)
+[![npm](https://img.shields.io/badge/npm-%40reactive--agents-CB3837?logo=npm)](https://www.npmjs.com/org/reactive-agents)
+[![npm downloads](https://img.shields.io/npm/dt/@reactive-agents/core?label=downloads)](https://www.npmjs.com/org/reactive-agents)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![GitHub Stars](https://img.shields.io/github/stars/tylerjrbuell/reactive-agents-ts?style=social)](https://github.com/tylerjrbuell/reactive-agents-ts)
 
@@ -78,23 +78,23 @@ Every layer is an Effect `Layer` — composable, testable, and tree-shakeable. E
 
 ## Packages
 
-| Package | Description | Status |
-|---------|-------------|--------|
-| [`@reactive-agents/core`](packages/core) | EventBus, AgentService, TaskService, types | Stable |
-| [`@reactive-agents/runtime`](packages/runtime) | ExecutionEngine, ReactiveAgentBuilder | Stable |
-| [`@reactive-agents/llm-provider`](packages/llm-provider) | LLM adapters (Anthropic, OpenAI, Ollama, Gemini) | Stable |
-| [`@reactive-agents/memory`](packages/memory) | Working, Semantic, Episodic, Procedural memory | Stable |
-| [`@reactive-agents/reasoning`](packages/reasoning) | ReAct, Plan-Execute, ToT, Reflexion strategies | Stable |
-| [`@reactive-agents/tools`](packages/tools) | Tool registry, sandbox, MCP client | Stable |
-| [`@reactive-agents/guardrails`](packages/guardrails) | Injection, PII, toxicity detection | Stable |
-| [`@reactive-agents/verification`](packages/verification) | Semantic entropy, fact decomposition | Stable |
-| [`@reactive-agents/cost`](packages/cost) | Complexity routing, budget enforcement | Stable |
-| [`@reactive-agents/identity`](packages/identity) | Agent certificates, RBAC | Stable |
-| [`@reactive-agents/observability`](packages/observability) | Tracing, metrics, structured logging | Stable |
-| [`@reactive-agents/interaction`](packages/interaction) | 5 interaction modes, checkpoints | Stable |
-| [`@reactive-agents/orchestration`](packages/orchestration) | Multi-agent workflow engine | Stable |
-| [`@reactive-agents/prompts`](packages/prompts) | Template engine, built-in prompt library | Stable |
-| [`@reactive-agents/cli`](apps/cli) | `rax` CLI for scaffolding and running | Stable |
+| Package                                                    | Description                                      | Status |
+| ---------------------------------------------------------- | ------------------------------------------------ | ------ |
+| [`@reactive-agents/core`](packages/core)                   | EventBus, AgentService, TaskService, types       | Stable |
+| [`@reactive-agents/runtime`](packages/runtime)             | ExecutionEngine, ReactiveAgentBuilder            | Stable |
+| [`@reactive-agents/llm-provider`](packages/llm-provider)   | LLM adapters (Anthropic, OpenAI, Ollama, Gemini) | Stable |
+| [`@reactive-agents/memory`](packages/memory)               | Working, Semantic, Episodic, Procedural memory   | Stable |
+| [`@reactive-agents/reasoning`](packages/reasoning)         | ReAct, Plan-Execute, ToT, Reflexion strategies   | Stable |
+| [`@reactive-agents/tools`](packages/tools)                 | Tool registry, sandbox, MCP client               | Stable |
+| [`@reactive-agents/guardrails`](packages/guardrails)       | Injection, PII, toxicity detection               | Stable |
+| [`@reactive-agents/verification`](packages/verification)   | Semantic entropy, fact decomposition             | Stable |
+| [`@reactive-agents/cost`](packages/cost)                   | Complexity routing, budget enforcement           | Stable |
+| [`@reactive-agents/identity`](packages/identity)           | Agent certificates, RBAC                         | Stable |
+| [`@reactive-agents/observability`](packages/observability) | Tracing, metrics, structured logging             | Stable |
+| [`@reactive-agents/interaction`](packages/interaction)     | 5 interaction modes, checkpoints                 | Stable |
+| [`@reactive-agents/orchestration`](packages/orchestration) | Multi-agent workflow engine                      | Stable |
+| [`@reactive-agents/prompts`](packages/prompts)             | Template engine, built-in prompt library         | Stable |
+| [`@reactive-agents/cli`](apps/cli)                         | `rax` CLI for scaffolding and running            | Stable |
 
 ## 10-Phase Execution Engine
 
@@ -117,13 +117,13 @@ Each phase supports `before`, `after`, and `on-error` lifecycle hooks.
 
 Agents dynamically adjust their autonomy:
 
-| Mode | Autonomy | When |
-|------|----------|------|
-| Autonomous | Full | High confidence, routine tasks |
-| Supervised | High | Periodic checkpoints |
-| Collaborative | Medium | Complex decisions |
-| Consultative | Low | High-cost or risky actions |
-| Interrogative | Minimal | Information gathering |
+| Mode          | Autonomy | When                           |
+| ------------- | -------- | ------------------------------ |
+| Autonomous    | Full     | High confidence, routine tasks |
+| Supervised    | High     | Periodic checkpoints           |
+| Collaborative | Medium   | Complex decisions              |
+| Consultative  | Low      | High-cost or risky actions     |
+| Interrogative | Minimal  | Information gathering          |
 
 Mode transitions happen automatically based on confidence, cost, and user activity.
 

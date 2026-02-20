@@ -5,7 +5,7 @@
 Type-safe from prompt to production.
 
 [![CI](https://github.com/tylerjrbuell/reactive-agents-ts/actions/workflows/ci.yml/badge.svg)](https://github.com/tylerjrbuell/reactive-agents-ts/actions/workflows/ci.yml)
-[![npm](https://img.shields.io/npm/v/reactive-agents)](https://www.npmjs.com/package/reactive-agents)
+[![npm](https://img.shields.io/badge/npm-%40reactive--agents-CB3837?logo=npm)](https://www.npmjs.com/org/reactive-agents)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 This is the **meta-package** — it re-exports everything from the 14 individual `@reactive-agents/*` packages so you can get started with a single install.
