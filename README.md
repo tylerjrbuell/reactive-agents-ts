@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="./assets/logo.png" alt="Reactive Agents" width="280" />
+
 # Reactive Agents
 
 **The composable AI agent framework built on Effect-TS.**
@@ -8,7 +10,14 @@ Type-safe from prompt to production.
 
 [![CI](https://github.com/tylerjrbuell/reactive-agents-ts/actions/workflows/ci.yml/badge.svg)](https://github.com/tylerjrbuell/reactive-agents-ts/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/reactive-agents)](https://www.npmjs.com/package/reactive-agents)
+[![npm downloads](https://img.shields.io/npm/dm/reactive-agents?label=downloads)](https://www.npmjs.com/package/reactive-agents)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![GitHub Stars](https://img.shields.io/github/stars/tylerjrbuell/reactive-agents-ts?style=social)](https://github.com/tylerjrbuell/reactive-agents-ts)
+
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.7+-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Effect-TS](https://img.shields.io/badge/Effect--TS-3.x-7C3AED?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0id2hpdGUiIGQ9Ik0xMiAyTDIgN2wxMCA1IDEwLTV6TTIgMTdsOSA1IDktNS05LTR6TTIgMTJsOSA1IDktNUwxMiA3eiIvPjwvc3ZnPg==)](https://effect.website)
+[![Bun](https://img.shields.io/badge/Bun-compatible-FBF0DF?logo=bun&logoColor=000000)](https://bun.sh)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/tylerjrbuell/reactive-agents-ts/pulls)
 
 [Documentation](https://tylerjrbuell.github.io/reactive-agents-ts/) | [Getting Started](#quick-start) | [Architecture](#architecture)
 
