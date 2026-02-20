@@ -6,6 +6,9 @@ const DIM = "\x1b[2m";
 const RESET = "\x1b[0m";
 const BOLD = "\x1b[1m";
 
+// Import version from package.json
+import pkg from "../package.json" with { type: "json" };
+
 export const BANNER = `
 ${PURPLE}  ╔══════════════════════════════════════════╗${RESET}
 ${PURPLE}  ║${RESET}                                          ${PURPLE}║${RESET}
@@ -19,7 +22,7 @@ ${PURPLE}  ║${RESET}                                          ${PURPLE}║${RE
 ${PURPLE}  ╚══════════════════════════════════════════╝${RESET}
 `;
 
-export const VERSION = "0.1.5";
+export const VERSION = pkg.version;
 
 export function printBanner() {
   console.log(BANNER);
