@@ -53,9 +53,9 @@ console.log(result.output);
 ReactiveAgentBuilder
   → createRuntime()
     → Core Services     (EventBus, AgentService, TaskService)
-    → LLM Provider      (Anthropic, OpenAI, Ollama)
+    → LLM Provider      (Anthropic, OpenAI, Ollama, Gemini)
     → Memory            (Working, Semantic, Episodic, Procedural)
-    → Reasoning         (ReAct, Plan-Execute, Tree-of-Thought)
+    → Reasoning         (ReAct, Plan-Execute, Tree-of-Thought, Reflexion)
     → Tools             (Registry, Sandbox, MCP)
     → Guardrails        (Injection, PII, Toxicity, Contracts)
     → Verification      (Semantic Entropy, Fact Decomposition)
@@ -73,9 +73,9 @@ Every layer is an Effect `Layer` — composable, testable, and tree-shakeable. E
 |---------|-------------|--------|
 | [`@reactive-agents/core`](packages/core) | EventBus, AgentService, TaskService, types | Stable |
 | [`@reactive-agents/runtime`](packages/runtime) | ExecutionEngine, ReactiveAgentBuilder | Stable |
-| [`@reactive-agents/llm-provider`](packages/llm-provider) | LLM adapters (Anthropic, OpenAI, Ollama) | Stable |
+| [`@reactive-agents/llm-provider`](packages/llm-provider) | LLM adapters (Anthropic, OpenAI, Ollama, Gemini) | Stable |
 | [`@reactive-agents/memory`](packages/memory) | Working, Semantic, Episodic, Procedural memory | Stable |
-| [`@reactive-agents/reasoning`](packages/reasoning) | ReAct, Plan-Execute, ToT strategies | Stable |
+| [`@reactive-agents/reasoning`](packages/reasoning) | ReAct, Plan-Execute, ToT, Reflexion strategies | Stable |
 | [`@reactive-agents/tools`](packages/tools) | Tool registry, sandbox, MCP client | Stable |
 | [`@reactive-agents/guardrails`](packages/guardrails) | Injection, PII, toxicity detection | Stable |
 | [`@reactive-agents/verification`](packages/verification) | Semantic entropy, fact decomposition | Stable |
@@ -130,7 +130,7 @@ rax run "Explain quantum computing" --provider anthropic  # Run an agent
 
 ```bash
 bun install              # Install dependencies
-bun test                 # Run all tests (283 tests, 52 files)
+bun test                 # Run all tests (300 tests, 54 files)
 bun run build            # Type-check all packages
 
 # Docs
@@ -142,8 +142,9 @@ bun run docs:preview     # Preview built docs locally
 ## Environment Variables
 
 ```bash
-ANTHROPIC_API_KEY=sk-ant-...     # Anthropic API key
-OPENAI_API_KEY=sk-...            # OpenAI API key (alternative)
+ANTHROPIC_API_KEY=sk-ant-...     # Anthropic Claude
+OPENAI_API_KEY=sk-...            # OpenAI GPT-4o
+GOOGLE_API_KEY=...               # Google Gemini
 EMBEDDING_PROVIDER=openai        # For Tier 2 memory
 EMBEDDING_MODEL=text-embedding-3-small
 ```

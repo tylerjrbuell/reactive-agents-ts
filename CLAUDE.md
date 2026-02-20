@@ -2,11 +2,12 @@
 
 ## Project Status
 
-**All phases complete.** 15 packages + 2 apps built, 283 tests passing, full integration verified.
+**All phases complete + pre-release features shipped.** 15 packages + 2 apps built, 300 tests passing, full integration verified.
 
 - Phase 1: Core, LLM Provider, Memory, Reasoning, Tools, Interaction, Runtime
 - Phase 2: Guardrails, Verification, Cost
 - Phase 3: Identity, Observability, Orchestration, Prompts, CLI (`rax`)
+- Pre-release: tsup compiled output, Google Gemini provider, Reflexion reasoning strategy
 - Final Integration: All layers compose via `createRuntime()` and `ReactiveAgentBuilder`
 - Docs: Starlight (Astro) site at `apps/docs/`
 
@@ -16,8 +17,8 @@
 
 ```bash
 bun install              # Install dependencies
-bun test                 # Run all tests (283 tests, 52 files)
-bun run build            # Type-check all packages (17 packages)
+bun test                 # Run all tests (300 tests, 54 files)
+bun run build            # Build all packages (16 packages, ESM + DTS)
 cd apps/docs && npx astro dev    # Start docs dev server
 cd apps/docs && npx astro build  # Build docs for production
 ```
@@ -68,6 +69,7 @@ const result = await agent.run("Hello");
 ```bash
 ANTHROPIC_API_KEY=sk-ant-...
 OPENAI_API_KEY=sk-...
+GOOGLE_API_KEY=...
 EMBEDDING_PROVIDER=openai
 EMBEDDING_MODEL=text-embedding-3-small
 LLM_DEFAULT_MODEL=claude-sonnet-4-20250514
