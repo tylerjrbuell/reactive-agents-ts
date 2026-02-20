@@ -103,7 +103,9 @@ export const AnthropicProviderLive = Layer.effect(
       complete: (request) =>
         Effect.gen(function* () {
           const client = getClient();
-          const model = request.model?.model ?? config.defaultModel;
+          const model = typeof request.model === 'string'
+            ? request.model
+            : request.model?.model ?? config.defaultModel;
 
           const response = yield* Effect.tryPromise({
             try: () =>
@@ -139,7 +141,9 @@ export const AnthropicProviderLive = Layer.effect(
       stream: (request) =>
         Effect.gen(function* () {
           const client = getClient();
-          const model = request.model?.model ?? config.defaultModel;
+          const model = typeof request.model === 'string'
+            ? request.model
+            : request.model?.model ?? config.defaultModel;
 
           return Stream.async<StreamEvent, LLMErrors>((emit) => {
             const stream = (client as { messages: { stream: (opts: unknown) => { on: (event: string, cb: (...args: unknown[]) => void) => void } } }).messages.stream({
@@ -234,7 +238,9 @@ export const AnthropicProviderLive = Layer.effect(
               try: () => {
                 const client = getClient();
                 return (client as { messages: { create: (opts: unknown) => Promise<unknown> } }).messages.create({
-                  model: request.model?.model ?? config.defaultModel,
+                  model: typeof request.model === 'string'
+                    ? request.model
+                    : request.model?.model ?? config.defaultModel,
                   max_tokens:
                     request.maxTokens ?? config.defaultMaxTokens,
                   temperature: request.temperature ?? config.defaultTemperature,
@@ -247,7 +253,9 @@ export const AnthropicProviderLive = Layer.effect(
 
             const response = mapAnthropicResponse(
               completeResult as AnthropicRawResponse,
-              request.model?.model ?? config.defaultModel,
+              typeof request.model === 'string'
+                ? request.model
+                : request.model?.model ?? config.defaultModel,
             );
 
             try {
