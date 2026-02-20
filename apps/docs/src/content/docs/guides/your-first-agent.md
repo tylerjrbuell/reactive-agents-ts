@@ -10,7 +10,7 @@ This guide walks through building a research assistant agent with memory, reason
 Every agent starts with `ReactiveAgents.create()`:
 
 ```typescript
-import { ReactiveAgents } from "@reactive-agents/runtime";
+import { ReactiveAgents } from "reactive-agents";
 
 const agent = await ReactiveAgents.create()
   .withName("research-assistant")

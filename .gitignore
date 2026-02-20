@@ -5,3 +5,6 @@ bun.lockb
 .env.local
 .reactive-agents/
 *.tsbuildinfo
+
+# Astro generated type cache
+.astro/
