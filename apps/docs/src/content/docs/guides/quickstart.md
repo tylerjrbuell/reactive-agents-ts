@@ -80,7 +80,7 @@ const agent = await ReactiveAgents.create()
 
 ## What's Next?
 
-- [Your First Agent](/guides/your-first-agent/) — A deeper walkthrough
-- [Memory](/guides/memory/) — How agent memory works
-- [Reasoning](/guides/reasoning/) — Understanding reasoning strategies
-- [Architecture](/concepts/architecture/) — The full layer system
+- [Your First Agent](../your-first-agent/) — A deeper walkthrough
+- [Memory](../memory/) — How agent memory works
+- [Reasoning](../reasoning/) — Understanding reasoning strategies
+- [Architecture](../../concepts/architecture/) — The full layer system

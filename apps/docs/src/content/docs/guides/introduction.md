@@ -78,6 +78,6 @@ Mode transitions happen automatically based on confidence thresholds, cost, and 
 
 ## Next Steps
 
-- [Quickstart](/guides/quickstart/) — Build your first agent in 5 minutes
-- [Installation](/guides/installation/) — Set up your project
-- [Architecture](/concepts/architecture/) — Understand the layer system
+- [Quickstart](../quickstart/) — Build your first agent in 5 minutes
+- [Installation](../installation/) — Set up your project
+- [Architecture](../../concepts/architecture/) — Understand the layer system
