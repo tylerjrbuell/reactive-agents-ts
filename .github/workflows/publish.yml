@@ -16,23 +16,26 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          registry-url: "https://registry.npmjs.org"
 
-      - run: bun install --frozen-lockfile
-      - run: bun run build
-      - run: bun test
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
 
-      - name: Publish packages
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Typecheck & test
         run: |
-          # Publish packages in dependency order
+          bun run build
+          bun test
+
+      - name: Publish packages in dependency order
+        env:
+          BUN_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          # Extract version from tag (v0.1.0 → 0.1.0) or use package version
+          TAG="${GITHUB_REF#refs/tags/v}"
+
           PACKAGES=(
             "packages/core"
             "packages/llm-provider"
@@ -55,6 +58,7 @@ jobs:
           for pkg in "${PACKAGES[@]}"; do
             echo "Publishing $pkg..."
             cd "$pkg"
-            npm publish --access public --provenance || true
-            cd -
+            # bun publish resolves workspace:* → real version numbers automatically
+            bun publish --access public --no-git-checks || echo "⚠️  $pkg: already published or error, skipping"
+            cd "$GITHUB_WORKSPACE"
           done
