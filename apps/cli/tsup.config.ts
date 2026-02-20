@@ -7,6 +7,6 @@ export default defineConfig({
   clean: true,
   splitting: false,
   sourcemap: true,
-  banner: { js: "#!/usr/bin/env node" },
+  banner: { js: "#!/usr/bin/env bun" },
   external: ["effect", "@reactive-agents/core", "@reactive-agents/runtime"],
 });
