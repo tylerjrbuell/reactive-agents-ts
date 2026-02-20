@@ -1,0 +1,60 @@
+name: Publish to npm
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    name: Publish Packages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+
+      - run: bun install --frozen-lockfile
+      - run: bun run build
+      - run: bun test
+
+      - name: Publish packages
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          # Publish packages in dependency order
+          PACKAGES=(
+            "packages/core"
+            "packages/llm-provider"
+            "packages/memory"
+            "packages/reasoning"
+            "packages/tools"
+            "packages/guardrails"
+            "packages/verification"
+            "packages/cost"
+            "packages/identity"
+            "packages/observability"
+            "packages/interaction"
+            "packages/orchestration"
+            "packages/prompts"
+            "packages/runtime"
+            "packages/reactive-agents"
+            "apps/cli"
+          )
+
+          for pkg in "${PACKAGES[@]}"; do
+            echo "Publishing $pkg..."
+            cd "$pkg"
+            npm publish --access public --provenance || true
+            cd -
+          done

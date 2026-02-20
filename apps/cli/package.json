@@ -1,0 +1,34 @@
+{
+  "name": "@reactive-agents/cli",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "src/index.ts",
+  "bin": {
+    "rax": "src/index.ts",
+    "reactive-agents": "src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/reactive-agents/reactive-agents-ts.git",
+    "directory": "apps/cli"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": ["src", "README.md", "LICENSE"],
+  "dependencies": {
+    "effect": "^3.10.0",
+    "@reactive-agents/core": "workspace:*",
+    "@reactive-agents/runtime": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "bun-types": "latest"
+  }
+}
