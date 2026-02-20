@@ -9,6 +9,7 @@ import {
 } from "../errors/errors.js";
 import type { LLMService } from "@reactive-agents/llm-provider";
 import { executeReactive } from "../strategies/reactive.js";
+import { executeReflexion } from "../strategies/reflexion.js";
 
 // ─── Strategy function type ───
 
@@ -49,7 +50,10 @@ export const StrategyRegistryLive = Layer.effect(
   Effect.gen(function* () {
     // Ref-based mutable map of strategies
     const registryRef = yield* Ref.make<Map<string, StrategyFn>>(
-      new Map<string, StrategyFn>([["reactive", executeReactive]]),
+      new Map<string, StrategyFn>([
+        ["reactive", executeReactive],
+        ["reflexion", executeReflexion],
+      ]),
     );
 
     return {
