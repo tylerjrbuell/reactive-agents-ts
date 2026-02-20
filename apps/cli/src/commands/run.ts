@@ -28,12 +28,12 @@ export async function runAgent(args: string[]): Promise<void> {
 
   console.log(`Building agent "${name}" with provider: ${provider}...`);
 
-  const builder = ReactiveAgents.create()
+  let builder = ReactiveAgents.create()
     .withName(name)
     .withProvider(provider);
 
   if (model) {
-    builder.withModel(model);
+    builder = builder.withModel(model);
   }
 
   try {

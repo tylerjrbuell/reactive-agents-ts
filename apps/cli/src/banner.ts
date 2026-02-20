@@ -19,7 +19,7 @@ ${PURPLE}  ║${RESET}                                          ${PURPLE}║${RE
 ${PURPLE}  ╚══════════════════════════════════════════╝${RESET}
 `;
 
-export const VERSION = "0.1.0";
+export const VERSION = "0.1.3";
 
 export function printBanner() {
   console.log(BANNER);

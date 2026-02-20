@@ -176,6 +176,7 @@ export class ReactiveAgentBuilder {
     const runtime = createRuntime({
       agentId,
       provider: this._provider,
+      model: this._model,
       memoryTier: this._memoryTier,
       maxIterations: this._maxIterations,
       enableGuardrails: this._enableGuardrails,
