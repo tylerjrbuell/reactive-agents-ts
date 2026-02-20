@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/cli",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "type": "module",
   "main": "./dist/index.js",
   "bin": {
@@ -29,7 +29,7 @@
   "dependencies": {
     "effect": "^3.10.0",
     "@reactive-agents/core": "0.1.0",
-    "@reactive-agents/runtime": "0.1.1"
+    "@reactive-agents/runtime": "0.1.2"
   },
   "devDependencies": {
     "typescript": "^5.7.0",
