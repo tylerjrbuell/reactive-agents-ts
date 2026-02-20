@@ -60,6 +60,7 @@ export { PromptManager, PromptManagerLive } from "./prompt-manager.js";
 export { AnthropicProviderLive } from "./providers/anthropic.js";
 export { OpenAIProviderLive } from "./providers/openai.js";
 export { LocalProviderLive } from "./providers/local.js";
+export { GeminiProviderLive } from "./providers/gemini.js";
 
 // ─── Testing ───
 export { TestLLMService, TestLLMServiceLayer } from "./testing.js";

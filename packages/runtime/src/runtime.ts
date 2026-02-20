@@ -23,7 +23,7 @@ import { createOrchestrationLayer } from "@reactive-agents/orchestration";
 
 export interface RuntimeOptions {
   agentId: string;
-  provider?: "anthropic" | "openai" | "ollama" | "test";
+  provider?: "anthropic" | "openai" | "ollama" | "gemini" | "test";
   memoryTier?: "1" | "2";
   maxIterations?: number;
   testResponses?: Record<string, string>;

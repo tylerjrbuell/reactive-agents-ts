@@ -16,11 +16,13 @@
   },
   "optionalDependencies": {
     "@anthropic-ai/sdk": "^0.30.0",
-    "openai": "^4.70.0"
+    "openai": "^4.70.0",
+    "@google/genai": "^1.0.0"
   },
   "devDependencies": {
-    "typescript": "^5.7.0",
-    "bun-types": "latest"
+    "@google/genai": "^1.42.0",
+    "bun-types": "latest",
+    "typescript": "^5.7.0"
   },
   "license": "MIT",
   "repository": {

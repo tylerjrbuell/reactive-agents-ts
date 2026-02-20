@@ -14,6 +14,6 @@ export default defineConfig({
     "@effect/platform",
     "@anthropic-ai/sdk",
     "openai",
-    "@google/generative-ai",
+    "@google/genai",
   ],
 });
