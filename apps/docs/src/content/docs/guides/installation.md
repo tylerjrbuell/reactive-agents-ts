@@ -32,10 +32,10 @@ The framework is modular — install only the packages you need:
 |---------|-------------|-----------|
 | `@reactive-agents/core` | EventBus, AgentService, TaskService, types | Yes |
 | `@reactive-agents/runtime` | ExecutionEngine, ReactiveAgentBuilder | Yes |
-| `@reactive-agents/llm-provider` | LLM adapters (Anthropic, OpenAI, Ollama) | Yes |
+| `@reactive-agents/llm-provider` | LLM adapters (Anthropic, OpenAI, Gemini, Ollama) | Yes |
 | `effect` | Effect-TS runtime | Yes |
 | `@reactive-agents/memory` | Working, Semantic, Episodic, Procedural memory | Optional |
-| `@reactive-agents/reasoning` | ReAct, Plan-Execute, Tree-of-Thought | Optional |
+| `@reactive-agents/reasoning` | ReAct, Plan-Execute, Tree-of-Thought, Reflexion | Optional |
 | `@reactive-agents/tools` | Tool registry, sandbox, MCP client | Optional |
 | `@reactive-agents/guardrails` | Injection, PII, toxicity detection | Optional |
 | `@reactive-agents/verification` | Semantic entropy, fact decomposition | Optional |
@@ -55,17 +55,20 @@ bun add @reactive-agents/core @reactive-agents/runtime @reactive-agents/llm-prov
 Create a `.env` file:
 
 ```bash
-# LLM Provider (at least one required)
-ANTHROPIC_API_KEY=sk-ant-...
-OPENAI_API_KEY=sk-...
+# LLM Provider — set at least one
+ANTHROPIC_API_KEY=sk-ant-...        # Anthropic Claude
+OPENAI_API_KEY=sk-...               # OpenAI GPT-4o
+GOOGLE_API_KEY=...                  # Google Gemini
 
-# Embeddings (for Tier 2 memory)
-EMBEDDING_PROVIDER=openai
+# Embeddings (for Tier 2 semantic memory)
+EMBEDDING_PROVIDER=openai           # "openai" | "ollama"
 EMBEDDING_MODEL=text-embedding-3-small
 
-# Optional
+# Tuning (optional)
 LLM_DEFAULT_MODEL=claude-sonnet-4-20250514
+LLM_DEFAULT_TEMPERATURE=0.7
 LLM_MAX_RETRIES=3
+LLM_TIMEOUT_MS=30000
 ```
 
 ## TypeScript Configuration
