@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/runtime",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -18,8 +18,8 @@
     "@reactive-agents/guardrails": "0.1.0",
     "@reactive-agents/verification": "0.1.0",
     "@reactive-agents/cost": "0.1.0",
-    "@reactive-agents/reasoning": "0.1.0",
-    "@reactive-agents/tools": "0.1.1",
+    "@reactive-agents/reasoning": "0.2.0",
+    "@reactive-agents/tools": "0.2.0",
     "@reactive-agents/identity": "0.1.0",
     "@reactive-agents/observability": "0.1.0",
     "@reactive-agents/interaction": "0.1.0",

@@ -39,11 +39,38 @@ The default. A Thought → Action → Observation loop:
 
 ```
 Thought: I need to find information about X
-Action: search("X")
-Observation: [search results]
+ACTION: web_search({"query": "X"})
+Observation: [actual search results from the registered tool]
 Thought: Based on the results, I can conclude...
 FINAL ANSWER: [conclusion]
 ```
+
+When `ToolService` is present (via `.withTools()` on the agent builder), ACTION calls execute real registered tools and return real results as observations. Tool arguments must be valid JSON. If a plain string is provided, it is mapped to the first required parameter of the tool definition.
+
+```typescript
+import { ReactiveAgents } from "reactive-agents";
+import { defineTool } from "@reactive-agents/tools";
+import { Effect, Schema } from "effect";
+
+const searchTool = defineTool({
+  name: "web_search",
+  description: "Search the web for current information",
+  input: Schema.Struct({ query: Schema.String }),
+  handler: ({ query }) => Effect.succeed(`Results for: ${query}`),
+});
+
+const agent = await ReactiveAgents.create()
+  .withName("researcher")
+  .withProvider("anthropic")
+  .withReasoning()      // ReAct strategy
+  .withTools([searchTool])  // tools available during reasoning
+  .build();
+
+const result = await agent.run("What are the latest AI developments?");
+// The ReAct loop will call web_search with real args and use the result
+```
+
+When ToolService is absent, a clear descriptive message is returned as the observation instead — the agent degrades gracefully without crashing.
 
 ## Reflexion Strategy
 

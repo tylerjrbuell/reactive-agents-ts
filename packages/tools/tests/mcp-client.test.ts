@@ -3,21 +3,24 @@ import { describe, it, expect } from "bun:test";
 
 import { makeMCPClient } from "../src/mcp/mcp-client.js";
 
+// NOTE: These tests use transport:"sse" which is a stub (no subprocess spawned).
+// Real stdio transport is tested separately in mcp-stdio-integration.test.ts
+// once a test MCP server binary is available.
+
 describe("MCPClient", () => {
-  it("should connect to a server (stub)", async () => {
+  it("should connect to a server (sse stub)", async () => {
     const program = Effect.gen(function* () {
       const client = yield* makeMCPClient;
 
       const server = yield* client.connect({
         name: "test-server",
-        transport: "stdio",
-        command: "node",
-        args: ["server.js"],
+        transport: "sse",
+        endpoint: "http://localhost:3001",
       });
 
       expect(server.name).toBe("test-server");
       expect(server.status).toBe("connected");
-      expect(server.transport).toBe("stdio");
+      expect(server.transport).toBe("sse");
     });
 
     await Effect.runPromise(program);
@@ -29,15 +32,14 @@ describe("MCPClient", () => {
 
       yield* client.connect({
         name: "server-a",
-        transport: "stdio",
-        command: "node",
-        args: [],
+        transport: "sse",
+        endpoint: "http://localhost:3001",
       });
 
       yield* client.connect({
         name: "server-b",
         transport: "sse",
-        endpoint: "http://localhost:3000",
+        endpoint: "http://localhost:3002",
       });
 
       const servers = yield* client.listServers();
@@ -53,9 +55,8 @@ describe("MCPClient", () => {
 
       yield* client.connect({
         name: "test-server",
-        transport: "stdio",
-        command: "node",
-        args: [],
+        transport: "sse",
+        endpoint: "http://localhost:3001",
       });
 
       yield* client.disconnect("test-server");

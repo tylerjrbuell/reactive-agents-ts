@@ -42,11 +42,37 @@ const result = await agent.run("What are the latest AI developments?");
 
 ## MCP Client
 
+The MCP client supports connecting to local MCP servers over stdio using `Bun.spawn()`.
+
 ```typescript
-const agent = await ReactiveAgents.create()
-  .withTools({ mcp: { url: "http://localhost:3000" } })
-  .build();
+import { makeMCPClient } from "@reactive-agents/tools";
+import { Effect } from "effect";
+
+const program = Effect.gen(function* () {
+  const client = yield* makeMCPClient;
+
+  // Connect to a local MCP server over stdio
+  const server = yield* client.connect({
+    name: "filesystem",
+    transport: "stdio",
+    command: "npx",
+    args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+  });
+
+  // Call a tool on the server
+  const result = yield* client.callTool("filesystem", "read_file", {
+    path: "/tmp/example.txt",
+  });
+
+  yield* client.disconnect("filesystem");
+  return result;
+});
 ```
+
+**Transport support:**
+- **stdio** — Fully implemented. Uses `Bun.spawn()` with a background stdout reader loop for line-delimited JSON-RPC. Handles the MCP `initialize` handshake, tool discovery via `tools/list`, and `tools/call` invocations. Pending requests are tracked with Promise-based resolution; the subprocess is killed on disconnect.
+- **SSE (HTTP event stream)** — Stub, not yet implemented.
+- **WebSocket** — Stub, not yet implemented.
 
 ## Documentation
 

@@ -12,11 +12,35 @@ The reasoning layer provides structured thinking strategies that go beyond simpl
 A Thought → Action → Observation loop that continues until the agent reaches a final answer.
 
 1. **Think** — The agent reasons about the current state
-2. **Act** — If needed, the agent calls a tool
-3. **Observe** — The agent incorporates the tool result
+2. **Act** — If needed, the agent emits `ACTION: tool_name({"param": "value"})` in JSON format
+3. **Observe** — The tool is executed via ToolService and the real result is fed back as an observation
 4. Repeat until `FINAL ANSWER:` is reached
 
 Best for: Tasks requiring tool use, multi-step reasoning, and iterative refinement.
+
+When `.withTools()` is added to the builder, the ReAct strategy executes real registered tools and uses their actual results as observations. Available tool names are injected into the prompt context so the LLM knows what tools it can call. If ToolService is not present, a descriptive message is returned as the observation instead — the agent degrades gracefully.
+
+```typescript
+import { ReactiveAgents } from "reactive-agents";
+import { defineTool } from "@reactive-agents/tools";
+import { Effect, Schema } from "effect";
+
+const searchTool = defineTool({
+  name: "web_search",
+  description: "Search the web for current information",
+  input: Schema.Struct({ query: Schema.String }),
+  handler: ({ query }) => Effect.succeed(`Results for: ${query}`),
+});
+
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withReasoning()          // ReAct strategy by default
+  .withTools([searchTool])  // tools are called for real during reasoning
+  .build();
+
+const result = await agent.run("What happened in AI this week?");
+// ReAct loop: Thought → ACTION: web_search({"query":"..."}) → Observation: [real results] → FINAL ANSWER
+```
 
 ### Plan-Execute
 

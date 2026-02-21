@@ -44,12 +44,35 @@ Tool inputs are validated against their parameter schemas before execution:
 
 ## MCP Support
 
-Connect to Model Context Protocol servers:
+Connect to Model Context Protocol servers using the `makeMCPClient` factory.
+
+**stdio transport** is fully implemented using `Bun.spawn()`. The client opens a subprocess, runs a background stdout reader loop for line-delimited JSON-RPC, performs the MCP `initialize` handshake, discovers tools via `tools/list`, and dispatches `tools/call` requests with Promise-based resolution. The subprocess is killed on `disconnect()`.
 
 ```typescript
-// MCP integration is available through the ToolService
-// Connect to MCP servers that provide tools dynamically
+import { makeMCPClient } from "@reactive-agents/tools";
+import { Effect } from "effect";
+
+const program = Effect.gen(function* () {
+  const client = yield* makeMCPClient;
+
+  // Connect to a local stdio MCP server
+  const server = yield* client.connect({
+    name: "filesystem",
+    transport: "stdio",
+    command: "npx",
+    args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+  });
+
+  const result = yield* client.callTool("filesystem", "read_file", {
+    path: "/tmp/notes.txt",
+  });
+
+  yield* client.disconnect("filesystem");
+  return result;
+});
 ```
+
+**SSE (HTTP event stream)** and **WebSocket** transports are stubbed — these will be implemented in a future release.
 
 ## Function Adapter
 
