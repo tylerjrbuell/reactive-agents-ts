@@ -205,10 +205,11 @@
     },
     "packages/reactive-agents": {
       "name": "reactive-agents",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "dependencies": {
         "@reactive-agents/core": "workspace:*",
         "@reactive-agents/cost": "workspace:*",
+        "@reactive-agents/eval": "workspace:*",
         "@reactive-agents/guardrails": "workspace:*",
         "@reactive-agents/identity": "workspace:*",
         "@reactive-agents/interaction": "workspace:*",
