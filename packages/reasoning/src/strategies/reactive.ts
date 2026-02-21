@@ -7,6 +7,7 @@ import { ExecutionError, IterationLimitError } from "../errors/errors.js";
 import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { ToolService } from "@reactive-agents/tools";
+import type { ToolDefinition, ToolOutput } from "@reactive-agents/tools";
 
 interface ReactiveInput {
   readonly taskDescription: string;
@@ -33,7 +34,10 @@ export const executeReactive = (
   Effect.gen(function* () {
     const llm = yield* LLMService;
     // ToolService is optional — reasoning works with or without tools
-    const toolServiceOpt = yield* Effect.serviceOption(ToolService);
+    const toolServiceOptRaw = yield* Effect.serviceOption(ToolService);
+    const toolServiceOpt = toolServiceOptRaw as
+      | { _tag: "Some"; value: ToolServiceInstance }
+      | { _tag: "None" };
     const maxIter = input.config.strategies.reactive.maxIterations;
     const temp = input.config.strategies.reactive.temperature;
     const steps: ReasoningStep[] = [];
@@ -131,10 +135,22 @@ export const executeReactive = (
     return buildResult(steps, null, "partial", start, totalTokens, totalCost);
   });
 
+// ─── Local type alias for the ToolService interface ───
+
+type ToolServiceInstance = {
+  readonly execute: (input: {
+    toolName: string;
+    arguments: Record<string, unknown>;
+    agentId: string;
+    sessionId: string;
+  }) => Effect.Effect<ToolOutput, unknown>;
+  readonly getTool: (name: string) => Effect.Effect<ToolDefinition, unknown>;
+};
+
 // ─── Tool execution (called from inside Effect.gen, no extra requirements) ───
 
 function runToolObservation(
-  toolServiceOpt: { _tag: "Some"; value: typeof ToolService.Service } | { _tag: "None" },
+  toolServiceOpt: { _tag: "Some"; value: ToolServiceInstance } | { _tag: "None" },
   toolRequest: { tool: string; input: string },
   _input: ReactiveInput,
 ): Effect.Effect<string, never> {
@@ -158,7 +174,7 @@ function runToolObservation(
         sessionId: "reasoning-session",
       })
       .pipe(
-        Effect.map((r) =>
+        Effect.map((r: ToolOutput) =>
           typeof r.result === "string" ? r.result : JSON.stringify(r.result),
         ),
         Effect.catchAll((e) => {
@@ -181,7 +197,7 @@ function runToolObservation(
 }
 
 function resolveToolArgs(
-  toolService: typeof ToolService.Service,
+  toolService: ToolServiceInstance,
   toolRequest: { tool: string; input: string },
 ): Effect.Effect<Record<string, unknown>, never> {
   const trimmed = toolRequest.input.trim();
@@ -202,9 +218,9 @@ function resolveToolArgs(
   return toolService
     .getTool(toolRequest.tool)
     .pipe(
-      Effect.map((toolDef) => {
+      Effect.map((toolDef: ToolDefinition) => {
         const firstParam =
-          toolDef.parameters.find((p) => p.required) ?? toolDef.parameters[0];
+          toolDef.parameters.find((p: { required?: boolean }) => p.required) ?? toolDef.parameters[0];
         if (firstParam) {
           return { [firstParam.name]: trimmed } as Record<string, unknown>;
         }
