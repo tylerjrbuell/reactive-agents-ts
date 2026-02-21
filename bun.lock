@@ -12,7 +12,7 @@
     },
     "apps/cli": {
       "name": "@reactive-agents/cli",
-      "version": "0.1.0",
+      "version": "0.1.7",
       "dependencies": {
         "@reactive-agents/core": "workspace:*",
         "@reactive-agents/runtime": "workspace:*",
@@ -129,7 +129,7 @@
     },
     "packages/llm-provider": {
       "name": "@reactive-agents/llm-provider",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "dependencies": {
         "@reactive-agents/core": "workspace:*",
         "effect": "^3.10.0",
@@ -228,6 +228,7 @@
       "dependencies": {
         "@reactive-agents/core": "workspace:*",
         "@reactive-agents/llm-provider": "workspace:*",
+        "@reactive-agents/tools": "workspace:*",
         "effect": "^3.10.0",
         "ulid": "^2.3.0",
       },
@@ -238,7 +239,7 @@
     },
     "packages/runtime": {
       "name": "@reactive-agents/runtime",
-      "version": "0.1.0",
+      "version": "0.1.2",
       "dependencies": {
         "@reactive-agents/core": "workspace:*",
         "@reactive-agents/cost": "workspace:*",
@@ -262,7 +263,7 @@
     },
     "packages/tools": {
       "name": "@reactive-agents/tools",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "dependencies": {
         "@reactive-agents/core": "workspace:*",
         "effect": "^3.10.0",

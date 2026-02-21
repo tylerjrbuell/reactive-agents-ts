@@ -6,6 +6,7 @@ import type { StepId } from "../types/step.js";
 import { ExecutionError, IterationLimitError } from "../errors/errors.js";
 import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
+import { ToolService } from "@reactive-agents/tools";
 
 interface ReactiveInput {
   readonly taskDescription: string;
@@ -17,7 +18,10 @@ interface ReactiveInput {
 
 /**
  * ReAct loop: Thought -> Action -> Observation, iterating until done.
- * Each iteration calls the LLM once for reasoning.
+ *
+ * When ToolService is available in context, ACTION calls are executed
+ * against real registered tools and results are fed back as observations.
+ * Without ToolService, tool calls are noted as unavailable.
  */
 export const executeReactive = (
   input: ReactiveInput,
@@ -28,6 +32,8 @@ export const executeReactive = (
 > =>
   Effect.gen(function* () {
     const llm = yield* LLMService;
+    // ToolService is optional — reasoning works with or without tools
+    const toolServiceOpt = yield* Effect.serviceOption(ToolService);
     const maxIter = input.config.strategies.reactive.maxIterations;
     const temp = input.config.strategies.reactive.temperature;
     const steps: ReasoningStep[] = [];
@@ -95,17 +101,26 @@ export const executeReactive = (
           metadata: { toolUsed: toolRequest.tool },
         });
 
-        // Tool execution is deferred to the caller (ReasoningService) via a
-        // placeholder observation. The service orchestrates tool calls through
-        // the ToolService from Layer 8. Here, we note the request and continue.
+        // Execute tool via ToolService (real result) or note as unavailable
+        const observationContent = yield* runToolObservation(
+          toolServiceOpt,
+          toolRequest,
+          input,
+        );
+
         steps.push({
           id: ulid() as StepId,
           type: "observation",
-          content: `[Tool call requested: ${toolRequest.tool}(${JSON.stringify(toolRequest.input)})]`,
+          content: observationContent,
           timestamp: new Date(),
         });
 
-        // Update context with tool request for next iteration
+        // Feed real observation back into context for next iteration
+        context = appendToContext(
+          context,
+          `${thought}\nObservation: ${observationContent}`,
+        );
+      } else {
         context = appendToContext(context, thought);
       }
 
@@ -116,14 +131,103 @@ export const executeReactive = (
     return buildResult(steps, null, "partial", start, totalTokens, totalCost);
   });
 
+// ─── Tool execution (called from inside Effect.gen, no extra requirements) ───
+
+function runToolObservation(
+  toolServiceOpt: { _tag: "Some"; value: typeof ToolService.Service } | { _tag: "None" },
+  toolRequest: { tool: string; input: string },
+  _input: ReactiveInput,
+): Effect.Effect<string, never> {
+  if (toolServiceOpt._tag === "None") {
+    return Effect.succeed(
+      `[Tool "${toolRequest.tool}" requested but ToolService is not available — add .withTools() to agent builder]`,
+    );
+  }
+
+  const toolService = toolServiceOpt.value;
+
+  return Effect.gen(function* () {
+    // Parse args: try JSON first, fall back to first-param string mapping
+    const args = yield* resolveToolArgs(toolService, toolRequest);
+
+    const result = yield* toolService
+      .execute({
+        toolName: toolRequest.tool,
+        arguments: args,
+        agentId: "reasoning-agent",
+        sessionId: "reasoning-session",
+      })
+      .pipe(
+        Effect.map((r) =>
+          typeof r.result === "string" ? r.result : JSON.stringify(r.result),
+        ),
+        Effect.catchAll((e) => {
+          const msg =
+            e instanceof Error
+              ? e.message
+              : typeof e === "object" && e !== null && "message" in e
+                ? String((e as { message: unknown }).message)
+                : String(e);
+          return Effect.succeed(`[Tool error: ${msg}]`);
+        }),
+      );
+
+    return result;
+  }).pipe(
+    Effect.catchAll((e) =>
+      Effect.succeed(`[Unexpected error executing tool: ${String(e)}]`),
+    ),
+  );
+}
+
+function resolveToolArgs(
+  toolService: typeof ToolService.Service,
+  toolRequest: { tool: string; input: string },
+): Effect.Effect<Record<string, unknown>, never> {
+  const trimmed = toolRequest.input.trim();
+
+  // Try JSON object/array parsing
+  if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+        return Effect.succeed(parsed as Record<string, unknown>);
+      }
+    } catch {
+      // Fall through to parameter mapping
+    }
+  }
+
+  // Map raw string to first required parameter of the tool definition
+  return toolService
+    .getTool(toolRequest.tool)
+    .pipe(
+      Effect.map((toolDef) => {
+        const firstParam =
+          toolDef.parameters.find((p) => p.required) ?? toolDef.parameters[0];
+        if (firstParam) {
+          return { [firstParam.name]: trimmed } as Record<string, unknown>;
+        }
+        return { input: trimmed } as Record<string, unknown>;
+      }),
+      Effect.catchAll(() =>
+        Effect.succeed({ input: trimmed } as Record<string, unknown>),
+      ),
+    );
+}
+
 // ─── Helpers (private to module) ───
 
 function buildInitialContext(input: ReactiveInput): string {
+  const toolsSection =
+    input.availableTools.length > 0
+      ? `Available Tools: ${input.availableTools.join(", ")}\nTo use a tool: ACTION: tool_name({"param": "value"}) — use JSON for tool arguments.`
+      : "No tools available for this task.";
   return [
     `Task: ${input.taskDescription}`,
     `Task Type: ${input.taskType}`,
     `Relevant Memory:\n${input.memoryContext}`,
-    `Available Tools: ${input.availableTools.join(", ")}`,
+    toolsSection,
   ].join("\n\n");
 }
 
@@ -132,7 +236,7 @@ function buildThoughtPrompt(
   history: readonly ReasoningStep[],
 ): string {
   const historyStr = history.map((s) => `[${s.type}] ${s.content}`).join("\n");
-  return `${context}\n\nPrevious steps:\n${historyStr}\n\nThink step-by-step. If you need a tool, respond with "ACTION: tool_name(input)". If you have a final answer, respond with "FINAL ANSWER: ...".`;
+  return `${context}\n\nPrevious steps:\n${historyStr}\n\nThink step-by-step. If you need a tool, respond with "ACTION: tool_name({"param": "value"})". If you have a final answer, respond with "FINAL ANSWER: ...".`;
 }
 
 function hasFinalAnswer(thought: string): boolean {
@@ -142,7 +246,8 @@ function hasFinalAnswer(thought: string): boolean {
 function parseToolRequest(
   thought: string,
 ): { tool: string; input: string } | null {
-  const match = thought.match(/ACTION:\s*(\w+)\((.+?)\)/i);
+  // Greedy match to handle JSON in the argument (which may contain parentheses)
+  const match = thought.match(/ACTION:\s*([\w-]+)\((.+)\)/is);
   return match ? { tool: match[1], input: match[2] } : null;
 }
 

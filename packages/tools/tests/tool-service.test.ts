@@ -221,15 +221,15 @@ describe("ToolService", () => {
     await Effect.runPromise(program.pipe(Effect.provide(TestToolLayer)));
   });
 
-  it("should connect to an MCP server (stub)", async () => {
+  it("should connect to an MCP server (sse stub)", async () => {
     const program = Effect.gen(function* () {
       const tools = yield* ToolService;
 
+      // Use sse transport (stub path — no subprocess spawned in unit tests)
       const server = yield* tools.connectMCPServer({
         name: "test-server",
-        transport: "stdio",
-        command: "node",
-        args: ["test-mcp-server.js"],
+        transport: "sse",
+        endpoint: "http://localhost:3001",
       });
 
       expect(server.status).toBe("connected");
@@ -248,9 +248,8 @@ describe("ToolService", () => {
 
       yield* tools.connectMCPServer({
         name: "test-server",
-        transport: "stdio",
-        command: "node",
-        args: [],
+        transport: "sse",
+        endpoint: "http://localhost:3001",
       });
 
       yield* tools.disconnectMCPServer("test-server");
