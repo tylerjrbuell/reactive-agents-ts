@@ -137,6 +137,7 @@ packages/
   prompts/       — Template engine, built-in prompt library
   runtime/       — ExecutionEngine, ReactiveAgentBuilder, createRuntime
   eval/          — Evaluation framework (scaffold only)
+  evolution/     — [PLANNED v1.1+] Group-Evolving Agents (GEA): strategy evolution, experience sharing, zero-cost genome deployment
 apps/
   cli/           — `rax` CLI (init, create, run, dev, eval, playground, inspect)
   docs/          — Starlight documentation site
