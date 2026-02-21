@@ -500,15 +500,15 @@ This roadmap outlines the development of Reactive Agents V2 from initial MVP to 
 
 ### Phase 4 Deliverables
 
-✅ **CLI tool** and helpers  
-✅ **Testing utilities** suite  
-✅ **Time-travel debugging**  
-✅ **Container isolation**  
-✅ **Multi-tenancy** support  
-✅ **Auto-scaling** capabilities  
-✅ **Complete documentation**  
-✅ **Community infrastructure**  
-✅ **V1.0 Release**  
+✅ **CLI tool** and helpers
+✅ **Testing utilities** suite
+✅ **Time-travel debugging**
+✅ **Container isolation**
+✅ **Multi-tenancy** support
+✅ **Auto-scaling** capabilities
+✅ **Complete documentation**
+✅ **Community infrastructure**
+✅ **V1.0 Release**
 
 ### Phase 4 Success Metrics
 
@@ -518,6 +518,119 @@ This roadmap outlines the development of Reactive Agents V2 from initial MVP to 
 - Active community
 - 10,000+ GitHub stars
 - 1,000+ production deployments
+
+---
+
+## 🧬 Phase 5: Evolutionary Intelligence & A2A (Post-V1.0)
+
+**Goal:** Enable agent groups to self-improve autonomously — inspired by the UC Santa Barbara [Group-Evolving Agents (GEA)](https://venturebeat.com/orchestration/new-agent-framework-matches-human-engineered-ai-systems-and-adds-zero) research — and achieve full interoperability via the A2A protocol.
+
+> GEA demonstrated that groups of AI agents can evolve together, sharing experiences and innovations, reaching 71% on SWE-bench Verified (vs 56.7% baseline) **with zero additional inference cost at deployment**. Evolved configurations are model-agnostic and transfer across model families (Claude → GPT). This is the future of multi-agent systems.
+
+### New Package: `@reactive-agents/evolution`
+
+A dedicated package that sits atop orchestration, reasoning, memory, and eval to enable group-evolving agent behavior.
+
+```
+packages/
+  evolution/
+    ├── src/
+    │   ├── index.ts
+    │   ├── types.ts                   — EvolutionConfig, FitnessScore, AgentGenome, StrategyGene
+    │   ├── evolution-service.ts       — Main EvolutionService (Context.Tag + Layer)
+    │   ├── group/
+    │   │   ├── agent-group.ts         — Group lifecycle, member registration, shared context
+    │   │   └── experience-pool.ts     — Cross-agent episodic/procedural memory sharing
+    │   ├── strategies/
+    │   │   ├── strategy-evolver.ts    — Mutate/crossover ReasoningStrategy configurations
+    │   │   ├── strategy-genome.ts     — Serializable strategy representation (zero-cost deploy)
+    │   │   └── fitness-evaluator.ts   — Eval-driven fitness scoring via @reactive-agents/eval
+    │   ├── transfer/
+    │   │   └── cross-model-transfer.ts — Validate strategy configs across LLM providers
+    │   └── persistence/
+    │       └── evolution-store.ts     — SQLite-backed genome & fitness history (bun:sqlite)
+    └── tests/
+```
+
+**Dependencies:** `@reactive-agents/orchestration`, `@reactive-agents/reasoning`, `@reactive-agents/memory`, `@reactive-agents/eval`, `@reactive-agents/core`
+
+### Key Capabilities
+
+#### Group Co-Evolution
+- Agent groups share a **collective experience pool** backed by episodic/procedural memory
+- When one agent discovers a better approach, it's encoded as a `StrategyGene` and offered to the group
+- The group's fitness improves over iterations **without any human engineering**
+- Compatible with existing `OrchestrationService` worker-pool pattern
+
+#### Zero-Cost Deployment
+- Evolved behaviors are serialized as `AgentGenome` (strategy configs, prompt templates, tool orderings)
+- No extra LLM calls at inference time — evolved knowledge is baked into configurations
+- Genomes are stored in SQLite and loaded at agent startup — consistent with existing memory patterns
+- Export/import genomes via `rax eval evolve --export genome.json`
+
+#### Eval-Driven Fitness
+- Integrates with `@reactive-agents/eval` LLM-as-judge scoring as the fitness function
+- Configurable fitness criteria: task success rate, token efficiency, latency, safety scores
+- Supports domain-specific benchmarks alongside generic quality metrics
+- Tournament selection, elitism, and configurable mutation rates
+
+#### Cross-Model Strategy Transfer
+- Evolved strategy configs are **model-agnostic by design** (no model-specific optimizations)
+- `CrossModelTransferService` validates genome fitness across configured providers before deployment
+- Prevents provider lock-in for evolved agent behaviors
+
+### API Design
+
+```typescript
+// Configure a group that co-evolves
+const evolution = await ReactiveAgents.create()
+  .withName("research-group")
+  .withProvider("anthropic")
+  .withEvolution({
+    groupSize: 5,
+    fitnessMetric: "task_success_rate",
+    generationsPerCycle: 10,
+    mutationRate: 0.1,
+    elitism: 2,
+    experienceSharing: true,
+  })
+  .buildGroup();
+
+// Run evolution loop
+const bestGenome = await evolution.evolve(trainingTasks);
+
+// Deploy zero-cost — just load the genome
+const agent = await ReactiveAgents.create()
+  .withGenome(bestGenome)
+  .build();
+```
+
+### Integration with Existing A2A + Multi-Agent Features
+
+- **A2A protocol** (`@reactive-agents/orchestration/a2a`): evolved agents expose their genome via Agent Card metadata, enabling cross-framework strategy sharing
+- **Worker pool**: evolved worker agents automatically pick up the best genome from the group's experience pool
+- **Workflow engine**: evolution cycles can be triggered as durable workflow steps with checkpoint recovery
+- **Observability**: evolution metrics (generation, fitness scores, genome diff) emitted as spans and metrics
+
+### Phase 5 Milestones
+
+| Milestone | Target |
+|-----------|--------|
+| `@reactive-agents/evolution` package scaffold | v1.1.0 |
+| Experience sharing via procedural memory | v1.2.0 |
+| Eval-driven fitness evaluation loop | v1.2.0 |
+| Strategy genome serialization (zero-cost deploy) | v1.3.0 |
+| Cross-model transfer validation | v1.3.0 |
+| A2A genome sharing via Agent Card metadata | v1.4.0 |
+| Full CLI: `rax eval evolve` command | v1.4.0 |
+| SWE-bench / custom benchmark integration | v1.5.0 |
+
+### Phase 5 Success Metrics
+
+- Evolved agents outperform hand-crafted baselines by ≥10% on internal benchmarks
+- Zero inference overhead vs non-evolved agents at deployment
+- Strategy genomes transfer across ≥2 model providers without regression
+- Evolution cycle completes in <1 hour for groups of 5 agents on standard tasks
 
 ---
 
@@ -552,6 +665,14 @@ This roadmap outlines the development of Reactive Agents V2 from initial MVP to 
 - Advanced security
 - Meta-learning
 - Swarm intelligence
+
+### Post-V1.0 / Phase 5 (Evolutionary Intelligence)
+- Group-Evolving Agents (GEA) — `@reactive-agents/evolution`
+- Cross-agent experience sharing (episodic/procedural memory pool)
+- Eval-driven strategy evolution (fitness function via `@reactive-agents/eval`)
+- Zero-cost genome deployment (no extra inference at runtime)
+- Cross-model strategy transfer (model-agnostic genomes)
+- A2A genome sharing via Agent Card metadata
 
 ---
 
@@ -664,18 +785,30 @@ This roadmap outlines the development of Reactive Agents V2 from initial MVP to 
 
 ## 🎉 Beyond V1.0
 
-### V1.x Series (Year 2)
-- Advanced learning systems
-- Meta-learning capabilities
-- Swarm intelligence
-- Advanced visual tools
-- Enterprise certifications
+### V1.x Series — Evolutionary Intelligence (Phase 5)
 
-### V2.0 Vision (Year 3)
-- Native multi-modal support
-- Edge-first architecture
-- Advanced safety systems
-- AGI safety research integration
+The primary post-V1.0 focus is **Group-Evolving Agents (GEA)** — enabling Reactive Agents groups to self-improve without human engineering, inspired by UC Santa Barbara's 2026 research. See [Phase 5 section above](#-phase-5-evolutionary-intelligence--a2a-post-v10) for full spec.
+
+Key V1.x releases:
+- **v1.1**: `@reactive-agents/evolution` scaffold, agent group primitives
+- **v1.2**: Experience sharing + eval-driven fitness evaluation
+- **v1.3**: Zero-cost genome serialization + cross-model transfer
+- **v1.4**: A2A genome sharing, `rax eval evolve` CLI command
+- **v1.5**: Benchmark integration (SWE-bench, custom task suites), production hardening
+
+Additional V1.x work:
+- Full A2A protocol implementation (agent-to-agent interoperability across frameworks)
+- Advanced multi-agent workflow patterns (map-reduce swarms, debate, consensus)
+- Advanced learning from interaction history (procedural memory refinement)
+- Enterprise certifications (SOC2, HIPAA audit logging)
+- Advanced visual tools (agent graph visualizer, evolution timeline)
+
+### V2.0 Vision (Year 3+)
+- Native multi-modal agent support (vision, audio, structured data)
+- Edge-first architecture (evolved genomes deployed to edge runtimes)
+- Advanced safety systems (constitutional AI constraints in evolution loop)
+- Federated evolution — share genomes across organizations without raw data exposure
+- AGI safety research integration (alignment-aware fitness functions)
 
 ---
 
