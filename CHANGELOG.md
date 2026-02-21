@@ -6,6 +6,38 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 
 ---
 
+## [0.2.1] — 2026-02-20
+
+### Added
+
+#### Evaluation Framework (`@reactive-agents/eval`)
+- **`@reactive-agents/eval` 0.1.0** — LLM-as-judge evaluation framework for agent quality measurement
+- 5 built-in scoring dimensions: `accuracy`, `relevance`, `completeness`, `safety`, `cost-efficiency`
+- Custom dimension support via generic LLM-as-judge prompting
+- `EvalService.runSuite(suite, agentConfig)` — runs all cases, scores all dimensions, builds summary with pass/fail counts
+- `EvalService.runCase(evalCase, agentConfig, dimensions, actualOutput, metrics)` — score a single case with real agent output
+- `EvalService.compare(runA, runB)` — per-dimension improvement/regression/unchanged classification (±0.02 delta threshold)
+- `EvalService.checkRegression(current, baseline, threshold?)` — regression detection with configurable threshold (default 0.05)
+- `EvalService.getHistory(suiteId)` — retrieve past runs from in-memory history ref
+- `DatasetService.loadSuite(path)` — load eval suite from JSON file (Schema-validated)
+- `DatasetService.loadSuitesFromDir(dir)` — batch-load all `*.json` suites from a directory
+- `rax eval run --suite <path> [--provider anthropic|openai|test]` — CLI command with summary table and dimension score bars
+- 11 tests: eval-service (7) and dataset-service (4)
+
+### Changed
+- `reactive-agents` meta-package 0.2.0 → 0.2.1: adds `@reactive-agents/eval` dep and `./eval` subpath export
+- `@reactive-agents/cli` 0.2.0 → 0.2.1: real `rax eval run` implementation (was placeholder)
+- `@reactive-agents/reasoning` type fixes for correct DTS output (no API changes)
+
+### Fixed
+- Build order: `@reactive-agents/tools` now builds before `@reactive-agents/reasoning` (DTS dependency)
+- `reactive.ts` type errors in DTS output from `typeof ToolService.Service` — replaced with explicit local interface
+
+### Stats
+- 318 tests across 56 test files (was 307/54)
+
+---
+
 ## [0.2.0] — 2026-02-20
 
 ### Added
@@ -142,7 +174,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 - Real MCP server integration tests (Filesystem, GitHub, Brave Search)
 
 ### Planned (v0.3.0)
-- `@reactive-agents/eval` — LLM-as-judge scoring, regression detection, dataset loading, `rax eval run` CLI command
 - Mistral and Cohere provider adapters
 - A2A Protocol (agent-to-agent): server, client, agent-as-tool pattern
 - Streaming service with real-time agent events (SSE + Effect Queue/Stream)
