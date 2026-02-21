@@ -38,6 +38,7 @@ jobs:
           PACKAGES=(
             "packages/core"
             "packages/llm-provider"
+            "packages/eval"
             "packages/memory"
             "packages/reasoning"
             "packages/tools"
