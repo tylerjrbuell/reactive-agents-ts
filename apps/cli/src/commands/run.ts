@@ -69,7 +69,15 @@ export async function runAgent(args: string[]): Promise<void> {
       process.exit(1);
     }
   } catch (err) {
-    console.error("Error:", err instanceof Error ? err.message : String(err));
+    const msg = err instanceof Error ? err.message : String(err);
+    // FiberFailure from Effect stores cause via [cause] symbol; check both
+    const rawCause = err instanceof Error
+      ? err.cause ?? (err as any)[Symbol.for("cause")]
+      : undefined;
+    const causeStr = rawCause
+      ? `\n  Caused by: ${rawCause instanceof Error ? rawCause.message : String(rawCause)}`
+      : "";
+    console.error(`Error: ${msg}${causeStr}`);
     process.exit(1);
   }
 }

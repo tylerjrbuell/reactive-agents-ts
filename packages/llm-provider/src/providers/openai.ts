@@ -99,11 +99,16 @@ export const OpenAIProviderLive = Layer.effect(
             ? request.model
             : request.model?.model ?? defaultModel;
 
+          const messages = toOpenAIMessages(request.messages);
+          if (request.systemPrompt) {
+            messages.unshift({ role: "system", content: request.systemPrompt });
+          }
+
           const requestBody: Record<string, unknown> = {
                 model,
                 max_tokens: request.maxTokens ?? config.defaultMaxTokens,
                 temperature: request.temperature ?? config.defaultTemperature,
-                messages: toOpenAIMessages(request.messages),
+                messages,
                 stop: request.stopSequences
                   ? [...request.stopSequences]
                   : undefined,
@@ -150,7 +155,13 @@ export const OpenAIProviderLive = Layer.effect(
                     request.maxTokens ?? config.defaultMaxTokens,
                   temperature:
                     request.temperature ?? config.defaultTemperature,
-                  messages: toOpenAIMessages(request.messages),
+                  messages: (() => {
+                    const msgs = toOpenAIMessages(request.messages);
+                    if (request.systemPrompt) {
+                      msgs.unshift({ role: "system", content: request.systemPrompt });
+                    }
+                    return msgs;
+                  })(),
                   stream: true,
                 });
 

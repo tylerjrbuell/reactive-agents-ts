@@ -257,7 +257,11 @@ export class ReactiveAgent {
         metadata: result.metadata as AgentResultMetadata,
       })),
       Effect.mapError(
-        (e: any) => new Error(e.message ?? String(e)),
+        (e: any) => {
+          const err = new Error(e.message ?? String(e));
+          if (e.cause) err.cause = e.cause;
+          return err;
+        },
       ),
       Effect.provide(runtime as unknown as Layer.Layer<never>),
     ) as Effect.Effect<AgentResult, Error>;
