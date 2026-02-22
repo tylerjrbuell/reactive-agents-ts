@@ -34,6 +34,27 @@ export interface PromptsOptions {
   readonly templates?: ReadonlyArray<PromptTemplate>;
 }
 
+/** Options for `.withA2A()` — configure A2A server */
+export interface A2AOptions {
+  /** Port for A2A server (default: 3000) */
+  readonly port?: number;
+  /** Base path for A2A endpoints */
+  readonly basePath?: string;
+}
+
+/** Options for `.withAgentTool()` — register agent as tool */
+export interface AgentToolOptions {
+  /** Name for this agent tool */
+  readonly name: string;
+  /** Agent configuration for local agent */
+  readonly agent?: {
+    readonly name: string;
+    readonly description?: string;
+  };
+  /** URL for remote A2A agent */
+  readonly remoteUrl?: string;
+}
+
 // ─── Result Types ────────────────────────────────────────────────────────────
 
 export interface AgentResultMetadata {
@@ -86,6 +107,8 @@ export class ReactiveAgentBuilder {
   private _extraLayers?: Layer.Layer<any, any>;
   private _mcpServers: MCPServerConfig[] = [];
   private _systemPrompt?: string;
+  private _a2aOptions?: A2AOptions;
+  private _agentTools: AgentToolOptions[] = [];
 
   // ─── Identity ───
 
@@ -98,6 +121,28 @@ export class ReactiveAgentBuilder {
 
   withSystemPrompt(prompt: string): this {
     this._systemPrompt = prompt;
+    return this;
+  }
+
+  // ─── A2A ────────────────────────────────────────────────────────────────────
+
+  /** Enable A2A server on the agent */
+  withA2A(options?: A2AOptions): this {
+    this._a2aOptions = options ?? { port: 3000 };
+    return this;
+  }
+
+  // ─── Agent Tools ─────────────────────────────────────────────────────────────
+
+  /** Register a local agent as a callable tool */
+  withAgentTool(name: string, agent: { name: string; description?: string }): this {
+    this._agentTools.push({ name, agent });
+    return this;
+  }
+
+  /** Register a remote A2A agent as a callable tool */
+  withRemoteAgent(name: string, remoteUrl: string): this {
+    this._agentTools.push({ name, remoteUrl });
     return this;
   }
 
@@ -265,12 +310,17 @@ export class ReactiveAgentBuilder {
       systemPrompt: this._systemPrompt,
       mcpServers: this._mcpServers.length > 0 ? this._mcpServers : undefined,
       reasoningOptions: this._reasoningOptions,
+      enableA2A: !!this._a2aOptions,
+      a2aPort: this._a2aOptions?.port,
+      a2aBasePath: this._a2aOptions?.basePath,
     });
 
     const hooks = [...this._hooks];
     const mcpServers = [...this._mcpServers];
     const toolsOptions = this._toolsOptions;
     const promptsOptions = this._promptsOptions;
+    const a2aOptions = this._a2aOptions;
+    const agentTools = this._agentTools;
 
     return Effect.gen(function* () {
       const engine = yield* ExecutionEngine.pipe(Effect.provide(runtime));
@@ -309,6 +359,10 @@ export class ReactiveAgentBuilder {
           yield* (promptService as any).register(template);
         }
       }
+
+      // Register agent-as-tools if configured
+      // Note: Full agent tool registration requires agent execution functions
+      // This is a placeholder for future implementation
 
       return new ReactiveAgent(engine, agentId, runtime);
     }) as Effect.Effect<ReactiveAgent, Error>;
