@@ -6,6 +6,93 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 
 ---
 
+## [0.3.0] — 2026-02-21
+
+### Added
+
+#### Foundation Integration — All Services Wired Through Execution Engine
+
+The 10-phase execution engine now calls every configured service. Agents can think, use tools, observe results, verify output, track costs, and log audit trails — all in a single execution loop.
+
+**Tools in Reasoning (C1)**
+- `ReasoningService` captures `ToolService` optionally at layer construction time
+- Strategies like ReAct receive ToolService in their Effect context — tools execute for real during reasoning
+- `createRuntime()` restructured: tools layer built before reasoning layer and provided as a dependency
+
+**OpenAI Function Calling (C2)**
+- `toOpenAITool()` converter maps tool definitions to OpenAI's function_calling format
+- `tools` array sent in OpenAI API request body when tools are provided
+- `tool_calls` extracted from responses; `function.arguments` JSON parsed into `ToolCall[]`
+- `finish_reason: "tool_calls"` mapped to `stopReason: "tool_use"`; `content: null` handled
+
+**3 New Reasoning Strategies (C3)**
+- **Plan-Execute-Reflect** — Generate plan → execute steps → reflect → refine (configurable `maxRefinements`, `reflectionDepth`)
+- **Tree-of-Thought** — BFS expansion → score branches → prune below threshold → synthesize best path (configurable `breadth`, `depth`, `pruningThreshold`)
+- **Adaptive** — Meta-strategy: analyze task complexity via LLM → delegate to optimal sub-strategy
+- All 5 strategies registered in `StrategyRegistryLive` initial map
+
+**Tool Type Adapter (C4)**
+- Execution engine calls `toFunctionCallingFormat()` before LLM loop, converting tools package format to LLM-compatible `{ name, description, inputSchema }` format
+
+**Token Tracking (C5)**
+- `tokensUsed` added to `ExecutionContext` schema, initialized to 0
+- Accumulated from `response.usage.totalTokens` after each LLM call
+- Final `TaskResult` reports accurate token count (was hardcoded to 0)
+
+**Observability Integration (H1)**
+- `ObservabilityService` acquired optionally at start of `execute()`
+- `runObservablePhase()` wrapper wraps every phase in `obs.withSpan()` when available
+- All `runPhase()` calls replaced with `runObservablePhase()`
+- Spans include `taskId`, `agentId`, and `phase` attributes
+
+**Stub Phases Wired to Real Services (H2)**
+- Phase 2 (Guardrail): `GuardrailService.check(inputText)` — fails with `GuardrailViolationError` if `!result.passed`
+- Phase 3 (Cost Route): `CostService.routeToModel(task)` — selects optimal model tier
+- Phase 6 (Verify): `VerificationService.verify(response, input)` — stores score and risk in context metadata
+- Phase 8 (Cost Track): `CostService.recordCost()` — logs token counts, latency, and cost
+- Phase 9 (Audit): `ObservabilityService.info()` — logs task summary with iterations, tokens, cost, strategy, duration
+
+**Context Window Management (H3)**
+- `ContextWindowManager.truncate()` called before each LLM call to stay within token limits
+
+**Memory Integration in Reasoning Loop (H5)**
+- OBSERVE phase logs tool results as episodic memories via `MemoryService.logEpisode()`
+- Phase 7 (Memory Flush) calls `flush()` in addition to `snapshot()` for full persistence
+
+#### Documentation Overhaul
+- **12 new documentation pages** (28 total, up from 15)
+- 7 feature docs: LLM Providers, Verification, Cost Tracking, Identity/RBAC, Observability, Orchestration, Prompt Templates
+- 4 cookbook pages: Testing Agents, Multi-Agent Patterns, Custom Strategies, Production Deployment
+- Rewritten landing page with tabbed code examples and framework comparison cards
+- New sidebar sections: Features, Cookbook
+- Neural network logo design, favicon
+
+#### README Rewrite
+- Architecture tables mapping phases to services
+- Strategy comparison matrix with use cases
+- Multi-provider capability matrix
+- Cleaner badge layout, updated stats
+
+#### New Tests
+- `packages/runtime/tests/foundation-integration.test.ts` — token accumulation, tools-to-LLM, observability spans, guardrails/verify/cost phases, OpenAI tool_calls
+- `packages/reasoning/tests/strategies/plan-execute.test.ts` — 3 tests
+- `packages/reasoning/tests/strategies/tree-of-thought.test.ts` — 3 tests
+- `packages/reasoning/tests/strategies/adaptive.test.ts` — 3 tests
+- `packages/llm-provider/tests/openai-tools.test.ts` — OpenAI tool format
+
+### Changed
+- `@reactive-agents/runtime` 0.2.0 → 0.3.0: major execution engine rewrite, all phases wired
+- `@reactive-agents/reasoning` 0.2.0 → 0.3.0: 3 new strategies, ToolService integration
+- `@reactive-agents/llm-provider` 0.1.1 → 0.2.0: OpenAI function calling support
+- `reactive-agents` meta-package 0.2.1 → 0.3.0
+- Updated existing docs: reasoning (5 strategies), tools (reasoning integration), guardrails (execution engine wiring), agent lifecycle (service calls per phase), builder API reference (Gemini provider)
+
+### Stats
+- 340 tests across 63 files (was 318/56)
+- 28 documentation pages (was 15)
+
+---
+
 ## [0.2.1] — 2026-02-20
 
 ### Added
@@ -162,18 +249,3 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 #### CI/CD
 - GitHub Actions: CI (typecheck + test), docs deployment to GitHub Pages, npm publish on version tags
 - 283 tests across 52 files
-
----
-
-## [Unreleased]
-
-### Planned (v0.2.x)
-- MCP SSE (HTTP event stream) transport
-- MCP WebSocket transport
-- MCP tool schema auto-conversion to `defineTool()` format
-- Real MCP server integration tests (Filesystem, GitHub, Brave Search)
-
-### Planned (v0.3.0)
-- Mistral and Cohere provider adapters
-- A2A Protocol (agent-to-agent): server, client, agent-as-tool pattern
-- Streaming service with real-time agent events (SSE + Effect Queue/Stream)
