@@ -1,0 +1,68 @@
+{
+  "id": "reasoning-quality",
+  "name": "Reasoning Quality",
+  "description": "10 multi-step reasoning tasks requiring logical deduction, math, and analysis",
+  "dimensions": ["accuracy", "relevance", "completeness"],
+  "cases": [
+    {
+      "id": "rq-1",
+      "name": "Multi-step math",
+      "input": "A store sells apples for $2 each and oranges for $3 each. If I buy 4 apples and 3 oranges, how much do I spend in total?",
+      "expectedOutput": "$17 (4 * $2 + 3 * $3 = $8 + $9 = $17)"
+    },
+    {
+      "id": "rq-2",
+      "name": "Logical deduction",
+      "input": "All mammals are warm-blooded. All dogs are mammals. Is a golden retriever warm-blooded? Explain your reasoning.",
+      "expectedOutput": "Yes, a golden retriever is warm-blooded because it is a dog, all dogs are mammals, and all mammals are warm-blooded."
+    },
+    {
+      "id": "rq-3",
+      "name": "Pattern recognition",
+      "input": "What is the next number in the sequence: 2, 6, 12, 20, 30, ?",
+      "expectedOutput": "42 (differences are 4, 6, 8, 10, 12)"
+    },
+    {
+      "id": "rq-4",
+      "name": "Percentage calculation",
+      "input": "A shirt originally costs $80. It's on sale for 25% off. What is the sale price?",
+      "expectedOutput": "$60 ($80 - 25% of $80 = $80 - $20 = $60)"
+    },
+    {
+      "id": "rq-5",
+      "name": "Cause and effect",
+      "input": "If the temperature drops below 0°C, water freezes. The temperature outside is -5°C. What will happen to a puddle of water left outside?",
+      "expectedOutput": "The puddle will freeze because -5°C is below 0°C, the freezing point of water."
+    },
+    {
+      "id": "rq-6",
+      "name": "Comparison analysis",
+      "input": "Compare and contrast renewable and non-renewable energy sources. Give two advantages of each.",
+      "expectedOutput": "Renewable: sustainable/inexhaustible, lower environmental impact. Non-renewable: reliable/consistent output, existing infrastructure."
+    },
+    {
+      "id": "rq-7",
+      "name": "Time zone math",
+      "input": "If it's 3 PM in New York (EST, UTC-5), what time is it in London (GMT, UTC+0)?",
+      "expectedOutput": "8 PM (London is 5 hours ahead of New York)"
+    },
+    {
+      "id": "rq-8",
+      "name": "Conditional reasoning",
+      "input": "A function returns true if the input is even and greater than 10. What does it return for: 12, 7, 14, 8?",
+      "expectedOutput": "12: true, 7: false (odd), 14: true, 8: false (not greater than 10)"
+    },
+    {
+      "id": "rq-9",
+      "name": "Word problem",
+      "input": "A train travels at 60 mph. How far will it travel in 2 hours and 30 minutes?",
+      "expectedOutput": "150 miles (60 mph * 2.5 hours = 150 miles)"
+    },
+    {
+      "id": "rq-10",
+      "name": "Inference",
+      "input": "A survey shows 60% of respondents prefer coffee, 30% prefer tea, and 10% prefer neither. If 200 people were surveyed, how many prefer tea?",
+      "expectedOutput": "60 people (30% of 200 = 60)"
+    }
+  ]
+}

@@ -18,6 +18,7 @@ bun add @reactive-agents/reasoning effect
 | `plan-execute-reflect` | Plan all steps, then execute | 2+ | Multi-step tasks |
 | `tree-of-thought` | Explore multiple branches | 3× breadth/depth | Complex reasoning |
 | `reflexion` | Generate → Critique → Improve loop | 3/retry | Quality-critical output |
+| `adaptive` | Analyze task → auto-select best strategy | 1 + delegated | Mixed workloads |
 
 ## Usage
 
@@ -49,21 +50,12 @@ When `ToolService` is present (via `.withTools()` on the agent builder), ACTION 
 
 ```typescript
 import { ReactiveAgents } from "reactive-agents";
-import { defineTool } from "@reactive-agents/tools";
-import { Effect, Schema } from "effect";
-
-const searchTool = defineTool({
-  name: "web_search",
-  description: "Search the web for current information",
-  input: Schema.Struct({ query: Schema.String }),
-  handler: ({ query }) => Effect.succeed(`Results for: ${query}`),
-});
 
 const agent = await ReactiveAgents.create()
   .withName("researcher")
   .withProvider("anthropic")
   .withReasoning()      // ReAct strategy
-  .withTools([searchTool])  // tools available during reasoning
+  .withTools()          // built-in tools available during reasoning
   .build();
 
 const result = await agent.run("What are the latest AI developments?");

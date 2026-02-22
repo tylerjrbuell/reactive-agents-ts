@@ -94,6 +94,7 @@ export const ReactiveAgentsConfigSchema = Schema.Struct({
   enableCostTracking: Schema.Boolean,
   enableAudit: Schema.Boolean,
   agentId: Schema.String,
+  systemPrompt: Schema.optional(Schema.String),
 });
 export type ReactiveAgentsConfig = typeof ReactiveAgentsConfigSchema.Type;
 

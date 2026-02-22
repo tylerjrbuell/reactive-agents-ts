@@ -17,7 +17,7 @@
 
 ```bash
 bun install              # Install dependencies
-bun test                 # Run all tests (300 tests, 54 files)
+bun test                 # Run all tests (442 tests, 77 files)
 bun run build            # Build all packages (16 packages, ESM + DTS)
 cd apps/docs && npx astro dev    # Start docs dev server
 cd apps/docs && npx astro build  # Build docs for production
@@ -70,6 +70,7 @@ const result = await agent.run("Hello");
 ANTHROPIC_API_KEY=sk-ant-...
 OPENAI_API_KEY=sk-...
 GOOGLE_API_KEY=...
+TAVILY_API_KEY=tvly-...
 EMBEDDING_PROVIDER=openai
 EMBEDDING_MODEL=text-embedding-3-small
 LLM_DEFAULT_MODEL=claude-sonnet-4-20250514

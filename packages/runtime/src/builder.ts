@@ -3,6 +3,36 @@ import { createRuntime } from "./runtime.js";
 import type { MCPServerConfig } from "./runtime.js";
 import { ExecutionEngine } from "./execution-engine.js";
 import type { LifecycleHook } from "./types.js";
+import type { ReasoningConfig } from "@reactive-agents/reasoning";
+import type { ToolDefinition } from "@reactive-agents/tools";
+import type { PromptTemplate } from "@reactive-agents/prompts";
+
+// ─── Optional Parameter Types ─────────────────────────────────────────────────
+
+/** Options for `.withReasoning()` — all fields optional, merged with defaults. */
+export interface ReasoningOptions {
+  /** Default strategy: "reactive" | "plan-execute-reflect" | "tree-of-thought" | "reflexion" | "adaptive" */
+  readonly defaultStrategy?: ReasoningConfig["defaultStrategy"];
+  /** Per-strategy overrides (partial). */
+  readonly strategies?: Partial<ReasoningConfig["strategies"]>;
+  /** Adaptive reasoning settings. */
+  readonly adaptive?: Partial<ReasoningConfig["adaptive"]>;
+}
+
+/** Options for `.withTools()` — all fields optional. */
+export interface ToolsOptions {
+  /** Custom tool definitions to register after build. */
+  readonly tools?: ReadonlyArray<{
+    readonly definition: ToolDefinition;
+    readonly handler: (args: Record<string, unknown>) => Effect.Effect<unknown>;
+  }>;
+}
+
+/** Options for `.withPrompts()` — all fields optional. */
+export interface PromptsOptions {
+  /** Custom prompt templates to register after build. */
+  readonly templates?: ReadonlyArray<PromptTemplate>;
+}
 
 // ─── Result Types ────────────────────────────────────────────────────────────
 
@@ -43,20 +73,31 @@ export class ReactiveAgentBuilder {
   private _enableCostTracking: boolean = false;
   private _enableAudit: boolean = false;
   private _enableReasoning: boolean = false;
+  private _reasoningOptions?: ReasoningOptions;
   private _enableTools: boolean = false;
+  private _toolsOptions?: ToolsOptions;
   private _enableIdentity: boolean = false;
   private _enableObservability: boolean = false;
   private _enableInteraction: boolean = false;
   private _enablePrompts: boolean = false;
+  private _promptsOptions?: PromptsOptions;
   private _enableOrchestration: boolean = false;
   private _testResponses?: Record<string, string>;
   private _extraLayers?: Layer.Layer<any, any>;
   private _mcpServers: MCPServerConfig[] = [];
+  private _systemPrompt?: string;
 
   // ─── Identity ───
 
   withName(name: string): this {
     this._name = name;
+    return this;
+  }
+
+  // ─── System Prompt ───
+
+  withSystemPrompt(prompt: string): this {
+    this._systemPrompt = prompt;
     return this;
   }
 
@@ -117,13 +158,15 @@ export class ReactiveAgentBuilder {
     return this;
   }
 
-  withReasoning(): this {
+  withReasoning(options?: ReasoningOptions): this {
     this._enableReasoning = true;
+    if (options) this._reasoningOptions = options;
     return this;
   }
 
-  withTools(): this {
+  withTools(options?: ToolsOptions): this {
     this._enableTools = true;
+    if (options) this._toolsOptions = options;
     return this;
   }
 
@@ -142,8 +185,9 @@ export class ReactiveAgentBuilder {
     return this;
   }
 
-  withPrompts(): this {
+  withPrompts(options?: PromptsOptions): this {
     this._enablePrompts = true;
+    if (options) this._promptsOptions = options;
     return this;
   }
 
@@ -182,6 +226,21 @@ export class ReactiveAgentBuilder {
   }
 
   buildEffect(): Effect.Effect<ReactiveAgent, Error> {
+    // Validate provider API key exists at build time (fast fail)
+    const keyMap: Record<string, string | undefined> = {
+      anthropic: "ANTHROPIC_API_KEY",
+      openai: "OPENAI_API_KEY",
+      gemini: "GOOGLE_API_KEY",
+    };
+    const requiredKey = keyMap[this._provider];
+    if (requiredKey && !process.env[requiredKey]) {
+      return Effect.fail(
+        new Error(
+          `Missing API key: ${requiredKey} is not set. Provider "${this._provider}" requires it.`,
+        ),
+      );
+    }
+
     const agentId = `${this._name}-${Date.now()}`;
 
     const runtime = createRuntime({
@@ -203,11 +262,15 @@ export class ReactiveAgentBuilder {
       enableOrchestration: this._enableOrchestration,
       testResponses: this._testResponses,
       extraLayers: this._extraLayers,
+      systemPrompt: this._systemPrompt,
       mcpServers: this._mcpServers.length > 0 ? this._mcpServers : undefined,
+      reasoningOptions: this._reasoningOptions,
     });
 
     const hooks = [...this._hooks];
     const mcpServers = [...this._mcpServers];
+    const toolsOptions = this._toolsOptions;
+    const promptsOptions = this._promptsOptions;
 
     return Effect.gen(function* () {
       const engine = yield* ExecutionEngine.pipe(Effect.provide(runtime));
@@ -216,14 +279,34 @@ export class ReactiveAgentBuilder {
         yield* engine.registerHook(hook);
       }
 
-      // Connect MCP servers if configured
-      if (mcpServers.length > 0) {
+      // Connect MCP servers and/or register custom tools if configured
+      if (mcpServers.length > 0 || (toolsOptions?.tools && toolsOptions.tools.length > 0)) {
         const { ToolService } = yield* Effect.promise(() =>
           import("@reactive-agents/tools"),
         );
         const toolService = yield* (ToolService as any).pipe(Effect.provide(runtime));
+
+        // Connect MCP servers
         for (const mcp of mcpServers) {
           yield* (toolService as any).connectMCPServer(mcp);
+        }
+
+        // Register custom tools
+        if (toolsOptions?.tools) {
+          for (const tool of toolsOptions.tools) {
+            yield* (toolService as any).register(tool.definition, tool.handler);
+          }
+        }
+      }
+
+      // Register custom prompt templates if configured
+      if (promptsOptions?.templates && promptsOptions.templates.length > 0) {
+        const { PromptService } = yield* Effect.promise(() =>
+          import("@reactive-agents/prompts"),
+        );
+        const promptService = yield* (PromptService as any).pipe(Effect.provide(runtime));
+        for (const template of promptsOptions.templates) {
+          yield* (promptService as any).register(template);
         }
       }
 

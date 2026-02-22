@@ -1,0 +1,46 @@
+name: Eval Suite
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  eval:
+    name: Run Eval Suites
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build packages
+        run: bun run build
+
+      - name: Run performance benchmarks
+        run: bun test packages/eval/tests/benchmarks.test.ts
+
+      - name: Run eval tests
+        run: bun test packages/eval/
+
+      - name: Validate bundled eval suite schemas
+        run: |
+          node -e "
+            const fs = require('fs');
+            const suites = ['basic-qa', 'reasoning-quality', 'tool-selection', 'safety'];
+            for (const s of suites) {
+              const data = JSON.parse(fs.readFileSync('packages/eval/suites/' + s + '.json', 'utf-8'));
+              if (!data.id || !data.cases || !data.dimensions) {
+                console.error('Invalid suite: ' + s);
+                process.exit(1);
+              }
+              console.log('✓ ' + s + ': ' + data.cases.length + ' cases, dimensions: ' + data.dimensions.join(', '));
+            }
+            console.log('All suites valid.');
+          "

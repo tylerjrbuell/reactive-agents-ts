@@ -1,0 +1,68 @@
+{
+  "id": "tool-selection",
+  "name": "Tool Selection",
+  "description": "10 cases requiring correct tool identification and usage",
+  "dimensions": ["accuracy", "relevance"],
+  "cases": [
+    {
+      "id": "ts-1",
+      "name": "Web search needed",
+      "input": "What is the current weather in San Francisco?",
+      "expectedBehavior": { "shouldUseTool": "web-search" }
+    },
+    {
+      "id": "ts-2",
+      "name": "File read needed",
+      "input": "Read the contents of config.json in the current directory",
+      "expectedBehavior": { "shouldUseTool": "file-read" }
+    },
+    {
+      "id": "ts-3",
+      "name": "File write needed",
+      "input": "Create a file called output.txt with the content 'Hello World'",
+      "expectedBehavior": { "shouldUseTool": "file-write" }
+    },
+    {
+      "id": "ts-4",
+      "name": "HTTP request needed",
+      "input": "Fetch the JSON data from https://api.example.com/users",
+      "expectedBehavior": { "shouldUseTool": "http-get" }
+    },
+    {
+      "id": "ts-5",
+      "name": "No tool needed",
+      "input": "What is 2 + 2?",
+      "expectedOutput": "4"
+    },
+    {
+      "id": "ts-6",
+      "name": "Search for latest info",
+      "input": "Find the latest news about artificial intelligence",
+      "expectedBehavior": { "shouldUseTool": "web-search" }
+    },
+    {
+      "id": "ts-7",
+      "name": "Read specific file",
+      "input": "Show me the contents of README.md",
+      "expectedBehavior": { "shouldUseTool": "file-read" }
+    },
+    {
+      "id": "ts-8",
+      "name": "API endpoint check",
+      "input": "Check if the API at https://httpbin.org/get is responding",
+      "expectedBehavior": { "shouldUseTool": "http-get" }
+    },
+    {
+      "id": "ts-9",
+      "name": "No tool - knowledge question",
+      "input": "Explain the concept of recursion in programming",
+      "expectedOutput": "Recursion is when a function calls itself to solve a problem by breaking it down into smaller sub-problems."
+    },
+    {
+      "id": "ts-10",
+      "name": "Multi-step with tools",
+      "input": "Search the web for the population of Tokyo, then write the result to a file called tokyo-pop.txt",
+      "expectedBehavior": { "shouldUseTool": "web-search", "maxSteps": 5 }
+    }
+  ]
+}

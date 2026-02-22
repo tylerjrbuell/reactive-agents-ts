@@ -13,20 +13,62 @@ interface MCPConfigFile {
   }>;
 }
 
+const VALID_PROVIDERS = ["anthropic", "openai", "ollama", "gemini", "test"] as const;
+type Provider = (typeof VALID_PROVIDERS)[number];
+
+const PROVIDER_API_KEYS: Record<string, { env: string; label: string } | null> = {
+  anthropic: { env: "ANTHROPIC_API_KEY", label: "Anthropic" },
+  openai: { env: "OPENAI_API_KEY", label: "OpenAI" },
+  gemini: { env: "GOOGLE_API_KEY", label: "Google" },
+  ollama: null, // No API key needed
+  test: null,
+};
+
+function isValidProvider(p: string): p is Provider {
+  return (VALID_PROVIDERS as readonly string[]).includes(p);
+}
+
+/** Simple stderr spinner for long-running operations. */
+function createSpinner(message: string) {
+  const frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+  let i = 0;
+  const interval = setInterval(() => {
+    process.stderr.write(`\r${frames[i++ % frames.length]} ${message}`);
+  }, 80);
+  return {
+    stop(finalMessage?: string) {
+      clearInterval(interval);
+      process.stderr.write(`\r${finalMessage ?? `✓ ${message}`}\n`);
+    },
+    fail(finalMessage: string) {
+      clearInterval(interval);
+      process.stderr.write(`\r✗ ${finalMessage}\n`);
+    },
+  };
+}
+
 export async function runAgent(args: string[]): Promise<void> {
   // Parse arguments
   const promptParts: string[] = [];
-  let provider: "anthropic" | "openai" | "ollama" | "gemini" | "test" = "anthropic";
+  let provider: Provider = "anthropic";
   let model: string | undefined;
   let name = "cli-agent";
   let enableTools = false;
   let enableReasoning = false;
   let mcpConfigPath: string | undefined;
+  let verbose = false;
+  let quiet = false;
+  let stream = false;
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === "--provider" && args[i + 1]) {
-      provider = args[++i] as typeof provider;
+      const raw = args[++i];
+      if (!isValidProvider(raw)) {
+        console.error(`Unknown provider: "${raw}". Valid providers: ${VALID_PROVIDERS.join(", ")}`);
+        process.exit(1);
+      }
+      provider = raw;
     } else if (arg === "--model" && args[i + 1]) {
       model = args[++i];
     } else if (arg === "--name" && args[i + 1]) {
@@ -37,6 +79,12 @@ export async function runAgent(args: string[]): Promise<void> {
       enableReasoning = true;
     } else if ((arg === "--mcp-config" || arg === "--mcp") && args[i + 1]) {
       mcpConfigPath = args[++i];
+    } else if (arg === "--verbose" || arg === "-v") {
+      verbose = true;
+    } else if (arg === "--quiet" || arg === "-q") {
+      quiet = true;
+    } else if (arg === "--stream") {
+      stream = true;
     } else if (!arg.startsWith("--")) {
       promptParts.push(arg);
     }
@@ -44,7 +92,30 @@ export async function runAgent(args: string[]): Promise<void> {
 
   const prompt = promptParts.join(" ");
   if (!prompt) {
-    console.error("Usage: rax run <prompt> [--provider anthropic|openai|ollama|gemini|test] [--model <model>] [--name <name>] [--tools] [--reasoning] [--mcp-config <path>]");
+    console.error("Usage: rax run <prompt> [options]\n");
+    console.error("Options:");
+    console.error("  --provider <name>    Provider: anthropic, openai, ollama, gemini, test");
+    console.error("  --model <model>      Model identifier");
+    console.error("  --name <name>        Agent name (default: cli-agent)");
+    console.error("  --tools              Enable tool calling");
+    console.error("  --reasoning          Enable reasoning strategies");
+    console.error("  --mcp-config <path>  Path to MCP server config JSON");
+    console.error("  --verbose, -v        Show phase-by-phase execution details");
+    console.error("  --quiet, -q          Show only output (no metadata)");
+    console.error("  --stream             Stream LLM output tokens");
+    process.exit(1);
+  }
+
+  // Warn about unimplemented --stream flag
+  if (stream) {
+    console.error("Note: --stream is not yet implemented. Running without streaming.");
+  }
+
+  // Validate API key exists before building agent (fast fail)
+  const keySpec = PROVIDER_API_KEYS[provider];
+  if (keySpec && !process.env[keySpec.env]) {
+    console.error(`Missing API key: ${keySpec.env} is not set.`);
+    console.error(`Set it with: export ${keySpec.env}=<your-key>`);
     process.exit(1);
   }
 
@@ -55,7 +126,9 @@ export async function runAgent(args: string[]): Promise<void> {
     try {
       const raw = readFileSync(mcpConfigPath ?? configFile, "utf-8");
       mcpConfig = JSON.parse(raw) as MCPConfigFile;
-      console.log(`Loaded MCP config: ${mcpConfig.servers.length} server(s)`);
+      if (!quiet) {
+        console.log(`Loaded MCP config: ${mcpConfig.servers.length} server(s)`);
+      }
     } catch (err) {
       if (mcpConfigPath) {
         console.error(`Failed to load MCP config from ${mcpConfigPath}: ${err}`);
@@ -64,7 +137,8 @@ export async function runAgent(args: string[]): Promise<void> {
     }
   }
 
-  console.log(`Building agent "${name}" with provider: ${provider}...`);
+  // Build agent
+  const spinner = quiet ? null : createSpinner(`Building agent "${name}" with provider: ${provider}`);
 
   let builder = ReactiveAgents.create()
     .withName(name)
@@ -90,23 +164,46 @@ export async function runAgent(args: string[]): Promise<void> {
 
   try {
     const agent = await builder.build();
-    console.log(`Agent ready: ${agent.agentId}`);
-    console.log(`Running: "${prompt}"\n`);
+    spinner?.stop(`Agent ready: ${agent.agentId}`);
 
+    if (verbose) {
+      console.error(`  Provider: ${provider}`);
+      if (model) console.error(`  Model: ${model}`);
+      console.error(`  Tools: ${enableTools ? "enabled" : "disabled"}`);
+      console.error(`  Reasoning: ${enableReasoning ? "enabled" : "disabled"}`);
+      if (mcpConfig) console.error(`  MCP servers: ${mcpConfig.servers.length}`);
+      console.error("");
+    }
+
+    if (!quiet) {
+      console.error(`Running: "${prompt}"\n`);
+    }
+
+    const execSpinner = quiet ? null : createSpinner("Executing");
     const result = await agent.run(prompt);
+    execSpinner?.stop("Execution complete");
 
     if (result.success) {
-      console.log("─── Output ───");
-      console.log(result.output || "(no output)");
-      console.log("\n─── Metadata ───");
-      console.log(`  Duration: ${result.metadata.duration}ms`);
-      console.log(`  Steps: ${result.metadata.stepsCount}`);
-      console.log(`  Cost: $${result.metadata.cost.toFixed(6)}`);
+      if (quiet) {
+        // Quiet mode: output only, no chrome
+        console.log(result.output || "");
+      } else {
+        console.log("\n─── Output ───");
+        console.log(result.output || "(no output)");
+        console.log("\n─── Metadata ───");
+        console.log(`  Duration: ${result.metadata.duration}ms`);
+        console.log(`  Steps: ${result.metadata.stepsCount}`);
+        console.log(`  Cost: $${result.metadata.cost.toFixed(6)}`);
+        if (verbose && result.metadata.strategyUsed) {
+          console.log(`  Strategy: ${result.metadata.strategyUsed}`);
+        }
+      }
     } else {
       console.error("Agent execution failed.");
       process.exit(1);
     }
   } catch (err) {
+    spinner?.fail("Build failed");
     const msg = err instanceof Error ? err.message : String(err);
     // FiberFailure from Effect stores cause via [cause] symbol; check both
     const rawCause = err instanceof Error

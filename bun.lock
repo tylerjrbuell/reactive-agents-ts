@@ -237,6 +237,7 @@
       "dependencies": {
         "@reactive-agents/core": "workspace:*",
         "@reactive-agents/llm-provider": "workspace:*",
+        "@reactive-agents/prompts": "workspace:*",
         "@reactive-agents/tools": "workspace:*",
         "effect": "^3.10.0",
         "ulid": "^2.3.0",

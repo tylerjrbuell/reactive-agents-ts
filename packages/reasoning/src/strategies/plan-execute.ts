@@ -15,6 +15,7 @@ import { ExecutionError, IterationLimitError } from "../errors/errors.js";
 import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { ToolService } from "@reactive-agents/tools";
+import { PromptService } from "@reactive-agents/prompts";
 
 interface PlanExecuteInput {
   readonly taskDescription: string;
@@ -36,6 +37,9 @@ export const executePlanExecute = (
     const toolServiceOpt = yield* Effect.serviceOption(ToolService).pipe(
       Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
     );
+    const promptServiceOpt = yield* Effect.serviceOption(PromptService).pipe(
+      Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
+    );
     const { maxRefinements, reflectionDepth } =
       input.config.strategies.planExecute;
     const steps: ReasoningStep[] = [];
@@ -53,10 +57,17 @@ export const executePlanExecute = (
           ? buildPlanPrompt(input)
           : buildRefinePlanPrompt(input, steps);
 
+      const planSystemPrompt = yield* compilePromptOrFallback(
+        promptServiceOpt,
+        "reasoning.plan-execute-plan",
+        { task: input.taskDescription },
+        `You are a planning agent. Break tasks into clear, sequential steps. Task: ${input.taskDescription}`,
+      );
+
       const planResponse = yield* llm
         .complete({
           messages: [{ role: "user", content: planPrompt }],
-          systemPrompt: `You are a planning agent. Break tasks into clear, sequential steps. Task: ${input.taskDescription}`,
+          systemPrompt: planSystemPrompt,
           maxTokens: 500,
           temperature: 0.5,
         })
@@ -129,6 +140,12 @@ export const executePlanExecute = (
             );
         } else {
           // Execute step via LLM
+          const execSystemPrompt = yield* compilePromptOrFallback(
+            promptServiceOpt,
+            "reasoning.plan-execute-execute",
+            { task: input.taskDescription },
+            `You are executing a plan for: ${input.taskDescription}`,
+          );
           const execResponse = yield* llm
             .complete({
               messages: [
@@ -137,7 +154,7 @@ export const executePlanExecute = (
                   content: `Execute this step of the plan:\n\nStep ${i + 1}: ${stepDescription}\n\nContext so far:\n${stepResults.join("\n")}`,
                 },
               ],
-              systemPrompt: `You are executing a plan for: ${input.taskDescription}`,
+              systemPrompt: execSystemPrompt,
               maxTokens: 300,
               temperature: 0.5,
             })
@@ -169,6 +186,12 @@ export const executePlanExecute = (
       }
 
       // ── REFLECT: Evaluate execution quality ──
+      const reflectSystemPrompt = yield* compilePromptOrFallback(
+        promptServiceOpt,
+        "reasoning.plan-execute-reflect",
+        {},
+        "You are evaluating plan execution. Determine if the task has been adequately addressed.",
+      );
       const reflectResponse = yield* llm
         .complete({
           messages: [
@@ -182,8 +205,7 @@ export const executePlanExecute = (
               ),
             },
           ],
-          systemPrompt:
-            "You are evaluating plan execution. Determine if the task has been adequately addressed.",
+          systemPrompt: reflectSystemPrompt,
           maxTokens: reflectionDepth === "deep" ? 500 : 300,
           temperature: 0.3,
         })
@@ -240,6 +262,29 @@ export const executePlanExecute = (
       status: finalOutput ? ("completed" as const) : ("partial" as const),
     };
   });
+
+// ─── Prompt compilation helper ───
+
+type PromptServiceOpt =
+  | { _tag: "Some"; value: { compile: (id: string, vars: Record<string, unknown>) => Effect.Effect<{ content: string }, unknown> } }
+  | { _tag: "None" };
+
+function compilePromptOrFallback(
+  promptServiceOpt: PromptServiceOpt,
+  templateId: string,
+  variables: Record<string, unknown>,
+  fallback: string,
+): Effect.Effect<string, never> {
+  if (promptServiceOpt._tag === "None") {
+    return Effect.succeed(fallback);
+  }
+  return promptServiceOpt.value
+    .compile(templateId, variables)
+    .pipe(
+      Effect.map((compiled: { content: string }) => compiled.content),
+      Effect.catchAll(() => Effect.succeed(fallback)),
+    );
+}
 
 // ─── Private Helpers ───
 

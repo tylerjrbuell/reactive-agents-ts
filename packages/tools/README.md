@@ -20,21 +20,34 @@ bun add @reactive-agents/tools effect
 
 ```typescript
 import { ReactiveAgents } from "reactive-agents";
-import { defineTool } from "@reactive-agents/tools";
-import { Schema } from "effect";
+import { Effect } from "effect";
 
-const searchTool = defineTool({
-  name: "web_search",
-  description: "Search the web for information",
-  input: Schema.Struct({ query: Schema.String }),
-  handler: ({ query }) => Effect.succeed(`Results for: ${query}`),
-});
-
+// Built-in tools (web search, file I/O, HTTP, code execution) are auto-registered
 const agent = await ReactiveAgents.create()
   .withName("research-agent")
   .withProvider("anthropic")
   .withReasoning()
-  .withTools([searchTool])
+  .withTools()              // enable built-in tools
+  .build();
+
+// Or register custom tools at build time:
+const agentWithCustomTools = await ReactiveAgents.create()
+  .withName("custom-agent")
+  .withProvider("anthropic")
+  .withTools({
+    tools: [{
+      definition: {
+        name: "lookup",
+        description: "Look up a value in the database",
+        parameters: [{ name: "key", type: "string", description: "Lookup key", required: true }],
+        riskLevel: "low",
+        timeoutMs: 5_000,
+        requiresApproval: false,
+        source: "function",
+      },
+      handler: (args) => Effect.succeed(`Value for ${args.key}`),
+    }],
+  })
   .build();
 
 const result = await agent.run("What are the latest AI developments?");

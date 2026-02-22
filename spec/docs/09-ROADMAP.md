@@ -766,6 +766,7 @@ const agent = await ReactiveAgents.create()
 - **v0.2.0** - Tool system
 - **v0.3.0** - Foundation integration — all phases wired, 5 reasoning strategies
 - **v0.3.1** - Tool calling hardening — Ollama SDK, MCP parameter population, Tavily web search, builder MCP config
+- **v0.4.0** - Robustness & documentation truth — enhanced builder API, structured tool results, EvalStore persistence, 80+ new tests
 
 ### Beta Releases (Months 4-6)
 - **v0.4.0** - Advanced reasoning

@@ -35,6 +35,20 @@ const toGeminiContents = (messages: readonly LLMMessage[]): GeminiContent[] => {
   for (const msg of messages) {
     if (msg.role === "system") continue; // handled via config.systemInstruction
 
+    // Handle tool result messages
+    if (msg.role === "tool") {
+      result.push({
+        role: "user",
+        parts: [{
+          functionResponse: {
+            name: "tool",
+            response: { content: msg.content },
+          },
+        }],
+      });
+      continue;
+    }
+
     const role = msg.role === "assistant" ? "model" : "user";
 
     if (typeof msg.content === "string") {

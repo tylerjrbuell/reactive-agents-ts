@@ -6,6 +6,67 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 
 ---
 
+## [0.4.0] — 2026-02-22
+
+### Added
+
+#### Enhanced Builder API (`@reactive-agents/runtime` 0.4.0)
+- **`.withReasoning(options?)`** — accepts optional `ReasoningOptions` for `defaultStrategy`, per-strategy config, and adaptive settings
+- **`.withTools(options?)`** — accepts optional `ToolsOptions` with custom tool definitions (definition + handler pairs) registered at build time
+- **`.withPrompts(options?)`** — accepts optional `PromptsOptions` with custom `PromptTemplate` objects registered at build time
+- All three methods remain zero-arg compatible for simple use cases
+- New exported interfaces: `ReasoningOptions`, `ToolsOptions`, `PromptsOptions`
+
+#### Structured Tool Results (`@reactive-agents/llm-provider` 0.4.0, `@reactive-agents/runtime` 0.4.0)
+- **LLMMessage type extended** with `{ role: "tool", toolCallId: string, content: string }` variant
+- Execution engine OBSERVE phase now emits structured tool result messages with `toolCallId` references (was plain text `"Tool result: ..."`)
+- **Anthropic adapter**: tool messages converted to `{ role: "user", content: [{ type: "tool_result", tool_use_id, content }] }`
+- **OpenAI adapter**: tool messages mapped to `{ role: "tool", tool_call_id, content }`
+- **Gemini adapter**: tool messages converted to `functionResponse` parts
+- **Ollama adapter**: tool messages filtered (unsupported by Ollama API)
+
+#### EvalStore Persistence (`@reactive-agents/eval` 0.2.0)
+- **`makeEvalServiceLive(store?)`** factory wires optional `EvalStore` (SQLite) into `EvalService`
+- `saveRun()` persists to both in-memory Ref and SQLite store when provided
+- `getHistory()` reads from SQLite store when available, falls back to in-memory Ref
+- **`makeEvalServicePersistentLive(dbPath?)`** convenience function — one-line persistent eval setup
+- `EvalServiceLive` remains backwards compatible (in-memory only)
+
+#### CLI Improvements (`@reactive-agents/cli` 0.4.0)
+- `--stream` flag now prints informational warning ("not yet implemented") instead of silently ignoring
+
+#### Integration Smoke Tests (6 new test files, 26 tests)
+- `packages/runtime/tests/smoke-builder-combinations.test.ts` — 8 tests: minimal, tools-only, reasoning-only, tools+reasoning, full stack, custom system prompt, custom max iterations, withTestResponses
+- `packages/runtime/tests/smoke-tool-pipeline.test.ts` — 3 tests: register → call → observe → complete, tool-not-found graceful error, tool timeout handling
+- `packages/runtime/tests/smoke-guardrails.test.ts` — 3 tests: injection blocked, clean input passes, guardrails + reasoning combo
+- `packages/runtime/tests/smoke-error-recovery.test.ts` — 4 tests: max iterations, missing provider, invalid input, structured error shape
+- `packages/runtime/tests/smoke-memory.test.ts` — 3 tests: memory tier 1, multi-turn sequential, memory + reasoning combo
+- `packages/eval/tests/smoke-eval-store.test.ts` — 5 tests: saveRun → loadHistory, compareRuns dimension changes, unknown ID returns null, cross-instance persistence, limit option
+
+#### Performance & Quality Benchmarks (3 test files, 19 tests)
+- `packages/eval/tests/benchmarks.test.ts` — extended with: `agent.run()` e2e < 100ms, all layers enabled < 200ms, prompt template compilation < 2ms average
+- `packages/eval/tests/quality-regression.test.ts` — 6 tests: ReAct thought sequence, Reflexion critique cycle, Plan-Execute plan sequence, Tree-of-Thought branching + synthesis, Adaptive strategy delegation, all strategies return valid ReasoningResult shape
+- `packages/prompts/tests/template-compilation.test.ts` — 6 tests: template structure validation, compilation with dummy variables, token estimation, PromptService registration, unique IDs, valid variable types
+
+### Changed
+- `@reactive-agents/runtime` 0.3.1 → 0.4.0: enhanced builder API with optional params, structured tool results in execution engine
+- `@reactive-agents/llm-provider` 0.3.0 → 0.4.0: LLMMessage extended with tool role, all 4 provider adapters updated
+- `@reactive-agents/eval` 0.1.0 → 0.2.0: EvalStore wired into EvalService, persistent layer factory
+- `@reactive-agents/cli` 0.3.0 → 0.4.0: --stream warning
+- `reactive-agents` meta-package 0.3.1 → 0.4.0
+
+### Fixed
+- All documentation code examples now reflect actual builder API signatures
+- Removed all references to non-existent `defineTool()` function — replaced with actual `ToolService.register()` pattern or builder `.withTools({ tools: [...] })` option
+- Fixed `.withTools([tool])`, `.withReasoning({ defaultStrategy })`, `.withPrompts({ system })` examples across 18+ documentation files to match real API
+- Updated stale test/file counts in README and CLAUDE.md
+
+### Stats
+- 442 tests across 77 files (was 361/66)
+- 41 files changed, 1238 insertions, 285 deletions
+
+---
+
 ## [0.3.1] — 2026-02-21
 
 ### Added

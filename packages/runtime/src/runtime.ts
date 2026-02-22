@@ -11,8 +11,10 @@ import { createMemoryLayer } from "@reactive-agents/memory";
 import { createGuardrailsLayer } from "@reactive-agents/guardrails";
 import { createVerificationLayer } from "@reactive-agents/verification";
 import { createCostLayer } from "@reactive-agents/cost";
-import { createReasoningLayer } from "@reactive-agents/reasoning";
+import { createReasoningLayer, defaultReasoningConfig } from "@reactive-agents/reasoning";
+import type { ReasoningConfig } from "@reactive-agents/reasoning";
 import { createToolsLayer } from "@reactive-agents/tools";
+import type { ReasoningOptions } from "./builder.js";
 import { createIdentityLayer } from "@reactive-agents/identity";
 import { createObservabilityLayer } from "@reactive-agents/observability";
 import { createInteractionLayer } from "@reactive-agents/interaction";
@@ -51,8 +53,14 @@ export interface RuntimeOptions {
   enableOrchestration?: boolean;
   enableAudit?: boolean;
 
+  // Custom system prompt for the agent
+  systemPrompt?: string;
+
   // MCP servers — implicitly enables tools if set
   mcpServers?: MCPServerConfig[];
+
+  // Reasoning configuration overrides
+  reasoningOptions?: ReasoningOptions;
 }
 
 /**
@@ -79,6 +87,7 @@ export const createRuntime = (options: RuntimeOptions) => {
     enableVerification: options.enableVerification ?? false,
     enableCostTracking: options.enableCostTracking ?? false,
     enableAudit: options.enableAudit ?? false,
+    systemPrompt: options.systemPrompt,
   };
 
   // ── Required layers ──
@@ -130,12 +139,44 @@ export const createRuntime = (options: RuntimeOptions) => {
   }
 
   if (options.enableReasoning) {
+    // Build reasoning config from defaults + user overrides
+    const reasoningConfig: ReasoningConfig = options.reasoningOptions
+      ? {
+          ...defaultReasoningConfig,
+          ...(options.reasoningOptions.defaultStrategy
+            ? { defaultStrategy: options.reasoningOptions.defaultStrategy }
+            : {}),
+          adaptive: {
+            ...defaultReasoningConfig.adaptive,
+            ...(options.reasoningOptions.adaptive ?? {}),
+          },
+          strategies: {
+            reactive: {
+              ...defaultReasoningConfig.strategies.reactive,
+              ...(options.reasoningOptions.strategies?.reactive ?? {}),
+            },
+            planExecute: {
+              ...defaultReasoningConfig.strategies.planExecute,
+              ...(options.reasoningOptions.strategies?.planExecute ?? {}),
+            },
+            treeOfThought: {
+              ...defaultReasoningConfig.strategies.treeOfThought,
+              ...(options.reasoningOptions.strategies?.treeOfThought ?? {}),
+            },
+            reflexion: {
+              ...defaultReasoningConfig.strategies.reflexion,
+              ...(options.reasoningOptions.strategies?.reflexion ?? {}),
+            },
+          },
+        }
+      : defaultReasoningConfig;
+
     // ReasoningService requires LLMService, optionally ToolService
     let reasoningDeps = llmLayer;
     if (toolsLayer) {
       reasoningDeps = Layer.merge(llmLayer, toolsLayer) as any;
     }
-    const reasoningLayer = createReasoningLayer().pipe(
+    const reasoningLayer = createReasoningLayer(reasoningConfig).pipe(
       Layer.provide(reasoningDeps),
     );
     runtime = Layer.merge(runtime, reasoningLayer) as any;

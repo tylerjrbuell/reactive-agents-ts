@@ -347,6 +347,107 @@ describe("ToolService", () => {
     await Effect.runPromise(program.pipe(Effect.provide(TestToolLayer)));
   });
 
+  it("should end-to-end: register → validate → sandbox execute → result", async () => {
+    const program = Effect.gen(function* () {
+      const tools = yield* ToolService;
+
+      // Register a tool with strict params
+      yield* tools.register(
+        {
+          name: "greet-formal",
+          description: "Formally greet a person",
+          parameters: [
+            {
+              name: "firstName",
+              type: "string",
+              description: "First name",
+              required: true,
+            },
+            {
+              name: "title",
+              type: "string",
+              description: "Title (Mr., Ms., Dr.)",
+              required: true,
+              enum: ["Mr.", "Ms.", "Dr."],
+            },
+          ],
+          riskLevel: "low",
+          timeoutMs: 5000,
+          requiresApproval: false,
+          source: "function",
+        },
+        (args) =>
+          Effect.succeed(
+            `Good day, ${args.title} ${args.firstName}!`,
+          ),
+      );
+
+      // Valid execution
+      const result = yield* tools.execute({
+        toolName: "greet-formal",
+        arguments: { firstName: "Ada", title: "Dr." },
+        agentId: "agent-e2e",
+        sessionId: "session-e2e",
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.result).toBe("Good day, Dr. Ada!");
+      expect(result.executionTimeMs).toBeGreaterThanOrEqual(0);
+
+      // Invalid enum value should fail validation
+      const badResult = yield* tools
+        .execute({
+          toolName: "greet-formal",
+          arguments: { firstName: "Ada", title: "Prof." },
+          agentId: "agent-e2e",
+          sessionId: "session-e2e",
+        })
+        .pipe(Effect.flip);
+
+      expect(badResult._tag).toBe("ToolValidationError");
+    });
+
+    await Effect.runPromise(program.pipe(Effect.provide(TestToolLayer)));
+  });
+
+  it("should document requiresApproval flag (currently not enforced at service level)", async () => {
+    // requiresApproval is a metadata flag — it's up to the execution engine
+    // or interaction layer to check it. ToolService executes regardless.
+    const program = Effect.gen(function* () {
+      const tools = yield* ToolService;
+
+      yield* tools.register(
+        {
+          name: "dangerous-tool",
+          description: "A tool requiring approval",
+          parameters: [],
+          riskLevel: "critical",
+          timeoutMs: 5000,
+          requiresApproval: true,
+          source: "function",
+        },
+        () => Effect.succeed("executed anyway"),
+      );
+
+      // Tool still executes — approval is enforced by higher layers
+      const result = yield* tools.execute({
+        toolName: "dangerous-tool",
+        arguments: {},
+        agentId: "agent-1",
+        sessionId: "session-1",
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.result).toBe("executed anyway");
+
+      // Verify the definition has requiresApproval set
+      const def = yield* tools.getTool("dangerous-tool");
+      expect(def.requiresApproval).toBe(true);
+    });
+
+    await Effect.runPromise(program.pipe(Effect.provide(TestToolLayer)));
+  });
+
   it("should still allow registering additional tools alongside built-ins", async () => {
     const program = Effect.gen(function* () {
       const tools = yield* ToolService;

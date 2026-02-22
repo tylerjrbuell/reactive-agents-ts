@@ -23,8 +23,12 @@ export { scoreSafety } from "./dimensions/safety.js";
 export { scoreCostEfficiency } from "./dimensions/cost-efficiency.js";
 
 // Services
-export { EvalService, EvalServiceLive } from "./services/eval-service.js";
+export { EvalService, EvalServiceLive, makeEvalServiceLive, makeEvalServicePersistentLive } from "./services/eval-service.js";
 export { DatasetService, DatasetServiceLive } from "./services/dataset-service.js";
+
+// Persistent store
+export { createEvalStore } from "./services/eval-store.js";
+export type { EvalStore } from "./services/eval-store.js";
 
 // Runtime factory
 export { createEvalLayer } from "./runtime.js";

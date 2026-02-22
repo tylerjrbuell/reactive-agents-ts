@@ -12,6 +12,7 @@ import type { StepId } from "../types/step.js";
 import { ExecutionError, IterationLimitError } from "../errors/errors.js";
 import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
+import { PromptService } from "@reactive-agents/prompts";
 
 interface TreeOfThoughtInput {
   readonly taskDescription: string;
@@ -38,6 +39,9 @@ export const executeTreeOfThought = (
 > =>
   Effect.gen(function* () {
     const llm = yield* LLMService;
+    const promptServiceOpt = yield* Effect.serviceOption(PromptService).pipe(
+      Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
+    );
     const { breadth, depth, pruningThreshold } =
       input.config.strategies.treeOfThought;
     const steps: ReasoningStep[] = [];
@@ -85,7 +89,12 @@ export const executeTreeOfThought = (
                 ),
               },
             ],
-            systemPrompt: `You are exploring solution paths for: ${input.taskDescription}. Generate ${breadth} distinct approaches.`,
+            systemPrompt: yield* compilePromptOrFallback(
+              promptServiceOpt,
+              "reasoning.tree-of-thought-expand",
+              { task: input.taskDescription, breadth },
+              `You are exploring solution paths for: ${input.taskDescription}. Generate ${breadth} distinct approaches.`,
+            ),
             maxTokens: 200 * breadth,
             temperature: 0.8,
           })
@@ -120,8 +129,12 @@ export const executeTreeOfThought = (
                   ),
                 },
               ],
-              systemPrompt:
+              systemPrompt: yield* compilePromptOrFallback(
+                promptServiceOpt,
+                "reasoning.tree-of-thought-score",
+                {},
                 "You are evaluating a reasoning path. Rate its promise on a scale of 0.0 to 1.0. Respond with ONLY a number.",
+              ),
               maxTokens: 50,
               temperature: 0.2,
             })
@@ -218,8 +231,12 @@ export const executeTreeOfThought = (
             content: `Based on this reasoning path, provide a final answer to: ${input.taskDescription}\n\nReasoning path:\n${bestPath.join("\n→ ")}`,
           },
         ],
-        systemPrompt:
+        systemPrompt: yield* compilePromptOrFallback(
+          promptServiceOpt,
+          "reasoning.tree-of-thought-synthesize",
+          {},
           "Synthesize the reasoning path into a clear, concise final answer.",
+        ),
         maxTokens: 500,
         temperature: 0.3,
       })
@@ -254,6 +271,29 @@ export const executeTreeOfThought = (
       totalCost,
     );
   });
+
+// ─── Prompt compilation helper ───
+
+type PromptServiceOpt =
+  | { _tag: "Some"; value: { compile: (id: string, vars: Record<string, unknown>) => Effect.Effect<{ content: string }, unknown> } }
+  | { _tag: "None" };
+
+function compilePromptOrFallback(
+  promptServiceOpt: PromptServiceOpt,
+  templateId: string,
+  variables: Record<string, unknown>,
+  fallback: string,
+): Effect.Effect<string, never> {
+  if (promptServiceOpt._tag === "None") {
+    return Effect.succeed(fallback);
+  }
+  return promptServiceOpt.value
+    .compile(templateId, variables)
+    .pipe(
+      Effect.map((compiled: { content: string }) => compiled.content),
+      Effect.catchAll(() => Effect.succeed(fallback)),
+    );
+}
 
 // ─── Private Helpers ───
 

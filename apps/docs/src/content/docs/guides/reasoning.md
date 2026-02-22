@@ -22,20 +22,11 @@ A **Thought → Action → Observation** loop that continues until the agent rea
 
 ```typescript
 import { ReactiveAgents } from "reactive-agents";
-import { defineTool } from "@reactive-agents/tools";
-import { Effect, Schema } from "effect";
-
-const searchTool = defineTool({
-  name: "web_search",
-  description: "Search the web for current information",
-  input: Schema.Struct({ query: Schema.String }),
-  handler: ({ query }) => Effect.succeed(`Results for: ${query}`),
-});
 
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withReasoning()          // ReAct strategy by default
-  .withTools([searchTool])  // Tools are called for real during reasoning
+  .withTools()              // Built-in tools (web search, file I/O, etc.)
   .build();
 
 const result = await agent.run("What happened in AI this week?");
@@ -87,7 +78,7 @@ A structured approach that generates a plan first, then executes each step:
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withReasoning({ defaultStrategy: "plan-execute-reflect" })
-  .withTools([searchTool, calculatorTool])
+  .withTools()
   .build();
 
 const result = await agent.run("Compare the GDP growth of the top 5 economies over the last decade");
@@ -149,7 +140,7 @@ The Adaptive strategy doesn't reason itself — it **analyzes the task and deleg
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withReasoning({ defaultStrategy: "adaptive" })
-  .withTools([...myTools])
+  .withTools()
   .build();
 
 // Adaptive selects the best strategy per task

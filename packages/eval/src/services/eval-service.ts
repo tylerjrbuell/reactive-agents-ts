@@ -10,6 +10,7 @@ import type { EvalResult, EvalRun, EvalRunSummary, DimensionScore } from "../typ
 import type { EvalConfig } from "../types/config.js";
 import { DEFAULT_EVAL_CONFIG } from "../types/config.js";
 import { EvalError, BenchmarkError } from "../errors/errors.js";
+import type { EvalStore } from "./eval-store.js";
 import { scoreAccuracy } from "../dimensions/accuracy.js";
 import { scoreRelevance } from "../dimensions/relevance.js";
 import { scoreCompleteness } from "../dimensions/completeness.js";
@@ -146,71 +147,82 @@ const buildSummary = (results: EvalResult[], passThreshold: number): EvalRunSumm
   };
 };
 
-export const EvalServiceLive = Layer.effect(
-  EvalService,
-  Effect.gen(function* () {
-    const llm = yield* LLMService;
-    const historyRef = yield* Ref.make<EvalRun[]>([]);
+/**
+ * Create EvalServiceLive with optional persistent store.
+ * When a store is provided, runs are persisted to SQLite and history is loaded from disk.
+ */
+export const makeEvalServiceLive = (store?: EvalStore) =>
+  Layer.effect(
+    EvalService,
+    Effect.gen(function* () {
+      const llm = yield* LLMService;
+      const historyRef = yield* Ref.make<EvalRun[]>([]);
 
-    return {
-      runSuite: (suite, agentConfig, configOverride) =>
-        Effect.gen(function* () {
-          const config = { ...DEFAULT_EVAL_CONFIG, ...configOverride };
-          const results: EvalResult[] = [];
+      return {
+        runSuite: (suite, agentConfig, configOverride) =>
+          Effect.gen(function* () {
+            const config = { ...DEFAULT_EVAL_CONFIG, ...configOverride };
+            const results: EvalResult[] = [];
 
-          for (const evalCase of suite.cases) {
-            const start = Date.now();
-            const scores = yield* Effect.all(
-              suite.dimensions.map((dim) =>
-                scoreDimension(llm, dim, {
-                  input: evalCase.input,
-                  actualOutput: "[evaluated via LLM-as-judge]",
-                  expectedOutput: evalCase.expectedOutput,
-                  caseId: evalCase.id,
-                  costUsd: 0,
-                }),
-              ),
-              { concurrency: config.parallelism },
-            ).pipe(
-              Effect.mapError(
-                (err) =>
-                  new BenchmarkError({
-                    message: `Suite "${suite.id}" case "${evalCase.id}" failed: ${String(err)}`,
-                    suiteId: suite.id,
+            for (const evalCase of suite.cases) {
+              const start = Date.now();
+              const scores = yield* Effect.all(
+                suite.dimensions.map((dim) =>
+                  scoreDimension(llm, dim, {
+                    input: evalCase.input,
+                    actualOutput: "[evaluated via LLM-as-judge]",
+                    expectedOutput: evalCase.expectedOutput,
+                    caseId: evalCase.id,
+                    costUsd: 0,
                   }),
-              ),
-            );
+                ),
+                { concurrency: config.parallelism },
+              ).pipe(
+                Effect.mapError(
+                  (err) =>
+                    new BenchmarkError({
+                      message: `Suite "${suite.id}" case "${evalCase.id}" failed: ${String(err)}`,
+                      suiteId: suite.id,
+                    }),
+                ),
+              );
 
-            const overallScore =
-              scores.length > 0 ? scores.reduce((s, d) => s + d.score, 0) / scores.length : 0;
+              const overallScore =
+                scores.length > 0 ? scores.reduce((s, d) => s + d.score, 0) / scores.length : 0;
 
-            results.push({
-              caseId: evalCase.id,
+              results.push({
+                caseId: evalCase.id,
+                timestamp: new Date(),
+                agentConfig,
+                scores,
+                overallScore,
+                actualOutput: "[evaluated via LLM-as-judge]",
+                latencyMs: Date.now() - start,
+                costUsd: 0,
+                tokensUsed: 0,
+                stepsExecuted: 0,
+                passed: overallScore >= config.passThreshold,
+              });
+            }
+
+            const run: EvalRun = {
+              id: crypto.randomUUID(),
+              suiteId: suite.id,
               timestamp: new Date(),
               agentConfig,
-              scores,
-              overallScore,
-              actualOutput: "[evaluated via LLM-as-judge]",
-              latencyMs: Date.now() - start,
-              costUsd: 0,
-              tokensUsed: 0,
-              stepsExecuted: 0,
-              passed: overallScore >= config.passThreshold,
-            });
-          }
+              results,
+              summary: buildSummary(results, config.passThreshold),
+            };
 
-          const run: EvalRun = {
-            id: crypto.randomUUID(),
-            suiteId: suite.id,
-            timestamp: new Date(),
-            agentConfig,
-            results,
-            summary: buildSummary(results, config.passThreshold),
-          };
+            yield* Ref.update(historyRef, (h) => [...h, run]);
 
-          yield* Ref.update(historyRef, (h) => [...h, run]);
-          return run;
-        }),
+            // Persist to store if available
+            if (store) {
+              yield* store.saveRun(run).pipe(Effect.catchAll(() => Effect.void));
+            }
+
+            return run;
+          }),
 
       runCase: (evalCase, agentConfig, dimensions, actualOutput, metrics) =>
         Effect.gen(function* () {
@@ -320,13 +332,35 @@ export const EvalServiceLive = Layer.effect(
       },
 
       getHistory: (suiteId, options) =>
-        Ref.get(historyRef).pipe(
-          Effect.map((h) =>
-            h
-              .filter((r) => r.suiteId === suiteId)
-              .slice(-(options?.limit ?? 100)),
-          ),
-        ),
+        store
+          ? store.loadHistory(suiteId, options).pipe(
+              Effect.catchAll(() =>
+                Ref.get(historyRef).pipe(
+                  Effect.map((h) =>
+                    h
+                      .filter((r) => r.suiteId === suiteId)
+                      .slice(-(options?.limit ?? 100)),
+                  ),
+                ),
+              ),
+            )
+          : Ref.get(historyRef).pipe(
+              Effect.map((h) =>
+                h
+                  .filter((r) => r.suiteId === suiteId)
+                  .slice(-(options?.limit ?? 100)),
+              ),
+            ),
     };
   }),
 );
+
+/** EvalServiceLive without persistence (in-memory only) — backwards compatible. */
+export const EvalServiceLive = makeEvalServiceLive();
+
+/** EvalServicePersistentLive — convenience layer with SQLite persistence. */
+export const makeEvalServicePersistentLive = (dbPath?: string) => {
+  // Lazy import to avoid requiring bun:sqlite at module load time
+  const { createEvalStore } = require("./eval-store.js") as typeof import("./eval-store.js");
+  return makeEvalServiceLive(createEvalStore(dbPath));
+};

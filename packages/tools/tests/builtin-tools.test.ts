@@ -69,10 +69,10 @@ describe("Built-in Tool Handlers", () => {
         webSearchHandler({ query: "test query" }),
       );
 
-      const typed = result as { query: string; results: unknown[]; message: string };
+      const typed = result as { query: string; results: unknown[]; error: string };
       expect(typed.query).toBe("test query");
       expect(typed.results).toEqual([]);
-      expect(typed.message).toContain("stub");
+      expect(typed.error).toContain("TAVILY_API_KEY");
     } finally {
       if (original) process.env.TAVILY_API_KEY = original;
     }

@@ -434,9 +434,10 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         }>;
                       }>("LLMService");
 
+                      const defaultPrompt = config.systemPrompt ?? "You are a helpful AI assistant.";
                       const systemPrompt = c.memoryContext
-                        ? `${String((c.memoryContext as any).semanticContext ?? "")}\n\nYou are a helpful AI assistant.`
-                        : `You are a helpful AI assistant.`;
+                        ? `${String((c.memoryContext as any).semanticContext ?? "")}\n\n${defaultPrompt}`
+                        : defaultPrompt;
 
                       // Convert function-calling tools to LLM ToolDefinition format
                       const llmTools = functionCallingTools.length > 0
@@ -583,19 +584,21 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         }
                       }
 
+                      // Emit structured tool result messages with toolCallId references
+                      // LLM provider adapters translate these to their native format:
+                      // - Anthropic: { type: "tool_result", tool_use_id, content }
+                      // - OpenAI: { role: "tool", tool_call_id, content }
+                      const toolResultMessages = recentResults.map((r: any) => ({
+                        role: "tool" as const,
+                        toolCallId: r.toolCallId,
+                        content: typeof r.result === "string" ? r.result : JSON.stringify(r.result),
+                      }));
+
                       return {
                         ...c,
                         messages: [
                           ...c.messages,
-                          {
-                            role: "user",
-                            content: recentResults
-                              .map(
-                                (r: any) =>
-                                  `Tool result: ${JSON.stringify(r.result)}`,
-                              )
-                              .join("\n"),
-                          },
+                          ...toolResultMessages,
                         ],
                         iteration: c.iteration + 1,
                       };
