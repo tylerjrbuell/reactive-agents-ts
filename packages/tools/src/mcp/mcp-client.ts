@@ -151,6 +151,11 @@ const startSseReader = (
   const connect = () => {
     if (transport.connected) return;
 
+    // Abort any existing controller before creating a new one
+    if (transport.abortController) {
+      transport.abortController.abort();
+    }
+
     const abortController = new AbortController();
     transport.abortController = abortController;
 
