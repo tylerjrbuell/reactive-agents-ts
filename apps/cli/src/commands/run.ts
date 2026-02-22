@@ -1,5 +1,18 @@
 import { ReactiveAgents } from "@reactive-agents/runtime";
 
+import { existsSync, readFileSync } from "fs";
+import { resolve } from "path";
+
+interface MCPConfigFile {
+  servers: Array<{
+    name: string;
+    transport: "stdio" | "sse" | "websocket";
+    command?: string;
+    args?: string[];
+    endpoint?: string;
+  }>;
+}
+
 export async function runAgent(args: string[]): Promise<void> {
   // Parse arguments
   const promptParts: string[] = [];
@@ -8,6 +21,7 @@ export async function runAgent(args: string[]): Promise<void> {
   let name = "cli-agent";
   let enableTools = false;
   let enableReasoning = false;
+  let mcpConfigPath: string | undefined;
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -21,6 +35,8 @@ export async function runAgent(args: string[]): Promise<void> {
       enableTools = true;
     } else if (arg === "--reasoning") {
       enableReasoning = true;
+    } else if ((arg === "--mcp-config" || arg === "--mcp") && args[i + 1]) {
+      mcpConfigPath = args[++i];
     } else if (!arg.startsWith("--")) {
       promptParts.push(arg);
     }
@@ -28,8 +44,24 @@ export async function runAgent(args: string[]): Promise<void> {
 
   const prompt = promptParts.join(" ");
   if (!prompt) {
-    console.error("Usage: rax run <prompt> [--provider anthropic|openai|ollama|gemini|test] [--model <model>] [--name <name>] [--tools] [--reasoning]");
+    console.error("Usage: rax run <prompt> [--provider anthropic|openai|ollama|gemini|test] [--model <model>] [--name <name>] [--tools] [--reasoning] [--mcp-config <path>]");
     process.exit(1);
+  }
+
+  // Load MCP config: explicit path > auto-detect .rax/mcp.json
+  let mcpConfig: MCPConfigFile | undefined;
+  const configFile = mcpConfigPath ?? resolve(process.cwd(), ".rax", "mcp.json");
+  if (mcpConfigPath || existsSync(configFile)) {
+    try {
+      const raw = readFileSync(mcpConfigPath ?? configFile, "utf-8");
+      mcpConfig = JSON.parse(raw) as MCPConfigFile;
+      console.log(`Loaded MCP config: ${mcpConfig.servers.length} server(s)`);
+    } catch (err) {
+      if (mcpConfigPath) {
+        console.error(`Failed to load MCP config from ${mcpConfigPath}: ${err}`);
+        process.exit(1);
+      }
+    }
   }
 
   console.log(`Building agent "${name}" with provider: ${provider}...`);
@@ -48,6 +80,12 @@ export async function runAgent(args: string[]): Promise<void> {
 
   if (enableReasoning) {
     builder = builder.withReasoning();
+  }
+
+  if (mcpConfig) {
+    for (const server of mcpConfig.servers) {
+      builder = builder.withMCP(server);
+    }
   }
 
   try {

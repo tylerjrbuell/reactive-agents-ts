@@ -5,6 +5,7 @@ export type {
   ToolInput,
   ToolOutput,
   MCPServer,
+  MCPToolSchema,
   MCPRequest,
   MCPResponse,
   FunctionCallingTool,
@@ -54,6 +55,7 @@ export { makeSandbox } from "./execution/sandbox.js";
 export { validateToolInput } from "./validation/input-validator.js";
 
 // ─── Skills ───
+export { builtinTools } from "./skills/builtin.js";
 export { webSearchTool, webSearchHandler } from "./skills/web-search.js";
 export {
   fileReadTool,

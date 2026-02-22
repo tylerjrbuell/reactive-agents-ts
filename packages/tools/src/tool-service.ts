@@ -153,13 +153,36 @@ export const ToolServiceLive = Layer.effect(
       Effect.gen(function* () {
         const server = yield* mcpClient.connect(config);
 
-        // Register each MCP tool in the registry
-        for (const toolName of server.tools) {
+        // Register each MCP tool in the registry with full schema info
+        const schemas = server.toolSchemas ?? [];
+        for (let i = 0; i < server.tools.length; i++) {
+          const toolName = server.tools[i];
+          const schema = schemas[i];
+
+          // Convert inputSchema.properties to parameters array
+          const parameters: import("./types.js").ToolParameter[] = [];
+          if (schema?.inputSchema) {
+            const props = schema.inputSchema.properties as
+              | Record<string, { type?: string; description?: string }>
+              | undefined;
+            const required = (schema.inputSchema.required as string[]) ?? [];
+            if (props) {
+              for (const [name, prop] of Object.entries(props)) {
+                parameters.push({
+                  name,
+                  type: (prop.type as "string" | "number" | "boolean" | "object" | "array") ?? "string",
+                  description: prop.description ?? "",
+                  required: required.includes(name),
+                });
+              }
+            }
+          }
+
           yield* registry.register(
             {
               name: `${server.name}/${toolName}`,
-              description: `MCP tool from ${server.name}`,
-              parameters: [],
+              description: schema?.description ?? `MCP tool from ${server.name}`,
+              parameters,
               riskLevel: "medium",
               timeoutMs: 30_000,
               requiresApproval: false,

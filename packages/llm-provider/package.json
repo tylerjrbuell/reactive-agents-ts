@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/llm-provider",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -11,16 +11,18 @@
     "test:watch": "bun test --watch"
   },
   "dependencies": {
-    "effect": "^3.10.0",
-    "@reactive-agents/core": "workspace:*"
+    "@reactive-agents/core": "workspace:*",
+    "effect": "^3.10.0"
   },
   "optionalDependencies": {
     "@anthropic-ai/sdk": "^0.30.0",
     "openai": "^4.70.0",
-    "@google/genai": "^1.0.0"
+    "@google/genai": "^1.0.0",
+    "ollama": "^0.6.3"
   },
   "devDependencies": {
     "@google/genai": "^1.42.0",
+    "ollama": "^0.6.3",
     "bun-types": "latest",
     "typescript": "^5.7.0"
   },

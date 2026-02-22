@@ -1,5 +1,6 @@
 import { Effect, Layer } from "effect";
 import { createRuntime } from "./runtime.js";
+import type { MCPServerConfig } from "./runtime.js";
 import { ExecutionEngine } from "./execution-engine.js";
 import type { LifecycleHook } from "./types.js";
 
@@ -50,6 +51,7 @@ export class ReactiveAgentBuilder {
   private _enableOrchestration: boolean = false;
   private _testResponses?: Record<string, string>;
   private _extraLayers?: Layer.Layer<any, any>;
+  private _mcpServers: MCPServerConfig[] = [];
 
   // ─── Identity ───
 
@@ -150,6 +152,15 @@ export class ReactiveAgentBuilder {
     return this;
   }
 
+  // ─── MCP Servers ───
+
+  withMCP(config: MCPServerConfig | MCPServerConfig[]): this {
+    const configs = Array.isArray(config) ? config : [config];
+    this._mcpServers.push(...configs);
+    this._enableTools = true;
+    return this;
+  }
+
   // ─── Testing ───
 
   withTestResponses(responses: Record<string, string>): this {
@@ -192,9 +203,11 @@ export class ReactiveAgentBuilder {
       enableOrchestration: this._enableOrchestration,
       testResponses: this._testResponses,
       extraLayers: this._extraLayers,
+      mcpServers: this._mcpServers.length > 0 ? this._mcpServers : undefined,
     });
 
     const hooks = [...this._hooks];
+    const mcpServers = [...this._mcpServers];
 
     return Effect.gen(function* () {
       const engine = yield* ExecutionEngine.pipe(Effect.provide(runtime));
@@ -203,8 +216,19 @@ export class ReactiveAgentBuilder {
         yield* engine.registerHook(hook);
       }
 
+      // Connect MCP servers if configured
+      if (mcpServers.length > 0) {
+        const { ToolService } = yield* Effect.promise(() =>
+          import("@reactive-agents/tools"),
+        );
+        const toolService = yield* (ToolService as any).pipe(Effect.provide(runtime));
+        for (const mcp of mcpServers) {
+          yield* (toolService as any).connectMCPServer(mcp);
+        }
+      }
+
       return new ReactiveAgent(engine, agentId, runtime);
-    });
+    }) as Effect.Effect<ReactiveAgent, Error>;
   }
 }
 

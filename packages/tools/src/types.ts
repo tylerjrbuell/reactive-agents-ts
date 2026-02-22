@@ -52,6 +52,15 @@ export type ToolOutput = typeof ToolOutputSchema.Type;
 
 // ─── MCP Types ───
 
+export const MCPToolSchemaEntry = Schema.Struct({
+  name: Schema.String,
+  description: Schema.optional(Schema.String),
+  inputSchema: Schema.optional(
+    Schema.Record({ key: Schema.String, value: Schema.Unknown }),
+  ),
+});
+export type MCPToolSchema = typeof MCPToolSchemaEntry.Type;
+
 export const MCPServerSchema = Schema.Struct({
   name: Schema.String,
   version: Schema.String,
@@ -60,6 +69,7 @@ export const MCPServerSchema = Schema.Struct({
   command: Schema.optional(Schema.String),
   args: Schema.optional(Schema.Array(Schema.String)),
   tools: Schema.Array(Schema.String),
+  toolSchemas: Schema.optional(Schema.Array(MCPToolSchemaEntry)),
   status: Schema.Literal("connected", "disconnected", "error"),
 });
 export type MCPServer = typeof MCPServerSchema.Type;

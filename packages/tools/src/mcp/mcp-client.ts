@@ -269,11 +269,25 @@ export const makeMCPClient = Effect.gen(function* () {
         method: "tools/list",
       });
 
-      const toolNames = Array.isArray(toolsResponse.result)
-        ? toolsResponse.result.map(
-            (t: Record<string, unknown>) => t.name as string,
-          )
-        : [];
+      // Parse full tool schemas from MCP tools/list response
+      const rawTools = Array.isArray(
+        (toolsResponse.result as Record<string, unknown>)?.tools,
+      )
+        ? ((toolsResponse.result as Record<string, unknown>).tools as Array<
+            Record<string, unknown>
+          >)
+        : Array.isArray(toolsResponse.result)
+          ? (toolsResponse.result as Array<Record<string, unknown>>)
+          : [];
+
+      const toolNames = rawTools.map((t) => t.name as string);
+      const toolSchemas = rawTools.map((t) => ({
+        name: t.name as string,
+        description: t.description as string | undefined,
+        inputSchema: t.inputSchema as
+          | Record<string, unknown>
+          | undefined,
+      }));
 
       const server: MCPServer = {
         name: config.name,
@@ -291,6 +305,7 @@ export const makeMCPClient = Effect.gen(function* () {
         command: config.command,
         args: config.args,
         tools: toolNames,
+        toolSchemas,
         status: "connected",
       };
 

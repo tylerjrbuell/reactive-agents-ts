@@ -12,7 +12,7 @@
     },
     "apps/cli": {
       "name": "@reactive-agents/cli",
-      "version": "0.2.1",
+      "version": "0.3.0",
       "bin": {
         "rax": "dist/index.js",
         "reactive-agents": "dist/index.js",
@@ -135,7 +135,7 @@
     },
     "packages/llm-provider": {
       "name": "@reactive-agents/llm-provider",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "dependencies": {
         "@reactive-agents/core": "workspace:*",
         "effect": "^3.10.0",
@@ -143,11 +143,13 @@
       "devDependencies": {
         "@google/genai": "^1.42.0",
         "bun-types": "latest",
+        "ollama": "^0.6.3",
         "typescript": "^5.7.0",
       },
       "optionalDependencies": {
         "@anthropic-ai/sdk": "^0.30.0",
         "@google/genai": "^1.0.0",
+        "ollama": "^0.6.3",
         "openai": "^4.70.0",
       },
     },
@@ -205,7 +207,7 @@
     },
     "packages/reactive-agents": {
       "name": "reactive-agents",
-      "version": "0.3.0",
+      "version": "0.3.1",
       "dependencies": {
         "@reactive-agents/core": "workspace:*",
         "@reactive-agents/cost": "workspace:*",
@@ -246,7 +248,7 @@
     },
     "packages/runtime": {
       "name": "@reactive-agents/runtime",
-      "version": "0.3.0",
+      "version": "0.3.1",
       "dependencies": {
         "@reactive-agents/core": "0.1.0",
         "@reactive-agents/cost": "0.1.0",
@@ -270,7 +272,7 @@
     },
     "packages/tools": {
       "name": "@reactive-agents/tools",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "dependencies": {
         "@reactive-agents/core": "workspace:*",
         "effect": "^3.10.0",
@@ -1180,6 +1182,8 @@
 
     "ohash": ["ohash@2.0.11", "", {}, "sha512-RdR9FQrFwNBNXAr4GixM8YaRZRJ5PUWbKYbE5eOsrwAjJW0q2REGcf79oYPsLyskQCZG1PLN+S/K1V00joZAoQ=="],
 
+    "ollama": ["ollama@0.6.3", "", { "dependencies": { "whatwg-fetch": "^3.6.20" } }, "sha512-KEWEhIqE5wtfzEIZbDCLH51VFZ6Z3ZSa6sIOg/E/tBV8S51flyqBOXi+bRxlOYKDf8i327zG9eSTb8IJxvm3Zg=="],
+
     "oniguruma-parser": ["oniguruma-parser@0.12.1", "", {}, "sha512-8Unqkvk1RYc6yq2WBYRj4hdnsAxVze8i7iPfQr8e4uSP3tRv0rpZcbGUDvxfQQcdwHt/e9PrMvGCsa8OqG9X3w=="],
 
     "oniguruma-to-es": ["oniguruma-to-es@4.3.4", "", { "dependencies": { "oniguruma-parser": "^0.12.1", "regex": "^6.0.1", "regex-recursion": "^6.0.2" } }, "sha512-3VhUGN3w2eYxnTzHn+ikMI+fp/96KoRSVK9/kMTcFqj1NRDh2IhQCKvYxDnWePKRXY/AqH+Fuiyb7VHSzBjHfA=="],
@@ -1438,6 +1442,8 @@
 
     "webidl-conversions": ["webidl-conversions@3.0.1", "", {}, "sha512-2JAn3z8AR6rjK8Sm8orRC0h/bcl/DqL7tRPdGZ4I1CjdF+EaMLmYxBHyXuKL849eucPFhvBoxMsflfOb8kxaeQ=="],
 
+    "whatwg-fetch": ["whatwg-fetch@3.6.20", "", {}, "sha512-EqhiFU6daOA8kpjOWTL0olhVOF3i7OrFzSYiGsEMB8GcXS+RrzauAERX65xMeNWVqxA6HXH2m69Z9LaKKdisfg=="],
+
     "whatwg-url": ["whatwg-url@5.0.0", "", { "dependencies": { "tr46": "~0.0.3", "webidl-conversions": "^3.0.0" } }, "sha512-saE57nupxk6v3HY35+jzBwYa0rKSy0XR8JSxZPwgLr7ys0IBzhGviA1/TUGJLmSVqs8pb9AnvICXEuOHLprYTw=="],
 
     "which": ["which@2.0.2", "", { "dependencies": { "isexe": "^2.0.0" }, "bin": { "node-which": "./bin/node-which" } }, "sha512-BLI3Tl1TW3Pvl70l3yq3Y64i+awpwXqsGBYWkkqMtnbXgrMD+yj7rhW0kuEDxzJaYXGjEW5ogapKNMEKNMjibA=="],
@@ -1481,6 +1487,8 @@
     "@reactive-agents/runtime/@reactive-agents/llm-provider": ["@reactive-agents/llm-provider@0.1.1", "", { "dependencies": { "@reactive-agents/core": "0.1.0", "effect": "^3.10.0" }, "optionalDependencies": { "@anthropic-ai/sdk": "^0.30.0", "@google/genai": "^1.0.0", "openai": "^4.70.0" } }, "sha512-+dx+m2wa+oiS9WPREYH4/bggr+RveI87gUA7tRkBLPl9kw+ckaA2+40dA96rzfyQ8LBv2tR6/ywkkzaPR59g9g=="],
 
     "@reactive-agents/runtime/@reactive-agents/reasoning": ["@reactive-agents/reasoning@0.2.0", "", { "dependencies": { "@reactive-agents/core": "0.1.0", "@reactive-agents/llm-provider": "0.1.1", "@reactive-agents/tools": "0.1.1", "effect": "^3.10.0", "ulid": "^2.3.0" } }, "sha512-SuHzs3dBooIiqtfYlzlSv/EBOMM1mUzbphHJ01uX6g5HzRKjKIgr2nqutBRa7xiQegGwiVZjZyQL+pHcptPrXg=="],
+
+    "@reactive-agents/runtime/@reactive-agents/tools": ["@reactive-agents/tools@0.2.0", "", { "dependencies": { "@reactive-agents/core": "0.1.0", "effect": "^3.10.0" } }, "sha512-IwJIZ7b8tLryJ+Z4pcGziHec3yRCDhf4ZVxFgSEpDA/P/txC9OmetIiO9OuKVSCv3jf7FNkYlozDRZiJ7JPEGg=="],
 
     "@rollup/pluginutils/estree-walker": ["estree-walker@2.0.2", "", {}, "sha512-Rfkk/Mp/DL7JVje3u18FxFujQlTNR2q6QfMSMB7AvCBx91NGj/ba3kCfza0f6dVDbw7YlRf/nDrn7pQrCCyQ/w=="],
 

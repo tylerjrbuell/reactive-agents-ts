@@ -36,6 +36,7 @@ export { ExecutionEngine, ExecutionEngineLive } from "./execution-engine.js";
 
 // ─── Runtime ───
 export { createRuntime } from "./runtime.js";
+export type { RuntimeOptions, MCPServerConfig } from "./runtime.js";
 
 // ─── Builder (Primary Public DX) ───
 export {
