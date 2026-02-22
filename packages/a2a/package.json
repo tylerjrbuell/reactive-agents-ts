@@ -1,0 +1,43 @@
+{
+  "name": "@reactive-agents/a2a",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsup --config ../../tsup.config.base.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "test:watch": "bun test --watch"
+  },
+  "dependencies": {
+    "effect": "^3.10.0",
+    "@reactive-agents/core": "workspace:^",
+    "@reactive-agents/tools": "workspace:^"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "bun-types": "latest",
+    "@reactive-agents/identity": "workspace:^"
+  },
+  "peerDependencies": {
+    "@reactive-agents/identity": "workspace:^"
+  },
+  "peerDependenciesMeta": {
+    "@reactive-agents/identity": {
+      "optional": true
+    }
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "README.md", "LICENSE"],
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  }
+}

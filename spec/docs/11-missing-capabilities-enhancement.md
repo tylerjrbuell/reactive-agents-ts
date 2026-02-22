@@ -18,33 +18,33 @@ Seven enhancement capabilities organized into **3 new packages** plus **4 integr
 
 # Package 1: `@reactive-agents/guardrails`
 
-## Package Structure
+> **Design Evolution (v0.4.0):** The original spec proposed a multi-service architecture with
+> PolicyEngine, ContractEnforcer, scope-enforcer, and content-filter as separate Context.Tag services.
+> The shipped implementation is intentionally simpler: a single `GuardrailService` backed by 3
+> heuristic detectors (injection, PII, toxicity) plus an optional AgentContract check. This avoids
+> over-engineering for the current use case while preserving the ability to add PolicyEngine and
+> ContractEnforcer as separate services in v1.x when policy-based routing becomes necessary.
+
+## Package Structure (Shipped)
 
 ```
 @reactive-agents/guardrails/
 ├── src/
 │   ├── index.ts                      # Public API re-exports
-│   ├── types/
-│   │   ├── contract.ts               # AgentContract schema
-│   │   ├── policy.ts                 # Policy, GuardrailDecision schemas
-│   │   ├── result.ts                 # GuardrailResult schema
-│   │   └── config.ts                 # GuardrailConfig schema + defaults
-│   ├── errors/
-│   │   └── errors.ts                 # Data.TaggedError definitions
+│   ├── types.ts                      # ViolationType, Severity, GuardrailResult, AgentContract, GuardrailConfig schemas
+│   ├── errors.ts                     # Data.TaggedError definitions
 │   ├── detectors/
-│   │   ├── prompt-injection.ts       # Heuristic + LLM prompt injection detection
-│   │   ├── pii-detector.ts           # PII regex detection + redaction
-│   │   ├── content-filter.ts         # Toxicity / harmful content (LLM-based)
-│   │   └── scope-enforcer.ts         # Ensure output matches task scope
-│   ├── services/
-│   │   ├── policy-engine.ts          # PolicyEngine Context.Tag + Live Layer
-│   │   ├── contract-enforcer.ts      # ContractEnforcer Context.Tag + Live Layer
-│   │   └── guardrail-service.ts      # GuardrailService Context.Tag + Live Layer
+│   │   ├── injection-detector.ts     # Heuristic prompt injection detection
+│   │   ├── pii-detector.ts           # PII regex detection (email, phone, SSN, CC, API keys)
+│   │   └── toxicity-detector.ts      # Keyword/blocklist-based toxicity detection
+│   ├── contracts/
+│   │   └── agent-contract.ts         # AgentContract topic/action boundary enforcement
+│   ├── guardrail-service.ts          # GuardrailService Context.Tag + Live Layer (orchestrates all checks)
 │   └── runtime.ts                    # createGuardrailLayer factory
 ├── tests/
-│   ├── prompt-injection.test.ts
+│   ├── injection-detector.test.ts
 │   ├── pii-detector.test.ts
-│   ├── policy-engine.test.ts
+│   ├── toxicity-detector.test.ts
 │   └── guardrail-service.test.ts
 ├── package.json
 └── tsconfig.json
@@ -52,489 +52,169 @@ Seven enhancement capabilities organized into **3 new packages** plus **4 integr
 
 ## Build Order
 
-1. `src/types/contract.ts` — AgentContract schema (capabilities, prohibitions, limits, content policy)
-2. `src/types/policy.ts` — Policy, GuardrailDecision, PolicyPhase schemas
-3. `src/types/result.ts` — GuardrailResult schema
-4. `src/types/config.ts` — GuardrailConfig with default policies
-5. `src/errors/errors.ts` — GuardrailError, ContractViolationError, PolicyViolationError
-6. `src/detectors/prompt-injection.ts` — heuristic regex patterns + LLM fallback
-7. `src/detectors/pii-detector.ts` — regex patterns for email, phone, SSN, CC, API keys
-8. `src/detectors/content-filter.ts` — LLM-based toxicity scoring
-9. `src/detectors/scope-enforcer.ts` — check output relevance to task
-10. `src/services/policy-engine.ts` — PolicyEngine + PolicyEngineLive (evaluates policies)
-11. `src/services/contract-enforcer.ts` — ContractEnforcer + ContractEnforcerLive (enforces contracts)
-12. `src/services/guardrail-service.ts` — GuardrailService + GuardrailServiceLive (orchestrates check pipeline)
-13. `src/runtime.ts` — createGuardrailLayer factory
-14. `src/index.ts` — Public re-exports
-15. Tests
+1. `src/types.ts` — ViolationType, Severity, GuardrailResult, AgentContract, GuardrailConfig schemas + defaults
+2. `src/errors.ts` — GuardrailError
+3. `src/detectors/injection-detector.ts` — heuristic regex patterns for prompt injection
+4. `src/detectors/pii-detector.ts` — regex patterns for email, phone, SSN, CC, API keys
+5. `src/detectors/toxicity-detector.ts` — keyword/blocklist-based toxicity scoring
+6. `src/contracts/agent-contract.ts` — topic/action boundary enforcement against AgentContract
+7. `src/guardrail-service.ts` — GuardrailService + GuardrailServiceLive (orchestrates check pipeline)
+8. `src/runtime.ts` — createGuardrailLayer factory
+9. `src/index.ts` — Public re-exports
+10. Tests
 
-## Core Types
+> **Future Enhancements (v1.x):**
+> - `PolicyEngine` — configurable policy rules with phase-aware evaluation (input/output/action/always)
+> - `ContractEnforcer` — separate service for enforcing complex agent contracts with capability/prohibition checks
+> - `scope-enforcer` — LLM-based output relevance checking
+> - `content-filter` — LLM-based toxicity scoring (currently heuristic-only)
 
-### File: `src/types/contract.ts`
+## Core Types (Shipped)
 
-```typescript
-// File: src/types/contract.ts
-import { Schema } from "effect";
-
-export const AgentContractSchema = Schema.Struct({
-  name: Schema.String,
-  version: Schema.String,
-  capabilities: Schema.Array(
-    Schema.Struct({
-      action: Schema.String,
-      constraints: Schema.optional(
-        Schema.Record({ key: Schema.String, value: Schema.Unknown }),
-      ),
-    }),
-  ),
-  prohibitions: Schema.Array(
-    Schema.Struct({
-      action: Schema.String,
-      reason: Schema.String,
-    }),
-  ),
-  limits: Schema.Struct({
-    maxLLMCallsPerTask: Schema.optional(Schema.Number),
-    maxToolCallsPerTask: Schema.optional(Schema.Number),
-    maxCostPerTask: Schema.optional(Schema.Number),
-    maxDurationMs: Schema.optional(Schema.Number),
-    maxOutputTokens: Schema.optional(Schema.Number),
-  }),
-  contentPolicy: Schema.Struct({
-    allowPII: Schema.optional(Schema.Boolean),
-    allowCodeExecution: Schema.optional(Schema.Boolean),
-    toxicityThreshold: Schema.optional(Schema.Number),
-    requireSourceAttribution: Schema.optional(Schema.Boolean),
-  }),
-  escalation: Schema.Struct({
-    requireApprovalAboveCost: Schema.optional(Schema.Number),
-    requireApprovalForActions: Schema.optional(Schema.Array(Schema.String)),
-    notifyOnBoundaryViolation: Schema.optional(Schema.Boolean),
-  }),
-});
-export type AgentContract = typeof AgentContractSchema.Type;
-```
-
-### File: `src/types/policy.ts`
+### File: `src/types.ts`
 
 ```typescript
-// File: src/types/policy.ts
+// File: src/types.ts
 import { Schema } from "effect";
 
-export const GuardrailDecision = Schema.Literal(
-  "allow",
-  "block",
-  "modify",
-  "escalate",
-);
-export type GuardrailDecision = typeof GuardrailDecision.Type;
+// ─── Violation Type ───
 
-export const PolicyPhase = Schema.Literal(
-  "input",
-  "output",
-  "action",
-  "always",
-);
-export type PolicyPhase = typeof PolicyPhase.Type;
-
-export const PolicyCheck = Schema.Literal(
+export const ViolationType = Schema.Literal(
   "prompt-injection",
-  "pii",
+  "pii-detected",
   "toxicity",
-  "scope",
-  "resource-limit",
-  "cost-limit",
-  "action-boundary",
-  "content-filter",
-  "custom",
+  "scope-violation",
+  "contract-violation",
 );
-export type PolicyCheck = typeof PolicyCheck.Type;
+export type ViolationType = typeof ViolationType.Type;
 
-export const PolicySeverity = Schema.Literal("info", "warning", "critical");
-export type PolicySeverity = typeof PolicySeverity.Type;
+// ─── Severity ───
 
-export const PolicySchema = Schema.Struct({
-  id: Schema.String,
-  name: Schema.String,
-  description: Schema.String,
-  enabled: Schema.Boolean,
-  priority: Schema.Number,
-  when: Schema.Struct({
-    phase: PolicyPhase,
-    agentTypes: Schema.optional(Schema.Array(Schema.String)),
-    taskTypes: Schema.optional(Schema.Array(Schema.String)),
-  }),
-  check: PolicyCheck,
-  action: GuardrailDecision,
-  config: Schema.optional(
-    Schema.Record({ key: Schema.String, value: Schema.Unknown }),
-  ),
-});
-export type Policy = typeof PolicySchema.Type;
-```
+export const Severity = Schema.Literal("low", "medium", "high", "critical");
+export type Severity = typeof Severity.Type;
 
-### File: `src/types/result.ts`
-
-```typescript
-// File: src/types/result.ts
-import { Schema } from "effect";
-import { GuardrailDecision, PolicySeverity } from "./policy.js";
+// ─── Guardrail Result ───
 
 export const GuardrailResultSchema = Schema.Struct({
-  decision: GuardrailDecision,
-  guardrail: Schema.String,
-  reason: Schema.String,
-  severity: PolicySeverity,
-  originalContent: Schema.optional(Schema.String),
-  modifiedContent: Schema.optional(Schema.String),
-  metadata: Schema.optional(
-    Schema.Record({ key: Schema.String, value: Schema.Unknown }),
+  passed: Schema.Boolean,
+  violations: Schema.Array(
+    Schema.Struct({
+      type: ViolationType,
+      severity: Severity,
+      message: Schema.String,
+      details: Schema.optional(Schema.String),
+    }),
   ),
+  score: Schema.Number, // 0-1, 1 = fully safe
+  checkedAt: Schema.DateFromSelf,
 });
 export type GuardrailResult = typeof GuardrailResultSchema.Type;
+
+// ─── Agent Contract ───
+
+export const AgentContractSchema = Schema.Struct({
+  allowedTopics: Schema.Array(Schema.String),
+  deniedTopics: Schema.Array(Schema.String),
+  allowedActions: Schema.Array(Schema.String),
+  deniedActions: Schema.Array(Schema.String),
+  maxOutputLength: Schema.optional(Schema.Number),
+  requireDisclosure: Schema.optional(Schema.Boolean),
+});
+export type AgentContract = typeof AgentContractSchema.Type;
+
+// ─── Guardrail Config ───
+
+export const GuardrailConfigSchema = Schema.Struct({
+  enableInjectionDetection: Schema.Boolean,
+  enablePiiDetection: Schema.Boolean,
+  enableToxicityDetection: Schema.Boolean,
+  contract: Schema.optional(AgentContractSchema),
+  customBlocklist: Schema.optional(Schema.Array(Schema.String)),
+});
+export type GuardrailConfig = typeof GuardrailConfigSchema.Type;
+
+export const defaultGuardrailConfig: GuardrailConfig = {
+  enableInjectionDetection: true,
+  enablePiiDetection: true,
+  enableToxicityDetection: true,
+};
 ```
 
-## Error Types
+## Error Types (Shipped)
 
-### File: `src/errors/errors.ts`
+### File: `src/errors.ts`
 
 ```typescript
-// File: src/errors/errors.ts
+// File: src/errors.ts
 import { Data } from "effect";
 
 export class GuardrailError extends Data.TaggedError("GuardrailError")<{
   readonly message: string;
-  readonly guardrail: string;
+  readonly guardrail?: string;
   readonly cause?: unknown;
 }> {}
 
-export class ContractViolationError extends Data.TaggedError(
-  "ContractViolationError",
-)<{
-  readonly agentId: string;
-  readonly violation: string;
-  readonly contractName: string;
-}> {}
-
-export class PolicyViolationError extends Data.TaggedError(
-  "PolicyViolationError",
-)<{
-  readonly policyId: string;
-  readonly policyName: string;
-  readonly reason: string;
-  readonly severity: string;
-}> {}
-
-export type GuardrailErrors =
-  | GuardrailError
-  | ContractViolationError
-  | PolicyViolationError;
+export type GuardrailErrors = GuardrailError;
 ```
 
-## Services
+## Services (Shipped)
 
-### File: `src/services/policy-engine.ts`
+### File: `src/guardrail-service.ts`
 
-```typescript
-// File: src/services/policy-engine.ts
-import { Context, Effect, Layer, Ref } from "effect";
-import type { Policy, PolicyPhase } from "../types/policy.js";
-import type { GuardrailResult } from "../types/result.js";
-import { GuardrailError } from "../errors/errors.js";
-
-export class PolicyEngine extends Context.Tag("PolicyEngine")<
-  PolicyEngine,
-  {
-    readonly addPolicy: (policy: Policy) => Effect.Effect<void>;
-    readonly removePolicy: (policyId: string) => Effect.Effect<void>;
-    readonly evaluate: (params: {
-      readonly phase: PolicyPhase;
-      readonly content: string;
-      readonly context: { agentId: string; taskType?: string };
-    }) => Effect.Effect<GuardrailResult, GuardrailError>;
-    readonly listPolicies: () => Effect.Effect<readonly Policy[]>;
-  }
->() {}
-
-export const PolicyEngineLive = Layer.effect(
-  PolicyEngine,
-  Effect.gen(function* () {
-    const policiesRef = yield* Ref.make<Map<string, Policy>>(new Map());
-
-    return {
-      addPolicy: (policy) =>
-        Ref.update(policiesRef, (m) => {
-          const n = new Map(m);
-          n.set(policy.id, policy);
-          return n;
-        }),
-
-      removePolicy: (policyId) =>
-        Ref.update(policiesRef, (m) => {
-          const n = new Map(m);
-          n.delete(policyId);
-          return n;
-        }),
-
-      evaluate: (params) =>
-        Effect.gen(function* () {
-          const policies = yield* Ref.get(policiesRef);
-          const applicable = Array.from(policies.values())
-            .filter(
-              (p) =>
-                p.enabled &&
-                (p.when.phase === params.phase || p.when.phase === "always"),
-            )
-            .sort((a, b) => b.priority - a.priority);
-
-          for (const policy of applicable) {
-            // Each detector is called based on policy.check
-            // Simplified: return first violation found
-            // Full implementation delegates to specific detectors
-            if (policy.check === "prompt-injection") {
-              const isInjection = detectPromptInjectionHeuristic(
-                params.content,
-              );
-              if (isInjection.detected) {
-                return {
-                  decision: policy.action,
-                  guardrail: policy.name,
-                  reason: `Prompt injection detected: ${isInjection.technique}`,
-                  severity: "critical" as const,
-                  originalContent: params.content,
-                };
-              }
-            }
-
-            if (policy.check === "pii") {
-              const piiResult = detectPII(params.content);
-              if (piiResult.hasPII) {
-                return {
-                  decision: policy.action,
-                  guardrail: policy.name,
-                  reason: `PII detected: ${piiResult.types.join(", ")}`,
-                  severity: "warning" as const,
-                  originalContent: params.content,
-                  modifiedContent: piiResult.redacted,
-                };
-              }
-            }
-          }
-
-          return {
-            decision: "allow" as const,
-            guardrail: "none",
-            reason: "No policy violations",
-            severity: "info" as const,
-          };
-        }),
-
-      listPolicies: () =>
-        Ref.get(policiesRef).pipe(Effect.map((m) => Array.from(m.values()))),
-    };
-  }),
-);
-
-// ─── Inline helpers (used by policy engine) ───
-
-function detectPromptInjectionHeuristic(input: string): {
-  detected: boolean;
-  technique?: string;
-} {
-  const patterns = [
-    {
-      regex: /ignore\s+(previous|above|all)\s+(instructions|prompts)/i,
-      technique: "instruction-override",
-    },
-    { regex: /you\s+are\s+now\s+/i, technique: "role-hijacking" },
-    { regex: /system\s*:\s*/i, technique: "system-prompt-injection" },
-    {
-      regex: /\[INST\]|\[\/INST\]|<\|im_start\|>/i,
-      technique: "format-injection",
-    },
-    {
-      regex: /pretend\s+you\s+(are|can|have)/i,
-      technique: "persona-manipulation",
-    },
-  ];
-  for (const { regex, technique } of patterns) {
-    if (regex.test(input)) return { detected: true, technique };
-  }
-  return { detected: false };
-}
-
-function detectPII(text: string): {
-  hasPII: boolean;
-  types: string[];
-  redacted: string;
-} {
-  const patterns = [
-    {
-      type: "email",
-      regex: /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g,
-      replacement: "[EMAIL]",
-    },
-    {
-      type: "phone",
-      regex: /(\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/g,
-      replacement: "[PHONE]",
-    },
-    {
-      type: "ssn",
-      regex: /\b\d{3}[-.]?\d{2}[-.]?\d{4}\b/g,
-      replacement: "[SSN]",
-    },
-    {
-      type: "credit-card",
-      regex: /\b\d{4}[-.\s]?\d{4}[-.\s]?\d{4}[-.\s]?\d{4}\b/g,
-      replacement: "[CC]",
-    },
-    {
-      type: "api-key",
-      regex: /\b(sk-|pk-|api[_-]?key[_-]?)[a-zA-Z0-9]{20,}\b/gi,
-      replacement: "[API_KEY]",
-    },
-  ];
-  let redacted = text;
-  const types: string[] = [];
-  for (const { type, regex, replacement } of patterns) {
-    if (regex.test(text)) {
-      types.push(type);
-      redacted = redacted.replace(regex, replacement);
-    }
-  }
-  return { hasPII: types.length > 0, types, redacted };
-}
-```
-
-### File: `src/services/guardrail-service.ts`
+The shipped `GuardrailService` is a single service that orchestrates 3 detectors + optional contract check.
+It does NOT use PolicyEngine or ContractEnforcer as separate services.
 
 ```typescript
-// File: src/services/guardrail-service.ts
-import { Context, Effect, Layer, Ref } from "effect";
-import type { AgentContract } from "../types/contract.js";
-import type { GuardrailResult } from "../types/result.js";
-import { GuardrailError, ContractViolationError } from "../errors/errors.js";
-import { PolicyEngine } from "./policy-engine.js";
+// File: src/guardrail-service.ts
+import { Effect, Context, Layer } from "effect";
+import type { GuardrailResult, GuardrailConfig } from "./types.js";
+import { GuardrailError } from "./errors.js";
+import { detectInjection } from "./detectors/injection-detector.js";
+import { detectPii } from "./detectors/pii-detector.js";
+import { detectToxicity } from "./detectors/toxicity-detector.js";
+import { checkContract } from "./contracts/agent-contract.js";
 
 export class GuardrailService extends Context.Tag("GuardrailService")<
   GuardrailService,
   {
-    readonly checkInput: (
-      input: string,
-      context: { agentId: string; taskType?: string },
-    ) => Effect.Effect<GuardrailResult, GuardrailError>;
+    /** Check input text against all configured guardrails. */
+    readonly check: (text: string) => Effect.Effect<GuardrailResult, GuardrailError>;
 
-    readonly checkOutput: (
-      output: string,
-      context: { agentId: string; taskType?: string; originalInput?: string },
-    ) => Effect.Effect<GuardrailResult, GuardrailError>;
+    /** Check output text (PII + toxicity, not injection). */
+    readonly checkOutput: (text: string) => Effect.Effect<GuardrailResult, GuardrailError>;
 
-    readonly checkAction: (
-      action: { tool: string; input: unknown },
-      context: { agentId: string; contract: AgentContract },
-    ) => Effect.Effect<
-      GuardrailResult,
-      GuardrailError | ContractViolationError
-    >;
-
-    readonly registerContract: (
-      agentId: string,
-      contract: AgentContract,
-    ) => Effect.Effect<void>;
-
-    readonly killAgent: (
-      agentId: string,
-      reason: string,
-    ) => Effect.Effect<void>;
-
-    readonly getViolations: (filter?: {
-      agentId?: string;
-      severity?: string;
-      since?: Date;
-    }) => Effect.Effect<readonly GuardrailResult[]>;
+    /** Get current config. */
+    readonly getConfig: () => Effect.Effect<GuardrailConfig, never>;
   }
 >() {}
 
-export const GuardrailServiceLive = Layer.effect(
-  GuardrailService,
-  Effect.gen(function* () {
-    const policyEngine = yield* PolicyEngine;
-    const contractsRef = yield* Ref.make<Map<string, AgentContract>>(new Map());
-    const violationsRef = yield* Ref.make<GuardrailResult[]>([]);
-
-    return {
-      checkInput: (input, context) =>
-        policyEngine.evaluate({ phase: "input", content: input, context }),
-
-      checkOutput: (output, context) =>
-        policyEngine.evaluate({ phase: "output", content: output, context }),
-
-      checkAction: (action, context) =>
-        Effect.gen(function* () {
-          // Check if action is prohibited by contract
-          const prohibited = context.contract.prohibitions.find(
-            (p) => p.action === action.tool,
-          );
-          if (prohibited) {
-            const result: GuardrailResult = {
-              decision: "block",
-              guardrail: "contract-enforcer",
-              reason: `Action "${action.tool}" prohibited: ${prohibited.reason}`,
-              severity: "critical",
-            };
-            yield* Ref.update(violationsRef, (v) => [...v, result]);
-            return result;
-          }
-
-          // Check resource limits
-          return yield* policyEngine.evaluate({
-            phase: "action",
-            content: JSON.stringify(action),
-            context: { agentId: context.agentId },
-          });
-        }),
-
-      registerContract: (agentId, contract) =>
-        Ref.update(contractsRef, (m) => {
-          const n = new Map(m);
-          n.set(agentId, contract);
-          return n;
-        }),
-
-      killAgent: (agentId, reason) =>
-        Effect.gen(function* () {
-          // Publish kill event so the ExecutionEngine and other listeners can halt work
-          const eventBus = yield* Effect.serviceOption(
-            Context.GenericTag<{
-              publish: (event: unknown) => Effect.Effect<void>;
-            }>("EventBus"),
-          );
-          if (eventBus._tag === "Some") {
-            yield* eventBus.value.publish({
-              _tag: "GuardrailKillAgent",
-              agentId,
-              reason,
-              timestamp: new Date(),
-            });
-          }
-          // Log unconditionally as a safety backstop
-          console.error(`[GUARDRAIL KILL] Agent ${agentId}: ${reason}`);
-        }),
-
-      getViolations: (filter) =>
-        Ref.get(violationsRef).pipe(
-          Effect.map((violations) =>
-            violations.filter((v) => {
-              if (filter?.severity && v.severity !== filter.severity)
-                return false;
-              return true;
-            }),
-          ),
-        ),
-    };
-  }),
-);
+export const GuardrailServiceLive = (config: GuardrailConfig) =>
+  Layer.succeed(GuardrailService, {
+    check: (text) =>
+      Effect.gen(function* () {
+        const violations = [];
+        if (config.enableInjectionDetection) {
+          const result = yield* detectInjection(text);
+          if (result.detected) violations.push({ ...result });
+        }
+        if (config.enablePiiDetection) {
+          const result = yield* detectPii(text);
+          if (result.detected) violations.push({ ...result });
+        }
+        if (config.enableToxicityDetection) {
+          const result = yield* detectToxicity(text, config.customBlocklist ?? []);
+          if (result.detected) violations.push({ ...result });
+        }
+        if (config.contract) {
+          const result = yield* checkContract(text, config.contract);
+          if (result.detected) violations.push({ ...result });
+        }
+        const score = violations.length === 0 ? 1 : Math.max(0, 1 - violations.length * 0.25);
+        return { passed: violations.length === 0, violations, score, checkedAt: new Date() };
+      }),
+    checkOutput: (text) => /* same as check but skips injection detection */,
+    getConfig: () => Effect.succeed(config),
+  });
 ```
 
 ### File: `src/runtime.ts`
@@ -542,61 +222,16 @@ export const GuardrailServiceLive = Layer.effect(
 ```typescript
 // File: src/runtime.ts
 import { Layer } from "effect";
-import { PolicyEngineLive } from "./services/policy-engine.js";
-import { GuardrailServiceLive } from "./services/guardrail-service.js";
+import { GuardrailServiceLive } from "./guardrail-service.js";
+import type { GuardrailConfig } from "./types.js";
+import { defaultGuardrailConfig } from "./types.js";
 
 /**
- * Provides: GuardrailService, PolicyEngine
- * Requires: None (standalone)
+ * Provides: GuardrailService
+ * Requires: None (standalone, no LLM dependency)
  */
-export const createGuardrailLayer = () => {
-  const PolicyLayer = PolicyEngineLive;
-  const ServiceLayer = GuardrailServiceLive.pipe(Layer.provide(PolicyLayer));
-  return Layer.mergeAll(ServiceLayer, PolicyLayer);
-};
-```
-
-### `guarded()` Helper
-
-```typescript
-// File: src/guarded.ts
-// Wrap any agent Effect with guardrail enforcement
-import { Effect } from "effect";
-import { GuardrailService } from "./services/guardrail-service.js";
-import { GuardrailError } from "./errors/errors.js";
-
-export const guarded = <A, E>(
-  agentId: string,
-  effect: Effect.Effect<A, E>,
-  options?: { input?: string; output?: string },
-): Effect.Effect<A, E | GuardrailError, GuardrailService> =>
-  Effect.gen(function* () {
-    const guardrails = yield* GuardrailService;
-    if (options?.input) {
-      const r = yield* guardrails.checkInput(options.input, { agentId });
-      if (r.decision === "block") {
-        return yield* Effect.fail(
-          new GuardrailError({
-            message: `Input blocked: ${r.reason}`,
-            guardrail: r.guardrail,
-          }),
-        );
-      }
-    }
-    const result = yield* effect;
-    if (options?.output) {
-      const r = yield* guardrails.checkOutput(options.output, { agentId });
-      if (r.decision === "block") {
-        return yield* Effect.fail(
-          new GuardrailError({
-            message: `Output blocked: ${r.reason}`,
-            guardrail: r.guardrail,
-          }),
-        );
-      }
-    }
-    return result;
-  });
+export const createGuardrailLayer = (config: GuardrailConfig = defaultGuardrailConfig) =>
+  GuardrailServiceLive(config);
 ```
 
 ### Package Config
@@ -604,24 +239,32 @@ export const guarded = <A, E>(
 ```json
 {
   "name": "@reactive-agents/guardrails",
-  "version": "0.1.0",
+  "version": "0.4.0",
   "type": "module",
   "main": "src/index.ts",
   "dependencies": {
     "effect": "^3.10.0",
-    "@reactive-agents/core": "workspace:*",
-    "@reactive-agents/llm-provider": "workspace:*"
+    "@reactive-agents/core": "workspace:^"
   }
 }
 ```
 
-> **Note:** `llm-provider` is required by `content-filter.ts` (LLM-based toxicity scoring) and `scope-enforcer.ts` (LLM-based relevance check). Heuristic-only detectors (`prompt-injection.ts`, `pii-detector.ts`) do not require it. `GuardrailServiceLive` should use `Effect.serviceOption(LLMService)` so the service degrades gracefully (heuristics-only) when no LLM layer is provided.
+> **Note:** The shipped guardrails package uses heuristic-only detectors and does NOT depend on
+> `@reactive-agents/llm-provider`. LLM-based scoring (content-filter, scope-enforcer) is deferred to v1.x.
+> When LLM-based detectors are added, `llm-provider` will become an optional dependency accessed via
+> `Effect.serviceOption(LLMService)` so the service degrades gracefully to heuristics-only.
 
 ---
 
 # Package 2: `@reactive-agents/eval`
 
-## Package Structure
+> **Design Evolution (v0.4.0):** The original spec envisioned shadow eval, A/B testing, regression
+> alerts, and benchmark suites as first-class features. The shipped implementation focuses on the
+> core evaluation loop: LLM-as-judge scoring across 5 dimensions (accuracy, relevance, completeness,
+> safety, cost-efficiency), with `EvalStore` for SQLite persistence and `DatasetService` for managing
+> eval datasets. Shadow eval and A/B testing are deferred to v1.x.
+
+## Package Structure (Shipped)
 
 ```
 @reactive-agents/eval/
@@ -629,18 +272,19 @@ export const guarded = <A, E>(
 │   ├── index.ts
 │   ├── types/
 │   │   ├── eval-case.ts              # EvalCase, EvalSuite schemas
-│   │   ├── eval-result.ts            # EvalResult, DimensionScore, EvalRun schemas
-│   │   └── config.ts                 # EvalConfig schema
+│   │   ├── eval-result.ts            # EvalResult, DimensionScore, EvalRun, EvalRunSummary schemas
+│   │   └── config.ts                 # EvalConfig schema + DEFAULT_EVAL_CONFIG
 │   ├── errors/
 │   │   └── errors.ts                 # EvalError, BenchmarkError
 │   ├── dimensions/
-│   │   ├── accuracy.ts               # Accuracy scorer (LLM-as-judge)
-│   │   ├── relevance.ts              # Relevance scorer
-│   │   ├── completeness.ts           # Completeness scorer
-│   │   ├── safety.ts                 # Safety scorer
-│   │   └── cost-efficiency.ts        # Cost per quality unit
+│   │   ├── accuracy.ts               # LLM-as-judge accuracy scorer
+│   │   ├── relevance.ts              # LLM-as-judge relevance scorer
+│   │   ├── completeness.ts           # LLM-as-judge completeness scorer
+│   │   ├── safety.ts                 # LLM-as-judge safety scorer
+│   │   └── cost-efficiency.ts        # Quality-per-dollar calculation (no LLM needed)
 │   ├── services/
-│   │   ├── eval-service.ts           # EvalService Context.Tag + Live Layer
+│   │   ├── eval-service.ts           # EvalService Context.Tag + makeEvalServiceLive factory
+│   │   ├── eval-store.ts             # EvalStore — SQLite persistence for eval runs
 │   │   └── dataset-service.ts        # DatasetService Context.Tag + Live Layer
 │   └── runtime.ts                    # createEvalLayer factory
 ├── tests/
@@ -651,19 +295,26 @@ export const guarded = <A, E>(
 ## Build Order
 
 1. `src/types/eval-case.ts` — EvalCase, EvalSuite schemas
-2. `src/types/eval-result.ts` — DimensionScore, EvalResult, EvalRun schemas
-3. `src/types/config.ts` — EvalConfig schema
+2. `src/types/eval-result.ts` — DimensionScore, EvalResult, EvalRun, EvalRunSummary schemas
+3. `src/types/config.ts` — EvalConfig schema + DEFAULT_EVAL_CONFIG (passThreshold, regressionThreshold, parallelism)
 4. `src/errors/errors.ts` — EvalError, BenchmarkError
 5. `src/dimensions/accuracy.ts` — LLM-as-judge accuracy scorer
-6. `src/dimensions/relevance.ts` — relevance scorer
-7. `src/dimensions/completeness.ts` — completeness scorer
-8. `src/dimensions/safety.ts` — safety scorer
-9. `src/dimensions/cost-efficiency.ts` — cost per quality unit
-10. `src/services/dataset-service.ts` — DatasetService + DatasetServiceLive
-11. `src/services/eval-service.ts` — EvalService + EvalServiceLive
-12. `src/runtime.ts` — createEvalLayer factory
-13. `src/index.ts` — Public re-exports
-14. Tests
+6. `src/dimensions/relevance.ts` — LLM-as-judge relevance scorer
+7. `src/dimensions/completeness.ts` — LLM-as-judge completeness scorer
+8. `src/dimensions/safety.ts` — LLM-as-judge safety scorer
+9. `src/dimensions/cost-efficiency.ts` — quality-per-dollar calculation
+10. `src/services/eval-store.ts` — EvalStore (SQLite persistence via bun:sqlite)
+11. `src/services/dataset-service.ts` — DatasetService + DatasetServiceLive
+12. `src/services/eval-service.ts` — EvalService + makeEvalServiceLive (optionally accepts EvalStore)
+13. `src/runtime.ts` — createEvalLayer factory
+14. `src/index.ts` — Public re-exports
+15. Tests
+
+> **Future Enhancements (v1.x):**
+> - **Shadow eval** — run eval suites in the background against live traffic without affecting responses
+> - **A/B testing** — compare two agent configurations side-by-side with statistical significance
+> - **Regression alerts** — automated CI alerts when eval scores drop below baseline
+> - **Benchmark suites** — standardized industry benchmarks (MMLU, HumanEval, etc.)
 
 ## Core Types
 
@@ -787,13 +438,19 @@ export type EvalErrors = EvalError | BenchmarkError;
 
 ### File: `src/services/eval-service.ts`
 
+The shipped EvalService uses a `makeEvalServiceLive` factory that optionally accepts an `EvalStore`
+for SQLite persistence. Each dimension scorer is a separate module that takes a captured LLM instance.
+
 ```typescript
 // File: src/services/eval-service.ts
 import { Context, Effect, Layer, Ref } from "effect";
-import type { EvalSuite, EvalCase } from "../types/eval-case.js";
-import type { EvalRun, EvalResult } from "../types/eval-result.js";
-import { EvalError } from "../errors/errors.js";
 import { LLMService } from "@reactive-agents/llm-provider";
+import type { EvalSuite, EvalCase } from "../types/eval-case.js";
+import type { EvalRun, EvalResult, EvalRunSummary, DimensionScore } from "../types/eval-result.js";
+import type { EvalConfig } from "../types/config.js";
+import { DEFAULT_EVAL_CONFIG } from "../types/config.js";
+import { EvalError, BenchmarkError } from "../errors/errors.js";
+import type { EvalStore } from "./eval-store.js";
 
 export class EvalService extends Context.Tag("EvalService")<
   EvalService,
@@ -801,12 +458,15 @@ export class EvalService extends Context.Tag("EvalService")<
     readonly runSuite: (
       suite: EvalSuite,
       agentConfig: string,
-    ) => Effect.Effect<EvalRun, EvalError>;
+      config?: Partial<EvalConfig>,
+    ) => Effect.Effect<EvalRun, BenchmarkError>;
 
     readonly runCase: (
       evalCase: EvalCase,
       agentConfig: string,
       dimensions: readonly string[],
+      actualOutput: string,
+      metrics?: { latencyMs?: number; costUsd?: number; tokensUsed?: number; stepsExecuted?: number },
     ) => Effect.Effect<EvalResult, EvalError>;
 
     readonly compare: (
@@ -821,7 +481,7 @@ export class EvalService extends Context.Tag("EvalService")<
     readonly checkRegression: (
       current: EvalRun,
       baseline: EvalRun,
-      threshold: number,
+      threshold?: number,
     ) => Effect.Effect<{ hasRegression: boolean; details: string[] }>;
 
     readonly getHistory: (
@@ -831,125 +491,60 @@ export class EvalService extends Context.Tag("EvalService")<
   }
 >() {}
 
-export const EvalServiceLive = Layer.effect(
-  EvalService,
-  Effect.gen(function* () {
-    const llm = yield* LLMService;
-    const historyRef = yield* Ref.make<EvalRun[]>([]);
+/**
+ * Create EvalServiceLive with optional persistent store.
+ * When a store is provided, runs are persisted to SQLite and history is loaded from disk.
+ */
+export const makeEvalServiceLive = (store?: EvalStore) =>
+  Layer.effect(
+    EvalService,
+    Effect.gen(function* () {
+      const llm = yield* LLMService;
+      const historyRef = yield* Ref.make<EvalRun[]>([]);
 
-    return {
-      runSuite: (suite, agentConfig) =>
-        Effect.gen(function* () {
-          const results: EvalResult[] = [];
+      return {
+        runSuite: (suite, agentConfig, configOverride) =>
+          Effect.gen(function* () {
+            const config = { ...DEFAULT_EVAL_CONFIG, ...configOverride };
+            // Score each case across all dimensions using LLM-as-judge
+            // Persist to store if available
+            // Return EvalRun with summary
+          }),
 
-          for (const evalCase of suite.cases) {
-            // Each case is scored by LLM-as-judge across requested dimensions
-            const scores = yield* Effect.all(
-              suite.dimensions.map((dim) =>
-                Effect.tryPromise({
-                  try: () =>
-                    llm.complete({
-                      prompt: `Evaluate the following output on "${dim}" (score 0.0-1.0):\nInput: ${evalCase.input}\nExpected: ${evalCase.expectedOutput ?? "N/A"}\n\nScore (number only):`,
-                      maxTokens: 10,
-                      temperature: 0.1,
-                    }),
-                  catch: (err) =>
-                    new EvalError({
-                      message: `Scoring "${dim}" failed`,
-                      caseId: evalCase.id,
-                      cause: err,
-                    }),
-                }).pipe(
-                  Effect.map((r) => ({
-                    dimension: dim,
-                    score: Math.max(
-                      0,
-                      Math.min(1, parseFloat(r.text.trim()) || 0.5),
-                    ),
-                  })),
-                ),
-              ),
-            );
+        runCase: (evalCase, agentConfig, dimensions, actualOutput, metrics) =>
+          Effect.gen(function* () {
+            // Score each dimension, compute overall score
+            // cost-efficiency dimension uses quality-per-dollar (no LLM call)
+          }),
 
-            const avg = scores.reduce((s, d) => s + d.score, 0) / scores.length;
-            results.push({
-              caseId: evalCase.id,
-              timestamp: new Date(),
-              agentConfig,
-              scores,
-              overallScore: avg,
-              actualOutput: "[evaluated via LLM-as-judge]",
-              latencyMs: 0,
-              costUsd: 0,
-              tokensUsed: 0,
-              stepsExecuted: 0,
-              passed: avg >= 0.7,
-            });
-          }
+        compare: (runA, runB) => /* dimension-level delta comparison (>0.02 threshold) */,
 
-          const run: EvalRun = {
-            id: crypto.randomUUID(),
-            suiteId: suite.id,
-            timestamp: new Date(),
-            agentConfig,
-            results,
-            summary: {
-              totalCases: results.length,
-              passed: results.filter((r) => r.passed).length,
-              failed: results.filter((r) => !r.passed).length,
-              avgScore:
-                results.reduce((s, r) => s + r.overallScore, 0) /
-                results.length,
-              avgLatencyMs: 0,
-              totalCostUsd: 0,
-              dimensionAverages: {} as Record<string, number>,
-            },
-          };
+        checkRegression: (current, baseline, threshold) =>
+          /* per-dimension + overall regression check */,
 
-          yield* Ref.update(historyRef, (h) => [...h, run]);
-          return run;
-        }),
+        getHistory: (suiteId, options) =>
+          /* load from store if available, else from in-memory Ref */,
+      };
+    }),
+  );
 
-      runCase: (evalCase, agentConfig, dimensions) =>
-        Effect.succeed({
-          caseId: evalCase.id,
-          timestamp: new Date(),
-          agentConfig,
-          scores: [],
-          overallScore: 0,
-          actualOutput: "",
-          latencyMs: 0,
-          costUsd: 0,
-          tokensUsed: 0,
-          stepsExecuted: 0,
-          passed: false,
-        }),
+/** EvalServiceLive without persistence (in-memory only). */
+export const EvalServiceLive = makeEvalServiceLive();
 
-      compare: (runA, runB) =>
-        Effect.succeed({
-          improved: [] as string[],
-          regressed: [] as string[],
-          unchanged: [] as string[],
-        }),
+/** Convenience layer with SQLite persistence. */
+export const makeEvalServicePersistentLive = (dbPath?: string) => {
+  const { createEvalStore } = require("./eval-store.js");
+  return makeEvalServiceLive(createEvalStore(dbPath));
+};
+```
 
-      checkRegression: (current, baseline, threshold) =>
-        Effect.succeed({
-          hasRegression:
-            current.summary.avgScore < baseline.summary.avgScore - threshold,
-          details: [] as string[],
-        }),
+### File: `src/services/eval-store.ts`
 
-      getHistory: (suiteId, options) =>
-        Ref.get(historyRef).pipe(
-          Effect.map((h) =>
-            h
-              .filter((r) => r.suiteId === suiteId)
-              .slice(-(options?.limit ?? 100)),
-          ),
-        ),
-    };
-  }),
-);
+```typescript
+// File: src/services/eval-store.ts
+// SQLite-backed persistence for eval runs using bun:sqlite
+// Stores runs as JSON blobs keyed by suiteId + runId
+// Provides: saveRun(), loadHistory(), loadRun()
 ```
 
 ### File: `src/runtime.ts`
@@ -971,13 +566,13 @@ export const createEvalLayer = () => EvalServiceLive;
 ```json
 {
   "name": "@reactive-agents/eval",
-  "version": "0.1.0",
+  "version": "0.4.0",
   "type": "module",
   "main": "src/index.ts",
   "dependencies": {
     "effect": "^3.10.0",
-    "@reactive-agents/core": "workspace:*",
-    "@reactive-agents/llm-provider": "workspace:*"
+    "@reactive-agents/core": "workspace:^",
+    "@reactive-agents/llm-provider": "workspace:^"
   }
 }
 ```
@@ -1778,7 +1373,7 @@ bunx reactive-agents inspect research-agent --trace last
 5. Certificate-based agent identity
 6. Multi-modal adaptive interaction (5 modes)
 7. Agent behavioral contracts & guardrails
-8. Built-in evaluation & benchmarking
+8. Built-in LLM-as-judge evaluation with 5 dimensions + EvalStore persistence
 9. CLI, playground, and scaffolding
 10. Versioned prompt engineering system
 11. Cross-task self-improvement loop

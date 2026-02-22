@@ -1,18 +1,21 @@
 # Reactive Agents V2: Development Roadmap
 
-> **From concept to production-ready framework in 12 months**
+> **⚠️ HISTORICAL DOCUMENT** — This was the original planning roadmap. Phases 1-4 completed in 3 days (Feb 20-22, 2026) using agent-assisted development. For the current forward-looking roadmap, see:
+> - **Current roadmap:** `/ROADMAP.md` (root) — market-grounded, v0.4.0 baseline
+> - **v0.5 implementation plan:** `spec/docs/14-v0.5-comprehensive-plan.md` — A2A, agent-as-tool, MCP transports
+> - **Actual release history:** `/CHANGELOG.md`
 
 ---
 
-## 🎯 Overview
+## 🎯 Overview (Original Plan — Superseded)
 
-This roadmap outlines the development of Reactive Agents V2 from initial MVP to feature-complete framework over approximately 12 months, divided into 4 major phases.
+This roadmap originally outlined development over ~12 months in 4 phases. **Actual execution** compressed Phases 1-4 into v0.1.0 through v0.4.0 (Feb 20-22, 2026). Phase 5 (Evolutionary Intelligence) remains a post-v1.0 target.
 
-### Timeline Summary
-- **Phase 1 (MVP)**: Months 1-3 (Q1 2025)
-- **Phase 2 (Core Expansion)**: Months 4-6 (Q2 2025)
-- **Phase 3 (Advanced Features)**: Months 7-9 (Q3 2025)
-- **Phase 4 (Polish & Scale)**: Months 10-12 (Q4 2025)
+### Original Timeline (Superseded)
+- **Phase 1 (MVP)**: Months 1-3 (Q1 2025) → **Actual: v0.1.0, Feb 20, 2026**
+- **Phase 2 (Core Expansion)**: Months 4-6 (Q2 2025) → **Actual: v0.2.0-v0.3.0, Feb 20-21, 2026**
+- **Phase 3 (Advanced Features)**: Months 7-9 (Q3 2025) → **Actual: v0.3.0-v0.4.0, Feb 21-22, 2026**
+- **Phase 4 (Polish & Scale)**: Months 10-12 (Q4 2025) → **Partially complete; remaining in v0.5+**
 
 ### Success Criteria
 - ✅ **10,000 GitHub stars** by end of Year 1

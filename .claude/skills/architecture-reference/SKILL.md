@@ -11,9 +11,11 @@ user-invocable: false
 ```
 @reactive-agents/runtime ← ExecutionEngine (10-phase agent loop; depends on ALL layers)
      ↑
+Layer 11: a2a (A2A protocol: Agent Cards, JSON-RPC server/client, SSE)  [v0.5]
+     ↑
 Layer 10: interaction   Layer 9: observability   Layer 8: tools
      ↑                        ↑                       ↑
-Layer 7: orchestration (A2A, durable exec, multi-agent)
+Layer 7: orchestration (durable exec, multi-agent workflows)
      ↑
 Layer 6: identity (Ed25519 certs, RBAC, audit)
      ↑
@@ -53,6 +55,10 @@ Layer 1: core (types, EventBus, AgentService, TaskService, ContextWindowManager)
 - `@reactive-agents/interaction` → `core`, `llm-provider`
 - `@reactive-agents/eval` → `core`, `llm-provider`
 - `@reactive-agents/prompts` → `core`
+
+**A2A (v0.5 — agent-to-agent interop):**
+
+- `@reactive-agents/a2a` → `core`, `tools`, `identity` (optional), Effect `HttpServer`/`HttpClient`
 
 **Orchestrator (depends on ALL):**
 

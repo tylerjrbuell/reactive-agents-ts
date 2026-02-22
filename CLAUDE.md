@@ -2,7 +2,7 @@
 
 ## Project Status
 
-**All phases complete + pre-release features shipped.** 15 packages + 2 apps built, 300 tests passing, full integration verified.
+**v0.4.0 released.** 15 packages + 2 apps built, 442 tests across 77 files, full integration verified. Now executing v0.5 plan (A2A, agent-as-tool, MCP transports, test hardening).
 
 - Phase 1: Core, LLM Provider, Memory, Reasoning, Tools, Interaction, Runtime
 - Phase 2: Guardrails, Verification, Cost
@@ -82,20 +82,24 @@ LLM_DEFAULT_MODEL=claude-sonnet-4-20250514
 
 Skills in `.claude/skills/` are loaded automatically.
 
-### Reference Skills
+### Reference Skills (auto-loaded as context)
 | Skill | What It Provides |
 |-------|-----------------|
 | `effect-ts-patterns` | Schema.Struct, Data.TaggedError, Context.Tag + Layer.effect, Ref |
-| `architecture-reference` | Layer stack, dependency graph, 10-phase ExecutionEngine loop |
-| `llm-api-contract` | LLMService.complete()/stream()/embed() signatures |
+| `architecture-reference` | Layer stack, dependency graph, build order, 10-phase ExecutionEngine loop |
+| `llm-api-contract` | LLMService.complete()/stream()/embed() signatures, common mistakes |
 | `memory-patterns` | bun:sqlite WAL, FTS5, sqlite-vec KNN, Zettelkasten |
 
-### Task Skills
+### Task Skills (user-invocable)
 | Skill | Invocation | Purpose |
 |-------|-----------|---------|
 | `build-package` | `/build-package <name>` | 10-step package scaffold from spec |
 | `validate-build` | `/validate-build <name>` | 10-check quality gate |
 | `review-patterns` | `/review-patterns <path>` | 8-category pattern compliance audit |
+| `implement-service` | `/implement-service <Name> <pkg>` | 6-step Effect-TS service creation |
+| `implement-test` | `/implement-test <pkg-or-service>` | Test creation with bun:test + Effect patterns |
+| `build-coordinator` | `/build-coordinator <phase>` | Multi-agent team orchestration for parallel builds |
+| `update-docs` | `/update-docs` | Sync Starlight docs, README, CHANGELOG after changes |
 
 ---
 
@@ -117,7 +121,35 @@ Skills in `.claude/skills/` are loaded automatically.
 | `spec/docs/layer-10-interaction-revolutionary-design.md` | `@reactive-agents/interaction` |
 | `spec/docs/11-missing-capabilities-enhancement.md` | guardrails, eval, prompts, CLI |
 | `spec/docs/12-market-validation-feb-2026.md` | Competitive analysis, A2A priority |
-| `spec/docs/13-foundation-gap-analysis-feb-2026.md` | Full codebase audit, prioritized fix plan |
+| `spec/docs/14-v0.5-comprehensive-plan.md` | v0.5 plan: A2A, agent-as-tool, MCP, test hardening |
+
+---
+
+## v0.5 Active Development
+
+**Current plan:** `spec/docs/14-v0.5-comprehensive-plan.md`
+
+Sprint order: Housekeeping → A2A Core → Agent-as-Tool + MCP → Test Hardening → Builder/DX → Integration + Release
+
+New package: `@reactive-agents/a2a` (JSON-RPC 2.0, Agent Cards, SSE streaming)
+
+---
+
+## Documentation Update Requirements
+
+**After ANY code change**, check if these need updating:
+
+| What Changed | Update Required |
+|---|---|
+| New package or service | CHANGELOG, README packages table, CLAUDE.md package map, docs site |
+| New builder method | README quick start, docs builder-api reference, CLAUDE.md architecture |
+| New CLI command | README CLI section, docs CLI reference |
+| New/changed test counts | CLAUDE.md build commands, README development section |
+| API signature change | All docs examples that reference the changed API |
+| New reasoning strategy | README strategies table, docs reasoning guide |
+| New provider | README providers table, docs LLM providers page |
+
+See `AGENTS.md` for full workflow instructions.
 
 ---
 
@@ -139,8 +171,9 @@ packages/
   orchestration/ — Multi-agent workflow engine
   prompts/       — Template engine, built-in prompt library
   runtime/       — ExecutionEngine, ReactiveAgentBuilder, createRuntime
-  eval/          — Evaluation framework (scaffold only)
-  evolution/     — [PLANNED v1.1+] Group-Evolving Agents (GEA): strategy evolution, experience sharing, zero-cost genome deployment
+  eval/          — Evaluation framework (LLM-as-judge, EvalStore)
+  a2a/           — [v0.5] A2A protocol: Agent Cards, JSON-RPC server/client, SSE streaming
+  evolution/     — [PLANNED v1.1+] Group-Evolving Agents (GEA): strategy evolution, experience sharing
 apps/
   cli/           — `rax` CLI (init, create, run, dev, eval, playground, inspect)
   docs/          — Starlight documentation site
