@@ -1,18 +1,79 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36" width="36" height="36">
-  <!-- Orbital rings -->
-  <ellipse cx="18" cy="18" rx="16" ry="6" fill="none" stroke="#7c3aed" stroke-width="1.2" transform="rotate(-30 18 18)" opacity="0.6"/>
-  <ellipse cx="18" cy="18" rx="16" ry="6" fill="none" stroke="#6d28d9" stroke-width="1.2" transform="rotate(30 18 18)" opacity="0.6"/>
-  <ellipse cx="18" cy="18" rx="16" ry="6" fill="none" stroke="#5b21b6" stroke-width="1.2" transform="rotate(90 18 18)" opacity="0.6"/>
-  <!-- Core -->
-  <circle cx="18" cy="18" r="4" fill="url(#gl)"/>
-  <!-- Electron dots -->
-  <circle cx="33" cy="14" r="1.5" fill="#7c3aed"/>
-  <circle cx="3" cy="22" r="1.5" fill="#7c3aed"/>
-  <circle cx="18" cy="2" r="1.5" fill="#6d28d9"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
   <defs>
-    <radialGradient id="gl">
+    <linearGradient id="edge-l" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6d28d9" stop-opacity="0.7"/>
+      <stop offset="100%" stop-color="#5b21b6" stop-opacity="0.25"/>
+    </linearGradient>
+    <linearGradient id="edge2-l" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#7c3aed" stop-opacity="0.65"/>
+      <stop offset="100%" stop-color="#6d28d9" stop-opacity="0.2"/>
+    </linearGradient>
+    <radialGradient id="core-l" cx="50%" cy="50%" r="50%">
       <stop offset="0%" stop-color="#8b5cf6"/>
+      <stop offset="50%" stop-color="#6d28d9"/>
       <stop offset="100%" stop-color="#4c1d95"/>
     </radialGradient>
+    <radialGradient id="node-l" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#8b5cf6"/>
+      <stop offset="100%" stop-color="#6d28d9"/>
+    </radialGradient>
+    <radialGradient id="node-sm-l" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#7c3aed"/>
+      <stop offset="100%" stop-color="#5b21b6"/>
+    </radialGradient>
+    <filter id="glow-l" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="1.2" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="glow-sm-l" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="0.8" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
   </defs>
+
+  <!-- Edges — outer ring connections -->
+  <line x1="14" y1="6" x2="34" y2="6" stroke="url(#edge-l)" stroke-width="1.2"/>
+  <line x1="14" y1="6" x2="6" y2="20" stroke="url(#edge-l)" stroke-width="1.2"/>
+  <line x1="34" y1="6" x2="42" y2="20" stroke="url(#edge-l)" stroke-width="1.2"/>
+  <line x1="6" y1="20" x2="6" y2="34" stroke="url(#edge-l)" stroke-width="1.2"/>
+  <line x1="42" y1="20" x2="42" y2="34" stroke="url(#edge-l)" stroke-width="1.2"/>
+  <line x1="6" y1="34" x2="18" y2="44" stroke="url(#edge-l)" stroke-width="1.2"/>
+  <line x1="42" y1="34" x2="30" y2="44" stroke="url(#edge-l)" stroke-width="1.2"/>
+  <line x1="18" y1="44" x2="30" y2="44" stroke="url(#edge-l)" stroke-width="1.2"/>
+
+  <!-- Edges — connections to center -->
+  <line x1="14" y1="6" x2="24" y2="24" stroke="url(#edge2-l)" stroke-width="1.4"/>
+  <line x1="34" y1="6" x2="24" y2="24" stroke="url(#edge2-l)" stroke-width="1.4"/>
+  <line x1="6" y1="20" x2="24" y2="24" stroke="url(#edge2-l)" stroke-width="1.4"/>
+  <line x1="42" y1="20" x2="24" y2="24" stroke="url(#edge2-l)" stroke-width="1.4"/>
+  <line x1="6" y1="34" x2="24" y2="24" stroke="url(#edge2-l)" stroke-width="1.4"/>
+  <line x1="42" y1="34" x2="24" y2="24" stroke="url(#edge2-l)" stroke-width="1.4"/>
+  <line x1="18" y1="44" x2="24" y2="24" stroke="url(#edge2-l)" stroke-width="1.4"/>
+  <line x1="30" y1="44" x2="24" y2="24" stroke="url(#edge2-l)" stroke-width="1.4"/>
+
+  <!-- Cross-connections for density -->
+  <line x1="6" y1="20" x2="34" y2="6" stroke="url(#edge-l)" stroke-width="0.7" opacity="0.35"/>
+  <line x1="42" y1="20" x2="14" y2="6" stroke="url(#edge-l)" stroke-width="0.7" opacity="0.35"/>
+  <line x1="6" y1="34" x2="42" y2="20" stroke="url(#edge-l)" stroke-width="0.7" opacity="0.25"/>
+  <line x1="42" y1="34" x2="6" y2="20" stroke="url(#edge-l)" stroke-width="0.7" opacity="0.25"/>
+
+  <!-- Outer nodes -->
+  <circle cx="14" cy="6" r="2.8" fill="url(#node-l)" filter="url(#glow-sm-l)"/>
+  <circle cx="34" cy="6" r="2.8" fill="url(#node-l)" filter="url(#glow-sm-l)"/>
+  <circle cx="6" cy="20" r="2.5" fill="url(#node-sm-l)" filter="url(#glow-sm-l)"/>
+  <circle cx="42" cy="20" r="2.5" fill="url(#node-sm-l)" filter="url(#glow-sm-l)"/>
+  <circle cx="6" cy="34" r="2.5" fill="url(#node-sm-l)" filter="url(#glow-sm-l)"/>
+  <circle cx="42" cy="34" r="2.5" fill="url(#node-sm-l)" filter="url(#glow-sm-l)"/>
+  <circle cx="18" cy="44" r="2.8" fill="url(#node-l)" filter="url(#glow-sm-l)"/>
+  <circle cx="30" cy="44" r="2.8" fill="url(#node-l)" filter="url(#glow-sm-l)"/>
+
+  <!-- Central core node -->
+  <circle cx="24" cy="24" r="5.5" fill="url(#core-l)" filter="url(#glow-l)"/>
+  <circle cx="24" cy="24" r="7.5" fill="none" stroke="#6d28d9" stroke-width="0.5" opacity="0.25"/>
 </svg>
