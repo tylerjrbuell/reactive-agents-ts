@@ -12,6 +12,8 @@ import type {
   CompletionResponse,
   StreamEvent,
   LLMMessage,
+  ToolDefinition,
+  ToolCall,
 } from "../types.js";
 import { calculateCost, estimateTokenCount } from "../token-counter.js";
 import { retryPolicy } from "../retry.js";
@@ -55,6 +57,17 @@ const toEffectError = (error: unknown, provider: "openai"): LLMErrors => {
   });
 };
 
+// ─── OpenAI Tool Conversion ───
+
+const toOpenAITool = (tool: ToolDefinition) => ({
+  type: "function" as const,
+  function: {
+    name: tool.name,
+    description: tool.description,
+    parameters: tool.inputSchema,
+  },
+});
+
 // ─── OpenAI Provider Layer ───
 
 export const OpenAIProviderLive = Layer.effect(
@@ -86,9 +99,7 @@ export const OpenAIProviderLive = Layer.effect(
             ? request.model
             : request.model?.model ?? defaultModel;
 
-          const response = yield* Effect.tryPromise({
-            try: () =>
-              (client as { chat: { completions: { create: (opts: unknown) => Promise<unknown> } } }).chat.completions.create({
+          const requestBody: Record<string, unknown> = {
                 model,
                 max_tokens: request.maxTokens ?? config.defaultMaxTokens,
                 temperature: request.temperature ?? config.defaultTemperature,
@@ -96,7 +107,15 @@ export const OpenAIProviderLive = Layer.effect(
                 stop: request.stopSequences
                   ? [...request.stopSequences]
                   : undefined,
-              }),
+          };
+
+          if (request.tools && request.tools.length > 0) {
+            requestBody.tools = request.tools.map(toOpenAITool);
+          }
+
+          const response = yield* Effect.tryPromise({
+            try: () =>
+              (client as { chat: { completions: { create: (opts: unknown) => Promise<unknown> } } }).chat.completions.create(requestBody),
             catch: (error) => toEffectError(error, "openai"),
           });
 
@@ -321,9 +340,19 @@ export const OpenAIProviderLive = Layer.effect(
 
 // ─── OpenAI Response Mapping ───
 
+type OpenAIToolCall = {
+  id: string;
+  type: "function";
+  function: { name: string; arguments: string };
+};
+
 type OpenAIRawResponse = {
   choices: Array<{
-    message: { content: string; role: string };
+    message: {
+      content: string | null;
+      role: string;
+      tool_calls?: OpenAIToolCall[];
+    };
     finish_reason: string;
   }>;
   usage: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
@@ -334,14 +363,36 @@ const mapOpenAIResponse = (
   response: OpenAIRawResponse,
   model: string,
 ): CompletionResponse => {
-  const content = response.choices[0]?.message?.content ?? "";
+  const message = response.choices[0]?.message;
+  const content = message?.content ?? "";
+  const rawToolCalls = message?.tool_calls;
+
+  const hasToolCalls = rawToolCalls && rawToolCalls.length > 0;
 
   const stopReason =
-    response.choices[0]?.finish_reason === "stop"
-      ? ("end_turn" as const)
-      : response.choices[0]?.finish_reason === "length"
-        ? ("max_tokens" as const)
-        : ("end_turn" as const);
+    response.choices[0]?.finish_reason === "tool_calls" || hasToolCalls
+      ? ("tool_use" as const)
+      : response.choices[0]?.finish_reason === "stop"
+        ? ("end_turn" as const)
+        : response.choices[0]?.finish_reason === "length"
+          ? ("max_tokens" as const)
+          : ("end_turn" as const);
+
+  const toolCalls: ToolCall[] | undefined = hasToolCalls
+    ? rawToolCalls.map((tc) => {
+        let input: unknown;
+        try {
+          input = JSON.parse(tc.function.arguments);
+        } catch {
+          input = { raw: tc.function.arguments };
+        }
+        return {
+          id: tc.id,
+          name: tc.function.name,
+          input,
+        };
+      })
+    : undefined;
 
   return {
     content,
@@ -357,5 +408,6 @@ const mapOpenAIResponse = (
       ),
     },
     model: response.model ?? model,
+    toolCalls,
   };
 };

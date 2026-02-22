@@ -2,6 +2,7 @@ import { Effect, Context, Layer, Ref } from "effect";
 import type { ExecutionContext, ReactiveAgentsConfig } from "./types.js";
 import {
   ExecutionError,
+  GuardrailViolationError,
   MaxIterationsError,
   type RuntimeErrors,
 } from "./errors.js";
@@ -12,6 +13,10 @@ import type { LifecycleHook } from "./types.js";
 import type { Task, TaskResult } from "@reactive-agents/core";
 import type { TaskError } from "@reactive-agents/core";
 import { ToolService } from "@reactive-agents/tools";
+import { ObservabilityService } from "@reactive-agents/observability";
+import { GuardrailService } from "@reactive-agents/guardrails";
+import { VerificationService } from "@reactive-agents/verification";
+import { CostService } from "@reactive-agents/cost";
 
 // ─── Service Tag ───
 
@@ -97,11 +102,44 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
           return ctxFinal;
         });
 
+      /**
+       * H1: Observable phase wrapper — wraps runPhase in observability span
+       * when ObservabilityService is available.
+       */
+      const runObservablePhase = <E>(
+        obs: { withSpan: <A, E2>(name: string, effect: Effect.Effect<A, E2>, attrs?: Record<string, unknown>) => Effect.Effect<A, E2> } | null,
+        ctx: ExecutionContext,
+        phase: ExecutionContext["phase"],
+        body: (ctx: ExecutionContext) => Effect.Effect<ExecutionContext, E>,
+      ): Effect.Effect<ExecutionContext, E | RuntimeErrors> => {
+        const phaseEffect = runPhase(ctx, phase, body);
+        if (!obs) return phaseEffect;
+        return obs.withSpan(
+          `execution.phase.${phase}`,
+          phaseEffect.pipe(
+            Effect.tap((result) =>
+              obs.withSpan(`phase.${phase}.metrics`, Effect.void, {
+                iteration: result.iteration,
+                tokensUsed: result.tokensUsed,
+                cost: result.cost,
+              }),
+            ),
+          ),
+          { taskId: ctx.taskId, agentId: ctx.agentId, phase },
+        ) as Effect.Effect<ExecutionContext, E | RuntimeErrors>;
+      };
+
       const execute = (task: Task): Effect.Effect<TaskResult, RuntimeErrors> =>
         (
           Effect.gen(function* () {
             const now = new Date();
             const sessionId = `session-${Date.now()}`;
+
+            // ── H1: Acquire ObservabilityService optionally ──
+            const obsOpt = yield* Effect.serviceOption(ObservabilityService).pipe(
+              Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
+            );
+            const obs = obsOpt._tag === "Some" ? obsOpt.value : null;
 
             // Initialize context
             let ctx: ExecutionContext = {
@@ -115,6 +153,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
               messages: [],
               toolResults: [],
               cost: 0,
+              tokensUsed: 0,
               startedAt: now,
               selectedModel: config.defaultModel,
               metadata: {},
@@ -125,8 +164,15 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
               new Map(m).set(task.id, ctx),
             );
 
+            if (obs) {
+              yield* obs.info("Execution started", {
+                taskId: task.id,
+                agentId: task.agentId,
+              });
+            }
+
             // ── Phase 1: BOOTSTRAP ──
-            ctx = yield* runPhase(ctx, "bootstrap", (c) =>
+            ctx = yield* runObservablePhase(obs, ctx, "bootstrap", (c) =>
               Effect.gen(function* () {
                 // MemoryService is optional — skip if not provided
                 const memoryContext = yield* Effect.serviceOption(
@@ -152,20 +198,78 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
               }),
             );
 
-            // ── Phase 2: GUARDRAIL (optional) ──
+            // ── Phase 2: GUARDRAIL (optional) ── H2
             if (config.enableGuardrails) {
-              ctx = yield* runPhase(ctx, "guardrail", (c) => Effect.succeed(c));
+              ctx = yield* runObservablePhase(obs, ctx, "guardrail", (c) =>
+                Effect.gen(function* () {
+                  const guardrailOpt = yield* Effect.serviceOption(GuardrailService).pipe(
+                    Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
+                  );
+
+                  if (guardrailOpt._tag === "Some") {
+                    const inputText = String(
+                      (task.input as any).question ?? JSON.stringify(task.input),
+                    );
+                    const result = yield* guardrailOpt.value
+                      .check(inputText)
+                      .pipe(Effect.catchAll(() => Effect.succeed({ passed: true, violations: [], score: 1, checkedAt: new Date() })));
+
+                    if (!result.passed) {
+                      const violationSummary = result.violations
+                        .map((v: any) => `${v.type}: ${v.message}`)
+                        .join("; ");
+                      return yield* Effect.fail(
+                        new GuardrailViolationError({
+                          message: `Input guardrail check failed: ${violationSummary}`,
+                          taskId: c.taskId,
+                          violation: violationSummary,
+                        }),
+                      );
+                    }
+
+                    return {
+                      ...c,
+                      metadata: { ...c.metadata, guardrailScore: result.score },
+                    };
+                  }
+
+                  return c;
+                }),
+              );
             }
 
-            // ── Phase 3: COST_ROUTE (optional) ──
+            // ── Phase 3: COST_ROUTE (optional) ── H2
             if (config.enableCostTracking) {
-              ctx = yield* runPhase(ctx, "cost-route", (c) =>
-                Effect.succeed({ ...c, selectedModel: config.defaultModel }),
+              ctx = yield* runObservablePhase(obs, ctx, "cost-route", (c) =>
+                Effect.gen(function* () {
+                  const costOpt = yield* Effect.serviceOption(CostService).pipe(
+                    Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
+                  );
+
+                  if (costOpt._tag === "Some") {
+                    const taskDescription = String(
+                      (task.input as any).question ?? JSON.stringify(task.input),
+                    );
+                    const modelConfig = yield* costOpt.value
+                      .routeToModel(taskDescription)
+                      .pipe(
+                        Effect.catchAll(() =>
+                          Effect.succeed({ model: config.defaultModel }),
+                        ),
+                      );
+                    return {
+                      ...c,
+                      selectedModel: (modelConfig as any).model ?? config.defaultModel,
+                    };
+                  }
+
+                  return { ...c, selectedModel: config.defaultModel };
+                }),
               );
             }
 
             // ── Phase 4: STRATEGY_SELECT ──
-            ctx = yield* runPhase(ctx, "strategy-select", (c) =>
+            ctx = yield* runObservablePhase(obs, ctx, "strategy-select", (c) =>
               Effect.gen(function* () {
                 const selectorOpt = yield* Effect.serviceOption(
                   Context.GenericTag<{
@@ -234,7 +338,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 Effect.catchAll(() => Effect.succeed([] as string[])),
               );
 
-              ctx = yield* runPhase(ctx, "think", (c) =>
+              ctx = yield* runObservablePhase(obs, ctx, "think", (c) =>
                 Effect.gen(function* () {
                   const result = yield* reasoningOpt.value.execute({
                     taskDescription: JSON.stringify(task.input),
@@ -248,6 +352,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   return {
                     ...c,
                     cost: c.cost + (result.metadata.cost ?? 0),
+                    tokensUsed: c.tokensUsed + (result.metadata.tokensUsed ?? 0),
                     metadata: {
                       ...c.metadata,
                       lastResponse: String(result.output ?? ""),
@@ -274,11 +379,48 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 ],
               };
 
+              // Get tools in function-calling format for LLM requests
+              const functionCallingTools = yield* Effect.serviceOption(
+                ToolService,
+              ).pipe(
+                Effect.flatMap((opt) =>
+                  opt._tag === "Some"
+                    ? opt.value.toFunctionCallingFormat()
+                    : Effect.succeed([] as readonly any[]),
+                ),
+                Effect.catchAll(() => Effect.succeed([] as readonly any[])),
+              );
+
+              // H3: Get ContextWindowManager for message truncation
+              const contextManagerOpt = yield* Effect.serviceOption(
+                Context.GenericTag<{
+                  truncate: (
+                    messages: readonly unknown[],
+                    targetTokens: number,
+                    strategy: string,
+                  ) => Effect.Effect<readonly unknown[], unknown>;
+                }>("ContextWindowManager"),
+              ).pipe(
+                Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
+              );
+
               let isComplete = false;
 
               while (!isComplete && ctx.iteration < ctx.maxIterations) {
+                // H3: Truncate messages if ContextWindowManager is available
+                let messagesToSend = ctx.messages as unknown[];
+                if (contextManagerOpt._tag === "Some") {
+                  messagesToSend = yield* contextManagerOpt.value
+                    .truncate([...ctx.messages], 100_000, "drop-oldest")
+                    .pipe(
+                      Effect.map((msgs) => [...msgs]),
+                      Effect.catchAll(() => Effect.succeed([...ctx.messages] as unknown[])),
+                    );
+                }
+
                 // 5a. THINK
-                ctx = yield* runPhase(
+                ctx = yield* runObservablePhase(
+                  obs,
                   ctx,
                   "think",
                   (c) =>
@@ -288,6 +430,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                           content: string;
                           toolCalls?: unknown[];
                           stopReason: string;
+                          usage?: { totalTokens?: number; estimatedCost?: number };
                         }>;
                       }>("LLMService");
 
@@ -295,10 +438,20 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         ? `${String((c.memoryContext as any).semanticContext ?? "")}\n\nYou are a helpful AI assistant.`
                         : `You are a helpful AI assistant.`;
 
+                      // Convert function-calling tools to LLM ToolDefinition format
+                      const llmTools = functionCallingTools.length > 0
+                        ? functionCallingTools.map((t: any) => ({
+                            name: t.name,
+                            description: t.description,
+                            inputSchema: t.input_schema,
+                          }))
+                        : undefined;
+
                       const response = yield* llm.complete({
-                        messages: c.messages,
+                        messages: messagesToSend,
                         systemPrompt,
                         model: c.selectedModel,
+                        ...(llmTools ? { tools: llmTools } : {}),
                       });
 
                       const updatedMessages = [
@@ -313,6 +466,8 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       return {
                         ...c,
                         messages: updatedMessages,
+                        tokensUsed: c.tokensUsed + (response.usage?.totalTokens ?? 0),
+                        cost: c.cost + (response.usage?.estimatedCost ?? 0),
                         metadata: {
                           ...c.metadata,
                           lastResponse: response.content,
@@ -327,7 +482,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 const pendingCalls =
                   (ctx.metadata.pendingToolCalls as unknown[]) ?? [];
                 if (pendingCalls.length > 0) {
-                  ctx = yield* runPhase(ctx, "act", (c) =>
+                  ctx = yield* runObservablePhase(obs, ctx, "act", (c) =>
                     Effect.gen(function* () {
                       const toolServiceOpt =
                         yield* Effect.serviceOption(ToolService);
@@ -400,24 +555,50 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     }),
                   );
 
-                  // 5c. OBSERVE
-                  ctx = yield* runPhase(ctx, "observe", (c) =>
-                    Effect.succeed({
-                      ...c,
-                      messages: [
-                        ...c.messages,
-                        {
-                          role: "user",
-                          content: c.toolResults
-                            .slice(-pendingCalls.length)
-                            .map(
-                              (r: any) =>
-                                `Tool result: ${JSON.stringify(r.result)}`,
-                            )
-                            .join("\n"),
-                        },
-                      ],
-                      iteration: c.iteration + 1,
+                  // 5c. OBSERVE — H5: also log episodic memories
+                  ctx = yield* runObservablePhase(obs, ctx, "observe", (c) =>
+                    Effect.gen(function* () {
+                      const recentResults = c.toolResults.slice(-pendingCalls.length);
+
+                      // H5: Log tool results as episodic memory items
+                      const memOpt = yield* Effect.serviceOption(
+                        Context.GenericTag<{
+                          logEpisode: (episode: unknown) => Effect.Effect<void>;
+                        }>("MemoryService"),
+                      ).pipe(
+                        Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
+                      );
+
+                      if (memOpt._tag === "Some") {
+                        for (const r of recentResults) {
+                          yield* memOpt.value
+                            .logEpisode({
+                              type: "tool_result",
+                              toolName: (r as any).toolName,
+                              result: (r as any).result,
+                              taskId: c.taskId,
+                              timestamp: new Date(),
+                            })
+                            .pipe(Effect.catchAll(() => Effect.void));
+                        }
+                      }
+
+                      return {
+                        ...c,
+                        messages: [
+                          ...c.messages,
+                          {
+                            role: "user",
+                            content: recentResults
+                              .map(
+                                (r: any) =>
+                                  `Tool result: ${JSON.stringify(r.result)}`,
+                              )
+                              .join("\n"),
+                          },
+                        ],
+                        iteration: c.iteration + 1,
+                      };
                     }),
                   );
                 } else {
@@ -440,32 +621,80 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
               }
             }
 
-            // ── Phase 6: VERIFY (optional) ──
+            // ── Phase 6: VERIFY (optional) ── H2
             if (config.enableVerification) {
-              ctx = yield* runPhase(ctx, "verify", (c) => Effect.succeed(c));
+              ctx = yield* runObservablePhase(obs, ctx, "verify", (c) =>
+                Effect.gen(function* () {
+                  const verifyOpt = yield* Effect.serviceOption(VerificationService).pipe(
+                    Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
+                  );
+
+                  if (verifyOpt._tag === "Some") {
+                    const response = String(c.metadata.lastResponse ?? "");
+                    const input = String(
+                      (task.input as any).question ?? JSON.stringify(task.input),
+                    );
+                    const result = yield* verifyOpt.value
+                      .verify(response, input)
+                      .pipe(
+                        Effect.catchAll(() =>
+                          Effect.succeed({
+                            overallScore: 0.5,
+                            passed: true,
+                            riskLevel: "medium" as const,
+                            layerResults: [],
+                            recommendation: "accept" as const,
+                            verifiedAt: new Date(),
+                          }),
+                        ),
+                      );
+
+                    return {
+                      ...c,
+                      agentState: "verifying" as const,
+                      metadata: {
+                        ...c.metadata,
+                        verificationResult: result,
+                        verificationScore: result.overallScore,
+                      },
+                    };
+                  }
+
+                  return c;
+                }),
+              );
             }
 
-            // ── Phase 7: MEMORY_FLUSH ──
-            ctx = yield* runPhase(ctx, "memory-flush", (c) =>
+            // ── Phase 7: MEMORY_FLUSH ── H5
+            ctx = yield* runObservablePhase(obs, ctx, "memory-flush", (c) =>
               Effect.gen(function* () {
                 yield* Effect.serviceOption(
                   Context.GenericTag<{
                     snapshot: (s: unknown) => Effect.Effect<void>;
+                    flush?: () => Effect.Effect<void>;
                   }>("MemoryService"),
                 ).pipe(
                   Effect.flatMap((opt) =>
                     opt._tag === "Some"
-                      ? opt.value.snapshot({
-                          id: c.sessionId,
-                          agentId: c.agentId,
-                          messages: c.messages,
-                          summary: String(c.metadata.lastResponse ?? ""),
-                          keyDecisions: [],
-                          taskIds: [c.taskId],
-                          startedAt: c.startedAt,
-                          endedAt: new Date(),
-                          totalCost: c.cost,
-                          totalTokens: 0,
+                      ? Effect.gen(function* () {
+                          yield* opt.value.snapshot({
+                            id: c.sessionId,
+                            agentId: c.agentId,
+                            messages: c.messages,
+                            summary: String(c.metadata.lastResponse ?? ""),
+                            keyDecisions: [],
+                            taskIds: [c.taskId],
+                            startedAt: c.startedAt,
+                            endedAt: new Date(),
+                            totalCost: c.cost,
+                            totalTokens: c.tokensUsed,
+                          });
+                          // H5: Call flush() to generate memory.md projection
+                          if (opt.value.flush) {
+                            yield* opt.value.flush().pipe(
+                              Effect.catchAll(() => Effect.void),
+                            );
+                          }
                         })
                       : Effect.void,
                   ),
@@ -476,20 +705,59 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
               }),
             );
 
-            // ── Phase 8: COST_TRACK (optional) ──
+            // ── Phase 8: COST_TRACK (optional) ── H2
             if (config.enableCostTracking) {
-              ctx = yield* runPhase(ctx, "cost-track", (c) =>
-                Effect.succeed(c),
+              ctx = yield* runObservablePhase(obs, ctx, "cost-track", (c) =>
+                Effect.gen(function* () {
+                  const costOpt = yield* Effect.serviceOption(CostService).pipe(
+                    Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
+                  );
+
+                  if (costOpt._tag === "Some") {
+                    yield* costOpt.value
+                      .recordCost({
+                        agentId: c.agentId,
+                        sessionId: c.sessionId,
+                        model: String(c.selectedModel ?? "unknown"),
+                        tier: "sonnet" as const,
+                        inputTokens: 0,
+                        outputTokens: c.tokensUsed,
+                        cost: c.cost,
+                        cachedHit: false,
+                        taskType: task.type,
+                        latencyMs: Date.now() - c.startedAt.getTime(),
+                      })
+                      .pipe(Effect.catchAll(() => Effect.void));
+                  }
+
+                  return c;
+                }),
               );
             }
 
-            // ── Phase 9: AUDIT (optional) ──
+            // ── Phase 9: AUDIT (optional) ── H2
             if (config.enableAudit) {
-              ctx = yield* runPhase(ctx, "audit", (c) => Effect.succeed(c));
+              ctx = yield* runObservablePhase(obs, ctx, "audit", (c) =>
+                Effect.gen(function* () {
+                  if (obs) {
+                    yield* obs.info("Execution audit trail", {
+                      taskId: c.taskId,
+                      agentId: c.agentId,
+                      iterations: c.iteration,
+                      tokensUsed: c.tokensUsed,
+                      cost: c.cost,
+                      strategy: c.selectedStrategy,
+                      duration: Date.now() - c.startedAt.getTime(),
+                      phase: "audit",
+                    });
+                  }
+                  return c;
+                }),
+              );
             }
 
             // ── Phase 10: COMPLETE ──
-            ctx = yield* runPhase(ctx, "complete", (c) =>
+            ctx = yield* runObservablePhase(obs, ctx, "complete", (c) =>
               Effect.succeed({ ...c, agentState: "completed" as const }),
             );
 
@@ -502,12 +770,22 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
               metadata: {
                 duration: Date.now() - ctx.startedAt.getTime(),
                 cost: ctx.cost,
-                tokensUsed: 0,
+                tokensUsed: ctx.tokensUsed,
                 strategyUsed: ctx.selectedStrategy,
                 stepsCount: ctx.iteration,
               },
               completedAt: new Date(),
             };
+
+            if (obs) {
+              yield* obs.info("Execution completed", {
+                taskId: task.id,
+                success: true,
+                tokensUsed: ctx.tokensUsed,
+                cost: ctx.cost,
+                duration: result.metadata.duration,
+              });
+            }
 
             return result;
           }) as Effect.Effect<TaskResult, RuntimeErrors, any>

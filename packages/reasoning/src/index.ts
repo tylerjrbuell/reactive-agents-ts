@@ -73,6 +73,9 @@ export type { StrategyFn } from "./services/strategy-registry.js";
 // ─── Strategy Functions ───
 export { executeReactive } from "./strategies/reactive.js";
 export { executeReflexion } from "./strategies/reflexion.js";
+export { executePlanExecute } from "./strategies/plan-execute.js";
+export { executeTreeOfThought } from "./strategies/tree-of-thought.js";
+export { executeAdaptive } from "./strategies/adaptive.js";
 
 // ─── Runtime ───
 export { createReasoningLayer } from "./runtime.js";

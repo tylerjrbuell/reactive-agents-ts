@@ -9,6 +9,7 @@ import { defaultReasoningConfig } from "../types/config.js";
 import { StrategyRegistry, type StrategyFn } from "./strategy-registry.js";
 import type { ReasoningErrors } from "../errors/errors.js";
 import { LLMService } from "@reactive-agents/llm-provider";
+import { ToolService } from "@reactive-agents/tools";
 
 // ─── Service Tag ───
 
@@ -51,6 +52,17 @@ export const ReasoningServiceLive = (
       const llmService = yield* LLMService;
       const llmLayer = Layer.succeed(LLMService, llmService);
 
+      // Capture ToolService optionally — strategies like ReAct need it
+      // for tool execution. When not available, strategies degrade gracefully.
+      const toolServiceOpt = yield* Effect.serviceOption(ToolService);
+      let strategyLayer: Layer.Layer<any, never> = llmLayer;
+      if (toolServiceOpt._tag === "Some") {
+        strategyLayer = Layer.merge(
+          llmLayer,
+          Layer.succeed(ToolService, toolServiceOpt.value),
+        );
+      }
+
       return {
         execute: (params) =>
           Effect.gen(function* () {
@@ -61,11 +73,11 @@ export const ReasoningServiceLive = (
             // ── Get strategy function from registry ──
             const strategyFn = yield* registry.get(strategyName);
 
-            // ── Execute strategy, providing LLMService ──
+            // ── Execute strategy, providing LLMService + ToolService ──
             const result = yield* strategyFn({
               ...params,
               config,
-            }).pipe(Effect.provide(llmLayer));
+            }).pipe(Effect.provide(strategyLayer));
 
             return result;
           }),

@@ -53,6 +53,7 @@ export const ExecutionContextSchema = Schema.Struct({
   selectedModel: Schema.optional(Schema.Unknown),
   toolResults: Schema.Array(Schema.Unknown),
   cost: Schema.Number,
+  tokensUsed: Schema.Number,
   startedAt: Schema.DateFromSelf,
   metadata: Schema.Record({ key: Schema.String, value: Schema.Unknown }),
 });

@@ -107,16 +107,24 @@ export const createRuntime = (options: RuntimeOptions) => {
     runtime = Layer.merge(runtime, createCostLayer()) as any;
   }
 
-  if (options.enableReasoning) {
-    // ReasoningService requires LLMService
-    const reasoningLayer = createReasoningLayer().pipe(Layer.provide(llmLayer));
-    runtime = Layer.merge(runtime, reasoningLayer) as any;
-  }
-
+  // Build tools layer first — reasoning may depend on it
+  let toolsLayer: Layer.Layer<any, any> | null = null;
   if (options.enableTools) {
     // ToolService requires EventBus
-    const toolsLayer = createToolsLayer().pipe(Layer.provide(eventBusLayer));
+    toolsLayer = createToolsLayer().pipe(Layer.provide(eventBusLayer));
     runtime = Layer.merge(runtime, toolsLayer) as any;
+  }
+
+  if (options.enableReasoning) {
+    // ReasoningService requires LLMService, optionally ToolService
+    let reasoningDeps = llmLayer;
+    if (toolsLayer) {
+      reasoningDeps = Layer.merge(llmLayer, toolsLayer) as any;
+    }
+    const reasoningLayer = createReasoningLayer().pipe(
+      Layer.provide(reasoningDeps),
+    );
+    runtime = Layer.merge(runtime, reasoningLayer) as any;
   }
 
   if (options.enableIdentity) {

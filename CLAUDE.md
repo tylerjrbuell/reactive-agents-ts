@@ -115,6 +115,8 @@ Skills in `.claude/skills/` are loaded automatically.
 | `spec/docs/09-layer-observability.md` | `@reactive-agents/observability` |
 | `spec/docs/layer-10-interaction-revolutionary-design.md` | `@reactive-agents/interaction` |
 | `spec/docs/11-missing-capabilities-enhancement.md` | guardrails, eval, prompts, CLI |
+| `spec/docs/12-market-validation-feb-2026.md` | Competitive analysis, A2A priority |
+| `spec/docs/13-foundation-gap-analysis-feb-2026.md` | Full codebase audit, prioritized fix plan |
 
 ---
 

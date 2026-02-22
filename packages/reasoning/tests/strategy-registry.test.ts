@@ -35,7 +35,7 @@ describe("StrategyRegistry", () => {
   it("should fail with StrategyNotFoundError for unknown strategy", async () => {
     const program = Effect.gen(function* () {
       const registry = yield* StrategyRegistry;
-      return yield* registry.get("tree-of-thought");
+      return yield* registry.get("nonexistent-strategy" as any);
     });
 
     const result = await Effect.runPromiseExit(
