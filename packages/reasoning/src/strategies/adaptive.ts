@@ -44,9 +44,10 @@ export const executeAdaptive = (
 > =>
   Effect.gen(function* () {
     const llm = yield* LLMService;
-    const promptServiceOpt = yield* Effect.serviceOption(PromptService).pipe(
+    const promptServiceOptRaw = yield* Effect.serviceOption(PromptService).pipe(
       Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
     );
+    const promptServiceOpt = promptServiceOptRaw as PromptServiceOpt;
     const steps: ReasoningStep[] = [];
     const start = Date.now();
 
