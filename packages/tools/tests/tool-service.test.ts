@@ -1,12 +1,81 @@
 import { Effect, Layer } from "effect";
-import { describe, it, expect } from "bun:test";
+import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 
 import { EventBusLive } from "@reactive-agents/core";
 import { ToolService, ToolServiceLive } from "../src/tool-service.js";
 
 const TestToolLayer = ToolServiceLive.pipe(Layer.provide(EventBusLive));
 
+const createMockMcpServer = (port: number) => {
+  return Bun.serve({
+    port,
+    idleTimeout: 5,
+    fetch(req) {
+      if (req.method === "GET") {
+        return new Response(
+          new ReadableStream({
+            start(controller) {
+              const encoder = new TextEncoder();
+              const initialData = JSON.stringify({
+                jsonrpc: "2.0",
+                id: null,
+                result: { tools: [] },
+              });
+              controller.enqueue(
+                encoder.encode(`event: message\ndata: ${initialData}\n\n`),
+              );
+              setTimeout(() => controller.close(), 100);
+            },
+          }),
+          {
+            headers: {
+              "Content-Type": "text/event-stream",
+              "Cache-Control": "no-cache",
+            },
+          },
+        );
+      }
+
+      if (req.method === "POST") {
+        return req.json().then((body) => {
+          if (body.method === "initialize") {
+            return Response.json({
+              jsonrpc: "2.0",
+              id: body.id,
+              result: {
+                protocolVersion: "2024-11-05",
+                capabilities: { tools: {} },
+                serverInfo: { name: "test-mcp", version: "1.0.0" },
+              },
+            });
+          }
+          if (body.method === "tools/list") {
+            return Response.json({
+              jsonrpc: "2.0",
+              id: body.id,
+              result: { tools: [{ name: "test-tool", description: "Test", inputSchema: {} }] },
+            });
+          }
+          return Response.json({ jsonrpc: "2.0", id: body.id, result: {} });
+        });
+      }
+
+      return new Response("Not Found", { status: 404 });
+    },
+  });
+};
+
 describe("ToolService", () => {
+  let mockServer: ReturnType<typeof createMockMcpServer>;
+
+  beforeEach(() => {
+    mockServer = createMockMcpServer(0);
+  });
+
+  afterEach(() => {
+    mockServer.stop();
+  });
+
   it("should register and execute a tool", async () => {
     const program = Effect.gen(function* () {
       const tools = yield* ToolService;
@@ -227,15 +296,14 @@ describe("ToolService", () => {
     await Effect.runPromise(program.pipe(Effect.provide(TestToolLayer)));
   });
 
-  it("should connect to an MCP server (sse stub)", async () => {
+  it("should connect to an MCP server via SSE", async () => {
     const program = Effect.gen(function* () {
       const tools = yield* ToolService;
 
-      // Use sse transport (stub path — no subprocess spawned in unit tests)
       const server = yield* tools.connectMCPServer({
         name: "test-server",
         transport: "sse",
-        endpoint: "http://localhost:3001",
+        endpoint: `http://localhost:${mockServer.port}/sse`,
       });
 
       expect(server.status).toBe("connected");
@@ -255,7 +323,7 @@ describe("ToolService", () => {
       yield* tools.connectMCPServer({
         name: "test-server",
         transport: "sse",
-        endpoint: "http://localhost:3001",
+        endpoint: `http://localhost:${mockServer.port}/sse`,
       });
 
       yield* tools.disconnectMCPServer("test-server");
@@ -325,23 +393,17 @@ describe("ToolService", () => {
   });
 
   it("should populate MCP tool parameters from schemas", async () => {
-    // This tests the MCP parameter population logic by verifying
-    // that when an MCP server returns tool schemas with inputSchema,
-    // the registered tools have proper parameters
     const program = Effect.gen(function* () {
       const tools = yield* ToolService;
 
-      // Connect via sse (stub transport - no subprocess)
-      // The stub returns empty tools, but we verify the registration mechanism
       const server = yield* tools.connectMCPServer({
         name: "schema-test",
         transport: "sse",
-        endpoint: "http://localhost:3002",
+        endpoint: `http://localhost:${mockServer.port}/sse`,
       });
 
       expect(server.status).toBe("connected");
-      // SSE stub returns empty tools - that's OK for this unit test
-      // The full integration is tested via the MCP client tests
+      expect(server.tools).toContain("test-tool");
     });
 
     await Effect.runPromise(program.pipe(Effect.provide(TestToolLayer)));
