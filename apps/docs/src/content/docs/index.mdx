@@ -1,9 +1,9 @@
 ---
 title: Reactive Agents
-description: Build autonomous AI agents with Effect-TS. Type-safe, composable, observable.
+description: The composable AI agent framework for TypeScript. Type-safe, observable, and production-ready.
 template: splash
 hero:
-  tagline: The composable AI agent framework built on Effect-TS. Type-safe from prompt to production.
+  tagline: "The only AI agent framework where every capability is an independent, composable layer. Built on Effect-TS for type safety from prompt to production."
   image:
     file: ../../assets/logo-dark.svg
   actions:
@@ -16,60 +16,153 @@ hero:
       icon: external
 ---
 
-import { Card, CardGrid } from "@astrojs/starlight/components";
+import { Card, CardGrid, Tabs, TabItem } from "@astrojs/starlight/components";
 
-## Why Reactive Agents?
+## Build Agents That Think, Act, and Learn
+
+Most agent frameworks give you a chat loop and call it a day. Reactive Agents gives you a **10-phase execution engine**, **5 reasoning strategies**, **4-tier memory**, and **13 composable layers** — all fully typed, all independently toggleable.
 
 <CardGrid stagger>
-  <Card title="Type-Safe Agents" icon="seti:typescript">
-    Every agent, tool, and memory operation is fully typed with Effect-TS
-    schemas. Catch errors at compile time, not in production.
+  <Card title="Type-Safe from End to End" icon="seti:typescript">
+    Every agent, tool, memory entry, and LLM call is validated by Effect-TS schemas.
+    Catch errors at compile time. Runtime validation at every service boundary.
+    No `any` leaking through your agent stack.
   </Card>
-  <Card title="Composable Layers" icon="puzzle">
-    Mix and match capabilities — memory, reasoning, guardrails, cost tracking —
-    using Effect's Layer system. Only pay for what you use.
+  <Card title="Composable Layer Architecture" icon="puzzle">
+    Enable exactly the capabilities you need. Memory without guardrails? Just reasoning
+    and tools? Full production stack? Each layer is an independent Effect Layer with
+    explicit dependencies — no hidden coupling, no wasted resources.
   </Card>
-  <Card title="Observable by Default" icon="magnifier">
-    Built-in tracing, metrics, and structured logging. Every agent decision is
-    inspectable through the 10-phase execution engine.
+  <Card title="Observable Execution Engine" icon="magnifier">
+    Every agent task flows through a deterministic 10-phase lifecycle with before/after/error hooks.
+    When observability is enabled, every phase emits spans and metrics. You see exactly
+    what your agent decided and why.
   </Card>
-  <Card title="5 Interaction Modes" icon="setting">
-    From fully autonomous to human-in-the-loop collaborative. Agents
-    dynamically escalate and de-escalate based on confidence.
+  <Card title="5 Reasoning Strategies" icon="star">
+    ReAct for tool use. Reflexion for self-improvement. Plan-Execute for structured work.
+    Tree-of-Thought for creative exploration. Adaptive to auto-select the best strategy.
+    Register your own strategies too.
   </Card>
 </CardGrid>
 
+---
+
 ## Quick Example
 
+<Tabs>
+  <TabItem label="Simple Agent">
 ```typescript
 import { ReactiveAgents } from "reactive-agents";
 
 const agent = await ReactiveAgents.create()
-  .withName("research-assistant")
+  .withName("assistant")
   .withProvider("anthropic")
   .withModel("claude-sonnet-4-20250514")
-  .withMemory("1")
-  .withReasoning()
-  .withGuardrails()
   .build();
 
-const result = await agent.run("Summarize the key findings from this paper");
+const result = await agent.run("Explain quantum entanglement");
 console.log(result.output);
 ```
+  </TabItem>
+  <TabItem label="With Tools + Reasoning">
+```typescript
+import { ReactiveAgents } from "reactive-agents";
+import { defineTool } from "@reactive-agents/tools";
+import { Effect, Schema } from "effect";
+
+const searchTool = defineTool({
+  name: "web_search",
+  description: "Search the web",
+  input: Schema.Struct({ query: Schema.String }),
+  handler: ({ query }) => Effect.succeed(`Results for: ${query}`),
+});
+
+const agent = await ReactiveAgents.create()
+  .withName("researcher")
+  .withProvider("anthropic")
+  .withReasoning()           // ReAct loop: Think -> Act -> Observe
+  .withTools([searchTool])   // Tools are called during reasoning
+  .withMemory("1")           // Persistent memory across sessions
+  .build();
+
+const result = await agent.run("What happened in AI this week?");
+```
+  </TabItem>
+  <TabItem label="Production Stack">
+```typescript
+const agent = await ReactiveAgents.create()
+  .withName("production-agent")
+  .withProvider("anthropic")
+  .withModel("claude-sonnet-4-20250514")
+  .withReasoning()           // 5 reasoning strategies
+  .withTools([...myTools])   // Sandboxed tool execution
+  .withMemory("2")           // Vector + FTS5 search
+  .withGuardrails()          // Injection, PII, toxicity detection
+  .withVerification()        // Semantic entropy fact-checking
+  .withCostTracking()        // Budget enforcement + model routing
+  .withObservability()       // Distributed tracing + metrics
+  .withIdentity()            // RBAC + agent certificates
+  .withInteraction()         // 5 autonomy modes
+  .withAudit()               // Compliance audit trail
+  .build();
+```
+  </TabItem>
+</Tabs>
+
+---
+
+## How It's Different
+
+<CardGrid>
+  <Card title="vs. LangChain / LlamaIndex" icon="document">
+    Those frameworks are Python-first, dynamically typed, and monolithic.
+    Reactive Agents is TypeScript-native, statically typed with Effect-TS schemas,
+    and fully modular — you only load what you use.
+  </Card>
+  <Card title="vs. Vercel AI SDK" icon="document">
+    Vercel AI SDK handles streaming and tool calling well but stops there.
+    Reactive Agents adds reasoning strategies, persistent memory, guardrails,
+    verification, cost routing, observability, and multi-agent orchestration.
+  </Card>
+  <Card title="vs. AutoGen / CrewAI" icon="document">
+    Multi-agent frameworks that lack type safety, composable architecture,
+    or fine-grained observability. Reactive Agents gives you all three plus
+    a 10-phase execution engine you can hook into at any point.
+  </Card>
+  <Card title="vs. Building From Scratch" icon="document">
+    You get 15 production-ready packages with 300+ tests, covering memory,
+    reasoning, tools, safety, cost, identity, and orchestration. Focus on
+    your agent's logic, not infrastructure.
+  </Card>
+</CardGrid>
+
+---
 
 ## Architecture at a Glance
 
 ```
 ReactiveAgentBuilder
   -> createRuntime()
-    -> CoreServices (EventBus, AgentService, TaskService)
-    -> LLMProvider  (Anthropic, OpenAI, Ollama)
-    -> Memory       (Working, Semantic, Episodic, Procedural)
-    -> Reasoning    (ReAct, Plan-Execute, Tree-of-Thought)
-    -> Tools        (Registry, Sandbox, MCP)
-    -> Guardrails   (Injection, PII, Toxicity, Contracts)
-    -> Verification (Semantic Entropy, Fact Decomposition)
-    -> Cost         (Complexity Router, Budget Enforcer)
-    -> Interaction  (5 Modes, Checkpoints, Collaboration)
+    -> CoreServices    (EventBus, AgentService, TaskService)
+    -> LLMProvider     (Anthropic, OpenAI, Gemini, Ollama)
+    -> Memory          (Working, Semantic, Episodic, Procedural)
+    -> Reasoning       (ReAct, Reflexion, Plan-Execute, ToT, Adaptive)
+    -> Tools           (Registry, Sandbox, MCP Client)
+    -> Guardrails      (Injection, PII, Toxicity, Contracts)
+    -> Verification    (Semantic Entropy, Fact Decomposition)
+    -> Cost            (Complexity Router, Budget Enforcer)
+    -> Identity        (Certificates, RBAC)
+    -> Observability   (Tracing, Metrics, Structured Logging)
+    -> Interaction     (5 Modes, Checkpoints, Preference Learning)
+    -> Orchestration   (Multi-Agent Workflows)
+    -> Prompts         (Template Engine, Built-in Library)
     -> ExecutionEngine (10-phase lifecycle with hooks)
 ```
+
+## 15 Packages, One Command
+
+```bash
+bun add reactive-agents effect
+```
+
+Or install individual packages for minimal bundle size. [See installation guide &rarr;](guides/installation/)

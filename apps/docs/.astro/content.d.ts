@@ -198,6 +198,83 @@ declare module 'astro:content' {
   collection: "docs";
   data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
+"cookbook/custom-strategies.md": {
+	id: "cookbook/custom-strategies.md";
+  slug: "cookbook/custom-strategies";
+  body: string;
+  collection: "docs";
+  data: InferEntrySchema<"docs">
+} & { render(): Render[".md"] };
+"cookbook/multi-agent-patterns.md": {
+	id: "cookbook/multi-agent-patterns.md";
+  slug: "cookbook/multi-agent-patterns";
+  body: string;
+  collection: "docs";
+  data: InferEntrySchema<"docs">
+} & { render(): Render[".md"] };
+"cookbook/production-deployment.md": {
+	id: "cookbook/production-deployment.md";
+  slug: "cookbook/production-deployment";
+  body: string;
+  collection: "docs";
+  data: InferEntrySchema<"docs">
+} & { render(): Render[".md"] };
+"cookbook/testing-agents.md": {
+	id: "cookbook/testing-agents.md";
+  slug: "cookbook/testing-agents";
+  body: string;
+  collection: "docs";
+  data: InferEntrySchema<"docs">
+} & { render(): Render[".md"] };
+"features/cost-tracking.md": {
+	id: "features/cost-tracking.md";
+  slug: "features/cost-tracking";
+  body: string;
+  collection: "docs";
+  data: InferEntrySchema<"docs">
+} & { render(): Render[".md"] };
+"features/identity.md": {
+	id: "features/identity.md";
+  slug: "features/identity";
+  body: string;
+  collection: "docs";
+  data: InferEntrySchema<"docs">
+} & { render(): Render[".md"] };
+"features/llm-providers.md": {
+	id: "features/llm-providers.md";
+  slug: "features/llm-providers";
+  body: string;
+  collection: "docs";
+  data: InferEntrySchema<"docs">
+} & { render(): Render[".md"] };
+"features/observability.md": {
+	id: "features/observability.md";
+  slug: "features/observability";
+  body: string;
+  collection: "docs";
+  data: InferEntrySchema<"docs">
+} & { render(): Render[".md"] };
+"features/orchestration.md": {
+	id: "features/orchestration.md";
+  slug: "features/orchestration";
+  body: string;
+  collection: "docs";
+  data: InferEntrySchema<"docs">
+} & { render(): Render[".md"] };
+"features/prompts.md": {
+	id: "features/prompts.md";
+  slug: "features/prompts";
+  body: string;
+  collection: "docs";
+  data: InferEntrySchema<"docs">
+} & { render(): Render[".md"] };
+"features/verification.md": {
+	id: "features/verification.md";
+  slug: "features/verification";
+  body: string;
+  collection: "docs";
+  data: InferEntrySchema<"docs">
+} & { render(): Render[".md"] };
 "guides/guardrails.md": {
 	id: "guides/guardrails.md";
   slug: "guides/guardrails";

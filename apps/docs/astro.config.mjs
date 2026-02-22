@@ -21,6 +21,7 @@ export default defineConfig({
           href: "https://github.com/tylerjrbuell/reactive-agents-ts",
         },
       ],
+      favicon: "/favicon.svg",
       logo: {
         light: "./src/assets/logo-light.svg",
         dark: "./src/assets/logo-dark.svg",
@@ -33,8 +34,16 @@ export default defineConfig({
           autogenerate: { directory: "guides" },
         },
         {
+          label: "Features",
+          autogenerate: { directory: "features" },
+        },
+        {
           label: "Concepts",
           autogenerate: { directory: "concepts" },
+        },
+        {
+          label: "Cookbook",
+          autogenerate: { directory: "cookbook" },
         },
         {
           label: "API Reference",
