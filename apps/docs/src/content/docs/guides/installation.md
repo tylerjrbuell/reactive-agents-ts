@@ -60,6 +60,9 @@ ANTHROPIC_API_KEY=sk-ant-...        # Anthropic Claude
 OPENAI_API_KEY=sk-...               # OpenAI GPT-4o
 GOOGLE_API_KEY=...                  # Google Gemini
 
+# Tools (optional)
+TAVILY_API_KEY=tvly-...             # Enables built-in web search tool
+
 # Embeddings (for Tier 2 semantic memory)
 EMBEDDING_PROVIDER=openai           # "openai" | "ollama"
 EMBEDDING_MODEL=text-embedding-3-small

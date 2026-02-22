@@ -14,7 +14,7 @@ Reactive Agents supports multiple LLM providers through a unified `LLMService` i
 | **Anthropic** | Claude 3.5 Haiku, Claude Sonnet 4, Claude Opus 4 | Yes | Yes | No (use OpenAI) | Yes |
 | **OpenAI** | GPT-4o, GPT-4o-mini | Yes | Yes | Yes | No |
 | **Google Gemini** | Gemini 2.0 Flash, Gemini 2.5 Pro | Yes | Yes | No | No |
-| **Ollama** | Any locally hosted model | No | Yes | Yes | No |
+| **Ollama** | Any locally hosted model | Yes | Yes | Yes | No |
 | **Test** | Mock provider for testing | No | No | No | No |
 
 ## Configuration
@@ -58,6 +58,9 @@ OPENAI_API_KEY=sk-...
 GOOGLE_API_KEY=...
 OLLAMA_ENDPOINT=http://localhost:11434   # defaults to this
 
+# Tools (optional)
+TAVILY_API_KEY=tvly-...                  # enables built-in web search
+
 # Optional tuning
 LLM_DEFAULT_MODEL=claude-sonnet-4-20250514
 LLM_DEFAULT_TEMPERATURE=0.7
@@ -93,6 +96,7 @@ When tools are enabled, the LLM can request tool calls. Each provider translates
 - **Anthropic**: Uses the `tools` parameter with Anthropic's tool use format
 - **OpenAI**: Uses `function_calling` with `tools` array
 - **Gemini**: Uses `functionDeclarations` in `tools` array
+- **Ollama**: Uses the `ollama` npm SDK with OpenAI-compatible tool format
 
 ```typescript
 const response = await llm.complete({

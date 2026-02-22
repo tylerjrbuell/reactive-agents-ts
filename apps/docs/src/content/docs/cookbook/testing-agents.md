@@ -42,16 +42,7 @@ The test provider matches the longest substring found in the input against the r
 Test tool execution without real external calls:
 
 ```typescript
-import { defineTool } from "@reactive-agents/tools";
-import { Effect, Schema } from "effect";
-
-const mockSearchTool = defineTool({
-  name: "web_search",
-  description: "Search the web",
-  input: Schema.Struct({ query: Schema.String }),
-  handler: ({ query }) =>
-    Effect.succeed(`Mock results for: ${query}`),
-});
+import { Effect } from "effect";
 
 test("agent uses tools", async () => {
   const agent = await ReactiveAgents.create()
@@ -60,7 +51,20 @@ test("agent uses tools", async () => {
     .withTestResponses({
       default: "Based on my research, the answer is 42.",
     })
-    .withTools([mockSearchTool])
+    .withTools({
+      tools: [{
+        definition: {
+          name: "web_search",
+          description: "Search the web",
+          parameters: [{ name: "query", type: "string", description: "Search query", required: true }],
+          riskLevel: "low",
+          timeoutMs: 5_000,
+          requiresApproval: false,
+          source: "function",
+        },
+        handler: (args) => Effect.succeed(`Mock results for: ${args.query}`),
+      }],
+    })
     .build();
 
   const result = await agent.run("Search for the meaning of life");

@@ -25,6 +25,7 @@ All methods return `this` for chaining.
 | Method | Signature | Description |
 |--------|-----------|-------------|
 | `withName` | `(name: string) => this` | Set the agent's name (used as `agentId`) |
+| `withSystemPrompt` | `(prompt: string) => this` | Set a custom system prompt (default: `"You are a helpful AI assistant."`) |
 
 ### Model & Provider
 
@@ -52,12 +53,12 @@ All methods return `this` for chaining.
 | `withGuardrails()` | Injection, PII, toxicity detection on input |
 | `withVerification()` | Semantic entropy, fact decomposition on output |
 | `withCostTracking()` | Budget enforcement, complexity routing, semantic caching |
-| `withReasoning()` | Structured reasoning (ReAct, Reflexion, Plan-Execute, ToT, Adaptive) |
-| `withTools([...])` | Tool registry with sandboxed execution |
+| `withReasoning(options?)` | Structured reasoning (ReAct, Reflexion, Plan-Execute, ToT, Adaptive). Options: `{ defaultStrategy?, strategies?, adaptive? }` |
+| `withTools(options?)` | Tool registry with sandboxed execution. Options: `{ tools?: [{ definition, handler }] }` |
 | `withIdentity()` | Agent certificates and RBAC |
 | `withObservability()` | Distributed tracing, metrics, structured logging |
 | `withInteraction()` | 5 interaction modes with adaptive transitions |
-| `withPrompts()` | Version-controlled prompt template engine |
+| `withPrompts(options?)` | Version-controlled prompt template engine. Options: `{ templates?: PromptTemplate[] }` |
 | `withOrchestration()` | Multi-agent workflow coordination |
 | `withAudit()` | Compliance audit trail logging |
 
@@ -154,29 +155,22 @@ interface AgentResult {
 
 ```typescript
 import { ReactiveAgents } from "reactive-agents";
-import { defineTool } from "@reactive-agents/tools";
-import { Effect, Schema } from "effect";
-
-// Define tools
-const searchTool = defineTool({
-  name: "web_search",
-  description: "Search the web",
-  input: Schema.Struct({ query: Schema.String }),
-  handler: ({ query }) => Effect.succeed(`Results for: ${query}`),
-});
+import { Effect } from "effect";
 
 // Build agent with all features
 const agent = await ReactiveAgents.create()
   .withName("research-assistant")
   .withProvider("anthropic")
   .withModel("claude-sonnet-4-20250514")
+  .withSystemPrompt("You are a CRISPR research specialist.")
   .withMemory("1")
-  .withReasoning()
-  .withTools([searchTool])
+  .withReasoning({ defaultStrategy: "adaptive" })
+  .withTools()              // Built-in tools (web search, file I/O, etc.)
   .withGuardrails()
   .withVerification()
   .withCostTracking()
   .withObservability()
+  .withAudit()
   .withInteraction()
   .withMaxIterations(15)
   .withHook({

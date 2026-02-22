@@ -208,6 +208,11 @@ export type LLMMessage =
   | {
       readonly role: "assistant";
       readonly content: string | readonly ContentBlock[];
+    }
+  | {
+      readonly role: "tool";
+      readonly toolCallId: string;
+      readonly content: string;
     };
 
 // ─── Token Usage ───

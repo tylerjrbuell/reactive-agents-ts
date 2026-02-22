@@ -34,18 +34,20 @@ type OllamaMessage = {
 const toOllamaMessages = (
   messages: readonly LLMMessage[],
 ): OllamaMessage[] =>
-  messages.map((m) => ({
-    role: m.role,
-    content:
-      typeof m.content === "string"
-        ? m.content
-        : m.content
-            .filter(
-              (b): b is { type: "text"; text: string } => b.type === "text",
-            )
-            .map((b) => b.text)
-            .join(""),
-  }));
+  messages
+    .filter((m) => m.role !== "tool") // Ollama doesn't support tool messages — filter them
+    .map((m) => ({
+      role: m.role as "system" | "user" | "assistant",
+      content:
+        typeof m.content === "string"
+          ? m.content
+          : (m.content as readonly { type: string; text?: string }[])
+              .filter(
+                (b): b is { type: "text"; text: string } => b.type === "text",
+              )
+              .map((b) => b.text)
+              .join(""),
+    }));
 
 const toOllamaTools = (
   tools?: readonly ToolDefinition[],

@@ -20,26 +20,34 @@ import { retryPolicy } from "../retry.js";
 
 // ─── OpenAI Message Conversion ───
 
-type OpenAIMessage = {
-  role: "system" | "user" | "assistant";
-  content: string;
-};
+type OpenAIMessage =
+  | { role: "system" | "user" | "assistant"; content: string }
+  | { role: "tool"; tool_call_id: string; content: string };
 
 const toOpenAIMessages = (
   messages: readonly LLMMessage[],
 ): OpenAIMessage[] =>
-  messages.map((m) => ({
-    role: m.role,
-    content:
-      typeof m.content === "string"
-        ? m.content
-        : m.content
-            .filter(
-              (b): b is { type: "text"; text: string } => b.type === "text",
-            )
-            .map((b) => b.text)
-            .join(""),
-  }));
+  messages.map((m) => {
+    if (m.role === "tool") {
+      return {
+        role: "tool" as const,
+        tool_call_id: m.toolCallId,
+        content: m.content,
+      };
+    }
+    return {
+      role: m.role as "system" | "user" | "assistant",
+      content:
+        typeof m.content === "string"
+          ? m.content
+          : (m.content as readonly { type: string; text?: string }[])
+              .filter(
+                (b): b is { type: "text"; text: string } => b.type === "text",
+              )
+              .map((b) => b.text)
+              .join(""),
+    };
+  });
 
 const toEffectError = (error: unknown, provider: "openai"): LLMErrors => {
   const err = error as { status?: number; message?: string };

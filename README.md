@@ -64,7 +64,7 @@ const agent = await ReactiveAgents.create()
   .withName("research-agent")
   .withProvider("anthropic")
   .withReasoning()            // ReAct reasoning loop
-  .withTools([searchTool])    // Tools called during reasoning
+  .withTools()                // Built-in tools + MCP support
   .withMemory("1")            // Persistent memory (FTS5 search)
   .withGuardrails()           // Block injection, PII, toxicity
   .withVerification()         // Fact-check outputs
@@ -76,18 +76,32 @@ const agent = await ReactiveAgents.create()
   .build();
 ```
 
-### Define Tools
+### Register Custom Tools
+
+Tools are registered at build time or via `ToolService.register()`. Built-in tools (web search, file I/O, HTTP, code execution) are available automatically when `.withTools()` is enabled.
 
 ```typescript
-import { defineTool } from "@reactive-agents/tools";
-import { Effect, Schema } from "effect";
+import { ReactiveAgents } from "reactive-agents";
+import { Effect } from "effect";
 
-const searchTool = defineTool({
-  name: "web_search",
-  description: "Search the web for current information",
-  input: Schema.Struct({ query: Schema.String }),
-  handler: ({ query }) => Effect.succeed(`Results for: ${query}`),
-});
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withReasoning()
+  .withTools({
+    tools: [{
+      definition: {
+        name: "web_search",
+        description: "Search the web for current information",
+        parameters: [{ name: "query", type: "string", description: "Search query", required: true }],
+        riskLevel: "low",
+        timeoutMs: 10_000,
+        requiresApproval: false,
+        source: "function",
+      },
+      handler: (args) => Effect.succeed(`Results for: ${args.query}`),
+    }],
+  })
+  .build();
 ```
 
 When reasoning is enabled, the agent calls tools during the Think → Act → Observe loop and uses real results to inform its reasoning.
@@ -222,7 +236,7 @@ const result = await agent.run("What is the capital of France?");
 
 ```bash
 bun install              # Install dependencies
-bun test                 # Run all tests (340+ tests, 60+ files)
+bun test                 # Run all tests (442 tests, 77 files)
 bun run build            # Build all packages (ESM + DTS)
 ```
 

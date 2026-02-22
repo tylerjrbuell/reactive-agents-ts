@@ -16,6 +16,7 @@ import type { StepId } from "../types/step.js";
 import { ExecutionError, IterationLimitError } from "../errors/errors.js";
 import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
+import { PromptService } from "@reactive-agents/prompts";
 
 interface ReflexionInput {
   readonly taskDescription: string;
@@ -38,6 +39,9 @@ export const executeReflexion = (
 > =>
   Effect.gen(function* () {
     const llm = yield* LLMService;
+    const promptServiceOpt = yield* Effect.serviceOption(PromptService).pipe(
+      Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
+    );
     const { maxRetries, selfCritiqueDepth } = input.config.strategies.reflexion;
     const steps: ReasoningStep[] = [];
     const start = Date.now();
@@ -47,6 +51,12 @@ export const executeReflexion = (
     let previousCritiques: string[] = [];
 
     // ── STEP 1: Initial generation ──
+    const genSystemPrompt = yield* compilePromptOrFallback(
+      promptServiceOpt,
+      "reasoning.reflexion-generate",
+      { task: input.taskDescription },
+      buildSystemPrompt(input.taskDescription),
+    );
     const initialResponse = yield* llm
       .complete({
         messages: [
@@ -55,7 +65,7 @@ export const executeReflexion = (
             content: buildGenerationPrompt(input, null),
           },
         ],
-        systemPrompt: buildSystemPrompt(input.taskDescription),
+        systemPrompt: genSystemPrompt,
         maxTokens: selfCritiqueDepth === "deep" ? 800 : 500,
         temperature: 0.7,
       })
@@ -87,6 +97,12 @@ export const executeReflexion = (
       attempt++;
 
       // ── Reflect: self-critique the current response ──
+      const critiqueSystemPrompt = yield* compilePromptOrFallback(
+        promptServiceOpt,
+        "reasoning.reflexion-critique",
+        {},
+        "You are a critical evaluator. Analyze responses for accuracy, completeness, and quality.",
+      );
       const critiqueResponse = yield* llm
         .complete({
           messages: [
@@ -100,8 +116,7 @@ export const executeReflexion = (
               ),
             },
           ],
-          systemPrompt:
-            "You are a critical evaluator. Analyze responses for accuracy, completeness, and quality.",
+          systemPrompt: critiqueSystemPrompt,
           maxTokens: selfCritiqueDepth === "deep" ? 600 : 300,
           temperature: 0.3, // low temp for objective critique
         })
@@ -144,6 +159,12 @@ export const executeReflexion = (
       previousCritiques.push(critique);
 
       // ── Improve: generate a refined response ──
+      const improveSystemPrompt = yield* compilePromptOrFallback(
+        promptServiceOpt,
+        "reasoning.reflexion-generate",
+        { task: input.taskDescription },
+        buildSystemPrompt(input.taskDescription),
+      );
       const improvedResponse = yield* llm
         .complete({
           messages: [
@@ -152,7 +173,7 @@ export const executeReflexion = (
               content: buildGenerationPrompt(input, previousCritiques),
             },
           ],
-          systemPrompt: buildSystemPrompt(input.taskDescription),
+          systemPrompt: improveSystemPrompt,
           maxTokens: selfCritiqueDepth === "deep" ? 800 : 500,
           temperature: 0.6,
         })
@@ -191,6 +212,29 @@ export const executeReflexion = (
       attempt,
     );
   });
+
+// ─── Prompt compilation helper ───
+
+type PromptServiceOpt =
+  | { _tag: "Some"; value: { compile: (id: string, vars: Record<string, unknown>) => Effect.Effect<{ content: string }, unknown> } }
+  | { _tag: "None" };
+
+function compilePromptOrFallback(
+  promptServiceOpt: PromptServiceOpt,
+  templateId: string,
+  variables: Record<string, unknown>,
+  fallback: string,
+): Effect.Effect<string, never> {
+  if (promptServiceOpt._tag === "None") {
+    return Effect.succeed(fallback);
+  }
+  return promptServiceOpt.value
+    .compile(templateId, variables)
+    .pipe(
+      Effect.map((compiled: { content: string }) => compiled.content),
+      Effect.catchAll(() => Effect.succeed(fallback)),
+    );
+}
 
 // ─── Private Helpers ───
 

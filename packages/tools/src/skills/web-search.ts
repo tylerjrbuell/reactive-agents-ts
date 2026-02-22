@@ -74,12 +74,16 @@ export const webSearchHandler = (
         };
       }
 
-      // Stub when no API key is set
+      // No API key — warn the user
+      console.warn(
+        "[web-search] TAVILY_API_KEY is not set. Web search is inactive. " +
+          "Set TAVILY_API_KEY in your environment to enable real web search results.",
+      );
       return {
         query,
         maxResults,
         results: [],
-        message: "Web search stub - configure TAVILY_API_KEY for real results",
+        error: "Web search is not activated — TAVILY_API_KEY is missing. Set it in your .env file.",
       };
     },
     catch: (e) =>

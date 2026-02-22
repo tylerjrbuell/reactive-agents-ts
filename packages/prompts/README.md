@@ -38,11 +38,28 @@ With the builder:
 ```typescript
 import { ReactiveAgents } from "reactive-agents";
 
+// Enable built-in prompt templates (reasoning, evaluation, agent)
 const agent = await ReactiveAgents.create()
   .withName("researcher")
   .withProvider("anthropic")
+  .withPrompts()          // registers all built-in templates
+  .build();
+
+// Or register custom templates at build time:
+const customAgent = await ReactiveAgents.create()
+  .withName("custom")
+  .withProvider("anthropic")
   .withPrompts({
-    system: PromptLibrary.get("researcher"),
+    templates: [{
+      id: "custom.system",
+      name: "Custom System Prompt",
+      version: 1,
+      template: "You are a {{role}} expert. Answer in {{language}}.",
+      variables: [
+        { name: "role", required: true, type: "string" },
+        { name: "language", required: false, type: "string", defaultValue: "English" },
+      ],
+    }],
   })
   .build();
 ```

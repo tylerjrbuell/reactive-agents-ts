@@ -15,6 +15,7 @@ import type { StepId } from "../types/step.js";
 import { ExecutionError, IterationLimitError } from "../errors/errors.js";
 import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
+import { PromptService } from "@reactive-agents/prompts";
 import { executeReactive } from "./reactive.js";
 import { executeReflexion } from "./reflexion.js";
 import { executePlanExecute } from "./plan-execute.js";
@@ -43,10 +44,19 @@ export const executeAdaptive = (
 > =>
   Effect.gen(function* () {
     const llm = yield* LLMService;
+    const promptServiceOpt = yield* Effect.serviceOption(PromptService).pipe(
+      Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
+    );
     const steps: ReasoningStep[] = [];
     const start = Date.now();
 
     // ── Analyze task to select strategy ──
+    const classifySystemPrompt = yield* compilePromptOrFallback(
+      promptServiceOpt,
+      "reasoning.adaptive-classify",
+      {},
+      "You are a task analyzer. Classify the task and recommend the best reasoning strategy. Respond with ONLY one of: REACTIVE, REFLEXION, PLAN_EXECUTE, TREE_OF_THOUGHT",
+    );
     const analysisResponse = yield* llm
       .complete({
         messages: [
@@ -55,8 +65,7 @@ export const executeAdaptive = (
             content: buildAnalysisPrompt(input),
           },
         ],
-        systemPrompt:
-          "You are a task analyzer. Classify the task and recommend the best reasoning strategy. Respond with ONLY one of: REACTIVE, REFLEXION, PLAN_EXECUTE, TREE_OF_THOUGHT",
+        systemPrompt: classifySystemPrompt,
         maxTokens: 50,
         temperature: 0.2,
       })
@@ -108,6 +117,29 @@ export const executeAdaptive = (
       status: subResult.status,
     };
   });
+
+// ─── Prompt compilation helper ───
+
+type PromptServiceOpt =
+  | { _tag: "Some"; value: { compile: (id: string, vars: Record<string, unknown>) => Effect.Effect<{ content: string }, unknown> } }
+  | { _tag: "None" };
+
+function compilePromptOrFallback(
+  promptServiceOpt: PromptServiceOpt,
+  templateId: string,
+  variables: Record<string, unknown>,
+  fallback: string,
+): Effect.Effect<string, never> {
+  if (promptServiceOpt._tag === "None") {
+    return Effect.succeed(fallback);
+  }
+  return promptServiceOpt.value
+    .compile(templateId, variables)
+    .pipe(
+      Effect.map((compiled: { content: string }) => compiled.content),
+      Effect.catchAll(() => Effect.succeed(fallback)),
+    );
+}
 
 // ─── Private Helpers ───
 

@@ -21,7 +21,7 @@ const agent = await ReactiveAgents.create()
 
   // Core capabilities
   .withReasoning({ defaultStrategy: "adaptive" })
-  .withTools([...productionTools])
+  .withTools()                // Built-in tools + any MCP servers
   .withMemory("2")              // Vector + FTS5 for rich memory
 
   // Safety
@@ -61,6 +61,9 @@ EMBEDDING_DIMENSIONS=1536
 
 # Optional: OpenAI for fallback or specific tasks
 OPENAI_API_KEY=sk-...
+
+# Tools (optional)
+TAVILY_API_KEY=tvly-...            # enables built-in web search tool
 ```
 
 ## Cost Controls
@@ -237,7 +240,7 @@ const agents = {
     .withName("researcher")
     .withProvider("anthropic")
     .withReasoning()
-    .withTools([searchTool])
+    .withTools()
     .build(),
 
   writer: await ReactiveAgents.create()

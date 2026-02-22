@@ -26,8 +26,9 @@ export const ${toCamelCase(name)} = () =>
     .withProvider("anthropic")
     .withName("${name}")
     .withSystemPrompt("You are a research assistant. Gather information, synthesize findings, and provide well-sourced answers.")
-    .withMemory(true)
-    .withReasoning("reactive")
+    .withMemory("1")
+    .withReasoning()
+    .withTools()
     .build();
 `,
 
@@ -38,7 +39,8 @@ export const ${toCamelCase(name)} = () =>
     .withProvider("anthropic")
     .withName("${name}")
     .withSystemPrompt("You are a coding assistant. Write clean, well-tested code and explain your decisions.")
-    .withReasoning("reactive")
+    .withReasoning()
+    .withTools()
     .build();
 `,
 
@@ -49,8 +51,9 @@ export const ${toCamelCase(name)} = () =>
     .withProvider("anthropic")
     .withName("${name}")
     .withSystemPrompt("You are an orchestrator agent. Decompose complex tasks and coordinate sub-agents.")
-    .withMemory(true)
-    .withReasoning("reactive")
+    .withMemory("1")
+    .withReasoning()
+    .withTools()
     .build();
 `,
 };

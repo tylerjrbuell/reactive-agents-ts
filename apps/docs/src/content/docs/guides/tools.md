@@ -7,51 +7,53 @@ sidebar:
 
 The tools layer lets agents call external functions, APIs, and MCP servers. Tools integrate directly with the reasoning loop — when an agent thinks it needs information or wants to take an action, it calls a tool and uses the real result.
 
-## Defining Tools
+## Built-in Tools vs Custom Tools
 
-Tools are defined with an Effect Schema and a handler:
+When you call `.withTools()`, several built-in tools are automatically registered. You can also register custom tools at build time by passing options.
 
-```typescript
-import { defineTool } from "@reactive-agents/tools";
-import { Effect, Schema } from "effect";
-
-const searchTool = defineTool({
-  name: "web_search",
-  description: "Search the web for current information",
-  input: Schema.Struct({
-    query: Schema.String,
-    maxResults: Schema.optional(Schema.Number),
-  }),
-  handler: ({ query, maxResults }) =>
-    Effect.succeed(`Top ${maxResults ?? 5} results for: ${query}`),
-});
-
-const calculatorTool = defineTool({
-  name: "calculator",
-  description: "Perform arithmetic calculations",
-  input: Schema.Struct({
-    expression: Schema.String,
-  }),
-  handler: ({ expression }) =>
-    Effect.try(() => String(eval(expression))),
-});
-```
-
-## Using Tools with Agents
-
-Pass tools to the builder:
+### Using Built-in Tools
 
 ```typescript
 import { ReactiveAgents } from "reactive-agents";
 
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
-  .withTools([searchTool, calculatorTool])
-  .withReasoning()   // Tools work with or without reasoning
+  .withTools()               // Built-in tools auto-registered
+  .withReasoning()           // Tools work with or without reasoning
   .build();
 
 const result = await agent.run("What is the population of Tokyo times 3?");
 ```
+
+### Registering Custom Tools
+
+Pass custom tool definitions via the `tools` option:
+
+```typescript
+import { ReactiveAgents } from "reactive-agents";
+import { Effect } from "effect";
+
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withTools({
+    tools: [{
+      definition: {
+        name: "calculator",
+        description: "Perform arithmetic calculations",
+        parameters: [{ name: "expression", type: "string", description: "Math expression", required: true }],
+        riskLevel: "low",
+        timeoutMs: 5_000,
+        requiresApproval: false,
+        source: "function",
+      },
+      handler: (args) => Effect.try(() => String(eval(String(args.expression)))),
+    }],
+  })
+  .withReasoning()
+  .build();
+```
+
+You can also register tools programmatically after build using `ToolService.register()` via the Effect API.
 
 ### With Reasoning (ReAct)
 
@@ -74,6 +76,29 @@ Without reasoning, tool calling uses the LLM provider's native function calling:
 5. Loop continues until the LLM stops requesting tools
 
 Both paths produce the same outcome — the agent uses tools to accomplish its task.
+
+## Built-in Tools
+
+When you enable `.withTools()`, these tools are automatically registered and available to the agent:
+
+| Tool | Category | Description | Requires |
+|------|----------|-------------|----------|
+| `web-search` | search | Search the web using Tavily API | `TAVILY_API_KEY` |
+| `http-get` | http | Make HTTP GET requests | — |
+| `file-read` | file | Read file contents (path-traversal protected) | — |
+| `file-write` | file | Write file contents (requires approval) | — |
+| `code-execute` | code | Execute code snippets (stub — sandbox only) | — |
+
+### Web Search Configuration
+
+The `web-search` tool requires a [Tavily](https://tavily.com) API key. Without it, calls to `web-search` return an error telling the agent the tool is inactive:
+
+```bash
+# .env
+TAVILY_API_KEY=tvly-...
+```
+
+When the key is set, web search makes real API calls and returns `{ title, url, content }` results. When missing, the agent sees an explicit error message explaining that `TAVILY_API_KEY` is not configured.
 
 ## Sandboxed Execution
 
@@ -155,6 +180,36 @@ const program = Effect.gen(function* () {
   yield* client.disconnect("filesystem");
   return result;
 });
+```
+
+### Builder Integration
+
+Connect MCP servers through the builder API — no manual client setup needed:
+
+```typescript
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withMCP({
+    name: "filesystem",
+    transport: "stdio",
+    command: "npx",
+    args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+  })
+  .build();
+```
+
+Or load from a config file with the CLI:
+
+```bash
+# .rax/mcp.json (auto-loaded if present)
+{
+  "servers": [
+    { "name": "fs", "transport": "stdio", "command": "npx", "args": ["-y", "@anthropic/mcp-filesystem"] }
+  ]
+}
+
+# Explicit path
+rax run "list files" --mcp-config .rax/mcp.json
 ```
 
 ### SSE and WebSocket Transports

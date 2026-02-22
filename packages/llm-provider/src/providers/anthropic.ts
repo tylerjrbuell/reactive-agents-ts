@@ -38,15 +38,28 @@ const toAnthropicMessages = (
 ): AnthropicMessage[] =>
   messages
     .filter((m) => m.role !== "system")
-    .map((m) => ({
-      role: m.role as AnthropicRole,
-      content:
-        typeof m.content === "string"
-          ? m.content
-          : (m.content as readonly ContentBlock[]).map(
-              (b) => b as unknown as AnthropicContentBlock,
-            ),
-    }));
+    .map((m) => {
+      if (m.role === "tool") {
+        // Convert tool result to Anthropic's tool_result content block format
+        return {
+          role: "user" as AnthropicRole,
+          content: [{
+            type: "tool_result" as const,
+            tool_use_id: m.toolCallId,
+            content: m.content,
+          }] as unknown as AnthropicContentBlock[],
+        };
+      }
+      return {
+        role: m.role as AnthropicRole,
+        content:
+          typeof m.content === "string"
+            ? m.content
+            : (m.content as readonly ContentBlock[]).map(
+                (b) => b as unknown as AnthropicContentBlock,
+              ),
+      };
+    });
 
 const toAnthropicTool = (tool: {
   name: string;

@@ -8,6 +8,7 @@ import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { ToolService } from "@reactive-agents/tools";
 import type { ToolDefinition, ToolOutput } from "@reactive-agents/tools";
+import { PromptService } from "@reactive-agents/prompts";
 
 interface ReactiveInput {
   readonly taskDescription: string;
@@ -38,6 +39,10 @@ export const executeReactive = (
     const toolServiceOpt = toolServiceOptRaw as
       | { _tag: "Some"; value: ToolServiceInstance }
       | { _tag: "None" };
+    // PromptService is optional — falls back to hardcoded strings
+    const promptServiceOpt = yield* Effect.serviceOption(PromptService).pipe(
+      Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
+    );
     const maxIter = input.config.strategies.reactive.maxIterations;
     const temp = input.config.strategies.reactive.temperature;
     const steps: ReasoningStep[] = [];
@@ -50,13 +55,30 @@ export const executeReactive = (
 
     while (iteration < maxIter) {
       // ── THOUGHT ──
+      // Use PromptService for system prompt if available
+      const systemPrompt = yield* compilePromptOrFallback(
+        promptServiceOpt,
+        "reasoning.react-system",
+        { task: input.taskDescription },
+        `You are a reasoning agent. Task: ${input.taskDescription}`,
+      );
+      const thoughtContent = yield* compilePromptOrFallback(
+        promptServiceOpt,
+        "reasoning.react-thought",
+        {
+          context,
+          history: steps.map((s) => `[${s.type}] ${s.content}`).join("\n"),
+        },
+        buildThoughtPrompt(context, steps),
+      );
+
       const thoughtResponse = yield* llm
         .complete({
           messages: [
-            { role: "user", content: buildThoughtPrompt(context, steps) },
+            { role: "user", content: thoughtContent },
           ],
-          systemPrompt: `You are a reasoning agent. Task: ${input.taskDescription}`,
-          maxTokens: 300,
+          systemPrompt,
+          maxTokens: 1500,
           temperature: temp,
         })
         .pipe(
@@ -214,7 +236,34 @@ function resolveToolArgs(
         return Effect.succeed(parsed as Record<string, unknown>);
       }
     } catch {
-      // Fall through to parameter mapping
+      // JSON looks truncated or malformed — check if tool has multiple required params
+      return toolService
+        .getTool(toolRequest.tool)
+        .pipe(
+          Effect.flatMap((toolDef: ToolDefinition) => {
+            const requiredParams = toolDef.parameters.filter(
+              (p: { required?: boolean }) => p.required,
+            );
+            if (requiredParams.length > 1) {
+              // Multi-param tool with broken JSON — don't guess, report the problem
+              const paramNames = requiredParams.map((p: { name: string }) => p.name).join(", ");
+              return Effect.succeed({
+                _parseError: true,
+                error: `Malformed JSON for tool "${toolRequest.tool}". Expected JSON with keys: ${paramNames}. Got: ${trimmed.slice(0, 100)}...`,
+              } as Record<string, unknown>);
+            }
+            // Single-param: map raw string to first param
+            const firstParam = requiredParams[0] ?? toolDef.parameters[0];
+            return Effect.succeed(
+              firstParam
+                ? ({ [firstParam.name]: trimmed } as Record<string, unknown>)
+                : ({ input: trimmed } as Record<string, unknown>),
+            );
+          }),
+          Effect.catchAll(() =>
+            Effect.succeed({ input: trimmed } as Record<string, unknown>),
+          ),
+        );
     }
   }
 
@@ -233,6 +282,29 @@ function resolveToolArgs(
       Effect.catchAll(() =>
         Effect.succeed({ input: trimmed } as Record<string, unknown>),
       ),
+    );
+}
+
+// ─── Prompt compilation helper ───
+
+type PromptServiceOpt =
+  | { _tag: "Some"; value: { compile: (id: string, vars: Record<string, unknown>) => Effect.Effect<{ content: string }, unknown> } }
+  | { _tag: "None" };
+
+function compilePromptOrFallback(
+  promptServiceOpt: PromptServiceOpt,
+  templateId: string,
+  variables: Record<string, unknown>,
+  fallback: string,
+): Effect.Effect<string, never> {
+  if (promptServiceOpt._tag === "None") {
+    return Effect.succeed(fallback);
+  }
+  return promptServiceOpt.value
+    .compile(templateId, variables)
+    .pipe(
+      Effect.map((compiled) => compiled.content),
+      Effect.catchAll(() => Effect.succeed(fallback)),
     );
 }
 
@@ -256,7 +328,7 @@ function buildThoughtPrompt(
   history: readonly ReasoningStep[],
 ): string {
   const historyStr = history.map((s) => `[${s.type}] ${s.content}`).join("\n");
-  return `${context}\n\nPrevious steps:\n${historyStr}\n\nThink step-by-step. If you need a tool, respond with "ACTION: tool_name({"param": "value"})". If you have a final answer, respond with "FINAL ANSWER: ...".`;
+  return `${context}\n\nPrevious steps:\n${historyStr}\n\nThink step-by-step. If you need a tool, respond with "ACTION: tool_name({"param": "value"})" using valid JSON for the arguments. For tools with multiple parameters, include all required fields in the JSON object. If you have a final answer, respond with "FINAL ANSWER: ...".`;
 }
 
 function hasFinalAnswer(thought: string): boolean {
@@ -266,9 +338,48 @@ function hasFinalAnswer(thought: string): boolean {
 function parseToolRequest(
   thought: string,
 ): { tool: string; input: string } | null {
-  // Greedy match to handle JSON in the argument (which may contain parentheses)
-  const match = thought.match(/ACTION:\s*([\w-]+)\((.+)\)/is);
-  return match ? { tool: match[1], input: match[2] } : null;
+  // Match the ACTION prefix and tool name
+  const prefixMatch = thought.match(/ACTION:\s*([\w-]+)\(/i);
+  if (!prefixMatch) return null;
+
+  const tool = prefixMatch[1];
+  const argsStart = (prefixMatch.index ?? 0) + prefixMatch[0].length;
+  const rest = thought.slice(argsStart);
+
+  // If args start with '{', use brace-matching to extract the JSON object
+  if (rest.trimStart().startsWith("{")) {
+    const trimOffset = rest.length - rest.trimStart().length;
+    let depth = 0;
+    let inString = false;
+    let escape = false;
+    for (let i = trimOffset; i < rest.length; i++) {
+      const ch = rest[i];
+      if (escape) {
+        escape = false;
+        continue;
+      }
+      if (ch === "\\") {
+        escape = true;
+        continue;
+      }
+      if (ch === '"') {
+        inString = !inString;
+        continue;
+      }
+      if (inString) continue;
+      if (ch === "{") depth++;
+      if (ch === "}") {
+        depth--;
+        if (depth === 0) {
+          return { tool, input: rest.slice(trimOffset, i + 1) };
+        }
+      }
+    }
+  }
+
+  // Fallback: greedy regex (captures up to last ')' in thought)
+  const match = thought.match(/ACTION:\s*[\w-]+\((.+)\)/is);
+  return match ? { tool, input: match[1] } : null;
 }
 
 function appendToContext(context: string, addition: string): string {
