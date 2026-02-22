@@ -61,6 +61,11 @@ export interface RuntimeOptions {
 
   // Reasoning configuration overrides
   reasoningOptions?: ReasoningOptions;
+
+  // A2A configuration
+  enableA2A?: boolean;
+  a2aPort?: number;
+  a2aBasePath?: string;
 }
 
 /**
@@ -206,9 +211,42 @@ export const createRuntime = (options: RuntimeOptions) => {
     runtime = Layer.merge(runtime, createOrchestrationLayer()) as any;
   }
 
+  // A2A support - use extraLayers pattern for optional A2A
+  if (options.enableA2A) {
+    runtime = Layer.merge(runtime, A2aExtraLayer(options.agentId, options.a2aPort ?? 3000)) as any;
+  }
+
   if (options.extraLayers) {
     runtime = Layer.merge(runtime, options.extraLayers) as any;
   }
 
   return runtime;
+};
+
+// ─── A2A Extra Layer (optional) ─────────────────────────────────────────────
+
+const A2aExtraLayer = (agentId: string, port: number): Layer.Layer<any, any> => {
+  try {
+    // Dynamic import - will fail gracefully if A2A package not installed
+    const a2a = require("@reactive-agents/a2a");
+    const { createA2AServerLayer } = a2a;
+    
+    const agentCard = {
+      id: agentId,
+      name: agentId,
+      version: "0.5.0",
+      url: `http://localhost:${port}`,
+      provider: { organization: "Reactive Agents" },
+      capabilities: {
+        streaming: true,
+        pushNotifications: false,
+        stateTransitionHistory: false,
+      },
+    };
+    
+    return createA2AServerLayer(agentCard, port);
+  } catch (e) {
+    // Return empty layer if A2A not available
+    return Layer.succeed(null as any, {}) as unknown as Layer.Layer<any, any>;
+  }
 };
