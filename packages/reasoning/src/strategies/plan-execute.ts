@@ -37,9 +37,10 @@ export const executePlanExecute = (
     const toolServiceOpt = yield* Effect.serviceOption(ToolService).pipe(
       Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
     );
-    const promptServiceOpt = yield* Effect.serviceOption(PromptService).pipe(
+    const promptServiceOptRaw = yield* Effect.serviceOption(PromptService).pipe(
       Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
     );
+    const promptServiceOpt = promptServiceOptRaw as PromptServiceOpt;
     const { maxRefinements, reflectionDepth } =
       input.config.strategies.planExecute;
     const steps: ReasoningStep[] = [];

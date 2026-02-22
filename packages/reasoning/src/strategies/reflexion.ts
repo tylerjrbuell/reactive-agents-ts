@@ -39,9 +39,10 @@ export const executeReflexion = (
 > =>
   Effect.gen(function* () {
     const llm = yield* LLMService;
-    const promptServiceOpt = yield* Effect.serviceOption(PromptService).pipe(
+    const promptServiceOptRaw = yield* Effect.serviceOption(PromptService).pipe(
       Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
     );
+    const promptServiceOpt = promptServiceOptRaw as PromptServiceOpt;
     const { maxRetries, selfCritiqueDepth } = input.config.strategies.reflexion;
     const steps: ReasoningStep[] = [];
     const start = Date.now();

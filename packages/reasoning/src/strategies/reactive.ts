@@ -40,9 +40,10 @@ export const executeReactive = (
       | { _tag: "Some"; value: ToolServiceInstance }
       | { _tag: "None" };
     // PromptService is optional — falls back to hardcoded strings
-    const promptServiceOpt = yield* Effect.serviceOption(PromptService).pipe(
+    const promptServiceOptRaw = yield* Effect.serviceOption(PromptService).pipe(
       Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
     );
+    const promptServiceOpt = promptServiceOptRaw as PromptServiceOpt;
     const maxIter = input.config.strategies.reactive.maxIterations;
     const temp = input.config.strategies.reactive.temperature;
     const steps: ReasoningStep[] = [];

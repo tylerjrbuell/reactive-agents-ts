@@ -15,7 +15,7 @@
     "@reactive-agents/core": "workspace:*",
     "@reactive-agents/llm-provider": "workspace:*",
     "@reactive-agents/tools": "workspace:*",
-    "@reactive-agents/prompts": "workspace:*",
+    "@reactive-agents/prompts": "workspace:^",
     "ulid": "^2.3.0"
   },
   "devDependencies": {

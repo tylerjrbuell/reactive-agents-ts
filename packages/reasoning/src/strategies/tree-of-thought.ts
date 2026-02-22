@@ -39,9 +39,10 @@ export const executeTreeOfThought = (
 > =>
   Effect.gen(function* () {
     const llm = yield* LLMService;
-    const promptServiceOpt = yield* Effect.serviceOption(PromptService).pipe(
+    const promptServiceOptRaw = yield* Effect.serviceOption(PromptService).pipe(
       Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
     );
+    const promptServiceOpt = promptServiceOptRaw as PromptServiceOpt;
     const { breadth, depth, pruningThreshold } =
       input.config.strategies.treeOfThought;
     const steps: ReasoningStep[] = [];
