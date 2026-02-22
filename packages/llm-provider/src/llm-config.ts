@@ -33,32 +33,35 @@ export class LLMConfig extends Context.Tag("LLMConfig")<
 >() {}
 
 /**
+ * Raw LLMConfig value from environment variables.
+ * Exported so callers can spread overrides (e.g. model) on top.
+ */
+export const llmConfigFromEnv = LLMConfig.of({
+  defaultProvider: "anthropic",
+  defaultModel:
+    process.env.LLM_DEFAULT_MODEL ?? "claude-sonnet-4-20250514",
+  anthropicApiKey: process.env.ANTHROPIC_API_KEY,
+  openaiApiKey: process.env.OPENAI_API_KEY,
+  googleApiKey: process.env.GOOGLE_API_KEY,
+  ollamaEndpoint:
+    process.env.OLLAMA_ENDPOINT ?? "http://localhost:11434",
+  embeddingConfig: {
+    model: process.env.EMBEDDING_MODEL ?? "text-embedding-3-small",
+    dimensions: Number(process.env.EMBEDDING_DIMENSIONS ?? 1536),
+    provider:
+      (process.env.EMBEDDING_PROVIDER as "openai" | "ollama") ?? "openai",
+    batchSize: 100,
+  },
+  supportsPromptCaching: (
+    process.env.LLM_DEFAULT_MODEL ?? "claude-sonnet-4-20250514"
+  ).startsWith("claude"),
+  maxRetries: Number(process.env.LLM_MAX_RETRIES ?? 3),
+  timeoutMs: Number(process.env.LLM_TIMEOUT_MS ?? 30_000),
+  defaultMaxTokens: 4096,
+  defaultTemperature: Number(process.env.LLM_DEFAULT_TEMPERATURE ?? 0.7),
+});
+
+/**
  * Build LLMConfig from environment variables.
  */
-export const LLMConfigFromEnv = Layer.succeed(
-  LLMConfig,
-  LLMConfig.of({
-    defaultProvider: "anthropic",
-    defaultModel:
-      process.env.LLM_DEFAULT_MODEL ?? "claude-sonnet-4-20250514",
-    anthropicApiKey: process.env.ANTHROPIC_API_KEY,
-    openaiApiKey: process.env.OPENAI_API_KEY,
-    googleApiKey: process.env.GOOGLE_API_KEY,
-    ollamaEndpoint:
-      process.env.OLLAMA_ENDPOINT ?? "http://localhost:11434",
-    embeddingConfig: {
-      model: process.env.EMBEDDING_MODEL ?? "text-embedding-3-small",
-      dimensions: Number(process.env.EMBEDDING_DIMENSIONS ?? 1536),
-      provider:
-        (process.env.EMBEDDING_PROVIDER as "openai" | "ollama") ?? "openai",
-      batchSize: 100,
-    },
-    supportsPromptCaching: (
-      process.env.LLM_DEFAULT_MODEL ?? "claude-sonnet-4-20250514"
-    ).startsWith("claude"),
-    maxRetries: Number(process.env.LLM_MAX_RETRIES ?? 3),
-    timeoutMs: Number(process.env.LLM_TIMEOUT_MS ?? 30_000),
-    defaultMaxTokens: 4096,
-    defaultTemperature: Number(process.env.LLM_DEFAULT_TEMPERATURE ?? 0.7),
-  }),
-);
+export const LLMConfigFromEnv = Layer.succeed(LLMConfig, llmConfigFromEnv);

@@ -77,6 +77,7 @@ export const createRuntime = (options: RuntimeOptions) => {
   const llmLayer = createLLMProviderLayer(
     options.provider ?? "test",
     options.testResponses,
+    options.model,
   );
   const memoryLayer = createMemoryLayer(config.memoryTier, {
     agentId: options.agentId,

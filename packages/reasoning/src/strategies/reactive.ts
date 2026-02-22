@@ -64,7 +64,11 @@ export const executeReactive = (
             (err) =>
               new ExecutionError({
                 strategy: "reactive",
-                message: `LLM thought failed at iteration ${iteration}`,
+                message: `LLM thought failed at iteration ${iteration}: ${
+                  err && typeof err === "object" && "message" in err
+                    ? (err as { message: string }).message
+                    : String(err)
+                }`,
                 step: iteration,
                 cause: err,
               }),

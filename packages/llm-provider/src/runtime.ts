@@ -1,5 +1,5 @@
 import { Layer } from "effect";
-import { LLMConfig, LLMConfigFromEnv } from "./llm-config.js";
+import { LLMConfig, LLMConfigFromEnv, llmConfigFromEnv } from "./llm-config.js";
 import { AnthropicProviderLive } from "./providers/anthropic.js";
 import { OpenAIProviderLive } from "./providers/openai.js";
 import { LocalProviderLive } from "./providers/local.js";
@@ -14,6 +14,7 @@ import { TestLLMServiceLayer } from "./testing.js";
 export const createLLMProviderLayer = (
   provider: "anthropic" | "openai" | "ollama" | "gemini" | "test" = "anthropic",
   testResponses?: Record<string, string>,
+  model?: string,
 ) => {
   if (provider === "test") {
     return Layer.mergeAll(
@@ -22,7 +23,9 @@ export const createLLMProviderLayer = (
     );
   }
 
-  const configLayer = LLMConfigFromEnv;
+  const configLayer = model
+    ? Layer.succeed(LLMConfig, LLMConfig.of({ ...llmConfigFromEnv, defaultModel: model }))
+    : LLMConfigFromEnv;
 
   const providerLayer =
     provider === "anthropic"

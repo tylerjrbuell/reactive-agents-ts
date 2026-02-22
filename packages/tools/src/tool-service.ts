@@ -20,6 +20,7 @@ import { makeMCPClient } from "./mcp/mcp-client.js";
 import { makeSandbox } from "./execution/sandbox.js";
 import { validateToolInput } from "./validation/input-validator.js";
 import { EventBus } from "@reactive-agents/core";
+import { builtinTools } from "./skills/builtin.js";
 
 // ─── Service Tag ───
 
@@ -218,6 +219,11 @@ export const ToolServiceLive = Layer.effect(
 
     const listMCPServers = (): Effect.Effect<readonly MCPServer[], never> =>
       mcpClient.listServers();
+
+    // Register built-in tools automatically
+    for (const tool of builtinTools) {
+      yield* registry.register(tool.definition, tool.handler);
+    }
 
     return {
       execute,

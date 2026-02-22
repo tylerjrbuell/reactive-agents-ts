@@ -60,7 +60,13 @@ export const LocalProviderLive = Layer.effect(
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                   model,
-                  messages: toOllamaMessages(request.messages),
+                  messages: (() => {
+                    const msgs = toOllamaMessages(request.messages);
+                    if (request.systemPrompt) {
+                      msgs.unshift({ role: "system", content: request.systemPrompt });
+                    }
+                    return msgs;
+                  })(),
                   stream: false,
                   options: {
                     temperature:
@@ -111,13 +117,13 @@ export const LocalProviderLive = Layer.effect(
           } satisfies CompletionResponse;
         }).pipe(
           Effect.retry(retryPolicy),
-          Effect.timeout("60 seconds"),
+          Effect.timeout("120 seconds"),
           Effect.catchTag("TimeoutException", () =>
             Effect.fail(
               new LLMTimeoutError({
                 message: "Local LLM request timed out",
                 provider: "ollama",
-                timeoutMs: 60_000,
+                timeoutMs: 120_000,
               }),
             ),
           ),
@@ -137,7 +143,13 @@ export const LocalProviderLive = Layer.effect(
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({
                     model,
-                    messages: toOllamaMessages(request.messages),
+                    messages: (() => {
+                      const msgs = toOllamaMessages(request.messages);
+                      if (request.systemPrompt) {
+                        msgs.unshift({ role: "system", content: request.systemPrompt });
+                      }
+                      return msgs;
+                    })(),
                     stream: true,
                     options: {
                       temperature:
