@@ -6,6 +6,64 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 
 ---
 
+## [0.3.1] — 2026-02-21
+
+### Added
+
+#### Ollama SDK Integration (`@reactive-agents/llm-provider` 0.3.0)
+- **Replaced raw `fetch()` with `ollama` npm SDK** — lazy-imported via `await import("ollama")` (same pattern as Gemini)
+- Native tool calling: `tools` param passed to `ollama.chat()`, `response.message.tool_calls` parsed into `CompletionResponse.toolCalls`
+- `done_reason` mapping: `"stop"` → `end_turn`, `"length"` → `max_tokens`, tool_calls present → `tool_use`
+- `keep_alive: "5m"` for model caching between requests
+- `embed()` rewritten to use `ollama.embed()` with batched input array
+- `completeStructured()` uses `format: "json"` for native JSON mode
+- Configurable endpoint via `new Ollama({ host })` from `config.ollamaEndpoint`
+
+#### MCP Tool Parameter Population (`@reactive-agents/tools` 0.3.0)
+- MCP `tools/list` response now parsed for full `{ name, description, inputSchema }` tuples (was name-only)
+- `MCPServer.toolSchemas` field added for rich tool metadata
+- `connectMCPServer()` converts `inputSchema.properties` → `parameters[]` array with proper types and `required` flags
+- Tool descriptions use actual MCP description (was generic "MCP tool from ...")
+
+#### MCP Server Configuration (`@reactive-agents/runtime` 0.3.1)
+- `MCPServerConfig` interface and `mcpServers` field added to `RuntimeOptions`
+- `mcpServers` implicitly enables tools when set
+- `.withMCP(config)` builder method — accepts single config or array, implicitly sets `_enableTools = true`
+- Builder `buildEffect()` connects MCP servers after layer construction via dynamic `ToolService` import
+- Exported `RuntimeOptions` and `MCPServerConfig` types from runtime index
+
+#### CLI MCP Support (`@reactive-agents/cli` 0.3.0)
+- `--mcp-config <path>` / `--mcp <path>` flag for `rax run` — points to JSON config file
+- Auto-loads `.rax/mcp.json` from project root if present (no flag needed)
+- Config format: `{ "servers": [{ "name", "transport", "command", "args", "endpoint" }] }`
+
+#### Web Search: Tavily Integration
+- `webSearchHandler` checks `TAVILY_API_KEY` at execution time
+- If set: POST to `https://api.tavily.com/search`, returns `{ title, url, content }` results
+- If not set: returns existing stub (zero breakage for users without API key)
+
+#### Exports
+- `builtinTools` array exported from `@reactive-agents/tools` index
+- `MCPToolSchema` type exported from tools index
+
+#### New Tests
+- `packages/tools/tests/builtin-tools.test.ts` — 5 tests: httpGet (real HTTP), fileRead, fileWrite, webSearch stub, codeExecute stub
+- `packages/llm-provider/tests/ollama-tools.test.ts` — 6 tests: complete(), tools pass-through, tool_calls parsing, done_reason mapping, embed(), getModelConfig()
+- `packages/runtime/tests/builder-tools.test.ts` — 5 tests: .withTools() build, run with tools, .withMCP() config, array configs, full pipeline
+- `packages/tools/tests/tool-service.test.ts` — +1 test: MCP parameter population
+
+### Changed
+- `@reactive-agents/llm-provider` 0.2.0 → 0.3.0: Ollama SDK rewrite with tool calling support
+- `@reactive-agents/tools` 0.2.0 → 0.3.0: MCP parameter population, Tavily web search, builtinTools export
+- `@reactive-agents/runtime` 0.3.0 → 0.3.1: MCP server config in builder and runtime
+- `@reactive-agents/cli` 0.2.1 → 0.3.0: --mcp-config flag, .rax/mcp.json auto-loading
+- `reactive-agents` meta-package 0.3.0 → 0.3.1
+
+### Stats
+- 361 tests across 66 files (was 340/63)
+
+---
+
 ## [0.3.0] — 2026-02-21
 
 ### Added

@@ -21,6 +21,14 @@ import { createOrchestrationLayer } from "@reactive-agents/orchestration";
 
 // ─── Runtime Options ───
 
+export interface MCPServerConfig {
+  name: string;
+  transport: "stdio" | "sse" | "websocket";
+  command?: string;
+  args?: string[];
+  endpoint?: string;
+}
+
 export interface RuntimeOptions {
   agentId: string;
   provider?: "anthropic" | "openai" | "ollama" | "gemini" | "test";
@@ -42,6 +50,9 @@ export interface RuntimeOptions {
   enablePrompts?: boolean;
   enableOrchestration?: boolean;
   enableAudit?: boolean;
+
+  // MCP servers — implicitly enables tools if set
+  mcpServers?: MCPServerConfig[];
 }
 
 /**
@@ -109,8 +120,10 @@ export const createRuntime = (options: RuntimeOptions) => {
   }
 
   // Build tools layer first — reasoning may depend on it
+  // MCP servers implicitly enable tools
   let toolsLayer: Layer.Layer<any, any> | null = null;
-  if (options.enableTools) {
+  const shouldEnableTools = options.enableTools || (options.mcpServers && options.mcpServers.length > 0);
+  if (shouldEnableTools) {
     // ToolService requires EventBus
     toolsLayer = createToolsLayer().pipe(Layer.provide(eventBusLayer));
     runtime = Layer.merge(runtime, toolsLayer) as any;

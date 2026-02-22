@@ -36,8 +36,45 @@ export const webSearchHandler = (
       const query = args.query as string;
       const maxResults = (args.maxResults as number) ?? 5;
 
-      // In production: call search API (Tavily, SerpAPI, etc.)
-      // Stub implementation for Phase 1
+      const apiKey = process.env.TAVILY_API_KEY;
+      if (apiKey) {
+        const response = await fetch("https://api.tavily.com/search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            query,
+            max_results: maxResults,
+            api_key: apiKey,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(
+            `Tavily API returned ${response.status}: ${response.statusText}`,
+          );
+        }
+
+        const data = (await response.json()) as {
+          results: Array<{
+            title: string;
+            url: string;
+            content: string;
+            score: number;
+          }>;
+        };
+
+        return {
+          query,
+          maxResults,
+          results: data.results.map((r) => ({
+            title: r.title,
+            url: r.url,
+            content: r.content,
+          })),
+        };
+      }
+
+      // Stub when no API key is set
       return {
         query,
         maxResults,

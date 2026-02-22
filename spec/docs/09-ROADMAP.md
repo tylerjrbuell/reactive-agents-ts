@@ -764,7 +764,8 @@ const agent = await ReactiveAgents.create()
 ### Alpha Releases (Months 1-3)
 - **v0.1.0** - Basic agent system
 - **v0.2.0** - Tool system
-- **v0.3.0** - Memory & observability
+- **v0.3.0** - Foundation integration — all phases wired, 5 reasoning strategies
+- **v0.3.1** - Tool calling hardening — Ollama SDK, MCP parameter population, Tavily web search, builder MCP config
 
 ### Beta Releases (Months 4-6)
 - **v0.4.0** - Advanced reasoning
