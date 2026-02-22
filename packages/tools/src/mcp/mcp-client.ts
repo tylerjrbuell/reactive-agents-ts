@@ -6,6 +6,7 @@ import { MCPConnectionError, ToolExecutionError } from "../errors.js";
 // ─── Active Transport State ───
 
 interface StdioTransport {
+  type: "stdio";
   subprocess: ReturnType<typeof Bun.spawn>;
   pendingRequests: Map<
     string | number,
@@ -17,8 +18,44 @@ interface StdioTransport {
   readerStopped: boolean;
 }
 
-// Module-level map: serverName -> StdioTransport
-const activeTransports = new Map<string, StdioTransport>();
+interface SseTransport {
+  type: "sse";
+  endpoint: string;
+  pendingRequests: Map<
+    string | number,
+    {
+      resolve: (response: MCPResponse) => void;
+      reject: (err: Error) => void;
+    }
+  >;
+  abortController: AbortController | null;
+  connected: boolean;
+  reconnectAttempt: number;
+  reconnectTimeoutId: ReturnType<typeof setTimeout> | null;
+}
+
+interface WebSocketTransport {
+  type: "websocket";
+  socket: WebSocket | null;
+  endpoint: string;
+  pendingRequests: Map<
+    string | number,
+    {
+      resolve: (response: MCPResponse) => void;
+      reject: (err: Error) => void;
+    }
+  >;
+  connected: boolean;
+  reconnectAttempt: number;
+  reconnectTimeoutId: ReturnType<typeof setTimeout> | null;
+  reconnecting: boolean;
+  closing: boolean;
+}
+
+type ActiveTransport = StdioTransport | SseTransport | WebSocketTransport;
+
+// Module-level map: serverName -> ActiveTransport
+const activeTransports = new Map<string, ActiveTransport>();
 
 // ─── Background stdout reader ───
 
@@ -83,6 +120,280 @@ const startStdioReader = (
   })();
 };
 
+// ─── SSE Transport ───
+
+const SSE_RECONNECT_DELAYS = [1000, 2000, 4000, 8000, 16000, 30000];
+const SSE_CONNECTION_TIMEOUT = 30000;
+
+const isStdioTransport = (t: ActiveTransport): t is StdioTransport =>
+  t.type === "stdio";
+
+const isSseTransport = (t: ActiveTransport): t is SseTransport =>
+  t.type === "sse";
+
+const isWebSocketTransport = (t: ActiveTransport): t is WebSocketTransport =>
+  t.type === "websocket";
+
+const parseSseEvent = (line: string): { event?: string; data?: string } => {
+  if (line.startsWith("event:")) {
+    return { event: line.slice(6).trim() };
+  }
+  if (line.startsWith("data:")) {
+    return { data: line.slice(5).trim() };
+  }
+  return {};
+};
+
+const startSseReader = (
+  serverName: string,
+  transport: SseTransport,
+): void => {
+  const connect = () => {
+    if (transport.connected) return;
+
+    const abortController = new AbortController();
+    transport.abortController = abortController;
+
+    const sseEndpoint = transport.endpoint.includes("?")
+      ? `${transport.endpoint}&session=${serverName}`
+      : `${transport.endpoint}?session=${serverName}`;
+
+    const initSSE = async () => {
+      const timeoutId = setTimeout(() => {
+        abortController.abort();
+      }, SSE_CONNECTION_TIMEOUT);
+
+      try {
+        transport.connected = true;
+        transport.reconnectAttempt = 0;
+
+        const response = await fetch(sseEndpoint, {
+          method: "GET",
+          headers: { Accept: "text/event-stream" },
+          signal: abortController.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok || !response.body) {
+          throw new Error(`SSE connection failed: ${response.status}`);
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        const readStream = async (): Promise<void> => {
+          try {
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done || abortController.signal.aborted) break;
+
+              buffer += decoder.decode(value, { stream: true });
+              const lines = buffer.split("\n");
+              buffer = lines.pop() ?? "";
+
+              let eventType = "";
+              let eventData = "";
+
+              for (const line of lines) {
+                const parsed = parseSseEvent(line);
+                if (parsed.event) eventType = parsed.event;
+                if (parsed.data) eventData = parsed.data;
+              }
+
+              if (eventType === "message" && eventData) {
+                try {
+                  const parsed = JSON.parse(eventData) as MCPResponse;
+                  const pending = transport.pendingRequests.get(parsed.id);
+                  if (pending) {
+                    transport.pendingRequests.delete(parsed.id);
+                    pending.resolve(parsed);
+                  }
+                } catch {
+                  // Invalid JSON in SSE data - skip
+                }
+              }
+
+              if (eventType === "ping" || eventType === "keepalive") {
+                // Keepalive received, reset reconnect attempt
+                transport.reconnectAttempt = 0;
+              }
+            }
+          } catch {
+            // Stream ended or error
+          }
+        };
+
+        readStream().catch(() => {
+          // Ignore read errors during cleanup
+        });
+      } catch (err) {
+        clearTimeout(timeoutId);
+        transport.connected = false;
+
+        if (!abortController.signal.aborted) {
+          const delay =
+            SSE_RECONNECT_DELAYS[
+              Math.min(
+                transport.reconnectAttempt,
+                SSE_RECONNECT_DELAYS.length - 1,
+              )
+            ];
+          transport.reconnectAttempt++;
+
+          transport.reconnectTimeoutId = setTimeout(() => {
+            if (!abortController.signal.aborted) {
+              initSSE();
+            }
+          }, delay);
+        }
+      }
+    };
+
+    initSSE();
+  };
+
+  connect();
+};
+
+const createSseTransport = (
+  config: Pick<MCPServer, "name" | "endpoint">,
+): SseTransport => {
+  const endpoint = config.endpoint ?? "";
+  return {
+    type: "sse",
+    endpoint,
+    pendingRequests: new Map(),
+    abortController: null,
+    connected: false,
+    reconnectAttempt: 0,
+    reconnectTimeoutId: null,
+  };
+};
+
+// ─── WebSocket Transport ───
+
+const WS_RECONNECT_DELAYS = [1000, 2000, 4000, 8000, 16000, 30000];
+const WS_CONNECTION_TIMEOUT = 30000;
+
+const createWebSocketTransport = (
+  config: Pick<MCPServer, "name" | "endpoint">,
+): WebSocketTransport => {
+  const endpoint = config.endpoint ?? "";
+  return {
+    type: "websocket",
+    socket: null,
+    endpoint,
+    pendingRequests: new Map(),
+    connected: false,
+    reconnectAttempt: 0,
+    reconnectTimeoutId: null,
+    reconnecting: false,
+    closing: false,
+  };
+};
+
+const connectWebSocket = (
+  serverName: string,
+  transport: WebSocketTransport,
+): Promise<void> => {
+  if (transport.connected && transport.socket?.readyState === WebSocket.OPEN) {
+    return Promise.resolve();
+  }
+
+  if (transport.socket && transport.socket.readyState === WebSocket.CONNECTING) {
+    return new Promise((resolve, reject) => {
+      const timeoutId = setTimeout(() => {
+        reject(new Error(`WebSocket connecting timeout for "${serverName}"`));
+      }, WS_CONNECTION_TIMEOUT);
+
+      transport.socket!.onopen = () => {
+        clearTimeout(timeoutId);
+        transport.connected = true;
+        resolve();
+      };
+      transport.socket!.onerror = () => {
+        clearTimeout(timeoutId);
+        reject(new Error(`WebSocket error while connecting for "${serverName}"`));
+      };
+    });
+  }
+
+  if (transport.socket) {
+    try {
+      transport.socket.close();
+    } catch {
+      // Ignore close errors
+    }
+  }
+
+  return new Promise((resolve, reject) => {
+    const endpoint = transport.endpoint;
+    if (!endpoint) {
+      const err = new Error(
+        `WebSocket endpoint not configured for MCP server "${serverName}"`,
+      );
+      reject(err);
+      return;
+    }
+
+    const timeoutId = setTimeout(() => {
+      if (transport.socket && transport.socket.readyState === WebSocket.CONNECTING) {
+        transport.socket.close();
+      }
+      reject(new Error(`WebSocket connection timeout for "${serverName}"`));
+    }, WS_CONNECTION_TIMEOUT);
+
+    const socket = new WebSocket(endpoint);
+    transport.socket = socket;
+
+    socket.onopen = () => {
+      clearTimeout(timeoutId);
+      transport.connected = true;
+      transport.reconnectAttempt = 0;
+      transport.reconnecting = false;
+      resolve();
+    };
+
+    socket.onmessage = (event) => {
+      try {
+        const parsed = JSON.parse(event.data as string) as MCPResponse;
+        const pending = transport.pendingRequests.get(parsed.id);
+        if (pending) {
+          transport.pendingRequests.delete(parsed.id);
+          pending.resolve(parsed);
+        }
+      } catch {
+        // Invalid JSON - skip
+      }
+    };
+
+    socket.onerror = () => {
+      clearTimeout(timeoutId);
+      transport.connected = false;
+      reject(new Error(`WebSocket error for "${serverName}"`));
+    };
+
+    socket.onclose = () => {
+      clearTimeout(timeoutId);
+      transport.connected = false;
+
+      if (!transport.closing && transport.reconnectAttempt < WS_RECONNECT_DELAYS.length) {
+        transport.reconnecting = true;
+        const delay = WS_RECONNECT_DELAYS[transport.reconnectAttempt];
+        transport.reconnectAttempt++;
+
+        transport.reconnectTimeoutId = setTimeout(() => {
+          if (!transport.closing) {
+            connectWebSocket(serverName, transport).catch(() => {});
+          }
+        }, delay);
+      }
+    };
+  });
+};
+
 // ─── Transport Creation ───
 
 const createTransport = (
@@ -107,6 +418,7 @@ const createTransport = (
       });
 
       const transport: StdioTransport = {
+        type: "stdio",
         subprocess,
         pendingRequests: new Map(),
         readerStopped: false,
@@ -117,14 +429,39 @@ const createTransport = (
     });
   }
 
-  // SSE transport — TODO: implement HTTP event stream
+  // SSE transport — implement HTTP event stream
   if (config.transport === "sse") {
-    return Effect.void;
+    return Effect.tryPromise(async () => {
+      const endpoint = config.endpoint;
+      if (!endpoint) {
+        throw new Error(
+          `MCP server "${config.name}" has transport "sse" but no endpoint specified`,
+        );
+      }
+
+      const transport = createSseTransport({ name: config.name, endpoint });
+      activeTransports.set(config.name, transport);
+      startSseReader(config.name, transport);
+    });
   }
 
-  // WebSocket transport — TODO: implement WebSocket
+  // WebSocket transport
   if (config.transport === "websocket") {
-    return Effect.void;
+    return Effect.tryPromise(async () => {
+      const endpoint = config.endpoint;
+      if (!endpoint) {
+        throw new Error(
+          `MCP server "${config.name}" has transport "websocket" but no endpoint specified`,
+        );
+      }
+
+      const transport = createWebSocketTransport({
+        name: config.name,
+        endpoint,
+      });
+      activeTransports.set(config.name, transport);
+      await connectWebSocket(config.name, transport);
+    });
   }
 
   return Effect.void;
@@ -140,7 +477,7 @@ const sendRequest = (
     return Effect.tryPromise({
       try: () => {
         const transport = activeTransports.get(config.name);
-        if (!transport) {
+        if (!transport || !isStdioTransport(transport)) {
           return Promise.reject(
             new Error(
               `No active stdio transport for MCP server "${config.name}" — was createTransport called?`,
@@ -213,7 +550,148 @@ const sendRequest = (
     });
   }
 
-  // SSE / WebSocket stubs — return empty success
+  // SSE transport
+  if (config.transport === "sse") {
+    return Effect.tryPromise({
+      try: () => {
+        const transport = activeTransports.get(config.name);
+        if (!transport || !isSseTransport(transport)) {
+          return Promise.reject(
+            new Error(
+              `No active SSE transport for MCP server "${config.name}" — was createTransport called?`,
+            ),
+          );
+        }
+
+        const endpoint = transport.endpoint;
+        if (!endpoint) {
+          return Promise.reject(
+            new Error(
+              `No endpoint configured for SSE transport on "${config.name}"`,
+            ),
+          );
+        }
+
+        return new Promise<MCPResponse>((resolve, reject) => {
+          transport.pendingRequests.set(request.id, { resolve, reject });
+
+          const rpcMessage = JSON.stringify(request);
+
+          fetch(endpoint, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Accept: "application/json",
+            },
+            body: rpcMessage,
+          })
+            .then((response) => {
+              if (!response.ok) {
+                transport.pendingRequests.delete(request.id);
+                reject(
+                  new Error(
+                    `SSE request failed for "${config.name}": ${response.status} ${response.statusText}`,
+                  ),
+                );
+                return null;
+              }
+              return response.text();
+            })
+            .then((text) => {
+              if (text) {
+                try {
+                  const data = JSON.parse(text) as MCPResponse;
+                  transport.pendingRequests.delete(request.id);
+                  resolve(data);
+                } catch {
+                  transport.pendingRequests.delete(request.id);
+                  reject(
+                    new Error(
+                      `SSE response parse error for "${config.name}": ${text}`,
+                    ),
+                  );
+                }
+              }
+            })
+            .catch((err) => {
+              transport.pendingRequests.delete(request.id);
+              reject(
+                err instanceof Error
+                  ? err
+                  : new Error(
+                      `SSE request failed for "${config.name}": ${String(err)}`,
+                    ),
+              );
+            });
+        });
+      },
+      catch: (e) =>
+        new MCPConnectionError({
+          message:
+            e instanceof Error
+              ? e.message
+              : `Failed to send request to MCP server "${config.name}"`,
+          serverName: config.name,
+          transport: config.transport,
+          cause: e,
+        }),
+    });
+  }
+
+  // WebSocket transport
+  if (config.transport === "websocket") {
+    return Effect.tryPromise({
+      try: async () => {
+        const transport = activeTransports.get(config.name);
+        if (!transport || !isWebSocketTransport(transport)) {
+          throw new Error(
+            `No active WebSocket transport for MCP server "${config.name}" — was createTransport called?`,
+          );
+        }
+
+        if (!transport.connected || !transport.socket || transport.socket.readyState !== WebSocket.OPEN) {
+          await connectWebSocket(config.name, transport);
+        }
+
+        const socket = transport.socket;
+        if (!socket || socket.readyState !== WebSocket.OPEN) {
+          throw new Error(
+            `WebSocket not connected for MCP server "${config.name}" (state: ${socket?.readyState})`,
+          );
+        }
+
+        return new Promise<MCPResponse>((resolve, reject) => {
+          transport.pendingRequests.set(request.id, { resolve, reject });
+
+          const rpcMessage = JSON.stringify(request);
+
+          try {
+            socket.send(rpcMessage);
+          } catch (err) {
+            transport.pendingRequests.delete(request.id);
+            reject(
+              err instanceof Error
+                ? err
+                : new Error(
+                    `Failed to send WebSocket message to MCP server "${config.name}": ${String(err)}`,
+                  ),
+            );
+          }
+        });
+      },
+      catch: (e) =>
+        new MCPConnectionError({
+          message:
+            e instanceof Error
+              ? e.message
+              : `Failed to send request to MCP server "${config.name}"`,
+          serverName: config.name,
+          transport: config.transport,
+          cause: e,
+        }),
+    });
+  }
+
   return Effect.succeed({
     jsonrpc: "2.0" as const,
     id: request.id,
@@ -372,9 +850,7 @@ export const makeMCPClient = Effect.gen(function* () {
     Effect.gen(function* () {
       const transport = activeTransports.get(serverName);
       if (transport) {
-        transport.readerStopped = true;
-
-        // Reject any in-flight requests before killing the process
+        // Reject any in-flight requests before disconnecting
         for (const [id, pending] of transport.pendingRequests) {
           transport.pendingRequests.delete(id);
           pending.reject(
@@ -384,10 +860,31 @@ export const makeMCPClient = Effect.gen(function* () {
           );
         }
 
-        try {
-          transport.subprocess.kill();
-        } catch {
-          // Process may already be gone
+        if (isStdioTransport(transport)) {
+          transport.readerStopped = true;
+          try {
+            transport.subprocess.kill();
+          } catch {
+            // Process may already be gone
+          }
+        } else if (isSseTransport(transport)) {
+          if (transport.reconnectTimeoutId) {
+            clearTimeout(transport.reconnectTimeoutId);
+          }
+          if (transport.abortController) {
+            transport.abortController.abort();
+          }
+          transport.connected = false;
+        } else if (isWebSocketTransport(transport)) {
+          if (transport.reconnectTimeoutId) {
+            clearTimeout(transport.reconnectTimeoutId);
+          }
+          transport.closing = true;
+          if (transport.socket) {
+            transport.socket.close();
+            transport.socket = null;
+          }
+          transport.connected = false;
         }
 
         activeTransports.delete(serverName);
