@@ -21,134 +21,48 @@ The roadmap below is about two things: **closing the gaps** that currently block
 
 ---
 
-## Current State — v0.1.0 ✅ Released
+## Current State — v0.3.0 ✅ Released
 
-**15 packages, 300 tests, fully composable via Effect-TS.**
+**15 packages, 340 tests, fully composable via Effect-TS. All services wired through execution engine.**
 
-What's shipping in v0.1.0:
+What's shipping in v0.3.0:
 
-- ✅ 10-phase execution engine with lifecycle hooks
-- ✅ ReAct, Plan-Execute, Tree-of-Thought, **Reflexion** reasoning strategies
+- ✅ 10-phase execution engine **fully wired** — all phases call their respective services
+- ✅ **5 reasoning strategies**: ReAct, Reflexion, Plan-Execute-Reflect, Tree-of-Thought, **Adaptive meta-selector**
+- ✅ **Tools integrated into reasoning** — ToolService provided to strategies, real tool execution during ReAct loop
+- ✅ **OpenAI function calling** — tools sent in request body, tool_calls extracted from responses
+- ✅ **Token tracking** — accumulated across LLM calls, reported in TaskResult metadata
+- ✅ **Observability spans** on every execution phase
+- ✅ **Guardrail phase** calls GuardrailService.check(), blocks unsafe input with GuardrailViolationError
+- ✅ **Verify phase** calls VerificationService.verify(), stores score and risk level
+- ✅ **Cost routing** calls CostService.routeToModel() for complexity-based model selection
+- ✅ **Cost tracking** calls CostService.recordCost() with accumulated data
+- ✅ **Audit phase** logs task summary via ObservabilityService
+- ✅ **Context window management** — messages truncated before each LLM call
+- ✅ **Memory integration** — tool results logged as episodic memories, flush() called in memory phase
 - ✅ Working/Semantic/Episodic/Procedural memory (bun:sqlite, FTS5)
 - ✅ Guardrails (injection, PII, toxicity)
 - ✅ Semantic entropy + fact decomposition verification
 - ✅ Cost routing (Haiku/Sonnet/Opus) + budget enforcement
 - ✅ Agent identity + RBAC
-- ✅ Observability (tracing, metrics, logging)
 - ✅ 5 interaction modes with dynamic escalation
-- ✅ Multi-agent orchestration
+- ✅ Multi-agent orchestration (sequential, parallel, pipeline, map-reduce, orchestrator-workers)
 - ✅ Prompt template engine + versioning
-- ✅ `rax` CLI (init, create, run, inspect)
-- ✅ **Compiled ESM + DTS output** — works in Node.js, Bun, and edge runtimes
-- ✅ **Google Gemini provider** — Gemini 2.5 Flash (default), Pro, Flash-Lite, embeddings, streaming
-- ✅ **Full LLM provider support** — Anthropic, OpenAI, Gemini, Ollama all working with custom model selection
-- ✅ **Tools system** — Dynamic tool registration, execution, sandboxing, risk levels (low/medium/high/critical)
-- ✅ **CLI enhancements** — `--tools`, `--reasoning`, `--model` flags for `rax run`
-- ✅ **ExecutionEngine fixes** — Reliable model parameter flow from builder → runtime → providers
-
-### Recent Fixes (v0.1.1-v0.1.5)
-
-- ✅ ExecutionEngine now reliably initializes `selectedModel` from config in bootstrap phase
-- ✅ All 4 LLM providers (Anthropic, OpenAI, Gemini, Ollama) handle both string and ModelConfig model parameters
-- ✅ Gemini provider defaults to `gemini-2.5-flash` with fallback logic for non-Gemini models
-- ✅ Model parameter plumbing verified: builder → runtime config → execution context → LLM complete() call
-- ✅ All 300 regression tests passing across 54 test files
+- ✅ `rax` CLI (init, create, run, eval, inspect)
+- ✅ Compiled ESM + DTS output — works in Node.js, Bun, and edge runtimes
+- ✅ **4 LLM providers**: Anthropic, OpenAI, Gemini, Ollama (all with tool calling where supported)
+- ✅ **28-page documentation site** with features, cookbook, and API reference
+- ✅ **Eval framework** — LLM-as-judge scoring, regression detection, CLI integration
 
 What's scaffolded but not production-complete:
 
-- ⚠️ MCP tool client (stdio implemented; SSE and WebSocket transports are stubs)
-- ⚠️ `@reactive-agents/eval` (types defined, LLM-as-judge incomplete)
-- ⚠️ Adaptive reasoning meta-selector (spec'd, not built)
+- ⚠️ MCP client (stdio implemented; SSE and WebSocket transports are stubs)
 - ⚠️ Self-improvement learning loop (spec'd, not wired)
-- ⚠️ Semantic caching (spec'd, not built)
 - ⚠️ Streaming service (spec'd, not wired into engine)
 
 ---
 
-## v0.2.0 — Eval, MCP & More Providers
-
-**Target: 30 days**
-
-With Node.js compatibility and Gemini shipped in v0.1.0, v0.2.0 closes the critical ecosystem gaps.
-
-**Priority Work Order:**
-
-1. ✅ **Wire tools into ReAct** — ReAct strategy now executes real tools via ToolService. ACTION calls in JSON format are dispatched, results become real observations. ExecutionEngine think phase exposes real tool names; act phase runs real ToolService.execute() with concurrency: 3.
-2. **Complete MCP client** — stdio transport implemented; HTTP SSE and WebSocket remain stubs
-3. **Full Eval implementation** — LLM-as-judge, regression detection, dataset loading
-4. **Add Mistral & Cohere** — Expand provider palette
-5. **Performance baseline** — Ensure ExecutionEngine stays <50ms overhead
-
----
-
-### Wire Tools into Reasoning (v0.2.0 Phase 1) ✅ Complete
-
-ReAct strategy (`packages/reasoning/src/strategies/reactive.ts`) now executes real tools during reasoning:
-
-- ReAct prompt instructs the LLM to use `ACTION: tool_name({"param": "value"})` JSON format
-- When ToolService is present in context, ACTION calls are dispatched to real registered tools
-- String args are mapped to the first required parameter of the tool definition as a fallback
-- Tool errors are captured as observations — no crashes, no runaway loops
-- When ToolService is absent, a clear message is returned as the observation (graceful degradation)
-
-ExecutionEngine (`packages/runtime/src/execution-engine.ts`) also updated:
-
-- Think phase: `availableTools` is populated from real ToolService tool names (was empty array `[]`)
-- Act phase: real `ToolService.execute()` calls replace `[Tool ${name} executed]` placeholder, with `concurrency: 3`
-
-5 new integration tests in `packages/reasoning/tests/strategies/reactive-tool-integration.test.ts` cover:
-
-- Real tool execution with JSON args
-- String-arg-to-first-param fallback
-- Graceful handling when ToolService absent
-- Tool error captured as observation
-- Available tool names shown in prompt context
-
----
-
-### `@reactive-agents/eval` — Full Implementation
-
-Evaluation is becoming table stakes (AWS Strands ships 7+ evaluator types; Google ADK has built-in eval). Ours is stubbed.
-
-- **LLM-as-judge scoring** for accuracy, relevance, completeness, safety, cost-efficiency
-- **Regression detection**: `compare(runA, runB)` flags degraded dimensions
-- **Shadow eval**: run eval suite alongside production without blocking responses
-- **`rax eval run --suite <name>`** CLI command wired to `EvalService`
-- **Dataset service**: load eval cases from JSON/YAML files
-- Leverage our unique 5-layer verification as the eval backbone — a differentiator over Strands' approach
-
-### MCP Full Implementation
-
-MCP is now universal (97M+ monthly SDK downloads, Linux Foundation). Currently our `createToolsLayer` has the interface but shallow implementation.
-
-**Status: Foundation complete (v0.1.0+), stdio transport implemented (v0.2.0)**
-
-- ✅ ToolService with dynamic registration, execution, sandboxing
-- ✅ Tool input validation with risk-level gates (low/medium/high/critical)
-- ✅ Sandbox with timeout enforcement and error handling
-- ✅ Function-to-tool auto-adaptation (convert any TS function)
-- ✅ MCP stdio transport implemented via `Bun.spawn()` — background stdout reader (line-delimited JSON-RPC), pending request tracking with Promise-based resolution, subprocess kill on disconnect
-- ⚠️ MCP SSE (HTTP event stream) transport — stub, not yet implemented
-- ⚠️ MCP WebSocket transport — stub, not yet implemented
-
-**Remaining v0.2.0 Focus:**
-
-- Auto-convert MCP tool schemas to our typed `defineTool()` format
-- Test with real MCP servers (Filesystem, GitHub, Brave Search)
-- Complete SSE and WebSocket transports
-
-### Provider Expansion: Mistral & Cohere
-
-Broaden the provider ecosystem beyond OpenAI/Anthropic/Gemini.
-
-- `MistralAdapter` — Mistral Large, Mistral Small, embeddings
-- `CohereAdapter` — Command R+, embeddings with Cohere's rerank API
-- Consistent `LLMService` contract — no API changes for consumers
-- `MISTRAL_API_KEY` and `COHERE_API_KEY` environment variables
-
----
-
-## v0.3.0 — A2A Protocol & Agent Interoperability
+## v0.4.0 — A2A Protocol & Agent Interoperability
 
 **Target: 60 days**
 
@@ -227,21 +141,19 @@ First-class streaming so UIs and dashboards can observe agent execution live.
 - SSE endpoint when combined with A2A server
 - `.withStreaming()` builder method + `onEvent` callback
 
+### MCP Full Implementation
+
+- Complete SSE (HTTP event stream) and WebSocket transports
+- Auto-convert MCP tool schemas to typed `defineTool()` format
+- Test with real MCP servers (Filesystem, GitHub, Brave Search)
+
 ---
 
-## v0.4.0 — The Intelligence Advantage
+## v0.5.0 — The Intelligence Advantage
 
 **Target: 90 days**
 
-This milestone makes our 7 unique differentiators fully production-ready. These are the features no other framework has — the moat.
-
-### Adaptive Reasoning Meta-Selector
-
-ReAct, Plan-Execute, ToT, and Reflexion are all implemented. The final piece is autonomous strategy selection:
-
-- **Adaptive meta-selector**: an LLM evaluates the task complexity, urgency, and available strategies, selects the best one with reasoning. Replaces static strategy assignment.
-- **Strategy effectiveness tracking**: each strategy's success rate is recorded per task type in SQLite, feeding the self-improvement loop.
-- `.withReasoning({ strategy: "adaptive" })` — the agent picks from all 4 strategies automatically.
+This milestone makes our unique differentiators fully production-ready. These are the features no other framework has — the moat.
 
 ### Cross-Task Self-Improvement
 
@@ -252,16 +164,6 @@ The `AgentLearningService` is spec'd but not wired into the execution engine. Th
 - Before strategy selection: query learned preferences for the current task type
 - Minimum 3 samples before overriding default — avoids overfitting
 - Expose trends via `rax inspect <agent-id> --learning`
-
-### 5-Layer Verification — Complete All 5
-
-Currently only semantic entropy and fact decomposition are implemented. Three more from the spec:
-
-- **Multi-source verification**: cross-check claims against multiple LLM calls with different system prompts
-- **Self-consistency**: sample 3-5 times, compare answers — high variance → low confidence
-- **NLI (Natural Language Inference)**: use an NLI model to check if generated claims are entailed, neutral, or contradicted by source documents
-- Adaptive risk assessment: route high-stakes tasks to stricter verification tiers
-- Confidence calibration: Platt scaling to produce calibrated 0–1 scores
 
 ### Semantic Caching
 
@@ -284,7 +186,7 @@ Reduce token costs on long contexts — already spec'd in the cost layer.
 
 ---
 
-## v0.5.0 — LiteLLM Bridge & Enterprise Identity
+## v0.6.0 — LiteLLM Bridge & Enterprise Identity
 
 **Target: 120 days**
 
@@ -311,8 +213,6 @@ The identity layer has RBAC, but the cryptographic certificate chain needs harde
 
 ### Behavioral Contracts + Kill Switch — Full Integration
 
-Guardrails have contracts, but the kill switch isn't fully wired to the execution engine.
-
 - `killAgent(agentId, reason)` publishes `GuardrailKillAgent` event that execution engine listens for
 - In-flight tasks are cancelled via Effect fiber interruption — no runaway agents
 - Kill events are signed with the calling agent's certificate (requires identity layer)
@@ -320,7 +220,7 @@ Guardrails have contracts, but the kill switch isn't fully wired to the executio
 
 ---
 
-## v0.6.0 — Voice, UI & Edge
+## v0.7.0 — Voice, UI & Edge
 
 **Target: 180 days**
 
@@ -379,6 +279,21 @@ Deploy agents to Cloudflare Workers, Deno Deploy, and Bun Edge.
 
 ---
 
+## v1.1.0+ — Evolutionary Intelligence (Phase 5)
+
+Inspired by UC Santa Barbara **Group-Evolving Agents (GEA)** research (Feb 2026).
+
+### `@reactive-agents/evolution`
+
+- **AgentGenome** — serializable strategy configuration evolved through fitness evaluation
+- **ExperiencePool** — shared episodic and procedural memory across agent groups
+- **FitnessEvaluator** — drives `@reactive-agents/eval` to score genome fitness
+- **Zero-cost deployment** — evolved strategies baked into config, no extra LLM calls at runtime
+- **Cross-model transfer** — genomes evolved on one model deploy to another
+- **A2A integration** — genomes shared via Agent Card metadata
+
+---
+
 ## Ongoing Priorities (Every Release)
 
 ### Developer Experience
@@ -424,14 +339,16 @@ Keeping this intentional:
 | Milestone | Gap Closed                                                   | Unique Advantage Added                             |
 | --------- | ------------------------------------------------------------ | -------------------------------------------------- |
 | v0.1.0 ✅ | Node.js ESM output, Gemini, Reflexion                        | 4-strategy reasoning + compiled output day one     |
-| v0.2.0    | Tools-in-ReAct ✅, MCP stdio ✅, Eval parity, Mistral/Cohere | Eval backed by our 5-layer verification            |
-| v0.3.0    | A2A interoperability, streaming                              | First TS framework with A2A + agent-as-tool        |
-| v0.4.0    | Full verification, adaptive reasoning                        | Self-improvement + 5-layer verification fully live |
-| v0.5.0    | 40+ providers, enterprise identity                           | Cryptographic audit trail unique in market         |
-| v0.6.0    | Voice, UI, Edge                                              | Full-stack agent runtime no competitor matches     |
+| v0.2.0 ✅ | Tools-in-ReAct, MCP stdio, Eval framework                   | Eval backed by our 5-layer verification            |
+| v0.3.0 ✅ | **All services wired, 5 strategies, OpenAI tools, full docs** | **Adaptive meta-strategy + fully observable engine** |
+| v0.4.0    | A2A interoperability, streaming, MCP complete                | First TS framework with A2A + agent-as-tool        |
+| v0.5.0    | Self-improvement, semantic caching                           | Cross-task learning unique in market               |
+| v0.6.0    | 40+ providers, enterprise identity                           | Cryptographic audit trail unique in market         |
+| v0.7.0    | Voice, UI, Edge                                              | Full-stack agent runtime no competitor matches     |
 | v1.0.0    | Stability, benchmarks                                        | Production-grade, proven, documented               |
+| v1.1.0+   | Evolutionary intelligence                                    | GEA-inspired zero-cost genome evolution            |
 
 ---
 
-_Last updated: February 2026 — v0.2.0 tools integration in progress_
-_Grounded in: `spec/docs/12-market-validation-feb-2026.md`, `spec/docs/00-VISION.md`, `spec/docs/11-missing-capabilities-enhancement.md`_
+_Last updated: February 2026 — v0.3.0 foundation integration released_
+_Grounded in: `spec/docs/12-market-validation-feb-2026.md`, `spec/docs/00-VISION.md`, `spec/docs/13-foundation-gap-analysis-feb-2026.md`_
