@@ -71,3 +71,13 @@ export {
 
 // ─── Runtime ───
 export { createToolsLayer, ToolsLayer } from "./runtime.js";
+
+// ─── Adapters ───
+export {
+  createAgentTool,
+  createRemoteAgentTool,
+  executeAgentTool,
+  executeRemoteAgentTool,
+  MAX_RECURSION_DEPTH,
+} from "./adapters/agent-tool-adapter.js";
+export type { RemoteAgentClient, TaskResult } from "./adapters/agent-tool-adapter.js";

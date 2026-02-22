@@ -12,7 +12,8 @@
   },
   "dependencies": {
     "effect": "^3.10.0",
-    "@reactive-agents/core": "workspace:*"
+    "@reactive-agents/core": "workspace:*",
+    "@reactive-agents/a2a": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.7.0",
