@@ -5,6 +5,8 @@ import { runEval } from "./commands/eval.js";
 import { runPlayground } from "./commands/playground.js";
 import { runInspect } from "./commands/inspect.js";
 import { runAgent } from "./commands/run.js";
+import { runServe } from "./commands/serve.js";
+import { runDiscover } from "./commands/discover.js";
 import { printBanner, printVersion, VERSION } from "./banner.js";
 
 const HELP = `
@@ -14,6 +16,8 @@ const HELP = `
     init <name> [--template minimal|standard|full]   Scaffold a new project
     create agent <name> [--recipe basic|...]          Generate an agent file
     run <prompt> [--provider ...] [--model ...]       Run an agent with a prompt
+    serve [--port <n>] [--name <name>]               Start agent as A2A server
+    discover <url>                                    Fetch and display remote agent card
     dev                                               Start dev server
     eval run --suite <name>                           Run evaluation suite
     playground                                        Launch interactive REPL
@@ -44,6 +48,14 @@ export function main(argv: string[] = process.argv.slice(2)) {
 
     case "run":
       runAgent(argv.slice(1));
+      break;
+
+    case "serve":
+      runServe(argv.slice(1));
+      break;
+
+    case "discover":
+      runDiscover(argv.slice(1));
       break;
 
     case "dev":
