@@ -2,11 +2,23 @@
 
 ## Overview
 
-Multi-modal human-agent interaction system with 5 interaction modes (Autonomous → Interrogative), adaptive mode switching, user preference learning, and context-preserving transitions. This is a UNIQUE competitive advantage — no other framework offers a variable-autonomy interaction spectrum.
+Multi-modal human-agent interaction system with 5 interaction modes (Autonomous, Supervised, Collaborative, Consultative, Interrogative), rule-based mode switching via escalation/de-escalation rules, user preference learning, and context-preserving transitions. This is a UNIQUE competitive advantage — no other framework offers a variable-autonomy interaction spectrum.
 
 **Package:** `@reactive-agents/interaction`
 **Dependencies:** `effect@^3.10`, `@reactive-agents/core`, `@reactive-agents/reasoning`, `@reactive-agents/observability`
 **Phase:** 1C (Autonomous mode only, Week 4); Phase 3 (all 5 modes, Weeks 13-14)
+
+> **Design Evolution (v0.4.0):** The original spec proposed 6 modes including an "adaptive" meta-mode
+> where the agent would dynamically select its interaction mode via AI. During implementation, "adaptive"
+> was dropped as a distinct mode. Instead, adaptive behavior is achieved through the ModeSwitcher's
+> `evaluateTransition()` method, which applies configurable escalation/de-escalation rules to switch
+> between the 5 concrete modes at runtime. This is simpler, more predictable, and avoids the overhead
+> of an LLM call to select interaction modes. The 5 shipped modes are:
+> - **autonomous** -- Fire-and-forget: agent runs independently
+> - **supervised** -- Checkpoints: agent pauses at milestones for approval
+> - **collaborative** -- Real-time: agent and user work together
+> - **consultative** -- Advisory: agent observes and suggests
+> - **interrogative** -- Drill-down: user explores agent state/reasoning
 
 ---
 
@@ -85,7 +97,8 @@ export const InteractionModeType = Schema.Literal(
   "collaborative", // Real-time: agent and user work together
   "consultative", // Advisory: agent observes and suggests
   "interrogative", // Drill-down: user explores agent state/reasoning
-  "adaptive", // AI-driven: agent selects mode dynamically
+  // NOTE: "adaptive" was removed as a distinct mode. Adaptive behavior is
+  // achieved via ModeSwitcher.evaluateTransition() with escalation/de-escalation rules.
 );
 export type InteractionModeType = typeof InteractionModeType.Type;
 
@@ -1146,17 +1159,7 @@ export const ModeSwitcherLive = (
 
             if (currentMode === targetMode) return;
 
-            // Validate transition is allowed
-            if (targetMode === "adaptive") {
-              return yield* Effect.fail(
-                new ModeTransitionError({
-                  from: currentMode,
-                  to: targetMode,
-                  reason:
-                    "Cannot manually switch to adaptive — adaptive is auto-managed.",
-                }),
-              );
-            }
+            // All 5 modes support direct manual switching.
 
             yield* Ref.update(modesRef, (m) => {
               const next = new Map(m);
@@ -1780,7 +1783,7 @@ describe("PreferenceLearner", () => {
 
 ## Success Criteria
 
-- [ ] All 5 interaction modes represented with proper schema types
+- [x] All 5 interaction modes (autonomous, supervised, collaborative, consultative, interrogative) represented with proper schema types
 - [ ] InteractionManager, ModeSwitcher, CheckpointService, NotificationService, CollaborationService, PreferenceLearner as Context.Tag + Layer.effect
 - [ ] Adaptive mode switching evaluates escalation/de-escalation rules correctly
 - [ ] PreferenceLearner accumulates patterns and auto-approves after sufficient confidence

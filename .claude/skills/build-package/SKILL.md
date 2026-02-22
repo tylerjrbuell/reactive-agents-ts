@@ -38,6 +38,7 @@ Look up the package in the build order table. Read the corresponding spec file f
 | eval          | `11-missing-capabilities-enhancement.md` (Package 2)   |
 | prompts       | `11-missing-capabilities-enhancement.md` (Package 3)   |
 | cli           | `11-missing-capabilities-enhancement.md` (Extension 7) |
+| a2a           | `14-v0.5-comprehensive-plan.md` (Sprint 1)              |
 
 ### Step 2: Read the full spec
 

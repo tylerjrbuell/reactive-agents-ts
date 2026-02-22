@@ -21,168 +21,64 @@ The roadmap below is about two things: **closing the gaps** that currently block
 
 ---
 
-## Current State — v0.3.0 ✅ Released
+## Current State — v0.4.0 ✅ Released (Feb 22, 2026)
 
-**15 packages, 340 tests, fully composable via Effect-TS. All services wired through execution engine.**
+**15 packages, 442 tests across 77 files, fully composable via Effect-TS.**
 
-What's shipping in v0.3.0:
+### v0.3.0 → v0.4.0 History
 
-- ✅ 10-phase execution engine **fully wired** — all phases call their respective services
-- ✅ **5 reasoning strategies**: ReAct, Reflexion, Plan-Execute-Reflect, Tree-of-Thought, **Adaptive meta-selector**
-- ✅ **Tools integrated into reasoning** — ToolService provided to strategies, real tool execution during ReAct loop
-- ✅ **OpenAI function calling** — tools sent in request body, tool_calls extracted from responses
-- ✅ **Token tracking** — accumulated across LLM calls, reported in TaskResult metadata
-- ✅ **Observability spans** on every execution phase
-- ✅ **Guardrail phase** calls GuardrailService.check(), blocks unsafe input with GuardrailViolationError
-- ✅ **Verify phase** calls VerificationService.verify(), stores score and risk level
-- ✅ **Cost routing** calls CostService.routeToModel() for complexity-based model selection
-- ✅ **Cost tracking** calls CostService.recordCost() with accumulated data
-- ✅ **Audit phase** logs task summary via ObservabilityService
-- ✅ **Context window management** — messages truncated before each LLM call
-- ✅ **Memory integration** — tool results logged as episodic memories, flush() called in memory phase
-- ✅ Working/Semantic/Episodic/Procedural memory (bun:sqlite, FTS5)
-- ✅ Guardrails (injection, PII, toxicity)
-- ✅ Semantic entropy + fact decomposition verification
-- ✅ Cost routing (Haiku/Sonnet/Opus) + budget enforcement
-- ✅ Agent identity + RBAC
-- ✅ 5 interaction modes with dynamic escalation
-- ✅ Multi-agent orchestration (sequential, parallel, pipeline, map-reduce, orchestrator-workers)
-- ✅ Prompt template engine + versioning
-- ✅ `rax` CLI (init, create, run, eval, inspect)
-- ✅ Compiled ESM + DTS output — works in Node.js, Bun, and edge runtimes
-- ✅ **4 LLM providers**: Anthropic, OpenAI, Gemini, Ollama (all with tool calling where supported)
-- ✅ **28-page documentation site** with features, cookbook, and API reference
-- ✅ **Eval framework** — LLM-as-judge scoring, regression detection, CLI integration
+- **v0.3.0** (Feb 21): All 10 execution engine phases wired, 5 reasoning strategies, OpenAI function calling, 28-page docs site
+- **v0.3.1** (Feb 21): Ollama SDK, MCP parameter population, builder MCP config, Tavily web search
+- **v0.4.0** (Feb 22): Enhanced builder API (ReasoningOptions, ToolsOptions, PromptsOptions), structured tool results across all 4 adapters, EvalStore persistence, 80+ new tests
 
-What's scaffolded but not production-complete:
+### What's Complete
 
-- ⚠️ MCP client (stdio implemented; SSE and WebSocket transports are stubs)
+- ✅ 10-phase execution engine fully wired — all phases call their respective services
+- ✅ 5 reasoning strategies: ReAct, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive
+- ✅ 4 LLM providers: Anthropic, OpenAI, Gemini, Ollama (all with tool calling where supported)
+- ✅ Full memory system (Working/Semantic/Episodic/Procedural, FTS5, Zettelkasten)
+- ✅ Guardrails, verification, cost tracking, identity, observability, interaction, orchestration
+- ✅ MCP stdio transport, Tavily web search, built-in tools
+- ✅ Eval framework with LLM-as-judge and EvalStore persistence
+- ✅ `rax` CLI, Starlight docs (28 pages), compiled ESM + DTS output
+
+### What's Scaffolded / Incomplete
+
+- ⚠️ MCP SSE and WebSocket transports (stubs only)
 - ⚠️ Self-improvement learning loop (spec'd, not wired)
-- ⚠️ Streaming service (spec'd, not wired into engine)
+- ⚠️ Streaming service (spec'd, not wired)
+- ⚠️ A2A protocol (not started — critical gap)
 
 ---
 
-## v0.4.0 — A2A Protocol & Agent Interoperability
+## v0.5.0 — A2A Protocol, Agent Composition & Hardening
 
-**Target: 60 days**
+**In Progress — see `spec/docs/14-v0.5-comprehensive-plan.md` for full implementation plan.**
 
-**A2A is the single most important gap.** Google ADK and AWS Strands both ship native A2A support. It is the emerging Linux Foundation standard (21.9K stars, v0.3.0, 139 contributors) for agent-to-agent communication. Without it, our agents are isolated silos.
+**A2A is the single most important gap.** Google ADK and AWS Strands both ship native A2A support. It is the emerging Linux Foundation standard (21.9K stars) for agent-to-agent communication.
 
 > **MCP = agent ↔ tools. A2A = agent ↔ agent.**
 
-### A2A Server — Expose Agents as Endpoints
+### New Package: `@reactive-agents/a2a`
 
-Any `ReactiveAgent` should be exposable as an A2A-compatible endpoint.
+- **A2A Server**: JSON-RPC 2.0 over HTTP, Agent Cards at `.well-known/agent.json`, SSE task streaming
+- **A2A Client**: Discover remote agents, send tasks, subscribe to updates
+- **Agent-as-Tool**: Register local or remote agents as callable tools
 
-```typescript
-import { A2AServer } from "@reactive-agents/orchestration";
+### MCP Full Transports
 
-const server = A2AServer.from(agent, {
-  port: 3000,
-  agentCard: {
-    name: "research-assistant",
-    description: "Researches topics and summarizes findings",
-    capabilities: ["web-search", "document-analysis"],
-  },
-});
-await server.start();
-```
+- SSE transport for remote MCP servers
+- WebSocket transport for bidirectional MCP
 
-- JSON-RPC 2.0 over HTTP/S transport
-- SSE for streaming responses and async push notifications
-- Agent Cards: machine-readable capability discovery (JSON-LD)
-- Authentication: bearer tokens, API keys
-- Preserves agent opacity — internal state never exposed
+### Test Coverage Hardening
 
-### A2A Client — Consume External Agents
+- Target 550+ tests (from 442)
+- Focus: verification, identity, orchestration, observability, cost packages
 
-External A2A agents become first-class participants in our orchestration workflows.
+### Builder & CLI Extensions
 
-```typescript
-import { A2AClient } from "@reactive-agents/orchestration";
-
-const externalAgent = await A2AClient.connect("https://agent.example.com");
-const result = await externalAgent.sendTask("Analyze this dataset");
-```
-
-- Discover capabilities via Agent Cards
-- Support sync, streaming, and async task modes
-- Rich data exchange: text, files, structured JSON
-- Works as a tool within our reasoning loop
-
-### Agent-as-Tool Pattern
-
-Any agent can be registered as a tool callable by other agents — enabling recursive, hierarchical agent architectures.
-
-```typescript
-const researchAgent = await ReactiveAgents.create()
-  .withName("researcher")
-  .withProvider("anthropic")
-  .withReasoning()
-  .build();
-
-const orchestratorAgent = await ReactiveAgents.create()
-  .withName("orchestrator")
-  .withProvider("anthropic")
-  .withTools([researchAgent.asTool()]) // ← agent as tool
-  .build();
-```
-
-- Typed input/output schemas between agents
-- Timeout and budget propagation from parent to child
-- Works with both local and A2A remote agents
-
-### Streaming Service — Real-Time Agent Events
-
-First-class streaming so UIs and dashboards can observe agent execution live.
-
-- `StreamingService` with per-agent event queues (Effect `Queue` + `Stream`)
-- Structured event types: `thinking`, `action`, `action-result`, `verification`, `output-chunk`, `state-change`, `checkpoint`, `cost-update`
-- SSE endpoint when combined with A2A server
-- `.withStreaming()` builder method + `onEvent` callback
-
-### MCP Full Implementation
-
-- Complete SSE (HTTP event stream) and WebSocket transports
-- Auto-convert MCP tool schemas to typed `defineTool()` format
-- Test with real MCP servers (Filesystem, GitHub, Brave Search)
-
----
-
-## v0.5.0 — The Intelligence Advantage
-
-**Target: 90 days**
-
-This milestone makes our unique differentiators fully production-ready. These are the features no other framework has — the moat.
-
-### Cross-Task Self-Improvement
-
-The `AgentLearningService` is spec'd but not wired into the execution engine. This is our most unique differentiator — no other framework learns from past executions.
-
-- Wire `AgentLearningService` into the execution engine's `complete` phase
-- After each task: record outcome (strategy, success, score, cost, latency) to persistent SQLite store
-- Before strategy selection: query learned preferences for the current task type
-- Minimum 3 samples before overriding default — avoids overfitting
-- Expose trends via `rax inspect <agent-id> --learning`
-
-### Semantic Caching
-
-Spec targets a 10x cost reduction. No competitor has architectural caching.
-
-- Cache LLM responses keyed by semantic similarity (cosine distance < 0.05 = cache hit)
-- Use `sqlite-vec` (already in the memory layer) for fast KNN lookup
-- Cache invalidation: TTL, manual, or confidence-score-based
-- Cost savings reported in `result.metadata.cacheSavings`
-- `withCostTracking({ semanticCache: true })` to enable
-
-### Prompt Compression
-
-Reduce token costs on long contexts — already spec'd in the cost layer.
-
-- Automatic summarization of conversation history beyond a token threshold
-- Priority-based context window budgeting (system > task > memory > history)
-- Sliding window with topic coherence preservation
-- Works transparently within `ContextWindowManager`
+- `.withA2A()`, `.withAgentTool()`, `.withRemoteAgent()` builder methods
+- `rax serve`, `rax discover` CLI commands
 
 ---
 
@@ -341,14 +237,14 @@ Keeping this intentional:
 | v0.1.0 ✅ | Node.js ESM output, Gemini, Reflexion                        | 4-strategy reasoning + compiled output day one     |
 | v0.2.0 ✅ | Tools-in-ReAct, MCP stdio, Eval framework                   | Eval backed by our 5-layer verification            |
 | v0.3.0 ✅ | **All services wired, 5 strategies, OpenAI tools, full docs** | **Adaptive meta-strategy + fully observable engine** |
-| v0.4.0    | A2A interoperability, streaming, MCP complete                | First TS framework with A2A + agent-as-tool        |
-| v0.5.0    | Self-improvement, semantic caching                           | Cross-task learning unique in market               |
-| v0.6.0    | 40+ providers, enterprise identity                           | Cryptographic audit trail unique in market         |
+| v0.4.0 ✅ | Enhanced builder, structured tool results, EvalStore         | Composable builder options + persistent eval       |
+| v0.5.0    | **A2A interop, agent-as-tool, MCP transports, test hardening** | **First TS framework with A2A + agent composition** |
+| v0.6.0    | Self-improvement, semantic caching, 40+ providers            | Cross-task learning + LiteLLM adapter              |
 | v0.7.0    | Voice, UI, Edge                                              | Full-stack agent runtime no competitor matches     |
 | v1.0.0    | Stability, benchmarks                                        | Production-grade, proven, documented               |
 | v1.1.0+   | Evolutionary intelligence                                    | GEA-inspired zero-cost genome evolution            |
 
 ---
 
-_Last updated: February 2026 — v0.3.0 foundation integration released_
-_Grounded in: `spec/docs/12-market-validation-feb-2026.md`, `spec/docs/00-VISION.md`, `spec/docs/13-foundation-gap-analysis-feb-2026.md`_
+_Last updated: February 22, 2026 — v0.4.0 released, v0.5.0 in progress_
+_Grounded in: `spec/docs/12-market-validation-feb-2026.md`, `spec/docs/14-v0.5-comprehensive-plan.md`_

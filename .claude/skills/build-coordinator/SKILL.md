@@ -161,6 +161,38 @@ These are the critical integration interfaces — verify them explicitly:
 | `tools` ToolService | runtime, orchestration | `ToolService.register()` / `ToolService.execute()` |
 | `reasoning` StrategySelector | runtime | `StrategySelector.select()` → `ReasoningStrategy` |
 
+## v0.5 Sprint Coordination
+
+### Sprint 0: Housekeeping (Solo)
+No parallelism needed. One agent updates spec files sequentially.
+
+### Sprint 1: A2A Core (2 Teammates)
+```
+Teammate A: types.ts → errors.ts → agent-card.ts → a2a-service.ts → runtime.ts
+Teammate B: (waits for types) → server/a2a-server.ts → server/task-handler.ts → server/streaming.ts
+Teammate A: (after service) → client/a2a-client.ts → client/discovery.ts → client/capability-matcher.ts
+Gate: /validate-build a2a before Sprint 2
+```
+
+### Sprint 2: Agent-as-Tool + MCP (2-3 Teammates)
+```
+Teammate A: packages/tools/src/adapters/agent-tool-adapter.ts + tests
+Teammate B: MCP SSE transport (packages/tools/src/mcp/mcp-client.ts) + tests
+Teammate C: MCP WebSocket transport + tests
+Gate: bun test packages/tools — all pass
+```
+
+### Sprint 3: Test Hardening (3 Teammates — High Parallelism)
+```
+Teammate A: verification tests (5 files)
+Teammate B: identity + orchestration tests (6 files)
+Teammate C: observability + cost tests (5 files)
+All parallel — no cross-dependencies
+```
+
+### Sprint 4-5: Sequential
+Builder API extensions → CLI → Integration tests → Release prep
+
 ## Common Coordination Mistakes
 
 1. **Starting runtime before ALL Phase 1 packages pass** — runtime imports from every layer
@@ -169,4 +201,5 @@ These are the critical integration interfaces — verify them explicitly:
 4. **Assigning more than one large package per teammate** — leads to context thrashing
 5. **Skipping /validate-build between packages** — pattern drift compounds across layers
 6. **Not verifying index.ts exports** — downstream packages will fail to import
+7. **Forgetting documentation updates** — run `/update-docs` after completing any sprint
 ```
