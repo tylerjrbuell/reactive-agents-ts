@@ -1,26 +1,99 @@
 import { Effect } from "effect";
-import { describe, it, expect } from "bun:test";
+import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 
 import { makeMCPClient } from "../src/mcp/mcp-client.js";
 
-// NOTE: These tests use transport:"sse" which is a stub (no subprocess spawned).
-// Real stdio transport is tested separately in mcp-stdio-integration.test.ts
-// once a test MCP server binary is available.
+const createMockMcpServer = (port: number) => {
+  return Bun.serve({
+    port,
+    idleTimeout: 10,
+    fetch(req) {
+      if (req.method === "GET") {
+        return new Response(
+          new ReadableStream({
+            start(controller) {
+              const encoder = new TextEncoder();
+              const initialData = JSON.stringify({
+                jsonrpc: "2.0",
+                id: null,
+                result: { tools: [] },
+              });
+              controller.enqueue(
+                encoder.encode(`event: message\ndata: ${initialData}\n\n`),
+              );
+              setTimeout(() => {
+                try {
+                  controller.close();
+                } catch {
+                  // Already closed
+                }
+              }, 50);
+            },
+          }),
+          {
+            headers: {
+              "Content-Type": "text/event-stream",
+              "Cache-Control": "no-cache",
+            },
+          },
+        );
+      }
+
+      if (req.method === "POST") {
+        return req.json().then((body) => {
+          if (body.method === "initialize") {
+            return Response.json({
+              jsonrpc: "2.0",
+              id: body.id,
+              result: {
+                protocolVersion: "2024-11-05",
+                capabilities: { tools: {} },
+                serverInfo: { name: "test-server", version: "1.0.0" },
+              },
+            });
+          }
+          if (body.method === "tools/list") {
+            return Response.json({
+              jsonrpc: "2.0",
+              id: body.id,
+              result: { tools: [{ name: "test-tool", description: "Test", inputSchema: {} }] },
+            });
+          }
+          return Response.json({ jsonrpc: "2.0", id: body.id, result: {} });
+        });
+      }
+
+      return new Response("Not Found", { status: 404 });
+    },
+  });
+};
 
 describe("MCPClient", () => {
-  it("should connect to a server (sse stub)", async () => {
+  let server: ReturnType<typeof createMockMcpServer>;
+
+  beforeEach(() => {
+    server = createMockMcpServer(0);
+  });
+
+  afterEach(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    server.stop();
+  });
+
+  it("should connect to a server via SSE", async () => {
     const program = Effect.gen(function* () {
       const client = yield* makeMCPClient;
 
-      const server = yield* client.connect({
+      const serverConn = yield* client.connect({
         name: "test-server",
         transport: "sse",
-        endpoint: "http://localhost:3001",
+        endpoint: `http://localhost:${server.port}/sse`,
       });
 
-      expect(server.name).toBe("test-server");
-      expect(server.status).toBe("connected");
-      expect(server.transport).toBe("sse");
+      expect(serverConn.name).toBe("test-server");
+      expect(serverConn.status).toBe("connected");
+      expect(serverConn.transport).toBe("sse");
+      expect(serverConn.version).toBe("1.0.0");
     });
 
     await Effect.runPromise(program);
@@ -33,17 +106,14 @@ describe("MCPClient", () => {
       yield* client.connect({
         name: "server-a",
         transport: "sse",
-        endpoint: "http://localhost:3001",
+        endpoint: `http://localhost:${server.port}/sse`,
       });
 
-      yield* client.connect({
-        name: "server-b",
-        transport: "sse",
-        endpoint: "http://localhost:3002",
-      });
+      yield* client.disconnect("server-a");
 
       const servers = yield* client.listServers();
-      expect(servers).toHaveLength(2);
+      expect(servers).toHaveLength(1);
+      expect(servers[0].status).toBe("disconnected");
     });
 
     await Effect.runPromise(program);
@@ -56,7 +126,7 @@ describe("MCPClient", () => {
       yield* client.connect({
         name: "test-server",
         transport: "sse",
-        endpoint: "http://localhost:3001",
+        endpoint: `http://localhost:${server.port}/sse`,
       });
 
       yield* client.disconnect("test-server");
