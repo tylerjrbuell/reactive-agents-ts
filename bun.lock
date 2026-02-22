@@ -18,10 +18,10 @@
         "reactive-agents": "dist/index.js",
       },
       "dependencies": {
-        "@reactive-agents/core": "0.1.0",
-        "@reactive-agents/eval": "0.1.0",
-        "@reactive-agents/llm-provider": "workspace:*",
-        "@reactive-agents/runtime": "0.2.0",
+        "@reactive-agents/core": "workspace:^",
+        "@reactive-agents/eval": "workspace:^",
+        "@reactive-agents/llm-provider": "workspace:^",
+        "@reactive-agents/runtime": "workspace:^",
         "effect": "^3.10.0",
       },
       "devDependencies": {
@@ -250,19 +250,19 @@
       "name": "@reactive-agents/runtime",
       "version": "0.3.1",
       "dependencies": {
-        "@reactive-agents/core": "0.1.0",
-        "@reactive-agents/cost": "0.1.0",
-        "@reactive-agents/guardrails": "0.1.0",
-        "@reactive-agents/identity": "0.1.0",
-        "@reactive-agents/interaction": "0.1.0",
-        "@reactive-agents/llm-provider": "0.1.1",
-        "@reactive-agents/memory": "0.1.0",
-        "@reactive-agents/observability": "0.1.0",
-        "@reactive-agents/orchestration": "0.1.0",
-        "@reactive-agents/prompts": "0.1.0",
-        "@reactive-agents/reasoning": "0.2.0",
-        "@reactive-agents/tools": "0.2.0",
-        "@reactive-agents/verification": "0.1.0",
+        "@reactive-agents/core": "workspace:^",
+        "@reactive-agents/cost": "workspace:^",
+        "@reactive-agents/guardrails": "workspace:^",
+        "@reactive-agents/identity": "workspace:^",
+        "@reactive-agents/interaction": "workspace:^",
+        "@reactive-agents/llm-provider": "workspace:^",
+        "@reactive-agents/memory": "workspace:^",
+        "@reactive-agents/observability": "workspace:^",
+        "@reactive-agents/orchestration": "workspace:^",
+        "@reactive-agents/prompts": "workspace:^",
+        "@reactive-agents/reasoning": "workspace:^",
+        "@reactive-agents/tools": "workspace:^",
+        "@reactive-agents/verification": "workspace:^",
         "effect": "^3.10.0",
       },
       "devDependencies": {
@@ -1482,14 +1482,6 @@
 
     "@isaacs/cliui/wrap-ansi": ["wrap-ansi@8.1.0", "", { "dependencies": { "ansi-styles": "^6.1.0", "string-width": "^5.0.1", "strip-ansi": "^7.0.1" } }, "sha512-si7QWI6zUMq56bESFvagtmzMdGOtoxfR+Sez11Mobfc7tm+VkUckk9bW2UeffTGVUbOksxmSw0AA2gs8g71NCQ=="],
 
-    "@reactive-agents/cli/@reactive-agents/runtime": ["@reactive-agents/runtime@0.2.0", "", { "dependencies": { "@reactive-agents/core": "0.1.0", "@reactive-agents/cost": "0.1.0", "@reactive-agents/guardrails": "0.1.0", "@reactive-agents/identity": "0.1.0", "@reactive-agents/interaction": "0.1.0", "@reactive-agents/llm-provider": "0.1.1", "@reactive-agents/memory": "0.1.0", "@reactive-agents/observability": "0.1.0", "@reactive-agents/orchestration": "0.1.0", "@reactive-agents/prompts": "0.1.0", "@reactive-agents/reasoning": "0.2.0", "@reactive-agents/tools": "0.2.0", "@reactive-agents/verification": "0.1.0", "effect": "^3.10.0" } }, "sha512-McURMBTUN2GzM+0kgfMMiI0p8BrCxoY5W6nNa8UJ+8Wvt6Kcu2K9KBFRXUGdYxqVa5jd4JKva3kE0zMZLchWlA=="],
-
-    "@reactive-agents/runtime/@reactive-agents/llm-provider": ["@reactive-agents/llm-provider@0.1.1", "", { "dependencies": { "@reactive-agents/core": "0.1.0", "effect": "^3.10.0" }, "optionalDependencies": { "@anthropic-ai/sdk": "^0.30.0", "@google/genai": "^1.0.0", "openai": "^4.70.0" } }, "sha512-+dx+m2wa+oiS9WPREYH4/bggr+RveI87gUA7tRkBLPl9kw+ckaA2+40dA96rzfyQ8LBv2tR6/ywkkzaPR59g9g=="],
-
-    "@reactive-agents/runtime/@reactive-agents/reasoning": ["@reactive-agents/reasoning@0.2.0", "", { "dependencies": { "@reactive-agents/core": "0.1.0", "@reactive-agents/llm-provider": "0.1.1", "@reactive-agents/tools": "0.1.1", "effect": "^3.10.0", "ulid": "^2.3.0" } }, "sha512-SuHzs3dBooIiqtfYlzlSv/EBOMM1mUzbphHJ01uX6g5HzRKjKIgr2nqutBRa7xiQegGwiVZjZyQL+pHcptPrXg=="],
-
-    "@reactive-agents/runtime/@reactive-agents/tools": ["@reactive-agents/tools@0.2.0", "", { "dependencies": { "@reactive-agents/core": "0.1.0", "effect": "^3.10.0" } }, "sha512-IwJIZ7b8tLryJ+Z4pcGziHec3yRCDhf4ZVxFgSEpDA/P/txC9OmetIiO9OuKVSCv3jf7FNkYlozDRZiJ7JPEGg=="],
-
     "@rollup/pluginutils/estree-walker": ["estree-walker@2.0.2", "", {}, "sha512-Rfkk/Mp/DL7JVje3u18FxFujQlTNR2q6QfMSMB7AvCBx91NGj/ba3kCfza0f6dVDbw7YlRf/nDrn7pQrCCyQ/w=="],
 
     "ansi-align/string-width": ["string-width@4.2.3", "", { "dependencies": { "emoji-regex": "^8.0.0", "is-fullwidth-code-point": "^3.0.0", "strip-ansi": "^6.0.1" } }, "sha512-wKyQRQpjJ0sIp62ErSZdGsjMJWsap5oRNihHhu6G7JVO/9jIB6UyevL+tXuOqrng8j/cxKTWyWUwvSTriiZz/g=="],
@@ -1537,12 +1529,6 @@
     "@anthropic-ai/sdk/@types/node/undici-types": ["undici-types@5.26.5", "", {}, "sha512-JlCMO+ehdEIKqlFxk6IfVoAUVmgz7cU7zD/h9XZ0qzeosSHmUJVOzSQvvYSYWXkFXC+IfLKSIffhv0sVZup6pA=="],
 
     "@isaacs/cliui/string-width/emoji-regex": ["emoji-regex@9.2.2", "", {}, "sha512-L18DaJsXSUk2+42pv8mLs5jJT2hqFkFE4j21wOmgbUqsZ2hL72NsUU785g9RXgo3s0ZNgVl42TiHp3ZtOv/Vyg=="],
-
-    "@reactive-agents/cli/@reactive-agents/runtime/@reactive-agents/llm-provider": ["@reactive-agents/llm-provider@0.1.1", "", { "dependencies": { "@reactive-agents/core": "0.1.0", "effect": "^3.10.0" }, "optionalDependencies": { "@anthropic-ai/sdk": "^0.30.0", "@google/genai": "^1.0.0", "openai": "^4.70.0" } }, "sha512-+dx+m2wa+oiS9WPREYH4/bggr+RveI87gUA7tRkBLPl9kw+ckaA2+40dA96rzfyQ8LBv2tR6/ywkkzaPR59g9g=="],
-
-    "@reactive-agents/cli/@reactive-agents/runtime/@reactive-agents/reasoning": ["@reactive-agents/reasoning@0.2.0", "", { "dependencies": { "@reactive-agents/core": "0.1.0", "@reactive-agents/llm-provider": "0.1.1", "@reactive-agents/tools": "0.1.1", "effect": "^3.10.0", "ulid": "^2.3.0" } }, "sha512-SuHzs3dBooIiqtfYlzlSv/EBOMM1mUzbphHJ01uX6g5HzRKjKIgr2nqutBRa7xiQegGwiVZjZyQL+pHcptPrXg=="],
-
-    "@reactive-agents/runtime/@reactive-agents/reasoning/@reactive-agents/tools": ["@reactive-agents/tools@0.1.1", "", { "dependencies": { "@reactive-agents/core": "0.1.0", "effect": "^3.10.0" } }, "sha512-HbG0r7Mbr+3/Rrn6ngBHaWdBPRWaSvIDCJ8KHh0jet9FKGBkK5VQ9vxStcn7A7Y8msXxoh58CNWsKLMDo3q+Rw=="],
 
     "ansi-align/string-width/emoji-regex": ["emoji-regex@8.0.0", "", {}, "sha512-MSjYzcWNOA0ewAHpz0MxpYFvwg6yjy1NG3xteoqz644VCo/RPgnr1/GGt+ic3iJTzQ8Eu3TdM14SawnVUmGE6A=="],
 
@@ -1649,8 +1635,6 @@
     "wrap-ansi-cjs/string-width/emoji-regex": ["emoji-regex@8.0.0", "", {}, "sha512-MSjYzcWNOA0ewAHpz0MxpYFvwg6yjy1NG3xteoqz644VCo/RPgnr1/GGt+ic3iJTzQ8Eu3TdM14SawnVUmGE6A=="],
 
     "wrap-ansi-cjs/strip-ansi/ansi-regex": ["ansi-regex@5.0.1", "", {}, "sha512-quJQXlTSUGL2LH9SUXo8VwsY4soanhgo6LNSm84E1LBcE8s3O0wpdiRzyR9z/ZZJMlMWv37qOOb9pdJlMUEKFQ=="],
-
-    "@reactive-agents/cli/@reactive-agents/runtime/@reactive-agents/reasoning/@reactive-agents/tools": ["@reactive-agents/tools@0.1.1", "", { "dependencies": { "@reactive-agents/core": "0.1.0", "effect": "^3.10.0" } }, "sha512-HbG0r7Mbr+3/Rrn6ngBHaWdBPRWaSvIDCJ8KHh0jet9FKGBkK5VQ9vxStcn7A7Y8msXxoh58CNWsKLMDo3q+Rw=="],
 
     "ansi-align/string-width/strip-ansi/ansi-regex": ["ansi-regex@5.0.1", "", {}, "sha512-quJQXlTSUGL2LH9SUXo8VwsY4soanhgo6LNSm84E1LBcE8s3O0wpdiRzyR9z/ZZJMlMWv37qOOb9pdJlMUEKFQ=="],
   }

@@ -28,10 +28,10 @@
   ],
   "dependencies": {
     "effect": "^3.10.0",
-    "@reactive-agents/core": "0.1.0",
-    "@reactive-agents/runtime": "0.2.0",
-    "@reactive-agents/eval": "0.1.0",
-    "@reactive-agents/llm-provider": "workspace:*"
+    "@reactive-agents/core": "workspace:^",
+    "@reactive-agents/runtime": "workspace:^",
+    "@reactive-agents/eval": "workspace:^",
+    "@reactive-agents/llm-provider": "workspace:^"
   },
   "devDependencies": {
     "typescript": "^5.7.0",
