@@ -63,7 +63,7 @@ describe("ReasoningService", () => {
         taskType: "query",
         memoryContext: "",
         availableTools: [],
-        strategy: "tree-of-thought",
+        strategy: "nonexistent-strategy" as any,
       });
     });
 

@@ -10,6 +10,9 @@ import {
 import type { LLMService } from "@reactive-agents/llm-provider";
 import { executeReactive } from "../strategies/reactive.js";
 import { executeReflexion } from "../strategies/reflexion.js";
+import { executePlanExecute } from "../strategies/plan-execute.js";
+import { executeTreeOfThought } from "../strategies/tree-of-thought.js";
+import { executeAdaptive } from "../strategies/adaptive.js";
 
 // ─── Strategy function type ───
 
@@ -53,6 +56,9 @@ export const StrategyRegistryLive = Layer.effect(
       new Map<string, StrategyFn>([
         ["reactive", executeReactive],
         ["reflexion", executeReflexion],
+        ["plan-execute-reflect", executePlanExecute],
+        ["tree-of-thought", executeTreeOfThought],
+        ["adaptive", executeAdaptive],
       ]),
     );
 
