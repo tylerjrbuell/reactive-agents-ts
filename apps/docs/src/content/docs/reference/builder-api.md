@@ -62,6 +62,20 @@ All methods return `this` for chaining.
 | `withOrchestration()` | Multi-agent workflow coordination |
 | `withAudit()` | Compliance audit trail logging |
 
+### A2A Protocol
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `withA2A` | `(config: { port?: number }) => this` | Enable A2A server capability |
+| `withAgentTool` | `(name: string, agent: { name: string; description?: string }) => this` | Register a local agent as a callable tool |
+| `withRemoteAgent` | `(name: string, remoteUrl: string) => this` | Register a remote A2A agent as a callable tool |
+
+### MCP
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `withMCP` | `(config: MCPServerConfig \| MCPServerConfig[]) => this` | Connect to MCP servers (stdio, SSE) |
+
 ### Lifecycle
 
 | Method | Signature | Description |

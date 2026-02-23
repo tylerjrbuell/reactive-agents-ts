@@ -20,7 +20,7 @@ import { Card, CardGrid, Tabs, TabItem } from "@astrojs/starlight/components";
 
 ## Build Agents That Think, Act, and Learn
 
-Most agent frameworks give you a chat loop and call it a day. Reactive Agents gives you a **10-phase execution engine**, **5 reasoning strategies**, **4-tier memory**, and **13 composable layers** — all fully typed, all independently toggleable.
+Most agent frameworks give you a chat loop and call it a day. Reactive Agents gives you a **10-phase execution engine**, **5 reasoning strategies**, **4-tier memory**, **A2A protocol for agent interop**, and **14 composable layers** — all fully typed, all independently toggleable.
 
 <CardGrid stagger>
   <Card title="Type-Safe from End to End" icon="seti:typescript">
@@ -130,9 +130,9 @@ const agent = await ReactiveAgents.create()
     a 10-phase execution engine you can hook into at any point.
   </Card>
   <Card title="vs. Building From Scratch" icon="document">
-    You get 15 production-ready packages with 300+ tests, covering memory,
-    reasoning, tools, safety, cost, identity, and orchestration. Focus on
-    your agent's logic, not infrastructure.
+    You get 17 production-ready packages with 600+ tests, covering memory,
+    reasoning, tools, A2A protocol, safety, cost, identity, and orchestration.
+    Focus on your agent's logic, not infrastructure.
   </Card>
 </CardGrid>
 
@@ -148,6 +148,7 @@ ReactiveAgentBuilder
     -> Memory          (Working, Semantic, Episodic, Procedural)
     -> Reasoning       (ReAct, Reflexion, Plan-Execute, ToT, Adaptive)
     -> Tools           (Registry, Sandbox, MCP Client)
+    -> A2A             (Agent Cards, JSON-RPC, SSE Streaming)
     -> Guardrails      (Injection, PII, Toxicity, Contracts)
     -> Verification    (Semantic Entropy, Fact Decomposition)
     -> Cost            (Complexity Router, Budget Enforcer)
@@ -159,7 +160,7 @@ ReactiveAgentBuilder
     -> ExecutionEngine (10-phase lifecycle with hooks)
 ```
 
-## 15 Packages, One Command
+## 17 Packages, One Command
 
 ```bash
 bun add reactive-agents effect
