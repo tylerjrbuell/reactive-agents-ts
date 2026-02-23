@@ -21,15 +21,14 @@ The roadmap below is about two things: **closing the gaps** that currently block
 
 ---
 
-## Current State — v0.4.0 ✅ Released (Feb 22, 2026)
+## Current State — v0.5.0 ✅ Released (Feb 23, 2026)
 
-**15 packages, 442 tests across 77 files, fully composable via Effect-TS.**
+**17 packages, 720 tests across 106 files, fully composable via Effect-TS.**
 
-### v0.3.0 → v0.4.0 History
+### v0.4.0 → v0.5.0 History
 
-- **v0.3.0** (Feb 21): All 10 execution engine phases wired, 5 reasoning strategies, OpenAI function calling, 28-page docs site
-- **v0.3.1** (Feb 21): Ollama SDK, MCP parameter population, builder MCP config, Tavily web search
 - **v0.4.0** (Feb 22): Enhanced builder API (ReasoningOptions, ToolsOptions, PromptsOptions), structured tool results across all 4 adapters, EvalStore persistence, 80+ new tests
+- **v0.5.0 — A2A + Foundation Hardening** (Feb 23): Full A2A protocol (`@reactive-agents/a2a`), agent-as-tool, MCP SSE transport, ObservabilityService exporters (console/file), tracer correlation IDs, EventBus wiring for all phases, LLM request capture as episodic memory, semantic cache embeddings, LLM-based prompt compression, workflow approval gates, ThoughtTracer, real-time reasoning visibility (`live: true` streaming)
 
 ### What's Complete
 
@@ -37,48 +36,50 @@ The roadmap below is about two things: **closing the gaps** that currently block
 - ✅ 5 reasoning strategies: ReAct, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive
 - ✅ 4 LLM providers: Anthropic, OpenAI, Gemini, Ollama (all with tool calling where supported)
 - ✅ Full memory system (Working/Semantic/Episodic/Procedural, FTS5, Zettelkasten)
-- ✅ Guardrails, verification, cost tracking, identity, observability, interaction, orchestration
-- ✅ MCP stdio transport, Tavily web search, built-in tools
+- ✅ Guardrails, verification, cost tracking, identity, interaction, orchestration
+- ✅ MCP stdio + SSE transports, Tavily web search, built-in tools
 - ✅ Eval framework with LLM-as-judge and EvalStore persistence
-- ✅ `rax` CLI, Starlight docs (28 pages), compiled ESM + DTS output
+- ✅ `rax` CLI (init, create, run, serve, discover), Starlight docs (28 pages), compiled ESM + DTS output
+- ✅ A2A protocol: JSON-RPC 2.0, Agent Cards, SSE streaming, agent-as-tool
+- ✅ Observability: console exporter (ANSI), file exporter (JSONL), tracer correlation, live streaming
+- ✅ Real-time reasoning visibility: `┄ [thought/action/obs]` lines stream as agent thinks
+- ✅ ThoughtTracer, WorkflowEngine approval gates, semantic cache embeddings, LLM-based compression
 
 ### What's Scaffolded / Incomplete
 
-- ⚠️ MCP SSE and WebSocket transports (stubs only)
+- ⚠️ MCP WebSocket transport (SSE done; WebSocket still spec'd only)
 - ⚠️ Self-improvement learning loop (spec'd, not wired)
 - ⚠️ Streaming service (spec'd, not wired)
-- ⚠️ A2A protocol (not started — critical gap)
 
 ---
 
-## v0.5.0 — A2A Protocol, Agent Composition & Hardening
+## v0.5.0 — A2A Protocol, Agent Composition & Hardening ✅ Released (Feb 23, 2026)
 
-**In Progress — see `spec/docs/14-v0.5-comprehensive-plan.md` for full implementation plan.**
+See `spec/docs/14-v0.5-comprehensive-plan.md` for the full plan. All items shipped.
 
-**A2A is the single most important gap.** Google ADK and AWS Strands both ship native A2A support. It is the emerging Linux Foundation standard (21.9K stars) for agent-to-agent communication.
-
-> **MCP = agent ↔ tools. A2A = agent ↔ agent.**
-
-### New Package: `@reactive-agents/a2a`
+### Shipped: `@reactive-agents/a2a`
 
 - **A2A Server**: JSON-RPC 2.0 over HTTP, Agent Cards at `.well-known/agent.json`, SSE task streaming
 - **A2A Client**: Discover remote agents, send tasks, subscribe to updates
 - **Agent-as-Tool**: Register local or remote agents as callable tools
 
-### MCP Full Transports
+### Shipped: MCP SSE Transport
 
-- SSE transport for remote MCP servers
-- WebSocket transport for bidirectional MCP
+- Full SSE transport for remote MCP servers (WebSocket deferred to v0.6.0)
 
-### Test Coverage Hardening
+### Shipped: Foundation Hardening
 
-- Target 550+ tests (from 442)
-- Focus: verification, identity, orchestration, observability, cost packages
+- ObservabilityService console + file exporters; tracer correlation IDs propagated across spans
+- EventBus: `LLMRequestCompleted`, `ToolCallStarted/Completed`, `ExecutionPhaseCompleted`, `ReasoningStepCompleted`
+- Semantic cache with optional embedding-based cosine similarity (>0.92 threshold)
+- LLM-based prompt compression (heuristic first, LLM second pass)
+- WorkflowEngine approval gates (`requiresApproval` on steps, `approveStep()`/`rejectStep()`)
+- ThoughtTracer service — captures reasoning chain via EventBus subscription
+- Live reasoning streaming: `withObservability({ verbosity: "verbose", live: true })`
 
-### Builder & CLI Extensions
+### Shipped: Test Coverage
 
-- `.withA2A()`, `.withAgentTool()`, `.withRemoteAgent()` builder methods
-- `rax serve`, `rax discover` CLI commands
+- 720 tests across 106 files (was 442/77 in v0.4.0)
 
 ---
 
@@ -238,7 +239,7 @@ Keeping this intentional:
 | v0.2.0 ✅ | Tools-in-ReAct, MCP stdio, Eval framework                   | Eval backed by our 5-layer verification            |
 | v0.3.0 ✅ | **All services wired, 5 strategies, OpenAI tools, full docs** | **Adaptive meta-strategy + fully observable engine** |
 | v0.4.0 ✅ | Enhanced builder, structured tool results, EvalStore         | Composable builder options + persistent eval       |
-| v0.5.0    | **A2A interop, agent-as-tool, MCP transports, test hardening** | **First TS framework with A2A + agent composition** |
+| v0.5.0 ✅ | **A2A interop, agent-as-tool, MCP SSE, foundation hardening, real-time observability** | **First TS framework with A2A + live reasoning visibility** |
 | v0.6.0    | Self-improvement, semantic caching, 40+ providers            | Cross-task learning + LiteLLM adapter              |
 | v0.7.0    | Voice, UI, Edge                                              | Full-stack agent runtime no competitor matches     |
 | v1.0.0    | Stability, benchmarks                                        | Production-grade, proven, documented               |
@@ -246,5 +247,5 @@ Keeping this intentional:
 
 ---
 
-_Last updated: February 22, 2026 — v0.4.0 released, v0.5.0 in progress_
+_Last updated: February 23, 2026 — v0.5.0 released, v0.6.0 planning_
 _Grounded in: `spec/docs/12-market-validation-feb-2026.md`, `spec/docs/14-v0.5-comprehensive-plan.md`_
