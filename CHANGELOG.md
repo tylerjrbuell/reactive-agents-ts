@@ -6,59 +6,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 
 ---
 
-## [Unreleased] — Foundation Hardening + Real-Time Observability
-
-### Added
-
-#### Real-Time Log Streaming (`@reactive-agents/observability`, `@reactive-agents/runtime`)
-- **`withObservability({ verbosity, live, file? })`** — builder now accepts options:
-  - `live: true` — each log line written to stdout immediately as it fires, not buffered until flush
-  - `verbosity: "minimal" | "normal" | "verbose" | "debug"` — controls log detail level
-  - `file?: string` — optional JSONL file exporter path
-- **`LiveLogWriter`** — synchronous callback wired into `StructuredLogger` via `Effect.suspend`; writing happens before buffering
-- **`makeLiveLogWriter(options?)`** — factory exported from `@reactive-agents/observability`; formats with ANSI colors + timestamps
-- **Structured phase logs**: `◉ [bootstrap/strategy/think/act/complete]` at `normal`; `┄ [thought/action/obs/llm/ctx]` at `verbose`/`debug`
-- **Real-time reasoning steps**: strategies subscribe `ReasoningStepCompleted` events via EventBus before the think phase; each step prints the instant it fires rather than after the phase completes
-
-#### EventBus Reasoning Events (all 5 strategies in `@reactive-agents/reasoning`)
-- All strategies (`reactive`, `plan-execute`, `tree-of-thought`, `reflexion`, `adaptive`) publish `ReasoningStepCompleted` via `Effect.serviceOption(EventBus)` after each thought/action/observation step
-- No hard dependency — runs gracefully when EventBus is absent from context
-
-#### ThoughtTracer (`@reactive-agents/observability`)
-- **`ThoughtTracerService`** — new Effect-TS service that auto-subscribes to `ReasoningStepCompleted` events and exposes `getThoughtChain(strategy)` / `clearChain()`
-- **`ThoughtTracerLive`** — uses `Layer.provideMerge(ThoughtTracerLive, EventBusLive)` pattern to wire EventBus at layer init
-
-#### Observability Exporters (`@reactive-agents/observability`)
-- **`ConsoleExporter`** — ANSI-colored span tree with timing + metrics summary, printed at flush
-- **`FileExporter`** — JSONL output with one entry per span/log
-- **Tracer correlation IDs** — `withSpan()` propagates `traceId` via `FiberRef`; child spans inherit parent context
-
-#### Foundation Hardening
-- **Semantic cache embeddings** — `makeSemanticCache(embedFn?)` factory; cosine similarity matching (threshold 0.92)
-- **LLM-based prompt compressor** — `makePromptCompressor(llm?)` factory; heuristic first pass + LLM second pass when over `maxTokens`
-- **InteractionManager approval gates** — `approvalGate()` waits async until `resolveApproval()` called; 5-minute timeout
-- **WorkflowEngine approval gates** — `requiresApproval` on `WorkflowStep`; `approveStep()` / `rejectStep()` on `OrchestrationService`
-- **LLM hook context enrichment** — `lastLLMRequest`, `lastLLMResponse`, `availableTools`, `traceId` in every hook context
-- **LLM episodic memory** — LLM calls and tool results logged as episodic memory items during execution
-
-### Tests
-- **`packages/observability/tests/live-streaming.test.ts`** — 11 tests: liveWriter synchrony, formatLogEntryLive ANSI, makeLiveLogWriter, verbosity getter
-- **`packages/observability/tests/exporters.test.ts`** — console and file exporter tests
-- **`packages/observability/tests/thought-tracer.test.ts`** — ThoughtTracer capture tests
-- **`packages/observability/tests/tracer-correlation.test.ts`** — correlation ID propagation
-- **`packages/reasoning/tests/strategies/reactive-events.test.ts`** — 6 tests: ReasoningStepCompleted published, strategy field, no error without bus, ThoughtTracer end-to-end
-- **`packages/runtime/tests/observability-verbosity.test.ts`** — 10 tests: verbosity threading, live mode, withObservability options
-- **`packages/runtime/tests/feature-contract.test.ts`** — 18 tests: user-observable behavior (hooks, iterations, tool visibility, stepsCount, tokensUsed, TaskResult shape)
-- **`packages/orchestration/tests/approval-gate.test.ts`** — workflow approval gate tests
-- **`packages/cost/tests/semantic-cache-embeddings.test.ts`** — embedding-based cache tests
-- **`packages/cost/tests/prompt-compressor-llm.test.ts`** — LLM compressor tests
-
-### Stats
-- 720 tests across 106 files (was 624/96 in v0.5.0)
-
----
-
-## [0.5.0] — 2026-02-22
+## [0.5.0] — 2026-02-23
 
 ### Added
 
@@ -100,20 +48,64 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 - `apps/examples/src/05-agent-composition.ts` — agent-as-tool pattern with coordinator/specialist
 - `apps/examples/src/06-remote-mcp.ts` — MCP server configuration (stdio + SSE transports)
 
+#### Real-Time Observability (`@reactive-agents/observability`, `@reactive-agents/runtime`)
+- **`withObservability({ verbosity, live, file? })`** — builder now accepts options:
+  - `live: true` — each log line written to stdout immediately as it fires, not buffered until flush
+  - `verbosity: "minimal" | "normal" | "verbose" | "debug"` — controls log detail level
+  - `file?: string` — optional JSONL file exporter path
+- **`LiveLogWriter`** — synchronous callback wired into `StructuredLogger` via `Effect.suspend`
+- **`makeLiveLogWriter(options?)`** — factory exported from observability package; ANSI colors + timestamps
+- **Structured phase logs**: `◉ [bootstrap/strategy/think/act/complete]` at `normal`; `┄ [thought/action/obs/llm/ctx]` at `verbose`/`debug` — streaming live as each step fires
+- **`ConsoleExporter`** — ANSI-colored span tree with timing + metrics summary, printed at flush
+- **`FileExporter`** — JSONL output with one entry per span/log
+- **Tracer correlation IDs** — `withSpan()` propagates `traceId` via `FiberRef`; child spans inherit parent context
+
+#### ThoughtTracer (`@reactive-agents/observability`)
+- **`ThoughtTracerService`** — new Effect-TS service that auto-subscribes to `ReasoningStepCompleted` events and exposes `getThoughtChain(strategy)` / `clearChain()`
+- **`ThoughtTracerLive`** — wired via `Layer.provideMerge(ThoughtTracerLive, EventBusLive)` pattern
+
+#### EventBus Reasoning Events (`@reactive-agents/reasoning`)
+- All 5 strategies (`reactive`, `plan-execute`, `tree-of-thought`, `reflexion`, `adaptive`) publish `ReasoningStepCompleted` via `Effect.serviceOption(EventBus)` after each thought/action/observation step
+- No hard dependency — runs gracefully when EventBus is absent from context
+- EventBus extended with `on(tag, handler)` method for filtered subscriptions
+
+#### Foundation Hardening
+- **Semantic cache embeddings** — `makeSemanticCache(embedFn?)` factory; cosine similarity matching (>0.92 threshold, hash fast path)
+- **LLM-based prompt compressor** — `makePromptCompressor(llm?)` factory; heuristic first pass + LLM second pass when over `maxTokens`
+- **InteractionManager approval gates** — `approvalGate()` waits async until `resolveApproval()` called; 5-minute timeout
+- **WorkflowEngine approval gates** — `requiresApproval` on `WorkflowStep`; `approveStep()` / `rejectStep()` on `OrchestrationService`
+- **LLM hook context enrichment** — `lastLLMRequest`, `lastLLMResponse`, `availableTools`, `traceId` in every hook context
+- **LLM episodic memory** — LLM calls and tool results logged as episodic memory items during execution
+- **Semantic entropy** — both heuristic + LLM-based (paraphrase embeddings) implementations in verification
+- **Fact decomposition** — both heuristic + LLM-based (atomic claim extraction + status scoring) in verification
+- **Feature contract tests** — 18 tests verifying user-observable behavior (hooks, iterations, tool visibility, stepsCount, tokensUsed, TaskResult shape)
+
 ### Changed
-- `@reactive-agents/runtime` 0.4.0 → 0.5.0: agent-tool builder wiring, A2A integration
+- `@reactive-agents/runtime` 0.4.0 → 0.5.0: agent-tool builder wiring, A2A integration, observability verbosity, live streaming wiring
 - `@reactive-agents/cli` 0.4.0 → 0.5.0: `rax serve` with real HTTP server
 - `@reactive-agents/a2a` 0.1.0: new package
+- `@reactive-agents/core` 0.1.0 → 0.2.0: EventBus `on(tag, handler)` method + 6 new event types (LLMRequestCompleted, ToolCallStarted/Completed, ExecutionPhaseCompleted, ReasoningStepCompleted, ExecutionLoopIteration)
+- `@reactive-agents/observability` 0.1.0 → 0.2.0: ConsoleExporter, FileExporter, ThoughtTracer, live streaming, verbosity API, tracer correlation IDs
+- `@reactive-agents/reasoning` 0.3.0 → 0.4.0: all 5 strategies publish ReasoningStepCompleted events, ReAct prompt hardening (stop sequences, one-action rule, extractFinalAnswer)
+- `@reactive-agents/cost` 0.1.0 → 0.2.0: `makeSemanticCache(embedFn?)` and `makePromptCompressor(llm?)` factories
+- `@reactive-agents/verification` 0.1.0 → 0.2.0: LLM-based semantic entropy and fact decomposition
+- `@reactive-agents/interaction` 0.1.0 → 0.2.0: `approvalGate()` with `resolveApproval()` and 5-minute timeout
+- `@reactive-agents/orchestration` 0.1.0 → 0.2.0: `requiresApproval` on WorkflowStep, `approveStep()`/`rejectStep()`
+- `@reactive-agents/llm-provider` 0.4.0 → 0.5.0: LLMRequestEvent type + ObservabilityVerbosity field
 - Build order: added `@reactive-agents/a2a` to `build:packages` (after orchestration, before runtime)
 - `serve.ts` uses lazy `import()` for `@reactive-agents/a2a` to avoid module resolution in non-serve contexts
 
 ### Fixed
 - CI lockfile: `bun.lock` updated for new `@reactive-agents/a2a` package (was causing `--frozen-lockfile` failures)
 - CLI test failures from top-level `@reactive-agents/a2a` import — converted to dynamic `import()` in `serve.ts`
+- ReAct `iteration: 0` bug — fixed to start at 1
+- `[act]` hook never firing in reasoning path — fixed: action steps extracted post-reasoning, synthetic act/observe phases fired
+- `stepsCount: 0` in TaskResult — fixed: reads from reasoning result metadata
+- `maxIterations` override silently ignored — `defaultReactiveAgentsConfig` now accepts optional overrides param
 
 ### Stats
-- 624 tests across 96 files (was 442/77 in v0.4.0)
-- 16 packages + 1 new A2A package (17 total)
+- 720 tests across 106 files (was 442/77 in v0.4.0)
+- 17 packages + 2 apps
 - 3 new example apps (6 total)
 
 ---
