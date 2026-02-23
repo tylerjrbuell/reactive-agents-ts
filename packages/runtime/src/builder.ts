@@ -34,6 +34,16 @@ export interface PromptsOptions {
   readonly templates?: ReadonlyArray<PromptTemplate>;
 }
 
+/** Options for `.withObservability()` — configure observability verbosity and live streaming. */
+export interface ObservabilityOptions {
+  /** Verbosity level. Default: "normal" */
+  readonly verbosity?: "minimal" | "normal" | "verbose" | "debug";
+  /** Stream logs in real-time as the agent runs. Default: false */
+  readonly live?: boolean;
+  /** Path for JSONL file output. */
+  readonly file?: string;
+}
+
 /** Options for `.withA2A()` — configure A2A server */
 export interface A2AOptions {
   /** Port for A2A server (default: 3000) */
@@ -99,6 +109,7 @@ export class ReactiveAgentBuilder {
   private _toolsOptions?: ToolsOptions;
   private _enableIdentity: boolean = false;
   private _enableObservability: boolean = false;
+  private _observabilityOptions?: ObservabilityOptions;
   private _enableInteraction: boolean = false;
   private _enablePrompts: boolean = false;
   private _promptsOptions?: PromptsOptions;
@@ -220,8 +231,9 @@ export class ReactiveAgentBuilder {
     return this;
   }
 
-  withObservability(): this {
+  withObservability(options?: ObservabilityOptions): this {
     this._enableObservability = true;
+    if (options) this._observabilityOptions = options;
     return this;
   }
 
@@ -302,6 +314,7 @@ export class ReactiveAgentBuilder {
       enableTools: this._enableTools,
       enableIdentity: this._enableIdentity,
       enableObservability: this._enableObservability,
+      observabilityOptions: this._observabilityOptions,
       enableInteraction: this._enableInteraction,
       enablePrompts: this._enablePrompts,
       enableOrchestration: this._enableOrchestration,

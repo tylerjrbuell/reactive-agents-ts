@@ -83,6 +83,7 @@ export {
   InteractionManager,
   InteractionManagerLive,
 } from "./services/interaction-manager.js";
+export type { ApprovalResult } from "./services/interaction-manager.js";
 export { ModeSwitcher, ModeSwitcherLive } from "./services/mode-switcher.js";
 export {
   NotificationService,

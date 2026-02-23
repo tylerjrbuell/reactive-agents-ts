@@ -4,7 +4,7 @@ import { DEFAULT_BUDGET_LIMITS } from "./types.js";
 import type { BudgetExceededError, CostTrackingError, CacheError, RoutingError } from "./errors.js";
 import { routeToModel } from "./routing/complexity-router.js";
 import { estimateTokens } from "./routing/complexity-router.js";
-import { makeSemanticCache } from "./caching/semantic-cache.js";
+import { makeSemanticCache, type EmbedFn } from "./caching/semantic-cache.js";
 import { makePromptCompressor } from "./compression/prompt-compressor.js";
 import { makeBudgetEnforcer } from "./budgets/budget-enforcer.js";
 import { makeCostTracker } from "./analytics/cost-tracker.js";
@@ -58,12 +58,28 @@ export class CostService extends Context.Tag("CostService")<
 
 // ─── Live Implementation ───
 
-export const CostServiceLive = (budgetLimits: BudgetLimits = DEFAULT_BUDGET_LIMITS) =>
+// ─── Optional dependency types ───
+
+type LLMForCost = {
+  complete: (req: any) => Effect.Effect<{ content: string }, any>;
+};
+
+export type CostServiceOptions = {
+  /** Optional embed function for semantic similarity cache (Tier 2). */
+  readonly embedFn?: EmbedFn;
+  /** Optional LLM for prompt compression second pass (Tier 2). */
+  readonly llm?: LLMForCost;
+};
+
+export const CostServiceLive = (
+  budgetLimits: BudgetLimits = DEFAULT_BUDGET_LIMITS,
+  options?: CostServiceOptions,
+) =>
   Layer.effect(
     CostService,
     Effect.gen(function* () {
-      const cache = yield* makeSemanticCache;
-      const compressor = yield* makePromptCompressor;
+      const cache = yield* makeSemanticCache(options?.embedFn);
+      const compressor = yield* makePromptCompressor(options?.llm);
       const budget = yield* makeBudgetEnforcer(budgetLimits);
       const tracker = yield* makeCostTracker;
 

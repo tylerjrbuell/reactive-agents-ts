@@ -13,6 +13,7 @@ import { ExecutionError, IterationLimitError } from "../errors/errors.js";
 import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { PromptService } from "@reactive-agents/prompts";
+import { EventBus } from "@reactive-agents/core";
 
 interface TreeOfThoughtInput {
   readonly taskDescription: string;
@@ -43,6 +44,10 @@ export const executeTreeOfThought = (
       Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
     );
     const promptServiceOpt = promptServiceOptRaw as PromptServiceOpt;
+    const ebOptRaw = yield* Effect.serviceOption(EventBus).pipe(
+      Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
+    );
+    const ebOpt = ebOptRaw as typeof ebOptRaw;
     const { breadth, depth, pruningThreshold } =
       input.config.strategies.treeOfThought;
     const steps: ReasoningStep[] = [];
@@ -172,6 +177,17 @@ export const executeTreeOfThought = (
             content: `[TOT d=${d}] score=${score.toFixed(2)}: ${candidate.substring(0, 100)}...`,
             timestamp: new Date(),
           });
+
+          if (ebOpt._tag === "Some") {
+            yield* ebOpt.value.publish({
+              _tag: "ReasoningStepCompleted",
+              taskId: "tree-of-thought",
+              strategy: "tree-of-thought",
+              step: steps.length,
+              totalSteps: depth * breadth,
+              thought: `[TOT d=${d}] score=${score.toFixed(2)}: ${candidate.substring(0, 100)}...`,
+            }).pipe(Effect.catchAll(() => Effect.void));
+          }
 
           // Prune: only keep nodes above threshold
           if (score >= pruningThreshold) {

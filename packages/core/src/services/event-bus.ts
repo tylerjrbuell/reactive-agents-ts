@@ -48,6 +48,50 @@ export type AgentEvent =
       readonly agentId: string;
       readonly sessionId: string;
     }
+  // ─── LLM events (from @reactive-agents/llm-provider) ───
+  | {
+      readonly _tag: "LLMRequestCompleted";
+      readonly taskId: string;
+      readonly requestId: string;
+      readonly model: string;
+      readonly provider: string;
+      readonly durationMs: number;
+      readonly tokensUsed: number;
+      readonly estimatedCost: number;
+    }
+  // ─── Tool execution events (from @reactive-agents/runtime) ───
+  | {
+      readonly _tag: "ToolCallStarted";
+      readonly taskId: string;
+      readonly toolName: string;
+      readonly callId: string;
+    }
+  | {
+      readonly _tag: "ToolCallCompleted";
+      readonly taskId: string;
+      readonly toolName: string;
+      readonly callId: string;
+      readonly durationMs: number;
+      readonly success: boolean;
+    }
+  // ─── Phase completion events (from @reactive-agents/runtime) ───
+  | {
+      readonly _tag: "ExecutionPhaseCompleted";
+      readonly taskId: string;
+      readonly phase: string;
+      readonly durationMs: number;
+    }
+  // ─── Reasoning step events (from @reactive-agents/reasoning) ───
+  | {
+      readonly _tag: "ReasoningStepCompleted";
+      readonly taskId: string;
+      readonly strategy: string;
+      readonly step: number;
+      readonly totalSteps: number;
+      readonly thought?: string;
+      readonly action?: string;
+      readonly observation?: string;
+    }
   // ─── Custom/extension events ───
   | {
       readonly _tag: "Custom";

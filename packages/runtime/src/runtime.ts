@@ -14,7 +14,7 @@ import { createCostLayer } from "@reactive-agents/cost";
 import { createReasoningLayer, defaultReasoningConfig } from "@reactive-agents/reasoning";
 import type { ReasoningConfig } from "@reactive-agents/reasoning";
 import { createToolsLayer } from "@reactive-agents/tools";
-import type { ReasoningOptions } from "./builder.js";
+import type { ReasoningOptions, ObservabilityOptions } from "./builder.js";
 import { createIdentityLayer } from "@reactive-agents/identity";
 import { createObservabilityLayer } from "@reactive-agents/observability";
 import { createInteractionLayer } from "@reactive-agents/interaction";
@@ -62,6 +62,9 @@ export interface RuntimeOptions {
   // Reasoning configuration overrides
   reasoningOptions?: ReasoningOptions;
 
+  // Observability options
+  observabilityOptions?: ObservabilityOptions;
+
   // A2A configuration
   enableA2A?: boolean;
   a2aPort?: number;
@@ -93,6 +96,7 @@ export const createRuntime = (options: RuntimeOptions) => {
     enableCostTracking: options.enableCostTracking ?? false,
     enableAudit: options.enableAudit ?? false,
     systemPrompt: options.systemPrompt,
+    observabilityVerbosity: options.observabilityOptions?.verbosity,
   };
 
   // ── Required layers ──
@@ -192,7 +196,14 @@ export const createRuntime = (options: RuntimeOptions) => {
   }
 
   if (options.enableObservability) {
-    runtime = Layer.merge(runtime, createObservabilityLayer()) as any;
+    const obsExporterConfig = {
+      verbosity: options.observabilityOptions?.verbosity,
+      live: options.observabilityOptions?.live,
+      file: options.observabilityOptions?.file
+        ? { filePath: options.observabilityOptions.file }
+        : undefined,
+    };
+    runtime = Layer.merge(runtime, createObservabilityLayer(obsExporterConfig)) as any;
   }
 
   if (options.enableInteraction) {

@@ -1,5 +1,5 @@
 import { Context, Layer } from "effect";
-import type { LLMProvider, EmbeddingConfig } from "./types.js";
+import type { LLMProvider, EmbeddingConfig, ObservabilityVerbosity } from "./types.js";
 
 /**
  * LLM configuration — provided via environment or config file.
@@ -29,6 +29,13 @@ export class LLMConfig extends Context.Tag("LLMConfig")<
     readonly timeoutMs: number;
     readonly defaultMaxTokens: number;
     readonly defaultTemperature: number;
+    /**
+     * LLM request/response observability verbosity.
+     * "full" captures the complete request and response payloads.
+     * "metadata" captures only timing/token counts (cheaper for production).
+     * Default: "full" — always capture everything during development.
+     */
+    readonly observabilityVerbosity: ObservabilityVerbosity;
   }
 >() {}
 
@@ -59,6 +66,7 @@ export const llmConfigFromEnv = LLMConfig.of({
   timeoutMs: Number(process.env.LLM_TIMEOUT_MS ?? 30_000),
   defaultMaxTokens: 4096,
   defaultTemperature: Number(process.env.LLM_DEFAULT_TEMPERATURE ?? 0.7),
+  observabilityVerbosity: (process.env.LLM_OBSERVABILITY_VERBOSITY as ObservabilityVerbosity | undefined) ?? "full",
 });
 
 /**

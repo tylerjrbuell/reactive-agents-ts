@@ -25,7 +25,7 @@ export type { Tracer } from "./tracing/tracer.js";
 
 // ─── Logging ───
 export { makeStructuredLogger } from "./logging/structured-logger.js";
-export type { StructuredLogger } from "./logging/structured-logger.js";
+export type { StructuredLogger, LiveLogWriter } from "./logging/structured-logger.js";
 
 // ─── Metrics ───
 export { makeMetricsCollector } from "./metrics/metrics-collector.js";
@@ -35,8 +35,28 @@ export type { MetricsCollector } from "./metrics/metrics-collector.js";
 export { makeStateInspector } from "./debugging/state-inspector.js";
 export type { StateInspector } from "./debugging/state-inspector.js";
 
+export {
+  makeThoughtTracer,
+  ThoughtTracerService,
+  ThoughtTracerLive,
+} from "./debugging/thought-tracer.js";
+export type { ThoughtTracer, ThoughtNode } from "./debugging/thought-tracer.js";
+
+// ─── Exporters ───
+export { makeConsoleExporter, makeFileExporter, formatLogEntryLive, makeLiveLogWriter } from "./exporters/index.js";
+export type {
+  ConsoleExporter,
+  ConsoleExporterOptions,
+  FileExporter,
+  FileExporterOptions,
+} from "./exporters/index.js";
+
 // ─── Service ───
-export { ObservabilityService, ObservabilityServiceLive } from "./observability-service.js";
+export {
+  ObservabilityService,
+  ObservabilityServiceLive,
+} from "./observability-service.js";
+export type { ExporterConfig, VerbosityLevel } from "./observability-service.js";
 
 // ─── Runtime ───
 export { createObservabilityLayer } from "./runtime.js";

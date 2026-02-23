@@ -16,6 +16,7 @@ import { ExecutionError, IterationLimitError } from "../errors/errors.js";
 import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { PromptService } from "@reactive-agents/prompts";
+import { EventBus } from "@reactive-agents/core";
 import { executeReactive } from "./reactive.js";
 import { executeReflexion } from "./reflexion.js";
 import { executePlanExecute } from "./plan-execute.js";
@@ -48,6 +49,10 @@ export const executeAdaptive = (
       Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
     );
     const promptServiceOpt = promptServiceOptRaw as PromptServiceOpt;
+    const ebOptRaw = yield* Effect.serviceOption(EventBus).pipe(
+      Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
+    );
+    const ebOpt = ebOptRaw as typeof ebOptRaw;
     const steps: ReasoningStep[] = [];
     const start = Date.now();
 
@@ -92,6 +97,17 @@ export const executeAdaptive = (
       content: `[ADAPTIVE] Selected strategy: ${selectedStrategy} (analysis tokens: ${analysisResponse.usage.totalTokens})`,
       timestamp: new Date(),
     });
+
+    if (ebOpt._tag === "Some") {
+      yield* ebOpt.value.publish({
+        _tag: "ReasoningStepCompleted",
+        taskId: "adaptive",
+        strategy: "adaptive",
+        step: steps.length,
+        totalSteps: 1,
+        thought: `[ADAPTIVE] Selected strategy: ${selectedStrategy}`,
+      }).pipe(Effect.catchAll(() => Effect.void));
+    }
 
     // ── Dispatch to selected strategy ──
     const subResult = yield* dispatchStrategy(selectedStrategy, input);

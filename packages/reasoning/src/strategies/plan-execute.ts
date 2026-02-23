@@ -16,6 +16,7 @@ import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { ToolService } from "@reactive-agents/tools";
 import { PromptService } from "@reactive-agents/prompts";
+import { EventBus } from "@reactive-agents/core";
 
 interface PlanExecuteInput {
   readonly taskDescription: string;
@@ -41,6 +42,10 @@ export const executePlanExecute = (
       Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
     );
     const promptServiceOpt = promptServiceOptRaw as PromptServiceOpt;
+    const ebOptRaw = yield* Effect.serviceOption(EventBus).pipe(
+      Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
+    );
+    const ebOpt = ebOptRaw as typeof ebOptRaw;
     const { maxRefinements, reflectionDepth } =
       input.config.strategies.planExecute;
     const steps: ReasoningStep[] = [];
@@ -94,6 +99,17 @@ export const executePlanExecute = (
         content: `[PLAN ${refinement + 1}] ${planText}`,
         timestamp: new Date(),
       });
+
+      if (ebOpt._tag === "Some") {
+        yield* ebOpt.value.publish({
+          _tag: "ReasoningStepCompleted",
+          taskId: "plan-execute",
+          strategy: "plan-execute-reflect",
+          step: steps.length,
+          totalSteps: maxRefinements + 1,
+          thought: `[PLAN ${refinement + 1}] ${planText}`,
+        }).pipe(Effect.catchAll(() => Effect.void));
+      }
 
       // Parse plan into individual steps
       const planSteps = parsePlanSteps(planText);
@@ -184,6 +200,17 @@ export const executePlanExecute = (
           content: `[EXEC ${i + 1}] ${stepResult}`,
           timestamp: new Date(),
         });
+
+        if (ebOpt._tag === "Some") {
+          yield* ebOpt.value.publish({
+            _tag: "ReasoningStepCompleted",
+            taskId: "plan-execute",
+            strategy: "plan-execute-reflect",
+            step: steps.length,
+            totalSteps: maxRefinements + 1,
+            observation: `[EXEC ${i + 1}] ${stepResult}`,
+          }).pipe(Effect.catchAll(() => Effect.void));
+        }
       }
 
       // ── REFLECT: Evaluate execution quality ──

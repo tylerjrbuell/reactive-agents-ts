@@ -1,4 +1,4 @@
-import { Context, Effect, Layer } from "effect";
+import { Context, Effect, Layer, Ref } from "effect";
 import type { InteractionModeType } from "../types/mode.js";
 import type { SessionId } from "../types/mode.js";
 import type {
@@ -16,6 +16,14 @@ import { CheckpointService } from "./checkpoint-service.js";
 import { CollaborationService } from "./collaboration-service.js";
 import { PreferenceLearner } from "./preference-learner.js";
 import { EventBus } from "@reactive-agents/core";
+
+// ─── Approval Gate Types ───
+
+export interface ApprovalResult {
+  readonly approved: boolean;
+  readonly reason?: string;
+  readonly timedOut?: boolean;
+}
 
 export class InteractionManager extends Context.Tag("InteractionManager")<
   InteractionManager,
@@ -87,8 +95,21 @@ export class InteractionManager extends Context.Tag("InteractionManager")<
       taskType: string;
       cost?: number;
     }) => Effect.Effect<boolean>;
+
+    // ─── Approval Gate (supervised mode) ───
+    readonly approvalGate: (
+      action: string,
+      timeoutMs?: number,
+    ) => Effect.Effect<ApprovalResult, never>;
+    readonly resolveApproval: (
+      gateId: string,
+      approved: boolean,
+      reason?: string,
+    ) => Effect.Effect<boolean, never>;
   }
 >() {}
+
+const DEFAULT_APPROVAL_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
 export const InteractionManagerLive = Layer.effect(
   InteractionManager,
@@ -99,6 +120,11 @@ export const InteractionManagerLive = Layer.effect(
     const collaboration = yield* CollaborationService;
     const preferences = yield* PreferenceLearner;
     const eventBus = yield* EventBus;
+
+    // ─── Approval gate state ───
+    const pendingApprovals = yield* Ref.make<Map<string, (result: ApprovalResult) => void>>(
+      new Map(),
+    );
 
     return {
       // Mode
@@ -136,6 +162,83 @@ export const InteractionManagerLive = Layer.effect(
       // Preferences
       getPreference: (userId) => preferences.getPreference(userId),
       shouldAutoApprove: (params) => preferences.shouldAutoApprove(params),
+
+      // ─── Approval Gate ───
+      approvalGate: (action: string, timeoutMs: number = DEFAULT_APPROVAL_TIMEOUT_MS) =>
+        Effect.gen(function* () {
+          const gateId = crypto.randomUUID();
+
+          // Publish the approval-requested event so external systems can react
+          yield* eventBus.publish({
+            _tag: "Custom",
+            type: "approval-requested",
+            payload: { gateId, action },
+          });
+
+          // Await resolution from an external resolver or timeout
+          const approvalEffect = Effect.async<ApprovalResult>((resume) => {
+            // Register the resolver synchronously (Effect.runSync is safe here
+            // because Ref.update is purely synchronous)
+            Effect.runSync(
+              Ref.update(pendingApprovals, (m) => {
+                const next = new Map(m);
+                next.set(gateId, (r) => resume(Effect.succeed(r)));
+                return next;
+              }),
+            );
+
+            // Return cleanup: remove the resolver if the async fiber is interrupted
+            return Effect.sync(() => {
+              Effect.runSync(
+                Ref.update(pendingApprovals, (m) => {
+                  const next = new Map(m);
+                  next.delete(gateId);
+                  return next;
+                }),
+              );
+            });
+          });
+
+          const timeoutResult: ApprovalResult = {
+            approved: false,
+            timedOut: true,
+            reason: "Approval timed out",
+          };
+
+          const result = yield* approvalEffect.pipe(
+            Effect.timeout(timeoutMs),
+            Effect.map((opt) =>
+              // Effect.timeout wraps in Option when using milliseconds
+              opt === undefined ? timeoutResult : opt,
+            ),
+            Effect.catchAll(() => Effect.succeed(timeoutResult)),
+          );
+
+          // Clean up resolver if still present (e.g. after timeout)
+          yield* Ref.update(pendingApprovals, (m) => {
+            const next = new Map(m);
+            next.delete(gateId);
+            return next;
+          });
+
+          return result;
+        }),
+
+      resolveApproval: (gateId: string, approved: boolean, reason?: string) =>
+        Effect.gen(function* () {
+          const approvals = yield* Ref.get(pendingApprovals);
+          const resolver = approvals.get(gateId);
+          if (resolver) {
+            resolver({ approved, reason });
+            yield* Ref.update(pendingApprovals, (m) => {
+              const next = new Map(m);
+              next.delete(gateId);
+              return next;
+            });
+            return true;
+          }
+          return false;
+        }),
     };
   }),
 );

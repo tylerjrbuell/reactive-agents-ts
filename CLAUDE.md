@@ -2,12 +2,14 @@
 
 ## Project Status
 
-**v0.5.0 released.** 17 packages + 2 apps built, 624 tests across 96 files, full integration verified.
+**v0.5.0 released.** 17 packages + 2 apps built, 720 tests across 106 files, full integration verified.
 
 - Phase 1: Core, LLM Provider, Memory, Reasoning, Tools, Interaction, Runtime
 - Phase 2: Guardrails, Verification, Cost
 - Phase 3: Identity, Observability, Orchestration, Prompts, CLI (`rax`)
 - v0.5: A2A Protocol, Agent-as-Tool, MCP transports, test hardening (624 tests)
+- Foundation Hardening: Observability exporters, tracer correlation IDs, EventBus wiring, LLM capture, memory accumulation, hook enrichment, semantic cache embeddings, LLM-based compression, workflow approval gates, ThoughtTracer (675 tests)
+- Real-Time Observability: live log streaming, verbosity levels, reasoning event publishing, structured phase logs (720 tests)
 - Pre-release: tsup compiled output, Google Gemini provider, Reflexion reasoning strategy
 - Final Integration: All layers compose via `createRuntime()` and `ReactiveAgentBuilder`
 - Docs: Starlight (Astro) site at `apps/docs/`
@@ -18,7 +20,7 @@
 
 ```bash
 bun install              # Install dependencies
-bun test                 # Run all tests (624 tests, 96 files)
+bun test                 # Run all tests (720 tests, 106 files)
 bun run build            # Build all packages (16 packages, ESM + DTS)
 cd apps/docs && npx astro dev    # Start docs dev server
 cd apps/docs && npx astro build  # Build docs for production
