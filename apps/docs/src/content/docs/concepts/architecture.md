@@ -47,6 +47,7 @@ These can be enabled independently:
 | Interaction | `@reactive-agents/interaction` | 5 autonomy modes |
 | Orchestration | `@reactive-agents/orchestration` | Multi-agent workflows |
 | Prompts | `@reactive-agents/prompts` | Template engine |
+| A2A | `@reactive-agents/a2a` | Agent-to-Agent protocol (JSON-RPC, Agent Cards, SSE) |
 
 ## Dependency Graph
 
@@ -63,6 +64,7 @@ Core ← Guardrails (standalone)
      ← Interaction (needs EventBus)
      ← Orchestration (standalone)
      ← Prompts (standalone)
+     ← A2A (needs Core + Tools)
 ```
 
 ## How Layers Compose

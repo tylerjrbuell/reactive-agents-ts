@@ -54,6 +54,47 @@ rax run <prompt> [--provider anthropic|openai|ollama|test] [--model <model>] [--
 rax run "Explain quantum computing" --provider anthropic --model claude-sonnet-4-20250514
 ```
 
+### `rax serve`
+
+Start an agent as an A2A server.
+
+```bash
+rax serve [--port <number>] [--name <name>] [--provider <provider>] [--model <model>]
+          [--with-tools] [--with-reasoning] [--with-memory]
+```
+
+**Options:**
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--port` | `3000` | HTTP port for the A2A server |
+| `--name` | `"agent"` | Agent name (used in Agent Card) |
+| `--provider` | `"test"` | LLM provider |
+| `--model` | — | Model name |
+| `--with-tools` | off | Enable tool execution |
+| `--with-reasoning` | off | Enable reasoning strategies |
+| `--with-memory` | off | Enable memory (tier 2) |
+
+**Endpoints served:**
+
+- `GET /.well-known/agent.json` — Agent Card (A2A discovery)
+- `GET /agent/card` — Agent Card (fallback)
+- `POST /` — JSON-RPC 2.0 (`message/send`, `tasks/get`, `tasks/cancel`, `agent/card`)
+
+**Example:**
+
+```bash
+rax serve --name researcher --provider anthropic --model claude-sonnet-4-20250514 --with-tools --port 4000
+```
+
+### `rax discover`
+
+Fetch and display a remote agent's card.
+
+```bash
+rax discover <url>
+```
+
 ### `rax dev`
 
 Start the development server (placeholder).

@@ -226,6 +226,13 @@ declare module 'astro:content' {
   collection: "docs";
   data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
+"features/a2a-protocol.md": {
+	id: "features/a2a-protocol.md";
+  slug: "features/a2a-protocol";
+  body: string;
+  collection: "docs";
+  data: InferEntrySchema<"docs">
+} & { render(): Render[".md"] };
 "features/cost-tracking.md": {
 	id: "features/cost-tracking.md";
   slug: "features/cost-tracking";

@@ -107,7 +107,13 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
        * when ObservabilityService is available.
        */
       const runObservablePhase = <E>(
-        obs: { withSpan: <A, E2>(name: string, effect: Effect.Effect<A, E2>, attrs?: Record<string, unknown>) => Effect.Effect<A, E2> } | null,
+        obs: {
+          withSpan: <A, E2>(
+            name: string,
+            effect: Effect.Effect<A, E2>,
+            attrs?: Record<string, unknown>,
+          ) => Effect.Effect<A, E2>;
+        } | null,
         ctx: ExecutionContext,
         phase: ExecutionContext["phase"],
         body: (ctx: ExecutionContext) => Effect.Effect<ExecutionContext, E>,
@@ -136,7 +142,9 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
             const sessionId = `session-${Date.now()}`;
 
             // ── H1: Acquire ObservabilityService optionally ──
-            const obsOpt = yield* Effect.serviceOption(ObservabilityService).pipe(
+            const obsOpt = yield* Effect.serviceOption(
+              ObservabilityService,
+            ).pipe(
               Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
             );
             const obs = obsOpt._tag === "Some" ? obsOpt.value : null;
@@ -202,17 +210,31 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
             if (config.enableGuardrails) {
               ctx = yield* runObservablePhase(obs, ctx, "guardrail", (c) =>
                 Effect.gen(function* () {
-                  const guardrailOpt = yield* Effect.serviceOption(GuardrailService).pipe(
-                    Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
+                  const guardrailOpt = yield* Effect.serviceOption(
+                    GuardrailService,
+                  ).pipe(
+                    Effect.catchAll(() =>
+                      Effect.succeed({ _tag: "None" as const }),
+                    ),
                   );
 
                   if (guardrailOpt._tag === "Some") {
                     const inputText = String(
-                      (task.input as any).question ?? JSON.stringify(task.input),
+                      (task.input as any).question ??
+                        JSON.stringify(task.input),
                     );
                     const result = yield* guardrailOpt.value
                       .check(inputText)
-                      .pipe(Effect.catchAll(() => Effect.succeed({ passed: true, violations: [], score: 1, checkedAt: new Date() })));
+                      .pipe(
+                        Effect.catchAll(() =>
+                          Effect.succeed({
+                            passed: true,
+                            violations: [],
+                            score: 1,
+                            checkedAt: new Date(),
+                          }),
+                        ),
+                      );
 
                     if (!result.passed) {
                       const violationSummary = result.violations
@@ -243,12 +265,15 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
               ctx = yield* runObservablePhase(obs, ctx, "cost-route", (c) =>
                 Effect.gen(function* () {
                   const costOpt = yield* Effect.serviceOption(CostService).pipe(
-                    Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
+                    Effect.catchAll(() =>
+                      Effect.succeed({ _tag: "None" as const }),
+                    ),
                   );
 
                   if (costOpt._tag === "Some") {
                     const taskDescription = String(
-                      (task.input as any).question ?? JSON.stringify(task.input),
+                      (task.input as any).question ??
+                        JSON.stringify(task.input),
                     );
                     const modelConfig = yield* costOpt.value
                       .routeToModel(taskDescription)
@@ -259,7 +284,8 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       );
                     return {
                       ...c,
-                      selectedModel: (modelConfig as any).model ?? config.defaultModel,
+                      selectedModel:
+                        (modelConfig as any).model ?? config.defaultModel,
                     };
                   }
 
@@ -352,7 +378,8 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   return {
                     ...c,
                     cost: c.cost + (result.metadata.cost ?? 0),
-                    tokensUsed: c.tokensUsed + (result.metadata.tokensUsed ?? 0),
+                    tokensUsed:
+                      c.tokensUsed + (result.metadata.tokensUsed ?? 0),
                     metadata: {
                       ...c.metadata,
                       lastResponse: String(result.output ?? ""),
@@ -401,7 +428,9 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   ) => Effect.Effect<readonly unknown[], unknown>;
                 }>("ContextWindowManager"),
               ).pipe(
-                Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
+                Effect.catchAll(() =>
+                  Effect.succeed({ _tag: "None" as const }),
+                ),
               );
 
               let isComplete = false;
@@ -414,7 +443,9 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     .truncate([...ctx.messages], 100_000, "drop-oldest")
                     .pipe(
                       Effect.map((msgs) => [...msgs]),
-                      Effect.catchAll(() => Effect.succeed([...ctx.messages] as unknown[])),
+                      Effect.catchAll(() =>
+                        Effect.succeed([...ctx.messages] as unknown[]),
+                      ),
                     );
                 }
 
@@ -430,23 +461,29 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                           content: string;
                           toolCalls?: unknown[];
                           stopReason: string;
-                          usage?: { totalTokens?: number; estimatedCost?: number };
+                          usage?: {
+                            totalTokens?: number;
+                            estimatedCost?: number;
+                          };
                         }>;
                       }>("LLMService");
 
-                      const defaultPrompt = config.systemPrompt ?? "You are a helpful AI assistant.";
+                      const defaultPrompt =
+                        config.systemPrompt ??
+                        "You are a helpful AI assistant.";
                       const systemPrompt = c.memoryContext
                         ? `${String((c.memoryContext as any).semanticContext ?? "")}\n\n${defaultPrompt}`
                         : defaultPrompt;
 
                       // Convert function-calling tools to LLM ToolDefinition format
-                      const llmTools = functionCallingTools.length > 0
-                        ? functionCallingTools.map((t: any) => ({
-                            name: t.name,
-                            description: t.description,
-                            inputSchema: t.input_schema,
-                          }))
-                        : undefined;
+                      const llmTools =
+                        functionCallingTools.length > 0
+                          ? functionCallingTools.map((t: any) => ({
+                              name: t.name,
+                              description: t.description,
+                              inputSchema: t.input_schema,
+                            }))
+                          : undefined;
 
                       const response = yield* llm.complete({
                         messages: messagesToSend,
@@ -467,7 +504,8 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       return {
                         ...c,
                         messages: updatedMessages,
-                        tokensUsed: c.tokensUsed + (response.usage?.totalTokens ?? 0),
+                        tokensUsed:
+                          c.tokensUsed + (response.usage?.totalTokens ?? 0),
                         cost: c.cost + (response.usage?.estimatedCost ?? 0),
                         metadata: {
                           ...c.metadata,
@@ -559,7 +597,9 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   // 5c. OBSERVE — H5: also log episodic memories
                   ctx = yield* runObservablePhase(obs, ctx, "observe", (c) =>
                     Effect.gen(function* () {
-                      const recentResults = c.toolResults.slice(-pendingCalls.length);
+                      const recentResults = c.toolResults.slice(
+                        -pendingCalls.length,
+                      );
 
                       // H5: Log tool results as episodic memory items
                       const memOpt = yield* Effect.serviceOption(
@@ -567,7 +607,9 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                           logEpisode: (episode: unknown) => Effect.Effect<void>;
                         }>("MemoryService"),
                       ).pipe(
-                        Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
+                        Effect.catchAll(() =>
+                          Effect.succeed({ _tag: "None" as const }),
+                        ),
                       );
 
                       if (memOpt._tag === "Some") {
@@ -588,18 +630,20 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       // LLM provider adapters translate these to their native format:
                       // - Anthropic: { type: "tool_result", tool_use_id, content }
                       // - OpenAI: { role: "tool", tool_call_id, content }
-                      const toolResultMessages = recentResults.map((r: any) => ({
-                        role: "tool" as const,
-                        toolCallId: r.toolCallId,
-                        content: typeof r.result === "string" ? r.result : JSON.stringify(r.result),
-                      }));
+                      const toolResultMessages = recentResults.map(
+                        (r: any) => ({
+                          role: "tool" as const,
+                          toolCallId: r.toolCallId,
+                          content:
+                            typeof r.result === "string"
+                              ? r.result
+                              : JSON.stringify(r.result),
+                        }),
+                      );
 
                       return {
                         ...c,
-                        messages: [
-                          ...c.messages,
-                          ...toolResultMessages,
-                        ],
+                        messages: [...c.messages, ...toolResultMessages],
                         iteration: c.iteration + 1,
                       };
                     }),
@@ -628,14 +672,19 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
             if (config.enableVerification) {
               ctx = yield* runObservablePhase(obs, ctx, "verify", (c) =>
                 Effect.gen(function* () {
-                  const verifyOpt = yield* Effect.serviceOption(VerificationService).pipe(
-                    Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
+                  const verifyOpt = yield* Effect.serviceOption(
+                    VerificationService,
+                  ).pipe(
+                    Effect.catchAll(() =>
+                      Effect.succeed({ _tag: "None" as const }),
+                    ),
                   );
 
                   if (verifyOpt._tag === "Some") {
                     const response = String(c.metadata.lastResponse ?? "");
                     const input = String(
-                      (task.input as any).question ?? JSON.stringify(task.input),
+                      (task.input as any).question ??
+                        JSON.stringify(task.input),
                     );
                     const result = yield* verifyOpt.value
                       .verify(response, input)
@@ -694,9 +743,9 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                           });
                           // H5: Call flush() to generate memory.md projection
                           if (opt.value.flush) {
-                            yield* opt.value.flush().pipe(
-                              Effect.catchAll(() => Effect.void),
-                            );
+                            yield* opt.value
+                              .flush()
+                              .pipe(Effect.catchAll(() => Effect.void));
                           }
                         })
                       : Effect.void,
@@ -713,7 +762,9 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
               ctx = yield* runObservablePhase(obs, ctx, "cost-track", (c) =>
                 Effect.gen(function* () {
                   const costOpt = yield* Effect.serviceOption(CostService).pipe(
-                    Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
+                    Effect.catchAll(() =>
+                      Effect.succeed({ _tag: "None" as const }),
+                    ),
                   );
 
                   if (costOpt._tag === "Some") {

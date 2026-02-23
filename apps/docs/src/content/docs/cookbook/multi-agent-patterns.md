@@ -252,3 +252,54 @@ const agent = await ReactiveAgents.create()
 ```
 
 Each agent in the system gets its own trace, and workflow-level events are logged in the orchestration event log for full auditability.
+
+## A2A Remote Agent Communication
+
+Agents can communicate across process boundaries using the A2A protocol:
+
+```typescript
+import { ReactiveAgents } from "reactive-agents";
+import { discoverAgent, findBestAgent } from "@reactive-agents/a2a";
+import { Effect } from "effect";
+
+// Discover available agents on the network
+const agents = await Effect.runPromise(
+  discoverMultipleAgents([
+    "https://agent-a.example.com",
+    "https://agent-b.example.com",
+    "https://agent-c.example.com",
+  ])
+);
+
+// Find the best agent for a research task
+const best = findBestAgent(agents, {
+  skillIds: ["web-search"],
+  tags: ["research"],
+});
+
+if (best) {
+  console.log(`Delegating to ${best.agent.name} (score: ${best.score})`);
+
+  // Register the remote agent as a tool on your coordinator
+  const coordinator = await ReactiveAgents.create()
+    .withName("coordinator")
+    .withProvider("anthropic")
+    .withRemoteAgent("researcher", best.agent.url)
+    .withReasoning()
+    .build();
+
+  const result = await coordinator.run("Research the latest in quantum computing");
+}
+```
+
+### Exposing Your Agent via A2A
+
+```bash
+# Start your agent as an A2A server
+rax serve --name my-agent --provider anthropic --port 3000
+
+# Other agents can now discover and call yours at:
+# http://localhost:3000/.well-known/agent.json
+```
+
+See the [A2A Protocol](/features/a2a-protocol/) docs for complete server/client API details.

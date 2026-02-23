@@ -18,7 +18,7 @@ const HELP = `
 
 export function runServe(argv: string[]) {
   const args = argv.slice();
-  
+
   if (args.includes("--help") || args.includes("-h")) {
     console.log(HELP);
     return;
@@ -65,7 +65,6 @@ export function runServe(argv: string[]) {
   console.log(`Tools: ${withTools ? "enabled" : "disabled"}`);
   console.log(`Reasoning: ${withReasoning ? "enabled" : "disabled"}`);
   console.log(`Memory: ${memoryTier ? `tier ${memoryTier}` : "disabled"}`);
-  console.log("\nA2A server ready! Agent Card available at http://localhost:" + port + "/agent/card");
 
   const builder = ReactiveAgents.create()
     .withName(name)
@@ -77,6 +76,170 @@ export function runServe(argv: string[]) {
   if (withReasoning) builder.withReasoning();
   if (memoryTier) builder.withMemory(memoryTier);
 
-  console.log("\nNote: Server functionality requires full implementation of A2A HTTP server");
+  // Build the agent and start HTTP server
+  startServer(builder.build(), name, port);
+}
+
+async function startServer(
+  agentPromise: Promise<InstanceType<typeof Object>>,
+  name: string,
+  port: number,
+) {
+  let agent: any;
+  try {
+    agent = await agentPromise;
+  } catch (err) {
+    console.error("Failed to build agent:", err);
+    process.exit(1);
+  }
+
+  // Lazy import to avoid top-level module resolution failures in tests
+  const { generateAgentCard } = await import("@reactive-agents/a2a");
+
+  // Generate the agent card for discovery
+  const agentCard = generateAgentCard({
+    name,
+    description: `A2A agent: ${name}`,
+    url: `http://localhost:${port}`,
+  });
+
+  // Task store for tracking in-flight tasks
+  const tasks = new Map<string, { id: string; status: { state: string; message?: string; timestamp: string }; result?: unknown }>();
+
+  const server = Bun.serve({
+    port,
+    async fetch(req) {
+      const url = new URL(req.url);
+
+      // GET /.well-known/agent.json — A2A Agent Card discovery
+      if (req.method === "GET" && (url.pathname === "/.well-known/agent.json" || url.pathname === "/agent/card")) {
+        return Response.json(agentCard);
+      }
+
+      // POST / — JSON-RPC handler
+      if (req.method === "POST" && url.pathname === "/") {
+        let body: any;
+        try {
+          body = await req.json();
+        } catch {
+          return Response.json({
+            jsonrpc: "2.0",
+            error: { code: -32700, message: "Parse error" },
+            id: null,
+          });
+        }
+
+        const { method, params, id } = body;
+
+        switch (method) {
+          case "agent/card": {
+            return Response.json({ jsonrpc: "2.0", result: agentCard, id });
+          }
+
+          case "message/send": {
+            const taskId = crypto.randomUUID();
+            const message = params?.message;
+            const textPart = message?.parts?.find((p: any) => p.kind === "text");
+            const input = textPart?.text ?? JSON.stringify(params);
+
+            tasks.set(taskId, {
+              id: taskId,
+              status: { state: "working", timestamp: new Date().toISOString() },
+            });
+
+            // Run the agent asynchronously, update task on completion
+            agent.run(input).then(
+              (result: any) => {
+                tasks.set(taskId, {
+                  id: taskId,
+                  status: { state: "completed", timestamp: new Date().toISOString() },
+                  result: result.output ?? result,
+                });
+              },
+              (err: any) => {
+                tasks.set(taskId, {
+                  id: taskId,
+                  status: {
+                    state: "failed",
+                    message: err?.message ?? String(err),
+                    timestamp: new Date().toISOString(),
+                  },
+                });
+              },
+            );
+
+            return Response.json({
+              jsonrpc: "2.0",
+              result: { taskId },
+              id,
+            });
+          }
+
+          case "tasks/get": {
+            const taskId = params?.id;
+            const task = tasks.get(taskId);
+            if (!task) {
+              return Response.json({
+                jsonrpc: "2.0",
+                error: { code: -32000, message: `Task not found: ${taskId}` },
+                id,
+              });
+            }
+            return Response.json({ jsonrpc: "2.0", result: task, id });
+          }
+
+          case "tasks/cancel": {
+            const taskId = params?.id;
+            const task = tasks.get(taskId);
+            if (!task) {
+              return Response.json({
+                jsonrpc: "2.0",
+                error: { code: -32000, message: `Task not found: ${taskId}` },
+                id,
+              });
+            }
+            if (["completed", "failed", "canceled"].includes(task.status.state)) {
+              return Response.json({
+                jsonrpc: "2.0",
+                error: { code: -32001, message: `Cannot cancel task in state: ${task.status.state}` },
+                id,
+              });
+            }
+            task.status = { state: "canceled", message: "Canceled by user", timestamp: new Date().toISOString() };
+            try {
+              await agent.cancel(taskId);
+            } catch {
+              // Best-effort cancel
+            }
+            return Response.json({ jsonrpc: "2.0", result: task, id });
+          }
+
+          default:
+            return Response.json({
+              jsonrpc: "2.0",
+              error: { code: -32601, message: `Method not found: ${method}` },
+              id,
+            });
+        }
+      }
+
+      return new Response("Not Found", { status: 404 });
+    },
+  });
+
+  console.log(`\nA2A server ready! Agent Card available at http://localhost:${port}/.well-known/agent.json`);
+  console.log(`JSON-RPC endpoint: http://localhost:${port}/`);
   console.log("Use Ctrl+C to stop");
+
+  // Keep the process alive
+  process.on("SIGINT", () => {
+    console.log("\nShutting down A2A server...");
+    server.stop(true);
+    process.exit(0);
+  });
+
+  process.on("SIGTERM", () => {
+    server.stop(true);
+    process.exit(0);
+  });
 }

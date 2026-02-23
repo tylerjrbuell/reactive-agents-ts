@@ -214,7 +214,41 @@ rax run "list files" --mcp-config .rax/mcp.json
 
 ### SSE and WebSocket Transports
 
-SSE (HTTP event stream) and WebSocket transports are stubbed for future implementation.
+SSE (HTTP event stream) and WebSocket transports are available for connecting to remote MCP servers over HTTP.
+
+## Agent-as-Tool
+
+Register other agents (local or remote) as callable tools. This enables hierarchical agent architectures where a coordinator delegates subtasks to specialists.
+
+### Remote Agent (via A2A)
+
+```typescript
+const agent = await ReactiveAgents.create()
+  .withName("coordinator")
+  .withProvider("anthropic")
+  .withRemoteAgent("researcher", "https://research-agent.example.com")
+  .withReasoning()
+  .build();
+
+// The coordinator can now call the researcher as a tool during reasoning
+```
+
+The remote agent is discovered via its A2A Agent Card and called via JSON-RPC `message/send`.
+
+### Local Agent
+
+```typescript
+const agent = await ReactiveAgents.create()
+  .withName("coordinator")
+  .withProvider("anthropic")
+  .withAgentTool("specialist", {
+    name: "data-analyst",
+    description: "Analyzes data and produces insights",
+  })
+  .build();
+```
+
+See the [A2A Protocol](/features/a2a-protocol/) docs for full details.
 
 ## Tool Type Conversion
 

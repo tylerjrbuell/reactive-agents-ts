@@ -6,6 +6,66 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 
 ---
 
+## [0.5.0] — 2026-02-22
+
+### Added
+
+#### A2A Protocol Package (`@reactive-agents/a2a` 0.1.0) — NEW
+- **Full A2A (Agent-to-Agent) protocol implementation** based on Google's A2A specification
+- **Agent Card** — `generateAgentCard()` pure function produces A2A-compliant Agent Cards with skills, capabilities, and provider metadata; `toolsToSkills()` maps tool definitions to `AgentSkill[]`
+- **JSON-RPC 2.0 Server** — `A2AHttpServer` with `Bun.serve()` binding, routes `message/send`, `message/stream`, `tasks/get`, `tasks/cancel`, `agent/card`; serves `GET /.well-known/agent.json` for standard agent discovery
+- **Task Handler** — `createTaskHandler()` persists tasks via Effect `Ref`, transitions through `submitted → working → completed/failed` states, extracts text from message parts, stores artifacts on completion
+- **SSE Streaming** — `createSSEStream()` produces `ReadableStream` + `Queue` for real-time task updates; `formatSSEEvent()` serializes events with JSON-RPC 2.0 wrapping
+- **Client** — `A2AClient` (Effect-TS service) with `sendMessage()`, `getTask()`, `cancelTask()`, `getAgentCard()` via fetch-based JSON-RPC; supports bearer and API key auth
+- **Discovery** — `discoverAgent()` tries `/.well-known/agent.json` then falls back to `/agent/card`; `discoverMultipleAgents()` runs up to 5 discoveries concurrently
+- **Capability Matcher** — `matchCapabilities()` scores agents by skill ID (10pts), tag overlap (5pts each), input mode (2pts each); `findBestAgent()` returns top-scoring result
+- **A2AService** — unified Effect-TS service wrapping both server and client operations
+- **Types** — full Schema.Struct types: `AgentCard`, `A2ATask`, `A2AMessage`, `Part` (Text/File/Data), `Artifact`, `TaskState`, `JsonRpcRequest/Response`, `SendMessageParams`, `TaskQueryParams`, `TaskCancelParams`, `A2AServerConfig`
+- **Errors** — `A2AError`, `DiscoveryError`, `TransportError`, `TaskNotFoundError`, `TaskCanceledError`, `InvalidTaskStateError`, `AuthenticationError`
+
+#### Agent-as-Tool Pattern (`@reactive-agents/tools` 0.3.0, `@reactive-agents/runtime` 0.5.0)
+- **`createAgentTool()`** — wraps a local agent as a `ToolDefinition`
+- **`createRemoteAgentTool()`** — wraps a remote A2A client call as a tool with `MAX_RECURSION_DEPTH=3`
+- **Builder wiring** — `.withAgentTool(name, config)` and `.withRemoteAgent(name, url)` now register tools via `ToolService` (was placeholder comment)
+- Dynamic import of `ToolService` and adapters at build time; remote agents use `fetch`-based JSON-RPC
+
+#### CLI A2A Support (`@reactive-agents/cli` 0.5.0)
+- **`rax serve`** — fully functional A2A HTTP server via `Bun.serve()`:
+  - `GET /.well-known/agent.json` and `GET /agent/card` for discovery
+  - `POST /` JSON-RPC endpoint: `message/send` (runs agent async, returns taskId), `tasks/get`, `tasks/cancel`, `agent/card`
+  - In-memory task store, SIGINT/SIGTERM graceful shutdown
+  - Configurable: `--port`, `--name`, `--provider`, `--model`, `--with-tools`, `--with-reasoning`, `--with-memory`
+
+#### Test Coverage Hardening (35+ new tests)
+- `packages/a2a/tests/a2a-client.test.ts` — 6 tests: JSON-RPC send/get/cancel, discovery, transport errors, error propagation
+- `packages/a2a/tests/agent-card.test.ts` — 6 tests: minimal/full config, defaults, toolsToSkills mapping
+- `packages/a2a/tests/a2a-service.test.ts` — 6 tests: server integration, JSON-RPC routing, error mapping
+- `packages/a2a/tests/integration.test.ts` — 6 tests: send→poll→complete, discovery, capability matching, full pipeline, task cancellation
+- `packages/cost/tests/semantic-cache.test.ts` — 11 tests: cache hit/miss, TTL expiration, stats, eviction, case-insensitive matching
+
+#### Example Apps
+- `apps/examples/src/04-a2a-agents.ts` — two agents communicating via A2A protocol
+- `apps/examples/src/05-agent-composition.ts` — agent-as-tool pattern with coordinator/specialist
+- `apps/examples/src/06-remote-mcp.ts` — MCP server configuration (stdio + SSE transports)
+
+### Changed
+- `@reactive-agents/runtime` 0.4.0 → 0.5.0: agent-tool builder wiring, A2A integration
+- `@reactive-agents/cli` 0.4.0 → 0.5.0: `rax serve` with real HTTP server
+- `@reactive-agents/a2a` 0.1.0: new package
+- Build order: added `@reactive-agents/a2a` to `build:packages` (after orchestration, before runtime)
+- `serve.ts` uses lazy `import()` for `@reactive-agents/a2a` to avoid module resolution in non-serve contexts
+
+### Fixed
+- CI lockfile: `bun.lock` updated for new `@reactive-agents/a2a` package (was causing `--frozen-lockfile` failures)
+- CLI test failures from top-level `@reactive-agents/a2a` import — converted to dynamic `import()` in `serve.ts`
+
+### Stats
+- 624 tests across 96 files (was 442/77 in v0.4.0)
+- 16 packages + 1 new A2A package (17 total)
+- 3 new example apps (6 total)
+
+---
+
 ## [0.4.0] — 2026-02-22
 
 ### Added

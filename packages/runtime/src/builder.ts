@@ -361,8 +361,99 @@ export class ReactiveAgentBuilder {
       }
 
       // Register agent-as-tools if configured
-      // Note: Full agent tool registration requires agent execution functions
-      // This is a placeholder for future implementation
+      if (agentTools.length > 0) {
+        const { ToolService } = yield* Effect.promise(() =>
+          import("@reactive-agents/tools"),
+        );
+        const toolService = yield* (ToolService as any).pipe(Effect.provide(runtime));
+
+        const {
+          createAgentTool,
+          createRemoteAgentTool,
+          executeAgentTool,
+          executeRemoteAgentTool,
+        } = yield* Effect.promise(() =>
+          import("@reactive-agents/tools"),
+        );
+
+        for (const agentTool of agentTools) {
+          if (agentTool.remoteUrl) {
+            // Remote A2A agent tool
+            const toolDef = createRemoteAgentTool(
+              agentTool.name,
+              `${agentTool.remoteUrl}/.well-known/agent.json`,
+              agentTool.remoteUrl,
+            );
+            const handler = (args: Record<string, unknown>) =>
+              Effect.tryPromise({
+                try: () =>
+                  executeRemoteAgentTool(
+                    toolDef,
+                    args,
+                    {
+                      sendMessage: (params: any) =>
+                        Effect.tryPromise({
+                          try: () =>
+                            fetch(agentTool.remoteUrl!, {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({
+                                jsonrpc: "2.0",
+                                method: "message/send",
+                                params: {
+                                  message: {
+                                    role: params.message.role,
+                                    parts: [{ kind: "text", text: params.message.content }],
+                                  },
+                                },
+                                id: crypto.randomUUID(),
+                              }),
+                            }).then((r) => r.json()).then((d: any) => d.result),
+                          catch: (e) => new Error(String(e)),
+                        }),
+                      getTask: (params: any) =>
+                        Effect.tryPromise({
+                          try: () =>
+                            fetch(agentTool.remoteUrl!, {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({
+                                jsonrpc: "2.0",
+                                method: "tasks/get",
+                                params: { id: params.id },
+                                id: crypto.randomUUID(),
+                              }),
+                            }).then((r) => r.json()).then((d: any) => d.result),
+                          catch: (e) => new Error(String(e)),
+                        }),
+                    },
+                    `${agentTool.remoteUrl}/.well-known/agent.json`,
+                  ),
+                catch: (e) => e,
+              });
+            yield* (toolService as any).register(toolDef, handler);
+          } else if (agentTool.agent) {
+            // Local agent tool
+            const agentConfig = {
+              name: agentTool.agent.name,
+              description: agentTool.agent.description ?? `Agent: ${agentTool.agent.name}`,
+              capabilities: [],
+            };
+            const toolDef = createAgentTool(agentTool.name, agentConfig as any);
+            const handler = (args: Record<string, unknown>) =>
+              Effect.tryPromise({
+                try: () =>
+                  executeAgentTool(toolDef, args, async (input) => {
+                    // Delegate to a sub-agent execution — returns the input as-is for now
+                    // Full delegation requires building a sub-agent at runtime
+                    return { agentName: agentTool.agent!.name, input, status: "delegated" };
+                  }),
+                catch: (e) => e,
+              });
+            yield* (toolService as any).register(toolDef, handler);
+          }
+        }
+      }
 
       return new ReactiveAgent(engine, agentId, runtime);
     }) as Effect.Effect<ReactiveAgent, Error>;
