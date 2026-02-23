@@ -6,7 +6,7 @@
 
 **The composable AI agent framework built on Effect-TS.**
 
-Type-safe from prompt to production. 15 packages. 13 composable layers. 5 reasoning strategies. 10-phase execution engine.
+Type-safe from prompt to production. 17 packages. 13 composable layers. 5 reasoning strategies. 10-phase execution engine.
 
 [![CI](https://github.com/tylerjrbuell/reactive-agents-ts/actions/workflows/ci.yml/badge.svg)](https://github.com/tylerjrbuell/reactive-agents-ts/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/badge/npm-%40reactive--agents-CB3837?logo=npm)](https://www.npmjs.com/org/reactive-agents)
@@ -69,7 +69,7 @@ const agent = await ReactiveAgents.create()
   .withGuardrails()           // Block injection, PII, toxicity
   .withVerification()         // Fact-check outputs
   .withCostTracking()         // Budget enforcement + model routing
-  .withObservability()        // Distributed tracing + metrics
+  .withObservability({ verbosity: "verbose", live: true }) // Live log streaming + tracing
   .withIdentity()             // RBAC + agent certificates
   .withInteraction()          // 5 autonomy modes
   .withOrchestration()        // Multi-agent workflows
@@ -207,6 +207,7 @@ Switch providers with one line — agent code stays the same.
 | [`@reactive-agents/orchestration`](packages/orchestration) | Multi-agent workflows (sequential, parallel, map-reduce, pipeline) |
 | [`@reactive-agents/prompts`](packages/prompts) | Version-controlled template engine |
 | [`@reactive-agents/eval`](packages/eval) | Evaluation framework (LLM-as-judge scoring) |
+| [`@reactive-agents/a2a`](packages/a2a) | A2A protocol: Agent Cards, JSON-RPC server/client, SSE streaming |
 
 ## CLI (`rax`)
 
@@ -236,7 +237,7 @@ const result = await agent.run("What is the capital of France?");
 
 ```bash
 bun install              # Install dependencies
-bun test                 # Run all tests (442 tests, 77 files)
+bun test                 # Run all tests (720 tests, 106 files)
 bun run build            # Build all packages (ESM + DTS)
 ```
 
