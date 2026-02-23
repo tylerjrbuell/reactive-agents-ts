@@ -24,7 +24,7 @@ const createMockMcpServer = (port: number) => {
               controller.enqueue(
                 encoder.encode(`event: message\ndata: ${initialData}\n\n`),
               );
-              setTimeout(() => controller.close(), 100);
+              setTimeout(() => { try { controller.close(); } catch { /* already closed */ } }, 100);
             },
           }),
           {

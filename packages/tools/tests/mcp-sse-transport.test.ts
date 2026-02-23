@@ -29,7 +29,7 @@ const createMockMcpServer = (port: number): MockServer => {
                 encoder.encode(`event: message\ndata: ${initialData}\n\n`),
               );
               setTimeout(() => {
-                controller.close();
+                try { controller.close(); } catch { /* already closed */ }
               }, 100);
             },
           }),
@@ -233,7 +233,7 @@ describe("SSE Transport Error Handling", () => {
                 controller.enqueue(
                   encoder.encode("not valid sse\nevent: message\ndata: invalid json\n\n"),
                 );
-                setTimeout(() => controller.close(), 100);
+                setTimeout(() => { try { controller.close(); } catch { /* already closed */ } }, 100);
               },
             }),
             {
