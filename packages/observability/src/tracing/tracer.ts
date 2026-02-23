@@ -3,7 +3,7 @@ import type { Span, SpanStatus } from "../types.js";
 
 export interface Tracer {
   readonly withSpan: <A, E>(name: string, effect: Effect.Effect<A, E>, attributes?: Record<string, unknown>) => Effect.Effect<A, E>;
-  readonly getTraceContext: () => Effect.Effect<{ traceId: string; spanId: string }, never>;
+  readonly getTraceContext: () => Effect.Effect<{ traceId: string; spanId: string; parentSpanId?: string }, never>;
   readonly getSpans: (filter?: { name?: string; status?: SpanStatus }) => Effect.Effect<readonly Span[], never>;
 }
 
@@ -19,8 +19,20 @@ const generateSpanId = (): string => {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 };
 
+// ─── Current Trace Context ───
+// Shared Ref for the active span context so nested withSpan() calls
+// can inherit the parent's traceId and set parentSpanId correctly.
+
+type TraceContext = {
+  readonly traceId: string;
+  readonly spanId: string;
+  readonly parentSpanId?: string;
+} | null;
+
 export const makeTracer = Effect.gen(function* () {
   const spansRef = yield* Ref.make<Span[]>([]);
+  // Tracks the currently active span context for correlation
+  const activeContextRef = yield* Ref.make<TraceContext>(null);
 
   const withSpan = <A, E>(
     name: string,
@@ -28,19 +40,27 @@ export const makeTracer = Effect.gen(function* () {
     attributes?: Record<string, unknown>,
   ): Effect.Effect<A, E> =>
     Effect.gen(function* () {
-      const traceId = generateId();
+      const parentContext = yield* Ref.get(activeContextRef);
+
+      // Inherit traceId from parent span, or start a new trace
+      const traceId = parentContext?.traceId ?? generateId();
       const spanId = generateSpanId();
+      const parentSpanId = parentContext?.spanId;
       const startTime = performance.now();
 
       const baseSpan: Span = {
         traceId,
         spanId,
+        parentSpanId,
         name,
         startTime: new Date(),
         status: "unset",
         attributes: { ...attributes, "service.name": "reactive-agents" },
         events: [],
       };
+
+      // Push this span as the active context before running the effect
+      yield* Ref.set(activeContextRef, { traceId, spanId, parentSpanId });
 
       const result = yield* effect.pipe(
         Effect.tap(() =>
@@ -66,13 +86,20 @@ export const makeTracer = Effect.gen(function* () {
             },
           ]),
         ),
+        // Always restore parent context when this span completes
+        Effect.ensuring(Ref.set(activeContextRef, parentContext)),
       );
 
       return result;
     });
 
-  const getTraceContext = (): Effect.Effect<{ traceId: string; spanId: string }, never> =>
-    Effect.succeed({ traceId: generateId(), spanId: generateSpanId() });
+  const getTraceContext = (): Effect.Effect<{ traceId: string; spanId: string; parentSpanId?: string }, never> =>
+    Effect.gen(function* () {
+      const ctx = yield* Ref.get(activeContextRef);
+      if (ctx) return ctx;
+      // Outside of any span — generate a one-shot context
+      return { traceId: generateId(), spanId: generateSpanId() };
+    });
 
   const getSpans = (filter?: { name?: string; status?: SpanStatus }): Effect.Effect<readonly Span[], never> =>
     Effect.gen(function* () {

@@ -9,6 +9,7 @@ import { LLMService } from "@reactive-agents/llm-provider";
 import { ToolService } from "@reactive-agents/tools";
 import type { ToolDefinition, ToolOutput } from "@reactive-agents/tools";
 import { PromptService } from "@reactive-agents/prompts";
+import { EventBus } from "@reactive-agents/core";
 
 interface ReactiveInput {
   readonly taskDescription: string;
@@ -44,6 +45,11 @@ export const executeReactive = (
       Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
     );
     const promptServiceOpt = promptServiceOptRaw as PromptServiceOpt;
+    // EventBus is optional — publish reasoning steps when available
+    const ebOptRaw = yield* Effect.serviceOption(EventBus).pipe(
+      Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
+    );
+    const ebOpt = ebOptRaw as typeof ebOptRaw;
     const maxIter = input.config.strategies.reactive.maxIterations;
     const temp = input.config.strategies.reactive.temperature;
     const steps: ReasoningStep[] = [];
@@ -81,6 +87,9 @@ export const executeReactive = (
           systemPrompt,
           maxTokens: 1500,
           temperature: temp,
+          // Stop before the model fabricates its own Observation — the framework
+          // provides real observations after executing the tool.
+          stopSequences: ["Observation:", "\nObservation:"],
         })
         .pipe(
           Effect.mapError(
@@ -109,20 +118,36 @@ export const executeReactive = (
         timestamp: new Date(),
       });
 
-      // ── CHECK: does the thought indicate a final answer? ──
-      if (hasFinalAnswer(thought)) {
+      // Publish ReasoningStepCompleted for thought
+      if (ebOpt._tag === "Some") {
+        yield* ebOpt.value.publish({
+          _tag: "ReasoningStepCompleted",
+          taskId: "reactive",
+          strategy: "reactive",
+          step: steps.length,
+          totalSteps: maxIter,
+          thought,
+        }).pipe(Effect.catchAll(() => Effect.void));
+      }
+
+      // ── ACTION: check for tool call BEFORE final answer check.
+      // If the model outputs both ACTION and FINAL ANSWER in one response
+      // (a common issue without stop sequences), execute the action first
+      // so the framework provides a real observation rather than returning
+      // the raw hallucinated text.
+      const toolRequest = parseToolRequest(thought);
+
+      // ── CHECK: does the thought indicate a final answer (and no pending action)? ──
+      if (!toolRequest && hasFinalAnswer(thought)) {
         return buildResult(
           steps,
-          thought,
+          extractFinalAnswer(thought),
           "completed",
           start,
           totalTokens,
           totalCost,
         );
       }
-
-      // ── ACTION: does the thought request a tool call? ──
-      const toolRequest = parseToolRequest(thought);
       if (toolRequest) {
         steps.push({
           id: ulid() as StepId,
@@ -131,6 +156,18 @@ export const executeReactive = (
           timestamp: new Date(),
           metadata: { toolUsed: toolRequest.tool },
         });
+
+        // Publish ReasoningStepCompleted for action
+        if (ebOpt._tag === "Some") {
+          yield* ebOpt.value.publish({
+            _tag: "ReasoningStepCompleted",
+            taskId: "reactive",
+            strategy: "reactive",
+            step: steps.length,
+            totalSteps: maxIter,
+            action: JSON.stringify(toolRequest),
+          }).pipe(Effect.catchAll(() => Effect.void));
+        }
 
         // Execute tool via ToolService (real result) or note as unavailable
         const observationContent = yield* runToolObservation(
@@ -146,11 +183,30 @@ export const executeReactive = (
           timestamp: new Date(),
         });
 
+        // Publish ReasoningStepCompleted for observation
+        if (ebOpt._tag === "Some") {
+          yield* ebOpt.value.publish({
+            _tag: "ReasoningStepCompleted",
+            taskId: "reactive",
+            strategy: "reactive",
+            step: steps.length,
+            totalSteps: maxIter,
+            observation: observationContent,
+          }).pipe(Effect.catchAll(() => Effect.void));
+        }
+
         // Feed real observation back into context for next iteration
         context = appendToContext(
           context,
           `${thought}\nObservation: ${observationContent}`,
         );
+
+        // After executing the action, check if the original thought also had
+        // a FINAL ANSWER — if so, we're done (no need for another LLM call).
+        if (hasFinalAnswer(thought)) {
+          iteration++;
+          return buildResult(steps, extractFinalAnswer(thought), "completed", start, totalTokens, totalCost);
+        }
       } else {
         context = appendToContext(context, thought);
       }
@@ -329,11 +385,16 @@ function buildThoughtPrompt(
   history: readonly ReasoningStep[],
 ): string {
   const historyStr = history.map((s) => `[${s.type}] ${s.content}`).join("\n");
-  return `${context}\n\nPrevious steps:\n${historyStr}\n\nThink step-by-step. If you need a tool, respond with "ACTION: tool_name({"param": "value"})" using valid JSON for the arguments. For tools with multiple parameters, include all required fields in the JSON object. If you have a final answer, respond with "FINAL ANSWER: ...".`;
+  return `${context}\n\nPrevious steps:\n${historyStr}\n\nThink step-by-step. When you need a tool: ACTION: tool_name({"param": "value"}) — one action at a time, valid JSON args only. The real result will be provided back to you; do NOT fabricate results. Only say "FINAL ANSWER: ..." when ALL parts of the task are complete (data gathered AND any required files written).`;
 }
 
 function hasFinalAnswer(thought: string): boolean {
   return /final answer:/i.test(thought);
+}
+
+function extractFinalAnswer(thought: string): string {
+  const match = thought.match(/final answer:\s*([\s\S]*)/i);
+  return match ? match[1]!.trim() : thought;
 }
 
 function parseToolRequest(

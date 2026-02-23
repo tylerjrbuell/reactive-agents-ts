@@ -27,6 +27,8 @@ export const WorkflowStepSchema = Schema.Struct({
   error: Schema.optional(Schema.String),
   retryCount: Schema.Number,
   maxRetries: Schema.Number,
+  /** When true, execution pauses before this step and waits for explicit approval. */
+  requiresApproval: Schema.optional(Schema.Boolean),
 });
 export type WorkflowStep = typeof WorkflowStepSchema.Type;
 

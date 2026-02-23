@@ -1,6 +1,11 @@
 import { Effect, Ref } from "effect";
 import type { Workflow, WorkflowStep, WorkflowId, DomainEvent, Checkpoint } from "../types.js";
 import type { WorkflowStepError, WorkflowError } from "../errors.js";
+import { WorkflowStepError as WorkflowStepErrorClass } from "../errors.js";
+
+const DEFAULT_APPROVAL_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+
+type ApprovalCallback = (approved: boolean, reason?: string) => void;
 
 export interface WorkflowEngine {
   readonly executeSequential: (
@@ -18,6 +23,7 @@ export interface WorkflowEngine {
   readonly appendEvent: (event: DomainEvent) => Effect.Effect<void, never>;
   readonly updateWorkflow: (workflow: Workflow) => Effect.Effect<void, never>;
   readonly createCheckpoint: (workflow: Workflow) => Effect.Effect<Checkpoint, never>;
+  readonly resolveStepApproval: (stepId: string, approved: boolean, reason?: string) => Effect.Effect<boolean, never>;
   readonly workflowsRef: Ref.Ref<Map<string, Workflow>>;
   readonly eventLogRef: Ref.Ref<DomainEvent[]>;
 }
@@ -25,6 +31,7 @@ export interface WorkflowEngine {
 export const makeWorkflowEngine = Effect.gen(function* () {
   const workflowsRef = yield* Ref.make<Map<string, Workflow>>(new Map());
   const eventLogRef = yield* Ref.make<DomainEvent[]>([]);
+  const pendingApprovals = yield* Ref.make<Map<string, ApprovalCallback>>(new Map());
 
   const appendEvent = (event: DomainEvent): Effect.Effect<void, never> =>
     Ref.update(eventLogRef, (events) => [...events, event]);
@@ -48,6 +55,51 @@ export const makeWorkflowEngine = Effect.gen(function* () {
       };
     });
 
+  // ─── Approval gate ───
+
+  const awaitStepApproval = (stepId: string): Effect.Effect<{ approved: boolean; reason?: string }, never> =>
+    Effect.async<{ approved: boolean; reason?: string }>((resume) => {
+      Effect.runSync(
+        Ref.update(pendingApprovals, (m) => {
+          const next = new Map(m);
+          next.set(stepId, (approved, reason) => resume(Effect.succeed({ approved, reason })));
+          return next;
+        }),
+      );
+      // Cleanup on fiber interruption
+      return Effect.sync(() => {
+        Effect.runSync(
+          Ref.update(pendingApprovals, (m) => {
+            const next = new Map(m);
+            next.delete(stepId);
+            return next;
+          }),
+        );
+      });
+    }).pipe(
+      Effect.timeout(DEFAULT_APPROVAL_TIMEOUT_MS),
+      Effect.map((opt) => (opt === undefined ? { approved: false, reason: "Approval timed out" } : opt)),
+      Effect.catchAll(() => Effect.succeed({ approved: false, reason: "Approval timed out" })),
+    );
+
+  const resolveStepApproval = (stepId: string, approved: boolean, reason?: string): Effect.Effect<boolean, never> =>
+    Effect.gen(function* () {
+      const approvals = yield* Ref.get(pendingApprovals);
+      const callback = approvals.get(stepId);
+      if (callback) {
+        callback(approved, reason);
+        yield* Ref.update(pendingApprovals, (m) => {
+          const next = new Map(m);
+          next.delete(stepId);
+          return next;
+        });
+        return true;
+      }
+      return false;
+    });
+
+  // ─── Sequential execution with optional approval gates ───
+
   const executeSequential = (
     workflow: Workflow,
     executeStep: (step: WorkflowStep) => Effect.Effect<unknown, WorkflowStepError>,
@@ -63,6 +115,26 @@ export const makeWorkflowEngine = Effect.gen(function* () {
           timestamp: new Date(),
           payload: { stepId: step.id, agentId: step.agentId ?? "default" },
         });
+
+        // Approval gate: pause and wait if step requires approval
+        if (step.requiresApproval) {
+          const { approved, reason } = yield* awaitStepApproval(step.id);
+          if (!approved) {
+            yield* appendEvent({
+              type: "StepFailed",
+              workflowId: workflow.id,
+              timestamp: new Date(),
+              payload: { stepId: step.id, error: reason ?? "Step rejected by approver" },
+            });
+            return yield* Effect.fail(
+              new WorkflowStepErrorClass({
+                message: reason ?? "Step rejected by approver",
+                stepId: step.id,
+                workflowId: workflow.id,
+              }),
+            );
+          }
+        }
 
         const result = yield* executeStep(step);
 
@@ -196,6 +268,7 @@ export const makeWorkflowEngine = Effect.gen(function* () {
     appendEvent,
     updateWorkflow,
     createCheckpoint,
+    resolveStepApproval,
     workflowsRef,
     eventLogRef,
   } satisfies WorkflowEngine;

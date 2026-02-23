@@ -56,6 +56,12 @@ export const ExecutionContextSchema = Schema.Struct({
   tokensUsed: Schema.Number,
   startedAt: Schema.DateFromSelf,
   metadata: Schema.Record({ key: Schema.String, value: Schema.Unknown }),
+  // ─── Hook context enrichment fields (Phase 1.4) ───
+  // Populated by execution engine so after-hooks can inspect the last LLM interaction.
+  lastLLMRequest: Schema.optional(Schema.Unknown),
+  lastLLMResponse: Schema.optional(Schema.Unknown),
+  availableTools: Schema.optional(Schema.Array(Schema.String)),
+  traceId: Schema.optional(Schema.String),
 });
 export type ExecutionContext = typeof ExecutionContextSchema.Type;
 
@@ -95,11 +101,15 @@ export const ReactiveAgentsConfigSchema = Schema.Struct({
   enableAudit: Schema.Boolean,
   agentId: Schema.String,
   systemPrompt: Schema.optional(Schema.String),
+  observabilityVerbosity: Schema.optional(
+    Schema.Literal("minimal", "normal", "verbose", "debug"),
+  ),
 });
 export type ReactiveAgentsConfig = typeof ReactiveAgentsConfigSchema.Type;
 
 export const defaultReactiveAgentsConfig = (
   agentId: string,
+  overrides?: Partial<ReactiveAgentsConfig>,
 ): ReactiveAgentsConfig => ({
   maxIterations: 10,
   memoryTier: "1",
@@ -108,4 +118,5 @@ export const defaultReactiveAgentsConfig = (
   enableCostTracking: false,
   enableAudit: false,
   agentId,
+  ...overrides,
 });

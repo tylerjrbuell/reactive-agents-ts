@@ -17,6 +17,7 @@ import { ExecutionError, IterationLimitError } from "../errors/errors.js";
 import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { PromptService } from "@reactive-agents/prompts";
+import { EventBus } from "@reactive-agents/core";
 
 interface ReflexionInput {
   readonly taskDescription: string;
@@ -43,6 +44,10 @@ export const executeReflexion = (
       Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
     );
     const promptServiceOpt = promptServiceOptRaw as PromptServiceOpt;
+    const ebOptRaw = yield* Effect.serviceOption(EventBus).pipe(
+      Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
+    );
+    const ebOpt = ebOptRaw as typeof ebOptRaw;
     const { maxRetries, selfCritiqueDepth } = input.config.strategies.reflexion;
     const steps: ReasoningStep[] = [];
     const start = Date.now();
@@ -93,6 +98,17 @@ export const executeReflexion = (
       timestamp: new Date(),
     });
 
+    if (ebOpt._tag === "Some") {
+      yield* ebOpt.value.publish({
+        _tag: "ReasoningStepCompleted",
+        taskId: "reflexion",
+        strategy: "reflexion",
+        step: steps.length,
+        totalSteps: maxRetries + 1,
+        thought: `[ATTEMPT 1] ${currentResponse}`,
+      }).pipe(Effect.catchAll(() => Effect.void));
+    }
+
     // ── LOOP: Reflect → Improve ──
     while (attempt < maxRetries) {
       attempt++;
@@ -142,7 +158,18 @@ export const executeReflexion = (
         type: "observation",
         content: `[CRITIQUE ${attempt}] ${critique}`,
         timestamp: new Date(),
-        });
+      });
+
+      if (ebOpt._tag === "Some") {
+        yield* ebOpt.value.publish({
+          _tag: "ReasoningStepCompleted",
+          taskId: "reflexion",
+          strategy: "reflexion",
+          step: steps.length,
+          totalSteps: maxRetries + 1,
+          observation: `[CRITIQUE ${attempt}] ${critique}`,
+        }).pipe(Effect.catchAll(() => Effect.void));
+      }
 
       // ── Check if satisfied ──
       if (isSatisfied(critique)) {
@@ -199,7 +226,18 @@ export const executeReflexion = (
         type: "thought",
         content: `[ATTEMPT ${attempt + 1}] ${currentResponse}`,
         timestamp: new Date(),
-        });
+      });
+
+      if (ebOpt._tag === "Some") {
+        yield* ebOpt.value.publish({
+          _tag: "ReasoningStepCompleted",
+          taskId: "reflexion",
+          strategy: "reflexion",
+          step: steps.length,
+          totalSteps: maxRetries + 1,
+          thought: `[ATTEMPT ${attempt + 1}] ${currentResponse}`,
+        }).pipe(Effect.catchAll(() => Effect.void));
+      }
     }
 
     // Max retries reached — return the best response so far

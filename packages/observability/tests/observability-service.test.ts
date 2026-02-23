@@ -2,7 +2,7 @@ import { describe, test, expect } from "bun:test";
 import { Effect } from "effect";
 import { ObservabilityService, ObservabilityServiceLive } from "../src/observability-service.js";
 
-const TestLayer = ObservabilityServiceLive;
+const TestLayer = ObservabilityServiceLive();
 
 const run = <A>(effect: Effect.Effect<A, any, ObservabilityService>) =>
   Effect.runPromise(Effect.provide(effect, TestLayer));

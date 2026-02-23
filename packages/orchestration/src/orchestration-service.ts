@@ -55,6 +55,24 @@ export class OrchestrationService extends Context.Tag("OrchestrationService")<
     readonly getEventLog: (
       workflowId?: WorkflowId,
     ) => Effect.Effect<readonly DomainEvent[], never>;
+
+    /**
+     * Approve a pending step in a supervised workflow.
+     * Returns true if a matching pending approval was found and resolved.
+     */
+    readonly approveStep: (
+      stepId: string,
+      reason?: string,
+    ) => Effect.Effect<boolean, never>;
+
+    /**
+     * Reject a pending step in a supervised workflow.
+     * Returns true if a matching pending approval was found and resolved.
+     */
+    readonly rejectStep: (
+      stepId: string,
+      reason?: string,
+    ) => Effect.Effect<boolean, never>;
   }
 >() {}
 
@@ -262,6 +280,12 @@ export const OrchestrationServiceLive = Effect.gen(function* () {
       return events;
     });
 
+  const approveStep = (stepId: string, reason?: string): Effect.Effect<boolean, never> =>
+    engine.resolveStepApproval(stepId, true, reason);
+
+  const rejectStep = (stepId: string, reason?: string): Effect.Effect<boolean, never> =>
+    engine.resolveStepApproval(stepId, false, reason ?? "Step rejected");
+
   return {
     executeWorkflow,
     resumeWorkflow,
@@ -271,5 +295,7 @@ export const OrchestrationServiceLive = Effect.gen(function* () {
     listWorkflows,
     spawnWorker,
     getEventLog,
+    approveStep,
+    rejectStep,
   } as const;
 });

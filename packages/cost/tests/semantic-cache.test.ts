@@ -9,7 +9,7 @@ describe("SemanticCache", () => {
   it("should return null on empty cache", async () => {
     const result = await runCache(
       Effect.gen(function* () {
-        const cache = yield* makeSemanticCache;
+        const cache = yield* makeSemanticCache();
         return yield* cache.check("What is TypeScript?");
       }),
     );
@@ -19,7 +19,7 @@ describe("SemanticCache", () => {
   it("should return cached response on exact match", async () => {
     const result = await runCache(
       Effect.gen(function* () {
-        const cache = yield* makeSemanticCache;
+        const cache = yield* makeSemanticCache();
         yield* cache.store("What is TypeScript?", "A typed superset of JavaScript.", "haiku");
         return yield* cache.check("What is TypeScript?");
       }),
@@ -30,7 +30,7 @@ describe("SemanticCache", () => {
   it("should match case-insensitively", async () => {
     const result = await runCache(
       Effect.gen(function* () {
-        const cache = yield* makeSemanticCache;
+        const cache = yield* makeSemanticCache();
         yield* cache.store("What is TypeScript?", "A typed JS superset.", "haiku");
         return yield* cache.check("what is typescript?");
       }),
@@ -41,7 +41,7 @@ describe("SemanticCache", () => {
   it("should match with leading/trailing whitespace trimmed", async () => {
     const result = await runCache(
       Effect.gen(function* () {
-        const cache = yield* makeSemanticCache;
+        const cache = yield* makeSemanticCache();
         yield* cache.store("  hello world  ", "greeting response", "haiku");
         return yield* cache.check("hello world");
       }),
@@ -52,7 +52,7 @@ describe("SemanticCache", () => {
   it("should return null on dissimilar queries (cache miss)", async () => {
     const result = await runCache(
       Effect.gen(function* () {
-        const cache = yield* makeSemanticCache;
+        const cache = yield* makeSemanticCache();
         yield* cache.store("What is TypeScript?", "A typed superset of JavaScript.", "haiku");
         return yield* cache.check("How does Rust handle memory safety?");
       }),
@@ -63,7 +63,7 @@ describe("SemanticCache", () => {
   it("should invalidate entries after TTL expires", async () => {
     const result = await runCache(
       Effect.gen(function* () {
-        const cache = yield* makeSemanticCache;
+        const cache = yield* makeSemanticCache();
         // Store with 1ms TTL so it expires immediately
         yield* cache.store("What is TypeScript?", "A typed superset.", "haiku", 1);
         // Wait for expiration
@@ -77,7 +77,7 @@ describe("SemanticCache", () => {
   it("should track cache stats with zero entries initially", async () => {
     const stats = await runCache(
       Effect.gen(function* () {
-        const cache = yield* makeSemanticCache;
+        const cache = yield* makeSemanticCache();
         return yield* cache.getStats;
       }),
     );
@@ -89,7 +89,7 @@ describe("SemanticCache", () => {
   it("should track cache stats after stores and hits", async () => {
     const stats = await runCache(
       Effect.gen(function* () {
-        const cache = yield* makeSemanticCache;
+        const cache = yield* makeSemanticCache();
         yield* cache.store("q1", "r1", "haiku");
         yield* cache.store("q2", "r2", "sonnet");
         // Hit q1 twice
@@ -108,7 +108,7 @@ describe("SemanticCache", () => {
   it("should replace existing entry with same hash on re-store", async () => {
     const result = await runCache(
       Effect.gen(function* () {
-        const cache = yield* makeSemanticCache;
+        const cache = yield* makeSemanticCache();
         yield* cache.store("What is JS?", "Old answer", "haiku");
         yield* cache.store("What is JS?", "Updated answer", "sonnet");
         return yield* cache.check("What is JS?");
@@ -120,7 +120,7 @@ describe("SemanticCache", () => {
   it("should evict expired entries during store", async () => {
     const stats = await runCache(
       Effect.gen(function* () {
-        const cache = yield* makeSemanticCache;
+        const cache = yield* makeSemanticCache();
         // Store with tiny TTL
         yield* cache.store("expiring", "gone soon", "haiku", 1);
         yield* Effect.promise(() => new Promise((r) => setTimeout(r, 10)));
@@ -135,7 +135,7 @@ describe("SemanticCache", () => {
   it("should increment hitCount on repeated checks", async () => {
     const stats = await runCache(
       Effect.gen(function* () {
-        const cache = yield* makeSemanticCache;
+        const cache = yield* makeSemanticCache();
         yield* cache.store("q", "r", "haiku");
         yield* cache.check("q");
         yield* cache.check("q");

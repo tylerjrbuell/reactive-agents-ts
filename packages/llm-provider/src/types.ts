@@ -312,3 +312,38 @@ export type TruncationStrategy =
   | "summarize-middle"
   | "sliding-window"
   | "importance-based";
+
+// ─── LLM Request Event ───
+// Emitted after every complete() call for observability consumers.
+
+export type LLMRequestEvent = {
+  /** Unique ID for this request/response pair */
+  readonly requestId: string;
+  readonly provider: string;
+  readonly model: string;
+  readonly timestamp: Date;
+  readonly durationMs: number;
+  /** Token budget consumed */
+  readonly systemPromptLength: number;
+  readonly messageCount: number;
+  readonly toolCount: number;
+  readonly response: {
+    readonly contentLength: number;
+    readonly stopReason: string;
+    readonly toolCallCount: number;
+    readonly usage: {
+      readonly inputTokens: number;
+      readonly outputTokens: number;
+      readonly totalTokens: number;
+      readonly estimatedCost: number;
+    };
+  };
+  /** Full request payload — only present when verbosity = "full" */
+  readonly fullRequest?: CompletionRequest;
+  /** Full response payload — only present when verbosity = "full" */
+  readonly fullResponse?: CompletionResponse;
+};
+
+// ─── Observability Verbosity ───
+
+export type ObservabilityVerbosity = "metadata" | "full";
