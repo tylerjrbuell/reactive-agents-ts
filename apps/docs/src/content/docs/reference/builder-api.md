@@ -56,7 +56,7 @@ All methods return `this` for chaining.
 | `withReasoning(options?)` | Structured reasoning (ReAct, Reflexion, Plan-Execute, ToT, Adaptive). Options: `{ defaultStrategy?, strategies?, adaptive? }` |
 | `withTools(options?)` | Tool registry with sandboxed execution. Options: `{ tools?: [{ definition, handler }] }` |
 | `withIdentity()` | Agent certificates and RBAC |
-| `withObservability()` | Distributed tracing, metrics, structured logging |
+| `withObservability(options?)` | Distributed tracing, metrics, structured logging. Options: `{ verbosity?: "minimal" \| "normal" \| "verbose" \| "debug", live?: boolean, file?: string }` |
 | `withInteraction()` | 5 interaction modes with adaptive transitions |
 | `withPrompts(options?)` | Version-controlled prompt template engine. Options: `{ templates?: PromptTemplate[] }` |
 | `withOrchestration()` | Multi-agent workflow coordination |

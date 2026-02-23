@@ -16,6 +16,36 @@ const agent = await ReactiveAgents.create()
   .build();
 ```
 
+For real-time visibility while the agent runs, pass verbosity and live options:
+
+```typescript
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withReasoning()
+  .withTools()
+  .withObservability({ verbosity: "verbose", live: true })
+  .build();
+
+// Live output as the agent runs:
+// ◉ [bootstrap]     0 semantic, 0 episodic | 12ms
+// ◉ [strategy]      reactive | tools: web-search, http-get
+//   ┄ [thought]  I need to search for the current price...
+//   ┄ [action]   web-search({"query":"bitcoin price USD"})
+//   ┄ [obs]      Bitcoin is trading at $64,500 [42 chars]
+// ◉ [think]         3 steps | 6,633 tok | 8.3s
+// ◉ [act]           web-search (1 tools)
+// ◉ [complete]      ✓ task-abc | 6,633 tok | $0.0001 | 8.5s
+```
+
+### Verbosity Levels
+
+| Level | Output |
+|-------|--------|
+| `"minimal"` | Start + complete lines only |
+| `"normal"` (default) | Phase transitions + tool names + final stats |
+| `"verbose"` | + reasoning steps + LLM call summary + memory stats |
+| `"debug"` | + full prompt content + full tool I/O (no truncation) |
+
 When observability is enabled, the execution engine automatically wraps every phase in a trace span and records metrics for duration, token usage, and cost.
 
 ## Distributed Tracing
@@ -176,6 +206,28 @@ When observability is enabled, the execution engine automatically:
 5. Includes task metadata (iterations, tokens, cost, strategy, duration) in audit logs
 
 No manual instrumentation needed — just enable `.withObservability()` and everything is traced.
+
+## ThoughtTracer
+
+`ThoughtTracer` captures reasoning steps from all 5 strategies automatically via the EventBus. Add it via `ThoughtTracerLive`:
+
+```typescript
+import { ThoughtTracerService, ThoughtTracerLive } from "@reactive-agents/observability";
+import { EventBusLive } from "@reactive-agents/core";
+import { Layer, Effect } from "effect";
+
+const tracerWithBus = Layer.provideMerge(ThoughtTracerLive, EventBusLive);
+
+const steps = await Effect.runPromise(
+  Effect.gen(function* () {
+    // ... run agent ...
+    const tracer = yield* ThoughtTracerService;
+    return yield* tracer.getThoughtChain("reactive");
+  }).pipe(Effect.provide(tracerWithBus)),
+);
+```
+
+Each step in the chain has `{ step, thought?, action?, observation?, strategy }` fields.
 
 ## Exporting
 
