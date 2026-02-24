@@ -28,6 +28,8 @@ interface AdaptiveInput {
   readonly memoryContext: string;
   readonly availableTools: readonly string[];
   readonly config: ReasoningConfig;
+  /** Custom system prompt for steering agent behavior */
+  readonly systemPrompt?: string;
 }
 
 type SubStrategy =
@@ -57,11 +59,15 @@ export const executeAdaptive = (
     const start = Date.now();
 
     // ── Analyze task to select strategy ──
+    const classifyDefaultFallback = input.systemPrompt
+      ? `${input.systemPrompt}\n\nYou are a task analyzer. Classify the task and recommend the best reasoning strategy. Respond with ONLY one of: REACTIVE, REFLEXION, PLAN_EXECUTE, TREE_OF_THOUGHT`
+      : "You are a task analyzer. Classify the task and recommend the best reasoning strategy. Respond with ONLY one of: REACTIVE, REFLEXION, PLAN_EXECUTE, TREE_OF_THOUGHT";
+
     const classifySystemPrompt = yield* compilePromptOrFallback(
       promptServiceOpt,
       "reasoning.adaptive-classify",
       {},
-      "You are a task analyzer. Classify the task and recommend the best reasoning strategy. Respond with ONLY one of: REACTIVE, REFLEXION, PLAN_EXECUTE, TREE_OF_THOUGHT",
+      classifyDefaultFallback,
     );
     const analysisResponse = yield* llm
       .complete({

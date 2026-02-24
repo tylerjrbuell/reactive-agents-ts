@@ -36,6 +36,8 @@ export class ReasoningService extends Context.Tag("ReasoningService")<
       readonly strategy?: ReasoningStrategy;
       /** Context profile for model-adaptive context engineering */
       readonly contextProfile?: Partial<ContextProfile>;
+      /** Custom system prompt for steering agent behavior */
+      readonly systemPrompt?: string;
     }) => Effect.Effect<ReasoningResult, ReasoningErrors>;
 
     /** Register a custom strategy function. */

@@ -40,6 +40,8 @@ interface ReactiveInput {
   readonly config: ReasoningConfig;
   /** Model context profile — controls compaction thresholds, verbosity, tool result sizes. */
   readonly contextProfile?: ContextProfile;
+  /** Custom system prompt for steering agent behavior */
+  readonly systemPrompt?: string;
 }
 
 /**
@@ -99,11 +101,15 @@ export const executeReactive = (
 
       // ── THOUGHT ──
       // Use PromptService for system prompt if available
+      const defaultFallback = input.systemPrompt
+        ? `${input.systemPrompt}\n\nTask: ${input.taskDescription}`
+        : `You are a reasoning agent. Task: ${input.taskDescription}`;
+
       const systemPrompt = yield* compilePromptOrFallback(
         promptServiceOpt,
         "reasoning.react-system",
         { task: input.taskDescription },
-        `You are a reasoning agent. Task: ${input.taskDescription}`,
+        defaultFallback,
         profile.tier,
       );
       const thoughtContent = yield* compilePromptOrFallback(

@@ -22,6 +22,13 @@ export interface SubAgentConfig {
   readonly maxIterations?: number;
   /** Focused system prompt for this sub-agent */
   readonly systemPrompt?: string;
+  /** Optional persona for steering sub-agent behavior */
+  readonly persona?: {
+    readonly role?: string;
+    readonly instructions?: string;
+    readonly tone?: string;
+    readonly background?: string;
+  };
 }
 
 export interface SubAgentResult {
@@ -47,9 +54,16 @@ export const createSubAgentExecutor = (
     model?: string;
     maxIterations?: number;
     systemPrompt?: string;
+    persona?: {
+      role?: string;
+      instructions?: string;
+      tone?: string;
+      background?: string;
+    };
     enableReasoning: boolean;
     enableTools: boolean;
     task: string;
+    name: string;
   }) => Promise<{ output: string; success: boolean; tokensUsed: number }>,
   depth: number = 0,
 ): ((task: string) => Promise<SubAgentResult>) => {
@@ -70,9 +84,11 @@ export const createSubAgentExecutor = (
         model: config.model,
         maxIterations: config.maxIterations ?? 5,
         systemPrompt: config.systemPrompt,
+        persona: config.persona,
         enableReasoning: true,
         enableTools: true,
         task,
+        name: config.name,
       });
 
       const summary = result.output.length > 1500
@@ -163,7 +179,8 @@ export const createSpawnAgentTool = (): ToolDefinition => ({
     "self-contained subtask. The sub-agent runs independently (no access to parent " +
     "history) and returns a structured summary. Use this to delegate tasks that benefit " +
     "from a fresh reasoning context or that might otherwise bloat the current window. " +
-    "IMPORTANT: use 'task' param (required), not 'input' or 'prompt'.",
+    "IMPORTANT: use 'task' param (required), not 'input' or 'prompt'. " +
+    "Optionally steer sub-agent behavior via role, instructions, and tone.",
   parameters: [
     {
       name: "task",
@@ -189,6 +206,27 @@ export const createSpawnAgentTool = (): ToolDefinition => ({
       name: "maxIterations",
       type: "number" as const,
       description: "Maximum reasoning iterations (default: 5).",
+      required: false,
+    },
+    {
+      name: "role",
+      type: "string" as const,
+      description: "Optional role/persona for the sub-agent (e.g., 'Data Analyst', 'Code Reviewer'). " +
+        "Steers how the agent approaches the task.",
+      required: false,
+    },
+    {
+      name: "instructions",
+      type: "string" as const,
+      description: "Optional behavioral instructions for the sub-agent (e.g., 'Focus on security', " +
+        "'Optimize for performance'). These guide the sub-agent's approach.",
+      required: false,
+    },
+    {
+      name: "tone",
+      type: "string" as const,
+      description: "Optional tone guidance for the sub-agent (e.g., 'professional', 'concise', 'detailed'). " +
+        "Influences communication style.",
       required: false,
     },
   ],

@@ -25,7 +25,8 @@ All methods return `this` for chaining.
 | Method | Signature | Description |
 |--------|-----------|-------------|
 | `withName` | `(name: string) => this` | Set the agent's name (used as `agentId`) |
-| `withSystemPrompt` | `(prompt: string) => this` | Set a custom system prompt (default: `"You are a helpful AI assistant."`) |
+| `withPersona` | `(persona: AgentPersona) => this` | Set a structured persona for behavior steering. Fields: `{ name?, role?, background?, instructions?, tone? }` |
+| `withSystemPrompt` | `(prompt: string) => this` | Set a custom system prompt. When combined with persona, the persona is prepended |
 
 ### Model & Provider
 
@@ -67,7 +68,8 @@ All methods return `this` for chaining.
 | Method | Signature | Description |
 |--------|-----------|-------------|
 | `withA2A` | `(config: { port?: number }) => this` | Enable A2A server capability |
-| `withAgentTool` | `(name: string, agent: { name: string; description?: string }) => this` | Register a local agent as a callable tool |
+| `withAgentTool` | `(name: string, agent: { name: string; description?: string; persona?: AgentPersona; systemPrompt?: string; ... }) => this` | Register a local agent as a callable tool. Subagent personas are supported for specialized behavior |
+| `withDynamicSubAgents` | `(options?: { maxIterations?: number }) => this` | Enable `spawn-agent` tool to dynamically create subagents at runtime with optional persona parameters |
 | `withRemoteAgent` | `(name: string, remoteUrl: string) => this` | Register a remote A2A agent as a callable tool |
 
 ### MCP
@@ -176,7 +178,12 @@ const agent = await ReactiveAgents.create()
   .withName("research-assistant")
   .withProvider("anthropic")
   .withModel("claude-sonnet-4-20250514")
-  .withSystemPrompt("You are a CRISPR research specialist.")
+  .withPersona({
+    role: "CRISPR Research Specialist",
+    background: "Expert in gene editing and molecular biology",
+    instructions: "Provide detailed technical analysis with citations",
+    tone: "professional",
+  })
   .withMemory("1")
   .withReasoning({ defaultStrategy: "adaptive" })
   .withTools()              // Built-in tools (web search, file I/O, etc.)

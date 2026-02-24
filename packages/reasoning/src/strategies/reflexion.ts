@@ -25,6 +25,8 @@ interface ReflexionInput {
   readonly memoryContext: string;
   readonly availableTools: readonly string[];
   readonly config: ReasoningConfig;
+  /** Custom system prompt for steering agent behavior */
+  readonly systemPrompt?: string;
 }
 
 /**
@@ -57,11 +59,15 @@ export const executeReflexion = (
     let previousCritiques: string[] = [];
 
     // ── STEP 1: Initial generation ──
+    const genDefaultFallback = input.systemPrompt
+      ? `${input.systemPrompt}\n\nYou are a thoughtful reasoning agent. Provide clear, accurate, and complete responses.`
+      : buildSystemPrompt(input.taskDescription);
+
     const genSystemPrompt = yield* compilePromptOrFallback(
       promptServiceOpt,
       "reasoning.reflexion-generate",
       { task: input.taskDescription },
-      buildSystemPrompt(input.taskDescription),
+      genDefaultFallback,
     );
     const initialResponse = yield* llm
       .complete({
@@ -114,11 +120,15 @@ export const executeReflexion = (
       attempt++;
 
       // ── Reflect: self-critique the current response ──
+      const critiqueDefaultFallback = input.systemPrompt
+        ? `${input.systemPrompt}\n\nYou are a critical evaluator. Analyze responses for accuracy, completeness, and quality.`
+        : "You are a critical evaluator. Analyze responses for accuracy, completeness, and quality.";
+
       const critiqueSystemPrompt = yield* compilePromptOrFallback(
         promptServiceOpt,
         "reasoning.reflexion-critique",
         {},
-        "You are a critical evaluator. Analyze responses for accuracy, completeness, and quality.",
+        critiqueDefaultFallback,
       );
       const critiqueResponse = yield* llm
         .complete({
@@ -187,11 +197,15 @@ export const executeReflexion = (
       previousCritiques.push(critique);
 
       // ── Improve: generate a refined response ──
+      const improveDefaultFallback = input.systemPrompt
+        ? `${input.systemPrompt}\n\nYou are a thoughtful reasoning agent. Provide clear, accurate, and complete responses.`
+        : buildSystemPrompt(input.taskDescription);
+
       const improveSystemPrompt = yield* compilePromptOrFallback(
         promptServiceOpt,
         "reasoning.reflexion-generate",
         { task: input.taskDescription },
-        buildSystemPrompt(input.taskDescription),
+        improveDefaultFallback,
       );
       const improvedResponse = yield* llm
         .complete({

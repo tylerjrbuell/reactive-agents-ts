@@ -6,6 +6,40 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 
 ---
 
+## [0.5.2] — 2026-02-24
+
+### Added
+
+#### Agent Persona / Steering API (`@reactive-agents/runtime`, `@reactive-agents/reasoning`, `@reactive-agents/tools`)
+
+- **`AgentPersona` Interface** — Structured alternative to raw system prompts. Fields: `name?`, `role?`, `background?`, `instructions?`, `tone?` — all optional.
+- **`.withPersona(persona)` Builder Method** — Enables steerable, type-safe behavior configuration for main agents. Personas are composed into system prompt sections.
+- **Persona Composition** — When both persona and systemPrompt are set, persona comes first (`${personaPrompt}\n\n${systemPrompt}`), allowing layered behavior guidance.
+- **Subagent Personas** — Static subagents (`.withAgentTool()`) and dynamic subagents (`spawn-agent` tool) now accept persona configuration. Parent agents can dynamically generate persona parameters (`role`, `instructions`, `tone`) to steer specialized subagents at runtime.
+- **Enhanced `spawn-agent` Tool** — New tool parameters enable parent agents to specify subagent personas: `role` (e.g., "Data Analyst"), `instructions` (e.g., "Focus on accuracy"), `tone` (e.g., "professional").
+
+#### Critical Bug Fix: System Prompt Forwarding in Reasoning Path
+- **Bug**: When `enableReasoning: true`, custom systemPrompt (from `.withSystemPrompt()` or composed persona) was silently ignored by all reasoning strategies (ReAct, Plan-Execute, Tree-of-Thought, Reflexion, Adaptive).
+- **Root Cause**: ReasoningService had no mechanism to pass systemPrompt to strategies; each strategy hardcoded its own default fallback.
+- **Fix** (6 files):
+  1. Added `systemPrompt?: string` to `ReasoningService.execute()` params
+  2. Added `systemPrompt?: string` to `StrategyFn` type in strategy-registry
+  3. Updated all 5 strategy input types to include `systemPrompt?`
+  4. Updated all 5 strategies to use `input.systemPrompt` in fallback when available
+  5. Updated execution-engine to pass `config.systemPrompt` to reasoning execute
+  6. Fixed Context.GenericTag type in execution-engine to include systemPrompt
+
+### Changed
+- `@reactive-agents/runtime` 0.5.1 → 0.5.2: AgentPersona type, `.withPersona()` method, persona composition, subagent persona support
+- `@reactive-agents/reasoning` 0.5.0 → 0.5.1: ReasoningService params include systemPrompt, all strategies accept and use systemPrompt
+- `@reactive-agents/tools` 0.4.0 → 0.4.1: SubAgentConfig includes persona, spawn-agent tool has role/instructions/tone parameters
+
+### Stats
+- 812 tests across 116 files (was 804/114 in v0.5.1, +8 new tests)
+- 2 new test files: `persona.test.ts`, `subagent-persona.test.ts`
+
+---
+
 ## [0.5.1] — 2026-02-24
 
 ### Added

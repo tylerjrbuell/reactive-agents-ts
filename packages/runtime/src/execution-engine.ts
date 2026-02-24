@@ -434,6 +434,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       availableToolSchemas?: readonly { name: string; description: string; parameters: readonly { name: string; type: string; description: string; required: boolean }[] }[];
                       strategy?: string;
                       contextProfile?: Partial<ContextProfile>;
+                      systemPrompt?: string;
                     }) => Effect.Effect<{
                       output: unknown;
                       status: string;
@@ -516,6 +517,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         availableToolSchemas,
                         strategy: c.selectedStrategy ?? "reactive",
                         contextProfile: config.contextProfile,
+                        systemPrompt: config.systemPrompt,
                       });
                       return {
                         ...c,
