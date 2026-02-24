@@ -14,6 +14,16 @@ export type {
 
 export type { StrategyEffectiveness } from "./types/effectiveness.js";
 
+export type { ObservationResult } from "./types/observation.js";
+
+export {
+  ObservationCategory,
+  ResultKind,
+  ObservationResultSchema,
+  categorizeToolName,
+  deriveResultKind,
+} from "./types/observation.js";
+
 export type {
   ReasoningConfig,
   ReactiveConfig,
@@ -76,6 +86,22 @@ export { executeReflexion } from "./strategies/reflexion.js";
 export { executePlanExecute } from "./strategies/plan-execute.js";
 export { executeTreeOfThought } from "./strategies/tree-of-thought.js";
 export { executeAdaptive } from "./strategies/adaptive.js";
+
+// ─── Context Profiles & Budgets ───
+export {
+  ModelTier,
+  ContextProfileSchema,
+  CONTEXT_PROFILES,
+  mergeProfile,
+  resolveProfile,
+  ContextBudgetSchema,
+  BudgetSectionSchema,
+  allocateBudget,
+  estimateTokens,
+  wouldExceedBudget,
+  trackUsage,
+} from "./context/index.js";
+export type { ContextProfile, ContextBudget, BudgetSection } from "./context/index.js";
 
 // ─── Runtime ───
 export { createReasoningLayer } from "./runtime.js";

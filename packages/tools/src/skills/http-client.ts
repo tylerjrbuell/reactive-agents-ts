@@ -5,21 +5,32 @@ import { ToolExecutionError } from "../errors.js";
 
 export const httpGetTool: ToolDefinition = {
   name: "http-get",
-  description: "Make an HTTP GET request to a URL",
+  description:
+    "Fetch content from a specific URL via HTTP GET. " +
+    "Use when you have an exact URL to retrieve (API endpoint, direct link, raw file). " +
+    "JSON responses are automatically parsed into objects; other responses are returned as text. " +
+    "Returns { status, body } — a status of 200 means success.",
   parameters: [
     {
       name: "url",
       type: "string",
-      description: "URL to fetch",
+      description:
+        "The full URL to fetch. Must include the scheme (https:// or http://). " +
+        "Examples: 'https://api.example.com/v1/data', 'https://jsonplaceholder.typicode.com/posts/1'.",
       required: true,
     },
     {
       name: "headers",
       type: "object",
-      description: "Optional request headers",
+      description:
+        "Optional HTTP headers as a JSON object of key-value string pairs. " +
+        "Example: { \"Authorization\": \"Bearer mytoken\", \"Accept\": \"application/json\" }. " +
+        "Omit this parameter entirely if no special headers are needed.",
       required: false,
     },
   ],
+  returnType:
+    "{ status: number, statusText: string, headers: object, body: string | object }",
   category: "http",
   riskLevel: "medium",
   timeoutMs: 15_000,

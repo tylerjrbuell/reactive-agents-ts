@@ -250,8 +250,8 @@ describe("ToolService", () => {
       );
 
       const all = yield* tools.listTools();
-      // 5 built-in + 2 registered = 7
-      expect(all).toHaveLength(7);
+      // 7 built-in (5 original + scratchpad-write + scratchpad-read) + 2 registered = 9
+      expect(all).toHaveLength(9);
 
       const searchOnly = yield* tools.listTools({ category: "search" });
       // built-in web-search + tool-a
@@ -264,8 +264,9 @@ describe("ToolService", () => {
       expect(highRisk.map((t) => t.name)).toContain("tool-b");
 
       const functions = yield* tools.listTools({ source: "function" });
-      expect(functions).toHaveLength(1);
-      expect(functions[0].name).toBe("tool-b");
+      // tool-b + scratchpad-write + scratchpad-read = 3
+      expect(functions).toHaveLength(3);
+      expect(functions.map((t) => t.name)).toContain("tool-b");
     });
 
     await Effect.runPromise(program.pipe(Effect.provide(TestToolLayer)));

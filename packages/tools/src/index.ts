@@ -69,6 +69,14 @@ export {
   codeExecuteHandler,
 } from "./skills/code-execution.js";
 
+export {
+  scratchpadWriteTool,
+  scratchpadReadTool,
+  makeScratchpadStore,
+  makeScratchpadWriteHandler,
+  makeScratchpadReadHandler,
+} from "./skills/scratchpad.js";
+
 // ─── Runtime ───
 export { createToolsLayer, ToolsLayer } from "./runtime.js";
 
@@ -78,6 +86,7 @@ export {
   createRemoteAgentTool,
   executeAgentTool,
   executeRemoteAgentTool,
+  createSubAgentExecutor,
   MAX_RECURSION_DEPTH,
 } from "./adapters/agent-tool-adapter.js";
-export type { RemoteAgentClient, TaskResult } from "./adapters/agent-tool-adapter.js";
+export type { RemoteAgentClient, TaskResult, SubAgentConfig, SubAgentResult } from "./adapters/agent-tool-adapter.js";

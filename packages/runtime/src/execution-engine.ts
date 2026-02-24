@@ -12,6 +12,7 @@ import type { LifecycleHook } from "./types.js";
 // Import from other packages (type-only to avoid circular deps at runtime)
 import type { Task, TaskResult } from "@reactive-agents/core";
 import type { TaskError } from "@reactive-agents/core";
+import type { ContextProfile } from "@reactive-agents/reasoning";
 import { ToolService } from "@reactive-agents/tools";
 import { ObservabilityService } from "@reactive-agents/observability";
 import { GuardrailService } from "@reactive-agents/guardrails";
@@ -279,11 +280,11 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 if (obs && isNormal) {
                   const bootstrapMs = Date.now() - now.getTime();
                   const mc = ctx.memoryContext as any;
-                  const semanticCount = mc?.semanticResults?.length ?? 0;
-                  const episodicCount = mc?.episodicSummary?.length ?? 0;
-                  const memInfo = isVerbose
-                    ? `${semanticCount} semantic, ${episodicCount} episodic`
-                    : "memory loaded";
+                  // MemoryBootstrapResult fields: semanticContext (string) + recentEpisodes (array)
+                  const semanticLines = (mc?.semanticContext as string | undefined)
+                    ?.split("\n").filter((l: string) => l.trim()).length ?? 0;
+                  const episodicCount = (mc?.recentEpisodes as unknown[] | undefined)?.length ?? 0;
+                  const memInfo = `${semanticLines} semantic lines, ${episodicCount} episodic`;
                   yield* obs.info(`◉ [bootstrap]  ${memInfo} | ${bootstrapMs}ms`)
                     .pipe(Effect.catchAll(() => Effect.void));
                 }
@@ -430,7 +431,9 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       taskType: string;
                       memoryContext: string;
                       availableTools: readonly string[];
+                      availableToolSchemas?: readonly { name: string; description: string; parameters: readonly { name: string; type: string; description: string; required: boolean }[] }[];
                       strategy?: string;
+                      contextProfile?: Partial<ContextProfile>;
                     }) => Effect.Effect<{
                       output: unknown;
                       status: string;
@@ -452,22 +455,28 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
 
                 if (reasoningOpt._tag === "Some") {
                   // ── Full reasoning path ──
-                  const availableToolNames = yield* Effect.serviceOption(
+                  // Fetch full tool definitions for rich schema injection into prompts
+                  const availableToolDefs = yield* Effect.serviceOption(
                     ToolService,
                   ).pipe(
                     Effect.flatMap((opt) =>
                       opt._tag === "Some"
-                        ? opt.value
-                            .listTools()
-                            .pipe(
-                              Effect.map(
-                                (tools) => tools.map((t) => t.name) as string[],
-                              ),
-                            )
-                        : Effect.succeed([] as string[]),
+                        ? opt.value.listTools()
+                        : Effect.succeed([] as readonly any[]),
                     ),
-                    Effect.catchAll(() => Effect.succeed([] as string[])),
+                    Effect.catchAll(() => Effect.succeed([] as readonly any[])),
                   );
+                  const availableToolNames = availableToolDefs.map((t: any) => t.name as string);
+                  const availableToolSchemas = availableToolDefs.map((t: any) => ({
+                    name: t.name as string,
+                    description: t.description as string,
+                    parameters: (t.parameters ?? []).map((p: any) => ({
+                      name: p.name as string,
+                      type: p.type as string,
+                      description: p.description as string,
+                      required: Boolean(p.required),
+                    })),
+                  }));
 
                   // ── Subscribe to reasoning steps for live streaming ──
                   let unsubscribeReasoningSteps: (() => void) | null = null;
@@ -504,7 +513,9 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                           (c.memoryContext as any)?.semanticContext ?? "",
                         ),
                         availableTools: availableToolNames,
+                        availableToolSchemas,
                         strategy: c.selectedStrategy ?? "reactive",
+                        contextProfile: config.contextProfile,
                       });
                       return {
                         ...c,
@@ -537,6 +548,39 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     const thinkMs = thinkResult?.metadata?.duration ?? 0;
                     yield* obs.info(`◉ [think]      ${stepsCount} steps | ${tokTot.toLocaleString()} tok | ${(thinkMs / 1000).toFixed(1)}s`)
                       .pipe(Effect.catchAll(() => Effect.void));
+                  }
+
+                  // ── Bridge reasoning path → episodic memory ──
+                  // The direct-LLM path logs via logEpisode() inline, but the reasoning
+                  // path (ReasoningService.execute) handles tools internally and never
+                  // reaches those code paths. Log the task+result here so bootstrap()
+                  // can surface prior runs on the next invocation.
+                  {
+                    const thinkRes = ctx.metadata.reasoningResult as any;
+                    if (thinkRes?.output) {
+                      const memBridge = yield* Effect.serviceOption(
+                        Context.GenericTag<{
+                          logEpisode: (episode: unknown) => Effect.Effect<void>;
+                        }>("MemoryService"),
+                      ).pipe(Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })));
+                      if (memBridge._tag === "Some") {
+                        const epNow = new Date();
+                        yield* memBridge.value.logEpisode({
+                          id: crypto.randomUUID().replace(/-/g, ""),
+                          agentId: ctx.agentId,
+                          date: epNow.toISOString().slice(0, 10),
+                          content: `Task: ${String(task.input).slice(0, 200)} → ${String(thinkRes.output).slice(0, 300)}`,
+                          taskId: ctx.taskId,
+                          eventType: "task-completed",
+                          createdAt: epNow,
+                          metadata: {
+                            steps: ctx.metadata.stepsCount ?? 0,
+                            tokensUsed: ctx.tokensUsed,
+                            strategy: thinkRes.strategy ?? "unknown",
+                          },
+                        }).pipe(Effect.catchAll(() => Effect.void));
+                      }
+                    }
                   }
 
                   // ── Fire "act" + "observe" phases if reasoning used tools ──
@@ -1105,7 +1149,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     yield* Effect.serviceOption(
                       Context.GenericTag<{
                         snapshot: (s: unknown) => Effect.Effect<void>;
-                        flush?: () => Effect.Effect<void>;
+                        flush?: (agentId: string) => Effect.Effect<void>;
                       }>("MemoryService"),
                     ).pipe(
                       Effect.flatMap((opt) =>
@@ -1123,10 +1167,10 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                                 totalCost: c.cost,
                                 totalTokens: c.tokensUsed,
                               });
-                              // H5: Call flush() to generate memory.md projection
+                              // H5: flush(agentId) writes the memory.md projection to disk
                               if (opt.value.flush) {
                                 yield* opt.value
-                                  .flush()
+                                  .flush(c.agentId)
                                   .pipe(Effect.catchAll(() => Effect.void));
                               }
                             })

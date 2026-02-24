@@ -15,5 +15,6 @@ export default defineConfig({
     "@anthropic-ai/sdk",
     "openai",
     "@google/genai",
+    /^@reactive-agents\//,
   ],
 });

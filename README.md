@@ -6,7 +6,7 @@
 
 **The composable AI agent framework built on Effect-TS.**
 
-Type-safe from prompt to production. 17 packages. 13 composable layers. 5 reasoning strategies. 10-phase execution engine.
+Type-safe from prompt to production. 17 packages. 13 composable layers. 5 reasoning strategies. 10-phase execution engine. 7 built-in tools. Model-adaptive context engineering.
 
 [![CI](https://github.com/tylerjrbuell/reactive-agents-ts/actions/workflows/ci.yml/badge.svg)](https://github.com/tylerjrbuell/reactive-agents-ts/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/badge/npm-%40reactive--agents-CB3837?logo=npm)](https://www.npmjs.com/org/reactive-agents)
@@ -34,6 +34,7 @@ Most AI agent frameworks are dynamically typed, monolithic, and opaque. **Reacti
 | **Unsafe by default** | Guardrails block injection/PII/toxicity before the LLM sees input |
 | **No cost control** | Complexity router picks the cheapest capable model; budget enforcement at 4 levels |
 | **Single reasoning mode** | 5 strategies (ReAct, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive) |
+| **Context bloat in long runs** | Model-adaptive context engineering — compaction, truncation, and tier-aware prompts |
 
 ## Quick Start
 
@@ -70,6 +71,7 @@ const agent = await ReactiveAgents.create()
   .withVerification()         // Fact-check outputs
   .withCostTracking()         // Budget enforcement + model routing
   .withObservability({ verbosity: "verbose", live: true }) // Live log streaming + tracing
+  .withContextProfile({ tier: "local" }) // Adaptive context for model tier
   .withIdentity()             // RBAC + agent certificates
   .withInteraction()          // 5 autonomy modes
   .withOrchestration()        // Multi-agent workflows
@@ -78,7 +80,7 @@ const agent = await ReactiveAgents.create()
 
 ### Register Custom Tools
 
-Tools are registered at build time or via `ToolService.register()`. Built-in tools (web search, file I/O, HTTP, code execution) are available automatically when `.withTools()` is enabled.
+Tools are registered at build time or via `ToolService.register()`. Built-in tools (web search, file I/O, HTTP, code execution, scratchpad-write, scratchpad-read (persistent notes)) are available automatically when `.withTools()` is enabled.
 
 ```typescript
 import { ReactiveAgents } from "reactive-agents";
@@ -105,6 +107,26 @@ const agent = await ReactiveAgents.create()
 ```
 
 When reasoning is enabled, the agent calls tools during the Think → Act → Observe loop and uses real results to inform its reasoning.
+
+### Model-Adaptive Context
+
+Optimize prompt construction and context compaction for your model tier:
+
+```typescript
+// Optimize context for your model tier
+const agent = await ReactiveAgents.create()
+  .withProvider("ollama")
+  .withModel("qwen3:4b")
+  .withReasoning()
+  .withTools()
+  .withContextProfile({ tier: "local" })  // Lean prompts, aggressive compaction
+  .build();
+```
+
+| Tier | Models | Context Strategy |
+|------|--------|-----------------|
+| `"local"` | Ollama small models (≤14b) | Lean prompts, aggressive compaction after 6 steps, 800-char truncation |
+| `"cloud"` | Anthropic, OpenAI, Gemini | Full context, standard compaction |
 
 ## Architecture
 
@@ -237,7 +259,7 @@ const result = await agent.run("What is the capital of France?");
 
 ```bash
 bun install              # Install dependencies
-bun test                 # Run all tests (720 tests, 106 files)
+bun test                 # Run all tests (804 tests, 114 files)
 bun run build            # Build all packages (ESM + DTS)
 ```
 

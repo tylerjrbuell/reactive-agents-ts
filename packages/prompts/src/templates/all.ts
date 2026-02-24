@@ -10,6 +10,11 @@ import { factCheckTemplate } from "./verification/fact-check.js";
 // Strategy-specific system prompts
 import { reactSystemTemplate } from "./reasoning/react-system.js";
 import { reactThoughtTemplate } from "./reasoning/react-thought.js";
+// Tier-specific variants
+import { reactSystemLocalTemplate } from "./reasoning/react-system-local.js";
+import { reactSystemFrontierTemplate } from "./reasoning/react-system-frontier.js";
+import { reactThoughtLocalTemplate } from "./reasoning/react-thought-local.js";
+import { reactThoughtFrontierTemplate } from "./reasoning/react-thought-frontier.js";
 import { planExecutePlanTemplate } from "./reasoning/plan-execute-plan.js";
 import { planExecuteExecuteTemplate } from "./reasoning/plan-execute-execute.js";
 import { planExecuteReflectTemplate } from "./reasoning/plan-execute-reflect.js";
@@ -41,6 +46,11 @@ export const allBuiltinTemplates: readonly PromptTemplate[] = [
   // Strategy-specific system prompts
   reactSystemTemplate,
   reactThoughtTemplate,
+  // Tier-specific variants
+  reactSystemLocalTemplate,
+  reactSystemFrontierTemplate,
+  reactThoughtLocalTemplate,
+  reactThoughtFrontierTemplate,
   planExecutePlanTemplate,
   planExecuteExecuteTemplate,
   planExecuteReflectTemplate,

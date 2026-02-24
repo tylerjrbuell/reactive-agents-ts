@@ -78,14 +78,14 @@ describe("Built-in Tool Handlers", () => {
     }
   });
 
-  it("codeExecuteHandler returns stub response", async () => {
+  it("codeExecuteHandler executes code and returns result", async () => {
     const result = await Effect.runPromise(
-      codeExecuteHandler({ code: "console.log('hello')" }),
+      codeExecuteHandler({ code: "return 2 + 2" }),
     );
 
-    const typed = result as { code: string; executed: boolean; message: string };
-    expect(typed.code).toBe("console.log('hello')");
-    expect(typed.executed).toBe(false);
-    expect(typed.message).toContain("stub");
+    const typed = result as { executed: boolean; result: unknown; output: string };
+    expect(typed.executed).toBe(true);
+    expect(typed.result).toBe(4);
+    expect(typed.output).toBe("4");
   });
 });
