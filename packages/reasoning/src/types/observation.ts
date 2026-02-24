@@ -43,6 +43,7 @@ const TOOL_CATEGORY_MAP: Record<string, ObservationCategory> = {
   "code-execute": "code-execute",
   "scratchpad-write": "scratchpad",
   "scratchpad-read": "scratchpad",
+  "spawn-agent": "agent-delegate",
 };
 
 export const categorizeToolName = (toolName: string): ObservationCategory =>
