@@ -140,6 +140,28 @@ const coordinator = await ReactiveAgents.create()
 
 Sub-agents are depth-limited to 3 levels (`MAX_RECURSION_DEPTH`) to prevent infinite delegation.
 
+### Dynamic Sub-Agent Spawning
+
+For ad-hoc delegation where you don't know ahead of time what sub-tasks the agent will need to delegate, use `.withDynamicSubAgents()`. This registers the built-in `spawn-agent` tool, which the model can invoke freely at runtime:
+
+```typescript
+const agent = await ReactiveAgents.create()
+  .withTools()
+  .withDynamicSubAgents({ maxIterations: 5 })
+  .build();
+```
+
+The model calls `spawn-agent(task, name?, model?, maxIterations?)` whenever it decides a subtask benefits from a clean context window. Sub-agents inherit the parent's provider and model by default.
+
+**Comparison:**
+
+| Approach | When to use |
+|---|---|
+| `.withAgentTool("name", config)` | Named, purpose-built sub-agent with a specific role |
+| `.withDynamicSubAgents()` | Ad-hoc delegation at model's discretion, unknown tasks |
+
+Depth is capped at `MAX_RECURSION_DEPTH = 3`. Spawned sub-agents do not inherit the `spawn-agent` tool by default, naturally containing recursion.
+
 ## Tier-Aware Prompt Templates
 
 Prompt templates automatically select tier-specific variants when available:

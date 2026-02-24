@@ -50,6 +50,7 @@ The roadmap below is about two things: **closing the gaps** that currently block
 - ✅ Context budget system — per-section token allocation, adaptive compaction
 - ✅ Real sub-agent delegation — .withAgentTool() spawns clean-context sub-runtimes (depth limited)
 - ✅ Scratchpad built-in tool — persistent notes outside context window (7 total built-in tools)
+- ✅ Dynamic sub-agent spawning via withDynamicSubAgents() — spawn-agent built-in tool, clean context windows, MAX_RECURSION_DEPTH=3 guard (8 total built-in tools)
 - ✅ Progressive 4-level compaction — full/summary/grouped/dropped with preservation rules
 - ✅ Tier-aware prompt templates — react-system/thought variants for local and frontier models
 

@@ -6,7 +6,7 @@
 
 **The composable AI agent framework built on Effect-TS.**
 
-Type-safe from prompt to production. 17 packages. 13 composable layers. 5 reasoning strategies. 10-phase execution engine. 7 built-in tools. Model-adaptive context engineering.
+Type-safe from prompt to production. 17 packages. 13 composable layers. 5 reasoning strategies. 10-phase execution engine. 8 built-in tools. Model-adaptive context engineering.
 
 [![CI](https://github.com/tylerjrbuell/reactive-agents-ts/actions/workflows/ci.yml/badge.svg)](https://github.com/tylerjrbuell/reactive-agents-ts/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/badge/npm-%40reactive--agents-CB3837?logo=npm)](https://www.npmjs.com/org/reactive-agents)
@@ -80,7 +80,7 @@ const agent = await ReactiveAgents.create()
 
 ### Register Custom Tools
 
-Tools are registered at build time or via `ToolService.register()`. Built-in tools (web search, file I/O, HTTP, code execution, scratchpad-write, scratchpad-read (persistent notes)) are available automatically when `.withTools()` is enabled.
+Tools are registered at build time or via `ToolService.register()`. Built-in tools (web search, file I/O, HTTP, code execution, scratchpad-write, scratchpad-read (persistent notes), spawn-agent (dynamic sub-agent delegation)) are available automatically when the relevant builder methods are enabled.
 
 ```typescript
 import { ReactiveAgents } from "reactive-agents";
@@ -107,6 +107,26 @@ const agent = await ReactiveAgents.create()
 ```
 
 When reasoning is enabled, the agent calls tools during the Think → Act → Observe loop and uses real results to inform its reasoning.
+
+### Dynamic Sub-Agent Spawning
+
+Use `.withDynamicSubAgents()` to let the model spawn ad-hoc sub-agents at runtime without pre-configuring named agent tools. This registers the built-in `spawn-agent` tool, which the model can invoke freely:
+
+```typescript
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withModel("claude-sonnet-4-6")
+  .withTools()
+  .withDynamicSubAgents({ maxIterations: 5 })
+  .build();
+```
+
+Sub-agents receive a clean context window, inherit the parent's provider and model by default, and are depth-limited to `MAX_RECURSION_DEPTH = 3`.
+
+| Approach | When to use |
+|---|---|
+| `.withAgentTool("name", config)` | Named, purpose-built sub-agent with a specific role |
+| `.withDynamicSubAgents()` | Ad-hoc delegation at model's discretion, unknown tasks |
 
 ### Model-Adaptive Context
 
