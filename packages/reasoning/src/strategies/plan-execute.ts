@@ -24,6 +24,8 @@ interface PlanExecuteInput {
   readonly memoryContext: string;
   readonly availableTools: readonly string[];
   readonly config: ReasoningConfig;
+  /** Custom system prompt for steering agent behavior */
+  readonly systemPrompt?: string;
 }
 
 export const executePlanExecute = (
@@ -63,11 +65,15 @@ export const executePlanExecute = (
           ? buildPlanPrompt(input)
           : buildRefinePlanPrompt(input, steps);
 
+      const planDefaultFallback = input.systemPrompt
+        ? `${input.systemPrompt}\n\nYou are a planning agent. Break tasks into clear, sequential steps. Task: ${input.taskDescription}`
+        : `You are a planning agent. Break tasks into clear, sequential steps. Task: ${input.taskDescription}`;
+
       const planSystemPrompt = yield* compilePromptOrFallback(
         promptServiceOpt,
         "reasoning.plan-execute-plan",
         { task: input.taskDescription },
-        `You are a planning agent. Break tasks into clear, sequential steps. Task: ${input.taskDescription}`,
+        planDefaultFallback,
       );
 
       const planResponse = yield* llm
@@ -157,11 +163,15 @@ export const executePlanExecute = (
             );
         } else {
           // Execute step via LLM
+          const execDefaultFallback = input.systemPrompt
+            ? `${input.systemPrompt}\n\nYou are executing a plan for: ${input.taskDescription}`
+            : `You are executing a plan for: ${input.taskDescription}`;
+
           const execSystemPrompt = yield* compilePromptOrFallback(
             promptServiceOpt,
             "reasoning.plan-execute-execute",
             { task: input.taskDescription },
-            `You are executing a plan for: ${input.taskDescription}`,
+            execDefaultFallback,
           );
           const execResponse = yield* llm
             .complete({
@@ -214,11 +224,15 @@ export const executePlanExecute = (
       }
 
       // ── REFLECT: Evaluate execution quality ──
+      const reflectDefaultFallback = input.systemPrompt
+        ? `${input.systemPrompt}\n\nYou are evaluating plan execution. Determine if the task has been adequately addressed.`
+        : "You are evaluating plan execution. Determine if the task has been adequately addressed.";
+
       const reflectSystemPrompt = yield* compilePromptOrFallback(
         promptServiceOpt,
         "reasoning.plan-execute-reflect",
         {},
-        "You are evaluating plan execution. Determine if the task has been adequately addressed.",
+        reflectDefaultFallback,
       );
       const reflectResponse = yield* llm
         .complete({

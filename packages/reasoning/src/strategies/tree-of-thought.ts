@@ -21,6 +21,8 @@ interface TreeOfThoughtInput {
   readonly memoryContext: string;
   readonly availableTools: readonly string[];
   readonly config: ReasoningConfig;
+  /** Custom system prompt for steering agent behavior */
+  readonly systemPrompt?: string;
 }
 
 interface ThoughtNode {
@@ -99,7 +101,9 @@ export const executeTreeOfThought = (
               promptServiceOpt,
               "reasoning.tree-of-thought-expand",
               { task: input.taskDescription, breadth },
-              `You are exploring solution paths for: ${input.taskDescription}. Generate ${breadth} distinct approaches.`,
+              input.systemPrompt
+                ? `${input.systemPrompt}\n\nYou are exploring solution paths for: ${input.taskDescription}. Generate ${breadth} distinct approaches.`
+                : `You are exploring solution paths for: ${input.taskDescription}. Generate ${breadth} distinct approaches.`,
             ),
             maxTokens: 200 * breadth,
             temperature: 0.8,
@@ -139,7 +143,9 @@ export const executeTreeOfThought = (
                 promptServiceOpt,
                 "reasoning.tree-of-thought-score",
                 {},
-                "You are evaluating a reasoning path. Rate its promise on a scale of 0.0 to 1.0. Respond with ONLY a number.",
+                input.systemPrompt
+                  ? `${input.systemPrompt}\n\nYou are evaluating a reasoning path. Rate its promise on a scale of 0.0 to 1.0. Respond with ONLY a number.`
+                  : "You are evaluating a reasoning path. Rate its promise on a scale of 0.0 to 1.0. Respond with ONLY a number.",
               ),
               maxTokens: 50,
               temperature: 0.2,
@@ -252,7 +258,9 @@ export const executeTreeOfThought = (
           promptServiceOpt,
           "reasoning.tree-of-thought-synthesize",
           {},
-          "Synthesize the reasoning path into a clear, concise final answer.",
+          input.systemPrompt
+            ? `${input.systemPrompt}\n\nSynthesize the reasoning path into a clear, concise final answer.`
+            : "Synthesize the reasoning path into a clear, concise final answer.",
         ),
         maxTokens: 500,
         temperature: 0.3,

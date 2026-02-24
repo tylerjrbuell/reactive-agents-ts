@@ -17,8 +17,8 @@ const TEST_ARTIFACTS = [
   "./chain_c.txt",
   "./mem_fact.txt",
   "./no-such-file.txt", // if agent creates it
-  "./sub_agent_output.txt",      // S12: explicit sub-agent delegation
-  "./dynamic_spawn_output.txt",  // S13: dynamic sub-agent spawn
+  "./sub_agent_output.txt", // S12: explicit sub-agent delegation
+  "./dynamic_spawn_output.txt", // S13: dynamic sub-agent spawn
 ];
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -27,6 +27,15 @@ function buildAgent(name: string, maxIter = 8) {
     .withName(name)
     .withProvider(PROVIDER)
     .withModel(MODEL)
+    .withPersona({
+      name: "John Doe",
+      role: "Software Engineer",
+      background:
+        "I am a software engineer with 10 years of experience in the industry.",
+      instructions:
+        "You are a software engineer. You are tasked with writing code to solve a problem.",
+      tone: "professional",
+    })
     .withTools()
     .withMemory("1")
     .withObservability({ live: true, verbosity: "debug" })
@@ -331,9 +340,7 @@ scenarios.push(
       const ok = output.includes("105");
       return {
         passed: ok,
-        reason: ok
-          ? undefined
-          : `Expected 105, got: "${output.slice(0, 100)}"`,
+        reason: ok ? undefined : `Expected 105, got: "${output.slice(0, 100)}"`,
       };
     },
     await ReactiveAgents.create()
@@ -394,7 +401,9 @@ scenarios.push(
     "S12: Sub-agent delegation (file write)",
     "Use the 'writer' agent tool to write the text 'DELEGATED_CONTENT' to ./sub_agent_output.txt, then report whether the delegation succeeded.",
     (output) => {
-      const ok = /DELEGATED_CONTENT|delegat|succeeded|written|sub.agent/i.test(output);
+      const ok = /DELEGATED_CONTENT|delegat|succeeded|written|sub.agent/i.test(
+        output,
+      );
       return {
         passed: ok,
         reason: ok
@@ -409,7 +418,8 @@ scenarios.push(
       .withTools()
       .withAgentTool("writer", {
         name: "writer",
-        description: "A sub-agent that can write files. Provide a task describing exactly what to write and where.",
+        description:
+          "A sub-agent that can write files. Provide a task describing exactly what to write and where.",
         provider: PROVIDER,
         model: MODEL,
         maxIterations: 5,
@@ -446,7 +456,9 @@ scenarios.push(
     "S13: Dynamic sub-agent spawn (runtime delegation)",
     "You have a spawn-agent tool available. Use it to delegate this task: write the text 'DYNAMIC_SPAWN_RESULT' to ./dynamic_spawn_output.txt. Then report back whether the delegation succeeded.",
     (output) => {
-      const ok = /DYNAMIC_SPAWN_RESULT|delegat|spawn|succeeded|written/i.test(output);
+      const ok = /DYNAMIC_SPAWN_RESULT|delegat|spawn|succeeded|written/i.test(
+        output,
+      );
       return {
         passed: ok,
         reason: ok

@@ -6,7 +6,7 @@
 
 **The composable AI agent framework built on Effect-TS.**
 
-Type-safe from prompt to production. 17 packages. 13 composable layers. 5 reasoning strategies. 10-phase execution engine. 8 built-in tools. Model-adaptive context engineering.
+Type-safe from prompt to production. 17 packages. 13 composable layers. 5 reasoning strategies. 10-phase execution engine. 8 built-in tools. Model-adaptive context engineering. Structured agent steering via personas.
 
 [![CI](https://github.com/tylerjrbuell/reactive-agents-ts/actions/workflows/ci.yml/badge.svg)](https://github.com/tylerjrbuell/reactive-agents-ts/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/badge/npm-%40reactive--agents-CB3837?logo=npm)](https://www.npmjs.com/org/reactive-agents)
@@ -279,7 +279,7 @@ const result = await agent.run("What is the capital of France?");
 
 ```bash
 bun install              # Install dependencies
-bun test                 # Run all tests (804 tests, 114 files)
+bun test                 # Run all tests (812 tests, 116 files)
 bun run build            # Build all packages (ESM + DTS)
 ```
 

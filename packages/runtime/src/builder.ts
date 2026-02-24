@@ -18,6 +18,20 @@ export type ProviderName = "anthropic" | "openai" | "ollama" | "gemini" | "test"
 
 // ─── Optional Parameter Types ─────────────────────────────────────────────────
 
+/** Agent persona for steering behavior — structured alternative to raw system prompts. */
+export interface AgentPersona {
+  /** Display name of the agent (defaults to builder .withName() value) */
+  readonly name?: string;
+  /** What this agent does — injected as "Role:" section */
+  readonly role?: string;
+  /** Background context / expertise description */
+  readonly background?: string;
+  /** Explicit behavioral instructions */
+  readonly instructions?: string;
+  /** Tone/style guidance (e.g. "professional", "concise", "friendly") */
+  readonly tone?: string;
+}
+
 /** Options for `.withReasoning()` — all fields optional, merged with defaults. */
 export interface ReasoningOptions {
   /** Default strategy: "reactive" | "plan-execute-reflect" | "tree-of-thought" | "reflexion" | "adaptive" */
@@ -74,6 +88,7 @@ export interface AgentToolOptions {
     readonly tools?: readonly string[];
     readonly maxIterations?: number;
     readonly systemPrompt?: string;
+    readonly persona?: AgentPersona;
   };
   /** URL for remote A2A agent */
   readonly remoteUrl?: string;
@@ -95,6 +110,38 @@ export interface AgentResult {
   readonly taskId: string;
   readonly agentId: string;
   readonly metadata: AgentResultMetadata;
+}
+
+// ─── Persona Composition Helper ───────────────────────────────────────────────
+
+/**
+ * Compose an AgentPersona into a structured system prompt.
+ * Only includes non-empty sections.
+ */
+function composePersonaToSystemPrompt(persona: AgentPersona, agentName: string): string {
+  const sections: string[] = [];
+
+  // Role (required-ish for personas, but we'll include if set)
+  if (persona.role) {
+    sections.push(`Role: ${persona.role}`);
+  }
+
+  // Background
+  if (persona.background) {
+    sections.push(`Background: ${persona.background}`);
+  }
+
+  // Instructions
+  if (persona.instructions) {
+    sections.push(`Instructions: ${persona.instructions}`);
+  }
+
+  // Tone
+  if (persona.tone) {
+    sections.push(`Tone: ${persona.tone}`);
+  }
+
+  return sections.join("\n\n");
 }
 
 // ─── ReactiveAgents Namespace ────────────────────────────────────────────────
@@ -137,11 +184,17 @@ export class ReactiveAgentBuilder {
   private _contextProfile?: Partial<ContextProfile>;
   private _allowDynamicSubAgents: boolean = false;
   private _dynamicSubAgentOptions?: { maxIterations?: number };
+  private _persona?: AgentPersona;
 
   // ─── Identity ───
 
   withName(name: string): this {
     this._name = name;
+    return this;
+  }
+
+  withPersona(persona: AgentPersona): this {
+    this._persona = persona;
     return this;
   }
 
@@ -171,6 +224,7 @@ export class ReactiveAgentBuilder {
     tools?: readonly string[];
     maxIterations?: number;
     systemPrompt?: string;
+    persona?: AgentPersona;
   }): this {
     this._agentTools.push({ name, agent });
     return this;
@@ -344,6 +398,15 @@ export class ReactiveAgentBuilder {
 
     const agentId = `${this._name}-${Date.now()}`;
 
+    // Compose persona into system prompt if provided
+    let composedSystemPrompt = this._systemPrompt;
+    if (this._persona) {
+      const personaPrompt = composePersonaToSystemPrompt(this._persona, this._name);
+      composedSystemPrompt = composedSystemPrompt
+        ? `${personaPrompt}\n\n${composedSystemPrompt}`
+        : personaPrompt;
+    }
+
     const baseRuntime = createRuntime({
       agentId,
       provider: this._provider,
@@ -364,7 +427,7 @@ export class ReactiveAgentBuilder {
       enableOrchestration: this._enableOrchestration,
       testResponses: this._testResponses,
       extraLayers: this._extraLayers,
-      systemPrompt: this._systemPrompt,
+      systemPrompt: composedSystemPrompt,
       mcpServers: this._mcpServers.length > 0 ? this._mcpServers : undefined,
       reasoningOptions: this._reasoningOptions,
       enableA2A: !!this._a2aOptions,
@@ -534,18 +597,29 @@ export class ReactiveAgentBuilder {
                 tools: agentTool.agent!.tools,
                 maxIterations: agentTool.agent!.maxIterations,
                 systemPrompt: agentTool.agent!.systemPrompt,
+                persona: agentTool.agent!.persona,
               },
               async (opts) => {
                 const _subLabel = agentTool.agent!.name;
                 const _taskPreview = opts.task.length > 80 ? opts.task.slice(0, 80) + "…" : opts.task;
                 process.stdout.write(`\n  \x1b[36m┌─ [sub-agent: ${_subLabel}]\x1b[0m → "${_taskPreview}"\n`);
                 const _subStart = Date.now();
+
+                // Compose persona with system prompt
+                let composedSystemPrompt = opts.systemPrompt;
+                if (opts.persona) {
+                  const personaPrompt = composePersonaToSystemPrompt(opts.persona, opts.name);
+                  composedSystemPrompt = composedSystemPrompt
+                    ? `${personaPrompt}\n\n${composedSystemPrompt}`
+                    : personaPrompt;
+                }
+
                 const subRuntime = createRuntime({
                   agentId: opts.agentId,
                   provider: (opts.provider ?? "test") as ProviderName,
                   model: opts.model,
                   maxIterations: opts.maxIterations,
-                  systemPrompt: opts.systemPrompt,
+                  systemPrompt: composedSystemPrompt,
                   enableReasoning: opts.enableReasoning,
                   enableTools: opts.enableTools,
                 });
@@ -618,23 +692,41 @@ export class ReactiveAgentBuilder {
                     ? args.maxIterations
                     : defaultMaxIter;
 
+                // Extract optional persona parameters
+                const subPersona = {
+                  role: typeof args.role === "string" ? args.role : undefined,
+                  instructions: typeof args.instructions === "string" ? args.instructions : undefined,
+                  tone: typeof args.tone === "string" ? args.tone : undefined,
+                };
+
                 const executor = toolsMod.createSubAgentExecutor(
                   {
                     name: subName,
                     provider: parentProvider,
                     model: subModel ?? parentModel,
                     maxIterations: subMaxIter,
+                    persona: (subPersona.role || subPersona.instructions || subPersona.tone) ? subPersona : undefined,
                   },
                   async (opts) => {
                     const _taskPreview = opts.task.length > 80 ? opts.task.slice(0, 80) + "…" : opts.task;
                     process.stdout.write(`\n  \x1b[36m┌─ [sub-agent: ${subName}]\x1b[0m → "${_taskPreview}"\n`);
                     const _subStart = Date.now();
+
+                    // Compose persona with system prompt
+                    let composedSystemPrompt = opts.systemPrompt;
+                    if (opts.persona) {
+                      const personaPrompt = composePersonaToSystemPrompt(opts.persona as AgentPersona, opts.name);
+                      composedSystemPrompt = composedSystemPrompt
+                        ? `${personaPrompt}\n\n${composedSystemPrompt}`
+                        : personaPrompt;
+                    }
+
                     const subRuntime = createRuntime({
                       agentId: opts.agentId,
                       provider: (opts.provider ?? "test") as ProviderName,
                       model: opts.model,
                       maxIterations: opts.maxIterations,
-                      systemPrompt: opts.systemPrompt,
+                      systemPrompt: composedSystemPrompt,
                       enableReasoning: opts.enableReasoning,
                       enableTools: opts.enableTools,
                     });

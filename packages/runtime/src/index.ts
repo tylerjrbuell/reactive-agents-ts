@@ -44,4 +44,4 @@ export {
   ReactiveAgentBuilder,
   ReactiveAgent,
 } from "./builder.js";
-export type { AgentResult, AgentResultMetadata } from "./builder.js";
+export type { AgentResult, AgentResultMetadata, AgentPersona } from "./builder.js";

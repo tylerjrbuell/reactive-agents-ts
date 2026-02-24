@@ -22,6 +22,7 @@ export type StrategyFn = (input: {
   readonly memoryContext: string;
   readonly availableTools: readonly string[];
   readonly config: ReasoningConfig;
+  readonly systemPrompt?: string;
 }) => Effect.Effect<
   ReasoningResult,
   ExecutionError | IterationLimitError,
