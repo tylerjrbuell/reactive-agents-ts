@@ -151,6 +151,55 @@ const deriveInputSchemaFromCapabilities = (
   return params;
 };
 
+/**
+ * Create the `spawn-agent` tool definition used when `.withDynamicSubAgents()`
+ * is enabled on the builder. The handler is registered separately by the
+ * builder so it can capture the parent's provider/model config as a closure.
+ */
+export const createSpawnAgentTool = (): ToolDefinition => ({
+  name: "spawn-agent",
+  description:
+    "Dynamically spawn a focused sub-agent with a clean context window to handle a " +
+    "self-contained subtask. The sub-agent runs independently (no access to parent " +
+    "history) and returns a structured summary. Use this to delegate tasks that benefit " +
+    "from a fresh reasoning context or that might otherwise bloat the current window. " +
+    "IMPORTANT: use 'task' param (required), not 'input' or 'prompt'.",
+  parameters: [
+    {
+      name: "task",
+      type: "string" as const,
+      description:
+        "Complete task description for the sub-agent. Be explicit — the sub-agent " +
+        "has no knowledge of the current conversation.",
+      required: true,
+    },
+    {
+      name: "name",
+      type: "string" as const,
+      description: "Optional label for this sub-agent (appears in logs). Default: 'dynamic-agent'.",
+      required: false,
+    },
+    {
+      name: "model",
+      type: "string" as const,
+      description: "Optional model override. Inherits parent's model when omitted.",
+      required: false,
+    },
+    {
+      name: "maxIterations",
+      type: "number" as const,
+      description: "Maximum reasoning iterations (default: 5).",
+      required: false,
+    },
+  ],
+  returnType: "object" as const,
+  category: "custom" as const,
+  riskLevel: "medium" as const,
+  timeoutMs: 120_000,
+  requiresApproval: false,
+  source: "function" as const,
+});
+
 export const createAgentTool = (
   name: string,
   agent: AgentConfig,

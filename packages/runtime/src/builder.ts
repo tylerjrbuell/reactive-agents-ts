@@ -135,6 +135,8 @@ export class ReactiveAgentBuilder {
   private _a2aOptions?: A2AOptions;
   private _agentTools: AgentToolOptions[] = [];
   private _contextProfile?: Partial<ContextProfile>;
+  private _allowDynamicSubAgents: boolean = false;
+  private _dynamicSubAgentOptions?: { maxIterations?: number };
 
   // ─── Identity ───
 
@@ -171,6 +173,19 @@ export class ReactiveAgentBuilder {
     systemPrompt?: string;
   }): this {
     this._agentTools.push({ name, agent });
+    return this;
+  }
+
+  /**
+   * Allow this agent to dynamically spawn sub-agents at runtime via the
+   * built-in `spawn-agent` tool. Sub-agents run in a clean context window
+   * (no parent history) using the parent's provider and model by default.
+   * Depth is capped at MAX_RECURSION_DEPTH (3); spawned sub-agents do NOT
+   * inherit the spawn-agent tool unless explicitly given it.
+   */
+  withDynamicSubAgents(options?: { maxIterations?: number }): this {
+    this._allowDynamicSubAgents = true;
+    this._dynamicSubAgentOptions = options;
     return this;
   }
 
@@ -364,6 +379,10 @@ export class ReactiveAgentBuilder {
     const promptsOptions = this._promptsOptions;
     const a2aOptions = this._a2aOptions;
     const agentTools = this._agentTools;
+    const allowDynamicSubAgents = this._allowDynamicSubAgents;
+    const dynamicSubAgentOptions = this._dynamicSubAgentOptions;
+    const parentProvider = this._provider;
+    const parentModel = this._model;
 
     return Effect.gen(function* () {
       const engine = yield* ExecutionEngine.pipe(Effect.provide(runtime));
@@ -403,8 +422,8 @@ export class ReactiveAgentBuilder {
         }
       }
 
-      // Register agent-as-tools if configured
-      if (agentTools.length > 0) {
+      // Register agent-as-tools and/or dynamic spawn-agent tool if configured
+      if (agentTools.length > 0 || allowDynamicSubAgents) {
         const toolsMod = yield* Effect.promise(() =>
           import("@reactive-agents/tools"),
         );
@@ -558,6 +577,81 @@ export class ReactiveAgentBuilder {
               });
             yield* toolService.register(toolDef, handler);
           }
+        }
+
+        // Register the built-in spawn-agent tool when dynamic sub-agents are enabled.
+        // The handler captures parentProvider/parentModel so spawned agents inherit
+        // the parent's LLM config without any extra wiring required.
+        if (allowDynamicSubAgents) {
+          const spawnToolDef = toolsMod.createSpawnAgentTool();
+          const defaultMaxIter = dynamicSubAgentOptions?.maxIterations ?? 5;
+
+          const spawnHandler = (args: Record<string, unknown>) =>
+            Effect.tryPromise({
+              try: () => {
+                const task =
+                  typeof args.task === "string"
+                    ? args.task
+                    : JSON.stringify(args.task ?? "");
+                const subName =
+                  typeof args.name === "string" ? args.name : "dynamic-agent";
+                const subModel =
+                  typeof args.model === "string" ? args.model : undefined;
+                const subMaxIter =
+                  typeof args.maxIterations === "number"
+                    ? args.maxIterations
+                    : defaultMaxIter;
+
+                const executor = toolsMod.createSubAgentExecutor(
+                  {
+                    name: subName,
+                    provider: parentProvider,
+                    model: subModel ?? parentModel,
+                    maxIterations: subMaxIter,
+                  },
+                  async (opts) => {
+                    const subRuntime = createRuntime({
+                      agentId: opts.agentId,
+                      provider: (opts.provider ?? "test") as ProviderName,
+                      model: opts.model,
+                      maxIterations: opts.maxIterations,
+                      systemPrompt: opts.systemPrompt,
+                      enableReasoning: opts.enableReasoning,
+                      enableTools: opts.enableTools,
+                    });
+                    const subEngine = await Effect.runPromise(
+                      ExecutionEngine.pipe(Effect.provide(subRuntime)),
+                    );
+                    const taskObj: Task = {
+                      id: generateTaskId(),
+                      agentId: Schema.decodeSync(AgentId)(opts.agentId),
+                      type: "query" as const,
+                      input: { question: opts.task },
+                      priority: "medium" as const,
+                      status: "pending" as const,
+                      metadata: { tags: [] },
+                      createdAt: new Date(),
+                    };
+                    const result: TaskResult = await Effect.runPromise(
+                      subEngine.execute(taskObj).pipe(
+                        Effect.provide(subRuntime as unknown as Layer.Layer<never>),
+                      ),
+                    );
+                    return {
+                      output: String(result.output ?? ""),
+                      success: result.success,
+                      tokensUsed: result.metadata.tokensUsed,
+                    };
+                  },
+                  0,
+                );
+
+                return executor(task);
+              },
+              catch: (e) => new Error(String(e)),
+            });
+
+          yield* toolService.register(spawnToolDef, spawnHandler);
         }
       }
 

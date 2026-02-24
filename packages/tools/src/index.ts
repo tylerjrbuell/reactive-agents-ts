@@ -84,6 +84,7 @@ export { createToolsLayer, ToolsLayer } from "./runtime.js";
 export {
   createAgentTool,
   createRemoteAgentTool,
+  createSpawnAgentTool,
   executeAgentTool,
   executeRemoteAgentTool,
   createSubAgentExecutor,
