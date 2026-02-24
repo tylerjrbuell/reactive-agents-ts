@@ -344,7 +344,7 @@ export class ReactiveAgentBuilder {
 
     const agentId = `${this._name}-${Date.now()}`;
 
-    const runtime = createRuntime({
+    const baseRuntime = createRuntime({
       agentId,
       provider: this._provider,
       model: this._model,
@@ -385,7 +385,7 @@ export class ReactiveAgentBuilder {
     const parentModel = this._model;
 
     return Effect.gen(function* () {
-      const engine = yield* ExecutionEngine.pipe(Effect.provide(runtime));
+      const engine = yield* ExecutionEngine.pipe(Effect.provide(baseRuntime));
 
       for (const hook of hooks) {
         yield* engine.registerHook(hook);
@@ -396,7 +396,7 @@ export class ReactiveAgentBuilder {
         const { ToolService } = yield* Effect.promise(() =>
           import("@reactive-agents/tools"),
         );
-        const toolService = yield* (ToolService as any).pipe(Effect.provide(runtime));
+        const toolService = yield* (ToolService as any).pipe(Effect.provide(baseRuntime));
 
         // Connect MCP servers
         for (const mcp of mcpServers) {
@@ -416,34 +416,43 @@ export class ReactiveAgentBuilder {
         const { PromptService } = yield* Effect.promise(() =>
           import("@reactive-agents/prompts"),
         );
-        const promptService = yield* (PromptService as any).pipe(Effect.provide(runtime));
+        const promptService = yield* (PromptService as any).pipe(Effect.provide(baseRuntime));
         for (const template of promptsOptions.templates) {
           yield* (promptService as any).register(template);
         }
       }
 
-      // Register agent-as-tools and/or dynamic spawn-agent tool if configured
+      // ── Agent tools: bake registrations into the runtime layer ──────────────
+      //
+      // Root cause of the previous bug: tools registered via `Effect.provide(runtime)`
+      // inside buildEffect() wrote into a ToolService instance from Scope 1 (the
+      // build() call). Each run() creates Scope 2 with a fresh ToolService — so
+      // the agent tools were invisible at execution time.
+      //
+      // Fix: Pre-build all (definition, handler) pairs as plain JS closures, then
+      // compose a Layer.effectDiscard into the runtime. The effectDiscard runs the
+      // registrations during layer evaluation, INSIDE each run() scope. Because
+      // Layer.merge uses reference-identity memoization, the same ToolService
+      // instance (from baseRuntime) receives the registrations AND serves the engine.
+      let fullRuntime: Layer.Layer<any, any> = baseRuntime as Layer.Layer<any, any>;
+
       if (agentTools.length > 0 || allowDynamicSubAgents) {
         const toolsMod = yield* Effect.promise(() =>
           import("@reactive-agents/tools"),
         );
-        // Dynamic import + runtime layer provision requires type narrowing since
-        // TypeScript can't statically verify the runtime provides ToolService.
-        // We assert the specific methods used rather than using broad `any`.
-        const toolService = (yield* toolsMod.ToolService.pipe(
-          Effect.provide(runtime),
-        )) as unknown as {
-          readonly register: (
-            definition: ToolDefinition,
-            handler: (args: Record<string, unknown>) => Effect.Effect<unknown, Error>,
-          ) => Effect.Effect<void, never>;
-        };
 
         const {
           createAgentTool,
           createRemoteAgentTool,
           executeRemoteAgentTool,
         } = toolsMod;
+
+        // Collect (definition, handler) pairs — no registration yet.
+        type RegEntry = {
+          def: ToolDefinition;
+          handler: (args: Record<string, unknown>) => Effect.Effect<unknown, Error>;
+        };
+        const registrations: RegEntry[] = [];
 
         for (const agentTool of agentTools) {
           if (agentTool.remoteUrl) {
@@ -506,7 +515,7 @@ export class ReactiveAgentBuilder {
                   ),
                 catch: (e) => new Error(String(e)),
               });
-            yield* toolService.register(toolDef, handler);
+            registrations.push({ def: toolDef, handler });
           } else if (agentTool.agent) {
             // Local agent tool — real sub-agent delegation
             const agentConfig: import("@reactive-agents/core").AgentConfig = {
@@ -527,6 +536,10 @@ export class ReactiveAgentBuilder {
                 systemPrompt: agentTool.agent!.systemPrompt,
               },
               async (opts) => {
+                const _subLabel = agentTool.agent!.name;
+                const _taskPreview = opts.task.length > 80 ? opts.task.slice(0, 80) + "…" : opts.task;
+                process.stdout.write(`\n  \x1b[36m┌─ [sub-agent: ${_subLabel}]\x1b[0m → "${_taskPreview}"\n`);
+                const _subStart = Date.now();
                 const subRuntime = createRuntime({
                   agentId: opts.agentId,
                   provider: (opts.provider ?? "test") as ProviderName,
@@ -554,6 +567,9 @@ export class ReactiveAgentBuilder {
                     Effect.provide(subRuntime as unknown as Layer.Layer<never>),
                   ),
                 );
+                const _subElapsed = ((Date.now() - _subStart) / 1000).toFixed(1);
+                const _subIcon = result.success ? "\x1b[32m✓\x1b[0m" : "\x1b[31m✗\x1b[0m";
+                process.stdout.write(`  \x1b[36m└─ [sub-agent: ${_subLabel}]\x1b[0m ${_subIcon} done | ${result.metadata.tokensUsed} tok | ${_subElapsed}s\n\n`);
                 return {
                   output: String(result.output ?? ""),
                   success: result.success,
@@ -575,7 +591,7 @@ export class ReactiveAgentBuilder {
                 },
                 catch: (e) => new Error(String(e)),
               });
-            yield* toolService.register(toolDef, handler);
+            registrations.push({ def: toolDef, handler });
           }
         }
 
@@ -610,6 +626,9 @@ export class ReactiveAgentBuilder {
                     maxIterations: subMaxIter,
                   },
                   async (opts) => {
+                    const _taskPreview = opts.task.length > 80 ? opts.task.slice(0, 80) + "…" : opts.task;
+                    process.stdout.write(`\n  \x1b[36m┌─ [sub-agent: ${subName}]\x1b[0m → "${_taskPreview}"\n`);
+                    const _subStart = Date.now();
                     const subRuntime = createRuntime({
                       agentId: opts.agentId,
                       provider: (opts.provider ?? "test") as ProviderName,
@@ -637,6 +656,9 @@ export class ReactiveAgentBuilder {
                         Effect.provide(subRuntime as unknown as Layer.Layer<never>),
                       ),
                     );
+                    const _subElapsed = ((Date.now() - _subStart) / 1000).toFixed(1);
+                    const _subIcon = result.success ? "\x1b[32m✓\x1b[0m" : "\x1b[31m✗\x1b[0m";
+                    process.stdout.write(`  \x1b[36m└─ [sub-agent: ${subName}]\x1b[0m ${_subIcon} done | ${result.metadata.tokensUsed} tok | ${_subElapsed}s\n\n`);
                     return {
                       output: String(result.output ?? ""),
                       success: result.success,
@@ -651,13 +673,38 @@ export class ReactiveAgentBuilder {
               catch: (e) => new Error(String(e)),
             });
 
-          yield* toolService.register(spawnToolDef, spawnHandler);
+          registrations.push({ def: spawnToolDef, handler: spawnHandler });
         }
+
+        // Build an init effect that registers all agent tools into the ToolService
+        // found in the execution environment. No Effect.provide() here — the
+        // ToolService comes from the layer environment at evaluation time.
+        const agentToolInitEffect = Effect.gen(function* () {
+          const ts = yield* (toolsMod.ToolService as unknown as import("effect").Context.Tag<any, any>);
+          for (const { def, handler } of registrations) {
+            yield* (ts as any).register(def, handler);
+          }
+        });
+
+        // Layer.effectDiscard wraps the init as a side-effect layer (no service output).
+        // Layer.provide(baseRuntime) satisfies the ToolService requirement.
+        // Layer.merge combines baseRuntime + initLayer: Effect memoizes baseRuntime by
+        // reference so both the engine and the init effect share the same ToolService.
+        const agentToolInitLayer = Layer.effectDiscard(
+          agentToolInitEffect as Effect.Effect<unknown, never, never>,
+        ).pipe(
+          Layer.provide(baseRuntime as unknown as Layer.Layer<any>),
+        );
+
+        fullRuntime = Layer.merge(
+          baseRuntime as unknown as Layer.Layer<any>,
+          agentToolInitLayer,
+        );
       }
 
       // The runtime layer provides all required services dynamically; cast to
       // Layer<never> so the facade can provide it without leaking the union type.
-      return new ReactiveAgent(engine, agentId, runtime as unknown as Layer.Layer<never>);
+      return new ReactiveAgent(engine, agentId, fullRuntime as unknown as Layer.Layer<never>);
     }) as Effect.Effect<ReactiveAgent, Error>;
   }
 }
