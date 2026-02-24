@@ -8,6 +8,7 @@ import type { ReasoningConfig } from "../types/config.js";
 import { defaultReasoningConfig } from "../types/config.js";
 import { StrategyRegistry, type StrategyFn } from "./strategy-registry.js";
 import type { ReasoningErrors } from "../errors/errors.js";
+import type { ContextProfile } from "../context/context-profile.js";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { ToolService } from "@reactive-agents/tools";
 
@@ -26,7 +27,15 @@ export class ReasoningService extends Context.Tag("ReasoningService")<
       readonly taskType: string;
       readonly memoryContext: string;
       readonly availableTools: readonly string[];
+      /** Full tool schemas with parameter info — passed through to strategies */
+      readonly availableToolSchemas?: readonly {
+        name: string;
+        description: string;
+        parameters: readonly { name: string; type: string; description: string; required: boolean }[];
+      }[];
       readonly strategy?: ReasoningStrategy;
+      /** Context profile for model-adaptive context engineering */
+      readonly contextProfile?: Partial<ContextProfile>;
     }) => Effect.Effect<ReasoningResult, ReasoningErrors>;
 
     /** Register a custom strategy function. */

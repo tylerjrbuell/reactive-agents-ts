@@ -5,22 +5,32 @@ import { ToolExecutionError } from "../errors.js";
 
 export const webSearchTool: ToolDefinition = {
   name: "web-search",
-  description: "Search the web for information using a query string",
+  description:
+    "Search the web and return a list of relevant results. " +
+    "Use for current information, facts, prices, news, documentation, or anything requiring up-to-date knowledge. " +
+    "Returns an array of results, each with { title, url, content } fields. " +
+    "Read the 'content' field of results to extract the information you need.",
   parameters: [
     {
       name: "query",
       type: "string",
-      description: "Search query",
+      description:
+        "The search query. Be specific for better results. " +
+        "Examples: 'Bitcoin price today USD', 'TypeScript async await tutorial 2024', 'Node.js fs.readFile docs'.",
       required: true,
     },
     {
       name: "maxResults",
       type: "number",
-      description: "Max results to return",
+      description:
+        "Maximum number of results to return (1–10). Default: 5. " +
+        "Use 3 for quick single-fact lookups, 5 for general research, up to 10 for broad topics.",
       required: false,
       default: 5,
     },
   ],
+  returnType:
+    "{ query: string, results: Array<{ title: string, url: string, content: string }> }",
   category: "search",
   riskLevel: "low",
   timeoutMs: 10_000,

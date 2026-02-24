@@ -197,27 +197,27 @@ describe("webSearchHandler — error cases", () => {
 // ═══════════════════════════════════════════════════════════════════════
 
 describe("codeExecuteHandler — behavior", () => {
-  it("should return stub with explanation", async () => {
+  it("should execute code and return result", async () => {
     const result = await Effect.runPromise(
-      codeExecuteHandler({ code: "console.log('hello')" }),
+      codeExecuteHandler({ code: "return 6 * 7" }),
     );
     const typed = result as {
-      code: string;
       executed: boolean;
-      message: string;
+      result: unknown;
+      output: string;
     };
-    expect(typed.code).toBe("console.log('hello')");
-    expect(typed.executed).toBe(false);
-    expect(typed.message).toContain("stub");
+    expect(typed.executed).toBe(true);
+    expect(typed.result).toBe(42);
+    expect(typed.output).toBe("42");
   });
 
-  it("should accept language parameter", async () => {
+  it("should accept language parameter and execute", async () => {
     const result = await Effect.runPromise(
-      codeExecuteHandler({ code: "let x = 1;", language: "typescript" }),
+      codeExecuteHandler({ code: "return 1 + 1;", language: "typescript" }),
     );
-    const typed = result as { code: string; executed: boolean };
-    expect(typed.code).toBe("let x = 1;");
-    expect(typed.executed).toBe(false);
+    const typed = result as { executed: boolean; result: unknown };
+    expect(typed.executed).toBe(true);
+    expect(typed.result).toBe(2);
   });
 
   it("codeExecuteTool definition has requiresApproval: true and critical risk", async () => {

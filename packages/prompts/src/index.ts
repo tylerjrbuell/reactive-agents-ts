@@ -42,6 +42,10 @@ export { treeOfThoughtSynthesizeTemplate } from "./templates/reasoning/tree-of-t
 export { reflexionGenerateTemplate } from "./templates/reasoning/reflexion-generate.js";
 export { reflexionCritiqueTemplate } from "./templates/reasoning/reflexion-critique.js";
 export { adaptiveClassifyTemplate } from "./templates/reasoning/adaptive-classify.js";
+export { reactSystemLocalTemplate } from "./templates/reasoning/react-system-local.js";
+export { reactSystemFrontierTemplate } from "./templates/reasoning/react-system-frontier.js";
+export { reactThoughtLocalTemplate } from "./templates/reasoning/react-thought-local.js";
+export { reactThoughtFrontierTemplate } from "./templates/reasoning/react-thought-frontier.js";
 
 // Built-in templates — evaluation
 export { judgeAccuracyTemplate } from "./templates/evaluation/judge-accuracy.js";

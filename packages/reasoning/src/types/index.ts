@@ -8,6 +8,15 @@ export {
 export type { StepMetadata, ReasoningStep } from "./step.js";
 
 export {
+  ObservationCategory,
+  ResultKind,
+  ObservationResultSchema,
+  categorizeToolName,
+  deriveResultKind,
+} from "./observation.js";
+export type { ObservationResult } from "./observation.js";
+
+export {
   ReasoningStrategy,
   ReasoningStatus,
   ReasoningMetadataSchema,

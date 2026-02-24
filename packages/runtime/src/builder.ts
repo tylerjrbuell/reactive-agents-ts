@@ -1,11 +1,20 @@
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Schema } from "effect";
 import { createRuntime } from "./runtime.js";
 import type { MCPServerConfig } from "./runtime.js";
 import { ExecutionEngine } from "./execution-engine.js";
-import type { LifecycleHook } from "./types.js";
-import type { ReasoningConfig } from "@reactive-agents/reasoning";
+import type { LifecycleHook, ExecutionContext } from "./types.js";
+import type { RuntimeErrors } from "./errors.js";
+import type { ReasoningConfig, ContextProfile } from "@reactive-agents/reasoning";
 import type { ToolDefinition } from "@reactive-agents/tools";
+import type { RemoteAgentClient } from "@reactive-agents/tools";
 import type { PromptTemplate } from "@reactive-agents/prompts";
+import type { Task, TaskResult } from "@reactive-agents/core";
+import type { TaskError } from "@reactive-agents/core";
+import { generateTaskId, AgentId } from "@reactive-agents/core";
+
+// ─── Provider Types ──────────────────────────────────────────────────────────
+
+export type ProviderName = "anthropic" | "openai" | "ollama" | "gemini" | "test";
 
 // ─── Optional Parameter Types ─────────────────────────────────────────────────
 
@@ -60,6 +69,11 @@ export interface AgentToolOptions {
   readonly agent?: {
     readonly name: string;
     readonly description?: string;
+    readonly provider?: string;
+    readonly model?: string;
+    readonly tools?: readonly string[];
+    readonly maxIterations?: number;
+    readonly systemPrompt?: string;
   };
   /** URL for remote A2A agent */
   readonly remoteUrl?: string;
@@ -94,7 +108,7 @@ export const ReactiveAgents = {
 
 export class ReactiveAgentBuilder {
   private _name: string = "agent";
-  private _provider: "anthropic" | "openai" | "ollama" | "gemini" | "test" = "test";
+  private _provider: ProviderName = "test";
   private _model?: string;
   private _memoryTier: "1" | "2" = "1";
   private _hooks: LifecycleHook[] = [];
@@ -120,6 +134,7 @@ export class ReactiveAgentBuilder {
   private _systemPrompt?: string;
   private _a2aOptions?: A2AOptions;
   private _agentTools: AgentToolOptions[] = [];
+  private _contextProfile?: Partial<ContextProfile>;
 
   // ─── Identity ───
 
@@ -145,8 +160,16 @@ export class ReactiveAgentBuilder {
 
   // ─── Agent Tools ─────────────────────────────────────────────────────────────
 
-  /** Register a local agent as a callable tool */
-  withAgentTool(name: string, agent: { name: string; description?: string }): this {
+  /** Register a local agent as a callable tool with real sub-agent delegation */
+  withAgentTool(name: string, agent: {
+    name: string;
+    description?: string;
+    provider?: string;
+    model?: string;
+    tools?: readonly string[];
+    maxIterations?: number;
+    systemPrompt?: string;
+  }): this {
     this._agentTools.push({ name, agent });
     return this;
   }
@@ -165,7 +188,7 @@ export class ReactiveAgentBuilder {
   }
 
   withProvider(
-    provider: "anthropic" | "openai" | "ollama" | "gemini" | "test",
+    provider: ProviderName,
   ): this {
     this._provider = provider;
     return this;
@@ -253,6 +276,12 @@ export class ReactiveAgentBuilder {
     return this;
   }
 
+  /** Set model context profile overrides — controls compaction thresholds, verbosity, tool result sizes. */
+  withContextProfile(profile: Partial<ContextProfile>): this {
+    this._contextProfile = profile;
+    return this;
+  }
+
   // ─── MCP Servers ───
 
   withMCP(config: MCPServerConfig | MCPServerConfig[]): this {
@@ -326,6 +355,7 @@ export class ReactiveAgentBuilder {
       enableA2A: !!this._a2aOptions,
       a2aPort: this._a2aOptions?.port,
       a2aBasePath: this._a2aOptions?.basePath,
+      contextProfile: this._contextProfile,
     });
 
     const hooks = [...this._hooks];
@@ -375,19 +405,26 @@ export class ReactiveAgentBuilder {
 
       // Register agent-as-tools if configured
       if (agentTools.length > 0) {
-        const { ToolService } = yield* Effect.promise(() =>
+        const toolsMod = yield* Effect.promise(() =>
           import("@reactive-agents/tools"),
         );
-        const toolService = yield* (ToolService as any).pipe(Effect.provide(runtime));
+        // Dynamic import + runtime layer provision requires type narrowing since
+        // TypeScript can't statically verify the runtime provides ToolService.
+        // We assert the specific methods used rather than using broad `any`.
+        const toolService = (yield* toolsMod.ToolService.pipe(
+          Effect.provide(runtime),
+        )) as unknown as {
+          readonly register: (
+            definition: ToolDefinition,
+            handler: (args: Record<string, unknown>) => Effect.Effect<unknown, Error>,
+          ) => Effect.Effect<void, never>;
+        };
 
         const {
           createAgentTool,
           createRemoteAgentTool,
-          executeAgentTool,
           executeRemoteAgentTool,
-        } = yield* Effect.promise(() =>
-          import("@reactive-agents/tools"),
-        );
+        } = toolsMod;
 
         for (const agentTool of agentTools) {
           if (agentTool.remoteUrl) {
@@ -397,93 +434,155 @@ export class ReactiveAgentBuilder {
               `${agentTool.remoteUrl}/.well-known/agent.json`,
               agentTool.remoteUrl,
             );
+            const remoteUrl = agentTool.remoteUrl;
+            const remoteClient: RemoteAgentClient = {
+              sendMessage: (params: { message: { role: string; content: string }; agentCardUrl: string }) =>
+                Effect.tryPromise({
+                  try: () =>
+                    fetch(remoteUrl, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        jsonrpc: "2.0",
+                        method: "message/send",
+                        params: {
+                          message: {
+                            role: params.message.role,
+                            parts: [{ kind: "text", text: params.message.content }],
+                          },
+                        },
+                        id: crypto.randomUUID(),
+                      }),
+                    }).then((r) => r.json()).then((d: Record<string, unknown>) =>
+                      d.result as { taskId: string },
+                    ),
+                  catch: (e) => new Error(String(e)),
+                }),
+              getTask: (params: { id: string }) =>
+                Effect.tryPromise({
+                  try: () =>
+                    fetch(remoteUrl, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        jsonrpc: "2.0",
+                        method: "tasks/get",
+                        params: { id: params.id },
+                        id: crypto.randomUUID(),
+                      }),
+                    }).then((r) => r.json()).then((d: Record<string, unknown>) =>
+                      d.result as { status: string; result: unknown },
+                    ),
+                  catch: (e) => new Error(String(e)),
+                }),
+            };
             const handler = (args: Record<string, unknown>) =>
               Effect.tryPromise({
                 try: () =>
                   executeRemoteAgentTool(
                     toolDef,
                     args,
-                    {
-                      sendMessage: (params: any) =>
-                        Effect.tryPromise({
-                          try: () =>
-                            fetch(agentTool.remoteUrl!, {
-                              method: "POST",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({
-                                jsonrpc: "2.0",
-                                method: "message/send",
-                                params: {
-                                  message: {
-                                    role: params.message.role,
-                                    parts: [{ kind: "text", text: params.message.content }],
-                                  },
-                                },
-                                id: crypto.randomUUID(),
-                              }),
-                            }).then((r) => r.json()).then((d: any) => d.result),
-                          catch: (e) => new Error(String(e)),
-                        }),
-                      getTask: (params: any) =>
-                        Effect.tryPromise({
-                          try: () =>
-                            fetch(agentTool.remoteUrl!, {
-                              method: "POST",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({
-                                jsonrpc: "2.0",
-                                method: "tasks/get",
-                                params: { id: params.id },
-                                id: crypto.randomUUID(),
-                              }),
-                            }).then((r) => r.json()).then((d: any) => d.result),
-                          catch: (e) => new Error(String(e)),
-                        }),
-                    },
-                    `${agentTool.remoteUrl}/.well-known/agent.json`,
+                    remoteClient,
+                    `${remoteUrl}/.well-known/agent.json`,
                   ),
-                catch: (e) => e,
+                catch: (e) => new Error(String(e)),
               });
-            yield* (toolService as any).register(toolDef, handler);
+            yield* toolService.register(toolDef, handler);
           } else if (agentTool.agent) {
-            // Local agent tool
-            const agentConfig = {
+            // Local agent tool — real sub-agent delegation
+            const agentConfig: import("@reactive-agents/core").AgentConfig = {
               name: agentTool.agent.name,
               description: agentTool.agent.description ?? `Agent: ${agentTool.agent.name}`,
               capabilities: [],
             };
-            const toolDef = createAgentTool(agentTool.name, agentConfig as any);
+            const toolDef = createAgentTool(agentTool.name, agentConfig);
+
+            const subAgentExec = toolsMod.createSubAgentExecutor(
+              {
+                name: agentTool.agent!.name,
+                description: agentTool.agent!.description,
+                provider: agentTool.agent!.provider,
+                model: agentTool.agent!.model,
+                tools: agentTool.agent!.tools,
+                maxIterations: agentTool.agent!.maxIterations,
+                systemPrompt: agentTool.agent!.systemPrompt,
+              },
+              async (opts) => {
+                const subRuntime = createRuntime({
+                  agentId: opts.agentId,
+                  provider: (opts.provider ?? "test") as ProviderName,
+                  model: opts.model,
+                  maxIterations: opts.maxIterations,
+                  systemPrompt: opts.systemPrompt,
+                  enableReasoning: opts.enableReasoning,
+                  enableTools: opts.enableTools,
+                });
+                const subEngine = await Effect.runPromise(
+                  ExecutionEngine.pipe(Effect.provide(subRuntime)),
+                );
+                const taskObj: Task = {
+                  id: generateTaskId(),
+                  agentId: Schema.decodeSync(AgentId)(opts.agentId),
+                  type: "query" as const,
+                  input: { question: opts.task },
+                  priority: "medium" as const,
+                  status: "pending" as const,
+                  metadata: { tags: [] },
+                  createdAt: new Date(),
+                };
+                const result: TaskResult = await Effect.runPromise(
+                  subEngine.execute(taskObj).pipe(
+                    Effect.provide(subRuntime as unknown as Layer.Layer<never>),
+                  ),
+                );
+                return {
+                  output: String(result.output ?? ""),
+                  success: result.success,
+                  tokensUsed: result.metadata.tokensUsed,
+                };
+              },
+              0,
+            );
+
             const handler = (args: Record<string, unknown>) =>
               Effect.tryPromise({
-                try: () =>
-                  executeAgentTool(toolDef, args, async (input) => {
-                    // Delegate to a sub-agent execution — returns the input as-is for now
-                    // Full delegation requires building a sub-agent at runtime
-                    return { agentName: agentTool.agent!.name, input, status: "delegated" };
-                  }),
-                catch: (e) => e,
+                try: () => {
+                  const task = typeof args.input === "string"
+                    ? args.input
+                    : typeof args.message === "string"
+                      ? args.message
+                      : JSON.stringify(args);
+                  return subAgentExec(task);
+                },
+                catch: (e) => new Error(String(e)),
               });
-            yield* (toolService as any).register(toolDef, handler);
+            yield* toolService.register(toolDef, handler);
           }
         }
       }
 
-      return new ReactiveAgent(engine, agentId, runtime);
+      // The runtime layer provides all required services dynamically; cast to
+      // Layer<never> so the facade can provide it without leaking the union type.
+      return new ReactiveAgent(engine, agentId, runtime as unknown as Layer.Layer<never>);
     }) as Effect.Effect<ReactiveAgent, Error>;
   }
 }
 
 // ─── ReactiveAgent Facade ────────────────────────────────────────────────────
 
+// NOTE: The engine/runtime use broad types because the runtime Layer is dynamically
+// composed from optional features (reasoning, tools, guardrails, etc.), making
+// precise typing impractical without phantom types. The public API (run/cancel/getContext)
+// returns properly typed results via explicit type annotations.
 export class ReactiveAgent {
   constructor(
     private readonly engine: {
-      execute: (task: any) => Effect.Effect<any, any>;
-      cancel: (taskId: string) => Effect.Effect<void, any>;
-      getContext: (taskId: string) => Effect.Effect<any, never>;
+      execute: (task: Task) => Effect.Effect<TaskResult, RuntimeErrors | TaskError>;
+      cancel: (taskId: string) => Effect.Effect<void, RuntimeErrors>;
+      getContext: (taskId: string) => Effect.Effect<ExecutionContext | null, never>;
     },
     readonly agentId: string,
-    private readonly runtime: Layer.Layer<any, any>,
+    private readonly runtime: Layer.Layer<never>,
   ) {}
 
   /**
@@ -497,14 +596,12 @@ export class ReactiveAgent {
    * Run a task and return the result (Advanced API — Effect).
    */
   runEffect(input: string): Effect.Effect<AgentResult, Error> {
-    const taskId = `task-${Date.now()}`;
-    const agentId = this.agentId;
     const engine = this.engine;
     const runtime = this.runtime;
 
-    const task = {
-      id: taskId,
-      agentId,
+    const task: Task = {
+      id: generateTaskId(),
+      agentId: Schema.decodeSync(AgentId)(this.agentId),
       type: "query" as const,
       input: { question: input },
       priority: "medium" as const,
@@ -514,21 +611,20 @@ export class ReactiveAgent {
     };
 
     return engine.execute(task).pipe(
-      Effect.map((result: any) => ({
+      Effect.map((result: TaskResult) => ({
         output: String(result.output ?? ""),
-        success: Boolean(result.success),
+        success: result.success,
         taskId: String(result.taskId),
         agentId: String(result.agentId),
         metadata: result.metadata as AgentResultMetadata,
       })),
       Effect.mapError(
-        (e: any) => {
-          const err = new Error(e.message ?? String(e));
-          if (e.cause) err.cause = e.cause;
+        (e: RuntimeErrors | TaskError) => {
+          const err = new Error("message" in e ? e.message : String(e));
           return err;
         },
       ),
-      Effect.provide(runtime as unknown as Layer.Layer<never>),
+      Effect.provide(runtime),
     ) as Effect.Effect<AgentResult, Error>;
   }
 
@@ -536,18 +632,18 @@ export class ReactiveAgent {
   async cancel(taskId: string): Promise<void> {
     return Effect.runPromise(
       this.engine.cancel(taskId).pipe(
-        Effect.mapError((e: any) => new Error(e.message ?? String(e))),
-        Effect.provide(this.runtime as unknown as Layer.Layer<never>),
+        Effect.mapError((e: RuntimeErrors) => new Error("message" in e ? e.message : String(e))),
+        Effect.provide(this.runtime),
       ) as Effect.Effect<void>,
     );
   }
 
   /** Inspect context of a running task (null if not running). */
-  async getContext(taskId: string): Promise<unknown> {
+  async getContext(taskId: string): Promise<ExecutionContext | null> {
     return Effect.runPromise(
       this.engine.getContext(taskId).pipe(
-        Effect.provide(this.runtime as unknown as Layer.Layer<never>),
-      ) as Effect.Effect<unknown>,
+        Effect.provide(this.runtime),
+      ) as Effect.Effect<ExecutionContext | null>,
     );
   }
 }

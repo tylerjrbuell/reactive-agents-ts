@@ -11,7 +11,7 @@ export class PromptService extends Context.Tag("PromptService")<
     readonly compile: (
       templateId: string,
       variables: Record<string, unknown>,
-      options?: { maxTokens?: number },
+      options?: { maxTokens?: number; tier?: string },
     ) => Effect.Effect<CompiledPrompt, TemplateNotFoundError | VariableError>;
 
     readonly compose: (
@@ -56,19 +56,30 @@ export const PromptServiceLive = Layer.effect(
       compile: (templateId, variables, options) =>
         Effect.gen(function* () {
           const latest = yield* Ref.get(latestRef);
-          const version = latest.get(templateId);
+
+          // Try tier-specific variant first: "${templateId}:${tier}"
+          let resolvedId = templateId;
+          if (options?.tier) {
+            const tieredId = `${templateId}:${options.tier}`;
+            const tieredVersion = latest.get(tieredId);
+            if (tieredVersion != null) {
+              resolvedId = tieredId;
+            }
+          }
+
+          const version = latest.get(resolvedId);
           if (version == null) {
-            return yield* Effect.fail(new TemplateNotFoundError({ templateId }));
+            return yield* Effect.fail(new TemplateNotFoundError({ templateId: resolvedId }));
           }
 
           const templates = yield* Ref.get(templatesRef);
-          const template = templates.get(`${templateId}:${version}`)!;
+          const template = templates.get(`${resolvedId}:${version}`)!;
 
           const content = yield* interpolate(template, variables);
           const tokenEst = estimateTokens(content);
 
           return {
-            templateId,
+            templateId: resolvedId,
             version,
             content:
               options?.maxTokens && tokenEst > options.maxTokens

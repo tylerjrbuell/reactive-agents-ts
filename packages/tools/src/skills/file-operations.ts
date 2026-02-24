@@ -7,22 +7,31 @@ import { ToolExecutionError } from "../errors.js";
 
 export const fileReadTool: ToolDefinition = {
   name: "file-read",
-  description: "Read the contents of a file",
+  description:
+    "Read a file and return its full text content as a string. " +
+    "Use this to read existing files or to verify what was written. " +
+    "Returns the raw text content on success. " +
+    "Fails with an error if the file does not exist.",
   parameters: [
     {
       name: "path",
       type: "string",
-      description: "File path to read",
+      description:
+        "Relative or absolute path to the file to read. " +
+        "Examples: './output.txt', './data/report.md', './results/data.json'. " +
+        "Must be within the current working directory.",
       required: true,
     },
     {
       name: "encoding",
       type: "string",
-      description: "File encoding",
+      description:
+        "Text encoding of the file. Default: 'utf-8'. Only change this for non-UTF-8 files.",
       required: false,
       default: "utf-8",
     },
   ],
+  returnType: "string — the complete text content of the file",
   category: "file",
   riskLevel: "medium",
   timeoutMs: 5_000,
@@ -57,28 +66,40 @@ export const fileReadHandler = (
 
 export const fileWriteTool: ToolDefinition = {
   name: "file-write",
-  description: "Write contents to a file",
+  description:
+    "Write text to a file, creating it if it does not exist (overwrites any existing content). " +
+    "Returns { written: true, path: '...' } on success — once you see this, the file is saved. " +
+    "IMPORTANT: the required parameters are 'path' and 'content' — do NOT use 'file', 'filename', or 'filepath'.",
   parameters: [
     {
       name: "path",
       type: "string",
-      description: "File path to write",
+      description:
+        "REQUIRED. Relative or absolute path where the file will be written. " +
+        "Use 'path', NOT 'file' or 'filename'. " +
+        "Examples: './output.txt', './results/report.md', './data.json'. " +
+        "If no path is specified in the task, use a sensible default like './output.txt'. " +
+        "Must be within the current working directory.",
       required: true,
     },
     {
       name: "content",
       type: "string",
-      description: "Content to write",
+      description:
+        "REQUIRED. The complete text to write to the file. This OVERWRITES any existing content — there is no append mode. " +
+        "Use newlines (\\n) for multi-line content.",
       required: true,
     },
     {
       name: "encoding",
       type: "string",
-      description: "File encoding",
+      description:
+        "Text encoding. Default: 'utf-8'. Only change for non-UTF-8 content.",
       required: false,
       default: "utf-8",
     },
   ],
+  returnType: "{ written: true, path: string } — confirms the file was saved successfully",
   category: "file",
   riskLevel: "high",
   timeoutMs: 5_000,

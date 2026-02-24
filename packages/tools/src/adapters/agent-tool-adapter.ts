@@ -5,6 +5,97 @@ import { ToolExecutionError } from "../errors.js";
 
 export const MAX_RECURSION_DEPTH = 3;
 
+// ─── Sub-Agent Configuration ───
+
+export interface SubAgentConfig {
+  /** Display name for the sub-agent */
+  readonly name: string;
+  /** Description of what this sub-agent does */
+  readonly description?: string;
+  /** LLM provider override */
+  readonly provider?: string;
+  /** Model override */
+  readonly model?: string;
+  /** Subset of parent's tools this sub-agent can access */
+  readonly tools?: readonly string[];
+  /** Max reasoning iterations (default: 5, lower than parent) */
+  readonly maxIterations?: number;
+  /** Focused system prompt for this sub-agent */
+  readonly systemPrompt?: string;
+}
+
+export interface SubAgentResult {
+  readonly subAgentName: string;
+  readonly success: boolean;
+  readonly summary: string;
+  readonly tokensUsed: number;
+}
+
+/**
+ * Create a sub-agent executor that delegates tasks to a sub-agent.
+ * Returns a structured summary instead of raw output.
+ *
+ * The `executeFn` is provided by the caller (builder.ts) to avoid circular
+ * imports between tools and runtime packages. It creates the runtime and
+ * runs the task against it.
+ */
+export const createSubAgentExecutor = (
+  config: SubAgentConfig,
+  executeFn: (opts: {
+    agentId: string;
+    provider?: string;
+    model?: string;
+    maxIterations?: number;
+    systemPrompt?: string;
+    enableReasoning: boolean;
+    enableTools: boolean;
+    task: string;
+  }) => Promise<{ output: string; success: boolean; tokensUsed: number }>,
+  depth: number = 0,
+): ((task: string) => Promise<SubAgentResult>) => {
+  return async (task: string): Promise<SubAgentResult> => {
+    if (depth >= MAX_RECURSION_DEPTH) {
+      return {
+        subAgentName: config.name,
+        success: false,
+        summary: `Maximum agent recursion depth (${MAX_RECURSION_DEPTH}) exceeded`,
+        tokensUsed: 0,
+      };
+    }
+
+    try {
+      const result = await executeFn({
+        agentId: `sub-${config.name}-${Date.now()}`,
+        provider: config.provider,
+        model: config.model,
+        maxIterations: config.maxIterations ?? 5,
+        systemPrompt: config.systemPrompt,
+        enableReasoning: true,
+        enableTools: true,
+        task,
+      });
+
+      const summary = result.output.length > 1500
+        ? result.output.slice(0, 1500) + "..."
+        : result.output;
+
+      return {
+        subAgentName: config.name,
+        success: result.success,
+        summary,
+        tokensUsed: result.tokensUsed,
+      };
+    } catch (error) {
+      return {
+        subAgentName: config.name,
+        success: false,
+        summary: error instanceof Error ? error.message : String(error),
+        tokensUsed: 0,
+      };
+    }
+  };
+};
+
 const deriveInputSchemaFromCapabilities = (
   capabilities: readonly Capability[]
 ): ToolParameter[] => {

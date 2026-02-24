@@ -1,4 +1,4 @@
-import { Layer } from "effect";
+import { Layer, Effect } from "effect";
 import { LifecycleHookRegistryLive } from "./hooks.js";
 import { ExecutionEngineLive } from "./execution-engine.js";
 import type { ReactiveAgentsConfig } from "./types.js";
@@ -15,6 +15,7 @@ import { createReasoningLayer, defaultReasoningConfig } from "@reactive-agents/r
 import type { ReasoningConfig } from "@reactive-agents/reasoning";
 import { createToolsLayer } from "@reactive-agents/tools";
 import type { ReasoningOptions, ObservabilityOptions } from "./builder.js";
+import type { ContextProfile } from "@reactive-agents/reasoning";
 import { createIdentityLayer } from "@reactive-agents/identity";
 import { createObservabilityLayer } from "@reactive-agents/observability";
 import { createInteractionLayer } from "@reactive-agents/interaction";
@@ -69,6 +70,9 @@ export interface RuntimeOptions {
   enableA2A?: boolean;
   a2aPort?: number;
   a2aBasePath?: string;
+
+  // Context profile overrides for model-adaptive context engineering
+  contextProfile?: Partial<ContextProfile>;
 }
 
 /**
@@ -97,6 +101,7 @@ export const createRuntime = (options: RuntimeOptions) => {
     enableAudit: options.enableAudit ?? false,
     systemPrompt: options.systemPrompt,
     observabilityVerbosity: options.observabilityOptions?.verbosity,
+    contextProfile: options.contextProfile,
   };
 
   // ── Required layers ──
@@ -180,10 +185,13 @@ export const createRuntime = (options: RuntimeOptions) => {
         }
       : defaultReasoningConfig;
 
-    // ReasoningService requires LLMService, optionally ToolService
+    // ReasoningService requires LLMService, optionally ToolService + PromptService
     let reasoningDeps = llmLayer;
     if (toolsLayer) {
       reasoningDeps = Layer.merge(llmLayer, toolsLayer) as any;
+    }
+    if (options.enablePrompts) {
+      reasoningDeps = Layer.merge(reasoningDeps, createPromptLayer()) as any;
     }
     const reasoningLayer = createReasoningLayer(reasoningConfig).pipe(
       Layer.provide(reasoningDeps),
@@ -237,27 +245,30 @@ export const createRuntime = (options: RuntimeOptions) => {
 // ─── A2A Extra Layer (optional) ─────────────────────────────────────────────
 
 const A2aExtraLayer = (agentId: string, port: number): Layer.Layer<any, any> => {
-  try {
-    // Dynamic import - will fail gracefully if A2A package not installed
-    const a2a = require("@reactive-agents/a2a");
-    const { createA2AServerLayer } = a2a;
-    
-    const agentCard = {
-      id: agentId,
-      name: agentId,
-      version: "0.5.0",
-      url: `http://localhost:${port}`,
-      provider: { organization: "Reactive Agents" },
-      capabilities: {
-        streaming: true,
-        pushNotifications: false,
-        stateTransitionHistory: false,
-      },
-    };
-    
-    return createA2AServerLayer(agentCard, port);
-  } catch (e) {
-    // Return empty layer if A2A not available
-    return Layer.succeed(null as any, {}) as unknown as Layer.Layer<any, any>;
-  }
+  // Use dynamic import() so Bun's mock.module() can intercept it in tests.
+  // Layer.unwrapEffect lets us return a Layer from inside an async Effect.
+  return Layer.unwrapEffect(
+    Effect.promise(async () => {
+      try {
+        const mod = await import("@reactive-agents/a2a") as any;
+        const { createA2AServerLayer } = mod;
+        const agentCard = {
+          id: agentId,
+          name: agentId,
+          version: "0.5.0",
+          url: `http://localhost:${port}`,
+          provider: { organization: "Reactive Agents" },
+          capabilities: {
+            streaming: true,
+            pushNotifications: false,
+            stateTransitionHistory: false,
+          },
+        };
+        return createA2AServerLayer(agentCard, port) as Layer.Layer<any, any>;
+      } catch {
+        // A2A package not installed — return empty layer
+        return Layer.empty as unknown as Layer.Layer<any, any>;
+      }
+    }),
+  );
 };

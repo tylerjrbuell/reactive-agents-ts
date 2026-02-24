@@ -1,4 +1,5 @@
 import { Schema } from "effect";
+import { ContextProfileSchema } from "@reactive-agents/reasoning";
 
 // ─── Lifecycle Phase ───
 
@@ -104,6 +105,7 @@ export const ReactiveAgentsConfigSchema = Schema.Struct({
   observabilityVerbosity: Schema.optional(
     Schema.Literal("minimal", "normal", "verbose", "debug"),
   ),
+  contextProfile: Schema.optional(Schema.partial(ContextProfileSchema)),
 });
 export type ReactiveAgentsConfig = typeof ReactiveAgentsConfigSchema.Type;
 

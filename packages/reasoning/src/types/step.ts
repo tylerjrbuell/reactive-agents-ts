@@ -1,5 +1,6 @@
 // File: src/types/step.ts
 import { Schema } from "effect";
+import { ObservationResultSchema } from "./observation.js";
 
 // ─── Step ID (branded string) ───
 
@@ -25,6 +26,7 @@ export const StepMetadataSchema = Schema.Struct({
   toolUsed: Schema.optional(Schema.String),
   cost: Schema.optional(Schema.Number),
   duration: Schema.optional(Schema.Number),
+  observationResult: Schema.optional(ObservationResultSchema),
 });
 export type StepMetadata = typeof StepMetadataSchema.Type;
 
