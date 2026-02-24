@@ -905,6 +905,32 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                                         }
                                       })()
                                     : (rawArgs as Record<string, unknown>);
+                                // Log tool invocation before execution (direct-LLM path)
+                                if (obs && isNormal) {
+                                  const isAgentDelegateTool =
+                                    toolName === "spawn-agent" ||
+                                    toolName.startsWith("agent-");
+                                  if (isAgentDelegateTool) {
+                                    const taskArg = typeof args.task === "string"
+                                      ? args.task.slice(0, 80)
+                                      : typeof args.input === "string"
+                                        ? args.input.slice(0, 80)
+                                        : "";
+                                    const nameSuffix = typeof args.name === "string" ? ` [${args.name}]` : "";
+                                    yield* obs.info(
+                                      `  ◉ [act]        ↓ ${toolName}${nameSuffix}: "${taskArg}"`,
+                                    ).pipe(Effect.catchAll(() => Effect.void));
+                                  } else {
+                                    const argPreview = Object.entries(args)
+                                      .slice(0, 2)
+                                      .map(([k, v]) => `${k}: ${String(typeof v === "string" ? v : JSON.stringify(v)).slice(0, 40)}`)
+                                      .join(", ");
+                                    yield* obs.info(
+                                      `  ◉ [act]        → ${toolName}(${argPreview})`,
+                                    ).pipe(Effect.catchAll(() => Effect.void));
+                                  }
+                                }
+
                                 const startMs = Date.now();
 
                                 // Phase 0.2: Publish ToolCallStarted
@@ -1030,14 +1056,30 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                           // Verbose: log tool results
                           if (obs && isVerbose) {
                             for (const r of recentResults) {
-                              const resultStr = typeof (r as any).result === "string"
-                                ? (r as any).result as string
-                                : JSON.stringify((r as any).result);
-                              const preview = resultStr.length > 120 ? resultStr.slice(0, 120) + "..." : resultStr;
-                              const charCount = resultStr.length;
-                              yield* obs.debug(
-                                `  ┄ [obs]    ${(r as any).toolName}: ${preview} [${charCount} chars]`,
-                              ).pipe(Effect.catchAll(() => Effect.void));
+                              const rToolName = (r as any).toolName as string;
+                              const rResult = (r as any).result;
+                              const isAgentDelegate =
+                                rToolName === "spawn-agent" ||
+                                rToolName.startsWith("agent-");
+                              if (isAgentDelegate && typeof rResult === "object" && rResult !== null) {
+                                const sub = rResult as { subAgentName?: string; success?: boolean; summary?: string; tokensUsed?: number };
+                                const subIcon = sub.success ? "✓" : "✗";
+                                const subName = sub.subAgentName ?? rToolName;
+                                const subSummary = String(sub.summary ?? "").slice(0, 150);
+                                const subTok = sub.tokensUsed ?? 0;
+                                yield* obs.info(
+                                  `  ◉ [sub-agent: ${subName}] ${subIcon} ${subTok} tok | "${subSummary}"`,
+                                ).pipe(Effect.catchAll(() => Effect.void));
+                              } else {
+                                const resultStr = typeof rResult === "string"
+                                  ? rResult
+                                  : JSON.stringify(rResult);
+                                const preview = resultStr.length > 120 ? resultStr.slice(0, 120) + "..." : resultStr;
+                                const charCount = resultStr.length;
+                                yield* obs.debug(
+                                  `  ┄ [obs]    ${rToolName}: ${preview} [${charCount} chars]`,
+                                ).pipe(Effect.catchAll(() => Effect.void));
+                              }
                             }
                           }
 

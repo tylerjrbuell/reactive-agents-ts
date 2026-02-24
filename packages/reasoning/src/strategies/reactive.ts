@@ -737,7 +737,10 @@ function normalizeObservation(toolName: string, result: string): string {
     // agent-delegate: structured sub-agent summary
     if (typeof parsed.subAgentName === "string" && typeof parsed.summary === "string") {
       const prefix = parsed.success ? "✓" : "✗";
-      return `${prefix} [Sub-agent "${parsed.subAgentName}"]: ${String(parsed.summary).slice(0, 500)}`;
+      const tokStr = typeof parsed.tokensUsed === "number" && parsed.tokensUsed > 0
+        ? ` | ${parsed.tokensUsed} tok`
+        : "";
+      return `${prefix} [Sub-agent "${parsed.subAgentName}"${tokStr}]: ${String(parsed.summary).slice(0, 500)}`;
     }
   } catch {
     // Not JSON — return as-is
