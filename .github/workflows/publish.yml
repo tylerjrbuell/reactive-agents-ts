@@ -50,6 +50,7 @@ jobs:
             "packages/interaction"
             "packages/orchestration"
             "packages/prompts"
+            "packages/a2a"
             "packages/runtime"
             "packages/reactive-agents"
             "apps/cli"
