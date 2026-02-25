@@ -5,9 +5,8 @@ import type { AgentCard } from "./types.js";
 import type { ClientConfig } from "./client/a2a-client.js";
 
 export const createA2AServerLayer = (agentCard: AgentCard, port?: number) =>
-  Layer.mergeAll(
-    createA2AServer(agentCard),
-    createA2AHttpServer(port ?? 3000),
+  createA2AHttpServer(port ?? 3000).pipe(
+    Layer.provide(createA2AServer(agentCard)),
   );
 
 export const createA2AClientLayer = (config: ClientConfig) => createA2AClient(config);
