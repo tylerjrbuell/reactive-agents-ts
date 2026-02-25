@@ -12,17 +12,17 @@
     },
     "apps/cli": {
       "name": "@reactive-agents/cli",
-      "version": "0.4.0",
+      "version": "0.5.2",
       "bin": {
         "rax": "dist/index.js",
         "reactive-agents": "dist/index.js",
       },
       "dependencies": {
-        "@reactive-agents/a2a": "workspace:^",
-        "@reactive-agents/core": "workspace:^",
-        "@reactive-agents/eval": "workspace:^",
-        "@reactive-agents/llm-provider": "workspace:^",
-        "@reactive-agents/runtime": "workspace:^",
+        "@reactive-agents/a2a": "^0.5.2",
+        "@reactive-agents/core": "^0.1.0",
+        "@reactive-agents/eval": "^0.2.0",
+        "@reactive-agents/llm-provider": "^0.4.0",
+        "@reactive-agents/runtime": "^0.5.3",
         "effect": "^3.10.0",
       },
       "devDependencies": {
@@ -56,7 +56,7 @@
     },
     "packages/a2a": {
       "name": "@reactive-agents/a2a",
-      "version": "0.1.0",
+      "version": "0.5.2",
       "dependencies": {
         "@reactive-agents/core": "workspace:^",
         "@reactive-agents/tools": "workspace:^",
@@ -76,7 +76,7 @@
     },
     "packages/core": {
       "name": "@reactive-agents/core",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "dependencies": {
         "effect": "^3.10.0",
         "ulid": "^2.3.0",
@@ -88,7 +88,7 @@
     },
     "packages/cost": {
       "name": "@reactive-agents/cost",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "dependencies": {
         "@reactive-agents/core": "workspace:*",
         "@reactive-agents/llm-provider": "workspace:*",
@@ -141,7 +141,7 @@
     },
     "packages/interaction": {
       "name": "@reactive-agents/interaction",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "dependencies": {
         "@reactive-agents/core": "workspace:*",
         "@reactive-agents/observability": "workspace:*",
@@ -156,7 +156,7 @@
     },
     "packages/llm-provider": {
       "name": "@reactive-agents/llm-provider",
-      "version": "0.4.0",
+      "version": "0.5.0",
       "dependencies": {
         "@reactive-agents/core": "workspace:*",
         "effect": "^3.10.0",
@@ -188,7 +188,7 @@
     },
     "packages/observability": {
       "name": "@reactive-agents/observability",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "dependencies": {
         "@reactive-agents/core": "workspace:*",
         "effect": "^3.10.0",
@@ -200,7 +200,7 @@
     },
     "packages/orchestration": {
       "name": "@reactive-agents/orchestration",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "dependencies": {
         "@reactive-agents/core": "workspace:*",
         "@reactive-agents/cost": "workspace:*",
@@ -228,7 +228,7 @@
     },
     "packages/reactive-agents": {
       "name": "reactive-agents",
-      "version": "0.4.0",
+      "version": "0.5.2",
       "dependencies": {
         "@reactive-agents/core": "workspace:*",
         "@reactive-agents/cost": "workspace:*",
@@ -254,7 +254,7 @@
     },
     "packages/reasoning": {
       "name": "@reactive-agents/reasoning",
-      "version": "0.3.0",
+      "version": "0.5.1",
       "dependencies": {
         "@reactive-agents/core": "workspace:*",
         "@reactive-agents/llm-provider": "workspace:*",
@@ -270,7 +270,7 @@
     },
     "packages/runtime": {
       "name": "@reactive-agents/runtime",
-      "version": "0.4.0",
+      "version": "0.5.3",
       "dependencies": {
         "@reactive-agents/core": "workspace:^",
         "@reactive-agents/cost": "workspace:^",
@@ -294,7 +294,7 @@
     },
     "packages/tools": {
       "name": "@reactive-agents/tools",
-      "version": "0.3.0",
+      "version": "0.4.1",
       "dependencies": {
         "@reactive-agents/a2a": "workspace:*",
         "@reactive-agents/core": "workspace:*",
@@ -307,7 +307,7 @@
     },
     "packages/verification": {
       "name": "@reactive-agents/verification",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "dependencies": {
         "@reactive-agents/core": "workspace:*",
         "@reactive-agents/llm-provider": "workspace:*",
@@ -1506,6 +1506,10 @@
     "@isaacs/cliui/string-width": ["string-width@5.1.2", "", { "dependencies": { "eastasianwidth": "^0.2.0", "emoji-regex": "^9.2.2", "strip-ansi": "^7.0.1" } }, "sha512-HnLOCR3vjcY8beoNLtcjZ5/nxn2afmME6lhrDrebokqMap+XbeW8n9TXpPDOqdGK5qcI3oT0GKTW6wC7EMiVqA=="],
 
     "@isaacs/cliui/wrap-ansi": ["wrap-ansi@8.1.0", "", { "dependencies": { "ansi-styles": "^6.1.0", "string-width": "^5.0.1", "strip-ansi": "^7.0.1" } }, "sha512-si7QWI6zUMq56bESFvagtmzMdGOtoxfR+Sez11Mobfc7tm+VkUckk9bW2UeffTGVUbOksxmSw0AA2gs8g71NCQ=="],
+
+    "@reactive-agents/cli/@reactive-agents/core": ["@reactive-agents/core@0.1.0", "", { "dependencies": { "effect": "^3.10.0", "ulid": "^2.3.0" } }, "sha512-SSY/pwKUWrZ357aInOZ0y0fD64uqUXgyxqplrtjOj5aAmTDQHDV7bru2z7SVj2TEqkMtaUP44aCaQHTK7dyOkw=="],
+
+    "@reactive-agents/cli/@reactive-agents/llm-provider": ["@reactive-agents/llm-provider@0.4.0", "", { "dependencies": { "@reactive-agents/core": "0.1.0", "effect": "^3.10.0" }, "optionalDependencies": { "@anthropic-ai/sdk": "^0.30.0", "@google/genai": "^1.0.0", "ollama": "^0.6.3", "openai": "^4.70.0" } }, "sha512-USunDSIbEAltrp/22z2Phug/LibHsW5FS1jMLcoJ0g4yA2ruJhlq4YlnA3T1ps5q34tr+1FBD/iWLumrThEETQ=="],
 
     "@rollup/pluginutils/estree-walker": ["estree-walker@2.0.2", "", {}, "sha512-Rfkk/Mp/DL7JVje3u18FxFujQlTNR2q6QfMSMB7AvCBx91NGj/ba3kCfza0f6dVDbw7YlRf/nDrn7pQrCCyQ/w=="],
 
