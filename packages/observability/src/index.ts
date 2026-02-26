@@ -32,7 +32,7 @@ export { makeStructuredLogger } from "./logging/structured-logger.js";
 export type { StructuredLogger, LiveLogWriter } from "./logging/structured-logger.js";
 
 // ─── Metrics ───
-export { makeMetricsCollector } from "./metrics/metrics-collector.js";
+export { makeMetricsCollector, MetricsCollectorTag, MetricsCollectorLive } from "./metrics/metrics-collector.js";
 export type { MetricsCollector, ToolSummary } from "./metrics/metrics-collector.js";
 
 // ─── Debugging ───
