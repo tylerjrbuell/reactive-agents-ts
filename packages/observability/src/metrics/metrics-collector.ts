@@ -1,4 +1,4 @@
-import { Effect, Ref } from "effect";
+import { Effect, Ref, Context, Layer } from "effect";
 import type { Metric, ToolMetric, ToolMetricStatus } from "../types.js";
 
 export interface ToolSummary {
@@ -18,6 +18,10 @@ export interface MetricsCollector {
   readonly getToolMetrics: () => Effect.Effect<readonly ToolMetric[], never>;
   readonly getToolSummary: () => Effect.Effect<Map<string, ToolSummary>, never>;
 }
+
+// ─── Context Tag and Layer ───
+
+export class MetricsCollectorTag extends Context.Tag("MetricsCollector")<MetricsCollectorTag, MetricsCollector>() {}
 
 export const makeMetricsCollector = Effect.gen(function* () {
   const metricsRef = yield* Ref.make<Metric[]>([]);
@@ -107,3 +111,8 @@ export const makeMetricsCollector = Effect.gen(function* () {
 
   return { incrementCounter, recordHistogram, setGauge, getMetrics, recordToolExecution, getToolMetrics, getToolSummary } satisfies MetricsCollector;
 });
+
+export const MetricsCollectorLive: Layer.Layer<MetricsCollectorTag, never> = Layer.effect(
+  MetricsCollectorTag,
+  makeMetricsCollector,
+);

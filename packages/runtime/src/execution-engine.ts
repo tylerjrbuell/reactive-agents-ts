@@ -3,6 +3,8 @@ import type { ExecutionContext, ReactiveAgentsConfig } from "./types.js";
 import {
   ExecutionError,
   GuardrailViolationError,
+  KillSwitchTriggeredError,
+  BehavioralContractViolationError,
   MaxIterationsError,
   type RuntimeErrors,
 } from "./errors.js";
@@ -14,8 +16,8 @@ import type { Task, TaskResult } from "@reactive-agents/core";
 import type { TaskError } from "@reactive-agents/core";
 import type { ContextProfile } from "@reactive-agents/reasoning";
 import { ToolService } from "@reactive-agents/tools";
-import { ObservabilityService } from "@reactive-agents/observability";
-import { GuardrailService } from "@reactive-agents/guardrails";
+import { ObservabilityService, MetricsCollectorTag } from "@reactive-agents/observability";
+import { GuardrailService, KillSwitchService, BehavioralContractService } from "@reactive-agents/guardrails";
 import { VerificationService } from "@reactive-agents/verification";
 import { CostService } from "@reactive-agents/cost";
 import { EventBus } from "@reactive-agents/core";
@@ -38,7 +40,10 @@ type ObsLike = {
 
 type EbLike = {
   publish: (event: AgentEvent) => Effect.Effect<void, never>;
-  on: (tag: AgentEvent["_tag"], handler: (event: AgentEvent) => Effect.Effect<void, never>) => Effect.Effect<() => void, never>;
+  on: <T extends AgentEvent["_tag"]>(
+    tag: T,
+    handler: (event: Extract<AgentEvent, { _tag: T }>) => Effect.Effect<void, never>,
+  ) => Effect.Effect<() => void, never>;
 };
 
 // ─── Service Tag ───
@@ -84,6 +89,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
         ctx: ExecutionContext,
         phase: ExecutionContext["phase"],
         body: (ctx: ExecutionContext) => Effect.Effect<ExecutionContext, E>,
+        eb?: EbLike | null,
       ): Effect.Effect<ExecutionContext, E | RuntimeErrors> =>
         Effect.gen(function* () {
           const ctxBefore = { ...ctx, phase };
@@ -93,9 +99,18 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
             .run(phase, "before", ctxBefore)
             .pipe(Effect.catchAll(() => Effect.succeed(ctxBefore)));
 
+          if (eb) {
+            yield* eb.publish({ _tag: "ExecutionHookFired", taskId: ctx.taskId, phase: String(phase), timing: "before" })
+              .pipe(Effect.catchAll(() => Effect.void));
+          }
+
           // Check cancellation
           const cancelled = yield* Ref.get(cancelledTasks);
           if (cancelled.has(ctx.taskId)) {
+            if (eb) {
+              yield* eb.publish({ _tag: "ExecutionCancelled", taskId: ctx.taskId })
+                .pipe(Effect.catchAll(() => Effect.void));
+            }
             return yield* Effect.fail(
               new ExecutionError({
                 message: `Task ${ctx.taskId} was cancelled`,
@@ -122,6 +137,11 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
             .run(phase, "after", ctxAfterBody)
             .pipe(Effect.catchAll(() => Effect.succeed(ctxAfterBody)));
 
+          if (eb) {
+            yield* eb.publish({ _tag: "ExecutionHookFired", taskId: ctx.taskId, phase: String(phase), timing: "after" })
+              .pipe(Effect.catchAll(() => Effect.void));
+          }
+
           return ctxFinal;
         });
 
@@ -144,7 +164,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
               .pipe(Effect.catchAll(() => Effect.void))
           : Effect.void;
 
-        const phaseEffect = runPhase(ctx, phase, body).pipe(
+        const phaseEffect = runPhase(ctx, phase, body, eb).pipe(
           // After phase completes: emit metrics + phase completed event
           Effect.tap((result) => {
             const durationMs = performance.now() - startMs;
@@ -194,6 +214,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
         (
           Effect.gen(function* () {
             const now = new Date();
+            const executionStartMs = Date.now();
             const sessionId = `session-${Date.now()}`;
 
             // ── H1: Acquire ObservabilityService optionally ──
@@ -215,6 +236,14 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
               Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
             );
             const eb: EbLike | null = ebOpt._tag === "Some" ? ebOpt.value : null;
+
+            // ── Acquire KillSwitchService optionally ──
+            const ksOpt = config.enableKillSwitch
+              ? yield* Effect.serviceOption(KillSwitchService).pipe(
+                  Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
+                )
+              : { _tag: "None" as const };
+            const ks = ksOpt._tag === "Some" ? ksOpt.value : null;
 
             // Wrap entire execution in root observability span
             const executeCore = (): Effect.Effect<TaskResult, RuntimeErrors, any> =>
@@ -243,6 +272,44 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   new Map(m).set(task.id, ctx),
                 );
 
+                // ── Lifecycle guard helper ──
+                const checkLifecycle = (taskId: string): Effect.Effect<void, RuntimeErrors> =>
+                  Effect.gen(function* () {
+                    if (!ks) return;
+                    const status = yield* ks.waitIfPaused(config.agentId, taskId)
+                      .pipe(Effect.catchAll(() => Effect.succeed("ok" as const)));
+                    if (status === "stopping") {
+                      if (eb) yield* eb.publish({ _tag: "AgentStopping", agentId: config.agentId,
+                        taskId, reason: "stop() requested" }).pipe(Effect.catchAll(() => Effect.void));
+                      if (eb) yield* eb.publish({ _tag: "AgentStopped", agentId: config.agentId,
+                        taskId, reason: "stop() requested" }).pipe(Effect.catchAll(() => Effect.void));
+                      return yield* Effect.fail(new KillSwitchTriggeredError({
+                        message: `Agent ${config.agentId} stopping gracefully`,
+                        taskId, agentId: config.agentId, reason: "stop() requested",
+                      }));
+                    }
+                    const ksStatus = (yield* ks.isTriggered(config.agentId)
+                      .pipe(Effect.catchAll(() => Effect.succeed({ triggered: false })))) as { triggered: boolean; reason?: string };
+                    if (ksStatus.triggered) {
+                      if (eb) yield* eb.publish({ _tag: "AgentTerminated", agentId: config.agentId,
+                        taskId, reason: ksStatus.reason ?? "terminated" }).pipe(Effect.catchAll(() => Effect.void));
+                      return yield* Effect.fail(new KillSwitchTriggeredError({
+                        message: `Kill switch triggered for agent ${config.agentId}: ${ksStatus.reason ?? "no reason"}`,
+                        taskId, agentId: config.agentId, reason: ksStatus.reason ?? "no reason",
+                      }));
+                    }
+                  });
+
+                // ── Guarded phase wrapper: lifecycle check before every phase ──
+                const guardedPhase = <E>(
+                  gCtx: ExecutionContext,
+                  phase: ExecutionContext["phase"],
+                  body: (ctx: ExecutionContext) => Effect.Effect<ExecutionContext, E>,
+                ): Effect.Effect<ExecutionContext, E | RuntimeErrors> =>
+                  checkLifecycle(gCtx.taskId).pipe(
+                    Effect.zipRight(runObservablePhase(obs, eb, gCtx, phase, body)),
+                  );
+
                 if (obs) {
                   yield* obs.info("Execution started", {
                     taskId: task.id,
@@ -250,8 +317,19 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   }).pipe(Effect.catchAll(() => Effect.void));
                 }
 
+                if (eb) {
+                  yield* eb.publish({
+                    _tag: "AgentStarted",
+                    taskId: ctx.taskId,
+                    agentId: config.agentId,
+                    provider: String((config as any).provider ?? "unknown"),
+                    model: String((config as any).selectedModel?.model ?? (config as any).model ?? "unknown"),
+                    timestamp: executionStartMs,
+                  }).pipe(Effect.catchAll(() => Effect.void));
+                }
+
                 // ── Phase 1: BOOTSTRAP ──
-                ctx = yield* runObservablePhase(obs, eb, ctx, "bootstrap", (c) =>
+                ctx = yield* guardedPhase(ctx, "bootstrap", (c) =>
                   Effect.gen(function* () {
                     const memoryContext = yield* Effect.serviceOption(
                       Context.GenericTag<{
@@ -291,7 +369,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
 
                 // ── Phase 2: GUARDRAIL (optional) ── H2
                 if (config.enableGuardrails) {
-                  ctx = yield* runObservablePhase(obs, eb, ctx, "guardrail", (c) =>
+                  ctx = yield* guardedPhase(ctx, "guardrail", (c) =>
                     Effect.gen(function* () {
                       const guardrailOpt = yield* Effect.serviceOption(
                         GuardrailService,
@@ -323,6 +401,15 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                           const violationSummary = result.violations
                             .map((v: any) => `${v.type}: ${v.message}`)
                             .join("; ");
+                          if (eb) {
+                            yield* eb.publish({
+                              _tag: "GuardrailViolationDetected",
+                              taskId: c.taskId,
+                              violations: result.violations.map((v: any) => `${v.type}: ${v.message}`),
+                              score: result.score,
+                              blocked: true,
+                            }).pipe(Effect.catchAll(() => Effect.void));
+                          }
                           return yield* Effect.fail(
                             new GuardrailViolationError({
                               message: `Input guardrail check failed: ${violationSummary}`,
@@ -345,7 +432,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
 
                 // ── Phase 3: COST_ROUTE (optional) ── H2
                 if (config.enableCostTracking) {
-                  ctx = yield* runObservablePhase(obs, eb, ctx, "cost-route", (c) =>
+                  ctx = yield* guardedPhase(ctx, "cost-route", (c) =>
                     Effect.gen(function* () {
                       const costOpt = yield* Effect.serviceOption(CostService).pipe(
                         Effect.catchAll(() =>
@@ -378,7 +465,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 }
 
                 // ── Phase 4: STRATEGY_SELECT ──
-                ctx = yield* runObservablePhase(obs, eb, ctx, "strategy-select", (c) =>
+                ctx = yield* guardedPhase(ctx, "strategy-select", (c) =>
                   Effect.gen(function* () {
                     const selectorOpt = yield* Effect.serviceOption(
                       Context.GenericTag<{
@@ -435,6 +522,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       strategy?: string;
                       contextProfile?: Partial<ContextProfile>;
                       systemPrompt?: string;
+                      taskId?: string;
                     }) => Effect.Effect<{
                       output: unknown;
                       status: string;
@@ -487,13 +575,12 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     unsubscribeReasoningSteps = yield* eb.on(
                       "ReasoningStepCompleted",
                       (event) => {
-                        const e = event as Extract<AgentEvent, { _tag: "ReasoningStepCompleted" }>;
-                        const prefix = e.thought
+                        const prefix = event.thought
                           ? "┄ [thought]"
-                          : e.action
+                          : event.action
                             ? "┄ [action] "
                             : "┄ [obs]    ";
-                        const rawContent = e.thought ?? e.action ?? e.observation ?? "";
+                        const rawContent = event.thought ?? event.action ?? event.observation ?? "";
                         const content =
                           capturedIsDebug || rawContent.length <= 180
                             ? rawContent
@@ -505,7 +592,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     );
                   }
 
-                  ctx = yield* runObservablePhase(obs, eb, ctx, "think", (c) =>
+                  ctx = yield* guardedPhase(ctx, "think", (c) =>
                     Effect.gen(function* () {
                       const result = yield* reasoningOpt.value.execute({
                         taskDescription: JSON.stringify(task.input),
@@ -518,6 +605,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         strategy: c.selectedStrategy ?? "reactive",
                         contextProfile: config.contextProfile,
                         systemPrompt: config.systemPrompt,
+                        taskId: c.taskId,
                       });
                       return {
                         ...c,
@@ -567,18 +655,29 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       ).pipe(Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })));
                       if (memBridge._tag === "Some") {
                         const epNow = new Date();
+                        const durationMs = Date.now() - ctx.startedAt.getTime();
+                        const success = thinkRes.status === "completed";
+                        const strategyUsed = thinkRes.strategy ?? ctx.selectedStrategy ?? "unknown";
+
                         yield* memBridge.value.logEpisode({
                           id: crypto.randomUUID().replace(/-/g, ""),
                           agentId: ctx.agentId,
                           date: epNow.toISOString().slice(0, 10),
                           content: `Task: ${String(task.input).slice(0, 200)} → ${String(thinkRes.output).slice(0, 300)}`,
                           taskId: ctx.taskId,
-                          eventType: "task-completed",
+                          eventType: config.enableSelfImprovement ? "strategy-outcome" : "task-completed",
                           createdAt: epNow,
                           metadata: {
                             steps: ctx.metadata.stepsCount ?? 0,
                             tokensUsed: ctx.tokensUsed,
-                            strategy: thinkRes.strategy ?? "unknown",
+                            strategy: strategyUsed,
+                            success,
+                            durationMs,
+                            ...(config.enableSelfImprovement ? {
+                              selfImprovement: true,
+                              taskDescription: String(task.input).slice(0, 500),
+                              taskType: task.type,
+                            } : {}),
                           },
                         }).pipe(Effect.catchAll(() => Effect.void));
                       }
@@ -615,10 +714,10 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
 
                     ctx = { ...ctx, toolResults: syntheticToolResults };
 
-                    ctx = yield* runObservablePhase(obs, eb, ctx, "act", (c) =>
+                    ctx = yield* guardedPhase(ctx, "act", (c) =>
                       Effect.succeed(c),
                     );
-                    ctx = yield* runObservablePhase(obs, eb, ctx, "observe", (c) =>
+                    ctx = yield* guardedPhase(ctx, "observe", (c) =>
                       Effect.succeed(c),
                     );
                   }
@@ -684,6 +783,22 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   let isComplete = false;
 
                   while (!isComplete && ctx.iteration <= ctx.maxIterations) {
+                    // ── Behavioral contract: check iteration limit ──
+                    if (config.enableBehavioralContracts) {
+                      const bcOpt = yield* Effect.serviceOption(BehavioralContractService)
+                        .pipe(Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })));
+                      if (bcOpt._tag === "Some") {
+                        const violation = yield* bcOpt.value.checkIteration(ctx.iteration)
+                          .pipe(Effect.catchAll(() => Effect.succeed(null)));
+                        if (violation?.severity === "block") {
+                          return yield* Effect.fail(new BehavioralContractViolationError({
+                            message: violation.message, taskId: ctx.taskId,
+                            rule: violation.rule, violation: violation.message,
+                          }));
+                        }
+                      }
+                    }
+
                     // Phase 0.2: Publish loop iteration event
                     if (eb) {
                       yield* eb.publish({
@@ -699,9 +814,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     }
 
                     // 5a. THINK
-                    ctx = yield* runObservablePhase(
-                      obs,
-                      eb,
+                    ctx = yield* guardedPhase(
                       ctx,
                       "think",
                       (c) =>
@@ -767,6 +880,18 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                             ...(llmTools ? { tools: llmTools } : {}),
                           };
 
+                          const reqId = `req-${Date.now()}`;
+                          if (eb) {
+                            yield* eb.publish({
+                              _tag: "LLMRequestStarted",
+                              taskId: c.taskId,
+                              requestId: reqId,
+                              model: String((c.selectedModel as any)?.model ?? c.selectedModel ?? "unknown"),
+                              provider: String((c.selectedModel as any)?.provider ?? "unknown"),
+                              contextSize: messagesToSend.length,
+                            }).pipe(Effect.catchAll(() => Effect.void));
+                          }
+
                           const llmCallStart = performance.now();
                           const response = yield* llm.complete(llmRequest);
                           const llmDurationMs = performance.now() - llmCallStart;
@@ -776,7 +901,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                             yield* eb.publish({
                               _tag: "LLMRequestCompleted",
                               taskId: c.taskId,
-                              requestId: `req-${Date.now()}`,
+                              requestId: reqId,
                               model: String((c.selectedModel as any)?.model ?? c.selectedModel ?? "unknown"),
                               provider: String((c.selectedModel as any)?.provider ?? "unknown"),
                               durationMs: llmDurationMs,
@@ -881,7 +1006,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     const pendingCalls =
                       (ctx.metadata.pendingToolCalls as unknown[]) ?? [];
                     if (pendingCalls.length > 0) {
-                      ctx = yield* runObservablePhase(obs, eb, ctx, "act", (c) =>
+                      ctx = yield* guardedPhase(ctx, "act", (c) =>
                         Effect.gen(function* () {
                           const toolServiceOpt =
                             yield* Effect.serviceOption(ToolService);
@@ -892,6 +1017,23 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                                 const callId = call.id ?? "unknown";
                                 const toolName =
                                   call.name ?? call.function?.name ?? "unknown";
+
+                                // ── Behavioral contract: check tool call ──
+                                if (config.enableBehavioralContracts) {
+                                  const bcOpt = yield* Effect.serviceOption(BehavioralContractService)
+                                    .pipe(Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })));
+                                  if (bcOpt._tag === "Some") {
+                                    const violation = yield* bcOpt.value
+                                      .checkToolCall(toolName, c.toolResults.length)
+                                      .pipe(Effect.catchAll(() => Effect.succeed(null)));
+                                    if (violation?.severity === "block") {
+                                      return yield* Effect.fail(new BehavioralContractViolationError({
+                                        message: violation.message, taskId: c.taskId,
+                                        rule: violation.rule, violation: violation.message,
+                                      }));
+                                    }
+                                  }
+                                }
                                 const rawArgs =
                                   call.input ??
                                   call.arguments ??
@@ -957,6 +1099,13 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                                       success: false,
                                     }).pipe(Effect.catchAll(() => Effect.void));
                                   }
+                                  // Record tool execution in metrics
+                                  const metricsOpt = yield* Effect.serviceOption(MetricsCollectorTag);
+                                  if (metricsOpt._tag === "Some") {
+                                    yield* metricsOpt.value
+                                      .recordToolExecution(toolName, durationMs, "error")
+                                      .pipe(Effect.catchAll(() => Effect.void));
+                                  }
                                   return {
                                     toolCallId: callId,
                                     toolName,
@@ -1003,6 +1152,15 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                                   }).pipe(Effect.catchAll(() => Effect.void));
                                 }
 
+                                // Record tool execution in metrics
+                                const metricsOpt = yield* Effect.serviceOption(MetricsCollectorTag);
+                                if (metricsOpt._tag === "Some") {
+                                  const status = toolResult.success ? "success" : "error";
+                                  yield* metricsOpt.value
+                                    .recordToolExecution(toolName, toolResult.durationMs, status)
+                                    .pipe(Effect.catchAll(() => Effect.void));
+                                }
+
                                 return toolResult;
                               }),
                             ),
@@ -1017,7 +1175,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       );
 
                       // 5c. OBSERVE — H5: also log episodic memories
-                      ctx = yield* runObservablePhase(obs, eb, ctx, "observe", (c) =>
+                      ctx = yield* guardedPhase(ctx, "observe", (c) =>
                         Effect.gen(function* () {
                           const recentResults = c.toolResults.slice(
                             -pendingCalls.length,
@@ -1140,7 +1298,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
 
                 // ── Phase 6: VERIFY (optional) ── H2
                 if (config.enableVerification) {
-                  ctx = yield* runObservablePhase(obs, eb, ctx, "verify", (c) =>
+                  ctx = yield* guardedPhase(ctx, "verify", (c) =>
                     Effect.gen(function* () {
                       const verifyOpt = yield* Effect.serviceOption(
                         VerificationService,
@@ -1188,7 +1346,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 }
 
                 // ── Phase 7: MEMORY_FLUSH ── H5
-                ctx = yield* runObservablePhase(obs, eb, ctx, "memory-flush", (c) =>
+                ctx = yield* guardedPhase(ctx, "memory-flush", (c) =>
                   Effect.gen(function* () {
                     yield* Effect.serviceOption(
                       Context.GenericTag<{
@@ -1229,7 +1387,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
 
                 // ── Phase 8: COST_TRACK (optional) ── H2
                 if (config.enableCostTracking) {
-                  ctx = yield* runObservablePhase(obs, eb, ctx, "cost-track", (c) =>
+                  ctx = yield* guardedPhase(ctx, "cost-track", (c) =>
                     Effect.gen(function* () {
                       const costOpt = yield* Effect.serviceOption(CostService).pipe(
                         Effect.catchAll(() =>
@@ -1261,7 +1419,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
 
                 // ── Phase 9: AUDIT (optional) ── H2
                 if (config.enableAudit) {
-                  ctx = yield* runObservablePhase(obs, eb, ctx, "audit", (c) =>
+                  ctx = yield* guardedPhase(ctx, "audit", (c) =>
                     Effect.gen(function* () {
                       if (obs) {
                         yield* obs.info("Execution audit trail", {
@@ -1281,8 +1439,21 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 }
 
                 // ── Phase 10: COMPLETE ──
-                ctx = yield* runObservablePhase(obs, eb, ctx, "complete", (c) =>
-                  Effect.succeed({ ...c, agentState: "completed" as const }),
+                ctx = yield* guardedPhase(ctx, "complete", (c) =>
+                  Effect.gen(function* () {
+                    if (eb) {
+                      yield* eb.publish({
+                        _tag: "AgentCompleted",
+                        taskId: c.taskId,
+                        agentId: config.agentId,
+                        success: true,
+                        totalIterations: c.iteration,
+                        totalTokens: c.tokensUsed,
+                        durationMs: Date.now() - executionStartMs,
+                      }).pipe(Effect.catchAll(() => Effect.void));
+                    }
+                    return { ...c, agentState: "completed" as const };
+                  }),
                 );
 
                 // Build TaskResult

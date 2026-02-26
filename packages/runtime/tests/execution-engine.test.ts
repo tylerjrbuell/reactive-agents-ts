@@ -197,4 +197,124 @@ describe("ExecutionEngine", () => {
       hookLog.indexOf("bootstrap:after"),
     );
   });
+
+  it("should record tool execution metrics when tools are called", async () => {
+    // Track how many LLM calls we've made
+    let callCount = 0;
+
+    // Mock LLM that returns a tool call on first iteration, then completes
+    const ToolCallingLLMServiceLive = Layer.succeed(
+      Context.GenericTag<{
+        complete: (req: unknown) => Effect.Effect<{
+          content: string;
+          stopReason: string;
+          toolCalls?: Array<{ id: string; name: string; input: Record<string, unknown> }>;
+          usage: {
+            inputTokens: number;
+            outputTokens: number;
+            totalTokens: number;
+            estimatedCost: number;
+          };
+          model: string;
+        }>;
+      }>("LLMService"),
+      {
+        complete: (_req: unknown) =>
+          Effect.succeed((() => {
+            callCount++;
+            // First call: request a tool, second call and beyond: complete
+            if (callCount === 1) {
+              return {
+                content: "Let me read the file.\nAction: file-read\nInput: {\"path\": \"/tmp/test.txt\"}",
+                stopReason: "tool_use",
+                toolCalls: [
+                  { id: "call-001", name: "file-read", input: { path: "/tmp/test.txt" } },
+                ],
+                usage: {
+                  inputTokens: 10,
+                  outputTokens: 20,
+                  totalTokens: 30,
+                  estimatedCost: 0,
+                },
+                model: "test-model",
+              };
+            } else {
+              // Complete on second call
+              return {
+                content: "Based on the file contents, the answer is 42.",
+                stopReason: "end_turn",
+                toolCalls: [],
+                usage: {
+                  inputTokens: 10,
+                  outputTokens: 20,
+                  totalTokens: 30,
+                  estimatedCost: 0,
+                },
+                model: "test-model",
+              };
+            }
+          })()),
+      },
+    );
+
+    // Mock tool service
+    const { ToolService } = await import("@reactive-agents/tools");
+    const MockToolServiceLive = Layer.succeed(ToolService, {
+      execute: (_params: unknown) =>
+        Effect.succeed({ result: "file contents here" }),
+      listTools: () =>
+        Effect.succeed([
+          { name: "file-read", description: "Read a file", parameters: {} },
+        ]),
+      registerTool: () => Effect.void,
+      getTool: () => Effect.succeed(null),
+      toFunctionCallingFormat: () =>
+        Effect.succeed([
+          { name: "file-read", description: "Read a file", parameters: {} },
+        ]),
+    });
+
+    // Mock metrics collector to capture recorded metrics
+    const { MetricsCollectorTag } = await import("@reactive-agents/observability");
+    let recordedMetrics: Array<{ toolName: string; duration: number; status: string }> = [];
+
+    const MockMetricsLive = Layer.succeed(MetricsCollectorTag, {
+      incrementCounter: () => Effect.void,
+      recordHistogram: () => Effect.void,
+      setGauge: () => Effect.void,
+      getMetrics: () => Effect.succeed([]),
+      recordToolExecution: (toolName: string, duration: number, status: string) =>
+        Effect.gen(function* () {
+          recordedMetrics.push({ toolName, duration, status });
+        }),
+      getToolMetrics: () => Effect.succeed([]),
+      getToolSummary: () => Effect.succeed(new Map()),
+    });
+
+    const testLayer = Layer.mergeAll(
+      LifecycleHookRegistryLive,
+      ExecutionEngineLive(config).pipe(
+        Layer.provide(LifecycleHookRegistryLive),
+      ),
+      ToolCallingLLMServiceLive,
+      MockToolServiceLive,
+      MockMetricsLive,
+    );
+
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const engine = yield* ExecutionEngine;
+        yield* engine.execute(mockTask);
+      }).pipe(Effect.provide(testLayer)),
+    );
+
+    // Verify that a tool metric was recorded
+    expect(recordedMetrics.length).toBeGreaterThan(0);
+    const fileReadMetric = recordedMetrics.find((m) => m.toolName === "file-read");
+    expect(fileReadMetric).toBeDefined();
+    if (fileReadMetric) {
+      expect(fileReadMetric.status).toBe("success");
+      expect(fileReadMetric.duration).toBeGreaterThanOrEqual(0);
+    }
+  });
 });
