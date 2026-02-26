@@ -1,6 +1,6 @@
 import { describe, test, expect, mock } from "bun:test";
 import { Effect, Layer } from "effect";
-import { makeConsoleExporter } from "../src/exporters/console-exporter.js";
+import { makeConsoleExporter, formatMetricsDashboard, formatDuration, type DashboardData } from "../src/exporters/console-exporter.js";
 import { makeFileExporter } from "../src/exporters/file-exporter.js";
 import { ObservabilityService, ObservabilityServiceLive } from "../src/observability-service.js";
 import type { LogEntry, Span, Metric } from "../src/types.js";
@@ -320,5 +320,163 @@ describe("ObservabilityService flush() (Phase 0.3)", () => {
     );
     expect(spans).toHaveLength(1);
     expect(spans[0].name).toBe("my.span");
+  });
+});
+
+// ─── Dashboard Formatter ───
+
+describe("DashboardFormatter (Task 2)", () => {
+  test("formatDuration() converts milliseconds correctly", () => {
+    expect(formatDuration(500)).toBe("500ms");
+    expect(formatDuration(999)).toBe("999ms");
+    expect(formatDuration(1000)).toBe("1.0s");
+    expect(formatDuration(13900)).toBe("13.9s");
+    expect(formatDuration(60000)).toBe("60.0s");
+  });
+
+  test("formatMetricsDashboard() formats all sections correctly", () => {
+    const data: DashboardData = {
+      status: "success",
+      totalDuration: 13900,
+      stepCount: 7,
+      tokenCount: 1963,
+      estimatedCost: 0.003,
+      modelName: "claude-3.5",
+      phases: [
+        { name: "bootstrap", duration: 100, status: "ok" },
+        { name: "think", duration: 10001, status: "warning", details: "7 iter, 72% of time" },
+        { name: "act", duration: 1000, status: "ok", details: "2 tools" },
+        { name: "complete", duration: 28, status: "ok" },
+      ],
+      tools: [
+        { name: "file-write", callCount: 3, successCount: 3, errorCount: 0, avgDuration: 450 },
+        { name: "web-search", callCount: 2, successCount: 2, errorCount: 0, avgDuration: 280 },
+      ],
+      alerts: [
+        { level: "warning", message: "think phase blocked ≥10s (LLM latency)" },
+        { level: "info", message: "7 iterations needed (complex reasoning)" },
+        { level: "info", message: "Consider: Simpler task prompt or shorter context" },
+      ],
+    };
+
+    const output = formatMetricsDashboard(data);
+
+    // Verify header sections exist
+    expect(output).toContain("Agent Execution Summary");
+    expect(output).toContain("✅");
+    expect(output).toContain("Success");
+    expect(output).toContain("13.9s");
+    expect(output).toContain("1,963");
+    expect(output).toContain("claude-3.5");
+
+    // Verify timeline section
+    expect(output).toContain("📊 Execution Timeline");
+    expect(output).toContain("[bootstrap]");
+    expect(output).toContain("[think]");
+    expect(output).toContain("7 iter, 72% of time");
+
+    // Verify tools section
+    expect(output).toContain("🔧 Tool Execution");
+    expect(output).toContain("file-write");
+    expect(output).toContain("web-search");
+
+    // Verify alerts section
+    expect(output).toContain("⚠️  Alerts & Insights");
+    expect(output).toContain("think phase blocked ≥10s");
+  });
+
+  test("formatMetricsDashboard() shows warning icon for phases > 10s", () => {
+    const data: DashboardData = {
+      status: "success",
+      totalDuration: 15000,
+      stepCount: 5,
+      tokenCount: 1500,
+      estimatedCost: 0.002,
+      modelName: "claude-3",
+      phases: [
+        { name: "think", duration: 11000, status: "warning" },
+      ],
+      tools: [],
+      alerts: [],
+    };
+
+    const output = formatMetricsDashboard(data);
+
+    // Find the think phase line and verify it has warning status
+    const lines = output.split("\n");
+    const thinkLine = lines.find(l => l.includes("[think]"));
+    expect(thinkLine).toBeDefined();
+    expect(thinkLine).toContain("⚠️");
+  });
+
+  test("formatMetricsDashboard() omits empty sections", () => {
+    const data: DashboardData = {
+      status: "success",
+      totalDuration: 5000,
+      stepCount: 3,
+      tokenCount: 800,
+      estimatedCost: 0.001,
+      modelName: "claude-3",
+      phases: [],
+      tools: [],
+      alerts: [],
+    };
+
+    const output = formatMetricsDashboard(data);
+
+    // Header should always be present
+    expect(output).toContain("Agent Execution Summary");
+
+    // But sections for empty data should not appear
+    expect(output).not.toContain("📊 Execution Timeline");
+    expect(output).not.toContain("🔧 Tool Execution");
+    expect(output).not.toContain("⚠️  Alerts & Insights");
+  });
+
+  test("formatMetricsDashboard() formats error status correctly", () => {
+    const data: DashboardData = {
+      status: "error",
+      totalDuration: 2000,
+      stepCount: 1,
+      tokenCount: 500,
+      estimatedCost: 0.001,
+      modelName: "claude-3",
+      phases: [
+        { name: "bootstrap", duration: 100, status: "error" },
+      ],
+      tools: [],
+      alerts: [
+        { level: "error", message: "Agent execution failed" },
+      ],
+    };
+
+    const output = formatMetricsDashboard(data);
+
+    expect(output).toContain("Agent Execution Summary");
+    expect(output).toContain("Error");
+    expect(output).toContain("❌");
+  });
+
+  test("formatMetricsDashboard() includes tool error indicators", () => {
+    const data: DashboardData = {
+      status: "partial",
+      totalDuration: 5000,
+      stepCount: 4,
+      tokenCount: 1000,
+      estimatedCost: 0.001,
+      modelName: "claude-3",
+      phases: [],
+      tools: [
+        { name: "file-write", callCount: 3, successCount: 2, errorCount: 1, avgDuration: 400 },
+      ],
+      alerts: [],
+    };
+
+    const output = formatMetricsDashboard(data);
+
+    expect(output).toContain("🔧 Tool Execution");
+    expect(output).toContain("file-write");
+    // Tool with errors should show warning
+    expect(output).toContain("⚠️");
   });
 });
