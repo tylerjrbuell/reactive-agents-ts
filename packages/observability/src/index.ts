@@ -5,6 +5,8 @@ export type {
   SpanStatus,
   Metric,
   AgentStateSnapshot,
+  ToolMetric,
+  ToolMetricStatus,
 } from "./types.js";
 export {
   LogLevel,
@@ -14,6 +16,8 @@ export {
   MetricType,
   MetricSchema,
   AgentStateSnapshotSchema,
+  ToolMetricSchema,
+  ToolMetricStatusSchema,
 } from "./types.js";
 
 // ─── Errors ───
@@ -29,7 +33,7 @@ export type { StructuredLogger, LiveLogWriter } from "./logging/structured-logge
 
 // ─── Metrics ───
 export { makeMetricsCollector } from "./metrics/metrics-collector.js";
-export type { MetricsCollector } from "./metrics/metrics-collector.js";
+export type { MetricsCollector, ToolSummary } from "./metrics/metrics-collector.js";
 
 // ─── Debugging ───
 export { makeStateInspector } from "./debugging/state-inspector.js";
