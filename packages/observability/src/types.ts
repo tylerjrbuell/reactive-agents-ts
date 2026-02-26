@@ -77,3 +77,17 @@ export const AgentStateSnapshotSchema = Schema.Struct({
   costAccumulated: Schema.Number,
 });
 export type AgentStateSnapshot = typeof AgentStateSnapshotSchema.Type;
+
+// ─── Tool Metric ───
+
+export const ToolMetricStatusSchema = Schema.Literal("success", "error", "partial");
+export type ToolMetricStatus = typeof ToolMetricStatusSchema.Type;
+
+export const ToolMetricSchema = Schema.Struct({
+  toolName: Schema.String,
+  duration: Schema.Number,
+  status: ToolMetricStatusSchema,
+  callCount: Schema.Number,
+  timestamp: Schema.DateFromSelf,
+});
+export type ToolMetric = typeof ToolMetricSchema.Type;
