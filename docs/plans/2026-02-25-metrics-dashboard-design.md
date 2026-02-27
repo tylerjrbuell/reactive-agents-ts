@@ -28,7 +28,7 @@ Current metrics output is verbose and hard to scan:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ ✅ Agent Execution Summary                                   │
+│ ✅ Agent Execution Summary                                  │
 ├─────────────────────────────────────────────────────────────┤
 │ Status:    ✅ Success   Duration: 13.9s   Steps: 7          │
 │ Tokens:    1,963        Cost: ~$0.003     Model: claude-3.5 │

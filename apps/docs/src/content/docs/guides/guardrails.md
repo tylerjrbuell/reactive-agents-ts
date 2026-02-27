@@ -1,6 +1,6 @@
 ---
 title: Guardrails
-description: Input and output safety — injection detection, PII scanning, toxicity filtering, and behavioral contracts.
+description: Input and output safety — injection detection, PII scanning, toxicity filtering, kill switch, and behavioral contracts.
 sidebar:
   order: 9
 ---
@@ -43,9 +43,111 @@ Identifies personally identifiable information:
 
 Flags toxic, harmful, or inappropriate content using pattern matching and configurable blocklists.
 
-### Agent Contracts
+### Kill Switch
 
-Define behavioral boundaries for agents:
+Emergency halt for agents — per-agent or globally. The execution engine checks the kill switch at every phase boundary via the `guardedPhase()` wrapper, so a triggered kill switch stops the agent within one phase transition.
+
+```typescript
+import { KillSwitchService } from "@reactive-agents/guardrails";
+import { Effect } from "effect";
+
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withGuardrails()
+  .withKillSwitch()   // Enable kill switch
+  .build();
+
+// Run the agent
+agent.run("Do something long-running...");
+
+// From another context (e.g., a signal handler or admin API):
+// Trigger per-agent halt — stops at next phase boundary
+// killSwitchService.trigger(agentId, "Emergency stop requested")
+
+// Trigger global halt — stops ALL agents
+// killSwitchService.triggerGlobal("System maintenance")
+```
+
+When `.withKillSwitch()` is enabled, the `guardedPhase()` wrapper checks at the start of each execution phase whether a halt has been triggered. If so, the task fails immediately with a `KillSwitchTriggeredError`.
+
+#### Full Lifecycle Control
+
+The `KillSwitchService` provides fine-grained lifecycle control beyond hard stops:
+
+```typescript
+import { KillSwitchService } from "@reactive-agents/guardrails";
+
+// Hard stop: fails the task immediately at next phase boundary
+killSwitchService.trigger(agentId, "Reason")
+killSwitchService.triggerGlobal("System shutdown")
+
+// Clear after stop
+killSwitchService.clear(agentId)
+killSwitchService.clearGlobal()
+
+// Pause / resume (blocks at next phase boundary until resumed)
+killSwitchService.pause(agentId)
+killSwitchService.resume(agentId)
+
+// Graceful stop: signals intent; agent completes current phase, then stops
+killSwitchService.stop(agentId, "Graceful shutdown")
+
+// Immediate termination (also triggers kill switch)
+killSwitchService.terminate(agentId, "Reason")
+
+// Query lifecycle state
+const lifecycle = yield* killSwitchService.getLifecycle(agentId)
+// Returns: "running" | "paused" | "stopping" | "terminated" | "unknown"
+```
+
+The `ReactiveAgent` facade exposes these methods directly:
+
+```typescript
+const agent = await ReactiveAgents.create()
+  .withKillSwitch()
+  .build();
+
+// Pause execution at the next phase boundary (blocks until resumed)
+await agent.pause();
+
+// Resume a paused agent
+await agent.resume();
+
+// Graceful stop (completes current phase, then exits)
+await agent.stop("User requested stop");
+
+// Hard terminate
+await agent.terminate("Emergency");
+
+// Subscribe to lifecycle events
+const unsubscribe = await agent.subscribe("AgentPaused", (event) => {
+  console.log(`Agent paused: ${event.agentId}`);
+});
+```
+
+When `pause()` is active, the execution engine waits at the next phase boundary (via `waitIfPaused()`) until `resume()` is called, making it safe to inspect state mid-execution.
+
+### Behavioral Contracts
+
+Enforce typed behavioral boundaries — which tools the agent may or may not call, and how many iterations it may run:
+
+```typescript
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withGuardrails()
+  .withBehavioralContracts({
+    deniedTools: ["file-write", "code-execute"],  // never allowed
+    allowedTools: ["web-search", "http-get"],     // whitelist (optional)
+    maxIterations: 8,                             // hard cap
+  })
+  .build();
+```
+
+Contract violations throw `BehavioralContractError` at the guardrail phase **before** the LLM executes. Both `deniedTools` and `allowedTools` can be set simultaneously — the agent must be in the whitelist AND not in the denylist.
+
+### Agent Contracts (Legacy)
+
+Define behavioral boundaries for agents using topic-level constraints:
 
 - Required topics the agent must stay within
 - Forbidden topics the agent must avoid
@@ -55,7 +157,7 @@ Define behavioral boundaries for agents:
 
 Guardrails run during **Phase 2** of the 10-phase execution lifecycle:
 
-```
+```text
 1. Bootstrap → 2. GUARDRAIL → 3. Cost Route → ...
 ```
 
@@ -98,7 +200,7 @@ Each check returns a `GuardrailResult`:
 ### Violation Severities
 
 | Severity | Description |
-|----------|-------------|
+| -------- | ----------- |
 | `low` | Minor concern, likely safe |
 | `medium` | Potential risk, worth reviewing |
 | `high` | Significant risk, should be blocked |
@@ -107,7 +209,7 @@ Each check returns a `GuardrailResult`:
 ## Input vs Output Checks
 
 | Check | Input | Output |
-|-------|:---:|:---:|
+| ----- | :---: | :---: |
 | Injection Detection | Yes | No |
 | PII Detection | Yes | Yes |
 | Toxicity Detection | Yes | Yes |
@@ -139,6 +241,28 @@ const agent = await ReactiveAgents.create()
   })
   .build();
 ```
+
+## EventBus Integration
+
+When `.withEventBus()` is active, guardrail violations emit a typed event you can subscribe to:
+
+```typescript
+const unsubscribe = await agent.subscribe("GuardrailViolationDetected", (event) => {
+  console.log(`Blocked input to ${event.taskId}`);
+  console.log(`Violations: ${event.violations.join(", ")}`);
+  console.log(`Safety score: ${event.score}`);  // 0.0–1.0
+  console.log(`Blocked: ${event.blocked}`);     // true when execution stopped
+});
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `taskId` | `string` | The task that was blocked |
+| `violations` | `string[]` | Human-readable violation summaries |
+| `score` | `number` | Safety score 0.0–1.0 (1.0 = fully safe) |
+| `blocked` | `boolean` | Whether execution was stopped |
+
+This event fires only when a violation actually blocks execution. Safe inputs that pass the check produce no event.
 
 ## When to Use Guardrails
 

@@ -149,6 +149,56 @@ Builds the final `TaskResult`:
 - `success`: Whether the task completed without errors
 - `metadata`: Duration, cost, tokens used, strategy, step count
 
+## EventBus Integration
+
+When `.withEventBus()` (or any feature that wires an EventBus) is active, every meaningful lifecycle moment emits a typed event. `agent.subscribe()` is overloaded — pass a tag to get the event payload automatically narrowed to that type:
+
+```typescript
+// Tag-filtered: event payload is narrowed — no _tag check, no cast
+const unsub = await agent.subscribe("AgentCompleted", (event) => {
+  console.log(event.totalTokens, event.durationMs); // fully typed
+});
+
+// Catch-all: receives the full AgentEvent union
+const unsub2 = await agent.subscribe((event) => {
+  if (event._tag === "ToolCallStarted") console.log(event.toolName);
+});
+```
+
+**Complete event stream for a typical run:**
+
+```
+AgentStarted              { taskId, agentId, provider, model, timestamp }
+ExecutionPhaseEntered     { taskId, phase }
+ExecutionHookFired        { taskId, phase, timing: "before"|"after" }
+  MemoryBootstrapped        { agentId, tier }
+ExecutionPhaseCompleted   { taskId, phase, durationMs }
+  LLMRequestStarted         { taskId, requestId, model, provider, contextSize }
+  LLMRequestCompleted       { taskId, requestId, tokensUsed, durationMs }     ← same requestId
+  ReasoningStepCompleted    { taskId, strategy, step, thought|action|observation }
+  ToolCallStarted           { taskId, toolName, callId }
+  ToolCallCompleted         { taskId, toolName, callId, success, durationMs }
+  FinalAnswerProduced       { taskId, strategy, answer, iteration, totalTokens }
+  GuardrailViolationDetected{ taskId, violations, score, blocked }   ← on block only
+  MemoryFlushed             { agentId }
+AgentCompleted            { taskId, agentId, totalIterations, totalTokens, durationMs }
+TaskCompleted             { taskId, success }
+```
+
+All events carry the correct `taskId` for cross-event correlation. The `LLMRequestStarted` / `LLMRequestCompleted` pair share a `requestId` so you can measure exact LLM latency.
+
+For direct EventBus access in Effect programs, the `TypedEventHandler<T>` helper lets you define handlers outside of inline callbacks:
+
+```typescript
+import type { TypedEventHandler } from "@reactive-agents/core";
+import { EventBus } from "@reactive-agents/core";
+
+const onStep: TypedEventHandler<"ReasoningStepCompleted"> = (event) =>
+  Effect.log(`Step ${event.step} [${event.strategy}]: ${event.thought ?? event.action}`);
+
+yield* EventBus.pipe(Effect.flatMap((eb) => eb.on("ReasoningStepCompleted", onStep)));
+```
+
 ## Observability Integration
 
 When `.withObservability()` is enabled, every phase is wrapped in a trace span:

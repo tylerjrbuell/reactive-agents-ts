@@ -6,7 +6,7 @@
 
 **The composable AI agent framework built on Effect-TS.**
 
-Type-safe from prompt to production. 17 packages. 13 composable layers. 5 reasoning strategies. 10-phase execution engine. 8 built-in tools. Model-adaptive context engineering. Structured agent steering via personas.
+Type-safe from prompt to production. 17 packages. 13 composable layers. 5 reasoning strategies. 10-phase execution engine. 8 built-in tools. Model-adaptive context engineering. Structured agent steering via personas. Real Ed25519 cryptography, kill switch, behavioral contracts, cross-task self-improvement, and full real-time EventBus observability.
 
 [![CI](https://github.com/tylerjrbuell/reactive-agents-ts/actions/workflows/ci.yml/badge.svg)](https://github.com/tylerjrbuell/reactive-agents-ts/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/badge/npm-%40reactive--agents-CB3837?logo=npm)](https://www.npmjs.com/org/reactive-agents)
@@ -54,6 +54,7 @@ const agent = await ReactiveAgents.create()
 const result = await agent.run("Explain quantum entanglement");
 console.log(result.output);
 console.log(result.metadata); // { duration, cost, tokensUsed, stepsCount }
+// ✅ Observability enabled: Professional metrics dashboard displayed automatically
 ```
 
 ### Add Capabilities
@@ -68,13 +69,19 @@ const agent = await ReactiveAgents.create()
   .withTools()                // Built-in tools + MCP support
   .withMemory("1")            // Persistent memory (FTS5 search)
   .withGuardrails()           // Block injection, PII, toxicity
+  .withKillSwitch()           // Per-agent + global emergency halt
+  .withBehavioralContracts({  // Enforce tool whitelist + iteration cap
+    deniedTools: ["file-write"],
+    maxIterations: 10,
+  })
   .withVerification()         // Fact-check outputs
   .withCostTracking()         // Budget enforcement + model routing
   .withObservability({ verbosity: "verbose", live: true }) // Live log streaming + tracing
   .withContextProfile({ tier: "local" }) // Adaptive context for model tier
-  .withIdentity()             // RBAC + agent certificates
+  .withIdentity()             // RBAC + agent certificates (Ed25519)
   .withInteraction()          // 5 autonomy modes
   .withOrchestration()        // Multi-agent workflows
+  .withSelfImprovement()      // Cross-task strategy outcome learning
   .build();
 ```
 
@@ -154,11 +161,11 @@ const agent = await ReactiveAgents.create()
 ReactiveAgentBuilder
   → createRuntime()
     → Core Services     EventBus, AgentService, TaskService
-    → LLM Provider      Anthropic, OpenAI, Gemini, Ollama
+    → LLM Provider      Anthropic, OpenAI, Gemini, Ollama, LiteLLM
     → Memory            Working, Semantic, Episodic, Procedural
     → Reasoning         ReAct, Reflexion, Plan-Execute, ToT, Adaptive
     → Tools             Registry, Sandbox, MCP Client
-    → Guardrails        Injection, PII, Toxicity, Contracts
+    → Guardrails        Injection, PII, Toxicity, Kill Switch, Behavioral Contracts
     → Verification      Semantic Entropy, Fact Decomposition, NLI
     → Cost              Complexity Router, Budget Enforcer, Cache
     → Identity          Certificates, RBAC, Delegation, Audit
@@ -226,6 +233,7 @@ const agent = await ReactiveAgents.create()
 | **OpenAI** | GPT-4o, GPT-4o-mini | ✓ | ✓ |
 | **Google Gemini** | Gemini Flash, Pro | ✓ | ✓ |
 | **Ollama** | Any local model | — | ✓ |
+| **LiteLLM** | 100+ models via LiteLLM proxy | ✓ | ✓ |
 | **Test** | Mock (deterministic) | — | — |
 
 Switch providers with one line — agent code stays the same.
@@ -236,7 +244,7 @@ Switch providers with one line — agent code stays the same.
 |---------|-------------|
 | [`@reactive-agents/core`](packages/core) | EventBus, AgentService, TaskService, types |
 | [`@reactive-agents/runtime`](packages/runtime) | ExecutionEngine, ReactiveAgentBuilder, `createRuntime()` |
-| [`@reactive-agents/llm-provider`](packages/llm-provider) | LLM adapters (Anthropic, OpenAI, Gemini, Ollama) |
+| [`@reactive-agents/llm-provider`](packages/llm-provider) | LLM adapters (Anthropic, OpenAI, Gemini, Ollama, LiteLLM) |
 | [`@reactive-agents/memory`](packages/memory) | Working, Semantic, Episodic, Procedural memory (bun:sqlite) |
 | [`@reactive-agents/reasoning`](packages/reasoning) | 5 strategies: ReAct, Reflexion, Plan-Execute, ToT, Adaptive |
 | [`@reactive-agents/tools`](packages/tools) | Tool registry, sandboxed execution, MCP client |
@@ -275,11 +283,46 @@ const result = await agent.run("What is the capital of France?");
 // result.output → "Paris is the capital of France."
 ```
 
+## Observability & Metrics Dashboard
+
+When observability is enabled, the agent displays a professional metrics dashboard after each execution:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ ✅ Agent Execution Summary                                   │
+├─────────────────────────────────────────────────────────────┤
+│ Status:    ✅ Success   Duration: 13.9s   Steps: 7          │
+│ Tokens:    1,963        Cost: ~$0.003     Model: claude-3.5 │
+└─────────────────────────────────────────────────────────────┘
+
+📊 Execution Timeline
+├─ [bootstrap]       100ms    ✅
+├─ [think]        10,001ms    ⚠️  (7 iter, 72% of time)
+├─ [act]           1,000ms    ✅  (2 tools)
+└─ [complete]         28ms    ✅
+
+🔧 Tool Execution (2 called)
+├─ file-write    ✅ 3 calls, 450ms avg
+└─ web-search    ✅ 2 calls, 280ms avg
+```
+
+**Features:**
+- Per-phase execution timing and bottleneck identification
+- Tool call summary (success/error counts, average duration)
+- Smart alerts and optimization tips
+- Cost estimation in USD
+- EventBus-driven collection (no manual instrumentation)
+
+Enable with:
+```typescript
+.withObservability({ verbosity: "normal", live: true })
+```
+
 ## Development
 
 ```bash
 bun install              # Install dependencies
-bun test                 # Run all tests (812 tests, 116 files)
+bun test                 # Run all tests (884 tests, 122 files)
 bun run build            # Build all packages (ESM + DTS)
 ```
 

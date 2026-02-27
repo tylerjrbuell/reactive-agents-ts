@@ -18,7 +18,7 @@ const agent = await ReactiveAgents.create()
 
 ## Certificates
 
-Every agent can have a cryptographic certificate for authentication:
+Every agent can have a cryptographic certificate for authentication. Certificates use **real Ed25519 asymmetric keys** generated via the Web Crypto API (`crypto.subtle.generateKey("Ed25519")`). Signatures are verified with `crypto.subtle.verify()` and fingerprints are computed as SHA-256 digests of the public key.
 
 ```typescript
 import { IdentityService } from "@reactive-agents/identity";

@@ -2,7 +2,7 @@
 
 ## Project Status
 
-**v0.5.0 released.** 17 packages + 2 apps built, 812 tests across 116 files, full integration verified.
+**v0.5.3+ released.** 17 packages + 2 apps built, 884 tests across 122 files, full integration verified with professional metrics dashboard.
 
 - Phase 1: Core, LLM Provider, Memory, Reasoning, Tools, Interaction, Runtime
 - Phase 2: Guardrails, Verification, Cost
@@ -12,6 +12,9 @@
 - Real-Time Observability: live log streaming, verbosity levels, reasoning event publishing, structured phase logs (720 tests)
 - Context Engineering: Model-adaptive context system, budget tracking, sub-agent tools, scratchpad, progressive compaction (804 tests)
 - Agent Persona / Steering API: Structured behavior control via `.withPersona()`, systemPrompt bug fix for reasoning path, subagent persona support with LLM generation (812 tests)
+- Trust & Differentiators: Real Ed25519 crypto, LiteLLM (40+ providers), kill switch, behavioral contracts, subprocess sandbox, multi-source verification, prompt A/B experiments, cross-task self-improvement (855 tests)
+- EventBus Groundwork: +5 new event types, taskId correlation through all 5 reasoning strategies, all lifecycle events wired (AgentStarted/Completed, LLMRequestStarted, FinalAnswerProduced, GuardrailViolationDetected, ExecutionHookFired/Cancelled, AgentPaused/Resumed/Stopped, MemoryBootstrapped/Flushed) (864 tests)
+- Professional Metrics Dashboard: MetricsCollector auto-subscribed to EventBus, formatMetricsDashboard() renders header card + timeline + tools + alerts, exportMetrics() shows professional CLI output (20 new tests, 884 total)
 - Pre-release: tsup compiled output, Google Gemini provider, Reflexion reasoning strategy
 - Final Integration: All layers compose via `createRuntime()` and `ReactiveAgentBuilder`
 - Docs: Starlight (Astro) site at `apps/docs/`
@@ -22,7 +25,7 @@
 
 ```bash
 bun install              # Install dependencies
-bun test                 # Run all tests (812 tests, 116 files)
+bun test                 # Run all tests (884 tests, 122 files)
 bun run build            # Build all packages (16 packages, ESM + DTS)
 cd apps/docs && npx astro dev    # Start docs dev server
 cd apps/docs && npx astro build  # Build docs for production
@@ -163,7 +166,7 @@ See `AGENTS.md` for full workflow instructions.
 ```
 packages/
   core/          — EventBus, AgentService, TaskService, types
-  llm-provider/  — LLM adapters (Anthropic, OpenAI, Ollama, Test)
+  llm-provider/  — LLM adapters (Anthropic, OpenAI, Gemini, Ollama, LiteLLM, Test)
   memory/        — Working, Semantic, Episodic, Procedural (bun:sqlite)
   reasoning/     — ReAct, Plan-Execute, ToT strategies
   tools/         — Tool registry, sandbox, MCP client
@@ -184,3 +187,70 @@ apps/
   docs/          — Starlight documentation site
   examples/      — Example agent apps
 ```
+
+---
+
+## Observability Output
+
+Agents with observability enabled display a professional metrics dashboard on completion. The dashboard shows execution status, per-phase timing, tool execution summary, and smart alerts about bottlenecks — all driven by the EventBus without manual instrumentation.
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ ✅ Agent Execution Summary                                   │
+├─────────────────────────────────────────────────────────────┤
+│ Status:    ✅ Success   Duration: 13.9s   Steps: 7          │
+│ Tokens:    1,963        Cost: ~$0.003     Model: claude-3.5 │
+└─────────────────────────────────────────────────────────────┘
+
+📊 Execution Timeline
+├─ [bootstrap]       100ms    ✅
+├─ [guardrail]        50ms    ✅
+├─ [strategy]         50ms    ✅
+├─ [think]        10,001ms    ⚠️  (7 iter, 72% of time)
+├─ [act]           1,000ms    ✅  (2 tools)
+├─ [observe]         500ms    ✅
+├─ [memory-flush]    200ms    ✅
+└─ [complete]         28ms    ✅
+
+🔧 Tool Execution (2 called)
+├─ file-write    ✅ 3 calls, 450ms avg
+└─ web-search    ✅ 2 calls, 280ms avg
+
+⚠️  Alerts & Insights
+├─ think phase blocked ≥10s (LLM latency)
+├─ 7 iterations needed (complex reasoning)
+└─ 💡 Consider: Simpler task prompt or shorter context
+```
+
+**Dashboard Sections:**
+
+1. **Header Card** — Overall status, total duration, step count, tokens, estimated cost, and model used
+2. **Execution Timeline** — Each phase with duration and percentage of total time; warning icons (⚠️) for phases ≥10s
+3. **Tool Execution** — Summary of all tool calls grouped by name, showing success count, error count, and average duration
+4. **Alerts & Insights** — Warnings about bottlenecks, token budgets, and optimization tips (only shown when relevant)
+
+**How It Works:**
+
+- **No manual instrumentation** — `MetricsCollector` auto-subscribes to EventBus `ToolCallCompleted` events via `MetricsCollectorLive` layer
+- **Phase timing** — `ExecutionEngine` tracks duration of each phase (bootstrap, guardrail, strategy, think, act, observe, memory-flush, verify, audit, complete)
+- **Tool tracking** — Tool calls are automatically recorded with name, duration, and success/error status
+- **Cost estimation** — Tokens are tracked per execution and converted to estimated USD cost ($0.003 per 1M tokens)
+- **Smart alerts** — Phases >10s are highlighted; tool failures shown; iteration count noted if >5 steps
+
+**Builder Integration:**
+
+```typescript
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withReasoning()
+  .withTools()
+  .withObservability({ verbosity: "normal", live: true })  // Shows dashboard on completion
+  .build();
+```
+
+**Enabling Dashboard:**
+
+- Dashboard displays automatically when `withObservability()` is enabled
+- Set `verbosity: "normal"` or higher to see the formatted output
+- `live: true` also streams phase events during execution
+- Dashboard respects `VerbosityLevel`: minimal (no dashboard), normal (full dashboard), verbose/debug (dashboard + detailed logs)
