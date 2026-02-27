@@ -212,10 +212,6 @@ export const executeReflexion = (
       }
 
       previousCritiques.push(critique);
-      // Cap critique history to last 3 entries to prevent prompt explosion
-      if (previousCritiques.length > 3) {
-        previousCritiques = previousCritiques.slice(-3);
-      }
 
       // ── Improve: generate a refined response ──
       const improveDefaultFallback = input.systemPrompt
@@ -389,7 +385,7 @@ function isCritiqueStagnant(previousCritiques: string[], newCritique: string): b
   const b = normalize(newCritique);
   if (a === b) return true;
   const [shorter, longer] = a.length <= b.length ? [a, b] : [b, a];
-  if (shorter.length > 20 && longer.includes(shorter.slice(0, Math.floor(shorter.length * 0.8)))) {
+  if (shorter.length > 30 && longer.includes(shorter)) {
     return true;
   }
   return false;
