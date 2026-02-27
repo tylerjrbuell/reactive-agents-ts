@@ -140,4 +140,45 @@ describe("AdaptiveStrategy", () => {
     expect(result.metadata.cost).toBeGreaterThanOrEqual(0);
     expect(result.metadata.duration).toBeGreaterThanOrEqual(0);
   });
+
+  it("falls back to reactive when selected sub-strategy returns partial status", async () => {
+    // reflexion with maxRetries=1 returns partial (loop runs once, no SATISFIED)
+    // reactive fallback returns completed (FINAL ANSWER)
+    const layer = TestLLMServiceLayer({
+      // Adaptive analysis → select REFLEXION
+      "Classify the task": "REFLEXION",
+      // Reflexion initial generation (systemPrompt contains "thoughtful reasoning agent")
+      "thoughtful reasoning agent": "Initial attempt at an answer.",
+      // Reflexion critique (content contains "Critically evaluate")
+      // No SATISFIED: prefix → not satisfied; maxRetries=1 so loop exits → partial
+      "Critically evaluate": "This response lacks detail and accuracy.",
+      // Reactive fallback (content contains "Think step-by-step")
+      "Think step-by-step": "FINAL ANSWER: Recovered with reactive fallback.",
+    });
+
+    const result = await Effect.runPromise(
+      executeAdaptive({
+        taskDescription: "Test fallback behavior",
+        taskType: "query",
+        memoryContext: "",
+        availableTools: [],
+        config: {
+          ...defaultReasoningConfig,
+          strategies: {
+            ...defaultReasoningConfig.strategies,
+            // maxRetries=1: loop runs once, no SATISFIED → reflexion returns partial
+            reflexion: { maxRetries: 1, selfCritiqueDepth: "shallow" },
+          },
+        },
+      }).pipe(Effect.provide(layer)),
+    );
+
+    expect(result.strategy).toBe("adaptive");
+    expect(result.status).toBe("completed");
+    // Should have a fallback step in the steps list
+    const fallbackStep = result.steps.find((s) =>
+      s.content.toLowerCase().includes("fallback") || s.content.toLowerCase().includes("falling back"),
+    );
+    expect(fallbackStep).toBeDefined();
+  });
 });

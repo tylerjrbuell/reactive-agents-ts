@@ -131,26 +131,53 @@ export const executeAdaptive = (
     // ── Dispatch to selected strategy ──
     const subResult = yield* dispatchStrategy(selectedStrategy, input);
 
+    // ── Fallback: if sub-strategy returned partial and wasn't already reactive ──
+    let finalSubResult = subResult;
+    if (subResult.status === "partial" && selectedStrategy !== "reactive") {
+      steps.push({
+        id: ulid() as StepId,
+        type: "thought",
+        content: `[ADAPTIVE] ${selectedStrategy} returned partial — falling back to reactive`,
+        timestamp: new Date(),
+      });
+
+      if (ebOpt._tag === "Some") {
+        yield* ebOpt.value.publish({
+          _tag: "ReasoningStepCompleted",
+          taskId: input.taskId ?? "adaptive",
+          strategy: "adaptive",
+          step: steps.length,
+          totalSteps: 2,
+          thought: `[ADAPTIVE] Falling back to reactive strategy`,
+        }).pipe(Effect.catchAll(() => Effect.void));
+      }
+
+      finalSubResult = yield* executeReactive(input).pipe(
+        // If reactive also fails, use original partial result rather than throwing
+        Effect.catchAll(() => Effect.succeed(subResult)),
+      );
+    }
+
     // ── Combine results ──
-    const allSteps = [...steps, ...subResult.steps];
+    const allSteps = [...steps, ...finalSubResult.steps];
 
     return {
       strategy: "adaptive" as const,
       steps: allSteps,
-      output: subResult.output,
+      output: finalSubResult.output,
       metadata: {
         duration: Date.now() - start,
         cost:
-          subResult.metadata.cost +
+          finalSubResult.metadata.cost +
           analysisResponse.usage.estimatedCost,
         tokensUsed:
-          subResult.metadata.tokensUsed +
+          finalSubResult.metadata.tokensUsed +
           analysisResponse.usage.totalTokens,
         stepsCount: allSteps.length,
-        confidence: subResult.metadata.confidence,
+        confidence: finalSubResult.metadata.confidence,
         selectedStrategy: selectedStrategy,
       },
-      status: subResult.status,
+      status: finalSubResult.status,
     };
   });
 
@@ -199,6 +226,16 @@ Strategy options:
       .join("\n");
     prompt += `\n\nPast experience on similar tasks:\n${experienceSummary}\nFavor strategies that succeeded on similar tasks.`;
   }
+
+  prompt += `\n\nExamples:
+- "What is the capital of France?" → REACTIVE (simple Q&A)
+- "Summarize this article" → REACTIVE (single-pass task, no iteration needed)
+- "Write a persuasive essay about climate change" → REFLEXION (quality-driven, iterative self-improvement)
+- "Review and fix this code for correctness" → REFLEXION (iterative accuracy, self-critique)
+- "Set up a CI/CD pipeline with these 5 steps" → PLAN_EXECUTE (procedural, sequential phases)
+- "Build a REST API with auth, tests, and docs" → PLAN_EXECUTE (clear decomposable stages)
+- "Design 3 different system architectures for this use case" → TREE_OF_THOUGHT (multiple valid approaches to explore)
+- "Find the most creative solution to this puzzle" → TREE_OF_THOUGHT (exploratory, branching possibilities)`;
 
   prompt += `\n\nRespond with ONLY the strategy name (REACTIVE, REFLEXION, PLAN_EXECUTE, or TREE_OF_THOUGHT).`;
   return prompt;
