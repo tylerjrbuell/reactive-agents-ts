@@ -86,6 +86,7 @@ export const executeReactive = (
     const temp = input.config.strategies.reactive.temperature;
     const steps: ReasoningStep[] = [];
     const start = Date.now();
+    const scratchpadStore = new Map<string, string>();
 
     const fullInitialContext = buildInitialContext(input, false);
     const compactInitialContext = buildInitialContext(input, true);
@@ -303,7 +304,14 @@ export const executeReactive = (
           obsResult = priorObsStep?.metadata?.observationResult ?? makeObservationResult(toolRequest.tool, true, observationContent);
         } else {
           const toolStartMs = Date.now();
-          const toolObs = yield* runToolObservation(toolServiceOpt, toolRequest, input, profile);
+          const toolObs = yield* runToolObservation(
+            toolServiceOpt,
+            toolRequest,
+            input,
+            profile,
+            input.resultCompression,
+            scratchpadStore,
+          );
           const toolDurationMs = Date.now() - toolStartMs;
           observationContent = toolObs.content;
           obsResult = toolObs.observationResult;
@@ -405,7 +413,28 @@ function runToolObservation(
   toolRequest: { tool: string; input: string },
   _input: ReactiveInput,
   profile?: ContextProfile,
+  compressionConfig?: ResultCompressionConfig,
+  scratchpadStore?: Map<string, string>,
 ): Effect.Effect<ToolObservationOutput, never> {
+  // Short-circuit scratchpad-read for auto-stored tool results
+  if (toolRequest.tool === "scratchpad-read" && scratchpadStore && scratchpadStore.size > 0) {
+    try {
+      const args = JSON.parse(toolRequest.input) as { key?: string };
+      const key = args.key ?? "";
+      if (scratchpadStore.has(key)) {
+        const value = scratchpadStore.get(key)!;
+        const budget = compressionConfig?.budget ?? profile?.toolResultMaxChars ?? 800;
+        const content = truncateForDisplay(value, budget);
+        return Effect.succeed({
+          content,
+          observationResult: makeObservationResult("scratchpad-read", true, content),
+        });
+      }
+    } catch {
+      // fall through to normal scratchpad-read tool execution
+    }
+  }
+
   if (toolServiceOpt._tag === "None") {
     const content = `[Tool "${toolRequest.tool}" requested but ToolService is not available — add .withTools() to agent builder]`;
     return Effect.succeed({
@@ -430,8 +459,13 @@ function runToolObservation(
         Effect.map((r: ToolOutput) => {
           const raw = typeof r.result === "string" ? r.result : JSON.stringify(r.result);
           const normalized = normalizeObservation(toolRequest.tool, raw);
-          const maxChars = profile?.toolResultMaxChars ?? 800;
-          const compressed = compressToolResult(normalized, toolRequest.tool, maxChars, 3);
+          const budget = compressionConfig?.budget ?? profile?.toolResultMaxChars ?? 800;
+          const previewItems = compressionConfig?.previewItems ?? 3;
+          const autoStore = compressionConfig?.autoStore ?? true;
+          const compressed = compressToolResult(normalized, toolRequest.tool, budget, previewItems);
+          if (autoStore && compressed.stored && scratchpadStore) {
+            scratchpadStore.set(compressed.stored.key, compressed.stored.value);
+          }
           const content = compressed.content;
           return {
             content,
