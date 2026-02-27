@@ -14,6 +14,7 @@ import { createCostLayer } from "@reactive-agents/cost";
 import { createReasoningLayer, defaultReasoningConfig } from "@reactive-agents/reasoning";
 import type { ReasoningConfig } from "@reactive-agents/reasoning";
 import { createToolsLayer } from "@reactive-agents/tools";
+import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { ReasoningOptions, ObservabilityOptions } from "./builder.js";
 import type { ContextProfile } from "@reactive-agents/reasoning";
 import { createIdentityLayer } from "@reactive-agents/identity";
@@ -50,29 +51,73 @@ export interface MCPServerConfig {
    * - `"stdio"` — Child process with stdin/stdout communication
    * - `"sse"` — HTTP Server-Sent Events streaming
    * - `"websocket"` — WebSocket bidirectional communication
+   * - `"streamable-http"` — MCP 2025-03-26 Streamable HTTP (single POST endpoint, JSON or SSE response)
    */
-  transport: "stdio" | "sse" | "websocket";
+  transport: "stdio" | "sse" | "websocket" | "streamable-http";
   /**
    * Command to execute (for `stdio` transport).
-   * Example: `"mcp-server-filesystem"` or `/usr/local/bin/custom-server`
    *
-   * Default: undefined
+   * Any executable on PATH or absolute path. Works with Docker, Python, Node, Bun, etc.
+   * @example `"bunx"`, `"docker"`, `"python"`, `"node"`, `"/usr/local/bin/my-server"`
    */
   command?: string;
   /**
    * Command-line arguments (for `stdio` transport).
-   * Example: `["/path/to/data", "--port", "8080"]`
-   *
-   * Default: undefined
+   * @example
+   * ```typescript
+   * // npm package via bunx
+   * args: ["-y", "@modelcontextprotocol/server-filesystem", "."]
+   * // Docker container
+   * args: ["run", "-i", "--rm", "-e", "API_KEY=...", "ghcr.io/org/mcp-server"]
+   * ```
    */
   args?: string[];
   /**
-   * HTTP endpoint URL (for `sse` or `websocket` transport).
-   * Example: `"http://localhost:8000/mcp"` or `"ws://localhost:8000/mcp"`
+   * Working directory for the subprocess (for `stdio` transport).
    *
-   * Default: undefined
+   * Defaults to the current working directory of the parent process.
+   * @example `"/home/user/project"`, `process.cwd()`
+   */
+  cwd?: string;
+  /**
+   * Additional environment variables to pass to the subprocess (for `stdio` transport).
+   *
+   * These are **merged** on top of the parent process environment — you only need
+   * to specify the variables that differ. Useful for per-server secrets.
+   *
+   * @example
+   * ```typescript
+   * env: {
+   *   GITHUB_PERSONAL_ACCESS_TOKEN: process.env.GITHUB_TOKEN ?? "",
+   *   SOME_SERVER_API_KEY: "sk-...",
+   * }
+   * ```
+   */
+  env?: Record<string, string>;
+  /**
+   * HTTP endpoint URL (for `sse` or `websocket` transport).
+   * @example `"http://localhost:8000/mcp"`, `"ws://localhost:8000/mcp"`
    */
   endpoint?: string;
+  /**
+   * HTTP headers to send with every request (for `sse` and `websocket` transports).
+   *
+   * Use this to pass authentication credentials. For OAuth, obtain a Bearer token
+   * via your own token exchange flow and pass it here.
+   *
+   * > **Note:** The native WebSocket API does not support custom headers.
+   * > For WebSocket auth, prefer embedding credentials in the URL
+   * > (`ws://host/mcp?token=…`) or use SSE transport instead.
+   *
+   * @example
+   * ```typescript
+   * // Bearer token (OAuth, JWT, PAT)
+   * headers: { Authorization: "Bearer ghp_..." }
+   * // API key header
+   * headers: { "x-api-key": process.env.MCP_API_KEY ?? "" }
+   * ```
+   */
+  headers?: Record<string, string>;
 }
 
 /**
@@ -317,6 +362,14 @@ export interface RuntimeOptions {
    * Default: undefined (uses model-tier defaults)
    */
   contextProfile?: Partial<ContextProfile>;
+
+  /**
+   * Tool result compression configuration.
+   * Controls how large tool outputs are truncated, previewed, and stored.
+   *
+   * Default: undefined (uses framework defaults)
+   */
+  resultCompression?: ResultCompressionConfig;
 }
 
 /**
@@ -369,6 +422,8 @@ export const createRuntime = (options: RuntimeOptions) => {
     systemPrompt: options.systemPrompt,
     observabilityVerbosity: options.observabilityOptions?.verbosity,
     contextProfile: options.contextProfile,
+    defaultStrategy: options.reasoningOptions?.defaultStrategy,
+    resultCompression: options.resultCompression,
   };
 
   // ── Required layers ──

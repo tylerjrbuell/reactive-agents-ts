@@ -411,6 +411,7 @@ export class ReactiveAgentBuilder {
   private _reasoningOptions?: ReasoningOptions;
   private _enableTools: boolean = false;
   private _toolsOptions?: ToolsOptions;
+  private _resultCompression?: ResultCompressionConfig;
   private _enableIdentity: boolean = false;
   private _enableObservability: boolean = false;
   private _observabilityOptions?: ObservabilityOptions;
@@ -787,6 +788,9 @@ export class ReactiveAgentBuilder {
   withTools(options?: ToolsOptions): this {
     this._enableTools = true;
     if (options) this._toolsOptions = options;
+    if (options?.resultCompression) {
+      this._resultCompression = options.resultCompression;
+    }
     return this;
   }
 
@@ -1147,6 +1151,7 @@ export class ReactiveAgentBuilder {
       a2aPort: this._a2aOptions?.port,
       a2aBasePath: this._a2aOptions?.basePath,
       contextProfile: this._contextProfile,
+      resultCompression: this._resultCompression,
     });
 
     const hooks = [...this._hooks];
