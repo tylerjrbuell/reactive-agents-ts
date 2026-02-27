@@ -1,4 +1,4 @@
-import { Effect, Context, Layer, Ref } from "effect";
+import { Effect, Context, Layer, Ref, Option } from "effect";
 import type { ExecutionContext, ReactiveAgentsConfig } from "./types.js";
 import {
   ExecutionError,
@@ -16,7 +16,7 @@ import type { Task, TaskResult } from "@reactive-agents/core";
 import type { TaskError } from "@reactive-agents/core";
 import type { ContextProfile } from "@reactive-agents/reasoning";
 import { ToolService } from "@reactive-agents/tools";
-import { ObservabilityService, MetricsCollectorTag } from "@reactive-agents/observability";
+import { ObservabilityService } from "@reactive-agents/observability";
 import { GuardrailService, KillSwitchService, BehavioralContractService } from "@reactive-agents/guardrails";
 import { VerificationService } from "@reactive-agents/verification";
 import { CostService } from "@reactive-agents/cost";
@@ -264,6 +264,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   tokensUsed: 0,
                   startedAt: now,
                   selectedModel: config.defaultModel,
+                  provider: config.provider,
                   metadata: {},
                 };
 
@@ -322,8 +323,8 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     _tag: "AgentStarted",
                     taskId: ctx.taskId,
                     agentId: config.agentId,
-                    provider: String((config as any).provider ?? "unknown"),
-                    model: String((config as any).selectedModel?.model ?? (config as any).model ?? "unknown"),
+                    provider: String(ctx.provider ?? "unknown"),
+                    model: String(ctx.selectedModel ?? "unknown"),
                     timestamp: executionStartMs,
                   }).pipe(Effect.catchAll(() => Effect.void));
                 }
@@ -691,7 +692,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     id: string;
                     type: string;
                     content: string;
-                    metadata?: { toolUsed?: string; duration?: number };
+                    metadata?: { toolUsed?: string; duration?: number; observationResult?: { success?: boolean } };
                   }>;
                   const actionSteps = reasoningSteps.filter((s) => s.type === "action");
 
@@ -705,14 +706,37 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         .pipe(Effect.catchAll(() => Effect.void));
                     }
 
-                    const syntheticToolResults = actionSteps.map((s) => ({
-                      toolName: s.metadata?.toolUsed ?? s.content.split("(")[0]?.trim() ?? "unknown",
-                      toolCallId: s.id,
-                      result: s.content,
-                      durationMs: s.metadata?.duration ?? 0,
-                    }));
+                    const syntheticToolResults = actionSteps.map((s) => {
+                      const actionIdx = reasoningSteps.indexOf(s);
+                      const nextStep = actionIdx >= 0 ? reasoningSteps[actionIdx + 1] : undefined;
+                      const success = nextStep?.type === "observation"
+                        ? (nextStep.metadata?.observationResult?.success ?? true)
+                        : true;
+                      return {
+                        toolName: s.metadata?.toolUsed ?? s.content.split("(")[0]?.trim() ?? "unknown",
+                        toolCallId: s.id,
+                        result: s.content,
+                        durationMs: s.metadata?.duration ?? 0,
+                        success,
+                      };
+                    });
 
                     ctx = { ...ctx, toolResults: syntheticToolResults };
+
+                    // Record tool execution metrics via ObservabilityService for the dashboard.
+                    // This path (reasoning strategy) executes tools internally — events via EventBus
+                    // have instance isolation issues, so record directly through obs instead.
+                    // NOTE: ToolCallCompleted is also published to EventBus in reactive.ts;
+                    // this histogram is the authoritative path for the ObservabilityService dashboard.
+                    if (obs) {
+                      for (const toolResult of syntheticToolResults) {
+                        yield* obs.recordHistogram(
+                          "execution.tool.execution",
+                          toolResult.durationMs,
+                          { tool: toolResult.toolName, status: toolResult.success ? "success" : "error" },
+                        ).pipe(Effect.catchAll(() => Effect.void));
+                      }
+                    }
 
                     ctx = yield* guardedPhase(ctx, "act", (c) =>
                       Effect.succeed(c),
@@ -886,8 +910,8 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                               _tag: "LLMRequestStarted",
                               taskId: c.taskId,
                               requestId: reqId,
-                              model: String((c.selectedModel as any)?.model ?? c.selectedModel ?? "unknown"),
-                              provider: String((c.selectedModel as any)?.provider ?? "unknown"),
+                              model: String(c.selectedModel ?? "unknown"),
+                              provider: String(c.provider ?? "unknown"),
                               contextSize: messagesToSend.length,
                             }).pipe(Effect.catchAll(() => Effect.void));
                           }
@@ -896,14 +920,20 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                           const response = yield* llm.complete(llmRequest);
                           const llmDurationMs = performance.now() - llmCallStart;
 
+                          // Update selectedModel to the actual model used by the provider
+                          const actualModel = (response as any).model;
+                          if (actualModel) {
+                            c = { ...c, selectedModel: actualModel };
+                          }
+
                           // Phase 0.2: Publish LLMRequestCompleted event
                           if (eb) {
                             yield* eb.publish({
                               _tag: "LLMRequestCompleted",
                               taskId: c.taskId,
                               requestId: reqId,
-                              model: String((c.selectedModel as any)?.model ?? c.selectedModel ?? "unknown"),
-                              provider: String((c.selectedModel as any)?.provider ?? "unknown"),
+                              model: String(c.selectedModel ?? "unknown"),
+                              provider: String(c.provider ?? "unknown"),
                               durationMs: llmDurationMs,
                               tokensUsed: response.usage?.totalTokens ?? 0,
                               estimatedCost: response.usage?.estimatedCost ?? 0,
@@ -915,7 +945,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                             yield* obs.recordHistogram(
                               "llm.request.duration_ms",
                               llmDurationMs,
-                              { model: String((c.selectedModel as any)?.model ?? "unknown") },
+                              { model: String(c.selectedModel ?? "unknown") },
                             ).pipe(Effect.catchAll(() => Effect.void));
                           }
 
@@ -955,7 +985,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                                 eventType: "decision-made",
                                 createdAt: now,
                                 metadata: {
-                                  model: String((c.selectedModel as any)?.model ?? c.selectedModel ?? "unknown"),
+                                  model: String(c.selectedModel ?? "unknown"),
                                   messageCount: messagesToSend.length,
                                   tokensUsed: response.usage?.totalTokens ?? 0,
                                   durationMs: llmDurationMs,
@@ -1099,13 +1129,6 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                                       success: false,
                                     }).pipe(Effect.catchAll(() => Effect.void));
                                   }
-                                  // Record tool execution in metrics
-                                  const metricsOpt = yield* Effect.serviceOption(MetricsCollectorTag);
-                                  if (metricsOpt._tag === "Some") {
-                                    yield* metricsOpt.value
-                                      .recordToolExecution(toolName, durationMs, "error")
-                                      .pipe(Effect.catchAll(() => Effect.void));
-                                  }
                                   return {
                                     toolCallId: callId,
                                     toolName,
@@ -1150,15 +1173,6 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                                     durationMs: toolResult.durationMs,
                                     success: toolResult.success,
                                   }).pipe(Effect.catchAll(() => Effect.void));
-                                }
-
-                                // Record tool execution in metrics
-                                const metricsOpt = yield* Effect.serviceOption(MetricsCollectorTag);
-                                if (metricsOpt._tag === "Some") {
-                                  const status = toolResult.success ? "success" : "error";
-                                  yield* metricsOpt.value
-                                    .recordToolExecution(toolName, toolResult.durationMs, status)
-                                    .pipe(Effect.catchAll(() => Effect.void));
                                 }
 
                                 return toolResult;
@@ -1489,6 +1503,23 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   yield* obs.info(
                     `◉ [complete]   ✓ ${task.id} | ${toks} tok | ${costStr} | ${durationSec}s`,
                   ).pipe(Effect.catchAll(() => Effect.void));
+                }
+
+                // Record final metrics for dashboard
+                if (obs) {
+                  yield* obs.setGauge("execution.tokens_used", ctx.tokensUsed, { taskId: ctx.taskId })
+                    .pipe(Effect.catchAll(() => Effect.void));
+                  yield* obs.setGauge("execution.total_duration", result.metadata.duration, { taskId: ctx.taskId })
+                    .pipe(Effect.catchAll(() => Effect.void));
+                  yield* obs.setGauge("execution.iteration", ctx.iteration, { taskId: ctx.taskId })
+                    .pipe(Effect.catchAll(() => Effect.void));
+
+                  // Record model used (updated to actual model from LLM provider response)
+                  const modelName = String(ctx.selectedModel ?? "unknown");
+                  const provider = String(config.provider ?? "unknown");
+
+                  yield* obs.incrementCounter("execution.model_name", 0, { model: modelName, provider, taskId: ctx.taskId })
+                    .pipe(Effect.catchAll(() => Effect.void));
                 }
 
                 // Phase 0.2: Publish TaskCompleted

@@ -1,4 +1,4 @@
-import { Effect, Layer, Schema } from "effect";
+import { Effect, Layer, Schema, ManagedRuntime } from "effect";
 import { createRuntime } from "./runtime.js";
 import type { MCPServerConfig } from "./runtime.js";
 import { ExecutionEngine } from "./execution-engine.js";
@@ -11,104 +11,301 @@ import type { PromptTemplate } from "@reactive-agents/prompts";
 import type { Task, TaskResult } from "@reactive-agents/core";
 import type { TaskError } from "@reactive-agents/core";
 import { generateTaskId, AgentId } from "@reactive-agents/core";
+import type { AgentEvent } from "@reactive-agents/core";
+import { EventBus } from "@reactive-agents/core";
+import { KillSwitchService } from "@reactive-agents/guardrails";
 
 // ─── Provider Types ──────────────────────────────────────────────────────────
 
-export type ProviderName = "anthropic" | "openai" | "ollama" | "gemini" | "test";
+/**
+ * Name of the LLM provider to use.
+ *
+ * - `"anthropic"` — Claude models via Anthropic API (requires `ANTHROPIC_API_KEY`)
+ * - `"openai"` — GPT models via OpenAI API (requires `OPENAI_API_KEY`)
+ * - `"ollama"` — Local models via Ollama (no API key needed)
+ * - `"gemini"` — Google Gemini models (requires `GOOGLE_API_KEY`)
+ * - `"litellm"` — LiteLLM proxy for 40+ provider models
+ * - `"test"` — Mock LLM for testing (uses `withTestResponses()`)
+ */
+export type ProviderName = "anthropic" | "openai" | "ollama" | "gemini" | "litellm" | "test";
 
 // ─── Optional Parameter Types ─────────────────────────────────────────────────
 
-/** Agent persona for steering behavior — structured alternative to raw system prompts. */
+/**
+ * Agent persona for steering behavior — a structured alternative to raw system prompts.
+ *
+ * Provides a type-safe way to define agent characteristics (role, background, instructions, tone)
+ * that get composed into the system prompt. When both persona and system prompt are provided,
+ * the persona is prepended to the system prompt.
+ *
+ * @example
+ * ```typescript
+ * const agent = await ReactiveAgents.create()
+ *   .withPersona({
+ *     role: "Data Analyst",
+ *     background: "Expert in statistical analysis and data visualization",
+ *     instructions: "Always check data quality before analysis",
+ *     tone: "professional and technical"
+ *   })
+ *   .build();
+ * ```
+ */
 export interface AgentPersona {
-  /** Display name of the agent (defaults to builder .withName() value) */
+  /** Display name of the agent (defaults to builder `.withName()` value). Default: undefined */
   readonly name?: string;
-  /** What this agent does — injected as "Role:" section */
+  /** What this agent does — injected as "Role:" section of system prompt. Default: undefined */
   readonly role?: string;
-  /** Background context / expertise description */
+  /** Background context or expertise description — injected as "Background:" section. Default: undefined */
   readonly background?: string;
-  /** Explicit behavioral instructions */
+  /** Explicit behavioral instructions — injected as "Instructions:" section. Default: undefined */
   readonly instructions?: string;
-  /** Tone/style guidance (e.g. "professional", "concise", "friendly") */
+  /** Tone/style guidance (e.g., "professional", "concise", "friendly") — injected as "Tone:" section. Default: undefined */
   readonly tone?: string;
 }
 
-/** Options for `.withReasoning()` — all fields optional, merged with defaults. */
+/**
+ * Options for `.withReasoning()` — all fields optional, merged with framework defaults.
+ *
+ * Allows fine-tuning of the reasoning layer, including strategy selection and per-strategy parameters.
+ *
+ * @example
+ * ```typescript
+ * agent
+ *   .withReasoning({
+ *     defaultStrategy: "tree-of-thought",
+ *     adaptive: { confidenceThreshold: 0.75 }
+ *   })
+ * ```
+ */
 export interface ReasoningOptions {
-  /** Default strategy: "reactive" | "plan-execute-reflect" | "tree-of-thought" | "reflexion" | "adaptive" */
+  /** Default reasoning strategy — one of: `"reactive"`, `"plan-execute-reflect"`, `"tree-of-thought"`, `"reflexion"`, `"adaptive"`. Default: "reactive" */
   readonly defaultStrategy?: ReasoningConfig["defaultStrategy"];
-  /** Per-strategy overrides (partial). */
+  /** Per-strategy configuration overrides (partial, merged with defaults). Default: {} */
   readonly strategies?: Partial<ReasoningConfig["strategies"]>;
-  /** Adaptive reasoning settings. */
+  /** Adaptive reasoning settings (e.g., confidence thresholds, backoff strategies). Default: {} */
   readonly adaptive?: Partial<ReasoningConfig["adaptive"]>;
 }
 
-/** Options for `.withTools()` — all fields optional. */
+/**
+ * Options for `.withTools()` — register custom tools with the agent.
+ *
+ * Custom tools are registered in addition to built-in tools (file-write, file-read, web-search, etc.).
+ * Tools can also be connected via MCP servers.
+ *
+ * @example
+ * ```typescript
+ * agent
+ *   .withTools({
+ *     tools: [
+ *       {
+ *         definition: { name: "my-tool", description: "...", parameters: [...] },
+ *         handler: (args) => Effect.succeed({ result: "done" })
+ *       }
+ *     ]
+ *   })
+ * ```
+ */
 export interface ToolsOptions {
-  /** Custom tool definitions to register after build. */
+  /** Array of custom tool definitions and handlers to register. Each entry includes the tool definition (name, description, parameters) and an async handler function. Default: [] */
   readonly tools?: ReadonlyArray<{
     readonly definition: ToolDefinition;
     readonly handler: (args: Record<string, unknown>) => Effect.Effect<unknown>;
   }>;
 }
 
-/** Options for `.withPrompts()` — all fields optional. */
+/**
+ * Options for `.withPrompts()` — register custom prompt templates.
+ *
+ * Custom templates are registered in addition to built-in prompt library templates.
+ * Templates can be referenced by name in reasoning strategies and tool descriptions.
+ *
+ * @example
+ * ```typescript
+ * agent
+ *   .withPrompts({
+ *     templates: [
+ *       { id: "custom-analysis", content: "Analyze the following...", tier: "frontier" }
+ *     ]
+ *   })
+ * ```
+ */
 export interface PromptsOptions {
-  /** Custom prompt templates to register after build. */
+  /** Array of custom prompt templates to register. Each template includes an ID, content, and optionally a tier specification. Default: [] */
   readonly templates?: ReadonlyArray<PromptTemplate>;
 }
 
-/** Options for `.withObservability()` — configure observability verbosity and live streaming. */
+/**
+ * Options for `.withObservability()` — configure observability verbosity, live streaming, and exporters.
+ *
+ * Controls how much output is displayed during agent execution and whether logs are streamed in real-time
+ * or exported to a file. The metrics dashboard automatically shows on completion at "normal" verbosity or higher.
+ *
+ * @example
+ * ```typescript
+ * agent
+ *   .withObservability({
+ *     verbosity: "verbose",
+ *     live: true,
+ *     file: "./logs/agent.jsonl"
+ *   })
+ * ```
+ */
 export interface ObservabilityOptions {
-  /** Verbosity level. Default: "normal" */
+  /**
+   * Output verbosity level:
+   * - `"minimal"` — no output except final result
+   * - `"normal"` — metrics dashboard only (recommended)
+   * - `"verbose"` — dashboard + structured phase logs
+   * - `"debug"` — everything without truncation, full context dumps
+   *
+   * Default: `"normal"`
+   */
   readonly verbosity?: "minimal" | "normal" | "verbose" | "debug";
-  /** Stream logs in real-time as the agent runs. Default: false */
+  /**
+   * Stream logs in real-time as the agent executes each phase.
+   * When enabled, phase logs appear immediately; otherwise they are buffered until the final dashboard.
+   *
+   * Default: `false`
+   */
   readonly live?: boolean;
-  /** Path for JSONL file output. */
+  /**
+   * Path for JSONL file export. Each log entry is written as a JSON object on a separate line.
+   * Useful for post-processing or long-term metric archival.
+   *
+   * Default: undefined (no file export)
+   */
   readonly file?: string;
 }
 
-/** Options for `.withA2A()` — configure A2A server */
+/**
+ * Options for `.withA2A()` — configure the Agent-to-Agent (A2A) protocol server.
+ *
+ * When enabled, the agent exposes a JSON-RPC 2.0 HTTP server that allows other agents
+ * to invoke it remotely. The agent becomes discoverable via Agent Cards at `/.well-known/agent.json`.
+ *
+ * @example
+ * ```typescript
+ * agent
+ *   .withA2A({ port: 8000, basePath: "/api/agents" })
+ * ```
+ */
 export interface A2AOptions {
-  /** Port for A2A server (default: 3000) */
+  /**
+   * HTTP port for the A2A server.
+   *
+   * Default: `3000`
+   */
   readonly port?: number;
-  /** Base path for A2A endpoints */
+  /**
+   * Base path for A2A endpoints (e.g., `/api/agents` → `http://localhost:3000/api/agents/rpc`).
+   *
+   * Default: `/` (root)
+   */
   readonly basePath?: string;
 }
 
-/** Options for `.withAgentTool()` — register agent as tool */
+/**
+ * Options for `.withAgentTool()` — register a local or remote agent as a callable tool.
+ *
+ * Allows this agent to spawn sub-agents (either locally or via remote A2A invocation) that
+ * run in isolated contexts and return results. Sub-agents inherit the parent's provider/model by default
+ * but can override them. Local sub-agents do NOT inherit the spawn-agent tool unless explicitly given it.
+ *
+ * @example
+ * ```typescript
+ * agent
+ *   .withAgentTool("researcher", {
+ *     name: "Research Agent",
+ *     description: "Gathers information and synthesizes findings",
+ *     provider: "anthropic",
+ *     model: "claude-opus-4-20250514",
+ *     tools: ["web-search", "file-write"],
+ *     maxIterations: 15
+ *   })
+ * ```
+ */
 export interface AgentToolOptions {
-  /** Name for this agent tool */
+  /**
+   * Name of the tool as it appears in the agent's tool registry.
+   * The LLM can invoke it by name, e.g., `web_search` or `researcher`.
+   */
   readonly name: string;
-  /** Agent configuration for local agent */
+  /**
+   * Configuration for a local sub-agent (mutually exclusive with `remoteUrl`).
+   * If provided, a new agent instance is created and run in this process.
+   */
   readonly agent?: {
+    /** Name of the sub-agent (displayed in logs). */
     readonly name: string;
+    /** Description of what this sub-agent does (shown to the parent LLM). Default: auto-generated from name */
     readonly description?: string;
+    /** LLM provider for the sub-agent (inherits parent's if omitted). Default: parent's provider */
     readonly provider?: string;
+    /** Model for the sub-agent (inherits parent's if omitted). Default: parent's model */
     readonly model?: string;
+    /** List of tool names this sub-agent can use (e.g., `["web-search", "file-write"]`). Default: no tools */
     readonly tools?: readonly string[];
+    /** Maximum reasoning iterations for the sub-agent. Default: 5 */
     readonly maxIterations?: number;
+    /** System prompt for the sub-agent. Default: empty */
     readonly systemPrompt?: string;
+    /** Persona to steer the sub-agent's behavior (composed into system prompt). Default: undefined */
     readonly persona?: AgentPersona;
   };
-  /** URL for remote A2A agent */
+  /**
+   * URL of a remote A2A server (mutually exclusive with `agent`).
+   * If provided, tool invocations are sent as JSON-RPC calls to the remote agent.
+   *
+   * Default: undefined (local agent)
+   */
   readonly remoteUrl?: string;
 }
 
 // ─── Result Types ────────────────────────────────────────────────────────────
 
+/**
+ * Metadata about an agent execution result.
+ *
+ * Captures timing, costs, token usage, and execution details for observability and analysis.
+ */
 export interface AgentResultMetadata {
+  /** Total wall-clock duration in milliseconds. */
   readonly duration: number;
+  /** Estimated cost in USD (calculated from token count). */
   readonly cost: number;
+  /** Total tokens consumed by the LLM for this execution. */
   readonly tokensUsed: number;
+  /** Name of the reasoning strategy that was used (e.g., "reactive", "tree-of-thought"). Default: undefined */
   readonly strategyUsed?: string;
+  /** Number of reasoning iterations/steps taken to complete the task. */
   readonly stepsCount: number;
 }
 
+/**
+ * Result of a completed agent execution.
+ *
+ * Includes the final output, success status, task ID, and execution metadata
+ * for full observability of what the agent did and how long it took.
+ *
+ * @example
+ * ```typescript
+ * const result = await agent.run("What is 2+2?");
+ * console.log(result.output);           // "4"
+ * console.log(result.success);          // true
+ * console.log(result.metadata.duration); // 1250 (ms)
+ * console.log(result.metadata.cost);    // 0.00123 (USD)
+ * ```
+ */
 export interface AgentResult {
+  /** The final output/answer produced by the agent. */
   readonly output: string;
+  /** Whether the execution completed successfully (true) or failed (false). */
   readonly success: boolean;
+  /** Unique ID for this execution task. */
   readonly taskId: string;
+  /** ID of the agent that performed the execution. */
   readonly agentId: string;
+  /** Metadata about the execution (duration, cost, tokens, strategy, steps). */
   readonly metadata: AgentResultMetadata;
 }
 
@@ -116,7 +313,14 @@ export interface AgentResult {
 
 /**
  * Compose an AgentPersona into a structured system prompt.
- * Only includes non-empty sections.
+ *
+ * Builds a multi-section prompt with Role, Background, Instructions, and Tone (if provided).
+ * Empty sections are omitted. This is used internally during agent build to merge persona
+ * configuration with explicit system prompts.
+ *
+ * @param persona - The agent persona to compose
+ * @param agentName - Name of the agent (for logging/reference, not included in output)
+ * @returns A formatted system prompt string with persona sections
  */
 function composePersonaToSystemPrompt(persona: AgentPersona, agentName: string): string {
   const sections: string[] = [];
@@ -146,13 +350,50 @@ function composePersonaToSystemPrompt(persona: AgentPersona, agentName: string):
 
 // ─── ReactiveAgents Namespace ────────────────────────────────────────────────
 
+/**
+ * Factory for creating agent builders.
+ * Entry point for the Reactive Agents builder API.
+ *
+ * @example
+ * ```typescript
+ * const agent = await ReactiveAgents.create()
+ *   .withName("my-assistant")
+ *   .withProvider("anthropic")
+ *   .withModel("claude-opus-4-20250514")
+ *   .withReasoning()
+ *   .withTools()
+ *   .build();
+ * ```
+ */
 export const ReactiveAgents = {
-  /** Create a new builder. All configuration is optional except `.withModel()`. */
+  /**
+   * Create a new agent builder with defaults.
+   * All builder methods are optional; no configuration is required at creation time.
+   *
+   * @returns A new `ReactiveAgentBuilder` instance
+   */
   create: (): ReactiveAgentBuilder => new ReactiveAgentBuilder(),
 };
 
-// ─── ReactiveAgentBuilder ────────────────────────────────────────────────────
-
+/**
+ * Fluent builder for configuring and instantiating Reactive Agents.
+ *
+ * All builder methods return `this` for method chaining. Call `.build()` or `.buildEffect()`
+ * when configuration is complete to instantiate the agent.
+ *
+ * @example
+ * ```typescript
+ * const agent = await ReactiveAgents.create()
+ *   .withName("analyzer")
+ *   .withProvider("anthropic")
+ *   .withModel("claude-opus-4-20250514")
+ *   .withReasoning({ defaultStrategy: "tree-of-thought" })
+ *   .withTools()
+ *   .withGuardrails()
+ *   .withObservability({ verbosity: "normal", live: true })
+ *   .build();
+ * ```
+ */
 export class ReactiveAgentBuilder {
   private _name: string = "agent";
   private _provider: ProviderName = "test";
@@ -185,14 +426,48 @@ export class ReactiveAgentBuilder {
   private _allowDynamicSubAgents: boolean = false;
   private _dynamicSubAgentOptions?: { maxIterations?: number };
   private _persona?: AgentPersona;
+  private _enableKillSwitch: boolean = false;
+  private _enableBehavioralContracts: boolean = false;
+  private _behavioralContract?: import("@reactive-agents/guardrails").BehavioralContract;
+  private _enableSelfImprovement: boolean = false;
+  private _enableEvents: boolean = false;
 
   // ─── Identity ───
 
+  /**
+   * Set the agent's name — used for identification and logging.
+   *
+   * @param name - Display name for the agent
+   * @returns `this` for chaining
+   * @example
+   * ```typescript
+   * builder.withName("my-assistant")
+   * ```
+   */
   withName(name: string): this {
     this._name = name;
     return this;
   }
 
+  /**
+   * Set the agent's persona — a structured way to define behavior and characteristics.
+   *
+   * The persona is composed into the system prompt, providing guidance on role, background,
+   * instructions, and tone. When combined with an explicit system prompt, the persona
+   * is prepended before the custom prompt.
+   *
+   * @param persona - AgentPersona with role, background, instructions, and/or tone
+   * @returns `this` for chaining
+   * @example
+   * ```typescript
+   * builder.withPersona({
+   *   role: "Data Scientist",
+   *   background: "Expert in statistical analysis",
+   *   instructions: "Always validate assumptions",
+   *   tone: "professional and rigorous"
+   * })
+   * ```
+   */
   withPersona(persona: AgentPersona): this {
     this._persona = persona;
     return this;
@@ -200,6 +475,19 @@ export class ReactiveAgentBuilder {
 
   // ─── System Prompt ───
 
+  /**
+   * Set a custom system prompt to guide the agent's behavior.
+   *
+   * If both system prompt and persona are provided, the persona is prepended to the system prompt.
+   * The system prompt is passed to the LLM with every request.
+   *
+   * @param prompt - Custom system prompt text
+   * @returns `this` for chaining
+   * @example
+   * ```typescript
+   * builder.withSystemPrompt("You are a helpful coding assistant...")
+   * ```
+   */
   withSystemPrompt(prompt: string): this {
     this._systemPrompt = prompt;
     return this;
@@ -207,7 +495,19 @@ export class ReactiveAgentBuilder {
 
   // ─── A2A ────────────────────────────────────────────────────────────────────
 
-  /** Enable A2A server on the agent */
+  /**
+   * Enable Agent-to-Agent (A2A) protocol server for remote agent invocation.
+   *
+   * When enabled, the agent exposes a JSON-RPC 2.0 HTTP endpoint at `/.well-known/agent.json`
+   * that allows other agents or services to discover and invoke this agent remotely.
+   *
+   * @param options - A2A configuration (port, basePath)
+   * @returns `this` for chaining
+   * @example
+   * ```typescript
+   * builder.withA2A({ port: 8000 })
+   * ```
+   */
   withA2A(options?: A2AOptions): this {
     this._a2aOptions = options ?? { port: 3000 };
     return this;
@@ -215,7 +515,25 @@ export class ReactiveAgentBuilder {
 
   // ─── Agent Tools ─────────────────────────────────────────────────────────────
 
-  /** Register a local agent as a callable tool with real sub-agent delegation */
+  /**
+   * Register a local agent as a callable tool for real sub-agent delegation.
+   *
+   * The sub-agent runs in an isolated context with its own reasoning loop.
+   * It inherits the parent's provider and model by default but can override them.
+   * Sub-agents do NOT automatically inherit the spawn-agent tool.
+   *
+   * @param name - Name of the tool (how the LLM invokes it)
+   * @param agent - Sub-agent configuration
+   * @returns `this` for chaining
+   * @example
+   * ```typescript
+   * builder.withAgentTool("researcher", {
+   *   name: "Research Agent",
+   *   description: "Gathers and synthesizes information",
+   *   maxIterations: 15
+   * })
+   * ```
+   */
   withAgentTool(name: string, agent: {
     name: string;
     description?: string;
@@ -231,11 +549,19 @@ export class ReactiveAgentBuilder {
   }
 
   /**
-   * Allow this agent to dynamically spawn sub-agents at runtime via the
-   * built-in `spawn-agent` tool. Sub-agents run in a clean context window
-   * (no parent history) using the parent's provider and model by default.
-   * Depth is capped at MAX_RECURSION_DEPTH (3); spawned sub-agents do NOT
-   * inherit the spawn-agent tool unless explicitly given it.
+   * Allow this agent to dynamically spawn sub-agents at runtime via the `spawn-agent` tool.
+   *
+   * Sub-agents run in a clean context window (no parent history) using the parent's provider
+   * and model by default. The parent LLM can generate parameters to steer spawned agents.
+   * Recursion depth is capped at 3; spawned agents do NOT inherit the spawn-agent tool
+   * unless explicitly given it.
+   *
+   * @param options - Optional configuration (maxIterations for spawned agents)
+   * @returns `this` for chaining
+   * @example
+   * ```typescript
+   * builder.withDynamicSubAgents({ maxIterations: 8 })
+   * ```
    */
   withDynamicSubAgents(options?: { maxIterations?: number }): this {
     this._allowDynamicSubAgents = true;
@@ -243,7 +569,20 @@ export class ReactiveAgentBuilder {
     return this;
   }
 
-  /** Register a remote A2A agent as a callable tool */
+  /**
+   * Register a remote A2A agent as a callable tool for distributed agent networks.
+   *
+   * The tool invocations are sent as JSON-RPC 2.0 POST requests to the remote agent's
+   * endpoint. Responses are unpacked and returned to the parent agent.
+   *
+   * @param name - Name of the tool (how the LLM invokes it)
+   * @param remoteUrl - Base URL of the remote A2A agent (e.g., `http://localhost:8000`)
+   * @returns `this` for chaining
+   * @example
+   * ```typescript
+   * builder.withRemoteAgent("remote-analyst", "http://remote-agent:8000")
+   * ```
+   */
   withRemoteAgent(name: string, remoteUrl: string): this {
     this._agentTools.push({ name, remoteUrl });
     return this;
@@ -251,11 +590,33 @@ export class ReactiveAgentBuilder {
 
   // ─── Model & Provider ───
 
+  /**
+   * Set the LLM model to use for this agent.
+   *
+   * Examples: `"claude-opus-4-20250514"`, `"gpt-4-turbo"`, `"mistral-large"`, `"gemini-2.0-flash"`
+   *
+   * @param model - Model identifier (provider-specific)
+   * @returns `this` for chaining
+   * @example
+   * ```typescript
+   * builder.withModel("claude-opus-4-20250514")
+   * ```
+   */
   withModel(model: string): this {
     this._model = model;
     return this;
   }
 
+  /**
+   * Set the LLM provider for the agent.
+   *
+   * @param provider - One of: `"anthropic"`, `"openai"`, `"ollama"`, `"gemini"`, `"litellm"`, or `"test"`
+   * @returns `this` for chaining
+   * @example
+   * ```typescript
+   * builder.withProvider("anthropic")
+   * ```
+   */
   withProvider(
     provider: ProviderName,
   ): this {
@@ -265,6 +626,19 @@ export class ReactiveAgentBuilder {
 
   // ─── Memory ───
 
+  /**
+   * Set the memory tier for the agent.
+   *
+   * - `"1"` — Lightweight memory (working memory only, minimal episodic storage)
+   * - `"2"` — Full memory system (working, episodic, procedural, semantic with embeddings)
+   *
+   * @param tier - Memory tier (`"1"` or `"2"`)
+   * @returns `this` for chaining
+   * @example
+   * ```typescript
+   * builder.withMemory("2")
+   * ```
+   */
   withMemory(tier: "1" | "2"): this {
     this._memoryTier = tier;
     return this;
@@ -272,6 +646,20 @@ export class ReactiveAgentBuilder {
 
   // ─── Execution ───
 
+  /**
+   * Set the maximum number of reasoning iterations the agent can perform.
+   *
+   * Higher values allow more complex reasoning but increase execution time and token cost.
+   * The agent stops earlier if it finds a final answer.
+   *
+   * @param n - Maximum iterations (typically 5-15)
+   * @returns `this` for chaining
+   * @example
+   * ```typescript
+   * builder.withMaxIterations(20)
+   * ```
+   * @default 10
+   */
   withMaxIterations(n: number): this {
     this._maxIterations = n;
     return this;
@@ -279,6 +667,26 @@ export class ReactiveAgentBuilder {
 
   // ─── Lifecycle Hooks ───
 
+  /**
+   * Register a lifecycle hook to be invoked at a specific phase and timing.
+   *
+   * Hooks can inspect/modify execution context before or after phases, or handle errors.
+   * Multiple hooks can be registered; they execute in registration order.
+   *
+   * @param hook - Lifecycle hook configuration
+   * @returns `this` for chaining
+   * @example
+   * ```typescript
+   * builder.withHook({
+   *   phase: "think",
+   *   timing: "after",
+   *   handler: (ctx) => Effect.sync(() => {
+   *     console.log(`Thought: ${ctx.metadata.thinking}`);
+   *     return ctx;
+   *   })
+   * })
+   * ```
+   */
   withHook(hook: LifecycleHook): this {
     this._hooks.push(hook);
     return this;
@@ -286,66 +694,265 @@ export class ReactiveAgentBuilder {
 
   // ─── Optional Features ───
 
+  /**
+   * Enable guardrails to protect against injection attacks and PII exposure.
+   *
+   * Guardrails check user input for prompt injection attempts and mask personally identifiable information.
+   *
+   * @returns `this` for chaining
+   */
   withGuardrails(): this {
     this._enableGuardrails = true;
     return this;
   }
 
+  /**
+   * Enable semantic verification to assess confidence in agent outputs.
+   *
+   * Verification uses semantic entropy, fact decomposition, and multi-source checking
+   * to estimate answer quality and flag uncertain outputs.
+   *
+   * @returns `this` for chaining
+   */
   withVerification(): this {
     this._enableVerification = true;
     return this;
   }
 
+  /**
+   * Enable cost tracking to monitor token consumption and estimate USD costs.
+   *
+   * @returns `this` for chaining
+   */
   withCostTracking(): this {
     this._enableCostTracking = true;
     return this;
   }
 
+  /**
+   * Enable audit logging for compliance and post-execution analysis.
+   *
+   * Audit logs record all phase transitions, tool invocations, and decision points.
+   *
+   * @returns `this` for chaining
+   */
   withAudit(): this {
     this._enableAudit = true;
     return this;
   }
 
+  /**
+   * Enable the reasoning layer to activate multi-step reasoning strategies.
+   *
+   * Without this, the agent performs single-step LLM calls. With it enabled,
+   * the agent can use strategies like ReAct (tool use loops), tree-of-thought, or plan-execute.
+   *
+   * @param options - Reasoning configuration overrides
+   * @returns `this` for chaining
+   * @example
+   * ```typescript
+   * builder.withReasoning({
+   *   defaultStrategy: "tree-of-thought"
+   * })
+   * ```
+   */
   withReasoning(options?: ReasoningOptions): this {
     this._enableReasoning = true;
     if (options) this._reasoningOptions = options;
     return this;
   }
 
+  /**
+   * Enable the tools layer to allow tool invocation (built-in or custom).
+   *
+   * Built-in tools include: file-write, file-read, web-search, http-get, code-execute.
+   * Additional tools can be provided via the options or via MCP servers.
+   *
+   * @param options - Custom tool definitions and handlers
+   * @returns `this` for chaining
+   * @example
+   * ```typescript
+   * builder.withTools({
+   *   tools: [
+   *     {
+   *       definition: { name: "my-tool", description: "...", parameters: [...] },
+   *       handler: async (args) => ({ result: "..." })
+   *     }
+   *   ]
+   * })
+   * ```
+   */
   withTools(options?: ToolsOptions): this {
     this._enableTools = true;
     if (options) this._toolsOptions = options;
     return this;
   }
 
+  /**
+   * Enable agent identity and identity verification via Ed25519 certificates.
+   *
+   * Allows the agent to sign messages and verify the identity of other agents in a network.
+   *
+   * @returns `this` for chaining
+   */
   withIdentity(): this {
     this._enableIdentity = true;
     return this;
   }
 
+  /**
+   * Enable observability — metrics collection, structured logging, and tracing.
+   *
+   * Automatically displays a metrics dashboard on completion showing execution timeline,
+   * tool usage, costs, and alerts. Configure verbosity and live streaming via options.
+   *
+   * @param options - Observability configuration (verbosity, live, file)
+   * @returns `this` for chaining
+   * @example
+   * ```typescript
+   * builder.withObservability({
+   *   verbosity: "normal",
+   *   live: true
+   * })
+   * ```
+   */
   withObservability(options?: ObservabilityOptions): this {
     this._enableObservability = true;
     if (options) this._observabilityOptions = options;
     return this;
   }
 
+  /**
+   * Enable interactive collaboration — approval gates and user feedback loops.
+   *
+   * Allows the agent to pause and request human approval for critical operations.
+   *
+   * @returns `this` for chaining
+   */
   withInteraction(): this {
     this._enableInteraction = true;
     return this;
   }
 
+  /**
+   * Enable the prompt template service for prompt management and A/B experiments.
+   *
+   * Allows registering and selecting from a library of prompts, with support for
+   * model-tier-specific variants and experiment tracking.
+   *
+   * @param options - Custom prompt template definitions
+   * @returns `this` for chaining
+   * @example
+   * ```typescript
+   * builder.withPrompts({
+   *   templates: [...]
+   * })
+   * ```
+   */
   withPrompts(options?: PromptsOptions): this {
     this._enablePrompts = true;
     if (options) this._promptsOptions = options;
     return this;
   }
 
+  /**
+   * Enable the orchestration layer for multi-agent workflows.
+   *
+   * Allows defining and executing complex workflows with approval gates and task dependencies.
+   *
+   * @returns `this` for chaining
+   */
   withOrchestration(): this {
     this._enableOrchestration = true;
     return this;
   }
 
-  /** Set model context profile overrides — controls compaction thresholds, verbosity, tool result sizes. */
+  /**
+   * Enable the kill switch service — allows pausing, resuming, stopping, and terminating agents.
+   *
+   * Provides fine-grained control over agent execution at phase boundaries.
+   * Required for `.pause()`, `.resume()`, `.stop()`, and `.terminate()` methods on ReactiveAgent.
+   *
+   * @returns `this` for chaining
+   */
+  withKillSwitch(): this {
+    this._enableKillSwitch = true;
+    return this;
+  }
+
+  /**
+   * Enable behavioral contracts — enforce constraints on tool usage, outputs, and iterations.
+   *
+   * Contracts can enforce that certain tools must/must not be used, iterations cannot exceed
+   * a threshold, or output must conform to specific patterns. Violations trigger guardrail violations.
+   *
+   * @param contract - Behavioral contract specification
+   * @returns `this` for chaining
+   * @example
+   * ```typescript
+   * builder.withBehavioralContracts({
+   *   maxIterations: 10,
+   *   allowedTools: ["file-write", "web-search"],
+   *   forbiddenTools: ["code-execute"]
+   * })
+   * ```
+   */
+  withBehavioralContracts(contract: import("@reactive-agents/guardrails").BehavioralContract): this {
+    this._enableBehavioralContracts = true;
+    this._behavioralContract = contract;
+    return this;
+  }
+
+  /**
+   * Enable cross-task self-improvement — the agent learns from past execution outcomes.
+   *
+   * Requires memory tier 2. When enabled, the agent logs which reasoning strategies
+   * succeeded or failed on similar tasks and biases future strategy selection toward
+   * strategies with higher success rates.
+   *
+   * @returns `this` for chaining
+   */
+  withSelfImprovement(): this {
+    this._enableSelfImprovement = true;
+    return this;
+  }
+
+  /**
+   * Enable agent lifecycle events — allows subscribing to agent execution events.
+   *
+   * Enables the `.subscribe()` method on ReactiveAgent to listen for events like
+   * `"AgentStarted"`, `"LLMRequestStarted"`, `"ToolCallStarted"`, `"AgentCompleted"`, etc.
+   *
+   * @returns `this` for chaining
+   * @example
+   * ```typescript
+   * const unsub = await agent.subscribe("ToolCallCompleted", (event) => {
+   *   console.log(`Tool ${event.toolName} took ${event.durationMs}ms`);
+   * });
+   * ```
+   */
+  withEvents(): this {
+    this._enableEvents = true;
+    return this;
+  }
+
+  /**
+   * Set model-adaptive context profile overrides — controls compaction, truncation, and tool result handling.
+   *
+   * Profiles define per-model-tier thresholds for context budget, tool result size, and compaction
+   * level. Use this to tune the agent for specific model capabilities or task requirements.
+   *
+   * @param profile - Partial context profile with overrides
+   * @returns `this` for chaining
+   * @example
+   * ```typescript
+   * builder.withContextProfile({
+   *   budgetTokens: 4000,
+   *   toolResultMaxChars: 1000,
+   *   compactionLevel: "grouped"
+   * })
+   * ```
+   */
   withContextProfile(profile: Partial<ContextProfile>): this {
     this._contextProfile = profile;
     return this;
@@ -353,6 +960,25 @@ export class ReactiveAgentBuilder {
 
   // ─── MCP Servers ───
 
+  /**
+   * Connect one or more Model Context Protocol (MCP) servers.
+   *
+   * MCP servers expose tools via a standardized protocol (stdio, SSE, or WebSocket).
+   * Tools are automatically discovered and added to the agent's tool registry.
+   * Implicitly enables the tools layer.
+   *
+   * @param config - MCP server configuration(s) — can be a single config or array
+   * @returns `this` for chaining
+   * @example
+   * ```typescript
+   * builder.withMCP({
+   *   name: "filesystem",
+   *   transport: "stdio",
+   *   command: "mcp-server-filesystem",
+   *   args: ["/home/user/data"]
+   * })
+   * ```
+   */
   withMCP(config: MCPServerConfig | MCPServerConfig[]): this {
     const configs = Array.isArray(config) ? config : [config];
     this._mcpServers.push(...configs);
@@ -362,6 +988,22 @@ export class ReactiveAgentBuilder {
 
   // ─── Testing ───
 
+  /**
+   * Configure mock LLM responses for testing (provider: "test" only).
+   *
+   * Maps input patterns to predefined outputs. Useful for testing agent behavior
+   * without hitting real LLM APIs.
+   *
+   * @param responses - Map of input pattern → output string
+   * @returns `this` for chaining
+   * @example
+   * ```typescript
+   * builder.withTestResponses({
+   *   "What is 2+2?": "4",
+   *   ".*search.*": "No results found"
+   * })
+   * ```
+   */
   withTestResponses(responses: Record<string, string>): this {
     this._testResponses = responses;
     return this;
@@ -369,6 +1011,15 @@ export class ReactiveAgentBuilder {
 
   // ─── Extra Layers ───
 
+  /**
+   * Compose additional Effect-TS layers into the runtime.
+   *
+   * Advanced feature for adding custom services or dependencies.
+   * Layers are merged into the main runtime layer stack.
+   *
+   * @param layers - Effect-TS Layer(s) to add
+   * @returns `this` for chaining
+   */
   withLayers(layers: Layer.Layer<any, any>): this {
     this._extraLayers = layers;
     return this;
@@ -376,10 +1027,40 @@ export class ReactiveAgentBuilder {
 
   // ─── Build ───
 
+  /**
+   * Build and instantiate the agent (simple async version).
+   *
+   * Validates configuration, creates layers, and returns a ready-to-use ReactiveAgent.
+   * Throws an error if required API keys are missing.
+   *
+   * @returns Promise resolving to a ReactiveAgent instance
+   * @throws Error if configuration is invalid or API keys are missing
+   * @example
+   * ```typescript
+   * const agent = await ReactiveAgents.create()
+   *   .withModel("claude-opus-4-20250514")
+   *   .build();
+   * ```
+   */
   async build(): Promise<ReactiveAgent> {
     return Effect.runPromise(this.buildEffect());
   }
 
+  /**
+   * Build the agent as an Effect (advanced async version).
+   *
+   * Returns an Effect that, when run, instantiates the agent.
+   * Useful for composing agent creation into larger Effect workflows.
+   *
+   * @returns Effect that produces a ReactiveAgent
+   * @example
+   * ```typescript
+   * const buildEffect = ReactiveAgents.create()
+   *   .withModel("claude-opus-4-20250514")
+   *   .buildEffect();
+   * const agent = await Effect.runPromise(buildEffect);
+   * ```
+   */
   buildEffect(): Effect.Effect<ReactiveAgent, Error> {
     // Validate provider API key exists at build time (fast fail)
     const keyMap: Record<string, string | undefined> = {
@@ -425,6 +1106,10 @@ export class ReactiveAgentBuilder {
       enableInteraction: this._enableInteraction,
       enablePrompts: this._enablePrompts,
       enableOrchestration: this._enableOrchestration,
+      enableKillSwitch: this._enableKillSwitch,
+      enableBehavioralContracts: this._enableBehavioralContracts,
+      behavioralContract: this._behavioralContract,
+      enableSelfImprovement: this._enableSelfImprovement,
       testResponses: this._testResponses,
       extraLayers: this._extraLayers,
       systemPrompt: composedSystemPrompt,
@@ -794,19 +1479,35 @@ export class ReactiveAgentBuilder {
         );
       }
 
-      // The runtime layer provides all required services dynamically; cast to
-      // Layer<never> so the facade can provide it without leaking the union type.
-      return new ReactiveAgent(engine, agentId, fullRuntime as unknown as Layer.Layer<never>);
+      // Create a ManagedRuntime so all facade calls (run, subscribe, pause, etc.)
+      // share the same layer scope and the same service instances (EventBus, KillSwitch, etc.).
+      const managedRuntime = ManagedRuntime.make(fullRuntime as unknown as Layer.Layer<any>);
+      return new ReactiveAgent(engine, agentId, managedRuntime);
     }) as Effect.Effect<ReactiveAgent, Error>;
   }
 }
 
-// ─── ReactiveAgent Facade ────────────────────────────────────────────────────
-
-// NOTE: The engine/runtime use broad types because the runtime Layer is dynamically
-// composed from optional features (reasoning, tools, guardrails, etc.), making
-// precise typing impractical without phantom types. The public API (run/cancel/getContext)
-// returns properly typed results via explicit type annotations.
+/**
+ * Reactive Agent — the main facade for executing tasks and controlling agent behavior.
+ *
+ * Create instances via `ReactiveAgents.create().build()`. The agent provides simple async
+ * methods (`run()`, `pause()`, `resume()`) and advanced Effect-based methods (`runEffect()`, `subscribe()`).
+ *
+ * All execution methods share a single managed runtime, so lifecycle state (pause/resume),
+ * event subscriptions, and service instances are properly maintained across calls.
+ *
+ * @example
+ * ```typescript
+ * const agent = await ReactiveAgents.create()
+ *   .withProvider("anthropic")
+ *   .withModel("claude-opus-4-20250514")
+ *   .withReasoning()
+ *   .build();
+ *
+ * const result = await agent.run("What is the capital of France?");
+ * console.log(result.output); // "Paris"
+ * ```
+ */
 export class ReactiveAgent {
   constructor(
     private readonly engine: {
@@ -814,24 +1515,53 @@ export class ReactiveAgent {
       cancel: (taskId: string) => Effect.Effect<void, RuntimeErrors>;
       getContext: (taskId: string) => Effect.Effect<ExecutionContext | null, never>;
     },
+    /**
+     * Unique identifier for this agent instance — set at instantiation and remains constant
+     * across all executions, pause/resume cycles, and subscriptions.
+     */
     readonly agentId: string,
-    private readonly runtime: Layer.Layer<never>,
+    // ManagedRuntime evaluates the layer once; all facade calls share service instances.
+    private readonly runtime: ManagedRuntime.ManagedRuntime<any, never>,
   ) {}
 
   /**
-   * Run a task and return the result (Simple API).
+   * Execute a task and return the result (simple async version).
+   *
+   * Blocks until the agent completes or fails. Returns full metadata including duration,
+   * cost, tokens used, and reasoning strategy/iteration count.
+   *
+   * @param input - The task prompt or question
+   * @returns Promise resolving to an AgentResult with output, success status, and metadata
+   * @throws Error if the task fails or required services are unavailable
+   * @example
+   * ```typescript
+   * const result = await agent.run("Write a haiku about programming");
+   * console.log(result.output);
+   * console.log(`Took ${result.metadata.duration}ms`);
+   * console.log(`Cost: $${result.metadata.cost}`);
+   * ```
    */
   async run(input: string): Promise<AgentResult> {
     return Effect.runPromise(this.runEffect(input));
   }
 
   /**
-   * Run a task and return the result (Advanced API — Effect).
+   * Execute a task as an Effect (advanced async version).
+   *
+   * Returns an Effect that, when run, performs the task execution. Useful for composing
+   * task execution into larger Effect workflows or for custom error handling.
+   *
+   * @param input - The task prompt or question
+   * @returns Effect that produces an AgentResult
+   * @example
+   * ```typescript
+   * const effect = agent.runEffect("What is 2+2?");
+   * const result = await Effect.runPromise(effect.pipe(
+   *   Effect.tapError(err => Effect.logError(err))
+   * ));
+   * ```
    */
   runEffect(input: string): Effect.Effect<AgentResult, Error> {
-    const engine = this.engine;
-    const runtime = this.runtime;
-
     const task: Task = {
       id: generateTaskId(),
       agentId: Schema.decodeSync(AgentId)(this.agentId),
@@ -843,40 +1573,217 @@ export class ReactiveAgent {
       createdAt: new Date(),
     };
 
-    return engine.execute(task).pipe(
-      Effect.map((result: TaskResult) => ({
-        output: String(result.output ?? ""),
-        success: result.success,
-        taskId: String(result.taskId),
-        agentId: String(result.agentId),
-        metadata: result.metadata as AgentResultMetadata,
-      })),
-      Effect.mapError(
-        (e: RuntimeErrors | TaskError) => {
-          const err = new Error("message" in e ? e.message : String(e));
-          return err;
-        },
+    return Effect.promise(() =>
+      this.runtime.runPromise(
+        this.engine.execute(task).pipe(
+          Effect.map((result: TaskResult) => ({
+            output: String(result.output ?? ""),
+            success: result.success,
+            taskId: String(result.taskId),
+            agentId: String(result.agentId),
+            metadata: result.metadata as AgentResultMetadata,
+          })),
+          Effect.mapError(
+            (e: RuntimeErrors | TaskError) =>
+              new Error("message" in e ? e.message : String(e)),
+          ),
+        ) as Effect.Effect<AgentResult, Error>,
       ),
-      Effect.provide(runtime),
-    ) as Effect.Effect<AgentResult, Error>;
+    );
   }
 
-  /** Cancel a running task by ID. */
+  /**
+   * Cancel a running task by its ID (graceful shutdown).
+   *
+   * Signals the ExecutionEngine to stop processing the specified task.
+   * The agent will finish the current phase before stopping.
+   *
+   * @param taskId - ID of the task to cancel
+   * @returns Promise that resolves when cancellation is complete
+   * @example
+   * ```typescript
+   * const result = agent.run("long-running-task");
+   * // Later...
+   * await agent.cancel(taskId);
+   * ```
+   */
   async cancel(taskId: string): Promise<void> {
-    return Effect.runPromise(
+    return this.runtime.runPromise(
       this.engine.cancel(taskId).pipe(
         Effect.mapError((e: RuntimeErrors) => new Error("message" in e ? e.message : String(e))),
-        Effect.provide(this.runtime),
+        Effect.catchAll(() => Effect.void),
       ) as Effect.Effect<void>,
     );
   }
 
-  /** Inspect context of a running task (null if not running). */
+  /**
+   * Inspect the current execution context of a running task.
+   *
+   * Returns the current ExecutionContext (messages, metadata, phase, iteration count, etc.)
+   * or null if the task is not currently running.
+   *
+   * @param taskId - ID of the task to inspect
+   * @returns Promise resolving to ExecutionContext or null
+   * @example
+   * ```typescript
+   * const ctx = await agent.getContext(taskId);
+   * if (ctx) {
+   *   console.log(`Phase: ${ctx.phase}, Iteration: ${ctx.iteration}`);
+   * }
+   * ```
+   */
   async getContext(taskId: string): Promise<ExecutionContext | null> {
-    return Effect.runPromise(
-      this.engine.getContext(taskId).pipe(
-        Effect.provide(this.runtime),
-      ) as Effect.Effect<ExecutionContext | null>,
+    return this.runtime.runPromise(
+      this.engine.getContext(taskId) as Effect.Effect<ExecutionContext | null>,
+    );
+  }
+
+  /**
+   * Pause agent execution at the next phase boundary.
+   *
+   * The agent will pause gracefully after the current phase completes,
+   * allowing later resumption via `.resume()`.
+   * Requires `.withKillSwitch()` to be enabled during build.
+   *
+   * @returns Promise that resolves when the pause signal is sent
+   * @example
+   * ```typescript
+   * await agent.pause();
+   * console.log("Agent paused");
+   * await agent.resume();
+   * ```
+   */
+  async pause(): Promise<void> {
+    return this.runtime.runPromise(
+      KillSwitchService.pipe(
+        Effect.flatMap((ks) => ks.pause(this.agentId)),
+        Effect.catchAll(() => Effect.void),
+      ) as Effect.Effect<void>,
+    );
+  }
+
+  /**
+   * Resume a paused agent.
+   *
+   * Signals the agent to resume execution after a pause.
+   * Has no effect if the agent is not currently paused.
+   * Requires `.withKillSwitch()` to be enabled during build.
+   *
+   * @returns Promise that resolves when the resume signal is sent
+   * @example
+   * ```typescript
+   * await agent.pause();
+   * // Later...
+   * await agent.resume();
+   * ```
+   */
+  async resume(): Promise<void> {
+    return this.runtime.runPromise(
+      KillSwitchService.pipe(
+        Effect.flatMap((ks) => ks.resume(this.agentId)),
+        Effect.catchAll(() => Effect.void),
+      ) as Effect.Effect<void>,
+    );
+  }
+
+  /**
+   * Signal the agent to stop gracefully at the next phase boundary.
+   *
+   * Similar to `.cancel()` but intended for user-initiated stops.
+   * The agent will finish the current phase and transition to a stopped state.
+   * Requires `.withKillSwitch()` to be enabled during build.
+   *
+   * @param reason - Optional reason for stopping (for logging/audit)
+   * @returns Promise that resolves when the stop signal is sent
+   * @example
+   * ```typescript
+   * await agent.stop("User interrupted");
+   * ```
+   */
+  async stop(reason = "stop() called"): Promise<void> {
+    return this.runtime.runPromise(
+      KillSwitchService.pipe(
+        Effect.flatMap((ks) => ks.stop(this.agentId, reason)),
+        Effect.catchAll(() => Effect.void),
+      ) as Effect.Effect<void>,
+    );
+  }
+
+  /**
+   * Immediately terminate agent execution without waiting for phase completion.
+   *
+   * Forcefully stops the agent. This is more abrupt than `.stop()` and should be used
+   * when immediate shutdown is required.
+   * Requires `.withKillSwitch()` to be enabled during build.
+   *
+   * @param reason - Optional reason for termination (for logging/audit)
+   * @returns Promise that resolves when the termination signal is sent
+   * @example
+   * ```typescript
+   * await agent.terminate("Resource exhausted");
+   * ```
+   */
+  async terminate(reason = "terminate() called"): Promise<void> {
+    return this.runtime.runPromise(
+      KillSwitchService.pipe(
+        Effect.flatMap((ks) => ks.terminate(this.agentId, reason)),
+        Effect.catchAll(() => Effect.void),
+      ) as Effect.Effect<void>,
+    );
+  }
+
+  /**
+   * Subscribe to a specific event type with automatic type narrowing.
+   * The handler receives the narrowed event — no `_tag` check needed.
+   *
+   * @example
+   * const unsub = await agent.subscribe("AgentCompleted", (event) => {
+   *   // event is { _tag: "AgentCompleted"; taskId: string; totalTokens: number; ... }
+   *   console.log(event.totalTokens);
+   * });
+   * unsub(); // stop listening
+   */
+  subscribe<T extends AgentEvent["_tag"]>(
+    tag: T,
+    handler: (event: Extract<AgentEvent, { _tag: T }>) => void,
+  ): Promise<() => void>;
+
+  /**
+   * Subscribe to all agent events (catch-all).
+   * The handler receives the full `AgentEvent` union — use `event._tag` to discriminate.
+   *
+   * @example
+   * const unsub = await agent.subscribe((event) => {
+   *   if (event._tag === "ToolCallStarted") console.log(event.toolName);
+   * });
+   */
+  subscribe(handler: (event: AgentEvent) => void): Promise<() => void>;
+
+  async subscribe<T extends AgentEvent["_tag"]>(
+    tagOrHandler: T | ((event: AgentEvent) => void),
+    handler?: (event: Extract<AgentEvent, { _tag: T }>) => void,
+  ): Promise<() => void> {
+    if (typeof tagOrHandler === "function") {
+      // Catch-all overload
+      return this.runtime.runPromise(
+        EventBus.pipe(
+          Effect.flatMap((eb) =>
+            eb.subscribe((event) =>
+              Effect.sync(() => (tagOrHandler as (event: AgentEvent) => void)(event)),
+            ),
+          ),
+          Effect.catchAll(() => Effect.succeed(() => {})),
+        ) as Effect.Effect<() => void>,
+      );
+    }
+    // Tag-filtered overload — delegates to the typed eb.on()
+    return this.runtime.runPromise(
+      EventBus.pipe(
+        Effect.flatMap((eb) =>
+          eb.on(tagOrHandler, (event) => Effect.sync(() => handler!(event))),
+        ),
+        Effect.catchAll(() => Effect.succeed(() => {})),
+      ) as Effect.Effect<() => void>,
     );
   }
 }
