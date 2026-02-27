@@ -107,4 +107,55 @@ describe("PlanExecuteStrategy", () => {
     expect(result.metadata.cost).toBeGreaterThanOrEqual(0);
     expect(result.metadata.duration).toBeGreaterThanOrEqual(0);
   });
+
+  it("compacts step context after 5 prior results to prevent O(n^2) token growth", async () => {
+    const layer = TestLLMServiceLayer({
+      "planning agent":
+        "1. Step A\n2. Step B\n3. Step C\n4. Step D\n5. Step E\n6. Step F\n7. Step G",
+      "Execute this step": "Result for this step.",
+      "evaluating plan execution": "SATISFIED: All steps complete.",
+      "Synthesize": "The final synthesized answer from 7 steps.",
+    });
+
+    const result = await Effect.runPromise(
+      executePlanExecute({
+        taskDescription: "Long multi-step research task",
+        taskType: "multi-step",
+        memoryContext: "",
+        availableTools: [],
+        config: defaultReasoningConfig,
+      }).pipe(Effect.provide(layer)),
+    );
+
+    expect(result.status).toBe("completed");
+    const execSteps = result.steps.filter((s) => s.content.startsWith("[EXEC"));
+    expect(execSteps.length).toBe(7);
+    expect(result.output).toBeTruthy();
+  });
+
+  it("produces a synthesized final answer via LLM, not raw step concatenation", async () => {
+    const layer = TestLLMServiceLayer({
+      "planning agent": "1. Look up data\n2. Analyze results",
+      "Execute this step": "Data found and analyzed.",
+      "evaluating plan execution": "SATISFIED: Task complete.",
+      "Synthesize": "The final synthesized answer: Data analysis complete with key insights.",
+    });
+
+    const result = await Effect.runPromise(
+      executePlanExecute({
+        taskDescription: "Research and summarize quantum computing",
+        taskType: "research",
+        memoryContext: "",
+        availableTools: [],
+        config: defaultReasoningConfig,
+      }).pipe(Effect.provide(layer)),
+    );
+
+    expect(result.status).toBe("completed");
+    expect(typeof result.output).toBe("string");
+    expect((result.output as string).length).toBeGreaterThan(0);
+    // Should have a SYNTHESIS step
+    const synthStep = result.steps.find((s) => s.content.startsWith("[SYNTHESIS]"));
+    expect(synthStep).toBeDefined();
+  });
 });

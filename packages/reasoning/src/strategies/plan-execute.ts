@@ -180,7 +180,7 @@ export const executePlanExecute = (
               messages: [
                 {
                   role: "user",
-                  content: `Execute this step of the plan:\n\nStep ${i + 1}: ${stepDescription}\n\nContext so far:\n${stepResults.join("\n")}`,
+                  content: `Execute this step of the plan:\n\nStep ${i + 1}: ${stepDescription}\n\nContext so far:\n${buildCompactedStepContext(stepResults)}`,
                 },
               ],
               systemPrompt: execSystemPrompt,
@@ -277,7 +277,39 @@ export const executePlanExecute = (
 
       // Check if reflection is satisfied
       if (isSatisfied(reflectResponse.content)) {
-        finalOutput = stepResults.join("\n\n");
+        // ── SYNTHESIZE: Produce a clean final answer from step results ──
+        const synthLlmResponse = yield* llm
+          .complete({
+            messages: [
+              {
+                role: "user",
+                content: `Task: ${input.taskDescription}\n\nExecution results:\n${stepResults.join("\n")}\n\nSynthesize a clear, complete answer to the original task based on the results above.`,
+              },
+            ],
+            systemPrompt: input.systemPrompt ?? "You are a synthesizer. Combine execution results into a clear, concise final answer.",
+            maxTokens: 500,
+            temperature: 0.3,
+          })
+          .pipe(
+            Effect.catchAll(() =>
+              Effect.succeed({
+                content: stepResults.join("\n\n"),
+                usage: { totalTokens: 0, estimatedCost: 0 },
+              }),
+            ),
+          );
+
+        totalTokens += synthLlmResponse.usage.totalTokens;
+        totalCost += synthLlmResponse.usage.estimatedCost;
+        finalOutput = synthLlmResponse.content;
+
+        steps.push({
+          id: ulid() as StepId,
+          type: "thought",
+          content: `[SYNTHESIS] ${finalOutput}`,
+          timestamp: new Date(),
+        });
+
         if (ebOpt._tag === "Some") {
           yield* ebOpt.value.publish({
             _tag: "FinalAnswerProduced",
@@ -361,7 +393,9 @@ function buildRefinePlanPrompt(
   input: PlanExecuteInput,
   previousSteps: readonly ReasoningStep[],
 ): string {
-  const history = previousSteps
+  // Keep last 8 steps — enough context for the refiner without unbounded growth
+  const recentSteps = previousSteps.slice(-8);
+  const history = recentSteps
     .map((s) => `[${s.type}] ${s.content}`)
     .join("\n");
 
@@ -431,4 +465,17 @@ function parseToolFromStep(
 
 function isSatisfied(reflection: string): boolean {
   return /^SATISFIED:/i.test(reflection.trim());
+}
+
+/**
+ * Prevents O(n²) token growth during plan execution.
+ * When more than 5 step results exist, collapses older ones to one-liners.
+ */
+function buildCompactedStepContext(stepResults: string[]): string {
+  if (stepResults.length <= 5) return stepResults.join("\n");
+  const older = stepResults
+    .slice(0, stepResults.length - 5)
+    .map((r, i) => `Step ${i + 1}: [completed]`);
+  const recent = stepResults.slice(-5);
+  return [...older, ...recent].join("\n");
 }
