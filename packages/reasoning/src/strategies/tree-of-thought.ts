@@ -287,7 +287,7 @@ export const executeTreeOfThought = (
 
     while (execIter < execMaxIter) {
       // Compact history: cap at last 8 non-TOT steps to prevent unbounded context growth
-      const rawHistory = steps.filter((s) => !s.content.startsWith("[TOT"));
+      const rawHistory = steps.filter((s) => !s.content.startsWith("[TOT ") && !s.content.startsWith("[TOT]"));
       const recentHistory = rawHistory.slice(-8);
       const history = recentHistory
         .map((s) =>
