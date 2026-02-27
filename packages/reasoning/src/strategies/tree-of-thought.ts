@@ -12,14 +12,22 @@ import type { StepId } from "../types/step.js";
 import { ExecutionError, IterationLimitError } from "../errors/errors.js";
 import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
+import { ToolService } from "@reactive-agents/tools";
 import { PromptService } from "@reactive-agents/prompts";
 import { EventBus } from "@reactive-agents/core";
+
+interface TotToolSchema {
+  readonly name: string;
+  readonly description: string;
+  readonly parameters: readonly { name: string; type: string; description: string; required: boolean }[];
+}
 
 interface TreeOfThoughtInput {
   readonly taskDescription: string;
   readonly taskType: string;
   readonly memoryContext: string;
   readonly availableTools: readonly string[];
+  readonly availableToolSchemas?: readonly TotToolSchema[];
   readonly config: ReasoningConfig;
   /** Custom system prompt for steering agent behavior */
   readonly systemPrompt?: string;
@@ -52,6 +60,10 @@ export const executeTreeOfThought = (
       Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
     );
     const ebOpt = ebOptRaw as typeof ebOptRaw;
+    const toolServiceOptRaw = yield* Effect.serviceOption(ToolService).pipe(
+      Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
+    );
+    const toolServiceOpt = toolServiceOptRaw as TotToolServiceOpt;
     const { breadth, depth, pruningThreshold } =
       input.config.strategies.treeOfThought;
     const steps: ReasoningStep[] = [];
@@ -149,7 +161,7 @@ export const executeTreeOfThought = (
                   ? `${input.systemPrompt}\n\nYou are evaluating a reasoning path. Rate its promise on a scale of 0.0 to 1.0. Respond with ONLY a number.`
                   : "You are evaluating a reasoning path. Rate its promise on a scale of 0.0 to 1.0. Respond with ONLY a number.",
               ),
-              maxTokens: 50,
+              maxTokens: 800,
               temperature: 0.2,
             })
             .pipe(
@@ -247,67 +259,181 @@ export const executeTreeOfThought = (
       timestamp: new Date(),
     });
 
-    // ── Synthesize final answer from best path ──
-    const synthesisResponse = yield* llm
-      .complete({
-        messages: [
-          {
-            role: "user",
-            content: `Based on this reasoning path, provide a final answer to: ${input.taskDescription}\n\nReasoning path:\n${bestPath.join("\n→ ")}`,
-          },
-        ],
-        systemPrompt: yield* compilePromptOrFallback(
-          promptServiceOpt,
-          "reasoning.tree-of-thought-synthesize",
-          {},
-          input.systemPrompt
-            ? `${input.systemPrompt}\n\nSynthesize the reasoning path into a clear, concise final answer.`
-            : "Synthesize the reasoning path into a clear, concise final answer.",
-        ),
-        maxTokens: 500,
-        temperature: 0.3,
-      })
-      .pipe(
-        Effect.mapError(
-          (err) =>
-            new ExecutionError({
+    // ── Phase 2: Execute the selected plan with tools ──
+    // Tree search determined the best approach; now execute it using a
+    // ReAct-style think/act/observe loop with real tool access.
+    const execMaxIter = input.config.strategies.reactive.maxIterations;
+    let execIter = 0;
+
+    while (execIter < execMaxIter) {
+      const history = steps
+        .filter((s) => !s.content.startsWith("[TOT"))
+        .map((s) =>
+          s.type === "observation"
+            ? `Observation: ${s.content}`
+            : s.type === "action"
+              ? `Action: ${s.content}`
+              : s.content,
+        )
+        .join("\n");
+
+      const execResponse = yield* llm
+        .complete({
+          messages: [
+            {
+              role: "user",
+              content: totBuildExecPrompt(input, bestPath, history),
+            },
+          ],
+          systemPrompt: input.systemPrompt
+            ? `${input.systemPrompt}\n\nYou are executing a task. Use tools as needed, then give FINAL ANSWER: <answer>.`
+            : "You are executing a task. Use tools as needed, then give FINAL ANSWER: <answer>.",
+          maxTokens: 1500,
+          temperature: input.config.strategies.reactive.temperature,
+          stopSequences: ["Observation:", "\nObservation:"],
+        })
+        .pipe(
+          Effect.mapError(
+            (err) =>
+              new ExecutionError({
+                strategy: "tree-of-thought",
+                message: `Execution failed at iter ${execIter}`,
+                step: execIter,
+                cause: err,
+              }),
+          ),
+        );
+
+      totalTokens += execResponse.usage.totalTokens;
+      totalCost += execResponse.usage.estimatedCost;
+
+      const thought = execResponse.content;
+
+      steps.push({
+        id: ulid() as StepId,
+        type: "thought",
+        content: thought,
+        timestamp: new Date(),
+      });
+
+      if (ebOpt._tag === "Some") {
+        yield* ebOpt.value
+          .publish({
+            _tag: "ReasoningStepCompleted",
+            taskId: input.taskId ?? "tree-of-thought",
+            strategy: "tree-of-thought",
+            step: steps.length,
+            totalSteps: execMaxIter,
+            thought,
+          })
+          .pipe(Effect.catchAll(() => Effect.void));
+      }
+
+      // ── Check for tool call ──
+      const allReqs = totParseAllToolRequests(thought);
+      const toolReq = allReqs[0] ?? null;
+
+      // ── Check for final answer (no pending action) ──
+      if (!toolReq && totHasFinalAnswer(thought)) {
+        const answer = totExtractFinalAnswer(thought);
+        if (ebOpt._tag === "Some") {
+          yield* ebOpt.value
+            .publish({
+              _tag: "FinalAnswerProduced",
+              taskId: input.taskId ?? "tree-of-thought",
               strategy: "tree-of-thought",
-              message: "Synthesis failed",
-              step: 999,
-              cause: err,
-            }),
-        ),
-      );
+              answer,
+              iteration: execIter,
+              totalTokens,
+            })
+            .pipe(Effect.catchAll(() => Effect.void));
+        }
+        return buildResult(steps, answer, "completed", start, totalTokens, totalCost);
+      }
 
-    totalTokens += synthesisResponse.usage.totalTokens;
-    totalCost += synthesisResponse.usage.estimatedCost;
+      if (toolReq) {
+        steps.push({
+          id: ulid() as StepId,
+          type: "action",
+          content: JSON.stringify(toolReq),
+          timestamp: new Date(),
+          metadata: { toolUsed: toolReq.tool },
+        });
 
-    steps.push({
-      id: ulid() as StepId,
-      type: "thought",
-      content: `[TOT FINAL] ${synthesisResponse.content}`,
-      timestamp: new Date(),
-    });
+        if (ebOpt._tag === "Some") {
+          yield* ebOpt.value
+            .publish({
+              _tag: "ReasoningStepCompleted",
+              taskId: input.taskId ?? "tree-of-thought",
+              strategy: "tree-of-thought",
+              step: steps.length,
+              totalSteps: execMaxIter,
+              action: JSON.stringify(toolReq),
+            })
+            .pipe(Effect.catchAll(() => Effect.void));
+        }
 
-    if (ebOpt._tag === "Some") {
-      yield* ebOpt.value.publish({
-        _tag: "FinalAnswerProduced",
-        taskId: input.taskId ?? "tree-of-thought",
-        strategy: "tree-of-thought",
-        answer: synthesisResponse.content,
-        iteration: depth,
-        totalTokens,
-      }).pipe(Effect.catchAll(() => Effect.void));
+        const toolStartMs = Date.now();
+        const observation = yield* totExecTool(toolServiceOpt, toolReq.tool, toolReq.input);
+        const toolDurationMs = Date.now() - toolStartMs;
+
+        if (ebOpt._tag === "Some") {
+          yield* ebOpt.value
+            .publish({
+              _tag: "ToolCallCompleted",
+              taskId: input.taskId ?? "tree-of-thought",
+              toolName: toolReq.tool,
+              callId: steps[steps.length - 1]?.id ?? "unknown",
+              durationMs: toolDurationMs,
+              success: !observation.startsWith("[Tool error"),
+            })
+            .pipe(Effect.catchAll(() => Effect.void));
+        }
+
+        steps.push({
+          id: ulid() as StepId,
+          type: "observation",
+          content: observation,
+          timestamp: new Date(),
+        });
+
+        if (ebOpt._tag === "Some") {
+          yield* ebOpt.value
+            .publish({
+              _tag: "ReasoningStepCompleted",
+              taskId: input.taskId ?? "tree-of-thought",
+              strategy: "tree-of-thought",
+              step: steps.length,
+              totalSteps: execMaxIter,
+              observation,
+            })
+            .pipe(Effect.catchAll(() => Effect.void));
+        }
+
+        if (totHasFinalAnswer(thought)) {
+          const answer = totExtractFinalAnswer(thought);
+          if (ebOpt._tag === "Some") {
+            yield* ebOpt.value
+              .publish({
+                _tag: "FinalAnswerProduced",
+                taskId: input.taskId ?? "tree-of-thought",
+                strategy: "tree-of-thought",
+                answer,
+                iteration: execIter,
+                totalTokens,
+              })
+              .pipe(Effect.catchAll(() => Effect.void));
+          }
+          return buildResult(steps, answer, "completed", start, totalTokens, totalCost);
+        }
+      }
+
+      execIter++;
     }
 
-    return buildResult(
-      steps,
-      synthesisResponse.content,
-      "completed",
-      start,
-      totalTokens,
-      totalCost,
-    );
+    // Max iterations reached — return last thought as partial output
+    const lastThought = steps.filter((s) => s.type === "thought").pop()?.content ?? null;
+    return buildResult(steps, lastThought, "partial", start, totalTokens, totalCost);
   });
 
 // ─── Prompt compilation helper ───
@@ -336,7 +462,7 @@ function compilePromptOrFallback(
 // ─── Private Helpers ───
 
 function buildExpansionPrompt(
-  _input: TreeOfThoughtInput,
+  input: TreeOfThoughtInput,
   parent: ThoughtNode,
   breadth: number,
   ancestorPath: string[],
@@ -345,11 +471,22 @@ function buildExpansionPrompt(
     ? `\nReasoning so far:\n${ancestorPath.join("\n→ ")}`
     : "";
 
-  return `Current thought: ${parent.content}${contextStr}
+  const toolStr =
+    input.availableToolSchemas && input.availableToolSchemas.length > 0
+      ? `\nAvailable tools: ${input.availableToolSchemas.map((t) => t.name).join(", ")}`
+      : input.availableTools.length > 0
+        ? `\nAvailable tools: ${input.availableTools.join(", ")}`
+        : "";
+
+  const toolHint = input.availableTools.length > 0
+    ? " — reference specific tools where relevant"
+    : "";
+
+  return `Current thought: ${parent.content}${contextStr}${toolStr}
 
 Generate exactly ${breadth} distinct next thoughts or approaches to continue solving this task.
 Format each as a numbered item (1., 2., etc.).
-Each should explore a meaningfully different direction.`;
+Each should explore a meaningfully different direction${toolHint}.`;
 }
 
 function buildScoringPrompt(
@@ -392,9 +529,20 @@ function parseCandidates(text: string, expectedCount: number): string[] {
 }
 
 function parseScore(text: string): number {
-  const match = text.trim().match(/([01]\.?\d*)/);
+  // Ollama strips <think>...</think> content before returning — the visible
+  // text is already the post-thinking output. Other providers may include
+  // think tags, so strip them as a precaution.
+  const stripped = text.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+  const target = stripped.length > 0 ? stripped : text.trim();
+
+  // Empty response means the model ran out of maxTokens inside its thinking
+  // block and never emitted a score. Caller should increase maxTokens.
+  if (target.length === 0) return 0.5;
+
+  // Match a decimal in [0, 1]: "0.75", ".75", "1.0", "0", "1"
+  const match = target.match(/\b(1\.0*|0?\.\d+|[01])\b/);
   if (match) {
-    const score = parseFloat(match[1]);
+    const score = parseFloat(match[1]!);
     return Math.max(0, Math.min(1, score));
   }
   return 0.5;
@@ -438,4 +586,140 @@ function buildResult(
     },
     status,
   };
+}
+
+// ─── Execution-phase helpers (Phase 2: plan execution with tools) ───
+
+type TotToolServiceOpt =
+  | {
+      _tag: "Some";
+      value: {
+        execute: (input: {
+          toolName: string;
+          arguments: Record<string, unknown>;
+          agentId: string;
+          sessionId: string;
+        }) => Effect.Effect<{ result: unknown; success?: boolean }, unknown>;
+      };
+    }
+  | { _tag: "None" };
+
+function totFormatToolSchema(tool: TotToolSchema): string {
+  if (tool.parameters.length === 0) return `- ${tool.name}() — ${tool.description}`;
+  const params = tool.parameters
+    .map((p) => `"${p.name}": "${p.type}${p.required ? " (required)" : " (optional)"}"`)
+    .join(", ");
+  return `- ${tool.name}({${params}}) — ${tool.description}`;
+}
+
+function totBuildExecPrompt(
+  input: TreeOfThoughtInput,
+  bestPath: string[],
+  history: string,
+): string {
+  const toolSection =
+    input.availableToolSchemas && input.availableToolSchemas.length > 0
+      ? `Available Tools:\n${input.availableToolSchemas.map(totFormatToolSchema).join("\n")}\n\nTo use a tool: ACTION: tool_name({"param": "value"}) — exact JSON`
+      : input.availableTools.length > 0
+        ? `Available Tools: ${input.availableTools.join(", ")}\nTo use a tool: ACTION: tool_name({"param": "value"})`
+        : "No tools available.";
+
+  const planSection = `Selected Approach (from planning phase):\n${bestPath.join("\n→ ")}`;
+  const historySection = history ? `\nExecution so far:\n${history}` : "";
+
+  return `Task: ${input.taskDescription}
+
+${planSection}
+
+${toolSection}
+
+RULES:
+1. ONE action per turn: ACTION: tool_name({"param": "value"})
+2. Use EXACT parameter names from tools above.
+3. When all steps are done: FINAL ANSWER: <your answer>
+4. Do NOT fabricate tool results — wait for real observations.${historySection}
+
+Think step-by-step, then take ONE action or give FINAL ANSWER:`;
+}
+
+function totParseToolRequest(thought: string): { tool: string; input: string } | null {
+  const prefixMatch = thought.match(/ACTION:\s*([\w\/\-]+)\(/i);
+  if (!prefixMatch) return null;
+  const tool = prefixMatch[1]!;
+  const argsStart = (prefixMatch.index ?? 0) + prefixMatch[0].length;
+  const rest = thought.slice(argsStart);
+  if (rest.trimStart().startsWith(")")) return { tool, input: "{}" };
+  if (rest.trimStart().startsWith("{")) {
+    const trimOffset = rest.length - rest.trimStart().length;
+    let depth = 0;
+    let inString = false;
+    let escape = false;
+    for (let i = trimOffset; i < rest.length; i++) {
+      const ch = rest[i]!;
+      if (escape) { escape = false; continue; }
+      if (ch === "\\") { escape = true; continue; }
+      if (ch === '"') { inString = !inString; continue; }
+      if (inString) continue;
+      if (ch === "{") depth++;
+      if (ch === "}") { depth--; if (depth === 0) return { tool, input: rest.slice(trimOffset, i + 1) }; }
+    }
+  }
+  const match = thought.match(/ACTION:\s*[\w\/\-]+\((.*?)\)/is);
+  return match ? { tool, input: match[1]! } : null;
+}
+
+function totParseAllToolRequests(thought: string): Array<{ tool: string; input: string }> {
+  const results: Array<{ tool: string; input: string }> = [];
+  const re = /ACTION:/gi;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(thought)) !== null) {
+    const req = totParseToolRequest(thought.slice(match.index));
+    if (req) results.push(req);
+  }
+  return results;
+}
+
+function totHasFinalAnswer(thought: string): boolean {
+  return /final answer:/i.test(thought);
+}
+
+function totExtractFinalAnswer(thought: string): string {
+  const match = thought.match(/final answer:\s*([\s\S]*)/i);
+  return match ? match[1]!.trim() : thought;
+}
+
+function totExecTool(
+  toolServiceOpt: TotToolServiceOpt,
+  toolName: string,
+  argsStr: string,
+): Effect.Effect<string, never> {
+  if (toolServiceOpt._tag === "None") {
+    return Effect.succeed("[ToolService not available — add .withTools() to agent builder]");
+  }
+  const toolService = toolServiceOpt.value;
+  let args: Record<string, unknown> = {};
+  const trimmed = argsStr.trim();
+  if (trimmed && trimmed !== "{}") {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+        args = parsed as Record<string, unknown>;
+      }
+    } catch { /* malformed JSON — proceed with empty args */ }
+  }
+  return toolService
+    .execute({ toolName, arguments: args, agentId: "tot-agent", sessionId: "tot-session" })
+    .pipe(
+      Effect.map((r) => {
+        const raw = typeof r.result === "string" ? r.result : JSON.stringify(r.result);
+        if (raw.length > 800) {
+          return `${raw.slice(0, 400)}\n[...${raw.length - 800} chars omitted...]\n${raw.slice(-400)}`;
+        }
+        return raw;
+      }),
+      Effect.catchAll((e) => {
+        const msg = e instanceof Error ? e.message : String(e);
+        return Effect.succeed(`[Tool error: ${msg}]`);
+      }),
+    );
 }
