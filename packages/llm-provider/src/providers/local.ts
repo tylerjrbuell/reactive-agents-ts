@@ -25,8 +25,10 @@ type OllamaTool = {
 };
 
 type OllamaMessage = {
-  role: "system" | "user" | "assistant";
+  role: "system" | "user" | "assistant" | "tool";
   content: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  tool_calls?: Array<{ function: { name: string; arguments: Record<string, any> } }>;
 };
 
 // ─── Conversion Helpers ───
@@ -34,20 +36,60 @@ type OllamaMessage = {
 const toOllamaMessages = (
   messages: readonly LLMMessage[],
 ): OllamaMessage[] =>
-  messages
-    .filter((m) => m.role !== "tool") // Ollama doesn't support tool messages — filter them
-    .map((m) => ({
-      role: m.role as "system" | "user" | "assistant",
+  messages.map((m) => {
+    // Tool result messages — pass through directly (Ollama supports role:"tool")
+    if (m.role === "tool") {
+      return { role: "tool" as const, content: m.content };
+    }
+    // Assistant messages — extract text and convert tool_use blocks to tool_calls
+    if (m.role === "assistant") {
+      const textContent =
+        typeof m.content === "string"
+          ? m.content
+          : (m.content as readonly { type: string; text?: string }[])
+              .filter((b): b is { type: "text"; text: string } => b.type === "text")
+              .map((b) => b.text)
+              .join("");
+      const toolUseBlocks =
+        typeof m.content !== "string"
+          ? (
+              m.content as readonly {
+                type: string;
+                name?: string;
+                input?: unknown;
+              }[]
+            ).filter((b): b is { type: "tool_use"; name: string; input: unknown } =>
+              b.type === "tool_use",
+            )
+          : [];
+      return {
+        role: "assistant" as const,
+        content: textContent,
+        ...(toolUseBlocks.length > 0
+          ? {
+              tool_calls: toolUseBlocks.map((tc) => ({
+                function: {
+                  name: tc.name,
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  arguments: (tc.input ?? {}) as Record<string, any>,
+                },
+              })),
+            }
+          : {}),
+      };
+    }
+    // system, user
+    return {
+      role: m.role as "system" | "user",
       content:
         typeof m.content === "string"
           ? m.content
           : (m.content as readonly { type: string; text?: string }[])
-              .filter(
-                (b): b is { type: "text"; text: string } => b.type === "text",
-              )
+              .filter((b): b is { type: "text"; text: string } => b.type === "text")
               .map((b) => b.text)
               .join(""),
-    }));
+    };
+  });
 
 const toOllamaTools = (
   tools?: readonly ToolDefinition[],
