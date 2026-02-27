@@ -39,7 +39,7 @@ export async function run(): Promise<ExampleResult> {
     .withMCP(useReal ? [{
       name: "filesystem",
       transport: "stdio",
-      command: "npx",
+      command: "bunx",
       args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
     }] : [])
     .withMaxIterations(5)

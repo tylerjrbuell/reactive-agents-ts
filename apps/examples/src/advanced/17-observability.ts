@@ -28,7 +28,9 @@ export interface ExampleResult {
   durationMs: number;
 }
 
-const PROVIDER = process.env.ANTHROPIC_API_KEY ? "anthropic" as const : "test" as const;
+// Always use test provider — this example demonstrates instrumentation, not LLM quality.
+// Swap to "anthropic" (and remove withTestResponses) to observe real LLM execution.
+const PROVIDER = "test" as const;
 const LOG_FILE = "/tmp/example_17_obs.jsonl";
 
 export async function run(): Promise<ExampleResult> {
@@ -38,7 +40,7 @@ export async function run(): Promise<ExampleResult> {
   try { if (existsSync(LOG_FILE)) unlinkSync(LOG_FILE); } catch { /* ignore */ }
 
   console.log("\n=== Observability Example ===\n");
-  console.log(`Mode: ${PROVIDER === "anthropic" ? "LIVE" : "TEST"}\n`);
+  console.log(`Mode: TEST (observability instrumentation demo)\n`);
 
   // ─── Part 1: Normal verbosity with JSONL file export ──────────────────────
 
