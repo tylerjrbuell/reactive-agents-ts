@@ -108,4 +108,67 @@ describe("TreeOfThoughtStrategy", () => {
     expect(result.metadata.cost).toBeGreaterThanOrEqual(0);
     expect(result.metadata.duration).toBeGreaterThanOrEqual(0);
   });
+
+  it("adaptive pruning rescues tree when all candidates score below threshold", async () => {
+    // All scoring returns 0.2 (below default 0.5 threshold)
+    // Adaptive pruning should lower threshold to 0.35 and rescue paths
+    const layer = TestLLMServiceLayer({
+      "explore solution": "1. Approach one\n2. Approach two",
+      "Rate this thought": "0.2",
+      "Think step-by-step": "FINAL ANSWER: Recovered despite low scores.",
+    });
+
+    const result = await Effect.runPromise(
+      executeTreeOfThought({
+        taskDescription: "Solve a difficult creative problem",
+        taskType: "creative",
+        memoryContext: "",
+        availableTools: [],
+        config: {
+          ...defaultReasoningConfig,
+          strategies: {
+            ...defaultReasoningConfig.strategies,
+            treeOfThought: { breadth: 2, depth: 2, pruningThreshold: 0.5 },
+          },
+        },
+      }).pipe(Effect.provide(layer)),
+    );
+
+    expect(result.strategy).toBe("tree-of-thought");
+    expect(result.steps.length).toBeGreaterThan(2);
+    // An adaptive pruning message should appear in steps
+    const adaptiveStep = result.steps.find((s) =>
+      s.content.toLowerCase().includes("adaptive"),
+    );
+    expect(adaptiveStep).toBeDefined();
+  });
+
+  it("parses scores in percentage format (75% → 0.75) and allows paths above threshold", async () => {
+    // Score returned as "75%" — should parse to 0.75, above 0.5 threshold → tree proceeds
+    const layer = TestLLMServiceLayer({
+      "explore solution": "1. Approach A\n2. Approach B",
+      "Rate this thought": "75%",
+      "Think step-by-step": "FINAL ANSWER: Answer from percentage-scored path.",
+    });
+
+    const result = await Effect.runPromise(
+      executeTreeOfThought({
+        taskDescription: "Solve a problem",
+        taskType: "query",
+        memoryContext: "",
+        availableTools: [],
+        config: {
+          ...defaultReasoningConfig,
+          strategies: {
+            ...defaultReasoningConfig.strategies,
+            treeOfThought: { breadth: 2, depth: 1, pruningThreshold: 0.5 },
+          },
+        },
+      }).pipe(Effect.provide(layer)),
+    );
+
+    expect(result.strategy).toBe("tree-of-thought");
+    expect(result.status).toBe("completed");
+    expect(result.output).toBeTruthy();
+  });
 });
