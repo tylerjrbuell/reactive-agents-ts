@@ -29,8 +29,28 @@ export class GuardrailViolationError extends Data.TaggedError(
   readonly violation: string;
 }> {}
 
+export class KillSwitchTriggeredError extends Data.TaggedError(
+  "KillSwitchTriggeredError",
+)<{
+  readonly message: string;
+  readonly taskId: string;
+  readonly agentId: string;
+  readonly reason: string;
+}> {}
+
+export class BehavioralContractViolationError extends Data.TaggedError(
+  "BehavioralContractViolationError",
+)<{
+  readonly message: string;
+  readonly taskId: string;
+  readonly rule: string;
+  readonly violation: string;
+}> {}
+
 export type RuntimeErrors =
   | ExecutionError
   | HookError
   | MaxIterationsError
-  | GuardrailViolationError;
+  | GuardrailViolationError
+  | KillSwitchTriggeredError
+  | BehavioralContractViolationError;

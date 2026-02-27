@@ -274,22 +274,10 @@ describe("ExecutionEngine", () => {
         ]),
     });
 
-    // Mock metrics collector to capture recorded metrics
-    const { MetricsCollectorTag } = await import("@reactive-agents/observability");
-    let recordedMetrics: Array<{ toolName: string; duration: number; status: string }> = [];
-
-    const MockMetricsLive = Layer.succeed(MetricsCollectorTag, {
-      incrementCounter: () => Effect.void,
-      recordHistogram: () => Effect.void,
-      setGauge: () => Effect.void,
-      getMetrics: () => Effect.succeed([]),
-      recordToolExecution: (toolName: string, duration: number, status: string) =>
-        Effect.gen(function* () {
-          recordedMetrics.push({ toolName, duration, status });
-        }),
-      getToolMetrics: () => Effect.succeed([]),
-      getToolSummary: () => Effect.succeed(new Map()),
-    });
+    // Capture ToolCallCompleted events to verify metrics are recorded via EventBus
+    const { EventBus, EventBusLive } = await import("@reactive-agents/core");
+    const { MetricsCollectorLive } = await import("@reactive-agents/observability");
+    let toolCallEvents: Array<{ toolName: string; durationMs: number; success: boolean }> = [];
 
     const testLayer = Layer.mergeAll(
       LifecycleHookRegistryLive,
@@ -298,23 +286,37 @@ describe("ExecutionEngine", () => {
       ),
       ToolCallingLLMServiceLive,
       MockToolServiceLive,
-      MockMetricsLive,
+      EventBusLive,
+      MetricsCollectorLive,
     );
 
     await Effect.runPromise(
       Effect.gen(function* () {
         const engine = yield* ExecutionEngine;
+        const bus = yield* EventBus;
+
+        // Subscribe to ToolCallCompleted events to capture what was published
+        yield* bus.on("ToolCallCompleted", (event) =>
+          Effect.gen(function* () {
+            toolCallEvents.push({
+              toolName: event.toolName,
+              durationMs: event.durationMs,
+              success: event.success,
+            });
+          }),
+        );
+
         yield* engine.execute(mockTask);
       }).pipe(Effect.provide(testLayer)),
     );
 
-    // Verify that a tool metric was recorded
-    expect(recordedMetrics.length).toBeGreaterThan(0);
-    const fileReadMetric = recordedMetrics.find((m) => m.toolName === "file-read");
-    expect(fileReadMetric).toBeDefined();
-    if (fileReadMetric) {
-      expect(fileReadMetric.status).toBe("success");
-      expect(fileReadMetric.duration).toBeGreaterThanOrEqual(0);
+    // Verify that a ToolCallCompleted event was published for the executed tool
+    expect(toolCallEvents.length).toBeGreaterThan(0);
+    const fileReadEvent = toolCallEvents.find((e) => e.toolName === "file-read");
+    expect(fileReadEvent).toBeDefined();
+    if (fileReadEvent) {
+      expect(fileReadEvent.success).toBe(true);
+      expect(fileReadEvent.durationMs).toBeGreaterThanOrEqual(0);
     }
   });
 });
