@@ -124,7 +124,7 @@ describe("Complexity Router", () => {
   test("getModelCostConfig returns all model properties", () => {
     const haiku = getModelCostConfig("haiku");
     expect(haiku.provider).toBe("anthropic");
-    expect(haiku.model).toBe("claude-3-5-haiku-20241022");
+    expect(haiku.model).toBe("claude-haiku-4-5-20251001");
     expect(haiku.maxContext).toBe(200_000);
     expect(haiku.speedTokensPerSec).toBe(150);
 
