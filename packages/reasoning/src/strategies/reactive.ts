@@ -9,7 +9,7 @@ import { ExecutionError, IterationLimitError } from "../errors/errors.js";
 import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { ToolService } from "@reactive-agents/tools";
-import type { ToolDefinition, ToolOutput } from "@reactive-agents/tools";
+import type { ToolDefinition, ToolOutput, ResultCompressionConfig } from "@reactive-agents/tools";
 import { PromptService } from "@reactive-agents/prompts";
 import { EventBus } from "@reactive-agents/core";
 import type { ContextProfile } from "../context/context-profile.js";
@@ -44,6 +44,8 @@ interface ReactiveInput {
   readonly systemPrompt?: string;
   /** Task ID for event correlation */
   readonly taskId?: string;
+  /** Tool result compression config — controls preview size, scratchpad overflow, and pipe transforms. */
+  readonly resultCompression?: ResultCompressionConfig;
 }
 
 /**
@@ -665,13 +667,19 @@ function extractFinalAnswer(thought: string): string {
 function parseToolRequest(
   thought: string,
 ): { tool: string; input: string } | null {
-  // Match the ACTION prefix and tool name
-  const prefixMatch = thought.match(/ACTION:\s*([\w-]+)\(/i);
+  // Match the ACTION prefix and tool name — allow '/' for namespaced MCP tools
+  // e.g. "filesystem/list_directory" or "github/search_repos"
+  const prefixMatch = thought.match(/ACTION:\s*([\w\/\-]+)\(/i);
   if (!prefixMatch) return null;
 
   const tool = prefixMatch[1];
   const argsStart = (prefixMatch.index ?? 0) + prefixMatch[0].length;
   const rest = thought.slice(argsStart);
+
+  // Empty parens — tool takes no arguments (e.g. filesystem/list_allowed_directories())
+  if (rest.trimStart().startsWith(")")) {
+    return { tool, input: "{}" };
+  }
 
   // If args start with '{', use brace-matching to extract the JSON object
   if (rest.trimStart().startsWith("{")) {
@@ -704,8 +712,8 @@ function parseToolRequest(
     }
   }
 
-  // Fallback: greedy regex (captures up to last ')' in thought)
-  const match = thought.match(/ACTION:\s*[\w-]+\((.+)\)/is);
+  // Fallback: greedy regex (captures up to last ')' in thought, allows empty args)
+  const match = thought.match(/ACTION:\s*[\w\/\-]+\((.*?)\)/is);
   return match ? { tool, input: match[1] } : null;
 }
 

@@ -495,8 +495,8 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                               },
                               c.memoryContext,
                             )
-                            .pipe(Effect.catchAll(() => Effect.succeed("reactive")))
-                        : "reactive";
+                            .pipe(Effect.catchAll(() => Effect.succeed(config.defaultStrategy ?? "reactive")))
+                        : (config.defaultStrategy ?? "reactive");
                     return { ...c, selectedStrategy: strategy };
                   }),
                 );
@@ -531,6 +531,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       contextProfile?: Partial<ContextProfile>;
                       systemPrompt?: string;
                       taskId?: string;
+                      resultCompression?: { budget?: number; previewItems?: number; autoStore?: boolean; codeTransform?: boolean };
                     }) => Effect.Effect<{
                       output: unknown;
                       status: string;
@@ -614,6 +615,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         contextProfile: config.contextProfile,
                         systemPrompt: config.systemPrompt,
                         taskId: c.taskId,
+                        resultCompression: config.resultCompression,
                       });
                       return {
                         ...c,
@@ -1001,9 +1003,28 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                               .pipe(Effect.catchAll(() => Effect.void));
                           }
 
+                          // When the response includes tool calls, store them as
+                          // tool_use content blocks so multi-turn providers (Ollama)
+                          // can properly associate the incoming tool results.
+                          const assistantContent =
+                            response.toolCalls && response.toolCalls.length > 0
+                              ? [
+                                  ...(response.content
+                                    ? [{ type: "text" as const, text: response.content }]
+                                    : []),
+                                  ...(response.toolCalls as Array<{ id: string; name: string; input: unknown }>).map(
+                                    (tc) => ({
+                                      type: "tool_use" as const,
+                                      id: tc.id,
+                                      name: tc.name,
+                                      input: tc.input ?? {},
+                                    }),
+                                  ),
+                                ]
+                              : response.content;
                           const updatedMessages = [
                             ...c.messages,
-                            { role: "assistant", content: response.content },
+                            { role: "assistant", content: assistantContent },
                           ];
 
                           const done =

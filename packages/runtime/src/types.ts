@@ -261,6 +261,17 @@ export const ReactiveAgentsConfigSchema = Schema.Struct({
   ),
   /** Model-adaptive context profile overrides */
   contextProfile: Schema.optional(Schema.partial(ContextProfileSchema)),
+  /** Default reasoning strategy when no StrategySelector is present */
+  defaultStrategy: Schema.optional(Schema.String),
+  /** Tool result compression config — controls preview size, scratchpad overflow, and pipe transforms */
+  resultCompression: Schema.optional(
+    Schema.Struct({
+      budget: Schema.optional(Schema.Number),
+      previewItems: Schema.optional(Schema.Number),
+      autoStore: Schema.optional(Schema.Boolean),
+      codeTransform: Schema.optional(Schema.Boolean),
+    })
+  ),
 });
 export type ReactiveAgentsConfig = typeof ReactiveAgentsConfigSchema.Type;
 
