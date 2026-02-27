@@ -111,7 +111,8 @@ describe("TreeOfThoughtStrategy", () => {
 
   it("adaptive pruning rescues tree when all candidates score below threshold", async () => {
     // All scoring returns 0.2 (below default 0.5 threshold)
-    // Adaptive pruning should lower threshold to 0.35 and rescue paths
+    // Score 0.2 is below both the original threshold (0.5) AND the adaptive threshold (0.35),
+    // so rescue fails — but the adaptive step is still emitted in the failure branch
     const layer = TestLLMServiceLayer({
       "explore solution": "1. Approach one\n2. Approach two",
       "Rate this thought": "0.2",
@@ -141,6 +142,42 @@ describe("TreeOfThoughtStrategy", () => {
       s.content.toLowerCase().includes("adaptive"),
     );
     expect(adaptiveStep).toBeDefined();
+  });
+
+  it("adaptive pruning rescue-success: continues with rescued nodes when score is between adaptive and original threshold", async () => {
+    // Score 0.4: below pruningThreshold 0.5, but above adaptive threshold 0.35 (0.5 - 0.15)
+    // → frontier = rescued nodes; loop continues
+    const layer = TestLLMServiceLayer({
+      "explore solution": "1. A feasible approach\n2. Another approach",
+      "Rate this thought": "0.4",
+      "Think step-by-step": "FINAL ANSWER: Completed via rescued path.",
+    });
+
+    const result = await Effect.runPromise(
+      executeTreeOfThought({
+        taskDescription: "Find an unconventional solution",
+        taskType: "creative",
+        memoryContext: "",
+        availableTools: [],
+        config: {
+          ...defaultReasoningConfig,
+          strategies: {
+            ...defaultReasoningConfig.strategies,
+            // depth 1 so there's only one BFS round — we want rescue to happen on that round
+            treeOfThought: { breadth: 2, depth: 1, pruningThreshold: 0.5 },
+          },
+        },
+      }).pipe(Effect.provide(layer)),
+    );
+
+    expect(result.strategy).toBe("tree-of-thought");
+    // The adaptive step message should contain the threshold numbers
+    const adaptiveStep = result.steps.find((s) =>
+      s.content.includes("Adaptive pruning") || s.content.includes("adaptive"),
+    );
+    expect(adaptiveStep).toBeDefined();
+    // The rescue succeeded so Phase 2 should run and produce a final answer
+    expect(result.output).toBeTruthy();
   });
 
   it("parses scores in percentage format (75% → 0.75) and allows paths above threshold", async () => {
