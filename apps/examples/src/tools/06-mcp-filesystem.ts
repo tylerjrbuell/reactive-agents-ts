@@ -48,7 +48,7 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
       command: "bunx",
       args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
     }] : [])
-    .withMaxIterations(5)
+    .withMaxIterations(10)
     .withTestResponses({
       "": "FINAL ANSWER: The /tmp directory contains temporary files managed by the operating system. MCP filesystem access is working.",
     })
