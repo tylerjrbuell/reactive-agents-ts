@@ -263,13 +263,14 @@ return new Response(stream, {
 
 ## MCP Transports
 
-When connecting to MCP (Model Context Protocol) tool servers, Reactive Agents supports three transport modes:
+When connecting to MCP (Model Context Protocol) tool servers, Reactive Agents supports four transport modes:
 
 | Transport | When to Use |
 |-----------|-------------|
 | `stdio` | Subprocess — MCP server launched as a child process |
 | `sse` | HTTP Server-Sent Events — remote server over HTTP |
 | `websocket` | WebSocket — low-latency bidirectional connection |
+| `streamable-http` | Streaming HTTP — persistent connection with multiplexed streams |
 
 ```typescript
 // stdio (subprocess)
@@ -280,6 +281,9 @@ When connecting to MCP (Model Context Protocol) tool servers, Reactive Agents su
 
 // WebSocket
 .withMCP({ name: "my-server", transport: "websocket", url: "ws://localhost:8080" })
+
+// Streamable HTTP (persistent connection with multiplexed streams)
+.withMCP({ name: "streaming-tools", transport: "streamable-http", url: "https://mcp.example.com/stream" })
 ```
 
 ## JSON-RPC Methods

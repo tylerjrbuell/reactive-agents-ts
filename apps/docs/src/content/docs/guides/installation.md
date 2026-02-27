@@ -32,7 +32,7 @@ The framework is modular — install only the packages you need:
 |---------|-------------|-----------|
 | `@reactive-agents/core` | EventBus, AgentService, TaskService, types | Yes |
 | `@reactive-agents/runtime` | ExecutionEngine, ReactiveAgentBuilder | Yes |
-| `@reactive-agents/llm-provider` | LLM adapters (Anthropic, OpenAI, Gemini, Ollama) | Yes |
+| `@reactive-agents/llm-provider` | LLM adapters (Anthropic, OpenAI, Gemini, Ollama, LiteLLM 40+) | Yes |
 | `effect` | Effect-TS runtime | Yes |
 | `@reactive-agents/memory` | Working, Semantic, Episodic, Procedural memory | Optional |
 | `@reactive-agents/reasoning` | ReAct, Plan-Execute, Tree-of-Thought, Reflexion | Optional |
@@ -44,6 +44,7 @@ The framework is modular — install only the packages you need:
 | `@reactive-agents/observability` | Tracing, metrics, structured logging | Optional |
 | `@reactive-agents/interaction` | 5 interaction modes, checkpoints | Optional |
 | `@reactive-agents/orchestration` | Multi-agent workflows | Optional |
+| `@reactive-agents/a2a` | Agent-to-Agent protocol, Agent Cards, JSON-RPC, SSE streaming | Optional |
 | `@reactive-agents/prompts` | Template engine, built-in prompt library | Optional |
 
 ```bash
