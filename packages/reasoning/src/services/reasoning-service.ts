@@ -78,8 +78,12 @@ export const ReasoningServiceLive = (
         execute: (params) =>
           Effect.gen(function* () {
             // ── Determine which strategy to use ──
-            const strategyName: ReasoningStrategy =
-              params.strategy ?? config.defaultStrategy;
+            // adaptive.enabled takes priority: routes every task through the
+            // adaptive classifier which picks the best sub-strategy per task.
+            // Explicit params.strategy and config.defaultStrategy are used otherwise.
+            const strategyName: ReasoningStrategy = config.adaptive.enabled
+              ? "adaptive"
+              : (params.strategy ?? config.defaultStrategy);
 
             // ── Get strategy function from registry ──
             const strategyFn = yield* registry.get(strategyName);

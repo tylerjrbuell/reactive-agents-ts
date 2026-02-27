@@ -2,7 +2,7 @@
 
 ## Project Status
 
-**v0.5.3+ released.** 17 packages + 2 apps built, 884 tests across 122 files, full integration verified with professional metrics dashboard.
+**v0.5.3+ released.** 17 packages + 2 apps built, 909 tests across 124 files, full integration verified with professional metrics dashboard.
 
 - Phase 1: Core, LLM Provider, Memory, Reasoning, Tools, Interaction, Runtime
 - Phase 2: Guardrails, Verification, Cost
@@ -15,6 +15,8 @@
 - Trust & Differentiators: Real Ed25519 crypto, LiteLLM (40+ providers), kill switch, behavioral contracts, subprocess sandbox, multi-source verification, prompt A/B experiments, cross-task self-improvement (855 tests)
 - EventBus Groundwork: +5 new event types, taskId correlation through all 5 reasoning strategies, all lifecycle events wired (AgentStarted/Completed, LLMRequestStarted, FinalAnswerProduced, GuardrailViolationDetected, ExecutionHookFired/Cancelled, AgentPaused/Resumed/Stopped, MemoryBootstrapped/Flushed) (864 tests)
 - Professional Metrics Dashboard: MetricsCollector auto-subscribed to EventBus, formatMetricsDashboard() renders header card + timeline + tools + alerts, exportMetrics() shows professional CLI output (20 new tests, 884 total)
+- Reasoning Strategy Fixes: `defaultStrategy` wired through to execution engine, ToT plan-then-execute (BFS planning → ReAct tool execution), `adaptive.enabled` flag connected, ToT score parsing robustness for thinking-mode LLMs (909 tests)
+- Tool Result Compression: `compressToolResult()` replaces blind truncation — structured previews (JSON array/object/text), scratchpad overflow store (`_tool_result_N`), code-transform pipe (`| transform: <expr>`), `ResultCompressionConfig` user-configurable on `.withTools()` (909 tests, 124 files)
 - Pre-release: tsup compiled output, Google Gemini provider, Reflexion reasoning strategy
 - Final Integration: All layers compose via `createRuntime()` and `ReactiveAgentBuilder`
 - Docs: Starlight (Astro) site at `apps/docs/`
@@ -25,7 +27,7 @@
 
 ```bash
 bun install              # Install dependencies
-bun test                 # Run all tests (884 tests, 122 files)
+bun test                 # Run all tests (909 tests, 124 files)
 bun run build            # Build all packages (16 packages, ESM + DTS)
 cd apps/docs && npx astro dev    # Start docs dev server
 cd apps/docs && npx astro build  # Build docs for production

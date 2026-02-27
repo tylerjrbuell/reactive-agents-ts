@@ -96,24 +96,29 @@ const result = await agent.run("Compare the GDP growth of the top 5 economies ov
 
 ### Tree-of-Thought
 
-Explores multiple reasoning branches in parallel, evaluating and pruning to find the best path:
+A two-phase **plan-then-execute** strategy that uses breadth-first tree search to find the best approach, then executes it using real tools:
 
-1. **Expand** — Generate multiple candidate thoughts (breadth)
-2. **Score** — Evaluate each thought's promise (0-1)
-3. **Prune** — Discard thoughts below the threshold
-4. **Deepen** — Expand the best thoughts further (depth)
-5. **Synthesize** — Select the best path and produce the final answer
+**Phase 1 — Planning (BFS tree search):**
+1. **Expand** — Generate multiple candidate thoughts, grounded in available tools
+2. **Score** — Evaluate each thought's promise (0.0–1.0)
+3. **Prune** — Discard thoughts below `pruningThreshold`
+4. **Deepen** — Expand surviving thoughts further (up to `depth` levels)
 
-**Best for:** Creative tasks, open-ended problems, and tasks with multiple valid approaches.
+**Phase 2 — Execution (ReAct loop):**
+5. **Execute** — Run a ReAct-style think/act/observe loop guided by the best path, calling real tools
+
+**Best for:** Complex tasks with multiple valid approaches that also require tool use (GitHub queries, file operations, multi-source research).
 
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withReasoning({ defaultStrategy: "tree-of-thought" })
+  .withTools()
   .build();
 
-const result = await agent.run("Design a novel data structure for real-time collaborative editing");
-// Explores 3 branches × 3 depth levels → Prunes weak ideas → Synthesizes best path
+const result = await agent.run("Research and summarize recent commits in this repo");
+// Phase 1: Explores 3 branches × 3 depth levels → Prunes weak ideas → Selects best path
+// Phase 2: Executes the plan with tool calls → FINAL ANSWER
 ```
 
 **Configuration:**
@@ -151,6 +156,17 @@ await agent.run("Write a technical report");  // → Uses Reflexion (quality-cri
 await agent.run("Plan a microservices arch"); // → Uses Plan-Execute (complex)
 ```
 
+Alternatively, enable adaptive routing via the `adaptive.enabled` flag while keeping a named default:
+
+```typescript
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withReasoning({ adaptive: { enabled: true } })
+  .withTools()
+  .build();
+// Every task is classified and routed to the best strategy automatically
+```
+
 ## Strategy Comparison
 
 | Strategy | LLM Calls | Best For | Trade-off |
@@ -158,7 +174,7 @@ await agent.run("Plan a microservices arch"); // → Uses Plan-Execute (complex)
 | **ReAct** | 1 per iteration | Tool use, step-by-step tasks | Fastest, most versatile |
 | **Reflexion** | 3 per retry cycle | Quality-critical output | Slower, higher quality |
 | **Plan-Execute** | 2+ per plan cycle | Structured multi-step work | Predictable, thorough |
-| **Tree-of-Thought** | 3× breadth × depth | Creative, open-ended | Most tokens, most creative |
+| **Tree-of-Thought** | 3× breadth × depth + execution | Creative + tool-using tasks | Most thorough: plans then executes |
 | **Adaptive** | 1 + delegated | Mixed workloads | Auto-selects, slight overhead |
 
 ## Enabling Reasoning
@@ -239,3 +255,5 @@ When both `.withReasoning()` and `.withTools()` are enabled, tools are wired dir
 4. Available tool names are injected into the reasoning prompt so the LLM knows what's available
 
 This means agents can genuinely interact with the world during reasoning — search the web, query databases, run calculations — and incorporate real results into their thinking.
+
+All five strategies support tool integration. Tree-of-Thought uses tools in its execution phase (Phase 2), while ReAct, Plan-Execute, and Reflexion use them throughout their loops.

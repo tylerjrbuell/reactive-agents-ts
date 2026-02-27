@@ -56,8 +56,8 @@ All methods return `this` for chaining.
 | `withBehavioralContracts(contract)` | Enforce typed behavioral boundaries: `deniedTools`, `allowedTools`, `maxIterations`. Throws `BehavioralContractError` on violation |
 | `withVerification()` | Semantic entropy, fact decomposition, and multi-source (LLM + Tavily) on output |
 | `withCostTracking()` | Budget enforcement, complexity routing, semantic caching |
-| `withReasoning(options?)` | Structured reasoning (ReAct, Reflexion, Plan-Execute, ToT, Adaptive). Options: `{ defaultStrategy?, strategies?, adaptive? }` |
-| `withTools(options?)` | Tool registry with sandboxed execution (subprocess isolation via `Bun.spawn`). Options: `{ tools?: [{ definition, handler }] }` |
+| `withReasoning(options?)` | Structured reasoning (ReAct, Reflexion, Plan-Execute, ToT, Adaptive). Options: `{ defaultStrategy?, strategies?, adaptive?: { enabled?: boolean, learning?: boolean } }`. Set `adaptive.enabled: true` to auto-select strategy per task |
+| `withTools(options?)` | Tool registry with sandboxed execution (subprocess isolation via `Bun.spawn`). Options: `{ tools?: [{ definition, handler }], resultCompression?: ResultCompressionConfig }`. See [Tool Result Compression](/guides/tools/#tool-result-compression) |
 | `withIdentity()` | Agent certificates (real Ed25519 keys) and RBAC |
 | `withObservability(options?)` | Distributed tracing, metrics, structured logging. Options: `{ verbosity?: "minimal" \| "normal" \| "verbose" \| "debug", live?: boolean, file?: string }` |
 | `withInteraction()` | 5 interaction modes with adaptive transitions |
@@ -79,7 +79,47 @@ All methods return `this` for chaining.
 
 | Method | Signature | Description |
 | ------ | --------- | ----------- |
-| `withMCP` | `(config: MCPServerConfig \| MCPServerConfig[]) => this` | Connect to MCP servers (stdio, SSE) |
+| `withMCP` | `(config: MCPServerConfig \| MCPServerConfig[]) => this` | Connect to MCP servers. Accepts a single config or array. Automatically enables `.withTools()`. |
+
+#### MCPServerConfig
+
+| Field | Type | Transport | Description |
+|-------|------|-----------|-------------|
+| `name` | `string` | all | Unique name for this server. Tool names are prefixed `{name}/` |
+| `transport` | `"stdio" \| "streamable-http" \| "sse" \| "websocket"` | all | Protocol to use. Use `"streamable-http"` for modern remote servers, `"stdio"` for local subprocesses |
+| `command` | `string` | stdio | Executable to launch (`"bunx"`, `"docker"`, `"python"`, absolute path, etc.) |
+| `args` | `string[]` | stdio | Arguments passed to `command`. Includes package names, flags, Docker image, etc. |
+| `env` | `Record<string, string>` | stdio | Extra env vars merged on top of the parent process environment. Use for per-server secrets |
+| `cwd` | `string` | stdio | Working directory for the subprocess. Defaults to parent process `cwd` |
+| `endpoint` | `string` | streamable-http, sse, websocket | HTTP/WebSocket URL (`"https://mcp.example.com"`, `"ws://localhost:8000/mcp"`) |
+| `headers` | `Record<string, string>` | streamable-http, sse | HTTP headers sent on every request. Use for `Authorization`, `x-api-key`, etc. |
+
+**Examples:**
+
+```typescript
+// stdio: npm package via bunx
+{ name: "filesystem", transport: "stdio", command: "bunx",
+  args: ["-y", "@modelcontextprotocol/server-filesystem", "."] }
+
+// stdio: with per-server secret
+{ name: "github", transport: "stdio", command: "bunx",
+  args: ["-y", "@modelcontextprotocol/server-github"],
+  env: { GITHUB_PERSONAL_ACCESS_TOKEN: process.env.GH_TOKEN ?? "" } }
+
+// stdio: Docker container with networking
+{ name: "my-server", transport: "stdio", command: "docker",
+  args: ["run", "-i", "--rm", "--network", "host", "ghcr.io/org/mcp-server"] }
+
+// streamable-http: modern cloud server with Bearer auth
+{ name: "stripe", transport: "streamable-http",
+  endpoint: "https://mcp.stripe.com",
+  headers: { Authorization: `Bearer ${process.env.STRIPE_KEY}` } }
+
+// sse: legacy remote server with API key
+{ name: "legacy", transport: "sse",
+  endpoint: "https://api.example.com/mcp",
+  headers: { "x-api-key": process.env.API_KEY ?? "" } }
+```
 
 ### Lifecycle
 
@@ -132,9 +172,85 @@ buildEffect(): Effect.Effect<ReactiveAgent, Error>
 
 Creates the agent as an Effect for composition in Effect programs.
 
+### `runOnce(input: string): Promise<AgentResult>`
+
+Builds the agent, runs a single task, disposes all resources, and returns the result — in one call. Use this for one-shot scripts where you don't need to hold a reference to the agent.
+
+```typescript
+const result = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withReasoning()
+  .runOnce("Summarize the README in one paragraph");
+
+console.log(result.output);
+// Resources are already cleaned up
+```
+
 ## ReactiveAgent
 
 The facade returned by `build()`.
+
+### Resource Management
+
+Agents that use MCP servers (stdio transport) or other subprocess-based resources **must be disposed** after use, otherwise the process will hang on open pipes. Three patterns are available:
+
+#### Pattern 1 — `await using` (recommended)
+
+Uses the [Explicit Resource Management](https://www.typescriptlang.org/docs/handbook/release-notes/typescript-5-2.html) protocol introduced in TypeScript 5.2. The agent is disposed automatically when the enclosing block exits, whether normally or via an exception.
+
+```typescript
+await using agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withMCP({ name: "filesystem", transport: "stdio", command: "npx", args: ["@modelcontextprotocol/server-filesystem", "."] })
+  .withReasoning()
+  .build();
+
+const result = await agent.run("List the project files.");
+console.log(result.output);
+// agent.dispose() is called automatically here
+```
+
+Requires `"lib": ["ES2022", "ESNext"]` or `"target": "ES2022"` in your `tsconfig.json`.
+
+#### Pattern 2 — `runOnce()` (one-shot)
+
+If you only need a single result and don't want to manage the agent handle at all, use the builder's `runOnce()` method. It builds, runs, and disposes in one call.
+
+```typescript
+const result = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withMCP({ name: "filesystem", transport: "stdio", command: "npx", args: ["@modelcontextprotocol/server-filesystem", "."] })
+  .withReasoning()
+  .runOnce("List the project files.");
+
+console.log(result.output);
+// Resources already cleaned up
+```
+
+#### Pattern 3 — `dispose()` (explicit)
+
+Call `dispose()` manually in a `finally` block when you need to reuse the agent across multiple calls before cleaning up.
+
+```typescript
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withReasoning()
+  .build();
+
+try {
+  const r1 = await agent.run("First task");
+  const r2 = await agent.run("Second task");
+  console.log(r1.output, r2.output);
+} finally {
+  await agent.dispose();
+}
+```
+
+| Pattern | When to use |
+|---------|-------------|
+| `await using` | General purpose — automatic cleanup, works with `try/catch` |
+| `runOnce()` | Single-shot scripts and one-liners |
+| `dispose()` | Multiple sequential runs before teardown |
 
 ### `run(input: string): Promise<AgentResult>`
 
@@ -262,8 +378,8 @@ interface AgentResult {
 import { ReactiveAgents } from "reactive-agents";
 import { Effect } from "effect";
 
-// Build agent with all features
-const agent = await ReactiveAgents.create()
+// await using — agent is disposed automatically when this block exits
+await using agent = await ReactiveAgents.create()
   .withName("research-assistant")
   .withProvider("anthropic")
   .withModel("claude-sonnet-4-20250514")
@@ -299,4 +415,5 @@ console.log(result.output);
 console.log(`Cost: $${result.metadata.cost.toFixed(4)}`);
 console.log(`Tokens: ${result.metadata.tokensUsed}`);
 console.log(`Strategy: ${result.metadata.strategyUsed}`);
+// agent.dispose() is called automatically here
 ```

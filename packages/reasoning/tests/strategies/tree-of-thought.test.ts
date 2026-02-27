@@ -10,7 +10,7 @@ describe("TreeOfThoughtStrategy", () => {
     const layer = TestLLMServiceLayer({
       "Generate exactly": "1. Approach via historical analysis\n2. Approach via geographical lookup",
       "Rate this thought": "0.8",
-      "Synthesize the reasoning": "Paris is the capital of France.",
+      "Selected Approach": "FINAL ANSWER: Paris is the capital of France.",
     });
 
     const program = executeTreeOfThought({
@@ -44,7 +44,7 @@ describe("TreeOfThoughtStrategy", () => {
     const layer = TestLLMServiceLayer({
       "Generate exactly": "1. A weak approach\n2. Another weak approach",
       "Rate this thought": "0.1",
-      "Synthesize the reasoning": "Best effort answer despite low scores.",
+      "Selected Approach": "FINAL ANSWER: Best effort answer despite low scores.",
     });
 
     const program = executeTreeOfThought({
@@ -82,7 +82,7 @@ describe("TreeOfThoughtStrategy", () => {
     const layer = TestLLMServiceLayer({
       "Generate exactly": "1. First thought\n2. Second thought",
       "Rate this thought": "0.7",
-      "Synthesize the reasoning": "Final synthesized answer.",
+      "Selected Approach": "FINAL ANSWER: Final synthesized answer.",
     });
 
     const program = executeTreeOfThought({
