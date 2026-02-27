@@ -24,6 +24,8 @@ export const PromptTemplateSchema = Schema.Struct({
   version: Schema.Number,
   template: Schema.String,
   variables: Schema.Array(PromptVariableSchema),
+  /** Links this template version to an A/B experiment. */
+  experimentId: Schema.optional(Schema.String),
   metadata: Schema.optional(
     Schema.Struct({
       author: Schema.optional(Schema.String),
