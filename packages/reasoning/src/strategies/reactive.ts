@@ -419,8 +419,8 @@ function runToolObservation(
   // Short-circuit scratchpad-read for auto-stored tool results
   if (toolRequest.tool === "scratchpad-read" && scratchpadStore && scratchpadStore.size > 0) {
     try {
-      const args = JSON.parse(toolRequest.input) as { key?: string };
-      const key = args.key ?? "";
+      const args = JSON.parse(toolRequest.input) as { key?: string } | string;
+      const key = typeof args === "string" ? args : (args.key ?? "");
       if (scratchpadStore.has(key)) {
         const value = scratchpadStore.get(key)!;
         const budget = compressionConfig?.budget ?? profile?.toolResultMaxChars ?? 800;
@@ -826,7 +826,7 @@ export function parseToolRequestWithTransform(
   const pipeIdx = thought.indexOf(" | transform: ");
   const actionPart = pipeIdx >= 0 ? thought.slice(0, pipeIdx) : thought;
   const transformExpr =
-    pipeIdx >= 0 ? thought.slice(pipeIdx + " | transform: ".length).trim() : undefined;
+    pipeIdx >= 0 ? thought.slice(pipeIdx + " | transform: ".length).split("\n")[0].trim() : undefined;
 
   const base = parseToolRequest(actionPart);
   if (!base) return null;
