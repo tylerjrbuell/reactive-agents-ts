@@ -25,16 +25,20 @@ export interface ExampleResult {
   durationMs: number;
 }
 
-export async function run(): Promise<ExampleResult> {
+export async function run(opts?: { provider?: string; model?: string }): Promise<ExampleResult> {
   const start = Date.now();
-  const useReal = Boolean(process.env.ANTHROPIC_API_KEY);
+  type PN = "anthropic" | "openai" | "ollama" | "gemini" | "litellm" | "test";
+  const provider = (opts?.provider ?? (process.env.ANTHROPIC_API_KEY ? "anthropic" : "test")) as PN;
+  const useReal = provider !== "test";
 
   console.log("\n=== MCP Filesystem Example ===");
-  console.log(`Mode: ${useReal ? "LIVE (MCP + Anthropic)" : "TEST (mock)"}\n`);
+  console.log(`Mode: ${useReal ? `LIVE (MCP + ${provider})` : "TEST (mock)"}\n`);
 
-  const agent = await ReactiveAgents.create()
+  let b = ReactiveAgents.create()
     .withName("mcp-filesystem-agent")
-    .withProvider(useReal ? "anthropic" : "test")
+    .withProvider(provider);
+  if (opts?.model) b = b.withModel(opts.model);
+  const agent = await b
     .withTools()
     .withMCP(useReal ? [{
       name: "filesystem",

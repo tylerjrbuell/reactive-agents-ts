@@ -20,20 +20,26 @@ export interface ExampleResult {
   durationMs: number;
 }
 
-const PROVIDER = process.env.ANTHROPIC_API_KEY ? "anthropic" as const : "test" as const;
-
-export async function run(): Promise<ExampleResult> {
+export async function run(opts?: { provider?: string; model?: string }): Promise<ExampleResult> {
   const start = Date.now();
+
+  type PN = "anthropic" | "openai" | "ollama" | "gemini" | "litellm" | "test";
+  const provider = (opts?.provider ?? (process.env.ANTHROPIC_API_KEY ? "anthropic" : "test")) as PN;
+
   console.log("\n=== Cost Tracking Example ===\n");
-  console.log(`Mode: ${PROVIDER === "anthropic" ? "LIVE" : "TEST"}\n`);
+  console.log(`Mode: ${provider !== "test" ? `LIVE (${provider})` : "TEST"}\n`);
+
+  const mkBase = (name: string) => {
+    let b = ReactiveAgents.create().withName(name).withProvider(provider);
+    if (opts?.model) b = b.withModel(opts.model);
+    return b;
+  };
 
   // ─── Part 1: Basic cost tracking ──────────────────────────────────────────
 
   console.log("Part 1: Basic cost tracking with .withCostTracking()");
 
-  const agent = await ReactiveAgents.create()
-    .withName("cost-tracked-agent")
-    .withProvider(PROVIDER)
+  const agent = await mkBase("cost-tracked-agent")
     .withCostTracking()
     .withTestResponses({ "": "FINAL ANSWER: The answer is 42. Task completed within budget." })
     .build();
@@ -50,9 +56,7 @@ export async function run(): Promise<ExampleResult> {
 
   console.log("\nPart 2: Cost accumulation across multiple runs");
 
-  const agent2 = await ReactiveAgents.create()
-    .withName("multi-run-agent")
-    .withProvider(PROVIDER)
+  const agent2 = await mkBase("multi-run-agent")
     .withCostTracking()
     .withTestResponses({
       "France": "FINAL ANSWER: Paris is the capital of France.",

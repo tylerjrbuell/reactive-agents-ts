@@ -23,17 +23,20 @@ export interface ExampleResult {
   durationMs: number;
 }
 
-const PROVIDER = process.env.ANTHROPIC_API_KEY ? "anthropic" as const : "test" as const;
-
-export async function run(): Promise<ExampleResult> {
+export async function run(opts?: { provider?: string; model?: string }): Promise<ExampleResult> {
   const start = Date.now();
 
-  console.log("\n=== Dynamic Sub-Agent Spawning Example ===");
-  console.log(`Mode: ${PROVIDER === "anthropic" ? "LIVE" : "TEST"}\n`);
+  type PN = "anthropic" | "openai" | "ollama" | "gemini" | "litellm" | "test";
+  const provider = (opts?.provider ?? (process.env.ANTHROPIC_API_KEY ? "anthropic" : "test")) as PN;
 
-  const agent = await ReactiveAgents.create()
+  console.log("\n=== Dynamic Sub-Agent Spawning Example ===");
+  console.log(`Mode: ${provider !== "test" ? `LIVE (${provider})` : "TEST"}\n`);
+
+  let b = ReactiveAgents.create()
     .withName("parent-spawner")
-    .withProvider(PROVIDER)
+    .withProvider(provider);
+  if (opts?.model) b = b.withModel(opts.model);
+  const agent = await b
     .withTools()
     .withDynamicSubAgents({ maxIterations: 4 })
     .withReasoning({ defaultStrategy: "reactive" })

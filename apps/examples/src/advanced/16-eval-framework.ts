@@ -27,20 +27,22 @@ export interface ExampleResult {
   durationMs: number;
 }
 
-const PROVIDER = process.env.ANTHROPIC_API_KEY ? "anthropic" as const : "test" as const;
-
-export async function run(): Promise<ExampleResult> {
+export async function run(opts?: { provider?: string; model?: string }): Promise<ExampleResult> {
   const start = Date.now();
+
+  type PN = "anthropic" | "openai" | "ollama" | "gemini" | "litellm" | "test";
+  const provider = (opts?.provider ?? (process.env.ANTHROPIC_API_KEY ? "anthropic" : "test")) as PN;
+
   console.log("\n=== Eval Framework Example ===\n");
-  console.log(`Mode: ${PROVIDER === "anthropic" ? "LIVE" : "TEST"}\n`);
+  console.log(`Mode: ${provider !== "test" ? `LIVE (${provider})` : "TEST"}\n`);
 
   // ─── Part 1: Run an agent to get a response ────────────────────────────────
 
   console.log("Part 1: Running agent to get response");
 
-  const agent = await ReactiveAgents.create()
-    .withName("eval-subject")
-    .withProvider(PROVIDER)
+  let b = ReactiveAgents.create().withName("eval-subject").withProvider(provider);
+  if (opts?.model) b = b.withModel(opts.model);
+  const agent = await b
     .withTestResponses({ "": "FINAL ANSWER: Paris is the capital of France." })
     .build();
 

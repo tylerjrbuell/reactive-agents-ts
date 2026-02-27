@@ -16,6 +16,22 @@ export interface ExampleResult {
   durationMs: number;
 }
 
+export interface RunConfig {
+  provider?: string;
+  model?: string;
+}
+
+// ─── Default LLM config for live examples ─────────────────────────────────────
+// Set these to use a specific provider/model across all examples that support
+// live mode. Leave undefined to auto-detect from environment variables.
+//
+// Examples:
+//   DEFAULT_PROVIDER = "openai";  DEFAULT_MODEL = "gpt-4o";
+//   DEFAULT_PROVIDER = "ollama";  DEFAULT_MODEL = "llama3.2";
+//   DEFAULT_PROVIDER = "anthropic"; DEFAULT_MODEL = "claude-opus-4-6";
+const DEFAULT_PROVIDER: string | undefined = undefined;
+const DEFAULT_MODEL: string | undefined = undefined;
+
 interface ExampleMeta {
   num: string;
   label: string;
@@ -97,8 +113,8 @@ for (const meta of toRun) {
   process.stdout.write(`${label} `);
   const wallStart = Date.now();
   try {
-    const mod = await import(meta.path) as { run: () => Promise<ExampleResult> };
-    const result = await mod.run();
+    const mod = await import(meta.path) as { run: (opts?: RunConfig) => Promise<ExampleResult> };
+    const result = await mod.run({ provider: DEFAULT_PROVIDER, model: DEFAULT_MODEL });
     const elapsed = Date.now() - wallStart;
     const icon = result.passed ? "✅" : "❌";
     console.log(`${icon}  ${result.steps}st  ${result.tokens}tk  ${elapsed}ms`);

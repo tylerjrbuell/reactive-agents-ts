@@ -24,20 +24,26 @@ export interface ExampleResult {
   durationMs: number;
 }
 
-const PROVIDER = process.env.ANTHROPIC_API_KEY ? "anthropic" as const : "test" as const;
-
-export async function run(): Promise<ExampleResult> {
+export async function run(opts?: { provider?: string; model?: string }): Promise<ExampleResult> {
   const start = Date.now();
+
+  type PN = "anthropic" | "openai" | "ollama" | "gemini" | "litellm" | "test";
+  const provider = (opts?.provider ?? (process.env.ANTHROPIC_API_KEY ? "anthropic" : "test")) as PN;
+
   console.log("\n=== Cross-Task Self-Improvement Example ===\n");
-  console.log(`Mode: ${PROVIDER === "anthropic" ? "LIVE" : "TEST"}\n`);
+  console.log(`Mode: ${provider !== "test" ? `LIVE (${provider})` : "TEST"}\n`);
+
+  const mkBase = (name: string) => {
+    let b = ReactiveAgents.create().withName(name).withProvider(provider);
+    if (opts?.model) b = b.withModel(opts.model);
+    return b;
+  };
 
   // ─── Run 1: Baseline ───────────────────────────────────────────────────────
 
   console.log("Run 1 (baseline — no prior episodic context)...");
 
-  const agent1 = await ReactiveAgents.create()
-    .withName("self-improve-demo")
-    .withProvider(PROVIDER)
+  const agent1 = await mkBase("self-improve-demo")
     .withMemory("1")
     .withSelfImprovement()
     .withMaxIterations(5)
@@ -57,9 +63,7 @@ export async function run(): Promise<ExampleResult> {
 
   console.log("\nRun 2 (with episodic learning from run 1)...");
 
-  const agent2 = await ReactiveAgents.create()
-    .withName("self-improve-demo")
-    .withProvider(PROVIDER)
+  const agent2 = await mkBase("self-improve-demo")
     .withMemory("1")
     .withSelfImprovement()
     .withMaxIterations(5)
@@ -79,9 +83,7 @@ export async function run(): Promise<ExampleResult> {
 
   console.log("\nRun 3 (different task — factual knowledge)...");
 
-  const agent3 = await ReactiveAgents.create()
-    .withName("self-improve-demo")
-    .withProvider(PROVIDER)
+  const agent3 = await mkBase("self-improve-demo")
     .withMemory("1")
     .withSelfImprovement()
     .withMaxIterations(5)

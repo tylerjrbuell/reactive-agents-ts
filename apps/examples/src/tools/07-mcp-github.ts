@@ -31,21 +31,25 @@ export interface ExampleResult {
   durationMs: number;
 }
 
-export async function run(): Promise<ExampleResult> {
+export async function run(opts?: { provider?: string; model?: string }): Promise<ExampleResult> {
   const start = Date.now();
-  const useReal = Boolean(process.env.ANTHROPIC_API_KEY && process.env.GITHUB_PERSONAL_ACCESS_TOKEN);
+  type PN = "anthropic" | "openai" | "ollama" | "gemini" | "litellm" | "test";
+  const provider = (opts?.provider ?? (process.env.ANTHROPIC_API_KEY ? "anthropic" : "test")) as PN;
+  const useReal = provider !== "test" && Boolean(process.env.GITHUB_PERSONAL_ACCESS_TOKEN);
 
   console.log("\n=== MCP GitHub Example ===");
-  console.log(`Mode: ${useReal ? "LIVE (MCP GitHub + Anthropic)" : "TEST (mock)"}\n`);
+  console.log(`Mode: ${useReal ? `LIVE (MCP GitHub + ${provider})` : "TEST (mock)"}\n`);
 
-  const agent = await ReactiveAgents.create()
+  let b = ReactiveAgents.create()
     .withName("mcp-github-agent")
-    .withProvider(useReal ? "anthropic" : "test")
+    .withProvider(provider);
+  if (opts?.model) b = b.withModel(opts.model);
+  const agent = await b
     .withTools()
     .withMCP(useReal ? [{
       name: "github",
       transport: "stdio",
-      command: "npx",
+      command: "bunx",
       args: ["-y", "@modelcontextprotocol/server-github"],
     }] : [])
     .withMaxIterations(5)
