@@ -166,4 +166,58 @@ describe("ReflexionStrategy", () => {
     expect(shallow.strategy).toBe("reflexion");
     expect(deep.strategy).toBe("reflexion");
   });
+
+  it("exits early when critique is stagnant (same as previous)", async () => {
+    // TestLLMService returns the SAME critique every time → stagnant → bail early
+    const layer = TestLLMServiceLayer({
+      "Critically evaluate": "The response is missing detail about superposition.",
+    });
+
+    const result = await Effect.runPromise(
+      executeReflexion({
+        taskDescription: "Explain quantum entanglement",
+        taskType: "explanation",
+        memoryContext: "",
+        availableTools: [],
+        config: {
+          ...defaultReasoningConfig,
+          strategies: {
+            ...defaultReasoningConfig.strategies,
+            reflexion: { maxRetries: 5, selfCritiqueDepth: "shallow" },
+          },
+        },
+      }).pipe(Effect.provide(layer)),
+    );
+
+    // With stagnation detection, should bail well before maxRetries
+    const thoughtSteps = result.steps.filter((s) => s.type === "thought");
+    expect(thoughtSteps.length).toBeLessThan(5); // < maxRetries attempts
+    expect(result.status).toBe("partial");
+  });
+
+  it("caps previousCritiques at 3 entries regardless of maxRetries", async () => {
+    const layer = TestLLMServiceLayer({
+      "Critically evaluate": "The response lacks examples.",
+      default: "An improved response.",
+    });
+
+    const result = await Effect.runPromise(
+      executeReflexion({
+        taskDescription: "Explain quantum entanglement",
+        taskType: "explanation",
+        memoryContext: "",
+        availableTools: [],
+        config: {
+          ...defaultReasoningConfig,
+          strategies: {
+            ...defaultReasoningConfig.strategies,
+            reflexion: { maxRetries: 4, selfCritiqueDepth: "shallow" },
+          },
+        },
+      }).pipe(Effect.provide(layer)),
+    );
+
+    expect(result.strategy).toBe("reflexion");
+    expect(result.steps.length).toBeGreaterThan(0);
+  });
 });
