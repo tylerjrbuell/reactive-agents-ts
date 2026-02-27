@@ -26,14 +26,14 @@ Type-safe from prompt to production. 17 packages. 13 composable layers. 5 reason
 
 Most AI agent frameworks are dynamically typed, monolithic, and opaque. **Reactive Agents** takes a fundamentally different approach:
 
-| Problem | How We Solve It |
-|---------|----------------|
-| **No type safety** | Effect-TS schemas validate every service boundary at compile time |
-| **Monolithic** | 13 independent layers — enable only what you need |
-| **Opaque decisions** | 10-phase execution engine with before/after/error hooks on every phase |
-| **Unsafe by default** | Guardrails block injection/PII/toxicity before the LLM sees input |
-| **No cost control** | Complexity router picks the cheapest capable model; budget enforcement at 4 levels |
-| **Single reasoning mode** | 5 strategies (ReAct, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive) |
+| Problem                        | How We Solve It                                                                     |
+| ------------------------------ | ----------------------------------------------------------------------------------- |
+| **No type safety**             | Effect-TS schemas validate every service boundary at compile time                   |
+| **Monolithic**                 | 13 independent layers — enable only what you need                                   |
+| **Opaque decisions**           | 10-phase execution engine with before/after/error hooks on every phase              |
+| **Unsafe by default**          | Guardrails block injection/PII/toxicity before the LLM sees input                   |
+| **No cost control**            | Complexity router picks the cheapest capable model; budget enforcement at 4 levels  |
+| **Single reasoning mode**      | 5 strategies (ReAct, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive)            |
 | **Context bloat in long runs** | Model-adaptive context engineering — compaction, truncation, and tier-aware prompts |
 
 ## Quick Start
@@ -65,23 +65,24 @@ Every capability is opt-in. Chain what you need:
 const agent = await ReactiveAgents.create()
   .withName("research-agent")
   .withProvider("anthropic")
-  .withReasoning()            // ReAct reasoning loop
-  .withTools()                // Built-in tools + MCP support
-  .withMemory("1")            // Persistent memory (FTS5 search)
-  .withGuardrails()           // Block injection, PII, toxicity
-  .withKillSwitch()           // Per-agent + global emergency halt
-  .withBehavioralContracts({  // Enforce tool whitelist + iteration cap
+  .withReasoning() // ReAct reasoning loop
+  .withTools() // Built-in tools + MCP support
+  .withMemory("1") // Persistent memory (FTS5 search)
+  .withGuardrails() // Block injection, PII, toxicity
+  .withKillSwitch() // Per-agent + global emergency halt
+  .withBehavioralContracts({
+    // Enforce tool whitelist + iteration cap
     deniedTools: ["file-write"],
     maxIterations: 10,
   })
-  .withVerification()         // Fact-check outputs
-  .withCostTracking()         // Budget enforcement + model routing
+  .withVerification() // Fact-check outputs
+  .withCostTracking() // Budget enforcement + model routing
   .withObservability({ verbosity: "verbose", live: true }) // Live log streaming + tracing
   .withContextProfile({ tier: "local" }) // Adaptive context for model tier
-  .withIdentity()             // RBAC + agent certificates (Ed25519)
-  .withInteraction()          // 5 autonomy modes
-  .withOrchestration()        // Multi-agent workflows
-  .withSelfImprovement()      // Cross-task strategy outcome learning
+  .withIdentity() // RBAC + agent certificates (Ed25519)
+  .withInteraction() // 5 autonomy modes
+  .withOrchestration() // Multi-agent workflows
+  .withSelfImprovement() // Cross-task strategy outcome learning
   .build();
 ```
 
@@ -97,18 +98,27 @@ const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withReasoning()
   .withTools({
-    tools: [{
-      definition: {
-        name: "web_search",
-        description: "Search the web for current information",
-        parameters: [{ name: "query", type: "string", description: "Search query", required: true }],
-        riskLevel: "low",
-        timeoutMs: 10_000,
-        requiresApproval: false,
-        source: "function",
+    tools: [
+      {
+        definition: {
+          name: "web_search",
+          description: "Search the web for current information",
+          parameters: [
+            {
+              name: "query",
+              type: "string",
+              description: "Search query",
+              required: true,
+            },
+          ],
+          riskLevel: "low",
+          timeoutMs: 10_000,
+          requiresApproval: false,
+          source: "function",
+        },
+        handler: (args) => Effect.succeed(`Results for: ${args.query}`),
       },
-      handler: (args) => Effect.succeed(`Results for: ${args.query}`),
-    }],
+    ],
   })
   .build();
 ```
@@ -130,10 +140,10 @@ const agent = await ReactiveAgents.create()
 
 Sub-agents receive a clean context window, inherit the parent's provider and model by default, and are depth-limited to `MAX_RECURSION_DEPTH = 3`.
 
-| Approach | When to use |
-|---|---|
-| `.withAgentTool("name", config)` | Named, purpose-built sub-agent with a specific role |
-| `.withDynamicSubAgents()` | Ad-hoc delegation at model's discretion, unknown tasks |
+| Approach                         | When to use                                            |
+| -------------------------------- | ------------------------------------------------------ |
+| `.withAgentTool("name", config)` | Named, purpose-built sub-agent with a specific role    |
+| `.withDynamicSubAgents()`        | Ad-hoc delegation at model's discretion, unknown tasks |
 
 ### Model-Adaptive Context
 
@@ -146,14 +156,14 @@ const agent = await ReactiveAgents.create()
   .withModel("qwen3:4b")
   .withReasoning()
   .withTools()
-  .withContextProfile({ tier: "local" })  // Lean prompts, aggressive compaction
+  .withContextProfile({ tier: "local" }) // Lean prompts, aggressive compaction
   .build();
 ```
 
-| Tier | Models | Context Strategy |
-|------|--------|-----------------|
+| Tier      | Models                     | Context Strategy                                                       |
+| --------- | -------------------------- | ---------------------------------------------------------------------- |
 | `"local"` | Ollama small models (≤14b) | Lean prompts, aggressive compaction after 6 steps, 800-char truncation |
-| `"cloud"` | Anthropic, OpenAI, Gemini | Full context, standard compaction |
+| `"cloud"` | Anthropic, OpenAI, Gemini  | Full context, standard compaction                                      |
 
 ## Architecture
 
@@ -192,30 +202,30 @@ Bootstrap ─→ Guardrail ─→ Cost Route ─→ Strategy Select
 Verify ─→ Memory Flush ─→ Cost Track ─→ Audit ─→ Complete
 ```
 
-| Phase | Service Called | What It Does |
-|-------|--------------|-------------|
-| Bootstrap | MemoryService | Load context from semantic/episodic memory |
-| Guardrail | GuardrailService | Block unsafe input before LLM sees it |
-| Cost Route | CostService | Select optimal model tier by complexity |
-| Strategy Select | ReasoningService | Pick reasoning strategy (or direct LLM) |
-| Think/Act/Observe | LLMService + ToolService | Reasoning loop with real tool execution |
-| Verify | VerificationService | Fact-check output (entropy, decomposition, NLI) |
-| Memory Flush | MemoryService | Persist session + episodic memories |
-| Cost Track | CostService | Record spend against budget |
-| Audit | ObservabilityService | Log audit trail (tokens, cost, strategy, duration) |
-| Complete | — | Build final result with metadata |
+| Phase             | Service Called           | What It Does                                       |
+| ----------------- | ------------------------ | -------------------------------------------------- |
+| Bootstrap         | MemoryService            | Load context from semantic/episodic memory         |
+| Guardrail         | GuardrailService         | Block unsafe input before LLM sees it              |
+| Cost Route        | CostService              | Select optimal model tier by complexity            |
+| Strategy Select   | ReasoningService         | Pick reasoning strategy (or direct LLM)            |
+| Think/Act/Observe | LLMService + ToolService | Reasoning loop with real tool execution            |
+| Verify            | VerificationService      | Fact-check output (entropy, decomposition, NLI)    |
+| Memory Flush      | MemoryService            | Persist session + episodic memories                |
+| Cost Track        | CostService              | Record spend against budget                        |
+| Audit             | ObservabilityService     | Log audit trail (tokens, cost, strategy, duration) |
+| Complete          | —                        | Build final result with metadata                   |
 
 Every phase supports `before`, `after`, and `on-error` lifecycle hooks. When observability is enabled, every phase emits trace spans and metrics.
 
 ## 5 Reasoning Strategies
 
-| Strategy | How It Works | Best For |
-|----------|-------------|----------|
-| **ReAct** | Think → Act → Observe loop | Tool use, step-by-step tasks |
-| **Reflexion** | Generate → Critique → Improve | Quality-critical output |
-| **Plan-Execute** | Plan steps → Execute → Reflect → Refine | Structured multi-step work |
-| **Tree-of-Thought** | Branch → Score → Prune → Synthesize | Creative, open-ended problems |
-| **Adaptive** | Analyze task → Auto-select best strategy | Mixed workloads |
+| Strategy            | How It Works                             | Best For                      |
+| ------------------- | ---------------------------------------- | ----------------------------- |
+| **ReAct**           | Think → Act → Observe loop               | Tool use, step-by-step tasks  |
+| **Reflexion**       | Generate → Critique → Improve            | Quality-critical output       |
+| **Plan-Execute**    | Plan steps → Execute → Reflect → Refine  | Structured multi-step work    |
+| **Tree-of-Thought** | Branch → Score → Prune → Synthesize      | Creative, open-ended problems |
+| **Adaptive**        | Analyze task → Auto-select best strategy | Mixed workloads               |
 
 ```typescript
 // Auto-select the best strategy per task
@@ -227,37 +237,37 @@ const agent = await ReactiveAgents.create()
 
 ## Multi-Provider Support
 
-| Provider | Models | Tool Calling | Streaming |
-|----------|--------|:---:|:---:|
-| **Anthropic** | Claude Haiku, Sonnet, Opus | ✓ | ✓ |
-| **OpenAI** | GPT-4o, GPT-4o-mini | ✓ | ✓ |
-| **Google Gemini** | Gemini Flash, Pro | ✓ | ✓ |
-| **Ollama** | Any local model | — | ✓ |
-| **LiteLLM** | 100+ models via LiteLLM proxy | ✓ | ✓ |
-| **Test** | Mock (deterministic) | — | — |
+| Provider          | Models                        | Tool Calling | Streaming |
+| ----------------- | ----------------------------- | :----------: | :-------: |
+| **Anthropic**     | Claude Haiku, Sonnet, Opus    |      ✓       |     ✓     |
+| **OpenAI**        | GPT-4o, GPT-4o-mini           |      ✓       |     ✓     |
+| **Google Gemini** | Gemini Flash, Pro             |      ✓       |     ✓     |
+| **Ollama**        | Any local model               |      —       |     ✓     |
+| **LiteLLM**       | 100+ models via LiteLLM proxy |      ✓       |     ✓     |
+| **Test**          | Mock (deterministic)          |      —       |     —     |
 
 Switch providers with one line — agent code stays the same.
 
 ## Packages
 
-| Package | Description |
-|---------|-------------|
-| [`@reactive-agents/core`](packages/core) | EventBus, AgentService, TaskService, types |
-| [`@reactive-agents/runtime`](packages/runtime) | ExecutionEngine, ReactiveAgentBuilder, `createRuntime()` |
-| [`@reactive-agents/llm-provider`](packages/llm-provider) | LLM adapters (Anthropic, OpenAI, Gemini, Ollama, LiteLLM) |
-| [`@reactive-agents/memory`](packages/memory) | Working, Semantic, Episodic, Procedural memory (bun:sqlite) |
-| [`@reactive-agents/reasoning`](packages/reasoning) | 5 strategies: ReAct, Reflexion, Plan-Execute, ToT, Adaptive |
-| [`@reactive-agents/tools`](packages/tools) | Tool registry, sandboxed execution, MCP client |
-| [`@reactive-agents/guardrails`](packages/guardrails) | Injection, PII, toxicity detection |
-| [`@reactive-agents/verification`](packages/verification) | Semantic entropy, fact decomposition, NLI |
-| [`@reactive-agents/cost`](packages/cost) | Complexity routing, budget enforcement, semantic caching |
-| [`@reactive-agents/identity`](packages/identity) | Agent certificates, RBAC, delegation |
-| [`@reactive-agents/observability`](packages/observability) | Distributed tracing, metrics, structured logging |
-| [`@reactive-agents/interaction`](packages/interaction) | 5 autonomy modes, checkpoints, preference learning |
+| Package                                                    | Description                                                        |
+| ---------------------------------------------------------- | ------------------------------------------------------------------ |
+| [`@reactive-agents/core`](packages/core)                   | EventBus, AgentService, TaskService, types                         |
+| [`@reactive-agents/runtime`](packages/runtime)             | ExecutionEngine, ReactiveAgentBuilder, `createRuntime()`           |
+| [`@reactive-agents/llm-provider`](packages/llm-provider)   | LLM adapters (Anthropic, OpenAI, Gemini, Ollama, LiteLLM)          |
+| [`@reactive-agents/memory`](packages/memory)               | Working, Semantic, Episodic, Procedural memory (bun:sqlite)        |
+| [`@reactive-agents/reasoning`](packages/reasoning)         | 5 strategies: ReAct, Reflexion, Plan-Execute, ToT, Adaptive        |
+| [`@reactive-agents/tools`](packages/tools)                 | Tool registry, sandboxed execution, MCP client                     |
+| [`@reactive-agents/guardrails`](packages/guardrails)       | Injection, PII, toxicity detection                                 |
+| [`@reactive-agents/verification`](packages/verification)   | Semantic entropy, fact decomposition, NLI                          |
+| [`@reactive-agents/cost`](packages/cost)                   | Complexity routing, budget enforcement, semantic caching           |
+| [`@reactive-agents/identity`](packages/identity)           | Agent certificates, RBAC, delegation                               |
+| [`@reactive-agents/observability`](packages/observability) | Distributed tracing, metrics, structured logging                   |
+| [`@reactive-agents/interaction`](packages/interaction)     | 5 autonomy modes, checkpoints, preference learning                 |
 | [`@reactive-agents/orchestration`](packages/orchestration) | Multi-agent workflows (sequential, parallel, map-reduce, pipeline) |
-| [`@reactive-agents/prompts`](packages/prompts) | Version-controlled template engine |
-| [`@reactive-agents/eval`](packages/eval) | Evaluation framework (LLM-as-judge scoring) |
-| [`@reactive-agents/a2a`](packages/a2a) | A2A protocol: Agent Cards, JSON-RPC server/client, SSE streaming |
+| [`@reactive-agents/prompts`](packages/prompts)             | Version-controlled template engine                                 |
+| [`@reactive-agents/eval`](packages/eval)                   | Evaluation framework (LLM-as-judge scoring)                        |
+| [`@reactive-agents/a2a`](packages/a2a)                     | A2A protocol: Agent Cards, JSON-RPC server/client, SSE streaming   |
 
 ## CLI (`rax`)
 
@@ -307,6 +317,7 @@ When observability is enabled, the agent displays a professional metrics dashboa
 ```
 
 **Features:**
+
 - Per-phase execution timing and bottleneck identification
 - Tool call summary (success/error counts, average duration)
 - Smart alerts and optimization tips
@@ -314,6 +325,7 @@ When observability is enabled, the agent displays a professional metrics dashboa
 - EventBus-driven collection (no manual instrumentation)
 
 Enable with:
+
 ```typescript
 .withObservability({ verbosity: "normal", live: true })
 ```
