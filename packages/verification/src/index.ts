@@ -5,6 +5,7 @@ export type {
   LayerResult,
   VerificationResult,
   VerificationConfig,
+  VerificationLLM,
 } from "./types.js";
 export {
   RiskLevel,
@@ -20,9 +21,9 @@ export {
 export { VerificationError, CalibrationError } from "./errors.js";
 
 // ─── Layers ───
-export { checkSemanticEntropy } from "./layers/semantic-entropy.js";
-export { checkFactDecomposition } from "./layers/fact-decomposition.js";
-export { checkMultiSource } from "./layers/multi-source.js";
+export { checkSemanticEntropy, checkSemanticEntropyLLM } from "./layers/semantic-entropy.js";
+export { checkFactDecomposition, checkFactDecompositionLLM } from "./layers/fact-decomposition.js";
+export { checkMultiSource, checkMultiSourceLLM } from "./layers/multi-source.js";
 export { checkSelfConsistency } from "./layers/self-consistency.js";
 export { checkNli } from "./layers/nli.js";
 
