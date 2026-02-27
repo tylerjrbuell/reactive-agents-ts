@@ -80,20 +80,17 @@ export const ThoughtTracerLive = Layer.effect(
     if (Option.isSome(ebOpt)) {
       // Register a handler — subscribe() returns an unsubscribe fn which we ignore
       // (the tracer lives for the process lifetime)
-      yield* ebOpt.value.on("ReasoningStepCompleted", (event) => {
-        if (event._tag === "ReasoningStepCompleted") {
-          return tracer.recordStep({
-            taskId: event.taskId,
-            strategy: event.strategy,
-            step: event.step,
-            totalSteps: event.totalSteps,
-            thought: event.thought,
-            action: event.action,
-            observation: event.observation,
-          });
-        }
-        return Effect.void;
-      }).pipe(Effect.catchAll(() => Effect.void));
+      yield* ebOpt.value.on("ReasoningStepCompleted", (event) =>
+        tracer.recordStep({
+          taskId: event.taskId,
+          strategy: event.strategy,
+          step: event.step,
+          totalSteps: event.totalSteps,
+          thought: event.thought,
+          action: event.action,
+          observation: event.observation,
+        }),
+      ).pipe(Effect.catchAll(() => Effect.void));
     }
 
     return tracer;
