@@ -8,7 +8,7 @@ const HELP = `
   Options:
     --port <number>      Port for A2A server (default: 3000)
     --name <string>     Agent name (default: "agent")
-    --provider <name>   LLM provider: anthropic|openai|ollama|gemini|test (default: test)
+    --provider <name>   LLM provider: anthropic|openai|ollama|gemini|litellm|test (default: test)
     --model <string>    Model name
     --with-tools        Enable tools
     --with-reasoning    Enable reasoning strategies
@@ -26,7 +26,7 @@ export function runServe(argv: string[]) {
 
   let port = 3000;
   let name = "agent";
-  let provider: "anthropic" | "openai" | "ollama" | "gemini" | "test" = "test";
+  let provider: "anthropic" | "openai" | "ollama" | "gemini" | "litellm" | "test" = "test";
   let model: string | undefined;
   let withTools = false;
   let withReasoning = false;
@@ -66,15 +66,15 @@ export function runServe(argv: string[]) {
   console.log(`Reasoning: ${withReasoning ? "enabled" : "disabled"}`);
   console.log(`Memory: ${memoryTier ? `tier ${memoryTier}` : "disabled"}`);
 
-  const builder = ReactiveAgents.create()
+  let builder = ReactiveAgents.create()
     .withName(name)
     .withProvider(provider)
     .withModel(model ?? "test")
     .withA2A({ port });
 
-  if (withTools) builder.withTools();
-  if (withReasoning) builder.withReasoning();
-  if (memoryTier) builder.withMemory(memoryTier);
+  if (withTools) builder = builder.withTools();
+  if (withReasoning) builder = builder.withReasoning();
+  if (memoryTier) builder = builder.withMemory(memoryTier);
 
   // Build the agent and start HTTP server
   startServer(builder.build(), name, port);
