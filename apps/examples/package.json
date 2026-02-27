@@ -4,15 +4,15 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "run-all": "bun run run-all.ts",
-    "run-all:offline": "bun run run-all.ts --offline",
-    "foundations": "bun run run-all.ts --filter foundations",
-    "tools": "bun run run-all.ts --filter tools",
-    "multi-agent": "bun run run-all.ts --filter multi-agent",
-    "trust": "bun run run-all.ts --filter trust",
-    "advanced": "bun run run-all.ts --filter advanced",
-    "reasoning": "bun run run-all.ts --filter reasoning",
-    "interaction": "bun run run-all.ts --filter interaction"
+    "run-all": "bun run index.ts",
+    "run-all:offline": "bun run index.ts --offline",
+    "foundations": "bun run index.ts --filter foundations",
+    "tools": "bun run index.ts --filter tools",
+    "multi-agent": "bun run index.ts --filter multi-agent",
+    "trust": "bun run index.ts --filter trust",
+    "advanced": "bun run index.ts --filter advanced",
+    "reasoning": "bun run index.ts --filter reasoning",
+    "interaction": "bun run index.ts --filter interaction"
   },
   "dependencies": {
     "effect": "^3.10.0",
