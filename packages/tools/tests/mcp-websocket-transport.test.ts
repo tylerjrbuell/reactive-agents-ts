@@ -164,6 +164,47 @@ describe("MCP WebSocket Transport", () => {
     await Effect.runPromise(program);
   });
 
+  it("should discover tool schemas via WebSocket", async () => {
+    const program = Effect.gen(function* () {
+      const client = yield* makeMCPClient;
+
+      const server = yield* client.connect({
+        name: "schema-test",
+        transport: "websocket",
+        endpoint: `ws://localhost:${mockServer.port}`,
+      });
+
+      expect(server.toolSchemas).toBeDefined();
+      expect(server.toolSchemas!.length).toBe(1);
+      expect(server.toolSchemas![0]!.name).toBe("ws-test-tool");
+      expect(server.toolSchemas![0]!.inputSchema).toBeDefined();
+    });
+
+    await Effect.runPromise(program);
+  });
+
+  it("should handle multiple sequential tool calls", async () => {
+    const program = Effect.gen(function* () {
+      const client = yield* makeMCPClient;
+
+      yield* client.connect({
+        name: "multi-call-test",
+        transport: "websocket",
+        endpoint: `ws://localhost:${mockServer.port}`,
+      });
+
+      const r1 = yield* client.callTool("multi-call-test", "ws-test-tool", { arg1: "first" });
+      const r2 = yield* client.callTool("multi-call-test", "ws-test-tool", { arg1: "second" });
+      const r3 = yield* client.callTool("multi-call-test", "ws-test-tool", { arg1: "third" });
+
+      expect(r1).toBeDefined();
+      expect(r2).toBeDefined();
+      expect(r3).toBeDefined();
+    });
+
+    await Effect.runPromise(program);
+  });
+
   it("should reject connection when endpoint is missing", async () => {
     const program = Effect.gen(function* () {
       const client = yield* makeMCPClient;
