@@ -196,28 +196,58 @@ describe("webSearchHandler — error cases", () => {
 // code-execute handler
 // ═══════════════════════════════════════════════════════════════════════
 
-describe("codeExecuteHandler — behavior", () => {
-  it("should execute code and return result", async () => {
+describe("codeExecuteHandler — subprocess isolation", () => {
+  it("should execute code in subprocess and return result", async () => {
     const result = await Effect.runPromise(
-      codeExecuteHandler({ code: "return 6 * 7" }),
+      codeExecuteHandler({ code: "console.log(6 * 7)" }),
     );
     const typed = result as {
       executed: boolean;
       result: unknown;
       output: string;
+      exitCode: number;
     };
     expect(typed.executed).toBe(true);
     expect(typed.result).toBe(42);
     expect(typed.output).toBe("42");
+    expect(typed.exitCode).toBe(0);
   });
 
-  it("should accept language parameter and execute", async () => {
+  it("should capture multi-line output", async () => {
     const result = await Effect.runPromise(
-      codeExecuteHandler({ code: "return 1 + 1;", language: "typescript" }),
+      codeExecuteHandler({ code: 'console.log("hello"); console.log("world");' }),
+    );
+    const typed = result as { executed: boolean; output: string };
+    expect(typed.executed).toBe(true);
+    expect(typed.output).toContain("hello");
+    expect(typed.output).toContain("world");
+  });
+
+  it("should report errors for invalid code", async () => {
+    const result = await Effect.runPromise(
+      codeExecuteHandler({ code: "throw new Error('boom')" }),
+    );
+    const typed = result as { executed: boolean; error?: string; exitCode: number };
+    expect(typed.executed).toBe(false);
+    expect(typed.exitCode).not.toBe(0);
+  });
+
+  it("runs in isolated env with no leaked secrets", async () => {
+    const result = await Effect.runPromise(
+      codeExecuteHandler({ code: "console.log(JSON.stringify(Object.keys(process.env)))" }),
     );
     const typed = result as { executed: boolean; result: unknown };
     expect(typed.executed).toBe(true);
-    expect(typed.result).toBe(2);
+    // Subprocess gets minimal env (PATH + HOME only); Bun may add internal vars,
+    // but no application secrets should leak through.
+    const envKeys = typed.result as string[];
+    expect(envKeys).not.toContain("ANTHROPIC_API_KEY");
+    expect(envKeys).not.toContain("OPENAI_API_KEY");
+    expect(envKeys).not.toContain("TAVILY_API_KEY");
+    expect(envKeys).not.toContain("GOOGLE_API_KEY");
+    // PATH and HOME are the only intentionally passed vars
+    expect(envKeys).toContain("PATH");
+    expect(envKeys).toContain("HOME");
   });
 
   it("codeExecuteTool definition has requiresApproval: true and critical risk", async () => {
