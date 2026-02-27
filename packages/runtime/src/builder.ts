@@ -5,7 +5,7 @@ import { ExecutionEngine } from "./execution-engine.js";
 import type { LifecycleHook, ExecutionContext } from "./types.js";
 import type { RuntimeErrors } from "./errors.js";
 import type { ReasoningConfig, ContextProfile } from "@reactive-agents/reasoning";
-import type { ToolDefinition } from "@reactive-agents/tools";
+import type { ToolDefinition, ResultCompressionConfig } from "@reactive-agents/tools";
 import type { RemoteAgentClient } from "@reactive-agents/tools";
 import type { PromptTemplate } from "@reactive-agents/prompts";
 import type { Task, TaskResult } from "@reactive-agents/core";
@@ -111,6 +111,8 @@ export interface ToolsOptions {
     readonly definition: ToolDefinition;
     readonly handler: (args: Record<string, unknown>) => Effect.Effect<unknown>;
   }>;
+  /** Tool result compression config — controls preview size, scratchpad overflow, and pipe transforms. */
+  readonly resultCompression?: ResultCompressionConfig;
 }
 
 /**
@@ -1047,6 +1049,32 @@ export class ReactiveAgentBuilder {
   }
 
   /**
+   * Build, run once, and automatically dispose — all in a single chain.
+   *
+   * The agent is created, the task is executed, and resources are cleaned up
+   * regardless of success or failure. Perfect for one-shot scripts.
+   *
+   * @param input - The task prompt or question
+   * @returns Promise resolving to an AgentResult
+   * @example
+   * ```typescript
+   * const result = await ReactiveAgents.create()
+   *   .withProvider("anthropic")
+   *   .withReasoning()
+   *   .runOnce("Summarize the README in one paragraph");
+   * console.log(result.output);
+   * ```
+   */
+  async runOnce(input: string): Promise<AgentResult> {
+    const agent = await this.build();
+    try {
+      return await agent.run(input);
+    } finally {
+      await agent.dispose();
+    }
+  }
+
+  /**
    * Build the agent as an Effect (advanced async version).
    *
    * Returns an Effect that, when run, instantiates the agent.
@@ -1475,7 +1503,7 @@ export class ReactiveAgentBuilder {
       // Create a ManagedRuntime so all facade calls (run, subscribe, pause, etc.)
       // share the same layer scope and the same service instances (EventBus, KillSwitch, etc.).
       const managedRuntime = ManagedRuntime.make(fullRuntime as unknown as Layer.Layer<any>);
-      return new ReactiveAgent(engine, agentId, managedRuntime);
+      return new ReactiveAgent(engine, agentId, managedRuntime, mcpServers.map((s) => s.name));
     }) as Effect.Effect<ReactiveAgent, Error>;
   }
 }
@@ -1515,7 +1543,59 @@ export class ReactiveAgent {
     readonly agentId: string,
     // ManagedRuntime evaluates the layer once; all facade calls share service instances.
     private readonly runtime: ManagedRuntime.ManagedRuntime<any, never>,
+    /** Names of connected MCP servers — needed for cleanup on dispose(). */
+    private readonly _mcpServerNames: readonly string[] = [],
   ) {}
+
+  /**
+   * Release all resources held by this agent.
+   *
+   * Disconnects any MCP stdio servers (killing their subprocesses) and closes
+   * the managed runtime scope. Call this after your last `agent.run()` to
+   * prevent the process from hanging on open subprocess pipes.
+   *
+   * @example
+   * ```typescript
+   * const result = await agent.run("...");
+   * await agent.dispose();
+   * ```
+   */
+  async dispose(): Promise<void> {
+    const serverNames = this._mcpServerNames;
+    if (serverNames.length > 0) {
+      await this.runtime.runPromise(
+        Effect.gen(function* () {
+          const toolsMod = yield* Effect.promise(() => import("@reactive-agents/tools"));
+          const ts = yield* (toolsMod.ToolService as unknown as import("effect").Context.Tag<any, any>);
+          for (const name of serverNames) {
+            yield* (ts as any).disconnectMCPServer(name).pipe(
+              Effect.catchAll(() => Effect.void),
+            );
+          }
+        }).pipe(Effect.catchAll(() => Effect.void)),
+      );
+    }
+    await this.runtime.dispose();
+  }
+
+  /**
+   * Automatic cleanup via the Explicit Resource Management protocol (TypeScript 5.2+).
+   *
+   * Enables `await using` syntax so the agent is disposed automatically when the
+   * enclosing block exits — no manual `dispose()` call required.
+   *
+   * @example
+   * ```typescript
+   * await using agent = await ReactiveAgents.create()
+   *   .withProvider("anthropic")
+   *   .build();
+   * const result = await agent.run("Hello");
+   * // agent.dispose() is called automatically here
+   * ```
+   */
+  async [Symbol.asyncDispose](): Promise<void> {
+    await this.dispose();
+  }
 
   /**
    * Execute a task and return the result (simple async version).
