@@ -56,8 +56,16 @@ export const VerificationConfigSchema = Schema.Struct({
   enableNli: Schema.Boolean,
   passThreshold: Schema.Number, // Default: 0.7
   riskThreshold: Schema.Number, // Default: 0.5
+  /** When true and llm is provided, use LLM-based semantic entropy and fact decomposition. */
+  useLLMTier: Schema.optional(Schema.Boolean),
 });
 export type VerificationConfig = typeof VerificationConfigSchema.Type;
+
+/** LLM interface for tier-2 verification layers. Decoupled from @reactive-agents/llm-provider. */
+export type VerificationLLM = {
+  complete: (req: any) => import("effect").Effect.Effect<{ content: string; usage?: { totalTokens?: number } }, any>;
+  embed: (texts: readonly string[], model?: string) => import("effect").Effect.Effect<readonly number[][], any>;
+};
 
 export const defaultVerificationConfig: VerificationConfig = {
   enableSemanticEntropy: true,

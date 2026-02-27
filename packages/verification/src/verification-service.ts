@@ -1,9 +1,9 @@
 import { Effect, Context, Layer } from "effect";
-import type { VerificationResult, VerificationConfig, LayerResult, RiskLevel } from "./types.js";
+import type { VerificationResult, VerificationConfig, VerificationLLM, LayerResult, RiskLevel } from "./types.js";
 import { VerificationError } from "./errors.js";
-import { checkSemanticEntropy } from "./layers/semantic-entropy.js";
-import { checkFactDecomposition } from "./layers/fact-decomposition.js";
-import { checkMultiSource } from "./layers/multi-source.js";
+import { checkSemanticEntropy, checkSemanticEntropyLLM } from "./layers/semantic-entropy.js";
+import { checkFactDecomposition, checkFactDecompositionLLM } from "./layers/fact-decomposition.js";
+import { checkMultiSource, checkMultiSourceLLM } from "./layers/multi-source.js";
 import { checkSelfConsistency } from "./layers/self-consistency.js";
 import { checkNli } from "./layers/nli.js";
 
@@ -25,22 +25,35 @@ export class VerificationService extends Context.Tag("VerificationService")<
 
 // ─── Live Implementation ───
 
-export const VerificationServiceLive = (config: VerificationConfig) =>
+export const VerificationServiceLive = (config: VerificationConfig, llm?: VerificationLLM) =>
   Layer.succeed(VerificationService, {
     verify: (response, input) =>
       Effect.gen(function* () {
         const layerResults: LayerResult[] = [];
+        const useLLM = config.useLLMTier === true && llm != null;
 
         if (config.enableSemanticEntropy) {
-          layerResults.push(yield* checkSemanticEntropy(response, input));
+          layerResults.push(
+            yield* (useLLM
+              ? checkSemanticEntropyLLM(response, input, llm!)
+              : checkSemanticEntropy(response, input)),
+          );
         }
 
         if (config.enableFactDecomposition) {
-          layerResults.push(yield* checkFactDecomposition(response));
+          layerResults.push(
+            yield* (useLLM
+              ? checkFactDecompositionLLM(response, llm!)
+              : checkFactDecomposition(response)),
+          );
         }
 
         if (config.enableMultiSource) {
-          layerResults.push(yield* checkMultiSource(response));
+          layerResults.push(
+            yield* (useLLM
+              ? checkMultiSourceLLM(response, llm!)
+              : checkMultiSource(response)),
+          );
         }
 
         if (config.enableSelfConsistency) {

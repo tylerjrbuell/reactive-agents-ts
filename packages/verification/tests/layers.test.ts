@@ -2,7 +2,7 @@ import { describe, test, expect } from "bun:test";
 import { Effect } from "effect";
 import { checkSemanticEntropy } from "../src/layers/semantic-entropy.js";
 import { checkFactDecomposition } from "../src/layers/fact-decomposition.js";
-import { checkMultiSource } from "../src/layers/multi-source.js";
+import { checkMultiSource, checkMultiSourceLLM } from "../src/layers/multi-source.js";
 import { checkSelfConsistency } from "../src/layers/self-consistency.js";
 import { checkNli } from "../src/layers/nli.js";
 
@@ -54,11 +54,97 @@ describe("Fact Decomposition Layer", () => {
 });
 
 describe("Multi-Source Layer", () => {
-  test("returns placeholder score", () => {
+  test("heuristic returns neutral confidence score", () => {
     const result = Effect.runSync(checkMultiSource("anything"));
     expect(result.layerName).toBe("multi-source");
-    expect(result.score).toBe(0.6);
+    expect(result.score).toBe(0.5);
     expect(result.passed).toBe(true);
+    expect(result.details).toContain("not yet implemented");
+  });
+
+  test("LLM tier skips when TAVILY_API_KEY is missing", async () => {
+    const original = process.env.TAVILY_API_KEY;
+    delete process.env.TAVILY_API_KEY;
+
+    const mockLLM = {
+      complete: (_req: any) =>
+        Effect.succeed({ content: '["TypeScript was created by Microsoft"]' }),
+    };
+
+    try {
+      const result = await Effect.runPromise(
+        checkMultiSourceLLM("TypeScript was created by Microsoft in 2012.", mockLLM),
+      );
+      expect(result.layerName).toBe("multi-source");
+      expect(result.score).toBe(0.5);
+      expect(result.details).toContain("TAVILY_API_KEY not set");
+    } finally {
+      if (original) process.env.TAVILY_API_KEY = original;
+    }
+  });
+
+  test("LLM tier falls back to heuristic on LLM error", async () => {
+    const original = process.env.TAVILY_API_KEY;
+    process.env.TAVILY_API_KEY = "test-key";
+
+    const mockLLM = {
+      complete: (_req: any) =>
+        Effect.fail(new Error("LLM unavailable")),
+    };
+
+    try {
+      const result = await Effect.runPromise(
+        checkMultiSourceLLM("Some text to verify.", mockLLM),
+      );
+      expect(result.layerName).toBe("multi-source");
+      expect(result.score).toBe(0.5);
+      expect(result.passed).toBe(true);
+    } finally {
+      if (original) process.env.TAVILY_API_KEY = original;
+      else delete process.env.TAVILY_API_KEY;
+    }
+  });
+
+  test("LLM tier returns neutral when no claims extracted", async () => {
+    const original = process.env.TAVILY_API_KEY;
+    process.env.TAVILY_API_KEY = "test-key";
+
+    const mockLLM = {
+      complete: (_req: any) => Effect.succeed({ content: "[]" }),
+    };
+
+    try {
+      const result = await Effect.runPromise(
+        checkMultiSourceLLM("Just an opinion, nothing verifiable.", mockLLM),
+      );
+      expect(result.layerName).toBe("multi-source");
+      expect(result.score).toBe(0.5);
+      expect(result.details).toContain("No verifiable claims");
+    } finally {
+      if (original) process.env.TAVILY_API_KEY = original;
+      else delete process.env.TAVILY_API_KEY;
+    }
+  });
+
+  test("LLM tier falls back on invalid JSON from LLM", async () => {
+    const original = process.env.TAVILY_API_KEY;
+    process.env.TAVILY_API_KEY = "test-key";
+
+    const mockLLM = {
+      complete: (_req: any) => Effect.succeed({ content: "not valid json" }),
+    };
+
+    try {
+      const result = await Effect.runPromise(
+        checkMultiSourceLLM("Some text.", mockLLM),
+      );
+      // Falls back to heuristic
+      expect(result.layerName).toBe("multi-source");
+      expect(result.score).toBe(0.5);
+    } finally {
+      if (original) process.env.TAVILY_API_KEY = original;
+      else delete process.env.TAVILY_API_KEY;
+    }
   });
 });
 
