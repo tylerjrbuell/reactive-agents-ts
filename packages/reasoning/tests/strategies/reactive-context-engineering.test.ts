@@ -247,7 +247,7 @@ describe("Sprint 1C: Tool result summarization", () => {
   it("large tool results are truncated with omission marker", async () => {
     const testLLMLayer = TestLLMServiceLayer({
       "step-by-step": 'ACTION: big-data({"query": "all"})',
-      "chars omitted": "FINAL ANSWER: Got truncated data.",
+      "STORED:": "FINAL ANSWER: Got compressed data.",
     });
 
     const toolsLayer = createToolsLayer();
@@ -284,10 +284,10 @@ describe("Sprint 1C: Tool result summarization", () => {
 
     const observations = result.steps.filter((s) => s.type === "observation");
     expect(observations.length).toBeGreaterThanOrEqual(1);
-    // Large result should be truncated
-    expect(observations[0]!.content).toContain("chars omitted");
-    // Result should be shorter than original 1000 chars
-    expect(observations[0]!.content.length).toBeLessThan(largeResult.length);
+    // Large result should be compressed (structured preview instead of full content)
+    expect(observations[0]!.content).toContain("STORED:");
+    // Full raw data should NOT appear verbatim in the observation
+    expect(observations[0]!.content).not.toContain(largeResult);
   });
 });
 

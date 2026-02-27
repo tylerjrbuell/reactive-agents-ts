@@ -431,7 +431,8 @@ function runToolObservation(
           const raw = typeof r.result === "string" ? r.result : JSON.stringify(r.result);
           const normalized = normalizeObservation(toolRequest.tool, raw);
           const maxChars = profile?.toolResultMaxChars ?? 800;
-          const content = truncateToolResult(normalized, maxChars);
+          const compressed = compressToolResult(normalized, toolRequest.tool, maxChars, 3);
+          const content = compressed.content;
           return {
             content,
             observationResult: makeObservationResult(toolRequest.tool, r.success !== false, content),
@@ -750,9 +751,124 @@ function makeObservationResult(
   return { success, toolName, displayText, category, resultKind, preserveOnCompaction };
 }
 
-/** Truncate large tool results to prevent context bloat.
- * Keeps first 400 + last 400 chars with an omission marker in between. */
-function truncateToolResult(result: string, maxChars = 800): string {
+// Monotonic counter for unique scratchpad keys within a process lifetime
+let _toolResultCounter = 0;
+
+export interface CompressResult {
+  content: string;
+  stored?: { key: string; value: string };
+}
+
+/** Replace blind truncation with structured preview + optional scratchpad storage. */
+export function compressToolResult(
+  result: string,
+  toolName: string,
+  budget: number,
+  previewItems: number,
+): CompressResult {
+  if (result.length <= budget) return { content: result };
+
+  const key = `_tool_result_${++_toolResultCounter}`;
+
+  // Try JSON first
+  try {
+    const parsed = JSON.parse(result) as unknown;
+
+    if (Array.isArray(parsed)) {
+      // Schema: inspect first item keys, flatten one level of nesting
+      const first = parsed[0] as Record<string, unknown> | undefined;
+      const schema = first
+        ? Object.entries(first)
+            .flatMap(([k, v]) =>
+              v !== null && typeof v === "object" && !Array.isArray(v)
+                ? Object.keys(v as object).map((sub) => `${k}.${sub}`)
+                : [k],
+            )
+            .slice(0, 8)
+            .join(", ")
+        : "unknown";
+
+      const items = (parsed as Array<Record<string, unknown>>)
+        .slice(0, previewItems)
+        .map((item, i) => {
+          const pairs = Object.entries(item)
+            .slice(0, 4)
+            .map(([k, v]) => {
+              const val =
+                v !== null && typeof v === "object"
+                  ? Object.values(v as object)
+                      .filter((x) => typeof x === "string")
+                      .map(String)[0] ?? "{...}"
+                  : String(v).slice(0, 60);
+              return `${k}=${val}`;
+            })
+            .join("  ");
+          return `  [${i}] ${pairs}`;
+        })
+        .join("\n");
+
+      const remaining = parsed.length - previewItems;
+      const moreStr = remaining > 0 ? `\n  ...${remaining} more` : "";
+      const content =
+        `[STORED: ${key} | ${toolName}]\n` +
+        `Type: Array(${parsed.length}) | Schema: ${schema}\n` +
+        `Preview (first ${Math.min(previewItems, parsed.length)}):\n` +
+        items +
+        moreStr +
+        `\n  — use scratchpad-read("${key}") or | transform: to access full data`;
+
+      return { content, stored: { key, value: result } };
+    }
+
+    // JSON object
+    if (typeof parsed === "object" && parsed !== null) {
+      const entries = Object.entries(parsed as Record<string, unknown>)
+        .slice(0, 8)
+        .map(([k, v]) => {
+          const val =
+            v === null
+              ? "null"
+              : Array.isArray(v)
+                ? `Array(${v.length})`
+                : typeof v === "object"
+                  ? `{${Object.keys(v as object).slice(0, 3).join(", ")}}`
+                  : String(v).slice(0, 80);
+          return `  ${k}: ${val}`;
+        })
+        .join("\n");
+
+      const totalKeys = Object.keys(parsed as object).length;
+      const content =
+        `[STORED: ${key} | ${toolName}]\n` +
+        `Type: Object(${totalKeys} keys)\n` +
+        entries +
+        `\n  — use scratchpad-read("${key}") or | transform: to access full data`;
+
+      return { content, stored: { key, value: result } };
+    }
+  } catch {
+    // Not JSON — plain text preview
+  }
+
+  // Plain text: first N lines, each line truncated to 120 chars
+  const lines = result.split("\n");
+  const preview = lines
+    .slice(0, previewItems)
+    .map((l) => (l.length > 120 ? `${l.slice(0, 120)}…` : l))
+    .join("\n");
+  const remaining = lines.length - previewItems;
+  const moreStr = remaining > 0 ? `\n  ...${remaining} more lines` : "";
+  const content =
+    `[STORED: ${key} | ${toolName}]\n` +
+    preview +
+    moreStr +
+    `\n  — use scratchpad-read("${key}") to access full text`;
+
+  return { content, stored: { key, value: result } };
+}
+
+/** Simple head+tail truncation — used only when agent explicitly reads the full stored result. */
+export function truncateForDisplay(result: string, maxChars: number): string {
   if (result.length <= maxChars) return result;
   const half = Math.floor(maxChars / 2);
   const omitted = result.length - maxChars;
