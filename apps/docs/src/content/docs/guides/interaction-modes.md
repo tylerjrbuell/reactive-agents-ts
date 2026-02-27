@@ -57,6 +57,75 @@ The interaction layer learns user preferences over time:
 
 After sufficient confidence (>= 0.7) and occurrences (>= 3), certain actions can be auto-approved.
 
+## Workflow Approval Gates
+
+Approval gates let a human pause agent execution at critical decision points and decide whether to continue.
+
+### `InteractionManager.approvalGate()`
+
+Calling `approvalGate()` suspends the currently running agent and waits for a human response:
+
+```typescript
+import { InteractionManager } from "@reactive-agents/interaction";
+import { Effect } from "effect";
+
+const program = Effect.gen(function* () {
+  const interaction = yield* InteractionManager;
+
+  // Pause here — agent waits until a human responds
+  const approved = yield* interaction.approvalGate(taskId, "Deploy to production?");
+
+  if (approved) {
+    // Continue with the action
+  } else {
+    // Execution cancelled
+  }
+});
+```
+
+**Resuming from an approval gate:**
+
+```typescript
+// Approve — execution continues
+await interaction.resolveApproval(taskId, true);
+
+// Reject — execution is cancelled
+await interaction.resolveApproval(taskId, false);
+```
+
+**Timeout:** If no response is received within **5 minutes**, execution cancels automatically.
+
+### Workflow-Level Gates
+
+Individual steps within a `WorkflowEngine` workflow can also require approval:
+
+```typescript
+const workflow = {
+  steps: [
+    { id: "analyze", task: "Analyze the data" },
+    {
+      id: "deploy",
+      task: "Deploy the result",
+      requiresApproval: true,   // Pause here for human sign-off
+    },
+  ],
+};
+```
+
+Resolve workflow step gates via `OrchestrationService`:
+
+```typescript
+import { OrchestrationService } from "@reactive-agents/orchestration";
+
+const orchestration = yield* OrchestrationService;
+
+// Approve and let the step proceed
+yield* orchestration.approveStep(workflowId, "deploy");
+
+// Reject and cancel the step
+yield* orchestration.rejectStep(workflowId, "deploy");
+```
+
 ## Enabling Interaction
 
 ```typescript

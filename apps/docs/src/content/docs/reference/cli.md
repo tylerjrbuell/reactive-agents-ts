@@ -71,7 +71,7 @@ rax serve [--port <number>] [--name <name>] [--provider <provider>] [--model <mo
 | `--name` | `"agent"` | Agent name (used in Agent Card) |
 | `--provider` | `"test"` | LLM provider |
 | `--model` | — | Model name |
-| `--with-tools` | off | Enable tool execution |
+| `--with-tools` | off | Enable built-in tools on the A2A server agent (file-write, web-search, etc.) |
 | `--with-reasoning` | off | Enable reasoning strategies |
 | `--with-memory` | off | Enable memory (tier 2) |
 
@@ -89,10 +89,26 @@ rax serve --name researcher --provider anthropic --model claude-sonnet-4-2025051
 
 ### `rax discover`
 
-Fetch and display a remote agent's card.
+Fetch and display the Agent Card from a remote A2A-compatible agent server.
 
 ```bash
 rax discover <url>
+```
+
+Fetches `GET <url>/.well-known/agent.json` and pretty-prints the agent's name, description, capabilities, and supported skills.
+
+**Example:**
+
+```bash
+rax discover http://localhost:3000
+```
+
+```
+Agent Card: researcher
+  Provider: anthropic (claude-sonnet-4-20250514)
+  Capabilities: streaming, tools
+  Skills: web-search, file-write
+  Endpoint: http://localhost:3000
 ```
 
 ### `rax dev`
