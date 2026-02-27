@@ -322,7 +322,7 @@ Enable with:
 
 ```bash
 bun install              # Install dependencies
-bun test                 # Run all tests (884 tests, 122 files)
+bun test                 # Run all tests (909 tests, 124 files)
 bun run build            # Build all packages (ESM + DTS)
 ```
 

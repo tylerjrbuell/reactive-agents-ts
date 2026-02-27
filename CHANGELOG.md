@@ -6,6 +6,32 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 
 ---
 
+## [Unreleased] — Tool Result Compression
+
+### Added
+
+#### Tool Result Compression (`@reactive-agents/reasoning`, `@reactive-agents/tools`, `@reactive-agents/runtime`)
+
+Replaces blind `head+tail` truncation with structured, accurate compression for large tool results:
+
+- **`compressToolResult(result, toolName, budget, previewItems)`** — detects JSON arrays, JSON objects, and plain text; generates compact structured previews that fit within budget
+  - JSON arrays: shows item count, flattened schema (top-level + one-level-deep keys), and first N items as compact `key=val` rows
+  - JSON objects: shows top-level keys with values (strings truncated to 60 chars, nested objects shown as `{...}`)
+  - Plain text: shows first N lines with total line count
+- **Scratchpad overflow store** — full result auto-stored in per-execution `Map<string, string>` under `_tool_result_N` key; agent can retrieve via `scratchpad-read("_tool_result_N")`
+- **`scratchpad-read` short-circuit** — when agent calls `scratchpad-read("_tool_result_N")`, the execution engine intercepts before hitting the tool and returns the stored value directly
+- **Pipe transform syntax** — `ACTION: tool(args) | transform: <js-expr>` evaluated in-process via `new Function("result", ...)` so only the transform output enters context; falls back to standard preview on error
+- **`ResultCompressionConfig`** type in `@reactive-agents/tools` — `{ budget?, previewItems?, autoStore?, codeTransform? }` — user-configurable on `.withTools({ resultCompression: {...} })`
+- **ReAct prompt updated** — explains `[STORED: ...]` format and `| transform:` syntax so models know how to use both mechanisms
+- **15 new tests** in `packages/reasoning/tests/strategies/reactive-compression.test.ts` covering preview generation, pipe parsing, transform evaluation, and wiring
+
+### Fixed
+
+- `scratchpad-read` called with bare string arg (e.g. `"_tool_result_1"`) now correctly resolves the key — previously fell back to `args.key` which was `undefined` on a string value
+- Pipe transform expression no longer captures trailing newlines or subsequent text when the model writes multi-line thoughts
+
+---
+
 ## [Unreleased] — Sprint 3B: EventBus Groundwork + Kill Switch Lifecycle
 
 ### Added
