@@ -253,6 +253,33 @@ const agent = await ReactiveAgents.create()
 
 Each agent in the system gets its own trace, and workflow-level events are logged in the orchestration event log for full auditability.
 
+## Dynamic Sub-Agent Spawning
+
+The `.withDynamicSubAgents()` builder method enables the `spawn-agent` built-in tool.
+The parent agent can spawn specialist sub-agents at runtime — the model itself decides
+when and what to delegate.
+
+```typescript
+const parent = await ReactiveAgents.create()
+  .withName("coordinator")
+  .withProvider("anthropic")
+  .withTools()
+  .withDynamicSubAgents({ maxIterations: 5 })
+  .build();
+
+// The model can now call spawn-agent tool:
+// spawn-agent({ task: "Analyze this dataset", role: "Data Analyst" })
+const result = await parent.run("Analyze this CSV and write a report.");
+```
+
+Sub-agents spawn with a clean context window and inherit the parent's tool
+configuration. Recursion depth is limited to 3 by default (`MAX_RECURSION_DEPTH`).
+
+Sub-agent persona can be specified via the `spawn-agent` tool parameters:
+- `role`: string — e.g., "Data Analyst", "Code Reviewer"
+- `instructions`: string — specific behavior instructions
+- `tone`: string — e.g., "formal", "concise"
+
 ## A2A Remote Agent Communication
 
 Agents can communicate across process boundaries using the A2A protocol:

@@ -63,6 +63,8 @@ const result = await agent.run("Write a concise explanation of quantum entanglem
 | `maxRetries` | 3 | Max generate-critique-improve cycles |
 | `selfCritiqueDepth` | "deep" | "shallow" or "deep" critique |
 
+**Trade-off:** Reflexion uses more tokens than ReAct (typically 3× per retry cycle) because each cycle requires a generate pass, a critique pass, and an improve pass. The additional cost is usually worth it for tasks where output quality matters more than speed — writing, detailed analysis, or any domain where a first-pass answer is rarely optimal.
+
 ### Plan-Execute-Reflect
 
 A structured approach that generates a plan first, then executes each step:
