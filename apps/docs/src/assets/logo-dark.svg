@@ -1,82 +1,149 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
   <defs>
-    <linearGradient id="edge-d" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#818cf8" stop-opacity="0.8"/>
-      <stop offset="100%" stop-color="#6366f1" stop-opacity="0.3"/>
+    <linearGradient id="ed" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.7"/>
+      <stop offset="100%" stop-color="#06b6d4" stop-opacity="0.3"/>
     </linearGradient>
-    <linearGradient id="edge2-d" x1="0%" y1="100%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#a78bfa" stop-opacity="0.7"/>
-      <stop offset="100%" stop-color="#7c3aed" stop-opacity="0.25"/>
+    <linearGradient id="ed2" x1="100%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#06b6d4" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#8b5cf6" stop-opacity="0.2"/>
     </linearGradient>
-    <radialGradient id="core-d" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#e0d4ff"/>
-      <stop offset="50%" stop-color="#a78bfa"/>
-      <stop offset="100%" stop-color="#7c3aed"/>
-    </radialGradient>
-    <radialGradient id="node-d" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#c4b5fd"/>
-      <stop offset="100%" stop-color="#818cf8"/>
-    </radialGradient>
-    <radialGradient id="node-sm-d" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#a78bfa"/>
-      <stop offset="100%" stop-color="#6366f1"/>
-    </radialGradient>
-    <filter id="glow-d" x="-40%" y="-40%" width="180%" height="180%">
-      <feGaussianBlur stdDeviation="1.8" result="blur"/>
-      <feMerge>
-        <feMergeNode in="blur"/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
+    <filter id="gC" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2.2" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
     </filter>
-    <filter id="glow-sm-d" x="-50%" y="-50%" width="200%" height="200%">
-      <feGaussianBlur stdDeviation="1" result="blur"/>
-      <feMerge>
-        <feMergeNode in="blur"/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
+    <filter id="gN" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="1.4" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
     </filter>
   </defs>
 
-  <!-- Background glow -->
-  <circle cx="24" cy="24" r="14" fill="#7c3aed" opacity="0.06"/>
+  <!-- Ambient background glow -->
+  <circle cx="24" cy="24" r="18" fill="#8b5cf6" opacity="0.06"/>
 
-  <!-- Edges — outer ring connections -->
-  <line x1="14" y1="6" x2="34" y2="6" stroke="url(#edge-d)" stroke-width="1.2"/>
-  <line x1="14" y1="6" x2="6" y2="20" stroke="url(#edge-d)" stroke-width="1.2"/>
-  <line x1="34" y1="6" x2="42" y2="20" stroke="url(#edge-d)" stroke-width="1.2"/>
-  <line x1="6" y1="20" x2="6" y2="34" stroke="url(#edge-d)" stroke-width="1.2"/>
-  <line x1="42" y1="20" x2="42" y2="34" stroke="url(#edge-d)" stroke-width="1.2"/>
-  <line x1="6" y1="34" x2="18" y2="44" stroke="url(#edge-d)" stroke-width="1.2"/>
-  <line x1="42" y1="34" x2="30" y2="44" stroke="url(#edge-d)" stroke-width="1.2"/>
-  <line x1="18" y1="44" x2="30" y2="44" stroke="url(#edge-d)" stroke-width="1.2"/>
+  <!-- ── Edges: outer ring ── -->
+  <line x1="14" y1="6" x2="34" y2="6"  stroke="url(#ed)" stroke-width="1.1" stroke-linecap="round">
+    <animate attributeName="opacity" values="0.5;0.85;0.5" dur="7s" begin="0.5s" repeatCount="indefinite"/>
+  </line>
+  <line x1="14" y1="6" x2="6"  y2="20" stroke="url(#ed)" stroke-width="1.1" stroke-linecap="round">
+    <animate attributeName="opacity" values="0.4;0.8;0.4"  dur="9s" begin="1s"   repeatCount="indefinite"/>
+  </line>
+  <line x1="34" y1="6" x2="42" y2="20" stroke="url(#ed)" stroke-width="1.1" stroke-linecap="round">
+    <animate attributeName="opacity" values="0.5;0.9;0.5"  dur="8s" begin="0s"   repeatCount="indefinite"/>
+  </line>
+  <line x1="6"  y1="20" x2="6"  y2="34" stroke="url(#ed)" stroke-width="1.1" stroke-linecap="round">
+    <animate attributeName="opacity" values="0.4;0.75;0.4" dur="10s" begin="2s"  repeatCount="indefinite"/>
+  </line>
+  <line x1="42" y1="20" x2="42" y2="34" stroke="url(#ed)" stroke-width="1.1" stroke-linecap="round">
+    <animate attributeName="opacity" values="0.45;0.8;0.45" dur="8.5s" begin="0.5s" repeatCount="indefinite"/>
+  </line>
+  <line x1="6"  y1="34" x2="18" y2="44" stroke="url(#ed)" stroke-width="1.1" stroke-linecap="round">
+    <animate attributeName="opacity" values="0.5;0.85;0.5" dur="9.5s" begin="1.5s" repeatCount="indefinite"/>
+  </line>
+  <line x1="42" y1="34" x2="30" y2="44" stroke="url(#ed)" stroke-width="1.1" stroke-linecap="round">
+    <animate attributeName="opacity" values="0.4;0.8;0.4"  dur="7.5s" begin="3s"   repeatCount="indefinite"/>
+  </line>
+  <line x1="18" y1="44" x2="30" y2="44" stroke="url(#ed)" stroke-width="1.1" stroke-linecap="round">
+    <animate attributeName="opacity" values="0.5;0.9;0.5"  dur="8s"   begin="0s"   repeatCount="indefinite"/>
+  </line>
 
-  <!-- Edges — connections to center -->
-  <line x1="14" y1="6" x2="24" y2="24" stroke="url(#edge2-d)" stroke-width="1.4"/>
-  <line x1="34" y1="6" x2="24" y2="24" stroke="url(#edge2-d)" stroke-width="1.4"/>
-  <line x1="6" y1="20" x2="24" y2="24" stroke="url(#edge2-d)" stroke-width="1.4"/>
-  <line x1="42" y1="20" x2="24" y2="24" stroke="url(#edge2-d)" stroke-width="1.4"/>
-  <line x1="6" y1="34" x2="24" y2="24" stroke="url(#edge2-d)" stroke-width="1.4"/>
-  <line x1="42" y1="34" x2="24" y2="24" stroke="url(#edge2-d)" stroke-width="1.4"/>
-  <line x1="18" y1="44" x2="24" y2="24" stroke="url(#edge2-d)" stroke-width="1.4"/>
-  <line x1="30" y1="44" x2="24" y2="24" stroke="url(#edge2-d)" stroke-width="1.4"/>
+  <!-- ── Edges: to center ── -->
+  <line x1="14" y1="6"  x2="24" y2="24" stroke="url(#ed2)" stroke-width="1.3" stroke-linecap="round">
+    <animate attributeName="opacity" values="0.3;0.7;0.3"  dur="7s"   begin="0s"   repeatCount="indefinite"/>
+  </line>
+  <line x1="34" y1="6"  x2="24" y2="24" stroke="url(#ed2)" stroke-width="1.3" stroke-linecap="round">
+    <animate attributeName="opacity" values="0.25;0.65;0.25" dur="9s"  begin="1.2s" repeatCount="indefinite"/>
+  </line>
+  <line x1="6"  y1="20" x2="24" y2="24" stroke="url(#ed2)" stroke-width="1.3" stroke-linecap="round">
+    <animate attributeName="opacity" values="0.3;0.7;0.3"  dur="8s"   begin="2.5s" repeatCount="indefinite"/>
+  </line>
+  <line x1="42" y1="20" x2="24" y2="24" stroke="url(#ed2)" stroke-width="1.3" stroke-linecap="round">
+    <animate attributeName="opacity" values="0.25;0.6;0.25" dur="10s"  begin="0.8s" repeatCount="indefinite"/>
+  </line>
+  <line x1="6"  y1="34" x2="24" y2="24" stroke="url(#ed2)" stroke-width="1.3" stroke-linecap="round">
+    <animate attributeName="opacity" values="0.3;0.65;0.3"  dur="8.5s" begin="3.5s" repeatCount="indefinite"/>
+  </line>
+  <line x1="42" y1="34" x2="24" y2="24" stroke="url(#ed2)" stroke-width="1.3" stroke-linecap="round">
+    <animate attributeName="opacity" values="0.25;0.7;0.25" dur="7.5s" begin="1.8s" repeatCount="indefinite"/>
+  </line>
+  <line x1="18" y1="44" x2="24" y2="24" stroke="url(#ed2)" stroke-width="1.3" stroke-linecap="round">
+    <animate attributeName="opacity" values="0.3;0.65;0.3"  dur="9.5s" begin="0.3s" repeatCount="indefinite"/>
+  </line>
+  <line x1="30" y1="44" x2="24" y2="24" stroke="url(#ed2)" stroke-width="1.3" stroke-linecap="round">
+    <animate attributeName="opacity" values="0.25;0.7;0.25" dur="8s"   begin="2s"   repeatCount="indefinite"/>
+  </line>
 
-  <!-- Cross-connections for density -->
-  <line x1="6" y1="20" x2="34" y2="6" stroke="url(#edge-d)" stroke-width="0.7" opacity="0.4"/>
-  <line x1="42" y1="20" x2="14" y2="6" stroke="url(#edge-d)" stroke-width="0.7" opacity="0.4"/>
-  <line x1="6" y1="34" x2="42" y2="20" stroke="url(#edge-d)" stroke-width="0.7" opacity="0.3"/>
-  <line x1="42" y1="34" x2="6" y2="20" stroke="url(#edge-d)" stroke-width="0.7" opacity="0.3"/>
+  <!-- ── Cross-connections (subtle) ── -->
+  <line x1="6"  y1="20" x2="34" y2="6"  stroke="url(#ed)" stroke-width="0.6" opacity="0.25">
+    <animate attributeName="opacity" values="0.15;0.35;0.15" dur="11s" begin="1s" repeatCount="indefinite"/>
+  </line>
+  <line x1="42" y1="20" x2="14" y2="6"  stroke="url(#ed)" stroke-width="0.6" opacity="0.25">
+    <animate attributeName="opacity" values="0.15;0.3;0.15"  dur="10s" begin="3s" repeatCount="indefinite"/>
+  </line>
+  <line x1="6"  y1="34" x2="42" y2="20" stroke="url(#ed)" stroke-width="0.5" opacity="0.18">
+    <animate attributeName="opacity" values="0.1;0.25;0.1"   dur="12s" begin="2s" repeatCount="indefinite"/>
+  </line>
+  <line x1="42" y1="34" x2="6"  y2="20" stroke="url(#ed)" stroke-width="0.5" opacity="0.18">
+    <animate attributeName="opacity" values="0.1;0.28;0.1"   dur="11s" begin="4s" repeatCount="indefinite"/>
+  </line>
 
-  <!-- Outer nodes -->
-  <circle cx="14" cy="6" r="2.8" fill="url(#node-d)" filter="url(#glow-sm-d)"/>
-  <circle cx="34" cy="6" r="2.8" fill="url(#node-d)" filter="url(#glow-sm-d)"/>
-  <circle cx="6" cy="20" r="2.5" fill="url(#node-sm-d)" filter="url(#glow-sm-d)"/>
-  <circle cx="42" cy="20" r="2.5" fill="url(#node-sm-d)" filter="url(#glow-sm-d)"/>
-  <circle cx="6" cy="34" r="2.5" fill="url(#node-sm-d)" filter="url(#glow-sm-d)"/>
-  <circle cx="42" cy="34" r="2.5" fill="url(#node-sm-d)" filter="url(#glow-sm-d)"/>
-  <circle cx="18" cy="44" r="2.8" fill="url(#node-d)" filter="url(#glow-sm-d)"/>
-  <circle cx="30" cy="44" r="2.8" fill="url(#node-d)" filter="url(#glow-sm-d)"/>
+  <!-- ── Outer nodes: animated neuron pulses ── -->
+  <!-- Each node cycles through violet/cyan fills at different speeds and offsets -->
 
-  <!-- Central core node -->
-  <circle cx="24" cy="24" r="5.5" fill="url(#core-d)" filter="url(#glow-d)"/>
-  <circle cx="24" cy="24" r="7.5" fill="none" stroke="#c4b5fd" stroke-width="0.5" opacity="0.3"/>
+  <!-- Top-left node -->
+  <circle cx="14" cy="6" r="2.8" fill="#8b5cf6" filter="url(#gN)">
+    <animate attributeName="fill"    values="#8b5cf6;#c4b5fd;#06b6d4;#a78bfa;#8b5cf6" dur="9s"   begin="0s"   repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0.75;1;0.85;1;0.75"                       dur="9s"   begin="0s"   repeatCount="indefinite"/>
+  </circle>
+
+  <!-- Top-right node -->
+  <circle cx="34" cy="6" r="2.8" fill="#06b6d4" filter="url(#gN)">
+    <animate attributeName="fill"    values="#06b6d4;#8b5cf6;#c4b5fd;#06b6d4" dur="7.5s" begin="1.5s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0.8;1;0.7;0.8"                   dur="7.5s" begin="1.5s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- Left-upper node -->
+  <circle cx="6" cy="20" r="2.4" fill="#a78bfa" filter="url(#gN)">
+    <animate attributeName="fill"    values="#a78bfa;#06b6d4;#8b5cf6;#c4b5fd;#a78bfa" dur="10s" begin="3s"   repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0.7;0.95;0.8;1;0.7"                      dur="10s" begin="3s"   repeatCount="indefinite"/>
+  </circle>
+
+  <!-- Right-upper node -->
+  <circle cx="42" cy="20" r="2.4" fill="#c4b5fd" filter="url(#gN)">
+    <animate attributeName="fill"    values="#c4b5fd;#8b5cf6;#06b6d4;#c4b5fd" dur="8s"   begin="0.8s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0.8;1;0.75;0.8"                  dur="8s"   begin="0.8s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- Left-lower node -->
+  <circle cx="6" cy="34" r="2.4" fill="#06b6d4" filter="url(#gN)">
+    <animate attributeName="fill"    values="#06b6d4;#a78bfa;#8b5cf6;#06b6d4" dur="8.5s" begin="2s"   repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0.7;1;0.85;0.7"                  dur="8.5s" begin="2s"   repeatCount="indefinite"/>
+  </circle>
+
+  <!-- Right-lower node -->
+  <circle cx="42" cy="34" r="2.4" fill="#8b5cf6" filter="url(#gN)">
+    <animate attributeName="fill"    values="#8b5cf6;#06b6d4;#c4b5fd;#8b5cf6" dur="9.5s" begin="4.2s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0.75;0.95;1;0.75"                dur="9.5s" begin="4.2s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- Bottom-left node -->
+  <circle cx="18" cy="44" r="2.8" fill="#a78bfa" filter="url(#gN)">
+    <animate attributeName="fill"    values="#a78bfa;#c4b5fd;#06b6d4;#8b5cf6;#a78bfa" dur="11s"  begin="1s"   repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0.8;1;0.7;0.9;0.8"                       dur="11s"  begin="1s"   repeatCount="indefinite"/>
+  </circle>
+
+  <!-- Bottom-right node -->
+  <circle cx="30" cy="44" r="2.8" fill="#06b6d4" filter="url(#gN)">
+    <animate attributeName="fill"    values="#06b6d4;#8b5cf6;#a78bfa;#06b6d4" dur="8s"   begin="3.5s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0.75;1;0.85;0.75"                dur="8s"   begin="3.5s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- ── Central core node ── -->
+  <circle cx="24" cy="24" r="5.5" fill="#8b5cf6" filter="url(#gC)">
+    <animate attributeName="fill" values="#8b5cf6;#a78bfa;#06b6d4;#a78bfa;#8b5cf6" dur="12s" begin="0s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="24" cy="24" r="8" fill="none" stroke="#06b6d4" stroke-width="0.5">
+    <animate attributeName="opacity"      values="0.15;0.35;0.15" dur="10s" begin="0s" repeatCount="indefinite"/>
+    <animate attributeName="stroke-width" values="0.4;0.7;0.4"    dur="10s" begin="0s" repeatCount="indefinite"/>
+  </circle>
 </svg>

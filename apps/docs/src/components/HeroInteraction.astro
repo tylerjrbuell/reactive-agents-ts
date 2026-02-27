@@ -1,0 +1,189 @@
+---
+/* Hero SVG mouse interaction — inlines the hero <img> as interactive SVG */
+---
+
+<script>
+  function initHeroSVG() {
+    const heroImg = document.querySelector('.hero img') as HTMLImageElement | null;
+    if (!heroImg) return;
+    const src = heroImg.getAttribute('src');
+    if (!src || !src.includes('.svg')) return;
+
+    fetch(src)
+      .then((r) => r.text())
+      .then((svgText) => {
+        const parser = new DOMParser();
+        const svgDoc = parser.parseFromString(svgText, 'image/svg+xml');
+        const svg = svgDoc.documentElement as unknown as SVGSVGElement;
+
+        // Match the img sizing — fill container
+        svg.removeAttribute('width');
+        svg.removeAttribute('height');
+        svg.style.width = '100%';
+        svg.style.height = '100%';
+        svg.style.maxWidth = heroImg.getBoundingClientRect().width + 'px';
+        svg.classList.add('ra-hero-svg');
+
+        heroImg.replaceWith(svg);
+
+        // Categorize SVG elements
+        const circles = Array.from(svg.querySelectorAll('circle'));
+        const lines = Array.from(svg.querySelectorAll('line'));
+
+        const outerNodes = circles.filter((c) => {
+          const r = +(c.getAttribute('r') || 0);
+          return r > 1 && r < 5;
+        });
+        const coreNode = circles.find((c) => +(c.getAttribute('r') || 0) === 5.5);
+        const coreRing = circles.find((c) => +(c.getAttribute('r') || 0) === 8);
+
+        const PROXIMITY = 18; // SVG units
+        let rafId: number | null = null;
+        let mx = 0;
+        let my = 0;
+        let hovering = false;
+
+        function toSVG(clientX: number, clientY: number) {
+          const pt = svg.createSVGPoint();
+          pt.x = clientX;
+          pt.y = clientY;
+          const ctm = svg.getScreenCTM();
+          return ctm ? pt.matrixTransform(ctm.inverse()) : null;
+        }
+
+        function dist(ax: number, ay: number, bx: number, by: number) {
+          return Math.sqrt((bx - ax) ** 2 + (by - ay) ** 2);
+        }
+
+        function ptSeg(px: number, py: number, x1: number, y1: number, x2: number, y2: number) {
+          const dx = x2 - x1;
+          const dy = y2 - y1;
+          const len2 = dx * dx + dy * dy;
+          if (len2 === 0) return dist(px, py, x1, y1);
+          const t = Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / len2));
+          return dist(px, py, x1 + t * dx, y1 + t * dy);
+        }
+
+        function update() {
+          rafId = null;
+          if (!hovering) return;
+          const sp = toSVG(mx, my);
+          if (!sp) return;
+
+          // Outer nodes: glow + scale on proximity
+          outerNodes.forEach((n) => {
+            const cx = +(n.getAttribute('cx') || 0);
+            const cy = +(n.getAttribute('cy') || 0);
+            const dd = dist(sp.x, sp.y, cx, cy);
+            if (dd < PROXIMITY) {
+              const t = 1 - dd / PROXIMITY;
+              const e = t * t; // quadratic ease for snappy feel
+              n.style.filter = `drop-shadow(0 0 ${2 + e * 4}px rgba(139,92,246,${0.3 + e * 0.7}))`;
+              n.style.opacity = `${Math.min(1, 0.85 + e * 0.15)}`;
+              n.style.transform = `scale(${1 + e * 0.5})`;
+            } else {
+              n.style.filter = '';
+              n.style.opacity = '';
+              n.style.transform = '';
+            }
+          });
+
+          // Edges: brighten + thicken on proximity
+          lines.forEach((l) => {
+            const x1 = +(l.getAttribute('x1') || 0);
+            const y1 = +(l.getAttribute('y1') || 0);
+            const x2 = +(l.getAttribute('x2') || 0);
+            const y2 = +(l.getAttribute('y2') || 0);
+            const dd = ptSeg(sp.x, sp.y, x1, y1, x2, y2);
+            if (dd < PROXIMITY * 0.7) {
+              const t = 1 - dd / (PROXIMITY * 0.7);
+              const sw = +(l.getAttribute('stroke-width') || '1');
+              l.style.opacity = `${Math.min(1, 0.5 + t * 0.5)}`;
+              l.style.strokeWidth = `${sw + t * 0.8}`;
+            } else {
+              l.style.opacity = '';
+              l.style.strokeWidth = '';
+            }
+          });
+
+          // Core node: cyan glow on proximity
+          if (coreNode) {
+            const dd = dist(sp.x, sp.y, 24, 24);
+            if (dd < 25) {
+              const t = 1 - dd / 25;
+              coreNode.style.filter = `drop-shadow(0 0 ${3 + t * 6}px rgba(6,182,212,${0.2 + t * 0.5}))`;
+              coreNode.style.transform = `scale(${1 + t * 0.12})`;
+            } else {
+              coreNode.style.filter = '';
+              coreNode.style.transform = '';
+            }
+          }
+
+          // Core ring: expand on proximity
+          if (coreRing) {
+            const dd = dist(sp.x, sp.y, 24, 24);
+            if (dd < 25) {
+              const t = 1 - dd / 25;
+              coreRing.style.opacity = `${0.2 + t * 0.35}`;
+              coreRing.style.transform = `scale(${1 + t * 0.15})`;
+            } else {
+              coreRing.style.opacity = '';
+              coreRing.style.transform = '';
+            }
+          }
+        }
+
+        svg.addEventListener('mousemove', (e: MouseEvent) => {
+          mx = e.clientX;
+          my = e.clientY;
+          hovering = true;
+          if (!rafId) rafId = requestAnimationFrame(update);
+        });
+
+        svg.addEventListener('mouseleave', () => {
+          hovering = false;
+
+          // Transition to neutral values (CSS transitions smooth this out)
+          outerNodes.forEach((n) => {
+            n.style.filter = 'none';
+            n.style.opacity = '0.85';
+            n.style.transform = 'scale(1)';
+          });
+          if (coreNode) {
+            coreNode.style.filter = 'none';
+            coreNode.style.transform = 'scale(1)';
+          }
+          if (coreRing) {
+            coreRing.style.opacity = '0.2';
+            coreRing.style.transform = 'scale(1)';
+          }
+          lines.forEach((l) => {
+            l.style.opacity = '0.5';
+            l.style.strokeWidth = '';
+          });
+
+          // After CSS transition completes, remove inline styles
+          // so <animate> elements resume control
+          setTimeout(() => {
+            if (hovering) return;
+            circles.forEach((c) => {
+              c.style.filter = '';
+              c.style.opacity = '';
+              c.style.transform = '';
+            });
+            lines.forEach((l) => {
+              l.style.opacity = '';
+              l.style.strokeWidth = '';
+            });
+          }, 400);
+        });
+      });
+  }
+
+  // Run after DOM is ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initHeroSVG);
+  } else {
+    requestAnimationFrame(initHeroSVG);
+  }
+</script>

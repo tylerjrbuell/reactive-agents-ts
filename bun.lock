@@ -13,7 +13,7 @@
     },
     "apps/cli": {
       "name": "@reactive-agents/cli",
-      "version": "0.5.4",
+      "version": "0.5.5",
       "bin": {
         "rax": "dist/index.js",
         "reactive-agents": "dist/index.js",
@@ -36,6 +36,7 @@
       "version": "0.1.0",
       "dependencies": {
         "@astrojs/starlight": "^0.34.0",
+        "@fontsource-variable/geist": "^5.0.0",
         "astro": "^5.7.0",
         "sharp": "^0.33.0",
       },
@@ -89,7 +90,7 @@
     },
     "packages/core": {
       "name": "@reactive-agents/core",
-      "version": "0.2.0",
+      "version": "0.5.5",
       "dependencies": {
         "effect": "^3.10.0",
         "ulid": "^2.3.0",
@@ -101,7 +102,7 @@
     },
     "packages/cost": {
       "name": "@reactive-agents/cost",
-      "version": "0.2.0",
+      "version": "0.5.5",
       "dependencies": {
         "@reactive-agents/core": "workspace:*",
         "@reactive-agents/llm-provider": "workspace:*",
@@ -128,7 +129,7 @@
     },
     "packages/guardrails": {
       "name": "@reactive-agents/guardrails",
-      "version": "0.1.0",
+      "version": "0.5.5",
       "dependencies": {
         "@reactive-agents/core": "workspace:*",
         "@reactive-agents/llm-provider": "workspace:*",
@@ -141,7 +142,7 @@
     },
     "packages/identity": {
       "name": "@reactive-agents/identity",
-      "version": "0.1.0",
+      "version": "0.5.5",
       "dependencies": {
         "@noble/ed25519": "^2.0.0",
         "@reactive-agents/core": "workspace:*",
@@ -169,7 +170,7 @@
     },
     "packages/llm-provider": {
       "name": "@reactive-agents/llm-provider",
-      "version": "0.5.0",
+      "version": "0.5.5",
       "dependencies": {
         "@reactive-agents/core": "workspace:*",
         "effect": "^3.10.0",
@@ -189,7 +190,7 @@
     },
     "packages/memory": {
       "name": "@reactive-agents/memory",
-      "version": "0.1.0",
+      "version": "0.5.5",
       "dependencies": {
         "@reactive-agents/core": "workspace:*",
         "effect": "^3.10.0",
@@ -201,7 +202,7 @@
     },
     "packages/observability": {
       "name": "@reactive-agents/observability",
-      "version": "0.2.0",
+      "version": "0.5.5",
       "dependencies": {
         "@reactive-agents/core": "workspace:*",
         "effect": "^3.10.0",
@@ -229,7 +230,7 @@
     },
     "packages/prompts": {
       "name": "@reactive-agents/prompts",
-      "version": "0.1.0",
+      "version": "0.5.5",
       "dependencies": {
         "@reactive-agents/core": "workspace:*",
         "effect": "^3.10.0",
@@ -241,7 +242,7 @@
     },
     "packages/reactive-agents": {
       "name": "reactive-agents",
-      "version": "0.5.2",
+      "version": "0.5.5",
       "dependencies": {
         "@reactive-agents/core": "workspace:^",
         "@reactive-agents/cost": "workspace:^",
@@ -267,7 +268,7 @@
     },
     "packages/reasoning": {
       "name": "@reactive-agents/reasoning",
-      "version": "0.5.1",
+      "version": "0.5.5",
       "dependencies": {
         "@reactive-agents/core": "workspace:*",
         "@reactive-agents/llm-provider": "workspace:*",
@@ -283,7 +284,7 @@
     },
     "packages/runtime": {
       "name": "@reactive-agents/runtime",
-      "version": "0.5.4",
+      "version": "0.5.5",
       "dependencies": {
         "@reactive-agents/core": "workspace:^",
         "@reactive-agents/cost": "workspace:^",
@@ -307,7 +308,7 @@
     },
     "packages/tools": {
       "name": "@reactive-agents/tools",
-      "version": "0.4.1",
+      "version": "0.5.5",
       "dependencies": {
         "@reactive-agents/a2a": "workspace:*",
         "@reactive-agents/core": "workspace:*",
@@ -320,7 +321,7 @@
     },
     "packages/verification": {
       "name": "@reactive-agents/verification",
-      "version": "0.2.0",
+      "version": "0.5.5",
       "dependencies": {
         "@reactive-agents/core": "workspace:*",
         "@reactive-agents/llm-provider": "workspace:*",
@@ -427,6 +428,8 @@
     "@expressive-code/plugin-shiki": ["@expressive-code/plugin-shiki@0.41.6", "", { "dependencies": { "@expressive-code/core": "^0.41.6", "shiki": "^3.2.2" } }, "sha512-Y6zmKBmsIUtWTzdefqlzm/h9Zz0Rc4gNdt2GTIH7fhHH2I9+lDYCa27BDwuBhjqcos6uK81Aca9dLUC4wzN+ng=="],
 
     "@expressive-code/plugin-text-markers": ["@expressive-code/plugin-text-markers@0.41.6", "", { "dependencies": { "@expressive-code/core": "^0.41.6" } }, "sha512-PBFa1wGyYzRExMDzBmAWC6/kdfG1oLn4pLpBeTfIRrALPjcGA/59HP3e7q9J0Smk4pC7U+lWkA2LHR8FYV8U7Q=="],
+
+    "@fontsource-variable/geist": ["@fontsource-variable/geist@5.2.8", "", {}, "sha512-cJ6m9e+8MQ5dCYJsLylfZrgBh6KkG4bOLckB35Tr9J/EqdkEM6QllH5PxqP1dhTvFup+HtMRPuz9xOjxXJggxw=="],
 
     "@google/genai": ["@google/genai@1.42.0", "", { "dependencies": { "google-auth-library": "^10.3.0", "p-retry": "^4.6.2", "protobufjs": "^7.5.4", "ws": "^8.18.0" }, "peerDependencies": { "@modelcontextprotocol/sdk": "^1.25.2" }, "optionalPeers": ["@modelcontextprotocol/sdk"] }, "sha512-+3nlMTcrQufbQ8IumGkOphxD5Pd5kKyJOzLcnY0/1IuE8upJk5aLmoexZ2BJhBp1zAjRJMEB4a2CJwKI9e2EYw=="],
 

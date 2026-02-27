@@ -6,7 +6,7 @@ description: Build your first Reactive Agent in 5 minutes.
 ## Prerequisites
 
 - [Bun](https://bun.sh) v1.1+ (or Node.js 20+)
-- An API key from [Anthropic](https://console.anthropic.com) or [OpenAI](https://platform.openai.com)
+- An API key from [Anthropic](https://console.anthropic.com), [Gemini](https://ai.google.dev/), [LiteLLM](https://litellm.ai) or [OpenAI](https://platform.openai.com)
 
 ## 1. Create a Project
 
@@ -30,6 +30,11 @@ bun add reactive-agents effect
 
 ```bash
 echo 'ANTHROPIC_API_KEY=sk-ant-...' > .env
+echo 'GOOGLE_API_KEY=...' >> .env
+echo 'TAVILY_API_KEY=tvly-...' >> .env
+echo 'LITELLM_API_KEY=...' >> .env
+echo 'OPENAI_API_KEY=...' >> .env
+
 ```
 
 ## 3. Build an Agent
@@ -76,10 +81,10 @@ const agent = await ReactiveAgents.create()
   .withName("research-agent")
   .withProvider("anthropic")
   .withModel("claude-sonnet-4-20250514")
-  .withMemory("1")          // Tier 1: FTS5 search
-  .withReasoning()           // ReAct reasoning loop
-  .withGuardrails()          // Input safety checks
-  .withCostTracking()        // Budget enforcement
+  .withMemory("1") // Tier 1: FTS5 search
+  .withReasoning() // ReAct reasoning loop
+  .withGuardrails() // Input safety checks
+  .withCostTracking() // Budget enforcement
   .build();
 ```
 
