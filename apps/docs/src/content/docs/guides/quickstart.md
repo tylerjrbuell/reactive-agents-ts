@@ -40,7 +40,8 @@ Create `src/agent.ts`:
 import { ReactiveAgents } from "reactive-agents";
 
 async function main() {
-  const agent = await ReactiveAgents.create()
+  // await using disposes the agent automatically when the block exits
+  await using agent = await ReactiveAgents.create()
     .withName("my-first-agent")
     .withProvider("anthropic")
     .withModel("claude-sonnet-4-20250514")
@@ -55,6 +56,10 @@ async function main() {
 
 main();
 ```
+
+:::tip[Resource cleanup]
+Always dispose agents that use MCP servers or other subprocess-based tools — otherwise the process will hang on open pipes. Use `await using` for automatic cleanup, or [`runOnce()`](../../reference/builder-api/#runonceinput-string-promiseagentresult) for one-shot scripts. See [Resource Management](../../reference/builder-api/#resource-management) for all three patterns.
+:::
 
 ## 4. Run It
 
