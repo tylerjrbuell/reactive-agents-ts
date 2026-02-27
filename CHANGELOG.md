@@ -6,6 +6,108 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 
 ---
 
+## [Unreleased] — Sprint 3B: EventBus Groundwork + Kill Switch Lifecycle
+
+### Added
+
+#### Full Real-Time EventBus Coverage (`@reactive-agents/core`, `@reactive-agents/runtime`, `@reactive-agents/reasoning`, `@reactive-agents/guardrails`, `@reactive-agents/memory`)
+
+**New event types in `AgentEvent` union:**
+- **`AgentStarted`** — emitted before Phase 1 (BOOTSTRAP) with `taskId`, `agentId`, `provider`, `model`, `timestamp`
+- **`AgentCompleted`** — emitted in the COMPLETE phase with `totalIterations`, `totalTokens`, `durationMs`
+- **`LLMRequestStarted`** — emitted before each `llm.complete()` call in the direct-LLM path; shares `requestId` with the existing `LLMRequestCompleted` for request correlation
+- **`FinalAnswerProduced`** — emitted when a reasoning strategy reaches its final answer, with `strategy`, `answer`, `iteration`, `totalTokens`
+- **`GuardrailViolationDetected`** — emitted before `GuardrailViolationError` is thrown, with the `violations` array, `score`, and `blocked: true`
+
+**Previously defined but never emitted — now wired:**
+- `ExecutionHookFired` — emitted after each lifecycle hook fires (`timing: "before"` | `"after"`)
+- `ExecutionCancelled` — emitted before the `ExecutionError` fail when a task is cancelled
+- `AgentPaused` / `AgentResumed` — emitted from `KillSwitchService.pause()` and `.resume()`
+- `AgentStopped` — emitted when `stop()` is confirmed in `checkLifecycle`
+- `MemoryBootstrapped` — emitted from `MemoryServiceLive.bootstrap()` after context is loaded
+- `MemoryFlushed` — emitted from `MemoryServiceLive.flush()` after memory.md is written
+
+**taskId correlation bug fixed:**
+- All 5 reasoning strategies (`reactive`, `plan-execute`, `tree-of-thought`, `reflexion`, `adaptive`) hardcoded their own name as the `taskId` in `ReasoningStepCompleted` events, making cross-event correlation impossible
+- Added `readonly taskId?: string` to all 5 strategy input interfaces
+- Execution engine now passes `taskId: ctx.taskId` to `ReasoningService.execute()`
+- All emit sites now use `input.taskId ?? "strategyName"` (safe fallback)
+
+### Stats
+- 864 tests across 121 files (was 855/120 in v0.5.3, +9 new tests from Sprint 3B kill switch lifecycle)
+
+---
+
+## [0.5.3] — 2026-02-25
+
+### Added
+
+#### Real Ed25519 Cryptography (`@reactive-agents/identity`)
+- **`crypto.subtle.generateKey("Ed25519")`** — real asymmetric key generation for agent certificates, replacing placeholder key stubs
+- **Signature verification** — `crypto.subtle.sign()` / `crypto.subtle.verify()` used for certificate authentication
+- **SHA-256 fingerprints** — certificate fingerprints computed via `crypto.subtle.digest("SHA-256")` over the DER-encoded public key
+
+#### LiteLLM Provider (`@reactive-agents/llm-provider`)
+- **5th LLM provider adapter**: `packages/llm-provider/src/providers/litellm.ts` — connects to any LiteLLM proxy endpoint, unlocking 100+ model backends (OpenAI-compatible format)
+- Builder: `.withProvider("litellm")` — requires `LITELLM_BASE_URL` env var (e.g., `http://localhost:4000`)
+- Full tool calling, streaming, and structured output support via the LiteLLM OpenAI-compatible API
+
+#### Kill Switch & Lifecycle Control (`@reactive-agents/guardrails`)
+- **`KillSwitchService`** — per-agent and global halt capability with full lifecycle control API:
+  - `trigger(agentId, reason)` — hard stop at next phase boundary
+  - `triggerGlobal(reason)` — halt all agents globally
+  - `pause(agentId)` / `resume(agentId)` — suspend and resume execution at phase boundaries
+  - `stop(agentId, reason)` — graceful stop (completes current phase, then exits)
+  - `terminate(agentId, reason)` — immediate termination
+  - `getLifecycle(agentId)` — query current state: `"running" | "paused" | "stopping" | "terminated" | "unknown"`
+  - `waitIfPaused(agentId)` — used by execution engine to block at phase boundaries when paused
+- Builder: `.withKillSwitch()` — wires `KillSwitchService` and exposes `agent.pause()`, `agent.resume()`, `agent.stop()`, `agent.terminate()` on the `ReactiveAgent` facade
+- `guardedPhase()` wrapper — every execution phase is wrapped to check kill switch state before entering
+- Emits `AgentPaused` / `AgentResumed` / `AgentStopped` events to EventBus when wired
+
+#### Behavioral Contracts (`@reactive-agents/guardrails`)
+- **`.withBehavioralContracts(contract)`** builder method — enforces typed behavioral boundaries:
+  - `deniedTools: string[]` — tool names the agent may never call
+  - `allowedTools: string[]` — if set, only these tools may be called (whitelist)
+  - `maxIterations: number` — per-contract iteration cap that cannot be overridden at runtime
+- Contract violations throw `BehavioralContractError` at the guardrail phase before the LLM executes
+
+#### Code Sandbox via Subprocess (`@reactive-agents/tools`)
+- **`Bun.spawn()` isolation** in `packages/tools/src/skills/code-execution.ts` — code snippets now execute in a subprocess with `cwd: "/tmp"` and a minimal environment (`PATH` only, no inherited secrets)
+- Replaces the previous `new Function()` eval approach; prevents environment variable leakage and file system escapes
+
+#### Multi-Source Verification (`@reactive-agents/verification`)
+- **Real LLM claim extraction + Tavily search** in `packages/verification/src/layers/multi-source.ts` — the Multi-Source verification layer now extracts factual claims from the output via LLM, then cross-references each claim with a Tavily web search
+- Previously documented as "not fully implemented"; now functional when `TAVILY_API_KEY` is set
+
+#### Prompt A/B Experiment Framework (`@reactive-agents/prompts`)
+- **`ExperimentService`** in `packages/prompts/src/services/experiment-service.ts` — structured A/B testing for prompt variants
+- Define experiments with variant groups, traffic splits, and success metrics; `ExperimentService.assign()` deterministically routes requests to variants; `ExperimentService.record()` logs outcomes for analysis
+
+#### Cross-Task Self-Improvement (`@reactive-agents/runtime`, `@reactive-agents/reasoning`)
+- **`StrategyOutcome` episodic logging** — after each completed task, strategy name, task description, outcome (success/failure), and step count are logged as episodic memories
+- **`.withSelfImprovement()`** builder method — enables outcome logging and retrieves relevant past strategy outcomes at bootstrap to bias strategy selection on similar future tasks
+
+#### Integration Scenarios
+- **S14** (`test.ts`) — code sandbox env isolation: verifies spawned code processes cannot read `ANTHROPIC_API_KEY` from the environment
+- **S15** (`test.ts`) — self-improvement two-run scenario: second run on similar task uses fewer iterations than first run, validated via episodic memory retrieval
+
+### Changed
+- `@reactive-agents/identity` 0.5.2 → 0.5.3: real Ed25519 key generation and signature verification
+- `@reactive-agents/llm-provider` 0.5.0 → 0.5.3: LiteLLM adapter (5th provider)
+- `@reactive-agents/guardrails` 0.5.2 → 0.5.3: KillSwitchService, BehavioralContractError, `.withKillSwitch()` / `.withBehavioralContracts()`
+- `@reactive-agents/tools` 0.5.1 → 0.5.3: Bun.spawn subprocess isolation in code-execute handler
+- `@reactive-agents/verification` 0.5.2 → 0.5.3: functional Multi-Source layer with LLM + Tavily
+- `@reactive-agents/prompts` 0.2.0 → 0.5.3: ExperimentService
+- `@reactive-agents/runtime` 0.5.2 → 0.5.3: `.withSelfImprovement()` builder method, StrategyOutcome logging
+- `@reactive-agents/reasoning` 0.5.1 → 0.5.3: StrategyOutcome type, episodic outcome logging
+
+### Stats
+- 855 tests across 120 files (was 812/116 in v0.5.2, +43 new tests)
+- 2 new integration scenarios: S14 (code sandbox), S15 (self-improvement)
+
+---
+
 ## [0.5.2] — 2026-02-24
 
 ### Added

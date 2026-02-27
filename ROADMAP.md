@@ -21,24 +21,25 @@ The roadmap below is about two things: **closing the gaps** that currently block
 
 ---
 
-## Current State — v0.5.1 ✅ Released (Feb 24, 2026)
+## Current State — v0.5.2 ✅ (Feb 25, 2026)
 
-**17 packages, 804 tests across 114 files, fully composable via Effect-TS.**
+**17 packages, 855 tests across 120 files, fully composable via Effect-TS.**
 
-### v0.4.0 → v0.5.1 History
+### v0.4.0 → v0.5.2 History
 
 - **v0.4.0** (Feb 22): Enhanced builder API (ReasoningOptions, ToolsOptions, PromptsOptions), structured tool results across all 4 adapters, EvalStore persistence, 80+ new tests
 - **v0.5.0 — A2A + Foundation Hardening** (Feb 23): Full A2A protocol (`@reactive-agents/a2a`), agent-as-tool, MCP SSE transport, ObservabilityService exporters (console/file), tracer correlation IDs, EventBus wiring for all phases, LLM request capture as episodic memory, semantic cache embeddings, LLM-based prompt compression, workflow approval gates, ThoughtTracer, real-time reasoning visibility (`live: true` streaming)
 - **v0.5.1 — Context Engineering Revolution** (Feb 24): Model-adaptive context profiles (4 tiers), structured ObservationResult, context budget system, real sub-agent delegation, scratchpad built-in tool (7 total), progressive 4-level compaction, tier-aware prompt templates, full type safety
+- **v0.5.2 — Trust Fixes + Differentiator Completion** (Feb 25): Real Ed25519 cryptography, LiteLLM provider (40+ models), kill switch + behavioral contracts, subprocess code sandbox, multi-source verification (LLM + Tavily), prompt A/B experiment framework, cross-task self-improvement loop, `rax serve --with-tools` builder fix
 
 ### What's Complete
 
 - ✅ 10-phase execution engine fully wired — all phases call their respective services
 - ✅ 5 reasoning strategies: ReAct, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive
-- ✅ 4 LLM providers: Anthropic, OpenAI, Gemini, Ollama (all with tool calling where supported)
+- ✅ **5 LLM providers**: Anthropic, OpenAI, Gemini, Ollama, **LiteLLM** (40+ models via proxy)
 - ✅ Full memory system (Working/Semantic/Episodic/Procedural, FTS5, Zettelkasten)
 - ✅ Guardrails, verification, cost tracking, identity, interaction, orchestration
-- ✅ MCP stdio + SSE transports, Tavily web search, built-in tools
+- ✅ MCP stdio + SSE + **WebSocket** transports, Tavily web search, built-in tools
 - ✅ Eval framework with LLM-as-judge and EvalStore persistence
 - ✅ `rax` CLI (init, create, run, serve, discover), Starlight docs (28 pages), compiled ESM + DTS output
 - ✅ A2A protocol: JSON-RPC 2.0, Agent Cards, SSE streaming, agent-as-tool
@@ -53,11 +54,19 @@ The roadmap below is about two things: **closing the gaps** that currently block
 - ✅ Dynamic sub-agent spawning via withDynamicSubAgents() — spawn-agent built-in tool, clean context windows, MAX_RECURSION_DEPTH=3 guard (8 total built-in tools)
 - ✅ Progressive 4-level compaction — full/summary/grouped/dropped with preservation rules
 - ✅ Tier-aware prompt templates — react-system/thought variants for local and frontier models
+- ✅ **Real Ed25519 cryptography** — `crypto.subtle.generateKey("Ed25519")`, signature verification, SHA-256 fingerprints, certificate rotation/revocation
+- ✅ **LiteLLM provider adapter** — unified access to 40+ LLM providers via configurable proxy, zero new dependencies
+- ✅ **Kill switch** — per-agent + global halt at any phase boundary via `.withKillSwitch()`
+- ✅ **Behavioral contracts** — enforce tool/output/iteration constraints via `.withBehavioralContracts()`
+- ✅ **Code sandbox** — subprocess isolation via `Bun.spawn()` with minimal env (PATH/HOME only), no project secrets leaked
+- ✅ **Multi-source verification** — LLM claim extraction + Tavily search corroboration (Tier 2), heuristic placeholder (Tier 1)
+- ✅ **Prompt A/B experiment framework** — `ExperimentService` with deterministic cohort assignment, outcome recording, winner selection
+- ✅ **Cross-task self-improvement** — episodic memory logs strategy outcomes; adaptive strategy queries past experience to bias selection
 
 ### What's Scaffolded / Incomplete
 
-- ⚠️ MCP WebSocket transport (SSE done; WebSocket still spec'd only)
-- ⚠️ Self-improvement learning loop (spec'd, not wired)
+- ⚠️ Docker container sandbox (subprocess done; full Docker isolation with network/memory limits deferred to v0.7.0)
+- ⚠️ Programmatic tool calling strategy (spec'd, depends on Docker sandbox)
 - ⚠️ Streaming service (spec'd, not wired)
 
 ---
@@ -92,37 +101,23 @@ See `spec/docs/14-v0.5-comprehensive-plan.md` for the full plan. All items shipp
 
 ---
 
-## v0.6.0 — LiteLLM Bridge & Enterprise Identity
+## v0.6.0 — Docker Sandbox & CLI Auto-Generation
 
-**Target: 120 days**
+**Target: 90 days**
 
-### LiteLLM Provider Adapter
+### ✅ Shipped Early (in v0.5.2)
 
-Vercel AI SDK supports 40+ providers. We need parity without maintaining 40 adapters.
+The following v0.6.0 items were completed ahead of schedule in v0.5.2:
 
-- `LiteLLMAdapter` that proxies any LiteLLM-compatible endpoint
-- Unified model naming convention
-- Covers: Mistral, Cohere, Azure OpenAI, AWS Bedrock, Together AI, Groq, DeepSeek, and more
-- `.withProvider("litellm", { model: "mistral/mistral-large", baseUrl: "..." })`
-- Maintains our typed `LLMService` contract — no API changes for consumers
+- ✅ **LiteLLM Provider Adapter** — `packages/llm-provider/src/providers/litellm.ts`, configurable via `LITELLM_BASE_URL`, covers 40+ providers
+- ✅ **Ed25519 Agent Certificates** — real `crypto.subtle.generateKey("Ed25519")`, signature verification, SHA-256 fingerprints, rotation/revocation
+- ✅ **Kill Switch + Behavioral Contracts** — `KillSwitchService` (per-agent + global), `BehavioralContractService` (tool/output/iteration constraints), integrated into execution engine
+- ✅ **Multi-source verification** — LLM claim extraction + Tavily search corroboration, replaces hardcoded stub
+- ✅ **Prompt A/B experiments** — `ExperimentService` with deterministic cohort assignment, outcome recording, winner selection
+- ✅ **Cross-task self-improvement** — episodic memory logs strategy outcomes, adaptive strategy queries past experience
+- ✅ **Code sandbox (subprocess)** — `Bun.spawn()` isolation with minimal env, no secrets leaked
 
-### Ed25519 Agent Certificates — Production-Ready
-
-The identity layer has RBAC, but the cryptographic certificate chain needs hardening for enterprise.
-
-- Ed25519 key generation per agent instance
-- Certificate signing by an issuer (your org's key or a built-in test CA)
-- Delegation chains: agent A delegates subset of permissions to agent B
-- Immutable audit log: every privileged action is signed and timestamped
-- Certificate revocation for compromised agents
-- `rax inspect <agent-id> --identity` shows full certificate chain
-
-### Behavioral Contracts + Kill Switch — Full Integration
-
-- `killAgent(agentId, reason)` publishes `GuardrailKillAgent` event that execution engine listens for
-- In-flight tasks are cancelled via Effect fiber interruption — no runaway agents
-- Kill events are signed with the calling agent's certificate (requires identity layer)
-- Audit log entry created with reason and calling agent identity
+### Remaining v0.6.0 Items
 
 ### Programmatic Tool Calling + Docker Sandbox
 
@@ -351,12 +346,13 @@ Keeping this intentional:
 | v0.3.0 ✅ | **All services wired, 5 strategies, OpenAI tools, full docs**                          | **Adaptive meta-strategy + fully observable engine**        |
 | v0.4.0 ✅ | Enhanced builder, structured tool results, EvalStore                                   | Composable builder options + persistent eval                |
 | v0.5.0 ✅ | **A2A interop, agent-as-tool, MCP SSE, foundation hardening, real-time observability** | **First TS framework with A2A + live reasoning visibility** |
-| v0.6.0    | Self-improvement, semantic caching, 40+ providers                                      | Cross-task learning + LiteLLM adapter                       |
+| v0.5.2 ✅ | **Ed25519 crypto, LiteLLM, kill switch, contracts, sandbox, self-improvement**         | **All 7 differentiators implemented — no competitor matches** |
+| v0.6.0    | Docker sandbox, programmatic tool calling, CLI auto-generation                          | Multi-tool single-execution, 30-50% token reduction         |
 | v0.7.0    | Voice, UI, Edge                                                                        | Full-stack agent runtime no competitor matches              |
 | v1.0.0    | Stability, benchmarks                                                                  | Production-grade, proven, documented                        |
 | v1.1.0+   | Evolutionary intelligence                                                              | GEA-inspired zero-cost genome evolution                     |
 
 ---
 
-_Last updated: February 24, 2026 — v0.5.1 released, v0.6.0 planning_
+_Last updated: February 25, 2026 — v0.5.2 (855 tests, all 7 differentiators complete), v0.6.0 planning_
 _Grounded in: `spec/docs/12-market-validation-feb-2026.md`, `spec/docs/14-v0.5-comprehensive-plan.md`_

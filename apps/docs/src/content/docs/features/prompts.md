@@ -151,6 +151,82 @@ The framework includes templates for internal reasoning strategies:
 
 These are used internally by the reasoning and verification layers — you don't need to register them manually.
 
+## A/B Experiments
+
+Run statistically-tracked prompt experiments to find the best-performing template variant for a task:
+
+```typescript
+import { ExperimentService } from "@reactive-agents/prompts";
+import { Effect } from "effect";
+
+const program = Effect.gen(function* () {
+  const experiments = yield* ExperimentService;
+
+  // Register two prompt variants as an experiment
+  const experimentId = yield* experiments.register({
+    name: "research-prompt-ab",
+    variants: [
+      {
+        id: "variant-a",
+        templateId: "research-task",
+        variables: { tone: "formal", depth: "comprehensive" },
+        weight: 0.5,
+      },
+      {
+        id: "variant-b",
+        templateId: "research-task",
+        variables: { tone: "concise", depth: "focused" },
+        weight: 0.5,
+      },
+    ],
+    metric: "user_satisfaction",
+  });
+
+  // Get the next variant to run (weighted random selection)
+  const variant = yield* experiments.nextVariant(experimentId);
+  const compiled = yield* prompts.compile(variant.templateId, variant.variables);
+
+  // ... run the agent with compiled.content as the system prompt ...
+
+  // Record outcome (0.0–1.0 score, or pass/fail)
+  yield* experiments.recordOutcome(experimentId, variant.id, {
+    score: 0.87,
+    metadata: { responseTime: 1200, userRating: 4 },
+  });
+
+  // Query results to see which variant is winning
+  const results = yield* experiments.getResults(experimentId);
+  console.log(results.variants);
+  // [
+  //   { id: "variant-a", runs: 45, avgScore: 0.82, p95: 0.90 },
+  //   { id: "variant-b", runs: 47, avgScore: 0.87, p95: 0.93 },
+  // ]
+  console.log(results.winner); // "variant-b"
+});
+```
+
+### Enable with Builder
+
+```typescript
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withPrompts({ experiments: true })
+  .build();
+```
+
+### Experiment Lifecycle
+
+| Method | Description |
+|--------|-------------|
+| `register(config)` | Create a new experiment with two or more weighted variants |
+| `nextVariant(id)` | Select the next variant to run (respects weights + exploration) |
+| `recordOutcome(id, variantId, outcome)` | Record a score for a completed variant run |
+| `getResults(id)` | Get aggregate statistics per variant with a `winner` field |
+| `pause(id)` | Pause variant selection (all calls get variant A) |
+| `archive(id)` | Archive a completed experiment |
+
+Outcomes are persisted to SQLite for cross-session aggregation, so experiments can run over thousands of agent invocations and still converge.
+
 ## Template Variables
 
 Each variable has a type and can be required or optional:

@@ -35,7 +35,7 @@ Measures word diversity and detects hedging language. High entropy (diverse voca
 
 Breaks the response into atomic claims and scores each for specificity:
 
-```
+```text
 Input:  "Paris, founded around 250 BC, is the capital of France
          and has a population of approximately 2.1 million."
 
@@ -55,9 +55,22 @@ Checks whether statements within the response contradict each other. Inconsisten
 
 Evaluates whether the response is entailed by (logically follows from) the input context. Catches hallucinated claims that aren't supported by the provided information.
 
-### Multi-Source (Tier 1)
+### Multi-Source
 
-Placeholder for cross-referencing claims against external knowledge bases. Not fully implemented in the current release.
+Cross-references extracted claims against live web search results. When `TAVILY_API_KEY` is set, this layer:
+
+1. Extracts atomic factual claims from the output via LLM
+2. Runs a Tavily web search for each claim
+3. Scores the claim as supported, contradicted, or unverifiable based on search results
+
+```typescript
+import { createVerificationLayer } from "@reactive-agents/verification";
+
+const layer = createVerificationLayer({
+  enableMultiSource: true,   // requires TAVILY_API_KEY
+  // ...
+});
+```
 
 ## Verification Result
 

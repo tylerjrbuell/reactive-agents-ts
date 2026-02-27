@@ -1,6 +1,6 @@
 ---
 title: LLM Providers
-description: Multi-provider LLM support — Anthropic, OpenAI, Google Gemini, Ollama, and custom providers.
+description: Multi-provider LLM support — Anthropic, OpenAI, Google Gemini, Ollama, LiteLLM, and custom providers.
 sidebar:
   order: 1
 ---
@@ -10,11 +10,12 @@ Reactive Agents supports multiple LLM providers through a unified `LLMService` i
 ## Supported Providers
 
 | Provider | Models | Tool Calling | Streaming | Embeddings | Prompt Caching |
-|----------|--------|:---:|:---:|:---:|:---:|
+| -------- | ------ | :---: | :---: | :---: | :---: |
 | **Anthropic** | Claude 3.5 Haiku, Claude Sonnet 4, Claude Opus 4 | Yes | Yes | No (use OpenAI) | Yes |
 | **OpenAI** | GPT-4o, GPT-4o-mini | Yes | Yes | Yes | No |
 | **Google Gemini** | Gemini 2.0 Flash, Gemini 2.5 Pro | Yes | Yes | No | No |
 | **Ollama** | Any locally hosted model | Yes | Yes | Yes | No |
+| **LiteLLM** | 100+ models via LiteLLM proxy | Yes | Yes | No | No |
 | **Test** | Mock provider for testing | No | No | No | No |
 
 ## Configuration
@@ -47,6 +48,12 @@ const agent = await ReactiveAgents.create()
   .withProvider("ollama")
   .withModel("llama3")
   .build();
+
+// LiteLLM proxy (100+ models)
+const agent = await ReactiveAgents.create()
+  .withProvider("litellm")
+  .withModel("gpt-4o")   // any model supported by your LiteLLM proxy
+  .build();
 ```
 
 ### Environment Variables
@@ -57,6 +64,7 @@ ANTHROPIC_API_KEY=sk-ant-...
 OPENAI_API_KEY=sk-...
 GOOGLE_API_KEY=...
 OLLAMA_ENDPOINT=http://localhost:11434   # defaults to this
+LITELLM_BASE_URL=http://localhost:4000   # LiteLLM proxy endpoint
 
 # Tools (optional)
 TAVILY_API_KEY=tvly-...                  # enables built-in web search
@@ -73,7 +81,7 @@ LLM_TIMEOUT_MS=30000
 Pre-configured model presets with cost and capability data:
 
 | Preset | Provider | Cost/1M Input | Context Window | Quality |
-|--------|----------|--------------|----------------|---------|
+| ------ | -------- | ------------ | -------------- | ------- |
 | `claude-haiku` | Anthropic | $1.00 | 200K | 0.60 |
 | `claude-sonnet` | Anthropic | $3.00 | 200K | 0.85 |
 | `claude-opus` | Anthropic | $15.00 | 1M | 1.00 |
@@ -97,6 +105,7 @@ When tools are enabled, the LLM can request tool calls. Each provider translates
 - **OpenAI**: Uses `function_calling` with `tools` array
 - **Gemini**: Uses `functionDeclarations` in `tools` array
 - **Ollama**: Uses the `ollama` npm SDK with OpenAI-compatible tool format
+- **LiteLLM**: OpenAI-compatible `tools` array forwarded to the proxy, which handles provider-specific translation
 
 ```typescript
 const response = await llm.complete({

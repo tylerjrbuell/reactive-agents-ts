@@ -87,7 +87,7 @@ When you enable `.withTools()`, these tools are automatically registered and ava
 | `http-get` | http | Make HTTP GET requests | — |
 | `file-read` | file | Read file contents (path-traversal protected) | — |
 | `file-write` | file | Write file contents (requires approval) | — |
-| `code-execute` | code | Execute code snippets (stub — sandbox only) | — |
+| `code-execute` | code | Execute code in a subprocess (`Bun.spawn`, `cwd: "/tmp"`, minimal env) | — |
 
 ### Web Search Configuration
 
@@ -107,6 +107,8 @@ All tool execution runs in a sandbox with:
 - **Timeout** — Default 30s per tool call, configurable
 - **Error containment** — Tool failures don't crash the agent; errors are reported as observation text
 - **Result wrapping** — All outputs are wrapped in `ToolExecutionResult` with success/failure status
+
+The `code-execute` tool uses subprocess isolation via `Bun.spawn()` with `cwd: "/tmp"` and a minimal environment (`PATH` only). This prevents spawned code from reading environment variables (API keys, secrets) or accessing files outside `/tmp`.
 
 ## Input Validation
 

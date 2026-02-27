@@ -8,9 +8,23 @@
 
 1. **Read before writing.** Always read existing files before editing. Understand patterns before introducing new code.
 2. **Follow Effect-TS patterns.** Load the `effect-ts-patterns` skill. No `throw`, no raw `await`, no plain interfaces.
-3. **Keep docs truthful.** Every code change that affects public API, test counts, or capabilities must update documentation (see Documentation Workflow below).
-4. **Test everything.** New services need tests. New features need integration tests. Run `bun test` before declaring work complete.
-5. **One concern per commit.** Don't mix unrelated changes.
+3. **Type safety first (no `any`).** Treat TypeScript types as part of the public API. Do not use `any` (including `as any` casts) or leave arguments/returns untyped—prefer precise types, generics, and tagged unions so IDE IntelliSense stays rich, accurate, and powered by the latest TypeScript features.
+4. **Control and observability over magic.** No black-box helpers or hidden globals. New code must expose explicit configuration, emit structured events/traces, and integrate with existing observability (EventBus, ThoughtTracer, tracing) so every decision is explainable and replayable.
+5. **Keep docs truthful.** Every code change that affects public API, test counts, or capabilities must update documentation (see Documentation Workflow below).
+6. **Test everything.** New services need tests. New features need integration tests. Run `bun test` before declaring work complete.
+7. **One concern per commit.** Don't mix unrelated changes.
+8. **Write JSDoc comments.** Every public API needs a JSDoc comment.
+
+## Vision Alignment Checklist
+
+Before you add or modify code, confirm:
+
+- **Explicit over implicit**: No hidden magic or one-liner “createAgent” helpers. New behavior is configured via explicit builders/layers, not global state.
+- **Observable over opaque**: The behavior is visible in traces/events (EventBus, ThoughtTracer, tracing), without relying on `console.log`.
+- **Type-safe reliability**: Inputs are validated (e.g. Zod schemas), errors are part of explicit tagged unions, and all public APIs use precise, generic-friendly types (no `any`/`unknown` escape hatches).
+- **Composable and testable**: Logic is factored into small, Effect-TS services/middleware that can be wired together and tested independently.
+- **Efficient and local-first**: Code respects token/latency budgets, reuses existing caching/batching/context systems, and works well with local as well as cloud models.
+- **Secure and production-first**: Changes honor guardrails, avoid leaking secrets, and default to safe behavior suitable for production workloads.
 
 ---
 
@@ -26,9 +40,18 @@
 ### Build & Test Cycle
 
 ```bash
-bun install              # After dependency changes
-bun test                 # Run full suite (must pass before any PR)
-bun run build            # Build all packages (ESM + DTS, must compile clean)
+bun install                   # Install dependencies
+bun test                      # Run full suite (must pass before any PR)
+bun test --watch              # Watch tests during development
+bun run typecheck             # Workspace-wide TypeScript checks (no implicit any)
+bun run build                 # Build all packages and apps (ESM + DTS)
+bun run build:packages        # Build all workspace packages
+bun run build:apps            # Build CLI and app bundles
+bun run clean                 # Remove all dist outputs
+bun run rax -- <args>         # Run the local `rax` CLI entrypoint
+bun run docs:dev              # Start docs dev server
+bun run docs:build            # Build docs for production
+bun run docs:preview          # Preview built docs
 ```
 
 ### After Completing a Feature
@@ -47,17 +70,17 @@ Run this checklist:
 
 ### When to Update What
 
-| Trigger | Files to Update |
-|---------|----------------|
-| **New package created** | `CLAUDE.md` (package map + spec index), `README.md` (packages table), `CHANGELOG.md`, architecture-reference skill, docs site sidebar |
-| **New/changed builder method** | `README.md` (quick start + capabilities), `apps/docs/src/content/docs/reference/builder-api.md`, `CLAUDE.md` (architecture section) |
-| **New CLI command** | `README.md` (CLI section), `apps/docs/src/content/docs/reference/cli.md`, `CLAUDE.md` (CLI section) |
-| **Test count changed** | `CLAUDE.md` (build commands section), `README.md` (development section) |
-| **New reasoning strategy** | `README.md` (strategies table), `apps/docs/src/content/docs/guides/reasoning.md` |
-| **New LLM provider** | `README.md` (providers table), `apps/docs/src/content/docs/features/llm-providers.md`, `CLAUDE.md` (env vars if needed) |
-| **New feature page needed** | `apps/docs/src/content/docs/features/<name>.md` or `guides/<name>.md` |
-| **API signature change** | Search all docs for old signature and update: `grep -r "oldMethod" apps/docs/` |
-| **Version bump / release** | `CHANGELOG.md` (new entry), all `package.json` files, `CLAUDE.md` status |
+| Trigger                        | Files to Update                                                                                                                       |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
+| **New package created**        | `CLAUDE.md` (package map + spec index), `README.md` (packages table), `CHANGELOG.md`, architecture-reference skill, docs site sidebar |
+| **New/changed builder method** | `README.md` (quick start + capabilities), `apps/docs/src/content/docs/reference/builder-api.md`, `CLAUDE.md` (architecture section)   |
+| **New CLI command**            | `README.md` (CLI section), `apps/docs/src/content/docs/reference/cli.md`, `CLAUDE.md` (CLI section)                                   |
+| **Test count changed**         | `CLAUDE.md` (build commands section), `README.md` (development section)                                                               |
+| **New reasoning strategy**     | `README.md` (strategies table), `apps/docs/src/content/docs/guides/reasoning.md`                                                      |
+| **New LLM provider**           | `README.md` (providers table), `apps/docs/src/content/docs/features/llm-providers.md`, `CLAUDE.md` (env vars if needed)               |
+| **New feature page needed**    | `apps/docs/src/content/docs/features/<name>.md` or `guides/<name>.md`                                                                 |
+| **API signature change**       | Search all docs for old signature and update: `grep -r "oldMethod" apps/docs/`                                                        |
+| **Version bump / release**     | `CHANGELOG.md` (new entry), all `package.json` files, `CLAUDE.md` status                                                              |
 
 ### CHANGELOG Format
 
@@ -67,15 +90,19 @@ Follow [Keep a Changelog](https://keepachangelog.com/). Each release entry must 
 ## [X.Y.Z] — YYYY-MM-DD
 
 ### Added
+
 - Feature descriptions with package scope
 
 ### Changed
+
 - Package version bumps with context
 
 ### Fixed
+
 - Bug fixes with root cause
 
 ### Stats
+
 - N tests across M files (was P/Q)
 ```
 
@@ -84,11 +111,13 @@ Follow [Keep a Changelog](https://keepachangelog.com/). Each release entry must 
 Location: `apps/docs/`
 
 ```bash
-cd apps/docs && npx astro dev    # Preview locally
-cd apps/docs && npx astro build  # Build for production
+bun run docs:dev              # Preview locally
+bun run docs:build            # Build for production
+bun run docs:preview          # Preview built docs
 ```
 
 Key files:
+
 - `astro.config.mjs` — sidebar structure (autogenerated from directories)
 - `src/content/docs/` — all documentation pages
 - `src/content/config.ts` — content collection config (NOT `content.config.ts`)
@@ -97,6 +126,7 @@ Key files:
 ### README.md
 
 The README is the public face. Keep it accurate:
+
 - Badge row at top
 - Architecture diagram reflects actual layers
 - Packages table lists all published packages
@@ -106,6 +136,7 @@ The README is the public face. Keep it accurate:
 ### ROADMAP.md
 
 Root `ROADMAP.md` is the authoritative forward-looking plan. Update when:
+
 - A milestone ships (move from "target" to "✅ Released")
 - Scope changes for a future version
 - New competitive intelligence changes priorities
@@ -118,11 +149,11 @@ Root `ROADMAP.md` is the authoritative forward-looking plan. Update when:
 
 For large features (new packages, cross-cutting changes):
 
-| Role | Does | Doesn't |
-|------|------|---------|
-| **Lead** | Plans, assigns, reviews, integrates | Write package code directly |
-| **Builder** | Implements packages using skills | Make cross-package architectural decisions |
-| **Tester** | Writes tests, validates coverage | Skip pattern review |
+| Role        | Does                                | Doesn't                                    |
+| ----------- | ----------------------------------- | ------------------------------------------ |
+| **Lead**    | Plans, assigns, reviews, integrates | Write package code directly                |
+| **Builder** | Implements packages using skills    | Make cross-package architectural decisions |
+| **Tester**  | Writes tests, validates coverage    | Skip pattern review                        |
 
 ### Parallelization Rules
 
@@ -137,6 +168,7 @@ For large features (new packages, cross-cutting changes):
 ### Communication Protocol
 
 When handing off between agents:
+
 1. State what was completed (files created/modified)
 2. State what was verified (tests passed, build clean)
 3. State what's next (dependent work now unblocked)
@@ -172,38 +204,38 @@ When creating a new package (e.g., `@reactive-agents/a2a`):
 
 ### Before Any PR
 
-| Check | Command | Must |
-|-------|---------|------|
-| Tests pass | `bun test` | 100% green |
-| Build clean | `bun run build` | No errors |
-| Pattern compliance | `/review-patterns <files>` | 8/8 pass |
-| Docs accurate | Manual review | No stale examples |
+| Check              | Command                    | Must              |
+| ------------------ | -------------------------- | ----------------- |
+| Tests pass         | `bun test`                 | 100% green        |
+| Build clean        | `bun run build`            | No errors         |
+| Pattern compliance | `/review-patterns <files>` | 8/8 pass          |
+| Docs accurate      | Manual review              | No stale examples |
 
 ### Before Any Release
 
-| Check | Details |
-|-------|---------|
-| All above | Plus full integration test |
-| CHANGELOG | New version entry with all sections |
-| Package versions | All bumped consistently |
-| Docs site builds | `cd apps/docs && npx astro build` |
-| README current | Stats, packages, examples all accurate |
-| ROADMAP updated | Shipped items marked, new targets set |
+| Check            | Details                                |
+| ---------------- | -------------------------------------- |
+| All above        | Plus full integration test             |
+| CHANGELOG        | New version entry with all sections    |
+| Package versions | All bumped consistently                |
+| Docs site builds | `cd apps/docs && npx astro build`      |
+| README current   | Stats, packages, examples all accurate |
+| ROADMAP updated  | Shipped items marked, new targets set  |
 
 ---
 
 ## Key File Paths
 
-| Category | Path |
-|----------|------|
-| Specs | `spec/docs/` |
-| Skills | `.claude/skills/` |
-| Packages | `packages/{core,llm-provider,memory,...}/` |
-| CLI | `apps/cli/` |
-| Docs | `apps/docs/src/content/docs/` |
-| Examples | `apps/examples/` |
-| CI | `.github/workflows/` |
-| v0.5 Plan | `spec/docs/14-v0.5-comprehensive-plan.md` |
+| Category  | Path                                       |
+| --------- | ------------------------------------------ |
+| Specs     | `spec/docs/`                               |
+| Skills    | `.claude/skills/`                          |
+| Packages  | `packages/{core,llm-provider,memory,...}/` |
+| CLI       | `apps/cli/`                                |
+| Docs      | `apps/docs/src/content/docs/`              |
+| Examples  | `apps/examples/`                           |
+| CI        | `.github/workflows/`                       |
+| v0.5 Plan | `spec/docs/14-v0.5-comprehensive-plan.md`  |
 
 ---
 

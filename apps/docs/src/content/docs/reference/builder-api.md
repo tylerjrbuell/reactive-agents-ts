@@ -23,7 +23,7 @@ All methods return `this` for chaining.
 ### Identity
 
 | Method | Signature | Description |
-|--------|-----------|-------------|
+| ------ | --------- | ----------- |
 | `withName` | `(name: string) => this` | Set the agent's name (used as `agentId`) |
 | `withPersona` | `(persona: AgentPersona) => this` | Set a structured persona for behavior steering. Fields: `{ name?, role?, background?, instructions?, tone? }` |
 | `withSystemPrompt` | `(prompt: string) => this` | Set a custom system prompt. When combined with persona, the persona is prepended |
@@ -31,42 +31,45 @@ All methods return `this` for chaining.
 ### Model & Provider
 
 | Method | Signature | Description |
-|--------|-----------|-------------|
+| ------ | --------- | ----------- |
 | `withModel` | `(model: string) => this` | Set the LLM model (e.g., `"claude-sonnet-4-20250514"`) |
-| `withProvider` | `(provider: "anthropic" \| "openai" \| "ollama" \| "gemini" \| "test") => this` | Set the LLM provider |
+| `withProvider` | `(provider: "anthropic" \| "openai" \| "ollama" \| "gemini" \| "litellm" \| "test") => this` | Set the LLM provider |
 
 ### Memory
 
 | Method | Signature | Description |
-|--------|-----------|-------------|
+| ------ | --------- | ----------- |
 | `withMemory` | `(tier: "1" \| "2") => this` | Enable memory. Tier 1: FTS5. Tier 2: FTS5 + KNN vectors |
 
 ### Execution
 
 | Method | Signature | Description |
-|--------|-----------|-------------|
+| ------ | --------- | ----------- |
 | `withMaxIterations` | `(n: number) => this` | Max agent loop iterations (default: 10) |
 
 ### Optional Features
 
 | Method | Description |
-|--------|-------------|
+| ------ | ----------- |
 | `withGuardrails()` | Injection, PII, toxicity detection on input |
-| `withVerification()` | Semantic entropy, fact decomposition on output |
+| `withKillSwitch()` | Per-agent and global emergency halt capability via `KillSwitchService` |
+| `withBehavioralContracts(contract)` | Enforce typed behavioral boundaries: `deniedTools`, `allowedTools`, `maxIterations`. Throws `BehavioralContractError` on violation |
+| `withVerification()` | Semantic entropy, fact decomposition, and multi-source (LLM + Tavily) on output |
 | `withCostTracking()` | Budget enforcement, complexity routing, semantic caching |
 | `withReasoning(options?)` | Structured reasoning (ReAct, Reflexion, Plan-Execute, ToT, Adaptive). Options: `{ defaultStrategy?, strategies?, adaptive? }` |
-| `withTools(options?)` | Tool registry with sandboxed execution. Options: `{ tools?: [{ definition, handler }] }` |
-| `withIdentity()` | Agent certificates and RBAC |
+| `withTools(options?)` | Tool registry with sandboxed execution (subprocess isolation via `Bun.spawn`). Options: `{ tools?: [{ definition, handler }] }` |
+| `withIdentity()` | Agent certificates (real Ed25519 keys) and RBAC |
 | `withObservability(options?)` | Distributed tracing, metrics, structured logging. Options: `{ verbosity?: "minimal" \| "normal" \| "verbose" \| "debug", live?: boolean, file?: string }` |
 | `withInteraction()` | 5 interaction modes with adaptive transitions |
 | `withPrompts(options?)` | Version-controlled prompt template engine. Options: `{ templates?: PromptTemplate[] }` |
 | `withOrchestration()` | Multi-agent workflow coordination |
+| `withSelfImprovement()` | Cross-task self-improvement: logs `StrategyOutcome` per task and retrieves relevant past outcomes at bootstrap to guide strategy selection |
 | `withAudit()` | Compliance audit trail logging |
 
 ### A2A Protocol
 
 | Method | Signature | Description |
-|--------|-----------|-------------|
+| ------ | --------- | ----------- |
 | `withA2A` | `(config: { port?: number }) => this` | Enable A2A server capability |
 | `withAgentTool` | `(name: string, agent: { name: string; description?: string; persona?: AgentPersona; systemPrompt?: string; ... }) => this` | Register a local agent as a callable tool. Subagent personas are supported for specialized behavior |
 | `withDynamicSubAgents` | `(options?: { maxIterations?: number }) => this` | Enable `spawn-agent` tool to dynamically create subagents at runtime with optional persona parameters |
@@ -75,13 +78,13 @@ All methods return `this` for chaining.
 ### MCP
 
 | Method | Signature | Description |
-|--------|-----------|-------------|
+| ------ | --------- | ----------- |
 | `withMCP` | `(config: MCPServerConfig \| MCPServerConfig[]) => this` | Connect to MCP servers (stdio, SSE) |
 
 ### Lifecycle
 
 | Method | Signature | Description |
-|--------|-----------|-------------|
+| ------ | --------- | ----------- |
 | `withHook` | `(hook: LifecycleHook) => this` | Register a lifecycle hook |
 
 #### LifecycleHook
@@ -102,13 +105,13 @@ type ExecutionPhase =
 ### Testing
 
 | Method | Signature | Description |
-|--------|-----------|-------------|
+| ------ | --------- | ----------- |
 | `withTestResponses` | `(responses: Record<string, string>) => this` | Set canned test responses (uses `"test"` provider) |
 
 ### Advanced
 
 | Method | Signature | Description |
-|--------|-----------|-------------|
+| ------ | --------- | ----------- |
 | `withLayers` | `(layers: Layer<any, any>) => this` | Add custom Effect Layers to the runtime |
 
 ## Build Methods
@@ -148,6 +151,92 @@ Cancel a running task by its ID.
 ### `getContext(taskId: string): Promise<unknown>`
 
 Get the execution context of a running or completed task.
+
+### Lifecycle Control
+
+Requires `.withKillSwitch()` to be enabled.
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `pause()` | `() => Promise<void>` | Pause execution at the next phase boundary. Blocks until `resume()` is called |
+| `resume()` | `() => Promise<void>` | Resume a paused agent |
+| `stop(reason)` | `(reason: string) => Promise<void>` | Graceful stop — signals intent; agent completes current phase then exits |
+| `terminate(reason)` | `(reason: string) => Promise<void>` | Immediate termination (also triggers kill switch) |
+
+### Event Subscription
+
+Requires an EventBus to be wired (any feature that enables it, e.g., `.withObservability()`).
+
+`subscribe` is overloaded — pass a tag for type-narrowed access, or omit it for a catch-all:
+
+```typescript
+// ── Tag-filtered: event is narrowed to the exact payload type ──────────────
+const unsub = await agent.subscribe("AgentCompleted", (event) => {
+  // TypeScript knows event has: taskId, agentId, success, totalIterations,
+  // totalTokens, durationMs — no _tag check, no cast needed
+  console.log(`Done in ${event.durationMs}ms, ${event.totalTokens} tokens`);
+});
+unsub();
+
+// ── Catch-all: receives the full AgentEvent union ──────────────────────────
+const unsub2 = await agent.subscribe((event) => {
+  // Discriminate via event._tag when handling multiple types in one handler
+  if (event._tag === "ToolCallStarted") console.log(`Tool: ${event.toolName}`);
+  if (event._tag === "LLMRequestStarted") console.log(`Model: ${event.model}`);
+});
+unsub2();
+```
+
+TypeScript signatures:
+
+```typescript
+// Tag-filtered — event type is automatically narrowed
+subscribe<T extends AgentEventTag>(
+  tag: T,
+  handler: (event: Extract<AgentEvent, { _tag: T }>) => void,
+): Promise<() => void>;
+
+// Catch-all — full AgentEvent union
+subscribe(handler: (event: AgentEvent) => void): Promise<() => void>;
+```
+
+The `AgentEventTag` and `TypedEventHandler<T>` helpers are exported from `@reactive-agents/core` for use in your own service code:
+
+```typescript
+import type { AgentEventTag, TypedEventHandler } from "@reactive-agents/core";
+
+// Build a typed handler outside of an inline callback
+const onStepComplete: TypedEventHandler<"ReasoningStepCompleted"> = (event) => {
+  // event.thought, event.action, event.observation — all typed
+  return Effect.log(`Step ${event.step}: ${event.thought ?? event.action}`);
+};
+
+yield* eventBus.on("ReasoningStepCompleted", onStepComplete);
+```
+
+**Subscribable event tags:**
+
+| Tag | Payload fields |
+|-----|---------------|
+| `AgentStarted` | `taskId`, `agentId`, `provider`, `model`, `timestamp` |
+| `AgentCompleted` | `taskId`, `agentId`, `success`, `totalIterations`, `totalTokens`, `durationMs` |
+| `LLMRequestStarted` | `taskId`, `requestId`, `model`, `provider`, `contextSize` |
+| `LLMRequestCompleted` | `taskId`, `requestId`, `tokensUsed`, `durationMs` |
+| `ReasoningStepCompleted` | `taskId`, `strategy`, `step`, `thought\|action\|observation` |
+| `ToolCallStarted` | `taskId`, `toolName`, `callId` |
+| `ToolCallCompleted` | `taskId`, `toolName`, `callId`, `success`, `durationMs` |
+| `FinalAnswerProduced` | `taskId`, `strategy`, `answer`, `iteration`, `totalTokens` |
+| `GuardrailViolationDetected` | `taskId`, `violations`, `score`, `blocked` |
+| `ExecutionPhaseEntered` | `taskId`, `phase` |
+| `ExecutionPhaseCompleted` | `taskId`, `phase`, `durationMs` |
+| `ExecutionHookFired` | `taskId`, `phase`, `timing` |
+| `ExecutionCancelled` | `taskId` |
+| `MemoryBootstrapped` | `agentId`, `tier` |
+| `MemoryFlushed` | `agentId` |
+| `AgentPaused` | `agentId`, `taskId` |
+| `AgentResumed` | `agentId`, `taskId` |
+| `AgentStopped` | `agentId`, `taskId`, `reason` |
+| `TaskCompleted` | `taskId`, `success` |
 
 ## AgentResult
 
