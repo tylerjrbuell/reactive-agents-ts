@@ -191,7 +191,7 @@ describe("ReflexionStrategy", () => {
 
     // With stagnation detection, should bail well before maxRetries
     const thoughtSteps = result.steps.filter((s) => s.type === "thought");
-    expect(thoughtSteps.length).toBeLessThan(5); // < maxRetries attempts
+    expect(thoughtSteps.length).toBe(2);
     expect(result.status).toBe("partial");
   });
 
