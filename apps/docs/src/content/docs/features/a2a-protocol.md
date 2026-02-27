@@ -69,6 +69,7 @@ The simplest way to expose an agent via A2A:
 
 ```bash
 rax serve --name my-agent --provider anthropic --port 3000
+rax serve --name my-agent --provider anthropic --port 3000 --with-tools   # Start A2A server with built-in tools enabled
 ```
 
 This starts a fully functional A2A HTTP server with:
@@ -258,6 +259,27 @@ close();
 return new Response(stream, {
   headers: { "Content-Type": "text/event-stream" },
 });
+```
+
+## MCP Transports
+
+When connecting to MCP (Model Context Protocol) tool servers, Reactive Agents supports three transport modes:
+
+| Transport | When to Use |
+|-----------|-------------|
+| `stdio` | Subprocess — MCP server launched as a child process |
+| `sse` | HTTP Server-Sent Events — remote server over HTTP |
+| `websocket` | WebSocket — low-latency bidirectional connection |
+
+```typescript
+// stdio (subprocess)
+.withMCP({ name: "local-tools", transport: "stdio", command: "npx", args: ["-y", "@modelcontextprotocol/server-filesystem"] })
+
+// SSE (HTTP server-sent events)
+.withMCP({ name: "remote-tools", transport: "sse", url: "https://mcp.example.com/sse" })
+
+// WebSocket
+.withMCP({ name: "my-server", transport: "websocket", url: "ws://localhost:8080" })
 ```
 
 ## JSON-RPC Methods

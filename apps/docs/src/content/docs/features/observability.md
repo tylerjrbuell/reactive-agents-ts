@@ -236,3 +236,60 @@ Call `flush()` to ensure all buffered metrics and logs are exported:
 ```typescript
 yield* obs.flush();
 ```
+
+## Metrics Dashboard
+
+When `verbosity` is set to `"normal"` or higher, a professional metrics dashboard is printed automatically at the end of every agent execution. No manual instrumentation is required — the `MetricsCollector` auto-subscribes to the EventBus and aggregates all phase timings, tool calls, token usage, and cost estimates.
+
+### Enabling the Dashboard
+
+```typescript
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withReasoning()
+  .withTools()
+  .withObservability({ verbosity: "normal", live: true })
+  .build();
+```
+
+Setting `live: true` additionally streams phase events to the console in real-time as the agent runs. The dashboard is shown once on completion regardless of `live`.
+
+### Dashboard Sections
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ ✅ Agent Execution Summary                                   │
+├─────────────────────────────────────────────────────────────┤
+│ Status:    ✅ Success   Duration: 13.9s   Steps: 7          │
+│ Tokens:    1,963        Cost: ~$0.003     Model: claude-3.5 │
+└─────────────────────────────────────────────────────────────┘
+
+📊 Execution Timeline
+├─ [bootstrap]       100ms    ✅
+├─ [think]        10,001ms    ⚠️  (7 iter, 72% of time)
+└─ [complete]         28ms    ✅
+
+🔧 Tool Execution (2 called)
+├─ file-write    ✅ 3 calls, 450ms avg
+└─ web-search    ✅ 2 calls, 280ms avg
+
+⚠️  Alerts & Insights
+└─ think phase blocked ≥10s (LLM latency)
+```
+
+**1. Header Card** — Overall status (success/failure), total wall-clock duration, step count, token usage, estimated USD cost, and the model that handled the request.
+
+**2. Execution Timeline** — Each execution phase listed with its duration and percentage of total time. Phases that take 10 seconds or more are flagged with a warning icon (`⚠️`) to highlight bottlenecks at a glance.
+
+**3. Tool Execution** — All tool calls grouped by tool name, showing success count, error count, and average call duration. Only shown when at least one tool was called.
+
+**4. Alerts & Insights** — Smart warnings about detected bottlenecks (e.g., slow `think` phase, high iteration count, budget approach). Only rendered when relevant — executions with no anomalies produce no alerts section.
+
+### Verbosity and Dashboard Visibility
+
+| Verbosity | Dashboard |
+|-----------|-----------|
+| `"minimal"` | Not shown |
+| `"normal"` | Full dashboard |
+| `"verbose"` | Full dashboard + detailed per-phase logs |
+| `"debug"` | Full dashboard + full prompt/tool I/O (no truncation) |
