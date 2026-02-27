@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test";
-import { compressToolResult } from "../../src/strategies/reactive.js";
+import { compressToolResult, parseToolRequestWithTransform, evaluateTransform } from "../../src/strategies/reactive.js";
 
 describe("tool result compression config threading", () => {
   test("ReactiveInput accepts resultCompression config", () => {
@@ -99,5 +99,55 @@ describe("compressToolResult", () => {
     const r1 = compressToolResult(big, "tool-a", 10, 3);
     const r2 = compressToolResult(big, "tool-b", 10, 3);
     expect(r1.stored!.key).not.toBe(r2.stored!.key);
+  });
+});
+
+describe("pipe transform parsing", () => {
+  test("parses plain action with no transform", () => {
+    const result = parseToolRequestWithTransform(
+      'ACTION: github/list_commits({"owner":"x","repo":"y"})'
+    );
+    expect(result?.tool).toBe("github/list_commits");
+    expect(result?.transform).toBeUndefined();
+  });
+
+  test("parses action with | transform: expression", () => {
+    const result = parseToolRequestWithTransform(
+      'ACTION: github/list_commits({"owner":"x"}) | transform: result.slice(0,3).map(c => c.sha)'
+    );
+    expect(result?.tool).toBe("github/list_commits");
+    expect(result?.transform).toBe("result.slice(0,3).map(c => c.sha)");
+  });
+
+  test("transform expression can contain nested parens and JSON", () => {
+    const result = parseToolRequestWithTransform(
+      'ACTION: some/tool({"k":"v"}) | transform: result.filter(x => x.active).map(x => ({id: x.id, name: x.name}))'
+    );
+    expect(result?.transform).toContain("result.filter");
+    expect(result?.transform).toContain("x.name");
+  });
+
+  test("returns null for invalid action", () => {
+    expect(parseToolRequestWithTransform("THOUGHT: just thinking")).toBeNull();
+  });
+});
+
+describe("evaluateTransform", () => {
+  test("evaluates expression with result variable", () => {
+    const input = [{ sha: "abc123def456", msg: "fix: bug" }, { sha: "xyz789uvw012", msg: "feat: add" }];
+    const expr = "result.map(c => c.sha.slice(0, 7))";
+    const output = evaluateTransform(expr, input);
+    expect(output).toEqual('[\n  "abc123d",\n  "xyz789u"\n]');
+  });
+
+  test("returns error string on expression throw", () => {
+    const output = evaluateTransform("result.nonExistentMethod()", []);
+    expect(typeof output).toBe("string");
+    expect(output as string).toContain("[Transform error:");
+  });
+
+  test("returns string output directly without re-serializing", () => {
+    const output = evaluateTransform('"hello world"', null);
+    expect(output).toBe("hello world");
   });
 });

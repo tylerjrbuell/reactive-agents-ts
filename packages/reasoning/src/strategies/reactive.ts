@@ -410,7 +410,7 @@ interface ToolObservationOutput {
 
 function runToolObservation(
   toolServiceOpt: { _tag: "Some"; value: ToolServiceInstance } | { _tag: "None" },
-  toolRequest: { tool: string; input: string },
+  toolRequest: { tool: string; input: string; transform?: string },
   _input: ReactiveInput,
   profile?: ContextProfile,
   compressionConfig?: ResultCompressionConfig,
@@ -459,6 +459,25 @@ function runToolObservation(
         Effect.map((r: ToolOutput) => {
           const raw = typeof r.result === "string" ? r.result : JSON.stringify(r.result);
           const normalized = normalizeObservation(toolRequest.tool, raw);
+
+          // Layer 2: pipe transform — evaluate in-process, inject only transformed result
+          if (toolRequest.transform && (compressionConfig?.codeTransform ?? true)) {
+            let parsed: unknown = normalized;
+            try { parsed = JSON.parse(normalized); } catch { /* use string */ }
+            const transformed = evaluateTransform(toolRequest.transform, parsed);
+            // Store full original for follow-up access even when transform is used
+            if ((compressionConfig?.autoStore ?? true) && scratchpadStore) {
+              const key = `_tool_result_${++_toolResultCounter}`;
+              scratchpadStore.set(key, normalized);
+            }
+            const isSuccess = !transformed.startsWith("[Transform error:");
+            return {
+              content: transformed,
+              observationResult: makeObservationResult(toolRequest.tool, isSuccess, transformed),
+            } satisfies ToolObservationOutput;
+          }
+
+          // Layer 1: auto-preview compression (existing code)
           const budget = compressionConfig?.budget ?? profile?.toolResultMaxChars ?? 800;
           const previewItems = compressionConfig?.previewItems ?? 3;
           const autoStore = compressionConfig?.autoStore ?? true;
@@ -757,16 +776,48 @@ function parseToolRequest(
  * when the model writes a multi-step plan in a single thought. */
 function parseAllToolRequests(
   thought: string,
-): Array<{ tool: string; input: string }> {
-  const results: Array<{ tool: string; input: string }> = [];
+): Array<{ tool: string; input: string; transform?: string }> {
+  const results: Array<{ tool: string; input: string; transform?: string }> = [];
   const re = /ACTION:/gi;
   let match: RegExpExecArray | null;
   while ((match = re.exec(thought)) !== null) {
     const slice = thought.slice(match.index);
-    const req = parseToolRequest(slice);
+    const req = parseToolRequestWithTransform(slice);
     if (req) results.push(req);
   }
   return results;
+}
+
+/** Parse an ACTION line, extracting optional | transform: expression. */
+export function parseToolRequestWithTransform(
+  thought: string,
+): { tool: string; input: string; transform?: string } | null {
+  // Split on " | transform: " before parsing the action args
+  const pipeIdx = thought.indexOf(" | transform: ");
+  const actionPart = pipeIdx >= 0 ? thought.slice(0, pipeIdx) : thought;
+  const transformExpr =
+    pipeIdx >= 0 ? thought.slice(pipeIdx + " | transform: ".length).trim() : undefined;
+
+  const base = parseToolRequest(actionPart);
+  if (!base) return null;
+  return { ...base, transform: transformExpr };
+}
+
+/**
+ * Evaluate a transform expression in-process with `result` bound to the tool output.
+ * Returns serialized result string, or an error string prefixed with "[Transform error:" on failure.
+ * Runs synchronously via new Function() — for pure data transforms only (no side effects).
+ */
+export function evaluateTransform(expr: string, result: unknown): string {
+  try {
+    // eslint-disable-next-line no-new-func
+    const fn = new Function("result", `return (${expr})`);
+    const output = fn(result) as unknown;
+    if (typeof output === "string") return output;
+    return JSON.stringify(output, null, 2);
+  } catch (e) {
+    return `[Transform error: ${e instanceof Error ? e.message : String(e)}] — fix the expression or remove | transform:`;
+  }
 }
 
 /**
