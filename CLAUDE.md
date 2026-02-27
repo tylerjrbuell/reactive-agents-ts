@@ -2,7 +2,7 @@
 
 ## Project Status
 
-**v0.5.3+ released.** 17 packages + 2 apps built, 909 tests across 124 files, full integration verified with professional metrics dashboard.
+**v0.5.5 released.** 17 packages + 2 apps built, 909 tests across 124 files, full integration verified with professional metrics dashboard.
 
 - Phase 1: Core, LLM Provider, Memory, Reasoning, Tools, Interaction, Runtime
 - Phase 2: Guardrails, Verification, Cost

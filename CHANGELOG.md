@@ -6,33 +6,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 
 ---
 
-## [Unreleased] — Tool Result Compression
-
-### Added
-
-#### Tool Result Compression (`@reactive-agents/reasoning`, `@reactive-agents/tools`, `@reactive-agents/runtime`)
-
-Replaces blind `head+tail` truncation with structured, accurate compression for large tool results:
-
-- **`compressToolResult(result, toolName, budget, previewItems)`** — detects JSON arrays, JSON objects, and plain text; generates compact structured previews that fit within budget
-  - JSON arrays: shows item count, flattened schema (top-level + one-level-deep keys), and first N items as compact `key=val` rows
-  - JSON objects: shows top-level keys with values (strings truncated to 60 chars, nested objects shown as `{...}`)
-  - Plain text: shows first N lines with total line count
-- **Scratchpad overflow store** — full result auto-stored in per-execution `Map<string, string>` under `_tool_result_N` key; agent can retrieve via `scratchpad-read("_tool_result_N")`
-- **`scratchpad-read` short-circuit** — when agent calls `scratchpad-read("_tool_result_N")`, the execution engine intercepts before hitting the tool and returns the stored value directly
-- **Pipe transform syntax** — `ACTION: tool(args) | transform: <js-expr>` evaluated in-process via `new Function("result", ...)` so only the transform output enters context; falls back to standard preview on error
-- **`ResultCompressionConfig`** type in `@reactive-agents/tools` — `{ budget?, previewItems?, autoStore?, codeTransform? }` — user-configurable on `.withTools({ resultCompression: {...} })`
-- **ReAct prompt updated** — explains `[STORED: ...]` format and `| transform:` syntax so models know how to use both mechanisms
-- **15 new tests** in `packages/reasoning/tests/strategies/reactive-compression.test.ts` covering preview generation, pipe parsing, transform evaluation, and wiring
-
-### Fixed
-
-- `scratchpad-read` called with bare string arg (e.g. `"_tool_result_1"`) now correctly resolves the key — previously fell back to `args.key` which was `undefined` on a string value
-- Pipe transform expression no longer captures trailing newlines or subsequent text when the model writes multi-line thoughts
-
----
-
-## [Unreleased] — Sprint 3B: EventBus Groundwork + Kill Switch Lifecycle
+## [0.5.5] — 2026-02-27
 
 ### Added
 
@@ -59,8 +33,87 @@ Replaces blind `head+tail` truncation with structured, accurate compression for 
 - Execution engine now passes `taskId: ctx.taskId` to `ReasoningService.execute()`
 - All emit sites now use `input.taskId ?? "strategyName"` (safe fallback)
 
+#### Professional Metrics Dashboard (`@reactive-agents/observability`, `@reactive-agents/runtime`)
+
+Agents with observability enabled now render a structured execution summary on completion:
+
+- **`MetricsCollector`** — auto-subscribed to EventBus `ToolCallCompleted` events via `MetricsCollectorLive` layer; no manual instrumentation required
+- **`formatMetricsDashboard(metrics)`** — renders a 4-section dashboard:
+  - **Header card** — overall status, total duration, step count, tokens, estimated cost (~$0.003/1M tokens), model name
+  - **Execution timeline** — per-phase duration with percentage of total time; ⚠️ icons for phases ≥10s
+  - **Tool execution summary** — grouped by tool name: success count, error count, average duration
+  - **Alerts & insights** — smart warnings about bottlenecks, high iteration counts, tool failures (only shown when relevant)
+- **`exportMetrics()`** — prints the formatted dashboard to stdout; wired into `ConsoleExporter.flush()`
+- **Tool execution tracking** — `ExecutionEngine` records each tool call with name, duration, and success/error status into `MetricsCollector`
+- **20 new tests** across metrics collector, dashboard formatter, and wiring
+
+#### Reasoning Strategy Fixes (`@reactive-agents/reasoning`, `@reactive-agents/runtime`)
+
+- **`defaultStrategy` wired end-to-end** — `.withReasoning({ defaultStrategy: "plan-execute" })` now correctly propagates through `RuntimeOptions` → `ReactiveAgentsConfig` → `ReasoningService.execute()` → strategy selection; was previously silently ignored
+- **Tree-of-Thought plan-then-execute** — ToT now uses a two-phase approach: BFS planning generates the thought tree, then the best branch is executed via ReAct tool loop; replaces naive single-pass synthesis
+- **Adaptive routing connected** — `adaptive.enabled` flag now gates delegation to sub-strategies; previously the flag existed in config but was never checked
+- **ToT score parsing robustness** — score extraction regex updated to handle thinking-mode LLM outputs that wrap scores in XML tags or extra whitespace
+
+#### Tool Result Compression (`@reactive-agents/reasoning`, `@reactive-agents/tools`, `@reactive-agents/runtime`)
+
+Replaces blind `head+tail` truncation with structured, accurate compression for large tool results:
+
+- **`compressToolResult(result, toolName, budget, previewItems)`** — detects JSON arrays, JSON objects, and plain text; generates compact structured previews that fit within budget
+  - JSON arrays: shows item count, flattened schema (top-level + one-level-deep keys), and first N items as compact `key=val` rows
+  - JSON objects: shows top-level keys with values (strings truncated to 60 chars, nested objects shown as `{...}`)
+  - Plain text: shows first N lines with total line count
+- **Scratchpad overflow store** — full result auto-stored in per-execution `Map<string, string>` under `_tool_result_N` key; agent can retrieve via `scratchpad-read("_tool_result_N")`
+- **`scratchpad-read` short-circuit** — when agent calls `scratchpad-read("_tool_result_N")`, the execution engine intercepts before hitting the tool and returns the stored value directly
+- **Pipe transform syntax** — `ACTION: tool(args) | transform: <js-expr>` evaluated in-process via `new Function("result", ...)` so only the transform output enters context; falls back to standard preview on error
+- **`ResultCompressionConfig`** type in `@reactive-agents/tools` — `{ budget?, previewItems?, autoStore?, codeTransform? }` — user-configurable on `.withTools({ resultCompression: {...} })`
+- **ReAct prompt updated** — explains `[STORED: ...]` format and `| transform:` syntax so models know how to use both mechanisms
+- **15 new tests** in `packages/reasoning/tests/strategies/reactive-compression.test.ts` covering preview generation, pipe parsing, transform evaluation, and wiring
+
+#### MCP Streamable-HTTP Transport (`@reactive-agents/tools`)
+
+- **`streamable-http` transport type** — new MCP transport mode that connects to remote MCP servers over HTTP with streaming support (complements existing `stdio` and `sse` transports)
+- **Headers, env, and cwd support** — `MCPServerConfig` extended with `headers?: Record<string, string>`, `env?: Record<string, string>`, and `cwd?: string` for full subprocess and remote server configuration
+- **Spec compliance** — MCP tool discovery and invocation now follows the MCP 1.0 spec more strictly; `tools/call` result handling updated to extract text content from structured response parts
+
+#### Examples Suite (`apps/examples`)
+
+- **21 runnable examples** organized into 5 categories: `foundations/`, `tools/`, `multi-agent/`, `trust/`, `advanced/`, `interaction/`
+- **Unified `index.ts` runner** — `bun run index.ts [category] [--live]` runs all or filtered examples; `--live` mode uses real LLM providers
+- **Category READMEs** — each category has a README explaining the examples and prerequisites
+- **New examples added**:
+  - `tools/05-builtin-tools`, `tools/06-mcp-filesystem`, `tools/07-mcp-github`
+  - `multi-agent/08-a2a-protocol`, `multi-agent/09-orchestration`, `multi-agent/10-dynamic-spawning`
+  - `trust/11-identity`, `trust/12-guardrails`, `trust/13-verification`
+  - `advanced/14-cost-tracking` through `advanced/18-self-improvement`
+  - `reasoning/19-react`, `reasoning/20-plan-execute`, `interaction/21-interaction-modes`
+
+### Fixed
+
+- **`scratchpad-read` bare string arg** — calling `scratchpad-read("_tool_result_1")` now correctly resolves the key; previously fell back to `args.key` which was `undefined` on a string value
+- **Pipe transform line boundary** — transform expression no longer captures trailing newlines or subsequent text when the model writes multi-line thoughts
+- **Cost-route model routing** — `complexity-router` now correctly selects model tiers for non-Anthropic providers (OpenAI, Gemini, Ollama, LiteLLM); was previously defaulting to Anthropic model names for all providers
+- **MCP connections scope** — MCP server connections are now established inside `Layer.effectDiscard` scope so they are properly torn down and re-established on each `agent.run()` call
+
+### Changed
+
+- `@reactive-agents/core` 0.2.0 → 0.5.5: typed `EventBus.on<T>()`, 5 new event types, `AgentEventTag` and `TypedEventHandler<T>` exports
+- `@reactive-agents/cost` 0.2.0 → 0.5.5: complexity-router model routing fix for non-Anthropic providers
+- `@reactive-agents/guardrails` 0.1.0 → 0.5.5: `GuardrailViolationDetected` event emission wired
+- `@reactive-agents/identity` 0.1.0 → 0.5.5: `MemoryBootstrapped` / `MemoryFlushed` event wiring (via memory service)
+- `@reactive-agents/llm-provider` 0.5.0 → 0.5.5: `LLMRequestStarted` event emission in direct-LLM path
+- `@reactive-agents/memory` 0.1.0 → 0.5.5: emits `MemoryBootstrapped` from `bootstrap()` and `MemoryFlushed` from `flush()`
+- `@reactive-agents/observability` 0.2.0 → 0.5.5: `MetricsCollector`, `formatMetricsDashboard()`, `exportMetrics()`, tool execution tracking
+- `@reactive-agents/prompts` 0.1.0 → 0.5.5: no API changes; version aligned to release
+- `@reactive-agents/reasoning` 0.5.1 → 0.5.5: strategy fixes (defaultStrategy, ToT plan-then-execute, adaptive routing, score parsing), tool result compression, taskId correlation
+- `@reactive-agents/runtime` 0.5.4 → 0.5.5: metrics wiring, MCP scope fix, execution engine tool tracking
+- `@reactive-agents/tools` 0.4.1 → 0.5.5: `ResultCompressionConfig`, streamable-http MCP transport, headers/env/cwd in `MCPServerConfig`
+- `@reactive-agents/verification` 0.2.0 → 0.5.5: no API changes; version aligned to release
+- `reactive-agents` meta-package 0.5.2 → 0.5.5
+- `@reactive-agents/cli` 0.5.4 → 0.5.5
+
 ### Stats
-- 864 tests across 121 files (was 855/120 in v0.5.3, +9 new tests from Sprint 3B kill switch lifecycle)
+- 909 tests across 124 files (was 855/120 in v0.5.3, +54 new tests)
+- 21 example apps across 6 categories
 
 ---
 
