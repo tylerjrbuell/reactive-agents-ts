@@ -22,6 +22,10 @@ export const CertificateSchema = Schema.Struct({
   issuer: Schema.String,
   fingerprint: Schema.String,
   status: Schema.Literal("active", "expired", "revoked"),
+  /** When true, keys are random UUIDs — not real Ed25519. Real crypto in v0.6.0. */
+  development: Schema.optional(Schema.Boolean),
+  /** Ed25519 signature over the certificate payload. Absent in development mode. */
+  signature: Schema.optional(Schema.String),
 });
 export type Certificate = typeof CertificateSchema.Type;
 

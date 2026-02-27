@@ -19,6 +19,41 @@ describe("CertificateAuth", () => {
     expect(cert.expiresAt.getTime()).toBeGreaterThan(Date.now());
   });
 
+  test("uses real Ed25519 keys and SHA-256 fingerprint", async () => {
+    const certAuth = await run(makeCertificateAuth);
+    const cert = await run(certAuth.issueCertificate("agent-1"));
+
+    // Public key is base64-encoded (32 bytes raw Ed25519 = 44 chars base64)
+    expect(cert.publicKey.length).toBe(44);
+    expect(cert.development).toBeUndefined();
+
+    // Fingerprint is 16 bytes of SHA-256 as hex (32 hex chars)
+    expect(cert.fingerprint).toMatch(/^[0-9a-f]{32}$/);
+
+    // Signature is present (base64-encoded 64 bytes = 88 chars)
+    expect(cert.signature).toBeDefined();
+    expect(cert.signature!.length).toBe(88);
+  });
+
+  test("verifies Ed25519 signature during authentication", async () => {
+    const certAuth = await run(makeCertificateAuth);
+    const cert = await run(certAuth.issueCertificate("agent-1"));
+    const result = await run(certAuth.authenticate(cert));
+
+    expect(result.authenticated).toBe(true);
+  });
+
+  test("rejects tampered certificate signature", async () => {
+    const certAuth = await run(makeCertificateAuth);
+    const cert = await run(certAuth.issueCertificate("agent-1"));
+
+    // Tamper with the certificate payload — change agentId
+    const tampered: Certificate = { ...cert, agentId: "agent-HACKED" };
+
+    const error = await run(certAuth.authenticate(tampered).pipe(Effect.flip));
+    expect(error.reason).toBe("invalid-certificate");
+  });
+
   test("respects custom TTL", async () => {
     const certAuth = await run(makeCertificateAuth);
     const now = Date.now();
