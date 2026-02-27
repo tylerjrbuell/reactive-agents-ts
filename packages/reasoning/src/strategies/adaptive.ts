@@ -22,6 +22,15 @@ import { executeReflexion } from "./reflexion.js";
 import { executePlanExecute } from "./plan-execute.js";
 import { executeTreeOfThought } from "./tree-of-thought.js";
 
+/** Record of a past strategy execution outcome for self-improvement. */
+export interface StrategyOutcome {
+  readonly strategy: string;
+  readonly success: boolean;
+  readonly durationMs: number;
+  readonly tokensUsed: number;
+  readonly taskDescription: string;
+}
+
 interface AdaptiveInput {
   readonly taskDescription: string;
   readonly taskType: string;
@@ -30,6 +39,10 @@ interface AdaptiveInput {
   readonly config: ReasoningConfig;
   /** Custom system prompt for steering agent behavior */
   readonly systemPrompt?: string;
+  /** Past strategy outcomes from episodic memory (for self-improvement). */
+  readonly pastExperience?: readonly StrategyOutcome[];
+  /** Task ID for event correlation */
+  readonly taskId?: string;
 }
 
 type SubStrategy =
@@ -107,7 +120,7 @@ export const executeAdaptive = (
     if (ebOpt._tag === "Some") {
       yield* ebOpt.value.publish({
         _tag: "ReasoningStepCompleted",
-        taskId: "adaptive",
+        taskId: input.taskId ?? "adaptive",
         strategy: "adaptive",
         step: steps.length,
         totalSteps: 1,
@@ -167,7 +180,7 @@ function compilePromptOrFallback(
 // ─── Private Helpers ───
 
 function buildAnalysisPrompt(input: AdaptiveInput): string {
-  return `Analyze this task and classify it:
+  let prompt = `Analyze this task and classify it:
 
 Task: ${input.taskDescription}
 Task Type: ${input.taskType}
@@ -177,9 +190,18 @@ Strategy options:
 - REACTIVE: Best for simple Q&A, quick tool use, straightforward tasks
 - REFLEXION: Best for tasks requiring accuracy, self-correction, quality improvement
 - PLAN_EXECUTE: Best for multi-step tasks, procedural work, tasks needing a plan
-- TREE_OF_THOUGHT: Best for creative/exploratory tasks, problems with multiple valid approaches
+- TREE_OF_THOUGHT: Best for creative/exploratory tasks, problems with multiple valid approaches`;
 
-Respond with ONLY the strategy name (REACTIVE, REFLEXION, PLAN_EXECUTE, or TREE_OF_THOUGHT).`;
+  // Include past experience for self-improvement bias
+  if (input.pastExperience && input.pastExperience.length > 0) {
+    const experienceSummary = input.pastExperience
+      .map((e) => `  - ${e.strategy}: ${e.success ? "succeeded" : "failed"} (${e.tokensUsed} tokens, ${(e.durationMs / 1000).toFixed(1)}s) for "${e.taskDescription.slice(0, 80)}"`)
+      .join("\n");
+    prompt += `\n\nPast experience on similar tasks:\n${experienceSummary}\nFavor strategies that succeeded on similar tasks.`;
+  }
+
+  prompt += `\n\nRespond with ONLY the strategy name (REACTIVE, REFLEXION, PLAN_EXECUTE, or TREE_OF_THOUGHT).`;
+  return prompt;
 }
 
 function parseStrategySelection(text: string): SubStrategy {

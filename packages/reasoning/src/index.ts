@@ -86,6 +86,7 @@ export { executeReflexion } from "./strategies/reflexion.js";
 export { executePlanExecute } from "./strategies/plan-execute.js";
 export { executeTreeOfThought } from "./strategies/tree-of-thought.js";
 export { executeAdaptive } from "./strategies/adaptive.js";
+export type { StrategyOutcome } from "./strategies/adaptive.js";
 
 // ─── Context Profiles & Budgets ───
 export {

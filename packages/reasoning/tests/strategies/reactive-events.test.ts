@@ -1,31 +1,31 @@
 import { describe, test, expect } from "bun:test";
-import { Effect, Layer, Ref } from "effect";
+import { Effect, Layer } from "effect";
 import { executeReactive } from "../../src/strategies/reactive.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 import { EventBusLive, EventBus } from "@reactive-agents/core";
 import type { AgentEvent } from "@reactive-agents/core";
 
-// ─── Helper: collect ReasoningStepCompleted events ───
+// ─── Helper ──────────────────────────────────────────────────────────────────
+// Using the typed eb.on() overload — `event` is automatically narrowed to
+// Extract<AgentEvent, { _tag: "ReasoningStepCompleted" }>, no guards needed.
+
+type ReasoningStepEvent = Extract<AgentEvent, { _tag: "ReasoningStepCompleted" }>;
 
 const collectReasoningEvents = async (
   llmResponses: Record<string, string>,
   taskDescription: string,
-): Promise<AgentEvent[]> => {
-  const captured: AgentEvent[] = [];
-
+): Promise<ReasoningStepEvent[]> => {
+  const captured: ReasoningStepEvent[] = [];
   const llmLayer = TestLLMServiceLayer(llmResponses);
 
   return Effect.runPromise(
     Effect.gen(function* () {
       const eb = yield* EventBus;
 
-      yield* eb.subscribe((event) =>
-        Effect.sync(() => {
-          if (event._tag === "ReasoningStepCompleted") {
-            captured.push(event);
-          }
-        }),
+      // Typed on() — handler receives ReasoningStepEvent directly, no _tag check needed
+      yield* eb.on("ReasoningStepCompleted", (event) =>
+        Effect.sync(() => { captured.push(event); }),
       );
 
       yield* executeReactive({
@@ -49,7 +49,7 @@ const collectReasoningEvents = async (
   );
 };
 
-// ─── Tests ───
+// ─── Tests ───────────────────────────────────────────────────────────────────
 
 describe("reactive strategy ReasoningStepCompleted events", () => {
   test("ReasoningStepCompleted published for thought step", async () => {
@@ -58,7 +58,8 @@ describe("reactive strategy ReasoningStepCompleted events", () => {
       "Think step-by-step about this",
     );
 
-    const thoughtEvents = events.filter((e) => e._tag === "ReasoningStepCompleted" && (e as any).thought);
+    // event.thought is directly typed — no (e as any).thought needed
+    const thoughtEvents = events.filter((e) => !!e.thought);
     expect(thoughtEvents.length).toBeGreaterThan(0);
   });
 
@@ -68,10 +69,10 @@ describe("reactive strategy ReasoningStepCompleted events", () => {
       "What is 2+2",
     );
 
-    const reasoningEvents = events.filter((e) => e._tag === "ReasoningStepCompleted");
-    expect(reasoningEvents.length).toBeGreaterThan(0);
-    for (const event of reasoningEvents) {
-      expect((event as any).strategy).toBe("reactive");
+    expect(events.length).toBeGreaterThan(0);
+    // strategy is directly typed — no cast needed
+    for (const event of events) {
+      expect(event.strategy).toBe("reactive");
     }
   });
 
@@ -96,19 +97,13 @@ describe("reactive strategy ReasoningStepCompleted events", () => {
 
   test("step counter increases with each published event", async () => {
     const events = await collectReasoningEvents(
-      {
-        "multi step task": "FINAL ANSWER: Complete.",
-      },
+      { "multi step task": "FINAL ANSWER: Complete." },
       "multi step task",
     );
 
-    const reasoningEvents = events.filter((e) => e._tag === "ReasoningStepCompleted") as Array<{
-      _tag: "ReasoningStepCompleted";
-      step: number;
-    }>;
-    expect(reasoningEvents.length).toBeGreaterThan(0);
-    // Steps should be sequential and positive
-    for (const e of reasoningEvents) {
+    expect(events.length).toBeGreaterThan(0);
+    // step is directly typed — no manual cast or filter needed
+    for (const e of events) {
       expect(e.step).toBeGreaterThan(0);
     }
   });
@@ -126,7 +121,6 @@ describe("reactive strategy ReasoningStepCompleted events", () => {
 
     const capturedSteps = await Effect.runPromise(
       Effect.gen(function* () {
-        // Execute the strategy (EventBus is now in scope via tracerWithBus)
         yield* executeReactive({
           taskDescription: "tracer integration",
           taskType: "query",
@@ -144,7 +138,7 @@ describe("reactive strategy ReasoningStepCompleted events", () => {
   });
 
   test("action events contain tool info", async () => {
-    const captured: AgentEvent[] = [];
+    const captured: ReasoningStepEvent[] = [];
     const llmLayer = TestLLMServiceLayer({
       "use a tool": 'ACTION: my-tool({"query": "test"})\nFINAL ANSWER: done.',
     });
@@ -152,7 +146,8 @@ describe("reactive strategy ReasoningStepCompleted events", () => {
     await Effect.runPromise(
       Effect.gen(function* () {
         const eb = yield* EventBus;
-        yield* eb.subscribe((event) =>
+        // Typed on() — action field is directly accessible without cast
+        yield* eb.on("ReasoningStepCompleted", (event) =>
           Effect.sync(() => { captured.push(event); }),
         );
         yield* executeReactive({
@@ -171,10 +166,8 @@ describe("reactive strategy ReasoningStepCompleted events", () => {
       }).pipe(Effect.provide(Layer.merge(llmLayer, EventBusLive))),
     );
 
-    const actionEvents = captured.filter(
-      (e) => e._tag === "ReasoningStepCompleted" && (e as any).action,
-    );
-    // Regardless of whether tool service is available, the action step is published
-    expect(actionEvents.length).toBeGreaterThanOrEqual(0); // may be 0 if model returns final answer directly
+    const actionEvents = captured.filter((e) => !!e.action);
+    // Regardless of whether tool service is available, action step may be published
+    expect(actionEvents.length).toBeGreaterThanOrEqual(0);
   });
 });

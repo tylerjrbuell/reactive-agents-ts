@@ -23,6 +23,8 @@ interface TreeOfThoughtInput {
   readonly config: ReasoningConfig;
   /** Custom system prompt for steering agent behavior */
   readonly systemPrompt?: string;
+  /** Task ID for event correlation */
+  readonly taskId?: string;
 }
 
 interface ThoughtNode {
@@ -187,7 +189,7 @@ export const executeTreeOfThought = (
           if (ebOpt._tag === "Some") {
             yield* ebOpt.value.publish({
               _tag: "ReasoningStepCompleted",
-              taskId: "tree-of-thought",
+              taskId: input.taskId ?? "tree-of-thought",
               strategy: "tree-of-thought",
               step: steps.length,
               totalSteps: depth * breadth,
@@ -286,6 +288,17 @@ export const executeTreeOfThought = (
       content: `[TOT FINAL] ${synthesisResponse.content}`,
       timestamp: new Date(),
     });
+
+    if (ebOpt._tag === "Some") {
+      yield* ebOpt.value.publish({
+        _tag: "FinalAnswerProduced",
+        taskId: input.taskId ?? "tree-of-thought",
+        strategy: "tree-of-thought",
+        answer: synthesisResponse.content,
+        iteration: depth,
+        totalTokens,
+      }).pipe(Effect.catchAll(() => Effect.void));
+    }
 
     return buildResult(
       steps,

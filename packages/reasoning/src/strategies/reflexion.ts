@@ -27,6 +27,8 @@ interface ReflexionInput {
   readonly config: ReasoningConfig;
   /** Custom system prompt for steering agent behavior */
   readonly systemPrompt?: string;
+  /** Task ID for event correlation */
+  readonly taskId?: string;
 }
 
 /**
@@ -107,7 +109,7 @@ export const executeReflexion = (
     if (ebOpt._tag === "Some") {
       yield* ebOpt.value.publish({
         _tag: "ReasoningStepCompleted",
-        taskId: "reflexion",
+        taskId: input.taskId ?? "reflexion",
         strategy: "reflexion",
         step: steps.length,
         totalSteps: maxRetries + 1,
@@ -173,7 +175,7 @@ export const executeReflexion = (
       if (ebOpt._tag === "Some") {
         yield* ebOpt.value.publish({
           _tag: "ReasoningStepCompleted",
-          taskId: "reflexion",
+          taskId: input.taskId ?? "reflexion",
           strategy: "reflexion",
           step: steps.length,
           totalSteps: maxRetries + 1,
@@ -183,6 +185,16 @@ export const executeReflexion = (
 
       // ── Check if satisfied ──
       if (isSatisfied(critique)) {
+        if (ebOpt._tag === "Some") {
+          yield* ebOpt.value.publish({
+            _tag: "FinalAnswerProduced",
+            taskId: input.taskId ?? "reflexion",
+            strategy: "reflexion",
+            answer: currentResponse,
+            iteration: attempt,
+            totalTokens,
+          }).pipe(Effect.catchAll(() => Effect.void));
+        }
         return buildResult(
           steps,
           currentResponse,
@@ -245,7 +257,7 @@ export const executeReflexion = (
       if (ebOpt._tag === "Some") {
         yield* ebOpt.value.publish({
           _tag: "ReasoningStepCompleted",
-          taskId: "reflexion",
+          taskId: input.taskId ?? "reflexion",
           strategy: "reflexion",
           step: steps.length,
           totalSteps: maxRetries + 1,

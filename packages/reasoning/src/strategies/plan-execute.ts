@@ -26,6 +26,8 @@ interface PlanExecuteInput {
   readonly config: ReasoningConfig;
   /** Custom system prompt for steering agent behavior */
   readonly systemPrompt?: string;
+  /** Task ID for event correlation */
+  readonly taskId?: string;
 }
 
 export const executePlanExecute = (
@@ -109,7 +111,7 @@ export const executePlanExecute = (
       if (ebOpt._tag === "Some") {
         yield* ebOpt.value.publish({
           _tag: "ReasoningStepCompleted",
-          taskId: "plan-execute",
+          taskId: input.taskId ?? "plan-execute",
           strategy: "plan-execute-reflect",
           step: steps.length,
           totalSteps: maxRefinements + 1,
@@ -214,7 +216,7 @@ export const executePlanExecute = (
         if (ebOpt._tag === "Some") {
           yield* ebOpt.value.publish({
             _tag: "ReasoningStepCompleted",
-            taskId: "plan-execute",
+            taskId: input.taskId ?? "plan-execute",
             strategy: "plan-execute-reflect",
             step: steps.length,
             totalSteps: maxRefinements + 1,
@@ -276,6 +278,16 @@ export const executePlanExecute = (
       // Check if reflection is satisfied
       if (isSatisfied(reflectResponse.content)) {
         finalOutput = stepResults.join("\n\n");
+        if (ebOpt._tag === "Some") {
+          yield* ebOpt.value.publish({
+            _tag: "FinalAnswerProduced",
+            taskId: input.taskId ?? "plan-execute",
+            strategy: "plan-execute-reflect",
+            answer: finalOutput,
+            iteration: refinement,
+            totalTokens,
+          }).pipe(Effect.catchAll(() => Effect.void));
+        }
         break;
       }
 
