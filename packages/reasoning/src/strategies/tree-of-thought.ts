@@ -216,12 +216,32 @@ export const executeTreeOfThought = (
         }
       }
 
-      // If all paths pruned, stop early
+      // If all paths pruned, try adaptive pruning before giving up
       if (nextFrontier.length === 0) {
+        // Adaptive pruning: lower threshold by 0.15 before giving up entirely
+        const adaptiveThreshold = Math.max(0.15, pruningThreshold - 0.15);
+        const nodesAtThisDepth = allNodes.filter((n) => n.depth === d);
+        const rescued = nodesAtThisDepth
+          .filter((n) => n.score >= adaptiveThreshold)
+          .sort((a, b) => b.score - a.score)
+          .slice(0, breadth);
+
+        if (rescued.length > 0) {
+          steps.push({
+            id: ulid() as StepId,
+            type: "observation",
+            content: `[TOT] Adaptive pruning at depth ${d}: threshold ${pruningThreshold} → ${adaptiveThreshold}, rescued ${rescued.length} path(s).`,
+            timestamp: new Date(),
+          });
+          frontier = rescued;
+          continue;
+        }
+
+        // Log the adaptive attempt even when no paths could be rescued
         steps.push({
           id: ulid() as StepId,
           type: "observation",
-          content: `[TOT] All paths pruned at depth ${d}. Selecting best from previous depth.`,
+          content: `[TOT] Adaptive pruning at depth ${d}: threshold ${pruningThreshold} → ${adaptiveThreshold}, no paths above adaptive threshold. Selecting best from all explored nodes.`,
           timestamp: new Date(),
         });
         break;
@@ -266,8 +286,10 @@ export const executeTreeOfThought = (
     let execIter = 0;
 
     while (execIter < execMaxIter) {
-      const history = steps
-        .filter((s) => !s.content.startsWith("[TOT"))
+      // Compact history: cap at last 8 non-TOT steps to prevent unbounded context growth
+      const rawHistory = steps.filter((s) => !s.content.startsWith("[TOT"));
+      const recentHistory = rawHistory.slice(-8);
+      const history = recentHistory
         .map((s) =>
           s.type === "observation"
             ? `Observation: ${s.content}`
@@ -529,22 +551,34 @@ function parseCandidates(text: string, expectedCount: number): string[] {
 }
 
 function parseScore(text: string): number {
-  // Ollama strips <think>...</think> content before returning — the visible
-  // text is already the post-thinking output. Other providers may include
-  // think tags, so strip them as a precaution.
+  // Strip think tags (some LLMs wrap reasoning in <think>...</think>)
   const stripped = text.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
   const target = stripped.length > 0 ? stripped : text.trim();
-
-  // Empty response means the model ran out of maxTokens inside its thinking
-  // block and never emitted a score. Caller should increase maxTokens.
   if (target.length === 0) return 0.5;
 
-  // Match a decimal in [0, 1]: "0.75", ".75", "1.0", "0", "1"
-  const match = target.match(/\b(1\.0*|0?\.\d+|[01])\b/);
-  if (match) {
-    const score = parseFloat(match[1]!);
-    return Math.max(0, Math.min(1, score));
+  // "75%" → 0.75
+  const pctMatch = target.match(/(\d+(?:\.\d+)?)\s*%/);
+  if (pctMatch) return Math.max(0, Math.min(1, parseFloat(pctMatch[1]!) / 100));
+
+  // "4/5" or "3/4" → ratio
+  const ratioMatch = target.match(/\b(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)\b/);
+  if (ratioMatch) {
+    const num = parseFloat(ratioMatch[1]!);
+    const den = parseFloat(ratioMatch[2]!);
+    if (den > 0) return Math.max(0, Math.min(1, num / den));
   }
+
+  // "Score: 0.8", "Rating: 7" (0–10 scale if > 1)
+  const labeledMatch = target.match(/(?:score|rating|value|grade)\s*[:=]\s*(\d+(?:\.\d+)?)/i);
+  if (labeledMatch) {
+    const val = parseFloat(labeledMatch[1]!);
+    return Math.max(0, Math.min(1, val > 1 ? val / 10 : val));
+  }
+
+  // Standard decimal: "0.75", ".75", "1.0", "0", "1"
+  const decMatch = target.match(/\b(1\.0*|0?\.\d+|[01])\b/);
+  if (decMatch) return Math.max(0, Math.min(1, parseFloat(decMatch[1]!)));
+
   return 0.5;
 }
 
