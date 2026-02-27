@@ -133,7 +133,9 @@ export const executeAdaptive = (
 
     // ── Fallback: if sub-strategy returned partial and wasn't already reactive ──
     let finalSubResult = subResult;
+    let fallbackOccurred = false;
     if (subResult.status === "partial" && selectedStrategy !== "reactive") {
+      fallbackOccurred = true;
       steps.push({
         id: ulid() as StepId,
         type: "thought",
@@ -152,6 +154,10 @@ export const executeAdaptive = (
         }).pipe(Effect.catchAll(() => Effect.void));
       }
 
+      // NOTE: The failed sub-strategy's tokens are not added to metadata —
+      // only the reactive result's tokens are reported. This is acceptable
+      // since this is a best-effort fallback and the partial tokens are
+      // from an unsuccessful run.
       finalSubResult = yield* executeReactive(input).pipe(
         // If reactive also fails, use original partial result rather than throwing
         Effect.catchAll(() => Effect.succeed(subResult)),
@@ -175,7 +181,10 @@ export const executeAdaptive = (
           analysisResponse.usage.totalTokens,
         stepsCount: allSteps.length,
         confidence: finalSubResult.metadata.confidence,
+        // selectedStrategy = what the classifier chose; fallbackOccurred = true means
+        // reactive actually produced the output (not selectedStrategy)
         selectedStrategy: selectedStrategy,
+        fallbackOccurred,
       },
       status: finalSubResult.status,
     };

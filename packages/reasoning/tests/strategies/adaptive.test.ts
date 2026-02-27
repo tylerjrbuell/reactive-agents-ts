@@ -175,10 +175,17 @@ describe("AdaptiveStrategy", () => {
 
     expect(result.strategy).toBe("adaptive");
     expect(result.status).toBe("completed");
-    // Should have a fallback step in the steps list
+    // Should show reflexion was the dispatched strategy
+    const dispatchStep = result.steps.find((s) =>
+      s.content.includes("[ADAPTIVE]") && s.content.includes("reflexion"),
+    );
+    expect(dispatchStep).toBeDefined();
+    // Should have a fallback step
     const fallbackStep = result.steps.find((s) =>
       s.content.toLowerCase().includes("fallback") || s.content.toLowerCase().includes("falling back"),
     );
     expect(fallbackStep).toBeDefined();
+    // Metadata should record fallback occurred
+    expect((result.metadata as any).fallbackOccurred).toBe(true);
   });
 });
