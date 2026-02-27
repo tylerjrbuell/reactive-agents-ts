@@ -63,5 +63,16 @@ export { allBuiltinTemplates } from "./templates/all.js";
 // Service
 export { PromptService, PromptServiceLive } from "./services/prompt-service.js";
 
+// Experiment Service
+export {
+  ExperimentService,
+  ExperimentServiceLive,
+} from "./services/experiment-service.js";
+export type {
+  Experiment,
+  ExperimentOutcome,
+  ExperimentResults,
+} from "./services/experiment-service.js";
+
 // Runtime
 export { createPromptLayer } from "./runtime.js";
