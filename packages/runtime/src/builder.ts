@@ -1139,26 +1139,6 @@ export class ReactiveAgentBuilder {
         yield* engine.registerHook(hook);
       }
 
-      // Connect MCP servers and/or register custom tools if configured
-      if (mcpServers.length > 0 || (toolsOptions?.tools && toolsOptions.tools.length > 0)) {
-        const { ToolService } = yield* Effect.promise(() =>
-          import("@reactive-agents/tools"),
-        );
-        const toolService = yield* (ToolService as any).pipe(Effect.provide(baseRuntime));
-
-        // Connect MCP servers
-        for (const mcp of mcpServers) {
-          yield* (toolService as any).connectMCPServer(mcp);
-        }
-
-        // Register custom tools
-        if (toolsOptions?.tools) {
-          for (const tool of toolsOptions.tools) {
-            yield* (toolService as any).register(tool.definition, tool.handler);
-          }
-        }
-      }
-
       // Register custom prompt templates if configured
       if (promptsOptions?.templates && promptsOptions.templates.length > 0) {
         const { PromptService } = yield* Effect.promise(() =>
@@ -1170,21 +1150,21 @@ export class ReactiveAgentBuilder {
         }
       }
 
-      // ── Agent tools: bake registrations into the runtime layer ──────────────
+      // ── MCP servers, custom tools, agent tools: bake into the runtime layer ────
       //
-      // Root cause of the previous bug: tools registered via `Effect.provide(runtime)`
-      // inside buildEffect() wrote into a ToolService instance from Scope 1 (the
-      // build() call). Each run() creates Scope 2 with a fresh ToolService — so
-      // the agent tools were invisible at execution time.
+      // Root cause of the scope bug: registrations done via `Effect.provide(runtime)`
+      // inside buildEffect() wrote into a ToolService from a throwaway scope. The
+      // ManagedRuntime used by run()/subscribe() creates a fresh scope on first use —
+      // so those registrations were invisible at execution time.
       //
-      // Fix: Pre-build all (definition, handler) pairs as plain JS closures, then
-      // compose a Layer.effectDiscard into the runtime. The effectDiscard runs the
-      // registrations during layer evaluation, INSIDE each run() scope. Because
-      // Layer.merge uses reference-identity memoization, the same ToolService
-      // instance (from baseRuntime) receives the registrations AND serves the engine.
+      // Fix: Compose a Layer.effectDiscard into the runtime. The effectDiscard runs
+      // connectMCPServer() / register() during layer evaluation, INSIDE the
+      // ManagedRuntime scope. Because Layer.merge uses reference-identity memoization,
+      // the same ToolService instance (from baseRuntime) receives all registrations
+      // AND serves the engine — MCP tools are visible to the LLM.
       let fullRuntime: Layer.Layer<any, any> = baseRuntime as Layer.Layer<any, any>;
 
-      if (agentTools.length > 0 || allowDynamicSubAgents) {
+      if (agentTools.length > 0 || allowDynamicSubAgents || mcpServers.length > 0 || (toolsOptions?.tools?.length ?? 0) > 0) {
         const toolsMod = yield* Effect.promise(() =>
           import("@reactive-agents/tools"),
         );
@@ -1453,11 +1433,24 @@ export class ReactiveAgentBuilder {
           registrations.push({ def: spawnToolDef, handler: spawnHandler });
         }
 
-        // Build an init effect that registers all agent tools into the ToolService
-        // found in the execution environment. No Effect.provide() here — the
-        // ToolService comes from the layer environment at evaluation time.
+        // Build an init effect that connects MCP servers, registers custom tools,
+        // and registers agent tools — all into the ToolService found in the
+        // execution environment. No Effect.provide() here — the ToolService comes
+        // from the layer environment at evaluation time (same instance as the engine).
         const agentToolInitEffect = Effect.gen(function* () {
           const ts = yield* (toolsMod.ToolService as unknown as import("effect").Context.Tag<any, any>);
+          // Connect MCP servers inside the managed runtime scope so the engine's
+          // ToolService and the MCP-connected ToolService are the same instance.
+          for (const mcp of mcpServers) {
+            yield* (ts as any).connectMCPServer(mcp);
+          }
+          // Register custom tools
+          if (toolsOptions?.tools) {
+            for (const tool of toolsOptions.tools) {
+              yield* (ts as any).register(tool.definition, tool.handler);
+            }
+          }
+          // Register agent tools
           for (const { def, handler } of registrations) {
             yield* (ts as any).register(def, handler);
           }
