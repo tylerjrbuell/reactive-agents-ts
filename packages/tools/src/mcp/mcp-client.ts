@@ -21,6 +21,7 @@ interface StdioTransport {
 interface SseTransport {
   type: "sse";
   endpoint: string;
+  headers: Record<string, string>;
   pendingRequests: Map<
     string | number,
     {
@@ -32,6 +33,23 @@ interface SseTransport {
   connected: boolean;
   reconnectAttempt: number;
   reconnectTimeoutId: ReturnType<typeof setTimeout> | null;
+}
+
+interface StreamableHttpTransport {
+  type: "streamable-http";
+  endpoint: string;
+  /** User-supplied auth/custom headers sent on every request. */
+  headers: Record<string, string>;
+  /** Session ID assigned by the server in the initialize response. Null until then. */
+  sessionId: string | null;
+  pendingRequests: Map<
+    string | number,
+    {
+      resolve: (response: MCPResponse) => void;
+      reject: (err: Error) => void;
+    }
+  >;
+  connected: boolean;
 }
 
 interface WebSocketTransport {
@@ -52,7 +70,7 @@ interface WebSocketTransport {
   closing: boolean;
 }
 
-type ActiveTransport = StdioTransport | SseTransport | WebSocketTransport;
+type ActiveTransport = StdioTransport | SseTransport | StreamableHttpTransport | WebSocketTransport;
 
 // Module-level map: serverName -> ActiveTransport
 const activeTransports = new Map<string, ActiveTransport>();
@@ -134,6 +152,9 @@ const isSseTransport = (t: ActiveTransport): t is SseTransport =>
 const isWebSocketTransport = (t: ActiveTransport): t is WebSocketTransport =>
   t.type === "websocket";
 
+const isStreamableHttpTransport = (t: ActiveTransport): t is StreamableHttpTransport =>
+  t.type === "streamable-http";
+
 const parseSseEvent = (line: string): { event?: string; data?: string } => {
   if (line.startsWith("event:")) {
     return { event: line.slice(6).trim() };
@@ -174,7 +195,7 @@ const startSseReader = (
 
         const response = await fetch(sseEndpoint, {
           method: "GET",
-          headers: { Accept: "text/event-stream" },
+          headers: { Accept: "text/event-stream", ...transport.headers },
           signal: abortController.signal,
         });
 
@@ -263,12 +284,13 @@ const startSseReader = (
 };
 
 const createSseTransport = (
-  config: Pick<MCPServer, "name" | "endpoint">,
+  config: Pick<MCPServer, "name" | "endpoint" | "headers">,
 ): SseTransport => {
   const endpoint = config.endpoint ?? "";
   return {
     type: "sse",
     endpoint,
+    headers: config.headers ?? {},
     pendingRequests: new Map(),
     abortController: null,
     connected: false,
@@ -404,7 +426,7 @@ const connectWebSocket = (
 const createTransport = (
   config: Pick<
     MCPServer,
-    "name" | "transport" | "endpoint" | "command" | "args"
+    "name" | "transport" | "endpoint" | "command" | "args" | "cwd" | "env" | "headers"
   >,
 ): Effect.Effect<void, unknown> => {
   if (config.transport === "stdio") {
@@ -416,10 +438,16 @@ const createTransport = (
         );
       }
 
+      const spawnEnv = config.env
+        ? { ...process.env, ...config.env }
+        : undefined;
+
       const subprocess = Bun.spawn([command, ...(config.args ?? [])], {
         stdin: "pipe",
         stdout: "pipe",
         stderr: "pipe",
+        ...(config.cwd ? { cwd: config.cwd } : {}),
+        ...(spawnEnv ? { env: spawnEnv } : {}),
       });
 
       const transport: StdioTransport = {
@@ -444,7 +472,7 @@ const createTransport = (
         );
       }
 
-      const transport = createSseTransport({ name: config.name, endpoint });
+      const transport = createSseTransport({ name: config.name, endpoint, headers: config.headers });
       activeTransports.set(config.name, transport);
       startSseReader(config.name, transport);
     });
@@ -469,13 +497,138 @@ const createTransport = (
     });
   }
 
+  // Streamable HTTP transport (MCP spec 2025-03-26)
+  if (config.transport === "streamable-http") {
+    return Effect.tryPromise(async () => {
+      const endpoint = config.endpoint;
+      if (!endpoint) {
+        throw new Error(
+          `MCP server "${config.name}" has transport "streamable-http" but no endpoint specified`,
+        );
+      }
+
+      const transport: StreamableHttpTransport = {
+        type: "streamable-http",
+        endpoint,
+        headers: config.headers ?? {},
+        sessionId: null,
+        pendingRequests: new Map(),
+        connected: true,
+      };
+
+      activeTransports.set(config.name, transport);
+    });
+  }
+
   return Effect.void;
+};
+
+// ─── JSON-RPC Notification Sender (fire-and-forget, no response expected) ───
+
+const sendNotification = (
+  config: Pick<MCPServer, "name" | "transport" | "endpoint" | "headers">,
+  method: string,
+): void => {
+  const payload = JSON.stringify({ jsonrpc: "2.0", method });
+
+  if (config.transport === "stdio") {
+    const transport = activeTransports.get(config.name);
+    if (transport && isStdioTransport(transport) && transport.subprocess.stdin) {
+      const encoded = new TextEncoder().encode(payload + "\n");
+      try {
+        (transport.subprocess.stdin as unknown as { write(b: Uint8Array): number }).write(encoded);
+        (transport.subprocess.stdin as unknown as { flush?(): void | Promise<void> }).flush?.();
+      } catch {
+        // notifications are fire-and-forget; ignore write errors
+      }
+    }
+    return;
+  }
+
+  if (config.transport === "sse") {
+    const transport = activeTransports.get(config.name);
+    if (!transport || !isSseTransport(transport)) return;
+    void fetch(transport.endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...transport.headers },
+      body: payload,
+    }).catch(() => {/* notifications are fire-and-forget */});
+    return;
+  }
+
+  if (config.transport === "streamable-http") {
+    const transport = activeTransports.get(config.name);
+    if (!transport || !isStreamableHttpTransport(transport)) return;
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      "Accept": "application/json, text/event-stream",
+      ...transport.headers,
+    };
+    if (transport.sessionId) headers["Mcp-Session-Id"] = transport.sessionId;
+    void fetch(transport.endpoint, { method: "POST", headers, body: payload })
+      .catch(() => {/* notifications are fire-and-forget */});
+    return;
+  }
+
+  if (config.transport === "websocket") {
+    const transport = activeTransports.get(config.name);
+    if (transport && isWebSocketTransport(transport) && transport.socket?.readyState === WebSocket.OPEN) {
+      transport.socket.send(payload);
+    }
+  }
+};
+
+// ─── SSE stream reader for Streamable HTTP responses ───
+
+const readSseStreamResponse = async (
+  response: Response,
+  requestId: string | number,
+): Promise<MCPResponse> => {
+  if (!response.body) {
+    throw new Error("No response body on SSE stream");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+
+      let eventData = "";
+      for (const line of lines) {
+        if (line.startsWith("data: ")) eventData = line.slice(6).trim();
+      }
+
+      if (eventData) {
+        try {
+          const parsed = JSON.parse(eventData) as MCPResponse;
+          // Accept matching id, or any response if the server doesn't echo id
+          if (parsed.id === requestId || parsed.id !== undefined) {
+            return parsed;
+          }
+        } catch {
+          // Invalid JSON in SSE data — skip
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  throw new Error(`SSE stream ended without a response for request id=${String(requestId)}`);
 };
 
 // ─── JSON-RPC Request Sender ───
 
 const sendRequest = (
-  config: Pick<MCPServer, "name" | "transport" | "endpoint" | "command">,
+  config: Pick<MCPServer, "name" | "transport" | "endpoint" | "command" | "headers">,
   request: MCPRequest,
 ): Effect.Effect<MCPResponse, MCPConnectionError> => {
   if (config.transport === "stdio") {
@@ -587,6 +740,7 @@ const sendRequest = (
             headers: {
               "Content-Type": "application/json",
               Accept: "application/json",
+              ...transport.headers,
             },
             body: rpcMessage,
           })
@@ -697,6 +851,62 @@ const sendRequest = (
     });
   }
 
+  // Streamable HTTP transport (MCP spec 2025-03-26)
+  if (config.transport === "streamable-http") {
+    return Effect.tryPromise({
+      try: async () => {
+        const transport = activeTransports.get(config.name);
+        if (!transport || !isStreamableHttpTransport(transport)) {
+          throw new Error(
+            `No active streamable-http transport for MCP server "${config.name}" — was createTransport called?`,
+          );
+        }
+
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+          "Accept": "application/json, text/event-stream",
+          ...transport.headers,
+        };
+        if (transport.sessionId) headers["Mcp-Session-Id"] = transport.sessionId;
+
+        const response = await fetch(transport.endpoint, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(request),
+        });
+
+        if (!response.ok) {
+          throw new Error(
+            `HTTP ${response.status} ${response.statusText} from MCP server "${config.name}"`,
+          );
+        }
+
+        // Capture session ID from server (assigned during initialize)
+        const sessionId = response.headers.get("Mcp-Session-Id");
+        if (sessionId && !transport.sessionId) {
+          transport.sessionId = sessionId;
+        }
+
+        const contentType = response.headers.get("Content-Type") ?? "";
+        if (contentType.includes("text/event-stream")) {
+          return readSseStreamResponse(response, request.id);
+        }
+
+        return response.json() as Promise<MCPResponse>;
+      },
+      catch: (e) =>
+        new MCPConnectionError({
+          message:
+            e instanceof Error
+              ? e.message
+              : `Failed to send request to MCP server "${config.name}"`,
+          serverName: config.name,
+          transport: config.transport,
+          cause: e,
+        }),
+    });
+  }
+
   return Effect.succeed({
     jsonrpc: "2.0" as const,
     id: request.id,
@@ -715,7 +925,7 @@ export const makeMCPClient = Effect.gen(function* () {
   const connect = (
     config: Pick<
       MCPServer,
-      "name" | "transport" | "endpoint" | "command" | "args"
+      "name" | "transport" | "endpoint" | "command" | "args" | "cwd" | "env" | "headers"
     >,
   ): Effect.Effect<MCPServer, MCPConnectionError> =>
     Effect.gen(function* () {
@@ -738,11 +948,15 @@ export const makeMCPClient = Effect.gen(function* () {
         id: reqId1,
         method: "initialize",
         params: {
-          protocolVersion: "2024-11-05",
+          protocolVersion: "2025-03-26",
           capabilities: { tools: {} },
           clientInfo: { name: "reactive-agents", version: "1.0.0" },
         },
       });
+
+      // Required by MCP spec: notify the server that the client is ready.
+      // Must be sent after initialize response, before any other requests.
+      sendNotification(config, "notifications/initialized");
 
       // Discover available tools
       const reqId2 = yield* nextRequestId;
@@ -846,6 +1060,34 @@ export const makeMCPClient = Effect.gen(function* () {
         );
       }
 
+      // MCP tools/call returns { content: [{type, text?, data?, mimeType?}], isError? }
+      // Extract text content so the model receives readable output, not raw JSON.
+      const raw = response.result as {
+        content?: Array<{ type: string; text?: string; data?: string; mimeType?: string }>;
+        isError?: boolean;
+      } | unknown;
+
+      if (raw && typeof raw === "object" && Array.isArray((raw as { content?: unknown }).content)) {
+        const result = raw as { content: Array<{ type: string; text?: string }>; isError?: boolean };
+        const text = result.content
+          .filter((item) => item.type === "text")
+          .map((item) => item.text ?? "")
+          .join("\n");
+
+        if (result.isError) {
+          return yield* Effect.fail(
+            new ToolExecutionError({
+              message: text || `MCP tool "${toolName}" returned an error`,
+              toolName,
+              input: args,
+            }),
+          );
+        }
+
+        // Return text if we extracted any; fall back to full result for non-text content
+        return text || raw;
+      }
+
       return response.result;
     });
 
@@ -879,6 +1121,13 @@ export const makeMCPClient = Effect.gen(function* () {
           if (transport.abortController) {
             transport.abortController.abort();
           }
+          transport.connected = false;
+        } else if (isStreamableHttpTransport(transport)) {
+          // Send HTTP DELETE to terminate the session on the server side (spec §session-management)
+          const headers: Record<string, string> = { ...transport.headers };
+          if (transport.sessionId) headers["Mcp-Session-Id"] = transport.sessionId;
+          void fetch(transport.endpoint, { method: "DELETE", headers })
+            .catch(() => {/* ignore errors — server may return 405 if DELETE is unsupported */});
           transport.connected = false;
         } else if (isWebSocketTransport(transport)) {
           if (transport.reconnectTimeoutId) {

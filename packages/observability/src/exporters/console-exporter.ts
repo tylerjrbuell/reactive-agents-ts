@@ -91,7 +91,10 @@ const extractPhaseMetrics = (
   const phaseMetrics = new Map<string, number[]>();
 
   for (const metric of metrics) {
-    if (metric.type === "histogram" && metric.name === "execution.phase.duration_ms") {
+    if (
+      metric.type === "histogram" &&
+      metric.name === "execution.phase.duration_ms"
+    ) {
       const phaseName = metric.labels?.phase;
       if (phaseName) {
         const existing = phaseMetrics.get(phaseName) ?? [];
@@ -192,10 +195,21 @@ const buildDashboardData = (
 
   // Extract tool metrics from metrics array (name: execution.tool.execution with tool label)
   const tools: DashboardTool[] = [];
-  const toolMetrics = new Map<string, { count: number; successCount: number; errorCount: number; totalDuration: number }>();
+  const toolMetrics = new Map<
+    string,
+    {
+      count: number;
+      successCount: number;
+      errorCount: number;
+      totalDuration: number;
+    }
+  >();
 
   for (const metric of metrics) {
-    if (metric.type === "histogram" && metric.name === "execution.tool.execution") {
+    if (
+      metric.type === "histogram" &&
+      metric.name === "execution.tool.execution"
+    ) {
       const toolName = metric.labels?.tool;
       const status = metric.labels?.status;
       if (toolName) {
@@ -205,8 +219,12 @@ const buildDashboardData = (
           errorCount: 0,
           totalDuration: 0,
         };
-        const newSuccess = status === "success" ? existing.successCount + 1 : existing.successCount;
-        const newError = status === "error" ? existing.errorCount + 1 : existing.errorCount;
+        const newSuccess =
+          status === "success"
+            ? existing.successCount + 1
+            : existing.successCount;
+        const newError =
+          status === "error" ? existing.errorCount + 1 : existing.errorCount;
         toolMetrics.set(toolName, {
           count: existing.count + 1,
           successCount: newSuccess,
@@ -219,7 +237,8 @@ const buildDashboardData = (
 
   // Build tool array from extracted metrics
   for (const [toolName, toolData] of toolMetrics.entries()) {
-    const avgDuration = toolData.count > 0 ? toolData.totalDuration / toolData.count : 0;
+    const avgDuration =
+      toolData.count > 0 ? toolData.totalDuration / toolData.count : 0;
     tools.push({
       name: toolName,
       callCount: toolData.count,
@@ -269,7 +288,10 @@ const buildDashboardData = (
       // Build details string based on phase name
       let details: string | undefined;
       if (phaseName === "think" && stepCount > 0) {
-        const percentOfTotal = totalPhaseDuration > 0 ? ((duration / totalPhaseDuration) * 100).toFixed(0) : "?";
+        const percentOfTotal =
+          totalPhaseDuration > 0
+            ? ((duration / totalPhaseDuration) * 100).toFixed(0)
+            : "?";
         details = `${stepCount} iter, ${percentOfTotal}% of time`;
       } else if (phaseName === "act" && tools.length > 0) {
         details = `${tools.length} tools`;
@@ -576,7 +598,10 @@ export const formatMetricsDashboard = (data: DashboardData): string => {
     lines.push("");
     lines.push(`${CYAN}${BOLD}📊 Execution Timeline${RESET}`);
     // Find max phase name length for alignment
-    const maxPhaseNameLen = Math.max(...data.phases.map((p) => p.name.length), 10);
+    const maxPhaseNameLen = Math.max(
+      ...data.phases.map((p) => p.name.length),
+      10,
+    );
     for (let i = 0; i < data.phases.length; i++) {
       const phase = data.phases[i];
       const isLast = i === data.phases.length - 1;
@@ -585,9 +610,7 @@ export const formatMetricsDashboard = (data: DashboardData): string => {
       const durationStr = formatDuration(phase.duration).padStart(8);
       const detailsStr = phase.details ? `  (${phase.details})` : "";
       const phaseName = `[${phase.name}]`.padEnd(maxPhaseNameLen + 2);
-      lines.push(
-        `${prefix} ${phaseName} ${durationStr}  ${icon}${detailsStr}`,
-      );
+      lines.push(`${prefix} ${phaseName} ${durationStr}  ${icon}${detailsStr}`);
     }
   }
 
