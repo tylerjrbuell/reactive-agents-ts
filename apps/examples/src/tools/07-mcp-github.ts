@@ -35,15 +35,18 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
   const start = Date.now();
   type PN = "anthropic" | "openai" | "ollama" | "gemini" | "litellm" | "test";
   const provider = (opts?.provider ?? (process.env.ANTHROPIC_API_KEY ? "anthropic" : "test")) as PN;
+  // useReal requires both a non-test provider AND a GitHub token.
+  // If either is missing, fall back to test mode entirely so withTestResponses works.
   const useReal = provider !== "test" && Boolean(process.env.GITHUB_PERSONAL_ACCESS_TOKEN);
+  const effectiveProvider = (useReal ? provider : "test") as PN;
 
   console.log("\n=== MCP GitHub Example ===");
   console.log(`Mode: ${useReal ? `LIVE (MCP GitHub + ${provider})` : "TEST (mock)"}\n`);
 
   let b = ReactiveAgents.create()
     .withName("mcp-github-agent")
-    .withProvider(provider);
-  if (opts?.model) b = b.withModel(opts.model);
+    .withProvider(effectiveProvider);
+  if (useReal && opts?.model) b = b.withModel(opts.model);
   const agent = await b
     .withTools()
     .withMCP(useReal ? [{
