@@ -183,6 +183,11 @@ export const executeReflexion = (
         }).pipe(Effect.catchAll(() => Effect.void));
       }
 
+      // ── Stagnation check: exit early if critique isn't changing ──
+      if (isCritiqueStagnant(previousCritiques, critique)) {
+        return buildResult(steps, currentResponse, "partial", start, totalTokens, totalCost, attempt);
+      }
+
       // ── Check if satisfied ──
       if (isSatisfied(critique)) {
         if (ebOpt._tag === "Some") {
@@ -207,6 +212,10 @@ export const executeReflexion = (
       }
 
       previousCritiques.push(critique);
+      // Cap critique history to last 3 entries to prevent prompt explosion
+      if (previousCritiques.length > 3) {
+        previousCritiques = previousCritiques.slice(-3);
+      }
 
       // ── Improve: generate a refined response ──
       const improveDefaultFallback = input.systemPrompt
@@ -322,7 +331,7 @@ function buildGenerationPrompt(
 
   if (previousCritiques && previousCritiques.length > 0) {
     parts.push(
-      `Previous attempts had these issues:\n${previousCritiques.map((c, i) => `${i + 1}. ${c}`).join("\n")}\n\nPlease address all of these issues in your improved response.`,
+      `Previous attempts had these issues:\n${buildCompactedCritiqueHistory(previousCritiques)}\n\nPlease address all of these issues in your improved response.`,
     );
   }
 
@@ -365,6 +374,38 @@ Otherwise, clearly list the specific issues that need to be fixed.`;
 
 function isSatisfied(critique: string): boolean {
   return /^SATISFIED:/i.test(critique.trim());
+}
+
+/**
+ * Detects stagnant critiques — if the new critique is substantially the same
+ * as the most recent one, further retries won't improve the response.
+ * Uses normalized substring matching.
+ */
+function isCritiqueStagnant(previousCritiques: string[], newCritique: string): boolean {
+  if (previousCritiques.length === 0) return false;
+  const lastCritique = previousCritiques[previousCritiques.length - 1]!;
+  const normalize = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
+  const a = normalize(lastCritique);
+  const b = normalize(newCritique);
+  if (a === b) return true;
+  const [shorter, longer] = a.length <= b.length ? [a, b] : [b, a];
+  if (shorter.length > 20 && longer.includes(shorter.slice(0, Math.floor(shorter.length * 0.8)))) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Progressive compaction for critique history.
+ * Keeps last 3 critiques verbatim, summarizes older ones.
+ */
+function buildCompactedCritiqueHistory(critiques: string[]): string {
+  if (critiques.length <= 3) {
+    return critiques.map((c, i) => `${i + 1}. ${c}`).join("\n");
+  }
+  const older = critiques.slice(0, critiques.length - 3).map((_, i) => `${i + 1}. [addressed]`);
+  const recent = critiques.slice(-3).map((c, i) => `${critiques.length - 2 + i}. ${c}`);
+  return [...older, ...recent].join("\n");
 }
 
 function buildResult(
