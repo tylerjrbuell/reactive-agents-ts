@@ -51,4 +51,18 @@ describe("ReactiveAgentBuilder", () => {
 
     expect(agent).toBeInstanceOf(ReactiveAgent);
   });
+
+  it("withTools() accepts resultCompression config", async () => {
+    const builder = ReactiveAgents.create()
+      .withProvider("test")
+      .withTools({
+        resultCompression: {
+          budget: 2000,
+          previewItems: 8,
+          autoStore: true,
+          codeTransform: true,
+        },
+      });
+    expect(builder).toBeDefined();
+  });
 });

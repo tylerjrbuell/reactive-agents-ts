@@ -9,6 +9,7 @@ export type {
   MCPRequest,
   MCPResponse,
   FunctionCallingTool,
+  ResultCompressionConfig,
 } from "./types.js";
 
 export {

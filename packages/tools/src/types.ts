@@ -430,7 +430,7 @@ export const MCPServerSchema = Schema.Struct({
    * - `"sse"` — HTTP Server-Sent Events streaming (one-way server push)
    * - `"websocket"` — Full-duplex WebSocket bidirectional communication
    */
-  transport: Schema.Literal("stdio", "sse", "websocket"),
+  transport: Schema.Literal("stdio", "sse", "websocket", "streamable-http"),
   /**
    * HTTP endpoint URL for `"sse"` or `"websocket"` transports.
    *
@@ -456,6 +456,29 @@ export const MCPServerSchema = Schema.Struct({
    * @example `["./mcp-filesystem-server.js", "--root", "/tmp"]`
    */
   args: Schema.optional(Schema.Array(Schema.String)),
+  /**
+   * Working directory for the subprocess (for `"stdio"` transport).
+   *
+   * @default undefined (inherits parent cwd)
+   */
+  cwd: Schema.optional(Schema.String),
+  /**
+   * Extra environment variables merged on top of the parent process environment
+   * (for `"stdio"` transport).
+   *
+   * @default undefined
+   * @example `{ GITHUB_PERSONAL_ACCESS_TOKEN: "ghp_..." }`
+   */
+  env: Schema.optional(Schema.Record({ key: Schema.String, value: Schema.String })),
+  /**
+   * HTTP headers sent with every request (for `"sse"` transport).
+   *
+   * Use for Bearer tokens, API keys, or any other per-server auth.
+   *
+   * @default undefined
+   * @example `{ Authorization: "Bearer ghp_..." }`
+   */
+  headers: Schema.optional(Schema.Record({ key: Schema.String, value: Schema.String })),
   /**
    * List of tool names available from this server.
    *
@@ -673,3 +696,36 @@ export const FunctionCallingToolSchema = Schema.Struct({
  * @see {@link ToolService.toFunctionCallingFormat}
  */
 export type FunctionCallingTool = typeof FunctionCallingToolSchema.Type;
+
+// ─── Result Compression Config ───
+
+/**
+ * Configuration for tool result compression behavior.
+ *
+ * Controls how large tool outputs are truncated, previewed, and stored
+ * to keep the agent context window manageable.
+ *
+ * @example
+ * ```typescript
+ * const agent = await ReactiveAgents.create()
+ *   .withTools({
+ *     resultCompression: {
+ *       budget: 2000,
+ *       previewItems: 8,
+ *       autoStore: true,
+ *       codeTransform: true,
+ *     }
+ *   })
+ *   .build();
+ * ```
+ */
+export interface ResultCompressionConfig {
+  /** Chars before overflow triggers. Default: 800 */
+  readonly budget?: number;
+  /** Array items shown in preview. Default: 3 */
+  readonly previewItems?: number;
+  /** Auto-store overflow in scratchpad. Default: true */
+  readonly autoStore?: boolean;
+  /** Enable | transform: pipe syntax. Default: true */
+  readonly codeTransform?: boolean;
+}
