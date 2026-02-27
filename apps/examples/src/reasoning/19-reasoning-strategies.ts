@@ -23,14 +23,14 @@ export interface ExampleResult {
   durationMs: number;
 }
 
-const PROVIDER = process.env.ANTHROPIC_API_KEY
-  ? ("anthropic" as const)
-  : ("test" as const);
-
-export async function run(): Promise<ExampleResult> {
+export async function run(opts?: { provider?: string; model?: string }): Promise<ExampleResult> {
   const start = Date.now();
+
+  type PN = "anthropic" | "openai" | "ollama" | "gemini" | "litellm" | "test";
+  const provider = (opts?.provider ?? (process.env.ANTHROPIC_API_KEY ? "anthropic" : "test")) as PN;
+
   console.log("\n=== Reasoning Strategies Comparison ===\n");
-  console.log(`Mode: ${PROVIDER === "anthropic" ? "LIVE" : "TEST"}\n`);
+  console.log(`Mode: ${provider !== "test" ? `LIVE (${provider})` : "TEST"}\n`);
 
   const TASK =
     "Explain in one sentence why agent memory is important for multi-turn conversations.";
@@ -47,9 +47,11 @@ export async function run(): Promise<ExampleResult> {
   let totalTokens = 0;
 
   for (const strategy of strategies) {
-    const agent = await ReactiveAgents.create()
+    let b = ReactiveAgents.create()
       .withName(`strategy-${strategy}`)
-      .withProvider(PROVIDER)
+      .withProvider(provider);
+    if (opts?.model) b = b.withModel(opts.model);
+    const agent = await b
       .withReasoning({ defaultStrategy: strategy })
       .withMaxIterations(5)
       .withTestResponses({

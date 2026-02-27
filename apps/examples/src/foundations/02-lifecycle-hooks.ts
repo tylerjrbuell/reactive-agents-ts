@@ -25,13 +25,14 @@ export interface ExampleResult {
   durationMs: number;
 }
 
-export async function run(): Promise<ExampleResult> {
+export async function run(opts?: { provider?: string; model?: string }): Promise<ExampleResult> {
   const start = Date.now();
 
-  const useRealLLM = Boolean(process.env.ANTHROPIC_API_KEY);
+  type PN = "anthropic" | "openai" | "ollama" | "gemini" | "litellm" | "test";
+  const provider = (opts?.provider ?? (process.env.ANTHROPIC_API_KEY ? "anthropic" : "test")) as PN;
 
   console.log("=== Reactive Agents: Lifecycle Hooks Example ===\n");
-  console.log(`Mode: ${useRealLLM ? "LIVE (Anthropic)" : "TEST (deterministic)"}\n`);
+  console.log(`Mode: ${provider !== "test" ? `LIVE (${provider})` : "TEST (deterministic)"}\n`);
 
   // ─── Define hooks ───
 
@@ -62,8 +63,9 @@ export async function run(): Promise<ExampleResult> {
 
   let builder = ReactiveAgents.create()
     .withName("hooked-agent")
-    .withProvider(useRealLLM ? "anthropic" : "test")
-    .withTestResponses({
+    .withProvider(provider);
+  if (opts?.model) builder = builder.withModel(opts.model);
+  builder = builder.withTestResponses({
       "Reactive Agents": "Reactive Agents is a TypeScript framework for building AI agents with Effect-TS. It features 10-phase execution, memory persistence, and lifecycle hooks.",
     })
     .withMaxIterations(3);

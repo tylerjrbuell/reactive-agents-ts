@@ -23,13 +23,14 @@ export interface ExampleResult {
   durationMs: number;
 }
 
-const PROVIDER = process.env.ANTHROPIC_API_KEY ? "anthropic" as const : "test" as const;
-
-export async function run(): Promise<ExampleResult> {
+export async function run(opts?: { provider?: string; model?: string }): Promise<ExampleResult> {
   const start = Date.now();
 
+  type PN = "anthropic" | "openai" | "ollama" | "gemini" | "litellm" | "test";
+  const provider = (opts?.provider ?? (process.env.ANTHROPIC_API_KEY ? "anthropic" : "test")) as PN;
+
   console.log("\n=== Multi-Layer Verification Example ===");
-  console.log(`Mode: ${PROVIDER === "anthropic" ? "LIVE" : "TEST"}\n`);
+  console.log(`Mode: ${provider !== "test" ? `LIVE (${provider})` : "TEST"}\n`);
 
   // ─── Part 1: Agent with verification enabled ──────────────────────────────
   //
@@ -42,9 +43,13 @@ export async function run(): Promise<ExampleResult> {
 
   console.log("Part 1: Verified agent (semantic entropy + fact decomposition)");
 
-  const verifiedAgent = await ReactiveAgents.create()
-    .withName("verified-agent")
-    .withProvider(PROVIDER)
+  const mkBase = (name: string) => {
+    let b = ReactiveAgents.create().withName(name).withProvider(provider);
+    if (opts?.model) b = b.withModel(opts.model);
+    return b;
+  };
+
+  const verifiedAgent = await mkBase("verified-agent")
     .withVerification()
     .withTestResponses({
       "": "FINAL ANSWER: The Eiffel Tower is 330 meters tall and located in Paris, France. It was completed in 1889 and was designed by Gustave Eiffel.",
@@ -63,9 +68,7 @@ export async function run(): Promise<ExampleResult> {
 
   console.log("\nPart 2: Unverified agent (baseline, no verification layer)");
 
-  const baselineAgent = await ReactiveAgents.create()
-    .withName("baseline-agent")
-    .withProvider(PROVIDER)
+  const baselineAgent = await mkBase("baseline-agent")
     .withTestResponses({
       "": "FINAL ANSWER: The Eiffel Tower is in Paris. It is very tall and was built a long time ago.",
     })

@@ -29,21 +29,26 @@ export interface ExampleResult {
   durationMs: number;
 }
 
-const PROVIDER = process.env.ANTHROPIC_API_KEY ? "anthropic" as const : "test" as const;
-
-export async function run(): Promise<ExampleResult> {
+export async function run(opts?: { provider?: string; model?: string }): Promise<ExampleResult> {
   const start = Date.now();
 
+  type PN = "anthropic" | "openai" | "ollama" | "gemini" | "litellm" | "test";
+  const provider = (opts?.provider ?? (process.env.ANTHROPIC_API_KEY ? "anthropic" : "test")) as PN;
+
   console.log("\n=== Guardrails Example ===");
-  console.log(`Mode: ${PROVIDER === "anthropic" ? "LIVE" : "TEST"}\n`);
+  console.log(`Mode: ${provider !== "test" ? `LIVE (${provider})` : "TEST"}\n`);
+
+  const mkBase = (name: string) => {
+    let b = ReactiveAgents.create().withName(name).withProvider(provider);
+    if (opts?.model) b = b.withModel(opts.model);
+    return b;
+  };
 
   // ─── Part 1: Behavioral contract — deny web-search tool ────────────────────
 
   console.log("Part 1: Behavioral contracts (deniedTools)");
 
-  const contractAgent = await ReactiveAgents.create()
-    .withName("contract-demo")
-    .withProvider(PROVIDER)
+  const contractAgent = await mkBase("contract-demo")
     .withTools()
     .withBehavioralContracts({
       deniedTools: ["web-search"],
@@ -65,9 +70,7 @@ export async function run(): Promise<ExampleResult> {
 
   console.log("\nPart 2: Kill switch (pause + resume)");
 
-  const ksAgent = await ReactiveAgents.create()
-    .withName("killswitch-demo")
-    .withProvider(PROVIDER)
+  const ksAgent = await mkBase("killswitch-demo")
     .withKillSwitch()
     .withTestResponses({
       "": "FINAL ANSWER: Task completed after pause/resume cycle.",

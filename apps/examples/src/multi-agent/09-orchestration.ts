@@ -24,19 +24,24 @@ export interface ExampleResult {
   durationMs: number;
 }
 
-const PROVIDER = process.env.ANTHROPIC_API_KEY ? "anthropic" as const : "test" as const;
-
-export async function run(): Promise<ExampleResult> {
+export async function run(opts?: { provider?: string; model?: string }): Promise<ExampleResult> {
   const start = Date.now();
 
+  type PN = "anthropic" | "openai" | "ollama" | "gemini" | "litellm" | "test";
+  const provider = (opts?.provider ?? (process.env.ANTHROPIC_API_KEY ? "anthropic" : "test")) as PN;
+
   console.log("\n=== Multi-Agent Orchestration Example ===");
-  console.log(`Mode: ${PROVIDER === "anthropic" ? "LIVE" : "TEST"}\n`);
+  console.log(`Mode: ${provider !== "test" ? `LIVE (${provider})` : "TEST"}\n`);
+
+  const mkBase = (name: string) => {
+    let b = ReactiveAgents.create().withName(name).withProvider(provider);
+    if (opts?.model) b = b.withModel(opts.model);
+    return b;
+  };
 
   // ─── Build worker agents ────────────────────────────────────────────────────
 
-  const researchAgent = await ReactiveAgents.create()
-    .withName("researcher")
-    .withProvider(PROVIDER)
+  const researchAgent = await mkBase("researcher")
     .withMaxIterations(3)
     .withTestResponses({
       "research": "FINAL ANSWER: Research complete. AI safety involves ensuring AI systems behave as intended and avoid harmful outcomes.",
@@ -44,9 +49,7 @@ export async function run(): Promise<ExampleResult> {
     })
     .build();
 
-  const writerAgent = await ReactiveAgents.create()
-    .withName("writer")
-    .withProvider(PROVIDER)
+  const writerAgent = await mkBase("writer")
     .withMaxIterations(3)
     .withTestResponses({
       "draft": "FINAL ANSWER: Draft complete. Summary: AI safety is the discipline of ensuring AI systems are aligned with human values.",
@@ -54,9 +57,7 @@ export async function run(): Promise<ExampleResult> {
     })
     .build();
 
-  const reviewerAgent = await ReactiveAgents.create()
-    .withName("reviewer")
-    .withProvider(PROVIDER)
+  const reviewerAgent = await mkBase("reviewer")
     .withMaxIterations(3)
     .withTestResponses({
       "review": "FINAL ANSWER: Review passed. The summary is accurate, clear, and appropriately concise.",

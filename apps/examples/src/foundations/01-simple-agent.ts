@@ -23,19 +23,22 @@ export interface ExampleResult {
   durationMs: number;
 }
 
-export async function run(): Promise<ExampleResult> {
+export async function run(opts?: { provider?: string; model?: string }): Promise<ExampleResult> {
   const start = Date.now();
 
-  const useRealLLM = Boolean(process.env.ANTHROPIC_API_KEY);
+  type PN = "anthropic" | "openai" | "ollama" | "gemini" | "litellm" | "test";
+  const provider = (opts?.provider ?? (process.env.ANTHROPIC_API_KEY ? "anthropic" : "test")) as PN;
 
   console.log("=== Reactive Agents: Simple Agent Example ===\n");
-  console.log(`Mode: ${useRealLLM ? "LIVE (Anthropic)" : "TEST (deterministic)"}\n`);
+  console.log(`Mode: ${provider !== "test" ? `LIVE (${provider})` : "TEST (deterministic)"}\n`);
 
   // ─── Build the agent ───
 
-  const agent = await ReactiveAgents.create()
+  let b = ReactiveAgents.create()
     .withName("simple-qa")
-    .withProvider(useRealLLM ? "anthropic" : "test")
+    .withProvider(provider);
+  if (opts?.model) b = b.withModel(opts.model);
+  const agent = await b
     .withTestResponses({
       // Test responses used only in test mode
       "capital of France": "The capital of France is Paris. It has been the capital since the 10th century and is known for landmarks like the Eiffel Tower, the Louvre, and Notre-Dame Cathedral.",

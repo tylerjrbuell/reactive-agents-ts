@@ -29,18 +29,23 @@ export interface ExampleResult {
   durationMs: number;
 }
 
-export async function run(): Promise<ExampleResult> {
+export async function run(opts?: { provider?: string; model?: string }): Promise<ExampleResult> {
   const start = Date.now();
+
+  type PN = "anthropic" | "openai" | "ollama" | "gemini" | "litellm" | "test";
+  const provider = (opts?.provider ?? (process.env.ANTHROPIC_API_KEY ? "anthropic" : "test")) as PN;
 
   // Clean up any previous run
   try { if (existsSync(DEMO_FILE)) unlinkSync(DEMO_FILE); } catch {}
 
   console.log("\n=== Built-in Tools Example ===");
-  console.log(`Mode: ${process.env.ANTHROPIC_API_KEY ? "LIVE" : "TEST"}\n`);
+  console.log(`Mode: ${provider !== "test" ? `LIVE (${provider})` : "TEST"}\n`);
 
-  const agent = await ReactiveAgents.create()
+  let b = ReactiveAgents.create()
     .withName("builtin-tools-demo")
-    .withProvider(process.env.ANTHROPIC_API_KEY ? "anthropic" : "test")
+    .withProvider(provider);
+  if (opts?.model) b = b.withModel(opts.model);
+  const agent = await b
     .withTools()
     .withReasoning({ defaultStrategy: "reactive" })
     .withMaxIterations(6)
