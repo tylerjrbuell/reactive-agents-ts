@@ -30,14 +30,16 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
   type PN = "anthropic" | "openai" | "ollama" | "gemini" | "litellm" | "test";
   const provider = (opts?.provider ?? (process.env.ANTHROPIC_API_KEY ? "anthropic" : "test")) as PN;
   const useReal = provider !== "test";
+  // When not using real MCP, fall back to test provider so withTestResponses works.
+  const effectiveProvider = (useReal ? provider : "test") as PN;
 
   console.log("\n=== MCP Filesystem Example ===");
   console.log(`Mode: ${useReal ? `LIVE (MCP + ${provider})` : "TEST (mock)"}\n`);
 
   let b = ReactiveAgents.create()
     .withName("mcp-filesystem-agent")
-    .withProvider(provider);
-  if (opts?.model) b = b.withModel(opts.model);
+    .withProvider(effectiveProvider);
+  if (useReal && opts?.model) b = b.withModel(opts.model);
   const agent = await b
     .withTools()
     .withMCP(useReal ? [{

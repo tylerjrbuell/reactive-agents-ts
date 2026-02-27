@@ -453,10 +453,17 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                               Effect.succeed({ model: config.defaultModel }),
                             ),
                           );
+                        // The complexity router returns Anthropic model names (e.g. claude-haiku-*).
+                        // Only apply the routed model when actually using Anthropic; for other
+                        // providers (Ollama, OpenAI, etc.) use the configured default model.
+                        const routedModel = (modelConfig as any).model as string | undefined;
+                        const useRoutedModel =
+                          config.provider === "anthropic" && !!routedModel;
                         return {
                           ...c,
-                          selectedModel:
-                            (modelConfig as any).model ?? config.defaultModel,
+                          selectedModel: useRoutedModel
+                            ? routedModel
+                            : config.defaultModel,
                         };
                       }
 
