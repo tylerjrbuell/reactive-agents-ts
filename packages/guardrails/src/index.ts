@@ -28,6 +28,20 @@ export { detectToxicity } from "./detectors/toxicity-detector.js";
 // ─── Contracts ───
 export { checkContract } from "./contracts/agent-contract.js";
 
+// ─── Kill Switch ───
+export { KillSwitchService, KillSwitchServiceLive } from "./kill-switch.js";
+
+// ─── Behavioral Contracts ───
+export {
+  BehavioralContractService,
+  BehavioralContractServiceLive,
+  BehavioralContractSchema,
+} from "./behavioral-contracts.js";
+export type {
+  BehavioralContract,
+  ContractViolation,
+} from "./behavioral-contracts.js";
+
 // ─── Service ───
 export { GuardrailService, GuardrailServiceLive } from "./guardrail-service.js";
 
