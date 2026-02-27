@@ -475,7 +475,7 @@ function buildCompactedStepContext(stepResults: string[]): string {
   if (stepResults.length <= 5) return stepResults.join("\n");
   const older = stepResults
     .slice(0, stepResults.length - 5)
-    .map((r, i) => `Step ${i + 1}: [completed]`);
+    .map((_, i) => `Step ${i + 1}: [completed]`);
   const recent = stepResults.slice(-5);
   return [...older, ...recent].join("\n");
 }
