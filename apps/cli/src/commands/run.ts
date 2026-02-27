@@ -13,13 +13,14 @@ interface MCPConfigFile {
   }>;
 }
 
-const VALID_PROVIDERS = ["anthropic", "openai", "ollama", "gemini", "test"] as const;
+const VALID_PROVIDERS = ["anthropic", "openai", "ollama", "gemini", "litellm", "test"] as const;
 type Provider = (typeof VALID_PROVIDERS)[number];
 
 const PROVIDER_API_KEYS: Record<string, { env: string; label: string } | null> = {
   anthropic: { env: "ANTHROPIC_API_KEY", label: "Anthropic" },
   openai: { env: "OPENAI_API_KEY", label: "OpenAI" },
   gemini: { env: "GOOGLE_API_KEY", label: "Google" },
+  litellm: null, // Uses LITELLM_BASE_URL + optional LITELLM_API_KEY
   ollama: null, // No API key needed
   test: null,
 };
@@ -94,7 +95,7 @@ export async function runAgent(args: string[]): Promise<void> {
   if (!prompt) {
     console.error("Usage: rax run <prompt> [options]\n");
     console.error("Options:");
-    console.error("  --provider <name>    Provider: anthropic, openai, ollama, gemini, test");
+    console.error("  --provider <name>    Provider: anthropic, openai, ollama, gemini, litellm, test");
     console.error("  --model <model>      Model identifier");
     console.error("  --name <name>        Agent name (default: cli-agent)");
     console.error("  --tools              Enable tool calling");
