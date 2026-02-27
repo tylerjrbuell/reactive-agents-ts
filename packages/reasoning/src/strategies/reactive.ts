@@ -650,9 +650,39 @@ function buildInitialContext(input: ReactiveInput, compact = false): string {
     sections.push(toolNames ? `Tools: ${toolNames}` : "No tools available.");
   } else if (input.availableToolSchemas && input.availableToolSchemas.length > 0) {
     const toolLines = input.availableToolSchemas.map(formatToolSchema).join("\n");
-    sections.push(`Available Tools:\n${toolLines}\n\nTo use a tool: ACTION: tool_name({"param": "value"}) — use EXACT parameter names shown above, valid JSON only.`);
+    const compressionNote = [
+      ``,
+      `TOOL RESULTS:`,
+      `Large results are stored automatically. You will see a compact preview:`,
+      `  [STORED: _tool_result_1 | tool/name]`,
+      `  Type: Array(30) | Schema: sha, commit.message, author.login`,
+      `  Preview: [0] sha=abc1234  msg="fix: bug"  ...`,
+      `  — use scratchpad-read("_tool_result_1") to access the full result`,
+      ``,
+      `PIPE TRANSFORMS (optional, advanced):`,
+      `To get exactly what you need in one step, append | transform: <expr> to any ACTION:`,
+      `  ACTION: github/list_commits({"owner":"x","repo":"y"}) | transform: result.slice(0,3).map(c => ({sha: c.sha.slice(0,7), msg: c.commit.message.split('\\n')[0]}))`,
+      `Only the transform output enters context. result = parsed JSON (or raw string if not JSON).`,
+    ].join("\n");
+    sections.push(
+      `Available Tools:\n${toolLines}\n\nTo use a tool: ACTION: tool_name({"param": "value"}) — use EXACT parameter names shown above, valid JSON only.${compressionNote}`
+    );
   } else if (input.availableTools.length > 0) {
-    sections.push(`Available Tools: ${input.availableTools.join(", ")}\nTo use a tool: ACTION: tool_name({"param": "value"}) — use JSON for tool arguments.`);
+    const compressionNote = [
+      ``,
+      `TOOL RESULTS:`,
+      `Large results are stored automatically. You will see a compact preview:`,
+      `  [STORED: _tool_result_1 | tool/name]`,
+      `  Type: Array(30) | Schema: sha, commit.message, author.login`,
+      `  Preview: [0] sha=abc1234  msg="fix: bug"  ...`,
+      `  — use scratchpad-read("_tool_result_1") to access the full result`,
+      ``,
+      `PIPE TRANSFORMS (optional, advanced):`,
+      `To get exactly what you need in one step, append | transform: <expr> to any ACTION:`,
+      `  ACTION: github/list_commits({"owner":"x","repo":"y"}) | transform: result.slice(0,3).map(c => ({sha: c.sha.slice(0,7), msg: c.commit.message.split('\\n')[0]}))`,
+      `Only the transform output enters context. result = parsed JSON (or raw string if not JSON).`,
+    ].join("\n");
+    sections.push(`Available Tools: ${input.availableTools.join(", ")}\nTo use a tool: ACTION: tool_name({"param": "value"}) — use JSON for tool arguments.${compressionNote}`);
   } else {
     sections.push("No tools available for this task.");
   }
