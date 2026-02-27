@@ -1,4 +1,5 @@
 import { Effect, Context, Layer } from "effect";
+import { EventBus } from "@reactive-agents/core";
 import type {
   MemoryBootstrapResult,
   MemoryConfig,
@@ -88,6 +89,12 @@ export const MemoryServiceLive = (config: MemoryConfig) =>
       const fileSystem = yield* MemoryFileSystem;
       const zettel = yield* ZettelkastenService;
 
+      // EventBus is optional — publish memory lifecycle events when available
+      const ebOpt = yield* Effect.serviceOption(EventBus).pipe(
+        Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
+      );
+      const eb = ebOpt._tag === "Some" ? ebOpt.value : null;
+
       const basePath = `.reactive-agents/memory`;
 
       return {
@@ -116,7 +123,7 @@ export const MemoryServiceLive = (config: MemoryConfig) =>
             // Get current working memory
             const workingMemory = yield* working.get();
 
-            return {
+            const result = {
               agentId,
               semanticContext,
               recentEpisodes,
@@ -125,6 +132,13 @@ export const MemoryServiceLive = (config: MemoryConfig) =>
               bootstrappedAt: new Date(),
               tier: config.tier,
             } satisfies MemoryBootstrapResult;
+
+            if (eb) {
+              yield* eb.publish({ _tag: "MemoryBootstrapped", agentId, tier: config.tier })
+                .pipe(Effect.catchAll(() => Effect.void));
+            }
+
+            return result;
           }),
 
         flush: (agentId) =>
@@ -134,6 +148,10 @@ export const MemoryServiceLive = (config: MemoryConfig) =>
               config.semantic.maxMarkdownLines,
             );
             yield* fileSystem.writeMarkdown(agentId, markdown, basePath);
+            if (eb) {
+              yield* eb.publish({ _tag: "MemoryFlushed", agentId })
+                .pipe(Effect.catchAll(() => Effect.void));
+            }
           }),
 
         snapshot: (snap) => episodic.saveSnapshot(snap),

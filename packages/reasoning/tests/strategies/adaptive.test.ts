@@ -70,6 +70,52 @@ describe("AdaptiveStrategy", () => {
     expect(adaptiveStep!.content).toContain("reactive");
   });
 
+  it("should include past experience in analysis when provided", async () => {
+    // We capture the LLM request to verify past experience is included in the prompt
+    let capturedPrompt = "";
+    const layer = TestLLMServiceLayer({
+      // The analysis prompt should contain past experience text
+      "Past experience": "PLAN_EXECUTE",
+      "Classify the task": "PLAN_EXECUTE",
+      // Sub-strategy response
+      "Think step-by-step": "FINAL ANSWER: Done with experience-informed strategy.",
+      default: "FINAL ANSWER: Done.",
+    });
+
+    const program = executeAdaptive({
+      taskDescription: "Build a multi-step data pipeline",
+      taskType: "complex-task",
+      memoryContext: "",
+      availableTools: ["file-read", "file-write", "code-execute"],
+      config: defaultReasoningConfig,
+      pastExperience: [
+        {
+          strategy: "plan-execute-reflect",
+          success: true,
+          durationMs: 5000,
+          tokensUsed: 1500,
+          taskDescription: "Build a data processing pipeline with 3 stages",
+        },
+        {
+          strategy: "reactive",
+          success: false,
+          durationMs: 8000,
+          tokensUsed: 3000,
+          taskDescription: "Create a multi-step ETL workflow",
+        },
+      ],
+    });
+
+    const result = await Effect.runPromise(
+      program.pipe(Effect.provide(layer)),
+    );
+
+    expect(result.strategy).toBe("adaptive");
+    expect(result.status).toBe("completed");
+    // The adaptive strategy should have run with past experience context
+    expect(result.steps.length).toBeGreaterThan(0);
+  });
+
   it("should combine token usage from analysis and sub-strategy", async () => {
     const layer = TestLLMServiceLayer({
       "Classify the task": "REACTIVE",

@@ -42,6 +42,8 @@ interface ReactiveInput {
   readonly contextProfile?: ContextProfile;
   /** Custom system prompt for steering agent behavior */
   readonly systemPrompt?: string;
+  /** Task ID for event correlation */
+  readonly taskId?: string;
 }
 
 /**
@@ -166,7 +168,7 @@ export const executeReactive = (
       if (ebOpt._tag === "Some") {
         yield* ebOpt.value.publish({
           _tag: "ReasoningStepCompleted",
-          taskId: "reactive",
+          taskId: input.taskId ?? "reactive",
           strategy: "reactive",
           step: steps.length,
           totalSteps: maxIter,
@@ -203,9 +205,20 @@ export const executeReactive = (
 
       // ── CHECK: does the thought indicate a final answer (and no pending action)? ──
       if (!toolRequest && hasFinalAnswer(thought)) {
+        const finalAnswer = extractFinalAnswer(thought);
+        if (ebOpt._tag === "Some") {
+          yield* ebOpt.value.publish({
+            _tag: "FinalAnswerProduced",
+            taskId: input.taskId ?? "reactive",
+            strategy: "reactive",
+            answer: finalAnswer,
+            iteration,
+            totalTokens: totalCost,
+          }).pipe(Effect.catchAll(() => Effect.void));
+        }
         return buildResult(
           steps,
-          extractFinalAnswer(thought),
+          finalAnswer,
           "completed",
           start,
           totalTokens,
@@ -258,7 +271,7 @@ export const executeReactive = (
         if (ebOpt._tag === "Some") {
           yield* ebOpt.value.publish({
             _tag: "ReasoningStepCompleted",
-            taskId: "reactive",
+            taskId: input.taskId ?? "reactive",
             strategy: "reactive",
             step: steps.length,
             totalSteps: maxIter,
@@ -287,9 +300,32 @@ export const executeReactive = (
           observationContent = `${priorObsContent} [Already done — do NOT repeat. Continue with next task step or give FINAL ANSWER if all steps are complete.]`;
           obsResult = priorObsStep?.metadata?.observationResult ?? makeObservationResult(toolRequest.tool, true, observationContent);
         } else {
+          const toolStartMs = Date.now();
           const toolObs = yield* runToolObservation(toolServiceOpt, toolRequest, input, profile);
+          const toolDurationMs = Date.now() - toolStartMs;
           observationContent = toolObs.content;
           obsResult = toolObs.observationResult;
+
+          // Store actual duration in action step metadata for metric extraction
+          const lastStep = steps[steps.length - 1];
+          if (lastStep?.type === "action") {
+            steps[steps.length - 1] = {
+              ...lastStep,
+              metadata: { ...(lastStep.metadata ?? {}), duration: toolDurationMs },
+            };
+          }
+
+          // Publish ToolCallCompleted so MetricsCollector tracks tool execution from reasoning path
+          if (ebOpt._tag === "Some") {
+            yield* ebOpt.value.publish({
+              _tag: "ToolCallCompleted",
+              taskId: input.taskId ?? "reactive",
+              toolName: toolRequest.tool,
+              callId: lastStep?.id ?? "unknown",
+              durationMs: toolDurationMs,
+              success: obsResult.success,
+            }).pipe(Effect.catchAll(() => Effect.void));
+          }
         }
 
         steps.push({
@@ -304,7 +340,7 @@ export const executeReactive = (
         if (ebOpt._tag === "Some") {
           yield* ebOpt.value.publish({
             _tag: "ReasoningStepCompleted",
-            taskId: "reactive",
+            taskId: input.taskId ?? "reactive",
             strategy: "reactive",
             step: steps.length,
             totalSteps: maxIter,
@@ -316,7 +352,18 @@ export const executeReactive = (
         // a FINAL ANSWER — if so, we're done (no need for another LLM call).
         if (hasFinalAnswer(thought)) {
           iteration++;
-          return buildResult(steps, extractFinalAnswer(thought), "completed", start, totalTokens, totalCost);
+          const finalAnswer = extractFinalAnswer(thought);
+          if (ebOpt._tag === "Some") {
+            yield* ebOpt.value.publish({
+              _tag: "FinalAnswerProduced",
+              taskId: input.taskId ?? "reactive",
+              strategy: "reactive",
+              answer: finalAnswer,
+              iteration,
+              totalTokens: totalCost,
+            }).pipe(Effect.catchAll(() => Effect.void));
+          }
+          return buildResult(steps, finalAnswer, "completed", start, totalTokens, totalCost);
         }
       }
       // Context is rebuilt from steps at the top of each loop iteration via

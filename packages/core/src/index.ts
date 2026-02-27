@@ -59,7 +59,12 @@ export {
 export { AgentService, AgentServiceLive } from "./services/agent-service.js";
 export { TaskService, TaskServiceLive } from "./services/task-service.js";
 export { EventBus, EventBusLive } from "./services/event-bus.js";
-export type { AgentEvent, EventHandler } from "./services/event-bus.js";
+export type {
+  AgentEvent,
+  AgentEventTag,
+  EventHandler,
+  TypedEventHandler,
+} from "./services/event-bus.js";
 export {
   ContextWindowManager,
   ContextWindowManagerLive,
