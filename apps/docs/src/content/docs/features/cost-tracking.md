@@ -64,6 +64,27 @@ Cache responses to avoid paying for identical queries:
 await costService.cacheResponse(query, response, model, 3600_000); // 1 hour TTL
 ```
 
+### `makeSemanticCache()`
+
+The cost layer uses `makeSemanticCache()` internally to provide cosine similarity-based prompt deduplication:
+
+```typescript
+import { makeSemanticCache } from "@reactive-agents/cost";
+
+// Without embedFn — falls back to exact hash matching only
+const cache = makeSemanticCache();
+
+// With embedFn — enables semantic similarity matching (>0.92 threshold)
+const cache = makeSemanticCache(myEmbedFn);
+```
+
+| Behavior | Without `embedFn` | With `embedFn` |
+|----------|-------------------|----------------|
+| Exact match | Yes (hash) | Yes (hash, fast path) |
+| Semantic match | No | Yes (cosine similarity > 0.92) |
+
+When an `embedFn` is provided, queries that are semantically equivalent (e.g., "What is the capital of France?" and "Which city is France's capital?") hit the cache without requiring an exact string match.
+
 ## Cost Analytics
 
 Get detailed reports on spending:
@@ -114,12 +135,33 @@ Cost tracking integrates with three phases of the execution lifecycle:
 
 ## Prompt Compression
 
-Reduce token usage by compressing prompts:
+Reduce token usage by compressing prompts before sending to the LLM:
 
 ```typescript
 const { compressed, savedTokens } = yield* cost.compressPrompt(longPrompt, 2000);
 console.log(`Saved ${savedTokens} tokens`);
 ```
+
+### `makePromptCompressor()`
+
+`makePromptCompressor()` uses a two-pass approach to reduce token count:
+
+```typescript
+import { makePromptCompressor } from "@reactive-agents/cost";
+
+// Heuristic-only compression (always runs — no LLM required)
+const compressor = makePromptCompressor();
+
+// Heuristic + optional LLM second pass
+const compressor = makePromptCompressor(myLlmService);
+```
+
+**Two-pass strategy:**
+
+1. **Heuristic pass** (always runs): Removes redundant whitespace, collapses repeated content, strips boilerplate. Fast and free.
+2. **LLM second pass** (optional): If the heuristic result still exceeds `maxTokens`, an LLM call intelligently summarizes or abbreviates the prompt further.
+
+Without an `llm` parameter, only the heuristic pass runs. The LLM second pass is recommended for very long prompts (>4,000 tokens) where heuristic compression alone may not be sufficient.
 
 ## Token Tracking
 
