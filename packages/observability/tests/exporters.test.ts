@@ -95,7 +95,7 @@ describe("ConsoleExporter (Phase 0.3)", () => {
     }
   });
 
-  test("exportMetrics shows counter totals, histogram percentiles, gauge last value", () => {
+  test("exportMetrics uses formatMetricsDashboard for professional output", () => {
     const output: string[] = [];
     const origLog = console.log;
     console.log = (...args: any[]) => output.push(args.join(" "));
@@ -103,18 +103,24 @@ describe("ConsoleExporter (Phase 0.3)", () => {
     try {
       const exporter = makeConsoleExporter({ showLogs: false, showSpans: false });
       const metrics: Metric[] = [
-        { name: "execution.phase.count", type: "counter", value: 1, timestamp: new Date(), labels: {} },
-        { name: "execution.phase.count", type: "counter", value: 1, timestamp: new Date(), labels: {} },
-        { name: "llm.request.duration_ms", type: "histogram", value: 50, timestamp: new Date(), labels: {} },
-        { name: "llm.request.duration_ms", type: "histogram", value: 200, timestamp: new Date(), labels: {} },
+        { name: "execution.phase.duration_ms", type: "histogram", value: 100, timestamp: new Date(), labels: { phase: "bootstrap" } },
+        { name: "execution.phase.duration_ms", type: "histogram", value: 5000, timestamp: new Date(), labels: { phase: "think" } },
+        { name: "execution.phase.duration_ms", type: "histogram", value: 1000, timestamp: new Date(), labels: { phase: "act" } },
         { name: "execution.iteration", type: "gauge", value: 3, timestamp: new Date(), labels: {} },
+        { name: "execution.tokens_used", type: "gauge", value: 1500, timestamp: new Date(), labels: {} },
       ];
       exporter.exportMetrics(metrics);
 
       const combined = output.join("\n");
-      expect(combined).toContain("execution.phase.count");
-      expect(combined).toContain("llm.request.duration_ms");
-      expect(combined).toContain("execution.iteration");
+      // Verify dashboard header is present
+      expect(combined).toContain("Agent Execution Summary");
+      expect(combined).toContain("Success");
+      expect(combined).toContain("Metrics Summary");
+      // Verify phases are shown in timeline
+      expect(combined).toContain("Execution Timeline");
+      expect(combined).toContain("bootstrap");
+      expect(combined).toContain("think");
+      expect(combined).toContain("act");
     } finally {
       console.log = origLog;
     }
@@ -478,5 +484,247 @@ describe("DashboardFormatter (Task 2)", () => {
     expect(output).toContain("file-write");
     // Tool with errors should show warning
     expect(output).toContain("⚠️");
+  });
+});
+
+// ─── Task 4: exportMetrics() Dashboard Integration ───
+
+describe("Task 4: exportMetrics() Dashboard Integration", () => {
+  test("exportMetrics builds DashboardData from histogram phase metrics", () => {
+    const output: string[] = [];
+    const origLog = console.log;
+    console.log = (...args: any[]) => output.push(args.join(" "));
+
+    try {
+      const exporter = makeConsoleExporter({ showLogs: false, showSpans: false });
+      const metrics: Metric[] = [
+        { name: "execution.phase.duration_ms", type: "histogram", value: 150, timestamp: new Date(), labels: { phase: "bootstrap" } },
+        { name: "execution.phase.duration_ms", type: "histogram", value: 8500, timestamp: new Date(), labels: { phase: "think" } },
+        { name: "execution.phase.duration_ms", type: "histogram", value: 2000, timestamp: new Date(), labels: { phase: "act" } },
+      ];
+      exporter.exportMetrics(metrics);
+
+      const combined = output.join("\n");
+      // Verify timeline section exists with all phases
+      expect(combined).toContain("Execution Timeline");
+      expect(combined).toContain("bootstrap");
+      expect(combined).toContain("think");
+      expect(combined).toContain("act");
+    } finally {
+      console.log = origLog;
+    }
+  });
+
+  test("exportMetrics extracts stepCount and tokenCount from gauges", () => {
+    const output: string[] = [];
+    const origLog = console.log;
+    console.log = (...args: any[]) => output.push(args.join(" "));
+
+    try {
+      const exporter = makeConsoleExporter({ showLogs: false, showSpans: false });
+      const metrics: Metric[] = [
+        { name: "execution.iteration", type: "gauge", value: 5, timestamp: new Date(), labels: {} },
+        { name: "execution.tokens_used", type: "gauge", value: 2000, timestamp: new Date(), labels: {} },
+      ];
+      exporter.exportMetrics(metrics);
+
+      const combined = output.join("\n");
+      // Verify header contains step and token counts
+      expect(combined).toContain("Steps: 5");
+      expect(combined).toContain("2,000"); // tokens formatted with commas
+    } finally {
+      console.log = origLog;
+    }
+  });
+
+  test("exportMetrics generates alerts for slow phases (>= 10s)", () => {
+    const output: string[] = [];
+    const origLog = console.log;
+    console.log = (...args: any[]) => output.push(args.join(" "));
+
+    try {
+      const exporter = makeConsoleExporter({ showLogs: false, showSpans: false });
+      const metrics: Metric[] = [
+        { name: "execution.phase.duration_ms", type: "histogram", value: 11500, timestamp: new Date(), labels: { phase: "think" } },
+      ];
+      exporter.exportMetrics(metrics);
+
+      const combined = output.join("\n");
+      // Verify alert section appears with warning
+      expect(combined).toContain("Alerts & Insights");
+      expect(combined).toContain("think phase blocked ≥10s");
+    } finally {
+      console.log = origLog;
+    }
+  });
+
+  test("exportMetrics generates alerts for high iteration count", () => {
+    const output: string[] = [];
+    const origLog = console.log;
+    console.log = (...args: any[]) => output.push(args.join(" "));
+
+    try {
+      const exporter = makeConsoleExporter({ showLogs: false, showSpans: false });
+      const metrics: Metric[] = [
+        { name: "execution.iteration", type: "gauge", value: 9, timestamp: new Date(), labels: {} },
+      ];
+      exporter.exportMetrics(metrics);
+
+      const combined = output.join("\n");
+      // Verify alerts show high iteration warnings
+      expect(combined).toContain("Alerts & Insights");
+      expect(combined).toContain("9 iterations needed");
+      expect(combined).toContain("High iteration count");
+    } finally {
+      console.log = origLog;
+    }
+  });
+
+  test("exportMetrics calculates estimated cost correctly", () => {
+    const output: string[] = [];
+    const origLog = console.log;
+    console.log = (...args: any[]) => output.push(args.join(" "));
+
+    try {
+      const exporter = makeConsoleExporter({ showLogs: false, showSpans: false });
+      const metrics: Metric[] = [
+        { name: "execution.tokens_used", type: "gauge", value: 1000, timestamp: new Date(), labels: {} },
+      ];
+      exporter.exportMetrics(metrics);
+
+      const combined = output.join("\n");
+      // At ~$0.0015 per 1K tokens, 1000 tokens should cost ~$0.0015
+      // But due to rounding in the display, it shows as $0.002 (rounded up)
+      expect(combined).toContain("Cost: ~$0.002");
+    } finally {
+      console.log = origLog;
+    }
+  });
+
+  test("exportMetrics extracts model name from metrics", () => {
+    const output: string[] = [];
+    const origLog = console.log;
+    console.log = (...args: any[]) => output.push(args.join(" "));
+
+    try {
+      const exporter = makeConsoleExporter({ showLogs: false, showSpans: false });
+      const metrics: Metric[] = [
+        { name: "execution.model_name", type: "counter", value: 0, timestamp: new Date(), labels: { model: "claude-3.5" } },
+      ];
+      exporter.exportMetrics(metrics);
+
+      const combined = output.join("\n");
+      // Verify model name appears in header
+      expect(combined).toContain("claude-3.5");
+    } finally {
+      console.log = origLog;
+    }
+  });
+
+  test("exportMetrics determines status from phase warnings", () => {
+    const output: string[] = [];
+    const origLog = console.log;
+    console.log = (...args: any[]) => output.push(args.join(" "));
+
+    try {
+      const exporter = makeConsoleExporter({ showLogs: false, showSpans: false });
+      // Slow phase should trigger "partial" status
+      const metrics: Metric[] = [
+        { name: "execution.phase.duration_ms", type: "histogram", value: 12000, timestamp: new Date(), labels: { phase: "think" } },
+      ];
+      exporter.exportMetrics(metrics);
+
+      const combined = output.join("\n");
+      // With warning phases, status should show "Partial"
+      expect(combined).toContain("Partial");
+      expect(combined).toContain("⚠️");
+    } finally {
+      console.log = origLog;
+    }
+  });
+
+  test("exportMetrics estimates token count from iteration when not provided", () => {
+    const output: string[] = [];
+    const origLog = console.log;
+    console.log = (...args: any[]) => output.push(args.join(" "));
+
+    try {
+      const exporter = makeConsoleExporter({ showLogs: false, showSpans: false });
+      // Only iteration count, no explicit tokens
+      const metrics: Metric[] = [
+        { name: "execution.iteration", type: "gauge", value: 3, timestamp: new Date(), labels: {} },
+      ];
+      exporter.exportMetrics(metrics);
+
+      const combined = output.join("\n");
+      // 3 iterations * 300 tokens = ~900 tokens
+      expect(combined).toContain("Tokens:");
+      expect(combined).toMatch(/900|1,000/); // fuzzy match due to rounding
+    } finally {
+      console.log = origLog;
+    }
+  });
+
+  test("exportMetrics displays tool execution section when tools are present", () => {
+    const output: string[] = [];
+    const origLog = console.log;
+    console.log = (...args: any[]) => output.push(args.join(" "));
+
+    try {
+      const exporter = makeConsoleExporter({ showLogs: false, showSpans: false });
+      const metrics: Metric[] = [
+        { name: "execution.phase.duration_ms", type: "histogram", value: 100, timestamp: new Date(), labels: { phase: "bootstrap" } },
+        { name: "execution.phase.duration_ms", type: "histogram", value: 500, timestamp: new Date(), labels: { phase: "think" } },
+        { name: "execution.tool.execution", type: "histogram", value: 150, timestamp: new Date(), labels: { tool: "file-write", status: "success" } },
+        { name: "execution.tool.execution", type: "histogram", value: 200, timestamp: new Date(), labels: { tool: "file-write", status: "success" } },
+        { name: "execution.tool.execution", type: "histogram", value: 100, timestamp: new Date(), labels: { tool: "web-search", status: "error" } },
+      ];
+      exporter.exportMetrics(metrics);
+
+      const combined = output.join("\n");
+      // Verify tool section appears
+      expect(combined).toContain("Tool Execution");
+      expect(combined).toContain("file-write");
+      expect(combined).toContain("web-search");
+      // Verify call counts and status
+      expect(combined).toContain("2 calls"); // file-write had 2 calls
+      expect(combined).toContain("1 calls"); // web-search had 1 call
+    } finally {
+      console.log = origLog;
+    }
+  });
+
+  test("exportMetrics handles empty metrics gracefully", () => {
+    const output: string[] = [];
+    const origLog = console.log;
+    console.log = (...args: any[]) => output.push(args.join(" "));
+
+    try {
+      const exporter = makeConsoleExporter({ showLogs: false, showSpans: false });
+      exporter.exportMetrics([]);
+
+      // Should not output anything when no metrics
+      expect(output.length).toBe(0);
+    } finally {
+      console.log = origLog;
+    }
+  });
+
+  test("exportMetrics respects showMetrics option", () => {
+    const output: string[] = [];
+    const origLog = console.log;
+    console.log = (...args: any[]) => output.push(args.join(" "));
+
+    try {
+      const exporter = makeConsoleExporter({ showLogs: false, showSpans: false, showMetrics: false });
+      const metrics: Metric[] = [
+        { name: "execution.iteration", type: "gauge", value: 5, timestamp: new Date(), labels: {} },
+      ];
+      exporter.exportMetrics(metrics);
+
+      expect(output.length).toBe(0);
+    } finally {
+      console.log = origLog;
+    }
   });
 });

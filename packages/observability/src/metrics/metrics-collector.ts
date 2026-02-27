@@ -1,5 +1,6 @@
-import { Effect, Ref, Context, Layer } from "effect";
+import { Effect, Ref, Context, Layer, Option } from "effect";
 import type { Metric, ToolMetric, ToolMetricStatus } from "../types.js";
+import { EventBus } from "@reactive-agents/core";
 
 export interface ToolSummary {
   readonly callCount: number;
@@ -72,10 +73,20 @@ export const makeMetricsCollector = Effect.gen(function* () {
     duration: number,
     status: ToolMetricStatus,
   ): Effect.Effect<void, never> =>
-    Ref.update(toolMetricsRef, (metrics) => [
-      ...metrics,
-      { toolName, duration, status, callCount: 1, timestamp: new Date() },
-    ]);
+    Effect.gen(function* () {
+      // Record in tool-specific tracker
+      yield* Ref.update(toolMetricsRef, (metrics) => [
+        ...metrics,
+        { toolName, duration, status, callCount: 1, timestamp: new Date() },
+      ]);
+
+      // Also add to metrics array for dashboard export
+      // Record as gauge metrics for tool call aggregation
+      yield* Ref.update(metricsRef, (metrics) => [
+        ...metrics,
+        { name: "execution.tool.execution", type: "histogram" as const, value: duration, timestamp: new Date(), labels: { tool: toolName, status } },
+      ]);
+    });
 
   const getToolMetrics = (): Effect.Effect<readonly ToolMetric[], never> =>
     Ref.get(toolMetricsRef);
@@ -114,5 +125,25 @@ export const makeMetricsCollector = Effect.gen(function* () {
 
 export const MetricsCollectorLive: Layer.Layer<MetricsCollectorTag, never> = Layer.effect(
   MetricsCollectorTag,
-  makeMetricsCollector,
+  Effect.gen(function* () {
+    const collector = yield* makeMetricsCollector;
+
+    // Optionally subscribe to EventBus for ToolCallCompleted events
+    const ebOpt = yield* Effect.serviceOption(EventBus);
+    if (Option.isSome(ebOpt)) {
+      // Register a handler — subscribe() returns an unsubscribe fn which we ignore
+      // (the collector lives for the process lifetime)
+      yield* ebOpt.value.on("ToolCallCompleted", (event) =>
+        collector
+          .recordToolExecution(
+            event.toolName,
+            event.durationMs,
+            event.success ? "success" : "error",
+          )
+          .pipe(Effect.catchAll(() => Effect.void)),
+      );
+    }
+
+    return collector;
+  }),
 );

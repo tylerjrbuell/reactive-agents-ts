@@ -1,5 +1,9 @@
 import type { LogEntry, Span, Metric } from "../types.js";
 import type { LiveLogWriter } from "../logging/structured-logger.js";
+import type {
+  MetricsCollector,
+  ToolSummary,
+} from "../metrics/metrics-collector.js";
 
 // ─── ANSI Colors ───
 
@@ -49,6 +53,7 @@ export interface DashboardData {
   readonly tokenCount: number;
   readonly estimatedCost: number; // USD
   readonly modelName: string;
+  readonly provider: string;
   readonly phases: readonly DashboardPhase[];
   readonly tools: readonly DashboardTool[];
   readonly alerts: readonly DashboardAlert[];
@@ -68,7 +73,276 @@ export interface ConsoleExporterOptions {
 }
 
 const LOG_LEVEL_ORDER: Record<string, number> = {
-  debug: 0, info: 1, warn: 2, error: 3,
+  debug: 0,
+  info: 1,
+  warn: 2,
+  error: 3,
+};
+
+// ─── Helper Functions for Dashboard Data Building ───
+
+/**
+ * Extract phase metrics (duration in ms) from metric array.
+ * Looks for histogram metrics named "execution.phase.duration_ms" with phase label
+ */
+const extractPhaseMetrics = (
+  metrics: readonly Metric[],
+): Map<string, number[]> => {
+  const phaseMetrics = new Map<string, number[]>();
+
+  for (const metric of metrics) {
+    if (metric.type === "histogram" && metric.name === "execution.phase.duration_ms") {
+      const phaseName = metric.labels?.phase;
+      if (phaseName) {
+        const existing = phaseMetrics.get(phaseName) ?? [];
+        phaseMetrics.set(phaseName, [...existing, metric.value]);
+      }
+    }
+  }
+
+  return phaseMetrics;
+};
+
+/**
+ * Calculate estimated cost in USD based on token count.
+ * Uses a simple heuristic: ~$0.0015 per 1K tokens (Claude 3.5 Sonnet pricing approx).
+ */
+const calculateCost = (tokenCount: number): number => {
+  return (tokenCount / 1000) * 0.0015;
+};
+
+/**
+ * Generate alerts based on phases, tools, and overall metrics.
+ */
+const generateAlerts = (
+  phases: readonly DashboardPhase[],
+  tools: readonly DashboardTool[],
+  stepCount: number,
+): readonly DashboardAlert[] => {
+  const alerts: DashboardAlert[] = [];
+
+  // Check for slow phases
+  for (const phase of phases) {
+    if (phase.duration >= 10000) {
+      alerts.push({
+        level: "warning",
+        message: `${phase.name} phase blocked ≥10s (LLM latency)`,
+      });
+    }
+  }
+
+  // Check for tool errors
+  for (const tool of tools) {
+    if (tool.errorCount > 0) {
+      const errorRate = ((tool.errorCount / tool.callCount) * 100).toFixed(0);
+      alerts.push({
+        level: "warning",
+        message: `${tool.name} had ${tool.errorCount} error(s) (${errorRate}% failure rate)`,
+      });
+    }
+  }
+
+  // Info alerts for reasoning complexity
+  if (stepCount >= 7) {
+    alerts.push({
+      level: "info",
+      message: `${stepCount} iterations needed (complex reasoning)`,
+    });
+  }
+
+  if (stepCount > 8) {
+    alerts.push({
+      level: "warning",
+      message:
+        "High iteration count suggests task complexity or model confusion",
+    });
+  }
+
+  return alerts;
+};
+
+/**
+ * Build DashboardData from metrics array and optional MetricsCollector.
+ * Aggregates phase durations, tool metrics, and generates alerts.
+ */
+const buildDashboardData = (
+  metrics: readonly Metric[],
+  metricsCollector?: MetricsCollector,
+): DashboardData => {
+  // Count total tokens from metrics
+  let tokenCount = 0;
+  for (const metric of metrics) {
+    if (metric.type === "gauge" && metric.name === "execution.tokens_used") {
+      tokenCount = Math.max(tokenCount, Math.round(metric.value));
+    }
+  }
+
+  // Count steps from gauge
+  let stepCount = 0;
+  for (const metric of metrics) {
+    if (metric.type === "gauge" && metric.name === "execution.iteration") {
+      stepCount = Math.max(stepCount, Math.round(metric.value));
+    }
+  }
+
+  // If tokenCount is 0, estimate from step count (rough heuristic)
+  if (tokenCount === 0 && stepCount > 0) {
+    tokenCount = Math.round(stepCount * 300);
+  }
+
+  // Extract tool metrics from metrics array (name: execution.tool.execution with tool label)
+  const tools: DashboardTool[] = [];
+  const toolMetrics = new Map<string, { count: number; successCount: number; errorCount: number; totalDuration: number }>();
+
+  for (const metric of metrics) {
+    if (metric.type === "histogram" && metric.name === "execution.tool.execution") {
+      const toolName = metric.labels?.tool;
+      const status = metric.labels?.status;
+      if (toolName) {
+        const existing = toolMetrics.get(toolName) ?? {
+          count: 0,
+          successCount: 0,
+          errorCount: 0,
+          totalDuration: 0,
+        };
+        const newSuccess = status === "success" ? existing.successCount + 1 : existing.successCount;
+        const newError = status === "error" ? existing.errorCount + 1 : existing.errorCount;
+        toolMetrics.set(toolName, {
+          count: existing.count + 1,
+          successCount: newSuccess,
+          errorCount: newError,
+          totalDuration: existing.totalDuration + metric.value,
+        });
+      }
+    }
+  }
+
+  // Build tool array from extracted metrics
+  for (const [toolName, toolData] of toolMetrics.entries()) {
+    const avgDuration = toolData.count > 0 ? toolData.totalDuration / toolData.count : 0;
+    tools.push({
+      name: toolName,
+      callCount: toolData.count,
+      successCount: toolData.successCount,
+      errorCount: toolData.errorCount,
+      avgDuration,
+    });
+  }
+
+  // Extract phase metrics
+  const phaseMetrics = extractPhaseMetrics(metrics);
+  const phases: DashboardPhase[] = [];
+
+  // Build phase array (in typical execution order)
+  const phaseOrder = [
+    "bootstrap",
+    "guardrail",
+    "cost-route",
+    "strategy-select",
+    "think",
+    "act",
+    "observe",
+    "verify",
+    "memory-flush",
+    "cost-track",
+    "audit",
+    "complete",
+  ];
+
+  // Calculate total phase duration for percentage calculation
+  let totalPhaseDuration = 0;
+  const phaseDurations = new Map<string, number>();
+  for (const phaseName of phaseOrder) {
+    const values = phaseMetrics.get(phaseName) ?? [];
+    const duration = values.reduce((a, b) => a + b, 0);
+    if (duration > 0) {
+      phaseDurations.set(phaseName, duration);
+      totalPhaseDuration += duration;
+    }
+  }
+
+  for (const phaseName of phaseOrder) {
+    const values = phaseMetrics.get(phaseName) ?? [];
+    if (values.length > 0) {
+      const duration = values.reduce((a, b) => a + b, 0);
+
+      // Build details string based on phase name
+      let details: string | undefined;
+      if (phaseName === "think" && stepCount > 0) {
+        const percentOfTotal = totalPhaseDuration > 0 ? ((duration / totalPhaseDuration) * 100).toFixed(0) : "?";
+        details = `${stepCount} iter, ${percentOfTotal}% of time`;
+      } else if (phaseName === "act" && tools.length > 0) {
+        details = `${tools.length} tools`;
+      }
+
+      phases.push({
+        name: phaseName,
+        duration,
+        status: duration >= 10000 ? "warning" : "ok",
+        details,
+      });
+    }
+  }
+
+  // Calculate total duration from execution.total_duration gauge (most accurate)
+  let totalDuration = 0;
+  for (const metric of metrics) {
+    if (metric.type === "gauge" && metric.name === "execution.total_duration") {
+      totalDuration = Math.max(totalDuration, Math.round(metric.value));
+      break;
+    }
+  }
+  // Fallback to phase durations if no gauge found
+  if (totalDuration === 0) {
+    totalDuration = phases.reduce((sum, p) => sum + p.duration, 0);
+  }
+
+  // Determine status
+  let status: "success" | "error" | "partial" = "success";
+  for (const phase of phases) {
+    if (phase.status === "error") {
+      status = "error";
+      break;
+    }
+    if (phase.status === "warning") {
+      status = "partial";
+    }
+  }
+
+  // If we have a metricsCollector, we could get tool summary here
+  // but since it's sync and collector is Effect-based, we skip for now
+  // Callers can enhance this by passing pre-fetched tool data if needed
+
+  // Get model name and provider from counter labels
+  let modelName = "unknown";
+  let provider = "unknown";
+  for (const metric of metrics) {
+    if (metric.type === "counter" && metric.name === "execution.model_name") {
+      if (metric.labels?.model) {
+        modelName = String(metric.labels.model);
+      }
+      if (metric.labels?.provider) {
+        provider = String(metric.labels.provider);
+      }
+      break;
+    }
+  }
+
+  const estimatedCost = calculateCost(tokenCount);
+  const alerts = generateAlerts(phases, tools, stepCount);
+
+  return {
+    status,
+    totalDuration,
+    stepCount,
+    tokenCount,
+    estimatedCost,
+    modelName,
+    provider,
+    phases,
+    tools,
+    alerts,
+  };
 };
 
 export const makeConsoleExporter = (options: ConsoleExporterOptions = {}) => {
@@ -82,7 +356,9 @@ export const makeConsoleExporter = (options: ConsoleExporterOptions = {}) => {
   const exportLogs = (logs: readonly LogEntry[]): void => {
     if (!showLogs || logs.length === 0) return;
     const minLevelOrder = LOG_LEVEL_ORDER[minLevel] ?? 0;
-    const filtered = logs.filter((l) => (LOG_LEVEL_ORDER[l.level] ?? 0) >= minLevelOrder);
+    const filtered = logs.filter(
+      (l) => (LOG_LEVEL_ORDER[l.level] ?? 0) >= minLevelOrder,
+    );
     if (filtered.length === 0) return;
 
     console.log(`\n${BOLD}${CYAN}═══ Logs (${filtered.length}) ═══${RESET}`);
@@ -93,7 +369,9 @@ export const makeConsoleExporter = (options: ConsoleExporterOptions = {}) => {
       const meta = entry.metadata
         ? ` ${GRAY}${JSON.stringify(entry.metadata)}${RESET}`
         : "";
-      console.log(`  ${GRAY}${ts}${RESET} ${color}${BOLD}${level}${RESET} ${entry.message}${meta}`);
+      console.log(
+        `  ${GRAY}${ts}${RESET} ${color}${BOLD}${level}${RESET} ${entry.message}${meta}`,
+      );
     }
   };
 
@@ -113,10 +391,17 @@ export const makeConsoleExporter = (options: ConsoleExporterOptions = {}) => {
     const printTree = (span: Span, indent: number): void => {
       const prefix = "  " + "  ".repeat(indent);
       const durationMs = span.attributes["duration_ms"] as number | undefined;
-      const durStr = durationMs !== undefined ? ` ${DIM}(${durationMs.toFixed(1)}ms)${RESET}` : "";
-      const statusColor = span.status === "ok" ? GREEN : span.status === "error" ? RED : GRAY;
-      const statusIcon = span.status === "ok" ? "✓" : span.status === "error" ? "✗" : "○";
-      console.log(`${prefix}${statusColor}${statusIcon}${RESET} ${BOLD}${span.name}${RESET}${durStr} ${GRAY}[${span.traceId.slice(0, 8)}…]${RESET}`);
+      const durStr =
+        durationMs !== undefined
+          ? ` ${DIM}(${durationMs.toFixed(1)}ms)${RESET}`
+          : "";
+      const statusColor =
+        span.status === "ok" ? GREEN : span.status === "error" ? RED : GRAY;
+      const statusIcon =
+        span.status === "ok" ? "✓" : span.status === "error" ? "✗" : "○";
+      console.log(
+        `${prefix}${statusColor}${statusIcon}${RESET} ${BOLD}${span.name}${RESET}${durStr} ${GRAY}[${span.traceId.slice(0, 8)}…]${RESET}`,
+      );
 
       const children = childrenMap.get(span.spanId) ?? [];
       for (const child of children) printTree(child, indent + 1);
@@ -134,37 +419,19 @@ export const makeConsoleExporter = (options: ConsoleExporterOptions = {}) => {
     }
   };
 
-  const exportMetrics = (metrics: readonly Metric[]): void => {
+  const exportMetrics = (
+    metrics: readonly Metric[],
+    metricsCollector?: MetricsCollector,
+  ): void => {
     if (!showMetrics || metrics.length === 0) return;
+
+    // Build dashboard data from metrics and collector
+    const dashboardData = buildDashboardData(metrics, metricsCollector);
+
+    // Format and output the dashboard
+    const dashboard = formatMetricsDashboard(dashboardData);
     console.log(`\n${BOLD}${CYAN}═══ Metrics Summary ═══${RESET}`);
-
-    // Group by metric name and type
-    const grouped = new Map<string, { type: string; values: number[] }>();
-    for (const m of metrics) {
-      const key = m.name;
-      const existing = grouped.get(key);
-      if (existing) {
-        existing.values.push(m.value);
-      } else {
-        grouped.set(key, { type: m.type, values: [m.value] });
-      }
-    }
-
-    for (const [name, { type, values }] of grouped.entries()) {
-      if (type === "counter") {
-        const total = values.reduce((a, b) => a + b, 0);
-        console.log(`  ${BLUE}counter${RESET}  ${name}: ${BOLD}${total}${RESET}`);
-      } else if (type === "gauge") {
-        const last = values[values.length - 1] ?? 0;
-        console.log(`  ${YELLOW}gauge${RESET}    ${name}: ${BOLD}${last}${RESET}`);
-      } else if (type === "histogram") {
-        const sorted = [...values].sort((a, b) => a - b);
-        const p50 = sorted[Math.floor(sorted.length * 0.5)] ?? 0;
-        const p95 = sorted[Math.floor(sorted.length * 0.95)] ?? 0;
-        const p99 = sorted[Math.floor(sorted.length * 0.99)] ?? 0;
-        console.log(`  ${GREEN}histogram${RESET} ${name}: p50=${BOLD}${p50.toFixed(1)}${RESET} p95=${p95.toFixed(1)} p99=${p99.toFixed(1)} (n=${values.length})`);
-      }
-    }
+    console.log(dashboard);
   };
 
   return { exportLogs, exportSpans, exportMetrics };
@@ -191,7 +458,9 @@ export const formatLogEntryLive = (entry: LogEntry): string => {
  * Create a LiveLogWriter that writes each log entry immediately to stdout.
  * Respects minLevel filtering from options.
  */
-export const makeLiveLogWriter = (options?: ConsoleExporterOptions): LiveLogWriter => {
+export const makeLiveLogWriter = (
+  options?: ConsoleExporterOptions,
+): LiveLogWriter => {
   const minLevel = options?.minLevel ?? "debug";
   const minLevelOrder = LOG_LEVEL_ORDER[minLevel] ?? 0;
   return (entry: LogEntry): void => {
@@ -219,13 +488,18 @@ export const formatDuration = (ms: number): string => {
  * Format a number as currency with commas.
  */
 export const formatNumber = (n: number): string => {
-  return n.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  return n.toLocaleString("en-US", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  });
 };
 
 /**
  * Get status icon based on status string.
  */
-const getStatusIcon = (status: "ok" | "warning" | "error" | "success" | "partial"): string => {
+const getStatusIcon = (
+  status: "ok" | "warning" | "error" | "success" | "partial",
+): string => {
   if (status === "ok" || status === "success") return "✅";
   if (status === "warning" || status === "partial") return "⚠️";
   return "❌";
@@ -246,44 +520,92 @@ const getAlertIcon = (level: "warning" | "error" | "info"): string => {
 export const formatMetricsDashboard = (data: DashboardData): string => {
   const lines: string[] = [];
 
+  // Helper to build a box line accounting for emoji visual width (2 columns per emoji)
+  const BOX_WIDTH = 72;
+  const buildBoxLine = (content: string): string => {
+    // Approximate visual width in terminal columns.
+    // Treat most characters as width 1, and common emoji symbols as width 2.
+    const emojiPattern = /\p{Extended_Pictographic}/gu;
+
+    let visualWidth = 0;
+    for (const ch of content) {
+      visualWidth += emojiPattern.test(ch) ? 2 : 1;
+    }
+
+    const padding = Math.max(0, BOX_WIDTH - visualWidth);
+    return `│ ${content}${" ".repeat(padding)} │`;
+  };
+
   // Header card with box drawing
   const statusIcon = getStatusIcon(data.status);
   const headerLines = [
-    `┌${"─".repeat(61)}┐`,
-    `│ ${statusIcon} Agent Execution Summary${"─".repeat(37)}│`,
-    `├${"─".repeat(61)}┤`,
-    `│ Status:    ${statusIcon} ${data.status === "success" ? "Success" : data.status === "error" ? "Error" : "Partial"}${" ".repeat(8)} Duration: ${formatDuration(data.totalDuration).padEnd(8)} Steps: ${data.stepCount}${" ".repeat(10)}│`,
-    `│ Tokens:    ${formatNumber(data.tokenCount).padEnd(11)} Cost: ~$${data.estimatedCost.toFixed(3)}${" ".repeat(8)} Model: ${data.modelName}${" ".repeat(Math.max(0, 21 - data.modelName.length))}│`,
-    `└${"─".repeat(61)}┘`,
+    `┌${"─".repeat(BOX_WIDTH + 2)}┐`,
+    buildBoxLine(`📄 Agent Execution Summary`),
+    `├${"─".repeat(BOX_WIDTH + 2)}┤`,
   ];
+
+  // Build status line
+  const statusText =
+    data.status === "success"
+      ? "Success"
+      : data.status === "error"
+        ? "Error"
+        : "Partial";
+  const durationStr = formatDuration(data.totalDuration);
+  const statusLine = `${statusIcon} ${statusText.padEnd(7)}  Duration: ${durationStr.padStart(7)}  Steps: ${data.stepCount}`;
+  headerLines.push(buildBoxLine(statusLine));
+
+  // Build model/provider line
+  const modelLine = `Model: ${data.modelName.padEnd(15)} (${data.provider})  Tokens: ${formatNumber(data.tokenCount)}`;
+  headerLines.push(buildBoxLine(modelLine));
+
+  // Build cost line - only for cloud providers (not local models like ollama)
+  const isLocalProvider =
+    data.provider?.toLowerCase().includes("ollama") ||
+    data.provider?.toLowerCase().includes("test");
+  if (!isLocalProvider) {
+    const costLine = `Cost: ~$${data.estimatedCost.toFixed(3)}`;
+    headerLines.push(buildBoxLine(costLine));
+  }
+
+  headerLines.push(`└${"─".repeat(BOX_WIDTH + 2)}┘`);
   lines.push(...headerLines);
 
   // Execution Timeline section (only if phases exist)
   if (data.phases.length > 0) {
     lines.push("");
     lines.push(`${CYAN}${BOLD}📊 Execution Timeline${RESET}`);
+    // Find max phase name length for alignment
+    const maxPhaseNameLen = Math.max(...data.phases.map((p) => p.name.length), 10);
     for (let i = 0; i < data.phases.length; i++) {
       const phase = data.phases[i];
       const isLast = i === data.phases.length - 1;
       const prefix = isLast ? "└─" : "├─";
       const icon = getStatusIcon(phase.status);
-      const durationStr = formatDuration(phase.duration).padStart(10);
+      const durationStr = formatDuration(phase.duration).padStart(8);
       const detailsStr = phase.details ? `  (${phase.details})` : "";
-      lines.push(`${prefix} [${phase.name}]${" ".repeat(Math.max(1, 12 - phase.name.length))}${durationStr}    ${icon}${detailsStr}`);
+      const phaseName = `[${phase.name}]`.padEnd(maxPhaseNameLen + 2);
+      lines.push(
+        `${prefix} ${phaseName} ${durationStr}  ${icon}${detailsStr}`,
+      );
     }
   }
 
   // Tool Execution section (only if tools exist)
   if (data.tools.length > 0) {
     lines.push("");
-    lines.push(`${CYAN}${BOLD}🔧 Tool Execution (${data.tools.length} called)${RESET}`);
+    lines.push(
+      `${CYAN}${BOLD}🔧 Tool Execution (${data.tools.length} called)${RESET}`,
+    );
     for (let i = 0; i < data.tools.length; i++) {
       const tool = data.tools[i];
       const isLast = i === data.tools.length - 1;
       const prefix = isLast ? "└─" : "├─";
       const icon = tool.errorCount > 0 ? "⚠️" : "✅";
       const avgStr = formatDuration(tool.avgDuration);
-      lines.push(`${prefix} ${tool.name.padEnd(15)} ${icon} ${tool.callCount} calls, ${avgStr} avg`);
+      lines.push(
+        `${prefix} ${tool.name.padEnd(15)} ${icon} ${tool.callCount} calls, ${avgStr} avg`,
+      );
     }
   }
 
