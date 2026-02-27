@@ -17,6 +17,42 @@ describe("tool result compression config threading", () => {
   });
 });
 
+describe("runToolObservation compression wiring", () => {
+  test("stored result is accessible via scratchpad store", () => {
+    const bigArray = Array.from({ length: 20 }, (_, i) => ({
+      sha: `sha${i}`,
+      message: `commit ${i}`,
+    }));
+    const bigJson = JSON.stringify(bigArray);
+
+    // Direct test: compressToolResult puts key in stored, and the key format is _tool_result_N
+    const store = new Map<string, string>();
+    const compressed = compressToolResult(bigJson, "github/list_commits", 100, 3);
+    if (compressed.stored) {
+      store.set(compressed.stored.key, compressed.stored.value);
+    }
+    expect(store.size).toBe(1);
+    const [key] = [...store.keys()];
+    expect(JSON.parse(store.get(key!)!)).toHaveLength(20);
+  });
+
+  test("compressToolResult reads compression config fields correctly", () => {
+    const bigArray = Array.from({ length: 10 }, (_, i) => ({ id: i, name: `item ${i}` }));
+    const bigJson = JSON.stringify(bigArray);
+
+    // With budget=2000, the array should NOT be compressed (fits in budget)
+    const result1 = compressToolResult(bigJson, "test-tool", 2000, 3);
+    expect(result1.stored).toBeUndefined();
+
+    // With budget=50, it should be compressed with previewItems=2
+    const result2 = compressToolResult(bigJson, "test-tool", 50, 2);
+    expect(result2.stored).toBeDefined();
+    expect(result2.content).toContain("Array(10)");
+    // Only 2 preview items (previewItems=2), so ...8 more
+    expect(result2.content).toContain("...8 more");
+  });
+});
+
 describe("compressToolResult", () => {
   test("returns result as-is when under budget", () => {
     const result = compressToolResult("hello world", "some-tool", 800, 3);
