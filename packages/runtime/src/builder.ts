@@ -207,6 +207,51 @@ export interface A2AOptions {
 }
 
 /**
+ * Options for `.withGateway()` — configure the persistent autonomous agent harness.
+ *
+ * Enables heartbeats, crons, webhooks, and a composable policy engine for proactive agent behavior.
+ * The gateway operates as deterministic infrastructure — LLM calls only happen when intelligence is needed.
+ *
+ * @example
+ * ```typescript
+ * agent.withGateway({
+ *   heartbeat: { intervalMs: 1800000, policy: "adaptive" },
+ *   crons: [{ schedule: "0 9 * * MON", instruction: "Review PRs" }],
+ *   policies: { dailyTokenBudget: 50000, maxActionsPerHour: 20 },
+ * })
+ * ```
+ */
+export interface GatewayOptions {
+  readonly heartbeat?: {
+    readonly intervalMs?: number;
+    readonly policy?: "always" | "adaptive" | "conservative";
+    readonly instruction?: string;
+    readonly maxConsecutiveSkips?: number;
+  };
+  readonly crons?: readonly {
+    readonly schedule: string;
+    readonly instruction: string;
+    readonly agentId?: string;
+    readonly priority?: "low" | "normal" | "high" | "critical";
+    readonly enabled?: boolean;
+  }[];
+  readonly webhooks?: readonly {
+    readonly path: string;
+    readonly adapter: string;
+    readonly secret?: string;
+    readonly events?: readonly string[];
+  }[];
+  readonly policies?: {
+    readonly dailyTokenBudget?: number;
+    readonly maxActionsPerHour?: number;
+    readonly heartbeatPolicy?: "always" | "adaptive" | "conservative";
+    readonly mergeWindowMs?: number;
+    readonly requireApprovalFor?: readonly string[];
+  };
+  readonly port?: number;
+}
+
+/**
  * Options for `.withAgentTool()` — register a local or remote agent as a callable tool.
  *
  * Allows this agent to spawn sub-agents (either locally or via remote A2A invocation) that
@@ -424,6 +469,7 @@ export class ReactiveAgentBuilder {
   private _mcpServers: MCPServerConfig[] = [];
   private _systemPrompt?: string;
   private _a2aOptions?: A2AOptions;
+  private _gatewayOptions?: GatewayOptions;
   private _agentTools: AgentToolOptions[] = [];
   private _contextProfile?: Partial<ContextProfile>;
   private _allowDynamicSubAgents: boolean = false;
@@ -513,6 +559,31 @@ export class ReactiveAgentBuilder {
    */
   withA2A(options?: A2AOptions): this {
     this._a2aOptions = options ?? { port: 3000 };
+    return this;
+  }
+
+  // ─── Gateway ────────────────────────────────────────────────────────────────
+
+  /**
+   * Enable the persistent gateway for autonomous agent behavior.
+   *
+   * Configures heartbeats (adaptive by default), cron schedules, webhook endpoints,
+   * and a composable policy engine. The gateway is deterministic infrastructure —
+   * it only invokes the LLM when intelligence is genuinely needed.
+   *
+   * @param options - Gateway configuration (heartbeat, crons, webhooks, policies)
+   * @returns `this` for chaining
+   * @example
+   * ```typescript
+   * builder.withGateway({
+   *   heartbeat: { intervalMs: 1800000, policy: "adaptive" },
+   *   crons: [{ schedule: "0 9 * * MON", instruction: "Review PRs" }],
+   *   policies: { dailyTokenBudget: 50000 },
+   * })
+   * ```
+   */
+  withGateway(options?: GatewayOptions): this {
+    this._gatewayOptions = options ?? {};
     return this;
   }
 
@@ -1150,6 +1221,8 @@ export class ReactiveAgentBuilder {
       enableA2A: !!this._a2aOptions,
       a2aPort: this._a2aOptions?.port,
       a2aBasePath: this._a2aOptions?.basePath,
+      enableGateway: !!this._gatewayOptions,
+      gatewayOptions: this._gatewayOptions,
       contextProfile: this._contextProfile,
       resultCompression: this._resultCompression,
     });

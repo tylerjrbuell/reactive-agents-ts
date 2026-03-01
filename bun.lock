@@ -300,6 +300,7 @@
       "dependencies": {
         "@reactive-agents/core": "workspace:^",
         "@reactive-agents/cost": "workspace:^",
+        "@reactive-agents/gateway": "workspace:^",
         "@reactive-agents/guardrails": "workspace:^",
         "@reactive-agents/identity": "workspace:^",
         "@reactive-agents/interaction": "workspace:^",
