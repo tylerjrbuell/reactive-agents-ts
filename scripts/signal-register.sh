@@ -6,6 +6,12 @@ set -euo pipefail
 #
 # Usage: ./scripts/signal-register.sh +1234567890 [data-dir]
 #
+# Signal requires a captcha for registration:
+#   1. Open https://signalcaptchas.org/registration/generate.html
+#   2. Solve the captcha
+#   3. Right-click "Open Signal" link → copy link address
+#   4. Paste the signalcaptcha:// URL when prompted
+#
 # After registration, auth data is stored in the data directory
 # and volume-mounted into the Docker container on subsequent runs.
 
@@ -27,16 +33,23 @@ echo "Phone: $PHONE"
 echo "Data:  $DATA_DIR"
 echo ""
 
-echo "Step 1: Requesting verification code..."
+echo "Step 1: Solve the captcha"
+echo "  Open: https://signalcaptchas.org/registration/generate.html"
+echo "  Solve the captcha, then right-click 'Open Signal' and copy the link."
+echo ""
+read -rp "Paste the signalcaptcha:// URL: " CAPTCHA
+
+echo ""
+echo "Step 2: Requesting verification code..."
 docker run -it --rm \
   -v "$(realpath "$DATA_DIR"):/data:rw" \
   -e SIGNAL_CLI_CONFIG=/data \
   --entrypoint signal-cli \
   "$IMAGE" \
-  -a "$PHONE" register
+  -a "$PHONE" register --captcha "$CAPTCHA"
 
 echo ""
-echo "Step 2: Enter the verification code sent to $PHONE:"
+echo "Step 3: Enter the verification code sent to $PHONE:"
 read -r CODE
 
 docker run -it --rm \
