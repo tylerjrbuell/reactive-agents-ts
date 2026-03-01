@@ -1,0 +1,48 @@
+# Docker Compose for Signal + Telegram MCP messaging servers
+#
+# Usage:
+#   docker compose -f docker/docker-compose.messaging.yml up -d
+#
+# Prerequisites:
+#   - Signal registered: ./scripts/signal-register.sh +1234567890
+#   - Telegram session: create .env.telegram with API_ID, API_HASH, SESSION_STRING
+
+services:
+  signal-mcp:
+    build:
+      context: ./signal-mcp
+    container_name: reactive-agents-signal
+    stdin_open: true            # Required for MCP stdio transport
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges
+    mem_limit: 128m
+    pids_limit: 30
+    read_only: true
+    tmpfs:
+      - /tmp:size=50m
+    volumes:
+      - ../signal-data:/data:rw
+    environment:
+      - SIGNAL_CLI_CONFIG=/data
+      - SIGNAL_USER_ID=${SIGNAL_PHONE_NUMBER}
+    restart: unless-stopped
+
+  telegram-mcp:
+    build:
+      context: ./telegram-mcp
+    container_name: reactive-agents-telegram
+    stdin_open: true            # Required for MCP stdio transport
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges
+    mem_limit: 128m
+    pids_limit: 30
+    read_only: true
+    tmpfs:
+      - /tmp:size=50m
+    env_file:
+      - ../.env.telegram
+    restart: unless-stopped
