@@ -13,3 +13,4 @@ export { WebhookService, WebhookServiceLive } from "./services/webhook-service.j
 export type { WebhookAdapter, WebhookRequest } from "./adapters/webhook-adapter.js";
 export { createGitHubAdapter } from "./adapters/github-adapter.js";
 export { createGenericAdapter } from "./adapters/generic-adapter.js";
+export { routeEvent, routeEventWithBus } from "./services/input-router.js";
