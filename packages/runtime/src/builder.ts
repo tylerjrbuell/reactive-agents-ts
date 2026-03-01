@@ -252,6 +252,26 @@ export interface GatewayOptions {
 }
 
 /**
+ * Summary returned when a gateway loop stops.
+ */
+export interface GatewaySummary {
+  readonly heartbeatsFired: number;
+  readonly totalRuns: number;
+  readonly cronChecks: number;
+  readonly error?: string;
+}
+
+/**
+ * Handle returned by `agent.start()` to control the persistent gateway loop.
+ */
+export interface GatewayHandle {
+  /** Stop the gateway loop and return execution summary. */
+  stop(): Promise<GatewaySummary>;
+  /** Promise that resolves when the gateway stops (via stop() or error). */
+  done: Promise<GatewaySummary>;
+}
+
+/**
  * Options for `.withAgentTool()` — register a local or remote agent as a callable tool.
  *
  * Allows this agent to spawn sub-agents (either locally or via remote A2A invocation) that
@@ -1232,6 +1252,7 @@ export class ReactiveAgentBuilder {
     const toolsOptions = this._toolsOptions;
     const promptsOptions = this._promptsOptions;
     const a2aOptions = this._a2aOptions;
+    const gatewayOptions = this._gatewayOptions;
     const agentTools = this._agentTools;
     const allowDynamicSubAgents = this._allowDynamicSubAgents;
     const dynamicSubAgentOptions = this._dynamicSubAgentOptions;
@@ -1581,7 +1602,7 @@ export class ReactiveAgentBuilder {
       // Create a ManagedRuntime so all facade calls (run, subscribe, pause, etc.)
       // share the same layer scope and the same service instances (EventBus, KillSwitch, etc.).
       const managedRuntime = ManagedRuntime.make(fullRuntime as unknown as Layer.Layer<any>);
-      return new ReactiveAgent(engine, agentId, managedRuntime, mcpServers.map((s) => s.name));
+      return new ReactiveAgent(engine, agentId, managedRuntime, mcpServers.map((s) => s.name), gatewayOptions?.heartbeat?.intervalMs);
     }) as Effect.Effect<ReactiveAgent, Error>;
   }
 }
@@ -1623,6 +1644,8 @@ export class ReactiveAgent {
     private readonly runtime: ManagedRuntime.ManagedRuntime<any, never>,
     /** Names of connected MCP servers — needed for cleanup on dispose(). */
     private readonly _mcpServerNames: readonly string[] = [],
+    /** @internal Gateway heartbeat interval (ms). Undefined when gateway is not configured. */
+    readonly _gatewayIntervalMs?: number,
   ) {}
 
   /**
@@ -1936,5 +1959,126 @@ export class ReactiveAgent {
         Effect.catchAll(() => Effect.succeed(() => {})),
       ) as Effect.Effect<() => void>,
     );
+  }
+
+  /**
+   * Start the persistent gateway loop (heartbeats + crons).
+   *
+   * Requires `.withGateway()` to be configured during build. The loop emits heartbeat events
+   * on a timer, passes them through the policy engine, and executes `agent.run()` when the
+   * policy decides to act. Cron entries are also checked each tick.
+   *
+   * Returns a `GatewayHandle` with `.stop()` to end the loop and `.done` that resolves
+   * when the loop stops.
+   *
+   * @throws Error if gateway is not configured (no `.withGateway()` call)
+   * @returns GatewayHandle with stop() and done promise
+   * @example
+   * ```typescript
+   * const handle = agent.start();
+   * // ... later
+   * const summary = await handle.stop();
+   * console.log(`${summary.totalRuns} runs, ${summary.heartbeatsFired} heartbeats`);
+   * ```
+   */
+  start(): GatewayHandle {
+    if (this._gatewayIntervalMs === undefined) {
+      throw new Error("Gateway not configured. Call .withGateway() before .start()");
+    }
+
+    const self = this;
+    let stopped = false;
+    let timer: ReturnType<typeof setInterval> | null = null;
+    let heartbeatsFired = 0;
+    let totalRuns = 0;
+    let cronChecks = 0;
+    let resolveStop: ((summary: GatewaySummary) => void) | null = null;
+
+    const stopPromise = new Promise<GatewaySummary>((resolve) => {
+      resolveStop = resolve;
+    });
+
+    // Start the loop asynchronously
+    const loopPromise = (async () => {
+      let gw: any;
+      let sched: any;
+      try {
+        const services = await self.runtime.runPromise(
+          Effect.gen(function* () {
+            const gwMod = yield* Effect.promise(() => import("@reactive-agents/gateway"));
+            const g = yield* (gwMod.GatewayService as any);
+            const s = yield* (gwMod.SchedulerService as any);
+            return { gw: g, sched: s };
+          }) as Effect.Effect<any>,
+        );
+        gw = services.gw;
+        sched = services.sched;
+      } catch (err) {
+        const summary: GatewaySummary = {
+          heartbeatsFired, totalRuns, cronChecks,
+          error: "Gateway not configured. Call .withGateway() before .start()",
+        };
+        resolveStop?.(summary);
+        throw new Error("Gateway not configured. Call .withGateway() before .start()");
+      }
+
+      const tick = async () => {
+        if (stopped) return;
+        try {
+          // 1. Emit heartbeat and check policy
+          const hbEvent = await self.runtime.runPromise(sched.emitHeartbeat());
+          const decision = await self.runtime.runPromise(gw.processEvent(hbEvent));
+          heartbeatsFired++;
+
+          if (decision.action === "execute") {
+            const instruction = hbEvent.metadata?.instruction ?? "Check for work";
+            try {
+              const result = await self.run(instruction);
+              totalRuns++;
+              if (result.metadata?.tokensUsed) {
+                await self.runtime.runPromise(gw.updateTokensUsed(result.metadata.tokensUsed));
+              }
+            } catch { /* run errors don't kill the loop */ }
+          }
+
+          // 2. Check crons
+          const cronEvents = await self.runtime.runPromise(sched.checkCrons(new Date()));
+          cronChecks++;
+          for (const cronEvent of cronEvents) {
+            if (stopped) break;
+            const cronDecision = await self.runtime.runPromise(gw.processEvent(cronEvent));
+            if (cronDecision.action === "execute") {
+              const cronInstruction = cronEvent.metadata?.instruction ?? "Cron task";
+              try {
+                const result = await self.run(cronInstruction);
+                totalRuns++;
+                if (result.metadata?.tokensUsed) {
+                  await self.runtime.runPromise(gw.updateTokensUsed(result.metadata.tokensUsed));
+                }
+              } catch { /* cron errors don't kill the loop */ }
+            }
+          }
+        } catch { /* tick errors don't kill the loop */ }
+      };
+
+      timer = setInterval(tick, self._gatewayIntervalMs ?? 60000);
+
+      // Run first tick immediately
+      await tick();
+    })();
+
+    // If loopPromise rejects (gateway not configured), propagate
+    loopPromise.catch(() => {});
+
+    return {
+      stop: async () => {
+        stopped = true;
+        if (timer) clearInterval(timer);
+        const summary: GatewaySummary = { heartbeatsFired, totalRuns, cronChecks };
+        resolveStop?.(summary);
+        return summary;
+      },
+      done: stopPromise,
+    };
   }
 }
