@@ -390,19 +390,44 @@ html {
 }
 
 /* ── Responsive stats ───────────────────────────────────────── */
-@media (max-width: 640px) {
+@media (max-width: 768px) {
   .ra-stats {
-    flex-wrap: wrap;
-    gap: 1rem 0;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.2rem 0;
+    padding: 1.5rem 0.5rem;
   }
   .ra-stat {
-    flex: 0 0 33.333%;
-    padding: 0.5rem;
+    padding: 0.3rem 0.25rem;
   }
-  .ra-stat + .ra-stat {
+  .ra-stat:nth-child(1),
+  .ra-stat:nth-child(4) {
     border-left: none;
   }
   .ra-stat-value {
     font-size: 1.8rem;
+    height: 2.2rem;
+    line-height: 2.2rem;
+  }
+  .ra-stat-label {
+    font-size: 0.6rem;
+  }
+}
+
+@media (max-width: 420px) {
+  .ra-stats {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem 0;
+    padding: 1.2rem 0.5rem;
+  }
+  .ra-stat {
+    border-left: none !important;
+  }
+  .ra-stat:nth-child(odd) {
+    border-right: 1px solid rgba(139, 92, 246, 0.12);
+  }
+  .ra-stat-value {
+    font-size: 1.6rem;
+    height: 2rem;
+    line-height: 2rem;
   }
 }

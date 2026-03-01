@@ -65,6 +65,7 @@ All methods return `this` for chaining.
 | `withOrchestration()` | Multi-agent workflow coordination |
 | `withSelfImprovement()` | Cross-task self-improvement: logs `StrategyOutcome` per task and retrieves relevant past outcomes at bootstrap to guide strategy selection |
 | `withAudit()` | Compliance audit trail logging |
+| `withGateway(options?)` | Persistent autonomous gateway: adaptive heartbeats, cron scheduling, webhook ingestion, policy engine. Options: `{ heartbeat?: HeartbeatConfig, crons?: CronEntry[], webhooks?: WebhookConfig[], policies?: PolicyConfig }` |
 
 ### A2A Protocol
 
@@ -353,6 +354,16 @@ yield* eventBus.on("ReasoningStepCompleted", onStepComplete);
 | `AgentResumed` | `agentId`, `taskId` |
 | `AgentStopped` | `agentId`, `taskId`, `reason` |
 | `TaskCompleted` | `taskId`, `success` |
+| `GatewayStarted` | `agentId`, `timestamp` |
+| `GatewayStopped` | `agentId`, `reason` |
+| `GatewayEventReceived` | `agentId`, `eventId`, `source`, `category` |
+| `ProactiveActionInitiated` | `agentId`, `eventId`, `action` |
+| `ProactiveActionCompleted` | `agentId`, `eventId`, `success`, `durationMs` |
+| `ProactiveActionSuppressed` | `agentId`, `eventId`, `reason` |
+| `PolicyDecisionMade` | `agentId`, `eventId`, `action`, `policyTag` |
+| `HeartbeatSkipped` | `agentId`, `consecutiveSkips`, `reason` |
+| `EventsMerged` | `agentId`, `mergedCount`, `mergeKey` |
+| `BudgetExhausted` | `agentId`, `tokensUsed`, `dailyBudget` |
 
 ## AgentResult
 

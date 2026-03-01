@@ -6,6 +6,40 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 
 ---
 
+## [0.5.6] — 2026-02-28
+
+### Added
+
+#### Agent Gateway (`@reactive-agents/gateway`) — New Package
+
+Persistent autonomous agent harness that runs agents as long-lived services with deterministic infrastructure:
+
+- **GatewayService** — central orchestrator with policy-driven event processing, stats tracking, and state management
+- **PolicyEngine** — composable policy chain (sorted by priority, first non-null decision wins) with 4 built-in policies:
+  - **AdaptiveHeartbeat** — skip ticks when agent state unchanged (3 modes: always, adaptive, conservative)
+  - **CostBudget** — daily token budget enforcement with critical-priority bypass
+  - **RateLimit** — hourly action cap with critical-priority bypass
+  - **EventMerging** — deduplicate events sharing the same merge key
+- **SchedulerService** — zero-dependency cron parser (5-field standard syntax with steps, ranges, day names), heartbeat/cron event factories
+- **WebhookService** — route-based dispatch with signature validation adapters:
+  - **GitHub adapter** — HMAC-SHA256 signature validation via `crypto.createHmac` + `timingSafeEqual`
+  - **Generic adapter** — configurable signature header/algorithm for arbitrary webhook sources
+- **InputRouter** — routes events through policies, publishes `GatewayEventReceived` and `ProactiveActionSuppressed` to EventBus
+- **10 new EventBus event types**: `GatewayStarted`, `GatewayStopped`, `GatewayEventReceived`, `ProactiveActionInitiated`, `ProactiveActionCompleted`, `ProactiveActionSuppressed`, `PolicyDecisionMade`, `HeartbeatSkipped`, `EventsMerged`, `BudgetExhausted`
+- **Builder integration**: `.withGateway(options?)` on `ReactiveAgentBuilder`, wired through `createRuntime()`
+- **Design philosophy**: "Harness vs Horse" — deterministic infrastructure handles event routing without LLM calls; LLM only invoked when intelligence is genuinely needed
+
+### Changed
+
+- `@reactive-agents/core` 0.5.5 → 0.5.6: 10 new gateway event variants in `AgentEvent` union
+- `@reactive-agents/runtime` 0.5.5 → 0.5.6: `.withGateway()` builder method, `enableGateway`/`gatewayOptions` in `RuntimeOptions`
+
+### Stats
+- 1001 tests across 139 files (was 909/124 in v0.5.5, +92 new tests)
+- 18 packages (was 17)
+
+---
+
 ## [0.5.5] — 2026-02-27
 
 ### Added

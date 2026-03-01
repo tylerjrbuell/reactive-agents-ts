@@ -6,7 +6,7 @@
 
 **The composable AI agent framework built on Effect-TS.**
 
-Type-safe from prompt to production. 17 packages. 13 composable layers. 5 reasoning strategies. 10-phase execution engine. 8 built-in tools. Model-adaptive context engineering. Structured agent steering via personas. Real Ed25519 cryptography, kill switch, behavioral contracts, cross-task self-improvement, and full real-time EventBus observability.
+Type-safe from prompt to production. 18 packages. 13 composable layers. 5 reasoning strategies. 10-phase execution engine. 8 built-in tools. Model-adaptive context engineering. Persistent autonomous gateway with adaptive heartbeats, crons, and webhooks. Structured agent steering via personas. Real Ed25519 cryptography, kill switch, behavioral contracts, cross-task self-improvement, and full real-time EventBus observability.
 
 [![CI](https://github.com/tylerjrbuell/reactive-agents-ts/actions/workflows/ci.yml/badge.svg)](https://github.com/tylerjrbuell/reactive-agents-ts/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/badge/npm-%40reactive--agents-CB3837?logo=npm)](https://www.npmjs.com/org/reactive-agents)
@@ -83,6 +83,11 @@ const agent = await ReactiveAgents.create()
   .withInteraction() // 5 autonomy modes
   .withOrchestration() // Multi-agent workflows
   .withSelfImprovement() // Cross-task strategy outcome learning
+  .withGateway({ // Persistent autonomous harness
+    heartbeat: { intervalMs: 1_800_000, policy: "adaptive" },
+    crons: [{ schedule: "0 9 * * MON", instruction: "Weekly review" }],
+    policies: { dailyTokenBudget: 50_000 },
+  })
   .build();
 ```
 
@@ -183,6 +188,7 @@ ReactiveAgentBuilder
     → Interaction       5 Modes, Checkpoints, Preference Learning
     → Orchestration     Sequential, Parallel, Pipeline, Map-Reduce
     → Prompts           Template Engine, Version Control
+    → Gateway           Heartbeats, Crons, Webhooks, Policy Engine
     → ExecutionEngine   10-phase lifecycle with hooks
 ```
 
@@ -268,6 +274,7 @@ Switch providers with one line — agent code stays the same.
 | [`@reactive-agents/prompts`](packages/prompts)             | Version-controlled template engine                                 |
 | [`@reactive-agents/eval`](packages/eval)                   | Evaluation framework (LLM-as-judge scoring)                        |
 | [`@reactive-agents/a2a`](packages/a2a)                     | A2A protocol: Agent Cards, JSON-RPC server/client, SSE streaming   |
+| [`@reactive-agents/gateway`](packages/gateway)             | Persistent autonomous agent harness: heartbeats, crons, webhooks, policy engine |
 
 ## CLI (`rax`)
 
@@ -334,7 +341,7 @@ Enable with:
 
 ```bash
 bun install              # Install dependencies
-bun test                 # Run all tests (909 tests, 124 files)
+bun test                 # Run all tests (1001 tests, 139 files)
 bun run build            # Build all packages (ESM + DTS)
 ```
 

@@ -41,6 +41,12 @@ const agent = await ReactiveAgents.create()
   // Execution limits
   .withMaxIterations(20)        // Prevent runaway loops
 
+  // Autonomous operation (optional)
+  .withGateway({                  // Persistent event-driven harness
+    heartbeat: { intervalMs: 1_800_000, policy: "adaptive" },
+    policies: { dailyTokenBudget: 50_000, maxActionsPerHour: 20 },
+  })
+
   .build();
 ```
 
@@ -256,6 +262,62 @@ app.post("/agent/:type", async (req, res) => {
   res.json(result);
 });
 ```
+
+### Autonomous Agent (Gateway)
+
+Long-running agent that responds to heartbeats, crons, and webhooks:
+
+```typescript
+const agent = await ReactiveAgents.create()
+  .withName("ops-agent")
+  .withProvider("anthropic")
+  .withReasoning({ defaultStrategy: "adaptive" })
+  .withTools()
+  .withMemory("1")
+  .withGuardrails()
+  .withCostTracking()
+  .withObservability({ verbosity: "normal" })
+  .withKillSwitch()
+  .withGateway({
+    heartbeat: {
+      intervalMs: 1_800_000,
+      policy: "adaptive",
+      instruction: "Check for pending tasks and recent alerts",
+    },
+    crons: [
+      {
+        schedule: "0 9 * * MON-FRI",
+        instruction: "Generate daily status summary",
+        priority: "high",
+      },
+    ],
+    webhooks: [
+      { path: "/github", adapter: "github", secret: process.env.GITHUB_WEBHOOK_SECRET },
+    ],
+    policies: {
+      dailyTokenBudget: 50_000,
+      maxActionsPerHour: 20,
+      heartbeatPolicy: "adaptive",
+    },
+  })
+  .build();
+
+// Monitor autonomous activity
+await agent.subscribe("ProactiveActionSuppressed", (event) => {
+  console.log(`Policy blocked: ${event.reason}`);
+});
+await agent.subscribe("BudgetExhausted", (event) => {
+  alerting.notify(`Token budget hit: ${event.tokensUsed}/${event.dailyBudget}`);
+});
+```
+
+Key production practices for autonomous agents:
+
+- **Always enable `.withKillSwitch()`** — emergency halt at any phase boundary
+- **Set `dailyTokenBudget`** — prevents runaway costs overnight
+- **Use `"adaptive"` heartbeats** — skip ticks when idle, saving ~50%+ of LLM calls
+- **Subscribe to `BudgetExhausted`** — get alerts when limits are hit
+- **Use `.withGuardrails()`** — webhook payloads are checked for injection before reaching the LLM
 
 ### Orchestrated Workflow
 
