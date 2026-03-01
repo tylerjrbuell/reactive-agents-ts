@@ -64,6 +64,7 @@ Each layer declares what it provides and what it requires:
 | Observability | ObservabilityService | Nothing |
 | Prompts | PromptService | Nothing |
 | Orchestration | OrchestrationService | Nothing |
+| Gateway | GatewayService, SchedulerService, WebhookService, PolicyEngine | EventBus |
 
 The runtime automatically satisfies dependencies when composing layers.
 

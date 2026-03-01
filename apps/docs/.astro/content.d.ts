@@ -240,6 +240,13 @@ declare module 'astro:content' {
   collection: "docs";
   data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
+"features/gateway.md": {
+	id: "features/gateway.md";
+  slug: "features/gateway";
+  body: string;
+  collection: "docs";
+  data: InferEntrySchema<"docs">
+} & { render(): Render[".md"] };
 "features/identity.md": {
 	id: "features/identity.md";
   slug: "features/identity";

@@ -21,9 +21,9 @@ The roadmap below is about two things: **closing the gaps** that currently block
 
 ---
 
-## Current State — v0.5.2 ✅ (Feb 25, 2026)
+## Current State — v0.5.6 ✅ (Feb 28, 2026)
 
-**17 packages, 855 tests across 120 files, fully composable via Effect-TS.**
+**18 packages, 1001 tests across 139 files, fully composable via Effect-TS.**
 
 ### v0.4.0 → v0.5.2 History
 
@@ -31,6 +31,8 @@ The roadmap below is about two things: **closing the gaps** that currently block
 - **v0.5.0 — A2A + Foundation Hardening** (Feb 23): Full A2A protocol (`@reactive-agents/a2a`), agent-as-tool, MCP SSE transport, ObservabilityService exporters (console/file), tracer correlation IDs, EventBus wiring for all phases, LLM request capture as episodic memory, semantic cache embeddings, LLM-based prompt compression, workflow approval gates, ThoughtTracer, real-time reasoning visibility (`live: true` streaming)
 - **v0.5.1 — Context Engineering Revolution** (Feb 24): Model-adaptive context profiles (4 tiers), structured ObservationResult, context budget system, real sub-agent delegation, scratchpad built-in tool (7 total), progressive 4-level compaction, tier-aware prompt templates, full type safety
 - **v0.5.2 — Trust Fixes + Differentiator Completion** (Feb 25): Real Ed25519 cryptography, LiteLLM provider (40+ models), kill switch + behavioral contracts, subprocess code sandbox, multi-source verification (LLM + Tavily), prompt A/B experiment framework, cross-task self-improvement loop, `rax serve --with-tools` builder fix
+- **v0.5.5 — EventBus Groundwork + Metrics Dashboard** (Feb 27): Full EventBus coverage (10+ new events, taskId correlation), MetricsCollector auto-subscribed dashboard, reasoning strategy fixes, tool result compression, MCP streamable-http transport
+- **v0.5.6 — Agent Gateway** (Feb 28): New `@reactive-agents/gateway` package — persistent autonomous harness with adaptive heartbeats, cron scheduling, webhook ingestion, composable policy engine, 10 new EventBus events
 
 ### What's Complete
 
@@ -62,6 +64,8 @@ The roadmap below is about two things: **closing the gaps** that currently block
 - ✅ **Multi-source verification** — LLM claim extraction + Tavily search corroboration (Tier 2), heuristic placeholder (Tier 1)
 - ✅ **Prompt A/B experiment framework** — `ExperimentService` with deterministic cohort assignment, outcome recording, winner selection
 - ✅ **Cross-task self-improvement** — episodic memory logs strategy outcomes; adaptive strategy queries past experience to bias selection
+- ✅ **Professional metrics dashboard** — `MetricsCollector` auto-subscribes to EventBus, `formatMetricsDashboard()` renders header + timeline + tools + alerts
+- ✅ **Agent Gateway** — `@reactive-agents/gateway` — persistent autonomous harness with adaptive heartbeats, cron scheduling, webhook ingestion (GitHub + generic adapters), composable policy engine (4 built-in policies), "Harness vs Horse" architecture (deterministic infrastructure, LLM only when needed)
 
 ### What's Scaffolded / Incomplete
 
@@ -347,6 +351,7 @@ Keeping this intentional:
 | v0.4.0 ✅ | Enhanced builder, structured tool results, EvalStore                                   | Composable builder options + persistent eval                |
 | v0.5.0 ✅ | **A2A interop, agent-as-tool, MCP SSE, foundation hardening, real-time observability** | **First TS framework with A2A + live reasoning visibility** |
 | v0.5.2 ✅ | **Ed25519 crypto, LiteLLM, kill switch, contracts, sandbox, self-improvement**         | **All 7 differentiators implemented — no competitor matches** |
+| v0.5.6 ✅ | **Agent Gateway: heartbeats, crons, webhooks, policy engine**                          | **Persistent autonomous agents — harness vs horse architecture** |
 | v0.6.0    | Docker sandbox, programmatic tool calling, CLI auto-generation                          | Multi-tool single-execution, 30-50% token reduction         |
 | v0.7.0    | Voice, UI, Edge                                                                        | Full-stack agent runtime no competitor matches              |
 | v1.0.0    | Stability, benchmarks                                                                  | Production-grade, proven, documented                        |
@@ -354,5 +359,5 @@ Keeping this intentional:
 
 ---
 
-_Last updated: February 25, 2026 — v0.5.2 (855 tests, all 7 differentiators complete), v0.6.0 planning_
+_Last updated: February 28, 2026 — v0.5.6 (1001 tests, 18 packages, gateway shipped), v0.6.0 planning_
 _Grounded in: `spec/docs/12-market-validation-feb-2026.md`, `spec/docs/14-v0.5-comprehensive-plan.md`_
