@@ -127,6 +127,18 @@
         "typescript": "^5.7.0",
       },
     },
+    "packages/gateway": {
+      "name": "@reactive-agents/gateway",
+      "version": "0.5.2",
+      "dependencies": {
+        "@reactive-agents/core": "workspace:^",
+        "effect": "^3.10.0",
+      },
+      "devDependencies": {
+        "bun-types": "latest",
+        "typescript": "^5.7.0",
+      },
+    },
     "packages/guardrails": {
       "name": "@reactive-agents/guardrails",
       "version": "0.5.5",
@@ -548,6 +560,8 @@
     "@reactive-agents/eval": ["@reactive-agents/eval@workspace:packages/eval"],
 
     "@reactive-agents/examples": ["@reactive-agents/examples@workspace:apps/examples"],
+
+    "@reactive-agents/gateway": ["@reactive-agents/gateway@workspace:packages/gateway"],
 
     "@reactive-agents/guardrails": ["@reactive-agents/guardrails@workspace:packages/guardrails"],
 
