@@ -24,7 +24,8 @@
     "@reactive-agents/observability": "workspace:^",
     "@reactive-agents/interaction": "workspace:^",
     "@reactive-agents/prompts": "workspace:^",
-    "@reactive-agents/orchestration": "workspace:^"
+    "@reactive-agents/orchestration": "workspace:^",
+    "@reactive-agents/gateway": "workspace:^"
   },
   "devDependencies": {
     "typescript": "^5.7.0",

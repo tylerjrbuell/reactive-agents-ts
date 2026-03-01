@@ -353,6 +353,26 @@ export interface RuntimeOptions {
    */
   a2aBasePath?: string;
 
+  // ─── Gateway Configuration ───
+
+  /**
+   * Enable the persistent gateway for autonomous agent behavior.
+   *
+   * Default: `false`
+   */
+  enableGateway?: boolean;
+
+  /**
+   * Gateway configuration options (heartbeat, crons, webhooks, policies).
+   */
+  gatewayOptions?: {
+    heartbeat?: { intervalMs?: number; policy?: string; instruction?: string; maxConsecutiveSkips?: number };
+    crons?: readonly { schedule: string; instruction: string; agentId?: string; priority?: string; enabled?: boolean }[];
+    webhooks?: readonly { path: string; adapter: string; secret?: string; events?: readonly string[] }[];
+    policies?: { dailyTokenBudget?: number; maxActionsPerHour?: number; heartbeatPolicy?: string; mergeWindowMs?: number };
+    port?: number;
+  };
+
   // ─── Context Engineering ───
 
   /**
@@ -578,6 +598,10 @@ export const createRuntime = (options: RuntimeOptions) => {
   if (options.enableA2A) {
     runtime = Layer.merge(runtime, A2aExtraLayer(options.agentId, options.a2aPort ?? 3000)) as any;
   }
+
+  // Gateway is configured at build time — the persistent event loop starts via agent.start()
+  // The GatewayService layer is composed in the builder's fullRuntime when enableGateway is true.
+  // No runtime layer merge needed here since the gateway operates independently of the execution engine.
 
   if (options.extraLayers) {
     runtime = Layer.merge(runtime, options.extraLayers) as any;
