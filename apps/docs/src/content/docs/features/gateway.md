@@ -396,6 +396,12 @@ interface GatewayConfig {
 | `mergeWindowMs` | `number` | `300_000` | Event merge window (5 min) |
 | `requireApprovalFor` | `string[]` | — | Categories requiring human approval |
 
+## Messaging Channels
+
+The gateway enables agents to communicate via **Signal** and **Telegram** using existing MCP servers in Docker containers. No custom adapter code needed — the framework's `.withMCP()` connects to the messaging servers, and the gateway heartbeat drives message polling.
+
+See the [Messaging Channels guide](/guides/messaging-channels/) for setup instructions.
+
 ## Error Types
 
 | Error | When |
