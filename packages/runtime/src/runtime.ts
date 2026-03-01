@@ -599,9 +599,24 @@ export const createRuntime = (options: RuntimeOptions) => {
     runtime = Layer.merge(runtime, A2aExtraLayer(options.agentId, options.a2aPort ?? 3000)) as any;
   }
 
-  // Gateway is configured at build time — the persistent event loop starts via agent.start()
-  // The GatewayService layer is composed in the builder's fullRuntime when enableGateway is true.
-  // No runtime layer merge needed here since the gateway operates independently of the execution engine.
+  // Gateway — compose GatewayService + SchedulerService when enabled.
+  // The persistent event loop itself starts via agent.start(); layer composition just makes
+  // the services resolvable from the ManagedRuntime.
+  if (options.enableGateway) {
+    const gatewayLayer = Layer.unwrapEffect(
+      Effect.promise(async () => {
+        const gw = await import("@reactive-agents/gateway");
+        const gwLayer = gw.GatewayServiceLive(options.gatewayOptions?.policies ?? {});
+        const schedLayer = gw.SchedulerServiceLive({
+          agentId: options.agentId,
+          heartbeat: options.gatewayOptions?.heartbeat as any,
+          crons: options.gatewayOptions?.crons as any,
+        });
+        return Layer.merge(gwLayer, schedLayer);
+      }),
+    );
+    runtime = Layer.merge(runtime, gatewayLayer) as any;
+  }
 
   if (options.extraLayers) {
     runtime = Layer.merge(runtime, options.extraLayers) as any;
