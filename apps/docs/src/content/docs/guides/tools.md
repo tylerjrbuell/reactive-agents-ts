@@ -326,6 +326,10 @@ The MCP client is spec-compliant with MCP 2025-03-26:
 - Tool results are extracted from the MCP `content` array format — the model receives clean text, not raw JSON
 - `isError: true` results from servers surface as tool execution errors in the agent loop
 
+:::tip[Messaging via MCP]
+Signal and Telegram can be connected as MCP servers running in Docker containers. The agent uses MCP tools to send and receive messages, with the gateway heartbeat driving message polling. See the [Messaging Channels guide](/guides/messaging-channels/).
+:::
+
 ## Agent-as-Tool
 
 Register other agents (local or remote) as callable tools. This enables hierarchical agent architectures where a coordinator delegates subtasks to specialists.
