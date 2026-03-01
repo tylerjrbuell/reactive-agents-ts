@@ -40,9 +40,10 @@ docker run -it --rm \
   --entrypoint python3 \
   "$IMAGE" \
   -c "
+import os
 from telethon.sync import TelegramClient
 from telethon.sessions import StringSession
-with TelegramClient(StringSession(), int('$API_ID'), '$API_HASH') as client:
+with TelegramClient(StringSession(), int(os.environ['TELEGRAM_API_ID']), os.environ['TELEGRAM_API_HASH']) as client:
     print()
     print('=== SESSION STRING (copy everything below) ===')
     print(client.session.save())

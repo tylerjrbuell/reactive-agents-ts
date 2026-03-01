@@ -1,6 +1,6 @@
 # Telegram MCP Server — Telethon MTProto client with MCP JSON-RPC interface
 # Requires one-time session setup: see scripts/telegram-session.sh
-FROM python:3.12-slim AS base
+FROM python:3.12-slim
 
 # Install telegram-mcp (chigwell/telegram-mcp)
 RUN pip install --no-cache-dir telegram-mcp

@@ -1,6 +1,6 @@
 # Signal MCP Server — wraps signal-cli with MCP JSON-RPC interface
 # Requires one-time registration: see scripts/signal-register.sh
-FROM eclipse-temurin:21-jre-alpine AS base
+FROM eclipse-temurin:21-jre-alpine
 
 ARG SIGNAL_CLI_VERSION=0.13.12
 
@@ -20,8 +20,7 @@ RUN pip3 install --no-cache-dir --break-system-packages signal-mcp
 RUN adduser -D -u 1000 agent
 USER agent
 
-# signal-cli auth data persists via volume mount
-VOLUME /data
+# signal-cli auth data persists via volume mount (bind-mount at runtime, no VOLUME declaration)
 ENV SIGNAL_CLI_CONFIG=/data
 
 # MCP stdio transport — reads JSON-RPC from stdin, writes to stdout

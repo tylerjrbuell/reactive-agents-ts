@@ -17,8 +17,11 @@ services:
       - ALL
     security_opt:
       - no-new-privileges
-    mem_limit: 128m
-    pids_limit: 30
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+          pids: 30
     read_only: true
     tmpfs:
       - /tmp:size=50m
@@ -38,8 +41,11 @@ services:
       - ALL
     security_opt:
       - no-new-privileges
-    mem_limit: 128m
-    pids_limit: 30
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+          pids: 30
     read_only: true
     tmpfs:
       - /tmp:size=50m
