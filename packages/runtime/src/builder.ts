@@ -1962,6 +1962,36 @@ export class ReactiveAgent {
   }
 
   /**
+   * Query the current gateway status (stats, uptime, state).
+   *
+   * Returns the `GatewayStatus` snapshot from GatewayService, or `null` if the gateway
+   * is not configured. Safe to call at any time — does not start the loop.
+   *
+   * @returns Promise resolving to GatewayStatus or null
+   * @example
+   * ```typescript
+   * const status = await agent.gatewayStatus();
+   * if (status) {
+   *   console.log(`Heartbeats: ${status.stats.heartbeatsFired}`);
+   *   console.log(`Uptime: ${status.uptime}ms`);
+   * }
+   * ```
+   */
+  async gatewayStatus(): Promise<import("@reactive-agents/gateway").GatewayStatus | null> {
+    try {
+      return await this.runtime.runPromise(
+        Effect.gen(function* () {
+          const gwMod = yield* Effect.promise(() => import("@reactive-agents/gateway"));
+          const gw = yield* (gwMod.GatewayService as any);
+          return yield* gw.status();
+        }) as Effect.Effect<any>,
+      );
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * Start the persistent gateway loop (heartbeats + crons).
    *
    * Requires `.withGateway()` to be configured during build. The loop emits heartbeat events
