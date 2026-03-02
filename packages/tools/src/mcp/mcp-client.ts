@@ -75,6 +75,12 @@ type ActiveTransport = StdioTransport | SseTransport | StreamableHttpTransport |
 // Module-level map: serverName -> ActiveTransport
 const activeTransports = new Map<string, ActiveTransport>();
 
+// Module-level map: serverName -> notification callback
+const notificationCallbacks = new Map<
+  string,
+  (method: string, params: Record<string, unknown>) => void
+>();
+
 // ─── Background stdout reader ───
 
 const startStdioReader = (
@@ -117,8 +123,23 @@ const startStdioReader = (
           if (pending) {
             transport.pendingRequests.delete(parsed.id);
             pending.resolve(parsed);
+          } else {
+            // Server-sent notification (no matching pending request)
+            // Forward to registered callback if available
+            const sName = [...activeTransports.entries()]
+              .find(([, t]) => t === transport)?.[0];
+            if (sName) {
+              const callback = notificationCallbacks.get(sName);
+              if (callback) {
+                try {
+                  callback(
+                    (parsed as any).method ?? "unknown",
+                    (parsed as any).params ?? {},
+                  );
+                } catch { /* don't let callback errors kill the reader */ }
+              }
+            }
           }
-          // Unsolicited notifications (no matching pending) are silently dropped
         }
       }
     } catch (err) {
@@ -1160,5 +1181,12 @@ export const makeMCPClient = Effect.gen(function* () {
       return [...servers.values()];
     });
 
-  return { connect, callTool, disconnect, listServers };
+  const onNotification = (
+    serverName: string,
+    callback: (method: string, params: Record<string, unknown>) => void,
+  ): void => {
+    notificationCallbacks.set(serverName, callback);
+  };
+
+  return { connect, callTool, disconnect, listServers, onNotification };
 });
