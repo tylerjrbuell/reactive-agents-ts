@@ -1,26 +1,37 @@
 // File: src/strategies/reactive.ts
 import { Effect } from "effect";
-import { ulid } from "ulid";
 import type { ReasoningResult, ReasoningStep } from "../types/index.js";
-import type { StepId } from "../types/step.js";
 import type { ObservationResult } from "../types/observation.js";
 import { categorizeToolName, deriveResultKind } from "../types/observation.js";
 import { ExecutionError, IterationLimitError } from "../errors/errors.js";
 import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
-import { ToolService } from "@reactive-agents/tools";
 import type { ToolDefinition, ToolOutput, ResultCompressionConfig } from "@reactive-agents/tools";
-import { PromptService } from "@reactive-agents/prompts";
-import { EventBus } from "@reactive-agents/core";
 import type { ContextProfile } from "../context/context-profile.js";
 import { CONTEXT_PROFILES } from "../context/context-profile.js";
-import { resolveProfile } from "../context/profile-resolver.js";
+import {
+  parseAllToolRequests,
+  hasFinalAnswer,
+  extractFinalAnswer,
+  evaluateTransform,
+} from "./shared/tool-utils.js";
+import { buildCompactedContext } from "./shared/context-utils.js";
+import { compilePromptOrFallback, resolveStrategyServices } from "./shared/service-utils.js";
+import { makeStep } from "./shared/step-utils.js";
+
+// Re-export shared utilities for backwards compatibility
+export { evaluateTransform } from "./shared/tool-utils.js";
+
+// parseToolRequestWithTransform is the public name used by tests — re-export the
+// shared `parseToolRequest` under the legacy export name, keeping the old behaviour
+// (same algorithm — parse + optional transform expression).
+export { parseToolRequest as parseToolRequestWithTransform } from "./shared/tool-utils.js";
 
 interface ToolParamSchema {
   readonly name: string;
   readonly type: string;
-  readonly description: string;
-  readonly required: boolean;
+  readonly description?: string;
+  readonly required?: boolean;
 }
 
 interface ToolSchema {
@@ -63,33 +74,20 @@ export const executeReactive = (
   LLMService
 > =>
   Effect.gen(function* () {
-    const llm = yield* LLMService;
-    // ToolService is optional — reasoning works with or without tools
-    const toolServiceOptRaw = yield* Effect.serviceOption(ToolService);
-    const toolServiceOpt = toolServiceOptRaw as
-      | { _tag: "Some"; value: ToolServiceInstance }
-      | { _tag: "None" };
-    // PromptService is optional — falls back to hardcoded strings
-    const promptServiceOptRaw = yield* Effect.serviceOption(PromptService).pipe(
-      Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
-    );
-    const promptServiceOpt = promptServiceOptRaw as PromptServiceOpt;
-    // EventBus is optional — publish reasoning steps when available
-    const ebOptRaw = yield* Effect.serviceOption(EventBus).pipe(
-      Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
-    );
-    const ebOpt = ebOptRaw as typeof ebOptRaw;
+    const { llm, toolService: toolServiceOpt, promptService: promptServiceOpt, eventBus: ebOpt } =
+      yield* resolveStrategyServices;
+
     // Resolve context profile — use provided profile, or default to "mid"
     const profile: ContextProfile = input.contextProfile ?? CONTEXT_PROFILES["mid"];
 
-    const maxIter = input.config.strategies.reactive.maxIterations;
-    const temp = input.config.strategies.reactive.temperature;
+    const maxIter = input.contextProfile?.maxIterations ?? input.config.strategies.reactive.maxIterations;
+    const temp = input.contextProfile?.temperature ?? input.config.strategies.reactive.temperature;
     const steps: ReasoningStep[] = [];
     const start = Date.now();
     const scratchpadStore = new Map<string, string>();
 
-    const fullInitialContext = buildInitialContext(input, false);
-    const compactInitialContext = buildInitialContext(input, true);
+    const fullInitialContext = buildInitialContext(input, false, profile);
+    const compactInitialContext = buildInitialContext(input, true, profile);
     let iteration = 0;
     let totalTokens = 0;
     let totalCost = 0;
@@ -160,12 +158,7 @@ export const executeReactive = (
       totalTokens += thoughtResponse.usage.totalTokens;
       totalCost += thoughtResponse.usage.estimatedCost;
 
-      steps.push({
-        id: ulid() as StepId,
-        type: "thought",
-        content: thought,
-        timestamp: new Date(),
-      });
+      steps.push(makeStep("thought", thought));
 
       // Publish ReasoningStepCompleted for thought
       if (ebOpt._tag === "Some") {
@@ -262,13 +255,7 @@ export const executeReactive = (
           );
         });
 
-        steps.push({
-          id: ulid() as StepId,
-          type: "action",
-          content: currentActionJson,
-          timestamp: new Date(),
-          metadata: { toolUsed: toolRequest.tool },
-        });
+        steps.push(makeStep("action", currentActionJson, { toolUsed: toolRequest.tool }));
 
         // Publish ReasoningStepCompleted for action
         if (ebOpt._tag === "Some") {
@@ -305,7 +292,7 @@ export const executeReactive = (
         } else {
           const toolStartMs = Date.now();
           const toolObs = yield* runToolObservation(
-            toolServiceOpt,
+            toolServiceOpt as { _tag: "Some"; value: ToolServiceInstance } | { _tag: "None" },
             toolRequest,
             input,
             profile,
@@ -338,13 +325,7 @@ export const executeReactive = (
           }
         }
 
-        steps.push({
-          id: ulid() as StepId,
-          type: "observation",
-          content: observationContent,
-          timestamp: new Date(),
-          metadata: { observationResult: obsResult },
-        });
+        steps.push(makeStep("observation", observationContent, { observationResult: obsResult }));
 
         // Publish ReasoningStepCompleted for observation
         if (ebOpt._tag === "Some") {
@@ -532,11 +513,27 @@ function runToolObservation(
   );
 }
 
+/**
+ * Normalize Python-style triple-quoted strings ("""...""") to valid JSON strings.
+ * Some models (e.g., cogito, smaller Ollama models) produce these in ACTION outputs.
+ */
+function normalizeTripleQuotes(input: string): string {
+  return input.replace(/"""([\s\S]*?)"""/g, (_, content: string) => {
+    const escaped = content
+      .replace(/\\/g, "\\\\")
+      .replace(/"/g, '\\"')
+      .replace(/\n/g, "\\n")
+      .replace(/\r/g, "\\r")
+      .replace(/\t/g, "\\t");
+    return `"${escaped}"`;
+  });
+}
+
 function resolveToolArgs(
   toolService: ToolServiceInstance,
   toolRequest: { tool: string; input: string },
 ): Effect.Effect<Record<string, unknown>, never> {
-  const trimmed = toolRequest.input.trim();
+  const trimmed = normalizeTripleQuotes(toolRequest.input.trim());
 
   // Try JSON object/array parsing
   if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
@@ -595,30 +592,6 @@ function resolveToolArgs(
     );
 }
 
-// ─── Prompt compilation helper ───
-
-type PromptServiceOpt =
-  | { _tag: "Some"; value: { compile: (id: string, vars: Record<string, unknown>, options?: { tier?: string }) => Effect.Effect<{ content: string }, unknown> } }
-  | { _tag: "None" };
-
-function compilePromptOrFallback(
-  promptServiceOpt: PromptServiceOpt,
-  templateId: string,
-  variables: Record<string, unknown>,
-  fallback: string,
-  tier?: string,
-): Effect.Effect<string, never> {
-  if (promptServiceOpt._tag === "None") {
-    return Effect.succeed(fallback);
-  }
-  return promptServiceOpt.value
-    .compile(templateId, variables, tier ? { tier } : undefined)
-    .pipe(
-      Effect.map((compiled) => compiled.content),
-      Effect.catchAll(() => Effect.succeed(fallback)),
-    );
-}
-
 // ─── Helpers (private to module) ───
 
 function formatToolSchema(tool: ToolSchema): string {
@@ -631,7 +604,43 @@ function formatToolSchema(tool: ToolSchema): string {
   return `- ${tool.name}({${params}}) — ${tool.description}`;
 }
 
-function buildInitialContext(input: ReactiveInput, compact = false): string {
+function formatToolSchemaCompact(tool: ToolSchema): string {
+  if (tool.parameters.length === 0) return `- ${tool.name}()`;
+  const params = tool.parameters
+    .map(p => `${p.name}: ${p.type}${p.required ? "" : "?"}`)
+    .join(", ");
+  return `- ${tool.name}(${params})`;
+}
+
+interface FilteredTools {
+  primary: readonly ToolSchema[];   // mentioned in task — full schema
+  secondary: readonly ToolSchema[]; // not mentioned — compact/collapsed
+}
+
+function filterToolsByRelevance(
+  taskDescription: string,
+  schemas: readonly ToolSchema[],
+): FilteredTools {
+  const taskLower = taskDescription.toLowerCase();
+  const primary: ToolSchema[] = [];
+  const secondary: ToolSchema[] = [];
+
+  for (const tool of schemas) {
+    // Check if tool name (or prefix before /) appears in the task description
+    const nameVariants = [
+      tool.name.toLowerCase(),
+      tool.name.split("/").pop()?.toLowerCase() ?? "",
+      // Also check without hyphens: "list_commits" matches "list commits"
+      tool.name.toLowerCase().replace(/[-_/]/g, " "),
+    ];
+    const mentioned = nameVariants.some(v => v && taskLower.includes(v));
+    (mentioned ? primary : secondary).push(tool);
+  }
+
+  return { primary, secondary };
+}
+
+function buildInitialContext(input: ReactiveInput, compact = false, profile?: ContextProfile): string {
   const sections: string[] = [
     `Task: ${input.taskDescription}`,
     `Task Type: ${input.taskType}`,
@@ -649,7 +658,7 @@ function buildInitialContext(input: ReactiveInput, compact = false): string {
       : input.availableTools.join(", ");
     sections.push(toolNames ? `Tools: ${toolNames}` : "No tools available.");
   } else if (input.availableToolSchemas && input.availableToolSchemas.length > 0) {
-    const toolLines = input.availableToolSchemas.map(formatToolSchema).join("\n");
+    const detail = profile?.toolSchemaDetail ?? "full";
     const compressionNote = [
       ``,
       `TOOL RESULTS:`,
@@ -664,9 +673,45 @@ function buildInitialContext(input: ReactiveInput, compact = false): string {
       `  ACTION: github/list_commits({"owner":"x","repo":"y"}) | transform: result.slice(0,3).map(c => ({sha: c.sha.slice(0,7), msg: c.commit.message.split('\\n')[0]}))`,
       `Only the transform output enters context. result = parsed JSON (or raw string if not JSON).`,
     ].join("\n");
-    sections.push(
-      `Available Tools:\n${toolLines}\n\nTo use a tool: ACTION: tool_name({"param": "value"}) — use EXACT parameter names shown above, valid JSON only.${compressionNote}`
-    );
+
+    const { primary, secondary } = filterToolsByRelevance(input.taskDescription, input.availableToolSchemas);
+
+    // Primary tools: always full schema (these are what the instruction asks for)
+    const primaryLines = primary.map(formatToolSchema).join("\n");
+
+    // Secondary tools: format based on tier
+    let secondarySection = "";
+    if (secondary.length > 0) {
+      if (detail === "names-only") {
+        secondarySection = `\nAlso available: ${secondary.map(t => t.name).join(", ")}`;
+      } else if (detail === "names-and-types") {
+        secondarySection = `\nOther tools:\n${secondary.map(formatToolSchemaCompact).join("\n")}`;
+      } else {
+        // full: show secondary tools with compact format (types but no descriptions)
+        // to reduce noise while keeping usability
+        secondarySection = `\nOther tools:\n${secondary.map(formatToolSchemaCompact).join("\n")}`;
+      }
+    }
+
+    // When ALL tools are secondary (none mentioned in task), use the tier-based format for all
+    if (primary.length === 0) {
+      if (detail === "names-only") {
+        const toolNames = input.availableToolSchemas.map(t => t.name).join(", ");
+        sections.push(`Tools: ${toolNames}\nTo use: ACTION: tool_name({"param": "value"})${compressionNote}`);
+      } else if (detail === "names-and-types") {
+        const toolLines = input.availableToolSchemas.map(formatToolSchemaCompact).join("\n");
+        sections.push(`Available Tools:\n${toolLines}\n\nTo use a tool: ACTION: tool_name({"param": "value"}) — use EXACT parameter names.${compressionNote}`);
+      } else {
+        const toolLines = input.availableToolSchemas.map(formatToolSchema).join("\n");
+        sections.push(
+          `Available Tools:\n${toolLines}\n\nTo use a tool: ACTION: tool_name({"param": "value"}) — use EXACT parameter names shown above, valid JSON only.${compressionNote}`
+        );
+      }
+    } else {
+      sections.push(
+        `Available Tools:\n${primaryLines}${secondarySection}\n\nTo use a tool: ACTION: tool_name({"param": "value"}) — use EXACT parameter names shown above, valid JSON only.${compressionNote}`
+      );
+    }
   } else if (input.availableTools.length > 0) {
     const compressionNote = [
       ``,
@@ -737,117 +782,6 @@ function buildThoughtPrompt(
   const completed = buildCompletedSummary(history);
   const rules = getRulesForComplexity(profile?.rulesComplexity ?? "standard");
   return `${context}${completed}\n\n${rules}\n\nThink step-by-step, then either take ONE action or give your FINAL ANSWER:`;
-}
-
-function hasFinalAnswer(thought: string): boolean {
-  return /final answer:/i.test(thought);
-}
-
-function extractFinalAnswer(thought: string): string {
-  const match = thought.match(/final answer:\s*([\s\S]*)/i);
-  return match ? match[1]!.trim() : thought;
-}
-
-function parseToolRequest(
-  thought: string,
-): { tool: string; input: string } | null {
-  // Match the ACTION prefix and tool name — allow '/' for namespaced MCP tools
-  // e.g. "filesystem/list_directory" or "github/search_repos"
-  const prefixMatch = thought.match(/ACTION:\s*([\w\/\-]+)\(/i);
-  if (!prefixMatch) return null;
-
-  const tool = prefixMatch[1];
-  const argsStart = (prefixMatch.index ?? 0) + prefixMatch[0].length;
-  const rest = thought.slice(argsStart);
-
-  // Empty parens — tool takes no arguments (e.g. filesystem/list_allowed_directories())
-  if (rest.trimStart().startsWith(")")) {
-    return { tool, input: "{}" };
-  }
-
-  // If args start with '{', use brace-matching to extract the JSON object
-  if (rest.trimStart().startsWith("{")) {
-    const trimOffset = rest.length - rest.trimStart().length;
-    let depth = 0;
-    let inString = false;
-    let escape = false;
-    for (let i = trimOffset; i < rest.length; i++) {
-      const ch = rest[i];
-      if (escape) {
-        escape = false;
-        continue;
-      }
-      if (ch === "\\") {
-        escape = true;
-        continue;
-      }
-      if (ch === '"') {
-        inString = !inString;
-        continue;
-      }
-      if (inString) continue;
-      if (ch === "{") depth++;
-      if (ch === "}") {
-        depth--;
-        if (depth === 0) {
-          return { tool, input: rest.slice(trimOffset, i + 1) };
-        }
-      }
-    }
-  }
-
-  // Fallback: greedy regex (captures up to last ')' in thought, allows empty args)
-  const match = thought.match(/ACTION:\s*[\w\/\-]+\((.*?)\)/is);
-  return match ? { tool, input: match[1] } : null;
-}
-
-/** Return ALL ACTION requests found in a thought, in order of appearance.
- * Used to skip duplicate actions and advance to the next uncompleted step
- * when the model writes a multi-step plan in a single thought. */
-function parseAllToolRequests(
-  thought: string,
-): Array<{ tool: string; input: string; transform?: string }> {
-  const results: Array<{ tool: string; input: string; transform?: string }> = [];
-  const re = /ACTION:/gi;
-  let match: RegExpExecArray | null;
-  while ((match = re.exec(thought)) !== null) {
-    const slice = thought.slice(match.index);
-    const req = parseToolRequestWithTransform(slice);
-    if (req) results.push(req);
-  }
-  return results;
-}
-
-/** Parse an ACTION line, extracting optional | transform: expression. */
-export function parseToolRequestWithTransform(
-  thought: string,
-): { tool: string; input: string; transform?: string } | null {
-  // Split on " | transform: " before parsing the action args
-  const pipeIdx = thought.indexOf(" | transform: ");
-  const actionPart = pipeIdx >= 0 ? thought.slice(0, pipeIdx) : thought;
-  const transformExpr =
-    pipeIdx >= 0 ? thought.slice(pipeIdx + " | transform: ".length).split("\n")[0].trim() : undefined;
-
-  const base = parseToolRequest(actionPart);
-  if (!base) return null;
-  return { ...base, transform: transformExpr };
-}
-
-/**
- * Evaluate a transform expression in-process with `result` bound to the tool output.
- * Returns serialized result string, or an error string prefixed with "[Transform error:" on failure.
- * Runs synchronously via new Function() — for pure data transforms only (no side effects).
- */
-export function evaluateTransform(expr: string, result: unknown): string {
-  try {
-    // eslint-disable-next-line no-new-func
-    const fn = new Function("result", `return (${expr})`);
-    const output = fn(result) as unknown;
-    if (typeof output === "string") return output;
-    return JSON.stringify(output, null, 2);
-  } catch (e) {
-    return `[Transform error: ${e instanceof Error ? e.message : String(e)}] — fix the expression or remove | transform:`;
-  }
 }
 
 /**
@@ -1038,59 +972,6 @@ function normalizeObservation(toolName: string, result: string): string {
     // Not JSON — return as-is
   }
   return result;
-}
-
-/**
- * Build a compacted context from reasoning steps.
- * After compactAfterSteps steps, older steps are summarized to one-line
- * entries to prevent linear context growth (~17K tokens for 18 steps).
- * Only the most recent fullDetailSteps steps are kept in full detail.
- * Thresholds are driven by the ContextProfile (defaults: 6 / 4 for backward compat).
- */
-
-/** Format a reasoning step in ReAct style (preserves Observation: prefix for LLM continuity) */
-function formatStepForContext(step: ReasoningStep): string {
-  if (step.type === "observation") return `Observation: ${step.content}`;
-  if (step.type === "action") {
-    const parsed = (() => { try { return JSON.parse(step.content); } catch { return null; } })();
-    return `Action: ${parsed?.tool ?? step.content}`;
-  }
-  return step.content; // thought — render as-is
-}
-
-function buildCompactedContext(
-  initialContext: string,
-  steps: readonly ReasoningStep[],
-  profile?: ContextProfile,
-): string {
-  const compactAfterSteps = profile?.compactAfterSteps ?? 6;
-  const fullDetailSteps = profile?.fullDetailSteps ?? 4;
-
-  if (steps.length === 0) return initialContext;
-
-  if (steps.length <= compactAfterSteps) {
-    // Not enough steps to compact — rebuild context from all steps in ReAct format
-    const stepLines = steps.map(formatStepForContext).join("\n");
-    return `${initialContext}\n\n${stepLines}`;
-  }
-
-  // Split into old steps (summarized) and recent steps (full detail)
-  const cutoff = steps.length - fullDetailSteps;
-  const oldSteps = steps.slice(0, cutoff);
-  const recentSteps = steps.slice(cutoff);
-
-  // Summarize old steps: one line per step
-  const summaryLines = oldSteps.map((s) => {
-    const formatted = formatStepForContext(s);
-    const preview = formatted.length > 120 ? formatted.slice(0, 120) + "..." : formatted;
-    return preview;
-  });
-  const summary = `[Earlier steps summary — ${oldSteps.length} steps]:\n${summaryLines.join("\n")}`;
-
-  // Keep recent steps in full detail in ReAct format
-  const recentLines = recentSteps.map(formatStepForContext).join("\n");
-
-  return `${initialContext}\n\n${summary}\n\n[Recent steps]:\n${recentLines}`;
 }
 
 function buildResult(
