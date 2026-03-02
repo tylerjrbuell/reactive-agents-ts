@@ -608,15 +608,17 @@ export const createRuntime = (options: RuntimeOptions) => {
       Effect.gen(function* () {
         const gw = yield* Effect.promise(() => import("@reactive-agents/gateway"));
 
-        // Resolve EventBus from context for observability (optional)
-        let bus: { publish: (e: any) => Effect.Effect<void, never> } | undefined;
-        try {
-          const core = yield* Effect.promise(() => import("@reactive-agents/core"));
+        // Resolve EventBus from context for observability (optional).
+        // Use Effect.catchAll — yield* with a missing service produces a fiber failure,
+        // not a JS exception, so try/catch won't catch it.
+        const core = yield* Effect.promise(() => import("@reactive-agents/core"));
+        type BusLike = { publish: (e: any) => Effect.Effect<void, never> };
+        const bus: BusLike | undefined = yield* Effect.gen(function* () {
           const eb = yield* (core.EventBus as any);
-          bus = { publish: (e: any) => eb.publish(e) };
-        } catch {
-          // EventBus not available — gateway runs without observability
-        }
+          return { publish: (e: any) => (eb as any).publish(e) } as BusLike;
+        }).pipe(
+          Effect.catchAll(() => Effect.succeed(undefined as BusLike | undefined)),
+        );
 
         const gwLayer = gw.GatewayServiceLive((options.gatewayOptions ?? {}) as any, bus);
         const schedLayer = gw.SchedulerServiceLive({
@@ -627,7 +629,7 @@ export const createRuntime = (options: RuntimeOptions) => {
         return Layer.merge(gwLayer, schedLayer);
       }),
     );
-    runtime = Layer.merge(runtime, gatewayLayer) as any;
+    runtime = Layer.merge(runtime, gatewayLayer.pipe(Layer.provide(eventBusLayer))) as any;
   }
 
   if (options.extraLayers) {

@@ -1615,7 +1615,7 @@ export class ReactiveAgentBuilder {
       // Create a ManagedRuntime so all facade calls (run, subscribe, pause, etc.)
       // share the same layer scope and the same service instances (EventBus, KillSwitch, etc.).
       const managedRuntime = ManagedRuntime.make(fullRuntime as unknown as Layer.Layer<any>);
-      return new ReactiveAgent(engine, agentId, managedRuntime, mcpServers.map((s) => s.name), !!gatewayOptions, gatewayOptions?.heartbeat?.intervalMs);
+      return new ReactiveAgent(engine, agentId, managedRuntime, mcpServers.map((s) => s.name), !!gatewayOptions, gatewayOptions?.heartbeat?.intervalMs, !!gatewayOptions?.heartbeat?.instruction);
     }) as Effect.Effect<ReactiveAgent, Error>;
   }
 }
@@ -1661,6 +1661,8 @@ export class ReactiveAgent {
     private readonly _gatewayEnabled: boolean = false,
     /** @internal Gateway heartbeat interval (ms). Defaults to 60000. */
     private readonly _gatewayIntervalMs: number = 60_000,
+    /** @internal Whether a custom heartbeat instruction was configured. */
+    private readonly _hasCustomHeartbeatInstruction: boolean = false,
   ) {}
 
   /**
@@ -2095,7 +2097,7 @@ export class ReactiveAgent {
       ) => {
         await publish({
           _tag: "ProactiveActionInitiated",
-          agentId: self._agentId ?? "unknown",
+          agentId: self.agentId ?? "unknown",
           source,
           taskDescription: instruction,
           timestamp: Date.now(),
@@ -2110,7 +2112,7 @@ export class ReactiveAgent {
           }
           await publish({
             _tag: "ProactiveActionCompleted",
-            agentId: self._agentId ?? "unknown",
+            agentId: self.agentId ?? "unknown",
             source,
             success: true,
             tokensUsed,
@@ -2120,7 +2122,7 @@ export class ReactiveAgent {
         } catch {
           await publish({
             _tag: "ProactiveActionCompleted",
-            agentId: self._agentId ?? "unknown",
+            agentId: self.agentId ?? "unknown",
             source,
             success: false,
             tokensUsed: 0,
@@ -2169,7 +2171,7 @@ export class ReactiveAgent {
                   id: `ch-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
                   source: "channel" as const,
                   timestamp: new Date(event.timestamp),
-                  agentId: self._agentId ?? "unknown",
+                  agentId: self.agentId ?? "unknown",
                   payload: { sender: event.sender, message: event.message },
                   priority: "normal" as const,
                   metadata: {
@@ -2201,7 +2203,7 @@ export class ReactiveAgent {
 
       // Run first tick — skip immediate execution when using default heartbeat
       // instruction (avoids confused first run with no context)
-      const hasCustomInstruction = !!self._gatewayOptions?.heartbeat?.instruction;
+      const hasCustomInstruction = self._hasCustomHeartbeatInstruction;
       if (hasCustomInstruction) {
         await tick();
       }
