@@ -14,6 +14,12 @@ import { createCostBudgetPolicy } from "../policies/cost-budget.js";
 import { createRateLimitPolicy } from "../policies/rate-limit.js";
 import { createEventMergingPolicy } from "../policies/event-merging.js";
 
+// ─── Optional EventBus ───────────────────────────────────────────────────────
+
+export type EventBusLike = {
+  readonly publish: (event: any) => Effect.Effect<void, never>;
+};
+
 // ─── Status Snapshot ────────────────────────────────────────────────────────
 
 export interface GatewayStatus {
@@ -55,7 +61,7 @@ export class GatewayService extends Context.Tag("GatewayService")<
 
 // ─── Live Implementation ────────────────────────────────────────────────────
 
-export const GatewayServiceLive = (config: Partial<GatewayConfig>) =>
+export const GatewayServiceLive = (config: Partial<GatewayConfig>, bus?: EventBusLike) =>
   Layer.effect(
     GatewayService,
     Effect.gen(function* () {
@@ -114,6 +120,17 @@ export const GatewayServiceLive = (config: Partial<GatewayConfig>) =>
             const state = yield* Ref.get(stateRef);
             const decision = yield* evaluatePolicies(policies, event, state);
 
+            // ── Publish GatewayEventReceived (always, when bus provided) ──
+            if (bus) {
+              yield* bus.publish({
+                _tag: "GatewayEventReceived" as const,
+                agentId: event.agentId ?? "unknown",
+                source: event.source,
+                eventId: event.id,
+                timestamp: Date.now(),
+              });
+            }
+
             // Track decision in stats
             yield* Ref.update(statsRef, (s) => {
               switch (decision.action) {
@@ -170,6 +187,32 @@ export const GatewayServiceLive = (config: Partial<GatewayConfig>) =>
                 lastExecutionAt: new Date(),
                 actionsThisHour: s.actionsThisHour + 1,
               }));
+            }
+
+            // ── Publish suppression / skip events (when bus provided) ────
+            if (bus && (decision.action === "skip" || decision.action === "queue")) {
+              const reason = decision.reason;
+              yield* bus.publish({
+                _tag: "ProactiveActionSuppressed" as const,
+                agentId: event.agentId ?? "unknown",
+                source: event.source,
+                reason,
+                policy: "policy-engine",
+                eventId: event.id,
+                timestamp: Date.now(),
+              });
+
+              // Heartbeat-specific skip event
+              if (event.source === "heartbeat" && decision.action === "skip") {
+                const updatedState = yield* Ref.get(stateRef);
+                yield* bus.publish({
+                  _tag: "HeartbeatSkipped" as const,
+                  agentId: event.agentId ?? "unknown",
+                  reason,
+                  consecutiveSkips: updatedState.consecutiveHeartbeatSkips,
+                  timestamp: Date.now(),
+                });
+              }
             }
 
             return decision;
