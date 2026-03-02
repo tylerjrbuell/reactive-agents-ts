@@ -13,6 +13,7 @@ import { createAdaptiveHeartbeatPolicy } from "../policies/adaptive-heartbeat.js
 import { createCostBudgetPolicy } from "../policies/cost-budget.js";
 import { createRateLimitPolicy } from "../policies/rate-limit.js";
 import { createEventMergingPolicy } from "../policies/event-merging.js";
+import { createAccessControlPolicy } from "../policies/access-control.js";
 
 // ─── Optional EventBus ───────────────────────────────────────────────────────
 
@@ -100,6 +101,19 @@ export const GatewayServiceLive = (config: Partial<GatewayConfig>, bus?: EventBu
 
       if (policyConfig?.mergeWindowMs) {
         policies.push(createEventMergingPolicy());
+      }
+
+      // Access control for channel messages (highest priority)
+      if (config.channels) {
+        policies.push(
+          createAccessControlPolicy({
+            policy: config.channels.accessPolicy ?? "allowlist",
+            allowedSenders: config.channels.allowedSenders as string[] | undefined,
+            blockedSenders: config.channels.blockedSenders as string[] | undefined,
+            unknownSenderAction: config.channels.unknownSenderAction,
+            replyToUnknown: config.channels.replyToUnknown,
+          }),
+        );
       }
 
       return {
