@@ -1,5 +1,5 @@
 import { Effect, Context, Layer, Ref } from "effect";
-import type { GatewayEvent, CronEntry, HeartbeatConfig } from "../types.js";
+import type { EventBusLike, GatewayEvent, CronEntry, HeartbeatConfig } from "../types.js";
 import { parseCron, shouldFireAt } from "./cron-parser.js";
 
 // ─── Event Factories ─────────────────────────────────────────────────────────
@@ -41,12 +41,6 @@ export const createCronEvent = (
     schedule: entry.schedule,
   },
 });
-
-// ─── EventBus structural type ──────────────────────────────────────────────
-
-type EventBusLike = {
-  readonly publish: (event: any) => Effect.Effect<void, never>;
-};
 
 // ─── Service ─────────────────────────────────────────────────────────────────
 

@@ -1,4 +1,14 @@
-import { Schema } from "effect";
+import { Effect, Schema } from "effect";
+
+// ─── EventBus structural type ──────────────────────────────────────────────
+
+/**
+ * Structural type for optional EventBus dependency injection.
+ * Avoids a hard dependency on `@reactive-agents/core` while enabling observability.
+ */
+export type EventBusLike = {
+  readonly publish: (event: any) => Effect.Effect<void, never>;
+};
 
 // ─── Enums ────────────────────────────────────────────────────────────────────
 

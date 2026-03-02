@@ -1,55 +1,98 @@
 import { ReactiveAgents } from "reactive-agents";
 
-// ─── Test all 4 improved reasoning strategies ─────────────────────────────────
+// ─── Persistent Gateway Agent with Signal ───────────────────────────────────
+// Sends a ping every 2 minutes on Sundays via Signal MCP.
+// Stays alive until SIGINT/SIGTERM.
 
-// Strategy 1: Plan-Execute — tests context compaction + synthesis
-console.log("\n=== PLAN-EXECUTE ===");
-await using agent1 = await ReactiveAgents.create()
+const agent = await ReactiveAgents.create()
   .withProvider("ollama")
   .withModel("cogito:14b")
-  .withName("plan-execute-agent")
-  .withReasoning({ defaultStrategy: "plan-execute-reflect" })
-  .withObservability({ verbosity: "normal", live: true })
+  .withPersona({
+    role: "Software Engineer Assistant",
+    instructions: "Always explain your reasoning step by step",
+    tone: "professional and concise",
+  })
+  .withGateway({
+    heartbeat: { intervalMs: 120_000, policy: "adaptive" },
+    crons: [
+      {
+        schedule: "*/30 * * * 0", // Every 30 minutes on Sundays
+        instruction:
+          "Fetch and summarize the last 5 commits on the reactive-agents-ts repo using the github mcp and send a formatted message to +12693310593",
+      },
+    ],
+    policies: { dailyTokenBudget: 50_000, maxActionsPerHour: 60 },
+    channels: {
+      accessPolicy: "allowlist",
+      allowedSenders: ["+12693310593"],
+      unknownSenderAction: "skip",
+    },
+  })
+  .withMCP({
+    name: "signal",
+    transport: "stdio",
+    command: "docker",
+    args: [
+      "run",
+      "-i",
+      "--rm",
+      "--cap-drop",
+      "ALL",
+      "--security-opt",
+      "no-new-privileges",
+      "--memory",
+      "512m",
+      "-v",
+      "./signal-data:/data:rw",
+      "-e",
+      `SIGNAL_USER_ID=${process.env.SIGNAL_PHONE_NUMBER}`,
+      "signal-mcp:local",
+    ],
+  })
+  .withMCP({
+    name: "github",
+    transport: "stdio",
+    command: "docker",
+    args: [
+      "run",
+      "-i",
+      "--rm",
+      "-e",
+      "GITHUB_PERSONAL_ACCESS_TOKEN",
+      "ghcr.io/github/github-mcp-server",
+    ],
+    env: {
+      GITHUB_PERSONAL_ACCESS_TOKEN:
+        process.env.GITHUB_PERSONAL_ACCESS_TOKEN ?? "",
+    },
+  })
+  .withTools()
+  .withName("gateway-agent")
+  .withReasoning({ defaultStrategy: "reactive" })
+  .withObservability({ verbosity: "debug", live: true })
   .build();
 
-const r1 = await agent1.run("Explain the water cycle in 3 clear steps");
-console.log("plan-execute result:", r1);
+// Start the persistent gateway loop
+const handle = agent.start();
 
-// Strategy 2: Reflexion — tests stagnation detection + bounded critiques
-console.log("\n=== REFLEXION ===");
-await using agent2 = await ReactiveAgents.create()
-  .withProvider("ollama")
-  .withModel("cogito:14b")
-  .withName("reflexion-agent")
-  .withReasoning({ defaultStrategy: "reflexion" })
-  .withObservability({ verbosity: "normal", live: true })
-  .build();
+console.log("Gateway agent started. Press Ctrl+C to stop.");
 
-const r2 = await agent2.run("Explain what makes a good API design in 2-3 sentences");
-console.log("reflexion result:", r2);
+// Graceful shutdown on SIGINT/SIGTERM
+let shuttingDown = false;
+const shutdown = async () => {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log("\nShutting down gateway...");
+  const summary = await handle.stop();
+  console.log(
+    `Gateway stopped: ${summary.totalRuns} runs, ${summary.heartbeatsFired} heartbeats`,
+  );
+  await agent.dispose();
+  process.exit(0);
+};
 
-// Strategy 3: Tree-of-Thought — tests score parsing + adaptive pruning
-console.log("\n=== TREE-OF-THOUGHT ===");
-await using agent3 = await ReactiveAgents.create()
-  .withProvider("ollama")
-  .withModel("cogito:14b")
-  .withName("tot-agent")
-  .withReasoning({ defaultStrategy: "tree-of-thought" })
-  .withObservability({ verbosity: "normal", live: true })
-  .build();
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);
 
-const r3 = await agent3.run("What are 3 different approaches to caching in a web app?");
-console.log("tree-of-thought result:", r3);
-
-// Strategy 4: Adaptive — tests classification + fallback
-console.log("\n=== ADAPTIVE ===");
-await using agent4 = await ReactiveAgents.create()
-  .withProvider("ollama")
-  .withModel("cogito:14b")
-  .withName("adaptive-agent")
-  .withReasoning({ defaultStrategy: "adaptive" })
-  .withObservability({ verbosity: "normal", live: true })
-  .build();
-
-const r4 = await agent4.run("What is the capital of Japan?");
-console.log("adaptive result:", r4);
+// Keep alive until stopped
+await handle.done;

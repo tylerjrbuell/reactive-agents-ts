@@ -370,6 +370,7 @@ export interface RuntimeOptions {
     crons?: readonly { schedule: string; instruction: string; agentId?: string; priority?: string; enabled?: boolean }[];
     webhooks?: readonly { path: string; adapter: string; secret?: string; events?: readonly string[] }[];
     policies?: { dailyTokenBudget?: number; maxActionsPerHour?: number; heartbeatPolicy?: string; mergeWindowMs?: number };
+    channels?: { accessPolicy?: string; allowedSenders?: readonly string[]; blockedSenders?: readonly string[]; unknownSenderAction?: string; replyToUnknown?: string };
     port?: number;
   };
 

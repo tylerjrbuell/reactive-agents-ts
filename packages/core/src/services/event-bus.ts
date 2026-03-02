@@ -589,7 +589,7 @@ export type AgentEvent =
     };
 
 /**
- * Discriminant tag union of all 33 agent event types.
+ * Discriminant tag union of all agent event types.
  * Derived directly from `AgentEvent["_tag"]` so it stays in sync with the union automatically.
  * Useful for writing generic event handlers, type guards, and filtering logic.
  *
@@ -670,7 +670,7 @@ export type EventHandler = (event: AgentEvent) => Effect.Effect<void, never>;
  * });
  * ```
  *
- * @see AgentEvent — union of all 33 event variants the bus can carry
+ * @see AgentEvent — union of all event variants the bus can carry
  * @see EventBusLive — default Effect-TS Layer implementation
  * @see TypedEventHandler — type for tag-filtered event handlers
  */

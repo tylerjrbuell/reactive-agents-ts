@@ -2194,7 +2194,7 @@ export class ReactiveAgent {
             ),
           );
           unsubChannel = () => {
-            try { self.runtime.runPromise(unsub as any).catch(() => {}); } catch {}
+            try { (unsub as () => void)(); } catch {}
           };
         } catch { /* EventBus subscription failed — no channel routing */ }
       }
