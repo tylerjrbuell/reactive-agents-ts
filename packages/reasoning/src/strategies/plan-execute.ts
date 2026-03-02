@@ -3,26 +3,32 @@
  * Plan-Execute-Reflect Strategy
  *
  * 1. Generate a plan (ordered list of steps)
- * 2. Execute each step via LLM (+tools if available)
+ * 2. Execute each step via the ReAct kernel (full tool-aware loop)
  * 3. After all steps, reflect on execution quality
  * 4. Optionally refine the plan and re-execute (up to maxRefinements)
  */
 import { Effect } from "effect";
-import { ulid } from "ulid";
 import type { ReasoningResult, ReasoningStep } from "../types/index.js";
-import type { StepId } from "../types/step.js";
 import { ExecutionError, IterationLimitError } from "../errors/errors.js";
 import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
-import { ToolService } from "@reactive-agents/tools";
-import { PromptService } from "@reactive-agents/prompts";
-import { EventBus } from "@reactive-agents/core";
+import { executeReActKernel } from "./shared/react-kernel.js";
+import {
+  resolveStrategyServices,
+  compilePromptOrFallback,
+  publishReasoningStep,
+} from "./shared/service-utils.js";
+import { makeStep, buildStrategyResult } from "./shared/step-utils.js";
+import { isSatisfied } from "./shared/quality-utils.js";
+import type { ToolSchema } from "./shared/tool-utils.js";
 
 interface PlanExecuteInput {
   readonly taskDescription: string;
   readonly taskType: string;
   readonly memoryContext: string;
   readonly availableTools: readonly string[];
+  /** Full tool schemas passed from execution engine for kernel tool awareness */
+  readonly availableToolSchemas?: readonly ToolSchema[];
   readonly config: ReasoningConfig;
   /** Custom system prompt for steering agent behavior */
   readonly systemPrompt?: string;
@@ -38,18 +44,9 @@ export const executePlanExecute = (
   LLMService
 > =>
   Effect.gen(function* () {
-    const llm = yield* LLMService;
-    const toolServiceOpt = yield* Effect.serviceOption(ToolService).pipe(
-      Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
-    );
-    const promptServiceOptRaw = yield* Effect.serviceOption(PromptService).pipe(
-      Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
-    );
-    const promptServiceOpt = promptServiceOptRaw as PromptServiceOpt;
-    const ebOptRaw = yield* Effect.serviceOption(EventBus).pipe(
-      Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
-    );
-    const ebOpt = ebOptRaw as typeof ebOptRaw;
+    const services = yield* resolveStrategyServices;
+    const { llm, promptService, eventBus } = services;
+
     const { maxRefinements, reflectionDepth } =
       input.config.strategies.planExecute;
     const steps: ReasoningStep[] = [];
@@ -72,7 +69,7 @@ export const executePlanExecute = (
         : `You are a planning agent. Break tasks into clear, sequential steps. Task: ${input.taskDescription}`;
 
       const planSystemPrompt = yield* compilePromptOrFallback(
-        promptServiceOpt,
+        promptService,
         "reasoning.plan-execute-plan",
         { task: input.taskDescription },
         planDefaultFallback,
@@ -101,128 +98,68 @@ export const executePlanExecute = (
       totalCost += planResponse.usage.estimatedCost;
 
       const planText = planResponse.content;
-      steps.push({
-        id: ulid() as StepId,
-        type: "thought",
-        content: `[PLAN ${refinement + 1}] ${planText}`,
-        timestamp: new Date(),
+      steps.push(makeStep("thought", `[PLAN ${refinement + 1}] ${planText}`));
+
+      yield* publishReasoningStep(eventBus, {
+        _tag: "ReasoningStepCompleted",
+        taskId: input.taskId ?? "plan-execute",
+        strategy: "plan-execute-reflect",
+        step: steps.length,
+        totalSteps: maxRefinements + 1,
+        thought: `[PLAN ${refinement + 1}] ${planText}`,
       });
 
-      if (ebOpt._tag === "Some") {
-        yield* ebOpt.value.publish({
+      // Parse plan into individual steps
+      const planSteps = parsePlanSteps(planText);
+
+      // ── EXECUTE: Run each plan step via ReAct kernel ──
+      const stepResults: string[] = [];
+      for (let i = 0; i < planSteps.length; i++) {
+        const stepDescription = planSteps[i]!;
+
+        // Build context from prior step results (capped at last 3)
+        const stepContext =
+          stepResults.length > 0
+            ? `\n\nPrevious steps:\n${stepResults.slice(-3).join("\n")}`
+            : "";
+
+        const execResult = yield* executeReActKernel({
+          task: `Execute this step of the plan:\n\nStep: ${stepDescription}\n\nMain task: ${input.taskDescription}${stepContext}`,
+          systemPrompt:
+            input.systemPrompt ??
+            "You are a precise task executor. Complete the given step using available tools if needed.",
+          availableToolSchemas: input.availableToolSchemas,
+          maxIterations: 2,
+          temperature: 0.5,
+          taskId: input.taskId,
+          parentStrategy: "plan-execute",
+        }).pipe(
+          Effect.mapError(
+            (err) =>
+              new ExecutionError({
+                strategy: "plan-execute-reflect",
+                message: `Step ${i + 1} execution failed`,
+                step: i,
+                cause: err,
+              }),
+          ),
+        );
+
+        const stepResult = execResult.output || `[Step ${i + 1} completed]`;
+        totalTokens += execResult.totalTokens;
+        totalCost += execResult.totalCost;
+        stepResults.push(`Step ${i + 1}: ${stepResult}`);
+
+        steps.push(makeStep("observation", `[EXEC ${i + 1}] ${stepResult}`));
+
+        yield* publishReasoningStep(eventBus, {
           _tag: "ReasoningStepCompleted",
           taskId: input.taskId ?? "plan-execute",
           strategy: "plan-execute-reflect",
           step: steps.length,
           totalSteps: maxRefinements + 1,
-          thought: `[PLAN ${refinement + 1}] ${planText}`,
-        }).pipe(Effect.catchAll(() => Effect.void));
-      }
-
-      // Parse plan into individual steps
-      const planSteps = parsePlanSteps(planText);
-
-      // ── EXECUTE: Run each plan step ──
-      let stepResults: string[] = [];
-      for (let i = 0; i < planSteps.length; i++) {
-        const stepDescription = planSteps[i];
-
-        // Check for tool requests in the step
-        const toolRequest = parseToolFromStep(stepDescription);
-
-        let stepResult: string;
-
-        if (
-          toolRequest &&
-          toolServiceOpt._tag === "Some"
-        ) {
-          // Execute tool
-          steps.push({
-            id: ulid() as StepId,
-            type: "action",
-            content: JSON.stringify(toolRequest),
-            timestamp: new Date(),
-            metadata: { toolUsed: toolRequest.tool },
-          });
-
-          const toolService = toolServiceOpt.value;
-          stepResult = yield* toolService
-            .execute({
-              toolName: toolRequest.tool,
-              arguments: toolRequest.args,
-              agentId: "reasoning-agent",
-              sessionId: "reasoning-session",
-            })
-            .pipe(
-              Effect.map((r) =>
-                typeof r.result === "string"
-                  ? r.result
-                  : JSON.stringify(r.result),
-              ),
-              Effect.catchAll((e) =>
-                Effect.succeed(`[Tool error: ${e instanceof Error ? e.message : String(e)}]`),
-              ),
-            );
-        } else {
-          // Execute step via LLM
-          const execDefaultFallback = input.systemPrompt
-            ? `${input.systemPrompt}\n\nYou are executing a plan for: ${input.taskDescription}`
-            : `You are executing a plan for: ${input.taskDescription}`;
-
-          const execSystemPrompt = yield* compilePromptOrFallback(
-            promptServiceOpt,
-            "reasoning.plan-execute-execute",
-            { task: input.taskDescription },
-            execDefaultFallback,
-          );
-          const execResponse = yield* llm
-            .complete({
-              messages: [
-                {
-                  role: "user",
-                  content: `Execute this step of the plan:\n\nStep ${i + 1}: ${stepDescription}\n\nContext so far:\n${buildCompactedStepContext(stepResults)}`,
-                },
-              ],
-              systemPrompt: execSystemPrompt,
-              maxTokens: 300,
-              temperature: 0.5,
-            })
-            .pipe(
-              Effect.mapError(
-                (err) =>
-                  new ExecutionError({
-                    strategy: "plan-execute-reflect",
-                    message: `Step ${i + 1} execution failed`,
-                    step: i,
-                    cause: err,
-                  }),
-              ),
-            );
-
-          totalTokens += execResponse.usage.totalTokens;
-          totalCost += execResponse.usage.estimatedCost;
-          stepResult = execResponse.content;
-        }
-
-        stepResults.push(`Step ${i + 1}: ${stepResult}`);
-
-        steps.push({
-          id: ulid() as StepId,
-          type: "observation",
-          content: `[EXEC ${i + 1}] ${stepResult}`,
-          timestamp: new Date(),
+          observation: `[EXEC ${i + 1}] ${stepResult}`,
         });
-
-        if (ebOpt._tag === "Some") {
-          yield* ebOpt.value.publish({
-            _tag: "ReasoningStepCompleted",
-            taskId: input.taskId ?? "plan-execute",
-            strategy: "plan-execute-reflect",
-            step: steps.length,
-            totalSteps: maxRefinements + 1,
-            observation: `[EXEC ${i + 1}] ${stepResult}`,
-          }).pipe(Effect.catchAll(() => Effect.void));
-        }
       }
 
       // ── REFLECT: Evaluate execution quality ──
@@ -231,7 +168,7 @@ export const executePlanExecute = (
         : "You are evaluating plan execution. Determine if the task has been adequately addressed.";
 
       const reflectSystemPrompt = yield* compilePromptOrFallback(
-        promptServiceOpt,
+        promptService,
         "reasoning.plan-execute-reflect",
         {},
         reflectDefaultFallback,
@@ -268,12 +205,12 @@ export const executePlanExecute = (
       totalTokens += reflectResponse.usage.totalTokens;
       totalCost += reflectResponse.usage.estimatedCost;
 
-      steps.push({
-        id: ulid() as StepId,
-        type: "observation",
-        content: `[REFLECT ${refinement + 1}] ${reflectResponse.content}`,
-        timestamp: new Date(),
-      });
+      steps.push(
+        makeStep(
+          "observation",
+          `[REFLECT ${refinement + 1}] ${reflectResponse.content}`,
+        ),
+      );
 
       // Check if reflection is satisfied
       if (isSatisfied(reflectResponse.content)) {
@@ -286,7 +223,9 @@ export const executePlanExecute = (
                 content: `Task: ${input.taskDescription}\n\nExecution results:\n${stepResults.join("\n")}\n\nSynthesize a clear, complete answer to the original task based on the results above.`,
               },
             ],
-            systemPrompt: input.systemPrompt ?? "You are a synthesizer. Combine execution results into a clear, concise final answer.",
+            systemPrompt:
+              input.systemPrompt ??
+              "You are a synthesizer. Combine execution results into a clear, concise final answer.",
             maxTokens: 500,
             temperature: 0.3,
           })
@@ -303,23 +242,16 @@ export const executePlanExecute = (
         totalCost += synthLlmResponse.usage.estimatedCost;
         finalOutput = synthLlmResponse.content;
 
-        steps.push({
-          id: ulid() as StepId,
-          type: "thought",
-          content: `[SYNTHESIS] ${finalOutput}`,
-          timestamp: new Date(),
-        });
+        steps.push(makeStep("thought", `[SYNTHESIS] ${finalOutput}`));
 
-        if (ebOpt._tag === "Some") {
-          yield* ebOpt.value.publish({
-            _tag: "FinalAnswerProduced",
-            taskId: input.taskId ?? "plan-execute",
-            strategy: "plan-execute-reflect",
-            answer: finalOutput,
-            iteration: refinement,
-            totalTokens,
-          }).pipe(Effect.catchAll(() => Effect.void));
-        }
+        yield* publishReasoningStep(eventBus, {
+          _tag: "FinalAnswerProduced",
+          taskId: input.taskId ?? "plan-execute",
+          strategy: "plan-execute-reflect",
+          answer: finalOutput,
+          iteration: refinement,
+          totalTokens,
+        });
         break;
       }
 
@@ -331,46 +263,21 @@ export const executePlanExecute = (
       const lastObservations = steps
         .filter((s) => s.type === "observation" && s.content.startsWith("[EXEC"))
         .map((s) => s.content);
-      finalOutput = lastObservations.join("\n\n") || String(steps[steps.length - 1]?.content ?? "");
+      finalOutput =
+        lastObservations.join("\n\n") ||
+        String(steps[steps.length - 1]?.content ?? "");
     }
 
-    return {
-      strategy: "plan-execute-reflect" as const,
-      steps: [...steps],
+    return buildStrategyResult({
+      strategy: "plan-execute-reflect",
+      steps,
       output: finalOutput,
-      metadata: {
-        duration: Date.now() - start,
-        cost: totalCost,
-        tokensUsed: totalTokens,
-        stepsCount: steps.length,
-        confidence: finalOutput ? 0.8 : 0.5,
-      },
-      status: finalOutput ? ("completed" as const) : ("partial" as const),
-    };
+      status: finalOutput ? "completed" : "partial",
+      start,
+      totalTokens,
+      totalCost,
+    });
   });
-
-// ─── Prompt compilation helper ───
-
-type PromptServiceOpt =
-  | { _tag: "Some"; value: { compile: (id: string, vars: Record<string, unknown>) => Effect.Effect<{ content: string }, unknown> } }
-  | { _tag: "None" };
-
-function compilePromptOrFallback(
-  promptServiceOpt: PromptServiceOpt,
-  templateId: string,
-  variables: Record<string, unknown>,
-  fallback: string,
-): Effect.Effect<string, never> {
-  if (promptServiceOpt._tag === "None") {
-    return Effect.succeed(fallback);
-  }
-  return promptServiceOpt.value
-    .compile(templateId, variables)
-    .pipe(
-      Effect.map((compiled: { content: string }) => compiled.content),
-      Effect.catchAll(() => Effect.succeed(fallback)),
-    );
-}
 
 // ─── Private Helpers ───
 
@@ -442,40 +349,8 @@ function parsePlanSteps(planText: string): string[] {
   for (const line of lines) {
     const match = line.match(/^\s*\d+[\.\)]\s+(.+)/);
     if (match) {
-      steps.push(match[1].trim());
+      steps.push(match[1]!.trim());
     }
   }
   return steps.length > 0 ? steps : [planText.trim()];
-}
-
-function parseToolFromStep(
-  step: string,
-): { tool: string; args: Record<string, unknown> } | null {
-  const match = step.match(/TOOL:\s*([\w-]+)\((.+)\)/is);
-  if (!match) return null;
-
-  let args: Record<string, unknown>;
-  try {
-    args = JSON.parse(match[2]);
-  } catch {
-    args = { input: match[2] };
-  }
-  return { tool: match[1], args };
-}
-
-function isSatisfied(reflection: string): boolean {
-  return /^SATISFIED:/i.test(reflection.trim());
-}
-
-/**
- * Prevents O(n²) token growth during plan execution.
- * When more than 5 step results exist, collapses older ones to one-liners.
- */
-function buildCompactedStepContext(stepResults: string[]): string {
-  if (stepResults.length <= 5) return stepResults.join("\n");
-  const older = stepResults
-    .slice(0, stepResults.length - 5)
-    .map((_, i) => `Step ${i + 1}: [completed]`);
-  const recent = stepResults.slice(-5);
-  return [...older, ...recent].join("\n");
 }
