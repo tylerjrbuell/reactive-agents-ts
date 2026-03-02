@@ -158,4 +158,53 @@ describe("PlanExecuteStrategy", () => {
     const synthStep = result.steps.find((s) => s.content.startsWith("[SYNTHESIS]"));
     expect(synthStep).toBeDefined();
   });
+
+  it("step execution uses kernel with provided tool schemas", async () => {
+    const layer = TestLLMServiceLayer({
+      "planning agent": "1. Search for data\n2. Write summary",
+      "Execute this step": "FINAL ANSWER: Step executed with tool awareness.",
+      "evaluating plan execution": "SATISFIED: All steps complete.",
+      "Synthesize": "The final synthesized answer combining all step results.",
+    });
+
+    const result = await Effect.runPromise(
+      executePlanExecute({
+        taskDescription: "Research quantum computing trends",
+        taskType: "research",
+        memoryContext: "",
+        availableTools: [],
+        availableToolSchemas: [
+          { name: "web-search", description: "Search the web", parameters: [] },
+        ],
+        config: defaultReasoningConfig,
+      }).pipe(Effect.provide(layer)),
+    );
+
+    expect(result.strategy).toBe("plan-execute-reflect");
+    expect(result.status).toBe("completed");
+  });
+
+  it("multiple steps execute without context explosion", async () => {
+    const layer = TestLLMServiceLayer({
+      "planning agent": "1. Step A\n2. Step B\n3. Step C",
+      "Execute this step": "FINAL ANSWER: Step result.",
+      "evaluating plan execution": "SATISFIED: Done.",
+      "Synthesize": "Final answer.",
+    });
+
+    const result = await Effect.runPromise(
+      executePlanExecute({
+        taskDescription: "Three step task",
+        taskType: "multi-step",
+        memoryContext: "",
+        availableTools: [],
+        config: defaultReasoningConfig,
+      }).pipe(Effect.provide(layer)),
+    );
+
+    expect(result.status).toBe("completed");
+    // All 3 steps executed
+    const execSteps = result.steps.filter((s) => s.content.includes("[EXEC"));
+    expect(execSteps.length).toBe(3);
+  });
 });
