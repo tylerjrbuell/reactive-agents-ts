@@ -170,3 +170,126 @@ export function formatToolSchemas(schemas: readonly ToolSchema[], verbose = fals
     })
     .join("\n");
 }
+
+// ── Tool Result Compression ───────────────────────────────────────────────────
+
+export interface CompressResult {
+  content: string;
+  stored?: { key: string; value: string };
+}
+
+// Monotonic counter for unique scratchpad keys within a process lifetime
+let _toolResultCounter = 0;
+
+/** Generate the next unique scratchpad key for a stored tool result. */
+export function nextToolResultKey(): string {
+  return `_tool_result_${++_toolResultCounter}`;
+}
+
+/** Replace blind truncation with structured preview + optional scratchpad storage. */
+export function compressToolResult(
+  result: string,
+  toolName: string,
+  budget: number,
+  previewItems: number,
+): CompressResult {
+  if (result.length <= budget) return { content: result };
+
+  const key = nextToolResultKey();
+
+  // Try JSON first
+  try {
+    const parsed = JSON.parse(result) as unknown;
+
+    if (Array.isArray(parsed)) {
+      // Schema: inspect first item keys, flatten one level of nesting
+      const first = parsed[0] as Record<string, unknown> | undefined;
+      const schema = first
+        ? Object.entries(first)
+            .flatMap(([k, v]) =>
+              v !== null && typeof v === "object" && !Array.isArray(v)
+                ? Object.keys(v as object).map((sub) => `${k}.${sub}`)
+                : [k],
+            )
+            .slice(0, 8)
+            .join(", ")
+        : "unknown";
+
+      const items = (parsed as Array<Record<string, unknown>>)
+        .slice(0, previewItems)
+        .map((item, i) => {
+          const pairs = Object.entries(item)
+            .slice(0, 4)
+            .map(([k, v]) => {
+              const val =
+                v !== null && typeof v === "object"
+                  ? Object.values(v as object)
+                      .filter((x) => typeof x === "string")
+                      .map(String)[0] ?? "{...}"
+                  : String(v).slice(0, 60);
+              return `${k}=${val}`;
+            })
+            .join("  ");
+          return `  [${i}] ${pairs}`;
+        })
+        .join("\n");
+
+      const remaining = parsed.length - previewItems;
+      const moreStr = remaining > 0 ? `\n  ...${remaining} more` : "";
+      const content =
+        `[STORED: ${key} | ${toolName}]\n` +
+        `Type: Array(${parsed.length}) | Schema: ${schema}\n` +
+        `Preview (first ${Math.min(previewItems, parsed.length)}):\n` +
+        items +
+        moreStr +
+        `\n  — use scratchpad-read("${key}") or | transform: to access full data`;
+
+      return { content, stored: { key, value: result } };
+    }
+
+    // JSON object
+    if (typeof parsed === "object" && parsed !== null) {
+      const entries = Object.entries(parsed as Record<string, unknown>)
+        .slice(0, 8)
+        .map(([k, v]) => {
+          const val =
+            v === null
+              ? "null"
+              : Array.isArray(v)
+                ? `Array(${v.length})`
+                : typeof v === "object"
+                  ? `{${Object.keys(v as object).slice(0, 3).join(", ")}}`
+                  : String(v).slice(0, 80);
+          return `  ${k}: ${val}`;
+        })
+        .join("\n");
+
+      const totalKeys = Object.keys(parsed as object).length;
+      const content =
+        `[STORED: ${key} | ${toolName}]\n` +
+        `Type: Object(${totalKeys} keys)\n` +
+        entries +
+        `\n  — use scratchpad-read("${key}") or | transform: to access full data`;
+
+      return { content, stored: { key, value: result } };
+    }
+  } catch {
+    // Not JSON — plain text preview
+  }
+
+  // Plain text: first N lines, each line truncated to 120 chars
+  const lines = result.split("\n");
+  const preview = lines
+    .slice(0, previewItems)
+    .map((l) => (l.length > 120 ? `${l.slice(0, 120)}…` : l))
+    .join("\n");
+  const remaining = lines.length - previewItems;
+  const moreStr = remaining > 0 ? `\n  ...${remaining} more lines` : "";
+  const content =
+    `[STORED: ${key} | ${toolName}]\n` +
+    preview +
+    moreStr +
+    `\n  — use scratchpad-read("${key}") to access full text`;
+
+  return { content, stored: { key, value: result } };
+}
