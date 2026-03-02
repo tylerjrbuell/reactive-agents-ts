@@ -220,4 +220,66 @@ describe("ReflexionStrategy", () => {
     expect(result.strategy).toBe("reflexion");
     expect(result.steps.length).toBeGreaterThan(0);
   });
+
+  it("generation pass uses tool schemas when available in input", async () => {
+    // Verify that the strategy accepts availableToolSchemas.
+    // The generation kernel call will get a prompt containing "quantum computing" →
+    // the layer returns a FINAL ANSWER string so the kernel terminates immediately.
+    // The critique prompt contains "Critically evaluate" → SATISFIED → completed.
+    const layer = TestLLMServiceLayer({
+      "Critically evaluate": "SATISFIED: The response is thorough and well-researched.",
+      "quantum computing": "FINAL ANSWER: A complete response generated with tool awareness.",
+    });
+
+    const result = await Effect.runPromise(
+      executeReflexion({
+        taskDescription: "Research and explain quantum computing",
+        taskType: "research",
+        memoryContext: "",
+        availableTools: [],
+        availableToolSchemas: [
+          { name: "web-search", description: "Search the web", parameters: [] },
+        ],
+        config: defaultReasoningConfig,
+      }).pipe(Effect.provide(layer)),
+    );
+
+    expect(result.strategy).toBe("reflexion");
+    expect(result.status).toBe("completed");
+  });
+
+  it("improvement pass includes critique in the task context", async () => {
+    // When a critique is not satisfied, the reflexion loop runs an improvement pass.
+    // The improvement prompt includes the critique text (via buildGenerationPrompt).
+    // We match on a unique string that appears only in the critique to verify the
+    // improvement LLM call received the critique context.
+    const layer = TestLLMServiceLayer({
+      // Critique prompt matches "Critically evaluate" → unsatisfied critique
+      "Critically evaluate": "The response misses superposition details uniqueMarker99.",
+      // Improvement prompt includes critique text → "uniqueMarker99" appears → improved response
+      "uniqueMarker99": "FINAL ANSWER: Improved explanation with superposition examples.",
+    });
+
+    const result = await Effect.runPromise(
+      executeReflexion({
+        taskDescription: "Explain quantum physics",
+        taskType: "explanation",
+        memoryContext: "",
+        availableTools: [],
+        config: {
+          ...defaultReasoningConfig,
+          strategies: {
+            ...defaultReasoningConfig.strategies,
+            reflexion: { maxRetries: 2, selfCritiqueDepth: "shallow" },
+          },
+        },
+      }).pipe(Effect.provide(layer)),
+    );
+
+    // The improvement pass ran and produced a response with improved content
+    expect(result.steps.length).toBeGreaterThanOrEqual(3); // initial + critique + improvement
+    const thoughtSteps = result.steps.filter((s) => s.type === "thought");
+    expect(thoughtSteps.length).toBeGreaterThanOrEqual(2); // initial attempt + improved attempt
+    expect(result.output).toContain("Improved explanation");
+  });
 });
