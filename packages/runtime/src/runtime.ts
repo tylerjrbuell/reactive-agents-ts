@@ -602,16 +602,28 @@ export const createRuntime = (options: RuntimeOptions) => {
   // Gateway — compose GatewayService + SchedulerService when enabled.
   // The persistent event loop itself starts via agent.start(); layer composition just makes
   // the services resolvable from the ManagedRuntime.
+  // EventBus is passed to gateway services for observability when available.
   if (options.enableGateway) {
     const gatewayLayer = Layer.unwrapEffect(
-      Effect.promise(async () => {
-        const gw = await import("@reactive-agents/gateway");
-        const gwLayer = gw.GatewayServiceLive(options.gatewayOptions?.policies ?? {});
+      Effect.gen(function* () {
+        const gw = yield* Effect.promise(() => import("@reactive-agents/gateway"));
+
+        // Resolve EventBus from context for observability (optional)
+        let bus: { publish: (e: any) => Effect.Effect<void, never> } | undefined;
+        try {
+          const core = yield* Effect.promise(() => import("@reactive-agents/core"));
+          const eb = yield* (core.EventBus as any);
+          bus = { publish: (e: any) => eb.publish(e) };
+        } catch {
+          // EventBus not available — gateway runs without observability
+        }
+
+        const gwLayer = gw.GatewayServiceLive((options.gatewayOptions ?? {}) as any, bus);
         const schedLayer = gw.SchedulerServiceLive({
           agentId: options.agentId,
           heartbeat: options.gatewayOptions?.heartbeat as any,
           crons: options.gatewayOptions?.crons as any,
-        });
+        }, bus);
         return Layer.merge(gwLayer, schedLayer);
       }),
     );
