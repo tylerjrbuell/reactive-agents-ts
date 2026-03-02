@@ -86,6 +86,16 @@ export const PolicyConfigSchema = Schema.Struct({
 });
 export type PolicyConfig = typeof PolicyConfigSchema.Type;
 
+// ─── Channel Access Configuration ───────────────────────────────────────────
+
+export interface ChannelAccessConfig {
+  readonly policy: "allowlist" | "blocklist" | "open";
+  readonly allowedSenders?: readonly string[];
+  readonly blockedSenders?: readonly string[];
+  readonly unknownSenderAction?: "skip" | "escalate";
+  readonly replyToUnknown?: string;
+}
+
 export const GatewayConfigSchema = Schema.Struct({
   heartbeat: Schema.optional(HeartbeatConfigSchema),
   crons: Schema.optional(Schema.Array(CronEntrySchema)),

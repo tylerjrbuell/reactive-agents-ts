@@ -9,6 +9,8 @@ export { createAdaptiveHeartbeatPolicy } from "./policies/adaptive-heartbeat.js"
 export { createCostBudgetPolicy } from "./policies/cost-budget.js";
 export { createRateLimitPolicy } from "./policies/rate-limit.js";
 export { createEventMergingPolicy } from "./policies/event-merging.js";
+export { createAccessControlPolicy } from "./policies/access-control.js";
+export type { ChannelAccessConfig } from "./types.js";
 export { WebhookService, WebhookServiceLive } from "./services/webhook-service.js";
 export type { WebhookAdapter, WebhookRequest } from "./adapters/webhook-adapter.js";
 export { createGitHubAdapter } from "./adapters/github-adapter.js";
