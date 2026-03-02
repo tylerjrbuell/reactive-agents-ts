@@ -555,6 +555,26 @@ export type AgentEvent =
       /** Unix timestamp in milliseconds when budget was exhausted */
       readonly timestamp: number;
     }
+  // ─── Channel / messaging events ───
+  | {
+      /**
+       * An incoming message was received from a messaging channel.
+       * Fired by ToolService when an MCP server sends a notifications/message notification.
+       */
+      readonly _tag: "ChannelMessageReceived";
+      /** Sender identifier (phone number, user ID, etc.) */
+      readonly sender: string;
+      /** Messaging platform name (e.g., "signal", "telegram") */
+      readonly platform: string;
+      /** Message text content */
+      readonly message: string;
+      /** Unix timestamp in milliseconds */
+      readonly timestamp: number;
+      /** MCP server name that received the message */
+      readonly mcpServer: string;
+      /** Optional group identifier */
+      readonly groupId?: string;
+    }
   // ─── Custom/extension events ───
   | {
       /**
@@ -569,7 +589,7 @@ export type AgentEvent =
     };
 
 /**
- * Discriminant tag union of all 32 agent event types.
+ * Discriminant tag union of all 33 agent event types.
  * Derived directly from `AgentEvent["_tag"]` so it stays in sync with the union automatically.
  * Useful for writing generic event handlers, type guards, and filtering logic.
  *
@@ -650,7 +670,7 @@ export type EventHandler = (event: AgentEvent) => Effect.Effect<void, never>;
  * });
  * ```
  *
- * @see AgentEvent — union of all 32 event variants the bus can carry
+ * @see AgentEvent — union of all 33 event variants the bus can carry
  * @see EventBusLive — default Effect-TS Layer implementation
  * @see TypedEventHandler — type for tag-filtered event handlers
  */
