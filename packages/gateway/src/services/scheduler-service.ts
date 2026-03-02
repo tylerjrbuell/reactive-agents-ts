@@ -42,6 +42,12 @@ export const createCronEvent = (
   },
 });
 
+// ─── EventBus structural type ──────────────────────────────────────────────
+
+type EventBusLike = {
+  readonly publish: (event: any) => Effect.Effect<void, never>;
+};
+
 // ─── Service ─────────────────────────────────────────────────────────────────
 
 interface SchedulerConfig {
@@ -64,7 +70,7 @@ export class SchedulerService extends Context.Tag("SchedulerService")<
   }
 >() {}
 
-export const SchedulerServiceLive = (config: SchedulerConfig) =>
+export const SchedulerServiceLive = (config: SchedulerConfig, bus?: EventBusLike) =>
   Layer.effect(
     SchedulerService,
     Effect.gen(function* () {
@@ -81,20 +87,40 @@ export const SchedulerServiceLive = (config: SchedulerConfig) =>
         pendingEvents: () => Ref.get(queueRef),
 
         checkCrons: (now: Date) =>
-          Effect.sync(() => {
+          Effect.gen(function* () {
             const events: GatewayEvent[] = [];
             for (const { entry, parsed } of parsedCrons) {
               if (parsed && shouldFireAt(parsed, now)) {
-                events.push(createCronEvent(agentId, entry));
+                const event = createCronEvent(agentId, entry);
+                events.push(event);
+                if (bus) {
+                  yield* bus.publish({
+                    _tag: "GatewayEventReceived",
+                    agentId,
+                    source: "cron",
+                    eventId: event.id,
+                    timestamp: Date.now(),
+                  });
+                }
               }
             }
             return events;
           }),
 
         emitHeartbeat: () =>
-          Effect.sync(() =>
-            createHeartbeatEvent(agentId, config.heartbeat?.instruction),
-          ),
+          Effect.gen(function* () {
+            const event = createHeartbeatEvent(agentId, config.heartbeat?.instruction);
+            if (bus) {
+              yield* bus.publish({
+                _tag: "GatewayEventReceived",
+                agentId,
+                source: "heartbeat",
+                eventId: event.id,
+                timestamp: Date.now(),
+              });
+            }
+            return event;
+          }),
       };
     }),
   );
