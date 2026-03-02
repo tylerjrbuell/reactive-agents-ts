@@ -1,14 +1,8 @@
 import { Effect } from "effect";
-import type { GatewayEvent, PolicyDecision } from "../types.js";
+import type { EventBusLike, GatewayEvent, PolicyDecision } from "../types.js";
 import type { SchedulingPolicy } from "./policy-engine.js";
 import { evaluatePolicies } from "./policy-engine.js";
 import { initialGatewayState } from "../types.js";
-
-// ─── EventBus structural type ──────────────────────────────────────────────
-
-type EventBusLike = {
-  readonly publish: (event: any) => Effect.Effect<void, never>;
-};
 
 // ─── Pure routing ──────────────────────────────────────────────────────────
 

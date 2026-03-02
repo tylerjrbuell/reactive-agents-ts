@@ -1,5 +1,6 @@
 import { Effect, Context, Layer, Ref } from "effect";
 import type {
+  EventBusLike,
   GatewayConfig,
   GatewayEvent,
   GatewayState,
@@ -14,12 +15,6 @@ import { createCostBudgetPolicy } from "../policies/cost-budget.js";
 import { createRateLimitPolicy } from "../policies/rate-limit.js";
 import { createEventMergingPolicy } from "../policies/event-merging.js";
 import { createAccessControlPolicy } from "../policies/access-control.js";
-
-// ─── Optional EventBus ───────────────────────────────────────────────────────
-
-export type EventBusLike = {
-  readonly publish: (event: any) => Effect.Effect<void, never>;
-};
 
 // ─── Status Snapshot ────────────────────────────────────────────────────────
 
