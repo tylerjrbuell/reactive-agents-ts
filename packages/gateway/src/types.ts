@@ -102,6 +102,19 @@ export const GatewayConfigSchema = Schema.Struct({
   webhooks: Schema.optional(Schema.Array(WebhookConfigSchema)),
   policies: Schema.optional(PolicyConfigSchema),
   port: Schema.optionalWith(Schema.Number, { default: () => 3000 }),
+  channels: Schema.optional(Schema.Struct({
+    accessPolicy: Schema.optionalWith(
+      Schema.Literal("allowlist", "blocklist", "open"),
+      { default: () => "allowlist" as const },
+    ),
+    allowedSenders: Schema.optional(Schema.Array(Schema.String)),
+    blockedSenders: Schema.optional(Schema.Array(Schema.String)),
+    unknownSenderAction: Schema.optionalWith(
+      Schema.Literal("skip", "escalate"),
+      { default: () => "skip" as const },
+    ),
+    replyToUnknown: Schema.optional(Schema.String),
+  })),
 });
 export type GatewayConfig = typeof GatewayConfigSchema.Type;
 
