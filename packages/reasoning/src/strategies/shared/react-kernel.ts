@@ -29,6 +29,8 @@ import {
   extractFinalAnswer,
   evaluateTransform,
   formatToolSchemas,
+  compressToolResult,
+  nextToolResultKey,
 } from "./tool-utils.js";
 import type { ToolSchema } from "./tool-utils.js";
 import { resolveStrategyServices, publishReasoningStep } from "./service-utils.js";
@@ -426,9 +428,6 @@ function makeObservationResult(
   return { success, toolName, displayText, category, resultKind, preserveOnCompaction };
 }
 
-/** Monotonic counter for scratchpad overflow keys */
-let _kernelToolResultCounter = 0;
-
 /**
  * Simple head+tail truncation for when structured compression is not available.
  */
@@ -437,110 +436,6 @@ function truncateForDisplay(result: string, maxChars: number): string {
   const half = Math.floor(maxChars / 2);
   const omitted = result.length - maxChars;
   return `${result.slice(0, half)}\n[...${omitted} chars omitted...]\n${result.slice(-half)}`;
-}
-
-/**
- * Structured preview compression — mirrors reactive.ts compressToolResult().
- * Returns a compact preview plus optional scratchpad storage entry.
- */
-function compressKernelToolResult(
-  result: string,
-  toolName: string,
-  budget: number,
-  previewItems: number,
-): { content: string; stored?: { key: string; value: string } } {
-  if (result.length <= budget) return { content: result };
-
-  const key = `_tool_result_${++_kernelToolResultCounter}`;
-
-  try {
-    const parsed = JSON.parse(result) as unknown;
-
-    if (Array.isArray(parsed)) {
-      const first = parsed[0] as Record<string, unknown> | undefined;
-      const schema = first
-        ? Object.entries(first)
-            .flatMap(([k, v]) =>
-              v !== null && typeof v === "object" && !Array.isArray(v)
-                ? Object.keys(v as object).map((sub) => `${k}.${sub}`)
-                : [k],
-            )
-            .slice(0, 8)
-            .join(", ")
-        : "unknown";
-
-      const items = (parsed as Array<Record<string, unknown>>)
-        .slice(0, previewItems)
-        .map((item, i) => {
-          const pairs = Object.entries(item)
-            .slice(0, 4)
-            .map(([k, v]) => {
-              const val =
-                v !== null && typeof v === "object"
-                  ? Object.values(v as object)
-                      .filter((x) => typeof x === "string")
-                      .map(String)[0] ?? "{...}"
-                  : String(v).slice(0, 60);
-              return `${k}=${val}`;
-            })
-            .join("  ");
-          return `  [${i}] ${pairs}`;
-        })
-        .join("\n");
-
-      const remaining = parsed.length - previewItems;
-      const moreStr = remaining > 0 ? `\n  ...${remaining} more` : "";
-      const content =
-        `[STORED: ${key} | ${toolName}]\n` +
-        `Type: Array(${parsed.length}) | Schema: ${schema}\n` +
-        `Preview (first ${Math.min(previewItems, parsed.length)}):\n` +
-        items +
-        moreStr +
-        `\n  — use scratchpad-read("${key}") to access all items`;
-      return { content, stored: { key, value: result } };
-    }
-
-    if (typeof parsed === "object" && parsed !== null) {
-      const entries = Object.entries(parsed as Record<string, unknown>)
-        .slice(0, 8)
-        .map(([k, v]) => {
-          const val =
-            v === null
-              ? "null"
-              : Array.isArray(v)
-                ? `Array(${v.length})`
-                : typeof v === "object"
-                  ? `{${Object.keys(v as object).slice(0, 3).join(", ")}}`
-                  : String(v).slice(0, 80);
-          return `  ${k}: ${val}`;
-        })
-        .join("\n");
-
-      const totalKeys = Object.keys(parsed as object).length;
-      const content =
-        `[STORED: ${key} | ${toolName}]\n` +
-        `Type: Object(${totalKeys} keys)\n` +
-        entries +
-        `\n  — use scratchpad-read("${key}") or | transform: to access full data`;
-      return { content, stored: { key, value: result } };
-    }
-  } catch {
-    // Not JSON — plain text preview
-  }
-
-  const lines = result.split("\n");
-  const preview = lines
-    .slice(0, previewItems)
-    .map((l) => (l.length > 120 ? `${l.slice(0, 120)}…` : l))
-    .join("\n");
-  const remaining = lines.length - previewItems;
-  const moreStr = remaining > 0 ? `\n  ...${remaining} more lines` : "";
-  const content =
-    `[STORED: ${key} | ${toolName}]\n` +
-    preview +
-    moreStr +
-    `\n  — use scratchpad-read("${key}") to access full text`;
-  return { content, stored: { key, value: result } };
 }
 
 /**
@@ -733,7 +628,7 @@ function runKernelToolObservation(
             }
             const transformed = evaluateTransform(toolRequest.transform, parsed);
             if ((compressionConfig?.autoStore ?? true) && scratchpadStore) {
-              const key = `_tool_result_${++_kernelToolResultCounter}`;
+              const key = nextToolResultKey();
               scratchpadStore.set(key, normalized);
             }
             const isSuccess = !transformed.startsWith("[Transform error:");
@@ -747,7 +642,7 @@ function runKernelToolObservation(
           const budget = compressionConfig?.budget ?? profile?.toolResultMaxChars ?? 800;
           const previewItems = compressionConfig?.previewItems ?? 3;
           const autoStore = compressionConfig?.autoStore ?? true;
-          const compressed = compressKernelToolResult(normalized, toolRequest.tool, budget, previewItems);
+          const compressed = compressToolResult(normalized, toolRequest.tool, budget, previewItems);
           if (autoStore && compressed.stored && scratchpadStore) {
             scratchpadStore.set(compressed.stored.key, compressed.stored.value);
           }
