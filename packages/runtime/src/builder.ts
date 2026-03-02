@@ -249,6 +249,19 @@ export interface GatewayOptions {
     readonly requireApprovalFor?: readonly string[];
   };
   readonly port?: number;
+  /** Channel access control configuration for messaging platforms. */
+  readonly channels?: {
+    /** Access control policy: "allowlist" (default), "blocklist", or "open". */
+    readonly accessPolicy?: "allowlist" | "blocklist" | "open";
+    /** Phone numbers / user IDs allowed to message (for allowlist mode). */
+    readonly allowedSenders?: string[];
+    /** Phone numbers / user IDs blocked (for blocklist mode). */
+    readonly blockedSenders?: string[];
+    /** Action for unknown senders: "skip" (default) or "escalate". */
+    readonly unknownSenderAction?: "skip" | "escalate";
+    /** Optional auto-reply message for unknown senders. */
+    readonly replyToUnknown?: string;
+  };
 }
 
 /**
@@ -1602,7 +1615,7 @@ export class ReactiveAgentBuilder {
       // Create a ManagedRuntime so all facade calls (run, subscribe, pause, etc.)
       // share the same layer scope and the same service instances (EventBus, KillSwitch, etc.).
       const managedRuntime = ManagedRuntime.make(fullRuntime as unknown as Layer.Layer<any>);
-      return new ReactiveAgent(engine, agentId, managedRuntime, mcpServers.map((s) => s.name), gatewayOptions?.heartbeat?.intervalMs);
+      return new ReactiveAgent(engine, agentId, managedRuntime, mcpServers.map((s) => s.name), !!gatewayOptions, gatewayOptions?.heartbeat?.intervalMs);
     }) as Effect.Effect<ReactiveAgent, Error>;
   }
 }
@@ -1644,8 +1657,10 @@ export class ReactiveAgent {
     private readonly runtime: ManagedRuntime.ManagedRuntime<any, never>,
     /** Names of connected MCP servers — needed for cleanup on dispose(). */
     private readonly _mcpServerNames: readonly string[] = [],
-    /** @internal Gateway heartbeat interval (ms). Undefined when gateway is not configured. */
-    readonly _gatewayIntervalMs?: number,
+    /** @internal Whether gateway was configured via .withGateway(). */
+    private readonly _gatewayEnabled: boolean = false,
+    /** @internal Gateway heartbeat interval (ms). Defaults to 60000. */
+    private readonly _gatewayIntervalMs: number = 60_000,
   ) {}
 
   /**
@@ -2012,7 +2027,7 @@ export class ReactiveAgent {
    * ```
    */
   start(): GatewayHandle {
-    if (this._gatewayIntervalMs === undefined) {
+    if (!this._gatewayEnabled) {
       throw new Error("Gateway not configured. Call .withGateway() before .start()");
     }
 
@@ -2023,6 +2038,7 @@ export class ReactiveAgent {
     let totalRuns = 0;
     let cronChecks = 0;
     let resolveStop: ((summary: GatewaySummary) => void) | null = null;
+    let unsubChannel: (() => void) | null = null;
 
     const stopPromise = new Promise<GatewaySummary>((resolve) => {
       resolveStop = resolve;
@@ -2032,6 +2048,7 @@ export class ReactiveAgent {
     const loopPromise = (async () => {
       let gw: any;
       let sched: any;
+      let eb: any = null;
       try {
         const services = await self.runtime.runPromise(
           Effect.gen(function* () {
@@ -2048,53 +2065,146 @@ export class ReactiveAgent {
           heartbeatsFired, totalRuns, cronChecks,
           error: "Gateway not configured. Call .withGateway() before .start()",
         };
-        resolveStop?.(summary);
+        (resolveStop as ((s: GatewaySummary) => void) | null)?.(summary);
         throw new Error("Gateway not configured. Call .withGateway() before .start()");
       }
+
+      // Resolve EventBus for observability (optional)
+      try {
+        eb = await self.runtime.runPromise(
+          Effect.gen(function* () {
+            const coreMod = yield* Effect.promise(() => import("@reactive-agents/core"));
+            return yield* (coreMod.EventBus as any);
+          }) as Effect.Effect<any>,
+        );
+      } catch { /* EventBus not in runtime — no observability */ }
+
+      // Helper to publish events safely
+      const publish = async (event: any) => {
+        if (!eb) return;
+        try {
+          await self.runtime.runPromise(eb.publish(event));
+        } catch { /* observability errors don't kill the loop */ }
+      };
+
+      // Helper to run an event through the gateway and execute if approved
+      const executeEvent = async (
+        event: any,
+        source: string,
+        instruction: string,
+      ) => {
+        await publish({
+          _tag: "ProactiveActionInitiated",
+          agentId: self._agentId ?? "unknown",
+          source,
+          taskDescription: instruction,
+          timestamp: Date.now(),
+        });
+        const runStart = Date.now();
+        try {
+          const result = await self.run(instruction);
+          totalRuns++;
+          const tokensUsed = result.metadata?.tokensUsed ?? 0;
+          if (tokensUsed) {
+            await self.runtime.runPromise(gw.updateTokensUsed(tokensUsed));
+          }
+          await publish({
+            _tag: "ProactiveActionCompleted",
+            agentId: self._agentId ?? "unknown",
+            source,
+            success: true,
+            tokensUsed,
+            durationMs: Date.now() - runStart,
+            timestamp: Date.now(),
+          });
+        } catch {
+          await publish({
+            _tag: "ProactiveActionCompleted",
+            agentId: self._agentId ?? "unknown",
+            source,
+            success: false,
+            tokensUsed: 0,
+            durationMs: Date.now() - runStart,
+            timestamp: Date.now(),
+          });
+        }
+      };
 
       const tick = async () => {
         if (stopped) return;
         try {
           // 1. Emit heartbeat and check policy
-          const hbEvent = await self.runtime.runPromise(sched.emitHeartbeat());
-          const decision = await self.runtime.runPromise(gw.processEvent(hbEvent));
+          const hbEvent: any = await self.runtime.runPromise(sched.emitHeartbeat());
+          const decision: any = await self.runtime.runPromise(gw.processEvent(hbEvent));
           heartbeatsFired++;
 
           if (decision.action === "execute") {
             const instruction = hbEvent.metadata?.instruction ?? "Check for work";
-            try {
-              const result = await self.run(instruction);
-              totalRuns++;
-              if (result.metadata?.tokensUsed) {
-                await self.runtime.runPromise(gw.updateTokensUsed(result.metadata.tokensUsed));
-              }
-            } catch { /* run errors don't kill the loop */ }
+            await executeEvent(hbEvent, "heartbeat", instruction);
           }
 
           // 2. Check crons
-          const cronEvents = await self.runtime.runPromise(sched.checkCrons(new Date()));
+          const cronEvents: any[] = await self.runtime.runPromise(sched.checkCrons(new Date())) as any;
           cronChecks++;
           for (const cronEvent of cronEvents) {
             if (stopped) break;
-            const cronDecision = await self.runtime.runPromise(gw.processEvent(cronEvent));
+            const cronDecision: any = await self.runtime.runPromise(gw.processEvent(cronEvent));
             if (cronDecision.action === "execute") {
               const cronInstruction = cronEvent.metadata?.instruction ?? "Cron task";
-              try {
-                const result = await self.run(cronInstruction);
-                totalRuns++;
-                if (result.metadata?.tokensUsed) {
-                  await self.runtime.runPromise(gw.updateTokensUsed(result.metadata.tokensUsed));
-                }
-              } catch { /* cron errors don't kill the loop */ }
+              await executeEvent(cronEvent, "cron", cronInstruction);
             }
           }
         } catch { /* tick errors don't kill the loop */ }
       };
 
-      timer = setInterval(tick, self._gatewayIntervalMs ?? 60000);
+      // Subscribe to channel messages from MCP servers for push-based messaging
+      if (eb) {
+        try {
+          const unsub = await self.runtime.runPromise(
+            eb.on("ChannelMessageReceived", (event: any) =>
+              Effect.gen(function* () {
+                if (stopped) return;
 
-      // Run first tick immediately
-      await tick();
+                const gwEvent = {
+                  id: `ch-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                  source: "channel" as const,
+                  timestamp: new Date(event.timestamp),
+                  agentId: self._agentId ?? "unknown",
+                  payload: { sender: event.sender, message: event.message },
+                  priority: "normal" as const,
+                  metadata: {
+                    platform: event.platform,
+                    sender: event.sender,
+                    groupId: event.groupId,
+                    mcpServer: event.mcpServer,
+                  },
+                };
+
+                const channelDecision: any = yield* gw.processEvent(gwEvent);
+
+                if (channelDecision.action === "execute") {
+                  const instruction = `Respond to this ${event.platform} message from ${event.sender}: "${event.message}". Use the ${event.mcpServer}/send_message_to_user tool to reply.`;
+                  yield* Effect.promise(() =>
+                    executeEvent(gwEvent, "channel", instruction),
+                  );
+                }
+              }),
+            ),
+          );
+          unsubChannel = () => {
+            try { self.runtime.runPromise(unsub as any).catch(() => {}); } catch {}
+          };
+        } catch { /* EventBus subscription failed — no channel routing */ }
+      }
+
+      timer = setInterval(tick, self._gatewayIntervalMs);
+
+      // Run first tick — skip immediate execution when using default heartbeat
+      // instruction (avoids confused first run with no context)
+      const hasCustomInstruction = !!self._gatewayOptions?.heartbeat?.instruction;
+      if (hasCustomInstruction) {
+        await tick();
+      }
     })();
 
     // If loopPromise rejects (gateway not configured), propagate
@@ -2104,6 +2214,7 @@ export class ReactiveAgent {
       stop: async () => {
         stopped = true;
         if (timer) clearInterval(timer);
+        unsubChannel?.();
         const summary: GatewaySummary = { heartbeatsFired, totalRuns, cronChecks };
         resolveStop?.(summary);
         return summary;
