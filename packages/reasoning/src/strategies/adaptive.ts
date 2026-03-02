@@ -9,18 +9,17 @@
  * - Exploratory/creative tasks → tree-of-thought
  */
 import { Effect } from "effect";
-import { ulid } from "ulid";
 import type { ReasoningResult, ReasoningStep } from "../types/index.js";
-import type { StepId } from "../types/step.js";
 import { ExecutionError, IterationLimitError } from "../errors/errors.js";
 import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
-import { PromptService } from "@reactive-agents/prompts";
-import { EventBus } from "@reactive-agents/core";
 import { executeReactive } from "./reactive.js";
 import { executeReflexion } from "./reflexion.js";
 import { executePlanExecute } from "./plan-execute.js";
 import { executeTreeOfThought } from "./tree-of-thought.js";
+import { resolveStrategyServices, compilePromptOrFallback, publishReasoningStep } from "./shared/service-utils.js";
+import { makeStep, buildStrategyResult } from "./shared/step-utils.js";
+import type { ToolSchema } from "./shared/tool-utils.js";
 
 /** Record of a past strategy execution outcome for self-improvement. */
 export interface StrategyOutcome {
@@ -43,6 +42,8 @@ interface AdaptiveInput {
   readonly pastExperience?: readonly StrategyOutcome[];
   /** Task ID for event correlation */
   readonly taskId?: string;
+  /** Full tool schemas for pass-through to sub-strategies */
+  readonly availableToolSchemas?: readonly ToolSchema[];
 }
 
 type SubStrategy =
@@ -59,15 +60,8 @@ export const executeAdaptive = (
   LLMService
 > =>
   Effect.gen(function* () {
-    const llm = yield* LLMService;
-    const promptServiceOptRaw = yield* Effect.serviceOption(PromptService).pipe(
-      Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
-    );
-    const promptServiceOpt = promptServiceOptRaw as PromptServiceOpt;
-    const ebOptRaw = yield* Effect.serviceOption(EventBus).pipe(
-      Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
-    );
-    const ebOpt = ebOptRaw as typeof ebOptRaw;
+    const { llm, promptService: promptServiceOpt, eventBus: ebOpt } =
+      yield* resolveStrategyServices;
     const steps: ReasoningStep[] = [];
     const start = Date.now();
 
@@ -110,23 +104,19 @@ export const executeAdaptive = (
       analysisResponse.content,
     );
 
-    steps.push({
-      id: ulid() as StepId,
-      type: "thought",
-      content: `[ADAPTIVE] Selected strategy: ${selectedStrategy} (analysis tokens: ${analysisResponse.usage.totalTokens})`,
-      timestamp: new Date(),
-    });
+    steps.push(makeStep(
+      "thought",
+      `[ADAPTIVE] Selected strategy: ${selectedStrategy} (analysis tokens: ${analysisResponse.usage.totalTokens})`,
+    ));
 
-    if (ebOpt._tag === "Some") {
-      yield* ebOpt.value.publish({
-        _tag: "ReasoningStepCompleted",
-        taskId: input.taskId ?? "adaptive",
-        strategy: "adaptive",
-        step: steps.length,
-        totalSteps: 1,
-        thought: `[ADAPTIVE] Selected strategy: ${selectedStrategy}`,
-      }).pipe(Effect.catchAll(() => Effect.void));
-    }
+    yield* publishReasoningStep(ebOpt, {
+      _tag: "ReasoningStepCompleted",
+      taskId: input.taskId ?? "adaptive",
+      strategy: "adaptive",
+      step: steps.length,
+      totalSteps: 1,
+      thought: `[ADAPTIVE] Selected strategy: ${selectedStrategy}`,
+    });
 
     // ── Dispatch to selected strategy ──
     const subResult = yield* dispatchStrategy(selectedStrategy, input);
@@ -136,23 +126,19 @@ export const executeAdaptive = (
     let fallbackOccurred = false;
     if (subResult.status === "partial" && selectedStrategy !== "reactive") {
       fallbackOccurred = true;
-      steps.push({
-        id: ulid() as StepId,
-        type: "thought",
-        content: `[ADAPTIVE] ${selectedStrategy} returned partial — falling back to reactive`,
-        timestamp: new Date(),
-      });
+      steps.push(makeStep(
+        "thought",
+        `[ADAPTIVE] ${selectedStrategy} returned partial — falling back to reactive`,
+      ));
 
-      if (ebOpt._tag === "Some") {
-        yield* ebOpt.value.publish({
-          _tag: "ReasoningStepCompleted",
-          taskId: input.taskId ?? "adaptive",
-          strategy: "adaptive",
-          step: steps.length,
-          totalSteps: 2,
-          thought: `[ADAPTIVE] Falling back to reactive strategy`,
-        }).pipe(Effect.catchAll(() => Effect.void));
-      }
+      yield* publishReasoningStep(ebOpt, {
+        _tag: "ReasoningStepCompleted",
+        taskId: input.taskId ?? "adaptive",
+        strategy: "adaptive",
+        step: steps.length,
+        totalSteps: 2,
+        thought: `[ADAPTIVE] Falling back to reactive strategy`,
+      });
 
       // NOTE: The failed sub-strategy's tokens are not added to metadata —
       // only the reactive result's tokens are reported. This is acceptable
@@ -167,51 +153,22 @@ export const executeAdaptive = (
     // ── Combine results ──
     const allSteps = [...steps, ...finalSubResult.steps];
 
-    return {
-      strategy: "adaptive" as const,
+    return buildStrategyResult({
+      strategy: "adaptive",
       steps: allSteps,
       output: finalSubResult.output,
-      metadata: {
-        duration: Date.now() - start,
-        cost:
-          finalSubResult.metadata.cost +
-          analysisResponse.usage.estimatedCost,
-        tokensUsed:
-          finalSubResult.metadata.tokensUsed +
-          analysisResponse.usage.totalTokens,
-        stepsCount: allSteps.length,
-        confidence: finalSubResult.metadata.confidence,
+      status: finalSubResult.status,
+      start,
+      totalTokens: finalSubResult.metadata.tokensUsed + analysisResponse.usage.totalTokens,
+      totalCost: finalSubResult.metadata.cost + analysisResponse.usage.estimatedCost,
+      extraMetadata: {
         // selectedStrategy = what the classifier chose; fallbackOccurred = true means
         // reactive actually produced the output (not selectedStrategy)
-        selectedStrategy: selectedStrategy,
+        selectedStrategy,
         fallbackOccurred,
       },
-      status: finalSubResult.status,
-    };
+    });
   });
-
-// ─── Prompt compilation helper ───
-
-type PromptServiceOpt =
-  | { _tag: "Some"; value: { compile: (id: string, vars: Record<string, unknown>) => Effect.Effect<{ content: string }, unknown> } }
-  | { _tag: "None" };
-
-function compilePromptOrFallback(
-  promptServiceOpt: PromptServiceOpt,
-  templateId: string,
-  variables: Record<string, unknown>,
-  fallback: string,
-): Effect.Effect<string, never> {
-  if (promptServiceOpt._tag === "None") {
-    return Effect.succeed(fallback);
-  }
-  return promptServiceOpt.value
-    .compile(templateId, variables)
-    .pipe(
-      Effect.map((compiled: { content: string }) => compiled.content),
-      Effect.catchAll(() => Effect.succeed(fallback)),
-    );
-}
 
 // ─── Private Helpers ───
 
