@@ -1,0 +1,108 @@
+import { describe, it, expect } from "bun:test";
+import { Effect, Layer } from "effect";
+import { LLMService } from "@reactive-agents/llm-provider";
+import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
+import { executeReflexion } from "../../src/strategies/reflexion.js";
+import { executePlanExecute } from "../../src/strategies/plan-execute.js";
+import { executeTreeOfThought } from "../../src/strategies/tree-of-thought.js";
+import { defaultReasoningConfig } from "../../src/types/config.js";
+
+const mockLLM = Layer.succeed(LLMService, {
+  complete: () =>
+    Effect.succeed({
+      content: "FINAL ANSWER: test result",
+      usage: { totalTokens: 10, estimatedCost: 0 },
+      model: "test",
+    }),
+  stream: () =>
+    Effect.succeed({
+      content: "FINAL ANSWER: test result",
+      usage: { totalTokens: 10, estimatedCost: 0 },
+      model: "test",
+    }),
+  embed: () => Effect.succeed([]),
+  getModelInfo: () =>
+    Effect.succeed({ contextWindow: 8000, id: "test", provider: "test" }),
+} as any);
+
+/**
+ * Reflexion needs a mock that returns SATISFIED for critique prompts.
+ * The critique prompt contains "Critically evaluate".
+ */
+const reflexionLLM = TestLLMServiceLayer({
+  "Critically evaluate": "SATISFIED: The response is accurate and complete.",
+});
+
+const baseInput = {
+  taskDescription: "Say hello",
+  taskType: "simple",
+  memoryContext: "",
+  availableTools: [] as string[],
+  config: defaultReasoningConfig,
+};
+
+describe("Strategy threading", () => {
+  it("reflexion accepts resultCompression", async () => {
+    const result = await Effect.runPromise(
+      executeReflexion({
+        ...baseInput,
+        resultCompression: { budget: 400, previewItems: 2 },
+      }).pipe(Effect.provide(reflexionLLM)),
+    );
+    expect(result.status).toBe("completed");
+  });
+
+  it("plan-execute accepts resultCompression", async () => {
+    const result = await Effect.runPromise(
+      executePlanExecute({
+        ...baseInput,
+        resultCompression: { budget: 400, previewItems: 2 },
+      }).pipe(Effect.provide(mockLLM)),
+    );
+    expect(result.status).toBe("completed");
+  });
+
+  it("tree-of-thought accepts resultCompression", async () => {
+    const result = await Effect.runPromise(
+      executeTreeOfThought({
+        ...baseInput,
+        resultCompression: { budget: 400, previewItems: 2 },
+      }).pipe(Effect.provide(mockLLM)),
+    );
+    expect(result.status).toBe("completed");
+  });
+
+  it("reflexion respects kernelMaxIterations config", async () => {
+    const config = {
+      ...defaultReasoningConfig,
+      strategies: {
+        ...defaultReasoningConfig.strategies,
+        reflexion: {
+          ...defaultReasoningConfig.strategies.reflexion,
+          kernelMaxIterations: 5,
+        },
+      },
+    };
+    const result = await Effect.runPromise(
+      executeReflexion({ ...baseInput, config }).pipe(Effect.provide(reflexionLLM)),
+    );
+    expect(result.status).toBe("completed");
+  });
+
+  it("plan-execute respects stepKernelMaxIterations config", async () => {
+    const config = {
+      ...defaultReasoningConfig,
+      strategies: {
+        ...defaultReasoningConfig.strategies,
+        planExecute: {
+          ...defaultReasoningConfig.strategies.planExecute,
+          stepKernelMaxIterations: 4,
+        },
+      },
+    };
+    const result = await Effect.runPromise(
+      executePlanExecute({ ...baseInput, config }).pipe(Effect.provide(mockLLM)),
+    );
+    expect(result.status).toBe("completed");
+  });
+});

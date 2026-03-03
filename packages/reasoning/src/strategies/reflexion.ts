@@ -25,6 +25,7 @@ import {
 import { makeStep, buildStrategyResult } from "./shared/step-utils.js";
 import { isSatisfied, isCritiqueStagnant } from "./shared/quality-utils.js";
 import type { ToolSchema } from "./shared/tool-utils.js";
+import type { ResultCompressionConfig } from "@reactive-agents/tools";
 
 interface ReflexionInput {
   readonly taskDescription: string;
@@ -38,6 +39,8 @@ interface ReflexionInput {
   readonly systemPrompt?: string;
   /** Task ID for event correlation */
   readonly taskId?: string;
+  /** Tool result compression config */
+  readonly resultCompression?: ResultCompressionConfig;
 }
 
 /**
@@ -82,10 +85,11 @@ export const executeReflexion = (
       task: buildGenerationPrompt(input, null),
       systemPrompt: genSystemPrompt,
       availableToolSchemas: input.availableToolSchemas,
-      maxIterations: 3,
+      maxIterations: input.config.strategies.reflexion?.kernelMaxIterations ?? 3,
       temperature: 0.7,
       taskId: input.taskId,
       parentStrategy: "reflexion",
+      resultCompression: input.resultCompression,
     }).pipe(
       Effect.mapError(
         (err) =>
@@ -229,10 +233,11 @@ export const executeReflexion = (
         task: buildGenerationPrompt(input, previousCritiques),
         systemPrompt: improveSystemPrompt,
         availableToolSchemas: input.availableToolSchemas,
-        maxIterations: 3,
+        maxIterations: input.config.strategies.reflexion?.kernelMaxIterations ?? 3,
         temperature: 0.6,
         taskId: input.taskId,
         parentStrategy: "reflexion",
+        resultCompression: input.resultCompression,
       }).pipe(
         Effect.mapError(
           (err) =>
