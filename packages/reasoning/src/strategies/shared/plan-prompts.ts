@@ -134,8 +134,9 @@ export function buildPlanGenerationPrompt(input: PlanGenerationInput): string {
   schemaSection += `- "composite": multi-tool sub-task (set toolHints for available tools)\n`;
   schemaSection += `\nIMPORTANT for tool_call steps:\n`;
   schemaSection += `- Include ALL required parameters in toolArgs\n`;
-  schemaSection += `- To use output from a previous step as an argument value, use {{from_step:sN}} where N is the step number\n`;
-  schemaSection += `- Example: {"message": "{{from_step:s2}}"} passes step s2's result as the "message" argument\n`;
+  schemaSection += `- To use output from a PREVIOUS step as an argument value, use {{from_step:sN}} where N is an EARLIER step number\n`;
+  schemaSection += `- A step can ONLY reference steps that come BEFORE it (e.g., s3 can reference s1 or s2, NOT s3 itself)\n`;
+  schemaSection += `- Example: s3 with {"message": "{{from_step:s2}}"} passes s2's result as the "message" argument\n`;
 
   if (isSmallModel) {
     schemaSection += `\nEXAMPLE:\n${PLAN_STEP_EXAMPLE}\n`;
@@ -222,7 +223,12 @@ export function buildStepExecutionPrompt(input: StepExecutionInput): string {
     sections.push(`AVAILABLE TOOLS FOR THIS STEP:\n${toolLines}`);
   }
 
-  sections.push(`Produce your answer directly. Do not prefix it with "FINAL ANSWER:" or any other label.`);
+  sections.push(
+    `RULES:\n` +
+    `- Produce your answer directly — no labels, no "FINAL ANSWER:" prefix.\n` +
+    `- Do NOT ask follow-up questions or offer to do something. Just produce the requested content.\n` +
+    `- Your output will be passed directly to the next step, so make it complete and ready to use.`,
+  );
 
   return sections.join("\n\n");
 }

@@ -556,6 +556,19 @@ function executeStep(
       const rawArgs = step.toolArgs ?? {};
       const resolvedArgs = resolveStepReferences(rawArgs, completedSteps);
 
+      // Warn if any {{from_step:sN}} references remain unresolved (self-ref or missing step)
+      for (const [key, value] of Object.entries(resolvedArgs)) {
+        if (typeof value === "string" && /\{\{from_step:s\d+\}\}/.test(value)) {
+          return {
+            output: `[Unresolved reference in toolArgs.${key}: ${value} — step may reference itself or a step that hasn't completed]`,
+            tokens: 0,
+            cost: 0,
+            success: false,
+          };
+        }
+      }
+
+      const toolStart = Date.now();
       const toolResult = yield* toolService.value
         .execute({
           toolName: step.toolName!,
@@ -574,6 +587,18 @@ function executeStep(
               }),
           ),
         );
+      const toolDurationMs = Date.now() - toolStart;
+
+      // Publish ToolCallCompleted so MetricsCollector tracks tool execution
+      yield* publishReasoningStep(services.eventBus, {
+        _tag: "ToolCallCompleted",
+        taskId: input.taskId ?? "plan-execute",
+        toolName: step.toolName!,
+        callId: `${plan.id}_${step.id}`,
+        durationMs: toolDurationMs,
+        success: toolResult.success !== false,
+        kernelPass: `plan-execute:step-${stepIndex + 1}`,
+      });
 
       const output =
         typeof toolResult.result === "string"
@@ -626,7 +651,7 @@ function executeStep(
         messages: [{ role: "user", content: taskText }],
         systemPrompt:
           input.systemPrompt ??
-          "You are a precise task executor. Complete the given step. Respond directly with your answer.",
+          "You are a precise task executor. Produce the requested content directly. Never ask questions or offer to do something — just output the finished result.",
         maxTokens: 1000,
         temperature: 0.5,
       })
