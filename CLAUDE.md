@@ -2,7 +2,7 @@
 
 ## Project Status
 
-**v0.5.5 released.** 18 packages + 2 apps built, 1001 tests across 139 files, full integration verified with professional metrics dashboard.
+**v0.5.6 + Phase A Foundation Fixes.** 19 packages + 2 apps built, 1179 tests across 160 files. All 5 reasoning strategies are now tool-aware via shared ReAct kernel with full type threading.
 
 - Phase 1: Core, LLM Provider, Memory, Reasoning, Tools, Interaction, Runtime
 - Phase 2: Guardrails, Verification, Cost
@@ -18,6 +18,8 @@
 - Reasoning Strategy Fixes: `defaultStrategy` wired through to execution engine, ToT plan-then-execute (BFS planning → ReAct tool execution), `adaptive.enabled` flag connected, ToT score parsing robustness for thinking-mode LLMs (909 tests)
 - Tool Result Compression: `compressToolResult()` replaces blind truncation — structured previews (JSON array/object/text), scratchpad overflow store (`_tool_result_N`), code-transform pipe (`| transform: <expr>`), `ResultCompressionConfig` user-configurable on `.withTools()` (909 tests, 124 files)
 - Agent Gateway: Persistent autonomous agent harness — heartbeats (adaptive), crons, webhooks (GitHub adapter), composable policy engine (4 policies), input router with EventBus integration, `.withGateway()` builder API (1001 tests, 139 files)
+- Strategy SDK Refactor: Shared ReAct kernel — `executeReActKernel()` extracted from reactive.ts, all 5 strategies tool-aware, 6 shared utility modules (tool-utils, quality-utils, context-utils, service-utils, step-utils, react-kernel) (1116 tests, 156 files)
+- Phase A Foundation Fixes: StrategyFn full type threading (resultCompression, contextProfile, agentId/sessionId), reflexion cross-run learning (priorCritiques → episodic memory), hallucination detection verification layer, `@reactive-agents/testing` package with mock services + assertion helpers (1179 tests, 160 files)
 - Pre-release: tsup compiled output, Google Gemini provider, Reflexion reasoning strategy
 - Final Integration: All layers compose via `createRuntime()` and `ReactiveAgentBuilder`
 - Docs: Starlight (Astro) site at `apps/docs/`
@@ -28,7 +30,7 @@
 
 ```bash
 bun install              # Install dependencies
-bun test                 # Run all tests (1001 tests, 139 files)
+bun test                 # Run all tests (1179 tests, 160 files)
 bun run build            # Build all packages (16 packages, ESM + DTS)
 cd apps/docs && npx astro dev    # Start docs dev server
 cd apps/docs && npx astro build  # Build docs for production
@@ -179,7 +181,7 @@ packages/
   reasoning/     — ReAct, Plan-Execute, ToT strategies
   tools/         — Tool registry, sandbox, MCP client
   guardrails/    — Injection, PII, toxicity detection
-  verification/  — Semantic entropy, fact decomposition
+  verification/  — Semantic entropy, fact decomposition, hallucination detection
   cost/          — Complexity routing, budget enforcement
   identity/      — Agent certificates, RBAC
   observability/ — Tracing, metrics, structured logging
@@ -190,6 +192,7 @@ packages/
   eval/          — Evaluation framework (LLM-as-judge, EvalStore)
   a2a/           — [v0.5] A2A protocol: Agent Cards, JSON-RPC server/client, SSE streaming
   gateway/       — Persistent autonomous agent harness: heartbeats, crons, webhooks, policy engine
+  testing/       — Mock services (LLM, tools, EventBus), assertion helpers, test fixtures
   evolution/     — [PLANNED v1.1+] Group-Evolving Agents (GEA): strategy evolution, experience sharing
 apps/
   cli/           — `rax` CLI (init, create, run, dev, eval, playground, inspect)
