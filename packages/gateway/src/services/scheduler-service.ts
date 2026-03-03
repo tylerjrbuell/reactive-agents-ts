@@ -1,5 +1,10 @@
 import { Effect, Context, Layer, Ref } from "effect";
-import type { EventBusLike, GatewayEvent, CronEntry, HeartbeatConfig } from "../types.js";
+import type {
+  EventBusLike,
+  GatewayEvent,
+  CronEntry,
+  HeartbeatConfig,
+} from "../types.js";
 import { parseCron, shouldFireAt } from "./cron-parser.js";
 
 // ─── Event Factories ─────────────────────────────────────────────────────────
@@ -19,7 +24,8 @@ export const createHeartbeatEvent = (
   payload: {},
   metadata: {
     instruction:
-      instruction ?? "Heartbeat: review current state and take any needed actions",
+      instruction ??
+      "Heartbeat: review current state and take any needed actions",
   },
 });
 
@@ -65,7 +71,10 @@ export class SchedulerService extends Context.Tag("SchedulerService")<
   }
 >() {}
 
-export const SchedulerServiceLive = (config: SchedulerConfig, bus?: EventBusLike) =>
+export const SchedulerServiceLive = (
+  config: SchedulerConfig,
+  bus?: EventBusLike,
+) =>
   Layer.effect(
     SchedulerService,
     Effect.gen(function* () {
@@ -73,11 +82,15 @@ export const SchedulerServiceLive = (config: SchedulerConfig, bus?: EventBusLike
       const agentId = config.agentId ?? "default";
 
       // Pre-parse all enabled cron entries once at construction time.
-      // Track last-fired minute per cron to prevent double-fire within the same minute
-      // (tick interval may be shorter than 60s, so shouldFireAt can match multiple times).
+      // Track last-checked minute per cron to detect and fire missed crons between beats
+      // (if heartbeat interval doesn't align with cron times).
       const parsedCrons = (config.crons ?? [])
         .filter((c) => c.enabled !== false)
-        .map((c) => ({ entry: c, parsed: parseCron(c.schedule), lastFiredMinute: -1 }))
+        .map((c) => ({
+          entry: c,
+          parsed: parseCron(c.schedule),
+          lastCheckedMinute: -1,
+        }))
         .filter((c) => c.parsed !== null);
 
       return {
@@ -86,27 +99,77 @@ export const SchedulerServiceLive = (config: SchedulerConfig, bus?: EventBusLike
         checkCrons: (now: Date) =>
           Effect.gen(function* () {
             const events: GatewayEvent[] = [];
-            // Unique key for the current minute (changes every 60s)
-            const minuteKey = Math.floor(now.getTime() / 60_000);
+            const currentMinute = Math.floor(now.getTime() / 60_000);
+            const currentDate = now;
+
             for (const cron of parsedCrons) {
               if (cron.parsed) {
-                // Use entry-specific timezone or fall back to global config timezone
                 const tz = cron.entry.timezone ?? config.timezone;
-                const shouldFire = shouldFireAt(cron.parsed, now, tz);
-                if (shouldFire && cron.lastFiredMinute !== minuteKey) {
-                  cron.lastFiredMinute = minuteKey;
-                  const event = createCronEvent(agentId, cron.entry);
-                  events.push(event);
-                  if (bus) {
-                    yield* bus.publish({
-                      _tag: "GatewayEventReceived",
-                      agentId,
-                      source: "cron",
-                      eventId: event.id,
-                      timestamp: Date.now(),
+
+                // On first call, initialize lastCheckedMinute to currentMinute - 1
+                // so we only check the current minute, not back to epoch (which would be millions of iterations).
+                if (cron.lastCheckedMinute === -1) {
+                  cron.lastCheckedMinute = currentMinute - 1;
+                }
+
+                // Check all minutes from lastCheckedMinute+1 to now (inclusive).
+                // This buffers missed crons that should have fired between heartbeats.
+                const startMinute = cron.lastCheckedMinute + 1;
+                for (
+                  let minuteKey = startMinute;
+                  minuteKey <= currentMinute;
+                  minuteKey++
+                ) {
+                  // Calculate minutes offset from current (in minutes)
+                  const minutesOffset = currentMinute - minuteKey;
+
+                  // Create a date for this minute by going backward from now
+                  // (e.g., if currentMinute is now, offset=0; if checking 1 minute ago, offset=1)
+                  const checkTime = new Date(
+                    currentDate.getTime() - minutesOffset * 60_000,
+                  );
+
+                  // Check if cron should fire at this minute
+                  const shouldFire = shouldFireAt(cron.parsed, checkTime, tz);
+
+                  // Only log when checking the current or recent minute
+                  if (minuteKey >= currentMinute - 2) {
+                    const dateStr = checkTime.toLocaleString("en-US", {
+                      timeZone: tz,
+                      year: "numeric",
+                      month: "2-digit",
+                      day: "2-digit",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      second: "2-digit",
                     });
+                    console.log(
+                      `[CRON-CHECK] "${cron.entry.schedule}" at ${dateStr} (${tz}) → ${shouldFire ? "✓ MATCHED" : "✗ no match"}`,
+                    );
+                  }
+
+                  if (shouldFire) {
+                    const event = createCronEvent(agentId, cron.entry);
+                    events.push(event);
+                    const dateStr = checkTime.toLocaleString();
+                    console.log(
+                      `  ▶️  FIRING: "${cron.entry.schedule}" at ${dateStr}`,
+                    );
+
+                    if (bus) {
+                      yield* bus.publish({
+                        _tag: "GatewayEventReceived",
+                        agentId,
+                        source: "cron",
+                        eventId: event.id,
+                        timestamp: Date.now(),
+                      });
+                    }
                   }
                 }
+
+                // Update lastCheckedMinute to current so we don't re-check these minutes
+                cron.lastCheckedMinute = currentMinute;
               }
             }
             return events;
@@ -114,7 +177,10 @@ export const SchedulerServiceLive = (config: SchedulerConfig, bus?: EventBusLike
 
         emitHeartbeat: () =>
           Effect.gen(function* () {
-            const event = createHeartbeatEvent(agentId, config.heartbeat?.instruction);
+            const event = createHeartbeatEvent(
+              agentId,
+              config.heartbeat?.instruction,
+            );
             if (bus) {
               yield* bus.publish({
                 _tag: "GatewayEventReceived",

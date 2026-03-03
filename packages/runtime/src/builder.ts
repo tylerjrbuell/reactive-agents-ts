@@ -4,8 +4,14 @@ import type { MCPServerConfig } from "./runtime.js";
 import { ExecutionEngine } from "./execution-engine.js";
 import type { LifecycleHook, ExecutionContext } from "./types.js";
 import type { RuntimeErrors } from "./errors.js";
-import type { ReasoningConfig, ContextProfile } from "@reactive-agents/reasoning";
-import type { ToolDefinition, ResultCompressionConfig } from "@reactive-agents/tools";
+import type {
+  ReasoningConfig,
+  ContextProfile,
+} from "@reactive-agents/reasoning";
+import type {
+  ToolDefinition,
+  ResultCompressionConfig,
+} from "@reactive-agents/tools";
 import type { RemoteAgentClient } from "@reactive-agents/tools";
 import type { PromptTemplate } from "@reactive-agents/prompts";
 import type { Task, TaskResult } from "@reactive-agents/core";
@@ -27,7 +33,13 @@ import { KillSwitchService } from "@reactive-agents/guardrails";
  * - `"litellm"` — LiteLLM proxy for 40+ provider models
  * - `"test"` — Mock LLM for testing (uses `withTestResponses()`)
  */
-export type ProviderName = "anthropic" | "openai" | "ollama" | "gemini" | "litellm" | "test";
+export type ProviderName =
+  | "anthropic"
+  | "openai"
+  | "ollama"
+  | "gemini"
+  | "litellm"
+  | "test";
 
 // ─── Optional Parameter Types ─────────────────────────────────────────────────
 
@@ -222,6 +234,7 @@ export interface A2AOptions {
  * ```
  */
 export interface GatewayOptions {
+  readonly timezone?: string;
   readonly heartbeat?: {
     readonly intervalMs?: number;
     readonly policy?: "always" | "adaptive" | "conservative";
@@ -233,6 +246,7 @@ export interface GatewayOptions {
     readonly instruction: string;
     readonly agentId?: string;
     readonly priority?: "low" | "normal" | "high" | "critical";
+    readonly timezone?: string;
     readonly enabled?: boolean;
   }[];
   readonly webhooks?: readonly {
@@ -402,7 +416,10 @@ export interface AgentResult {
  * @param agentName - Name of the agent (for logging/reference, not included in output)
  * @returns A formatted system prompt string with persona sections
  */
-function composePersonaToSystemPrompt(persona: AgentPersona, agentName: string): string {
+function composePersonaToSystemPrompt(
+  persona: AgentPersona,
+  agentName: string,
+): string {
   const sections: string[] = [];
 
   // Role (required-ish for personas, but we'll include if set)
@@ -641,16 +658,19 @@ export class ReactiveAgentBuilder {
    * })
    * ```
    */
-  withAgentTool(name: string, agent: {
-    name: string;
-    description?: string;
-    provider?: string;
-    model?: string;
-    tools?: readonly string[];
-    maxIterations?: number;
-    systemPrompt?: string;
-    persona?: AgentPersona;
-  }): this {
+  withAgentTool(
+    name: string,
+    agent: {
+      name: string;
+      description?: string;
+      provider?: string;
+      model?: string;
+      tools?: readonly string[];
+      maxIterations?: number;
+      systemPrompt?: string;
+      persona?: AgentPersona;
+    },
+  ): this {
     this._agentTools.push({ name, agent });
     return this;
   }
@@ -724,9 +744,7 @@ export class ReactiveAgentBuilder {
    * builder.withProvider("anthropic")
    * ```
    */
-  withProvider(
-    provider: ProviderName,
-  ): this {
+  withProvider(provider: ProviderName): this {
     this._provider = provider;
     return this;
   }
@@ -1007,7 +1025,9 @@ export class ReactiveAgentBuilder {
    * })
    * ```
    */
-  withBehavioralContracts(contract: import("@reactive-agents/guardrails").BehavioralContract): this {
+  withBehavioralContracts(
+    contract: import("@reactive-agents/guardrails").BehavioralContract,
+  ): this {
     this._enableBehavioralContracts = true;
     this._behavioralContract = contract;
     return this;
@@ -1223,7 +1243,10 @@ export class ReactiveAgentBuilder {
     // Compose persona into system prompt if provided
     let composedSystemPrompt = this._systemPrompt;
     if (this._persona) {
-      const personaPrompt = composePersonaToSystemPrompt(this._persona, this._name);
+      const personaPrompt = composePersonaToSystemPrompt(
+        this._persona,
+        this._name,
+      );
       composedSystemPrompt = composedSystemPrompt
         ? `${personaPrompt}\n\n${composedSystemPrompt}`
         : personaPrompt;
@@ -1286,10 +1309,12 @@ export class ReactiveAgentBuilder {
 
       // Register custom prompt templates if configured
       if (promptsOptions?.templates && promptsOptions.templates.length > 0) {
-        const { PromptService } = yield* Effect.promise(() =>
-          import("@reactive-agents/prompts"),
+        const { PromptService } = yield* Effect.promise(
+          () => import("@reactive-agents/prompts"),
         );
-        const promptService = yield* (PromptService as any).pipe(Effect.provide(baseRuntime));
+        const promptService = yield* (PromptService as any).pipe(
+          Effect.provide(baseRuntime),
+        );
         for (const template of promptsOptions.templates) {
           yield* (promptService as any).register(template);
         }
@@ -1307,11 +1332,19 @@ export class ReactiveAgentBuilder {
       // ManagedRuntime scope. Because Layer.merge uses reference-identity memoization,
       // the same ToolService instance (from baseRuntime) receives all registrations
       // AND serves the engine — MCP tools are visible to the LLM.
-      let fullRuntime: Layer.Layer<any, any> = baseRuntime as Layer.Layer<any, any>;
+      let fullRuntime: Layer.Layer<any, any> = baseRuntime as Layer.Layer<
+        any,
+        any
+      >;
 
-      if (agentTools.length > 0 || allowDynamicSubAgents || mcpServers.length > 0 || (toolsOptions?.tools?.length ?? 0) > 0) {
-        const toolsMod = yield* Effect.promise(() =>
-          import("@reactive-agents/tools"),
+      if (
+        agentTools.length > 0 ||
+        allowDynamicSubAgents ||
+        mcpServers.length > 0 ||
+        (toolsOptions?.tools?.length ?? 0) > 0
+      ) {
+        const toolsMod = yield* Effect.promise(
+          () => import("@reactive-agents/tools"),
         );
 
         const {
@@ -1323,7 +1356,9 @@ export class ReactiveAgentBuilder {
         // Collect (definition, handler) pairs — no registration yet.
         type RegEntry = {
           def: ToolDefinition;
-          handler: (args: Record<string, unknown>) => Effect.Effect<unknown, Error>;
+          handler: (
+            args: Record<string, unknown>,
+          ) => Effect.Effect<unknown, Error>;
         };
         const registrations: RegEntry[] = [];
 
@@ -1337,7 +1372,10 @@ export class ReactiveAgentBuilder {
             );
             const remoteUrl = agentTool.remoteUrl;
             const remoteClient: RemoteAgentClient = {
-              sendMessage: (params: { message: { role: string; content: string }; agentCardUrl: string }) =>
+              sendMessage: (params: {
+                message: { role: string; content: string };
+                agentCardUrl: string;
+              }) =>
                 Effect.tryPromise({
                   try: () =>
                     fetch(remoteUrl, {
@@ -1349,14 +1387,19 @@ export class ReactiveAgentBuilder {
                         params: {
                           message: {
                             role: params.message.role,
-                            parts: [{ kind: "text", text: params.message.content }],
+                            parts: [
+                              { kind: "text", text: params.message.content },
+                            ],
                           },
                         },
                         id: crypto.randomUUID(),
                       }),
-                    }).then((r) => r.json()).then((d: Record<string, unknown>) =>
-                      d.result as { taskId: string },
-                    ),
+                    })
+                      .then((r) => r.json())
+                      .then(
+                        (d: Record<string, unknown>) =>
+                          d.result as { taskId: string },
+                      ),
                   catch: (e) => new Error(String(e)),
                 }),
               getTask: (params: { id: string }) =>
@@ -1371,9 +1414,12 @@ export class ReactiveAgentBuilder {
                         params: { id: params.id },
                         id: crypto.randomUUID(),
                       }),
-                    }).then((r) => r.json()).then((d: Record<string, unknown>) =>
-                      d.result as { status: string; result: unknown },
-                    ),
+                    })
+                      .then((r) => r.json())
+                      .then(
+                        (d: Record<string, unknown>) =>
+                          d.result as { status: string; result: unknown },
+                      ),
                   catch: (e) => new Error(String(e)),
                 }),
             };
@@ -1393,7 +1439,8 @@ export class ReactiveAgentBuilder {
             // Local agent tool — real sub-agent delegation
             const agentConfig: import("@reactive-agents/core").AgentConfig = {
               name: agentTool.agent.name,
-              description: agentTool.agent.description ?? `Agent: ${agentTool.agent.name}`,
+              description:
+                agentTool.agent.description ?? `Agent: ${agentTool.agent.name}`,
               capabilities: [],
             };
             const toolDef = createAgentTool(agentTool.name, agentConfig);
@@ -1411,14 +1458,22 @@ export class ReactiveAgentBuilder {
               },
               async (opts) => {
                 const _subLabel = agentTool.agent!.name;
-                const _taskPreview = opts.task.length > 80 ? opts.task.slice(0, 80) + "…" : opts.task;
-                process.stdout.write(`\n  \x1b[36m┌─ [sub-agent: ${_subLabel}]\x1b[0m → "${_taskPreview}"\n`);
+                const _taskPreview =
+                  opts.task.length > 80
+                    ? opts.task.slice(0, 80) + "…"
+                    : opts.task;
+                process.stdout.write(
+                  `\n  \x1b[36m┌─ [sub-agent: ${_subLabel}]\x1b[0m → "${_taskPreview}"\n`,
+                );
                 const _subStart = Date.now();
 
                 // Compose persona with system prompt
                 let composedSystemPrompt = opts.systemPrompt;
                 if (opts.persona) {
-                  const personaPrompt = composePersonaToSystemPrompt(opts.persona, opts.name);
+                  const personaPrompt = composePersonaToSystemPrompt(
+                    opts.persona,
+                    opts.name,
+                  );
                   composedSystemPrompt = composedSystemPrompt
                     ? `${personaPrompt}\n\n${composedSystemPrompt}`
                     : personaPrompt;
@@ -1447,13 +1502,23 @@ export class ReactiveAgentBuilder {
                   createdAt: new Date(),
                 };
                 const result: TaskResult = await Effect.runPromise(
-                  subEngine.execute(taskObj).pipe(
-                    Effect.provide(subRuntime as unknown as Layer.Layer<never>),
-                  ),
+                  subEngine
+                    .execute(taskObj)
+                    .pipe(
+                      Effect.provide(
+                        subRuntime as unknown as Layer.Layer<never>,
+                      ),
+                    ),
                 );
-                const _subElapsed = ((Date.now() - _subStart) / 1000).toFixed(1);
-                const _subIcon = result.success ? "\x1b[32m✓\x1b[0m" : "\x1b[31m✗\x1b[0m";
-                process.stdout.write(`  \x1b[36m└─ [sub-agent: ${_subLabel}]\x1b[0m ${_subIcon} done | ${result.metadata.tokensUsed} tok | ${_subElapsed}s\n\n`);
+                const _subElapsed = ((Date.now() - _subStart) / 1000).toFixed(
+                  1,
+                );
+                const _subIcon = result.success
+                  ? "\x1b[32m✓\x1b[0m"
+                  : "\x1b[31m✗\x1b[0m";
+                process.stdout.write(
+                  `  \x1b[36m└─ [sub-agent: ${_subLabel}]\x1b[0m ${_subIcon} done | ${result.metadata.tokensUsed} tok | ${_subElapsed}s\n\n`,
+                );
                 return {
                   output: String(result.output ?? ""),
                   success: result.success,
@@ -1466,11 +1531,12 @@ export class ReactiveAgentBuilder {
             const handler = (args: Record<string, unknown>) =>
               Effect.tryPromise({
                 try: () => {
-                  const task = typeof args.input === "string"
-                    ? args.input
-                    : typeof args.message === "string"
-                      ? args.message
-                      : JSON.stringify(args);
+                  const task =
+                    typeof args.input === "string"
+                      ? args.input
+                      : typeof args.message === "string"
+                        ? args.message
+                        : JSON.stringify(args);
                   return subAgentExec(task);
                 },
                 catch: (e) => new Error(String(e)),
@@ -1505,7 +1571,10 @@ export class ReactiveAgentBuilder {
                 // Extract optional persona parameters
                 const subPersona = {
                   role: typeof args.role === "string" ? args.role : undefined,
-                  instructions: typeof args.instructions === "string" ? args.instructions : undefined,
+                  instructions:
+                    typeof args.instructions === "string"
+                      ? args.instructions
+                      : undefined,
                   tone: typeof args.tone === "string" ? args.tone : undefined,
                 };
 
@@ -1515,17 +1584,30 @@ export class ReactiveAgentBuilder {
                     provider: parentProvider,
                     model: subModel ?? parentModel,
                     maxIterations: subMaxIter,
-                    persona: (subPersona.role || subPersona.instructions || subPersona.tone) ? subPersona : undefined,
+                    persona:
+                      subPersona.role ||
+                      subPersona.instructions ||
+                      subPersona.tone
+                        ? subPersona
+                        : undefined,
                   },
                   async (opts) => {
-                    const _taskPreview = opts.task.length > 80 ? opts.task.slice(0, 80) + "…" : opts.task;
-                    process.stdout.write(`\n  \x1b[36m┌─ [sub-agent: ${subName}]\x1b[0m → "${_taskPreview}"\n`);
+                    const _taskPreview =
+                      opts.task.length > 80
+                        ? opts.task.slice(0, 80) + "…"
+                        : opts.task;
+                    process.stdout.write(
+                      `\n  \x1b[36m┌─ [sub-agent: ${subName}]\x1b[0m → "${_taskPreview}"\n`,
+                    );
                     const _subStart = Date.now();
 
                     // Compose persona with system prompt
                     let composedSystemPrompt = opts.systemPrompt;
                     if (opts.persona) {
-                      const personaPrompt = composePersonaToSystemPrompt(opts.persona as AgentPersona, opts.name);
+                      const personaPrompt = composePersonaToSystemPrompt(
+                        opts.persona as AgentPersona,
+                        opts.name,
+                      );
                       composedSystemPrompt = composedSystemPrompt
                         ? `${personaPrompt}\n\n${composedSystemPrompt}`
                         : personaPrompt;
@@ -1554,13 +1636,24 @@ export class ReactiveAgentBuilder {
                       createdAt: new Date(),
                     };
                     const result: TaskResult = await Effect.runPromise(
-                      subEngine.execute(taskObj).pipe(
-                        Effect.provide(subRuntime as unknown as Layer.Layer<never>),
-                      ),
+                      subEngine
+                        .execute(taskObj)
+                        .pipe(
+                          Effect.provide(
+                            subRuntime as unknown as Layer.Layer<never>,
+                          ),
+                        ),
                     );
-                    const _subElapsed = ((Date.now() - _subStart) / 1000).toFixed(1);
-                    const _subIcon = result.success ? "\x1b[32m✓\x1b[0m" : "\x1b[31m✗\x1b[0m";
-                    process.stdout.write(`  \x1b[36m└─ [sub-agent: ${subName}]\x1b[0m ${_subIcon} done | ${result.metadata.tokensUsed} tok | ${_subElapsed}s\n\n`);
+                    const _subElapsed = (
+                      (Date.now() - _subStart) /
+                      1000
+                    ).toFixed(1);
+                    const _subIcon = result.success
+                      ? "\x1b[32m✓\x1b[0m"
+                      : "\x1b[31m✗\x1b[0m";
+                    process.stdout.write(
+                      `  \x1b[36m└─ [sub-agent: ${subName}]\x1b[0m ${_subIcon} done | ${result.metadata.tokensUsed} tok | ${_subElapsed}s\n\n`,
+                    );
                     return {
                       output: String(result.output ?? ""),
                       success: result.success,
@@ -1583,7 +1676,11 @@ export class ReactiveAgentBuilder {
         // execution environment. No Effect.provide() here — the ToolService comes
         // from the layer environment at evaluation time (same instance as the engine).
         const agentToolInitEffect = Effect.gen(function* () {
-          const ts = yield* (toolsMod.ToolService as unknown as import("effect").Context.Tag<any, any>);
+          const ts =
+            yield* toolsMod.ToolService as unknown as import("effect").Context.Tag<
+              any,
+              any
+            >;
           // Connect MCP servers inside the managed runtime scope so the engine's
           // ToolService and the MCP-connected ToolService are the same instance.
           for (const mcp of mcpServers) {
@@ -1607,9 +1704,7 @@ export class ReactiveAgentBuilder {
         // reference so both the engine and the init effect share the same ToolService.
         const agentToolInitLayer = Layer.effectDiscard(
           agentToolInitEffect as Effect.Effect<unknown, never, never>,
-        ).pipe(
-          Layer.provide(baseRuntime as unknown as Layer.Layer<any>),
-        );
+        ).pipe(Layer.provide(baseRuntime as unknown as Layer.Layer<any>));
 
         fullRuntime = Layer.merge(
           baseRuntime as unknown as Layer.Layer<any>,
@@ -1619,8 +1714,18 @@ export class ReactiveAgentBuilder {
 
       // Create a ManagedRuntime so all facade calls (run, subscribe, pause, etc.)
       // share the same layer scope and the same service instances (EventBus, KillSwitch, etc.).
-      const managedRuntime = ManagedRuntime.make(fullRuntime as unknown as Layer.Layer<any>);
-      return new ReactiveAgent(engine, agentId, managedRuntime, mcpServers.map((s) => s.name), !!gatewayOptions, gatewayOptions?.heartbeat?.intervalMs, !!gatewayOptions?.heartbeat?.instruction);
+      const managedRuntime = ManagedRuntime.make(
+        fullRuntime as unknown as Layer.Layer<any>,
+      );
+      return new ReactiveAgent(
+        engine,
+        agentId,
+        managedRuntime,
+        mcpServers.map((s) => s.name),
+        !!gatewayOptions,
+        gatewayOptions?.heartbeat?.intervalMs,
+        !!gatewayOptions?.heartbeat?.instruction,
+      );
     }) as Effect.Effect<ReactiveAgent, Error>;
   }
 }
@@ -1649,9 +1754,13 @@ export class ReactiveAgentBuilder {
 export class ReactiveAgent {
   constructor(
     private readonly engine: {
-      execute: (task: Task) => Effect.Effect<TaskResult, RuntimeErrors | TaskError>;
+      execute: (
+        task: Task,
+      ) => Effect.Effect<TaskResult, RuntimeErrors | TaskError>;
       cancel: (taskId: string) => Effect.Effect<void, RuntimeErrors>;
-      getContext: (taskId: string) => Effect.Effect<ExecutionContext | null, never>;
+      getContext: (
+        taskId: string,
+      ) => Effect.Effect<ExecutionContext | null, never>;
     },
     /**
      * Unique identifier for this agent instance — set at instantiation and remains constant
@@ -1688,12 +1797,18 @@ export class ReactiveAgent {
     if (serverNames.length > 0) {
       await this.runtime.runPromise(
         Effect.gen(function* () {
-          const toolsMod = yield* Effect.promise(() => import("@reactive-agents/tools"));
-          const ts = yield* (toolsMod.ToolService as unknown as import("effect").Context.Tag<any, any>);
+          const toolsMod = yield* Effect.promise(
+            () => import("@reactive-agents/tools"),
+          );
+          const ts =
+            yield* toolsMod.ToolService as unknown as import("effect").Context.Tag<
+              any,
+              any
+            >;
           for (const name of serverNames) {
-            yield* (ts as any).disconnectMCPServer(name).pipe(
-              Effect.catchAll(() => Effect.void),
-            );
+            yield* (ts as any)
+              .disconnectMCPServer(name)
+              .pipe(Effect.catchAll(() => Effect.void));
           }
         }).pipe(Effect.catchAll(() => Effect.void)),
       );
@@ -1806,7 +1921,10 @@ export class ReactiveAgent {
   async cancel(taskId: string): Promise<void> {
     return this.runtime.runPromise(
       this.engine.cancel(taskId).pipe(
-        Effect.mapError((e: RuntimeErrors) => new Error("message" in e ? e.message : String(e))),
+        Effect.mapError(
+          (e: RuntimeErrors) =>
+            new Error("message" in e ? e.message : String(e)),
+        ),
         Effect.catchAll(() => Effect.void),
       ) as Effect.Effect<void>,
     );
@@ -1965,7 +2083,9 @@ export class ReactiveAgent {
         EventBus.pipe(
           Effect.flatMap((eb) =>
             eb.subscribe((event) =>
-              Effect.sync(() => (tagOrHandler as (event: AgentEvent) => void)(event)),
+              Effect.sync(() =>
+                (tagOrHandler as (event: AgentEvent) => void)(event),
+              ),
             ),
           ),
           Effect.catchAll(() => Effect.succeed(() => {})),
@@ -1999,12 +2119,16 @@ export class ReactiveAgent {
    * }
    * ```
    */
-  async gatewayStatus(): Promise<import("@reactive-agents/gateway").GatewayStatus | null> {
+  async gatewayStatus(): Promise<
+    import("@reactive-agents/gateway").GatewayStatus | null
+  > {
     try {
       return await this.runtime.runPromise(
         Effect.gen(function* () {
-          const gwMod = yield* Effect.promise(() => import("@reactive-agents/gateway"));
-          const gw = yield* (gwMod.GatewayService as any);
+          const gwMod = yield* Effect.promise(
+            () => import("@reactive-agents/gateway"),
+          );
+          const gw = yield* gwMod.GatewayService as any;
           return yield* gw.status();
         }) as Effect.Effect<any>,
       );
@@ -2035,7 +2159,9 @@ export class ReactiveAgent {
    */
   start(): GatewayHandle {
     if (!this._gatewayEnabled) {
-      throw new Error("Gateway not configured. Call .withGateway() before .start()");
+      throw new Error(
+        "Gateway not configured. Call .withGateway() before .start()",
+      );
     }
 
     const self = this;
@@ -2061,9 +2187,11 @@ export class ReactiveAgent {
       try {
         const services = await self.runtime.runPromise(
           Effect.gen(function* () {
-            const gwMod = yield* Effect.promise(() => import("@reactive-agents/gateway"));
-            const g = yield* (gwMod.GatewayService as any);
-            const s = yield* (gwMod.SchedulerService as any);
+            const gwMod = yield* Effect.promise(
+              () => import("@reactive-agents/gateway"),
+            );
+            const g = yield* gwMod.GatewayService as any;
+            const s = yield* gwMod.SchedulerService as any;
             return { gw: g, sched: s };
           }) as Effect.Effect<any>,
         );
@@ -2071,39 +2199,55 @@ export class ReactiveAgent {
         sched = services.sched;
       } catch (err) {
         const summary: GatewaySummary = {
-          heartbeatsFired, totalRuns, cronChecks,
+          heartbeatsFired,
+          totalRuns,
+          cronChecks,
           error: "Gateway not configured. Call .withGateway() before .start()",
         };
         (resolveStop as ((s: GatewaySummary) => void) | null)?.(summary);
-        throw new Error("Gateway not configured. Call .withGateway() before .start()");
+        throw new Error(
+          "Gateway not configured. Call .withGateway() before .start()",
+        );
       }
 
       // Resolve EventBus for observability (optional)
       try {
         eb = await self.runtime.runPromise(
           Effect.gen(function* () {
-            const coreMod = yield* Effect.promise(() => import("@reactive-agents/core"));
-            return yield* (coreMod.EventBus as any);
+            const coreMod = yield* Effect.promise(
+              () => import("@reactive-agents/core"),
+            );
+            return yield* coreMod.EventBus as any;
           }) as Effect.Effect<any>,
         );
-      } catch { /* EventBus not in runtime — no observability */ }
+      } catch {
+        /* EventBus not in runtime — no observability */
+      }
 
       // Resolve ObservabilityService for structured logging (optional)
       try {
         obs = await self.runtime.runPromise(
           Effect.gen(function* () {
-            const obsMod = yield* Effect.promise(() => import("@reactive-agents/observability"));
-            return yield* (obsMod.ObservabilityService as any);
+            const obsMod = yield* Effect.promise(
+              () => import("@reactive-agents/observability"),
+            );
+            return yield* obsMod.ObservabilityService as any;
           }) as Effect.Effect<any>,
         );
-      } catch { /* ObservabilityService not in runtime — no logging */ }
+      } catch {
+        /* ObservabilityService not in runtime — no logging */
+      }
 
       // Gateway log helper — routes through ObservabilityService when available
-      const glog = (level: string, message: string, metadata?: Record<string, unknown>) => {
+      const glog = (
+        level: string,
+        message: string,
+        metadata?: Record<string, unknown>,
+      ) => {
         if (!obs) return;
-        self.runtime.runPromise(
-          obs.log(level, `◉ [gateway] ${message}`, metadata ?? {}),
-        ).catch(() => {});
+        self.runtime
+          .runPromise(obs.log(level, `◉ [gateway] ${message}`, metadata ?? {}))
+          .catch(() => {});
       };
 
       glog("info", `started (interval=${self._gatewayIntervalMs}ms)`);
@@ -2113,7 +2257,9 @@ export class ReactiveAgent {
         if (!eb) return;
         try {
           await self.runtime.runPromise(eb.publish(event));
-        } catch { /* observability errors don't kill the loop */ }
+        } catch {
+          /* observability errors don't kill the loop */
+        }
       };
 
       // Helper to run an event through the gateway and execute if approved.
@@ -2152,11 +2298,13 @@ export class ReactiveAgent {
             createdAt: new Date(),
           };
           const taskResult: TaskResult = await self.runtime.runPromise(
-            self.engine.execute(task).pipe(
-              Effect.mapError(
-                (e: any) => new Error("message" in e ? e.message : String(e)),
-              ),
-            ) as Effect.Effect<TaskResult, Error>,
+            self.engine
+              .execute(task)
+              .pipe(
+                Effect.mapError(
+                  (e: any) => new Error("message" in e ? e.message : String(e)),
+                ),
+              ) as Effect.Effect<TaskResult, Error>,
           );
           const result = {
             output: String(taskResult.output ?? ""),
@@ -2169,7 +2317,10 @@ export class ReactiveAgent {
           if (tokensUsed) {
             await self.runtime.runPromise(gw.updateTokensUsed(tokensUsed));
           }
-          glog("info", `${source} completed (${durationMs}ms, ${tokensUsed} tokens)`);
+          glog(
+            "info",
+            `${source} completed (${durationMs}ms, ${tokensUsed} tokens)`,
+          );
           await publish({
             _tag: "ProactiveActionCompleted",
             agentId: self.agentId ?? "unknown",
@@ -2181,7 +2332,10 @@ export class ReactiveAgent {
           });
         } catch (err) {
           const durationMs = Date.now() - runStart;
-          glog("warn", `${source} failed (${durationMs}ms): ${err instanceof Error ? err.message : String(err)}`);
+          glog(
+            "warn",
+            `${source} failed (${durationMs}ms): ${err instanceof Error ? err.message : String(err)}`,
+          );
           await publish({
             _tag: "ProactiveActionCompleted",
             agentId: self.agentId ?? "unknown",
@@ -2200,39 +2354,68 @@ export class ReactiveAgent {
         if (stopped) return;
         try {
           // 1. Emit heartbeat and check policy — only run agent if a custom instruction was configured
-          const hbEvent: any = await self.runtime.runPromise(sched.emitHeartbeat());
-          const decision: any = await self.runtime.runPromise(gw.processEvent(hbEvent));
+          const hbEvent: any = await self.runtime.runPromise(
+            sched.emitHeartbeat(),
+          );
+          const decision: any = await self.runtime.runPromise(
+            gw.processEvent(hbEvent),
+          );
           heartbeatsFired++;
 
           if (!self._hasCustomHeartbeatInstruction) {
-            glog("debug", `heartbeat #${heartbeatsFired} → idle (no instruction configured)`);
+            glog(
+              "debug",
+              `heartbeat #${heartbeatsFired} → idle (no instruction configured)`,
+            );
           } else if (decision.action === "execute") {
-            const instruction = hbEvent.metadata?.instruction ?? "Check for work";
-            glog("info", `heartbeat #${heartbeatsFired} → execute`, { instruction: instruction.slice(0, 80) });
+            const instruction =
+              hbEvent.metadata?.instruction ?? "Check for work";
+            glog("info", `heartbeat #${heartbeatsFired} → execute`, {
+              instruction: instruction.slice(0, 80),
+            });
             await executeEvent(hbEvent, "heartbeat", instruction);
           } else {
-            glog("debug", `heartbeat #${heartbeatsFired} → ${decision.action}`, { reason: decision.reason });
+            glog(
+              "debug",
+              `heartbeat #${heartbeatsFired} → ${decision.action}`,
+              { reason: decision.reason },
+            );
           }
 
           // 2. Check crons
-          const cronEvents: any[] = await self.runtime.runPromise(sched.checkCrons(new Date())) as any;
+          const cronEvents: any[] = (await self.runtime.runPromise(
+            sched.checkCrons(new Date()),
+          )) as any;
           cronChecks++;
           if (cronEvents.length > 0) {
-            glog("info", `cron check #${cronChecks} → ${cronEvents.length} cron(s) due`);
+            glog(
+              "info",
+              `cron check #${cronChecks} → ${cronEvents.length} cron(s) due`,
+            );
           }
           for (const cronEvent of cronEvents) {
             if (stopped) break;
-            const cronDecision: any = await self.runtime.runPromise(gw.processEvent(cronEvent));
+            const cronDecision: any = await self.runtime.runPromise(
+              gw.processEvent(cronEvent),
+            );
             if (cronDecision.action === "execute") {
-              const cronInstruction = cronEvent.metadata?.instruction ?? "Cron task";
-              glog("info", `cron → execute`, { instruction: cronInstruction.slice(0, 80) });
+              const cronInstruction =
+                cronEvent.metadata?.instruction ?? "Cron task";
+              glog("info", `cron → execute`, {
+                instruction: cronInstruction.slice(0, 80),
+              });
               await executeEvent(cronEvent, "cron", cronInstruction);
             } else {
-              glog("debug", `cron → ${cronDecision.action}`, { reason: cronDecision.reason });
+              glog("debug", `cron → ${cronDecision.action}`, {
+                reason: cronDecision.reason,
+              });
             }
           }
         } catch (err) {
-          glog("error", `tick error: ${err instanceof Error ? err.message : String(err)}`);
+          glog(
+            "error",
+            `tick error: ${err instanceof Error ? err.message : String(err)}`,
+          );
         }
       };
 
@@ -2262,21 +2445,33 @@ export class ReactiveAgent {
                 const channelDecision: any = yield* gw.processEvent(gwEvent);
 
                 if (channelDecision.action === "execute") {
-                  glog("info", `channel → ${event.platform} message from ${event.sender}`, { message: event.message.slice(0, 80) });
+                  glog(
+                    "info",
+                    `channel → ${event.platform} message from ${event.sender}`,
+                    { message: event.message.slice(0, 80) },
+                  );
                   const instruction = `Respond to this ${event.platform} message from ${event.sender}: "${event.message}". Use the ${event.mcpServer}/send_message_to_user tool to reply.`;
                   yield* Effect.promise(() =>
                     executeEvent(gwEvent, "channel", instruction),
                   );
                 } else {
-                  glog("debug", `channel → ${channelDecision.action} from ${event.sender}`, { reason: channelDecision.reason });
+                  glog(
+                    "debug",
+                    `channel → ${channelDecision.action} from ${event.sender}`,
+                    { reason: channelDecision.reason },
+                  );
                 }
               }),
             ),
           );
           unsubChannel = () => {
-            try { (unsub as () => void)(); } catch {}
+            try {
+              (unsub as () => void)();
+            } catch {}
           };
-        } catch { /* EventBus subscription failed — no channel routing */ }
+        } catch {
+          /* EventBus subscription failed — no channel routing */
+        }
       }
 
       timer = setInterval(tick, self._gatewayIntervalMs);
@@ -2297,7 +2492,11 @@ export class ReactiveAgent {
         stopped = true;
         if (timer) clearInterval(timer);
         unsubChannel?.();
-        const summary: GatewaySummary = { heartbeatsFired, totalRuns, cronChecks };
+        const summary: GatewaySummary = {
+          heartbeatsFired,
+          totalRuns,
+          cronChecks,
+        };
         resolveStop?.(summary);
         return summary;
       },

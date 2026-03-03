@@ -42,7 +42,10 @@ const parseField = (
   // Replace day-of-week names (only relevant when caller passes DOW field)
   let normalized = field.toUpperCase();
   for (const [name, num] of Object.entries(DAY_NAMES)) {
-    normalized = normalized.replace(new RegExp(`\\b${name}\\b`, "g"), String(num));
+    normalized = normalized.replace(
+      new RegExp(`\\b${name}\\b`, "g"),
+      String(num),
+    );
   }
 
   // Comma-separated list — split and recurse
@@ -151,6 +154,7 @@ export const getDateInTimezone = (
   dayOfWeek: number;
 } => {
   try {
+    // Get all date parts in the target timezone
     const formatter = new Intl.DateTimeFormat("en-US", {
       timeZone: timezone,
       year: "numeric",
@@ -158,6 +162,7 @@ export const getDateInTimezone = (
       day: "2-digit",
       hour: "2-digit",
       minute: "2-digit",
+      weekday: "long",
       hour12: false,
     });
 
@@ -167,18 +172,23 @@ export const getDateInTimezone = (
       partMap[part.type] = part.value;
     }
 
-    // Get day of week in the target timezone
-    const dateStr = `${partMap.year}-${partMap.month}-${partMap.day}`;
-    const tzDate = new Date(dateStr);
-    const dayOfWeek =
-      (tzDate.getUTCDay() + new Date(dateStr).getDay() - new Date(dateStr).getUTCDay()) % 7;
+    // Map weekday name to 0-6 (0=Sunday, 6=Saturday)
+    const weekdayMap: Record<string, number> = {
+      Sunday: 0,
+      Monday: 1,
+      Tuesday: 2,
+      Wednesday: 3,
+      Thursday: 4,
+      Friday: 5,
+      Saturday: 6,
+    };
 
     return {
       minute: parseInt(partMap.minute || "0", 10),
       hour: parseInt(partMap.hour || "0", 10),
       day: parseInt(partMap.day || "1", 10),
       month: parseInt(partMap.month || "1", 10),
-      dayOfWeek: new Date(date.toLocaleString("en-US", { timeZone: timezone })).getDay(),
+      dayOfWeek: weekdayMap[partMap.weekday] ?? date.getUTCDay(),
     };
   } catch {
     // Fallback to UTC if timezone is invalid
