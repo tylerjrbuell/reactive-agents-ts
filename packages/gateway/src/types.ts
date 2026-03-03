@@ -107,6 +107,7 @@ export interface ChannelAccessConfig {
 }
 
 export const GatewayConfigSchema = Schema.Struct({
+  timezone: Schema.optionalWith(Schema.String, { default: () => "UTC" }),
   heartbeat: Schema.optional(HeartbeatConfigSchema),
   crons: Schema.optional(Schema.Array(CronEntrySchema)),
   webhooks: Schema.optional(Schema.Array(WebhookConfigSchema)),
