@@ -137,11 +137,85 @@ export const parseCron = (expression: string): CronExpression | null => {
 };
 
 /**
- * Check if a cron expression should fire at a given UTC date.
+ * Convert a UTC date to a specific timezone (IANA timezone string).
+ * Returns date components (minute, hour, day, month, day-of-week) in that timezone.
  */
-export const shouldFireAt = (cron: CronExpression, date: Date): boolean =>
-  cron.minutes.includes(date.getUTCMinutes()) &&
-  cron.hours.includes(date.getUTCHours()) &&
-  cron.daysOfMonth.includes(date.getUTCDate()) &&
-  cron.months.includes(date.getUTCMonth() + 1) &&
-  cron.daysOfWeek.includes(date.getUTCDay());
+export const getDateInTimezone = (
+  date: Date,
+  timezone: string,
+): {
+  minute: number;
+  hour: number;
+  day: number;
+  month: number;
+  dayOfWeek: number;
+} => {
+  try {
+    const formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+
+    const parts = formatter.formatToParts(date);
+    const partMap: Record<string, string> = {};
+    for (const part of parts) {
+      partMap[part.type] = part.value;
+    }
+
+    // Get day of week in the target timezone
+    const dateStr = `${partMap.year}-${partMap.month}-${partMap.day}`;
+    const tzDate = new Date(dateStr);
+    const dayOfWeek =
+      (tzDate.getUTCDay() + new Date(dateStr).getDay() - new Date(dateStr).getUTCDay()) % 7;
+
+    return {
+      minute: parseInt(partMap.minute || "0", 10),
+      hour: parseInt(partMap.hour || "0", 10),
+      day: parseInt(partMap.day || "1", 10),
+      month: parseInt(partMap.month || "1", 10),
+      dayOfWeek: new Date(date.toLocaleString("en-US", { timeZone: timezone })).getDay(),
+    };
+  } catch {
+    // Fallback to UTC if timezone is invalid
+    return {
+      minute: date.getUTCMinutes(),
+      hour: date.getUTCHours(),
+      day: date.getUTCDate(),
+      month: date.getUTCMonth() + 1,
+      dayOfWeek: date.getUTCDay(),
+    };
+  }
+};
+
+/**
+ * Check if a cron expression should fire at a given date.
+ * Optional timezone parameter converts to local time before checking.
+ */
+export const shouldFireAt = (
+  cron: CronExpression,
+  date: Date,
+  timezone?: string,
+): boolean => {
+  const dateInfo = timezone
+    ? getDateInTimezone(date, timezone)
+    : {
+        minute: date.getUTCMinutes(),
+        hour: date.getUTCHours(),
+        day: date.getUTCDate(),
+        month: date.getUTCMonth() + 1,
+        dayOfWeek: date.getUTCDay(),
+      };
+
+  return (
+    cron.minutes.includes(dateInfo.minute) &&
+    cron.hours.includes(dateInfo.hour) &&
+    cron.daysOfMonth.includes(dateInfo.day) &&
+    cron.months.includes(dateInfo.month) &&
+    cron.daysOfWeek.includes(dateInfo.dayOfWeek)
+  );
+};

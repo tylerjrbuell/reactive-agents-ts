@@ -532,6 +532,8 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       systemPrompt?: string;
                       taskId?: string;
                       resultCompression?: { budget?: number; previewItems?: number; autoStore?: boolean; codeTransform?: boolean };
+                      agentId?: string;
+                      sessionId?: string;
                     }) => Effect.Effect<{
                       output: unknown;
                       status: string;
