@@ -44,6 +44,22 @@ const baseInput = {
   config: defaultReasoningConfig,
 };
 
+/**
+ * Plan-execute now requires structured JSON output from plan generation.
+ * Build a TestLLMServiceLayer that returns valid JSON for extractStructuredOutput
+ * and text for reflection/synthesis.
+ */
+const planExecuteLLM = TestLLMServiceLayer({
+  "planning agent": JSON.stringify({
+    steps: [
+      { title: "Do the task", instruction: "Complete the task", type: "analysis" },
+    ],
+  }),
+  "OVERALL GOAL": "FINAL ANSWER: test result",
+  "GOAL:": "SATISFIED: Done.",
+  "Synthesize": "Final synthesized answer.",
+});
+
 describe("Strategy threading", () => {
   it("reflexion accepts resultCompression", async () => {
     const result = await Effect.runPromise(
@@ -60,7 +76,7 @@ describe("Strategy threading", () => {
       executePlanExecute({
         ...baseInput,
         resultCompression: { budget: 400, previewItems: 2 },
-      }).pipe(Effect.provide(mockLLM)),
+      }).pipe(Effect.provide(planExecuteLLM)),
     );
     expect(result.status).toBe("completed");
   });
@@ -109,7 +125,7 @@ describe("Strategy threading", () => {
         ...baseInput,
         agentId: "test-agent-123",
         sessionId: "test-session-456",
-      }).pipe(Effect.provide(mockLLM)),
+      }).pipe(Effect.provide(planExecuteLLM)),
     );
     expect(result.status).toBe("completed");
   });
@@ -160,7 +176,7 @@ describe("Strategy threading", () => {
       },
     };
     const result = await Effect.runPromise(
-      executePlanExecute({ ...baseInput, config }).pipe(Effect.provide(mockLLM)),
+      executePlanExecute({ ...baseInput, config }).pipe(Effect.provide(planExecuteLLM)),
     );
     expect(result.status).toBe("completed");
   });
@@ -231,7 +247,7 @@ describe("Kernel pass attribution", () => {
     const result = await Effect.runPromise(
       executePlanExecute({
         ...baseInput,
-      }).pipe(Effect.provide(Layer.merge(mockLLM, ebLayer))),
+      }).pipe(Effect.provide(Layer.merge(planExecuteLLM, ebLayer))),
     );
     expect(result.status).toBe("completed");
 
