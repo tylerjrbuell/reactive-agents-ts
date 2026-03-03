@@ -353,6 +353,14 @@ export const OpenAIProviderLive = Layer.effect(
           provider: "openai" as const,
           model: defaultModel,
         }),
+
+      getStructuredOutputCapabilities: () =>
+        Effect.succeed({
+          nativeJsonMode: true,
+          jsonSchemaEnforcement: true,
+          prefillSupport: false,
+          grammarConstraints: false,
+        }),
     });
   }),
 );

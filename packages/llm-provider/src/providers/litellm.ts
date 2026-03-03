@@ -511,6 +511,14 @@ export const LiteLLMProviderLive = Layer.effect(
           provider: "litellm" as const,
           model: defaultModel,
         }),
+
+      getStructuredOutputCapabilities: () =>
+        Effect.succeed({
+          nativeJsonMode: false,
+          jsonSchemaEnforcement: false,
+          prefillSupport: false,
+          grammarConstraints: false,
+        }),
     });
   }),
 );

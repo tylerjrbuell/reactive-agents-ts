@@ -424,6 +424,14 @@ export const LocalProviderLive = Layer.effect(
           provider: "ollama" as const,
           model: defaultModel,
         }),
+
+      getStructuredOutputCapabilities: () =>
+        Effect.succeed({
+          nativeJsonMode: true,
+          jsonSchemaEnforcement: false,
+          prefillSupport: false,
+          grammarConstraints: true,
+        }),
     });
   }),
 );

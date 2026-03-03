@@ -134,6 +134,14 @@ export const TestLLMService = (
       provider: "anthropic" as const,
       model: "test-model",
     }),
+
+  getStructuredOutputCapabilities: () =>
+    Effect.succeed({
+      nativeJsonMode: true,
+      jsonSchemaEnforcement: false,
+      prefillSupport: false,
+      grammarConstraints: false,
+    }),
 });
 
 /**

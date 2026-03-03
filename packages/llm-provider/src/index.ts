@@ -18,6 +18,7 @@ export type {
   StreamEvent,
   StructuredCompletionRequest,
   TruncationStrategy,
+  StructuredOutputCapabilities,
 } from "./types.js";
 
 // ─── Schemas ───
