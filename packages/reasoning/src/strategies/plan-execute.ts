@@ -12,11 +12,12 @@
  * 4. Retry on failure — retry once with error context; if retry fails, LLM patch via buildPatchPrompt
  * 5. Reflect — call LLM with buildReflectionPrompt. SATISFIED → synthesize. Otherwise refine.
  */
-import { Effect } from "effect";
+import { Effect, Cause, Exit, Option } from "effect";
 import type { ReasoningResult, ReasoningStep } from "../types/index.js";
 import { ExecutionError, IterationLimitError } from "../errors/errors.js";
 import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
+import { PlanStoreService } from "@reactive-agents/memory";
 import {
   LLMPlanOutputSchema,
   hydratePlan,
@@ -73,6 +74,11 @@ export const executePlanExecute = (
     const services = yield* resolveStrategyServices;
     const { llm, toolService, eventBus } = services;
 
+    // Optional PlanStore for persistence (available when memory layer is enabled)
+    const planStoreOpt = yield* Effect.serviceOption(PlanStoreService).pipe(
+      Effect.catchAll(() => Effect.succeed(Option.none<PlanStoreService["Type"]>())),
+    );
+
     const planConfig = input.config.strategies.planExecute;
     const maxRefinements = planConfig.maxRefinements;
     const reflectionDepth = planConfig.reflectionDepth;
@@ -88,18 +94,21 @@ export const executePlanExecute = (
     let refinement = 0;
     let finalOutput: string | null = null;
 
-    // Convert tool schemas to ToolSummary for prompts
+    // Extract plain goal text from taskDescription (may be JSON-wrapped)
+    const goal = extractGoalText(input.taskDescription);
+
+    // Convert tool schemas to ToolSummary for prompts (mark optional params with ?)
     const toolSummaries: ToolSummary[] = (
       input.availableToolSchemas ?? []
     ).map((t) => ({
       name: t.name,
-      signature: `(${t.parameters.map((p) => p.name).join(", ")})`,
+      signature: `(${t.parameters.map((p) => (p.required ? p.name : `${p.name}?`)).join(", ")})`,
     }));
 
     while (refinement <= maxRefinements) {
       // ── PLAN: Generate structured plan via extractStructuredOutput ──
       const planPrompt = buildPlanGenerationPrompt({
-        goal: input.taskDescription,
+        goal,
         tools: toolSummaries,
         pastPatterns: [],
         modelTier: "mid",
@@ -135,9 +144,17 @@ export const executePlanExecute = (
       const plan: Plan = hydratePlan(planResult.data, {
         taskId: input.taskId ?? "plan-execute",
         agentId: input.agentId ?? "reasoning-agent",
-        goal: input.taskDescription,
+        goal,
         planMode,
       });
+
+      // Persist plan to store (if available)
+      // Cast needed: reasoning Plan uses `readonly string[]` for toolHints/dependsOn
+      if (Option.isSome(planStoreOpt)) {
+        yield* planStoreOpt.value
+          .savePlan(plan as unknown as Parameters<typeof planStoreOpt.value.savePlan>[0])
+          .pipe(Effect.catchAll(() => Effect.void));
+      }
 
       steps.push(
         makeStep(
@@ -146,13 +163,20 @@ export const executePlanExecute = (
         ),
       );
 
+      const planDetail = plan.steps
+        .map(
+          (s) =>
+            `  ${s.id}: ${s.title} (${s.type}${s.toolName ? ` → ${s.toolName}` : ""})`,
+        )
+        .join("\n");
+
       yield* publishReasoningStep(eventBus, {
         _tag: "ReasoningStepCompleted",
         taskId: input.taskId ?? "plan-execute",
         strategy: "plan-execute-reflect",
         step: steps.length,
         totalSteps: maxRefinements + 1,
-        thought: `[PLAN ${refinement + 1}] Generated ${plan.steps.length} steps`,
+        thought: `[PLAN ${refinement + 1}] Generated ${plan.steps.length} steps:\n${planDetail}`,
         kernelPass: `plan-execute:plan-${refinement + 1}`,
       });
 
@@ -168,10 +192,10 @@ export const executePlanExecute = (
         let stepResult: string = "";
         let lastError: string | undefined;
 
-        // Retry loop (up to stepRetries attempts)
+        // Retry loop (up to stepRetries attempts) using Effect.exit to catch all errors
         for (let attempt = 0; attempt <= stepRetries; attempt++) {
-          try {
-            const result = yield* executeStep(
+          const exit = yield* Effect.exit(
+            executeStep(
               step,
               i,
               plan,
@@ -181,47 +205,26 @@ export const executePlanExecute = (
               services,
               stepKernelMaxIterations,
               attempt > 0 ? lastError : undefined,
-            );
+            ),
+          );
 
-            stepResult = result.output;
-            totalTokens += result.tokens;
-            totalCost += result.cost;
+          if (Exit.isSuccess(exit)) {
+            stepResult = exit.value.output;
+            totalTokens += exit.value.tokens;
+            totalCost += exit.value.cost;
             stepSucceeded = true;
             break;
-          } catch (e) {
-            lastError = e instanceof Error ? e.message : String(e);
+          } else {
+            // Extract error message from Cause (handles both Fail and Die)
+            const squashed = Cause.squash(exit.cause);
+            lastError =
+              squashed instanceof Error ? squashed.message : String(squashed);
           }
         }
 
-        // If retries failed, try to execute step via effect error handling
+        // Final fallback after all retries exhausted
         if (!stepSucceeded) {
-          const result = yield* executeStep(
-            step,
-            i,
-            plan,
-            completedSteps,
-            input,
-            toolSummaries,
-            services,
-            stepKernelMaxIterations,
-            lastError,
-          ).pipe(
-            Effect.catchAll((err) => {
-              const errorMsg =
-                err instanceof Error ? err.message : String(err);
-              return Effect.succeed({
-                output: `[Step failed: ${errorMsg}]`,
-                tokens: 0,
-                cost: 0,
-                success: false,
-              });
-            }),
-          );
-
-          stepResult = result.output;
-          totalTokens += result.tokens;
-          totalCost += result.cost;
-          stepSucceeded = result.success !== false;
+          stepResult = `[Step failed after ${stepRetries + 1} attempts: ${lastError}]`;
         }
 
         if (stepSucceeded) {
@@ -229,10 +232,26 @@ export const executePlanExecute = (
           step.result = stepResult;
           step.completedAt = new Date().toISOString();
           completedSteps.push(step);
+
+          // Persist step completion
+          if (Option.isSome(planStoreOpt)) {
+            yield* planStoreOpt.value.updateStepStatus(
+              step.id,
+              { status: "completed", result: stepResult },
+            ).pipe(Effect.catchAll(() => Effect.void));
+          }
         } else {
           step.status = "failed";
           step.error = stepResult;
           step.completedAt = new Date().toISOString();
+
+          // Persist step failure
+          if (Option.isSome(planStoreOpt)) {
+            yield* planStoreOpt.value.updateStepStatus(
+              step.id,
+              { status: "failed", error: stepResult },
+            ).pipe(Effect.catchAll(() => Effect.void));
+          }
 
           // Attempt patch if step failed
           const patchResult = yield* patchPlan(
@@ -284,7 +303,7 @@ export const executePlanExecute = (
       }));
 
       const reflectionPrompt = buildReflectionPrompt(
-        input.taskDescription,
+        goal,
         stepResults,
       );
 
@@ -331,7 +350,7 @@ export const executePlanExecute = (
             messages: [
               {
                 role: "user",
-                content: `Task: ${input.taskDescription}\n\nExecution results:\n${synthResultTexts.join("\n")}\n\nSynthesize a clear, complete answer to the original task based on the results above.`,
+                content: `Task: ${goal}\n\nExecution results:\n${synthResultTexts.join("\n")}\n\nSynthesize a clear, complete answer to the original task based on the results above.`,
               },
             ],
             systemPrompt: input.systemPrompt
@@ -460,9 +479,7 @@ function executeStep(
     });
   }
 
-  // For analysis or composite steps, or tool_call without toolService — use ReAct kernel
-
-  // Build prior results for the step execution prompt
+  // Build prior results for analysis/composite step prompts
   const priorResults = completedSteps
     .filter((s) => s.result)
     .map((s) => ({
@@ -479,7 +496,7 @@ function executeStep(
 
   // Build the step execution prompt
   const stepPrompt = buildStepExecutionPrompt({
-    goal: input.taskDescription,
+    goal: extractGoalText(input.taskDescription),
     step,
     stepIndex,
     totalSteps: plan.steps.length,
@@ -492,9 +509,39 @@ function executeStep(
     ? `${stepPrompt}\n\nPREVIOUS ATTEMPT FAILED: ${retryErrorContext}\nPlease try a different approach.`
     : stepPrompt;
 
-  // For analysis: no tools. For composite: scoped tools only.
+  // Analysis steps: single LLM call — no tool loop needed
+  if (step.type === "analysis") {
+    return services.llm
+      .complete({
+        messages: [{ role: "user", content: taskText }],
+        systemPrompt:
+          input.systemPrompt ??
+          "You are a precise task executor. Complete the given step. Respond directly with your answer.",
+        maxTokens: 1000,
+        temperature: 0.5,
+      })
+      .pipe(
+        Effect.map((response) => ({
+          output: stripFinalAnswerPrefix(response.content),
+          tokens: response.usage.totalTokens,
+          cost: response.usage.estimatedCost,
+          success: true,
+        })),
+        Effect.mapError(
+          (err) =>
+            new ExecutionError({
+              strategy: "plan-execute-reflect",
+              message: `Analysis step ${stepIndex + 1} failed`,
+              step: stepIndex,
+              cause: err,
+            }),
+        ),
+      );
+  }
+
+  // Composite steps: ReAct kernel with scoped tools
   const kernelToolSchemas =
-    step.type === "composite" && step.toolHints
+    step.toolHints
       ? (input.availableToolSchemas ?? []).filter((t) =>
           step.toolHints!.includes(t.name),
         )
@@ -516,7 +563,7 @@ function executeStep(
     sessionId: input.sessionId,
   }).pipe(
     Effect.map((kernelResult) => ({
-      output: kernelResult.output || `[Step ${stepIndex + 1} completed]`,
+      output: stripFinalAnswerPrefix(kernelResult.output || `[Step ${stepIndex + 1} completed]`),
       tokens: kernelResult.totalTokens,
       cost: kernelResult.totalCost,
       success: true,
@@ -548,7 +595,7 @@ function patchPlan(
   Error,
   LLMService
 > {
-  const patchPrompt = buildPatchPrompt(input.taskDescription, plan.steps);
+  const patchPrompt = buildPatchPrompt(extractGoalText(input.taskDescription), plan.steps);
 
   return extractStructuredOutput({
     schema: LLMPlanOutputSchema,
@@ -579,4 +626,31 @@ function patchPlan(
     }),
     Effect.catchAll(() => Effect.succeed(null)),
   );
+}
+
+// ─── Utility Helpers ───
+
+/**
+ * Extract plain goal text from taskDescription which may be JSON-wrapped.
+ * The execution engine passes `JSON.stringify(task.input)` which produces
+ * `{"question":"actual goal text"}` — unwrap that to get the clean string.
+ */
+function extractGoalText(taskDescription: string): string {
+  try {
+    const parsed = JSON.parse(taskDescription);
+    if (typeof parsed === "object" && parsed !== null && typeof parsed.question === "string") {
+      return parsed.question;
+    }
+  } catch {
+    // Not JSON — use as-is
+  }
+  return taskDescription;
+}
+
+/**
+ * Strip "FINAL ANSWER:" prefix from LLM output so it doesn't leak into
+ * tool arguments or user-visible messages.
+ */
+function stripFinalAnswerPrefix(text: string): string {
+  return text.replace(/^FINAL ANSWER:\s*/i, "").trim();
 }

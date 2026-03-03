@@ -51,7 +51,7 @@ const PLAN_STEP_SCHEMA = `{
   "instruction": "string — what the LLM or tool should do",
   "type": "tool_call" | "analysis" | "composite",
   "toolName": "string (optional) — tool to call if type is tool_call",
-  "toolArgs": "object (optional) — arguments for the tool",
+  "toolArgs": "object (optional) — ALL required arguments for the tool. Use {{from_step:sN}} to inject the result of a previous step as a string value",
   "toolHints": ["string"] (optional) — tool names available for composite steps",
   "dependsOn": ["string"] (optional) — step IDs that must complete first"
 }`;
@@ -70,6 +70,14 @@ const PLAN_STEP_EXAMPLE = `{
       "instruction": "Analyze the commits and write a brief summary",
       "type": "analysis",
       "dependsOn": ["s1"]
+    },
+    {
+      "title": "Send summary to user",
+      "instruction": "Send the commit summary via messaging",
+      "type": "tool_call",
+      "toolName": "messaging/send",
+      "toolArgs": { "recipient": "user@example.com", "message": "{{from_step:s2}}" },
+      "dependsOn": ["s2"]
     }
   ]
 }`;
@@ -88,7 +96,13 @@ export function buildPlanGenerationPrompt(input: PlanGenerationInput): string {
 
   // Section 1: Role & Goal
   sections.push(
-    `You are a planning agent. Your job is to decompose a goal into an ordered sequence of steps.\n\n` +
+    `You are a planning agent. Decompose the goal into the MINIMUM number of steps needed.\n\n` +
+    `PLANNING RULES:\n` +
+    `- Use the FEWEST steps possible. Combine related work into one step.\n` +
+    `- Prefer "tool_call" steps — they execute instantly without LLM overhead.\n` +
+    `- Use at most ONE "analysis" step to do all reasoning/writing/composition work.\n` +
+    `- Use {{from_step:sN}} in toolArgs to pass previous step results to tool calls.\n` +
+    `- Never split summarizing, formatting, and composing into separate steps — combine them.\n\n` +
     `GOAL:\n${input.goal}`,
   );
 
@@ -115,9 +129,13 @@ export function buildPlanGenerationPrompt(input: PlanGenerationInput): string {
 
   let schemaSection = `OUTPUT FORMAT:\nRespond with a JSON object containing a "steps" array. Each step has this schema:\n${PLAN_STEP_SCHEMA}\n\n`;
   schemaSection += `Step types:\n`;
-  schemaSection += `- "tool_call": calls a specific tool (set toolName and toolArgs)\n`;
+  schemaSection += `- "tool_call": calls a specific tool (set toolName and toolArgs with ALL required params)\n`;
   schemaSection += `- "analysis": LLM reasoning/writing (no tool needed)\n`;
   schemaSection += `- "composite": multi-tool sub-task (set toolHints for available tools)\n`;
+  schemaSection += `\nIMPORTANT for tool_call steps:\n`;
+  schemaSection += `- Include ALL required parameters in toolArgs\n`;
+  schemaSection += `- To use output from a previous step as an argument value, use {{from_step:sN}} where N is the step number\n`;
+  schemaSection += `- Example: {"message": "{{from_step:s2}}"} passes step s2's result as the "message" argument\n`;
 
   if (isSmallModel) {
     schemaSection += `\nEXAMPLE:\n${PLAN_STEP_EXAMPLE}\n`;
@@ -204,7 +222,7 @@ export function buildStepExecutionPrompt(input: StepExecutionInput): string {
     sections.push(`AVAILABLE TOOLS FOR THIS STEP:\n${toolLines}`);
   }
 
-  sections.push(`Produce your answer. Write FINAL ANSWER: <your answer> when done.`);
+  sections.push(`Produce your answer directly. Do not prefix it with "FINAL ANSWER:" or any other label.`);
 
   return sections.join("\n\n");
 }
