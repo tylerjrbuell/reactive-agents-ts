@@ -331,6 +331,13 @@ declare module 'astro:content' {
   collection: "docs";
   data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
+"guides/messaging-channels.md": {
+	id: "guides/messaging-channels.md";
+  slug: "guides/messaging-channels";
+  body: string;
+  collection: "docs";
+  data: InferEntrySchema<"docs">
+} & { render(): Render[".md"] };
 "guides/quickstart.md": {
 	id: "guides/quickstart.md";
   slug: "guides/quickstart";

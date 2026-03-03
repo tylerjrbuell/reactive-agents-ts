@@ -3,7 +3,7 @@ title: Messaging Channels
 description: Connect agents to Signal and Telegram using MCP servers in Docker containers.
 ---
 
-Reactive Agents can send and receive messages on **Signal** and **Telegram** using existing MCP servers. No custom adapter code needed — the framework's built-in `.withMCP()` and `.withGateway()` capabilities handle everything.
+Reactive Agents can send and receive messages on **Signal** and **Telegram** using MCP servers. No custom adapter code needed — the framework's built-in `.withMCP()` and `.withGateway()` capabilities handle everything.
 
 ## How It Works
 
@@ -14,7 +14,7 @@ Gateway heartbeat fires every N seconds
   → Responds via send_message MCP tool
 ```
 
-MCP servers for Signal ([rymurr/signal-mcp](https://github.com/rymurr/signal-mcp)) and Telegram ([chigwell/telegram-mcp](https://github.com/chigwell/telegram-mcp)) run in **hardened Docker containers**. The gateway heartbeat polls for messages; the agent uses MCP tools to read and respond.
+The Signal MCP server is a custom TypeScript implementation (`docker/signal-mcp/server/`) that spawns signal-cli in persistent `jsonRpc` mode — a single JVM boot with instant command execution (no cold starts per message). The Telegram MCP server uses [chigwell/telegram-mcp](https://github.com/chigwell/telegram-mcp). Both run in **hardened Docker containers**. The gateway heartbeat polls for messages; the agent uses MCP tools to read and respond.
 
 ## Signal Setup
 
@@ -56,14 +56,11 @@ const agent = await ReactiveAgents.create()
     args: [
       "run", "-i", "--rm",
       "--cap-drop", "ALL",
-      "--no-new-privileges",
-      "--memory", "128m",
-      "--user", "1000:1000",
+      "--security-opt", "no-new-privileges",
+      "--memory", "512m",
       "-v", "./signal-data:/data:rw",
       "-e", `SIGNAL_USER_ID=${process.env.SIGNAL_PHONE_NUMBER}`,
       "signal-mcp:local",
-      "--user-id", process.env.SIGNAL_PHONE_NUMBER!,
-      "--transport", "stdio",
     ],
   }])
   .withGateway({
@@ -84,6 +81,7 @@ const agent = await ReactiveAgents.create()
 | `signal/send_message_to_user` | Send a direct message to a Signal user |
 | `signal/send_message_to_group` | Send a message to a Signal group |
 | `signal/receive_message` | Receive pending messages (with timeout) |
+| `signal/list_groups` | List all Signal groups the account belongs to |
 
 ## Telegram Setup
 
@@ -160,7 +158,7 @@ All Docker flags in the examples enforce strict isolation:
 |------|---------|
 | `--cap-drop ALL` | Remove all Linux capabilities |
 | `--no-new-privileges` | Prevent privilege escalation |
-| `--memory 128m` | Hard memory limit |
+| `--memory 512m` | Hard memory limit (Signal needs 512m for JVM) |
 | `--pids-limit 30` | Prevent fork bombs |
 | `--user 1000:1000` | Run as non-root |
 | `--read-only` | Immutable root filesystem |
