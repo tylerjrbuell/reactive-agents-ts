@@ -188,12 +188,37 @@ export const executePlanExecute = (
         step.status = "in_progress";
         step.startedAt = new Date().toISOString();
 
+        // Publish step start
+        const stepLabel = `${step.id}: ${step.title} (${step.type}${step.toolName ? ` → ${step.toolName}` : ""})`;
+        yield* publishReasoningStep(eventBus, {
+          _tag: "ReasoningStepCompleted",
+          taskId: input.taskId ?? "plan-execute",
+          strategy: "plan-execute-reflect",
+          step: steps.length,
+          totalSteps: plan.steps.length,
+          action: `[STEP ${i + 1}/${plan.steps.length}] ${stepLabel}`,
+          kernelPass: `plan-execute:step-${i + 1}:start`,
+        });
+
         let stepSucceeded = false;
         let stepResult: string = "";
         let lastError: string | undefined;
 
         // Retry loop (up to stepRetries attempts) using Effect.exit to catch all errors
         for (let attempt = 0; attempt <= stepRetries; attempt++) {
+          if (attempt > 0) {
+            // Publish retry attempt
+            yield* publishReasoningStep(eventBus, {
+              _tag: "ReasoningStepCompleted",
+              taskId: input.taskId ?? "plan-execute",
+              strategy: "plan-execute-reflect",
+              step: steps.length,
+              totalSteps: plan.steps.length,
+              thought: `[RETRY ${step.id} attempt ${attempt + 1}/${stepRetries + 1}] Previous error: ${lastError}`,
+              kernelPass: `plan-execute:step-${i + 1}:retry-${attempt}`,
+            });
+          }
+
           const exit = yield* Effect.exit(
             executeStep(
               step,
@@ -245,6 +270,17 @@ export const executePlanExecute = (
           step.error = stepResult;
           step.completedAt = new Date().toISOString();
 
+          // Publish failure event
+          yield* publishReasoningStep(eventBus, {
+            _tag: "ReasoningStepCompleted",
+            taskId: input.taskId ?? "plan-execute",
+            strategy: "plan-execute-reflect",
+            step: steps.length,
+            totalSteps: plan.steps.length,
+            observation: `[FAILED ${step.id}] ${lastError}`,
+            kernelPass: `plan-execute:step-${i + 1}:failed`,
+          });
+
           // Persist step failure
           if (Option.isSome(planStoreOpt)) {
             yield* planStoreOpt.value.updateStepStatus(
@@ -271,6 +307,18 @@ export const executePlanExecute = (
               plan.steps.length - i - 1,
               ...patchedSteps,
             );
+
+            // Publish patch event
+            const patchDetail = patchedSteps.map((s) => `${s.id}: ${s.title}`).join(", ");
+            yield* publishReasoningStep(eventBus, {
+              _tag: "ReasoningStepCompleted",
+              taskId: input.taskId ?? "plan-execute",
+              strategy: "plan-execute-reflect",
+              step: steps.length,
+              totalSteps: plan.steps.length,
+              thought: `[PATCH] Replaced remaining steps: ${patchDetail}`,
+              kernelPass: `plan-execute:step-${i + 1}:patch`,
+            });
           }
 
           completedSteps.push(step);
@@ -278,8 +326,8 @@ export const executePlanExecute = (
 
         steps.push(
           makeStep(
-            "observation",
-            `[EXEC ${i + 1}] ${stepResult}`,
+            stepSucceeded ? "observation" : "thought",
+            `[EXEC ${step.id}] ${stepSucceeded ? "✓" : "✗"} ${stepResult}`,
           ),
         );
 
@@ -288,9 +336,9 @@ export const executePlanExecute = (
           taskId: input.taskId ?? "plan-execute",
           strategy: "plan-execute-reflect",
           step: steps.length,
-          totalSteps: maxRefinements + 1,
-          observation: `[EXEC ${i + 1}] ${stepResult}`,
-          kernelPass: `plan-execute:step-${i + 1}`,
+          totalSteps: plan.steps.length,
+          observation: `[EXEC ${step.id}] ${stepSucceeded ? "✓" : "✗"} ${stepResult}`,
+          kernelPass: `plan-execute:step-${i + 1}:done`,
         });
       }
 
@@ -331,15 +379,27 @@ export const executePlanExecute = (
       totalTokens += reflectResponse.usage.totalTokens;
       totalCost += reflectResponse.usage.estimatedCost;
 
+      const satisfied = isSatisfied(reflectResponse.content);
+
       steps.push(
         makeStep(
           "observation",
-          `[REFLECT ${refinement + 1}] ${reflectResponse.content}`,
+          `[REFLECT ${refinement + 1}] ${satisfied ? "SATISFIED" : "UNSATISFIED"} — ${reflectResponse.content}`,
         ),
       );
 
+      yield* publishReasoningStep(eventBus, {
+        _tag: "ReasoningStepCompleted",
+        taskId: input.taskId ?? "plan-execute",
+        strategy: "plan-execute-reflect",
+        step: steps.length,
+        totalSteps: maxRefinements + 1,
+        thought: `[REFLECT ${refinement + 1}] ${satisfied ? "✓ SATISFIED" : "✗ UNSATISFIED — refining..."} ${reflectResponse.content}`,
+        kernelPass: `plan-execute:reflect-${refinement + 1}`,
+      });
+
       // Check if reflection is satisfied
-      if (isSatisfied(reflectResponse.content)) {
+      if (satisfied) {
         // ── SYNTHESIZE: Produce a clean final answer from step results ──
         const synthResultTexts = plan.steps
           .filter((s) => s.result)
