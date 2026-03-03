@@ -62,6 +62,8 @@ export interface ReActKernelInput {
   taskId?: string;
   /** Name of the calling strategy (for event tagging) */
   parentStrategy?: string;
+  /** Descriptive label for this kernel invocation (e.g. "reflexion:generate", "plan-execute:step-3") */
+  kernelPass?: string;
   /** Agent ID for tool execution attribution. Falls back to "reasoning-agent". */
   agentId?: string;
   /** Session ID for tool execution attribution. Falls back to "reasoning-session". */
@@ -195,6 +197,7 @@ Think step-by-step, then either take ONE action or give your FINAL ANSWER:`;
         step: steps.length,
         totalSteps: maxIter,
         thought,
+        kernelPass: input.kernelPass,
       });
 
       // ── ACTION SELECTION ────────────────────────────────────────────────────
@@ -227,6 +230,7 @@ Think step-by-step, then either take ONE action or give your FINAL ANSWER:`;
           answer: finalAnswer,
           iteration,
           totalTokens: totalCost,
+          kernelPass: input.kernelPass,
         });
         return {
           output: finalAnswer,
@@ -291,6 +295,7 @@ Think step-by-step, then either take ONE action or give your FINAL ANSWER:`;
           step: steps.length,
           totalSteps: maxIter,
           action: currentActionJson,
+          kernelPass: input.kernelPass,
         });
 
         let observationContent: string;
@@ -345,6 +350,7 @@ Think step-by-step, then either take ONE action or give your FINAL ANSWER:`;
             callId: lastStep?.id ?? "unknown",
             durationMs: toolDurationMs,
             success: obsResult.success,
+            kernelPass: input.kernelPass,
           });
         }
 
@@ -363,6 +369,7 @@ Think step-by-step, then either take ONE action or give your FINAL ANSWER:`;
           step: steps.length,
           totalSteps: maxIter,
           observation: observationContent,
+          kernelPass: input.kernelPass,
         });
 
         // If the thought also contained a FINAL ANSWER after the action, return now
@@ -376,6 +383,7 @@ Think step-by-step, then either take ONE action or give your FINAL ANSWER:`;
             answer: finalAnswer,
             iteration,
             totalTokens: totalCost,
+            kernelPass: input.kernelPass,
           });
           return {
             output: finalAnswer,

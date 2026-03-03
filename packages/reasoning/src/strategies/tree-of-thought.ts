@@ -201,6 +201,7 @@ export const executeTreeOfThought = (
             step: steps.length,
             totalSteps: depth * breadth,
             thought: `[TOT d=${d}] score=${score.toFixed(2)}: ${candidate.substring(0, 100)}...`,
+            kernelPass: "tree-of-thought:explore",
           });
 
           // Prune: only keep nodes above threshold
@@ -286,6 +287,7 @@ export const executeTreeOfThought = (
       temperature: 0.7,
       taskId: input.taskId,
       parentStrategy: "tree-of-thought",
+      kernelPass: "tree-of-thought:execute",
       resultCompression: input.resultCompression,
       agentId: input.agentId,
       sessionId: input.sessionId,

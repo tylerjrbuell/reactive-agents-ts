@@ -167,6 +167,7 @@ export const executeReactive = (
           step: steps.length,
           totalSteps: maxIter,
           thought,
+          kernelPass: "reactive:main",
         }).pipe(Effect.catchAll(() => Effect.void));
       }
 
@@ -208,6 +209,7 @@ export const executeReactive = (
             answer: finalAnswer,
             iteration,
             totalTokens: totalCost,
+            kernelPass: "reactive:main",
           }).pipe(Effect.catchAll(() => Effect.void));
         }
         return buildResult(
@@ -264,6 +266,7 @@ export const executeReactive = (
             step: steps.length,
             totalSteps: maxIter,
             action: currentActionJson,
+            kernelPass: "reactive:main",
           }).pipe(Effect.catchAll(() => Effect.void));
         }
 
@@ -319,6 +322,7 @@ export const executeReactive = (
               callId: lastStep?.id ?? "unknown",
               durationMs: toolDurationMs,
               success: obsResult.success,
+              kernelPass: "reactive:main",
             }).pipe(Effect.catchAll(() => Effect.void));
           }
         }
@@ -334,6 +338,7 @@ export const executeReactive = (
             step: steps.length,
             totalSteps: maxIter,
             observation: observationContent,
+            kernelPass: "reactive:main",
           }).pipe(Effect.catchAll(() => Effect.void));
         }
 
@@ -350,6 +355,7 @@ export const executeReactive = (
               answer: finalAnswer,
               iteration,
               totalTokens: totalCost,
+              kernelPass: "reactive:main",
             }).pipe(Effect.catchAll(() => Effect.void));
           }
           return buildResult(steps, finalAnswer, "completed", start, totalTokens, totalCost);

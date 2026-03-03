@@ -97,6 +97,7 @@ export const executeReflexion = (
       temperature: 0.7,
       taskId: input.taskId,
       parentStrategy: "reflexion",
+      kernelPass: "reflexion:generate",
       resultCompression: input.resultCompression,
       agentId: input.agentId,
       sessionId: input.sessionId,
@@ -125,6 +126,7 @@ export const executeReflexion = (
       step: steps.length,
       totalSteps: maxRetries + 1,
       thought: `[ATTEMPT 1] ${currentResponse}`,
+      kernelPass: "reflexion:generate",
     });
 
     // ── LOOP: Reflect → Improve ──
@@ -185,6 +187,7 @@ export const executeReflexion = (
         step: steps.length,
         totalSteps: maxRetries + 1,
         observation: `[CRITIQUE ${attempt}] ${critique}`,
+        kernelPass: `reflexion:critique-${attempt}`,
       });
 
       // ── Stagnation check: exit early if critique isn't changing ──
@@ -210,6 +213,7 @@ export const executeReflexion = (
           answer: currentResponse,
           iteration: attempt,
           totalTokens,
+          kernelPass: `reflexion:improve-${attempt}`,
         });
         return buildStrategyResult({
           strategy: "reflexion",
@@ -248,6 +252,7 @@ export const executeReflexion = (
         temperature: 0.6,
         taskId: input.taskId,
         parentStrategy: "reflexion",
+        kernelPass: `reflexion:improve-${attempt}`,
         resultCompression: input.resultCompression,
         agentId: input.agentId,
         sessionId: input.sessionId,
@@ -276,6 +281,7 @@ export const executeReflexion = (
         step: steps.length,
         totalSteps: maxRetries + 1,
         thought: `[ATTEMPT ${attempt + 1}] ${currentResponse}`,
+        kernelPass: `reflexion:improve-${attempt}`,
       });
     }
 

@@ -1,10 +1,13 @@
 import { describe, it, expect } from "bun:test";
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Ref } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
+import { EventBus } from "@reactive-agents/core";
+import type { AgentEvent } from "@reactive-agents/core";
 import { executeReflexion } from "../../src/strategies/reflexion.js";
 import { executePlanExecute } from "../../src/strategies/plan-execute.js";
 import { executeTreeOfThought } from "../../src/strategies/tree-of-thought.js";
+import { executeReactive } from "../../src/strategies/reactive.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
 
 const mockLLM = Layer.succeed(LLMService, {
@@ -160,5 +163,163 @@ describe("Strategy threading", () => {
       executePlanExecute({ ...baseInput, config }).pipe(Effect.provide(mockLLM)),
     );
     expect(result.status).toBe("completed");
+  });
+});
+
+// ── Helper: create a capturing EventBus layer ──────────────────────────────
+
+function makeCapturingEventBus() {
+  const captured: AgentEvent[] = [];
+  const layer = Layer.effect(
+    EventBus,
+    Effect.gen(function* () {
+      const handlers = yield* Ref.make<((e: AgentEvent) => Effect.Effect<void, never>)[]>([]);
+      return {
+        publish: (event: AgentEvent) =>
+          Effect.gen(function* () {
+            captured.push(event);
+            const hs = yield* Ref.get(handlers);
+            yield* Effect.all(hs.map((h) => h(event)), { concurrency: "unbounded" });
+          }),
+        subscribe: (handler: (e: AgentEvent) => Effect.Effect<void, never>) =>
+          Effect.gen(function* () {
+            yield* Ref.update(handlers, (hs) => [...hs, handler]);
+            return () => {
+              Effect.runSync(Ref.update(handlers, (hs) => hs.filter((h) => h !== handler)));
+            };
+          }),
+        on: (_tag: string, handler: (e: AgentEvent) => Effect.Effect<void, never>) =>
+          Effect.gen(function* () {
+            const filtered = (event: AgentEvent) =>
+              event._tag === _tag ? handler(event as any) : Effect.void;
+            yield* Ref.update(handlers, (hs) => [...hs, filtered]);
+            return () => {
+              Effect.runSync(Ref.update(handlers, (hs) => hs.filter((h) => h !== filtered)));
+            };
+          }),
+      };
+    }),
+  );
+  return { captured, layer };
+}
+
+describe("Kernel pass attribution", () => {
+  it("reflexion events carry kernelPass labels", async () => {
+    const { captured, layer: ebLayer } = makeCapturingEventBus();
+    const result = await Effect.runPromise(
+      executeReflexion({
+        ...baseInput,
+      }).pipe(Effect.provide(Layer.merge(reflexionLLM, ebLayer))),
+    );
+    expect(result.status).toBe("completed");
+
+    // Should have ReasoningStepCompleted events with kernelPass set
+    const reasoningEvents = captured.filter(
+      (e) => e._tag === "ReasoningStepCompleted",
+    ) as Extract<AgentEvent, { _tag: "ReasoningStepCompleted" }>[];
+    expect(reasoningEvents.length).toBeGreaterThan(0);
+
+    // First generation event should carry "reflexion:generate"
+    const genEvents = reasoningEvents.filter(
+      (e) => (e as any).kernelPass === "reflexion:generate",
+    );
+    expect(genEvents.length).toBeGreaterThan(0);
+  });
+
+  it("plan-execute events carry kernelPass labels for each step", async () => {
+    const { captured, layer: ebLayer } = makeCapturingEventBus();
+    const result = await Effect.runPromise(
+      executePlanExecute({
+        ...baseInput,
+      }).pipe(Effect.provide(Layer.merge(mockLLM, ebLayer))),
+    );
+    expect(result.status).toBe("completed");
+
+    const reasoningEvents = captured.filter(
+      (e) => e._tag === "ReasoningStepCompleted",
+    ) as Extract<AgentEvent, { _tag: "ReasoningStepCompleted" }>[];
+    expect(reasoningEvents.length).toBeGreaterThan(0);
+
+    // Should have plan-execute:plan-1 for the planning phase
+    const planEvents = reasoningEvents.filter(
+      (e) => (e as any).kernelPass === "plan-execute:plan-1",
+    );
+    expect(planEvents.length).toBeGreaterThan(0);
+
+    // Should have plan-execute:step-1 for step execution
+    const stepEvents = reasoningEvents.filter(
+      (e) => (e as any).kernelPass?.startsWith("plan-execute:step-"),
+    );
+    expect(stepEvents.length).toBeGreaterThan(0);
+  });
+
+  it("tree-of-thought events carry kernelPass labels for explore and execute", async () => {
+    const { captured, layer: ebLayer } = makeCapturingEventBus();
+    const result = await Effect.runPromise(
+      executeTreeOfThought({
+        ...baseInput,
+      }).pipe(Effect.provide(Layer.merge(mockLLM, ebLayer))),
+    );
+    expect(result.status).toBe("completed");
+
+    const reasoningEvents = captured.filter(
+      (e) => e._tag === "ReasoningStepCompleted",
+    ) as Extract<AgentEvent, { _tag: "ReasoningStepCompleted" }>[];
+    expect(reasoningEvents.length).toBeGreaterThan(0);
+
+    // Should have explore-phase events
+    const exploreEvents = reasoningEvents.filter(
+      (e) => (e as any).kernelPass === "tree-of-thought:explore",
+    );
+    expect(exploreEvents.length).toBeGreaterThan(0);
+  });
+
+  it("reactive events carry kernelPass: reactive:main", async () => {
+    const { captured, layer: ebLayer } = makeCapturingEventBus();
+
+    // Use a mock LLM that returns a final answer on first call
+    const reactiveLLM = Layer.succeed(LLMService, {
+      complete: () =>
+        Effect.succeed({
+          content: "FINAL ANSWER: hello world",
+          usage: { totalTokens: 10, estimatedCost: 0 },
+          model: "test",
+        }),
+      stream: () =>
+        Effect.succeed({
+          content: "FINAL ANSWER: hello world",
+          usage: { totalTokens: 10, estimatedCost: 0 },
+          model: "test",
+        }),
+      embed: () => Effect.succeed([]),
+      getModelInfo: () =>
+        Effect.succeed({ contextWindow: 8000, id: "test", provider: "test" }),
+    } as any);
+
+    const result = await Effect.runPromise(
+      executeReactive({
+        ...baseInput,
+      }).pipe(Effect.provide(Layer.merge(reactiveLLM, ebLayer))),
+    );
+    expect(result.status).toBe("completed");
+
+    const reasoningEvents = captured.filter(
+      (e) => e._tag === "ReasoningStepCompleted",
+    ) as Extract<AgentEvent, { _tag: "ReasoningStepCompleted" }>[];
+    expect(reasoningEvents.length).toBeGreaterThan(0);
+
+    // All events should carry "reactive:main"
+    for (const event of reasoningEvents) {
+      expect((event as any).kernelPass).toBe("reactive:main");
+    }
+
+    // FinalAnswerProduced should also carry kernelPass
+    const finalEvents = captured.filter(
+      (e) => e._tag === "FinalAnswerProduced",
+    ) as Extract<AgentEvent, { _tag: "FinalAnswerProduced" }>[];
+    expect(finalEvents.length).toBeGreaterThan(0);
+    for (const event of finalEvents) {
+      expect((event as any).kernelPass).toBe("reactive:main");
+    }
   });
 });
