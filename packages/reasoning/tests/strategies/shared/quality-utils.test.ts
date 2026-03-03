@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { isSatisfied, isCritiqueStagnant, parseScore } from "../../../src/strategies/shared/quality-utils.js";
+import { isSatisfied, isCritiqueStagnant, parseScore, sanitizeAgentOutput } from "../../../src/strategies/shared/quality-utils.js";
 
 describe("isSatisfied", () => {
   it("returns true for SATISFIED: prefix", () => {
@@ -87,5 +87,91 @@ describe("parseScore", () => {
 
   it("returns 0.5 for empty string", () => {
     expect(parseScore("")).toBe(0.5);
+  });
+});
+
+describe("sanitizeAgentOutput", () => {
+  it("strips FINAL ANSWER: prefix", () => {
+    expect(sanitizeAgentOutput("FINAL ANSWER: The result is 42.")).toBe("The result is 42.");
+  });
+
+  it("strips FINAL ANSWER: case-insensitively", () => {
+    expect(sanitizeAgentOutput("Final Answer: Hello world")).toBe("Hello world");
+  });
+
+  it("strips <think>...</think> tags", () => {
+    expect(sanitizeAgentOutput("<think>internal reasoning</think>\nThe answer is 42.")).toBe("The answer is 42.");
+  });
+
+  it("strips internal step markers", () => {
+    expect(sanitizeAgentOutput("[STEP 1/3] Fetched data\n[EXEC s1] Done")).toBe("Fetched data\nDone");
+  });
+
+  it("strips [SYNTHESIS] marker", () => {
+    expect(sanitizeAgentOutput("[SYNTHESIS] Here is your briefing.")).toBe("Here is your briefing.");
+  });
+
+  it("strips [REFLECT N] marker", () => {
+    expect(sanitizeAgentOutput("[REFLECT 1] All steps completed.")).toBe("All steps completed.");
+  });
+
+  it("strips ReAct protocol prefixes", () => {
+    const input = "Thought: I need to search\nAction: web_search\nAction Input: query\nThe final result.";
+    const result = sanitizeAgentOutput(input);
+    expect(result).not.toContain("Thought:");
+    expect(result).not.toContain("Action:");
+    expect(result).not.toContain("Action Input:");
+    expect(result).toContain("The final result.");
+  });
+
+  it("strips tool call echo lines (tool/name: {json})", () => {
+    const input = 'signal/send_message_to_user: {"recipient": "+1234", "message": "hi"}\nMessage sent.';
+    expect(sanitizeAgentOutput(input)).toBe("Message sent.");
+  });
+
+  it("strips raw JSON with internal keys", () => {
+    const input = '{"recipient": "+1234", "toolName": "signal/send"}\nDone.';
+    expect(sanitizeAgentOutput(input)).toBe("Done.");
+  });
+
+  it("collapses multiple blank lines", () => {
+    expect(sanitizeAgentOutput("Hello\n\n\n\n\nWorld")).toBe("Hello\n\nWorld");
+  });
+
+  it("preserves clean user-facing content unchanged", () => {
+    const clean = "Here is your daily briefing:\n\n- PR #42 merged\n- 3 new issues opened";
+    expect(sanitizeAgentOutput(clean)).toBe(clean);
+  });
+
+  it("handles empty string", () => {
+    expect(sanitizeAgentOutput("")).toBe("");
+  });
+
+  it("handles non-string input gracefully", () => {
+    // Type coercion edge case — function should handle undefined/null
+    expect(sanitizeAgentOutput(null as any)).toBe(null);
+    expect(sanitizeAgentOutput(undefined as any)).toBe(undefined);
+  });
+
+  it("strips combined internal artifacts in real-world output", () => {
+    const messy = [
+      "FINAL ANSWER:",
+      "<think>Let me think about this</think>",
+      "[SYNTHESIS] Here is your briefing:",
+      "",
+      "signal/send_message_to_user: {\"recipient\": \"+12693310593\", \"message\": \"test\"}",
+      "",
+      "- 3 commits merged yesterday",
+      "- Build is green",
+    ].join("\n");
+    const result = sanitizeAgentOutput(messy);
+    expect(result).not.toContain("FINAL ANSWER");
+    expect(result).not.toContain("<think>");
+    expect(result).not.toContain("[SYNTHESIS]");
+    expect(result).not.toContain("signal/send_message_to_user");
+    expect(result).not.toContain("recipient");
+    expect(result).toContain("Here is your briefing:");
+    expect(result).toContain("- 3 commits merged yesterday");
+    expect(result).toContain("- Build is green");
   });
 });

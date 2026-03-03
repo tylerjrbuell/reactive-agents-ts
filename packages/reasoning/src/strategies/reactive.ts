@@ -21,6 +21,7 @@ export type { CompressResult } from "./shared/tool-utils.js";
 import { buildCompactedContext } from "./shared/context-utils.js";
 import { compilePromptOrFallback, resolveStrategyServices } from "./shared/service-utils.js";
 import { makeStep } from "./shared/step-utils.js";
+import { sanitizeAgentOutput } from "./shared/quality-utils.js";
 
 // Re-export shared utilities for backwards compatibility
 export { evaluateTransform, compressToolResult } from "./shared/tool-utils.js";
@@ -870,10 +871,14 @@ function buildResult(
   tokensUsed: number,
   cost: number,
 ): ReasoningResult {
+  // Sanitize output to strip internal agent metadata before it reaches the user
+  const sanitizedOutput =
+    typeof output === "string" ? sanitizeAgentOutput(output) : output;
+
   return {
     strategy: "reactive",
     steps: [...steps],
-    output,
+    output: sanitizedOutput,
     metadata: {
       duration: Date.now() - startMs,
       cost,
