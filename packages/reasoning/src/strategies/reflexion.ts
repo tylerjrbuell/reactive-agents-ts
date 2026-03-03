@@ -41,6 +41,10 @@ interface ReflexionInput {
   readonly taskId?: string;
   /** Tool result compression config */
   readonly resultCompression?: ResultCompressionConfig;
+  /** Agent ID for tool execution attribution. Falls back to "reasoning-agent". */
+  readonly agentId?: string;
+  /** Session ID for tool execution attribution. Falls back to "reasoning-session". */
+  readonly sessionId?: string;
 }
 
 /**
@@ -90,6 +94,8 @@ export const executeReflexion = (
       taskId: input.taskId,
       parentStrategy: "reflexion",
       resultCompression: input.resultCompression,
+      agentId: input.agentId,
+      sessionId: input.sessionId,
     }).pipe(
       Effect.mapError(
         (err) =>
@@ -238,6 +244,8 @@ export const executeReflexion = (
         taskId: input.taskId,
         parentStrategy: "reflexion",
         resultCompression: input.resultCompression,
+        agentId: input.agentId,
+        sessionId: input.sessionId,
       }).pipe(
         Effect.mapError(
           (err) =>

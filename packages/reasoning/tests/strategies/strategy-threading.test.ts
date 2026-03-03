@@ -89,6 +89,39 @@ describe("Strategy threading", () => {
     expect(result.status).toBe("completed");
   });
 
+  it("reflexion accepts agentId and sessionId", async () => {
+    const result = await Effect.runPromise(
+      executeReflexion({
+        ...baseInput,
+        agentId: "test-agent-123",
+        sessionId: "test-session-456",
+      }).pipe(Effect.provide(reflexionLLM)),
+    );
+    expect(result.status).toBe("completed");
+  });
+
+  it("plan-execute accepts agentId and sessionId", async () => {
+    const result = await Effect.runPromise(
+      executePlanExecute({
+        ...baseInput,
+        agentId: "test-agent-123",
+        sessionId: "test-session-456",
+      }).pipe(Effect.provide(mockLLM)),
+    );
+    expect(result.status).toBe("completed");
+  });
+
+  it("tree-of-thought accepts agentId and sessionId", async () => {
+    const result = await Effect.runPromise(
+      executeTreeOfThought({
+        ...baseInput,
+        agentId: "test-agent-123",
+        sessionId: "test-session-456",
+      }).pipe(Effect.provide(mockLLM)),
+    );
+    expect(result.status).toBe("completed");
+  });
+
   it("plan-execute respects stepKernelMaxIterations config", async () => {
     const config = {
       ...defaultReasoningConfig,
