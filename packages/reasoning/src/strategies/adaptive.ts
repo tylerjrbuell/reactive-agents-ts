@@ -120,6 +120,7 @@ export const executeAdaptive = (
       step: steps.length,
       totalSteps: 1,
       thought: `[ADAPTIVE] Selected strategy: ${selectedStrategy}`,
+      kernelPass: "adaptive:select",
     });
 
     // ── Dispatch to selected strategy ──
@@ -142,6 +143,7 @@ export const executeAdaptive = (
         step: steps.length,
         totalSteps: 2,
         thought: `[ADAPTIVE] Falling back to reactive strategy`,
+        kernelPass: "adaptive:fallback",
       });
 
       // NOTE: The failed sub-strategy's tokens are not added to metadata —

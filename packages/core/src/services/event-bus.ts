@@ -200,6 +200,8 @@ export type AgentEvent =
       readonly durationMs: number;
       /** True if tool executed successfully, false if error */
       readonly success: boolean;
+      /** Which kernel pass produced this call (e.g. "reflexion:generate", "plan-execute:step-2") */
+      readonly kernelPass?: string;
     }
   // ─── Phase completion events (from @reactive-agents/runtime) ───
   | {
@@ -237,6 +239,8 @@ export type AgentEvent =
       readonly action?: string;
       /** Tool result/observation from this step (optional) */
       readonly observation?: string;
+      /** Which kernel pass produced this step (e.g. "reflexion:improve-1", "tree-of-thought:execute") */
+      readonly kernelPass?: string;
     }
   // ─── Agent lifecycle events (from @reactive-agents/guardrails) ───
   | {
@@ -375,6 +379,8 @@ export type AgentEvent =
       readonly iteration: number;
       /** Total tokens used up to this point */
       readonly totalTokens: number;
+      /** Which kernel pass produced this answer (e.g. "reflexion:generate", "plan-execute:step-2") */
+      readonly kernelPass?: string;
     }
   // ─── Safety / guardrail events ───
   | {

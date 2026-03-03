@@ -114,6 +114,7 @@ export const executePlanExecute = (
         step: steps.length,
         totalSteps: maxRefinements + 1,
         thought: `[PLAN ${refinement + 1}] ${planText}`,
+        kernelPass: `plan-execute:plan-${refinement + 1}`,
       });
 
       // Parse plan into individual steps
@@ -140,6 +141,7 @@ export const executePlanExecute = (
           temperature: 0.5,
           taskId: input.taskId,
           parentStrategy: "plan-execute",
+          kernelPass: `plan-execute:step-${i + 1}`,
           resultCompression: input.resultCompression,
           agentId: input.agentId,
           sessionId: input.sessionId,
@@ -169,6 +171,7 @@ export const executePlanExecute = (
           step: steps.length,
           totalSteps: maxRefinements + 1,
           observation: `[EXEC ${i + 1}] ${stepResult}`,
+          kernelPass: `plan-execute:step-${i + 1}`,
         });
       }
 
@@ -261,6 +264,7 @@ export const executePlanExecute = (
           answer: finalOutput,
           iteration: refinement,
           totalTokens,
+          kernelPass: `plan-execute:synthesize`,
         });
         break;
       }
