@@ -1,6 +1,6 @@
 ---
 title: Verification
-description: Fact-checking and output quality verification using semantic entropy, fact decomposition, and NLI.
+description: Fact-checking and output quality verification using semantic entropy, fact decomposition, NLI, and hallucination detection.
 sidebar:
   order: 2
 ---
@@ -9,7 +9,7 @@ The verification layer fact-checks agent outputs before they reach the user. It 
 
 ## How It Works
 
-When verification is enabled, the execution engine runs the agent's output through up to 5 verification layers after the Think/Act/Observe loop completes. Each layer produces a score, and the results are combined into an overall confidence assessment.
+When verification is enabled, the execution engine runs the agent's output through up to 6 verification layers after the Think/Act/Observe loop completes. Each layer produces a score, and the results are combined into an overall confidence assessment.
 
 ```typescript
 const agent = await ReactiveAgents.create()
@@ -72,6 +72,36 @@ const layer = createVerificationLayer({
 });
 ```
 
+### Hallucination Detection
+
+Detects fabricated claims by comparing agent output against source context. Available in two modes:
+
+**Heuristic mode** (no LLM cost): Extracts claims from sentences, classifies confidence (certain/likely/uncertain), and verifies via keyword overlap with source material.
+
+**LLM mode**: Uses structured prompts for claim extraction and per-claim verification against source context. Falls back to heuristic mode on failure.
+
+```typescript
+import {
+  checkHallucination,
+  checkHallucinationLLM,
+  extractClaims,
+} from "@reactive-agents/verification";
+
+// Heuristic mode — fast, no LLM cost
+const result = checkHallucination(agentOutput, sourceContext);
+// { passed: true, hallucinationRate: 0.05, totalClaims: 8, unverifiedClaims: 0 }
+
+// LLM mode — more accurate, uses LLM calls
+const llmResult = await checkHallucinationLLM(agentOutput, sourceContext, llm);
+```
+
+**Hallucination rate** is calculated as `unverifiedClaims / totalClaims`. The default threshold is 10% — outputs with higher rates are flagged.
+
+Each claim is classified by confidence:
+- **certain** — Contains specific facts, numbers, or proper nouns
+- **likely** — General factual assertions
+- **uncertain** — Contains hedging language ("might", "possibly")
+
 ## Verification Result
 
 Each verification returns a `VerificationResult`:
@@ -110,13 +140,15 @@ Each verification returns a `VerificationResult`:
 import { createVerificationLayer } from "@reactive-agents/verification";
 
 const verificationLayer = createVerificationLayer({
-  enableSemanticEntropy: true,      // default: true
-  enableFactDecomposition: true,    // default: true
-  enableMultiSource: false,         // default: false
-  enableSelfConsistency: true,      // default: true
-  enableNli: true,                  // default: true
-  passThreshold: 0.7,              // 0-1, default: 0.7
-  riskThreshold: 0.5,             // 0-1, default: 0.5
+  enableSemanticEntropy: true,          // default: true
+  enableFactDecomposition: true,        // default: true
+  enableMultiSource: false,             // default: false
+  enableSelfConsistency: true,          // default: true
+  enableNli: true,                      // default: true
+  enableHallucinationDetection: false,  // default: false
+  hallucinationThreshold: 0.10,         // 0-1, default: 0.10
+  passThreshold: 0.7,                   // 0-1, default: 0.7
+  riskThreshold: 0.5,                   // 0-1, default: 0.5
 });
 ```
 
