@@ -421,12 +421,12 @@ export const executePlanExecute = (
             messages: [
               {
                 role: "user",
-                content: `Task: ${goal}\n\nExecution results:\n${synthResultTexts.join("\n")}\n\nSynthesize a clear, complete answer to the original task based on the results above.`,
+                content: `Task: ${goal}\n\nExecution results:\n${synthResultTexts.join("\n")}\n\nSynthesize a clear, complete answer to the original task. Do NOT include internal details like tool names, JSON payloads, recipient numbers, or execution metadata — only user-facing content.`,
               },
             ],
             systemPrompt: input.systemPrompt
-              ? `${input.systemPrompt}\n\nYou are a synthesizer. Combine execution results into a clear, concise final answer.`
-              : "You are a synthesizer. Combine execution results into a clear, concise final answer.",
+              ? `${input.systemPrompt}\n\nYou are a synthesizer. Combine execution results into a clear, concise final answer. Exclude all internal agent metadata.`
+              : "You are a synthesizer. Combine execution results into a clear, concise final answer. Exclude all internal agent metadata.",
             maxTokens: 500,
             temperature: 0.3,
           })
@@ -600,10 +600,15 @@ function executeStep(
         kernelPass: `plan-execute:step-${stepIndex + 1}`,
       });
 
-      const output =
+      const rawOutput =
         typeof toolResult.result === "string"
           ? toolResult.result
           : JSON.stringify(toolResult.result);
+
+      // Sanitize tool_call output: strip internal metadata (args, recipient, raw JSON)
+      // so it doesn't leak into downstream steps or final synthesis.
+      // Data-fetching tools keep full output; action tools get a clean confirmation.
+      const output = sanitizeToolOutput(step.toolName!, rawOutput, resolvedArgs);
 
       return {
         output,
@@ -788,4 +793,54 @@ function extractGoalText(taskDescription: string): string {
  */
 function stripFinalAnswerPrefix(text: string): string {
   return text.replace(/^FINAL ANSWER:\s*/i, "").trim();
+}
+
+/**
+ * Action-oriented tool name patterns — tools that perform side effects
+ * (send, write, post, create, delete, etc.) rather than fetching data.
+ * Their raw output (JSON with args like recipient/message) should NOT
+ * appear in downstream steps or the final synthesis.
+ */
+const ACTION_TOOL_PATTERNS = /\b(send|write|post|create|delete|remove|update|set|put|push|publish|notify|deploy|upload)\b/i;
+
+/**
+ * Sanitize tool output to prevent internal metadata from leaking into
+ * downstream steps or final user-facing synthesis.
+ *
+ * - Data-fetching tools (list, get, search, read) → keep full output
+ * - Action tools (send, write, post, create) → clean confirmation only
+ */
+function sanitizeToolOutput(
+  toolName: string,
+  rawOutput: string,
+  args: Record<string, unknown>,
+): string {
+  // If tool name indicates a data-fetching operation, keep full output
+  if (!ACTION_TOOL_PATTERNS.test(toolName)) {
+    return rawOutput;
+  }
+
+  // For action tools, check if the raw output is just echoing back the args
+  // (common MCP pattern: return the request payload as confirmation)
+  const isJsonEcho = (() => {
+    try {
+      const parsed = JSON.parse(rawOutput);
+      if (typeof parsed !== "object" || parsed === null) return false;
+      // If most keys in the output match the input args, it's an echo
+      const outputKeys = Object.keys(parsed);
+      const argKeys = Object.keys(args);
+      const overlap = outputKeys.filter((k) => argKeys.includes(k));
+      return overlap.length >= argKeys.length * 0.5;
+    } catch {
+      return false;
+    }
+  })();
+
+  if (isJsonEcho) {
+    // Replace with clean confirmation — just the tool name and success
+    const friendlyName = toolName.split("/").pop() ?? toolName;
+    return `✓ ${friendlyName} completed successfully`;
+  }
+
+  return rawOutput;
 }
