@@ -215,9 +215,81 @@ test("output matches snapshot", async () => {
 });
 ```
 
+## `@reactive-agents/testing` Package
+
+For lower-level testing, the dedicated testing package provides mock services and assertion helpers:
+
+### Mock LLM
+
+```typescript
+import { createMockLLM, createMockLLMFromMap } from "@reactive-agents/testing";
+
+// Rule-based — match patterns, return responses
+const llm = createMockLLM([
+  { match: /search/, response: "ACTION: web-search\nACTION INPUT: {\"query\": \"test\"}" },
+  { match: /.*/, response: "FINAL ANSWER: done" },
+]);
+
+// Simple key-value mapping
+const llm = createMockLLMFromMap({
+  "hello": "FINAL ANSWER: world",
+  "default": "FINAL ANSWER: fallback",
+});
+
+// Check what was called
+console.log(llm.calls);  // Array of all prompts received
+```
+
+### Mock Tool Service
+
+```typescript
+import { createMockToolService } from "@reactive-agents/testing";
+
+const tools = createMockToolService({
+  "web-search": "Search results for: test query",
+  "file-read": "File contents here",
+});
+
+// After execution, inspect recorded calls
+console.log(tools.calls);
+// [{ name: "web-search", args: { query: "test" }, timestamp: ... }]
+```
+
+### Mock EventBus
+
+```typescript
+import { createMockEventBus } from "@reactive-agents/testing";
+
+const bus = createMockEventBus();
+
+// After agent runs, check captured events
+const toolEvents = bus.captured("ToolCallCompleted");
+expect(toolEvents).toHaveLength(2);
+```
+
+### Assertion Helpers
+
+```typescript
+import {
+  assertToolCalled,
+  assertStepCount,
+  assertCostUnder,
+} from "@reactive-agents/testing";
+
+// Verify specific tool was called N times
+assertToolCalled(result, "web-search", { times: 1 });
+
+// Verify step count within bounds
+assertStepCount(result, { min: 1, max: 5 });
+
+// Verify cost stayed under budget
+assertCostUnder(result, 0.01);
+```
+
 ## Tips
 
 - **Use `"test"` provider** for all unit and integration tests — it's fast and deterministic
+- **Use `@reactive-agents/testing`** for lower-level mock services and assertions
 - **Mock tools** with `Effect.succeed()` handlers to avoid network calls
 - **Test each feature independently** — guardrails, reasoning, tools, memory each have independent test surfaces
 - **Use lifecycle hooks** for test assertions about execution flow

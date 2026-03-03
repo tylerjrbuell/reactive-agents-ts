@@ -62,6 +62,19 @@ const result = await agent.run("Write a concise explanation of quantum entanglem
 |--------|---------|-------------|
 | `maxRetries` | 3 | Max generate-critique-improve cycles |
 | `selfCritiqueDepth` | "deep" | "shallow" or "deep" critique |
+| `kernelMaxIterations` | 3 | Max ReAct tool-call iterations per generate/improve pass |
+
+**Cross-run learning:** Reflexion supports `priorCritiques` — critiques from previous runs on similar tasks, loaded from episodic memory. This lets the agent avoid repeating past mistakes:
+
+```typescript
+// The execution engine automatically loads prior critiques from episodic memory
+// when the strategy is "reflexion" and memory is enabled.
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withReasoning({ defaultStrategy: "reflexion" })
+  .withMemory("1")  // Episodic memory stores/retrieves critiques
+  .build();
+```
 
 **Trade-off:** Reflexion uses more tokens than ReAct (typically 3× per retry cycle) because each cycle requires a generate pass, a critique pass, and an improve pass. The additional cost is usually worth it for tasks where output quality matters more than speed — writing, detailed analysis, or any domain where a first-pass answer is rarely optimal.
 
@@ -93,6 +106,7 @@ const result = await agent.run("Compare the GDP growth of the top 5 economies ov
 |--------|---------|-------------|
 | `maxRefinements` | 2 | Max plan revision cycles |
 | `reflectionDepth` | "deep" | "shallow" or "deep" reflection |
+| `stepKernelMaxIterations` | 2 | Max ReAct tool-call iterations per plan step |
 
 ### Tree-of-Thought
 
@@ -257,3 +271,19 @@ When both `.withReasoning()` and `.withTools()` are enabled, tools are wired dir
 This means agents can genuinely interact with the world during reasoning — search the web, query databases, run calculations — and incorporate real results into their thinking.
 
 All five strategies support tool integration. Tree-of-Thought uses tools in its execution phase (Phase 2), while ReAct, Plan-Execute, and Reflexion use them throughout their loops.
+
+## Strategy Configuration
+
+All strategies receive the full execution context from the engine, including:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `resultCompression` | `ResultCompressionConfig` | Controls tool result preview size and scratchpad overflow |
+| `contextProfile` | `ContextProfile` | Model-adaptive context thresholds (local/mid/large/frontier) |
+| `agentId` | `string` | Real agent ID for tool execution attribution |
+| `sessionId` | `string` | Session/task ID for tool execution attribution |
+| `systemPrompt` | `string` | Custom system prompt (from persona or direct config) |
+
+These are threaded through to every `executeReActKernel()` call, so tool compression, context budgets, and attribution work consistently across all strategies.
+
+Custom strategies registered via `StrategyRegistry` receive all these fields automatically through the `StrategyFn` input type.
