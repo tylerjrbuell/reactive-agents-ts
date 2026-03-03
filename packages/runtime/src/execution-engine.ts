@@ -692,6 +692,26 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                             } : {}),
                           },
                         }).pipe(Effect.catchAll(() => Effect.void));
+
+                        // ── Persist reflexion critiques for cross-run learning ──
+                        const reflexionCritiques = thinkRes.metadata?.reflexionCritiques;
+                        if (Array.isArray(reflexionCritiques) && reflexionCritiques.length > 0) {
+                          yield* memBridge.value.logEpisode({
+                            id: crypto.randomUUID().replace(/-/g, ""),
+                            agentId: ctx.agentId,
+                            date: epNow.toISOString().slice(0, 10),
+                            content: `Reflexion critiques for ${task.type}: ${reflexionCritiques.join(" | ")}`,
+                            taskId: ctx.taskId,
+                            eventType: "reflexion-critique",
+                            createdAt: epNow,
+                            tags: ["reflexion", "critique", task.type],
+                            metadata: {
+                              strategy: strategyUsed,
+                              critiqueCount: reflexionCritiques.length,
+                              taskDescription: String(task.input).slice(0, 500),
+                            },
+                          }).pipe(Effect.catchAll(() => Effect.void));
+                        }
                       }
                     }
                   }
