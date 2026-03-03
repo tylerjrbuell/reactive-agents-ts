@@ -105,57 +105,58 @@ export const executePlanExecute = (
       signature: `(${t.parameters.map((p) => (p.required ? p.name : `${p.name}?`)).join(", ")})`,
     }));
 
+    // ── PLAN: Generate initial structured plan ──
+    const planPrompt = buildPlanGenerationPrompt({
+      goal,
+      tools: toolSummaries,
+      pastPatterns: [],
+      modelTier: "mid",
+    });
+
+    const planResult = yield* extractStructuredOutput({
+      schema: LLMPlanOutputSchema,
+      prompt: planPrompt,
+      systemPrompt: input.systemPrompt
+        ? `${input.systemPrompt}\nYou are a planning agent. Decompose the goal into structured steps.`
+        : "You are a planning agent. Decompose the goal into structured steps.",
+      maxRetries: 2,
+      temperature: 0.5,
+      maxTokens: 2000,
+    }).pipe(
+      Effect.mapError(
+        (err) =>
+          new ExecutionError({
+            strategy: "plan-execute-reflect",
+            message: `Plan generation failed: ${err.message}`,
+            step: 0,
+            cause: err,
+          }),
+      ),
+    );
+
+    const planTokenEst =
+      Math.ceil(planResult.raw.length / 4) +
+      Math.ceil(planPrompt.length / 4);
+    totalTokens += planTokenEst;
+
+    let plan: Plan = hydratePlan(planResult.data, {
+      taskId: input.taskId ?? "plan-execute",
+      agentId: input.agentId ?? "reasoning-agent",
+      goal,
+      planMode,
+    });
+
+    // Persist plan to store (if available)
+    if (Option.isSome(planStoreOpt)) {
+      yield* planStoreOpt.value
+        .savePlan(plan as unknown as Parameters<typeof planStoreOpt.value.savePlan>[0])
+        .pipe(Effect.catchAll(() => Effect.void));
+    }
+
+    // Track completed step results across refinements to avoid re-execution
+    let completedSteps: PlanStep[] = [];
+
     while (refinement <= maxRefinements) {
-      // ── PLAN: Generate structured plan via extractStructuredOutput ──
-      const planPrompt = buildPlanGenerationPrompt({
-        goal,
-        tools: toolSummaries,
-        pastPatterns: [],
-        modelTier: "mid",
-      });
-
-      const planResult = yield* extractStructuredOutput({
-        schema: LLMPlanOutputSchema,
-        prompt: planPrompt,
-        systemPrompt: input.systemPrompt
-          ? `${input.systemPrompt}\nYou are a planning agent. Decompose the goal into structured steps.`
-          : "You are a planning agent. Decompose the goal into structured steps.",
-        maxRetries: 2,
-        temperature: 0.5,
-        maxTokens: 2000,
-      }).pipe(
-        Effect.mapError(
-          (err) =>
-            new ExecutionError({
-              strategy: "plan-execute-reflect",
-              message: `Plan generation failed at refinement ${refinement}: ${err.message}`,
-              step: refinement,
-              cause: err,
-            }),
-        ),
-      );
-
-      // Track tokens from plan generation (estimated from raw response length)
-      const planTokenEst =
-        Math.ceil(planResult.raw.length / 4) +
-        Math.ceil(planPrompt.length / 4);
-      totalTokens += planTokenEst;
-
-      const plan: Plan = hydratePlan(planResult.data, {
-        taskId: input.taskId ?? "plan-execute",
-        agentId: input.agentId ?? "reasoning-agent",
-        goal,
-        planMode,
-      });
-
-      // Persist plan to store (if available)
-      // Cast needed: reasoning Plan uses `readonly string[]` for toolHints/dependsOn
-      if (Option.isSome(planStoreOpt)) {
-        yield* planStoreOpt.value
-          .savePlan(plan as unknown as Parameters<typeof planStoreOpt.value.savePlan>[0])
-          .pipe(Effect.catchAll(() => Effect.void));
-      }
-
       steps.push(
         makeStep(
           "thought",
@@ -166,7 +167,7 @@ export const executePlanExecute = (
       const planDetail = plan.steps
         .map(
           (s) =>
-            `  ${s.id}: ${s.title} (${s.type}${s.toolName ? ` → ${s.toolName}` : ""})`,
+            `  ${s.id}: ${s.title} (${s.type}${s.toolName ? ` → ${s.toolName}` : ""}${s.status === "completed" ? " ✓ carried forward" : ""})`,
         )
         .join("\n");
 
@@ -181,10 +182,25 @@ export const executePlanExecute = (
       });
 
       // ── EXECUTE: Run each plan step sequentially (linear mode) ──
-      const completedSteps: PlanStep[] = [];
+      // Skip steps that are already completed from a prior refinement cycle
 
       for (let i = 0; i < plan.steps.length; i++) {
         const step = plan.steps[i]!;
+
+        // Skip already completed steps (carried forward from prior refinement)
+        if (step.status === "completed") {
+          yield* publishReasoningStep(eventBus, {
+            _tag: "ReasoningStepCompleted",
+            taskId: input.taskId ?? "plan-execute",
+            strategy: "plan-execute-reflect",
+            step: steps.length,
+            totalSteps: plan.steps.length,
+            observation: `[SKIP ${step.id}] ✓ Already completed: ${step.title}`,
+            kernelPass: `plan-execute:step-${i + 1}:skip`,
+          });
+          continue;
+        }
+
         step.status = "in_progress";
         step.startedAt = new Date().toISOString();
 
@@ -207,7 +223,6 @@ export const executePlanExecute = (
         // Retry loop (up to stepRetries attempts) using Effect.exit to catch all errors
         for (let attempt = 0; attempt <= stepRetries; attempt++) {
           if (attempt > 0) {
-            // Publish retry attempt
             yield* publishReasoningStep(eventBus, {
               _tag: "ReasoningStepCompleted",
               taskId: input.taskId ?? "plan-execute",
@@ -240,14 +255,12 @@ export const executePlanExecute = (
             stepSucceeded = true;
             break;
           } else {
-            // Extract error message from Cause (handles both Fail and Die)
             const squashed = Cause.squash(exit.cause);
             lastError =
               squashed instanceof Error ? squashed.message : String(squashed);
           }
         }
 
-        // Final fallback after all retries exhausted
         if (!stepSucceeded) {
           stepResult = `[Step failed after ${stepRetries + 1} attempts: ${lastError}]`;
         }
@@ -258,7 +271,6 @@ export const executePlanExecute = (
           step.completedAt = new Date().toISOString();
           completedSteps.push(step);
 
-          // Persist step completion
           if (Option.isSome(planStoreOpt)) {
             yield* planStoreOpt.value.updateStepStatus(
               step.id,
@@ -270,7 +282,6 @@ export const executePlanExecute = (
           step.error = stepResult;
           step.completedAt = new Date().toISOString();
 
-          // Publish failure event
           yield* publishReasoningStep(eventBus, {
             _tag: "ReasoningStepCompleted",
             taskId: input.taskId ?? "plan-execute",
@@ -281,7 +292,6 @@ export const executePlanExecute = (
             kernelPass: `plan-execute:step-${i + 1}:failed`,
           });
 
-          // Persist step failure
           if (Option.isSome(planStoreOpt)) {
             yield* planStoreOpt.value.updateStepStatus(
               step.id,
@@ -289,7 +299,7 @@ export const executePlanExecute = (
             ).pipe(Effect.catchAll(() => Effect.void));
           }
 
-          // Attempt patch if step failed
+          // Attempt inline patch for remaining steps
           const patchResult = yield* patchPlan(
             plan,
             i,
@@ -300,7 +310,6 @@ export const executePlanExecute = (
 
           if (patchResult) {
             totalTokens += patchResult.tokens;
-            // Replace remaining steps with patched steps
             const patchedSteps = patchResult.steps;
             plan.steps.splice(
               i + 1,
@@ -308,7 +317,6 @@ export const executePlanExecute = (
               ...patchedSteps,
             );
 
-            // Publish patch event
             const patchDetail = patchedSteps.map((s) => `${s.id}: ${s.title}`).join(", ");
             yield* publishReasoningStep(eventBus, {
               _tag: "ReasoningStepCompleted",
@@ -350,6 +358,8 @@ export const executePlanExecute = (
         result: s.result ?? s.error,
       }));
 
+      const allStepsCompleted = plan.steps.every((s) => s.status === "completed");
+
       const reflectionPrompt = buildReflectionPrompt(
         goal,
         stepResults,
@@ -379,7 +389,9 @@ export const executePlanExecute = (
       totalTokens += reflectResponse.usage.totalTokens;
       totalCost += reflectResponse.usage.estimatedCost;
 
-      const satisfied = isSatisfied(reflectResponse.content);
+      // Treat as satisfied if: explicit SATISFIED, OR all steps completed successfully
+      // (prevents false-negative refinement loops that re-execute side-effecting steps)
+      const satisfied = isSatisfied(reflectResponse.content) || allStepsCompleted;
 
       steps.push(
         makeStep(
@@ -398,7 +410,6 @@ export const executePlanExecute = (
         kernelPass: `plan-execute:reflect-${refinement + 1}`,
       });
 
-      // Check if reflection is satisfied
       if (satisfied) {
         // ── SYNTHESIZE: Produce a clean final answer from step results ──
         const synthResultTexts = plan.steps
@@ -444,6 +455,45 @@ export const executePlanExecute = (
           kernelPass: `plan-execute:synthesize`,
         });
         break;
+      }
+
+      // ── REFINEMENT: Use patch prompt to rewrite only failed/pending steps ──
+      // Completed steps carry forward — no re-execution of side-effecting actions
+      const hasFailures = plan.steps.some((s) => s.status === "failed");
+      if (hasFailures) {
+        const patchResult = yield* patchPlan(
+          plan,
+          plan.steps.findIndex((s) => s.status === "failed"),
+          input,
+          llm,
+          totalTokens,
+        ).pipe(Effect.catchAll(() => Effect.succeed(null)));
+
+        if (patchResult) {
+          totalTokens += patchResult.tokens;
+          // Find last completed step index
+          const lastCompletedIdx = plan.steps.reduce(
+            (acc, s, idx) => (s.status === "completed" ? idx : acc),
+            -1,
+          );
+          // Replace failed + pending steps, keep completed
+          plan.steps.splice(
+            lastCompletedIdx + 1,
+            plan.steps.length - lastCompletedIdx - 1,
+            ...patchResult.steps,
+          );
+
+          const patchDetail = patchResult.steps.map((s) => `${s.id}: ${s.title}`).join(", ");
+          yield* publishReasoningStep(eventBus, {
+            _tag: "ReasoningStepCompleted",
+            taskId: input.taskId ?? "plan-execute",
+            strategy: "plan-execute-reflect",
+            step: steps.length,
+            totalSteps: maxRefinements + 1,
+            thought: `[REFINE] Patched plan — kept ${lastCompletedIdx + 1} completed steps, replaced with: ${patchDetail}`,
+            kernelPass: `plan-execute:refine-${refinement + 1}`,
+          });
+        }
       }
 
       refinement++;

@@ -7,10 +7,17 @@
 
 /**
  * Returns true if the LLM response signals that the task is complete.
- * Matches "SATISFIED:" or "SATISFIED " at the start of the text (line-level).
+ * Matches "SATISFIED:" or "SATISFIED " at the start of the text (line-level),
+ * case-insensitive. Also matches when the word "satisfied" appears after
+ * a common LLM prefix like "Status:" or newline.
  */
 export function isSatisfied(text: string): boolean {
-  return /^SATISFIED[:\s]/m.test(text.trim());
+  const trimmed = text.trim();
+  // Direct match: "SATISFIED:" or "SATISFIED " at line start (case-insensitive)
+  if (/^satisfied[:\s]/im.test(trimmed)) return true;
+  // Common LLM patterns: "Status: Satisfied", "\nSatisfied:", "Result: SATISFIED"
+  if (/(?:^|\n)\s*(?:status|result|verdict|assessment)?\s*:?\s*satisfied[:\s]/im.test(trimmed)) return true;
+  return false;
 }
 
 /**
