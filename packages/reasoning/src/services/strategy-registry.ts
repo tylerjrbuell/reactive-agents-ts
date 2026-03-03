@@ -8,6 +8,9 @@ import {
   type IterationLimitError,
 } from "../errors/errors.js";
 import type { LLMService } from "@reactive-agents/llm-provider";
+import type { ContextProfile } from "../context/context-profile.js";
+import type { ToolSchema } from "../strategies/shared/tool-utils.js";
+import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import { executeReactive } from "../strategies/reactive.js";
 import { executeReflexion } from "../strategies/reflexion.js";
 import { executePlanExecute } from "../strategies/plan-execute.js";
@@ -21,8 +24,14 @@ export type StrategyFn = (input: {
   readonly taskType: string;
   readonly memoryContext: string;
   readonly availableTools: readonly string[];
+  readonly availableToolSchemas?: readonly ToolSchema[];
   readonly config: ReasoningConfig;
   readonly systemPrompt?: string;
+  readonly taskId?: string;
+  readonly resultCompression?: ResultCompressionConfig;
+  readonly contextProfile?: Partial<ContextProfile>;
+  readonly agentId?: string;
+  readonly sessionId?: string;
 }) => Effect.Effect<
   ReasoningResult,
   ExecutionError | IterationLimitError,

@@ -13,6 +13,7 @@ export type ReactiveConfig = typeof ReactiveConfigSchema.Type;
 export const PlanExecuteConfigSchema = Schema.Struct({
   maxRefinements: Schema.Number.pipe(Schema.int(), Schema.positive()),
   reflectionDepth: Schema.Literal("shallow", "deep"),
+  stepKernelMaxIterations: Schema.optional(Schema.Number.pipe(Schema.int(), Schema.positive())),
 });
 export type PlanExecuteConfig = typeof PlanExecuteConfigSchema.Type;
 
@@ -26,6 +27,7 @@ export type TreeOfThoughtConfig = typeof TreeOfThoughtConfigSchema.Type;
 export const ReflexionConfigSchema = Schema.Struct({
   maxRetries: Schema.Number.pipe(Schema.int(), Schema.positive()),
   selfCritiqueDepth: Schema.Literal("shallow", "deep"),
+  kernelMaxIterations: Schema.optional(Schema.Number.pipe(Schema.int(), Schema.positive())),
 });
 export type ReflexionConfig = typeof ReflexionConfigSchema.Type;
 
