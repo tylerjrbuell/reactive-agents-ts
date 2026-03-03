@@ -45,6 +45,8 @@ interface ReflexionInput {
   readonly agentId?: string;
   /** Session ID for tool execution attribution. Falls back to "reasoning-session". */
   readonly sessionId?: string;
+  /** Critiques from prior reflexion runs on similar tasks — populated from episodic memory */
+  readonly priorCritiques?: readonly string[];
 }
 
 /**
@@ -71,7 +73,9 @@ export const executeReflexion = (
     let totalTokens = 0;
     let totalCost = 0;
     let attempt = 0;
-    let previousCritiques: string[] = [];
+    let previousCritiques: string[] = input.priorCritiques
+      ? [...input.priorCritiques]
+      : [];
 
     // ── STEP 1: Initial generation (tool-aware via ReAct kernel) ──
     const genDefaultFallback = input.systemPrompt
@@ -193,7 +197,7 @@ export const executeReflexion = (
           start,
           totalTokens,
           totalCost,
-          extraMetadata: { confidence: 0.4 },
+          extraMetadata: { confidence: 0.4, reflexionCritiques: previousCritiques },
         });
       }
 
@@ -217,6 +221,7 @@ export const executeReflexion = (
           totalCost,
           extraMetadata: {
             confidence: Math.max(0.6, 1 - (attempt / 3) * 0.3),
+            reflexionCritiques: previousCritiques,
           },
         });
       }
@@ -283,7 +288,7 @@ export const executeReflexion = (
       start,
       totalTokens,
       totalCost,
-      extraMetadata: { confidence: 0.4 },
+      extraMetadata: { confidence: 0.4, reflexionCritiques: previousCritiques },
     });
   });
 

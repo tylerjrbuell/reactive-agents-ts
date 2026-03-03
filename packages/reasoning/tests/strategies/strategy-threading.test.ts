@@ -122,6 +122,29 @@ describe("Strategy threading", () => {
     expect(result.status).toBe("completed");
   });
 
+  it("reflexion seeds previousCritiques from priorCritiques input", async () => {
+    const result = await Effect.runPromise(
+      executeReflexion({
+        ...baseInput,
+        priorCritiques: ["Previous run found the answer lacked error handling"],
+      }).pipe(Effect.provide(reflexionLLM)),
+    );
+    expect(result.status).toBe("completed");
+    // Critiques should be stored in result metadata for downstream persistence
+    expect(result.metadata.reflexionCritiques).toBeDefined();
+    expect(Array.isArray(result.metadata.reflexionCritiques)).toBe(true);
+  });
+
+  it("reflexion without priorCritiques still works (backward compat)", async () => {
+    const result = await Effect.runPromise(
+      executeReflexion({
+        ...baseInput,
+      }).pipe(Effect.provide(reflexionLLM)),
+    );
+    expect(result.status).toBe("completed");
+    expect(Array.isArray(result.metadata.reflexionCritiques)).toBe(true);
+  });
+
   it("plan-execute respects stepKernelMaxIterations config", async () => {
     const config = {
       ...defaultReasoningConfig,
