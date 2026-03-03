@@ -65,6 +65,33 @@ export class ExecutionEngine extends Context.Tag("ExecutionEngine")<
   }
 >() {}
 
+// ─── Output Sanitization (safety net) ───
+
+/**
+ * Strip internal agent metadata from output before it reaches the user.
+ * This is a safety net — strategies should sanitize their own output, but
+ * this catches anything that slips through.
+ */
+function sanitizeOutput(text: string): string {
+  if (!text || text.length === 0) return text;
+  let result = text;
+  // Strip <think>...</think> tags
+  result = result.replace(/<think>[\s\S]*?<\/think>/gi, "");
+  // Strip "FINAL ANSWER:" prefix
+  result = result.replace(/^FINAL ANSWER:\s*/i, "");
+  // Strip internal step markers
+  result = result.replace(/^\[(?:STEP \d+\/\d+|EXEC s\d+|SYNTHESIS|REFLECT \d+|SKIP s\d+|PATCH)\]\s*/gim, "");
+  // Strip ReAct protocol prefixes at line start
+  result = result.replace(/^(?:Thought|Action|Action Input|Observation):\s*/gim, "");
+  // Strip tool call echo lines: "tool/name: {json}"
+  result = result.replace(/^[\w\-]+\/[\w\-]+:\s*\{[^}]*\}\s*$/gm, "");
+  // Strip lines that are just raw JSON with internal keys
+  result = result.replace(/^\s*\{\s*"(?:recipient|toolName|callId|stepId|_tag)"[^}]*\}\s*$/gm, "");
+  // Collapse multiple blank lines
+  result = result.replace(/\n{3,}/g, "\n\n");
+  return result.trim();
+}
+
 // ─── Live Implementation ───
 
 export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
@@ -1522,11 +1549,12 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   }),
                 );
 
-                // Build TaskResult
+                // Build TaskResult — sanitize output to strip internal metadata
+                const rawOutput = ctx.metadata.lastResponse ?? null;
                 const result: TaskResult = {
                   taskId: task.id as any,
                   agentId: task.agentId,
-                  output: ctx.metadata.lastResponse ?? null,
+                  output: typeof rawOutput === "string" ? sanitizeOutput(rawOutput) : rawOutput,
                   success: true,
                   metadata: {
                     duration: Date.now() - ctx.startedAt.getTime(),

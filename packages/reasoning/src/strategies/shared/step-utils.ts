@@ -9,6 +9,7 @@ import { ulid } from "ulid";
 import type { ReasoningResult, ReasoningStep } from "../../types/index.js";
 import type { StepId } from "../../types/step.js";
 import type { ReasoningStrategy } from "../../types/index.js";
+import { sanitizeAgentOutput } from "./quality-utils.js";
 
 /**
  * Create a ReasoningStep with auto-generated ulid id and current timestamp.
@@ -54,10 +55,16 @@ export function buildStrategyResult(params: {
 }): ReasoningResult {
   const confidence = params.status === "completed" ? 0.8 : 0.4;
 
+  // Sanitize output to strip internal agent metadata before it reaches the user
+  const sanitizedOutput =
+    typeof params.output === "string"
+      ? sanitizeAgentOutput(params.output)
+      : params.output;
+
   return {
     strategy: params.strategy,
     steps: [...params.steps],
-    output: params.output,
+    output: sanitizedOutput,
     metadata: {
       duration: Date.now() - params.start,
       cost: params.totalCost,

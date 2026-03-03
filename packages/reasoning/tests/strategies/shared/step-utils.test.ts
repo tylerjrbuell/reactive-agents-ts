@@ -90,6 +90,49 @@ describe("buildStrategyResult", () => {
     });
     expect(result.metadata.stepsCount).toBe(2);
   });
+
+  it("sanitizes string output to strip internal metadata", () => {
+    const result = buildStrategyResult({
+      strategy: "plan-execute-reflect",
+      steps: [],
+      output: "FINAL ANSWER: Here is the clean answer",
+      status: "completed",
+      start: Date.now(),
+      totalTokens: 100,
+      totalCost: 0,
+    });
+    expect(result.output).toBe("Here is the clean answer");
+    expect(result.output).not.toContain("FINAL ANSWER");
+  });
+
+  it("sanitizes tool call echoes from output", () => {
+    const result = buildStrategyResult({
+      strategy: "reactive",
+      steps: [],
+      output: 'signal/send_message_to_user: {"recipient": "+1234", "message": "hi"}\nMessage delivered.',
+      status: "completed",
+      start: Date.now(),
+      totalTokens: 100,
+      totalCost: 0,
+    });
+    expect(result.output).not.toContain("signal/send_message_to_user");
+    expect(result.output).not.toContain("recipient");
+    expect(result.output).toContain("Message delivered.");
+  });
+
+  it("does not sanitize non-string output", () => {
+    const obj = { data: [1, 2, 3] };
+    const result = buildStrategyResult({
+      strategy: "reactive",
+      steps: [],
+      output: obj,
+      status: "completed",
+      start: Date.now(),
+      totalTokens: 100,
+      totalCost: 0,
+    });
+    expect(result.output).toEqual(obj);
+  });
 });
 
 describe("publishReasoningStep", () => {

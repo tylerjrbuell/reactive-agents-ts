@@ -89,3 +89,46 @@ export function parseScore(text: string): number {
 
   return 0.5;
 }
+
+// ── Output Sanitization ──────────────────────────────────────────────────────
+
+/**
+ * Sanitize agent output before it reaches the user.
+ *
+ * Strips internal agent metadata that should never appear in user-facing text:
+ * - ReAct protocol artifacts ("FINAL ANSWER:", "Thought:", "Action:", "Observation:")
+ * - Tool call echoes ("tool/name: {json...}")
+ * - Internal step markers ("[STEP 1/3]", "[EXEC s1]", "[SYNTHESIS]", etc.)
+ * - Think tags ("<think>...</think>")
+ *
+ * Applied at buildStrategyResult() to catch all 5 strategies, and as a safety
+ * net in the execution engine before TaskResult is returned.
+ */
+export function sanitizeAgentOutput(text: string): string {
+  if (typeof text !== "string" || text.length === 0) return text;
+
+  let result = text;
+
+  // Strip <think>...</think> tags (some models emit these)
+  result = result.replace(/<think>[\s\S]*?<\/think>/gi, "");
+
+  // Strip "FINAL ANSWER:" prefix
+  result = result.replace(/^FINAL ANSWER:\s*/i, "");
+
+  // Strip internal step markers: [STEP 1/3], [EXEC s1], [SYNTHESIS], [REFLECT 1], [SKIP s1], [PATCH]
+  result = result.replace(/^\[(?:STEP \d+\/\d+|EXEC s\d+|SYNTHESIS|REFLECT \d+|SKIP s\d+|PATCH)\]\s*/gim, "");
+
+  // Strip "Thought:" / "Action:" / "Action Input:" / "Observation:" protocol prefixes at line start
+  result = result.replace(/^(?:Thought|Action|Action Input|Observation):\s*/gim, "");
+
+  // Strip tool call echo lines: "tool/name: {" or "tool_name: {" at line start followed by JSON
+  result = result.replace(/^[\w\-]+\/[\w\-]+:\s*\{[^}]*\}\s*$/gm, "");
+
+  // Strip lines that are just raw JSON objects with common internal keys
+  result = result.replace(/^\s*\{\s*"(?:recipient|toolName|callId|stepId|_tag)"[^}]*\}\s*$/gm, "");
+
+  // Collapse multiple blank lines into one
+  result = result.replace(/\n{3,}/g, "\n\n");
+
+  return result.trim();
+}
