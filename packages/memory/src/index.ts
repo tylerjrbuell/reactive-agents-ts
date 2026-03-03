@@ -78,6 +78,10 @@ export {
   ProceduralMemoryService,
   ProceduralMemoryServiceLive,
 } from "./services/procedural-memory.js";
+export {
+  PlanStoreService,
+  PlanStoreServiceLive,
+} from "./services/plan-store.js";
 
 // ─── File System ───
 export {
