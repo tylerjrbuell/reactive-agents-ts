@@ -251,9 +251,10 @@ export function buildReflectionPrompt(goal: string, stepResults: StepResult[]): 
 
   sections.push(
     `Review the results above against the original goal.\n\n` +
-    `If all steps completed successfully and the goal is achieved, respond with:\n` +
-    `SATISFIED: <brief summary of what was accomplished>\n\n` +
-    `Otherwise, describe what is missing or what went wrong.`,
+    `Your FIRST LINE must be exactly one of:\n` +
+    `SATISFIED: <brief summary>\n` +
+    `UNSATISFIED: <what is missing or wrong>\n\n` +
+    `Then optionally add details on a new line. The first word MUST be either SATISFIED or UNSATISFIED.`,
   );
 
   return sections.join("\n\n");
