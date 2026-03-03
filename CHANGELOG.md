@@ -6,7 +6,25 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 
 ---
 
-## [Unreleased] — Phase A Foundation Fixes
+## [Unreleased] — Structured Plan Engine
+
+### Added
+
+#### Structured Plan Engine (`@reactive-agents/reasoning` + `@reactive-agents/memory` + `@reactive-agents/llm-provider`)
+
+Complete rewrite of the plan-execute-reflect strategy with structured JSON plans, replacing fragile text-parsed numbered lists:
+
+- **`packages/reasoning/src/types/plan.ts`** — `Plan`, `PlanStep`, `LLMPlanOutput` type-safe schemas. `hydratePlan()` generates deterministic short IDs (`s1`, `s2`). `resolveStepReferences()` for `{{from_step:sN}}` interpolation.
+- **`packages/reasoning/src/structured-output/`** — Reusable 4-layer structured output pipeline: high-signal prompting → JSON repair → Schema validation → retry with error feedback. `extractJsonBlock()` and `repairJson()` handle markdown fences, trailing commas, single quotes, truncated JSON.
+- **`packages/llm-provider`** — `StructuredOutputCapabilities` interface. Each provider reports JSON mode, schema enforcement, prefill, and grammar support.
+- **`packages/memory`** — `plans` + `plan_steps` SQLite tables. `PlanStoreService` for persistent plan CRUD.
+- **`packages/reasoning/src/strategies/plan-execute.ts`** — Rewritten with structured JSON plans, hybrid step execution (tool_call direct dispatch, analysis/composite scoped kernel), graduated retry → patch → replan, plan persistence.
+- **`packages/reasoning/src/strategies/shared/plan-prompts.ts`** — Tier-adaptive prompt builders: plan generation, patch, step execution, reflection.
+- **`PlanExecuteConfig`** — Extended with `planMode` ("linear" | "dag"), `stepRetries`, `patchStrategy`.
+
+---
+
+## [Phase A Foundation Fixes]
 
 ### Added
 
