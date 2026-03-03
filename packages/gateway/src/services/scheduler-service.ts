@@ -72,9 +72,11 @@ export const SchedulerServiceLive = (config: SchedulerConfig, bus?: EventBusLike
       const agentId = config.agentId ?? "default";
 
       // Pre-parse all enabled cron entries once at construction time.
+      // Track last-fired minute per cron to prevent double-fire within the same minute
+      // (tick interval may be shorter than 60s, so shouldFireAt can match multiple times).
       const parsedCrons = (config.crons ?? [])
         .filter((c) => c.enabled !== false)
-        .map((c) => ({ entry: c, parsed: parseCron(c.schedule) }))
+        .map((c) => ({ entry: c, parsed: parseCron(c.schedule), lastFiredMinute: -1 }))
         .filter((c) => c.parsed !== null);
 
       return {
@@ -83,9 +85,12 @@ export const SchedulerServiceLive = (config: SchedulerConfig, bus?: EventBusLike
         checkCrons: (now: Date) =>
           Effect.gen(function* () {
             const events: GatewayEvent[] = [];
-            for (const { entry, parsed } of parsedCrons) {
-              if (parsed && shouldFireAt(parsed, now)) {
-                const event = createCronEvent(agentId, entry);
+            // Unique key for the current minute (changes every 60s)
+            const minuteKey = Math.floor(now.getTime() / 60_000);
+            for (const cron of parsedCrons) {
+              if (cron.parsed && shouldFireAt(cron.parsed, now) && cron.lastFiredMinute !== minuteKey) {
+                cron.lastFiredMinute = minuteKey;
+                const event = createCronEvent(agentId, cron.entry);
                 events.push(event);
                 if (bus) {
                   yield* bus.publish({

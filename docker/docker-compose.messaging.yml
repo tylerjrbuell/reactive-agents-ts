@@ -20,9 +20,8 @@ services:
     deploy:
       resources:
         limits:
-          memory: 128m
-          pids: 30
-    read_only: true
+          memory: 512m          # JVM (signal-cli) + Bun (MCP server)
+          pids: 50
     tmpfs:
       - /tmp:size=50m
     volumes:
