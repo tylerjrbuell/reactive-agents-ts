@@ -46,6 +46,7 @@ export const createCronEvent = (
 
 interface SchedulerConfig {
   readonly agentId?: string;
+  readonly timezone?: string;
   readonly heartbeat?: HeartbeatConfig;
   readonly crons?: readonly CronEntry[];
 }
@@ -88,18 +89,23 @@ export const SchedulerServiceLive = (config: SchedulerConfig, bus?: EventBusLike
             // Unique key for the current minute (changes every 60s)
             const minuteKey = Math.floor(now.getTime() / 60_000);
             for (const cron of parsedCrons) {
-              if (cron.parsed && shouldFireAt(cron.parsed, now) && cron.lastFiredMinute !== minuteKey) {
-                cron.lastFiredMinute = minuteKey;
-                const event = createCronEvent(agentId, cron.entry);
-                events.push(event);
-                if (bus) {
-                  yield* bus.publish({
-                    _tag: "GatewayEventReceived",
-                    agentId,
-                    source: "cron",
-                    eventId: event.id,
-                    timestamp: Date.now(),
-                  });
+              if (cron.parsed) {
+                // Use entry-specific timezone or fall back to global config timezone
+                const tz = cron.entry.timezone ?? config.timezone;
+                const shouldFire = shouldFireAt(cron.parsed, now, tz);
+                if (shouldFire && cron.lastFiredMinute !== minuteKey) {
+                  cron.lastFiredMinute = minuteKey;
+                  const event = createCronEvent(agentId, cron.entry);
+                  events.push(event);
+                  if (bus) {
+                    yield* bus.publish({
+                      _tag: "GatewayEventReceived",
+                      agentId,
+                      source: "cron",
+                      eventId: event.id,
+                      timestamp: Date.now(),
+                    });
+                  }
                 }
               }
             }
