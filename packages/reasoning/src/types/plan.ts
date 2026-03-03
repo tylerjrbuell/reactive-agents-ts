@@ -4,7 +4,7 @@ import { Schema } from "effect";
 // ─── Short ID Generator ───
 
 export const shortId = (): string =>
-  `p_${Math.random().toString(36).slice(2, 6)}`;
+  `p_${Math.random().toString(36).slice(2, 8).padEnd(4, "0").slice(0, 4)}`;
 
 // ─── LLM Plan Step (content-only, from LLM output) ───
 
