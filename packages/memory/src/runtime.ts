@@ -6,6 +6,7 @@ import { ProceduralMemoryServiceLive } from "./services/procedural-memory.js";
 import { MemoryFileSystemLive } from "./fs/memory-file-system.js";
 import { MemorySearchServiceLive } from "./search.js";
 import { ZettelkastenServiceLive } from "./indexing/zettelkasten.js";
+import { PlanStoreServiceLive } from "./services/plan-store.js";
 import { MemoryServiceLive } from "./services/memory-service.js";
 import { MemoryDatabaseLive } from "./database.js";
 import type { MemoryConfig } from "./types.js";
@@ -40,6 +41,7 @@ export const createMemoryLayer = (
     SemanticMemoryServiceLive,
     EpisodicMemoryServiceLive,
     ProceduralMemoryServiceLive,
+    PlanStoreServiceLive,
     MemorySearchServiceLive,
     ZettelkastenServiceLive,
   ).pipe(Layer.provide(dbLayer));
