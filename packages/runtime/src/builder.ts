@@ -1153,6 +1153,11 @@ export class ReactiveAgentBuilder {
    * ```
    */
   async build(): Promise<ReactiveAgent> {
+    // Auto-resolve context profile from model name if not explicitly set
+    if (!this._contextProfile && this._model) {
+      const { resolveProfile } = await import("@reactive-agents/reasoning");
+      this._contextProfile = resolveProfile(this._model);
+    }
     return Effect.runPromise(this.buildEffect());
   }
 
@@ -2035,6 +2040,7 @@ export class ReactiveAgent {
 
     const self = this;
     let stopped = false;
+    let isExecuting = false; // concurrency guard — prevents overlapping agent runs
     let timer: ReturnType<typeof setInterval> | null = null;
     let heartbeatsFired = 0;
     let totalRuns = 0;
@@ -2051,6 +2057,7 @@ export class ReactiveAgent {
       let gw: any;
       let sched: any;
       let eb: any = null;
+      let obs: any = null;
       try {
         const services = await self.runtime.runPromise(
           Effect.gen(function* () {
@@ -2081,6 +2088,26 @@ export class ReactiveAgent {
         );
       } catch { /* EventBus not in runtime — no observability */ }
 
+      // Resolve ObservabilityService for structured logging (optional)
+      try {
+        obs = await self.runtime.runPromise(
+          Effect.gen(function* () {
+            const obsMod = yield* Effect.promise(() => import("@reactive-agents/observability"));
+            return yield* (obsMod.ObservabilityService as any);
+          }) as Effect.Effect<any>,
+        );
+      } catch { /* ObservabilityService not in runtime — no logging */ }
+
+      // Gateway log helper — routes through ObservabilityService when available
+      const glog = (level: string, message: string, metadata?: Record<string, unknown>) => {
+        if (!obs) return;
+        self.runtime.runPromise(
+          obs.log(level, `◉ [gateway] ${message}`, metadata ?? {}),
+        ).catch(() => {});
+      };
+
+      glog("info", `started (interval=${self._gatewayIntervalMs}ms)`);
+
       // Helper to publish events safely
       const publish = async (event: any) => {
         if (!eb) return;
@@ -2089,12 +2116,20 @@ export class ReactiveAgent {
         } catch { /* observability errors don't kill the loop */ }
       };
 
-      // Helper to run an event through the gateway and execute if approved
+      // Helper to run an event through the gateway and execute if approved.
+      // Guarded by `isExecuting` to prevent overlapping agent runs.
+      // Each execution uses a unique agentId suffix so it bootstraps with empty
+      // memory — gateway runs are stateless and don't carry context from prior runs.
       const executeEvent = async (
         event: any,
         source: string,
         instruction: string,
       ) => {
+        if (isExecuting) {
+          glog("debug", `${source} → skipped (another execution in progress)`);
+          return;
+        }
+        isExecuting = true;
         await publish({
           _tag: "ProactiveActionInitiated",
           agentId: self.agentId ?? "unknown",
@@ -2104,59 +2139,101 @@ export class ReactiveAgent {
         });
         const runStart = Date.now();
         try {
-          const result = await self.run(instruction);
+          // Isolated run: unique agentId per execution prevents memory accumulation
+          const runAgentId = `${self.agentId}-${source}-${Date.now()}`;
+          const task: Task = {
+            id: generateTaskId(),
+            agentId: Schema.decodeSync(AgentId)(runAgentId),
+            type: "query" as const,
+            input: { question: instruction },
+            priority: "medium" as const,
+            status: "pending" as const,
+            metadata: { tags: [] },
+            createdAt: new Date(),
+          };
+          const taskResult: TaskResult = await self.runtime.runPromise(
+            self.engine.execute(task).pipe(
+              Effect.mapError(
+                (e: any) => new Error("message" in e ? e.message : String(e)),
+              ),
+            ) as Effect.Effect<TaskResult, Error>,
+          );
+          const result = {
+            output: String(taskResult.output ?? ""),
+            success: taskResult.success,
+            metadata: taskResult.metadata as AgentResultMetadata,
+          };
           totalRuns++;
           const tokensUsed = result.metadata?.tokensUsed ?? 0;
+          const durationMs = Date.now() - runStart;
           if (tokensUsed) {
             await self.runtime.runPromise(gw.updateTokensUsed(tokensUsed));
           }
+          glog("info", `${source} completed (${durationMs}ms, ${tokensUsed} tokens)`);
           await publish({
             _tag: "ProactiveActionCompleted",
             agentId: self.agentId ?? "unknown",
             source,
             success: true,
             tokensUsed,
-            durationMs: Date.now() - runStart,
+            durationMs,
             timestamp: Date.now(),
           });
-        } catch {
+        } catch (err) {
+          const durationMs = Date.now() - runStart;
+          glog("warn", `${source} failed (${durationMs}ms): ${err instanceof Error ? err.message : String(err)}`);
           await publish({
             _tag: "ProactiveActionCompleted",
             agentId: self.agentId ?? "unknown",
             source,
             success: false,
             tokensUsed: 0,
-            durationMs: Date.now() - runStart,
+            durationMs,
             timestamp: Date.now(),
           });
+        } finally {
+          isExecuting = false;
         }
       };
 
       const tick = async () => {
         if (stopped) return;
         try {
-          // 1. Emit heartbeat and check policy
+          // 1. Emit heartbeat and check policy — only run agent if a custom instruction was configured
           const hbEvent: any = await self.runtime.runPromise(sched.emitHeartbeat());
           const decision: any = await self.runtime.runPromise(gw.processEvent(hbEvent));
           heartbeatsFired++;
 
-          if (decision.action === "execute") {
+          if (!self._hasCustomHeartbeatInstruction) {
+            glog("debug", `heartbeat #${heartbeatsFired} → idle (no instruction configured)`);
+          } else if (decision.action === "execute") {
             const instruction = hbEvent.metadata?.instruction ?? "Check for work";
+            glog("info", `heartbeat #${heartbeatsFired} → execute`, { instruction: instruction.slice(0, 80) });
             await executeEvent(hbEvent, "heartbeat", instruction);
+          } else {
+            glog("debug", `heartbeat #${heartbeatsFired} → ${decision.action}`, { reason: decision.reason });
           }
 
           // 2. Check crons
           const cronEvents: any[] = await self.runtime.runPromise(sched.checkCrons(new Date())) as any;
           cronChecks++;
+          if (cronEvents.length > 0) {
+            glog("info", `cron check #${cronChecks} → ${cronEvents.length} cron(s) due`);
+          }
           for (const cronEvent of cronEvents) {
             if (stopped) break;
             const cronDecision: any = await self.runtime.runPromise(gw.processEvent(cronEvent));
             if (cronDecision.action === "execute") {
               const cronInstruction = cronEvent.metadata?.instruction ?? "Cron task";
+              glog("info", `cron → execute`, { instruction: cronInstruction.slice(0, 80) });
               await executeEvent(cronEvent, "cron", cronInstruction);
+            } else {
+              glog("debug", `cron → ${cronDecision.action}`, { reason: cronDecision.reason });
             }
           }
-        } catch { /* tick errors don't kill the loop */ }
+        } catch (err) {
+          glog("error", `tick error: ${err instanceof Error ? err.message : String(err)}`);
+        }
       };
 
       // Subscribe to channel messages from MCP servers for push-based messaging
@@ -2185,10 +2262,13 @@ export class ReactiveAgent {
                 const channelDecision: any = yield* gw.processEvent(gwEvent);
 
                 if (channelDecision.action === "execute") {
+                  glog("info", `channel → ${event.platform} message from ${event.sender}`, { message: event.message.slice(0, 80) });
                   const instruction = `Respond to this ${event.platform} message from ${event.sender}: "${event.message}". Use the ${event.mcpServer}/send_message_to_user tool to reply.`;
                   yield* Effect.promise(() =>
                     executeEvent(gwEvent, "channel", instruction),
                   );
+                } else {
+                  glog("debug", `channel → ${channelDecision.action} from ${event.sender}`, { reason: channelDecision.reason });
                 }
               }),
             ),
