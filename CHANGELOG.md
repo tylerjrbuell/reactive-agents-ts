@@ -35,6 +35,13 @@ Complete rewrite of the plan-execute-reflect strategy with structured JSON plans
 - **Tool signatures show required vs optional** — `name` vs `name?` in plan generation prompt helps LLM include all required parameters
 - **Planning rules enforce efficiency** — Min steps, prefer tool_call, max ONE analysis step, combine related work
 
+#### Duplicate Step Prevention (`@reactive-agents/reasoning`)
+
+- **All-steps-completed guard** — If every plan step completed successfully, treat as satisfied regardless of LLM reflection text. Prevents false-negative refinement loops that re-execute side-effecting actions (e.g., sending duplicate messages)
+- **Carry-forward refinement** — Plan generation moved outside refinement loop. Completed steps preserved across cycles — only failed/pending steps get patched and re-executed via `buildPatchPrompt`
+- **`isSatisfied()` case-insensitive** — Now matches `"Satisfied:"`, `"Status: Satisfied"`, etc. Reflection prompt restructured to force `SATISFIED:` or `UNSATISFIED:` as first word
+- **Granular observability** — Step start, retry, failure, patch, skip, reflection events all published via EventBus for full plan execution visibility
+
 ---
 
 ## [Phase A Foundation Fixes]
