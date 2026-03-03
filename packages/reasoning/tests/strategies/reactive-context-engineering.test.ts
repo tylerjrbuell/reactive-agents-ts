@@ -435,3 +435,246 @@ describe("Sprint 2D: Early termination on end_turn", () => {
     expect(result.status).toBe("partial");
   });
 });
+
+// ─── Profile overrides: temperature and maxIterations ───
+
+describe("Profile overrides for temperature and maxIterations", () => {
+  it("uses profile.temperature when contextProfile provided", async () => {
+    let capturedTemperature: number | undefined;
+    const { LLMService: LLMSvc } = await import("@reactive-agents/llm-provider");
+
+    const capturingLLMLayer = Layer.succeed(LLMSvc, {
+      complete: (req: any) => {
+        capturedTemperature = req.temperature;
+        return Effect.succeed({
+          content: "FINAL ANSWER: done",
+          stopReason: "end_turn" as const,
+          usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15, estimatedCost: 0 },
+          model: "test-model",
+        });
+      },
+      stream: () => Effect.succeed({} as any),
+      completeStructured: () => Effect.succeed({} as any),
+      embed: (texts: string[]) => Effect.succeed(texts.map(() => [])),
+      countTokens: () => Effect.succeed(0),
+      getModelConfig: () => Effect.succeed({ provider: "anthropic" as const, model: "test-model" }),
+    } as any);
+
+    await Effect.runPromise(
+      executeReactive({
+        taskDescription: "Test temperature override",
+        taskType: "test",
+        memoryContext: "",
+        availableTools: [],
+        config: {
+          ...defaultReasoningConfig,
+          strategies: {
+            ...defaultReasoningConfig.strategies,
+            reactive: { maxIterations: 8, temperature: 0.7 },
+          },
+        },
+        contextProfile: {
+          tier: "local",
+          promptVerbosity: "minimal",
+          rulesComplexity: "simplified",
+          fewShotExampleCount: 0,
+          compactAfterSteps: 4,
+          fullDetailSteps: 2,
+          toolResultMaxChars: 400,
+          contextBudgetPercent: 70,
+          toolSchemaDetail: "names-and-types",
+          maxIterations: 8,
+          temperature: 0.3,
+        },
+      }).pipe(Effect.provide(capturingLLMLayer)),
+    );
+
+    // Profile temperature (0.3) should override config temperature (0.7)
+    expect(capturedTemperature).toBe(0.3);
+  });
+
+  it("uses profile.maxIterations when contextProfile provided", async () => {
+    let callCount = 0;
+    const { LLMService: LLMSvc } = await import("@reactive-agents/llm-provider");
+
+    const countingLLMLayer = Layer.succeed(LLMSvc, {
+      complete: (_req: any) => {
+        callCount++;
+        // Never give FINAL ANSWER — force exhaustion of maxIterations
+        return Effect.succeed({
+          content: `Thinking about step ${callCount}...`,
+          stopReason: "end_turn" as const,
+          usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15, estimatedCost: 0 },
+          model: "test-model",
+        });
+      },
+      stream: () => Effect.succeed({} as any),
+      completeStructured: () => Effect.succeed({} as any),
+      embed: (texts: string[]) => Effect.succeed(texts.map(() => [])),
+      countTokens: () => Effect.succeed(0),
+      getModelConfig: () => Effect.succeed({ provider: "anthropic" as const, model: "test-model" }),
+    } as any);
+
+    const result = await Effect.runPromise(
+      executeReactive({
+        taskDescription: "Test maxIterations override",
+        taskType: "test",
+        memoryContext: "",
+        availableTools: [],
+        config: {
+          ...defaultReasoningConfig,
+          strategies: {
+            ...defaultReasoningConfig.strategies,
+            reactive: { maxIterations: 10, temperature: 0.7 },
+          },
+        },
+        contextProfile: {
+          tier: "local",
+          promptVerbosity: "minimal",
+          rulesComplexity: "simplified",
+          fewShotExampleCount: 0,
+          compactAfterSteps: 4,
+          fullDetailSteps: 2,
+          toolResultMaxChars: 400,
+          contextBudgetPercent: 70,
+          toolSchemaDetail: "names-and-types",
+          maxIterations: 3,
+          temperature: 0.3,
+        },
+      }).pipe(Effect.provide(countingLLMLayer)),
+    );
+
+    // Profile maxIterations (3) should override config maxIterations (10)
+    // Loop should stop after 3 iterations, not 10
+    expect(callCount).toBe(3);
+    expect(result.status).toBe("partial");
+  });
+});
+
+// ─── Tool schema detail levels ───
+
+describe("toolSchemaDetail from context profile", () => {
+  it("names-and-types detail omits descriptions", async () => {
+    let capturedContent = "";
+    const { LLMService: LLMSvc } = await import("@reactive-agents/llm-provider");
+
+    const capturingLLMLayer = Layer.succeed(LLMSvc, {
+      complete: (req: any) => {
+        const lastMsg = req.messages[req.messages.length - 1];
+        capturedContent = typeof lastMsg?.content === "string" ? lastMsg.content : "";
+        return Effect.succeed({
+          content: "FINAL ANSWER: done",
+          stopReason: "end_turn" as const,
+          usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15, estimatedCost: 0 },
+          model: "test-model",
+        });
+      },
+      stream: () => Effect.succeed({} as any),
+      completeStructured: () => Effect.succeed({} as any),
+      embed: (texts: string[]) => Effect.succeed(texts.map(() => [])),
+      countTokens: () => Effect.succeed(0),
+      getModelConfig: () => Effect.succeed({ provider: "anthropic" as const, model: "test-model" }),
+    } as any);
+
+    await Effect.runPromise(
+      executeReactive({
+        taskDescription: "Write a file",
+        taskType: "file-operation",
+        memoryContext: "",
+        availableTools: ["file-write"],
+        availableToolSchemas: [
+          {
+            name: "file-write",
+            description: "Write content to a file",
+            parameters: [
+              { name: "path", type: "string", description: "File path", required: true },
+              { name: "content", type: "string", description: "File content", required: true },
+            ],
+          },
+        ],
+        config: testConfig,
+        contextProfile: {
+          tier: "local",
+          promptVerbosity: "minimal",
+          rulesComplexity: "simplified",
+          fewShotExampleCount: 0,
+          compactAfterSteps: 4,
+          fullDetailSteps: 2,
+          toolResultMaxChars: 400,
+          contextBudgetPercent: 70,
+          toolSchemaDetail: "names-and-types",
+        },
+      }).pipe(Effect.provide(capturingLLMLayer)),
+    );
+
+    // names-and-types format: "- file-write(path: string, content: string)" — no " — " description
+    expect(capturedContent).toContain("file-write(path: string, content: string)");
+    expect(capturedContent).not.toContain("Write content to a file");
+  });
+
+  it("names-only detail shows comma list without parameter details", async () => {
+    let capturedContent = "";
+    const { LLMService: LLMSvc } = await import("@reactive-agents/llm-provider");
+
+    const capturingLLMLayer = Layer.succeed(LLMSvc, {
+      complete: (req: any) => {
+        const lastMsg = req.messages[req.messages.length - 1];
+        capturedContent = typeof lastMsg?.content === "string" ? lastMsg.content : "";
+        return Effect.succeed({
+          content: "FINAL ANSWER: done",
+          stopReason: "end_turn" as const,
+          usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15, estimatedCost: 0 },
+          model: "test-model",
+        });
+      },
+      stream: () => Effect.succeed({} as any),
+      completeStructured: () => Effect.succeed({} as any),
+      embed: (texts: string[]) => Effect.succeed(texts.map(() => [])),
+      countTokens: () => Effect.succeed(0),
+      getModelConfig: () => Effect.succeed({ provider: "anthropic" as const, model: "test-model" }),
+    } as any);
+
+    await Effect.runPromise(
+      executeReactive({
+        taskDescription: "Write a file and search the web",
+        taskType: "multi-tool",
+        memoryContext: "",
+        availableTools: ["file-write", "web-search"],
+        availableToolSchemas: [
+          {
+            name: "file-write",
+            description: "Write content to a file",
+            parameters: [
+              { name: "path", type: "string", description: "File path", required: true },
+              { name: "content", type: "string", description: "File content", required: true },
+            ],
+          },
+          {
+            name: "web-search",
+            description: "Search the web",
+            parameters: [
+              { name: "query", type: "string", description: "Search query", required: true },
+            ],
+          },
+        ],
+        config: testConfig,
+        contextProfile: {
+          tier: "local",
+          promptVerbosity: "minimal",
+          rulesComplexity: "simplified",
+          fewShotExampleCount: 0,
+          compactAfterSteps: 4,
+          fullDetailSteps: 2,
+          toolResultMaxChars: 400,
+          contextBudgetPercent: 70,
+          toolSchemaDetail: "names-only",
+        },
+      }).pipe(Effect.provide(capturingLLMLayer)),
+    );
+
+    // names-only format: "Tools: file-write, web-search" — comma-separated, no params
+    expect(capturedContent).toContain("Tools: file-write, web-search");
+    expect(capturedContent).not.toContain("path: string");
+    expect(capturedContent).not.toContain("Write content to a file");
+  });
+});
