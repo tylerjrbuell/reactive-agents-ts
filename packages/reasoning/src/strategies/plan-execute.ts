@@ -21,6 +21,7 @@ import {
 import { makeStep, buildStrategyResult } from "./shared/step-utils.js";
 import { isSatisfied } from "./shared/quality-utils.js";
 import type { ToolSchema } from "./shared/tool-utils.js";
+import type { ResultCompressionConfig } from "@reactive-agents/tools";
 
 interface PlanExecuteInput {
   readonly taskDescription: string;
@@ -34,6 +35,8 @@ interface PlanExecuteInput {
   readonly systemPrompt?: string;
   /** Task ID for event correlation */
   readonly taskId?: string;
+  /** Tool result compression config */
+  readonly resultCompression?: ResultCompressionConfig;
 }
 
 export const executePlanExecute = (
@@ -129,10 +132,11 @@ export const executePlanExecute = (
             input.systemPrompt ??
             "You are a precise task executor. Complete the given step using available tools if needed.",
           availableToolSchemas: input.availableToolSchemas,
-          maxIterations: 2,
+          maxIterations: input.config.strategies.planExecute?.stepKernelMaxIterations ?? 2,
           temperature: 0.5,
           taskId: input.taskId,
           parentStrategy: "plan-execute",
+          resultCompression: input.resultCompression,
         }).pipe(
           Effect.mapError(
             (err) =>

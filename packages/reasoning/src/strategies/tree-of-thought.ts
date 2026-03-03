@@ -20,6 +20,7 @@ import { resolveStrategyServices, compilePromptOrFallback, publishReasoningStep 
 import { parseScore } from "./shared/quality-utils.js";
 import { formatToolSchemas } from "./shared/tool-utils.js";
 import type { ToolSchema } from "./shared/tool-utils.js";
+import type { ResultCompressionConfig } from "@reactive-agents/tools";
 
 interface TreeOfThoughtInput {
   readonly taskDescription: string;
@@ -32,6 +33,8 @@ interface TreeOfThoughtInput {
   readonly systemPrompt?: string;
   /** Task ID for event correlation */
   readonly taskId?: string;
+  /** Tool result compression config */
+  readonly resultCompression?: ResultCompressionConfig;
 }
 
 interface ThoughtNode {
@@ -279,6 +282,7 @@ export const executeTreeOfThought = (
       temperature: 0.7,
       taskId: input.taskId,
       parentStrategy: "tree-of-thought",
+      resultCompression: input.resultCompression,
     }).pipe(
       Effect.mapError((err) => new ExecutionError({
         strategy: "tree-of-thought",
