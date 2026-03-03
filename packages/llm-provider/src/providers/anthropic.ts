@@ -364,6 +364,14 @@ export const AnthropicProviderLive = Layer.effect(
           provider: "anthropic" as const,
           model: config.defaultModel,
         }),
+
+      getStructuredOutputCapabilities: () =>
+        Effect.succeed({
+          nativeJsonMode: false,
+          jsonSchemaEnforcement: false,
+          prefillSupport: true,
+          grammarConstraints: false,
+        }),
     });
   }),
 );
