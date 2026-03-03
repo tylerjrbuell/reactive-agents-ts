@@ -59,8 +59,8 @@ export interface PlanStep {
   type: "tool_call" | "analysis" | "composite";
   toolName?: string;
   toolArgs?: Record<string, unknown>;
-  toolHints?: string[];
-  dependsOn?: string[];
+  toolHints?: readonly string[];
+  dependsOn?: readonly string[];
   status: PlanStepStatus;
   result?: string;
   error?: string;
