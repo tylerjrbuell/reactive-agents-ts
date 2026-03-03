@@ -22,6 +22,19 @@ Complete rewrite of the plan-execute-reflect strategy with structured JSON plans
 - **`packages/reasoning/src/strategies/shared/plan-prompts.ts`** — Tier-adaptive prompt builders: plan generation, patch, step execution, reflection.
 - **`PlanExecuteConfig`** — Extended with `planMode` ("linear" | "dag"), `stepRetries`, `patchStrategy`.
 
+### Fixed
+
+#### Plan Persistence & Error Handling (`@reactive-agents/reasoning` + `@reactive-agents/memory`)
+
+- **`PlanStoreServiceLive` wired into memory layer** — Was missing from `createMemoryLayer()` in `packages/memory/src/runtime.ts`, so `Effect.serviceOption` always returned `None` and plans were never persisted despite the tables existing
+- **Step status updates use correct ID** — `updateStepStatus()` was called with composite `${planId}_${stepId}` but DB primary key is just `stepId`
+- **Effect error handling** — Replaced broken `try/catch` (doesn't catch Effect typed errors in generators) with `Effect.exit()` + `Exit.isSuccess()` + `Cause.squash()` pattern for reliable retry loop
+- **Goal stored as plain text** — `extractGoalText()` unwraps JSON-wrapped `{"question":"..."}` from execution engine's `JSON.stringify(task.input)`
+- **"FINAL ANSWER:" stripped from step outputs** — `stripFinalAnswerPrefix()` prevents ReAct protocol artifacts from leaking into tool args via `{{from_step:sN}}` references
+- **Analysis steps use direct `llm.complete()`** — Removed unnecessary ReAct kernel overhead for pure reasoning steps (no tools needed)
+- **Tool signatures show required vs optional** — `name` vs `name?` in plan generation prompt helps LLM include all required parameters
+- **Planning rules enforce efficiency** — Min steps, prefer tool_call, max ONE analysis step, combine related work
+
 ---
 
 ## [Phase A Foundation Fixes]
