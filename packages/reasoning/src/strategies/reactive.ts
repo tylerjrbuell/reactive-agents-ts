@@ -42,7 +42,7 @@ interface ReactiveInput {
   readonly availableTools: readonly string[];
   readonly config: ReasoningConfig;
   /** Model context profile — controls compaction thresholds, verbosity, tool result sizes. */
-  readonly contextProfile?: ContextProfile;
+  readonly contextProfile?: Partial<ContextProfile>;
   /** Custom system prompt for steering agent behavior */
   readonly systemPrompt?: string;
   /** Task ID for event correlation */
@@ -74,7 +74,9 @@ export const executeReactive = (
       yield* resolveStrategyServices;
 
     // Resolve context profile — use provided profile, or default to "mid"
-    const profile: ContextProfile = input.contextProfile ?? CONTEXT_PROFILES["mid"];
+    const profile: ContextProfile = input.contextProfile
+      ? ({ ...CONTEXT_PROFILES["mid"], ...input.contextProfile } as ContextProfile)
+      : CONTEXT_PROFILES["mid"];
 
     const maxIter = input.contextProfile?.maxIterations ?? input.config.strategies.reactive.maxIterations;
     const temp = input.contextProfile?.temperature ?? input.config.strategies.reactive.temperature;

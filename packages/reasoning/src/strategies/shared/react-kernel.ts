@@ -53,7 +53,7 @@ export interface ReActKernelInput {
   /** Maximum iterations before giving up. Default: 10 */
   maxIterations?: number;
   /** Model context profile controlling compaction thresholds, result sizes, etc. */
-  contextProfile?: ContextProfile;
+  contextProfile?: Partial<ContextProfile>;
   /** Tool result compression configuration */
   resultCompression?: ResultCompressionConfig;
   /** LLM sampling temperature */
@@ -101,7 +101,9 @@ export const executeReActKernel = (
     const services = yield* resolveStrategyServices;
     const { llm, toolService, promptService: _promptService, eventBus } = services;
 
-    const profile: ContextProfile = input.contextProfile ?? CONTEXT_PROFILES["mid"];
+    const profile: ContextProfile = input.contextProfile
+      ? ({ ...CONTEXT_PROFILES["mid"], ...input.contextProfile } as ContextProfile)
+      : CONTEXT_PROFILES["mid"];
     const maxIter = input.maxIterations ?? profile.maxIterations ?? 10;
     const temp = input.temperature ?? profile.temperature ?? 0.7;
     const strategy = input.parentStrategy ?? "react-kernel";
