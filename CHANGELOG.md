@@ -6,6 +6,97 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 
 ---
 
+## [Unreleased] — Phase A Foundation Fixes
+
+### Added
+
+#### Strategy Type Threading (`@reactive-agents/reasoning`)
+
+Full type-safe parameter threading from execution engine through all 5 reasoning strategies:
+
+- **`StrategyFn` type extended** — `resultCompression`, `contextProfile`, `taskId`, `agentId`, `sessionId` now explicitly typed (was silently accepted via structural typing)
+- **`resultCompression` wired** — All 3 kernel-backed strategies (Reflexion, Plan-Execute, ToT) forward compression config to `executeReActKernel()`
+- **`kernelMaxIterations` config** — Reflexion: `config.strategies.reflexion.kernelMaxIterations` (default 3); Plan-Execute: `config.strategies.planExecute.stepKernelMaxIterations` (default 2)
+- **Real `agentId`/`sessionId`** — Replaces hard-coded `"reasoning-agent"`/`"reasoning-session"` in react-kernel.ts and reactive.ts; execution engine passes `config.agentId` and `taskId`
+
+#### Reflexion Cross-Run Learning (`@reactive-agents/reasoning` + `@reactive-agents/runtime`)
+
+- **`priorCritiques`** — New optional field on `ReflexionInput`; seeds the critique loop from prior episodic memory
+- **Critique persistence** — After reflexion completes, critiques stored to episodic memory tagged `["reflexion", "critique", taskType]`
+
+#### Hallucination Detection Layer (`@reactive-agents/verification`)
+
+New verification layer for catching fabricated claims:
+
+- **`extractClaims(text)`** — Heuristic sentence-level claim extraction with confidence classification (certain/likely/uncertain)
+- **`checkHallucination(response, source, threshold?)`** — Keyword overlap verification, passes if rate ≤ 10%
+- **`checkHallucinationLLM(response, source, llm, threshold?)`** — LLM-based claim extraction + verification, falls back to heuristic
+- **Verification pipeline integration** — Wired as optional layer via `enableHallucinationDetection` config flag
+
+#### `@reactive-agents/testing` — New Package
+
+Reusable test infrastructure for agent testing:
+
+- **`createMockLLM(rules)`** — Ordered rule matching with call tracking
+- **`createMockLLMFromMap(responses)`** — Simple key→response mapping
+- **`createMockToolService(toolResults)`** — Records calls, returns configured results
+- **`createMockEventBus()`** — Captures published events for assertion
+- **`assertToolCalled()`**, **`assertStepCount()`**, **`assertCostUnder()`** — Test assertion helpers
+
+### Changed
+
+- `@reactive-agents/reasoning`: All strategy input types (`ReactiveInput`, `ReflexionInput`, `PlanExecuteInput`, `TreeOfThoughtInput`, `AdaptiveInput`) now include `agentId?`, `sessionId?`, `resultCompression?`
+- `@reactive-agents/reasoning`: `ReasoningService.execute` params extended with `taskId`, `resultCompression`, `agentId`, `sessionId`
+- `@reactive-agents/verification`: `VerificationConfigSchema` extended with `enableHallucinationDetection`, `hallucinationThreshold`
+
+### Stats
+- 1179 tests across 160 files (was 1116/156 before Phase A, +63 new tests)
+
+---
+
+## [Unreleased — Prior] — Strategy SDK Refactor
+
+### Added
+
+#### Shared Reasoning Kernel (`@reactive-agents/reasoning`)
+
+Extracted a shared execution primitive and utility library from the 5 reasoning strategy files:
+
+- **`shared/react-kernel.ts`** — `executeReActKernel()` — the ReAct Think→Act→Observe loop extracted from `reactive.ts` and parameterized for reuse by all strategies. Accepts `priorContext`, `availableToolSchemas`, `maxIterations`, `contextProfile`, `resultCompression`, `taskId`, `parentStrategy`.
+- **`shared/tool-utils.ts`** — `parseToolRequest`, `parseAllToolRequests`, `hasFinalAnswer`, `extractFinalAnswer`, `evaluateTransform`, `formatToolSchemas`, `compressToolResult` (consolidated from reactive.ts + kernel copy)
+- **`shared/quality-utils.ts`** — `isSatisfied`, `isCritiqueStagnant`, `parseScore`
+- **`shared/context-utils.ts`** — `buildCompactedContext`, `formatStepForContext`
+- **`shared/service-utils.ts`** — `resolveStrategyServices`, `compilePromptOrFallback`, `publishReasoningStep`
+- **`shared/step-utils.ts`** — `makeStep`, `buildStrategyResult`
+- **`shared/index.ts`** — barrel export for entire shared layer
+
+#### Tool Awareness for All Strategies
+
+All 5 strategies are now tool-aware:
+
+- **Reflexion** — generation and improvement passes call `executeReActKernel`; critique pass stays pure LLM
+- **Plan-Execute** — each plan step runs through the kernel (`maxIterations: 2` per step)
+- **Tree-of-Thought** — Phase 2 execution (best-path follow-through) replaced with single kernel call
+- **Adaptive** — threads `availableToolSchemas` to all dispatched sub-strategies
+- **Reactive** — unchanged algorithm; private duplicates removed, shared imports added
+
+#### New Input Fields
+
+`availableToolSchemas?: readonly ToolSchema[]` added to `ReflexionInput`, `PlanExecuteInput`, `TreeOfThoughtInput`, `AdaptiveInput`.
+
+### Changed
+
+- `@reactive-agents/reasoning`: `reactive.ts` — removed private duplicates (`hasFinalAnswer`, `extractFinalAnswer`, `parseToolRequest*`, `formatStepForContext`, `buildCompactedContext`, `compilePromptOrFallback`, local `ToolSchema`/`ToolParamSchema`), replaced with shared imports. Re-exports `evaluateTransform` and `parseToolRequestWithTransform` for backwards compat.
+- `@reactive-agents/reasoning`: `reflexion.ts`, `plan-execute.ts`, `tree-of-thought.ts` — removed local copies of `isSatisfied`, `isCritiqueStagnant`, `compilePromptOrFallback`, `buildResult`; all `tot*` duplicate parsing functions removed.
+- `@reactive-agents/reasoning`: `adaptive.ts` — replaced boilerplate with shared utils.
+- `compressToolResult` + `nextToolResultKey` consolidated into `shared/tool-utils.ts` — previously live in `reactive.ts` and duplicated in `react-kernel.ts`.
+
+### Stats
+- 1116 tests across 156 files (was 1001/139 in v0.5.6, +115 new tests)
+- Feature gap analysis: `spec/plans/2026-03-01-feature-gap-analysis.md` — 8 gaps documented for v0.5.7 planning
+
+---
+
 ## [0.5.6] — 2026-02-28
 
 ### Added
