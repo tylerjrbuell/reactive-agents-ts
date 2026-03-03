@@ -2,7 +2,7 @@
 
 ## Project Status
 
-**v0.5.7 + Structured Plan Engine.** 19 packages + 2 apps built, 1241 tests across 168 files. Plan-execute-reflect fully rewritten with structured JSON plans, provider-adaptive structured output, and persistent SQLite plan storage.
+**v0.5.7 + Structured Plan Engine.** 19 packages + 2 apps built, 1258 tests across 168 files. Plan-execute-reflect fully rewritten with structured JSON plans, provider-adaptive structured output, and persistent SQLite plan storage.
 
 - Phase 1: Core, LLM Provider, Memory, Reasoning, Tools, Interaction, Runtime
 - Phase 2: Guardrails, Verification, Cost
