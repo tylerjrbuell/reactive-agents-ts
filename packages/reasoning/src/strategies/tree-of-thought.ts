@@ -35,6 +35,10 @@ interface TreeOfThoughtInput {
   readonly taskId?: string;
   /** Tool result compression config */
   readonly resultCompression?: ResultCompressionConfig;
+  /** Agent ID for tool execution attribution. Falls back to "reasoning-agent". */
+  readonly agentId?: string;
+  /** Session ID for tool execution attribution. Falls back to "reasoning-session". */
+  readonly sessionId?: string;
 }
 
 interface ThoughtNode {
@@ -283,6 +287,8 @@ export const executeTreeOfThought = (
       taskId: input.taskId,
       parentStrategy: "tree-of-thought",
       resultCompression: input.resultCompression,
+      agentId: input.agentId,
+      sessionId: input.sessionId,
     }).pipe(
       Effect.mapError((err) => new ExecutionError({
         strategy: "tree-of-thought",

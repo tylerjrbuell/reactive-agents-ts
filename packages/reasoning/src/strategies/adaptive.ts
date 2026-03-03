@@ -44,6 +44,10 @@ interface AdaptiveInput {
   readonly taskId?: string;
   /** Full tool schemas for pass-through to sub-strategies */
   readonly availableToolSchemas?: readonly ToolSchema[];
+  /** Agent ID for tool execution attribution — forwarded to sub-strategies. */
+  readonly agentId?: string;
+  /** Session ID for tool execution attribution — forwarded to sub-strategies. */
+  readonly sessionId?: string;
 }
 
 type SubStrategy =

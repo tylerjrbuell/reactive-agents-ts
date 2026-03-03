@@ -616,6 +616,8 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         systemPrompt: config.systemPrompt,
                         taskId: c.taskId,
                         resultCompression: config.resultCompression,
+                        agentId: config.agentId,
+                        sessionId: c.taskId,
                       });
                       return {
                         ...c,

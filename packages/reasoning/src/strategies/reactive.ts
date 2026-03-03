@@ -49,6 +49,10 @@ interface ReactiveInput {
   readonly taskId?: string;
   /** Tool result compression config — controls preview size, scratchpad overflow, and pipe transforms. */
   readonly resultCompression?: ResultCompressionConfig;
+  /** Agent ID for tool execution attribution. Falls back to "reasoning-agent". */
+  readonly agentId?: string;
+  /** Session ID for tool execution attribution. Falls back to "reasoning-session". */
+  readonly sessionId?: string;
 }
 
 /**
@@ -425,8 +429,8 @@ function runToolObservation(
       .execute({
         toolName: toolRequest.tool,
         arguments: args,
-        agentId: "reasoning-agent",
-        sessionId: "reasoning-session",
+        agentId: _input.agentId ?? "reasoning-agent",
+        sessionId: _input.sessionId ?? "reasoning-session",
       })
       .pipe(
         Effect.map((r: ToolOutput) => {

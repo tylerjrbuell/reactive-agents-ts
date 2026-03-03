@@ -62,6 +62,10 @@ export interface ReActKernelInput {
   taskId?: string;
   /** Name of the calling strategy (for event tagging) */
   parentStrategy?: string;
+  /** Agent ID for tool execution attribution. Falls back to "reasoning-agent". */
+  agentId?: string;
+  /** Session ID for tool execution attribution. Falls back to "reasoning-session". */
+  sessionId?: string;
 }
 
 export interface ReActKernelResult {
@@ -315,6 +319,8 @@ Think step-by-step, then either take ONE action or give your FINAL ANSWER:`;
             profile,
             input.resultCompression,
             scratchpadStore,
+            input.agentId,
+            input.sessionId,
           );
           const toolDurationMs = Date.now() - toolStartMs;
           observationContent = toolObs.content;
@@ -569,6 +575,8 @@ function runKernelToolObservation(
   profile?: ContextProfile,
   compressionConfig?: ResultCompressionConfig,
   scratchpadStore?: Map<string, string>,
+  agentId?: string,
+  sessionId?: string,
 ): Effect.Effect<KernelToolObservationOutput, never> {
   // Short-circuit scratchpad-read for auto-stored tool results
   if (
@@ -610,8 +618,8 @@ function runKernelToolObservation(
       .execute({
         toolName: toolRequest.tool,
         arguments: args,
-        agentId: "reasoning-agent",
-        sessionId: "reasoning-session",
+        agentId: agentId ?? "reasoning-agent",
+        sessionId: sessionId ?? "reasoning-session",
       })
       .pipe(
         Effect.map((r: ToolOutput) => {
