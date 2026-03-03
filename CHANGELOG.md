@@ -50,6 +50,16 @@ Complete rewrite of the plan-execute-reflect strategy with structured JSON plans
 - **Analysis step directive prompt** — System prompt changed to "Produce the requested content directly. Never ask questions or offer to do something" to prevent conversational output like "Would you like me to send this?"
 - **Step execution structured RULES** — Added explicit rules: no labels/prefixes, no follow-up questions, output is passed directly to next step
 
+#### Output Sanitization (`@reactive-agents/reasoning` + `@reactive-agents/runtime`)
+
+Cross-cutting output sanitization prevents internal agent metadata from reaching users across all 5 reasoning strategies:
+
+- **`sanitizeAgentOutput()`** in `quality-utils.ts` — Strips `FINAL ANSWER:` prefix, `<think>` tags, `[STEP/EXEC/SYNTHESIS/REFLECT]` markers, ReAct protocol prefixes (`Thought:`/`Action:`/`Observation:`), tool call echo lines (`tool/name: {json}`), raw JSON with internal keys (`recipient`, `toolName`)
+- **`sanitizeToolOutput()`** in `plan-execute.ts` — Action tools (send/write/post/create) that echo back request payloads get sanitized to clean confirmations; data-fetching tools keep full output
+- **Wired into all exit points**: `buildStrategyResult()` (reflexion, plan-execute, ToT, adaptive), `buildResult()` (reactive), execution engine `TaskResult` assembly (safety net)
+- **Synthesis prompt hardened** — Explicitly instructs LLM to exclude tool names, JSON payloads, recipient numbers, and execution metadata from final answer
+- **17 new tests** covering sanitization patterns, integration with `buildStrategyResult`, and edge cases
+
 ---
 
 ## [Phase A Foundation Fixes]
