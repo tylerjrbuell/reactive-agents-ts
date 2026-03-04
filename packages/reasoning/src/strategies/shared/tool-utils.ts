@@ -17,6 +17,21 @@ export function extractFinalAnswer(thought: string): string {
 }
 
 /**
+ * Parse a bare tool call (no ACTION: prefix) from text.
+ * Matches patterns like `tool_name({...})` or `namespace/tool_name({...})`.
+ * Used to detect when a model writes a tool call inside FINAL ANSWER.
+ */
+export function parseBareToolCall(
+  text: string,
+): { tool: string; input: string } | null {
+  // Match: optional-namespace/tool_name({json})
+  const match = text.match(/^([\w\/\-]+)\s*\(/);
+  if (!match) return null;
+  // Reuse parseToolRequest by prepending ACTION: prefix
+  return parseToolRequest(`ACTION: ${text}`);
+}
+
+/**
  * Parse a single ACTION request from a thought string.
  * Returns tool name, input JSON string, and optional transform expression.
  * Handles:
@@ -169,6 +184,45 @@ export function formatToolSchemas(schemas: readonly ToolSchema[], verbose = fals
       return `- ${s.name}({${params}}) — ${s.description}`;
     })
     .join("\n");
+}
+
+/** Compact tool format — name and param types only, no description. ~15 tokens per tool. */
+export function formatToolSchemaCompact(tool: ToolSchema): string {
+  if (tool.parameters.length === 0) return `- ${tool.name}()`;
+  const params = tool.parameters
+    .map((p) => `${p.name}: ${p.type}${p.required ? "" : "?"}`)
+    .join(", ");
+  return `- ${tool.name}(${params})`;
+}
+
+export interface FilteredTools {
+  primary: readonly ToolSchema[];   // mentioned in task — full schema
+  secondary: readonly ToolSchema[]; // not mentioned — compact/collapsed
+}
+
+/**
+ * Split tool schemas into primary (mentioned in task) and secondary (other).
+ * Primary tools get full descriptions; secondary get compact name+types only.
+ */
+export function filterToolsByRelevance(
+  taskDescription: string,
+  schemas: readonly ToolSchema[],
+): FilteredTools {
+  const taskLower = taskDescription.toLowerCase();
+  const primary: ToolSchema[] = [];
+  const secondary: ToolSchema[] = [];
+
+  for (const tool of schemas) {
+    const nameVariants = [
+      tool.name.toLowerCase(),
+      tool.name.split("/").pop()?.toLowerCase() ?? "",
+      tool.name.toLowerCase().replace(/[-_/]/g, " "),
+    ];
+    const mentioned = nameVariants.some((v) => v && taskLower.includes(v));
+    (mentioned ? primary : secondary).push(tool);
+  }
+
+  return { primary, secondary };
 }
 
 // ── Tool Result Compression ───────────────────────────────────────────────────

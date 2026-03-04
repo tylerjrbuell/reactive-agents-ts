@@ -57,9 +57,9 @@ describe("ReflexionStrategy", () => {
 
   it("completes immediately when critique is SATISFIED", async () => {
     // TestLLMServiceLayer returns "Test response" by default for non-matching prompts.
-    // We need to match on critique prompt. The critique prompt includes "Critically evaluate"
+    // We need to match on critique prompt. The critique prompt includes "Evaluate whether"
     const layer = TestLLMServiceLayer({
-      "Critically evaluate": "SATISFIED: The response is accurate and complete.",
+      "Evaluate whether": "SATISFIED: The response is accurate and complete.",
     });
 
     const result = await Effect.runPromise(
@@ -107,7 +107,7 @@ describe("ReflexionStrategy", () => {
 
     // Satisfied on first critique — completed result (high confidence)
     const layer = TestLLMServiceLayer({
-      "Critically evaluate": "SATISFIED: Great response.",
+      "Evaluate whether": "SATISFIED: Great response.",
     });
     const completed = await Effect.runPromise(
       executeReflexion({
@@ -170,7 +170,7 @@ describe("ReflexionStrategy", () => {
   it("exits early when critique is stagnant (same as previous)", async () => {
     // TestLLMService returns the SAME critique every time → stagnant → bail early
     const layer = TestLLMServiceLayer({
-      "Critically evaluate": "The response is missing detail about superposition.",
+      "Evaluate whether": "The response is missing detail about superposition.",
     });
 
     const result = await Effect.runPromise(
@@ -197,7 +197,7 @@ describe("ReflexionStrategy", () => {
 
   it("caps previousCritiques at 3 entries regardless of maxRetries", async () => {
     const layer = TestLLMServiceLayer({
-      "Critically evaluate": "The response lacks examples.",
+      "Evaluate whether": "The response lacks examples.",
       default: "An improved response.",
     });
 
@@ -225,9 +225,9 @@ describe("ReflexionStrategy", () => {
     // Verify that the strategy accepts availableToolSchemas.
     // The generation kernel call will get a prompt containing "quantum computing" →
     // the layer returns a FINAL ANSWER string so the kernel terminates immediately.
-    // The critique prompt contains "Critically evaluate" → SATISFIED → completed.
+    // The critique prompt contains "Evaluate whether" → SATISFIED → completed.
     const layer = TestLLMServiceLayer({
-      "Critically evaluate": "SATISFIED: The response is thorough and well-researched.",
+      "Evaluate whether": "SATISFIED: The response is thorough and well-researched.",
       "quantum computing": "FINAL ANSWER: A complete response generated with tool awareness.",
     });
 
@@ -254,8 +254,8 @@ describe("ReflexionStrategy", () => {
     // We match on a unique string that appears only in the critique to verify the
     // improvement LLM call received the critique context.
     const layer = TestLLMServiceLayer({
-      // Critique prompt matches "Critically evaluate" → unsatisfied critique
-      "Critically evaluate": "The response misses superposition details uniqueMarker99.",
+      // Critique prompt matches "Evaluate whether" → unsatisfied critique
+      "Evaluate whether": "The response misses superposition details uniqueMarker99.",
       // Improvement prompt includes critique text → "uniqueMarker99" appears → improved response
       "uniqueMarker99": "FINAL ANSWER: Improved explanation with superposition examples.",
     });
@@ -281,5 +281,38 @@ describe("ReflexionStrategy", () => {
     const thoughtSteps = result.steps.filter((s) => s.type === "thought");
     expect(thoughtSteps.length).toBeGreaterThanOrEqual(2); // initial attempt + improved attempt
     expect(result.output).toContain("Improved explanation");
+  });
+
+  it("uses thinking content as critique when clean content is empty", async () => {
+    // Simulate Ollama think:true where entire critique is in <think> block
+    const layer = TestLLMServiceLayer({
+      "Evaluate whether": "<think>UNSATISFIED: The response needs more detail.</think>",
+    });
+
+    const result = await Effect.runPromise(
+      executeReflexion({
+        taskDescription: "Test thinking critique",
+        taskType: "query",
+        memoryContext: "",
+        availableTools: [],
+        config: {
+          ...defaultReasoningConfig,
+          strategies: {
+            ...defaultReasoningConfig.strategies,
+            reflexion: { maxRetries: 1, selfCritiqueDepth: "shallow" },
+          },
+        },
+      }).pipe(Effect.provide(layer)),
+    );
+
+    // Critique should NOT be empty — it should use thinking content
+    const critiques = result.steps.filter(
+      (s) => s.type === "observation" && s.content.includes("[CRITIQUE"),
+    );
+    expect(critiques.length).toBeGreaterThan(0);
+    for (const c of critiques) {
+      const content = c.content.replace(/^\[CRITIQUE \d+\]\s*/, "");
+      expect(content.length).toBeGreaterThan(0);
+    }
   });
 });

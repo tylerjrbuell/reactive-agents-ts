@@ -87,4 +87,26 @@ describe("executeReActKernel", () => {
     // Either end_turn or final_answer depending on mock behavior — just verify it terminates
     expect(["end_turn", "final_answer", "max_iterations"]).toContain(result.terminatedBy);
   });
+
+  it("blocks execution of tools listed in blockedTools", async () => {
+    // The model tries to call signal/send_message_to_user, which is blocked.
+    // The kernel should return a synthetic BLOCKED observation instead of executing.
+    const layer = TestLLMServiceLayer({
+      "Task:": 'ACTION: signal/send_message_to_user({"recipient": "+123", "message": "hi"})',
+    });
+
+    const result = await Effect.runPromise(
+      executeReActKernel({
+        task: "Send a message",
+        maxIterations: 2,
+        blockedTools: ["signal/send_message_to_user"],
+      }).pipe(Effect.provide(layer)),
+    );
+
+    // Should have an observation with BLOCKED text
+    const observations = result.steps.filter((s) => s.type === "observation");
+    expect(observations.length).toBeGreaterThan(0);
+    expect(observations[0]!.content).toContain("BLOCKED");
+    expect(observations[0]!.content).toContain("signal/send_message_to_user");
+  });
 });

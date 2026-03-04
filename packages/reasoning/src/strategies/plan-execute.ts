@@ -40,6 +40,7 @@ import {
 import type { StrategyServices } from "./shared/service-utils.js";
 import { makeStep, buildStrategyResult } from "./shared/step-utils.js";
 import { isSatisfied } from "./shared/quality-utils.js";
+import { stripThinking } from "./shared/thinking-utils.js";
 import type { ToolSchema } from "./shared/tool-utils.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 
@@ -389,14 +390,17 @@ export const executePlanExecute = (
       totalTokens += reflectResponse.usage.totalTokens;
       totalCost += reflectResponse.usage.estimatedCost;
 
+      // Strip <think> blocks from reflection before satisfaction check
+      const reflectionContent = stripThinking(reflectResponse.content);
+
       // Treat as satisfied if: explicit SATISFIED, OR all steps completed successfully
       // (prevents false-negative refinement loops that re-execute side-effecting steps)
-      const satisfied = isSatisfied(reflectResponse.content) || allStepsCompleted;
+      const satisfied = isSatisfied(reflectionContent) || allStepsCompleted;
 
       steps.push(
         makeStep(
           "observation",
-          `[REFLECT ${refinement + 1}] ${satisfied ? "SATISFIED" : "UNSATISFIED"} — ${reflectResponse.content}`,
+          `[REFLECT ${refinement + 1}] ${satisfied ? "SATISFIED" : "UNSATISFIED"} — ${reflectionContent}`,
         ),
       );
 
@@ -406,7 +410,7 @@ export const executePlanExecute = (
         strategy: "plan-execute-reflect",
         step: steps.length,
         totalSteps: maxRefinements + 1,
-        thought: `[REFLECT ${refinement + 1}] ${satisfied ? "✓ SATISFIED" : "✗ UNSATISFIED — refining..."} ${reflectResponse.content}`,
+        thought: `[REFLECT ${refinement + 1}] ${satisfied ? "✓ SATISFIED" : "✗ UNSATISFIED — refining..."} ${reflectionContent}`,
         kernelPass: `plan-execute:reflect-${refinement + 1}`,
       });
 

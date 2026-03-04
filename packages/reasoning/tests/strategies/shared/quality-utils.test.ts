@@ -17,6 +17,31 @@ describe("isSatisfied", () => {
   it("returns false for text that contains SATISFIED mid-sentence", () => {
     expect(isSatisfied("I am not satisfied with this response.")).toBe(false);
   });
+
+  it("returns true when SATISFIED: is buried after analysis (thinking model)", () => {
+    const thinkingCritique = `Thinking Process:
+
+1. The agent called github/list_commits correctly.
+2. The agent called signal/send_message_to_user correctly.
+3. All required actions were taken.
+
+SATISFIED: All required actions completed successfully.`;
+    expect(isSatisfied(thinkingCritique)).toBe(true);
+  });
+
+  it("returns false when only UNSATISFIED appears in full text", () => {
+    const critique = `After analysis:
+
+UNSATISFIED: The response is missing key details about the feature.`;
+    expect(isSatisfied(critique)).toBe(false);
+  });
+
+  it("returns false when text discusses 'satisfied' conceptually but verdict is UNSATISFIED", () => {
+    const critique = `The user may not be satisfied with this answer.
+
+UNSATISFIED: Needs more detail.`;
+    expect(isSatisfied(critique)).toBe(false);
+  });
 });
 
 describe("isCritiqueStagnant", () => {

@@ -27,14 +27,18 @@ import {
   parseAllToolRequests,
   hasFinalAnswer,
   extractFinalAnswer,
+  parseBareToolCall,
   evaluateTransform,
   formatToolSchemas,
+  formatToolSchemaCompact,
+  filterToolsByRelevance,
   compressToolResult,
   nextToolResultKey,
 } from "./tool-utils.js";
 import type { ToolSchema } from "./tool-utils.js";
 import { resolveStrategyServices, publishReasoningStep } from "./service-utils.js";
 import { buildCompactedContext } from "./context-utils.js";
+import { extractThinking } from "./thinking-utils.js";
 
 // ── Public input / output types ──────────────────────────────────────────────
 
@@ -68,6 +72,13 @@ export interface ReActKernelInput {
   agentId?: string;
   /** Session ID for tool execution attribution. Falls back to "reasoning-session". */
   sessionId?: string;
+  /**
+   * Tools that MUST NOT be executed — hard code-level guard.
+   * When the model requests a blocked tool, a synthetic observation is returned
+   * instead of executing. Used by reflexion to prevent re-executing side-effect
+   * tools (send, write, create, etc.) that already succeeded in a prior pass.
+   */
+  blockedTools?: readonly string[];
 }
 
 export interface ReActKernelResult {
@@ -117,15 +128,28 @@ export const executeReActKernel = (
     let totalTokens = 0;
     let totalCost = 0;
 
-    // Build initial context string
-    const toolSection =
-      input.availableToolSchemas && input.availableToolSchemas.length > 0
-        ? `Available Tools:\n${formatToolSchemas(input.availableToolSchemas)}\n\nTo use a tool: ACTION: tool_name({"param": "value"}) — use EXACT parameter names shown above, valid JSON only.`
-        : "No tools available for this task.";
+    // Build initial context string — tools FIRST, task LAST for recency bias.
+    // Filter tools: full schema for task-relevant tools, compact (name+types) for the rest.
+    let toolSection: string;
+    if (input.availableToolSchemas && input.availableToolSchemas.length > 0) {
+      const { primary, secondary } = filterToolsByRelevance(input.task, input.availableToolSchemas);
 
-    const priorSection = input.priorContext ? `\n\n${input.priorContext}` : "";
+      const primaryLines = primary.length > 0
+        ? formatToolSchemas(primary)
+        : "";
+      const secondaryLines = secondary.length > 0
+        ? (primary.length > 0 ? "\nOther tools:\n" : "") + secondary.map(formatToolSchemaCompact).join("\n")
+        : "";
 
-    const initialContext = `Task: ${input.task}\n\n${toolSection}${priorSection}`;
+      toolSection = `Available Tools:\n${primaryLines}${secondaryLines}\n\nTo use a tool: ACTION: tool_name({"param": "value"}) — use EXACT parameter names shown above, valid JSON only.`;
+    } else {
+      toolSection = "No tools available for this task.";
+    }
+
+    const priorSection = input.priorContext ? `\n${input.priorContext}\n` : "";
+
+    // Structure: Tools → Prior context → Task (task last = recency bias)
+    const initialContext = `${toolSection}${priorSection}\n\nTask: ${input.task}`;
 
     // System prompt
     const systemPromptText = input.systemPrompt
@@ -143,15 +167,26 @@ export const executeReActKernel = (
       const thoughtPrompt = `${context}${completedSummary}
 
 RULES:
-1. ONE action per turn. Wait for the real result before proceeding.
-2. Use EXACT parameter names from tool schemas above — do NOT guess parameter names.
-3. When you have ALL required information, immediately write: FINAL ANSWER: <your answer>
-4. Check 'ALREADY DONE' above before planning. If step 1 is already done, start your plan at the FIRST step that is NOT listed there.
-5. For file paths not specified in the task, choose a reasonable path (e.g., ./output.md).
+1. You MUST take action NOW. Do NOT ask for clarification — all information is in the Task above.
+2. ONE action per turn. Wait for the real result before proceeding.
+3. Use EXACT parameter names from tool schemas above — do NOT guess parameter names.
+4. When you have ALL required information, immediately write: FINAL ANSWER: <your answer>
+5. Check 'ALREADY DONE' above before acting. Skip completed steps.
 6. Do NOT fabricate results — wait for the real tool response.
-7. Trust your tool results. Once a file-write succeeds or a file-read returns content, the action is done — do NOT repeat it.
+7. Trust your tool results. Once a tool succeeds, the action is done — do NOT repeat it.
 
-Think step-by-step, then either take ONE action or give your FINAL ANSWER:`;
+You MUST respond with an ACTION or FINAL ANSWER. Do NOT ask questions. Start NOW:`;
+
+      // ── PROMPT TRACE (debug observability) ────────────────────────────────
+      yield* publishReasoningStep(eventBus, {
+        _tag: "ReasoningStepCompleted",
+        taskId: input.taskId ?? strategy,
+        strategy,
+        step: iteration + 1,
+        totalSteps: maxIter,
+        kernelPass: input.kernelPass,
+        prompt: { system: systemPromptText, user: thoughtPrompt },
+      });
 
       // ── THOUGHT ────────────────────────────────────────────────────────────
       const thoughtResponse = yield* llm
@@ -178,15 +213,25 @@ Think step-by-step, then either take ONE action or give your FINAL ANSWER:`;
           ),
         );
 
-      const thought = thoughtResponse.content;
+      const rawThought = thoughtResponse.content;
       totalTokens += thoughtResponse.usage.totalTokens;
       totalCost += thoughtResponse.usage.estimatedCost;
+
+      // Strip <think>...</think> blocks before parsing to prevent parser
+      // poisoning (ACTION/FINAL ANSWER inside thinking) and context bloat.
+      // When the provider already extracted thinking (Ollama think:true),
+      // content may be empty — fall back to response.thinking.
+      const { thinking: extractedThinking, content: cleanContent } = extractThinking(rawThought);
+      const providerThinking = (thoughtResponse as any).thinking as string | undefined;
+      const thinking = extractedThinking || providerThinking || null;
+      const thought = cleanContent || providerThinking || rawThought;
 
       steps.push({
         id: ulid() as StepId,
         type: "thought",
         content: thought,
         timestamp: new Date(),
+        ...(thinking ? { metadata: { thinking } } : {}),
       });
 
       // Publish thought event
@@ -203,8 +248,15 @@ Think step-by-step, then either take ONE action or give your FINAL ANSWER:`;
       // ── ACTION SELECTION ────────────────────────────────────────────────────
       // Smart action selection: skip already-succeeded actions so we advance
       // to the first genuinely uncompleted step.
-      const allToolRequests = parseAllToolRequests(thought);
-      const toolRequest =
+      // Thinking-model fallback: if the clean content has no ACTION: lines,
+      // check the thinking content — thinking models (qwen3, DeepSeek-R1) often
+      // put their tool-call decisions inside <think> blocks. We still strip
+      // thinking from context to prevent bloat, but honor tool calls from it.
+      let allToolRequests = parseAllToolRequests(thought);
+      if (allToolRequests.length === 0 && thinking) {
+        allToolRequests = parseAllToolRequests(thinking);
+      }
+      let toolRequest: { tool: string; input: string; transform?: string } | null =
         allToolRequests.find((req) => {
           const actionJson = JSON.stringify(req);
           return !steps.some((step, idx) => {
@@ -221,26 +273,39 @@ Think step-by-step, then either take ONE action or give your FINAL ANSWER:`;
         null;
 
       // ── FINAL ANSWER CHECK (no pending action) ──────────────────────────────
-      if (!toolRequest && hasFinalAnswer(thought)) {
-        const finalAnswer = extractFinalAnswer(thought);
-        yield* publishReasoningStep(eventBus, {
-          _tag: "FinalAnswerProduced",
-          taskId: input.taskId ?? strategy,
-          strategy,
-          answer: finalAnswer,
-          iteration,
-          totalTokens: totalCost,
-          kernelPass: input.kernelPass,
-        });
-        return {
-          output: finalAnswer,
-          steps: [...steps],
-          totalTokens,
-          totalCost,
-          toolsUsed: [...toolsUsed],
-          iterations: iteration + 1,
-          terminatedBy: "final_answer" as const,
-        };
+      // Also check thinking content for FINAL ANSWER when clean content has none.
+      const hasFA = hasFinalAnswer(thought) || (!!thinking && hasFinalAnswer(thinking));
+      if (!toolRequest && hasFA) {
+        const finalAnswer = hasFinalAnswer(thought)
+          ? extractFinalAnswer(thought)
+          : extractFinalAnswer(thinking!);
+
+        // Guard: if the "final answer" looks like a bare tool call, treat it as
+        // an ACTION instead. Models sometimes write `FINAL ANSWER: tool({...})`.
+        const embeddedToolCall = parseBareToolCall(finalAnswer);
+        if (embeddedToolCall) {
+          // Re-inject as a tool request and skip the final answer path
+          toolRequest = embeddedToolCall;
+        } else {
+          yield* publishReasoningStep(eventBus, {
+            _tag: "FinalAnswerProduced",
+            taskId: input.taskId ?? strategy,
+            strategy,
+            answer: finalAnswer,
+            iteration,
+            totalTokens: totalCost,
+            kernelPass: input.kernelPass,
+          });
+          return {
+            output: finalAnswer,
+            steps: [...steps],
+            totalTokens,
+            totalCost,
+            toolsUsed: [...toolsUsed],
+            iterations: iteration + 1,
+            terminatedBy: "final_answer" as const,
+          };
+        }
       }
 
       // ── EARLY END_TURN TERMINATION ──────────────────────────────────────────
@@ -301,7 +366,13 @@ Think step-by-step, then either take ONE action or give your FINAL ANSWER:`;
         let observationContent: string;
         let obsResult: ObservationResult;
 
-        if (isDuplicate) {
+        // Hard side-effect guard — refuse to execute blocked tools from prior passes
+        const isBlocked = input.blockedTools?.includes(toolRequest.tool) ?? false;
+
+        if (isBlocked) {
+          observationContent = `⚠️ BLOCKED: ${toolRequest.tool} already executed successfully in a prior pass. This tool has side effects and MUST NOT be called again. Move on to the next step or give FINAL ANSWER.`;
+          obsResult = makeObservationResult(toolRequest.tool, true, observationContent);
+        } else if (isDuplicate) {
           // Surface prior result with advisory — don't re-execute
           const priorSuccessObs = steps.find((step, idx) => {
             if (step.type !== "action" || step.content !== currentActionJson) return false;
@@ -373,9 +444,13 @@ Think step-by-step, then either take ONE action or give your FINAL ANSWER:`;
         });
 
         // If the thought also contained a FINAL ANSWER after the action, return now
-        if (hasFinalAnswer(thought)) {
+        // Also check thinking content for thinking-model fallback.
+        const postActionHasFA = hasFinalAnswer(thought) || (!!thinking && hasFinalAnswer(thinking));
+        if (postActionHasFA) {
           iteration++;
-          const finalAnswer = extractFinalAnswer(thought);
+          const finalAnswer = hasFinalAnswer(thought)
+            ? extractFinalAnswer(thought)
+            : extractFinalAnswer(thinking!);
           yield* publishReasoningStep(eventBus, {
             _tag: "FinalAnswerProduced",
             taskId: input.taskId ?? strategy,

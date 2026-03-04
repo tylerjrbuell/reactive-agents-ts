@@ -6,6 +6,8 @@ import {
   extractFinalAnswer,
   evaluateTransform,
   formatToolSchemas,
+  formatToolSchemaCompact,
+  filterToolsByRelevance,
 } from "../../../src/strategies/shared/tool-utils.js";
 
 describe("parseToolRequest", () => {
@@ -127,5 +129,65 @@ describe("formatToolSchemas", () => {
     const result = formatToolSchemas(schemas, true);
     expect(result).toContain("required");
     expect(result).toContain("Write content to a file");
+  });
+});
+
+describe("formatToolSchemaCompact", () => {
+  it("formats tool with params as name(param: type)", () => {
+    const result = formatToolSchemaCompact({
+      name: "web-search",
+      description: "Search the web",
+      parameters: [
+        { name: "query", type: "string", required: true },
+        { name: "maxResults", type: "number", required: false },
+      ],
+    });
+    expect(result).toBe("- web-search(query: string, maxResults: number?)");
+  });
+
+  it("formats tool with no params as name()", () => {
+    const result = formatToolSchemaCompact({
+      name: "list-groups",
+      description: "List all groups",
+      parameters: [],
+    });
+    expect(result).toBe("- list-groups()");
+  });
+});
+
+describe("filterToolsByRelevance", () => {
+  const allTools = [
+    { name: "github/list_commits", description: "List commits", parameters: [] },
+    { name: "signal/send_message_to_user", description: "Send message", parameters: [] },
+    { name: "web-search", description: "Search the web", parameters: [] },
+    { name: "file-write", description: "Write a file", parameters: [] },
+  ];
+
+  it("classifies tools mentioned in task as primary", () => {
+    const result = filterToolsByRelevance(
+      "Use github/list_commits to fetch commits then signal/send_message_to_user",
+      allTools,
+    );
+    expect(result.primary.map((t) => t.name)).toContain("github/list_commits");
+    expect(result.primary.map((t) => t.name)).toContain("signal/send_message_to_user");
+    expect(result.secondary.map((t) => t.name)).toContain("web-search");
+    expect(result.secondary.map((t) => t.name)).toContain("file-write");
+  });
+
+  it("matches tool names without namespace prefix", () => {
+    const result = filterToolsByRelevance("list_commits from the repo", allTools);
+    expect(result.primary.map((t) => t.name)).toContain("github/list_commits");
+  });
+
+  it("matches tool names by the part after the slash", () => {
+    // "send_message_to_user" is the suffix — should match when it appears in the task
+    const result = filterToolsByRelevance("use send_message_to_user to notify them", allTools);
+    expect(result.primary.map((t) => t.name)).toContain("signal/send_message_to_user");
+  });
+
+  it("returns all as secondary when none mentioned", () => {
+    const result = filterToolsByRelevance("Do something unrelated", allTools);
+    expect(result.primary.length).toBe(0);
+    expect(result.secondary.length).toBe(allTools.length);
   });
 });

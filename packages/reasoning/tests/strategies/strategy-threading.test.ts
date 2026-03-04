@@ -30,10 +30,10 @@ const mockLLM = Layer.succeed(LLMService, {
 
 /**
  * Reflexion needs a mock that returns SATISFIED for critique prompts.
- * The critique prompt contains "Critically evaluate".
+ * The critique prompt contains "Evaluate whether".
  */
 const reflexionLLM = TestLLMServiceLayer({
-  "Critically evaluate": "SATISFIED: The response is accurate and complete.",
+  "Evaluate whether": "SATISFIED: The response is accurate and complete.",
 });
 
 const baseInput = {
