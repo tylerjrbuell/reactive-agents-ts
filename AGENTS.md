@@ -4,6 +4,102 @@
 
 ---
 
+## Architecture Quick Reference
+
+> Scan this before touching any package. Full dependency tree — read top to bottom for build order.
+
+### Package Dependency Tree
+
+```
+Foundation (no reactive-agents deps)
+├── @reactive-agents/core          — EventBus, AgentService, TaskService, all shared types
+│
+├── @reactive-agents/llm-provider  — LLMService, 6 provider adapters, streaming, tool calling
+│
+├── @reactive-agents/memory        — 4-layer memory (Working/Semantic/Episodic/Procedural), SQLite/FTS5/vec
+│
+├── @reactive-agents/reasoning     — 5 strategies + ThoughtKernel, KernelRunner, Structured Plan Engine
+│   └── depends on: core, llm-provider, memory (PlanStoreService), tools (ToolService)
+│
+├── @reactive-agents/tools         — ToolService, ToolRegistry, 8 built-in tools, MCP client, sandbox
+│   └── depends on: core, llm-provider
+│
+├── @reactive-agents/guardrails    — Injection/PII/toxicity detection, KillSwitch, BehavioralContracts
+│   └── depends on: core, llm-provider
+│
+├── @reactive-agents/verification  — Semantic entropy, fact decomposition, NLI, hallucination detection
+│   └── depends on: core, llm-provider
+│
+├── @reactive-agents/cost          — Complexity router, budget enforcer, semantic cache
+│   └── depends on: core, llm-provider, memory
+│
+├── @reactive-agents/identity      — Ed25519 certs, RBAC, delegation, audit trail
+│   └── depends on: core
+│
+├── @reactive-agents/observability — Distributed tracing, metrics, structured logging, MetricsCollector
+│   └── depends on: core
+│
+├── @reactive-agents/interaction   — 5 autonomy modes, checkpoints, preference learning, approval gates
+│   └── depends on: core
+│
+├── @reactive-agents/orchestration — Multi-agent workflows (sequential, parallel, pipeline, map-reduce)
+│   └── depends on: core, llm-provider, tools
+│
+├── @reactive-agents/prompts       — Template engine, version control, tier-adaptive prompt variants
+│   └── depends on: core, llm-provider
+│
+├── @reactive-agents/eval          — LLM-as-judge, EvalStore (SQLite), 5 scoring dimensions, regression checks
+│   └── depends on: core, llm-provider
+│
+├── @reactive-agents/a2a           — Agent Cards, JSON-RPC 2.0, SSE streaming, A2A server/client
+│   └── depends on: core
+│
+├── @reactive-agents/gateway       — Persistent harness: heartbeats, crons, webhooks, policy engine
+│   └── depends on: core, llm-provider, tools
+│
+├── @reactive-agents/testing       — Mock LLMService, mock ToolService, mock EventBus, assertion helpers
+│   └── depends on: core, llm-provider (dev only)
+│
+└── Facade & Runtime
+    ├── @reactive-agents/runtime   — ExecutionEngine, ReactiveAgentBuilder, createRuntime()
+    │   └── depends on: all packages above (optional via Effect Layers)
+    └── reactive-agents            — Public API facade, re-exports builder + types
+        └── depends on: runtime
+```
+
+### Per-Layer Quick Reference
+
+| Package | First file to read | Key exports |
+|---|---|---|
+| `core` | `src/services/event-bus.ts` | `EventBus`, `AgentEvent`, `AgentId`, `TaskId` |
+| `llm-provider` | `src/runtime.ts` | `LLMService`, `createLLMProviderLayer()` |
+| `memory` | `src/runtime.ts` | `MemoryService`, `createMemoryLayer()` |
+| `reasoning` | `src/strategy-registry.ts` | `ReasoningService`, `StrategyRegistry`, `ThoughtKernel` |
+| `tools` | `src/services/tool-service.ts` | `ToolService`, `ToolDefinition`, `defineTool()` |
+| `guardrails` | `src/services/guardrail-service.ts` | `GuardrailService`, `KillSwitchService` |
+| `verification` | `src/services/verification-service.ts` | `VerificationService` |
+| `cost` | `src/services/cost-service.ts` | `CostService` |
+| `identity` | `src/services/identity-service.ts` | `IdentityService` |
+| `observability` | `src/services/observability-service.ts` | `ObservabilityService`, `ThoughtTracer` |
+| `gateway` | `src/services/gateway-service.ts` | `GatewayService`, `PolicyEngine`, `WebhookService` |
+| `eval` | `src/services/eval-service.ts` | `EvalService`, `EvalStore`, `EvalSuite` |
+| `runtime` | `src/builder.ts` | `ReactiveAgents`, `ReactiveAgentBuilder`, `createRuntime()` |
+
+### Common Debugging Entry Points
+
+| Symptom | Start reading |
+|---|---|
+| Agent not calling tools | `packages/reasoning/src/strategies/reactive.ts` → `packages/reasoning/src/kernel/kernel-runner.ts` |
+| EventBus events not firing | `packages/core/src/services/event-bus.ts` → check `ManagedRuntime` is shared |
+| LLM call fails silently | `packages/llm-provider/src/runtime.ts` → provider-specific file in `src/providers/` |
+| Memory not persisting | `packages/memory/src/runtime.ts` → check `createMemoryLayer()` wiring |
+| Plan-execute loops forever | `packages/reasoning/src/strategies/plan-execute.ts` → `isSatisfied()` + all-steps-completed guard |
+| Gateway not starting | `packages/gateway/src/services/gateway-service.ts` → check `.withGateway()` in builder |
+| Metrics dashboard missing | `packages/observability/src/services/observability-service.ts` → `MetricsCollectorLive` layer |
+| Custom kernel not registering | `packages/reasoning/src/strategy-registry.ts` → `registerKernel()` call |
+
+---
+
 ## Golden Rules
 
 1. **Read before writing.** Always read existing files before editing. Understand patterns before introducing new code.
