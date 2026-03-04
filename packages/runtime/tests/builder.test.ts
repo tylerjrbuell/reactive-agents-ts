@@ -42,6 +42,32 @@ describe("ReactiveAgentBuilder", () => {
     expect(typeof result.metadata.stepsCount).toBe("number");
   });
 
+  it("withModel() accepts a ModelParams object with thinking/temperature/maxTokens", async () => {
+    const agent = await ReactiveAgents.create()
+      .withName("model-params-agent")
+      .withProvider("test")
+      .withModel({
+        model: "test-model",
+        thinking: true,
+        temperature: 0.3,
+        maxTokens: 2048,
+      })
+      .build();
+
+    expect(agent).toBeInstanceOf(ReactiveAgent);
+    expect(agent.agentId).toContain("model-params-agent");
+  });
+
+  it("withModel() still accepts a plain string", async () => {
+    const agent = await ReactiveAgents.create()
+      .withName("string-model-agent")
+      .withProvider("test")
+      .withModel("test-model")
+      .build();
+
+    expect(agent).toBeInstanceOf(ReactiveAgent);
+  });
+
   it("should support max iterations configuration", async () => {
     const agent = await ReactiveAgents.create()
       .withName("test-agent")

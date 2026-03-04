@@ -122,7 +122,7 @@ export const executePlanExecute = (
         : "You are a planning agent. Decompose the goal into structured steps.",
       maxRetries: 2,
       temperature: 0.5,
-      maxTokens: 2000,
+      maxTokens: 4096,
     }).pipe(
       Effect.mapError(
         (err) =>
@@ -372,7 +372,7 @@ export const executePlanExecute = (
           systemPrompt: input.systemPrompt
             ? `${input.systemPrompt}\n\nYou are evaluating plan execution. Determine if the task has been adequately addressed.`
             : "You are evaluating plan execution. Determine if the task has been adequately addressed.",
-          maxTokens: reflectionDepth === "deep" ? 500 : 300,
+          maxTokens: reflectionDepth === "deep" ? 2500 : 1500,
           temperature: 0.3,
         })
         .pipe(
@@ -431,7 +431,7 @@ export const executePlanExecute = (
             systemPrompt: input.systemPrompt
               ? `${input.systemPrompt}\n\nYou are a synthesizer. Combine execution results into a clear, concise final answer. Exclude all internal agent metadata.`
               : "You are a synthesizer. Combine execution results into a clear, concise final answer. Exclude all internal agent metadata.",
-            maxTokens: 500,
+            maxTokens: 4096,
             temperature: 0.3,
           })
           .pipe(
@@ -445,7 +445,7 @@ export const executePlanExecute = (
 
         totalTokens += synthLlmResponse.usage.totalTokens;
         totalCost += synthLlmResponse.usage.estimatedCost;
-        finalOutput = synthLlmResponse.content;
+        finalOutput = stripThinking(synthLlmResponse.content);
 
         steps.push(makeStep("thought", `[SYNTHESIS] ${finalOutput}`));
 
@@ -654,6 +654,8 @@ function executeStep(
     : stepPrompt;
 
   // Analysis steps: single LLM call — no tool loop needed
+  // Note: maxTokens 4096 to accommodate thinking models where num_predict
+  // covers both thinking + content tokens combined.
   if (step.type === "analysis") {
     return services.llm
       .complete({
@@ -661,18 +663,31 @@ function executeStep(
         systemPrompt:
           input.systemPrompt ??
           "You are a precise task executor. Produce the requested content directly. Never ask questions or offer to do something — just output the finished result.",
-        maxTokens: 1000,
+        maxTokens: 4096,
         temperature: 0.5,
       })
       .pipe(
-        Effect.map((response) => ({
-          output: stripFinalAnswerPrefix(response.content),
-          tokens: response.usage.totalTokens,
-          cost: response.usage.estimatedCost,
-          success: true,
-        })),
+        Effect.flatMap((response) => {
+          const output = stripFinalAnswerPrefix(stripThinking(response.content));
+          if (!output.trim()) {
+            return Effect.fail(
+              new ExecutionError({
+                strategy: "plan-execute-reflect",
+                message: `Analysis step ${stepIndex + 1} produced empty output (model may have exhausted token budget on thinking)`,
+                step: stepIndex,
+              }),
+            );
+          }
+          return Effect.succeed({
+            output,
+            tokens: response.usage.totalTokens,
+            cost: response.usage.estimatedCost,
+            success: true,
+          });
+        }),
         Effect.mapError(
           (err) =>
+            err instanceof ExecutionError ? err :
             new ExecutionError({
               strategy: "plan-execute-reflect",
               message: `Analysis step ${stepIndex + 1} failed`,
@@ -748,7 +763,7 @@ function patchPlan(
       "You are a planning agent. Rewrite the failed and pending steps to recover.",
     maxRetries: 1,
     temperature: 0.3,
-    maxTokens: 1500,
+    maxTokens: 4096,
   }).pipe(
     Effect.map((result) => {
       const patchedPlan = hydratePlan(result.data, {

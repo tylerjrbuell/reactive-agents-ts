@@ -96,7 +96,7 @@ export const executeAdaptive = (
           },
         ],
         systemPrompt: classifySystemPrompt,
-        maxTokens: 50,
+        maxTokens: 500,
         temperature: 0.2,
       })
       .pipe(

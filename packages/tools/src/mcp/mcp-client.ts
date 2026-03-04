@@ -75,6 +75,49 @@ type ActiveTransport = StdioTransport | SseTransport | StreamableHttpTransport |
 // Module-level map: serverName -> ActiveTransport
 const activeTransports = new Map<string, ActiveTransport>();
 
+/**
+ * Kill all active stdio subprocesses on process exit.
+ * Safety net — prevents Docker containers (and other MCP subprocesses) from
+ * leaking when the agent errors out without calling dispose().
+ */
+function cleanupActiveTransports(): void {
+  for (const [name, transport] of activeTransports) {
+    try {
+      if (transport.type === "stdio") {
+        (transport as StdioTransport).readerStopped = true;
+        (transport as StdioTransport).subprocess.kill();
+      } else if (transport.type === "sse") {
+        (transport as SseTransport).abortController?.abort();
+      } else if (transport.type === "websocket") {
+        (transport as WebSocketTransport).closing = true;
+        (transport as WebSocketTransport).socket?.close();
+      }
+    } catch { /* already gone */ }
+    activeTransports.delete(name);
+  }
+}
+
+// Register once — idempotent even if module is re-evaluated
+let exitHandlerRegistered = false;
+function ensureExitHandler(): void {
+  if (exitHandlerRegistered) return;
+  exitHandlerRegistered = true;
+  process.on("exit", cleanupActiveTransports);
+  // SIGINT/SIGTERM: run cleanup then re-raise so the process actually exits
+  for (const sig of ["SIGINT", "SIGTERM"] as const) {
+    process.on(sig, () => {
+      cleanupActiveTransports();
+      process.exit(128 + (sig === "SIGINT" ? 2 : 15));
+    });
+  }
+}
+
+/** Register a transport and ensure process exit cleanup is armed. */
+function registerTransport(name: string, transport: ActiveTransport): void {
+  activeTransports.set(name, transport);
+  ensureExitHandler();
+}
+
 // Module-level map: serverName -> notification callback
 const notificationCallbacks = new Map<
   string,
@@ -478,7 +521,7 @@ const createTransport = (
         readerStopped: false,
       };
 
-      activeTransports.set(config.name, transport);
+      registerTransport(config.name, transport);
       startStdioReader(config.name, transport);
     });
   }
@@ -494,7 +537,7 @@ const createTransport = (
       }
 
       const transport = createSseTransport({ name: config.name, endpoint, headers: config.headers });
-      activeTransports.set(config.name, transport);
+      registerTransport(config.name, transport);
       startSseReader(config.name, transport);
     });
   }
@@ -513,7 +556,7 @@ const createTransport = (
         name: config.name,
         endpoint,
       });
-      activeTransports.set(config.name, transport);
+      registerTransport(config.name, transport);
       await connectWebSocket(config.name, transport);
     });
   }
@@ -537,7 +580,7 @@ const createTransport = (
         connected: true,
       };
 
-      activeTransports.set(config.name, transport);
+      registerTransport(config.name, transport);
     });
   }
 

@@ -111,7 +111,7 @@ export const executeTreeOfThought = (
                 ? `${input.systemPrompt}\n\nYou are exploring solution paths for: ${input.taskDescription}. Generate ${breadth} distinct approaches.`
                 : `You are exploring solution paths for: ${input.taskDescription}. Generate ${breadth} distinct approaches.`,
             ),
-            maxTokens: 200 * breadth,
+            maxTokens: 800 * breadth,
             temperature: 0.8,
           })
           .pipe(
@@ -155,7 +155,7 @@ export const executeTreeOfThought = (
                   ? `${input.systemPrompt}\n\nYou are evaluating a reasoning path. Rate its promise on a scale of 0.0 to 1.0. Respond with ONLY a number.`
                   : "You are evaluating a reasoning path. Rate its promise on a scale of 0.0 to 1.0. Respond with ONLY a number.",
               ),
-              maxTokens: 800,
+              maxTokens: 1500,
               temperature: 0.2,
             })
             .pipe(
@@ -173,7 +173,7 @@ export const executeTreeOfThought = (
           totalTokens += scoreResponse.usage.totalTokens;
           totalCost += scoreResponse.usage.estimatedCost;
 
-          const score = parseScore(scoreResponse.content);
+          const score = parseScore(stripThinking(scoreResponse.content));
 
           const node: ThoughtNode = {
             id: ulid(),

@@ -7,6 +7,7 @@ export type {
   ToolResult,
   LifecycleHook,
   ReactiveAgentsConfig,
+  ModelParams,
 } from "./types.js";
 
 // ─── Schemas ───
@@ -17,6 +18,7 @@ export {
   ExecutionContextSchema,
   ToolResultSchema,
   ReactiveAgentsConfigSchema,
+  ModelParamsSchema,
   defaultReactiveAgentsConfig,
 } from "./types.js";
 
@@ -26,6 +28,7 @@ export {
   HookError,
   MaxIterationsError,
   GuardrailViolationError,
+  unwrapError,
   type RuntimeErrors,
 } from "./errors.js";
 

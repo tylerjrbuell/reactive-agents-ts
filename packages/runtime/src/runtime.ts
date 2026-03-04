@@ -4,7 +4,10 @@ import { ExecutionEngineLive } from "./execution-engine.js";
 import type { ReactiveAgentsConfig } from "./types.js";
 import { defaultReactiveAgentsConfig } from "./types.js";
 import { CoreServicesLive, EventBusLive } from "@reactive-agents/core";
-import { createLLMProviderLayer } from "@reactive-agents/llm-provider";
+import {
+  createLLMProviderLayer,
+  getProviderDefaultModel,
+} from "@reactive-agents/llm-provider";
 import { createMemoryLayer } from "@reactive-agents/memory";
 
 // Optional package imports
@@ -156,6 +159,30 @@ export interface RuntimeOptions {
    * Default: undefined (uses provider default if available)
    */
   model?: string;
+
+  /**
+   * Enable/disable thinking mode for thinking-capable models.
+   * - `true` — Always enable thinking
+   * - `false` — Always disable thinking
+   * - `undefined` — Auto-detect based on model capabilities
+   *
+   * Default: undefined (auto-detect)
+   */
+  thinking?: boolean;
+
+  /**
+   * Override default LLM temperature (0.0-1.0).
+   *
+   * Default: undefined (uses provider default)
+   */
+  temperature?: number;
+
+  /**
+   * Override default max output tokens.
+   *
+   * Default: undefined (uses provider default)
+   */
+  maxTokens?: number;
 
   /**
    * Memory system tier:
@@ -462,10 +489,22 @@ export interface RuntimeOptions {
  * @see RuntimeOptions
  */
 export const createRuntime = (options: RuntimeOptions) => {
+  // Resolve default model: explicit > env var > provider registry fallback
+  const resolvedModel =
+    options.model ??
+    process.env.LLM_DEFAULT_MODEL ??
+    (options.provider
+      ? getProviderDefaultModel(options.provider)
+      : undefined) ??
+    "claude-sonnet-4-20250514";
+
   const config: ReactiveAgentsConfig = {
     ...defaultReactiveAgentsConfig(options.agentId),
-    defaultModel: options.model,
+    defaultModel: resolvedModel,
     provider: options.provider,
+    thinking: options.thinking,
+    temperature: options.temperature,
+    maxTokens: options.maxTokens,
     memoryTier: options.memoryTier ?? "1",
     maxIterations: options.maxIterations ?? 10,
     enableGuardrails: options.enableGuardrails ?? false,
@@ -497,6 +536,11 @@ export const createRuntime = (options: RuntimeOptions) => {
     options.provider ?? "test",
     options.testResponses,
     options.model,
+    {
+      thinking: options.thinking,
+      temperature: options.temperature,
+      maxTokens: options.maxTokens,
+    },
   );
   const memoryLayer = createMemoryLayer(config.memoryTier, {
     agentId: options.agentId,

@@ -89,6 +89,9 @@ export type {
   ComplexityAnalysis,
 } from "./structured-output.js";
 
+// ─── Provider Defaults ───
+export { PROVIDER_DEFAULT_MODELS, getProviderDefaultModel } from "./provider-defaults.js";
+
 // ─── Runtime ───
 export {
   createLLMProviderLayer,
