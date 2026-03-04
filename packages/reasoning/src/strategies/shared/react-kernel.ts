@@ -103,24 +103,66 @@ export interface ReActKernelResult {
 /**
  * Build the initial context string from tool schemas + prior context + task.
  * Tools FIRST, task LAST for recency bias.
+ *
+ * Profile-aware formatting:
+ * - toolSchemaDetail "names-only": secondary tools as comma-separated names
+ * - toolSchemaDetail "names-and-types": secondary tools as compact schemas
+ * - toolSchemaDetail "full" (default): secondary tools as compact schemas
+ * - When ALL tools are secondary and detail is "full", show full descriptions
  */
 function buildInitialContext(
   task: string,
   availableToolSchemas?: readonly ToolSchema[],
   priorContext?: string,
+  toolSchemaDetail?: "names-only" | "names-and-types" | "full",
 ): string {
+  const detail = toolSchemaDetail ?? "full";
   let toolSection: string;
   if (availableToolSchemas && availableToolSchemas.length > 0) {
+    // Detect name-only stubs (empty description + no parameters) — these come from
+    // the legacy `availableTools: string[]` path and should be shown as a simple
+    // comma-separated list rather than full schema format.
+    const allNameOnly = availableToolSchemas.every(
+      t => !t.description && t.parameters.length === 0,
+    );
+    if (allNameOnly) {
+      const names = availableToolSchemas.map(t => t.name).join(", ");
+      toolSection = `Available Tools: ${names}\nTo use a tool: ACTION: tool_name({"param": "value"}) — use JSON for tool arguments.`;
+      const priorSection = priorContext ? `\n${priorContext}\n` : "";
+      return `${toolSection}${priorSection}\n\nTask: ${task}`;
+    }
+
     const { primary, secondary } = filterToolsByRelevance(task, availableToolSchemas);
 
-    const primaryLines = primary.length > 0
-      ? formatToolSchemas(primary)
-      : "";
-    const secondaryLines = secondary.length > 0
-      ? (primary.length > 0 ? "\nOther tools:\n" : "") + secondary.map(formatToolSchemaCompact).join("\n")
-      : "";
+    // When ALL tools are secondary (none mentioned in task), format based on tier
+    if (primary.length === 0) {
+      if (detail === "names-only") {
+        const toolNames = availableToolSchemas.map(t => t.name).join(", ");
+        toolSection = `Tools: ${toolNames}\nTo use: ACTION: tool_name({"param": "value"})`;
+      } else if (detail === "names-and-types") {
+        const toolLines = availableToolSchemas.map(formatToolSchemaCompact).join("\n");
+        toolSection = `Available Tools:\n${toolLines}\n\nTo use a tool: ACTION: tool_name({"param": "value"}) — use EXACT parameter names.`;
+      } else {
+        // "full": show ALL tools with full descriptions when none are primary
+        const toolLines = formatToolSchemas(availableToolSchemas);
+        toolSection = `Available Tools:\n${toolLines}\n\nTo use a tool: ACTION: tool_name({"param": "value"}) — use EXACT parameter names shown above, valid JSON only.`;
+      }
+    } else {
+      // Primary tools always get full schema
+      const primaryLines = formatToolSchemas(primary);
 
-    toolSection = `Available Tools:\n${primaryLines}${secondaryLines}\n\nTo use a tool: ACTION: tool_name({"param": "value"}) — use EXACT parameter names shown above, valid JSON only.`;
+      // Secondary tools: format based on tier
+      let secondarySection = "";
+      if (secondary.length > 0) {
+        if (detail === "names-only") {
+          secondarySection = `\nAlso available: ${secondary.map(t => t.name).join(", ")}`;
+        } else {
+          secondarySection = `\nOther tools:\n${secondary.map(formatToolSchemaCompact).join("\n")}`;
+        }
+      }
+
+      toolSection = `Available Tools:\n${primaryLines}${secondarySection}\n\nTo use a tool: ACTION: tool_name({"param": "value"}) — use EXACT parameter names shown above, valid JSON only.`;
+    }
   } else {
     toolSection = "No tools available for this task.";
   }
@@ -182,6 +224,7 @@ function handleThinking(
       input.task,
       input.availableToolSchemas,
       input.priorContext,
+      profile.toolSchemaDetail,
     );
 
     const systemPromptText = buildSystemPrompt(input.task, input.systemPrompt);
@@ -203,7 +246,7 @@ RULES:
 6. Do NOT fabricate results — wait for the real tool response.
 7. Trust your tool results. Once a tool succeeds, the action is done — do NOT repeat it.
 
-You MUST respond with an ACTION or FINAL ANSWER. Do NOT ask questions. Start NOW:`;
+Think step-by-step, then either take ONE action or give your FINAL ANSWER:`;
 
     // Publish prompt trace event via hooks
     yield* hooks.onThought(state, `[prompt-trace] ${thoughtPrompt.slice(0, 200)}`);
