@@ -1,7 +1,14 @@
 import { describe, it, expect } from "bun:test";
 import { Effect } from "effect";
-import { executeReActKernel } from "../../../src/strategies/shared/react-kernel.js";
+import { executeReActKernel, reactKernel } from "../../../src/strategies/shared/react-kernel.js";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
+import {
+  initialKernelState,
+  noopHooks,
+  type KernelContext,
+  type KernelState,
+} from "../../../src/strategies/shared/kernel-state.js";
+import { CONTEXT_PROFILES } from "../../../src/context/context-profile.js";
 
 describe("executeReActKernel", () => {
   it("produces a final answer for a simple task (no tools)", async () => {
@@ -108,5 +115,125 @@ describe("executeReActKernel", () => {
     expect(observations.length).toBeGreaterThan(0);
     expect(observations[0]!.content).toContain("BLOCKED");
     expect(observations[0]!.content).toContain("signal/send_message_to_user");
+  });
+});
+
+// ── reactKernel ThoughtKernel direct tests ────────────────────────────────────
+
+describe("reactKernel (ThoughtKernel direct)", () => {
+  /** Helper to build a minimal KernelContext for testing */
+  function makeContext(overrides?: Partial<KernelContext>): KernelContext {
+    const profile = CONTEXT_PROFILES["mid"];
+    return {
+      input: {
+        task: "Test task",
+      },
+      profile,
+      compression: {
+        budget: profile.toolResultMaxChars ?? 800,
+        previewItems: 3,
+        autoStore: true,
+        codeTransform: true,
+      },
+      toolService: { _tag: "None" },
+      hooks: noopHooks,
+      ...overrides,
+    };
+  }
+
+  it("thinking + FINAL ANSWER transitions to done", async () => {
+    const layer = TestLLMServiceLayer({
+      "Task:": "FINAL ANSWER: The answer is 42.",
+    });
+
+    const state = initialKernelState({
+      maxIterations: 3,
+      strategy: "react-kernel",
+      kernelType: "react",
+    });
+
+    const context = makeContext();
+
+    const nextState = await Effect.runPromise(
+      reactKernel(state, context).pipe(Effect.provide(layer)),
+    );
+
+    expect(nextState.status).toBe("done");
+    expect(nextState.output).toBe("The answer is 42.");
+    expect(nextState.steps.length).toBe(1);
+    expect(nextState.steps[0]!.type).toBe("thought");
+    expect(nextState.iteration).toBe(1);
+  });
+
+  it("thinking + ACTION transitions to acting with pendingToolRequest", async () => {
+    const layer = TestLLMServiceLayer({
+      "Task:": 'ACTION: web-search({"query": "hello world"})',
+    });
+
+    const state = initialKernelState({
+      maxIterations: 3,
+      strategy: "react-kernel",
+      kernelType: "react",
+    });
+
+    const context = makeContext();
+
+    const nextState = await Effect.runPromise(
+      reactKernel(state, context).pipe(Effect.provide(layer)),
+    );
+
+    expect(nextState.status).toBe("acting");
+    expect(nextState.steps.length).toBe(1);
+    expect(nextState.steps[0]!.type).toBe("thought");
+    // pendingToolRequest stored in meta
+    const pending = nextState.meta.pendingToolRequest as { tool: string; input: string };
+    expect(pending.tool).toBe("web-search");
+  });
+
+  it("acting transitions to thinking after tool execution (no ToolService)", async () => {
+    const layer = TestLLMServiceLayer({});
+
+    // Start in acting state with a pending tool request
+    const state: KernelState = {
+      ...initialKernelState({
+        maxIterations: 3,
+        strategy: "react-kernel",
+        kernelType: "react",
+      }),
+      status: "acting",
+      steps: [
+        {
+          id: "test-step" as any,
+          type: "thought",
+          content: 'ACTION: web-search({"query": "hello"})',
+          timestamp: new Date(),
+        },
+      ],
+      meta: {
+        pendingToolRequest: { tool: "web-search", input: '{"query": "hello"}' },
+        lastThought: 'ACTION: web-search({"query": "hello"})',
+        lastThinking: null,
+      },
+    };
+
+    const context = makeContext();
+
+    const nextState = await Effect.runPromise(
+      reactKernel(state, context).pipe(Effect.provide(layer)),
+    );
+
+    // Should transition to thinking after tool execution
+    expect(nextState.status).toBe("thinking");
+    // Should have action + observation steps added
+    const actionSteps = nextState.steps.filter((s) => s.type === "action");
+    const obsSteps = nextState.steps.filter((s) => s.type === "observation");
+    expect(actionSteps.length).toBe(1);
+    expect(obsSteps.length).toBe(1);
+    // Observation should mention ToolService not available since we provided None
+    expect(obsSteps[0]!.content).toContain("ToolService is not available");
+    // Iteration should have been incremented
+    expect(nextState.iteration).toBe(1);
+    // web-search should be in toolsUsed
+    expect(nextState.toolsUsed.has("web-search")).toBe(true);
   });
 });
