@@ -809,20 +809,9 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
 
                     ctx = { ...ctx, toolResults: syntheticToolResults };
 
-                    // Record tool execution metrics via ObservabilityService for the dashboard.
-                    // This path (reasoning strategy) executes tools internally — events via EventBus
-                    // have instance isolation issues, so record directly through obs instead.
-                    // NOTE: ToolCallCompleted is also published to EventBus in reactive.ts;
-                    // this histogram is the authoritative path for the ObservabilityService dashboard.
-                    if (obs) {
-                      for (const toolResult of syntheticToolResults) {
-                        yield* obs.recordHistogram(
-                          "execution.tool.execution",
-                          toolResult.durationMs,
-                          { tool: toolResult.toolName, status: toolResult.success ? "success" : "error" },
-                        ).pipe(Effect.catchAll(() => Effect.void));
-                      }
-                    }
+                    // Tool metrics are now recorded via KernelHooks.onObservation → ToolCallCompleted
+                    // EventBus events. MetricsCollector auto-subscribes to these events.
+                    // (Previously duplicated here via obs.recordHistogram — removed to fix double counting.)
 
                     ctx = yield* guardedPhase(ctx, "act", (c) =>
                       Effect.succeed(c),
