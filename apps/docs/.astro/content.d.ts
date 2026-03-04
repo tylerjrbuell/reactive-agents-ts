@@ -184,6 +184,13 @@ declare module 'astro:content' {
   collection: "docs";
   data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
+"concepts/composable-kernel.md": {
+	id: "concepts/composable-kernel.md";
+  slug: "concepts/composable-kernel";
+  body: string;
+  collection: "docs";
+  data: InferEntrySchema<"docs">
+} & { render(): Render[".md"] };
 "concepts/effect-ts.md": {
 	id: "concepts/effect-ts.md";
   slug: "concepts/effect-ts";
@@ -236,6 +243,13 @@ declare module 'astro:content' {
 "features/cost-tracking.md": {
 	id: "features/cost-tracking.md";
   slug: "features/cost-tracking";
+  body: string;
+  collection: "docs";
+  data: InferEntrySchema<"docs">
+} & { render(): Render[".md"] };
+"features/eval.md": {
+	id: "features/eval.md";
+  slug: "features/eval";
   body: string;
   collection: "docs";
   data: InferEntrySchema<"docs">
