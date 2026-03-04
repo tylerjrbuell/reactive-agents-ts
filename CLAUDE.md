@@ -2,7 +2,7 @@
 
 ## Project Status
 
-**v0.5.7 + Structured Plan Engine.** 19 packages + 2 apps built, 1258 tests across 168 files. Plan-execute-reflect fully rewritten with structured JSON plans, provider-adaptive structured output, and persistent SQLite plan storage.
+**v0.5.7 + Composable Kernel Architecture.** 19 packages + 2 apps built, 1340 tests across 173 files. ThoughtKernel abstraction — swappable reasoning algorithms, immutable KernelState, universal KernelRunner with centralized hooks.
 
 - Phase 1: Core, LLM Provider, Memory, Reasoning, Tools, Interaction, Runtime
 - Phase 2: Guardrails, Verification, Cost
@@ -21,6 +21,7 @@
 - Strategy SDK Refactor: Shared ReAct kernel — `executeReActKernel()` extracted from reactive.ts, all 5 strategies tool-aware, 6 shared utility modules (tool-utils, quality-utils, context-utils, service-utils, step-utils, react-kernel) (1116 tests, 156 files)
 - Phase A Foundation Fixes: StrategyFn full type threading (resultCompression, contextProfile, agentId/sessionId), reflexion cross-run learning (priorCritiques → episodic memory), hallucination detection verification layer, `@reactive-agents/testing` package with mock services + assertion helpers (1179 tests, 160 files)
 - Structured Plan Engine: Plan-execute-reflect rewritten — structured JSON plans, 4-layer structured output pipeline (prompt → repair → validate → retry), provider-adaptive JSON capabilities, SQLite plan persistence (PlanStoreService wired into memory layer), hybrid step dispatch (tool_call direct, analysis single LLM call, composite scoped kernel), Effect.exit error handling, graduated retry → patch → replan, tier-adaptive prompt builders, `{{from_step:sN}}` cross-step references with self-reference guard, ToolCallCompleted EventBus integration, carry-forward refinement with all-steps-completed guard, granular observability events (1241 tests, 168 files)
+- Composable Kernel Architecture: ThoughtKernel abstraction — swappable reasoning algorithms, immutable KernelState, universal KernelRunner with centralized KernelHooks, reactive.ts collapsed 905→128 lines, shared tool-execution module, embedded tool call guard, double metrics fix, custom kernel registration via StrategyRegistry (1340 tests, 173 files)
 - Pre-release: tsup compiled output, Google Gemini provider, Reflexion reasoning strategy
 - Final Integration: All layers compose via `createRuntime()` and `ReactiveAgentBuilder`
 - Docs: Starlight (Astro) site at `apps/docs/`
@@ -31,7 +32,7 @@
 
 ```bash
 bun install              # Install dependencies
-bun test                 # Run all tests (1241 tests, 168 files)
+bun test                 # Run all tests (1340 tests, 173 files)
 bun run build            # Build all packages (16 packages, ESM + DTS)
 cd apps/docs && npx astro dev    # Start docs dev server
 cd apps/docs && npx astro build  # Build docs for production

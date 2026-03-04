@@ -6,6 +6,35 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 
 ---
 
+## [Unreleased] — Composable Kernel Architecture
+
+### Added
+
+#### Composable Kernel Architecture (`@reactive-agents/reasoning`)
+
+Three-layer separation: ThoughtKernel (single-step algorithm) → KernelRunner (universal loop) → Strategy (policy wrapper).
+
+- **`kernel-state.ts`** — `KernelState` immutable state, `ThoughtKernel` contract, `KernelContext`, serialization helpers for collective learning/replay
+- **`tool-execution.ts`** — Shared `executeToolCall()`, `makeObservationResult()`, `truncateForDisplay()` — replaces ~260 lines of duplication across reactive.ts and react-kernel.ts
+- **`kernel-hooks.ts`** — `buildKernelHooks()` wires `onThought/onAction/onObservation/onDone/onError` to EventBus. Single source of truth for `ToolCallCompleted` events
+- **`kernel-runner.ts`** — `runKernel()` universal execution loop with embedded tool call guard (catches bare tool calls in FINAL ANSWER text)
+- **`reactKernel: ThoughtKernel`** — ReAct algorithm as first kernel implementation. Single-step state transition dispatching on "thinking"/"acting" status
+- **Custom kernel registration** — `StrategyRegistry.registerKernel()/getKernel()/listKernels()` for swappable reasoning algorithms
+
+### Fixed
+
+- **Output containing raw tool call text** — Embedded tool call guard in KernelRunner detects `tool_name({...})` in output and executes the tool instead of returning raw text
+- **Double tool metrics** — Removed duplicate `obs.recordHistogram` in execution-engine.ts reasoning path. KernelHooks.onObservation is now the single source of `ToolCallCompleted`
+
+### Changed
+
+- `reactive.ts` collapsed from ~905 lines to ~128 lines (delegates to `runKernel(reactKernel, ...)`)
+- `reflexion.ts` generate/improve passes use `runKernel()` directly instead of `executeReActKernel()` wrapper
+- `tree-of-thought.ts` Phase 2 execution uses `runKernel()` directly
+- `react-kernel.ts` rewritten as `ThoughtKernel` with backwards-compatible `executeReActKernel()` wrapper
+
+---
+
 ## [Unreleased] — Structured Plan Engine
 
 ### Added
