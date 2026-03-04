@@ -13,10 +13,11 @@
  */
 import { Effect } from "effect";
 import type { ReasoningResult, ReasoningStep } from "../types/index.js";
-import { ExecutionError, IterationLimitError } from "../errors/errors.js";
+import { ExecutionError } from "../errors/errors.js";
 import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
-import { executeReActKernel } from "./shared/react-kernel.js";
+import { runKernel } from "./shared/kernel-runner.js";
+import { reactKernel } from "./shared/react-kernel.js";
 import {
   resolveStrategyServices,
   compilePromptOrFallback,
@@ -61,7 +62,7 @@ export const executeReflexion = (
   input: ReflexionInput,
 ): Effect.Effect<
   ReasoningResult,
-  ExecutionError | IterationLimitError,
+  ExecutionError,
   LLMService
 > =>
   Effect.gen(function* () {
@@ -96,36 +97,30 @@ export const executeReflexion = (
       ? `⚠️ CRITICAL — use these EXACT values (do NOT substitute or guess):\n${paramHints}`
       : undefined;
 
-    const genResult = yield* executeReActKernel({
+    const genState = yield* runKernel(reactKernel, {
       task: buildGenerationPrompt(input, null),
       systemPrompt: genSystemPrompt,
       priorContext: genPriorContext,
       availableToolSchemas: input.availableToolSchemas,
-      maxIterations: input.config.strategies.reflexion?.kernelMaxIterations ?? 3,
-      temperature: 0.7,
-      taskId: input.taskId,
-      parentStrategy: "reflexion",
-      kernelPass: "reflexion:generate",
       resultCompression: input.resultCompression,
+      temperature: 0.7,
       agentId: input.agentId,
       sessionId: input.sessionId,
-    }).pipe(
-      Effect.mapError(
-        (err) =>
-          new ExecutionError({
-            strategy: "reflexion",
-            message: "Initial generation failed",
-            step: 0,
-            cause: err,
-          }),
-      ),
-    );
+    }, {
+      maxIterations: input.config.strategies.reflexion?.kernelMaxIterations ?? 3,
+      strategy: "reflexion",
+      kernelType: "react",
+      taskId: input.taskId,
+      kernelPass: "reflexion:generate",
+    });
 
-    let currentResponse = genResult.output;
-    let lastKernelSteps = genResult.steps; // Track kernel steps for critique context
-    let allSideEffectSteps = [...genResult.steps]; // Accumulate ALL steps for side-effect tracking
-    totalTokens += genResult.totalTokens;
-    totalCost += genResult.totalCost;
+    let currentResponse = genState.output
+      ?? [...genState.steps].filter((s) => s.type === "thought").pop()?.content
+      ?? "";
+    let lastKernelSteps = [...genState.steps]; // Track kernel steps for critique context
+    let allSideEffectSteps = [...genState.steps]; // Accumulate ALL steps for side-effect tracking
+    totalTokens += genState.tokens;
+    totalCost += genState.cost;
 
     steps.push(makeStep("thought", `[ATTEMPT 1] ${currentResponse}`));
 
@@ -274,43 +269,38 @@ export const executeReflexion = (
       // succeeded in ANY prior pass. The kernel will refuse to execute these.
       const blockedTools = extractSuccessfulSideEffectTools(allSideEffectSteps);
 
-      const improveResult = yield* executeReActKernel({
+      const improveState = yield* runKernel(reactKernel, {
         task: improvementTask,
         systemPrompt: improveSystemPrompt,
         priorContext: improvePriorContext,
         availableToolSchemas: input.availableToolSchemas,
-        maxIterations: input.config.strategies.reflexion?.kernelMaxIterations ?? 3,
-        temperature: 0.6,
-        taskId: input.taskId,
-        parentStrategy: "reflexion",
-        kernelPass: `reflexion:improve-${attempt}`,
         resultCompression: input.resultCompression,
+        temperature: 0.6,
         agentId: input.agentId,
         sessionId: input.sessionId,
         blockedTools,
-      }).pipe(
-        Effect.mapError(
-          (err) =>
-            new ExecutionError({
-              strategy: "reflexion",
-              message: `Improvement failed at attempt ${attempt}`,
-              step: attempt,
-              cause: err,
-            }),
-        ),
-      );
+      }, {
+        maxIterations: input.config.strategies.reflexion?.kernelMaxIterations ?? 3,
+        strategy: "reflexion",
+        kernelType: "react",
+        taskId: input.taskId,
+        kernelPass: `reflexion:improve-${attempt}`,
+      });
 
-      currentResponse = improveResult.output || currentResponse;
+      const improveOutput = improveState.output
+        ?? [...improveState.steps].filter((s) => s.type === "thought").pop()?.content
+        ?? "";
+      currentResponse = improveOutput || currentResponse;
       // Only replace critique evidence if improvement actually called tools;
       // otherwise keep prior evidence so critique sees what was already done.
-      const improvementHadToolCalls = improveResult.steps.some((s) => s.type === "action");
+      const improvementHadToolCalls = [...improveState.steps].some((s) => s.type === "action");
       if (improvementHadToolCalls) {
-        lastKernelSteps = improveResult.steps;
+        lastKernelSteps = [...improveState.steps];
       }
       // Always accumulate all steps for side-effect tracking across passes
-      allSideEffectSteps = [...allSideEffectSteps, ...improveResult.steps];
-      totalTokens += improveResult.totalTokens;
-      totalCost += improveResult.totalCost;
+      allSideEffectSteps = [...allSideEffectSteps, ...improveState.steps];
+      totalTokens += improveState.tokens;
+      totalCost += improveState.cost;
 
       steps.push(makeStep("thought", `[ATTEMPT ${attempt + 1}] ${currentResponse}`));
 
