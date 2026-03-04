@@ -241,6 +241,8 @@ export type AgentEvent =
       readonly observation?: string;
       /** Which kernel pass produced this step (e.g. "reflexion:improve-1", "tree-of-thought:execute") */
       readonly kernelPass?: string;
+      /** Full LLM prompt trace for debug observability (system + user message) */
+      readonly prompt?: { readonly system: string; readonly user: string };
     }
   // ─── Agent lifecycle events (from @reactive-agents/guardrails) ───
   | {

@@ -746,6 +746,8 @@ export const CompletionResponseSchema = Schema.Struct({
   model: Schema.String,
   /** Tool calls emitted by the model (if any) */
   toolCalls: Schema.optional(Schema.Array(ToolCallSchema)),
+  /** Internal reasoning from thinking models (e.g. <think> blocks from qwen3, DeepSeek-R1) */
+  thinking: Schema.optional(Schema.String),
 });
 
 /**

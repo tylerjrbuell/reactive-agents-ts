@@ -284,6 +284,7 @@
       "dependencies": {
         "@reactive-agents/core": "workspace:*",
         "@reactive-agents/llm-provider": "workspace:*",
+        "@reactive-agents/memory": "workspace:^",
         "@reactive-agents/prompts": "workspace:^",
         "@reactive-agents/tools": "workspace:*",
         "effect": "^3.10.0",
@@ -312,6 +313,20 @@
         "@reactive-agents/reasoning": "workspace:^",
         "@reactive-agents/tools": "workspace:^",
         "@reactive-agents/verification": "workspace:^",
+        "effect": "^3.10.0",
+      },
+      "devDependencies": {
+        "bun-types": "latest",
+        "typescript": "^5.7.0",
+      },
+    },
+    "packages/testing": {
+      "name": "@reactive-agents/testing",
+      "version": "0.5.6",
+      "dependencies": {
+        "@reactive-agents/core": "workspace:^",
+        "@reactive-agents/llm-provider": "workspace:^",
+        "@reactive-agents/tools": "workspace:^",
         "effect": "^3.10.0",
       },
       "devDependencies": {
@@ -583,6 +598,8 @@
     "@reactive-agents/reasoning": ["@reactive-agents/reasoning@workspace:packages/reasoning"],
 
     "@reactive-agents/runtime": ["@reactive-agents/runtime@workspace:packages/runtime"],
+
+    "@reactive-agents/testing": ["@reactive-agents/testing@workspace:packages/testing"],
 
     "@reactive-agents/tools": ["@reactive-agents/tools@workspace:packages/tools"],
 

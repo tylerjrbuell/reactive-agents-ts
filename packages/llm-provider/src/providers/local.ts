@@ -157,6 +157,7 @@ export const LocalProviderLive = Layer.effect(
                 messages: msgs,
                 tools: toOllamaTools(request.tools),
                 stream: false,
+                think: true,
                 keep_alive: "5m",
                 options: {
                   temperature:
@@ -178,6 +179,8 @@ export const LocalProviderLive = Layer.effect(
           });
 
           const content = response.message?.content ?? "";
+          // Extract thinking from Ollama response (available in SDK v0.6+ for thinking models)
+          const thinkingContent = (response.message as { thinking?: string } | undefined)?.thinking || undefined;
           const inputTokens = response.prompt_eval_count ?? 0;
           const outputTokens = response.eval_count ?? 0;
           const toolCalls = parseToolCalls(
@@ -205,6 +208,7 @@ export const LocalProviderLive = Layer.effect(
             },
             model: response.model ?? model,
             toolCalls,
+            ...(thinkingContent ? { thinking: thinkingContent } : {}),
           } satisfies CompletionResponse;
         }).pipe(
           Effect.retry(retryPolicy),
