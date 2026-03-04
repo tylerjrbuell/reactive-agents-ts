@@ -607,10 +607,6 @@ function buildExecutionEvidence(steps?: readonly ReasoningStep[]): string {
 }
 
 /**
- * Progressive compaction for critique history.
- * Keeps last 3 critiques verbatim, summarizes older ones.
- */
-/**
  * Extract tool names that have side effects AND succeeded in a prior kernel pass.
  * These tools are blocked from re-execution in improvement passes to prevent
  * duplicate sends, writes, creates, etc.
