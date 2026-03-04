@@ -490,12 +490,13 @@ export interface RuntimeOptions {
  */
 export const createRuntime = (options: RuntimeOptions) => {
   // Resolve default model: explicit > env var > provider registry fallback
+  // Note: empty strings are treated as unset (env vars can be "" after unsetting)
   const resolvedModel =
-    options.model ??
-    process.env.LLM_DEFAULT_MODEL ??
+    options.model ||
+    process.env.LLM_DEFAULT_MODEL ||
     (options.provider
       ? getProviderDefaultModel(options.provider)
-      : undefined) ??
+      : undefined) ||
     "claude-sonnet-4-20250514";
 
   const config: ReactiveAgentsConfig = {
@@ -535,7 +536,7 @@ export const createRuntime = (options: RuntimeOptions) => {
   const llmLayer = createLLMProviderLayer(
     options.provider ?? "test",
     options.testResponses,
-    options.model,
+    resolvedModel,
     {
       thinking: options.thinking,
       temperature: options.temperature,

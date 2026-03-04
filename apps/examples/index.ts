@@ -27,7 +27,7 @@ export interface RunConfig {
 //
 // Examples:
 //   DEFAULT_PROVIDER = "openai";  DEFAULT_MODEL = "gpt-4o";
-//   DEFAULT_PROVIDER = "ollama";  DEFAULT_MODEL = "llama3.2";
+//   DEFAULT_PROVIDER = "ollama";  DEFAULT_MODEL = "cogito:14b";
 //   DEFAULT_PROVIDER = "anthropic"; DEFAULT_MODEL = "claude-opus-4-6";
 const DEFAULT_PROVIDER: string | undefined = "ollama";
 const DEFAULT_MODEL: string | undefined = "cogito:14b";
