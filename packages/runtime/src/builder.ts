@@ -2,8 +2,9 @@ import { Effect, Layer, Schema, ManagedRuntime } from "effect";
 import { createRuntime } from "./runtime.js";
 import type { MCPServerConfig } from "./runtime.js";
 import { ExecutionEngine } from "./execution-engine.js";
-import type { LifecycleHook, ExecutionContext } from "./types.js";
+import type { LifecycleHook, ExecutionContext, ModelParams } from "./types.js";
 import type { RuntimeErrors } from "./errors.js";
+import { unwrapError } from "./errors.js";
 import type {
   ReasoningConfig,
   ContextProfile,
@@ -504,6 +505,9 @@ export class ReactiveAgentBuilder {
   private _name: string = "agent";
   private _provider: ProviderName = "test";
   private _model?: string;
+  private _thinking?: boolean;
+  private _temperature?: number;
+  private _maxTokens?: number;
   private _memoryTier: "1" | "2" = "1";
   private _hooks: LifecycleHook[] = [];
   private _maxIterations: number = 10;
@@ -731,15 +735,25 @@ export class ReactiveAgentBuilder {
    *
    * Examples: `"claude-opus-4-20250514"`, `"gpt-4-turbo"`, `"mistral-large"`, `"gemini-2.0-flash"`
    *
-   * @param model - Model identifier (provider-specific)
+   * @param modelOrParams - Model identifier string, or ModelParams object with model + thinking/temperature/maxTokens
    * @returns `this` for chaining
    * @example
    * ```typescript
    * builder.withModel("claude-opus-4-20250514")
+   * builder.withModel({ model: "qwen3.5", thinking: true, temperature: 0.5 })
    * ```
    */
-  withModel(model: string): this {
-    this._model = model;
+  withModel(model: string): this;
+  withModel(params: ModelParams): this;
+  withModel(modelOrParams: string | ModelParams): this {
+    if (typeof modelOrParams === "string") {
+      this._model = modelOrParams;
+    } else {
+      this._model = modelOrParams.model;
+      if (modelOrParams.thinking !== undefined) this._thinking = modelOrParams.thinking;
+      if (modelOrParams.temperature !== undefined) this._temperature = modelOrParams.temperature;
+      if (modelOrParams.maxTokens !== undefined) this._maxTokens = modelOrParams.maxTokens;
+    }
     return this;
   }
 
@@ -1187,7 +1201,9 @@ export class ReactiveAgentBuilder {
       const { resolveProfile } = await import("@reactive-agents/reasoning");
       this._contextProfile = resolveProfile(this._model);
     }
-    return Effect.runPromise(this.buildEffect());
+    return Effect.runPromise(this.buildEffect()).catch((e) => {
+      throw unwrapError(e);
+    });
   }
 
   /**
@@ -1265,6 +1281,9 @@ export class ReactiveAgentBuilder {
       agentId,
       provider: this._provider,
       model: this._model,
+      thinking: this._thinking,
+      temperature: this._temperature,
+      maxTokens: this._maxTokens,
       memoryTier: this._memoryTier,
       maxIterations: this._maxIterations,
       enableGuardrails: this._enableGuardrails,
@@ -1862,7 +1881,9 @@ export class ReactiveAgent {
    * ```
    */
   async run(input: string): Promise<AgentResult> {
-    return Effect.runPromise(this.runEffect(input));
+    return Effect.runPromise(this.runEffect(input)).catch((e) => {
+      throw unwrapError(e);
+    });
   }
 
   /**

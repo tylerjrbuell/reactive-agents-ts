@@ -110,6 +110,16 @@ export class LLMConfig extends Context.Tag("LLMConfig")<
     readonly timeoutMs: number;
 
     /**
+     * Enable/disable thinking mode for thinking-capable models.
+     * - `true` — Always enable thinking (e.g., qwen3.5, DeepSeek-R1)
+     * - `false` — Always disable thinking (e.g., cogito:14b that crashes with think:true)
+     * - `undefined` — Auto-detect based on model capabilities (Ollama only)
+     *
+     * @default undefined (auto-detect)
+     */
+    readonly thinking?: boolean;
+
+    /**
      * Default maximum output tokens for LLM responses.
      * Used if a CompletionRequest does not specify maxTokens.
      * Set lower for faster responses; higher for longer outputs.

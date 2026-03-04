@@ -165,7 +165,7 @@ export const executeReflexion = (
             },
           ],
           systemPrompt: critiqueSystemPrompt,
-          maxTokens: selfCritiqueDepth === "deep" ? 600 : 300,
+          maxTokens: selfCritiqueDepth === "deep" ? 2500 : 1500,
           temperature: 0.3, // low temp for objective critique
         })
         .pipe(

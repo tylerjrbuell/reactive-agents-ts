@@ -181,7 +181,10 @@ export function buildPatchPrompt(goal: string, steps: PlanStep[]): string {
   sections.push(
     `Rewrite the failed and pending steps to recover from the error. ` +
     `Keep completed steps as-is. Respond with a JSON object containing a "steps" array ` +
-    `(only the replacement steps, not the completed ones).`,
+    `(only the replacement steps, not the completed ones).\n\n` +
+    `Each step MUST use this exact schema:\n${PLAN_STEP_SCHEMA}\n\n` +
+    `EXAMPLE:\n${PLAN_STEP_EXAMPLE}\n\n` +
+    `JSON only, no explanation.`,
   );
 
   return sections.join("\n\n");

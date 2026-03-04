@@ -6,10 +6,15 @@
  *   Layer 2: JSON extraction & repair (pure functions, no LLM)
  *   Layer 3: Schema validation with Effect-TS coercion
  *   Layer 4: Retry with error feedback
+ *
+ * Observability: When EventBus is available, emits ReasoningStepCompleted events
+ * with prompt/response data for logModelIO integration.
  */
-import { Effect, Schema } from "effect";
+import { Effect, Option, Schema } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
+import { EventBus } from "@reactive-agents/core";
 import { extractJsonBlock, repairJson } from "./json-repair.js";
+import { stripThinking } from "../strategies/shared/thinking-utils.js";
 
 export interface StructuredOutputConfig<T> {
   readonly schema: Schema.Schema<T>;
@@ -39,7 +44,13 @@ export const extractStructuredOutput = <T>(
     const llm = yield* LLMService;
     const maxRetries = config.maxRetries ?? 2;
     const temp = config.temperature ?? 0.3;
-    const maxTokens = config.maxTokens ?? 2000;
+    const maxTokens = config.maxTokens ?? 4096;
+
+    // Optional EventBus for logModelIO observability
+    const ebOpt = yield* Effect.serviceOption(EventBus).pipe(
+      Effect.catchAll(() => Effect.succeed(Option.none<EventBus["Type"]>())),
+    );
+    const eb = ebOpt._tag === "Some" ? ebOpt.value : null;
 
     let lastError: string | null = null;
 
@@ -50,8 +61,8 @@ export const extractStructuredOutput = <T>(
         : buildRetryPrompt(config, lastError ?? "Unknown error");
 
       const systemPrompt = config.systemPrompt
-        ? `${config.systemPrompt}\n\nRespond with ONLY valid JSON. No markdown, no explanation.`
-        : "Respond with ONLY valid JSON. No markdown, no explanation.";
+        ? `${config.systemPrompt}\n\nRespond with ONLY valid JSON. No markdown, no explanation, no thinking tags.`
+        : "Respond with ONLY valid JSON. No markdown, no explanation, no thinking tags.";
 
       // Layer 1: LLM call
       const response = yield* llm.complete({
@@ -60,10 +71,24 @@ export const extractStructuredOutput = <T>(
         maxTokens,
         temperature: attempt === 0 ? temp : 0.1,
       }).pipe(
-        Effect.mapError((e) => new Error(`LLM call failed: ${String(e)}`)),
+        Effect.mapError((e) => new Error(`LLM call failed: ${e instanceof Error ? e.message : String(e)}`)),
       );
 
-      const raw = response.content;
+      // Emit model IO event for logModelIO observability
+      if (eb) {
+        yield* eb.publish({
+          _tag: "ReasoningStepCompleted",
+          taskId: "structured-output",
+          strategy: "structured-output",
+          step: attempt + 1,
+          totalSteps: maxRetries + 1,
+          prompt: { system: systemPrompt, user: prompt },
+          thought: response.content,
+        }).pipe(Effect.catchAll(() => Effect.void));
+      }
+
+      // Strip <think>...</think> blocks before JSON extraction (thinking models)
+      const raw = stripThinking(response.content);
       let repaired = false;
 
       // Layer 2: Extract and repair JSON

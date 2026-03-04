@@ -319,15 +319,13 @@ const buildDashboardData = (
     totalDuration = phases.reduce((sum, p) => sum + p.duration, 0);
   }
 
-  // Determine status
+  // Determine status — only actual errors affect overall status.
+  // Timing warnings (slow phases) are informational and don't indicate partial completion.
   let status: "success" | "error" | "partial" = "success";
   for (const phase of phases) {
     if (phase.status === "error") {
       status = "error";
       break;
-    }
-    if (phase.status === "warning") {
-      status = "partial";
     }
   }
 

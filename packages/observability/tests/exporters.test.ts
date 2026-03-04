@@ -621,22 +621,22 @@ describe("Task 4: exportMetrics() Dashboard Integration", () => {
     }
   });
 
-  test("exportMetrics determines status from phase warnings", () => {
+  test("exportMetrics shows success for slow phases (timing warnings are informational)", () => {
     const output: string[] = [];
     const origLog = console.log;
     console.log = (...args: any[]) => output.push(args.join(" "));
 
     try {
       const exporter = makeConsoleExporter({ showLogs: false, showSpans: false });
-      // Slow phase should trigger "partial" status
+      // Slow phase should NOT demote overall status — only errors do
       const metrics: Metric[] = [
         { name: "execution.phase.duration_ms", type: "histogram", value: 12000, timestamp: new Date(), labels: { phase: "think" } },
       ];
       exporter.exportMetrics(metrics);
 
       const combined = output.join("\n");
-      // With warning phases, status should show "Partial"
-      expect(combined).toContain("Partial");
+      // Overall status is success; phase timeline still shows ⚠️ for slow phases
+      expect(combined).toContain("Success");
       expect(combined).toContain("⚠️");
     } finally {
       console.log = origLog;

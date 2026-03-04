@@ -101,6 +101,41 @@ describe("extractStructuredOutput", () => {
     expect(result.data.name).toBe("planned");
   });
 
+  it("strips <think> blocks before JSON extraction", async () => {
+    const layer = TestLLMServiceLayer({
+      "Extract": '<think>\nLet me think about this...\nThe name should be "thought" and count 99.\n</think>\n{"name": "thought", "count": 99}',
+    });
+
+    const result = await Effect.runPromise(
+      extractStructuredOutput({
+        schema: TestSchema,
+        prompt: "Extract the data",
+        maxRetries: 0,
+      }).pipe(Effect.provide(layer)),
+    );
+
+    expect(result.data.name).toBe("thought");
+    expect(result.data.count).toBe(99);
+    expect(result.attempts).toBe(1);
+  });
+
+  it("strips <think> blocks that contain JSON-like content", async () => {
+    const layer = TestLLMServiceLayer({
+      "Extract": '<think>\nI could return {"name": "wrong", "count": 0} but let me reconsider.\n</think>\n{"name": "correct", "count": 42}',
+    });
+
+    const result = await Effect.runPromise(
+      extractStructuredOutput({
+        schema: TestSchema,
+        prompt: "Extract the data",
+        maxRetries: 0,
+      }).pipe(Effect.provide(layer)),
+    );
+
+    expect(result.data.name).toBe("correct");
+    expect(result.data.count).toBe(42);
+  });
+
   it("includes few-shot examples in prompt", async () => {
     const layer = TestLLMServiceLayer({
       "Example": '{"name": "with-example", "count": 5}',
