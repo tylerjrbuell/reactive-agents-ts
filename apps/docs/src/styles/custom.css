@@ -194,7 +194,6 @@ html {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   opacity: 0.55;
-  white-space: nowrap;
   padding-top: 0.4rem;
 }
 
@@ -392,16 +391,26 @@ html {
 /* ── Responsive stats ───────────────────────────────────────── */
 @media (max-width: 768px) {
   .ra-stats {
-    grid-template-columns: repeat(3, 1fr);
-    gap: 1.2rem 0;
-    padding: 1.5rem 0.5rem;
+    /* Flexbox + justify-content:center auto-centers the partial last row (items 4+5) */
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    row-gap: 1.4rem;
+    column-gap: 0;
+    padding: 1.5rem 0.75rem;
   }
   .ra-stat {
-    padding: 0.3rem 0.25rem;
-  }
-  .ra-stat:nth-child(1),
-  .ra-stat:nth-child(4) {
+    /* 3-per-row; flex-shrink:0 keeps widths stable */
+    flex: 0 0 calc(33.33% - 0.5rem);
+    max-width: 160px;
+    padding: 0.3rem 0.5rem;
     border-left: none;
+  }
+  /* Horizontal rule between rows */
+  .ra-stat:nth-child(4),
+  .ra-stat:nth-child(5) {
+    border-top: 1px solid rgba(139, 92, 246, 0.12);
+    padding-top: 1.1rem;
   }
   .ra-stat-value {
     font-size: 1.8rem;
@@ -410,24 +419,40 @@ html {
   }
   .ra-stat-label {
     font-size: 0.6rem;
+    white-space: normal;       /* Allow wrapping — "Reasoning Strategies" fits */
+    letter-spacing: 0.05em;
   }
 }
 
 @media (max-width: 420px) {
   .ra-stats {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 1rem 0;
+    row-gap: 1.1rem;
     padding: 1.2rem 0.5rem;
   }
   .ra-stat {
-    border-left: none !important;
+    /* 2-per-row; lone 5th item stays at 50% width and is centered by flexbox */
+    flex: 0 0 calc(50% - 0.5rem);
+    max-width: 180px;
   }
-  .ra-stat:nth-child(odd) {
-    border-right: 1px solid rgba(139, 92, 246, 0.12);
+  /* Reset row-2 divider (items shift at 2-col) */
+  .ra-stat:nth-child(4),
+  .ra-stat:nth-child(5) {
+    border-top: none;
+    padding-top: 0.3rem;
+  }
+  /* New divider after first row (items 3, 4, 5) */
+  .ra-stat:nth-child(3),
+  .ra-stat:nth-child(4),
+  .ra-stat:nth-child(5) {
+    border-top: 1px solid rgba(139, 92, 246, 0.12);
+    padding-top: 1rem;
   }
   .ra-stat-value {
     font-size: 1.6rem;
     height: 2rem;
     line-height: 2rem;
+  }
+  .ra-stat-label {
+    font-size: 0.58rem;
   }
 }
