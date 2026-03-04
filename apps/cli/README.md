@@ -2,6 +2,8 @@
 
 **The Reactive Agents eXecutable** — CLI for scaffolding, running, and inspecting AI agents.
 
+[![npm downloads](https://img.shields.io/npm/dm/%40reactive-agents%2Fcli?logo=npm)](https://www.npmjs.com/package/@reactive-agents/cli)
+
 ## Installation
 
 ```bash

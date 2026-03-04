@@ -14,7 +14,15 @@
     "ai-agents",
     "autonomous-agents",
     "react-loop",
-    "guardrails"
+    "guardrails",
+    "agent-framework",
+    "multi-agent",
+    "mcp",
+    "model-context-protocol",
+    "ollama",
+    "a2a",
+    "observability",
+    "reasoning"
   ],
   "scripts": {
     "build": "tsup --config ../../tsup.config.base.ts",

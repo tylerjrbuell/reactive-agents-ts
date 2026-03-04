@@ -39,6 +39,17 @@
     "bun-types": "latest"
   },
   "description": "rax — the Reactive Agents CLI for scaffolding, running, and inspecting AI agents",
+  "keywords": [
+    "ai",
+    "agents",
+    "cli",
+    "typescript",
+    "llm",
+    "reactive-agents",
+    "mcp",
+    "agent-cli",
+    "developer-tools"
+  ],
   "homepage": "https://tylerjrbuell.github.io/reactive-agents-ts/",
   "bugs": {
     "url": "https://github.com/tylerjrbuell/reactive-agents-ts/issues"
