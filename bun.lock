@@ -242,8 +242,9 @@
     },
     "packages/reactive-agents": {
       "name": "reactive-agents",
-      "version": "0.5.5",
+      "version": "0.5.6",
       "dependencies": {
+        "@reactive-agents/a2a": "workspace:^",
         "@reactive-agents/core": "workspace:^",
         "@reactive-agents/cost": "workspace:^",
         "@reactive-agents/eval": "workspace:^",
@@ -284,8 +285,9 @@
     },
     "packages/runtime": {
       "name": "@reactive-agents/runtime",
-      "version": "0.5.5",
+      "version": "0.5.6",
       "dependencies": {
+        "@reactive-agents/a2a": "workspace:^",
         "@reactive-agents/core": "workspace:^",
         "@reactive-agents/cost": "workspace:^",
         "@reactive-agents/guardrails": "workspace:^",
