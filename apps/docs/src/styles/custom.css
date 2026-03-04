@@ -374,6 +374,11 @@ html {
 /* ── Hero SVG mouse interaction ─────────────────────────────── */
 .ra-hero-svg {
   cursor: crosshair;
+  /* Fill the Starlight hero image container — don't rely on JS getBoundingClientRect */
+  display: block;
+  width: 100%;
+  height: auto;
+  max-width: 100%;
 }
 .ra-hero-svg circle,
 .ra-hero-svg line {
