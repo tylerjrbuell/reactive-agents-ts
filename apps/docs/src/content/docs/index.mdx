@@ -25,7 +25,7 @@ import HeroInteraction from "../../components/HeroInteraction.astro";
     <span class="ra-stat-label">Packages</span>
   </div>
   <div class="ra-stat">
-    <span class="ra-stat-value">1000+</span>
+    <span class="ra-stat-value">1,353</span>
     <span class="ra-stat-label">Tests</span>
   </div>
   <div class="ra-stat">
@@ -67,6 +67,12 @@ Most agent frameworks give you a chat loop and call it a day. Reactive Agents gi
     ReAct for tool use. Reflexion for self-improvement. Plan-Execute for
     structured work. Tree-of-Thought for creative exploration. Adaptive to
     auto-select the best strategy. Register your own strategies too.
+  </Card>
+  <Card title="Composable Kernel Architecture" icon="setting">
+    Every reasoning strategy runs on a swappable ThoughtKernel abstraction.
+    Register custom kernels via StrategyRegistry, or use the built-in ReAct
+    kernel. KernelRunner handles the universal execution loop, tool call
+    guards, and EventBus wiring — strategies stay focused on policy, not plumbing.
   </Card>
   <Card title="Multi-Agent & A2A Protocol" icon="rocket">
     Build teams of specialized agents that collaborate via the A2A
@@ -173,7 +179,7 @@ const agent = await ReactiveAgents.create()
     10-phase execution engine you can hook into at any point.
   </Card>
   <Card title="vs. Building From Scratch" icon="document">
-    You get 19 production-ready packages with 1100+ tests, covering memory,
+    You get 19 production-ready packages with 1,353 tests, covering memory,
     reasoning, tools, A2A protocol, gateway, safety, cost, identity, and orchestration.
     Focus on your agent's logic, not infrastructure.
   </Card>
