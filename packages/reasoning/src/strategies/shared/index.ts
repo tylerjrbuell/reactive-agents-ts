@@ -7,3 +7,4 @@ export * from "./react-kernel.js";
 export * from "./plan-prompts.js";
 export * from "./kernel-state.js";
 export * from "./tool-execution.js";
+export * from "./kernel-hooks.js";
