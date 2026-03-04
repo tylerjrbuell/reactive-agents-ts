@@ -287,3 +287,190 @@ All strategies receive the full execution context from the engine, including:
 These are threaded through to every `executeReActKernel()` call, so tool compression, context budgets, and attribution work consistently across all strategies.
 
 Custom strategies registered via `StrategyRegistry` receive all these fields automatically through the `StrategyFn` input type.
+
+---
+
+## Structured Plan Engine
+
+The Plan-Execute strategy was rewritten in v0.6.0 with a **type-safe structured plan engine** that replaces fragile text-parsed numbered lists with JSON schemas, SQLite persistence, and a 4-layer output pipeline.
+
+### How It Works
+
+```
+1. Plan Generation   — LLM generates a structured JSON plan (typed schema, not free text)
+2. Structured Output — 4-layer pipeline: prompt → JSON repair → schema validation → retry
+3. Step Execution    — Hybrid dispatch: tool_call (direct) or analysis (single LLM call) or composite (scoped ReAct kernel)
+4. Cross-Step Data   — {{from_step:sN}} interpolation passes outputs between steps
+5. Reflection        — Graduated retry → patch → replan on failure
+6. Persistence       — Plans stored in SQLite via PlanStoreService
+```
+
+### Plan Schema
+
+The engine works with two core types from `packages/reasoning/src/types/plan.ts`:
+
+**`PlanStep`** — a hydrated step with full execution metadata:
+
+```typescript
+interface PlanStep {
+  id: string;           // Sequential ID: "s1", "s2", ...
+  seq: number;          // 1-based sequence number
+  title: string;        // Short human-readable title
+  instruction: string;  // Full execution instruction for the LLM or tool
+  type: "tool_call" | "analysis" | "composite";
+  toolName?: string;    // Required when type is "tool_call"
+  toolArgs?: Record<string, unknown>;  // Args passed directly to the tool
+  toolHints?: readonly string[];       // Tool names scoped to composite steps
+  dependsOn?: readonly string[];       // Step IDs this step depends on
+  status: "pending" | "in_progress" | "completed" | "failed" | "skipped";
+  result?: string;       // Output produced by this step
+  error?: string;        // Error message if the step failed
+  retries: number;       // Number of retry attempts made
+  tokensUsed: number;
+  startedAt?: string;
+  completedAt?: string;
+}
+```
+
+**`Plan`** — the top-level plan container:
+
+```typescript
+interface Plan {
+  id: string;
+  taskId: string;
+  agentId: string;
+  goal: string;
+  mode: "linear" | "dag";
+  steps: PlanStep[];
+  status: "active" | "completed" | "failed" | "abandoned";
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+  totalTokens: number;
+  totalCost: number;
+}
+```
+
+The LLM is asked to produce an `LLMPlanOutput` — an array of `LLMPlanStep` objects (content-only, no metadata). The engine then calls `hydratePlan()` to assign sequential IDs (`s1`, `s2`, ...), set all statuses to `"pending"`, and stamp timestamps.
+
+### Cross-Step References
+
+Steps can reference outputs from earlier steps using `{{from_step:sN}}` interpolation inside `toolArgs` values. A variant with `:summary` truncates to the first 500 characters:
+
+```typescript
+// Plan step s1: fetch recent commits from GitHub
+{
+  id: "s1",
+  type: "tool_call",
+  toolName: "web-search",
+  toolArgs: { query: "site:github.com/my-org/my-repo commits" }
+}
+
+// Plan step s2: summarize what was found in s1
+{
+  id: "s2",
+  type: "analysis",
+  instruction: "Summarize these commit messages: {{from_step:s1}}",
+  // Full s1 output is interpolated before the LLM call
+}
+
+// Or use :summary to truncate long outputs
+{
+  id: "s3",
+  type: "tool_call",
+  toolName: "file-write",
+  toolArgs: {
+    path: "./summary.md",
+    content: "{{from_step:s2:summary}}"  // First 500 chars of s2's result
+  }
+}
+```
+
+Self-references are guarded at runtime — a step cannot reference its own output. If a `{{from_step:sN}}` pattern remains unresolved (because the referenced step hasn't completed or is the current step), the step fails with a descriptive error rather than silently passing a broken string to a tool.
+
+### The 4-Layer Output Pipeline
+
+Plan generation uses `extractStructuredOutput()` from `packages/reasoning/src/structured-output/pipeline.ts`, which runs four layers in sequence:
+
+```
+Layer 1 — High-signal prompting     Tier-adaptive prompt with schema example and rules.
+                                    buildPlanGenerationPrompt() selects prompt complexity
+                                    based on model tier (local / mid / large / frontier).
+
+Layer 2 — JSON repair               extractJsonBlock() strips markdown fences and code
+                                    blocks. repairJson() fixes trailing commas, single
+                                    quotes, and truncated JSON before parsing.
+
+Layer 3 — Schema validation         Effect Schema.decode() validates the repaired JSON
+                                    against LLMPlanOutputSchema. Type errors surface as
+                                    structured messages, not raw exceptions.
+
+Layer 4 — Retry with feedback       On validation failure, re-prompts the LLM with the
+                                    exact validation error so it can correct its output.
+                                    Controlled by the maxRetries option (default: 2).
+```
+
+### Configuration
+
+Configure the Plan-Execute strategy via `withReasoning()`. All fields live under `strategies.planExecute` in the `ReasoningConfig`:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `maxRefinements` | `number` | `2` | Max plan revision cycles after reflection |
+| `reflectionDepth` | `"shallow" \| "deep"` | `"deep"` | Controls reflection prompt token budget (1500 vs 2500 tokens) |
+| `stepRetries` | `number` | `1` | Retry attempts per step before falling back to patch |
+| `stepKernelMaxIterations` | `number` | `3` | Max ReAct iterations for `composite`-type steps |
+| `planMode` | `"linear" \| "dag"` | `"linear"` | Execution mode — `linear` runs steps sequentially |
+| `patchStrategy` | `"in-place" \| "replan-remaining"` | — | How failed steps are repaired |
+
+```typescript
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withReasoning({
+    defaultStrategy: "plan-execute-reflect",
+    strategies: {
+      planExecute: {
+        maxRefinements: 3,
+        reflectionDepth: "deep",
+        stepRetries: 2,
+        stepKernelMaxIterations: 4,
+        planMode: "linear",
+      },
+    },
+  })
+  .withTools()
+  .withMemory()   // Enables PlanStoreService (SQLite plan persistence)
+  .build();
+```
+
+### Hybrid Step Dispatch
+
+Each `PlanStep` has a `type` that determines how it is executed:
+
+| Step Type | Execution | When to Use |
+|-----------|-----------|-------------|
+| `tool_call` | Direct `ToolService.execute()` call — no LLM involved | Single deterministic tool call with known args |
+| `analysis` | Single LLM completion — no tools, no loop | Reasoning, summarization, writing tasks |
+| `composite` | Scoped ReAct kernel — tools filtered to `toolHints` | Multi-tool sub-tasks within a larger plan |
+
+The `toolHints` field on a `composite` step limits which tools the scoped ReAct kernel can see, preventing the sub-agent from reaching outside its scope.
+
+### Error Recovery
+
+| Situation | Recovery Strategy |
+|-----------|------------------|
+| Step fails, retries remain | Retry the same step with the previous error message appended |
+| Step fails, no retries left | Patch: ask the LLM to rewrite only the failed and pending steps via `buildPatchPrompt()` |
+| Patch also fails | The step is marked `"failed"` and execution continues; reflection decides whether to replan |
+| All steps completed | `allStepsCompleted` flag forces `satisfied = true` regardless of reflection text |
+
+The `allStepsCompleted` guard is critical: without it, a reflection LLM that returns "needs improvement" can trigger a refinement loop that re-executes completed side-effecting steps (file writes, API calls, emails). The guard prevents this by treating 100% step completion as unconditional success.
+
+### Plan Persistence
+
+When `.withMemory()` is enabled, the `PlanStoreService` (backed by `bun:sqlite`) automatically persists:
+
+- The full `Plan` object on creation
+- Step status transitions (`pending` → `in_progress` → `completed` / `failed`) in real time
+
+This means plan state survives agent restarts and can be inspected for debugging or auditing. The persistence layer is optional — when memory is not configured, planning proceeds in-memory with no behavioral change.
