@@ -17,6 +17,10 @@ export function isSatisfied(text: string): boolean {
   if (/^satisfied[:\s]/im.test(trimmed)) return true;
   // Common LLM patterns: "Status: Satisfied", "\nSatisfied:", "Result: SATISFIED"
   if (/(?:^|\n)\s*(?:status|result|verdict|assessment)?\s*:?\s*satisfied[:\s]/im.test(trimmed)) return true;
+  // Thinking-model fallback: verdict may be buried after analysis. Scan full text
+  // for "SATISFIED:" that is NOT preceded by "UN" on the same word boundary.
+  // Must NOT match "UNSATISFIED".
+  if (/(?<![a-z])satisfied\s*:/im.test(trimmed) && !/unsatisfied/im.test(trimmed)) return true;
   return false;
 }
 

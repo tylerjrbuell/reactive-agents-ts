@@ -24,6 +24,7 @@ import {
 } from "./shared/service-utils.js";
 import { makeStep, buildStrategyResult } from "./shared/step-utils.js";
 import { isSatisfied, isCritiqueStagnant } from "./shared/quality-utils.js";
+import { extractThinking } from "./shared/thinking-utils.js";
 import type { ToolSchema } from "./shared/tool-utils.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 
@@ -79,7 +80,7 @@ export const executeReflexion = (
 
     // ── STEP 1: Initial generation (tool-aware via ReAct kernel) ──
     const genDefaultFallback = input.systemPrompt
-      ? `${input.systemPrompt}\n\nYou are a thoughtful reasoning agent. Provide clear, accurate, and complete responses.`
+      ? `${input.systemPrompt}\n\nExecute the task using the EXACT tool names and parameter values specified. Do NOT guess or substitute parameters. Complete ALL required actions.`
       : buildSystemPrompt(input.taskDescription);
 
     const genSystemPrompt = yield* compilePromptOrFallback(
@@ -89,9 +90,16 @@ export const executeReflexion = (
       genDefaultFallback,
     );
 
+    // Build priorContext with param hints — placed AFTER tool schemas, right before RULES
+    const paramHints = extractToolParamHints(input.taskDescription);
+    const genPriorContext = paramHints
+      ? `⚠️ CRITICAL — use these EXACT values (do NOT substitute or guess):\n${paramHints}`
+      : undefined;
+
     const genResult = yield* executeReActKernel({
       task: buildGenerationPrompt(input, null),
       systemPrompt: genSystemPrompt,
+      priorContext: genPriorContext,
       availableToolSchemas: input.availableToolSchemas,
       maxIterations: input.config.strategies.reflexion?.kernelMaxIterations ?? 3,
       temperature: 0.7,
@@ -114,6 +122,8 @@ export const executeReflexion = (
     );
 
     let currentResponse = genResult.output;
+    let lastKernelSteps = genResult.steps; // Track kernel steps for critique context
+    let allSideEffectSteps = [...genResult.steps]; // Accumulate ALL steps for side-effect tracking
     totalTokens += genResult.totalTokens;
     totalCost += genResult.totalCost;
 
@@ -155,6 +165,7 @@ export const executeReflexion = (
                 currentResponse,
                 selfCritiqueDepth,
                 previousCritiques,
+                lastKernelSteps,
               ),
             },
           ],
@@ -174,7 +185,15 @@ export const executeReflexion = (
           ),
         );
 
-      const critique = critiqueResponse.content;
+      // Strip <think> blocks from critique. If the model put the entire
+      // critique inside <think>, fall back to the thinking content so
+      // satisfaction/stagnation detection still works.
+      // When Ollama's think:true is active, the provider separates thinking
+      // into response.thinking — content may already be empty.
+      const { thinking: critiqueThinking, content: cleanCritique } =
+        extractThinking(critiqueResponse.content);
+      const providerThinking = (critiqueResponse as any).thinking as string | undefined;
+      const critique = cleanCritique || critiqueThinking || providerThinking || critiqueResponse.content;
       totalTokens += critiqueResponse.usage.totalTokens;
       totalCost += critiqueResponse.usage.estimatedCost;
 
@@ -234,7 +253,7 @@ export const executeReflexion = (
 
       // ── Improve: generate a refined response (tool-aware via ReAct kernel) ──
       const improveDefaultFallback = input.systemPrompt
-        ? `${input.systemPrompt}\n\nYou are a thoughtful reasoning agent. Provide clear, accurate, and complete responses.`
+        ? `${input.systemPrompt}\n\nYour previous attempt had issues. Fix them by using the EXACT tool parameters from the task. Complete ALL required actions.`
         : buildSystemPrompt(input.taskDescription);
 
       const improveSystemPrompt = yield* compilePromptOrFallback(
@@ -244,9 +263,21 @@ export const executeReflexion = (
         improveDefaultFallback,
       );
 
+      // Build focused improvement task based on what was already done
+      const completedActions = buildCompletedActionsContext(lastKernelSteps);
+      const improvementTask = buildImprovementTask(input, previousCritiques, completedActions);
+      const improvePriorContext = paramHints
+        ? `⚠️ CRITICAL — use these EXACT values (do NOT substitute or guess):\n${paramHints}`
+        : undefined;
+
+      // Hard side-effect guard: identify tools with side effects that already
+      // succeeded in ANY prior pass. The kernel will refuse to execute these.
+      const blockedTools = extractSuccessfulSideEffectTools(allSideEffectSteps);
+
       const improveResult = yield* executeReActKernel({
-        task: buildGenerationPrompt(input, previousCritiques),
+        task: improvementTask,
         systemPrompt: improveSystemPrompt,
+        priorContext: improvePriorContext,
         availableToolSchemas: input.availableToolSchemas,
         maxIterations: input.config.strategies.reflexion?.kernelMaxIterations ?? 3,
         temperature: 0.6,
@@ -256,6 +287,7 @@ export const executeReflexion = (
         resultCompression: input.resultCompression,
         agentId: input.agentId,
         sessionId: input.sessionId,
+        blockedTools,
       }).pipe(
         Effect.mapError(
           (err) =>
@@ -269,6 +301,14 @@ export const executeReflexion = (
       );
 
       currentResponse = improveResult.output || currentResponse;
+      // Only replace critique evidence if improvement actually called tools;
+      // otherwise keep prior evidence so critique sees what was already done.
+      const improvementHadToolCalls = improveResult.steps.some((s) => s.type === "action");
+      if (improvementHadToolCalls) {
+        lastKernelSteps = improveResult.steps;
+      }
+      // Always accumulate all steps for side-effect tracking across passes
+      allSideEffectSteps = [...allSideEffectSteps, ...improveResult.steps];
       totalTokens += improveResult.totalTokens;
       totalCost += improveResult.totalCost;
 
@@ -301,33 +341,201 @@ export const executeReflexion = (
 // ─── Private Helpers (reflexion-specific) ───
 
 function buildSystemPrompt(taskDescription: string): string {
-  return `You are a thoughtful reasoning agent. Your task is: ${taskDescription}\nProvide clear, accurate, and complete responses.`;
+  return (
+    `You are a task execution agent. Execute tasks exactly as specified.\n\n` +
+    `CRITICAL RULES:\n` +
+    `- Use the EXACT tool names and parameter values specified in the task.\n` +
+    `- Do NOT substitute, guess, or hallucinate parameter values.\n` +
+    `- Do NOT ask clarifying questions — all information is in the task.\n` +
+    `- Complete ALL required actions (fetching data AND sending messages).\n` +
+    `- Produce output directly — no offers, no "would you like me to...".\n\n` +
+    `Task: ${taskDescription}`
+  );
 }
 
 function buildGenerationPrompt(
   input: ReflexionInput,
   previousCritiques: string[] | null,
 ): string {
-  const parts: string[] = [
-    `Task: ${input.taskDescription}`,
-    `Task Type: ${input.taskType}`,
-  ];
+  const parts: string[] = [];
+
+  // Extract any explicit tool call parameters from the task and highlight them
+  const paramHints = extractToolParamHints(input.taskDescription);
+  if (paramHints) {
+    parts.push(`REQUIRED TOOL PARAMETERS (use these EXACT values):\n${paramHints}`);
+  }
+
+  parts.push(`TASK:\n${input.taskDescription}`);
 
   if (input.memoryContext) {
-    parts.push(`Relevant Context:\n${input.memoryContext}`);
+    parts.push(`CONTEXT:\n${input.memoryContext}`);
   }
 
   if (previousCritiques && previousCritiques.length > 0) {
+    // Extract actionable fixes from critiques, not just the raw critique text
+    const fixes = extractActionableFixes(previousCritiques);
     parts.push(
-      `Previous attempts had these issues:\n${buildCompactedCritiqueHistory(previousCritiques)}\n\nPlease address all of these issues in your improved response.`,
+      `ISSUES FROM PREVIOUS ATTEMPTS (you MUST fix ALL of these):\n${fixes}`,
     );
   }
 
   parts.push(
-    "Provide a thorough and accurate response to the task above.",
+    `Execute the task above step by step. Use the exact tool names and parameters specified.`,
   );
 
   return parts.join("\n\n");
+}
+
+/**
+ * Extract explicit tool parameter hints from the task description.
+ * Finds patterns like: tool_name(params), "owner: 'value'", "recipient 'value'"
+ */
+function extractToolParamHints(taskDescription: string): string | null {
+  const hints: string[] = [];
+
+  // Match patterns like: owner: 'luduscom', repo: 'ludus-next'
+  const paramMatches = taskDescription.matchAll(
+    /(\w+):\s*['"]([^'"]+)['"]/g,
+  );
+  for (const m of paramMatches) {
+    hints.push(`  ${m[1]}: "${m[2]}"`);
+  }
+
+  // Match patterns like: tool/name with recipient '+12345'
+  const toolWithArg = taskDescription.matchAll(
+    /(\w+\/\w+)\s+with\s+(\w+)\s+['"]([^'"]+)['"]/g,
+  );
+  for (const m of toolWithArg) {
+    hints.push(`  Tool: ${m[1]} → ${m[2]}: "${m[3]}"`);
+  }
+
+  return hints.length > 0 ? hints.join("\n") : null;
+}
+
+/**
+ * Extract actionable fix instructions from critique text.
+ * Turns verbose critique prose into concise bullet points.
+ */
+function extractActionableFixes(critiques: string[]): string {
+  const lastCritique = critiques[critiques.length - 1] ?? "";
+  const fixes: string[] = [];
+
+  // Look for "should" / "needs to" / "must" statements — these are actionable
+  const actionLines = lastCritique
+    .split("\n")
+    .filter(
+      (line) =>
+        /\b(should|must|needs? to|required|missing|incorrect|wrong)\b/i.test(line) &&
+        line.trim().length > 10,
+    )
+    .slice(0, 5);
+
+  if (actionLines.length > 0) {
+    fixes.push(...actionLines.map((l) => `- ${l.trim().replace(/^[-•*\d.)\s]+/, "")}`));
+  } else {
+    // Fallback: use the whole critique compacted
+    fixes.push(buildCompactedCritiqueHistory(critiques));
+  }
+
+  return fixes.join("\n");
+}
+
+/**
+ * Build a focused improvement task that tells the kernel what was already done
+ * and focuses only on fixing the specific issues identified by the critique.
+ */
+function buildImprovementTask(
+  input: ReflexionInput,
+  previousCritiques: string[],
+  completedActions: string,
+): string {
+  const parts: string[] = [];
+
+  if (completedActions) {
+    parts.push(completedActions);
+  }
+
+  // Extract specific fixes needed
+  const fixes = extractActionableFixes(previousCritiques);
+  parts.push(`FIX THESE SPECIFIC ISSUES:\n${fixes}`);
+
+  parts.push(`ORIGINAL TASK (for reference):\n${input.taskDescription}`);
+
+  if (input.memoryContext) {
+    parts.push(`CONTEXT:\n${input.memoryContext}`);
+  }
+
+  parts.push(
+    `Focus ONLY on fixing the issues listed above. Do NOT re-execute actions that already succeeded.`,
+  );
+
+  return parts.join("\n\n");
+}
+
+/**
+ * Build a summary of what was already accomplished from kernel steps.
+ * Identifies side-effect tools (send/create/write) that should NOT be re-called.
+ */
+function buildCompletedActionsContext(steps?: readonly ReasoningStep[]): string {
+  if (!steps || steps.length === 0) return "";
+
+  const actions = steps.filter((s) => s.type === "action");
+  const observations = steps.filter((s) => s.type === "observation");
+
+  if (actions.length === 0) return "";
+
+  const lines: string[] = ["ALREADY COMPLETED ACTIONS (do NOT repeat successful ones):"];
+
+  for (let i = 0; i < actions.length; i++) {
+    const action = actions[i];
+    // Check if the corresponding observation indicates success or error
+    const obs = observations[i];
+    const isError = obs && /\[Tool error/i.test(obs.content);
+    const icon = isError ? "❌" : "✅";
+    const content = action.content.length > 200
+      ? action.content.slice(0, 200) + "..."
+      : action.content;
+    lines.push(`  ${icon} ${content}`);
+  }
+
+  // Identify side-effect tools that must NOT be called again
+  const extractToolName = (step: ReasoningStep): string | undefined =>
+    (step.metadata?.toolUsed as string | undefined)
+    ?? step.content.match(/"tool"\s*:\s*"([^"]+)"/)?.[1]
+    ?? step.content.match(/^(\S+)\(/)?.[1];
+
+  const sideEffectActions = actions.filter((a) => {
+    const toolName = extractToolName(a);
+    return toolName != null && isSideEffectTool(toolName);
+  });
+  const successfulSideEffects = sideEffectActions.filter((a) => {
+    const obs = observations[actions.indexOf(a)];
+    return !obs || !/\[Tool error/i.test(obs.content);
+  });
+
+  if (successfulSideEffects.length > 0) {
+    lines.push("\n⚠️ DO NOT call these tools again (they have side effects and already executed):");
+    for (const t of successfulSideEffects) {
+      const name = extractToolName(t);
+      if (name) lines.push(`  - ${name}`);
+    }
+  }
+
+  return lines.join("\n");
+}
+
+/**
+ * Side-effect detection via word splitting (not regex \b which treats _ as word char).
+ * Splits tool names on / _ - separators, then checks for side-effect verbs.
+ */
+const SIDE_EFFECT_WORDS = new Set([
+  "send", "write", "create", "delete", "post", "push",
+  "publish", "notify", "deploy", "upload", "remove", "update",
+]);
+
+function isSideEffectTool(toolName: string): boolean {
+  const words = toolName.toLowerCase().split(/[/_\-]/);
+  return words.some((w) => SIDE_EFFECT_WORDS.has(w));
 }
 
 function buildCritiquePrompt(
@@ -335,35 +543,117 @@ function buildCritiquePrompt(
   response: string,
   depth: "shallow" | "deep",
   previousCritiques: string[],
+  executionSteps?: readonly ReasoningStep[],
 ): string {
   const deepInstructions =
     depth === "deep"
-      ? "\n- Check for logical consistency and coherence\n- Identify any unsupported claims or assumptions\n- Assess whether all aspects of the task are addressed"
+      ? "\n- Check for logical consistency and coherence\n- Identify any unsupported claims or assumptions"
       : "";
 
   const prevCritiqueNote =
     previousCritiques.length > 0
-      ? `\n\nPrevious critiques identified these issues:\n${previousCritiques.map((c, i) => `${i + 1}. ${c}`).join("\n")}\n\nFocus on whether the new response adequately addresses these.`
+      ? `\n\nPrevious critiques identified these issues:\n${previousCritiques.map((c, i) => `${i + 1}. ${c}`).join("\n")}\nWere these fixed in the latest attempt?`
       : "";
 
-  return `Task: ${taskDescription}
+  // Build execution evidence — this is the PRIMARY evaluation input
+  const executionEvidence = buildExecutionEvidence(executionSteps);
 
-Response to evaluate:
+  // Extract required params for comparison
+  const paramHints = extractToolParamHints(taskDescription);
+  const paramCheck = paramHints
+    ? `\nREQUIRED PARAMETERS (from task):\n${paramHints}`
+    : "";
+
+  return `Evaluate whether this task was COMPLETED based on the execution evidence.
+
+ORIGINAL TASK:
+${taskDescription}
+
+EXECUTION EVIDENCE (what tools were actually called):
+${executionEvidence || "No tool calls recorded."}
+
+AGENT'S TEXT RESPONSE:
 ${response}
+${paramCheck}
+EVALUATION RULES:
+1. Focus on whether the REQUIRED ACTIONS were taken — not text formatting or style.
+2. If tools with side effects (send, write, create) succeeded, those actions are DONE.
+3. Only mark UNSATISFIED if a required action was MISSING or used clearly wrong parameters.
+4. Do NOT invent requirements not stated in the original task.
+5. Minor issues (e.g., fetching 5 items instead of 10) are worth noting but don't invalidate completed work.${deepInstructions}${prevCritiqueNote}
 
-Critically evaluate this response. Identify:
-- Factual errors or inaccuracies
-- Missing information or incomplete answers
-- Unclear or ambiguous statements${deepInstructions}${prevCritiqueNote}
+Your FIRST LINE must be exactly one of:
+SATISFIED: <what was accomplished>
+UNSATISFIED: <what specific required action was not completed>
 
-If the response is accurate and complete, start your critique with "SATISFIED:".
-Otherwise, clearly list the specific issues that need to be fixed.`;
+If UNSATISFIED, list ONLY the specific fixes needed (one per line). Be actionable and concise.`;
+}
+
+/**
+ * Build a structured execution evidence summary from kernel steps.
+ * Pairs each tool call with its result so the critique can see what happened.
+ */
+function buildExecutionEvidence(steps?: readonly ReasoningStep[]): string {
+  if (!steps || steps.length === 0) return "No execution steps recorded.";
+
+  const actions = steps.filter((s) => s.type === "action");
+  const observations = steps.filter((s) => s.type === "observation");
+
+  if (actions.length === 0) return "No tool calls were made.";
+
+  const evidence: string[] = [];
+
+  for (let i = 0; i < actions.length; i++) {
+    const action = actions[i].content;
+    const obs = observations[i]?.content ?? "no result recorded";
+    const isError = /\[Tool error/i.test(obs);
+    const icon = isError ? "❌" : "✅";
+    const actionStr = action.length > 200 ? action.slice(0, 200) + "..." : action;
+    const obsStr = obs.length > 150 ? obs.slice(0, 150) + "..." : obs;
+    evidence.push(`${icon} ${actionStr}\n   → ${obsStr}`);
+  }
+
+  return evidence.join("\n");
 }
 
 /**
  * Progressive compaction for critique history.
  * Keeps last 3 critiques verbatim, summarizes older ones.
  */
+/**
+ * Extract tool names that have side effects AND succeeded in a prior kernel pass.
+ * These tools are blocked from re-execution in improvement passes to prevent
+ * duplicate sends, writes, creates, etc.
+ */
+function extractSuccessfulSideEffectTools(
+  steps?: readonly ReasoningStep[],
+): readonly string[] {
+  if (!steps || steps.length === 0) return [];
+
+  const actions = steps.filter((s) => s.type === "action");
+  const observations = steps.filter((s) => s.type === "observation");
+  const blocked = new Set<string>();
+
+  for (let i = 0; i < actions.length; i++) {
+    const action = actions[i];
+    const obs = observations[i];
+    const isError = obs && /\[Tool error/i.test(obs.content);
+    if (isError) continue; // Only block tools that succeeded
+
+    // Extract tool name from action content (JSON: {"tool":"name",...})
+    const toolName = action.metadata?.toolUsed as string | undefined
+      ?? action.content.match(/"tool"\s*:\s*"([^"]+)"/)?.[1];
+    if (!toolName) continue;
+
+    // Check if this tool has side effects
+    if (isSideEffectTool(toolName)) {
+      blocked.add(toolName);
+    }
+  }
+
+  return [...blocked];
+}
+
 function buildCompactedCritiqueHistory(critiques: string[]): string {
   if (critiques.length <= 3) {
     return critiques.map((c, i) => `${i + 1}. ${c}`).join("\n");

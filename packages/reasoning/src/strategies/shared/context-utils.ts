@@ -1,6 +1,7 @@
 // File: src/strategies/shared/context-utils.ts
 import type { ReasoningStep } from "../../types/index.js";
 import type { ContextProfile } from "../../context/context-profile.js";
+import { stripThinking } from "./thinking-utils.js";
 
 /**
  * Format a single reasoning step in ReAct style for inclusion in context.
@@ -19,7 +20,8 @@ export function formatStepForContext(step: ReasoningStep): string {
     })();
     return `Action: ${parsed?.tool ?? step.content}`;
   }
-  return step.content; // thought — render as-is
+  // thought — strip any residual <think> blocks as defense-in-depth
+  return stripThinking(step.content);
 }
 
 /**

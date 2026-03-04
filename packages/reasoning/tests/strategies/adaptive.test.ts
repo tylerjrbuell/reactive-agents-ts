@@ -159,11 +159,11 @@ describe("AdaptiveStrategy", () => {
     const layer = TestLLMServiceLayer({
       // Adaptive analysis → select REFLEXION
       "Classify the task": "REFLEXION",
-      // Reflexion initial generation (systemPrompt contains "thoughtful reasoning agent")
-      "thoughtful reasoning agent": "Initial attempt at an answer.",
-      // Reflexion critique (content contains "Critically evaluate")
+      // Reflexion initial generation (systemPrompt contains "task execution agent")
+      "task execution agent": "Initial attempt at an answer.",
+      // Reflexion critique (content contains "Evaluate whether")
       // No SATISFIED: prefix → not satisfied; maxRetries=1 so loop exits → partial
-      "Critically evaluate": "This response lacks detail and accuracy.",
+      "Evaluate whether": "This response lacks detail and accuracy.",
       // Reactive fallback (content contains "Think step-by-step")
       "Think step-by-step": "FINAL ANSWER: Recovered with reactive fallback.",
     });

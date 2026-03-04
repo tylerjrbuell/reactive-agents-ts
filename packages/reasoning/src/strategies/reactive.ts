@@ -13,6 +13,7 @@ import {
   parseAllToolRequests,
   hasFinalAnswer,
   extractFinalAnswer,
+  parseBareToolCall,
   evaluateTransform,
   compressToolResult,
   nextToolResultKey,
@@ -22,6 +23,7 @@ import { buildCompactedContext } from "./shared/context-utils.js";
 import { compilePromptOrFallback, resolveStrategyServices } from "./shared/service-utils.js";
 import { makeStep } from "./shared/step-utils.js";
 import { sanitizeAgentOutput } from "./shared/quality-utils.js";
+import { extractThinking } from "./shared/thinking-utils.js";
 
 // Re-export shared utilities for backwards compatibility
 export { evaluateTransform, compressToolResult } from "./shared/tool-utils.js";
@@ -31,7 +33,11 @@ export { evaluateTransform, compressToolResult } from "./shared/tool-utils.js";
 // (same algorithm — parse + optional transform expression).
 export { parseToolRequest as parseToolRequestWithTransform } from "./shared/tool-utils.js";
 
-import type { ToolSchema } from "./shared/tool-utils.js";
+import {
+  type ToolSchema,
+  filterToolsByRelevance,
+  formatToolSchemaCompact,
+} from "./shared/tool-utils.js";
 
 interface ReactiveInput {
   readonly taskDescription: string;
@@ -125,6 +131,19 @@ export const executeReactive = (
         profile.tier,
       );
 
+      // ── PROMPT TRACE (debug observability) ──
+      if (ebOpt._tag === "Some") {
+        yield* ebOpt.value.publish({
+          _tag: "ReasoningStepCompleted",
+          taskId: input.taskId ?? "reactive",
+          strategy: "reactive",
+          step: iteration + 1,
+          totalSteps: maxIter,
+          kernelPass: "reactive:main",
+          prompt: { system: systemPrompt, user: thoughtContent },
+        }).pipe(Effect.catchAll(() => Effect.void));
+      }
+
       const thoughtResponse = yield* llm
         .complete({
           messages: [
@@ -153,11 +172,20 @@ export const executeReactive = (
           ),
         );
 
-      const thought = thoughtResponse.content;
+      const rawThought = thoughtResponse.content;
       totalTokens += thoughtResponse.usage.totalTokens;
       totalCost += thoughtResponse.usage.estimatedCost;
 
-      steps.push(makeStep("thought", thought));
+      // Strip <think>...</think> blocks before parsing to prevent parser
+      // poisoning (ACTION/FINAL ANSWER inside thinking) and context bloat.
+      // When the provider already extracted thinking (Ollama think:true),
+      // content may be empty — fall back to response.thinking.
+      const { thinking: extractedThinking, content: cleanContent } = extractThinking(rawThought);
+      const providerThinking = (thoughtResponse as any).thinking as string | undefined;
+      const thinking = extractedThinking || providerThinking || null;
+      const thought = cleanContent || providerThinking || rawThought;
+
+      steps.push(makeStep("thought", thought, thinking ? { thinking } : undefined));
 
       // Publish ReasoningStepCompleted for thought
       if (ebOpt._tag === "Some") {
@@ -182,8 +210,13 @@ export const executeReactive = (
       // ACTION lines (e.g. step 1: ACTION chain_a, step 2: ACTION chain_b), skip
       // any that already have a prior ✓ observation in the history so we advance
       // to the first genuinely uncompleted step instead of looping on step 1.
-      const allToolRequests = parseAllToolRequests(thought);
-      const toolRequest =
+      // Thinking-model fallback: if clean content has no ACTION: lines,
+      // check thinking content — models like qwen3 put tool calls inside <think>.
+      let allToolRequests = parseAllToolRequests(thought);
+      if (allToolRequests.length === 0 && thinking) {
+        allToolRequests = parseAllToolRequests(thinking);
+      }
+      let toolRequest: { tool: string; input: string; transform?: string } | null =
         allToolRequests.find((req) => {
           const actionJson = JSON.stringify(req);
           return !steps.some((step, idx) => {
@@ -200,27 +233,37 @@ export const executeReactive = (
         null;
 
       // ── CHECK: does the thought indicate a final answer (and no pending action)? ──
-      if (!toolRequest && hasFinalAnswer(thought)) {
-        const finalAnswer = extractFinalAnswer(thought);
-        if (ebOpt._tag === "Some") {
-          yield* ebOpt.value.publish({
-            _tag: "FinalAnswerProduced",
-            taskId: input.taskId ?? "reactive",
-            strategy: "reactive",
-            answer: finalAnswer,
-            iteration,
-            totalTokens: totalCost,
-            kernelPass: "reactive:main",
-          }).pipe(Effect.catchAll(() => Effect.void));
+      // Also check thinking content for thinking-model fallback.
+      const hasFA = hasFinalAnswer(thought) || (!!thinking && hasFinalAnswer(thinking));
+      if (!toolRequest && hasFA) {
+        const finalAnswer = hasFinalAnswer(thought)
+          ? extractFinalAnswer(thought)
+          : extractFinalAnswer(thinking!);
+        // Guard: model wrote a bare tool call inside FINAL ANSWER (e.g. "signal/send_message({...})")
+        const embeddedToolCall = parseBareToolCall(finalAnswer);
+        if (embeddedToolCall) {
+          toolRequest = embeddedToolCall;
+        } else {
+          if (ebOpt._tag === "Some") {
+            yield* ebOpt.value.publish({
+              _tag: "FinalAnswerProduced",
+              taskId: input.taskId ?? "reactive",
+              strategy: "reactive",
+              answer: finalAnswer,
+              iteration,
+              totalTokens: totalCost,
+              kernelPass: "reactive:main",
+            }).pipe(Effect.catchAll(() => Effect.void));
+          }
+          return buildResult(
+            steps,
+            finalAnswer,
+            "completed",
+            start,
+            totalTokens,
+            totalCost,
+          );
         }
-        return buildResult(
-          steps,
-          finalAnswer,
-          "completed",
-          start,
-          totalTokens,
-          totalCost,
-        );
       }
 
       // ── EARLY TERMINATION: model gave a complete prose response with no tool call ──
@@ -345,9 +388,13 @@ export const executeReactive = (
 
         // After executing the action, check if the original thought also had
         // a FINAL ANSWER — if so, we're done (no need for another LLM call).
-        if (hasFinalAnswer(thought)) {
+        // Also check thinking content for thinking-model fallback.
+        const postActionHasFA = hasFinalAnswer(thought) || (!!thinking && hasFinalAnswer(thinking));
+        if (postActionHasFA) {
           iteration++;
-          const finalAnswer = extractFinalAnswer(thought);
+          const finalAnswer = hasFinalAnswer(thought)
+            ? extractFinalAnswer(thought)
+            : extractFinalAnswer(thinking!);
           if (ebOpt._tag === "Some") {
             yield* ebOpt.value.publish({
               _tag: "FinalAnswerProduced",
@@ -609,41 +656,7 @@ function formatToolSchema(tool: ToolSchema): string {
   return `- ${tool.name}({${params}}) — ${tool.description}`;
 }
 
-function formatToolSchemaCompact(tool: ToolSchema): string {
-  if (tool.parameters.length === 0) return `- ${tool.name}()`;
-  const params = tool.parameters
-    .map(p => `${p.name}: ${p.type}${p.required ? "" : "?"}`)
-    .join(", ");
-  return `- ${tool.name}(${params})`;
-}
-
-interface FilteredTools {
-  primary: readonly ToolSchema[];   // mentioned in task — full schema
-  secondary: readonly ToolSchema[]; // not mentioned — compact/collapsed
-}
-
-function filterToolsByRelevance(
-  taskDescription: string,
-  schemas: readonly ToolSchema[],
-): FilteredTools {
-  const taskLower = taskDescription.toLowerCase();
-  const primary: ToolSchema[] = [];
-  const secondary: ToolSchema[] = [];
-
-  for (const tool of schemas) {
-    // Check if tool name (or prefix before /) appears in the task description
-    const nameVariants = [
-      tool.name.toLowerCase(),
-      tool.name.split("/").pop()?.toLowerCase() ?? "",
-      // Also check without hyphens: "list_commits" matches "list commits"
-      tool.name.toLowerCase().replace(/[-_/]/g, " "),
-    ];
-    const mentioned = nameVariants.some(v => v && taskLower.includes(v));
-    (mentioned ? primary : secondary).push(tool);
-  }
-
-  return { primary, secondary };
-}
+// filterToolsByRelevance and formatToolSchemaCompact are now shared from tool-utils.ts
 
 function buildInitialContext(input: ReactiveInput, compact = false, profile?: ContextProfile): string {
   const sections: string[] = [

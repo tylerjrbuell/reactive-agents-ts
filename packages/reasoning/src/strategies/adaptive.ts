@@ -19,7 +19,10 @@ import { executePlanExecute } from "./plan-execute.js";
 import { executeTreeOfThought } from "./tree-of-thought.js";
 import { resolveStrategyServices, compilePromptOrFallback, publishReasoningStep } from "./shared/service-utils.js";
 import { makeStep, buildStrategyResult } from "./shared/step-utils.js";
+import { stripThinking } from "./shared/thinking-utils.js";
 import type { ToolSchema } from "./shared/tool-utils.js";
+import type { ResultCompressionConfig } from "@reactive-agents/tools";
+import type { ContextProfile } from "../context/context-profile.js";
 
 /** Record of a past strategy execution outcome for self-improvement. */
 export interface StrategyOutcome {
@@ -44,6 +47,10 @@ interface AdaptiveInput {
   readonly taskId?: string;
   /** Full tool schemas for pass-through to sub-strategies */
   readonly availableToolSchemas?: readonly ToolSchema[];
+  /** Tool result compression config — forwarded to sub-strategies. */
+  readonly resultCompression?: ResultCompressionConfig;
+  /** Context profile — forwarded to sub-strategies (used by reactive for compaction). */
+  readonly contextProfile?: Partial<ContextProfile>;
   /** Agent ID for tool execution attribution — forwarded to sub-strategies. */
   readonly agentId?: string;
   /** Session ID for tool execution attribution — forwarded to sub-strategies. */
@@ -104,8 +111,10 @@ export const executeAdaptive = (
         ),
       );
 
+    // Strip <think> blocks from classification to prevent thinking from
+    // being parsed as a strategy name.
     const selectedStrategy = parseStrategySelection(
-      analysisResponse.content,
+      stripThinking(analysisResponse.content),
     );
 
     steps.push(makeStep(

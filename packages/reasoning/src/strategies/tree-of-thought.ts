@@ -18,9 +18,10 @@ import { LLMService } from "@reactive-agents/llm-provider";
 import { executeReActKernel } from "./shared/react-kernel.js";
 import { resolveStrategyServices, compilePromptOrFallback, publishReasoningStep } from "./shared/service-utils.js";
 import { parseScore } from "./shared/quality-utils.js";
-import { formatToolSchemas } from "./shared/tool-utils.js";
+import { stripThinking } from "./shared/thinking-utils.js";
 import type { ToolSchema } from "./shared/tool-utils.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
+import { buildStrategyResult } from "./shared/step-utils.js";
 
 interface TreeOfThoughtInput {
   readonly taskDescription: string;
@@ -133,7 +134,9 @@ export const executeTreeOfThought = (
         totalTokens += expansionResponse.usage.totalTokens;
         totalCost += expansionResponse.usage.estimatedCost;
 
-        const candidates = parseCandidates(expansionResponse.content, breadth);
+        // Strip <think> blocks from expansion to prevent thinking from
+        // being parsed as candidate thoughts.
+        const candidates = parseCandidates(stripThinking(expansionResponse.content), breadth);
 
         // Score each candidate
         for (const candidate of candidates) {
@@ -254,14 +257,15 @@ export const executeTreeOfThought = (
     )[0];
 
     if (!bestLeaf) {
-      return buildResult(
+      return buildStrategyResult({
+        strategy: "tree-of-thought",
         steps,
-        null,
-        "partial",
+        output: null,
+        status: "partial",
         start,
         totalTokens,
         totalCost,
-      );
+      });
     }
 
     // Reconstruct the full path
@@ -305,14 +309,15 @@ export const executeTreeOfThought = (
     steps.push(...execResult.steps);
     const finalOutput = execResult.output;
 
-    return buildResult(
+    return buildStrategyResult({
+      strategy: "tree-of-thought",
       steps,
-      finalOutput || null,
-      finalOutput ? "completed" : "partial",
+      output: finalOutput || null,
+      status: finalOutput ? "completed" : "partial",
       start,
       totalTokens,
       totalCost,
-    );
+    });
   });
 
 // ─── Private Helpers ───
@@ -401,25 +406,3 @@ function getAncestorPath(
   return path;
 }
 
-function buildResult(
-  steps: readonly ReasoningStep[],
-  output: unknown,
-  status: "completed" | "partial",
-  startMs: number,
-  tokensUsed: number,
-  cost: number,
-): ReasoningResult {
-  return {
-    strategy: "tree-of-thought",
-    steps: [...steps],
-    output,
-    metadata: {
-      duration: Date.now() - startMs,
-      cost,
-      tokensUsed,
-      stepsCount: steps.length,
-      confidence: status === "completed" ? 0.85 : 0.4,
-    },
-    status,
-  };
-}

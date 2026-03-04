@@ -36,7 +36,7 @@ describe("TreeOfThoughtStrategy", () => {
     expect(result.steps.length).toBeGreaterThan(0);
     expect(result.metadata.stepsCount).toBeGreaterThan(0);
     expect(result.metadata.tokensUsed).toBeGreaterThan(0);
-    expect(result.metadata.confidence).toBe(0.85);
+    expect(result.metadata.confidence).toBe(0.8);
   });
 
   it("should prune branches below threshold and still produce a result", async () => {
