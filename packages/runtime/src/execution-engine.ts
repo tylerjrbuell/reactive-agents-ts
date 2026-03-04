@@ -92,6 +92,19 @@ function sanitizeOutput(text: string): string {
   return result.trim();
 }
 
+/**
+ * Extract plain-text task description from task.input.
+ * Handles both `{ question: "..." }` objects and raw strings.
+ */
+function extractTaskText(input: unknown): string {
+  if (typeof input === "string") return input;
+  if (typeof input === "object" && input !== null) {
+    const q = (input as Record<string, unknown>).question;
+    if (typeof q === "string") return q;
+  }
+  return JSON.stringify(input);
+}
+
 // ─── Live Implementation ───
 
 export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
@@ -257,6 +270,9 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
             const isNormal = verbosity !== "minimal";
             const isVerbose = verbosity === "verbose" || verbosity === "debug";
             const isDebug = verbosity === "debug";
+            // logModelIO: explicit opt-in/out for full prompt/response dumps.
+            // Default: true when debug, false otherwise.
+            const logModelIO = config.logModelIO ?? isDebug;
 
             // ── Phase 0.2: Acquire EventBus optionally ──
             const ebOpt = yield* Effect.serviceOption(EventBus).pipe(
@@ -408,10 +424,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       );
 
                       if (guardrailOpt._tag === "Some") {
-                        const inputText = String(
-                          (task.input as any).question ??
-                            JSON.stringify(task.input),
-                        );
+                        const inputText = extractTaskText(task.input);
                         const result = yield* guardrailOpt.value
                           .check(inputText)
                           .pipe(
@@ -469,10 +482,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       );
 
                       if (costOpt._tag === "Some") {
-                        const taskDescription = String(
-                          (task.input as any).question ??
-                            JSON.stringify(task.input),
-                        );
+                        const taskDescription = extractTaskText(task.input);
                         const modelConfig = yield* costOpt.value
                           .routeToModel(taskDescription)
                           .pipe(
@@ -515,7 +525,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         ? yield* selectorOpt.value
                             .select(
                               {
-                                taskDescription: JSON.stringify(task.input),
+                                taskDescription: extractTaskText(task.input),
                                 taskType: task.type,
                                 complexity: 0.5,
                                 urgency: 0.5,
@@ -609,16 +619,32 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   let unsubscribeReasoningSteps: (() => void) | null = null;
                   if (eb && obs && isVerbose) {
                     const capturedObs = obs;
+                    const capturedLogModelIO = logModelIO;
                     const capturedIsDebug = isDebug;
                     unsubscribeReasoningSteps = yield* eb.on(
                       "ReasoningStepCompleted",
                       (event) => {
+                        // Prompt trace: log full system + user message when logModelIO is enabled
+                        if (event.prompt && capturedLogModelIO) {
+                          const pass = event.kernelPass ?? event.strategy;
+                          const sysPreview = event.prompt.system.length <= 500
+                            ? event.prompt.system
+                            : event.prompt.system.slice(0, 500) + `... [${event.prompt.system.length} chars]`;
+                          const userPreview = event.prompt.user.length <= 2000
+                            ? event.prompt.user
+                            : event.prompt.user.slice(0, 2000) + `... [${event.prompt.user.length} chars]`;
+                          return capturedObs
+                            .debug(`  ┄ [prompt:${pass}]\n    ── system ──\n    ${sysPreview.replace(/\n/g, "\n    ")}\n    ── user ──\n    ${userPreview.replace(/\n/g, "\n    ")}`)
+                            .pipe(Effect.catchAll(() => Effect.void));
+                        }
+                        const rawContent = event.thought ?? event.action ?? event.observation ?? "";
+                        // Skip events with no displayable content (e.g. prompt-only events when logModelIO is off)
+                        if (!rawContent) return Effect.void;
                         const prefix = event.thought
                           ? "┄ [thought]"
                           : event.action
                             ? "┄ [action] "
                             : "┄ [obs]    ";
-                        const rawContent = event.thought ?? event.action ?? event.observation ?? "";
                         const content =
                           capturedIsDebug || rawContent.length <= 180
                             ? rawContent
@@ -633,7 +659,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   ctx = yield* guardedPhase(ctx, "think", (c) =>
                     Effect.gen(function* () {
                       const result = yield* reasoningOpt.value.execute({
-                        taskDescription: JSON.stringify(task.input),
+                        taskDescription: extractTaskText(task.input),
                         taskType: task.type,
                         memoryContext: String(
                           (c.memoryContext as any)?.semanticContext ?? "",
@@ -819,10 +845,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     messages: [
                       {
                         role: "user",
-                        content: String(
-                          (task.input as any).question ??
-                            JSON.stringify(task.input),
-                        ),
+                        content: extractTaskText(task.input),
                       },
                     ],
                   };
@@ -1403,10 +1426,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
 
                       if (verifyOpt._tag === "Some") {
                         const response = String(c.metadata.lastResponse ?? "");
-                        const input = String(
-                          (task.input as any).question ??
-                            JSON.stringify(task.input),
-                        );
+                        const input = extractTaskText(task.input);
                         const result = yield* verifyOpt.value
                           .verify(response, input)
                           .pipe(
@@ -1551,6 +1571,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
 
                 // Build TaskResult — sanitize output to strip internal metadata
                 const rawOutput = ctx.metadata.lastResponse ?? null;
+                const rr = ctx.metadata.reasoningResult as { metadata?: { confidence?: number } } | undefined;
                 const result: TaskResult = {
                   taskId: task.id as any,
                   agentId: task.agentId,
@@ -1562,6 +1583,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     tokensUsed: ctx.tokensUsed,
                     strategyUsed: ctx.selectedStrategy,
                     stepsCount: (ctx.metadata.stepsCount as number | undefined) ?? ctx.iteration,
+                    ...(rr?.metadata?.confidence !== undefined ? { confidence: rr.metadata.confidence } : {}),
                   },
                   completedAt: new Date(),
                 };

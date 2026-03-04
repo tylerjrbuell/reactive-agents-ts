@@ -169,7 +169,7 @@ export interface ObservabilityOptions {
    * Output verbosity level:
    * - `"minimal"` — no output except final result
    * - `"normal"` — metrics dashboard only (recommended)
-   * - `"verbose"` — dashboard + structured phase logs
+   * - `"verbose"` — dashboard + structured phase logs + reasoning steps (truncated)
    * - `"debug"` — everything without truncation, full context dumps
    *
    * Default: `"normal"`
@@ -189,6 +189,15 @@ export interface ObservabilityOptions {
    * Default: undefined (no file export)
    */
   readonly file?: string;
+  /**
+   * Log full model prompts and responses.
+   *
+   * When `true`, full system/user prompts and untruncated model responses are logged
+   * at debug level. When `false`, prompt dumps are suppressed even at `verbosity: "debug"`.
+   *
+   * Default: `true` when `verbosity` is `"debug"`, `false` otherwise.
+   */
+  readonly logModelIO?: boolean;
 }
 
 /**
@@ -2420,12 +2429,26 @@ export class ReactiveAgent {
       };
 
       // Subscribe to channel messages from MCP servers for push-based messaging
+      // Dedup guard: track recently processed messages to prevent feedback loops
+      // (e.g., agent reply echo arriving as syncMessage before MCP-level filter)
+      const recentMessageHashes = new Set<string>();
+      const MESSAGE_DEDUP_TTL = 30_000; // 30s window
+
       if (eb) {
         try {
           const unsub = await self.runtime.runPromise(
             eb.on("ChannelMessageReceived", (event: any) =>
               Effect.gen(function* () {
                 if (stopped) return;
+
+                // Dedup: skip if we've seen this exact sender+message recently
+                const msgHash = `${event.sender}:${event.message}`;
+                if (recentMessageHashes.has(msgHash)) {
+                  glog("debug", `channel → dedup skip from ${event.sender}`);
+                  return;
+                }
+                recentMessageHashes.add(msgHash);
+                setTimeout(() => recentMessageHashes.delete(msgHash), MESSAGE_DEDUP_TTL);
 
                 const gwEvent = {
                   id: `ch-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,

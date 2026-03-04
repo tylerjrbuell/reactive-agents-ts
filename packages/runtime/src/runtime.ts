@@ -477,6 +477,7 @@ export const createRuntime = (options: RuntimeOptions) => {
     enableSelfImprovement: options.enableSelfImprovement ?? false,
     systemPrompt: options.systemPrompt,
     observabilityVerbosity: options.observabilityOptions?.verbosity,
+    logModelIO: options.observabilityOptions?.logModelIO,
     contextProfile: options.contextProfile,
     defaultStrategy: options.reasoningOptions?.defaultStrategy,
     resultCompression: options.resultCompression,

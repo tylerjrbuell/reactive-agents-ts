@@ -259,6 +259,8 @@ export const ReactiveAgentsConfigSchema = Schema.Struct({
   observabilityVerbosity: Schema.optional(
     Schema.Literal("minimal", "normal", "verbose", "debug"),
   ),
+  /** Log full model prompts and responses (default: true when debug, false otherwise) */
+  logModelIO: Schema.optional(Schema.Boolean),
   /** Model-adaptive context profile overrides */
   contextProfile: Schema.optional(Schema.partial(ContextProfileSchema)),
   /** Default reasoning strategy when no StrategySelector is present */

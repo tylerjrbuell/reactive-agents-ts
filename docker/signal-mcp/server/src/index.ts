@@ -12,24 +12,79 @@ if (!userId) {
 
 const configDir = process.env.SIGNAL_CLI_CONFIG ?? "/data";
 
+// ── Logging helper (stderr only — stdout is reserved for MCP protocol) ──────
+function log(level: "info" | "warn" | "debug", msg: string, data?: Record<string, unknown>): void {
+  const ts = new Date().toISOString();
+  const extra = data ? " " + JSON.stringify(data) : "";
+  process.stderr.write(`[${ts}] [signal-mcp] [${level}] ${msg}${extra}\n`);
+}
+
 // ── Signal-CLI bridge (persistent jsonRpc subprocess) ───────────────────────
 const bridge = new SignalCliBridge(userId, configDir);
 bridge.start();
+log("info", `signal-cli bridge started for ${userId}`);
+
+// ── Recently-sent message tracker (prevents feedback loops) ─────────────────
+// When the agent sends a message via send_message_to_user/group, we record it.
+// When a syncMessage echo arrives with the same text, we skip it instead of
+// forwarding it as a new inbound message.
+const recentlySent = new Set<string>();
+const SENT_TTL_MS = 60_000; // 60s window
+
+function trackSentMessage(text: string): void {
+  recentlySent.add(text);
+  setTimeout(() => recentlySent.delete(text), SENT_TTL_MS);
+}
 
 // ── Push notifications for incoming messages ────────────────────────────────
 bridge.onMessageCallback = (notification) => {
   const envelope = (notification.params as any)?.envelope;
-  if (!envelope) return;
+  if (!envelope) {
+    log("debug", "notification without envelope, skipping");
+    return;
+  }
 
-  const message = envelope.dataMessage?.message ?? envelope.syncMessage?.sentMessage?.message;
-  if (!message) return; // Skip non-text notifications (receipts, typing, etc.)
+  // Extract message from either path:
+  // - dataMessage: inbound message from another user (or separate agent account)
+  // - syncMessage.sentMessage: Note to Self or outbound echo
+  const dataMsg = envelope.dataMessage?.message;
+  const syncMsg = envelope.syncMessage?.sentMessage?.message;
+  const message = dataMsg ?? syncMsg;
+  const sender = envelope.source ?? envelope.sourceNumber ?? "unknown";
+  const msgType = dataMsg ? "dataMessage" : syncMsg ? "syncMessage" : "other";
+
+  log("debug", `raw notification`, {
+    type: msgType,
+    sender,
+    hasDataMsg: !!dataMsg,
+    hasSyncMsg: !!syncMsg,
+    message: message?.slice(0, 80),
+  });
+
+  if (!message) {
+    log("debug", `skipping non-text notification (${msgType})`, { sender });
+    return;
+  }
+
+  // If this is a syncMessage, check if it's an echo of something WE just sent.
+  // If so, skip it to prevent feedback loops.
+  if (!dataMsg && syncMsg) {
+    if (recentlySent.has(syncMsg)) {
+      recentlySent.delete(syncMsg); // consume the entry
+      log("info", `skipping outbound echo`, { message: syncMsg.slice(0, 80) });
+      return;
+    }
+    log("info", `forwarding syncMessage (Note to Self)`, { sender, message: syncMsg.slice(0, 80) });
+  } else {
+    log("info", `forwarding dataMessage`, { sender, message: dataMsg!.slice(0, 80) });
+  }
 
   // Send MCP notification to connected client via stdout (JSON-RPC, no id = notification)
   const payload = JSON.stringify({
     jsonrpc: "2.0",
     method: "notifications/message",
     params: {
-      sender: envelope.source ?? envelope.sourceNumber ?? "unknown",
+      sender,
       message,
       timestamp: envelope.timestamp ?? Date.now(),
       groupId: envelope.dataMessage?.groupInfo?.groupId,
@@ -54,17 +109,22 @@ server.tool(
     message: z.string().describe("Message text to send"),
   },
   async ({ recipient, message }) => {
+    log("info", `send_message_to_user`, { recipient, message: message.slice(0, 80) });
     try {
+      trackSentMessage(message);
       await bridge.request("send", {
         recipient: [recipient],
         message,
       });
+      log("info", `message sent to ${recipient}`);
       return {
         content: [{ type: "text" as const, text: `Message sent to ${recipient}` }],
       };
     } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      log("warn", `send failed`, { recipient, error: errMsg });
       return {
-        content: [{ type: "text" as const, text: `Failed to send: ${err instanceof Error ? err.message : String(err)}` }],
+        content: [{ type: "text" as const, text: `Failed to send: ${errMsg}` }],
         isError: true,
       };
     }
@@ -80,17 +140,22 @@ server.tool(
     message: z.string().describe("Message text to send"),
   },
   async ({ groupId, message }) => {
+    log("info", `send_message_to_group`, { groupId, message: message.slice(0, 80) });
     try {
+      trackSentMessage(message);
       await bridge.request("send", {
         groupId,
         message,
       });
+      log("info", `message sent to group ${groupId}`);
       return {
         content: [{ type: "text" as const, text: `Message sent to group ${groupId}` }],
       };
     } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      log("warn", `group send failed`, { groupId, error: errMsg });
       return {
-        content: [{ type: "text" as const, text: `Failed to send: ${err instanceof Error ? err.message : String(err)}` }],
+        content: [{ type: "text" as const, text: `Failed to send: ${errMsg}` }],
         isError: true,
       };
     }
@@ -115,8 +180,10 @@ server.tool(
     while (Date.now() - start < waitMs) {
       const msgs = bridge.drainNotifications();
       if (msgs.length > 0) {
+        const formatted = formatMessages(msgs);
+        log("info", `receive_message: ${formatted.length} message(s)`);
         return {
-          content: [{ type: "text" as const, text: JSON.stringify(formatMessages(msgs), null, 2) }],
+          content: [{ type: "text" as const, text: JSON.stringify(formatted, null, 2) }],
         };
       }
       await sleep(500);
@@ -125,11 +192,14 @@ server.tool(
     // Final drain after timeout
     const msgs = bridge.drainNotifications();
     if (msgs.length > 0) {
+      const formatted = formatMessages(msgs);
+      log("info", `receive_message: ${formatted.length} message(s) (after timeout)`);
       return {
-        content: [{ type: "text" as const, text: JSON.stringify(formatMessages(msgs), null, 2) }],
+        content: [{ type: "text" as const, text: JSON.stringify(formatted, null, 2) }],
       };
     }
 
+    log("debug", "receive_message: no new messages");
     return {
       content: [{ type: "text" as const, text: "No new messages" }],
     };
@@ -159,7 +229,19 @@ server.tool(
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 function formatMessages(notifications: SignalNotification[]): unknown[] {
-  return notifications.map((n) => {
+  return notifications
+    .filter((n) => {
+      const envelope = (n.params as any)?.envelope;
+      const msg = envelope?.dataMessage?.message ?? envelope?.syncMessage?.sentMessage?.message;
+      if (!msg) return false;
+      // Skip sync echoes of messages we sent
+      if (!envelope?.dataMessage?.message && recentlySent.has(msg)) {
+        recentlySent.delete(msg);
+        return false;
+      }
+      return true;
+    })
+    .map((n) => {
     const envelope = (n.params as any)?.envelope;
     if (!envelope) return n.params;
     return {
@@ -177,7 +259,7 @@ function sleep(ms: number): Promise<void> {
 
 // ── Graceful shutdown ───────────────────────────────────────────────────────
 async function shutdown() {
-  process.stderr.write("Shutting down signal-mcp server...\n");
+  log("info", "shutting down...");
   await bridge.shutdown();
   process.exit(0);
 }
@@ -188,4 +270,4 @@ process.on("SIGTERM", shutdown);
 // ── Start MCP transport ─────────────────────────────────────────────────────
 const transport = new StdioServerTransport();
 await server.connect(transport);
-process.stderr.write("signal-mcp server started\n");
+log("info", "MCP server ready, listening for messages");
