@@ -2,7 +2,7 @@
 
 ## Project Status
 
-**v0.5.7 + Composable Kernel Architecture.** 19 packages + 2 apps built, 1340 tests across 173 files. ThoughtKernel abstraction — swappable reasoning algorithms, immutable KernelState, universal KernelRunner with centralized hooks.
+**v0.6.0 — Gateway + Composable Kernel Architecture.** 19 packages + 2 apps built, 1,353 tests across 174 files. ThoughtKernel abstraction — swappable reasoning algorithms, immutable KernelState, universal KernelRunner with centralized hooks.
 
 - Phase 1: Core, LLM Provider, Memory, Reasoning, Tools, Interaction, Runtime
 - Phase 2: Guardrails, Verification, Cost
@@ -32,7 +32,7 @@
 
 ```bash
 bun install              # Install dependencies
-bun test                 # Run all tests (1340 tests, 173 files)
+bun test                 # Run all tests (1353 tests, 174 files)
 bun run build            # Build all packages (16 packages, ESM + DTS)
 cd apps/docs && npx astro dev    # Start docs dev server
 cd apps/docs && npx astro build  # Build docs for production
