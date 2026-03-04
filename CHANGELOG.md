@@ -6,7 +6,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 
 ---
 
-## [Unreleased] — Composable Kernel Architecture
+## [0.6.0] - 2026-03-04
+
+Gateway persistent agent harness, Composable Kernel Architecture (ThoughtKernel abstraction, KernelRunner, custom kernel registration), and Structured Plan Engine (type-safe JSON plans, 4-layer output pipeline, SQLite plan persistence). 19 packages, 1,353 tests.
 
 ### Added
 
@@ -35,11 +37,7 @@ Three-layer separation: ThoughtKernel (single-step algorithm) → KernelRunner (
 
 ---
 
-## [Unreleased] — Structured Plan Engine
-
-### Added
-
-#### Structured Plan Engine (`@reactive-agents/reasoning` + `@reactive-agents/memory` + `@reactive-agents/llm-provider`)
+### Structured Plan Engine (`@reactive-agents/reasoning` + `@reactive-agents/memory`)
 
 Complete rewrite of the plan-execute-reflect strategy with structured JSON plans, replacing fragile text-parsed numbered lists:
 
