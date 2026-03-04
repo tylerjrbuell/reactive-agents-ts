@@ -119,7 +119,7 @@ describe("buildKernelHooks", () => {
       const { events, eb } = makeMockEventBus();
       const hooks = buildKernelHooks(eb);
 
-      // Add an action step so the observation hook can extract tool name from it
+      // Add an action step with toolUsed metadata (set by react-kernel handleActing)
       const state = transitionState(baseState(), {
         steps: [
           {
@@ -127,7 +127,7 @@ describe("buildKernelHooks", () => {
             type: "action" as const,
             content: JSON.stringify({ tool: "web-search", input: '{"query":"test"}' }),
             timestamp: new Date(),
-            metadata: { duration: 150 },
+            metadata: { toolUsed: "web-search", duration: 150 },
           },
         ],
       });
@@ -161,6 +161,7 @@ describe("buildKernelHooks", () => {
             type: "action" as const,
             content: JSON.stringify({ tool: "file-write", input: '{"path":"out.txt"}' }),
             timestamp: new Date(),
+            metadata: { toolUsed: "file-write" },
           },
         ],
       });

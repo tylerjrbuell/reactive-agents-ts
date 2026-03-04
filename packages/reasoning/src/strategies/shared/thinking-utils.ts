@@ -25,12 +25,9 @@ export function extractThinking(text: string): {
   thinking: string | null;
   content: string;
 } {
-  if (!text || !text.includes("<think")) {
-    // Fast path: no think tags at all (case-sensitive prefix check, then bail)
-    if (!text || !/<think/i.test(text)) {
-      return { thinking: null, content: text };
-    }
-  }
+  // Fast path: no think tags at all
+  if (!text) return { thinking: null, content: text };
+  if (!/<think/i.test(text)) return { thinking: null, content: text };
 
   // Collect all thinking blocks
   const thinkingParts: string[] = [];

@@ -81,9 +81,9 @@ export function runKernel(
     // ── 5. Create initial state ──────────────────────────────────────────────
     let state = initialKernelState(options);
 
-    // Mutable scratchpad mirror for tool execution auto-store writes.
-    // ReadonlyMap on KernelState prevents direct mutation, so we maintain a
-    // mutable Map here and sync it back into state after each iteration.
+    // Mutable scratchpad mirror — needed by the post-loop embedded tool call guard
+    // (step 7) which may execute a tool that auto-stores to scratchpad.
+    // Synced from state.scratchpad (ReadonlyMap) after each kernel step.
     const mutableScratchpad = new Map<string, string>(state.scratchpad);
 
     // ── 6. Main loop ─────────────────────────────────────────────────────────

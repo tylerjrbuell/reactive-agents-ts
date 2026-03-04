@@ -9,3 +9,4 @@ export * from "./kernel-state.js";
 export * from "./tool-execution.js";
 export * from "./kernel-hooks.js";
 export * from "./kernel-runner.js";
+export * from "./thinking-utils.js";

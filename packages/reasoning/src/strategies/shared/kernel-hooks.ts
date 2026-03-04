@@ -13,6 +13,11 @@ import { Effect } from "effect";
 import type { KernelHooks, KernelState, EventBusInstance, MaybeService } from "./kernel-state.js";
 import { publishReasoningStep } from "./service-utils.js";
 
+/** Extract kernelPass from state meta with fallback to strategy:main. */
+function getKernelPass(state: KernelState): string {
+  return (state.meta.kernelPass as string | undefined) ?? `${state.strategy}:main`;
+}
+
 /**
  * Build KernelHooks wired to an EventBus instance (or no-op if EventBus is None).
  *
@@ -29,7 +34,7 @@ export function buildKernelHooks(eventBus: MaybeService<EventBusInstance>): Kern
         step: state.steps.length + 1,
         totalSteps: 0,
         thought,
-        kernelPass: (state.meta.kernelPass as string | undefined) ?? `${state.strategy}:main`,
+        kernelPass: getKernelPass(state),
       }),
 
     onAction: (state: KernelState, tool: string, input: string): Effect.Effect<void, never> =>
@@ -40,7 +45,7 @@ export function buildKernelHooks(eventBus: MaybeService<EventBusInstance>): Kern
         step: state.steps.length + 1,
         totalSteps: 0,
         action: JSON.stringify({ tool, input }),
-        kernelPass: (state.meta.kernelPass as string | undefined) ?? `${state.strategy}:main`,
+        kernelPass: getKernelPass(state),
       }),
 
     onObservation: (state: KernelState, result: string): Effect.Effect<void, never> => {
@@ -53,25 +58,16 @@ export function buildKernelHooks(eventBus: MaybeService<EventBusInstance>): Kern
           step: state.steps.length + 1,
           totalSteps: 0,
           observation: result,
-          kernelPass: (state.meta.kernelPass as string | undefined) ?? `${state.strategy}:main`,
+          kernelPass: getKernelPass(state),
         }),
         publishReasoningStep(eventBus, {
           _tag: "ToolCallCompleted",
           taskId: state.taskId,
-          toolName: lastStep?.content
-            ? (() => {
-                try {
-                  const parsed = JSON.parse(lastStep.content);
-                  return parsed.tool ?? "unknown";
-                } catch {
-                  return "unknown";
-                }
-              })()
-            : "unknown",
+          toolName: (lastStep?.metadata?.toolUsed as string) ?? "unknown",
           callId: lastStep?.id ?? "unknown",
           durationMs: (lastStep?.metadata?.duration as number | undefined) ?? 0,
           success: true,
-          kernelPass: (state.meta.kernelPass as string | undefined) ?? `${state.strategy}:main`,
+          kernelPass: getKernelPass(state),
         }),
       ]).pipe(Effect.asVoid);
     },
@@ -84,7 +80,7 @@ export function buildKernelHooks(eventBus: MaybeService<EventBusInstance>): Kern
         answer: state.output ?? "",
         iteration: state.iteration,
         totalTokens: state.tokens,
-        kernelPass: (state.meta.kernelPass as string | undefined) ?? `${state.strategy}:main`,
+        kernelPass: getKernelPass(state),
       }),
 
     onError: (_state: KernelState, _error: string): Effect.Effect<void, never> => Effect.void,

@@ -11,22 +11,9 @@ import { ToolService } from "@reactive-agents/tools";
 import { PromptService } from "@reactive-agents/prompts";
 import { EventBus } from "@reactive-agents/core";
 
-// ── Internal narrow types for optional service instances ──────────────────────
+// ── Narrow types — shared types from kernel-state, prompt type local ─────────
 
-type MaybeService<T> = { _tag: "Some"; value: T } | { _tag: "None" };
-
-/** Minimal ToolService surface used by strategy helpers */
-type ToolServiceInstance = {
-  readonly execute: (input: {
-    toolName: string;
-    arguments: Record<string, unknown>;
-    agentId: string;
-    sessionId: string;
-  }) => Effect.Effect<{ result: unknown; success?: boolean }, unknown>;
-  readonly getTool: (name: string) => Effect.Effect<{
-    parameters: Array<{ name: string; type: string; required?: boolean }>;
-  }, unknown>;
-};
+import type { MaybeService, ToolServiceInstance, EventBusInstance } from "./kernel-state.js";
 
 /** Minimal PromptService surface used by strategies */
 type PromptServiceInstance = {
@@ -35,11 +22,6 @@ type PromptServiceInstance = {
     vars: Record<string, unknown>,
     options?: { tier?: string },
   ) => Effect.Effect<{ content: string }, unknown>;
-};
-
-/** Minimal EventBus surface used by strategies */
-type EventBusInstance = {
-  readonly publish: (event: unknown) => Effect.Effect<void, unknown>;
 };
 
 // ── Resolved services bundle ──────────────────────────────────────────────────

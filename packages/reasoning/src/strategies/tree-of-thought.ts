@@ -11,7 +11,6 @@
 import { Effect } from "effect";
 import { ulid } from "ulid";
 import type { ReasoningResult, ReasoningStep } from "../types/index.js";
-import type { StepId } from "../types/step.js";
 import { ExecutionError } from "../errors/errors.js";
 import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
@@ -22,7 +21,7 @@ import { parseScore } from "./shared/quality-utils.js";
 import { stripThinking } from "./shared/thinking-utils.js";
 import type { ToolSchema } from "./shared/tool-utils.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
-import { buildStrategyResult } from "./shared/step-utils.js";
+import { makeStep, buildStrategyResult } from "./shared/step-utils.js";
 
 interface TreeOfThoughtInput {
   readonly taskDescription: string;
@@ -83,12 +82,7 @@ export const executeTreeOfThought = (
       },
     ];
 
-    steps.push({
-      id: ulid() as StepId,
-      type: "thought",
-      content: `[TOT] Starting tree exploration: breadth=${breadth}, depth=${depth}, pruningThreshold=${pruningThreshold}`,
-      timestamp: new Date(),
-    });
+    steps.push(makeStep("thought", `[TOT] Starting tree exploration: breadth=${breadth}, depth=${depth}, pruningThreshold=${pruningThreshold}`));
 
     // ── BFS expansion ──
     for (let d = 1; d <= depth; d++) {
@@ -191,12 +185,7 @@ export const executeTreeOfThought = (
 
           allNodes.push(node);
 
-          steps.push({
-            id: ulid() as StepId,
-            type: "thought",
-            content: `[TOT d=${d}] score=${score.toFixed(2)}: ${candidate.substring(0, 100)}...`,
-            timestamp: new Date(),
-          });
+          steps.push(makeStep("thought", `[TOT d=${d}] score=${score.toFixed(2)}: ${candidate.substring(0, 100)}...`));
 
           yield* publishReasoningStep(eventBus, {
             _tag: "ReasoningStepCompleted",
@@ -226,23 +215,13 @@ export const executeTreeOfThought = (
           .slice(0, breadth);
 
         if (rescued.length > 0) {
-          steps.push({
-            id: ulid() as StepId,
-            type: "observation",
-            content: `[TOT] Adaptive pruning at depth ${d}: threshold ${pruningThreshold} → ${adaptiveThreshold}, rescued ${rescued.length} path(s).`,
-            timestamp: new Date(),
-          });
+          steps.push(makeStep("observation", `[TOT] Adaptive pruning at depth ${d}: threshold ${pruningThreshold} → ${adaptiveThreshold}, rescued ${rescued.length} path(s).`));
           frontier = rescued;
           continue;
         }
 
         // Log the adaptive attempt even when no paths could be rescued
-        steps.push({
-          id: ulid() as StepId,
-          type: "observation",
-          content: `[TOT] Adaptive pruning at depth ${d}: threshold ${pruningThreshold} → ${adaptiveThreshold}, no paths above adaptive threshold. Selecting best from all explored nodes.`,
-          timestamp: new Date(),
-        });
+        steps.push(makeStep("observation", `[TOT] Adaptive pruning at depth ${d}: threshold ${pruningThreshold} → ${adaptiveThreshold}, no paths above adaptive threshold. Selecting best from all explored nodes.`));
         break;
       }
 
@@ -272,12 +251,7 @@ export const executeTreeOfThought = (
     // Reconstruct the full path
     const bestPath = getAncestorPath(allNodes, bestLeaf);
 
-    steps.push({
-      id: ulid() as StepId,
-      type: "observation",
-      content: `[TOT] Best path (score=${bestLeaf.score.toFixed(2)}): ${bestPath.join(" -> ")}`,
-      timestamp: new Date(),
-    });
+    steps.push(makeStep("observation", `[TOT] Best path (score=${bestLeaf.score.toFixed(2)}): ${bestPath.join(" -> ")}`));
 
     // ── Phase 2: Execute best path using ReAct kernel ──
     const bestPathSummary = bestPath.join("\n→ ");
