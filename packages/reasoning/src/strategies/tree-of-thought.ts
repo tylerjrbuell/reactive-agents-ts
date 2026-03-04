@@ -12,10 +12,11 @@ import { Effect } from "effect";
 import { ulid } from "ulid";
 import type { ReasoningResult, ReasoningStep } from "../types/index.js";
 import type { StepId } from "../types/step.js";
-import { ExecutionError, IterationLimitError } from "../errors/errors.js";
+import { ExecutionError } from "../errors/errors.js";
 import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
-import { executeReActKernel } from "./shared/react-kernel.js";
+import { runKernel } from "./shared/kernel-runner.js";
+import { reactKernel } from "./shared/react-kernel.js";
 import { resolveStrategyServices, compilePromptOrFallback, publishReasoningStep } from "./shared/service-utils.js";
 import { parseScore } from "./shared/quality-utils.js";
 import { stripThinking } from "./shared/thinking-utils.js";
@@ -54,7 +55,7 @@ export const executeTreeOfThought = (
   input: TreeOfThoughtInput,
 ): Effect.Effect<
   ReasoningResult,
-  ExecutionError | IterationLimitError,
+  ExecutionError,
   LLMService
 > =>
   Effect.gen(function* () {
@@ -280,34 +281,31 @@ export const executeTreeOfThought = (
 
     // ── Phase 2: Execute best path using ReAct kernel ──
     const bestPathSummary = bestPath.join("\n→ ");
-    const execResult = yield* executeReActKernel({
+    const execState = yield* runKernel(reactKernel, {
       task: input.taskDescription,
       systemPrompt: input.systemPrompt
         ? `${input.systemPrompt}\n\nYou are a systematic problem solver. Execute the given approach to produce a final answer.`
         : "You are a systematic problem solver. Execute the given approach to produce a final answer.",
       availableToolSchemas: input.availableToolSchemas,
       priorContext: `Selected Approach (from planning phase):\n${bestPathSummary}`,
-      maxIterations: input.config.strategies.treeOfThought?.depth ?? 3,
-      temperature: 0.7,
-      taskId: input.taskId,
-      parentStrategy: "tree-of-thought",
-      kernelPass: "tree-of-thought:execute",
       resultCompression: input.resultCompression,
+      temperature: 0.7,
       agentId: input.agentId,
       sessionId: input.sessionId,
-    }).pipe(
-      Effect.mapError((err) => new ExecutionError({
-        strategy: "tree-of-thought",
-        message: "Phase 2 execution failed",
-        step: 0,
-        cause: err,
-      })),
-    );
+    }, {
+      maxIterations: input.config.strategies.treeOfThought?.depth ?? 3,
+      strategy: "tree-of-thought",
+      kernelType: "react",
+      taskId: input.taskId,
+      kernelPass: "tree-of-thought:execute",
+    });
 
-    totalTokens += execResult.totalTokens;
-    totalCost += execResult.totalCost;
-    steps.push(...execResult.steps);
-    const finalOutput = execResult.output;
+    totalTokens += execState.tokens;
+    totalCost += execState.cost;
+    steps.push(...execState.steps);
+    const finalOutput = execState.output
+      ?? [...execState.steps].filter((s) => s.type === "thought").pop()?.content
+      ?? null;
 
     return buildStrategyResult({
       strategy: "tree-of-thought",
