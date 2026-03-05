@@ -31,7 +31,7 @@ export default defineConfig({
       },
       editLink: {
         baseUrl:
-          "https://github.com/tylerjrbuell/reactive-agents-ts/edit/main/apps/docs/src/content/docs/",
+          "https://github.com/tylerjrbuell/reactive-agents-ts/edit/main/apps/docs/",
       },
       lastUpdated: true,
       customCss: ["./src/styles/custom.css"],

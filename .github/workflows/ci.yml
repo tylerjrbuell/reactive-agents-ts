@@ -58,6 +58,7 @@ jobs:
             --exclude "^/sitemap"
             --exclude "^/favicon"
             --exclude "^/\.well-known/"
+            --exclude "^https://tylerjrbuell\.github\.io/"
             "apps/docs/dist/**/*.html"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
