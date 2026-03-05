@@ -9,9 +9,9 @@
 //   5. Tool schemas appear in context when tools are provided
 //
 import { describe, it, expect } from "bun:test";
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Stream } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
-import type { CompletionResponse } from "@reactive-agents/llm-provider";
+import type { CompletionResponse, StreamEvent } from "@reactive-agents/llm-provider";
 import { executeReactive } from "../../src/strategies/reactive.js";
 import { executeReflexion } from "../../src/strategies/reflexion.js";
 import { executePlanExecute } from "../../src/strategies/plan-execute.js";
@@ -26,8 +26,17 @@ interface CapturedCall {
   messages: Array<{ role: string; content: string }>;
 }
 
+/** Build a proper Stream stub from a response string */
+function makeStreamResponse(content: string): Stream.Stream<StreamEvent, never> {
+  return Stream.make(
+    { type: "text_delta" as const, text: content },
+    { type: "content_complete" as const, content },
+    { type: "usage" as const, usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15, estimatedCost: 0 } },
+  ) as Stream.Stream<StreamEvent, never>;
+}
+
 /**
- * Creates a LLM layer that records every complete() call and returns
+ * Creates a LLM layer that records every complete() / stream() call and returns
  * configurable responses based on pattern matching.
  */
 function createCapturingLLM(
@@ -40,6 +49,21 @@ function createCapturingLLM(
     usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15, estimatedCost: 0 },
     model: "test-capture",
   };
+
+  function getMatchedContent(request: any): string {
+    const msgs = (request.messages ?? []).map((m: any) => ({
+      role: String(m.role),
+      content: String(m.content ?? ""),
+    }));
+    const searchText = msgs.map((m: any) => m.content).join(" ") +
+      " " + (request.systemPrompt ?? "");
+    for (const [pattern, response] of Object.entries(responses)) {
+      if (pattern.length > 0 && searchText.includes(pattern)) {
+        return response;
+      }
+    }
+    return defaultResponse.content;
+  }
 
   return {
     calls,
@@ -65,7 +89,18 @@ function createCapturingLLM(
           }
           return defaultResponse;
         }),
-      stream: () => Effect.succeed(null as any),
+      stream: (request: any) => {
+        const msgs = (request.messages ?? []).map((m: any) => ({
+          role: String(m.role),
+          content: String(m.content ?? ""),
+        }));
+        calls.push({
+          systemPrompt: request.systemPrompt,
+          messages: msgs,
+        });
+        const content = getMatchedContent(request);
+        return Effect.succeed(makeStreamResponse(content));
+      },
       embed: () => Effect.succeed([]),
       countTokens: () => Effect.succeed(0),
       getModelConfig: () => Effect.succeed({ provider: "anthropic" as const, model: "test-capture" }),

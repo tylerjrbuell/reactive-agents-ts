@@ -1,7 +1,8 @@
 import { describe, it, expect } from "bun:test";
-import { Effect, Layer, Ref } from "effect";
+import { Effect, Layer, Ref, Stream } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
+import type { StreamEvent } from "@reactive-agents/llm-provider";
 import { EventBus } from "@reactive-agents/core";
 import type { AgentEvent } from "@reactive-agents/core";
 import { executeReflexion } from "../../src/strategies/reflexion.js";
@@ -9,6 +10,15 @@ import { executePlanExecute } from "../../src/strategies/plan-execute.js";
 import { executeTreeOfThought } from "../../src/strategies/tree-of-thought.js";
 import { executeReactive } from "../../src/strategies/reactive.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
+
+/** Build a proper Stream stub from a response string */
+function makeStreamResponse(content: string): Stream.Stream<StreamEvent, never> {
+  return Stream.make(
+    { type: "text_delta" as const, text: content },
+    { type: "content_complete" as const, content },
+    { type: "usage" as const, usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15, estimatedCost: 0 } },
+  ) as Stream.Stream<StreamEvent, never>;
+}
 
 const mockLLM = Layer.succeed(LLMService, {
   complete: () =>
@@ -18,11 +28,7 @@ const mockLLM = Layer.succeed(LLMService, {
       model: "test",
     }),
   stream: () =>
-    Effect.succeed({
-      content: "FINAL ANSWER: test result",
-      usage: { totalTokens: 10, estimatedCost: 0 },
-      model: "test",
-    }),
+    Effect.succeed(makeStreamResponse("FINAL ANSWER: test result")),
   embed: () => Effect.succeed([]),
   getModelInfo: () =>
     Effect.succeed({ contextWindow: 8000, id: "test", provider: "test" }),
@@ -302,11 +308,7 @@ describe("Kernel pass attribution", () => {
           model: "test",
         }),
       stream: () =>
-        Effect.succeed({
-          content: "FINAL ANSWER: hello world",
-          usage: { totalTokens: 10, estimatedCost: 0 },
-          model: "test",
-        }),
+        Effect.succeed(makeStreamResponse("FINAL ANSWER: hello world")),
       embed: () => Effect.succeed([]),
       getModelInfo: () =>
         Effect.succeed({ contextWindow: 8000, id: "test", provider: "test" }),

@@ -259,7 +259,18 @@ describe("ReactiveStrategy — real tool execution", () => {
           model: "test",
         });
       },
-      stream: () => Stream.empty,
+      stream: (req: { messages: { role: string; content: string }[] }) => {
+        const lastMsg = req.messages[req.messages.length - 1];
+        capturedPrompt =
+          typeof lastMsg?.content === "string" ? lastMsg.content : "";
+        return Effect.succeed(
+          Stream.make(
+            { type: "text_delta" as const, text: "FINAL ANSWER: done" },
+            { type: "content_complete" as const, content: "FINAL ANSWER: done" },
+            { type: "usage" as const, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2, estimatedCost: 0 } },
+          ) as import("effect").Stream.Stream<import("@reactive-agents/llm-provider").StreamEvent, never>,
+        );
+      },
       embed: () =>
         Effect.succeed({
           embeddings: [] as number[][],
