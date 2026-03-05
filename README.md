@@ -17,7 +17,7 @@ Type-safe from prompt to production. 19 packages. 13 composable layers. 5 reason
 [![Bun](https://img.shields.io/badge/Bun-compatible-FBF0DF?logo=bun&logoColor=000000)](https://bun.sh)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/tylerjrbuell/reactive-agents-ts/pulls)
 
-[Documentation](https://tylerjrbuell.github.io/reactive-agents-ts/) · [Quick Start](#quick-start) · [Features](#features) · [Use Cases](#use-cases) · [Architecture](#architecture) · [Packages](#packages)
+[Documentation](https://tylerjrbuell.github.io/reactive-agents-ts/) · [Discord](https://discord.gg/498xEG5A) · [Quick Start](#quick-start) · [Features](#features) · [Use Cases](#use-cases) · [Architecture](#architecture) · [Packages](#packages)
 
 </div>
 
@@ -60,14 +60,14 @@ Most AI agent frameworks are dynamically typed, monolithic, and opaque. **Reacti
 
 Reactive Agents is designed for teams that need production-grade TypeScript AI agents with explicit architecture, strong typing, and observability.
 
-| Framework Focus | Reactive Agents |
-| --- | --- |
-| Type safety | Effect-TS-first service boundaries with schema validation |
-| Architecture | Composable layers instead of monolithic runtime |
-| Reasoning | 5 built-in strategies + adaptive strategy selection |
-| Tooling | Native MCP support, sandboxed tools, agent-as-tool |
-| Production controls | Guardrails, cost budgets, audit trails, kill switch |
-| Visibility | EventBus tracing, structured logs, metrics dashboard |
+| Framework Focus     | Reactive Agents                                           |
+| ------------------- | --------------------------------------------------------- |
+| Type safety         | Effect-TS-first service boundaries with schema validation |
+| Architecture        | Composable layers instead of monolithic runtime           |
+| Reasoning           | 5 built-in strategies + adaptive strategy selection       |
+| Tooling             | Native MCP support, sandboxed tools, agent-as-tool        |
+| Production controls | Guardrails, cost budgets, audit trails, kill switch       |
+| Visibility          | EventBus tracing, structured logs, metrics dashboard      |
 
 ## Quick Start
 
@@ -132,7 +132,8 @@ const agent = await ReactiveAgents.create()
   .withInteraction() // 5 autonomy modes
   .withOrchestration() // Multi-agent workflows
   .withSelfImprovement() // Cross-task strategy outcome learning
-  .withGateway({ // Persistent autonomous harness
+  .withGateway({
+    // Persistent autonomous harness
     heartbeat: { intervalMs: 1_800_000, policy: "adaptive" },
     crons: [{ schedule: "0 9 * * MON", instruction: "Weekly review" }],
     policies: { dailyTokenBudget: 50_000 },
@@ -305,26 +306,26 @@ Switch providers with one line — agent code stays the same.
 
 ## Packages
 
-| Package                                                    | Description                                                        |
-| ---------------------------------------------------------- | ------------------------------------------------------------------ |
-| [`@reactive-agents/core`](packages/core)                   | EventBus, AgentService, TaskService, types                         |
-| [`@reactive-agents/runtime`](packages/runtime)             | ExecutionEngine, ReactiveAgentBuilder, `createRuntime()`           |
-| [`@reactive-agents/llm-provider`](packages/llm-provider)   | LLM adapters (Anthropic, OpenAI, Gemini, Ollama, LiteLLM)          |
-| [`@reactive-agents/memory`](packages/memory)               | Working, Semantic, Episodic, Procedural memory (bun:sqlite)        |
-| [`@reactive-agents/reasoning`](packages/reasoning)         | 5 strategies: ReAct, Reflexion, Plan-Execute, ToT, Adaptive        |
-| [`@reactive-agents/tools`](packages/tools)                 | Tool registry, sandboxed execution, MCP client                     |
-| [`@reactive-agents/guardrails`](packages/guardrails)       | Injection, PII, toxicity detection                                 |
-| [`@reactive-agents/verification`](packages/verification)   | Semantic entropy, fact decomposition, NLI                          |
-| [`@reactive-agents/cost`](packages/cost)                   | Complexity routing, budget enforcement, semantic caching           |
-| [`@reactive-agents/identity`](packages/identity)           | Agent certificates, RBAC, delegation                               |
-| [`@reactive-agents/observability`](packages/observability) | Distributed tracing, metrics, structured logging                   |
-| [`@reactive-agents/interaction`](packages/interaction)     | 5 autonomy modes, checkpoints, preference learning                 |
-| [`@reactive-agents/orchestration`](packages/orchestration) | Multi-agent workflows (sequential, parallel, map-reduce, pipeline) |
-| [`@reactive-agents/prompts`](packages/prompts)             | Version-controlled template engine                                 |
-| [`@reactive-agents/eval`](packages/eval)                   | Evaluation framework (LLM-as-judge scoring)                        |
-| [`@reactive-agents/a2a`](packages/a2a)                     | A2A protocol: Agent Cards, JSON-RPC server/client, SSE streaming   |
+| Package                                                    | Description                                                                     |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| [`@reactive-agents/core`](packages/core)                   | EventBus, AgentService, TaskService, types                                      |
+| [`@reactive-agents/runtime`](packages/runtime)             | ExecutionEngine, ReactiveAgentBuilder, `createRuntime()`                        |
+| [`@reactive-agents/llm-provider`](packages/llm-provider)   | LLM adapters (Anthropic, OpenAI, Gemini, Ollama, LiteLLM)                       |
+| [`@reactive-agents/memory`](packages/memory)               | Working, Semantic, Episodic, Procedural memory (bun:sqlite)                     |
+| [`@reactive-agents/reasoning`](packages/reasoning)         | 5 strategies: ReAct, Reflexion, Plan-Execute, ToT, Adaptive                     |
+| [`@reactive-agents/tools`](packages/tools)                 | Tool registry, sandboxed execution, MCP client                                  |
+| [`@reactive-agents/guardrails`](packages/guardrails)       | Injection, PII, toxicity detection                                              |
+| [`@reactive-agents/verification`](packages/verification)   | Semantic entropy, fact decomposition, NLI                                       |
+| [`@reactive-agents/cost`](packages/cost)                   | Complexity routing, budget enforcement, semantic caching                        |
+| [`@reactive-agents/identity`](packages/identity)           | Agent certificates, RBAC, delegation                                            |
+| [`@reactive-agents/observability`](packages/observability) | Distributed tracing, metrics, structured logging                                |
+| [`@reactive-agents/interaction`](packages/interaction)     | 5 autonomy modes, checkpoints, preference learning                              |
+| [`@reactive-agents/orchestration`](packages/orchestration) | Multi-agent workflows (sequential, parallel, map-reduce, pipeline)              |
+| [`@reactive-agents/prompts`](packages/prompts)             | Version-controlled template engine                                              |
+| [`@reactive-agents/eval`](packages/eval)                   | Evaluation framework (LLM-as-judge scoring)                                     |
+| [`@reactive-agents/a2a`](packages/a2a)                     | A2A protocol: Agent Cards, JSON-RPC server/client, SSE streaming                |
 | [`@reactive-agents/gateway`](packages/gateway)             | Persistent autonomous agent harness: heartbeats, crons, webhooks, policy engine |
-| [`@reactive-agents/testing`](packages/testing)             | Testing utilities: mock services, assertions, test fixtures         |
+| [`@reactive-agents/testing`](packages/testing)             | Testing utilities: mock services, assertions, test fixtures                     |
 
 ## CLI (`rax`)
 
