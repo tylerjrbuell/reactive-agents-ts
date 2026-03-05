@@ -12,10 +12,12 @@
  *   - `executeReActKernel(input)` — backwards-compatible wrapper using `runKernel(reactKernel, ...)`
  *   - `ReActKernelInput` / `ReActKernelResult` — preserved types for all consumers
  */
-import { Effect } from "effect";
+import { Effect, Stream, FiberRef } from "effect";
 import type { ReasoningStep } from "../../types/index.js";
 import { ExecutionError } from "../../errors/errors.js";
 import { LLMService } from "@reactive-agents/llm-provider";
+import type { StreamEvent } from "@reactive-agents/llm-provider";
+import { StreamingTextCallback } from "@reactive-agents/core";
 import type { ContextProfile } from "../../context/context-profile.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { ToolSchema } from "./tool-utils.js";
@@ -251,40 +253,72 @@ Think step-by-step, then either take ONE action or give your FINAL ANSWER:`;
     // Publish prompt trace event via hooks
     yield* hooks.onThought(state, `[prompt-trace] ${thoughtPrompt.slice(0, 200)}`);
 
-    // ── THOUGHT ────────────────────────────────────────────────────────────
-    const thoughtResponse = yield* llm
-      .complete({
-        messages: [{ role: "user", content: thoughtPrompt }],
-        systemPrompt: systemPromptText,
-        maxTokens: 1500,
-        temperature: temp,
-        stopSequences: ["Observation:", "\nObservation:"],
-      })
-      .pipe(
-        Effect.mapError(
-          (err) =>
-            new ExecutionError({
-              strategy,
-              message: `LLM thought failed at iteration ${state.iteration}: ${
-                err && typeof err === "object" && "message" in err
-                  ? (err as { message: string }).message
-                  : String(err)
-              }`,
-              step: state.iteration,
-              cause: err,
-            }),
-        ),
-        // Convert ExecutionError to a never error channel by catching and dying
-        // (or we can handle gracefully). For the kernel contract we need never error.
-        Effect.catchAll((execErr) =>
-          Effect.succeed({
-            content: `[LLM Error: ${execErr.message}]`,
-            stopReason: "error" as const,
-            usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0, estimatedCost: 0 },
-            model: "unknown",
+    // ── STREAM (with text delta emission) ──────────────────────────────────
+    const llmStreamEffect = llm.stream({
+      messages: [{ role: "user", content: thoughtPrompt }],
+      systemPrompt: systemPromptText,
+      maxTokens: 1500,
+      temperature: temp,
+      stopSequences: ["Observation:", "\nObservation:"],
+    });
+
+    const llmStream = yield* llmStreamEffect.pipe(
+      Effect.mapError(
+        (err) =>
+          new ExecutionError({
+            strategy,
+            message: `LLM stream failed at iteration ${state.iteration}: ${
+              err && typeof err === "object" && "message" in err
+                ? (err as { message: string }).message
+                : String(err)
+            }`,
+            step: state.iteration,
+            cause: err,
           }),
+      ),
+      Effect.catchAll((execErr) =>
+        Effect.succeed(
+          Stream.make({
+            type: "content_complete" as const,
+            content: `[LLM Error: ${execErr.message}]`,
+          }) as Stream.Stream<StreamEvent, never>,
         ),
-      );
+      ),
+    );
+
+    // Accumulate content + emit text deltas via FiberRef callback
+    let accumulatedContent = "";
+    let accumulatedUsage = {
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+      estimatedCost: 0,
+    };
+
+    const textDeltaCb = yield* FiberRef.get(StreamingTextCallback);
+
+    yield* Stream.runForEach(llmStream, (event) =>
+      Effect.gen(function* () {
+        if (event.type === "text_delta") {
+          accumulatedContent += event.text;
+          if (textDeltaCb) {
+            yield* textDeltaCb(event.text).pipe(Effect.catchAll(() => Effect.void));
+          }
+        } else if (event.type === "content_complete") {
+          accumulatedContent = event.content;
+        } else if (event.type === "usage") {
+          accumulatedUsage = event.usage;
+        }
+      }),
+    ).pipe(Effect.catchAll(() => Effect.void));
+
+    // Build response shape matching original llm.complete() return
+    const thoughtResponse = {
+      content: accumulatedContent,
+      stopReason: "end_turn" as const,
+      usage: accumulatedUsage,
+      model: "unknown",
+    };
 
     const rawThought = thoughtResponse.content;
     const newTokens = state.tokens + thoughtResponse.usage.totalTokens;

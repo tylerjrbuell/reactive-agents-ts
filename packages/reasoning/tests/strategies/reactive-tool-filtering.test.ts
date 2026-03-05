@@ -1,7 +1,8 @@
 import { describe, it, expect } from "bun:test";
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Stream } from "effect";
 import { executeReactive } from "../../src/strategies/reactive.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
+import type { StreamEvent } from "@reactive-agents/llm-provider";
 
 const testConfig = {
   ...defaultReasoningConfig,
@@ -10,6 +11,15 @@ const testConfig = {
     reactive: { maxIterations: 8, temperature: 0.7 },
   },
 };
+
+/** Build a proper Stream stub from a response string (mirrors TestLLMService.stream()) */
+function makeStreamResponse(content: string): Stream.Stream<StreamEvent, never> {
+  return Stream.make(
+    { type: "text_delta" as const, text: content },
+    { type: "content_complete" as const, content },
+    { type: "usage" as const, usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15, estimatedCost: 0 } },
+  ) as Stream.Stream<StreamEvent, never>;
+}
 
 // Helper to create a capturing LLM layer
 async function createCapturingLayer() {
@@ -26,7 +36,11 @@ async function createCapturingLayer() {
         model: "test-model",
       });
     },
-    stream: () => Effect.succeed({} as any),
+    stream: (req: any) => {
+      const lastMsg = req.messages[req.messages.length - 1];
+      capturedContent = typeof lastMsg?.content === "string" ? lastMsg.content : "";
+      return Effect.succeed(makeStreamResponse("FINAL ANSWER: done"));
+    },
     completeStructured: () => Effect.succeed({} as any),
     embed: (texts: string[]) => Effect.succeed(texts.map(() => [])),
     countTokens: () => Effect.succeed(0),

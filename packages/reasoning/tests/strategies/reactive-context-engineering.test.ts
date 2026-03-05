@@ -8,11 +8,21 @@
 //   - Early termination on end_turn with no tool call (Sprint 2D)
 //
 import { describe, it, expect } from "bun:test";
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Stream } from "effect";
 import { executeReactive } from "../../src/strategies/reactive.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
+import type { StreamEvent } from "@reactive-agents/llm-provider";
 import { ToolService, ToolExecutionError, createToolsLayer } from "@reactive-agents/tools";
+
+/** Build a proper Stream stub from a response string */
+function makeStreamResponse(content: string): Stream.Stream<StreamEvent, never> {
+  return Stream.make(
+    { type: "text_delta" as const, text: content },
+    { type: "content_complete" as const, content },
+    { type: "usage" as const, usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15, estimatedCost: 0 } },
+  ) as Stream.Stream<StreamEvent, never>;
+}
 
 // ─── Shared tool definition for tests ───
 
@@ -57,7 +67,11 @@ describe("Sprint 0.1: Tool schemas in initial context", () => {
             model: "test-model",
           });
         },
-        stream: () => Effect.succeed({ pipe: () => {} } as any),
+        stream: (req: any) => {
+          const lastMsg = req.messages[req.messages.length - 1];
+          capturedContent = typeof lastMsg?.content === "string" ? lastMsg.content : "";
+          return Effect.succeed(makeStreamResponse("FINAL ANSWER: done"));
+        },
         completeStructured: () => Effect.succeed({} as any),
         embed: (texts: string[]) => Effect.succeed(texts.map(() => [])),
         countTokens: () => Effect.succeed(0),
@@ -79,7 +93,11 @@ describe("Sprint 0.1: Tool schemas in initial context", () => {
           model: "test-model",
         });
       },
-      stream: () => Effect.succeed({ pipe: () => {} } as any),
+      stream: (req: any) => {
+        const lastMsg = req.messages[req.messages.length - 1];
+        capturedContent = typeof lastMsg?.content === "string" ? lastMsg.content : "";
+        return Effect.succeed(makeStreamResponse("FINAL ANSWER: done"));
+      },
       completeStructured: () => Effect.succeed({} as any),
       embed: (texts: string[]) => Effect.succeed(texts.map(() => [])),
       countTokens: () => Effect.succeed(0),
@@ -128,7 +146,11 @@ describe("Sprint 0.1: Tool schemas in initial context", () => {
           model: "test-model",
         });
       },
-      stream: () => Effect.succeed({} as any),
+      stream: (req: any) => {
+        const lastMsg = req.messages[req.messages.length - 1];
+        capturedContent = typeof lastMsg?.content === "string" ? lastMsg.content : "";
+        return Effect.succeed(makeStreamResponse("FINAL ANSWER: done"));
+      },
       completeStructured: () => Effect.succeed({} as any),
       embed: (texts: string[]) => Effect.succeed(texts.map(() => [])),
       countTokens: () => Effect.succeed(0),
@@ -318,7 +340,13 @@ describe("Sprint 1B: Context compaction after N steps", () => {
           model: "test-model",
         });
       },
-      stream: () => Effect.succeed({} as any),
+      stream: (_req: any) => {
+        callCount++;
+        const content = callCount >= 3
+          ? "FINAL ANSWER: Completed after multiple steps."
+          : `Thinking on step ${callCount}. I need more info.`;
+        return Effect.succeed(makeStreamResponse(content));
+      },
       completeStructured: () => Effect.succeed({} as any),
       embed: (texts: string[]) => Effect.succeed(texts.map(() => [])),
       countTokens: () => Effect.succeed(0),
@@ -377,7 +405,13 @@ describe("Sprint 2D: Early termination on end_turn", () => {
           model: "test-model",
         });
       },
-      stream: () => Effect.succeed({} as any),
+      stream: (_req: any) => {
+        callCount++;
+        const content = callCount === 1
+          ? "Let me think about this."
+          : "Based on my analysis, the answer to your question is that this is a comprehensive response that provides all necessary information without needing further tool calls.";
+        return Effect.succeed(makeStreamResponse(content));
+      },
       completeStructured: () => Effect.succeed({} as any),
       embed: (texts: string[]) => Effect.succeed(texts.map(() => [])),
       countTokens: () => Effect.succeed(0),
@@ -453,7 +487,10 @@ describe("Profile overrides for temperature and maxIterations", () => {
           model: "test-model",
         });
       },
-      stream: () => Effect.succeed({} as any),
+      stream: (req: any) => {
+        capturedTemperature = req.temperature;
+        return Effect.succeed(makeStreamResponse("FINAL ANSWER: done"));
+      },
       completeStructured: () => Effect.succeed({} as any),
       embed: (texts: string[]) => Effect.succeed(texts.map(() => [])),
       countTokens: () => Effect.succeed(0),
@@ -508,7 +545,10 @@ describe("Profile overrides for temperature and maxIterations", () => {
           model: "test-model",
         });
       },
-      stream: () => Effect.succeed({} as any),
+      stream: (_req: any) => {
+        callCount++;
+        return Effect.succeed(makeStreamResponse(`Thinking about step ${callCount}...`));
+      },
       completeStructured: () => Effect.succeed({} as any),
       embed: (texts: string[]) => Effect.succeed(texts.map(() => [])),
       countTokens: () => Effect.succeed(0),
@@ -569,7 +609,11 @@ describe("toolSchemaDetail from context profile", () => {
           model: "test-model",
         });
       },
-      stream: () => Effect.succeed({} as any),
+      stream: (req: any) => {
+        const lastMsg = req.messages[req.messages.length - 1];
+        capturedContent = typeof lastMsg?.content === "string" ? lastMsg.content : "";
+        return Effect.succeed(makeStreamResponse("FINAL ANSWER: done"));
+      },
       completeStructured: () => Effect.succeed({} as any),
       embed: (texts: string[]) => Effect.succeed(texts.map(() => [])),
       countTokens: () => Effect.succeed(0),
@@ -627,7 +671,11 @@ describe("toolSchemaDetail from context profile", () => {
           model: "test-model",
         });
       },
-      stream: () => Effect.succeed({} as any),
+      stream: (req: any) => {
+        const lastMsg = req.messages[req.messages.length - 1];
+        capturedContent = typeof lastMsg?.content === "string" ? lastMsg.content : "";
+        return Effect.succeed(makeStreamResponse("FINAL ANSWER: done"));
+      },
       completeStructured: () => Effect.succeed({} as any),
       embed: (texts: string[]) => Effect.succeed(texts.map(() => [])),
       countTokens: () => Effect.succeed(0),
