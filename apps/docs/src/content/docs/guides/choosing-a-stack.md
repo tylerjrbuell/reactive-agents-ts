@@ -94,6 +94,6 @@ const agent = await ReactiveAgents.create()
 
 ## Next Steps
 
-- Tune context budgets in [Context Engineering](./context-engineering/)
-- Configure tools and MCP in [Tools](./tools/)
-- Harden production defaults in [Production Deployment](../cookbook/production-deployment/)
+- Tune context budgets in [Context Engineering](../context-engineering/)
+- Configure tools and MCP in [Tools](../tools/)
+- Harden production defaults in [Production Deployment](../../cookbook/production-deployment/)

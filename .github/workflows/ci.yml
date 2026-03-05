@@ -42,7 +42,7 @@ jobs:
       - name: Build docs
         working-directory: apps/docs
         run: bunx astro build
-      - name: Check links in docs content and built HTML
+      - name: Check links in built HTML
         uses: lycheeverse/lychee-action@v2
         with:
           fail: true
@@ -52,8 +52,12 @@ jobs:
             --accept 200,403,429
             --max-retries 2
             --retry-wait-time 2
-            "apps/docs/src/content/docs/**/*.md"
-            "apps/docs/src/content/docs/**/*.mdx"
+            --root-dir apps/docs/dist
+            --exclude "^/$"
+            --exclude "^/_astro/"
+            --exclude "^/sitemap"
+            --exclude "^/favicon"
+            --exclude "^/\.well-known/"
             "apps/docs/dist/**/*.html"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
