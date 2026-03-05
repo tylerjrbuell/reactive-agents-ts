@@ -13,7 +13,7 @@
  *   bun run apps/examples/src/foundations/01-simple-agent.ts
  */
 
-import { ReactiveAgents } from "@reactive-agents/runtime";
+import { ReactiveAgents } from "reactive-agents";
 
 export interface ExampleResult {
   passed: boolean;

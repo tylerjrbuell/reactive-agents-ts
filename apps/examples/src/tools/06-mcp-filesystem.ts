@@ -15,7 +15,7 @@
  *   bun run apps/examples/src/tools/06-mcp-filesystem.ts
  */
 
-import { ReactiveAgents } from "@reactive-agents/runtime";
+import { ReactiveAgents } from "reactive-agents";
 
 export interface ExampleResult {
   passed: boolean;

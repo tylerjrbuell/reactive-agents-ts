@@ -15,7 +15,7 @@
  *   ANTHROPIC_API_KEY=sk-ant-... bun run apps/examples/src/tools/05-builtin-tools.ts
  */
 
-import { ReactiveAgents } from "@reactive-agents/runtime";
+import { ReactiveAgents } from "reactive-agents";
 import { existsSync, unlinkSync } from "node:fs";
 
 const DEMO_FILE = "./example_05_output.txt";

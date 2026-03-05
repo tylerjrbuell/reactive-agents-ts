@@ -14,7 +14,7 @@
  *   ANTHROPIC_API_KEY=sk-ant-... bun run apps/examples/src/advanced/18-self-improvement.ts
  *   bun run apps/examples/src/advanced/18-self-improvement.ts  # test mode
  */
-import { ReactiveAgents } from "@reactive-agents/runtime";
+import { ReactiveAgents } from "reactive-agents";
 
 export interface ExampleResult {
   passed: boolean;

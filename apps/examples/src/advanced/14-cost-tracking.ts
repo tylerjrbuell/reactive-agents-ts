@@ -10,7 +10,7 @@
  *   ANTHROPIC_API_KEY=sk-ant-... bun run apps/examples/src/advanced/14-cost-tracking.ts
  *   bun run apps/examples/src/advanced/14-cost-tracking.ts  # test mode
  */
-import { ReactiveAgents } from "@reactive-agents/runtime";
+import { ReactiveAgents } from "reactive-agents";
 
 export interface ExampleResult {
   passed: boolean;

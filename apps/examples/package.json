@@ -12,10 +12,13 @@
     "trust": "bun run index.ts --filter trust",
     "advanced": "bun run index.ts --filter advanced",
     "reasoning": "bun run index.ts --filter reasoning",
-    "interaction": "bun run index.ts --filter interaction"
+    "interaction": "bun run index.ts --filter interaction",
+    "gateway": "bun run index.ts --filter gateway",
+    "streaming": "bun run index.ts --filter streaming"
   },
   "dependencies": {
     "effect": "^3.10.0",
+    "reactive-agents": "workspace:*",
     "@reactive-agents/core": "workspace:*",
     "@reactive-agents/llm-provider": "workspace:*",
     "@reactive-agents/memory": "workspace:*",

@@ -43,6 +43,9 @@ export {
 
   // Config & types
   defaultReactiveAgentsConfig,
+
+  // Streaming
+  AgentStream,
 } from "@reactive-agents/runtime";
 
 export type {
@@ -54,6 +57,9 @@ export type {
   ExecutionContext,
   LifecycleHook,
   ReactiveAgentsConfig,
+  // Streaming types
+  AgentStreamEvent,
+  StreamDensity,
 } from "@reactive-agents/runtime";
 
 // ─── Core Services ───

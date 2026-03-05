@@ -18,7 +18,7 @@
  * Usage:
  *   bun run apps/examples/src/interaction/21-interaction-modes.ts
  */
-import { ReactiveAgents } from "@reactive-agents/runtime";
+import { ReactiveAgents } from "reactive-agents";
 
 export interface ExampleResult {
   passed: boolean;
