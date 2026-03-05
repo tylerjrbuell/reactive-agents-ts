@@ -63,7 +63,7 @@ export const draftWriterTool: ToolDefinition = {
     const frontmatter = [
       "---",
       `type: ${input.type}`,
-      `title: "${input.title}"`,
+      `title: "${input.title.replace(/"/g, '\\"')}"`,
       input.platform ? `platform: ${input.platform}` : null,
       input.threadUrl ? `thread_url: ${input.threadUrl}` : null,
       `created: ${new Date().toISOString()}`,
