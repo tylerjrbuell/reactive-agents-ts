@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/reasoning",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -15,8 +15,8 @@
     "@reactive-agents/core": "workspace:*",
     "@reactive-agents/llm-provider": "workspace:*",
     "@reactive-agents/tools": "workspace:*",
-    "@reactive-agents/memory": "workspace:^",
-    "@reactive-agents/prompts": "workspace:^",
+    "@reactive-agents/memory": "workspace:*",
+    "@reactive-agents/prompts": "workspace:*",
     "ulid": "^2.3.0"
   },
   "devDependencies": {
