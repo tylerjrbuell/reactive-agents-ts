@@ -26,6 +26,7 @@
 cp .env.example .env
 # Add ANTHROPIC_API_KEY and TAVILY_API_KEY
 bun install
+bun run build    # build reactive-agents packages first
 bun run start
 ```
 
