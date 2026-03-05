@@ -121,7 +121,10 @@ export { createInteractionLayer } from "@reactive-agents/interaction";
 export { createOrchestrationLayer } from "@reactive-agents/orchestration";
 export { createPromptLayer } from "@reactive-agents/prompts";
 export { createEvalLayer } from "@reactive-agents/eval";
-export { createA2AServerLayer, createA2AClientLayer } from "@reactive-agents/a2a";
+export {
+  createA2AServerLayer,
+  createA2AClientLayer,
+} from "@reactive-agents/a2a";
 
 // ─── Deployment ───
 export { registerShutdownHandlers } from "@reactive-agents/runtime";
