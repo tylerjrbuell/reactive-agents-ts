@@ -6,7 +6,7 @@ import type {
 } from "@reactive-agents/llm-provider";
 import type { MockLLMRule } from "../types.js";
 
-interface LLMCall {
+export interface LLMCall {
   readonly messages: readonly { role: string; content: unknown }[];
   readonly response: string;
 }

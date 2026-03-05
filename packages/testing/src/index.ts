@@ -6,6 +6,7 @@ export { MockError } from "./errors.js";
 
 // ─── Mock Services ───
 export { createMockLLM, createMockLLMFromMap } from "./mocks/llm.js";
+export type { LLMCall } from "./mocks/llm.js";
 export { createMockToolService } from "./mocks/tools.js";
 export { createMockEventBus } from "./mocks/event-bus.js";
 
