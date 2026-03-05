@@ -7,7 +7,7 @@ Manages agent certificates and role-based access control (RBAC) so agents can sa
 ## Installation
 
 ```bash
-bun add @reactive-agents/identity effect
+bun add @reactive-agents/identity
 ```
 
 ## Features

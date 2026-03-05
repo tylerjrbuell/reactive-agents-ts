@@ -7,14 +7,14 @@ Reduces hallucinations by measuring semantic entropy (consistency across multipl
 ## Installation
 
 ```bash
-bun add @reactive-agents/verification effect
+bun add @reactive-agents/verification
 ```
 
 ## Techniques
 
-| Technique | How it works |
-|-----------|-------------|
-| Semantic entropy | Samples the LLM N times; high variance → low confidence |
+| Technique          | How it works                                                |
+| ------------------ | ----------------------------------------------------------- |
+| Semantic entropy   | Samples the LLM N times; high variance → low confidence     |
 | Fact decomposition | Breaks output into atomic claims, checks each independently |
 
 ## Usage

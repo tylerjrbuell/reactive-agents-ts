@@ -7,7 +7,7 @@ Provides a unified `LLMService` interface with adapters for Anthropic, OpenAI, G
 ## Installation
 
 ```bash
-bun add @reactive-agents/llm-provider effect
+bun add @reactive-agents/llm-provider
 ```
 
 Install the SDK for your chosen provider:
@@ -20,20 +20,23 @@ bun add @google/genai              # Google Gemini
 
 ## Supported Providers
 
-| Provider | Models | Streaming | Embeddings | Structured Output |
-|----------|--------|-----------|------------|------------------|
-| `anthropic` | claude-haiku, claude-sonnet, claude-opus | ✓ | — | ✓ |
-| `openai` | gpt-4o, gpt-4o-mini, o1-* | ✓ | ✓ | ✓ |
-| `gemini` | gemini-2.0-flash, gemini-2.5-pro | ✓ | ✓ | ✓ |
-| `ollama` | any local model | ✓ | ✓ | ✓ |
-| `test` | deterministic mock | ✓ | ✓ | — |
+| Provider    | Models                                   | Streaming | Embeddings | Structured Output |
+| ----------- | ---------------------------------------- | --------- | ---------- | ----------------- |
+| `anthropic` | claude-haiku, claude-sonnet, claude-opus | ✓         | —          | ✓                 |
+| `openai`    | gpt-4o, gpt-4o-mini, o1-\*               | ✓         | ✓          | ✓                 |
+| `gemini`    | gemini-2.0-flash, gemini-2.5-pro         | ✓         | ✓          | ✓                 |
+| `ollama`    | any local model                          | ✓         | ✓          | ✓                 |
+| `test`      | deterministic mock                       | ✓         | ✓          | —                 |
 
 ## Usage
 
 ### Anthropic
 
 ```typescript
-import { createLLMProviderLayer, LLMService } from "@reactive-agents/llm-provider";
+import {
+  createLLMProviderLayer,
+  LLMService,
+} from "@reactive-agents/llm-provider";
 import { Effect } from "effect";
 
 const layer = createLLMProviderLayer("anthropic");
@@ -51,7 +54,10 @@ const result = await Effect.runPromise(
 ### Google Gemini
 
 ```typescript
-import { createLLMProviderLayer, LLMService } from "@reactive-agents/llm-provider";
+import {
+  createLLMProviderLayer,
+  LLMService,
+} from "@reactive-agents/llm-provider";
 import { Effect } from "effect";
 
 // Set GOOGLE_API_KEY in your environment

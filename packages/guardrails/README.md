@@ -7,17 +7,17 @@ Protects agents from prompt injection, PII leakage, and toxic content — applie
 ## Installation
 
 ```bash
-bun add @reactive-agents/guardrails effect
+bun add @reactive-agents/guardrails
 ```
 
 ## Protections
 
-| Guard | What it catches |
-|-------|----------------|
-| Prompt injection | Attempts to override system instructions |
-| PII detection | Emails, phone numbers, SSNs, credit cards |
-| Toxicity filtering | Harmful or abusive content |
-| Output contracts | Schema-validates agent responses |
+| Guard              | What it catches                           |
+| ------------------ | ----------------------------------------- |
+| Prompt injection   | Attempts to override system instructions  |
+| PII detection      | Emails, phone numbers, SSNs, credit cards |
+| Toxicity filtering | Harmful or abusive content                |
+| Output contracts   | Schema-validates agent responses          |
 
 ## Usage
 

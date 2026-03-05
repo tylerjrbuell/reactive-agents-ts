@@ -7,7 +7,7 @@ Adds distributed tracing, metrics, and structured logging to every phase of the 
 ## Installation
 
 ```bash
-bun add @reactive-agents/observability effect
+bun add @reactive-agents/observability
 ```
 
 ## Features

@@ -7,7 +7,7 @@ Automatically routes tasks to the cheapest capable model and enforces per-reques
 ## Installation
 
 ```bash
-bun add @reactive-agents/cost effect
+bun add @reactive-agents/cost
 ```
 
 ## Features
@@ -25,23 +25,23 @@ const agent = await ReactiveAgents.create()
   .withName("budget-agent")
   .withProvider("anthropic")
   .withCostTracking({
-    maxSessionCost: 1.00,      // $1.00 per session
-    maxRequestCost: 0.10,      // $0.10 per request
+    maxSessionCost: 1.0, // $1.00 per session
+    maxRequestCost: 0.1, // $0.10 per request
   })
   .build();
 
 const result = await agent.run("Summarize this document");
-console.log(result.metadata.cost);       // { usd: 0.003, tokens: 450 }
-console.log(result.metadata.modelUsed);  // "claude-haiku-4-5" (auto-routed)
+console.log(result.metadata.cost); // { usd: 0.003, tokens: 450 }
+console.log(result.metadata.modelUsed); // "claude-haiku-4-5" (auto-routed)
 ```
 
 ## Routing Logic
 
-| Task signals | → Model |
-|---|---|
-| Simple, short, factual | Haiku |
-| Analysis, coding, multi-step | Sonnet |
-| Complex reasoning, research | Opus |
+| Task signals                 | → Model |
+| ---------------------------- | ------- |
+| Simple, short, factual       | Haiku   |
+| Analysis, coding, multi-step | Sonnet  |
+| Complex reasoning, research  | Opus    |
 
 ## Documentation
 

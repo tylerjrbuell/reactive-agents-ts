@@ -9,14 +9,18 @@ The easiest way to get started is with the `reactive-agents` meta-package, which
 
 ```bash
 # Bun (recommended)
-bun add reactive-agents effect
+bun add reactive-agents
 
 # npm
-npm install reactive-agents effect
+npm install reactive-agents
 
 # pnpm
-pnpm add reactive-agents effect
+pnpm add reactive-agents
 ```
+
+:::note[Effect dependency]
+`effect` ships as a dependency of `reactive-agents` and is installed automatically. Only add it explicitly (`bun add effect`) if your own code imports from `effect` directly.
+:::
 
 Then import from a single entry point:
 
@@ -28,28 +32,27 @@ import { ReactiveAgents } from "reactive-agents";
 
 The framework is modular — install only the packages you need:
 
-| Package | Description | Required? |
-|---------|-------------|-----------|
-| `@reactive-agents/core` | EventBus, AgentService, TaskService, types | Yes |
-| `@reactive-agents/runtime` | ExecutionEngine, ReactiveAgentBuilder | Yes |
-| `@reactive-agents/llm-provider` | LLM adapters (Anthropic, OpenAI, Gemini, Ollama, LiteLLM 40+) | Yes |
-| `effect` | Effect-TS runtime | Yes |
-| `@reactive-agents/memory` | Working, Semantic, Episodic, Procedural memory | Optional |
-| `@reactive-agents/reasoning` | ReAct, Plan-Execute, Tree-of-Thought, Reflexion | Optional |
-| `@reactive-agents/tools` | Tool registry, sandbox, MCP client | Optional |
-| `@reactive-agents/guardrails` | Injection, PII, toxicity detection | Optional |
-| `@reactive-agents/verification` | Semantic entropy, fact decomposition | Optional |
-| `@reactive-agents/cost` | Complexity routing, budget enforcement | Optional |
-| `@reactive-agents/identity` | Agent certificates, RBAC | Optional |
-| `@reactive-agents/observability` | Tracing, metrics, structured logging | Optional |
-| `@reactive-agents/interaction` | 5 interaction modes, checkpoints | Optional |
-| `@reactive-agents/orchestration` | Multi-agent workflows | Optional |
-| `@reactive-agents/a2a` | Agent-to-Agent protocol, Agent Cards, JSON-RPC, SSE streaming | Optional |
-| `@reactive-agents/prompts` | Template engine, built-in prompt library | Optional |
-| `@reactive-agents/gateway` | Persistent autonomous harness: heartbeats, crons, webhooks, policy engine | Optional |
+| Package                          | Description                                                               | Required? |
+| -------------------------------- | ------------------------------------------------------------------------- | --------- |
+| `@reactive-agents/core`          | EventBus, AgentService, TaskService, types                                | Yes       |
+| `@reactive-agents/runtime`       | ExecutionEngine, ReactiveAgentBuilder                                     | Yes       |
+| `@reactive-agents/llm-provider`  | LLM adapters (Anthropic, OpenAI, Gemini, Ollama, LiteLLM 40+)             | Yes       |
+| `@reactive-agents/memory`        | Working, Semantic, Episodic, Procedural memory                            | Optional  |
+| `@reactive-agents/reasoning`     | ReAct, Plan-Execute, Tree-of-Thought, Reflexion                           | Optional  |
+| `@reactive-agents/tools`         | Tool registry, sandbox, MCP client                                        | Optional  |
+| `@reactive-agents/guardrails`    | Injection, PII, toxicity detection                                        | Optional  |
+| `@reactive-agents/verification`  | Semantic entropy, fact decomposition                                      | Optional  |
+| `@reactive-agents/cost`          | Complexity routing, budget enforcement                                    | Optional  |
+| `@reactive-agents/identity`      | Agent certificates, RBAC                                                  | Optional  |
+| `@reactive-agents/observability` | Tracing, metrics, structured logging                                      | Optional  |
+| `@reactive-agents/interaction`   | 5 interaction modes, checkpoints                                          | Optional  |
+| `@reactive-agents/orchestration` | Multi-agent workflows                                                     | Optional  |
+| `@reactive-agents/a2a`           | Agent-to-Agent protocol, Agent Cards, JSON-RPC, SSE streaming             | Optional  |
+| `@reactive-agents/prompts`       | Template engine, built-in prompt library                                  | Optional  |
+| `@reactive-agents/gateway`       | Persistent autonomous harness: heartbeats, crons, webhooks, policy engine | Optional  |
 
 ```bash
-bun add @reactive-agents/core @reactive-agents/runtime @reactive-agents/llm-provider effect
+bun add @reactive-agents/core @reactive-agents/runtime @reactive-agents/llm-provider
 ```
 
 ## Environment Variables

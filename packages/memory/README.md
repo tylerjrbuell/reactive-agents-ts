@@ -7,19 +7,19 @@ Four memory types backed by `bun:sqlite` — Working, Semantic, Episodic, and Pr
 ## Installation
 
 ```bash
-bun add @reactive-agents/memory effect
+bun add @reactive-agents/memory
 ```
 
 > **Requires Bun** — uses `bun:sqlite` natively.
 
 ## Memory Types
 
-| Type | Purpose | Backend |
-|------|---------|---------|
-| Working | Short-term in-session context | SQLite in-memory |
-| Semantic | Long-term knowledge store | SQLite + FTS5 |
-| Episodic | Conversation history | SQLite |
-| Procedural | Learned workflows | SQLite |
+| Type       | Purpose                       | Backend          |
+| ---------- | ----------------------------- | ---------------- |
+| Working    | Short-term in-session context | SQLite in-memory |
+| Semantic   | Long-term knowledge store     | SQLite + FTS5    |
+| Episodic   | Conversation history          | SQLite           |
+| Procedural | Learned workflows             | SQLite           |
 
 ## Tiers
 
@@ -34,7 +34,7 @@ import { ReactiveAgents } from "reactive-agents";
 const agent = await ReactiveAgents.create()
   .withName("my-agent")
   .withProvider("anthropic")
-  .withMemory("1")   // Tier 1: FTS5
+  .withMemory("1") // Tier 1: FTS5
   // .withMemory("2") // Tier 2: vector embeddings
   .build();
 ```
