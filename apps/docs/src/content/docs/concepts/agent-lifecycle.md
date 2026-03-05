@@ -151,7 +151,7 @@ Builds the final `TaskResult`:
 
 ## EventBus Integration
 
-When `.withEventBus()` (or any feature that wires an EventBus) is active, every meaningful lifecycle moment emits a typed event. `agent.subscribe()` is overloaded — pass a tag to get the event payload automatically narrowed to that type:
+When `.withEvents()` (or any feature that wires an EventBus) is active, every meaningful lifecycle moment emits a typed event. `agent.subscribe()` is overloaded — pass a tag to get the event payload automatically narrowed to that type:
 
 ```typescript
 // Tag-filtered: event payload is narrowed — no _tag check, no cast

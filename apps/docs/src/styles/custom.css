@@ -152,7 +152,7 @@ html {
   align-items: center;
   margin: 2.5rem auto;
   padding: 2rem 0.5rem;
-  max-width: 820px;
+  max-width: 900px;
   border-radius: 12px;
   background: rgba(139, 92, 246, 0.06);
   border: 1px solid rgba(139, 92, 246, 0.18);
@@ -193,6 +193,7 @@ html {
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  white-space: nowrap;
   opacity: 0.55;
   padding-top: 0.4rem;
 }

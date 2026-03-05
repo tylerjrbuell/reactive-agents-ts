@@ -91,6 +91,9 @@ const agent = await ReactiveAgents.create()
 ## What's Next?
 
 - [Your First Agent](../your-first-agent/) — A deeper walkthrough
+- [Choosing a Stack](../choosing-a-stack/) — Pick provider/model/memory defaults quickly
+- [Agent Skills](../agent-skills/) — Publish reusable implementation skills for coding agents
 - [Memory](../memory/) — How agent memory works
 - [Reasoning](../reasoning/) — Understanding reasoning strategies
+- [Troubleshooting](../troubleshooting/) — Diagnose common failures fast
 - [Architecture](../../concepts/architecture/) — The full layer system

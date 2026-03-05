@@ -29,3 +29,31 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run build
       - run: bun test
+
+  docs-links:
+    name: Docs Link Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - name: Build docs
+        working-directory: apps/docs
+        run: bunx astro build
+      - name: Check links in docs content and built HTML
+        uses: lycheeverse/lychee-action@v2
+        with:
+          fail: true
+          args: >-
+            --verbose
+            --no-progress
+            --accept 200,403,429
+            --max-retries 2
+            --retry-wait-time 2
+            "apps/docs/src/content/docs/**/*.md"
+            "apps/docs/src/content/docs/**/*.mdx"
+            "apps/docs/dist/**/*.html"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -35,7 +35,7 @@ jobs:
         working-directory: apps/docs
         env:
           GITHUB_PAGES: "true"
-        run: npx astro build
+        run: bunx astro build
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

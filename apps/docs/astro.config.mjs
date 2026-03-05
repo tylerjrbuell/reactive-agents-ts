@@ -1,5 +1,6 @@
 import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
+import skills from "astro-skills";
 
 // Use a subpath base only when deploying to GitHub Pages.
 // Set GITHUB_PAGES=true in CI to enable it.
@@ -10,6 +11,7 @@ export default defineConfig({
   base: isGitHubPages ? "/reactive-agents-ts" : "/",
   legacy: { collections: true },
   integrations: [
+    skills(),
     starlight({
       title: "Reactive Agents",
       description:
@@ -27,6 +29,11 @@ export default defineConfig({
         dark: "./src/assets/logo-dark.svg",
         replacesTitle: false,
       },
+      editLink: {
+        baseUrl:
+          "https://github.com/tylerjrbuell/reactive-agents-ts/edit/main/apps/docs/src/content/docs/",
+      },
+      lastUpdated: true,
       customCss: ["./src/styles/custom.css"],
       sidebar: [
         {

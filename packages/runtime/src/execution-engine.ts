@@ -1686,107 +1686,95 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
 
         executeStream: (task, options) =>
           Effect.gen(function* () {
-            const density = options?.density ?? "tokens";
-            const queue = yield* Queue.bounded<AgentStreamEvent>(256);
+            const queue = yield* Queue.unbounded<AgentStreamEvent>();
+            const density = options?.density ?? config.streamDensity ?? "tokens";
+            const startMs = Date.now();
 
-            // Helper: offer event to queue, ignoring errors if queue is shut down
-            const offerSafe = (event: AgentStreamEvent): Effect.Effect<void, never> =>
-              Queue.offer(queue, event).pipe(
-                Effect.catchAll(() => Effect.void),
-              );
+            // Acquire EventBus optionally
+            const ebOpt = yield* Effect.serviceOption(EventBus).pipe(
+              Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
+            );
+            const eb: EbLike | null = ebOpt._tag === "Some" ? ebOpt.value : null;
 
-            // ── Full-density: forward EventBus events → queue ──
-            let unsubFn: (() => void) | null = null;
-            if (density === "full") {
-              const ebOpt = yield* Effect.serviceOption(EventBus).pipe(
-                Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
-              );
-              if (ebOpt._tag === "Some") {
-                const eb = ebOpt.value as EbLike & {
-                  subscribe: (
-                    handler: (e: AgentEvent) => Effect.Effect<void, never>,
-                  ) => Effect.Effect<() => void, never>;
-                };
-                unsubFn = yield* eb.subscribe((event: AgentEvent) =>
-                  Effect.gen(function* () {
-                    if (event._tag === "ExecutionPhaseEntered") {
-                      yield* offerSafe({
-                        _tag: "PhaseStarted",
-                        phase: event.phase,
-                        timestamp: Date.now(),
-                      });
-                    } else if (event._tag === "ExecutionPhaseCompleted") {
-                      yield* offerSafe({
-                        _tag: "PhaseCompleted",
-                        phase: event.phase,
-                        durationMs: event.durationMs,
-                      });
-                    } else if (
-                      event._tag === "ReasoningStepCompleted" &&
-                      (event as any).thought
-                    ) {
-                      yield* offerSafe({
-                        _tag: "ThoughtEmitted",
-                        content: (event as any).thought,
-                        iteration: event.step,
-                      });
-                    } else if (event._tag === "ToolCallStarted") {
-                      yield* offerSafe({
-                        _tag: "ToolCallStarted",
-                        toolName: (event as any).toolName,
-                        callId: (event as any).callId,
-                      });
-                    } else if (event._tag === "ToolCallCompleted") {
-                      yield* offerSafe({
-                        _tag: "ToolCallCompleted",
-                        toolName: (event as any).toolName,
-                        callId: (event as any).callId,
-                        durationMs: (event as any).durationMs,
-                        success: (event as any).success,
-                      });
-                    }
-                  }),
-                );
-              }
+            // Fire AgentStreamStarted
+            if (eb) {
+              yield* eb.publish({
+                _tag: "AgentStreamStarted",
+                taskId: String(task.id),
+                agentId: config.agentId,
+                density,
+                timestamp: startMs,
+              } as AgentEvent).pipe(Effect.catchAll(() => Effect.void));
             }
 
-            // ── Fork execute with StreamingTextCallback FiberRef set ──
-            // Queue is shut down in Effect.ensuring — this terminates the stream
-            // when execution completes or errors. No Effect.scoped needed: the
-            // queue and fiber outlive this Effect and are cleaned up by the ensuring.
+            // Fork execution within the Effect context (services available).
+            // Events are pushed to the queue; no Queue.shutdown (preserves items).
             yield* Effect.locally(
               execute(task).pipe(
-                Effect.tap((taskResult) =>
-                  offerSafe({
+                Effect.tap((taskResult) => {
+                  const completedEvent: AgentStreamEvent = {
                     _tag: "StreamCompleted",
                     output: String((taskResult as any).output ?? ""),
                     metadata: (taskResult as any).metadata ?? {},
                     taskId: String(task.id),
                     agentId: String(task.agentId),
-                  }),
-                ),
-                Effect.catchAll((err: unknown) =>
-                  offerSafe({
-                    _tag: "StreamError",
-                    cause:
-                      typeof err === "object" &&
-                      err !== null &&
-                      "message" in err
-                        ? String((err as any).message)
-                        : String(err),
-                  }),
-                ),
-                Effect.ensuring(
-                  Effect.sync(() => {
-                    if (unsubFn) unsubFn();
-                  }).pipe(Effect.flatMap(() => Queue.shutdown(queue))),
-                ),
+                  };
+                  const offer = Queue.offer(queue, completedEvent);
+                  if (!eb) return offer;
+                  return offer.pipe(
+                    Effect.tap(() =>
+                      eb.publish({
+                        _tag: "AgentStreamCompleted",
+                        taskId: String(task.id),
+                        agentId: config.agentId,
+                        success: true,
+                        durationMs: Date.now() - startMs,
+                      } as AgentEvent).pipe(Effect.catchAll(() => Effect.void)),
+                    ),
+                  );
+                }),
+                Effect.catchAll((err: unknown) => {
+                  const cause =
+                    typeof err === "object" &&
+                    err !== null &&
+                    "message" in err
+                      ? String((err as any).message)
+                      : String(err);
+                  const errorEvent: AgentStreamEvent = { _tag: "StreamError", cause };
+                  const offer = Queue.offer(queue, errorEvent);
+                  if (!eb) return offer;
+                  return offer.pipe(
+                    Effect.tap(() =>
+                      eb.publish({
+                        _tag: "AgentStreamCompleted",
+                        taskId: String(task.id),
+                        agentId: config.agentId,
+                        success: false,
+                        durationMs: Date.now() - startMs,
+                      } as AgentEvent).pipe(Effect.catchAll(() => Effect.void)),
+                    ),
+                  );
+                }),
               ),
               StreamingTextCallback,
-              (text: string) => offerSafe({ _tag: "TextDelta", text }),
+              (text: string) =>
+                Queue.offer(queue, { _tag: "TextDelta", text }).pipe(
+                  Effect.map(() => {}),
+                ),
             ).pipe(Effect.forkDaemon);
 
-            return EStream.fromQueue(queue);
+            // Stream reads from queue, stops after terminal event.
+            return EStream.unfoldEffect(false as boolean, (done) => {
+              if (done) return Effect.succeed(Option.none());
+              return Queue.take(queue).pipe(
+                Effect.map((event) => {
+                  const isTerminal =
+                    event._tag === "StreamCompleted" ||
+                    event._tag === "StreamError";
+                  return Option.some([event, isTerminal] as const);
+                }),
+              );
+            });
           }),
       };
     }),
