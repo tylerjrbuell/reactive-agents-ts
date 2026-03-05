@@ -9,9 +9,9 @@
  * @param onSummary - Optional callback to log the shutdown summary
  */
 export function createSigtermHandler(
-  handle: { stop: () => Promise<Record<string, unknown>> },
+  handle: { stop: () => Promise<unknown> },
   dispose: () => Promise<void>,
-  onSummary?: (summary: Record<string, unknown>) => void,
+  onSummary?: (summary: unknown) => void,
 ): () => Promise<void> {
   return async () => {
     const summary = await handle.stop();
@@ -25,7 +25,7 @@ export function createSigtermHandler(
  * Call this after agent.start() in a containerized deployment.
  */
 export function registerShutdownHandlers(
-  handle: { stop: () => Promise<Record<string, unknown>> },
+  handle: { stop: () => Promise<unknown> },
   dispose: () => Promise<void>,
   options?: { log?: boolean },
 ): void {
