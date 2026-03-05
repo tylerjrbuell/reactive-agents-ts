@@ -19,7 +19,9 @@ export interface LLMCall {
 export function createMockLLM(rules: MockLLMRule[]) {
   const calls: LLMCall[] = [];
 
-  const findMatch = (text: string): { response: string; tokens?: number } | undefined => {
+  const findMatch = (
+    text: string,
+  ): { response: string; tokens?: number } | undefined => {
     for (const rule of rules) {
       if (typeof rule.match === "string") {
         if (text.includes(rule.match)) {
@@ -35,7 +37,10 @@ export function createMockLLM(rules: MockLLMRule[]) {
   };
 
   const service = {
-    complete: (request: { messages: readonly { role: string; content: unknown }[]; systemPrompt?: string }) =>
+    complete: (request: {
+      messages: readonly { role: string; content: unknown }[];
+      systemPrompt?: string;
+    }) =>
       Effect.gen(function* () {
         const lastMessage = request.messages[request.messages.length - 1];
         const content =
@@ -66,7 +71,9 @@ export function createMockLLM(rules: MockLLMRule[]) {
         } satisfies CompletionResponse;
       }),
 
-    stream: (request: { messages: readonly { role: string; content: unknown }[] }) =>
+    stream: (request: {
+      messages: readonly { role: string; content: unknown }[];
+    }) =>
       Effect.gen(function* () {
         const lastMessage = request.messages[request.messages.length - 1];
         const content =
@@ -97,8 +104,7 @@ export function createMockLLM(rules: MockLLMRule[]) {
         ) as Stream.Stream<StreamEvent, never>;
       }),
 
-    completeStructured: (_request: unknown) =>
-      Effect.succeed({} as never),
+    completeStructured: (_request: unknown) => Effect.succeed({} as never),
 
     embed: (texts: readonly string[]) =>
       Effect.succeed(texts.map(() => new Array(768).fill(0))),

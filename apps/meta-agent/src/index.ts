@@ -15,14 +15,19 @@
 import { ReactiveAgents, registerShutdownHandlers } from "reactive-agents";
 import { makeHealthService } from "@reactive-agents/health";
 import { Effect } from "effect";
-import { communityMonitorTool, communityMonitorHandler } from "./tools/community-monitor.js";
+import {
+  communityMonitorTool,
+  communityMonitorHandler,
+} from "./tools/community-monitor.js";
 import { draftWriterTool, draftWriterHandler } from "./tools/draft-writer.js";
 
 const isDryRun = process.argv.includes("--dry-run");
 const provider = process.env.ANTHROPIC_API_KEY ? "anthropic" : "test";
 
 console.log("=== Reactive Agents — Community Growth Agent ===");
-console.log(`Mode: ${isDryRun ? "DRY RUN" : provider === "anthropic" ? "LIVE" : "TEST"}\n`);
+console.log(
+  `Mode: ${isDryRun ? "DRY RUN" : provider === "anthropic" ? "LIVE" : "TEST"}\n`,
+);
 
 // ─── Build the agent ──────────────────────────────────────────────────────────
 
@@ -106,7 +111,8 @@ const agentBuilder = ReactiveAgents.create()
 const agent = await (provider === "test"
   ? agentBuilder
       .withTestResponses({
-        "Check developer": "FINAL ANSWER: Monitored communities. Found 2 relevant threads. Saved drafts.",
+        "Check developer":
+          "FINAL ANSWER: Monitored communities. Found 2 relevant threads. Saved drafts.",
         "": "FINAL ANSWER: Community check complete. No new opportunities found.",
       })
       .withMaxIterations(10)
@@ -139,7 +145,10 @@ const healthPort = parseInt(process.env.HEALTH_PORT ?? "3000");
 
 if (!isDryRun) {
   const health = await Effect.runPromise(
-    makeHealthService({ port: healthPort, agentName: "community-growth-agent" }),
+    makeHealthService({
+      port: healthPort,
+      agentName: "community-growth-agent",
+    }),
   );
   await Effect.runPromise(health.start());
   console.log(`Health server: http://localhost:${healthPort}/health\n`);

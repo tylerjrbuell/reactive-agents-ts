@@ -44,9 +44,7 @@ describe("HealthService", () => {
     );
     await Effect.runPromise(service.start());
 
-    const res = await fetch(
-      `http://localhost:${(service as any)._port}/ready`,
-    );
+    const res = await fetch(`http://localhost:${(service as any)._port}/ready`);
     expect(res.status).toBe(503);
 
     const body = await res.json();
@@ -65,9 +63,7 @@ describe("HealthService", () => {
     );
     await Effect.runPromise(service.start());
 
-    const res = await fetch(
-      `http://localhost:${(service as any)._port}/ready`,
-    );
+    const res = await fetch(`http://localhost:${(service as any)._port}/ready`);
     expect(res.status).toBe(200);
 
     const body = await res.json();

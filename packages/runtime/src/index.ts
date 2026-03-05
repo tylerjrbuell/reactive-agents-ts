@@ -47,7 +47,11 @@ export {
   ReactiveAgentBuilder,
   ReactiveAgent,
 } from "./builder.js";
-export type { AgentResult, AgentResultMetadata, AgentPersona } from "./builder.js";
+export type {
+  AgentResult,
+  AgentResultMetadata,
+  AgentPersona,
+} from "./builder.js";
 
 // ─── Streaming ───
 export type { AgentStreamEvent, StreamDensity } from "./stream-types.js";
