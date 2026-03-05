@@ -25,7 +25,7 @@
     "@reactive-agents/interaction": "workspace:^",
     "@reactive-agents/prompts": "workspace:^",
     "@reactive-agents/orchestration": "workspace:^",
-    "@reactive-agents/gateway": "workspace:^"
+    "@reactive-agents/gateway": "workspace:^",
     "@reactive-agents/a2a": "workspace:^"
   },
   "devDependencies": {
