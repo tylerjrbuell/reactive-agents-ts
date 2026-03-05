@@ -7,13 +7,13 @@ Contains the 10-phase `ExecutionEngine`, the `ReactiveAgentBuilder` fluent API, 
 ## Installation
 
 ```bash
-bun add @reactive-agents/runtime effect
+bun add @reactive-agents/runtime
 ```
 
 Or install everything at once (recommended for new projects):
 
 ```bash
-bun add reactive-agents effect
+bun add reactive-agents
 ```
 
 ## Usage

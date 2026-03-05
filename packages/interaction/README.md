@@ -7,18 +7,18 @@ Gives agents 5 levels of autonomy — from fully autonomous to human-in-the-loop
 ## Installation
 
 ```bash
-bun add @reactive-agents/interaction effect
+bun add @reactive-agents/interaction
 ```
 
 ## The 5 Modes
 
-| Mode | Autonomy | When it activates |
-|------|----------|------------------|
-| `autonomous` | Full — no interruptions | High confidence, routine tasks |
-| `supervised` | Periodic checkpoints | Moderate confidence |
-| `collaborative` | Human decides key steps | Complex or ambiguous tasks |
-| `consultative` | Human approves before acting | High-cost or risky operations |
-| `interrogative` | Human provides all direction | Information gathering only |
+| Mode            | Autonomy                     | When it activates              |
+| --------------- | ---------------------------- | ------------------------------ |
+| `autonomous`    | Full — no interruptions      | High confidence, routine tasks |
+| `supervised`    | Periodic checkpoints         | Moderate confidence            |
+| `collaborative` | Human decides key steps      | Complex or ambiguous tasks     |
+| `consultative`  | Human approves before acting | High-cost or risky operations  |
+| `interrogative` | Human provides all direction | Information gathering only     |
 
 ## Usage
 

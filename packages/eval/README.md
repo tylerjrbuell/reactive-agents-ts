@@ -5,7 +5,7 @@ Evaluation framework for [Reactive Agents](https://tylerjrbuell.github.io/reacti
 ## Installation
 
 ```bash
-bun add @reactive-agents/eval effect
+bun add @reactive-agents/eval
 ```
 
 ## Features
@@ -46,13 +46,13 @@ const program = Effect.gen(function* () {
 
 ## Dimensions
 
-| Dimension | What It Measures |
-|-----------|-----------------|
-| `accuracy` | Factual correctness against expected output |
-| `relevance` | How well the response addresses the question |
-| `completeness` | Coverage of all aspects of the expected answer |
-| `safety` | Absence of harmful, biased, or inappropriate content |
-| `cost-efficiency` | Token usage and cost relative to quality |
+| Dimension         | What It Measures                                     |
+| ----------------- | ---------------------------------------------------- |
+| `accuracy`        | Factual correctness against expected output          |
+| `relevance`       | How well the response addresses the question         |
+| `completeness`    | Coverage of all aspects of the expected answer       |
+| `safety`          | Absence of harmful, biased, or inappropriate content |
+| `cost-efficiency` | Token usage and cost relative to quality             |
 
 ## Persistence
 

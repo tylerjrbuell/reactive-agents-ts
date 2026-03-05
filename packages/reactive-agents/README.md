@@ -13,7 +13,7 @@ This is the **meta-package** — it re-exports everything from the 14 individual
 ## Installation
 
 ```bash
-bun add reactive-agents effect
+bun add reactive-agents
 ```
 
 ## Quick Start
@@ -42,29 +42,29 @@ ANTHROPIC_API_KEY=sk-ant-...   # or OPENAI_API_KEY for OpenAI
 
 ## What's Included
 
-| Sub-package | Exported as |
-|-------------|-------------|
-| `@reactive-agents/runtime` | `ReactiveAgents`, `createRuntime` |
-| `@reactive-agents/core` | `AgentService`, `EventBus`, ... |
-| `@reactive-agents/llm-provider` | `createLLMLayer` |
-| `@reactive-agents/memory` | `createMemoryLayer` |
-| `@reactive-agents/reasoning` | `createReasoningLayer` |
-| `@reactive-agents/tools` | `createToolsLayer` |
-| `@reactive-agents/guardrails` | `createGuardrailsLayer` |
-| `@reactive-agents/verification` | `createVerificationLayer` |
-| `@reactive-agents/cost` | `createCostLayer` |
-| `@reactive-agents/identity` | `createIdentityLayer` |
-| `@reactive-agents/observability` | `createObservabilityLayer` |
-| `@reactive-agents/interaction` | `createInteractionLayer` |
-| `@reactive-agents/orchestration` | `createOrchestrationLayer` |
-| `@reactive-agents/prompts` | `createPromptsLayer` |
+| Sub-package                      | Exported as                       |
+| -------------------------------- | --------------------------------- |
+| `@reactive-agents/runtime`       | `ReactiveAgents`, `createRuntime` |
+| `@reactive-agents/core`          | `AgentService`, `EventBus`, ...   |
+| `@reactive-agents/llm-provider`  | `createLLMLayer`                  |
+| `@reactive-agents/memory`        | `createMemoryLayer`               |
+| `@reactive-agents/reasoning`     | `createReasoningLayer`            |
+| `@reactive-agents/tools`         | `createToolsLayer`                |
+| `@reactive-agents/guardrails`    | `createGuardrailsLayer`           |
+| `@reactive-agents/verification`  | `createVerificationLayer`         |
+| `@reactive-agents/cost`          | `createCostLayer`                 |
+| `@reactive-agents/identity`      | `createIdentityLayer`             |
+| `@reactive-agents/observability` | `createObservabilityLayer`        |
+| `@reactive-agents/interaction`   | `createInteractionLayer`          |
+| `@reactive-agents/orchestration` | `createOrchestrationLayer`        |
+| `@reactive-agents/prompts`       | `createPromptsLayer`              |
 
 ## Modular Install
 
 Prefer installing only what you need? Use the individual scoped packages:
 
 ```bash
-bun add @reactive-agents/core @reactive-agents/runtime @reactive-agents/llm-provider effect
+bun add @reactive-agents/core @reactive-agents/runtime @reactive-agents/llm-provider
 ```
 
 ## Documentation

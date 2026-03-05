@@ -7,7 +7,7 @@ Coordinate fleets of agents in parallel or sequential workflows, with typed mess
 ## Installation
 
 ```bash
-bun add @reactive-agents/orchestration effect
+bun add @reactive-agents/orchestration
 ```
 
 ## Features
@@ -32,7 +32,9 @@ const workflow = createOrchestration({
   ],
 });
 
-const result = await workflow.run({ query: "Latest advances in fusion energy" });
+const result = await workflow.run({
+  query: "Latest advances in fusion energy",
+});
 ```
 
 ## Documentation

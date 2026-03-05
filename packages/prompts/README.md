@@ -7,7 +7,7 @@ A template engine with variable interpolation and a built-in library of agent pr
 ## Installation
 
 ```bash
-bun add @reactive-agents/prompts effect
+bun add @reactive-agents/prompts
 ```
 
 ## Features
@@ -42,7 +42,7 @@ import { ReactiveAgents } from "reactive-agents";
 const agent = await ReactiveAgents.create()
   .withName("researcher")
   .withProvider("anthropic")
-  .withPrompts()          // registers all built-in templates
+  .withPrompts() // registers all built-in templates
   .build();
 
 // Or register custom templates at build time:
@@ -50,16 +50,23 @@ const customAgent = await ReactiveAgents.create()
   .withName("custom")
   .withProvider("anthropic")
   .withPrompts({
-    templates: [{
-      id: "custom.system",
-      name: "Custom System Prompt",
-      version: 1,
-      template: "You are a {{role}} expert. Answer in {{language}}.",
-      variables: [
-        { name: "role", required: true, type: "string" },
-        { name: "language", required: false, type: "string", defaultValue: "English" },
-      ],
-    }],
+    templates: [
+      {
+        id: "custom.system",
+        name: "Custom System Prompt",
+        version: 1,
+        template: "You are a {{role}} expert. Answer in {{language}}.",
+        variables: [
+          { name: "role", required: true, type: "string" },
+          {
+            name: "language",
+            required: false,
+            type: "string",
+            defaultValue: "English",
+          },
+        ],
+      },
+    ],
   })
   .build();
 ```

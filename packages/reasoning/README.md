@@ -7,18 +7,18 @@ Adds structured thinking to agents via ReAct, Plan-Execute, Tree-of-Thought, and
 ## Installation
 
 ```bash
-bun add @reactive-agents/reasoning effect
+bun add @reactive-agents/reasoning
 ```
 
 ## Strategies
 
-| Strategy | Description | LLM Calls | Best For |
-|----------|-------------|-----------|----------|
-| `reactive` | ReAct: Think → Act → Observe loop | 1/iteration | Tool-using agents |
-| `plan-execute-reflect` | Plan all steps, then execute | 2+ | Multi-step tasks |
-| `tree-of-thought` | Explore multiple branches | 3× breadth/depth | Complex reasoning |
-| `reflexion` | Generate → Critique → Improve loop | 3/retry | Quality-critical output |
-| `adaptive` | Analyze task → auto-select best strategy | 1 + delegated | Mixed workloads |
+| Strategy               | Description                              | LLM Calls        | Best For                |
+| ---------------------- | ---------------------------------------- | ---------------- | ----------------------- |
+| `reactive`             | ReAct: Think → Act → Observe loop        | 1/iteration      | Tool-using agents       |
+| `plan-execute-reflect` | Plan all steps, then execute             | 2+               | Multi-step tasks        |
+| `tree-of-thought`      | Explore multiple branches                | 3× breadth/depth | Complex reasoning       |
+| `reflexion`            | Generate → Critique → Improve loop       | 3/retry          | Quality-critical output |
+| `adaptive`             | Analyze task → auto-select best strategy | 1 + delegated    | Mixed workloads         |
 
 ## Usage
 
@@ -28,7 +28,7 @@ import { ReactiveAgents } from "reactive-agents";
 const agent = await ReactiveAgents.create()
   .withName("researcher")
   .withProvider("anthropic")
-  .withReasoning()  // defaults to ReAct
+  .withReasoning() // defaults to ReAct
   .build();
 
 const result = await agent.run("Analyze the trade-offs between TCP and UDP");
@@ -54,8 +54,8 @@ import { ReactiveAgents } from "reactive-agents";
 const agent = await ReactiveAgents.create()
   .withName("researcher")
   .withProvider("anthropic")
-  .withReasoning()      // ReAct strategy
-  .withTools()          // built-in tools available during reasoning
+  .withReasoning() // ReAct strategy
+  .withTools() // built-in tools available during reasoning
   .build();
 
 const result = await agent.run("What are the latest AI developments?");
@@ -95,7 +95,7 @@ const result = await Effect.runPromise(
         planExecute: { maxRefinements: 2, reflectionDepth: "deep" },
         treeOfThought: { breadth: 3, depth: 3, pruningThreshold: 0.5 },
         reflexion: {
-          maxRetries: 3,             // Max critique-improve cycles
+          maxRetries: 3, // Max critique-improve cycles
           selfCritiqueDepth: "deep", // "shallow" | "deep"
         },
       },

@@ -7,26 +7,26 @@ Provides the foundational building blocks that all other packages depend on: the
 ## Installation
 
 ```bash
-bun add @reactive-agents/core effect
+bun add @reactive-agents/core
 ```
 
 Or install everything at once:
 
 ```bash
-bun add reactive-agents effect
+bun add reactive-agents
 ```
 
 ## What's Included
 
-| Export | Description |
-|--------|-------------|
-| `EventBusLive` | Publish/subscribe event bus layer |
-| `AgentServiceLive` | Create and manage agent instances |
-| `TaskServiceLive` | Create, track, and cancel tasks |
-| `CoreServicesLive` | Composite layer wiring all three above |
-| `AgentId`, `TaskId` | Branded ID types |
-| `AgentConfig`, `TaskInput` | Validated schemas |
-| `AgentError`, `TaskError` | Tagged error types |
+| Export                     | Description                            |
+| -------------------------- | -------------------------------------- |
+| `EventBusLive`             | Publish/subscribe event bus layer      |
+| `AgentServiceLive`         | Create and manage agent instances      |
+| `TaskServiceLive`          | Create, track, and cancel tasks        |
+| `CoreServicesLive`         | Composite layer wiring all three above |
+| `AgentId`, `TaskId`        | Branded ID types                       |
+| `AgentConfig`, `TaskInput` | Validated schemas                      |
+| `AgentError`, `TaskError`  | Tagged error types                     |
 
 ## Usage
 
@@ -41,7 +41,7 @@ const program = Effect.gen(function* () {
 });
 
 const result = await Effect.runPromise(
-  program.pipe(Effect.provide(CoreServicesLive))
+  program.pipe(Effect.provide(CoreServicesLive)),
 );
 ```
 
