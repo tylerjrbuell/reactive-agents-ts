@@ -14,14 +14,16 @@ import { FiberRef, Effect } from "effect";
  *
  * @example
  * ```typescript
- * import { FiberRef } from "effect";
+ * import { Effect } from "effect";
  * import { StreamingTextCallback } from "@reactive-agents/core";
  *
  * // Set the callback before running execution:
  * await Effect.runPromise(
- *   FiberRef.locally(StreamingTextCallback, (text) =>
- *     Queue.offer(myQueue, { _tag: "TextDelta", text })
- *   )(myExecutionEffect)
+ *   Effect.locally(
+ *     myExecutionEffect,
+ *     StreamingTextCallback,
+ *     (text) => Queue.offer(myQueue, { _tag: "TextDelta", text }),
+ *   )
  * );
  * ```
  */
