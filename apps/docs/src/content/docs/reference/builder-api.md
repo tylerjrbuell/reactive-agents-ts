@@ -113,6 +113,7 @@ See [Context Engineering](/guides/context-engineering/) for full tier defaults.
 | `withOrchestration()` | Multi-agent workflow coordination |
 | `withSelfImprovement()` | Cross-task self-improvement: logs `StrategyOutcome` per task and retrieves relevant past outcomes at bootstrap to guide strategy selection |
 | `withAudit()` | Compliance audit trail logging |
+| `withEvents()` | Enable typed EventBus subscriptions via `agent.subscribe()` |
 | `withGateway(options?)` | Persistent autonomous gateway: adaptive heartbeats, cron scheduling, webhook ingestion, policy engine. Options: `{ heartbeat?: HeartbeatConfig, crons?: CronEntry[], webhooks?: WebhookConfig[], policies?: PolicyConfig }` |
 
 ### A2A Protocol

@@ -16,6 +16,20 @@
         const svgDoc = parser.parseFromString(svgText, 'image/svg+xml');
         const svg = svgDoc.documentElement as unknown as SVGSVGElement;
 
+        // Add a small viewport margin so glow/filter edges aren't clipped
+        const rawViewBox = svg.getAttribute('viewBox');
+        if (rawViewBox) {
+          const parts = rawViewBox
+            .trim()
+            .split(/\s+/)
+            .map((n) => Number(n));
+          if (parts.length === 4 && parts.every((n) => Number.isFinite(n))) {
+            const [minX, minY, width, height] = parts;
+            const pad = 2;
+            svg.setAttribute('viewBox', `${minX - pad} ${minY - pad} ${width + pad * 2} ${height + pad * 2}`);
+          }
+        }
+
         // Fill the hero image container; let Starlight's CSS control dimensions
         svg.removeAttribute('width');
         svg.removeAttribute('height');

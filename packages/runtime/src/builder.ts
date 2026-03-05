@@ -1,4 +1,4 @@
-import { Effect, Layer, Schema, ManagedRuntime } from "effect";
+import { Effect, Layer, Schema, ManagedRuntime, Stream as EStream } from "effect";
 import { createRuntime } from "./runtime.js";
 import type { MCPServerConfig } from "./runtime.js";
 import { ExecutionEngine } from "./execution-engine.js";
@@ -21,6 +21,8 @@ import { generateTaskId, AgentId } from "@reactive-agents/core";
 import type { AgentEvent } from "@reactive-agents/core";
 import { EventBus } from "@reactive-agents/core";
 import { KillSwitchService } from "@reactive-agents/guardrails";
+import type { AgentStreamEvent, StreamDensity } from "./stream-types.js";
+import { AgentStream } from "./agent-stream.js";
 
 // ─── Provider Types ──────────────────────────────────────────────────────────
 
@@ -543,6 +545,7 @@ export class ReactiveAgentBuilder {
   private _behavioralContract?: import("@reactive-agents/guardrails").BehavioralContract;
   private _enableSelfImprovement: boolean = false;
   private _enableEvents: boolean = false;
+  private _streamDensity?: StreamDensity;
 
   // ─── Identity ───
 
@@ -974,6 +977,17 @@ export class ReactiveAgentBuilder {
   }
 
   /**
+   * Configure default streaming density for `agent.runStream()` calls.
+   *
+   * @param options.density - `"tokens"` (default) for TextDelta only, `"full"` for all events
+   * @returns `this` for chaining
+   */
+  withStreaming(options?: { density?: StreamDensity }): this {
+    this._streamDensity = options?.density ?? "tokens";
+    return this;
+  }
+
+  /**
    * Enable interactive collaboration — approval gates and user feedback loops.
    *
    * Allows the agent to pause and request human approval for critical operations.
@@ -1327,6 +1341,7 @@ export class ReactiveAgentBuilder {
     const dynamicSubAgentOptions = this._dynamicSubAgentOptions;
     const parentProvider = this._provider;
     const parentModel = this._model;
+    const streamDensity = this._streamDensity;
 
     return Effect.gen(function* () {
       const engine = yield* ExecutionEngine.pipe(Effect.provide(baseRuntime));
@@ -1753,6 +1768,7 @@ export class ReactiveAgentBuilder {
         !!gatewayOptions,
         gatewayOptions?.heartbeat?.intervalMs,
         !!gatewayOptions?.heartbeat?.instruction,
+        streamDensity,
       );
     }) as Effect.Effect<ReactiveAgent, Error>;
   }
@@ -1785,6 +1801,10 @@ export class ReactiveAgent {
       execute: (
         task: Task,
       ) => Effect.Effect<TaskResult, RuntimeErrors | TaskError>;
+      executeStream: (
+        task: Task,
+        options?: { density?: StreamDensity },
+      ) => Effect.Effect<EStream.Stream<AgentStreamEvent, Error>>;
       cancel: (taskId: string) => Effect.Effect<void, RuntimeErrors>;
       getContext: (
         taskId: string,
@@ -1805,6 +1825,8 @@ export class ReactiveAgent {
     private readonly _gatewayIntervalMs: number = 60_000,
     /** @internal Whether a custom heartbeat instruction was configured. */
     private readonly _hasCustomHeartbeatInstruction: boolean = false,
+    /** @internal Default stream density set via `.withStreaming()`. */
+    private readonly _defaultStreamDensity?: StreamDensity,
   ) {}
 
   /**
@@ -1931,6 +1953,48 @@ export class ReactiveAgent {
         ) as Effect.Effect<AgentResult, Error>,
       ),
     );
+  }
+
+  /**
+   * Execute a task and return a stream of events.
+   *
+   * Returns an AsyncIterable that yields `AgentStreamEvent` objects as the agent works.
+   * Text tokens arrive as `TextDelta` events. The stream always ends with either
+   * `StreamCompleted` (success) or `StreamError` (failure).
+   *
+   * @param input - The task prompt or question
+   * @param options - Optional streaming configuration
+   * @param options.density - `"tokens"` (default) for text deltas only, `"full"` for phase/tool events too
+   * @returns AsyncIterable of AgentStreamEvent
+   * @example
+   * ```typescript
+   * for await (const event of agent.runStream("Write a haiku")) {
+   *   if (event._tag === "TextDelta") process.stdout.write(event.text);
+   *   if (event._tag === "StreamCompleted") console.log("\nDone!");
+   * }
+   * ```
+   */
+  async *runStream(
+    input: string,
+    options?: { density?: StreamDensity },
+  ): AsyncGenerator<AgentStreamEvent> {
+    const task: Task = {
+      id: generateTaskId(),
+      agentId: Schema.decodeSync(AgentId)(this.agentId),
+      type: "query" as const,
+      input: { question: input },
+      priority: "medium" as const,
+      status: "pending" as const,
+      metadata: { tags: [] },
+      createdAt: new Date(),
+    };
+
+    const density = options?.density ?? this._defaultStreamDensity ?? "tokens";
+    const stream = await this.runtime.runPromise(
+      this.engine.executeStream(task, { density }),
+    );
+
+    yield* AgentStream.toAsyncIterable(stream);
   }
 
   /**

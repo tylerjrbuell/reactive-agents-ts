@@ -1,0 +1,98 @@
+---
+title: Agent Skills
+description: Publish reusable Reactive Agents implementation skills from this docs site via well-known discovery endpoints.
+---
+
+import SkillsMarkdownLinks from "../../../components/SkillsMarkdownLinks.astro";
+
+This docs site now publishes Agent Skills so coding agents can discover reusable implementation playbooks directly from your docs URL.
+
+- Open the live skills index: [/.well-known/skills/index.json](/.well-known/skills/index.json)
+
+## What gets published
+
+At build time, the docs generate:
+
+- `/.well-known/skills/index.json` — skill index
+- `/.well-known/skills/<skill-name>/SKILL.md` — canonical skill file
+
+## Current published skills (dynamic)
+
+The list below is generated from the live `skills` collection at build time, and each link points to the published markdown endpoint:
+
+<SkillsMarkdownLinks />
+
+## Where skills live
+
+Skills are stored in:
+
+- `apps/docs/skills/<skill-name>/SKILL.md`
+
+Current example:
+
+- `apps/docs/skills/reactive-agents-framework/SKILL.md`
+
+## Skill format
+
+Each `SKILL.md` must include frontmatter fields:
+
+- `name` (string)
+- `description` (string)
+
+Example:
+
+```md
+---
+name: reactive-agents-framework
+description: Design and implement production-grade TypeScript AI agents using Reactive Agents.
+---
+
+# Reactive Agents Framework Skill
+
+...
+```
+
+## How this is wired
+
+The docs app uses:
+
+- `astro-skills` integration for discovery routes
+- A Starlight-safe custom content loader for the `skills` collection
+
+Key files:
+
+- `apps/docs/astro.config.mjs`
+- `apps/docs/src/content/config.ts`
+- `apps/docs/src/content/skills-loader.ts`
+
+## Validate locally
+
+Build docs:
+
+```bash
+bun run docs:build
+```
+
+Verify generated outputs:
+
+```bash
+cd apps/docs
+find dist -maxdepth 8 -type f | grep '.well-known/skills' | sort
+cat dist/.well-known/skills/index.json
+```
+
+You should see entries like:
+
+- `dist/.well-known/skills/index.json`
+- `dist/.well-known/skills/reactive-agents-framework/SKILL.md`
+
+## Add a new skill
+
+1. Create a new folder under `apps/docs/skills/` using kebab-case (for example, `reasoning-optimization`).
+2. Add `SKILL.md` with valid `name` + `description` frontmatter.
+3. Rebuild docs.
+4. Confirm the new skill appears in `dist/.well-known/skills/index.json`.
+
+## Why this matters
+
+This lets external agents consume implementation guidance that matches Reactive Agents architecture and conventions, directly from the public docs.

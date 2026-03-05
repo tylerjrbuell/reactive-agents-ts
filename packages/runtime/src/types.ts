@@ -301,6 +301,8 @@ export const ReactiveAgentsConfigSchema = Schema.Struct({
       codeTransform: Schema.optional(Schema.Boolean),
     })
   ),
+  /** Default stream density for runStream() — "tokens" emits only TextDelta, "full" emits all events */
+  streamDensity: Schema.optional(Schema.Literal("tokens", "full")),
 });
 export type ReactiveAgentsConfig = typeof ReactiveAgentsConfigSchema.Type;
 
