@@ -8,9 +8,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 
 ## [0.6.0] - 2026-03-04
 
-Gateway persistent agent harness, Composable Kernel Architecture (ThoughtKernel abstraction, KernelRunner, custom kernel registration), and Structured Plan Engine (type-safe JSON plans, 4-layer output pipeline, SQLite plan persistence). 19 packages, 1,353 tests.
+Agent Streaming, Gateway persistent agent harness, Composable Kernel Architecture, Structured Plan Engine, Strategy SDK Refactor, Foundation Fixes, documentation pass with 13 agent skills. 20 packages bumped to 0.6.0, 1,381 tests across 180 files.
 
 ### Added
+
+#### Agent Streaming (`@reactive-agents/runtime` + `@reactive-agents/core`)
+
+Token-by-token output streaming via `runStream()` AsyncGenerator with FiberRef-based TextDelta propagation:
+
+- **`stream-types.ts`** — `AgentStreamEvent` 8-variant discriminated union, `StreamDensity` type (`"tokens"` | `"full"`)
+- **`agent-stream.ts`** — `AgentStream` adapter namespace: `toSSE()` (Response with auto-close), `toReadableStream()`, `toAsyncIterable()`, `collect()` (stream → AgentResult)
+- **`StreamingTextCallback` FiberRef** — Fiber-local callback set via `Effect.locally` in `executeStream()`, read by react-kernel during LLM streaming
+- **`executeStream()` on ExecutionEngine** — Queue + forkDaemon architecture: unbounded queue bridges execution fiber to consumer, `Stream.unfoldEffect` yields events
+- **`.withStreaming()` builder method** — Sets default density; per-call override via `runStream(input, { density })`
+- **`AgentStreamStarted` / `AgentStreamCompleted`** EventBus events with density, taskId, agentId, durationMs
+
+#### Documentation & Skills Discovery
+
+- **Streaming docs page** — `apps/docs/src/content/docs/features/streaming.md` covering events, density modes, adapters, architecture
+- **13 agent skills** — Discoverable at `/.well-known/skills/` via Astro integration: streaming, gateway, a2a, reasoning, memory, observability, orchestration, context-engineering, cost, identity, mcp, verification, framework overview
+- **Skills loader** — `apps/docs/src/content/skills-loader.ts` + Astro config integration for auto-discovery
+- **New guides** — choosing-a-stack, security-hardening, troubleshooting, agent-skills
 
 #### Composable Kernel Architecture (`@reactive-agents/reasoning`)
 
@@ -87,12 +105,6 @@ Cross-cutting output sanitization prevents internal agent metadata from reaching
 - **Synthesis prompt hardened** — Explicitly instructs LLM to exclude tool names, JSON payloads, recipient numbers, and execution metadata from final answer
 - **17 new tests** covering sanitization patterns, integration with `buildStrategyResult`, and edge cases
 
----
-
-## [Phase A Foundation Fixes]
-
-### Added
-
 #### Strategy Type Threading (`@reactive-agents/reasoning`)
 
 Full type-safe parameter threading from execution engine through all 5 reasoning strategies:
@@ -132,15 +144,6 @@ Reusable test infrastructure for agent testing:
 - `@reactive-agents/reasoning`: `ReasoningService.execute` params extended with `taskId`, `resultCompression`, `agentId`, `sessionId`
 - `@reactive-agents/verification`: `VerificationConfigSchema` extended with `enableHallucinationDetection`, `hallucinationThreshold`
 
-### Stats
-- 1179 tests across 160 files (was 1116/156 before Phase A, +63 new tests)
-
----
-
-## [Unreleased — Prior] — Strategy SDK Refactor
-
-### Added
-
 #### Shared Reasoning Kernel (`@reactive-agents/reasoning`)
 
 Extracted a shared execution primitive and utility library from the 5 reasoning strategy files:
@@ -167,16 +170,10 @@ All 5 strategies are now tool-aware:
 
 `availableToolSchemas?: readonly ToolSchema[]` added to `ReflexionInput`, `PlanExecuteInput`, `TreeOfThoughtInput`, `AdaptiveInput`.
 
-### Changed
-
 - `@reactive-agents/reasoning`: `reactive.ts` — removed private duplicates (`hasFinalAnswer`, `extractFinalAnswer`, `parseToolRequest*`, `formatStepForContext`, `buildCompactedContext`, `compilePromptOrFallback`, local `ToolSchema`/`ToolParamSchema`), replaced with shared imports. Re-exports `evaluateTransform` and `parseToolRequestWithTransform` for backwards compat.
 - `@reactive-agents/reasoning`: `reflexion.ts`, `plan-execute.ts`, `tree-of-thought.ts` — removed local copies of `isSatisfied`, `isCritiqueStagnant`, `compilePromptOrFallback`, `buildResult`; all `tot*` duplicate parsing functions removed.
 - `@reactive-agents/reasoning`: `adaptive.ts` — replaced boilerplate with shared utils.
 - `compressToolResult` + `nextToolResultKey` consolidated into `shared/tool-utils.ts` — previously live in `reactive.ts` and duplicated in `react-kernel.ts`.
-
-### Stats
-- 1116 tests across 156 files (was 1001/139 in v0.5.6, +115 new tests)
-- Feature gap analysis: `spec/plans/2026-03-01-feature-gap-analysis.md` — 8 gaps documented for v0.5.7 planning
 
 ---
 

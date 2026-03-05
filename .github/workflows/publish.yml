@@ -82,8 +82,11 @@ jobs:
           TAG="${GITHUB_REF_NAME}"
           VERSION="${TAG#v}"
 
-          awk "/^## \\[${VERSION}\\]/,/^## \\[/ { print }" CHANGELOG.md \
-            | sed '$d' > release-notes.md
+          awk -v ver="$VERSION" '
+            $0 ~ "^## \\[" ver "\\]" { found=1 }
+            found && /^## \[/ && !($0 ~ "^## \\[" ver "\\]") { exit }
+            found { print }
+          ' CHANGELOG.md > release-notes.md
 
           if [[ ! -s release-notes.md ]]; then
             echo "No CHANGELOG section found for version ${VERSION}."
