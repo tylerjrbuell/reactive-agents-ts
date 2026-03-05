@@ -8,9 +8,9 @@ import type { ToolDefinition } from "reactive-agents/tools";
 export const communityMonitorTool: ToolDefinition = {
   name: "community-monitor",
   description:
-    "Search Hacker News, Reddit, and dev.to for TypeScript AI agent framework discussions. " +
-    "Returns threads where reactive-agents could be genuinely relevant and helpful to mention. " +
-    "Use this during heartbeat to find new opportunities.",
+    "Configure the search scope for TypeScript AI agent framework discussions on Hacker News, " +
+    "Reddit, and dev.to. Returns search terms, target platforms, and instructions for the " +
+    "web-search tool to follow. Use this during heartbeat to find new opportunities.",
   inputSchema: {
     type: "object",
     properties: {

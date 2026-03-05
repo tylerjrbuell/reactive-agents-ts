@@ -27,10 +27,12 @@ Built with: reactive-agents + Bun.serve
 ```
 Persistent autonomous agents on @bunjavascript — no server needed:
 
-await agent.withGateway({
-  heartbeat: { intervalMs: 3_600_000 },
-  crons: [{ schedule: "0 9 * * MON", instruction: "..." }],
-}).build().start()
+const agent = await ReactiveAgents.create()
+  .withGateway({
+    heartbeat: { intervalMs: 3_600_000 },
+    crons: [{ schedule: "0 9 * * MON", instruction: "..." }],
+  }).build();
+agent.start();
 
 Runs forever, adaptive heartbeat, budget enforcement, webhooks.
 Source: https://github.com/tylerjrbuell/reactive-agents-ts

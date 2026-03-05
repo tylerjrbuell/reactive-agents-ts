@@ -99,9 +99,9 @@ There is something clarifying about your framework eating its own cooking at thi
 
 ## Where It Goes Next
 
-The current project on the roadmap is the Scout Layer: collective learning across agent runs. The idea is that individual agents share patterns — successful reasoning traces, tool call results, verified facts — via a shared experience pool. Each agent gets smarter from runs it wasn't part of.
+On the longer-term roadmap is collective learning across agent runs — the idea that individual agents can share successful reasoning traces, verified facts, and tool call patterns via a shared experience pool. Each agent gets smarter from runs it wasn't part of.
 
-That's built on the same Layer architecture. Plug in the Scout Layer, and existing agents start benefiting from collective experience without code changes.
+That design would follow the same Layer architecture. A new package, opt-in, no code changes required in existing agents.
 
 ## Try It
 
