@@ -524,6 +524,39 @@ describe("TaskResult shape contracts", () => {
     expect(result.metadata.duration).toBeGreaterThanOrEqual(0);
   });
 
+  it("result.metadata.confidence reflects reasoning strategy confidence", async () => {
+    const { engineLayer } = makeEngine();
+    // Custom reasoning mock that includes confidence in metadata
+    const reasoningLayer = Layer.succeed(
+      Context.GenericTag<{
+        execute: (params: unknown) => Effect.Effect<{
+          output: unknown;
+          status: string;
+          steps?: readonly { id: string; type: string; content: string }[];
+          metadata: { cost: number; tokensUsed: number; stepsCount: number; confidence: number };
+        }>;
+      }>("ReasoningService"),
+      {
+        execute: (_params: unknown) =>
+          Effect.succeed({
+            output: "Completed answer",
+            status: "completed",
+            steps: [{ id: "s1", type: "thought", content: "thinking" }],
+            metadata: { cost: 0.001, tokensUsed: 200, stepsCount: 1, confidence: 0.8 },
+          }),
+      },
+    );
+    const testLayer = Layer.mergeAll(engineLayer, reasoningLayer);
+
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        return yield* (yield* ExecutionEngine).execute(mockTask());
+      }).pipe(Effect.provide(testLayer)),
+    );
+
+    expect(result.metadata.confidence).toBe(0.8);
+  });
+
   it("result.agentId matches the configured agent", async () => {
     const { engineLayer } = makeEngine();
     const llmLayer = makeMockLLM({ content: "FINAL ANSWER: done" });

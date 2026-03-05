@@ -1,6 +1,6 @@
 {
   "name": "reactive-agents",
-  "version": "0.5.6",
+  "version": "0.6.0",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -14,7 +14,15 @@
     "ai-agents",
     "autonomous-agents",
     "react-loop",
-    "guardrails"
+    "guardrails",
+    "agent-framework",
+    "multi-agent",
+    "mcp",
+    "model-context-protocol",
+    "ollama",
+    "a2a",
+    "observability",
+    "reasoning"
   ],
   "scripts": {
     "build": "tsup",

@@ -27,6 +27,8 @@ export const StepMetadataSchema = Schema.Struct({
   cost: Schema.optional(Schema.Number),
   duration: Schema.optional(Schema.Number),
   observationResult: Schema.optional(ObservationResultSchema),
+  /** Internal reasoning from thinking models (e.g. <think> blocks) */
+  thinking: Schema.optional(Schema.String),
 });
 export type StepMetadata = typeof StepMetadataSchema.Type;
 

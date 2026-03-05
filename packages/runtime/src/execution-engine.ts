@@ -1,4 +1,4 @@
-import { Effect, Context, Layer, Ref, Option } from "effect";
+import { Effect, Context, Layer, Ref, Option, Queue, Stream as EStream } from "effect";
 import type { ExecutionContext, ReactiveAgentsConfig } from "./types.js";
 import {
   ExecutionError,
@@ -10,6 +10,9 @@ import {
 } from "./errors.js";
 import { LifecycleHookRegistry } from "./hooks.js";
 import type { LifecycleHook } from "./types.js";
+
+import type { AgentStreamEvent, StreamDensity } from "./stream-types.js";
+import { StreamingTextCallback } from "@reactive-agents/core";
 
 // Import from other packages (type-only to avoid circular deps at runtime)
 import type { Task, TaskResult } from "@reactive-agents/core";
@@ -62,8 +65,53 @@ export class ExecutionEngine extends Context.Tag("ExecutionEngine")<
     ) => Effect.Effect<ExecutionContext | null, never>;
 
     readonly cancel: (taskId: string) => Effect.Effect<void, ExecutionError>;
+
+    readonly executeStream: (
+      task: Task,
+      options?: { density?: StreamDensity },
+    ) => Effect.Effect<EStream.Stream<AgentStreamEvent, Error>>;
   }
 >() {}
+
+// ─── Output Sanitization (safety net) ───
+
+/**
+ * Strip internal agent metadata from output before it reaches the user.
+ * This is a safety net — strategies should sanitize their own output, but
+ * this catches anything that slips through.
+ */
+function sanitizeOutput(text: string): string {
+  if (!text || text.length === 0) return text;
+  let result = text;
+  // Strip <think>...</think> tags
+  result = result.replace(/<think>[\s\S]*?<\/think>/gi, "");
+  // Strip "FINAL ANSWER:" prefix
+  result = result.replace(/^FINAL ANSWER:\s*/i, "");
+  // Strip internal step markers
+  result = result.replace(/^\[(?:STEP \d+\/\d+|EXEC s\d+|SYNTHESIS|REFLECT \d+|SKIP s\d+|PATCH)\]\s*/gim, "");
+  // Strip ReAct protocol prefixes at line start
+  result = result.replace(/^(?:Thought|Action|Action Input|Observation):\s*/gim, "");
+  // Strip tool call echo lines: "tool/name: {json}"
+  result = result.replace(/^[\w\-]+\/[\w\-]+:\s*\{[^}]*\}\s*$/gm, "");
+  // Strip lines that are just raw JSON with internal keys
+  result = result.replace(/^\s*\{\s*"(?:recipient|toolName|callId|stepId|_tag)"[^}]*\}\s*$/gm, "");
+  // Collapse multiple blank lines
+  result = result.replace(/\n{3,}/g, "\n\n");
+  return result.trim();
+}
+
+/**
+ * Extract plain-text task description from task.input.
+ * Handles both `{ question: "..." }` objects and raw strings.
+ */
+function extractTaskText(input: unknown): string {
+  if (typeof input === "string") return input;
+  if (typeof input === "object" && input !== null) {
+    const q = (input as Record<string, unknown>).question;
+    if (typeof q === "string") return q;
+  }
+  return JSON.stringify(input);
+}
 
 // ─── Live Implementation ───
 
@@ -230,6 +278,9 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
             const isNormal = verbosity !== "minimal";
             const isVerbose = verbosity === "verbose" || verbosity === "debug";
             const isDebug = verbosity === "debug";
+            // logModelIO: explicit opt-in/out for full prompt/response dumps.
+            // Default: true when debug, false otherwise.
+            const logModelIO = config.logModelIO ?? isDebug;
 
             // ── Phase 0.2: Acquire EventBus optionally ──
             const ebOpt = yield* Effect.serviceOption(EventBus).pipe(
@@ -381,10 +432,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       );
 
                       if (guardrailOpt._tag === "Some") {
-                        const inputText = String(
-                          (task.input as any).question ??
-                            JSON.stringify(task.input),
-                        );
+                        const inputText = extractTaskText(task.input);
                         const result = yield* guardrailOpt.value
                           .check(inputText)
                           .pipe(
@@ -442,10 +490,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       );
 
                       if (costOpt._tag === "Some") {
-                        const taskDescription = String(
-                          (task.input as any).question ??
-                            JSON.stringify(task.input),
-                        );
+                        const taskDescription = extractTaskText(task.input);
                         const modelConfig = yield* costOpt.value
                           .routeToModel(taskDescription)
                           .pipe(
@@ -488,7 +533,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         ? yield* selectorOpt.value
                             .select(
                               {
-                                taskDescription: JSON.stringify(task.input),
+                                taskDescription: extractTaskText(task.input),
                                 taskType: task.type,
                                 complexity: 0.5,
                                 urgency: 0.5,
@@ -532,6 +577,8 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       systemPrompt?: string;
                       taskId?: string;
                       resultCompression?: { budget?: number; previewItems?: number; autoStore?: boolean; codeTransform?: boolean };
+                      agentId?: string;
+                      sessionId?: string;
                     }) => Effect.Effect<{
                       output: unknown;
                       status: string;
@@ -580,16 +627,32 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   let unsubscribeReasoningSteps: (() => void) | null = null;
                   if (eb && obs && isVerbose) {
                     const capturedObs = obs;
+                    const capturedLogModelIO = logModelIO;
                     const capturedIsDebug = isDebug;
                     unsubscribeReasoningSteps = yield* eb.on(
                       "ReasoningStepCompleted",
                       (event) => {
+                        // Prompt trace: log full system + user message when logModelIO is enabled
+                        if (event.prompt && capturedLogModelIO) {
+                          const pass = event.kernelPass ?? event.strategy;
+                          const sysPreview = event.prompt.system.length <= 500
+                            ? event.prompt.system
+                            : event.prompt.system.slice(0, 500) + `... [${event.prompt.system.length} chars]`;
+                          const userPreview = event.prompt.user.length <= 2000
+                            ? event.prompt.user
+                            : event.prompt.user.slice(0, 2000) + `... [${event.prompt.user.length} chars]`;
+                          return capturedObs
+                            .debug(`  ┄ [prompt:${pass}]\n    ── system ──\n    ${sysPreview.replace(/\n/g, "\n    ")}\n    ── user ──\n    ${userPreview.replace(/\n/g, "\n    ")}`)
+                            .pipe(Effect.catchAll(() => Effect.void));
+                        }
+                        const rawContent = event.thought ?? event.action ?? event.observation ?? "";
+                        // Skip events with no displayable content (e.g. prompt-only events when logModelIO is off)
+                        if (!rawContent) return Effect.void;
                         const prefix = event.thought
                           ? "┄ [thought]"
                           : event.action
                             ? "┄ [action] "
                             : "┄ [obs]    ";
-                        const rawContent = event.thought ?? event.action ?? event.observation ?? "";
                         const content =
                           capturedIsDebug || rawContent.length <= 180
                             ? rawContent
@@ -604,7 +667,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   ctx = yield* guardedPhase(ctx, "think", (c) =>
                     Effect.gen(function* () {
                       const result = yield* reasoningOpt.value.execute({
-                        taskDescription: JSON.stringify(task.input),
+                        taskDescription: extractTaskText(task.input),
                         taskType: task.type,
                         memoryContext: String(
                           (c.memoryContext as any)?.semanticContext ?? "",
@@ -616,6 +679,8 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         systemPrompt: config.systemPrompt,
                         taskId: c.taskId,
                         resultCompression: config.resultCompression,
+                        agentId: config.agentId,
+                        sessionId: c.taskId,
                       });
                       return {
                         ...c,
@@ -690,6 +755,26 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                             } : {}),
                           },
                         }).pipe(Effect.catchAll(() => Effect.void));
+
+                        // ── Persist reflexion critiques for cross-run learning ──
+                        const reflexionCritiques = thinkRes.metadata?.reflexionCritiques;
+                        if (Array.isArray(reflexionCritiques) && reflexionCritiques.length > 0) {
+                          yield* memBridge.value.logEpisode({
+                            id: crypto.randomUUID().replace(/-/g, ""),
+                            agentId: ctx.agentId,
+                            date: epNow.toISOString().slice(0, 10),
+                            content: `Reflexion critiques for ${task.type}: ${reflexionCritiques.join(" | ")}`,
+                            taskId: ctx.taskId,
+                            eventType: "reflexion-critique",
+                            createdAt: epNow,
+                            tags: ["reflexion", "critique", task.type],
+                            metadata: {
+                              strategy: strategyUsed,
+                              critiqueCount: reflexionCritiques.length,
+                              taskDescription: String(task.input).slice(0, 500),
+                            },
+                          }).pipe(Effect.catchAll(() => Effect.void));
+                        }
                       }
                     }
                   }
@@ -732,20 +817,9 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
 
                     ctx = { ...ctx, toolResults: syntheticToolResults };
 
-                    // Record tool execution metrics via ObservabilityService for the dashboard.
-                    // This path (reasoning strategy) executes tools internally — events via EventBus
-                    // have instance isolation issues, so record directly through obs instead.
-                    // NOTE: ToolCallCompleted is also published to EventBus in reactive.ts;
-                    // this histogram is the authoritative path for the ObservabilityService dashboard.
-                    if (obs) {
-                      for (const toolResult of syntheticToolResults) {
-                        yield* obs.recordHistogram(
-                          "execution.tool.execution",
-                          toolResult.durationMs,
-                          { tool: toolResult.toolName, status: toolResult.success ? "success" : "error" },
-                        ).pipe(Effect.catchAll(() => Effect.void));
-                      }
-                    }
+                    // Tool metrics are now recorded via KernelHooks.onObservation → ToolCallCompleted
+                    // EventBus events. MetricsCollector auto-subscribes to these events.
+                    // (Previously duplicated here via obs.recordHistogram — removed to fix double counting.)
 
                     ctx = yield* guardedPhase(ctx, "act", (c) =>
                       Effect.succeed(c),
@@ -768,10 +842,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     messages: [
                       {
                         role: "user",
-                        content: String(
-                          (task.input as any).question ??
-                            JSON.stringify(task.input),
-                        ),
+                        content: extractTaskText(task.input),
                       },
                     ],
                   };
@@ -1352,10 +1423,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
 
                       if (verifyOpt._tag === "Some") {
                         const response = String(c.metadata.lastResponse ?? "");
-                        const input = String(
-                          (task.input as any).question ??
-                            JSON.stringify(task.input),
-                        );
+                        const input = extractTaskText(task.input);
                         const result = yield* verifyOpt.value
                           .verify(response, input)
                           .pipe(
@@ -1498,11 +1566,13 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   }),
                 );
 
-                // Build TaskResult
+                // Build TaskResult — sanitize output to strip internal metadata
+                const rawOutput = ctx.metadata.lastResponse ?? null;
+                const rr = ctx.metadata.reasoningResult as { metadata?: { confidence?: number } } | undefined;
                 const result: TaskResult = {
                   taskId: task.id as any,
                   agentId: task.agentId,
-                  output: ctx.metadata.lastResponse ?? null,
+                  output: typeof rawOutput === "string" ? sanitizeOutput(rawOutput) : rawOutput,
                   success: true,
                   metadata: {
                     duration: Date.now() - ctx.startedAt.getTime(),
@@ -1510,6 +1580,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     tokensUsed: ctx.tokensUsed,
                     strategyUsed: ctx.selectedStrategy,
                     stepsCount: (ctx.metadata.stepsCount as number | undefined) ?? ctx.iteration,
+                    ...(rr?.metadata?.confidence !== undefined ? { confidence: rr.metadata.confidence } : {}),
                   },
                   completedAt: new Date(),
                 };
@@ -1611,6 +1682,99 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
               );
             }
             yield* Ref.update(cancelledTasks, (s) => new Set(s).add(taskId));
+          }),
+
+        executeStream: (task, options) =>
+          Effect.gen(function* () {
+            const queue = yield* Queue.unbounded<AgentStreamEvent>();
+            const density = options?.density ?? config.streamDensity ?? "tokens";
+            const startMs = Date.now();
+
+            // Acquire EventBus optionally
+            const ebOpt = yield* Effect.serviceOption(EventBus).pipe(
+              Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
+            );
+            const eb: EbLike | null = ebOpt._tag === "Some" ? ebOpt.value : null;
+
+            // Fire AgentStreamStarted
+            if (eb) {
+              yield* eb.publish({
+                _tag: "AgentStreamStarted",
+                taskId: String(task.id),
+                agentId: config.agentId,
+                density,
+                timestamp: startMs,
+              } as AgentEvent).pipe(Effect.catchAll(() => Effect.void));
+            }
+
+            // Fork execution within the Effect context (services available).
+            // Events are pushed to the queue; no Queue.shutdown (preserves items).
+            yield* Effect.locally(
+              execute(task).pipe(
+                Effect.tap((taskResult) => {
+                  const completedEvent: AgentStreamEvent = {
+                    _tag: "StreamCompleted",
+                    output: String((taskResult as any).output ?? ""),
+                    metadata: (taskResult as any).metadata ?? {},
+                    taskId: String(task.id),
+                    agentId: String(task.agentId),
+                  };
+                  const offer = Queue.offer(queue, completedEvent);
+                  if (!eb) return offer;
+                  return offer.pipe(
+                    Effect.tap(() =>
+                      eb.publish({
+                        _tag: "AgentStreamCompleted",
+                        taskId: String(task.id),
+                        agentId: config.agentId,
+                        success: true,
+                        durationMs: Date.now() - startMs,
+                      } as AgentEvent).pipe(Effect.catchAll(() => Effect.void)),
+                    ),
+                  );
+                }),
+                Effect.catchAll((err: unknown) => {
+                  const cause =
+                    typeof err === "object" &&
+                    err !== null &&
+                    "message" in err
+                      ? String((err as any).message)
+                      : String(err);
+                  const errorEvent: AgentStreamEvent = { _tag: "StreamError", cause };
+                  const offer = Queue.offer(queue, errorEvent);
+                  if (!eb) return offer;
+                  return offer.pipe(
+                    Effect.tap(() =>
+                      eb.publish({
+                        _tag: "AgentStreamCompleted",
+                        taskId: String(task.id),
+                        agentId: config.agentId,
+                        success: false,
+                        durationMs: Date.now() - startMs,
+                      } as AgentEvent).pipe(Effect.catchAll(() => Effect.void)),
+                    ),
+                  );
+                }),
+              ),
+              StreamingTextCallback,
+              (text: string) =>
+                Queue.offer(queue, { _tag: "TextDelta", text }).pipe(
+                  Effect.map(() => {}),
+                ),
+            ).pipe(Effect.forkDaemon);
+
+            // Stream reads from queue, stops after terminal event.
+            return EStream.unfoldEffect(false as boolean, (done) => {
+              if (done) return Effect.succeed(Option.none());
+              return Queue.take(queue).pipe(
+                Effect.map((event) => {
+                  const isTerminal =
+                    event._tag === "StreamCompleted" ||
+                    event._tag === "StreamError";
+                  return Option.some([event, isTerminal] as const);
+                }),
+              );
+            });
           }),
       };
     }),

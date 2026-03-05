@@ -1,0 +1,22 @@
+---
+import { getCollection } from "astro:content";
+
+const skills = await getCollection("skills");
+const sortedSkills = [...skills].sort((left, right) => left.id.localeCompare(right.id));
+---
+
+{sortedSkills.length === 0 ? (
+  <p>No skills published yet.</p>
+) : (
+  <ul>
+    {sortedSkills.map((skill) => (
+      <li>
+        <a href={`/.well-known/skills/${skill.id}/SKILL.md`}>
+          {skill.data.name}
+        </a>
+        {" — "}
+        {skill.data.description}
+      </li>
+    ))}
+  </ul>
+)}

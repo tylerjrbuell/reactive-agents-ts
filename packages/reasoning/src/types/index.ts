@@ -33,6 +33,25 @@ export { StrategyEffectivenessSchema } from "./effectiveness.js";
 export type { StrategyEffectiveness } from "./effectiveness.js";
 
 export {
+  shortId,
+  LLMPlanStepSchema,
+  LLMPlanOutputSchema,
+  PlanStepStatusSchema,
+  PlanStatusSchema,
+  hydratePlan,
+  resolveStepReferences,
+} from "./plan.js";
+export type {
+  LLMPlanStep,
+  LLMPlanOutput,
+  PlanStepStatus,
+  PlanStatus,
+  PlanStep,
+  Plan,
+  PlanContext,
+} from "./plan.js";
+
+export {
   ReasoningConfigSchema,
   ReactiveConfigSchema,
   PlanExecuteConfigSchema,

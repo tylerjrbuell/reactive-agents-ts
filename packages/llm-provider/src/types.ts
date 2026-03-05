@@ -746,6 +746,8 @@ export const CompletionResponseSchema = Schema.Struct({
   model: Schema.String,
   /** Tool calls emitted by the model (if any) */
   toolCalls: Schema.optional(Schema.Array(ToolCallSchema)),
+  /** Internal reasoning from thinking models (e.g. <think> blocks from qwen3, DeepSeek-R1) */
+  thinking: Schema.optional(Schema.String),
 });
 
 /**
@@ -974,3 +976,20 @@ export type ObservabilityVerbosity =
   | "metadata"
   /** Capture complete request/response payloads — higher overhead, useful for debugging. */
   | "full";
+
+// ── Structured Output Capabilities ──
+
+/**
+ * Provider-reported capabilities for structured JSON output.
+ * Used by the structured output pipeline to select the optimal extraction strategy.
+ */
+export type StructuredOutputCapabilities = {
+  /** Provider supports forcing JSON-only output (OpenAI, Gemini, Ollama) */
+  readonly nativeJsonMode: boolean;
+  /** Provider can enforce a JSON Schema on the output (OpenAI structured outputs) */
+  readonly jsonSchemaEnforcement: boolean;
+  /** Provider supports assistant message prefill to start response with "{" (Anthropic) */
+  readonly prefillSupport: boolean;
+  /** Provider supports GBNF grammar constraints for exact schema matching (Ollama/llama.cpp) */
+  readonly grammarConstraints: boolean;
+};

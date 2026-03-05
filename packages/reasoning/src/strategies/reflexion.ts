@@ -4,65 +4,84 @@
  *
  * Based on the Reflexion paper (Shinn et al., 2023).
  * The agent:
- *   1. Generates an initial response (attempt)
- *   2. Self-critiques the response to identify gaps/errors
- *   3. Improves the response using the critique as feedback
- *   4. Repeats until maxRetries reached or the critique is satisfied
+ *   1. Generates an initial response (attempt) — now via the ReAct kernel so it
+ *      can call tools during generation and improvement passes.
+ *   2. Self-critiques the response to identify gaps/errors (pure LLM — no tools
+ *      needed for quality judgment).
+ *   3. Improves the response using the critique as feedback (ReAct kernel again).
+ *   4. Repeats until maxRetries reached or the critique is satisfied.
  */
 import { Effect } from "effect";
-import { ulid } from "ulid";
 import type { ReasoningResult, ReasoningStep } from "../types/index.js";
-import type { StepId } from "../types/step.js";
-import { ExecutionError, IterationLimitError } from "../errors/errors.js";
+import { ExecutionError } from "../errors/errors.js";
 import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
-import { PromptService } from "@reactive-agents/prompts";
-import { EventBus } from "@reactive-agents/core";
+import { runKernel } from "./shared/kernel-runner.js";
+import { reactKernel } from "./shared/react-kernel.js";
+import {
+  resolveStrategyServices,
+  compilePromptOrFallback,
+  publishReasoningStep,
+} from "./shared/service-utils.js";
+import { makeStep, buildStrategyResult } from "./shared/step-utils.js";
+import { isSatisfied, isCritiqueStagnant } from "./shared/quality-utils.js";
+import { extractThinking } from "./shared/thinking-utils.js";
+import type { ToolSchema } from "./shared/tool-utils.js";
+import type { ResultCompressionConfig } from "@reactive-agents/tools";
 
 interface ReflexionInput {
   readonly taskDescription: string;
   readonly taskType: string;
   readonly memoryContext: string;
   readonly availableTools: readonly string[];
+  /** Full tool schemas for tool-aware generation and improvement passes */
+  readonly availableToolSchemas?: readonly ToolSchema[];
   readonly config: ReasoningConfig;
   /** Custom system prompt for steering agent behavior */
   readonly systemPrompt?: string;
   /** Task ID for event correlation */
   readonly taskId?: string;
+  /** Tool result compression config */
+  readonly resultCompression?: ResultCompressionConfig;
+  /** Agent ID for tool execution attribution. Falls back to "reasoning-agent". */
+  readonly agentId?: string;
+  /** Session ID for tool execution attribution. Falls back to "reasoning-session". */
+  readonly sessionId?: string;
+  /** Critiques from prior reflexion runs on similar tasks — populated from episodic memory */
+  readonly priorCritiques?: readonly string[];
 }
 
 /**
  * Reflexion: Generate → Self-Critique → Improve, repeating until satisfied
  * or maxRetries is reached.
+ *
+ * Generation and improvement passes use the ReAct kernel (tool-aware).
+ * The critique pass is a pure LLM call — quality judgment needs no tools.
  */
 export const executeReflexion = (
   input: ReflexionInput,
 ): Effect.Effect<
   ReasoningResult,
-  ExecutionError | IterationLimitError,
+  ExecutionError,
   LLMService
 > =>
   Effect.gen(function* () {
-    const llm = yield* LLMService;
-    const promptServiceOptRaw = yield* Effect.serviceOption(PromptService).pipe(
-      Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
-    );
-    const promptServiceOpt = promptServiceOptRaw as PromptServiceOpt;
-    const ebOptRaw = yield* Effect.serviceOption(EventBus).pipe(
-      Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
-    );
-    const ebOpt = ebOptRaw as typeof ebOptRaw;
+    const { llm, promptService: promptServiceOpt, eventBus: ebOpt } =
+      yield* resolveStrategyServices;
+
     const { maxRetries, selfCritiqueDepth } = input.config.strategies.reflexion;
     const steps: ReasoningStep[] = [];
     const start = Date.now();
     let totalTokens = 0;
     let totalCost = 0;
     let attempt = 0;
-    let previousCritiques: string[] = [];
+    let previousCritiques: string[] = input.priorCritiques
+      ? [...input.priorCritiques]
+      : [];
 
-    // ── STEP 1: Initial generation ──
+    // ── STEP 1: Initial generation (tool-aware via ReAct kernel) ──
     const genDefaultFallback = input.systemPrompt
-      ? `${input.systemPrompt}\n\nYou are a thoughtful reasoning agent. Provide clear, accurate, and complete responses.`
+      ? `${input.systemPrompt}\n\nExecute the task using the EXACT tool names and parameter values specified. Do NOT guess or substitute parameters. Complete ALL required actions.`
       : buildSystemPrompt(input.taskDescription);
 
     const genSystemPrompt = yield* compilePromptOrFallback(
@@ -71,57 +90,55 @@ export const executeReflexion = (
       { task: input.taskDescription },
       genDefaultFallback,
     );
-    const initialResponse = yield* llm
-      .complete({
-        messages: [
-          {
-            role: "user",
-            content: buildGenerationPrompt(input, null),
-          },
-        ],
-        systemPrompt: genSystemPrompt,
-        maxTokens: selfCritiqueDepth === "deep" ? 800 : 500,
-        temperature: 0.7,
-      })
-      .pipe(
-        Effect.mapError(
-          (err) =>
-            new ExecutionError({
-              strategy: "reflexion",
-              message: "Initial generation failed",
-              step: 0,
-              cause: err,
-            }),
-        ),
-      );
 
-    let currentResponse = initialResponse.content;
-    totalTokens += initialResponse.usage.totalTokens;
-    totalCost += initialResponse.usage.estimatedCost;
+    // Build priorContext with param hints — placed AFTER tool schemas, right before RULES
+    const paramHints = extractToolParamHints(input.taskDescription);
+    const genPriorContext = paramHints
+      ? `⚠️ CRITICAL — use these EXACT values (do NOT substitute or guess):\n${paramHints}`
+      : undefined;
 
-    steps.push({
-      id: ulid() as StepId,
-      type: "thought",
-      content: `[ATTEMPT 1] ${currentResponse}`,
-      timestamp: new Date(),
+    const genState = yield* runKernel(reactKernel, {
+      task: buildGenerationPrompt(input, null),
+      systemPrompt: genSystemPrompt,
+      priorContext: genPriorContext,
+      availableToolSchemas: input.availableToolSchemas,
+      resultCompression: input.resultCompression,
+      temperature: 0.7,
+      agentId: input.agentId,
+      sessionId: input.sessionId,
+    }, {
+      maxIterations: input.config.strategies.reflexion?.kernelMaxIterations ?? 3,
+      strategy: "reflexion",
+      kernelType: "react",
+      taskId: input.taskId,
+      kernelPass: "reflexion:generate",
     });
 
-    if (ebOpt._tag === "Some") {
-      yield* ebOpt.value.publish({
-        _tag: "ReasoningStepCompleted",
-        taskId: input.taskId ?? "reflexion",
-        strategy: "reflexion",
-        step: steps.length,
-        totalSteps: maxRetries + 1,
-        thought: `[ATTEMPT 1] ${currentResponse}`,
-      }).pipe(Effect.catchAll(() => Effect.void));
-    }
+    let currentResponse = genState.output
+      ?? [...genState.steps].filter((s) => s.type === "thought").pop()?.content
+      ?? "";
+    let lastKernelSteps = [...genState.steps]; // Track kernel steps for critique context
+    let allSideEffectSteps = [...genState.steps]; // Accumulate ALL steps for side-effect tracking
+    totalTokens += genState.tokens;
+    totalCost += genState.cost;
+
+    steps.push(makeStep("thought", `[ATTEMPT 1] ${currentResponse}`));
+
+    yield* publishReasoningStep(ebOpt, {
+      _tag: "ReasoningStepCompleted",
+      taskId: input.taskId ?? "reflexion",
+      strategy: "reflexion",
+      step: steps.length,
+      totalSteps: maxRetries + 1,
+      thought: `[ATTEMPT 1] ${currentResponse}`,
+      kernelPass: "reflexion:generate",
+    });
 
     // ── LOOP: Reflect → Improve ──
     while (attempt < maxRetries) {
       attempt++;
 
-      // ── Reflect: self-critique the current response ──
+      // ── Reflect: self-critique the current response (pure LLM — no tools) ──
       const critiqueDefaultFallback = input.systemPrompt
         ? `${input.systemPrompt}\n\nYou are a critical evaluator. Analyze responses for accuracy, completeness, and quality.`
         : "You are a critical evaluator. Analyze responses for accuracy, completeness, and quality.";
@@ -132,6 +149,7 @@ export const executeReflexion = (
         {},
         critiqueDefaultFallback,
       );
+
       const critiqueResponse = yield* llm
         .complete({
           messages: [
@@ -142,11 +160,12 @@ export const executeReflexion = (
                 currentResponse,
                 selfCritiqueDepth,
                 previousCritiques,
+                lastKernelSteps,
               ),
             },
           ],
           systemPrompt: critiqueSystemPrompt,
-          maxTokens: selfCritiqueDepth === "deep" ? 600 : 300,
+          maxTokens: selfCritiqueDepth === "deep" ? 2500 : 1500,
           temperature: 0.3, // low temp for objective critique
         })
         .pipe(
@@ -161,61 +180,75 @@ export const executeReflexion = (
           ),
         );
 
-      const critique = critiqueResponse.content;
+      // Strip <think> blocks from critique. If the model put the entire
+      // critique inside <think>, fall back to the thinking content so
+      // satisfaction/stagnation detection still works.
+      // When Ollama's think:true is active, the provider separates thinking
+      // into response.thinking — content may already be empty.
+      const { thinking: critiqueThinking, content: cleanCritique } =
+        extractThinking(critiqueResponse.content);
+      const providerThinking = (critiqueResponse as any).thinking as string | undefined;
+      const critique = cleanCritique || critiqueThinking || providerThinking || critiqueResponse.content;
       totalTokens += critiqueResponse.usage.totalTokens;
       totalCost += critiqueResponse.usage.estimatedCost;
 
-      steps.push({
-        id: ulid() as StepId,
-        type: "observation",
-        content: `[CRITIQUE ${attempt}] ${critique}`,
-        timestamp: new Date(),
-      });
+      steps.push(makeStep("observation", `[CRITIQUE ${attempt}] ${critique}`));
 
-      if (ebOpt._tag === "Some") {
-        yield* ebOpt.value.publish({
-          _tag: "ReasoningStepCompleted",
-          taskId: input.taskId ?? "reflexion",
-          strategy: "reflexion",
-          step: steps.length,
-          totalSteps: maxRetries + 1,
-          observation: `[CRITIQUE ${attempt}] ${critique}`,
-        }).pipe(Effect.catchAll(() => Effect.void));
-      }
+      yield* publishReasoningStep(ebOpt, {
+        _tag: "ReasoningStepCompleted",
+        taskId: input.taskId ?? "reflexion",
+        strategy: "reflexion",
+        step: steps.length,
+        totalSteps: maxRetries + 1,
+        observation: `[CRITIQUE ${attempt}] ${critique}`,
+        kernelPass: `reflexion:critique-${attempt}`,
+      });
 
       // ── Stagnation check: exit early if critique isn't changing ──
       if (isCritiqueStagnant(previousCritiques, critique)) {
-        return buildResult(steps, currentResponse, "partial", start, totalTokens, totalCost, attempt);
+        return buildStrategyResult({
+          strategy: "reflexion",
+          steps,
+          output: currentResponse,
+          status: "partial",
+          start,
+          totalTokens,
+          totalCost,
+          extraMetadata: { confidence: 0.4, reflexionCritiques: previousCritiques },
+        });
       }
 
       // ── Check if satisfied ──
       if (isSatisfied(critique)) {
-        if (ebOpt._tag === "Some") {
-          yield* ebOpt.value.publish({
-            _tag: "FinalAnswerProduced",
-            taskId: input.taskId ?? "reflexion",
-            strategy: "reflexion",
-            answer: currentResponse,
-            iteration: attempt,
-            totalTokens,
-          }).pipe(Effect.catchAll(() => Effect.void));
-        }
-        return buildResult(
+        yield* publishReasoningStep(ebOpt, {
+          _tag: "FinalAnswerProduced",
+          taskId: input.taskId ?? "reflexion",
+          strategy: "reflexion",
+          answer: currentResponse,
+          iteration: attempt,
+          totalTokens,
+          kernelPass: `reflexion:improve-${attempt}`,
+        });
+        return buildStrategyResult({
+          strategy: "reflexion",
           steps,
-          currentResponse,
-          "completed",
+          output: currentResponse,
+          status: "completed",
           start,
           totalTokens,
           totalCost,
-          attempt,
-        );
+          extraMetadata: {
+            confidence: Math.max(0.6, 1 - (attempt / 3) * 0.3),
+            reflexionCritiques: previousCritiques,
+          },
+        });
       }
 
       previousCritiques.push(critique);
 
-      // ── Improve: generate a refined response ──
+      // ── Improve: generate a refined response (tool-aware via ReAct kernel) ──
       const improveDefaultFallback = input.systemPrompt
-        ? `${input.systemPrompt}\n\nYou are a thoughtful reasoning agent. Provide clear, accurate, and complete responses.`
+        ? `${input.systemPrompt}\n\nYour previous attempt had issues. Fix them by using the EXACT tool parameters from the task. Complete ALL required actions.`
         : buildSystemPrompt(input.taskDescription);
 
       const improveSystemPrompt = yield* compilePromptOrFallback(
@@ -224,118 +257,275 @@ export const executeReflexion = (
         { task: input.taskDescription },
         improveDefaultFallback,
       );
-      const improvedResponse = yield* llm
-        .complete({
-          messages: [
-            {
-              role: "user",
-              content: buildGenerationPrompt(input, previousCritiques),
-            },
-          ],
-          systemPrompt: improveSystemPrompt,
-          maxTokens: selfCritiqueDepth === "deep" ? 800 : 500,
-          temperature: 0.6,
-        })
-        .pipe(
-          Effect.mapError(
-            (err) =>
-              new ExecutionError({
-                strategy: "reflexion",
-                message: `Improvement generation failed at attempt ${attempt}`,
-                step: attempt,
-                cause: err,
-              }),
-          ),
-        );
 
-      currentResponse = improvedResponse.content;
-      totalTokens += improvedResponse.usage.totalTokens;
-      totalCost += improvedResponse.usage.estimatedCost;
+      // Build focused improvement task based on what was already done
+      const completedActions = buildCompletedActionsContext(lastKernelSteps);
+      const improvementTask = buildImprovementTask(input, previousCritiques, completedActions);
+      const improvePriorContext = paramHints
+        ? `⚠️ CRITICAL — use these EXACT values (do NOT substitute or guess):\n${paramHints}`
+        : undefined;
 
-      steps.push({
-        id: ulid() as StepId,
-        type: "thought",
-        content: `[ATTEMPT ${attempt + 1}] ${currentResponse}`,
-        timestamp: new Date(),
+      // Hard side-effect guard: identify tools with side effects that already
+      // succeeded in ANY prior pass. The kernel will refuse to execute these.
+      const blockedTools = extractSuccessfulSideEffectTools(allSideEffectSteps);
+
+      const improveState = yield* runKernel(reactKernel, {
+        task: improvementTask,
+        systemPrompt: improveSystemPrompt,
+        priorContext: improvePriorContext,
+        availableToolSchemas: input.availableToolSchemas,
+        resultCompression: input.resultCompression,
+        temperature: 0.6,
+        agentId: input.agentId,
+        sessionId: input.sessionId,
+        blockedTools,
+      }, {
+        maxIterations: input.config.strategies.reflexion?.kernelMaxIterations ?? 3,
+        strategy: "reflexion",
+        kernelType: "react",
+        taskId: input.taskId,
+        kernelPass: `reflexion:improve-${attempt}`,
       });
 
-      if (ebOpt._tag === "Some") {
-        yield* ebOpt.value.publish({
-          _tag: "ReasoningStepCompleted",
-          taskId: input.taskId ?? "reflexion",
-          strategy: "reflexion",
-          step: steps.length,
-          totalSteps: maxRetries + 1,
-          thought: `[ATTEMPT ${attempt + 1}] ${currentResponse}`,
-        }).pipe(Effect.catchAll(() => Effect.void));
+      const improveOutput = improveState.output
+        ?? [...improveState.steps].filter((s) => s.type === "thought").pop()?.content
+        ?? "";
+      currentResponse = improveOutput || currentResponse;
+      // Only replace critique evidence if improvement actually called tools;
+      // otherwise keep prior evidence so critique sees what was already done.
+      const improvementHadToolCalls = [...improveState.steps].some((s) => s.type === "action");
+      if (improvementHadToolCalls) {
+        lastKernelSteps = [...improveState.steps];
       }
+      // Always accumulate all steps for side-effect tracking across passes
+      allSideEffectSteps = [...allSideEffectSteps, ...improveState.steps];
+      totalTokens += improveState.tokens;
+      totalCost += improveState.cost;
+
+      steps.push(makeStep("thought", `[ATTEMPT ${attempt + 1}] ${currentResponse}`));
+
+      yield* publishReasoningStep(ebOpt, {
+        _tag: "ReasoningStepCompleted",
+        taskId: input.taskId ?? "reflexion",
+        strategy: "reflexion",
+        step: steps.length,
+        totalSteps: maxRetries + 1,
+        thought: `[ATTEMPT ${attempt + 1}] ${currentResponse}`,
+        kernelPass: `reflexion:improve-${attempt}`,
+      });
     }
 
     // Max retries reached — return the best response so far
-    return buildResult(
+    return buildStrategyResult({
+      strategy: "reflexion",
       steps,
-      currentResponse,
-      "partial",
+      output: currentResponse,
+      status: "partial",
       start,
       totalTokens,
       totalCost,
-      attempt,
-    );
+      extraMetadata: { confidence: 0.4, reflexionCritiques: previousCritiques },
+    });
   });
 
-// ─── Prompt compilation helper ───
-
-type PromptServiceOpt =
-  | { _tag: "Some"; value: { compile: (id: string, vars: Record<string, unknown>) => Effect.Effect<{ content: string }, unknown> } }
-  | { _tag: "None" };
-
-function compilePromptOrFallback(
-  promptServiceOpt: PromptServiceOpt,
-  templateId: string,
-  variables: Record<string, unknown>,
-  fallback: string,
-): Effect.Effect<string, never> {
-  if (promptServiceOpt._tag === "None") {
-    return Effect.succeed(fallback);
-  }
-  return promptServiceOpt.value
-    .compile(templateId, variables)
-    .pipe(
-      Effect.map((compiled: { content: string }) => compiled.content),
-      Effect.catchAll(() => Effect.succeed(fallback)),
-    );
-}
-
-// ─── Private Helpers ───
+// ─── Private Helpers (reflexion-specific) ───
 
 function buildSystemPrompt(taskDescription: string): string {
-  return `You are a thoughtful reasoning agent. Your task is: ${taskDescription}\nProvide clear, accurate, and complete responses.`;
+  return (
+    `You are a task execution agent. Execute tasks exactly as specified.\n\n` +
+    `CRITICAL RULES:\n` +
+    `- Use the EXACT tool names and parameter values specified in the task.\n` +
+    `- Do NOT substitute, guess, or hallucinate parameter values.\n` +
+    `- Do NOT ask clarifying questions — all information is in the task.\n` +
+    `- Complete ALL required actions (fetching data AND sending messages).\n` +
+    `- Produce output directly — no offers, no "would you like me to...".\n\n` +
+    `Task: ${taskDescription}`
+  );
 }
 
 function buildGenerationPrompt(
   input: ReflexionInput,
   previousCritiques: string[] | null,
 ): string {
-  const parts: string[] = [
-    `Task: ${input.taskDescription}`,
-    `Task Type: ${input.taskType}`,
-  ];
+  const parts: string[] = [];
+
+  // Extract any explicit tool call parameters from the task and highlight them
+  const paramHints = extractToolParamHints(input.taskDescription);
+  if (paramHints) {
+    parts.push(`REQUIRED TOOL PARAMETERS (use these EXACT values):\n${paramHints}`);
+  }
+
+  parts.push(`TASK:\n${input.taskDescription}`);
 
   if (input.memoryContext) {
-    parts.push(`Relevant Context:\n${input.memoryContext}`);
+    parts.push(`CONTEXT:\n${input.memoryContext}`);
   }
 
   if (previousCritiques && previousCritiques.length > 0) {
+    // Extract actionable fixes from critiques, not just the raw critique text
+    const fixes = extractActionableFixes(previousCritiques);
     parts.push(
-      `Previous attempts had these issues:\n${buildCompactedCritiqueHistory(previousCritiques)}\n\nPlease address all of these issues in your improved response.`,
+      `ISSUES FROM PREVIOUS ATTEMPTS (you MUST fix ALL of these):\n${fixes}`,
     );
   }
 
   parts.push(
-    "Provide a thorough and accurate response to the task above.",
+    `Execute the task above step by step. Use the exact tool names and parameters specified.`,
   );
 
   return parts.join("\n\n");
+}
+
+/**
+ * Extract explicit tool parameter hints from the task description.
+ * Finds patterns like: tool_name(params), "owner: 'value'", "recipient 'value'"
+ */
+function extractToolParamHints(taskDescription: string): string | null {
+  const hints: string[] = [];
+
+  // Match patterns like: owner: 'luduscom', repo: 'ludus-next'
+  const paramMatches = taskDescription.matchAll(
+    /(\w+):\s*['"]([^'"]+)['"]/g,
+  );
+  for (const m of paramMatches) {
+    hints.push(`  ${m[1]}: "${m[2]}"`);
+  }
+
+  // Match patterns like: tool/name with recipient '+12345'
+  const toolWithArg = taskDescription.matchAll(
+    /(\w+\/\w+)\s+with\s+(\w+)\s+['"]([^'"]+)['"]/g,
+  );
+  for (const m of toolWithArg) {
+    hints.push(`  Tool: ${m[1]} → ${m[2]}: "${m[3]}"`);
+  }
+
+  return hints.length > 0 ? hints.join("\n") : null;
+}
+
+/**
+ * Extract actionable fix instructions from critique text.
+ * Turns verbose critique prose into concise bullet points.
+ */
+function extractActionableFixes(critiques: string[]): string {
+  const lastCritique = critiques[critiques.length - 1] ?? "";
+  const fixes: string[] = [];
+
+  // Look for "should" / "needs to" / "must" statements — these are actionable
+  const actionLines = lastCritique
+    .split("\n")
+    .filter(
+      (line) =>
+        /\b(should|must|needs? to|required|missing|incorrect|wrong)\b/i.test(line) &&
+        line.trim().length > 10,
+    )
+    .slice(0, 5);
+
+  if (actionLines.length > 0) {
+    fixes.push(...actionLines.map((l) => `- ${l.trim().replace(/^[-•*\d.)\s]+/, "")}`));
+  } else {
+    // Fallback: use the whole critique compacted
+    fixes.push(buildCompactedCritiqueHistory(critiques));
+  }
+
+  return fixes.join("\n");
+}
+
+/**
+ * Build a focused improvement task that tells the kernel what was already done
+ * and focuses only on fixing the specific issues identified by the critique.
+ */
+function buildImprovementTask(
+  input: ReflexionInput,
+  previousCritiques: string[],
+  completedActions: string,
+): string {
+  const parts: string[] = [];
+
+  if (completedActions) {
+    parts.push(completedActions);
+  }
+
+  // Extract specific fixes needed
+  const fixes = extractActionableFixes(previousCritiques);
+  parts.push(`FIX THESE SPECIFIC ISSUES:\n${fixes}`);
+
+  parts.push(`ORIGINAL TASK (for reference):\n${input.taskDescription}`);
+
+  if (input.memoryContext) {
+    parts.push(`CONTEXT:\n${input.memoryContext}`);
+  }
+
+  parts.push(
+    `Focus ONLY on fixing the issues listed above. Do NOT re-execute actions that already succeeded.`,
+  );
+
+  return parts.join("\n\n");
+}
+
+/**
+ * Build a summary of what was already accomplished from kernel steps.
+ * Identifies side-effect tools (send/create/write) that should NOT be re-called.
+ */
+function buildCompletedActionsContext(steps?: readonly ReasoningStep[]): string {
+  if (!steps || steps.length === 0) return "";
+
+  const actions = steps.filter((s) => s.type === "action");
+  const observations = steps.filter((s) => s.type === "observation");
+
+  if (actions.length === 0) return "";
+
+  const lines: string[] = ["ALREADY COMPLETED ACTIONS (do NOT repeat successful ones):"];
+
+  for (let i = 0; i < actions.length; i++) {
+    const action = actions[i];
+    // Check if the corresponding observation indicates success or error
+    const obs = observations[i];
+    const isError = obs && /\[Tool error/i.test(obs.content);
+    const icon = isError ? "❌" : "✅";
+    const content = action.content.length > 200
+      ? action.content.slice(0, 200) + "..."
+      : action.content;
+    lines.push(`  ${icon} ${content}`);
+  }
+
+  // Identify side-effect tools that must NOT be called again
+  const extractToolName = (step: ReasoningStep): string | undefined =>
+    (step.metadata?.toolUsed as string | undefined)
+    ?? step.content.match(/"tool"\s*:\s*"([^"]+)"/)?.[1]
+    ?? step.content.match(/^(\S+)\(/)?.[1];
+
+  const sideEffectActions = actions.filter((a) => {
+    const toolName = extractToolName(a);
+    return toolName != null && isSideEffectTool(toolName);
+  });
+  const successfulSideEffects = sideEffectActions.filter((a) => {
+    const obs = observations[actions.indexOf(a)];
+    return !obs || !/\[Tool error/i.test(obs.content);
+  });
+
+  if (successfulSideEffects.length > 0) {
+    lines.push("\n⚠️ DO NOT call these tools again (they have side effects and already executed):");
+    for (const t of successfulSideEffects) {
+      const name = extractToolName(t);
+      if (name) lines.push(`  - ${name}`);
+    }
+  }
+
+  return lines.join("\n");
+}
+
+/**
+ * Side-effect detection via word splitting (not regex \b which treats _ as word char).
+ * Splits tool names on / _ - separators, then checks for side-effect verbs.
+ */
+const SIDE_EFFECT_WORDS = new Set([
+  "send", "write", "create", "delete", "post", "push",
+  "publish", "notify", "deploy", "upload", "remove", "update",
+]);
+
+function isSideEffectTool(toolName: string): boolean {
+  const words = toolName.toLowerCase().split(/[/_\-]/);
+  return words.some((w) => SIDE_EFFECT_WORDS.has(w));
 }
 
 function buildCritiquePrompt(
@@ -343,58 +533,113 @@ function buildCritiquePrompt(
   response: string,
   depth: "shallow" | "deep",
   previousCritiques: string[],
+  executionSteps?: readonly ReasoningStep[],
 ): string {
   const deepInstructions =
     depth === "deep"
-      ? "\n- Check for logical consistency and coherence\n- Identify any unsupported claims or assumptions\n- Assess whether all aspects of the task are addressed"
+      ? "\n- Check for logical consistency and coherence\n- Identify any unsupported claims or assumptions"
       : "";
 
   const prevCritiqueNote =
     previousCritiques.length > 0
-      ? `\n\nPrevious critiques identified these issues:\n${previousCritiques.map((c, i) => `${i + 1}. ${c}`).join("\n")}\n\nFocus on whether the new response adequately addresses these.`
+      ? `\n\nPrevious critiques identified these issues:\n${previousCritiques.map((c, i) => `${i + 1}. ${c}`).join("\n")}\nWere these fixed in the latest attempt?`
       : "";
 
-  return `Task: ${taskDescription}
+  // Build execution evidence — this is the PRIMARY evaluation input
+  const executionEvidence = buildExecutionEvidence(executionSteps);
 
-Response to evaluate:
+  // Extract required params for comparison
+  const paramHints = extractToolParamHints(taskDescription);
+  const paramCheck = paramHints
+    ? `\nREQUIRED PARAMETERS (from task):\n${paramHints}`
+    : "";
+
+  return `Evaluate whether this task was COMPLETED based on the execution evidence.
+
+ORIGINAL TASK:
+${taskDescription}
+
+EXECUTION EVIDENCE (what tools were actually called):
+${executionEvidence || "No tool calls recorded."}
+
+AGENT'S TEXT RESPONSE:
 ${response}
+${paramCheck}
+EVALUATION RULES:
+1. Focus on whether the REQUIRED ACTIONS were taken — not text formatting or style.
+2. If tools with side effects (send, write, create) succeeded, those actions are DONE.
+3. Only mark UNSATISFIED if a required action was MISSING or used clearly wrong parameters.
+4. Do NOT invent requirements not stated in the original task.
+5. Minor issues (e.g., fetching 5 items instead of 10) are worth noting but don't invalidate completed work.${deepInstructions}${prevCritiqueNote}
 
-Critically evaluate this response. Identify:
-- Factual errors or inaccuracies
-- Missing information or incomplete answers
-- Unclear or ambiguous statements${deepInstructions}${prevCritiqueNote}
+Your FIRST LINE must be exactly one of:
+SATISFIED: <what was accomplished>
+UNSATISFIED: <what specific required action was not completed>
 
-If the response is accurate and complete, start your critique with "SATISFIED:".
-Otherwise, clearly list the specific issues that need to be fixed.`;
-}
-
-function isSatisfied(critique: string): boolean {
-  return /^SATISFIED:/i.test(critique.trim());
+If UNSATISFIED, list ONLY the specific fixes needed (one per line). Be actionable and concise.`;
 }
 
 /**
- * Detects stagnant critiques — if the new critique is substantially the same
- * as the most recent one, further retries won't improve the response.
- * Uses normalized substring matching.
+ * Build a structured execution evidence summary from kernel steps.
+ * Pairs each tool call with its result so the critique can see what happened.
  */
-function isCritiqueStagnant(previousCritiques: string[], newCritique: string): boolean {
-  if (previousCritiques.length === 0) return false;
-  const lastCritique = previousCritiques[previousCritiques.length - 1]!;
-  const normalize = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
-  const a = normalize(lastCritique);
-  const b = normalize(newCritique);
-  if (a === b) return true;
-  const [shorter, longer] = a.length <= b.length ? [a, b] : [b, a];
-  if (shorter.length > 30 && longer.includes(shorter)) {
-    return true;
+function buildExecutionEvidence(steps?: readonly ReasoningStep[]): string {
+  if (!steps || steps.length === 0) return "No execution steps recorded.";
+
+  const actions = steps.filter((s) => s.type === "action");
+  const observations = steps.filter((s) => s.type === "observation");
+
+  if (actions.length === 0) return "No tool calls were made.";
+
+  const evidence: string[] = [];
+
+  for (let i = 0; i < actions.length; i++) {
+    const action = actions[i].content;
+    const obs = observations[i]?.content ?? "no result recorded";
+    const isError = /\[Tool error/i.test(obs);
+    const icon = isError ? "❌" : "✅";
+    const actionStr = action.length > 200 ? action.slice(0, 200) + "..." : action;
+    const obsStr = obs.length > 150 ? obs.slice(0, 150) + "..." : obs;
+    evidence.push(`${icon} ${actionStr}\n   → ${obsStr}`);
   }
-  return false;
+
+  return evidence.join("\n");
 }
 
 /**
- * Progressive compaction for critique history.
- * Keeps last 3 critiques verbatim, summarizes older ones.
+ * Extract tool names that have side effects AND succeeded in a prior kernel pass.
+ * These tools are blocked from re-execution in improvement passes to prevent
+ * duplicate sends, writes, creates, etc.
  */
+function extractSuccessfulSideEffectTools(
+  steps?: readonly ReasoningStep[],
+): readonly string[] {
+  if (!steps || steps.length === 0) return [];
+
+  const actions = steps.filter((s) => s.type === "action");
+  const observations = steps.filter((s) => s.type === "observation");
+  const blocked = new Set<string>();
+
+  for (let i = 0; i < actions.length; i++) {
+    const action = actions[i];
+    const obs = observations[i];
+    const isError = obs && /\[Tool error/i.test(obs.content);
+    if (isError) continue; // Only block tools that succeeded
+
+    // Extract tool name from action content (JSON: {"tool":"name",...})
+    const toolName = action.metadata?.toolUsed as string | undefined
+      ?? action.content.match(/"tool"\s*:\s*"([^"]+)"/)?.[1];
+    if (!toolName) continue;
+
+    // Check if this tool has side effects
+    if (isSideEffectTool(toolName)) {
+      blocked.add(toolName);
+    }
+  }
+
+  return [...blocked];
+}
+
 function buildCompactedCritiqueHistory(critiques: string[]): string {
   if (critiques.length <= 3) {
     return critiques.map((c, i) => `${i + 1}. ${c}`).join("\n");
@@ -402,35 +647,4 @@ function buildCompactedCritiqueHistory(critiques: string[]): string {
   const older = critiques.slice(0, critiques.length - 3).map((_, i) => `${i + 1}. [addressed]`);
   const recent = critiques.slice(-3).map((c, i) => `${critiques.length - 2 + i}. ${c}`);
   return [...older, ...recent].join("\n");
-}
-
-function buildResult(
-  steps: readonly ReasoningStep[],
-  output: string,
-  status: "completed" | "partial",
-  startMs: number,
-  tokensUsed: number,
-  cost: number,
-  iterations: number,
-): ReasoningResult {
-  // Confidence is higher when fewer iterations were needed
-  const maxNormal = 3;
-  const confidence =
-    status === "completed"
-      ? Math.max(0.6, 1 - (iterations / maxNormal) * 0.3)
-      : 0.4;
-
-  return {
-    strategy: "reflexion",
-    steps: [...steps],
-    output,
-    metadata: {
-      duration: Date.now() - startMs,
-      cost,
-      tokensUsed,
-      stepsCount: steps.length,
-      confidence,
-    },
-    status,
-  };
 }

@@ -223,6 +223,27 @@ export interface LifecycleHook {
 }
 
 /**
+ * Model parameters for the builder's `.withModel()` method.
+ * Allows setting model name along with thinking mode, temperature, and maxTokens.
+ *
+ * @example
+ * ```typescript
+ * builder.withModel({ model: "qwen3.5", thinking: true, temperature: 0.5 })
+ * ```
+ */
+export const ModelParamsSchema = Schema.Struct({
+  /** Model identifier (provider-specific) */
+  model: Schema.String,
+  /** Enable/disable thinking mode (auto-detect if omitted) */
+  thinking: Schema.optional(Schema.Boolean),
+  /** Sampling temperature 0.0-1.0 */
+  temperature: Schema.optional(Schema.Number),
+  /** Maximum output tokens */
+  maxTokens: Schema.optional(Schema.Number),
+});
+export type ModelParams = typeof ModelParamsSchema.Type;
+
+/**
  * Internal configuration for the Reactive Agents runtime.
  *
  * This is produced from RuntimeOptions and passed to ExecutionEngine and other core services.
@@ -259,10 +280,18 @@ export const ReactiveAgentsConfigSchema = Schema.Struct({
   observabilityVerbosity: Schema.optional(
     Schema.Literal("minimal", "normal", "verbose", "debug"),
   ),
+  /** Log full model prompts and responses (default: true when debug, false otherwise) */
+  logModelIO: Schema.optional(Schema.Boolean),
   /** Model-adaptive context profile overrides */
   contextProfile: Schema.optional(Schema.partial(ContextProfileSchema)),
   /** Default reasoning strategy when no StrategySelector is present */
   defaultStrategy: Schema.optional(Schema.String),
+  /** Enable/disable thinking mode for thinking-capable models (auto-detect if omitted) */
+  thinking: Schema.optional(Schema.Boolean),
+  /** Override default temperature for LLM requests */
+  temperature: Schema.optional(Schema.Number),
+  /** Override default maxTokens for LLM requests */
+  maxTokens: Schema.optional(Schema.Number),
   /** Tool result compression config — controls preview size, scratchpad overflow, and pipe transforms */
   resultCompression: Schema.optional(
     Schema.Struct({
@@ -272,6 +301,8 @@ export const ReactiveAgentsConfigSchema = Schema.Struct({
       codeTransform: Schema.optional(Schema.Boolean),
     })
   ),
+  /** Default stream density for runStream() — "tokens" emits only TextDelta, "full" emits all events */
+  streamDensity: Schema.optional(Schema.Literal("tokens", "full")),
 });
 export type ReactiveAgentsConfig = typeof ReactiveAgentsConfigSchema.Type;
 

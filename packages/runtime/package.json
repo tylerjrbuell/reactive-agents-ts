@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/runtime",
-  "version": "0.5.6",
+  "version": "0.6.0",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -25,6 +25,7 @@
     "@reactive-agents/interaction": "workspace:^",
     "@reactive-agents/prompts": "workspace:^",
     "@reactive-agents/orchestration": "workspace:^",
+    "@reactive-agents/gateway": "workspace:^",
     "@reactive-agents/a2a": "workspace:^"
   },
   "devDependencies": {

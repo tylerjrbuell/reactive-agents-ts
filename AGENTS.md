@@ -4,6 +4,102 @@
 
 ---
 
+## Architecture Quick Reference
+
+> Scan this before touching any package. Full dependency tree — read top to bottom for build order.
+
+### Package Dependency Tree
+
+```
+Foundation (no reactive-agents deps)
+├── @reactive-agents/core          — EventBus, AgentService, TaskService, all shared types
+│
+├── @reactive-agents/llm-provider  — LLMService, 6 provider adapters, streaming, tool calling
+│
+├── @reactive-agents/memory        — 4-layer memory (Working/Semantic/Episodic/Procedural), SQLite/FTS5/vec
+│
+├── @reactive-agents/reasoning     — 5 strategies + ThoughtKernel, KernelRunner, Structured Plan Engine
+│   └── depends on: core, llm-provider, memory (PlanStoreService), tools (ToolService)
+│
+├── @reactive-agents/tools         — ToolService, ToolRegistry, 8 built-in tools, MCP client, sandbox
+│   └── depends on: core, llm-provider
+│
+├── @reactive-agents/guardrails    — Injection/PII/toxicity detection, KillSwitch, BehavioralContracts
+│   └── depends on: core, llm-provider
+│
+├── @reactive-agents/verification  — Semantic entropy, fact decomposition, NLI, hallucination detection
+│   └── depends on: core, llm-provider
+│
+├── @reactive-agents/cost          — Complexity router, budget enforcer, semantic cache
+│   └── depends on: core, llm-provider, memory
+│
+├── @reactive-agents/identity      — Ed25519 certs, RBAC, delegation, audit trail
+│   └── depends on: core
+│
+├── @reactive-agents/observability — Distributed tracing, metrics, structured logging, MetricsCollector
+│   └── depends on: core
+│
+├── @reactive-agents/interaction   — 5 autonomy modes, checkpoints, preference learning, approval gates
+│   └── depends on: core
+│
+├── @reactive-agents/orchestration — Multi-agent workflows (sequential, parallel, pipeline, map-reduce)
+│   └── depends on: core, llm-provider, tools
+│
+├── @reactive-agents/prompts       — Template engine, version control, tier-adaptive prompt variants
+│   └── depends on: core, llm-provider
+│
+├── @reactive-agents/eval          — LLM-as-judge, EvalStore (SQLite), 5 scoring dimensions, regression checks
+│   └── depends on: core, llm-provider
+│
+├── @reactive-agents/a2a           — Agent Cards, JSON-RPC 2.0, SSE streaming, A2A server/client
+│   └── depends on: core
+│
+├── @reactive-agents/gateway       — Persistent harness: heartbeats, crons, webhooks, policy engine
+│   └── depends on: core, llm-provider, tools
+│
+├── @reactive-agents/testing       — Mock LLMService, mock ToolService, mock EventBus, assertion helpers
+│   └── depends on: core, llm-provider (dev only)
+│
+└── Facade & Runtime
+    ├── @reactive-agents/runtime   — ExecutionEngine, ReactiveAgentBuilder, createRuntime()
+    │   └── depends on: all packages above (optional via Effect Layers)
+    └── reactive-agents            — Public API facade, re-exports builder + types
+        └── depends on: runtime
+```
+
+### Per-Layer Quick Reference
+
+| Package | First file to read | Key exports |
+|---|---|---|
+| `core` | `src/services/event-bus.ts` | `EventBus`, `AgentEvent`, `AgentId`, `TaskId` |
+| `llm-provider` | `src/runtime.ts` | `LLMService`, `createLLMProviderLayer()` |
+| `memory` | `src/runtime.ts` | `MemoryService`, `createMemoryLayer()` |
+| `reasoning` | `src/strategy-registry.ts` | `ReasoningService`, `StrategyRegistry`, `ThoughtKernel` |
+| `tools` | `src/services/tool-service.ts` | `ToolService`, `ToolDefinition`, `defineTool()` |
+| `guardrails` | `src/services/guardrail-service.ts` | `GuardrailService`, `KillSwitchService` |
+| `verification` | `src/services/verification-service.ts` | `VerificationService` |
+| `cost` | `src/services/cost-service.ts` | `CostService` |
+| `identity` | `src/services/identity-service.ts` | `IdentityService` |
+| `observability` | `src/services/observability-service.ts` | `ObservabilityService`, `ThoughtTracer` |
+| `gateway` | `src/services/gateway-service.ts` | `GatewayService`, `PolicyEngine`, `WebhookService` |
+| `eval` | `src/services/eval-service.ts` | `EvalService`, `EvalStore`, `EvalSuite` |
+| `runtime` | `src/builder.ts` | `ReactiveAgents`, `ReactiveAgentBuilder`, `createRuntime()` |
+
+### Common Debugging Entry Points
+
+| Symptom | Start reading |
+|---|---|
+| Agent not calling tools | `packages/reasoning/src/strategies/reactive.ts` → `packages/reasoning/src/kernel/kernel-runner.ts` |
+| EventBus events not firing | `packages/core/src/services/event-bus.ts` → check `ManagedRuntime` is shared |
+| LLM call fails silently | `packages/llm-provider/src/runtime.ts` → provider-specific file in `src/providers/` |
+| Memory not persisting | `packages/memory/src/runtime.ts` → check `createMemoryLayer()` wiring |
+| Plan-execute loops forever | `packages/reasoning/src/strategies/plan-execute.ts` → `isSatisfied()` + all-steps-completed guard |
+| Gateway not starting | `packages/gateway/src/services/gateway-service.ts` → check `.withGateway()` in builder |
+| Metrics dashboard missing | `packages/observability/src/services/observability-service.ts` → `MetricsCollectorLive` layer |
+| Custom kernel not registering | `packages/reasoning/src/strategy-registry.ts` → `registerKernel()` call |
+
+---
+
 ## Golden Rules
 
 1. **Read before writing.** Always read existing files before editing. Understand patterns before introducing new code.
@@ -248,3 +344,182 @@ When creating a new package (e.g., `@reactive-agents/a2a`):
 5. **ReasoningService.execute** takes single params object, not positional args
 6. **Starlight content config** must be `src/content/config.ts` not `src/content.config.ts`
 7. **`workspace:^`** for internal deps (not `workspace:*`) to fix CI DTS builds
+
+---
+
+## Strategic Audit: Vision vs. Implementation (2026-03-02)
+
+> Reasoning cache for agents. Authoritative source of truth for what exists, what doesn't, and what to build next. Reference docs: `spec/REACTIVE_AGENTS_TECHNICAL_SPECS.md` (18-layer architecture), `spec/docs/00-VISION.md` (philosophy + differentiators).
+
+### Current State Snapshot
+
+**1116 tests, 156 files, 18 packages + 2 apps.** Builder API has 30+ `.with*()` methods. All layers compose via Effect-TS through `createRuntime()`.
+
+### Capability Matrix: Vision vs. Reality
+
+| Vision Capability | Status | What Exists | What's Missing |
+|---|---|---|---|
+| **Control-First Architecture** | COMPLETE | Builder API (30+ methods), explicit config, no black boxes | — |
+| **Multi-Strategy Reasoning** | COMPLETE | 5 strategies (ReAct, Plan-Execute, ToT, Reflexion, Adaptive) + shared kernel | See gap-analysis P1–P7 below |
+| **4-Layer Memory** | COMPLETE | Working, Episodic, Semantic (FTS5+sqlite-vec), Procedural (bun:sqlite) | Auto-consolidation pipeline (tier promotion), attention mechanism |
+| **Verification Stack** | STRONG | Semantic entropy, fact decomposition, multi-source, NLI, self-consistency, hallucination detection | Strategy auto-selector (complexity scoring → strategy dispatch) |
+| **Context Engineering** | COMPLETE | Model-adaptive profiles, budget allocation, progressive compaction, 4-tier awareness | Tiered context manager (HOT/WARM/COLD/FROZEN classification), semantic caching with vector search |
+| **Observability** | COMPLETE | EventBus, OpenTelemetry tracing, metrics dashboard, live streaming, structured logging | — |
+| **Type Safety** | COMPLETE | Effect-TS throughout, Schema validation, tagged errors, no `any` | — |
+| **Local-First Optimization** | PARTIAL | Context profiles adapt to model tier, compression, budget tracking | Auto-optimization (scouts learn optimal prompts per model), KV cache hints, hybrid cloud/local routing |
+| **Cost Tracking** | COMPLETE | Token counting, USD estimation, budget enforcement, complexity routing, semantic cache | Per-task/daily budget policies as formal constraints |
+| **Identity & Security** | COMPLETE | Ed25519 certs, RBAC, audit logging, guardrails (injection/PII/toxicity), subprocess sandbox | mTLS inter-agent, Vault integration |
+| **Multi-Agent** | COMPLETE | A2A protocol, agent-as-tool, sub-agents (static+dynamic), MCP (4 transports), orchestration workflows | — |
+| **Agent Gateway** | COMPLETE | Heartbeats (adaptive), crons, webhooks (GitHub adapter), policy engine, input router | Persistence/recovery across restarts |
+| **Scout Layer** | NOT STARTED | — | Entire system: simulation engine, sandbox environment, strategy testing, learning extraction, learning application |
+| **Reactive Seeding Network** | NOT STARTED | — | Entire system: network topology, gossip protocol, privacy preservation, trust scoring, learning aggregation, intelligent harvesting |
+| **SDK Package** | NOT STARTED | Builder API exists but no standalone SDK package | REST API server, `ReactiveAgentsClient` class, hosted endpoints |
+| **Testing Utilities** | PARTIAL | `TestLLMServiceLayer` exists in test files | Formal `@reactive-agents/testing` package with test helpers, mocks, assertions |
+
+### The Two Missing Flagship Differentiators
+
+These are what the vision calls "what makes us different" — the moat features that no other framework has:
+
+#### 1. Scout Layer (`@reactive-agents/scouts` + `@reactive-agents/simulation`)
+
+**What it does:** Safe pre-production testing. Before an agent runs a task in production, scouts explore the problem landscape in a sandbox — testing different strategies, measuring costs, cataloging failure modes, and learning the optimal approach.
+
+**Why it matters:** The vision claims 90-97% cost savings ("$0.50 scout learning + $0.10 optimized execution vs. $5-20 trial-and-error"). This is the core value proposition differentiating us from LangChain, AutoGen, and CrewAI.
+
+**What needs building:**
+- `ScoutConfig` — task, strategies to test, iteration count, sandbox limits, success criteria
+- `ScoutEnvironment` — isolated execution sandbox with mocked external services and safety limits
+- `Scout` class — runs task with assigned strategy in sandbox, captures full metrics (time, cost, tokens, confidence)
+- `ScoutSimulationEngine` — runs N scouts × M iterations, early-terminates on budget exceeded
+- `LearningExtractor` — analyzes results to produce `ScoutLearnings` (optimal strategy, cost curves, failure modes, problem landscape, confidence calibration)
+- `LearningApplicator` — configures production agent with learned optimal strategy, failure mitigations, context requirements, cost expectations
+- Builder integration: `.withScouts({ enabled: true, iterations: 100, budget: 0.50 })`
+- Integration with existing `StrategySelector` in adaptive strategy
+
+**Dependencies:** Reasoning (strategies to test), Cost (budget tracking), Memory (store learnings), Verification (assess results)
+
+#### 2. Reactive Seeding Network (`@reactive-agents/seeding`)
+
+**What it does:** Distributed learning across all agents. Scout learnings and production experiences are shared (privacy-preserved) so every agent benefits from the network's collective intelligence.
+
+**Why it matters:** Network effects create an exponential moat. The vision claims "10 users → 10x faster learning, 1000 users → impossible to replicate." This is the long-term strategic advantage.
+
+**What needs building:**
+- `SeedingNetwork` interface — seed (contribute), harvest (consume), query (intelligence)
+- `SeedingMode` — community (public), private (org-only), hybrid, isolated (offline)
+- `PrivacyPreserver` — differential privacy (noise injection), metadata stripping, threshold cryptography for share splitting
+- `SeedingNetworkTopology` — peer discovery (DHT for public, org registry for private), gossip protocol (fanout=3)
+- `LearningAggregator` — group by task similarity, weighted voting on optimal strategy, average cost curves, union failure modes
+- `IntelligentHarvester` — embed task description, semantic search for similar learnings, filter by trust score and recency, aggregate and rank
+- `TrustSystem` — source reputation (positive/negative feedback loop), verification count, production success rate, recency decay
+- Builder integration: `.withReactiveSeeding({ mode: "community", contribute: true, consume: true })`
+
+**Dependencies:** Scout Layer (produces learnings to share), Memory (semantic search), LLM Provider (embeddings), Identity (source attribution)
+
+### Near-Term Gap Fixes (v0.5.6 — from feature-gap-analysis.md)
+
+All gap fixes completed in Phase A Foundation Fixes:
+
+| # | Gap | Status | Commit |
+|---|-----|--------|--------|
+| P1 | Wire `taskId` into ToT Phase 2 kernel call | ✅ DONE (pre-existing) | — |
+| P2 | Wire `resultCompression` through Reflexion, Plan-Execute, ToT | ✅ DONE | `98bc93c` |
+| P3 | Extend `StrategyFn` type to match full execute params | ✅ DONE | `5b9c18d` |
+| P4 | `compressToolResult` dedup | ✅ DONE (pre-existing) | — |
+| P5 | Add `kernelMaxIterations` config to Reflexion + Plan-Execute | ✅ DONE | `5b9c18d` + `98bc93c` |
+| P6 | Thread real `agentId`/`sessionId` through kernel | ✅ DONE | `ec5aeb4` |
+| P7 | Reflexion `priorCritiques` from episodic memory | ✅ DONE | `05d8e67` |
+
+### Medium-Term Improvements (Pre-Scout Infrastructure)
+
+| Improvement | Package | Status | Notes |
+|---|---|---|---|
+| **Memory consolidation pipeline** | `memory` | ✅ EXISTS | `MemoryConsolidator.consolidate()` with decay, promotion, cleanup |
+| **Verification pipeline runner** | `verification` | ✅ EXISTS | Sequential layer execution with weighted scoring |
+| **Strategy auto-selector** | `reasoning` | ⬚ OPEN | Complexity scoring → strategy dispatch (not just adaptive meta-strategy) |
+| **Hallucination detection layer** | `verification` | ✅ DONE | `checkHallucination()` + `checkHallucinationLLM()` — commit `d81f747` |
+| **Budget enforcement policies** | `cost` | ✅ EXISTS | 4-tier enforcer (perRequest/perSession/daily/monthly) in `budget-enforcer.ts` |
+| **Testing utilities package** | `testing` | ✅ DONE | `@reactive-agents/testing` — mock LLM, tools, EventBus, assertions — commit `79816c6` |
+
+### Strategic Build Order
+
+```
+Phase A: Foundation Fixes (v0.5.6) ← COMPLETE
+  └─ P1–P7 gap fixes ✅
+  └─ Hallucination detection layer ✅
+  └─ @reactive-agents/testing package ✅
+  └─ Memory consolidation, budget enforcement, verification pipeline — already existed
+
+Phase B: Scout Layer (v0.6.0)
+  └─ @reactive-agents/scouts — ScoutConfig, Scout, ScoutEnvironment
+  └─ @reactive-agents/simulation — SimulationEngine, LearningExtractor
+  └─ LearningApplicator + builder .withScouts()
+  └─ Integration: strategies × scouts × verification × cost
+
+Phase C: Seeding Network (v0.7.0)
+  └─ @reactive-agents/seeding — SeedingNetwork, PrivacyPreserver
+  └─ Trust system, gossip protocol, intelligent harvesting
+  └─ Learning aggregation, weighted voting
+  └─ Builder .withReactiveSeeding()
+
+Phase D: Production Polish (v1.0)
+  └─ @reactive-agents/sdk — REST API + client library
+  └─ Tiered context manager (HOT/WARM/COLD/FROZEN)
+  └─ mTLS inter-agent communication
+  └─ Comprehensive documentation + examples
+  └─ Performance benchmarks + optimization
+```
+
+### Builder API: Complete vs. Spec
+
+What the builder has today (30+ methods):
+```
+.withName()  .withPersona()  .withSystemPrompt()  .withContextProfile()
+.withProvider()  .withModel()  .withMemory()  .withMaxIterations()
+.withReasoning()  .withTools()  .withMCP()  .withGuardrails()
+.withVerification()  .withCostTracking()  .withAudit()  .withIdentity()
+.withObservability()  .withInteraction()  .withPrompts()  .withOrchestration()
+.withKillSwitch()  .withBehavioralContracts()  .withSelfImprovement()
+.withEvents()  .withAgentTool()  .withRemoteAgent()  .withDynamicSubAgents()
+.withA2A()  .withGateway()  .withTestResponses()  .withHook()  .withLayers()
+```
+
+What the spec additionally requires:
+```
+.withScouts({ enabled, iterations, budget })           — Phase B
+.withReactiveSeeding({ mode, contribute, consume })    — Phase C
+.withBudget({ perTask, daily, monthly })               — Phase A (enhancement)
+.withScoutMode(enabled)                                — Phase B (alias)
+```
+
+### Package Dependency Graph for New Work
+
+```
+scouts ──────→ reasoning (strategies to test)
+             → cost (budget enforcement)
+             → memory (store learnings)
+             → verification (assess results)
+             → testing (simulation infrastructure)
+
+seeding ─────→ scouts (produces learnings)
+             → memory (semantic search)
+             → llm-provider (embeddings)
+             → identity (source attribution)
+             → core (EventBus for network events)
+
+testing ─────→ core (test helpers)
+             → llm-provider (mock providers)
+             → tools (mock tools)
+```
+
+### Key Design Decisions for Agents
+
+1. **Scout sandbox isolation** — Use Effect-TS `Layer.provide` with mocked services (not process-level sandboxing). Scouts get a `ScoutEnvironment` layer that replaces real services with mocked versions (mock LLM for cost simulation, mock tools for safety).
+
+2. **Learning storage format** — `ScoutLearnings` must be serializable to JSON and storable in episodic memory. Use `Schema.Struct` for validation. Learnings include: optimal strategy name, cost curves (strategy×cost×success), failure modes (mode×frequency×mitigation), problem landscape (complexity×ambiguity×requiredContext).
+
+3. **Seeding network transport** — Start with HTTP REST (not P2P gossip) for simplicity. Community mode posts to a central API; private mode uses org-local storage. Gossip protocol is a v1.0+ optimization.
+
+4. **Privacy** — Differential privacy via Laplacian noise on numerical fields (epsilon=0.1). Strip all metadata except task category and strategy outcomes. No raw task descriptions leave the local system.
+
+5. **Trust scoring** — Start simple: success rate in production × recency decay. Reputation system (positive/negative feedback) is v1.0+ refinement.

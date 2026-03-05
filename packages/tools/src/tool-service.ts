@@ -407,7 +407,7 @@ export const ToolServiceLive = Layer.effect(
                 Effect.mapError(
                   (e) =>
                     new ToolExecutionError({
-                      message: `MCP tool ${toolName} failed`,
+                      message: `MCP tool ${toolName} failed: ${e instanceof Error ? e.message : String(e)}`,
                       toolName,
                       cause: e,
                     }),
@@ -420,6 +420,23 @@ export const ToolServiceLive = Layer.effect(
           _tag: "Custom",
           type: "tools.mcp-connected",
           payload: { serverName: server.name, tools: server.tools },
+        });
+
+        // Register notification listener to forward MCP server notifications to EventBus
+        mcpClient.onNotification(config.name, (method, params) => {
+          if (method === "notifications/message") {
+            Effect.runPromise(
+              eventBus.publish({
+                _tag: "ChannelMessageReceived",
+                sender: String(params.sender ?? "unknown"),
+                platform: String(params.platform ?? "unknown"),
+                message: String(params.message ?? ""),
+                timestamp: typeof params.timestamp === "number" ? params.timestamp : Date.now(),
+                mcpServer: config.name,
+                groupId: params.groupId != null ? String(params.groupId) : undefined,
+              }),
+            ).catch(() => { /* don't let EventBus errors break MCP */ });
+          }
         });
 
         return server;

@@ -8,11 +8,21 @@
 //   - Early termination on end_turn with no tool call (Sprint 2D)
 //
 import { describe, it, expect } from "bun:test";
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Stream } from "effect";
 import { executeReactive } from "../../src/strategies/reactive.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
+import type { StreamEvent } from "@reactive-agents/llm-provider";
 import { ToolService, ToolExecutionError, createToolsLayer } from "@reactive-agents/tools";
+
+/** Build a proper Stream stub from a response string */
+function makeStreamResponse(content: string): Stream.Stream<StreamEvent, never> {
+  return Stream.make(
+    { type: "text_delta" as const, text: content },
+    { type: "content_complete" as const, content },
+    { type: "usage" as const, usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15, estimatedCost: 0 } },
+  ) as Stream.Stream<StreamEvent, never>;
+}
 
 // ─── Shared tool definition for tests ───
 
@@ -57,7 +67,11 @@ describe("Sprint 0.1: Tool schemas in initial context", () => {
             model: "test-model",
           });
         },
-        stream: () => Effect.succeed({ pipe: () => {} } as any),
+        stream: (req: any) => {
+          const lastMsg = req.messages[req.messages.length - 1];
+          capturedContent = typeof lastMsg?.content === "string" ? lastMsg.content : "";
+          return Effect.succeed(makeStreamResponse("FINAL ANSWER: done"));
+        },
         completeStructured: () => Effect.succeed({} as any),
         embed: (texts: string[]) => Effect.succeed(texts.map(() => [])),
         countTokens: () => Effect.succeed(0),
@@ -79,7 +93,11 @@ describe("Sprint 0.1: Tool schemas in initial context", () => {
           model: "test-model",
         });
       },
-      stream: () => Effect.succeed({ pipe: () => {} } as any),
+      stream: (req: any) => {
+        const lastMsg = req.messages[req.messages.length - 1];
+        capturedContent = typeof lastMsg?.content === "string" ? lastMsg.content : "";
+        return Effect.succeed(makeStreamResponse("FINAL ANSWER: done"));
+      },
       completeStructured: () => Effect.succeed({} as any),
       embed: (texts: string[]) => Effect.succeed(texts.map(() => [])),
       countTokens: () => Effect.succeed(0),
@@ -128,7 +146,11 @@ describe("Sprint 0.1: Tool schemas in initial context", () => {
           model: "test-model",
         });
       },
-      stream: () => Effect.succeed({} as any),
+      stream: (req: any) => {
+        const lastMsg = req.messages[req.messages.length - 1];
+        capturedContent = typeof lastMsg?.content === "string" ? lastMsg.content : "";
+        return Effect.succeed(makeStreamResponse("FINAL ANSWER: done"));
+      },
       completeStructured: () => Effect.succeed({} as any),
       embed: (texts: string[]) => Effect.succeed(texts.map(() => [])),
       countTokens: () => Effect.succeed(0),
@@ -318,7 +340,13 @@ describe("Sprint 1B: Context compaction after N steps", () => {
           model: "test-model",
         });
       },
-      stream: () => Effect.succeed({} as any),
+      stream: (_req: any) => {
+        callCount++;
+        const content = callCount >= 3
+          ? "FINAL ANSWER: Completed after multiple steps."
+          : `Thinking on step ${callCount}. I need more info.`;
+        return Effect.succeed(makeStreamResponse(content));
+      },
       completeStructured: () => Effect.succeed({} as any),
       embed: (texts: string[]) => Effect.succeed(texts.map(() => [])),
       countTokens: () => Effect.succeed(0),
@@ -377,7 +405,13 @@ describe("Sprint 2D: Early termination on end_turn", () => {
           model: "test-model",
         });
       },
-      stream: () => Effect.succeed({} as any),
+      stream: (_req: any) => {
+        callCount++;
+        const content = callCount === 1
+          ? "Let me think about this."
+          : "Based on my analysis, the answer to your question is that this is a comprehensive response that provides all necessary information without needing further tool calls.";
+        return Effect.succeed(makeStreamResponse(content));
+      },
       completeStructured: () => Effect.succeed({} as any),
       embed: (texts: string[]) => Effect.succeed(texts.map(() => [])),
       countTokens: () => Effect.succeed(0),
@@ -433,5 +467,262 @@ describe("Sprint 2D: Early termination on end_turn", () => {
 
     // Short responses should not trigger early exit — hits max iterations
     expect(result.status).toBe("partial");
+  });
+});
+
+// ─── Profile overrides: temperature and maxIterations ───
+
+describe("Profile overrides for temperature and maxIterations", () => {
+  it("uses profile.temperature when contextProfile provided", async () => {
+    let capturedTemperature: number | undefined;
+    const { LLMService: LLMSvc } = await import("@reactive-agents/llm-provider");
+
+    const capturingLLMLayer = Layer.succeed(LLMSvc, {
+      complete: (req: any) => {
+        capturedTemperature = req.temperature;
+        return Effect.succeed({
+          content: "FINAL ANSWER: done",
+          stopReason: "end_turn" as const,
+          usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15, estimatedCost: 0 },
+          model: "test-model",
+        });
+      },
+      stream: (req: any) => {
+        capturedTemperature = req.temperature;
+        return Effect.succeed(makeStreamResponse("FINAL ANSWER: done"));
+      },
+      completeStructured: () => Effect.succeed({} as any),
+      embed: (texts: string[]) => Effect.succeed(texts.map(() => [])),
+      countTokens: () => Effect.succeed(0),
+      getModelConfig: () => Effect.succeed({ provider: "anthropic" as const, model: "test-model" }),
+    } as any);
+
+    await Effect.runPromise(
+      executeReactive({
+        taskDescription: "Test temperature override",
+        taskType: "test",
+        memoryContext: "",
+        availableTools: [],
+        config: {
+          ...defaultReasoningConfig,
+          strategies: {
+            ...defaultReasoningConfig.strategies,
+            reactive: { maxIterations: 8, temperature: 0.7 },
+          },
+        },
+        contextProfile: {
+          tier: "local",
+          promptVerbosity: "minimal",
+          rulesComplexity: "simplified",
+          fewShotExampleCount: 0,
+          compactAfterSteps: 4,
+          fullDetailSteps: 2,
+          toolResultMaxChars: 400,
+          contextBudgetPercent: 70,
+          toolSchemaDetail: "names-and-types",
+          maxIterations: 8,
+          temperature: 0.3,
+        },
+      }).pipe(Effect.provide(capturingLLMLayer)),
+    );
+
+    // Profile temperature (0.3) should override config temperature (0.7)
+    expect(capturedTemperature).toBe(0.3);
+  });
+
+  it("uses profile.maxIterations when contextProfile provided", async () => {
+    let callCount = 0;
+    const { LLMService: LLMSvc } = await import("@reactive-agents/llm-provider");
+
+    const countingLLMLayer = Layer.succeed(LLMSvc, {
+      complete: (_req: any) => {
+        callCount++;
+        // Never give FINAL ANSWER — force exhaustion of maxIterations
+        return Effect.succeed({
+          content: `Thinking about step ${callCount}...`,
+          stopReason: "end_turn" as const,
+          usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15, estimatedCost: 0 },
+          model: "test-model",
+        });
+      },
+      stream: (_req: any) => {
+        callCount++;
+        return Effect.succeed(makeStreamResponse(`Thinking about step ${callCount}...`));
+      },
+      completeStructured: () => Effect.succeed({} as any),
+      embed: (texts: string[]) => Effect.succeed(texts.map(() => [])),
+      countTokens: () => Effect.succeed(0),
+      getModelConfig: () => Effect.succeed({ provider: "anthropic" as const, model: "test-model" }),
+    } as any);
+
+    const result = await Effect.runPromise(
+      executeReactive({
+        taskDescription: "Test maxIterations override",
+        taskType: "test",
+        memoryContext: "",
+        availableTools: [],
+        config: {
+          ...defaultReasoningConfig,
+          strategies: {
+            ...defaultReasoningConfig.strategies,
+            reactive: { maxIterations: 10, temperature: 0.7 },
+          },
+        },
+        contextProfile: {
+          tier: "local",
+          promptVerbosity: "minimal",
+          rulesComplexity: "simplified",
+          fewShotExampleCount: 0,
+          compactAfterSteps: 4,
+          fullDetailSteps: 2,
+          toolResultMaxChars: 400,
+          contextBudgetPercent: 70,
+          toolSchemaDetail: "names-and-types",
+          maxIterations: 3,
+          temperature: 0.3,
+        },
+      }).pipe(Effect.provide(countingLLMLayer)),
+    );
+
+    // Profile maxIterations (3) should override config maxIterations (10)
+    // Loop should stop after 3 iterations, not 10
+    expect(callCount).toBe(3);
+    expect(result.status).toBe("partial");
+  });
+});
+
+// ─── Tool schema detail levels ───
+
+describe("toolSchemaDetail from context profile", () => {
+  it("names-and-types detail omits descriptions", async () => {
+    let capturedContent = "";
+    const { LLMService: LLMSvc } = await import("@reactive-agents/llm-provider");
+
+    const capturingLLMLayer = Layer.succeed(LLMSvc, {
+      complete: (req: any) => {
+        const lastMsg = req.messages[req.messages.length - 1];
+        capturedContent = typeof lastMsg?.content === "string" ? lastMsg.content : "";
+        return Effect.succeed({
+          content: "FINAL ANSWER: done",
+          stopReason: "end_turn" as const,
+          usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15, estimatedCost: 0 },
+          model: "test-model",
+        });
+      },
+      stream: (req: any) => {
+        const lastMsg = req.messages[req.messages.length - 1];
+        capturedContent = typeof lastMsg?.content === "string" ? lastMsg.content : "";
+        return Effect.succeed(makeStreamResponse("FINAL ANSWER: done"));
+      },
+      completeStructured: () => Effect.succeed({} as any),
+      embed: (texts: string[]) => Effect.succeed(texts.map(() => [])),
+      countTokens: () => Effect.succeed(0),
+      getModelConfig: () => Effect.succeed({ provider: "anthropic" as const, model: "test-model" }),
+    } as any);
+
+    await Effect.runPromise(
+      executeReactive({
+        taskDescription: "Write a file",
+        taskType: "file-operation",
+        memoryContext: "",
+        availableTools: ["file-write"],
+        availableToolSchemas: [
+          {
+            name: "file-write",
+            description: "Write content to a file",
+            parameters: [
+              { name: "path", type: "string", description: "File path", required: true },
+              { name: "content", type: "string", description: "File content", required: true },
+            ],
+          },
+        ],
+        config: testConfig,
+        contextProfile: {
+          tier: "local",
+          promptVerbosity: "minimal",
+          rulesComplexity: "simplified",
+          fewShotExampleCount: 0,
+          compactAfterSteps: 4,
+          fullDetailSteps: 2,
+          toolResultMaxChars: 400,
+          contextBudgetPercent: 70,
+          toolSchemaDetail: "names-and-types",
+        },
+      }).pipe(Effect.provide(capturingLLMLayer)),
+    );
+
+    // names-and-types format: "- file-write(path: string, content: string)" — no " — " description
+    expect(capturedContent).toContain("file-write(path: string, content: string)");
+    expect(capturedContent).not.toContain("Write content to a file");
+  });
+
+  it("names-only detail shows comma list without parameter details", async () => {
+    let capturedContent = "";
+    const { LLMService: LLMSvc } = await import("@reactive-agents/llm-provider");
+
+    const capturingLLMLayer = Layer.succeed(LLMSvc, {
+      complete: (req: any) => {
+        const lastMsg = req.messages[req.messages.length - 1];
+        capturedContent = typeof lastMsg?.content === "string" ? lastMsg.content : "";
+        return Effect.succeed({
+          content: "FINAL ANSWER: done",
+          stopReason: "end_turn" as const,
+          usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15, estimatedCost: 0 },
+          model: "test-model",
+        });
+      },
+      stream: (req: any) => {
+        const lastMsg = req.messages[req.messages.length - 1];
+        capturedContent = typeof lastMsg?.content === "string" ? lastMsg.content : "";
+        return Effect.succeed(makeStreamResponse("FINAL ANSWER: done"));
+      },
+      completeStructured: () => Effect.succeed({} as any),
+      embed: (texts: string[]) => Effect.succeed(texts.map(() => [])),
+      countTokens: () => Effect.succeed(0),
+      getModelConfig: () => Effect.succeed({ provider: "anthropic" as const, model: "test-model" }),
+    } as any);
+
+    await Effect.runPromise(
+      executeReactive({
+        taskDescription: "Write a file and search the web",
+        taskType: "multi-tool",
+        memoryContext: "",
+        availableTools: ["file-write", "web-search"],
+        availableToolSchemas: [
+          {
+            name: "file-write",
+            description: "Write content to a file",
+            parameters: [
+              { name: "path", type: "string", description: "File path", required: true },
+              { name: "content", type: "string", description: "File content", required: true },
+            ],
+          },
+          {
+            name: "web-search",
+            description: "Search the web",
+            parameters: [
+              { name: "query", type: "string", description: "Search query", required: true },
+            ],
+          },
+        ],
+        config: testConfig,
+        contextProfile: {
+          tier: "local",
+          promptVerbosity: "minimal",
+          rulesComplexity: "simplified",
+          fewShotExampleCount: 0,
+          compactAfterSteps: 4,
+          fullDetailSteps: 2,
+          toolResultMaxChars: 400,
+          contextBudgetPercent: 70,
+          toolSchemaDetail: "names-only",
+        },
+      }).pipe(Effect.provide(capturingLLMLayer)),
+    );
+
+    // names-only format: "Tools: file-write, web-search" — comma-separated, no params
+    expect(capturedContent).toContain("Tools: file-write, web-search");
+    expect(capturedContent).not.toContain("path: string");
+    expect(capturedContent).not.toContain("Write content to a file");
   });
 });

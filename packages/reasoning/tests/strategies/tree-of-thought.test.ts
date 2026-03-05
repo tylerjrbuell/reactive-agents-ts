@@ -36,7 +36,7 @@ describe("TreeOfThoughtStrategy", () => {
     expect(result.steps.length).toBeGreaterThan(0);
     expect(result.metadata.stepsCount).toBeGreaterThan(0);
     expect(result.metadata.tokensUsed).toBeGreaterThan(0);
-    expect(result.metadata.confidence).toBe(0.85);
+    expect(result.metadata.confidence).toBe(0.8);
   });
 
   it("should prune branches below threshold and still produce a result", async () => {
@@ -207,5 +207,34 @@ describe("TreeOfThoughtStrategy", () => {
     expect(result.strategy).toBe("tree-of-thought");
     expect(result.status).toBe("completed");
     expect(result.output).toBeTruthy();
+  });
+
+  it("Phase 2 execution produces a structured final answer via kernel", async () => {
+    const layer = TestLLMServiceLayer({
+      "explore solution": "1. Approach A with recursion\n2. Approach B with iteration",
+      "Rate this thought": "0.8",
+      // Phase 2 kernel call — matches "Selected Approach" in the priorContext
+      "Selected Approach": "FINAL ANSWER: The best approach uses iteration for O(n) complexity.",
+    });
+
+    const result = await Effect.runPromise(
+      executeTreeOfThought({
+        taskDescription: "Find the most efficient sorting algorithm",
+        taskType: "analysis",
+        memoryContext: "",
+        availableTools: [],
+        config: {
+          ...defaultReasoningConfig,
+          strategies: {
+            ...defaultReasoningConfig.strategies,
+            treeOfThought: { breadth: 2, depth: 1, pruningThreshold: 0.5 },
+          },
+        },
+      }).pipe(Effect.provide(layer)),
+    );
+
+    expect(result.strategy).toBe("tree-of-thought");
+    expect(result.status).toBe("completed");
+    expect(result.output).toContain("iteration");
   });
 });

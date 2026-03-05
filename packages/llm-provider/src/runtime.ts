@@ -16,6 +16,7 @@ export const createLLMProviderLayer = (
   provider: "anthropic" | "openai" | "ollama" | "gemini" | "litellm" | "test" = "anthropic",
   testResponses?: Record<string, string>,
   model?: string,
+  modelParams?: { thinking?: boolean; temperature?: number; maxTokens?: number },
 ) => {
   if (provider === "test") {
     return Layer.mergeAll(
@@ -24,8 +25,14 @@ export const createLLMProviderLayer = (
     );
   }
 
-  const configLayer = model
-    ? Layer.succeed(LLMConfig, LLMConfig.of({ ...llmConfigFromEnv, defaultModel: model }))
+  const configOverrides: Record<string, unknown> = {};
+  if (model) configOverrides.defaultModel = model;
+  if (modelParams?.thinking !== undefined) configOverrides.thinking = modelParams.thinking;
+  if (modelParams?.temperature !== undefined) configOverrides.defaultTemperature = modelParams.temperature;
+  if (modelParams?.maxTokens !== undefined) configOverrides.defaultMaxTokens = modelParams.maxTokens;
+
+  const configLayer = Object.keys(configOverrides).length > 0
+    ? Layer.succeed(LLMConfig, LLMConfig.of({ ...llmConfigFromEnv, ...configOverrides }))
     : LLMConfigFromEnv;
 
   const providerLayer =

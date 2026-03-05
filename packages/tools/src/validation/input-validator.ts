@@ -26,7 +26,9 @@ export const validateToolInput = (
         );
       }
 
-      if (value === undefined) {
+      // Treat null the same as undefined for optional params.
+      // Many LLMs (especially smaller models) emit "param": null for optional fields.
+      if (value === undefined || value === null) {
         if (param.default !== undefined) {
           validated[param.name] = param.default;
         }

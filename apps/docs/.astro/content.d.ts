@@ -184,6 +184,13 @@ declare module 'astro:content' {
   collection: "docs";
   data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
+"concepts/composable-kernel.md": {
+	id: "concepts/composable-kernel.md";
+  slug: "concepts/composable-kernel";
+  body: string;
+  collection: "docs";
+  data: InferEntrySchema<"docs">
+} & { render(): Render[".md"] };
 "concepts/effect-ts.md": {
 	id: "concepts/effect-ts.md";
   slug: "concepts/effect-ts";
@@ -240,6 +247,20 @@ declare module 'astro:content' {
   collection: "docs";
   data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
+"features/eval.md": {
+	id: "features/eval.md";
+  slug: "features/eval";
+  body: string;
+  collection: "docs";
+  data: InferEntrySchema<"docs">
+} & { render(): Render[".md"] };
+"features/gateway.md": {
+	id: "features/gateway.md";
+  slug: "features/gateway";
+  body: string;
+  collection: "docs";
+  data: InferEntrySchema<"docs">
+} & { render(): Render[".md"] };
 "features/identity.md": {
 	id: "features/identity.md";
   slug: "features/identity";
@@ -275,9 +296,30 @@ declare module 'astro:content' {
   collection: "docs";
   data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
+"features/streaming.md": {
+	id: "features/streaming.md";
+  slug: "features/streaming";
+  body: string;
+  collection: "docs";
+  data: InferEntrySchema<"docs">
+} & { render(): Render[".md"] };
 "features/verification.md": {
 	id: "features/verification.md";
   slug: "features/verification";
+  body: string;
+  collection: "docs";
+  data: InferEntrySchema<"docs">
+} & { render(): Render[".md"] };
+"guides/agent-skills.mdx": {
+	id: "guides/agent-skills.mdx";
+  slug: "guides/agent-skills";
+  body: string;
+  collection: "docs";
+  data: InferEntrySchema<"docs">
+} & { render(): Render[".mdx"] };
+"guides/choosing-a-stack.md": {
+	id: "guides/choosing-a-stack.md";
+  slug: "guides/choosing-a-stack";
   body: string;
   collection: "docs";
   data: InferEntrySchema<"docs">
@@ -324,6 +366,13 @@ declare module 'astro:content' {
   collection: "docs";
   data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
+"guides/messaging-channels.md": {
+	id: "guides/messaging-channels.md";
+  slug: "guides/messaging-channels";
+  body: string;
+  collection: "docs";
+  data: InferEntrySchema<"docs">
+} & { render(): Render[".md"] };
 "guides/quickstart.md": {
 	id: "guides/quickstart.md";
   slug: "guides/quickstart";
@@ -338,9 +387,23 @@ declare module 'astro:content' {
   collection: "docs";
   data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
+"guides/security-hardening.md": {
+	id: "guides/security-hardening.md";
+  slug: "guides/security-hardening";
+  body: string;
+  collection: "docs";
+  data: InferEntrySchema<"docs">
+} & { render(): Render[".md"] };
 "guides/tools.md": {
 	id: "guides/tools.md";
   slug: "guides/tools";
+  body: string;
+  collection: "docs";
+  data: InferEntrySchema<"docs">
+} & { render(): Render[".md"] };
+"guides/troubleshooting.md": {
+	id: "guides/troubleshooting.md";
+  slug: "guides/troubleshooting";
   body: string;
   collection: "docs";
   data: InferEntrySchema<"docs">
@@ -378,7 +441,15 @@ declare module 'astro:content' {
 	};
 
 	type DataEntryMap = {
-		
+		"skills": Record<string, {
+  id: string;
+  body?: string;
+  collection: "skills";
+  data: InferEntrySchema<"skills">;
+  rendered?: RenderedContent;
+  filePath?: string;
+}>;
+
 	};
 
 	type AnyEntryMap = ContentEntryMap & DataEntryMap;

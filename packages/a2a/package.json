@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/a2a",
-  "version": "0.5.2",
+  "version": "0.6.0",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -35,8 +35,21 @@
       "default": "./dist/index.js"
     }
   },
-  "files": ["dist", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tylerjrbuell/reactive-agents-ts.git",
+    "directory": "packages/a2a"
+  },
+  "homepage": "https://tylerjrbuell.github.io/reactive-agents-ts/",
+  "bugs": {
+    "url": "https://github.com/tylerjrbuell/reactive-agents-ts/issues"
+  },
   "publishConfig": {
     "access": "public"
   }

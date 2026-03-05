@@ -32,8 +32,31 @@ All methods return `this` for chaining.
 
 | Method | Signature | Description |
 | ------ | --------- | ----------- |
-| `withModel` | `(model: string) => this` | Set the LLM model (e.g., `"claude-sonnet-4-20250514"`) |
+| `withModel` | `(model: string) => this` | Set the LLM model by name (e.g., `"claude-sonnet-4-20250514"`) |
+| `withModel` | `(params: ModelParams) => this` | Set model with advanced parameters: `thinking`, `temperature`, `maxTokens` |
 | `withProvider` | `(provider: "anthropic" \| "openai" \| "ollama" \| "gemini" \| "litellm" \| "test") => this` | Set the LLM provider |
+
+#### ModelParams
+
+```typescript
+interface ModelParams {
+  model: string;         // Model identifier (provider-specific)
+  thinking?: boolean;    // Enable thinking/reasoning mode (auto-detected if omitted)
+  temperature?: number;  // Sampling temperature 0.0–1.0
+  maxTokens?: number;    // Maximum output tokens
+}
+```
+
+```typescript
+// String form — simple model selection
+.withModel("claude-opus-4-20250514")
+
+// ModelParams form — local model with thinking mode
+.withModel({ model: "qwen3:14b", thinking: true, temperature: 0.7 })
+
+// ModelParams form — cap token budget
+.withModel({ model: "gpt-4o", maxTokens: 2048 })
+```
 
 ### Memory
 
@@ -46,6 +69,31 @@ All methods return `this` for chaining.
 | Method | Signature | Description |
 | ------ | --------- | ----------- |
 | `withMaxIterations` | `(n: number) => this` | Max agent loop iterations (default: 10) |
+| `withContextProfile` | `(profile: Partial<ContextProfile>) => this` | Model-adaptive context overrides: compaction thresholds, tool result size limits, budget |
+
+#### ContextProfile fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `tier` | `"local" \| "mid" \| "large" \| "frontier"` | Model tier — controls which defaults are applied |
+| `budgetTokens` | `number` | Max tokens to include in the context window |
+| `toolResultMaxChars` | `number` | Truncate tool results beyond this length |
+| `compactionLevel` | `"full" \| "summary" \| "grouped" \| "dropped"` | How aggressively to compact older steps |
+| `maxStepsBeforeCompaction` | `number` | Steps to keep in full detail before compacting |
+
+```typescript
+// Lean context for local small models
+.withContextProfile({ tier: "local" })
+
+// Manual overrides for a specific task
+.withContextProfile({
+  budgetTokens: 4000,
+  toolResultMaxChars: 800,
+  compactionLevel: "grouped",
+})
+```
+
+See [Context Engineering](/guides/context-engineering/) for full tier defaults.
 
 ### Optional Features
 
@@ -65,6 +113,8 @@ All methods return `this` for chaining.
 | `withOrchestration()` | Multi-agent workflow coordination |
 | `withSelfImprovement()` | Cross-task self-improvement: logs `StrategyOutcome` per task and retrieves relevant past outcomes at bootstrap to guide strategy selection |
 | `withAudit()` | Compliance audit trail logging |
+| `withEvents()` | Enable typed EventBus subscriptions via `agent.subscribe()` |
+| `withGateway(options?)` | Persistent autonomous gateway: adaptive heartbeats, cron scheduling, webhook ingestion, policy engine. Options: `{ heartbeat?: HeartbeatConfig, crons?: CronEntry[], webhooks?: WebhookConfig[], policies?: PolicyConfig }` |
 
 ### A2A Protocol
 
@@ -353,6 +403,16 @@ yield* eventBus.on("ReasoningStepCompleted", onStepComplete);
 | `AgentResumed` | `agentId`, `taskId` |
 | `AgentStopped` | `agentId`, `taskId`, `reason` |
 | `TaskCompleted` | `taskId`, `success` |
+| `GatewayStarted` | `agentId`, `timestamp` |
+| `GatewayStopped` | `agentId`, `reason` |
+| `GatewayEventReceived` | `agentId`, `eventId`, `source`, `category` |
+| `ProactiveActionInitiated` | `agentId`, `eventId`, `action` |
+| `ProactiveActionCompleted` | `agentId`, `eventId`, `success`, `durationMs` |
+| `ProactiveActionSuppressed` | `agentId`, `eventId`, `reason` |
+| `PolicyDecisionMade` | `agentId`, `eventId`, `action`, `policyTag` |
+| `HeartbeatSkipped` | `agentId`, `consecutiveSkips`, `reason` |
+| `EventsMerged` | `agentId`, `mergedCount`, `mergeKey` |
+| `BudgetExhausted` | `agentId`, `tokensUsed`, `dailyBudget` |
 
 ## AgentResult
 

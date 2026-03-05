@@ -70,26 +70,54 @@ export const TestLLMService = (
       } satisfies CompletionResponse;
     }),
 
-  stream: (_request) =>
-    Effect.succeed(
+  stream: (request) => {
+    const lastMessage = request.messages[request.messages.length - 1];
+    const content =
+      lastMessage && typeof lastMessage.content === "string"
+        ? lastMessage.content
+        : "";
+
+    // Also check systemPrompt for pattern matching (mirrors complete() logic)
+    const systemPrompt =
+      typeof (request as any).systemPrompt === "string"
+        ? (request as any).systemPrompt
+        : "";
+    const searchText = `${content} ${systemPrompt}`;
+
+    // Match against registered patterns
+    let matchedResponse = "Test response";
+    for (const [pattern, response] of Object.entries(responses)) {
+      if (pattern.length > 0 && searchText.includes(pattern)) {
+        matchedResponse = response;
+        break;
+      }
+    }
+
+    const inputTokens = Math.ceil(content.length / 4);
+    const outputTokens = Math.ceil(matchedResponse.length / 4);
+
+    return Effect.succeed(
       Stream.make(
-        { type: "text_delta" as const, text: "Test " } satisfies StreamEvent,
-        { type: "text_delta" as const, text: "response" } satisfies StreamEvent,
+        {
+          type: "text_delta" as const,
+          text: matchedResponse,
+        } satisfies StreamEvent,
         {
           type: "content_complete" as const,
-          content: "Test response",
+          content: matchedResponse,
         } satisfies StreamEvent,
         {
           type: "usage" as const,
           usage: {
-            inputTokens: 0,
-            outputTokens: 0,
-            totalTokens: 0,
+            inputTokens,
+            outputTokens,
+            totalTokens: inputTokens + outputTokens,
             estimatedCost: 0,
           },
         } satisfies StreamEvent,
       ) as Stream.Stream<StreamEvent, LLMErrors>,
-    ),
+    );
+  },
 
   completeStructured: (request) =>
     Effect.gen(function* () {
@@ -133,6 +161,14 @@ export const TestLLMService = (
     Effect.succeed({
       provider: "anthropic" as const,
       model: "test-model",
+    }),
+
+  getStructuredOutputCapabilities: () =>
+    Effect.succeed({
+      nativeJsonMode: true,
+      jsonSchemaEnforcement: false,
+      prefillSupport: false,
+      grammarConstraints: false,
     }),
 });
 

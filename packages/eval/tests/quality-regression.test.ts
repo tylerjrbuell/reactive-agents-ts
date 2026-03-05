@@ -79,13 +79,21 @@ describe("Quality Regression: Strategy Step Types", () => {
   });
 
   it("Plan-Execute produces plan → thought sequence", async () => {
+    const planJson = JSON.stringify({
+      steps: [
+        { title: "Research the topic", instruction: "Research AI safety", type: "analysis" },
+        { title: "Summarize results", instruction: "Summarize findings", type: "analysis" },
+      ],
+    });
     const llmLayer = TestLLMServiceLayer({
-      // Plan phase
-      default: "1. Research the topic\n2. Analyze findings\n3. Summarize results",
-      // Execute phase
-      "execute": "Step completed successfully.",
-      // Reflect phase
-      "reflect": "The plan was executed correctly. Results are complete.",
+      // Plan generation — extractStructuredOutput needs valid JSON
+      "planning agent": planJson,
+      // Step execution via ReAct kernel
+      "OVERALL GOAL": "FINAL ANSWER: Step completed successfully.",
+      // Reflection
+      "GOAL:": "SATISFIED: The plan was executed correctly.",
+      // Synthesis
+      "Synthesize": "AI safety research findings summarized successfully.",
     });
 
     const result = await Effect.runPromise(
@@ -146,10 +154,26 @@ describe("Quality Regression: Strategy Step Types", () => {
   });
 
   it("all strategies return valid ReasoningResult shape", async () => {
+    const planJson = JSON.stringify({
+      steps: [
+        { title: "Do the task", instruction: "Complete the task", type: "analysis" },
+      ],
+    });
     const llmLayer = TestLLMServiceLayer({
-      default: "FINAL ANSWER: Test result.",
+      // Plan-execute: extractStructuredOutput needs JSON for plan generation
+      "planning agent": planJson,
+      // Plan-execute: step execution via ReAct kernel
+      "OVERALL GOAL": "FINAL ANSWER: Test result.",
+      // Plan-execute: reflection
+      "GOAL:": "SATISFIED: Good.",
+      // Plan-execute: synthesis
+      "Synthesize": "Final synthesized test result.",
+      // Reflexion critique
       "critique": "SATISFIED: Good.",
+      // ToT scoring
       "score": "0.7",
+      // Default for reactive, reflexion generate, ToT expansion
+      default: "FINAL ANSWER: Test result.",
     });
 
     const strategies = [

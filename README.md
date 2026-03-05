@@ -2,21 +2,22 @@
 
 <img src="./assets/logo.png" alt="Reactive Agents" width="280" />
 
-# Reactive Agents
+# Reactive Agents — TypeScript AI Agent Framework
 
-**The composable AI agent framework built on Effect-TS.**
+**A composable, type-safe AI agent framework for TypeScript, built on Effect-TS.**
 
-Type-safe from prompt to production. 17 packages. 13 composable layers. 5 reasoning strategies. 10-phase execution engine. 8 built-in tools. Model-adaptive context engineering. Structured agent steering via personas. Real Ed25519 cryptography, kill switch, behavioral contracts, cross-task self-improvement, and full real-time EventBus observability.
+Type-safe from prompt to production. 19 packages. 13 composable layers. 5 reasoning strategies. 10-phase execution engine. 8 built-in tools. Model-adaptive context engineering. Persistent autonomous gateway with adaptive heartbeats, crons, and webhooks. Structured agent steering via personas. Real Ed25519 cryptography, kill switch, behavioral contracts, cross-task self-improvement, and full real-time EventBus observability.
 
 [![CI](https://github.com/tylerjrbuell/reactive-agents-ts/actions/workflows/ci.yml/badge.svg)](https://github.com/tylerjrbuell/reactive-agents-ts/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/badge/npm-%40reactive--agents-CB3837?logo=npm)](https://www.npmjs.com/org/reactive-agents)
+[![npm downloads](https://img.shields.io/npm/dm/reactive-agents?logo=npm)](https://www.npmjs.com/package/reactive-agents)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7+-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Effect-TS](https://img.shields.io/badge/Effect--TS-3.x-7C3AED)](https://effect.website)
 [![Bun](https://img.shields.io/badge/Bun-compatible-FBF0DF?logo=bun&logoColor=000000)](https://bun.sh)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/tylerjrbuell/reactive-agents-ts/pulls)
 
-[Documentation](https://tylerjrbuell.github.io/reactive-agents-ts/) · [Quick Start](#quick-start) · [Architecture](#architecture) · [Packages](#packages)
+[Documentation](https://tylerjrbuell.github.io/reactive-agents-ts/) · [Discord](https://discord.gg/498xEG5A) · [Quick Start](#quick-start) · [Features](#features) · [Use Cases](#use-cases) · [Architecture](#architecture) · [Packages](#packages)
 
 </div>
 
@@ -36,7 +37,41 @@ Most AI agent frameworks are dynamically typed, monolithic, and opaque. **Reacti
 | **Single reasoning mode**      | 5 strategies (ReAct, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive)            |
 | **Context bloat in long runs** | Model-adaptive context engineering — compaction, truncation, and tier-aware prompts |
 
+## Features
+
+- TypeScript-first AI agent framework with Effect-TS type safety
+- Multi-agent orchestration with A2A protocol and agent-as-tool composition
+- MCP client support for external tools and integrations
+- Built-in reasoning strategies: ReAct, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive
+- Production guardrails: injection, PII, toxicity, kill switch, behavioral contracts
+- Real-time observability: EventBus events, tracing, live execution metrics dashboard
+- Cost and budget controls with model routing and semantic caching
+- Local-first + cloud model support (Ollama, Anthropic, OpenAI, Gemini, LiteLLM)
+
+## Use Cases
+
+- Autonomous engineering agents with tool execution and code generation
+- Research and reporting workflows with verifiable reasoning steps
+- Scheduled background agents using heartbeats, cron jobs, and webhooks
+- Secure enterprise copilots with RBAC, audit trails, and policy controls
+- Hybrid local/cloud AI deployments with adaptive context profiles
+
+## Comparison
+
+Reactive Agents is designed for teams that need production-grade TypeScript AI agents with explicit architecture, strong typing, and observability.
+
+| Framework Focus     | Reactive Agents                                           |
+| ------------------- | --------------------------------------------------------- |
+| Type safety         | Effect-TS-first service boundaries with schema validation |
+| Architecture        | Composable layers instead of monolithic runtime           |
+| Reasoning           | 5 built-in strategies + adaptive strategy selection       |
+| Tooling             | Native MCP support, sandboxed tools, agent-as-tool        |
+| Production controls | Guardrails, cost budgets, audit trails, kill switch       |
+| Visibility          | EventBus tracing, structured logs, metrics dashboard      |
+
 ## Quick Start
+
+Install and run your first TypeScript AI agent in under 2 minutes.
 
 ```bash
 bun add reactive-agents effect
@@ -56,6 +91,20 @@ console.log(result.output);
 console.log(result.metadata); // { duration, cost, tokensUsed, stepsCount }
 // ✅ Observability enabled: Professional metrics dashboard displayed automatically
 ```
+
+## FAQ
+
+### Which models and providers are supported?
+
+Reactive Agents supports Anthropic, OpenAI, Google Gemini, Ollama (local), and LiteLLM (proxy for many providers).
+
+### Is this framework production-ready?
+
+Yes — it includes guardrails, budget controls, auditability, observability, and composable service layers for testable deployments.
+
+### Can I run fully local agents?
+
+Yes — use Ollama with local models plus context profiles tuned for local inference.
 
 ### Add Capabilities
 
@@ -83,6 +132,12 @@ const agent = await ReactiveAgents.create()
   .withInteraction() // 5 autonomy modes
   .withOrchestration() // Multi-agent workflows
   .withSelfImprovement() // Cross-task strategy outcome learning
+  .withGateway({
+    // Persistent autonomous harness
+    heartbeat: { intervalMs: 1_800_000, policy: "adaptive" },
+    crons: [{ schedule: "0 9 * * MON", instruction: "Weekly review" }],
+    policies: { dailyTokenBudget: 50_000 },
+  })
   .build();
 ```
 
@@ -183,6 +238,7 @@ ReactiveAgentBuilder
     → Interaction       5 Modes, Checkpoints, Preference Learning
     → Orchestration     Sequential, Parallel, Pipeline, Map-Reduce
     → Prompts           Template Engine, Version Control
+    → Gateway           Heartbeats, Crons, Webhooks, Policy Engine
     → ExecutionEngine   10-phase lifecycle with hooks
 ```
 
@@ -250,24 +306,26 @@ Switch providers with one line — agent code stays the same.
 
 ## Packages
 
-| Package                                                    | Description                                                        |
-| ---------------------------------------------------------- | ------------------------------------------------------------------ |
-| [`@reactive-agents/core`](packages/core)                   | EventBus, AgentService, TaskService, types                         |
-| [`@reactive-agents/runtime`](packages/runtime)             | ExecutionEngine, ReactiveAgentBuilder, `createRuntime()`           |
-| [`@reactive-agents/llm-provider`](packages/llm-provider)   | LLM adapters (Anthropic, OpenAI, Gemini, Ollama, LiteLLM)          |
-| [`@reactive-agents/memory`](packages/memory)               | Working, Semantic, Episodic, Procedural memory (bun:sqlite)        |
-| [`@reactive-agents/reasoning`](packages/reasoning)         | 5 strategies: ReAct, Reflexion, Plan-Execute, ToT, Adaptive        |
-| [`@reactive-agents/tools`](packages/tools)                 | Tool registry, sandboxed execution, MCP client                     |
-| [`@reactive-agents/guardrails`](packages/guardrails)       | Injection, PII, toxicity detection                                 |
-| [`@reactive-agents/verification`](packages/verification)   | Semantic entropy, fact decomposition, NLI                          |
-| [`@reactive-agents/cost`](packages/cost)                   | Complexity routing, budget enforcement, semantic caching           |
-| [`@reactive-agents/identity`](packages/identity)           | Agent certificates, RBAC, delegation                               |
-| [`@reactive-agents/observability`](packages/observability) | Distributed tracing, metrics, structured logging                   |
-| [`@reactive-agents/interaction`](packages/interaction)     | 5 autonomy modes, checkpoints, preference learning                 |
-| [`@reactive-agents/orchestration`](packages/orchestration) | Multi-agent workflows (sequential, parallel, map-reduce, pipeline) |
-| [`@reactive-agents/prompts`](packages/prompts)             | Version-controlled template engine                                 |
-| [`@reactive-agents/eval`](packages/eval)                   | Evaluation framework (LLM-as-judge scoring)                        |
-| [`@reactive-agents/a2a`](packages/a2a)                     | A2A protocol: Agent Cards, JSON-RPC server/client, SSE streaming   |
+| Package                                                    | Description                                                                     |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| [`@reactive-agents/core`](packages/core)                   | EventBus, AgentService, TaskService, types                                      |
+| [`@reactive-agents/runtime`](packages/runtime)             | ExecutionEngine, ReactiveAgentBuilder, `createRuntime()`                        |
+| [`@reactive-agents/llm-provider`](packages/llm-provider)   | LLM adapters (Anthropic, OpenAI, Gemini, Ollama, LiteLLM)                       |
+| [`@reactive-agents/memory`](packages/memory)               | Working, Semantic, Episodic, Procedural memory (bun:sqlite)                     |
+| [`@reactive-agents/reasoning`](packages/reasoning)         | 5 strategies: ReAct, Reflexion, Plan-Execute, ToT, Adaptive                     |
+| [`@reactive-agents/tools`](packages/tools)                 | Tool registry, sandboxed execution, MCP client                                  |
+| [`@reactive-agents/guardrails`](packages/guardrails)       | Injection, PII, toxicity detection                                              |
+| [`@reactive-agents/verification`](packages/verification)   | Semantic entropy, fact decomposition, NLI                                       |
+| [`@reactive-agents/cost`](packages/cost)                   | Complexity routing, budget enforcement, semantic caching                        |
+| [`@reactive-agents/identity`](packages/identity)           | Agent certificates, RBAC, delegation                                            |
+| [`@reactive-agents/observability`](packages/observability) | Distributed tracing, metrics, structured logging                                |
+| [`@reactive-agents/interaction`](packages/interaction)     | 5 autonomy modes, checkpoints, preference learning                              |
+| [`@reactive-agents/orchestration`](packages/orchestration) | Multi-agent workflows (sequential, parallel, map-reduce, pipeline)              |
+| [`@reactive-agents/prompts`](packages/prompts)             | Version-controlled template engine                                              |
+| [`@reactive-agents/eval`](packages/eval)                   | Evaluation framework (LLM-as-judge scoring)                                     |
+| [`@reactive-agents/a2a`](packages/a2a)                     | A2A protocol: Agent Cards, JSON-RPC server/client, SSE streaming                |
+| [`@reactive-agents/gateway`](packages/gateway)             | Persistent autonomous agent harness: heartbeats, crons, webhooks, policy engine |
+| [`@reactive-agents/testing`](packages/testing)             | Testing utilities: mock services, assertions, test fixtures                     |
 
 ## CLI (`rax`)
 
@@ -334,7 +392,7 @@ Enable with:
 
 ```bash
 bun install              # Install dependencies
-bun test                 # Run all tests (909 tests, 124 files)
+bun test                 # Run full test suite
 bun run build            # Build all packages (ESM + DTS)
 ```
 

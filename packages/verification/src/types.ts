@@ -46,6 +46,15 @@ export const VerificationResultSchema = Schema.Struct({
 });
 export type VerificationResult = typeof VerificationResultSchema.Type;
 
+// ─── Hallucination Claim ───
+
+export interface HallucinationClaim {
+  text: string;
+  confidence: "certain" | "likely" | "uncertain";
+  verified: boolean;
+  source?: string;
+}
+
 // ─── Verification Config ───
 
 export const VerificationConfigSchema = Schema.Struct({
@@ -54,6 +63,8 @@ export const VerificationConfigSchema = Schema.Struct({
   enableMultiSource: Schema.Boolean,
   enableSelfConsistency: Schema.Boolean,
   enableNli: Schema.Boolean,
+  enableHallucinationDetection: Schema.optional(Schema.Boolean),
+  hallucinationThreshold: Schema.optional(Schema.Number),
   passThreshold: Schema.Number, // Default: 0.7
   riskThreshold: Schema.Number, // Default: 0.5
   /** When true and llm is provided, use LLM-based semantic entropy and fact decomposition. */
@@ -73,6 +84,8 @@ export const defaultVerificationConfig: VerificationConfig = {
   enableMultiSource: false, // placeholder in Tier 1
   enableSelfConsistency: true,
   enableNli: true,
+  enableHallucinationDetection: false,
+  hallucinationThreshold: 0.10,
   passThreshold: 0.7,
   riskThreshold: 0.5,
 };
