@@ -1,0 +1,35 @@
+import { defineConfig } from "tsup";
+
+export default defineConfig({
+  entry: {
+    index: "src/index.ts",
+    core: "src/core.ts",
+    memory: "src/memory.ts",
+    reasoning: "src/reasoning.ts",
+    tools: "src/tools.ts",
+    guardrails: "src/guardrails.ts",
+    verification: "src/verification.ts",
+    cost: "src/cost.ts",
+    identity: "src/identity.ts",
+    observability: "src/observability.ts",
+    interaction: "src/interaction.ts",
+    orchestration: "src/orchestration.ts",
+    prompts: "src/prompts.ts",
+    eval: "src/eval.ts",
+    a2a: "src/a2a.ts",
+  },
+  format: ["esm"],
+  dts: true,
+  clean: true,
+  splitting: false,
+  sourcemap: true,
+  external: [
+    "effect",
+    "bun:sqlite",
+    "@effect/platform",
+    "@anthropic-ai/sdk",
+    "openai",
+    "@google/genai",
+    /^@reactive-agents\//,
+  ],
+});
