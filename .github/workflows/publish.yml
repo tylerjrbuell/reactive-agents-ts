@@ -51,6 +51,8 @@ jobs:
             "packages/orchestration"
             "packages/prompts"
             "packages/a2a"
+            "packages/gateway"
+            "packages/testing"
             "packages/runtime"
             "packages/reactive-agents"
             "apps/cli"
