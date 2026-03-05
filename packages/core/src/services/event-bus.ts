@@ -594,6 +594,40 @@ export type AgentEvent =
       readonly type: string;
       /** Arbitrary custom payload */
       readonly payload: unknown;
+    }
+  // ─── Streaming events ───
+  | {
+      /**
+       * A complete text response arrived from the LLM (end of streaming).
+       * Fired once per LLM call after content_complete — NOT per token.
+       * For per-token events, subscribe to agent.runStream() TextDelta events instead.
+       */
+      readonly _tag: "TextDeltaReceived";
+      readonly taskId: string;
+      readonly text: string;
+      readonly timestamp: number;
+    }
+  | {
+      /**
+       * Agent stream started.
+       * Fired at the beginning of agent.runStream() execution.
+       */
+      readonly _tag: "AgentStreamStarted";
+      readonly taskId: string;
+      readonly agentId: string;
+      readonly density: string;
+      readonly timestamp: number;
+    }
+  | {
+      /**
+       * Agent stream completed.
+       * Fired when the stream reaches StreamCompleted or StreamError.
+       */
+      readonly _tag: "AgentStreamCompleted";
+      readonly taskId: string;
+      readonly agentId: string;
+      readonly success: boolean;
+      readonly durationMs: number;
     };
 
 /**
