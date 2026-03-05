@@ -1,5 +1,5 @@
 // apps/meta-agent/src/tools/community-monitor.ts
-import type { ToolDefinition } from "reactive-agents";
+import type { ToolDefinition } from "reactive-agents/tools";
 
 /**
  * Custom tool: search developer communities for TypeScript AI agent discussions.
