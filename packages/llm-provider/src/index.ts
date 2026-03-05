@@ -18,6 +18,7 @@ export type {
   StreamEvent,
   StructuredCompletionRequest,
   TruncationStrategy,
+  StructuredOutputCapabilities,
 } from "./types.js";
 
 // ─── Schemas ───
@@ -87,6 +88,9 @@ export type {
   ThoughtEvaluation,
   ComplexityAnalysis,
 } from "./structured-output.js";
+
+// ─── Provider Defaults ───
+export { PROVIDER_DEFAULT_MODELS, getProviderDefaultModel } from "./provider-defaults.js";
 
 // ─── Runtime ───
 export {

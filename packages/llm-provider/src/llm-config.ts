@@ -110,6 +110,16 @@ export class LLMConfig extends Context.Tag("LLMConfig")<
     readonly timeoutMs: number;
 
     /**
+     * Enable/disable thinking mode for thinking-capable models.
+     * - `true` — Always enable thinking (e.g., qwen3.5, DeepSeek-R1)
+     * - `false` — Always disable thinking (e.g., cogito:14b that crashes with think:true)
+     * - `undefined` — Auto-detect based on model capabilities (Ollama only)
+     *
+     * @default undefined (auto-detect)
+     */
+    readonly thinking?: boolean;
+
+    /**
      * Default maximum output tokens for LLM responses.
      * Used if a CompletionRequest does not specify maxTokens.
      * Set lower for faster responses; higher for longer outputs.
@@ -181,7 +191,7 @@ export class LLMConfig extends Context.Tag("LLMConfig")<
 export const llmConfigFromEnv = LLMConfig.of({
   defaultProvider: "anthropic",
   defaultModel:
-    process.env.LLM_DEFAULT_MODEL ?? "claude-sonnet-4-20250514",
+    process.env.LLM_DEFAULT_MODEL || "claude-sonnet-4-20250514",
   anthropicApiKey: process.env.ANTHROPIC_API_KEY,
   openaiApiKey: process.env.OPENAI_API_KEY,
   googleApiKey: process.env.GOOGLE_API_KEY,
@@ -195,7 +205,7 @@ export const llmConfigFromEnv = LLMConfig.of({
     batchSize: 100,
   },
   supportsPromptCaching: (
-    process.env.LLM_DEFAULT_MODEL ?? "claude-sonnet-4-20250514"
+    process.env.LLM_DEFAULT_MODEL || "claude-sonnet-4-20250514"
   ).startsWith("claude"),
   maxRetries: Number(process.env.LLM_MAX_RETRIES ?? 3),
   timeoutMs: Number(process.env.LLM_TIMEOUT_MS ?? 30_000),

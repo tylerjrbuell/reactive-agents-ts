@@ -244,7 +244,7 @@ const agent = await ReactiveAgents.create()
 
 ## EventBus Integration
 
-When `.withEventBus()` is active, guardrail violations emit a typed event you can subscribe to:
+When `.withEvents()` is active, guardrail violations emit a typed event you can subscribe to:
 
 ```typescript
 const unsubscribe = await agent.subscribe("GuardrailViolationDetected", (event) => {

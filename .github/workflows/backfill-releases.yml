@@ -1,0 +1,78 @@
+name: Backfill GitHub Releases
+
+on:
+    workflow_dispatch:
+        inputs:
+            update_existing:
+                description: "Update existing releases when found"
+                required: false
+                default: "true"
+            fail_on_missing_changelog:
+                description: "Fail if a tag has no matching CHANGELOG section"
+                required: false
+                default: "false"
+
+permissions:
+    contents: write
+
+jobs:
+    backfill:
+        name: Backfill Releases from CHANGELOG
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
+            - name: Backfill releases
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  UPDATE_EXISTING: ${{ github.event.inputs.update_existing || 'true' }}
+                  FAIL_ON_MISSING_CHANGELOG: ${{ github.event.inputs.fail_on_missing_changelog || 'false' }}
+              shell: bash
+              run: |
+                  set -euo pipefail
+
+                  created=0
+                  updated=0
+                  skipped_missing=0
+                  skipped_existing=0
+
+                  for tag in $(git tag --sort=creatordate); do
+                    version="${tag#v}"
+                    tmp="/tmp/release-${tag}.md"
+
+                    awk "/^## \\[${version}\\]/,/^## \\[/ { print }" CHANGELOG.md | sed '$d' > "$tmp"
+
+                    if [[ ! -s "$tmp" ]]; then
+                      echo "::warning::No CHANGELOG section found for $tag (expected header: ## [${version}] - YYYY-MM-DD)"
+                      skipped_missing=$((skipped_missing + 1))
+                      if [[ "$FAIL_ON_MISSING_CHANGELOG" == "true" ]]; then
+                        exit 1
+                      fi
+                      continue
+                    fi
+
+                    if gh release view "$tag" >/dev/null 2>&1; then
+                      if [[ "$UPDATE_EXISTING" == "true" ]]; then
+                        gh release edit "$tag" --title "$tag" --notes-file "$tmp"
+                        echo "Updated $tag"
+                        updated=$((updated + 1))
+                      else
+                        echo "Skipped existing release $tag"
+                        skipped_existing=$((skipped_existing + 1))
+                      fi
+                    else
+                      gh release create "$tag" --title "$tag" --notes-file "$tmp"
+                      echo "Created $tag"
+                      created=$((created + 1))
+                    fi
+                  done
+
+                  {
+                    echo "### Backfill summary"
+                    echo "- Created: ${created}"
+                    echo "- Updated: ${updated}"
+                    echo "- Skipped (missing changelog): ${skipped_missing}"
+                    echo "- Skipped (existing release): ${skipped_existing}"
+                  } >> "$GITHUB_STEP_SUMMARY"

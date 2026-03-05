@@ -73,13 +73,25 @@ describe("AdaptiveStrategy", () => {
   it("should include past experience in analysis when provided", async () => {
     // We capture the LLM request to verify past experience is included in the prompt
     let capturedPrompt = "";
+    const planJson = JSON.stringify({
+      steps: [
+        { title: "Build pipeline", instruction: "Build the data pipeline", type: "analysis" },
+      ],
+    });
     const layer = TestLLMServiceLayer({
       // The analysis prompt should contain past experience text
       "Past experience": "PLAN_EXECUTE",
       "Classify the task": "PLAN_EXECUTE",
-      // Sub-strategy response
+      // Plan generation: extractStructuredOutput needs valid JSON
+      "planning agent": planJson,
+      // Step execution via ReAct kernel
+      "OVERALL GOAL": "FINAL ANSWER: Pipeline built successfully.",
+      // Reflection
+      "GOAL:": "SATISFIED: Pipeline complete.",
+      // Synthesis
+      "Synthesize": "Data pipeline built successfully with 3 stages.",
+      // Sub-strategy response (fallback)
       "Think step-by-step": "FINAL ANSWER: Done with experience-informed strategy.",
-      default: "FINAL ANSWER: Done.",
     });
 
     const program = executeAdaptive({
@@ -147,11 +159,11 @@ describe("AdaptiveStrategy", () => {
     const layer = TestLLMServiceLayer({
       // Adaptive analysis → select REFLEXION
       "Classify the task": "REFLEXION",
-      // Reflexion initial generation (systemPrompt contains "thoughtful reasoning agent")
-      "thoughtful reasoning agent": "Initial attempt at an answer.",
-      // Reflexion critique (content contains "Critically evaluate")
+      // Reflexion initial generation (systemPrompt contains "task execution agent")
+      "task execution agent": "Initial attempt at an answer.",
+      // Reflexion critique (content contains "Evaluate whether")
       // No SATISFIED: prefix → not satisfied; maxRetries=1 so loop exits → partial
-      "Critically evaluate": "This response lacks detail and accuracy.",
+      "Evaluate whether": "This response lacks detail and accuracy.",
       // Reactive fallback (content contains "Think step-by-step")
       "Think step-by-step": "FINAL ANSWER: Recovered with reactive fallback.",
     });

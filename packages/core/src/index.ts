@@ -86,3 +86,6 @@ export { generateAgentId, generateTaskId, generateMessageId } from "./id.js";
 
 // ─── Runtime ───
 export { CoreServicesLive } from "./runtime.js";
+
+// ─── Streaming ───
+export { StreamingTextCallback } from "./streaming.js";

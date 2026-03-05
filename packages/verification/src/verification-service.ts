@@ -6,6 +6,7 @@ import { checkFactDecomposition, checkFactDecompositionLLM } from "./layers/fact
 import { checkMultiSource, checkMultiSourceLLM } from "./layers/multi-source.js";
 import { checkSelfConsistency } from "./layers/self-consistency.js";
 import { checkNli } from "./layers/nli.js";
+import { checkHallucination, checkHallucinationLLM } from "./layers/hallucination-detection.js";
 
 // ─── Service Tag ───
 
@@ -62,6 +63,14 @@ export const VerificationServiceLive = (config: VerificationConfig, llm?: Verifi
 
         if (config.enableNli) {
           layerResults.push(yield* checkNli(response, input));
+        }
+
+        if (config.enableHallucinationDetection) {
+          layerResults.push(
+            yield* (useLLM
+              ? checkHallucinationLLM(response, input, llm!, config.hallucinationThreshold ?? 0.10)
+              : checkHallucination(response, input, config.hallucinationThreshold ?? 0.10)),
+          );
         }
 
         // Weighted average of layer scores

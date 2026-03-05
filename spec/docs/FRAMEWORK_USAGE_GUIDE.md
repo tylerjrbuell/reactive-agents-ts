@@ -145,11 +145,17 @@ export class ReactiveAgentBuilder {
 
   // ─── Identity ───
 
-  withName(name: string): this { this._name = name; return this; }
+  withName(name: string): this {
+    this._name = name;
+    return this;
+  }
 
   // ─── Model & Provider ───
 
-  withModel(model: string): this { this._model = model; return this; }
+  withModel(model: string): this {
+    this._model = model;
+    return this;
+  }
 
   withProvider(
     provider: "anthropic" | "openai" | "ollama",
@@ -164,32 +170,64 @@ export class ReactiveAgentBuilder {
   // ─── Memory ───
 
   /** "1" = FTS5 full-text search (default, zero deps). "2" = FTS5 + sqlite-vec KNN. */
-  withMemory(tier: "1" | "2"): this { this._memoryTier = tier; return this; }
+  withMemory(tier: "1" | "2"): this {
+    this._memoryTier = tier;
+    return this;
+  }
 
   // ─── Tools ───
 
-  withTools(tools: string[]): this { this._tools = tools; return this; }
+  withTools(tools: string[]): this {
+    this._tools = tools;
+    return this;
+  }
 
   // ─── Reasoning ───
 
   withReasoningStrategy(
-    strategy: "reactive" | "plan-execute-reflect" | "reflexion" | "tree-of-thought" | "adaptive",
-  ): this { this._reasoningStrategy = strategy; return this; }
+    strategy:
+      | "reactive"
+      | "plan-execute-reflect"
+      | "reflexion"
+      | "tree-of-thought"
+      | "adaptive",
+  ): this {
+    this._reasoningStrategy = strategy;
+    return this;
+  }
 
   // ─── Execution ───
 
-  withMaxIterations(n: number): this { this._maxIterations = n; return this; }
+  withMaxIterations(n: number): this {
+    this._maxIterations = n;
+    return this;
+  }
 
   // ─── Lifecycle Hooks ───
 
-  withHook(hook: LifecycleHook): this { this._hooks.push(hook); return this; }
+  withHook(hook: LifecycleHook): this {
+    this._hooks.push(hook);
+    return this;
+  }
 
   // ─── Optional Features (Phase 2+) ───
 
-  withGuardrails(): this { this._enableGuardrails = true; return this; }
-  withVerification(): this { this._enableVerification = true; return this; }
-  withCostTracking(): this { this._enableCostTracking = true; return this; }
-  withAudit(): this { this._enableAudit = true; return this; }
+  withGuardrails(): this {
+    this._enableGuardrails = true;
+    return this;
+  }
+  withVerification(): this {
+    this._enableVerification = true;
+    return this;
+  }
+  withCostTracking(): this {
+    this._enableCostTracking = true;
+    return this;
+  }
+  withAudit(): this {
+    this._enableAudit = true;
+    return this;
+  }
 
   /** Provide additional Effect layers (power users only). */
   withLayers(layers: Layer.Layer<unknown, unknown>): this {
@@ -289,11 +327,12 @@ export class ReactiveAgentBuilder {
    */
   buildEffect(): Effect.Effect<ReactiveAgent, Error> {
     const agentId = `${this._name}-${Date.now()}`;
-    const apiKey = this._apiKey
-      ?? (this._provider === "anthropic"
-          ? process.env.ANTHROPIC_API_KEY
-          : process.env.OPENAI_API_KEY)
-      ?? "";
+    const apiKey =
+      this._apiKey ??
+      (this._provider === "anthropic"
+        ? process.env.ANTHROPIC_API_KEY
+        : process.env.OPENAI_API_KEY) ??
+      "";
 
     const runtime = createRuntime({
       agentId,
@@ -411,7 +450,9 @@ export class ReactiveAgent {
     return Effect.runPromise(
       Effect.gen(function* () {
         const obsOpt = yield* Effect.serviceOption(
-          Context.GenericTag<{ getTrace: (id: string) => Effect.Effect<any> }>("ObservabilityService"),
+          Context.GenericTag<{ getTrace: (id: string) => Effect.Effect<any> }>(
+            "ObservabilityService",
+          ),
         );
         if (obsOpt._tag === "Some") {
           return yield* obsOpt.value.getTrace(taskId);
@@ -442,7 +483,9 @@ export class ReactiveAgent {
     return Effect.runPromise(
       Effect.gen(function* () {
         const obsOpt = yield* Effect.serviceOption(
-          Context.GenericTag<{ createDebugSession: (id: string) => Effect.Effect<any> }>("ObservabilityService"),
+          Context.GenericTag<{
+            createDebugSession: (id: string) => Effect.Effect<any>;
+          }>("ObservabilityService"),
         );
         if (obsOpt._tag === "Some") {
           return yield* obsOpt.value.createDebugSession(this.agentId);
@@ -460,7 +503,10 @@ export class ReactiveAgent {
    * Wired into LifecycleHookRegistry as a dynamic "think.before" hook.
    */
   onDecision(
-    handler: (decision: AgentDecision, ctx: ExecutionContext) => Promise<AgentDecision> | AgentDecision,
+    handler: (
+      decision: AgentDecision,
+      ctx: ExecutionContext,
+    ) => Promise<AgentDecision> | AgentDecision,
   ): void {
     // Registers a dynamic lifecycle hook on the "think" phase (before timing)
     // that intercepts the decision and allows the handler to approve/modify/reject.
@@ -472,7 +518,13 @@ export class ReactiveAgent {
    * Wired into LifecycleHookRegistry as a dynamic "think.after" hook.
    */
   onUncertainty(
-    handler: (signal: UncertaintySignal) => Promise<"continue" | "abort" | "escalate"> | "continue" | "abort" | "escalate",
+    handler: (
+      signal: UncertaintySignal,
+    ) =>
+      | Promise<"continue" | "abort" | "escalate">
+      | "continue"
+      | "abort"
+      | "escalate",
   ): void {
     // Registers a dynamic lifecycle hook on the "think" phase (after timing)
     // that checks for low-confidence signals and delegates to the handler.
@@ -482,11 +534,11 @@ export class ReactiveAgent {
 // ─── Result Types ────────────────────────────────────────────────────────────
 
 export interface AgentResultMetadata {
-  readonly duration: number;       // Milliseconds wall-clock
-  readonly cost: number;           // USD (0 if cost tracking disabled)
+  readonly duration: number; // Milliseconds wall-clock
+  readonly cost: number; // USD (0 if cost tracking disabled)
   readonly tokensUsed: number;
-  readonly strategyUsed?: string;  // e.g. "adaptive", "reflexion"
-  readonly stepsCount: number;     // Agent loop iterations
+  readonly strategyUsed?: string; // e.g. "adaptive", "reflexion"
+  readonly stepsCount: number; // Agent loop iterations
 }
 
 export interface AgentResult {
@@ -506,11 +558,21 @@ export interface AgentResult {
  * Source: @reactive-agents/reasoning/src/types/reasoning.ts
  */
 export interface ReasoningController {
-  readonly beforeReasoning?: (context: ReasoningInput) => Effect.Effect<ReasoningInput, ReasoningError>;
-  readonly duringStep?: (step: ReasoningStep) => Effect.Effect<ReasoningStep, ReasoningError>;
-  readonly afterStep?: (step: ReasoningStep) => Effect.Effect<ReasoningStep, ReasoningError>;
-  readonly onUncertainty?: (signal: UncertaintySignal) => Effect.Effect<"continue" | "abort" | "escalate", never>;
-  readonly onAdapt?: (context: ReasoningInput) => Effect.Effect<ReasoningStrategy, never>;
+  readonly beforeReasoning?: (
+    context: ReasoningInput,
+  ) => Effect.Effect<ReasoningInput, ReasoningError>;
+  readonly duringStep?: (
+    step: ReasoningStep,
+  ) => Effect.Effect<ReasoningStep, ReasoningError>;
+  readonly afterStep?: (
+    step: ReasoningStep,
+  ) => Effect.Effect<ReasoningStep, ReasoningError>;
+  readonly onUncertainty?: (
+    signal: UncertaintySignal,
+  ) => Effect.Effect<"continue" | "abort" | "escalate", never>;
+  readonly onAdapt?: (
+    context: ReasoningInput,
+  ) => Effect.Effect<ReasoningStrategy, never>;
 }
 
 /**
@@ -520,7 +582,7 @@ export interface ReasoningController {
 export interface ContextController {
   readonly prioritization?: "semantic" | "recency" | "importance";
   readonly pruning?: "adaptive" | "sliding-window" | "fifo";
-  readonly retention?: readonly string[];   // message types to always retain
+  readonly retention?: readonly string[]; // message types to always retain
   readonly compression?: "none" | "aggressive" | "adaptive";
 }
 
@@ -529,9 +591,9 @@ export interface ContextController {
  * Source: @reactive-agents/core/src/types/config.ts
  */
 export interface CircuitBreakerConfig {
-  readonly errorThreshold: number;    // 0.0–1.0: error rate to trip
-  readonly timeout: number;           // ms: max execution time before trip
-  readonly resetTimeout: number;      // ms: time before attempting reset
+  readonly errorThreshold: number; // 0.0–1.0: error rate to trip
+  readonly timeout: number; // ms: max execution time before trip
+  readonly resetTimeout: number; // ms: time before attempting reset
 }
 
 /**
@@ -546,7 +608,7 @@ export interface TokenBudgetConfig {
     readonly reasoning?: number;
     readonly output?: number;
   };
-  readonly enforcement: "hard" | "soft";  // hard = abort; soft = warn
+  readonly enforcement: "hard" | "soft"; // hard = abort; soft = warn
 }
 
 /**
@@ -555,7 +617,7 @@ export interface TokenBudgetConfig {
  */
 export interface SecretsConfig {
   readonly provider: "env" | "vault";
-  readonly path?: string;             // vault path prefix
+  readonly path?: string; // vault path prefix
   readonly encryption?: "aes-256";
 }
 
@@ -607,8 +669,12 @@ export interface AgentMetricEvent {
  */
 export interface DebugSession {
   readonly snapshots: readonly AgentStateSnapshot[];
-  readonly rewindTo: (index: number) => Effect.Effect<AgentStateSnapshot, ObservabilityError>;
-  readonly replay: (options?: { fromIndex?: number }) => Effect.Effect<AgentResult, ExecutionError>;
+  readonly rewindTo: (
+    index: number,
+  ) => Effect.Effect<AgentStateSnapshot, ObservabilityError>;
+  readonly replay: (options?: {
+    fromIndex?: number;
+  }) => Effect.Effect<AgentResult, ExecutionError>;
 }
 
 /**
@@ -629,7 +695,7 @@ export interface UncertaintySignal {
  */
 export interface AgentDecision {
   readonly type: "tool_call" | "strategy_switch" | "output";
-  readonly importance: number;  // 0.0–1.0
+  readonly importance: number; // 0.0–1.0
   readonly content: unknown;
 }
 ```
@@ -637,7 +703,11 @@ export interface AgentDecision {
 ### Update `src/index.ts` — add exports:
 
 ```typescript
-export { ReactiveAgents, ReactiveAgentBuilder, ReactiveAgent } from "./builder.js";
+export {
+  ReactiveAgents,
+  ReactiveAgentBuilder,
+  ReactiveAgent,
+} from "./builder.js";
 export type { AgentResult, AgentResultMetadata } from "./builder.js";
 ```
 
@@ -646,14 +716,14 @@ export type { AgentResult, AgentResultMetadata } from "./builder.js";
 ### Hello World (30 Seconds to Running)
 
 ```typescript
-import { ReactiveAgents } from '@reactive-agents/runtime';
+import { ReactiveAgents } from "@reactive-agents/runtime";
 
 const agent = await ReactiveAgents.create()
-  .withModel('claude-sonnet-4-5-20250929')
+  .withModel("claude-sonnet-4-5-20250929")
   .build();
 
-const result = await agent.run('What is the capital of France?');
-console.log(result.output);  // "The capital of France is Paris."
+const result = await agent.run("What is the capital of France?");
+console.log(result.output); // "The capital of France is Paris."
 ```
 
 ### AgentResult Shape
@@ -682,98 +752,99 @@ console.log(result.output);  // "The capital of France is Paris."
 ReactiveAgents.create()
 
   // ─── Identity ────────────────────────────────────────────────────────────
-  .withName('my-agent')                      // Agent ID prefix (default: "agent")
+  .withName("my-agent") // Agent ID prefix (default: "agent")
 
   // ─── Model & Provider ────────────────────────────────────────────────────
-  .withModel('claude-sonnet-4-5-20250929')   // Model name passed to LLMService
-  .withProvider('anthropic', {               // Default provider
-    apiKey: 'sk-ant-...',                    // Falls back to ANTHROPIC_API_KEY env
+  .withModel("claude-sonnet-4-5-20250929") // Model name passed to LLMService
+  .withProvider("anthropic", {
+    // Default provider
+    apiKey: "sk-ant-...", // Falls back to ANTHROPIC_API_KEY env
   })
-  .withProvider('openai', {
-    apiKey: 'sk-...',                        // Falls back to OPENAI_API_KEY env
-    baseUrl: 'https://api.openai.com/v1',
+  .withProvider("openai", {
+    apiKey: "sk-...", // Falls back to OPENAI_API_KEY env
+    baseUrl: "https://api.openai.com/v1",
   })
-  .withProvider('ollama', {
-    baseUrl: 'http://localhost:11434',
+  .withProvider("ollama", {
+    baseUrl: "http://localhost:11434",
   })
 
   // ─── Memory ──────────────────────────────────────────────────────────────
-  .withMemory('1')          // Tier 1: FTS5 only (zero deps, default)
-  .withMemory('2')          // Tier 2: FTS5 + sqlite-vec KNN (requires sqlite-vec)
+  .withMemory("1") // Tier 1: FTS5 only (zero deps, default)
+  .withMemory("2") // Tier 2: FTS5 + sqlite-vec KNN (requires sqlite-vec)
 
   // ─── Tools (Phase 2+) ────────────────────────────────────────────────────
-  .withTools(['web-search', 'code-execution', 'file-operations'])
+  .withTools(["web-search", "code-execution", "file-operations"])
 
   // ─── Reasoning (Phase 2+) ────────────────────────────────────────────────
-  .withReasoningStrategy('reactive')               // Fast, direct answers
-  .withReasoningStrategy('plan-execute-reflect')   // Structured multi-step
-  .withReasoningStrategy('reflexion')              // Self-correcting (high quality)
-  .withReasoningStrategy('tree-of-thought')        // Exploratory, creative
-  .withReasoningStrategy('adaptive')               // Auto-selects best strategy
+  .withReasoningStrategy("reactive") // Fast, direct answers
+  .withReasoningStrategy("plan-execute-reflect") // Structured multi-step
+  .withReasoningStrategy("reflexion") // Self-correcting (high quality)
+  .withReasoningStrategy("tree-of-thought") // Exploratory, creative
+  .withReasoningStrategy("adaptive") // Auto-selects best strategy
 
   // ─── Execution ───────────────────────────────────────────────────────────
-  .withMaxIterations(20)    // Override default (10)
+  .withMaxIterations(20) // Override default (10)
 
   // ─── Lifecycle Hooks ─────────────────────────────────────────────────────
   .withHook({
-    phase: 'think',
-    timing: 'before',
-    handler: (ctx) => Effect.succeed(ctx),  // Inspect or modify ExecutionContext
+    phase: "think",
+    timing: "before",
+    handler: (ctx) => Effect.succeed(ctx), // Inspect or modify ExecutionContext
   })
 
   // ─── Optional Features (Phase 2+) ────────────────────────────────────────
-  .withGuardrails()         // Enable GuardrailService (safety contracts + PII)
-  .withVerification()       // Enable VerificationService (hallucination detection)
-  .withCostTracking()       // Enable CostRouter + CostTracker
-  .withAudit()              // Enable AuditService (immutable audit trail)
-  .withLayers(myLayer)      // Inject additional Effect layers (power users)
+  .withGuardrails() // Enable GuardrailService (safety contracts + PII)
+  .withVerification() // Enable VerificationService (hallucination detection)
+  .withCostTracking() // Enable CostRouter + CostTracker
+  .withAudit() // Enable AuditService (immutable audit trail)
+  .withLayers(myLayer) // Inject additional Effect layers (power users)
 
   // ─── Build ───────────────────────────────────────────────────────────────
-  .build()                  // → Promise<ReactiveAgent>  (Simple API)
-  .buildEffect()            // → Effect<ReactiveAgent>   (Advanced API)
+  .build() // → Promise<ReactiveAgent>  (Simple API)
+  .buildEffect(); // → Effect<ReactiveAgent>   (Advanced API)
 ```
 
 ---
 
 ### Reasoning Strategy Guide
 
-| Strategy | Best For | Loop Behavior |
-|---|---|---|
-| `reactive` | Simple Q&A, calculations | 1 think call → immediate answer |
-| `plan-execute-reflect` | Research, multi-step tasks | Plan → execute each step → reflect → refine |
-| `reflexion` | Quality-critical content, legal/medical | Draft → self-critique → improve (up to N) |
-| `tree-of-thought` | Brainstorming, creative, complex reasoning | Explore N paths → evaluate → best |
-| `adaptive` | Mixed workloads, production | LLM selects best strategy per task |
+| Strategy               | Best For                                   | Loop Behavior                               |
+| ---------------------- | ------------------------------------------ | ------------------------------------------- |
+| `reactive`             | Simple Q&A, calculations                   | 1 think call → immediate answer             |
+| `plan-execute-reflect` | Research, multi-step tasks                 | Plan → execute each step → reflect → refine |
+| `reflexion`            | Quality-critical content, legal/medical    | Draft → self-critique → improve (up to N)   |
+| `tree-of-thought`      | Brainstorming, creative, complex reasoning | Explore N paths → evaluate → best           |
+| `adaptive`             | Mixed workloads, production                | LLM selects best strategy per task          |
 
 ```typescript
 // reactive — fastest, cheapest
 const quickAgent = await ReactiveAgents.create()
-  .withModel('claude-haiku-4-5')
-  .withReasoningStrategy('reactive')
+  .withModel("claude-haiku-4-5")
+  .withReasoningStrategy("reactive")
   .build();
 
-await quickAgent.run('What is 2 + 2?');
+await quickAgent.run("What is 2 + 2?");
 // → Single LLM call, < 1s
 
 // reflexion — highest quality
 const qualityAgent = await ReactiveAgents.create()
-  .withModel('claude-sonnet-4-5-20250929')
-  .withReasoningStrategy('reflexion')
-  .withMaxIterations(5)  // Up to 5 draft/critique cycles
+  .withModel("claude-sonnet-4-5-20250929")
+  .withReasoningStrategy("reflexion")
+  .withMaxIterations(5) // Up to 5 draft/critique cycles
   .build();
 
-await qualityAgent.run('Draft a privacy policy for a SaaS product');
+await qualityAgent.run("Draft a privacy policy for a SaaS product");
 // → Draft → Self-critique → Revise → Repeat until confidence threshold
 
 // adaptive — production default
 const productionAgent = await ReactiveAgents.create()
-  .withModel('claude-sonnet-4-5-20250929')
-  .withReasoningStrategy('adaptive')
+  .withModel("claude-sonnet-4-5-20250929")
+  .withReasoningStrategy("adaptive")
   .build();
 
-await productionAgent.run('What is 2+2?');        // → picks reactive
-await productionAgent.run('Research AI safety');  // → picks plan-execute
-await productionAgent.run('Draft legal clause');  // → picks reflexion
+await productionAgent.run("What is 2+2?"); // → picks reactive
+await productionAgent.run("Research AI safety"); // → picks plan-execute
+await productionAgent.run("Draft legal clause"); // → picks reflexion
 ```
 
 ---
@@ -783,22 +854,22 @@ await productionAgent.run('Draft legal clause');  // → picks reflexion
 ```typescript
 // Tier 1: FTS5 full-text search (default, zero dependencies)
 const agent = await ReactiveAgents.create()
-  .withModel('claude-sonnet-4-5-20250929')
-  .withMemory('1')
+  .withModel("claude-sonnet-4-5-20250929")
+  .withMemory("1")
   .build();
 
 // Memory persists to: .reactive-agents/memory/{agentId}/memory.db
 // First run: no prior context
-await agent.run('My name is Alex, I work in fintech at a Series B startup');
+await agent.run("My name is Alex, I work in fintech at a Series B startup");
 
 // Second run: bootstrap phase loads prior context automatically
-const result = await agent.run('What industry do I work in?');
-console.log(result.output);  // "You work in fintech."
+const result = await agent.run("What industry do I work in?");
+console.log(result.output); // "You work in fintech."
 
 // Tier 2: FTS5 + sqlite-vec KNN (requires: bun add sqlite-vec)
 const semanticAgent = await ReactiveAgents.create()
-  .withModel('claude-sonnet-4-5-20250929')
-  .withMemory('2')
+  .withModel("claude-sonnet-4-5-20250929")
+  .withMemory("2")
   .build();
 // Tier 2 finds conceptually similar memories (not just keyword matches)
 // Uses LLMService.embed() for embeddings — no separate EmbeddingProvider needed
@@ -809,55 +880,70 @@ const semanticAgent = await ReactiveAgents.create()
 ### Lifecycle Hook Examples
 
 ```typescript
-import { Effect } from 'effect';
-import { ExecutionError } from '@reactive-agents/runtime';
+import { Effect } from "effect";
+import { ExecutionError } from "@reactive-agents/runtime";
 
 // ── Observability Hook ─────────────────────────────────────────────────────
 const agent = await ReactiveAgents.create()
-  .withModel('claude-sonnet-4-5-20250929')
+  .withModel("claude-sonnet-4-5-20250929")
   .withHook({
-    phase: 'think',
-    timing: 'after',
-    handler: (ctx) => Effect.gen(function* () {
-      console.log(`[iter ${ctx.iteration}] cost=$${ctx.cost.toFixed(4)}`);
-      return ctx;
-    }),
+    phase: "think",
+    timing: "after",
+    handler: (ctx) =>
+      Effect.gen(function* () {
+        console.log(`[iter ${ctx.iteration}] cost=$${ctx.cost.toFixed(4)}`);
+        return ctx;
+      }),
   })
   .build();
 
 // ── Budget Guard Hook ─────────────────────────────────────────────────────
 const budgetAgent = await ReactiveAgents.create()
-  .withModel('claude-sonnet-4-5-20250929')
+  .withModel("claude-sonnet-4-5-20250929")
   .withHook({
-    phase: 'think',
-    timing: 'before',
-    handler: (ctx) => ctx.cost > 0.50
-      ? Effect.fail(new ExecutionError({ message: 'Budget exceeded $0.50', taskId: ctx.taskId, phase: 'think' }))
-      : Effect.succeed(ctx),
+    phase: "think",
+    timing: "before",
+    handler: (ctx) =>
+      ctx.cost > 0.5
+        ? Effect.fail(
+            new ExecutionError({
+              message: "Budget exceeded $0.50",
+              taskId: ctx.taskId,
+              phase: "think",
+            }),
+          )
+        : Effect.succeed(ctx),
   })
   .build();
 
 // ── Human-in-the-Loop Hook ────────────────────────────────────────────────
 const supervisedAgent = await ReactiveAgents.create()
-  .withModel('claude-sonnet-4-5-20250929')
+  .withModel("claude-sonnet-4-5-20250929")
   .withHook({
-    phase: 'act',
-    timing: 'before',
-    handler: (ctx) => Effect.gen(function* () {
-      const calls = ctx.metadata.pendingToolCalls as any[];
-      const dangerous = ['delete-record', 'send-email', 'deploy'];
-      const needsApproval = calls.some(c => dangerous.includes(c.name));
+    phase: "act",
+    timing: "before",
+    handler: (ctx) =>
+      Effect.gen(function* () {
+        const calls = ctx.metadata.pendingToolCalls as any[];
+        const dangerous = ["delete-record", "send-email", "deploy"];
+        const needsApproval = calls.some((c) => dangerous.includes(c.name));
 
-      if (needsApproval) {
-        const approved = yield* Effect.tryPromise(() => askHumanForApproval(calls));
-        if (!approved) {
-          return yield* Effect.fail(new ExecutionError({
-            message: 'Human rejected', taskId: ctx.taskId, phase: 'act',
-          }));
+        if (needsApproval) {
+          const approved = yield* Effect.tryPromise(() =>
+            askHumanForApproval(calls),
+          );
+          if (!approved) {
+            return yield* Effect.fail(
+              new ExecutionError({
+                message: "Human rejected",
+                taskId: ctx.taskId,
+                phase: "act",
+              }),
+            );
+          }
         }
-      }
-      return ctx;
-    }),
+        return ctx;
+      }),
   })
   .build();
 ```
@@ -867,16 +953,16 @@ const supervisedAgent = await ReactiveAgents.create()
 ### Advanced API: Effect-Based Usage
 
 ```typescript
-import { ReactiveAgents } from '@reactive-agents/runtime';
-import { Effect, Schedule } from 'effect';
+import { ReactiveAgents } from "@reactive-agents/runtime";
+import { Effect, Schedule } from "effect";
 
 // ── Build and run in one Effect program ────────────────────────────────────
 const program = Effect.gen(function* () {
   const agent = yield* ReactiveAgents.create()
-    .withModel('claude-sonnet-4-5-20250929')
+    .withModel("claude-sonnet-4-5-20250929")
     .buildEffect();
 
-  return yield* agent.runEffect('Research AI safety developments in 2025');
+  return yield* agent.runEffect("Research AI safety developments in 2025");
 });
 
 const result = await Effect.runPromise(program);
@@ -884,43 +970,61 @@ const result = await Effect.runPromise(program);
 // ── Retry with exponential backoff ─────────────────────────────────────────
 const resilient = Effect.gen(function* () {
   const agent = yield* ReactiveAgents.create()
-    .withModel('claude-sonnet-4-5-20250929')
+    .withModel("claude-sonnet-4-5-20250929")
     .buildEffect();
 
-  return yield* agent.runEffect('Analyze this data').pipe(
-    Effect.retry({ times: 3, schedule: Schedule.exponential('2 seconds') }),
-    Effect.timeout('60 seconds'),
-  );
+  return yield* agent
+    .runEffect("Analyze this data")
+    .pipe(
+      Effect.retry({ times: 3, schedule: Schedule.exponential("2 seconds") }),
+      Effect.timeout("60 seconds"),
+    );
 });
 
 // ── Parallel execution ─────────────────────────────────────────────────────
 const parallel = Effect.gen(function* () {
   const agent = yield* ReactiveAgents.create()
-    .withModel('claude-sonnet-4-5-20250929')
+    .withModel("claude-sonnet-4-5-20250929")
     .buildEffect();
 
-  return yield* Effect.all([
-    agent.runEffect('Analyze market opportunity'),
-    agent.runEffect('Analyze technical feasibility'),
-    agent.runEffect('Analyze regulatory risks'),
-  ], { concurrency: 3 });
+  return yield* Effect.all(
+    [
+      agent.runEffect("Analyze market opportunity"),
+      agent.runEffect("Analyze technical feasibility"),
+      agent.runEffect("Analyze regulatory risks"),
+    ],
+    { concurrency: 3 },
+  );
 });
 
 // ── Typed error handling ───────────────────────────────────────────────────
-import { MaxIterationsError, GuardrailViolationError } from '@reactive-agents/runtime';
+import {
+  MaxIterationsError,
+  GuardrailViolationError,
+} from "@reactive-agents/runtime";
 
 const safe = Effect.gen(function* () {
   const agent = yield* ReactiveAgents.create()
-    .withModel('claude-sonnet-4-5-20250929')
+    .withModel("claude-sonnet-4-5-20250929")
     .withGuardrails()
     .buildEffect();
 
-  return yield* agent.runEffect('Task').pipe(
-    Effect.catchTag('MaxIterationsError', (e) =>
-      Effect.succeed({ output: 'Partial result', success: false, taskId: e.taskId,
-                       agentId: '', metadata: { duration: 0, cost: 0, tokensUsed: 0, stepsCount: e.iterations } }),
+  return yield* agent.runEffect("Task").pipe(
+    Effect.catchTag("MaxIterationsError", (e) =>
+      Effect.succeed({
+        output: "Partial result",
+        success: false,
+        taskId: e.taskId,
+        agentId: "",
+        metadata: {
+          duration: 0,
+          cost: 0,
+          tokensUsed: 0,
+          stepsCount: e.iterations,
+        },
+      }),
     ),
-    Effect.catchTag('GuardrailViolationError', (e) =>
+    Effect.catchTag("GuardrailViolationError", (e) =>
       Effect.fail(new Error(`Blocked: ${e.violation}`)),
     ),
   );
@@ -934,45 +1038,70 @@ const safe = Effect.gen(function* () {
 ```typescript
 // ── Sequential Pipeline ────────────────────────────────────────────────────
 const [researcher, writer, editor] = await Promise.all([
-  ReactiveAgents.create().withName('researcher')
-    .withModel('claude-sonnet-4-5-20250929').withReasoningStrategy('plan-execute').build(),
-  ReactiveAgents.create().withName('writer')
-    .withModel('claude-sonnet-4-5-20250929').withReasoningStrategy('reflexion').build(),
-  ReactiveAgents.create().withName('editor')
-    .withModel('claude-haiku-4-5').withReasoningStrategy('reactive').build(),
+  ReactiveAgents.create()
+    .withName("researcher")
+    .withModel("claude-sonnet-4-5-20250929")
+    .withReasoningStrategy("plan-execute")
+    .build(),
+  ReactiveAgents.create()
+    .withName("writer")
+    .withModel("claude-sonnet-4-5-20250929")
+    .withReasoningStrategy("reflexion")
+    .build(),
+  ReactiveAgents.create()
+    .withName("editor")
+    .withModel("claude-haiku-4-5")
+    .withReasoningStrategy("reactive")
+    .build(),
 ]);
 
 async function publishArticle(topic: string): Promise<string> {
   const research = await researcher.run(`Research: ${topic}`);
-  const draft    = await writer.run(`Write article based on: ${research.output}`);
-  const final    = await editor.run(`Polish: ${draft.output}`);
+  const draft = await writer.run(`Write article based on: ${research.output}`);
+  const final = await editor.run(`Polish: ${draft.output}`);
   return final.output;
 }
 
 // ── Parallel Analysis Team ─────────────────────────────────────────────────
-import { Effect } from 'effect';
+import { Effect } from "effect";
 
-const teamReport = await Effect.runPromise(Effect.gen(function* () {
-  const [market, tech, risk] = yield* Effect.all([
-    ReactiveAgents.create().withName('market').withModel('claude-sonnet-4-5-20250929').buildEffect(),
-    ReactiveAgents.create().withName('tech').withModel('claude-sonnet-4-5-20250929').buildEffect(),
-    ReactiveAgents.create().withName('risk').withModel('claude-sonnet-4-5-20250929').buildEffect(),
-  ]);
+const teamReport = await Effect.runPromise(
+  Effect.gen(function* () {
+    const [market, tech, risk] = yield* Effect.all([
+      ReactiveAgents.create()
+        .withName("market")
+        .withModel("claude-sonnet-4-5-20250929")
+        .buildEffect(),
+      ReactiveAgents.create()
+        .withName("tech")
+        .withModel("claude-sonnet-4-5-20250929")
+        .buildEffect(),
+      ReactiveAgents.create()
+        .withName("risk")
+        .withModel("claude-sonnet-4-5-20250929")
+        .buildEffect(),
+    ]);
 
-  const [marketR, techR, riskR] = yield* Effect.all([
-    market.runEffect('Analyze market opportunity for AI agents'),
-    tech.runEffect('Analyze technical feasibility of AI agents'),
-    risk.runEffect('Analyze regulatory risks for AI agents'),
-  ], { concurrency: 3 });
+    const [marketR, techR, riskR] = yield* Effect.all(
+      [
+        market.runEffect("Analyze market opportunity for AI agents"),
+        tech.runEffect("Analyze technical feasibility of AI agents"),
+        risk.runEffect("Analyze regulatory risks for AI agents"),
+      ],
+      { concurrency: 3 },
+    );
 
-  const synthesizer = yield* ReactiveAgents.create()
-    .withName('synthesizer').withModel('claude-sonnet-4-5-20250929')
-    .withReasoningStrategy('plan-execute').buildEffect();
+    const synthesizer = yield* ReactiveAgents.create()
+      .withName("synthesizer")
+      .withModel("claude-sonnet-4-5-20250929")
+      .withReasoningStrategy("plan-execute")
+      .buildEffect();
 
-  return yield* synthesizer.runEffect(`
+    return yield* synthesizer.runEffect(`
     Synthesize: MARKET: ${marketR.output} TECHNICAL: ${techR.output} RISK: ${riskR.output}
   `);
-}));
+  }),
+);
 ```
 
 ---
@@ -983,46 +1112,57 @@ const teamReport = await Effect.runPromise(Effect.gen(function* () {
 
 ```typescript
 const researcher = await ReactiveAgents.create()
-  .withName('research-assistant')
-  .withModel('claude-sonnet-4-5-20250929')
-  .withReasoningStrategy('adaptive')
-  .withMemory('2')          // Semantic search: find related prior findings
+  .withName("research-assistant")
+  .withModel("claude-sonnet-4-5-20250929")
+  .withReasoningStrategy("adaptive")
+  .withMemory("2") // Semantic search: find related prior findings
   .withMaxIterations(20)
   .build();
 
 // After 100 sessions, agent recalls relevant prior research automatically
-const result = await researcher.run('Summarize recent developments in AI alignment');
+const result = await researcher.run(
+  "Summarize recent developments in AI alignment",
+);
 // → Bootstrap phase injects semantically similar past research from memory.db
 ```
 
 #### Safety-Critical Diagnostic Assistant
 
 ```typescript
-import { ExecutionError } from '@reactive-agents/runtime';
-import { Effect } from 'effect';
+import { ExecutionError } from "@reactive-agents/runtime";
+import { Effect } from "effect";
 
 const diagnosticAgent = await ReactiveAgents.create()
-  .withName('diagnostic-assistant')
-  .withModel('claude-opus-4-5-20251101')   // Most capable model
-  .withReasoningStrategy('reflexion')      // Triple-checks everything
-  .withMaxIterations(10)                   // Up to 5 reflection cycles
-  .withMemory('1')                         // Learn from similar cases
-  .withGuardrails()                        // Safety contracts
-  .withVerification()                      // Confidence verification
-  .withAudit()                             // HIPAA-compliant audit trail
+  .withName("diagnostic-assistant")
+  .withModel("claude-opus-4-5-20251101") // Most capable model
+  .withReasoningStrategy("reflexion") // Triple-checks everything
+  .withMaxIterations(10) // Up to 5 reflection cycles
+  .withMemory("1") // Learn from similar cases
+  .withGuardrails() // Safety contracts
+  .withVerification() // Confidence verification
+  .withAudit() // HIPAA-compliant audit trail
   .withHook({
     // Mandatory doctor review before any diagnosis is returned
-    phase: 'complete',
-    timing: 'before',
-    handler: (ctx) => Effect.gen(function* () {
-      const approved = yield* Effect.tryPromise(() =>
-        requestDoctorReview({ diagnosis: String(ctx.metadata.lastResponse), context: ctx }),
-      );
-      if (!approved) return yield* Effect.fail(new ExecutionError({
-        message: 'Doctor rejected AI diagnosis', taskId: ctx.taskId, phase: 'complete',
-      }));
-      return ctx;
-    }),
+    phase: "complete",
+    timing: "before",
+    handler: (ctx) =>
+      Effect.gen(function* () {
+        const approved = yield* Effect.tryPromise(() =>
+          requestDoctorReview({
+            diagnosis: String(ctx.metadata.lastResponse),
+            context: ctx,
+          }),
+        );
+        if (!approved)
+          return yield* Effect.fail(
+            new ExecutionError({
+              message: "Doctor rejected AI diagnosis",
+              taskId: ctx.taskId,
+              phase: "complete",
+            }),
+          );
+        return ctx;
+      }),
   })
   .build();
 ```
@@ -1031,25 +1171,30 @@ const diagnosticAgent = await ReactiveAgents.create()
 
 ```typescript
 const supportAgent = await ReactiveAgents.create()
-  .withName('support')
-  .withModel('claude-sonnet-4-5-20250929')
-  .withReasoningStrategy('adaptive')
-  .withMemory('1')          // Remember customer interaction history
+  .withName("support")
+  .withModel("claude-sonnet-4-5-20250929")
+  .withReasoningStrategy("adaptive")
+  .withMemory("1") // Remember customer interaction history
   .withHook({
-    phase: 'think',
-    timing: 'before',
-    handler: (ctx) => Effect.gen(function* () {
-      const sentiment = ctx.metadata.customerSentiment as string;
+    phase: "think",
+    timing: "before",
+    handler: (ctx) =>
+      Effect.gen(function* () {
+        const sentiment = ctx.metadata.customerSentiment as string;
 
-      // Escalate to human if customer is angry
-      if (sentiment === 'angry' || sentiment === 'urgent') {
-        yield* Effect.tryPromise(() => escalateToHuman(ctx.taskId));
-        return yield* Effect.fail(new ExecutionError({
-          message: 'Escalated', taskId: ctx.taskId, phase: 'think',
-        }));
-      }
-      return ctx;
-    }),
+        // Escalate to human if customer is angry
+        if (sentiment === "angry" || sentiment === "urgent") {
+          yield* Effect.tryPromise(() => escalateToHuman(ctx.taskId));
+          return yield* Effect.fail(
+            new ExecutionError({
+              message: "Escalated",
+              taskId: ctx.taskId,
+              phase: "think",
+            }),
+          );
+        }
+        return ctx;
+      }),
   })
   .build();
 ```
@@ -1091,7 +1236,9 @@ const result = await Effect.runPromise(
     const task = yield* tasks.create({
       agentId: agent.id,
       type: "query",
-      input: { question: "Explain the concept of monads in functional programming." },
+      input: {
+        question: "Explain the concept of monads in functional programming.",
+      },
       priority: "medium",
     });
 
@@ -1138,7 +1285,7 @@ const RuntimeTier1 = createRuntime({
 const RuntimeTier2 = createRuntime({
   agentId: "agent-001",
   anthropicApiKey: process.env.ANTHROPIC_API_KEY!,
-  memoryTier: "2",  // Requires 'sqlite-vec' npm package + LLMService.embed()
+  memoryTier: "2", // Requires 'sqlite-vec' npm package + LLMService.embed()
 });
 ```
 
@@ -1288,7 +1435,7 @@ const agentConfig = {
     { type: "tool", name: "web-search" },
     { type: "tool", name: "code-execution" },
     { type: "tool", name: "file-operations" },
-    { type: "tool", name: "mcp:filesystem" },   // MCP server tool
+    { type: "tool", name: "mcp:filesystem" }, // MCP server tool
 
     // Memory: which memory types are active
     { type: "memory", name: "semantic" },
@@ -1336,54 +1483,63 @@ import { TaskService } from "@reactive-agents/core";
 
 // TaskType = "query" | "analysis" | "generation" | "action" | "research" | "code" | "custom"
 
-const tasks = yield* TaskService;
+const tasks = yield * TaskService;
 
 // Simple Q&A query
-const queryTask = yield* tasks.create({
-  agentId: agent.id,
-  type: "query",
-  input: { question: "What is the capital of France?" },
-  priority: "low",
-});
+const queryTask =
+  yield *
+  tasks.create({
+    agentId: agent.id,
+    type: "query",
+    input: { question: "What is the capital of France?" },
+    priority: "low",
+  });
 
 // Research task
-const researchTask = yield* tasks.create({
-  agentId: agent.id,
-  type: "research",
-  input: {
-    topic: "Effect-TS performance benchmarks vs RxJS",
-    depth: "comprehensive",
-    outputFormat: "structured-report",
-  },
-  priority: "medium",
-  metadata: {
-    tags: ["typescript", "benchmarks"],
-    estimatedTokens: 5000,
-  },
-});
+const researchTask =
+  yield *
+  tasks.create({
+    agentId: agent.id,
+    type: "research",
+    input: {
+      topic: "Effect-TS performance benchmarks vs RxJS",
+      depth: "comprehensive",
+      outputFormat: "structured-report",
+    },
+    priority: "medium",
+    metadata: {
+      tags: ["typescript", "benchmarks"],
+      estimatedTokens: 5000,
+    },
+  });
 
 // Code generation
-const codeTask = yield* tasks.create({
-  agentId: agent.id,
-  type: "code",
-  input: {
-    description: "Implement a binary search tree in TypeScript with Effect-TS",
-    language: "typescript",
-    requirements: ["type-safe", "functional", "no mutations"],
-  },
-  priority: "high",
-});
+const codeTask =
+  yield *
+  tasks.create({
+    agentId: agent.id,
+    type: "code",
+    input: {
+      description:
+        "Implement a binary search tree in TypeScript with Effect-TS",
+      language: "typescript",
+      requirements: ["type-safe", "functional", "no mutations"],
+    },
+    priority: "high",
+  });
 
 // Autonomous action task
-const actionTask = yield* tasks.create({
-  agentId: agent.id,
-  type: "action",
-  input: {
-    goal: "Monitor GitHub repo for new PRs and summarize them daily",
-    schedule: "0 9 * * *",   // cron expression
-  },
-  priority: "medium",
-});
+const actionTask =
+  yield *
+  tasks.create({
+    agentId: agent.id,
+    type: "action",
+    input: {
+      goal: "Monitor GitHub repo for new PRs and summarize them daily",
+      schedule: "0 9 * * *", // cron expression
+    },
+    priority: "medium",
+  });
 ```
 
 ### Executing a Task
@@ -1434,16 +1590,16 @@ interface TaskResult {
   readonly taskId: TaskId;
   readonly agentId: AgentId;
   readonly success: boolean;
-  readonly output: unknown;                  // The final answer/result
+  readonly output: unknown; // The final answer/result
   readonly error?: string;
   readonly startedAt: Date;
   readonly completedAt: Date;
   readonly metadata: {
-    readonly stepsCount: number;             // Loop iterations
-    readonly cost: number;                   // USD
+    readonly stepsCount: number; // Loop iterations
+    readonly cost: number; // USD
     readonly tokensUsed: number;
     readonly strategyUsed: ReasoningStrategy;
-    readonly verificationScore?: number;     // 0-1, present if verification enabled
+    readonly verificationScore?: number; // 0-1, present if verification enabled
     readonly toolsUsed: string[];
     readonly memoryReadCount: number;
     readonly memoryWriteCount: number;
@@ -1457,7 +1613,7 @@ interface TaskResult {
 const cancelTask = (taskId: TaskId) =>
   Effect.gen(function* () {
     const engine = yield* ExecutionEngine;
-    yield* engine.cancel(taskId);  // Fails with ExecutionError if not running
+    yield* engine.cancel(taskId); // Fails with ExecutionError if not running
   });
 ```
 
@@ -1496,9 +1652,9 @@ import { createLLMLayer } from "@reactive-agents/llm-provider";
 const AnthropicLayer = createLLMLayer({
   provider: "anthropic",
   anthropicApiKey: process.env.ANTHROPIC_API_KEY!,
-  defaultModel: "claude-sonnet-4-20250514",  // Default for all requests
+  defaultModel: "claude-sonnet-4-20250514", // Default for all requests
   maxRetries: 3,
-  promptCachingEnabled: true,               // Cache memory context blocks
+  promptCachingEnabled: true, // Cache memory context blocks
 });
 ```
 
@@ -1519,7 +1675,7 @@ const OpenAILayer = createLLMLayer({
 const OllamaLayer = createLLMLayer({
   provider: "ollama",
   ollamaEndpoint: "http://localhost:11434",
-  defaultModel: "llama3.2",
+  defaultModel: "cogito:14b",
 });
 ```
 
@@ -1529,11 +1685,11 @@ const OllamaLayer = createLLMLayer({
 // Available presets from @reactive-agents/llm-provider src/types.ts
 // Use these string keys wherever ModelConfig is expected
 
-"claude-haiku"    // Fast, cheap — $1/$5 per 1M tokens, quality 0.6
-"claude-sonnet"   // Balanced — $3/$15 per 1M tokens, quality 0.85
-"claude-opus"     // Best — $15/$75 per 1M tokens, quality 1.0
-"gpt-4o-mini"     // OpenAI cheap — $0.15/$0.6 per 1M tokens, quality 0.55
-"gpt-4o"          // OpenAI balanced — $2.5/$10 per 1M tokens, quality 0.8
+"claude-haiku"; // Fast, cheap — $1/$5 per 1M tokens, quality 0.6
+"claude-sonnet"; // Balanced — $3/$15 per 1M tokens, quality 0.85
+"claude-opus"; // Best — $15/$75 per 1M tokens, quality 1.0
+"gpt-4o-mini"; // OpenAI cheap — $0.15/$0.6 per 1M tokens, quality 0.55
+"gpt-4o"; // OpenAI balanced — $2.5/$10 per 1M tokens, quality 0.8
 ```
 
 ### Manual Model Config
@@ -1561,8 +1717,8 @@ import type { EmbeddingConfig } from "@reactive-agents/llm-provider";
 
 const embeddingConfig: EmbeddingConfig = {
   model: "text-embedding-3-small",
-  dimensions: 1536,              // Must match sqlite-vec column size in Tier 2
-  provider: "openai",            // "openai" or "ollama"
+  dimensions: 1536, // Must match sqlite-vec column size in Tier 2
+  provider: "openai", // "openai" or "ollama"
   batchSize: 100,
 };
 
@@ -1570,7 +1726,7 @@ const embeddingConfig: EmbeddingConfig = {
 const embedText = (text: string) =>
   Effect.gen(function* () {
     const llm = yield* LLMService;
-    return yield* llm.embed([text], embeddingConfig);  // Returns number[][]
+    return yield* llm.embed([text], embeddingConfig); // Returns number[][]
   });
 ```
 
@@ -1638,7 +1794,7 @@ import { createMemoryLayer } from "@reactive-agents/memory";
 // Tier 1: bun:sqlite + FTS5 only
 const MemoryTier1 = createMemoryLayer("1", {
   agentId: "my-agent",
-  dbPath: ".reactive-agents/memory",   // Default storage location
+  dbPath: ".reactive-agents/memory", // Default storage location
 });
 // Creates: .reactive-agents/memory/my-agent/memory.db
 //          .reactive-agents/memory/my-agent/memory.md
@@ -1652,7 +1808,7 @@ Requires `sqlite-vec` npm package and OpenAI/Ollama embeddings via `LLMService.e
 // Tier 2: bun:sqlite + FTS5 + sqlite-vec KNN
 const MemoryTier2 = createMemoryLayer("2", {
   agentId: "my-agent",
-  embeddingDimensions: 1536,    // Must match EMBEDDING_MODEL dimensions
+  embeddingDimensions: 1536, // Must match EMBEDDING_MODEL dimensions
   // sqlite-vec vec0 column is created with this size
 });
 // NOTE: Tier 2 requires @reactive-agents/llm-provider on the Layer for embed() calls
@@ -1686,7 +1842,7 @@ const rememberFact = (agentId: AgentId, fact: string) =>
       agentId,
       type: "semantic",
       content: fact,
-      importance: 0.8,                    // 0-1 importance score
+      importance: 0.8, // 0-1 importance score
       source: { type: "agent", id: agentId },
       tags: ["knowledge", "fact"],
     });
@@ -1702,12 +1858,16 @@ const searchMemory = (agentId: AgentId, query: string) =>
       query,
       types: ["semantic", "episodic"],
       limit: 5,
-      useVectorSearch: false,             // true = KNN (Tier 2 only)
+      useVectorSearch: false, // true = KNN (Tier 2 only)
     });
   });
 
 // Snapshot session (called automatically by ExecutionEngine Phase 7)
-const saveSession = (agentId: AgentId, sessionId: string, messages: unknown[]) =>
+const saveSession = (
+  agentId: AgentId,
+  sessionId: string,
+  messages: unknown[],
+) =>
   Effect.gen(function* () {
     const memory = yield* MemoryService;
     yield* memory.snapshot(sessionId, messages);
@@ -1757,7 +1917,7 @@ const zettelGraph = Effect.gen(function* () {
   yield* zettel.link({
     sourceId: memoryId1,
     targetId: memoryId2,
-    relationship: "supports",           // "supports" | "contradicts" | "elaborates" | "requires"
+    relationship: "supports", // "supports" | "contradicts" | "elaborates" | "requires"
     strength: 0.85,
   });
 
@@ -1780,10 +1940,10 @@ import { createToolsLayer } from "@reactive-agents/tools";
 const ToolsLayer = createToolsLayer({
   // Enable built-in skills (all optional, default: none enabled)
   skills: {
-    webSearch: true,                    // DuckDuckGo + other providers
-    fileOperations: true,               // Read/write files in sandbox
-    codeExecution: true,                // Execute code in sandboxed Bun process
-    httpClient: true,                   // Make HTTP requests
+    webSearch: true, // DuckDuckGo + other providers
+    fileOperations: true, // Read/write files in sandbox
+    codeExecution: true, // Execute code in sandboxed Bun process
+    httpClient: true, // Make HTTP requests
   },
   // Sandbox config for code execution
   sandbox: {
@@ -1940,9 +2100,9 @@ const ReasoningLayer = createReasoningLayer({
   // StrategySelector uses task complexity, input length, and memory context
   // to pick the best strategy at runtime
   selectorConfig: {
-    complexityThreshold: 0.6,     // Use plan-execute-reflect above this
+    complexityThreshold: 0.6, // Use plan-execute-reflect above this
     treeOfThoughtThreshold: 0.85, // Use tree-of-thought for very complex tasks
-    maxReflexionIterations: 3,    // Max self-critique loops for reflexion
+    maxReflexionIterations: 3, // Max self-critique loops for reflexion
   },
 });
 ```
@@ -1996,7 +2156,7 @@ const InteractionLayer = createInteractionLayer({
     // Pause at these phases and wait for approval
     phases: ["strategy-select", "act"],
     // Pause when cost exceeds this threshold mid-execution
-    costThresholdUsd: 0.50,
+    costThresholdUsd: 0.5,
     // Pause if confidence drops below this
     uncertaintyThreshold: 0.6,
   },
@@ -2050,7 +2210,9 @@ const runCollaboratively = (task: Task) =>
             process.stdout.write(`\n💭 ${event.content}`);
             break;
           case "tool-call":
-            console.log(`\n🔧 Calling: ${event.toolName}(${JSON.stringify(event.args)})`);
+            console.log(
+              `\n🔧 Calling: ${event.toolName}(${JSON.stringify(event.args)})`,
+            );
             break;
           case "observation":
             console.log(`\n👁  Result: ${event.content}`);
@@ -2093,9 +2255,14 @@ const InteractionLayer = createInteractionLayer({
     // Always interrupt for critical decisions
     { trigger: "critical-decision", severity: "critical", enabled: true },
     // Interrupt if cost exceeds $1.00
-    { trigger: "high-cost", severity: "high", threshold: 1.00, enabled: true },
+    { trigger: "high-cost", severity: "high", threshold: 1.0, enabled: true },
     // Interrupt if confidence drops below 50%
-    { trigger: "uncertainty", severity: "medium", threshold: 0.5, enabled: true },
+    {
+      trigger: "uncertainty",
+      severity: "medium",
+      threshold: 0.5,
+      enabled: true,
+    },
     // Interrupt on any error (default: enabled)
     { trigger: "error", severity: "high", enabled: true },
   ],
@@ -2135,7 +2302,9 @@ const setupHooks = Effect.gen(function* () {
     timing: "after",
     handler: (ctx) =>
       Effect.gen(function* () {
-        yield* Effect.log(`[Iter ${ctx.iteration}] Cost so far: $${ctx.cost.toFixed(4)}`);
+        yield* Effect.log(
+          `[Iter ${ctx.iteration}] Cost so far: $${ctx.cost.toFixed(4)}`,
+        );
         return ctx;
       }),
   });
@@ -2160,7 +2329,9 @@ const setupHooks = Effect.gen(function* () {
     timing: "on-error",
     handler: (ctx) =>
       Effect.gen(function* () {
-        yield* Effect.logError(`Tool execution failed at iteration ${ctx.iteration}`);
+        yield* Effect.logError(
+          `Tool execution failed at iteration ${ctx.iteration}`,
+        );
         return ctx;
       }),
   });
@@ -2184,7 +2355,9 @@ const CostAlertHookLayer = Layer.effectDiscard(
       handler: (ctx) =>
         Effect.gen(function* () {
           if (ctx.cost > 5.0) {
-            yield* Effect.logWarning(`HIGH COST ALERT: Task ${ctx.taskId} has spent $${ctx.cost}`);
+            yield* Effect.logWarning(
+              `HIGH COST ALERT: Task ${ctx.taskId} has spent $${ctx.cost}`,
+            );
           }
           return ctx;
         }),
@@ -2201,13 +2374,15 @@ const AuditHookLayer = Layer.effectDiscard(
       timing: "after",
       handler: (ctx) =>
         Effect.gen(function* () {
-          yield* Effect.log(JSON.stringify({
-            event: "task_completed",
-            taskId: ctx.taskId,
-            agentId: ctx.agentId,
-            iterations: ctx.iteration,
-            cost: ctx.cost,
-          }));
+          yield* Effect.log(
+            JSON.stringify({
+              event: "task_completed",
+              taskId: ctx.taskId,
+              agentId: ctx.agentId,
+              iterations: ctx.iteration,
+              cost: ctx.cost,
+            }),
+          );
           return ctx;
         }),
     });
@@ -2236,22 +2411,34 @@ import { createGuardrailsLayer } from "@reactive-agents/guardrails";
 const GuardrailsLayer = createGuardrailsLayer({
   // Behavioral contracts: what the agent must/must not do
   contracts: [
-    { type: "must-not", description: "Generate harmful content", severity: "critical" },
-    { type: "must-not", description: "Execute arbitrary code without approval", severity: "high" },
-    { type: "must", description: "Cite sources for factual claims", severity: "medium" },
+    {
+      type: "must-not",
+      description: "Generate harmful content",
+      severity: "critical",
+    },
+    {
+      type: "must-not",
+      description: "Execute arbitrary code without approval",
+      severity: "high",
+    },
+    {
+      type: "must",
+      description: "Cite sources for factual claims",
+      severity: "medium",
+    },
   ],
 
   // PII detection: redact sensitive data before LLM calls
   piiDetection: {
     enabled: true,
     patterns: ["email", "phone", "ssn", "credit-card"],
-    action: "redact",   // "redact" | "block" | "warn"
+    action: "redact", // "redact" | "block" | "warn"
   },
 
   // Prompt injection defense
   injectionDefense: {
     enabled: true,
-    level: "strict",   // "strict" | "moderate" | "permissive"
+    level: "strict", // "strict" | "moderate" | "permissive"
   },
 });
 
@@ -2284,33 +2471,33 @@ const CostLayer = createCostLayer({
   monthlyBudgetUsd: 500,
 
   // Per-task budget limit
-  taskBudgetUsd: 2.00,
+  taskBudgetUsd: 2.0,
 
   // Model routing: auto-select cheapest model that meets quality requirements
   routing: {
     enabled: true,
     // Simple tasks → Haiku, Complex tasks → Sonnet, Critical → Opus
     complexityThresholds: {
-      simple: 0.3,    // Below 0.3 → claude-haiku
-      medium: 0.7,    // 0.3-0.7 → claude-sonnet
-      complex: 0.9,   // 0.7-0.9 → claude-sonnet
-      critical: 1.0,  // Above 0.9 → claude-opus
+      simple: 0.3, // Below 0.3 → claude-haiku
+      medium: 0.7, // 0.3-0.7 → claude-sonnet
+      complex: 0.9, // 0.7-0.9 → claude-sonnet
+      critical: 1.0, // Above 0.9 → claude-opus
     },
   },
 
   // Semantic caching: return cached results for similar queries
   semanticCache: {
     enabled: true,
-    similarityThreshold: 0.95,   // Cosine similarity (Tier 2 only for KNN)
-    ttlSeconds: 3600,             // 1 hour cache TTL
+    similarityThreshold: 0.95, // Cosine similarity (Tier 2 only for KNN)
+    ttlSeconds: 3600, // 1 hour cache TTL
     maxEntries: 10_000,
   },
 
   // Prompt compression: reduce token count for long prompts
   compression: {
     enabled: true,
-    targetReductionPercent: 60,   // Aim for 60% fewer tokens
-    strategy: "extractive",       // "extractive" | "abstractive"
+    targetReductionPercent: 60, // Aim for 60% fewer tokens
+    strategy: "extractive", // "extractive" | "abstractive"
   },
 });
 ```
@@ -2360,9 +2547,18 @@ const sequentialWorkflow = Effect.gen(function* () {
   return yield* workflow.run({
     pattern: "sequential",
     steps: [
-      { agentId: "researcher", task: { type: "research", input: { topic: "AI safety" } } },
-      { agentId: "writer", task: { type: "generation", input: { format: "blog-post" } } },    // receives researcher output
-      { agentId: "editor", task: { type: "action", input: { action: "review" } } },           // receives writer output
+      {
+        agentId: "researcher",
+        task: { type: "research", input: { topic: "AI safety" } },
+      },
+      {
+        agentId: "writer",
+        task: { type: "generation", input: { format: "blog-post" } },
+      }, // receives researcher output
+      {
+        agentId: "editor",
+        task: { type: "action", input: { action: "review" } },
+      }, // receives writer output
     ],
   });
 });
@@ -2374,12 +2570,24 @@ const parallelWorkflow = Effect.gen(function* () {
   return yield* workflow.run({
     pattern: "parallel",
     branches: [
-      { agentId: "agent-a", task: { type: "analysis", input: { aspect: "technical" } } },
-      { agentId: "agent-b", task: { type: "analysis", input: { aspect: "business" } } },
-      { agentId: "agent-c", task: { type: "analysis", input: { aspect: "legal" } } },
+      {
+        agentId: "agent-a",
+        task: { type: "analysis", input: { aspect: "technical" } },
+      },
+      {
+        agentId: "agent-b",
+        task: { type: "analysis", input: { aspect: "business" } },
+      },
+      {
+        agentId: "agent-c",
+        task: { type: "analysis", input: { aspect: "legal" } },
+      },
     ],
     // Merge branch results into final report
-    merge: { agentId: "synthesizer", task: { type: "generation", input: { format: "report" } } },
+    merge: {
+      agentId: "synthesizer",
+      task: { type: "generation", input: { format: "report" } },
+    },
   });
 });
 
@@ -2389,7 +2597,7 @@ const routerWorkflow = Effect.gen(function* () {
 
   return yield* workflow.run({
     pattern: "router",
-    classifier: { agentId: "classifier" },    // Classifies the input
+    classifier: { agentId: "classifier" }, // Classifies the input
     routes: {
       "code-question": { agentId: "code-expert" },
       "math-question": { agentId: "math-expert" },
@@ -2499,7 +2707,7 @@ const ObservabilityLayer = createObservabilityLayer({
   // Structured JSON logging
   logging: {
     enabled: true,
-    level: "info",    // "debug" | "info" | "warn" | "error"
+    level: "info", // "debug" | "info" | "warn" | "error"
     format: "json",
   },
 });
@@ -2562,28 +2770,25 @@ import { ExecutionEngine, createRuntime } from "@reactive-agents/runtime";
 import { LLMService } from "@reactive-agents/llm-provider";
 
 // Mock LLM that always returns a completed response
-const MockLLMServiceLive = Layer.succeed(
-  LLMService,
-  {
-    complete: (_req) =>
-      Effect.succeed({
-        content: "The answer is 42.",
-        stopReason: "end_turn",
-        toolCalls: [],
-        usage: {
-          inputTokens: 10,
-          outputTokens: 5,
-          totalTokens: 15,
-          estimatedCost: 0.0001,
-        },
-        model: "mock",
-      }),
-    stream: (_req) => Stream.make({ delta: "The answer is 42.", done: true }),
-    structured: (_req) => Effect.succeed({ answer: 42 }),
-    embed: (_texts, _config) => Effect.succeed([[0.1, 0.2, 0.3]]),
-    countTokens: (_messages) => Effect.succeed(15),
-  },
-);
+const MockLLMServiceLive = Layer.succeed(LLMService, {
+  complete: (_req) =>
+    Effect.succeed({
+      content: "The answer is 42.",
+      stopReason: "end_turn",
+      toolCalls: [],
+      usage: {
+        inputTokens: 10,
+        outputTokens: 5,
+        totalTokens: 15,
+        estimatedCost: 0.0001,
+      },
+      model: "mock",
+    }),
+  stream: (_req) => Stream.make({ delta: "The answer is 42.", done: true }),
+  structured: (_req) => Effect.succeed({ answer: 42 }),
+  embed: (_texts, _config) => Effect.succeed([[0.1, 0.2, 0.3]]),
+  countTokens: (_messages) => Effect.succeed(15),
+});
 
 describe("ExecutionEngine integration", () => {
   // Build a test runtime with mock LLM
@@ -2627,20 +2832,17 @@ describe("ExecutionEngine integration", () => {
 ```typescript
 import { ToolService } from "@reactive-agents/tools";
 
-const MockToolServiceLive = Layer.succeed(
-  ToolService,
-  {
-    execute: (input) =>
-      Effect.succeed({
-        toolName: input.toolName,
-        success: true,
-        result: { data: "mocked tool result" },
-        executionTimeMs: 5,
-      }),
-    register: (_def) => Effect.void,
-    list: () => Effect.succeed([]),
-  },
-);
+const MockToolServiceLive = Layer.succeed(ToolService, {
+  execute: (input) =>
+    Effect.succeed({
+      toolName: input.toolName,
+      success: true,
+      result: { data: "mocked tool result" },
+      executionTimeMs: 5,
+    }),
+  register: (_def) => Effect.void,
+  list: () => Effect.succeed([]),
+});
 ```
 
 ### Memory Test Helpers
@@ -2651,7 +2853,7 @@ import { createMemoryLayer } from "@reactive-agents/memory";
 
 const TestMemoryLayer = createMemoryLayer("1", {
   agentId: "test-agent",
-  dbPath: ":memory:",   // SQLite in-memory mode — no files created
+  dbPath: ":memory:", // SQLite in-memory mode — no files created
 });
 ```
 
@@ -2676,7 +2878,7 @@ import { createInteractionLayer } from "@reactive-agents/interaction";
 const ResearchRuntime = createRuntime({
   agentId: "research-assistant",
   anthropicApiKey: process.env.ANTHROPIC_API_KEY!,
-  memoryTier: "2",          // Vector search for semantic memory
+  memoryTier: "2", // Vector search for semantic memory
   maxIterations: 20,
   enableVerification: true,
   enableCostTracking: true,
@@ -2684,7 +2886,12 @@ const ResearchRuntime = createRuntime({
     // Tools: web search + file write
     createToolsLayer({
       mcpServers: [
-        { name: "web-search", transport: "stdio", command: "npx", args: ["-y", "mcp-web-search"] },
+        {
+          name: "web-search",
+          transport: "stdio",
+          command: "npx",
+          args: ["-y", "mcp-web-search"],
+        },
       ],
       skills: { fileOperations: true },
     }),
@@ -2695,14 +2902,14 @@ const ResearchRuntime = createRuntime({
     }),
     // Cost: $5 budget per task, auto-route to cheapest adequate model
     createCostLayer({
-      taskBudgetUsd: 5.00,
+      taskBudgetUsd: 5.0,
       monthlyBudgetUsd: 500,
       routing: { enabled: true },
     }),
     // Supervised interaction: user approves tool calls >5s timeout
     createInteractionLayer({
       defaultMode: "supervised",
-      checkpoints: { phases: ["act"], costThresholdUsd: 1.00 },
+      checkpoints: { phases: ["act"], costThresholdUsd: 1.0 },
     }),
   ),
 });
@@ -2752,9 +2959,13 @@ async function research(question: string) {
 }
 
 // Usage
-const report = await research("What are the latest developments in AI agent frameworks?");
+const report = await research(
+  "What are the latest developments in AI agent frameworks?",
+);
 console.log(report.report);
-console.log(`Cost: $${report.cost.toFixed(4)} | Verification: ${report.verificationScore}`);
+console.log(
+  `Cost: $${report.cost.toFixed(4)} | Verification: ${report.verificationScore}`,
+);
 ```
 
 ---
@@ -2774,13 +2985,21 @@ const MonitoringHookLayer = Layer.effectDiscard(
     const engine = yield* ExecutionEngine;
 
     // Log phase entries
-    for (const phase of ["bootstrap", "think", "act", "verify", "complete"] as const) {
+    for (const phase of [
+      "bootstrap",
+      "think",
+      "act",
+      "verify",
+      "complete",
+    ] as const) {
       yield* engine.registerHook({
         phase,
         timing: "after",
         handler: (ctx) =>
           Effect.gen(function* () {
-            yield* Effect.log(`[${ctx.agentState}] Phase '${phase}' completed. Cost: $${ctx.cost.toFixed(4)}`);
+            yield* Effect.log(
+              `[${ctx.agentState}] Phase '${phase}' completed. Cost: $${ctx.cost.toFixed(4)}`,
+            );
             return ctx;
           }),
       });
@@ -2793,7 +3012,9 @@ const MonitoringHookLayer = Layer.effectDiscard(
       handler: (ctx) =>
         Effect.gen(function* () {
           if (ctx.cost > 1.0) {
-            yield* Effect.logWarning(`Cost exceeded $1.00 for task ${ctx.taskId}`);
+            yield* Effect.logWarning(
+              `Cost exceeded $1.00 for task ${ctx.taskId}`,
+            );
           }
           return ctx;
         }),
@@ -2813,8 +3034,16 @@ const CodeReviewRuntime = createRuntime({
     }),
     createGuardrailsLayer({
       contracts: [
-        { type: "must-not", description: "Delete or overwrite files without approval", severity: "critical" },
-        { type: "must", description: "Provide actionable feedback for each issue found", severity: "medium" },
+        {
+          type: "must-not",
+          description: "Delete or overwrite files without approval",
+          severity: "critical",
+        },
+        {
+          type: "must",
+          description: "Provide actionable feedback for each issue found",
+          severity: "medium",
+        },
       ],
     }),
     MonitoringHookLayer,
@@ -2869,13 +3098,18 @@ import { createRuntime, ExecutionEngine } from "@reactive-agents/runtime";
 // ─── Custom Service Definition ────────────────────────────────────────
 // All custom services follow the same Context.Tag + Layer.effect pattern
 
-interface DatabaseRecord { id: string; data: unknown }
+interface DatabaseRecord {
+  id: string;
+  data: unknown;
+}
 
 class DatabaseService extends Context.Tag("DatabaseService")<
   DatabaseService,
   {
     readonly query: (sql: string) => Effect.Effect<DatabaseRecord[], never>;
-    readonly insert: (record: Omit<DatabaseRecord, "id">) => Effect.Effect<DatabaseRecord, never>;
+    readonly insert: (
+      record: Omit<DatabaseRecord, "id">,
+    ) => Effect.Effect<DatabaseRecord, never>;
   }
 >() {}
 
@@ -2943,50 +3177,54 @@ All framework errors are `Data.TaggedError` instances — never thrown, always t
 ```typescript
 // From @reactive-agents/runtime
 import {
-  ExecutionError,         // Phase execution failure
-  HookError,              // Lifecycle hook failure
-  MaxIterationsError,     // Agent loop exceeded maxIterations
+  ExecutionError, // Phase execution failure
+  HookError, // Lifecycle hook failure
+  MaxIterationsError, // Agent loop exceeded maxIterations
   GuardrailViolationError, // Input/output violated a guardrail policy
 } from "@reactive-agents/runtime";
 
 // From @reactive-agents/core
 import {
-  AgentError,             // AgentService operation failure
-  TaskError,              // TaskService operation failure
-  EventBusError,          // EventBus publish/subscribe failure
-  ContextWindowError,     // Context window overflow
+  AgentError, // AgentService operation failure
+  TaskError, // TaskService operation failure
+  EventBusError, // EventBus publish/subscribe failure
+  ContextWindowError, // Context window overflow
 } from "@reactive-agents/core";
 
 // From @reactive-agents/llm-provider
 import {
-  LLMError,               // LLM API call failure
-  RateLimitError,         // Rate limit hit (retried automatically)
-  TokenLimitError,        // Context window exceeded
-  StructuredOutputError,  // Schema validation failure on structured output
+  LLMError, // LLM API call failure
+  RateLimitError, // Rate limit hit (retried automatically)
+  TokenLimitError, // Context window exceeded
+  StructuredOutputError, // Schema validation failure on structured output
 } from "@reactive-agents/llm-provider";
 
 // From @reactive-agents/memory
 import {
-  MemoryError,            // SQLite read/write failure
-  MemoryCapacityError,    // Working memory capacity exceeded (eviction occurred)
-  EmbeddingError,         // Embedding generation failure (Tier 2)
+  MemoryError, // SQLite read/write failure
+  MemoryCapacityError, // Working memory capacity exceeded (eviction occurred)
+  EmbeddingError, // Embedding generation failure (Tier 2)
 } from "@reactive-agents/memory";
 
 // From @reactive-agents/tools
 import {
-  ToolError,              // Generic tool failure
-  ToolNotFoundError,      // Requested tool not registered
-  ToolExecutionError,     // Tool execution failure (includes sandbox errors)
-  MCPError,               // MCP protocol error
-  SandboxError,           // Sandboxed execution error
+  ToolError, // Generic tool failure
+  ToolNotFoundError, // Requested tool not registered
+  ToolExecutionError, // Tool execution failure (includes sandbox errors)
+  MCPError, // MCP protocol error
+  SandboxError, // Sandboxed execution error
 } from "@reactive-agents/tools";
 
 // Pattern: typed error handling in Effect.gen
 const safeRun = (task: Task) =>
   engine.execute(task).pipe(
-    Effect.catchTag("MaxIterationsError", (e) => /* handle */ Effect.succeed(fallback)),
-    Effect.catchTag("GuardrailViolationError", (e) => /* handle */ Effect.succeed(fallback)),
-    Effect.catchTag("ExecutionError", (e) => Effect.die(e)),   // unrecoverable
+    Effect.catchTag("MaxIterationsError", (e) =>
+      /* handle */ Effect.succeed(fallback),
+    ),
+    Effect.catchTag("GuardrailViolationError", (e) =>
+      /* handle */ Effect.succeed(fallback),
+    ),
+    Effect.catchTag("ExecutionError", (e) => Effect.die(e)), // unrecoverable
   );
 ```
 
@@ -3000,22 +3238,22 @@ const safeRun = (task: Task) =>
 // From @reactive-agents/runtime src/types.ts
 interface ReactiveAgentsConfig {
   // ─── Required ───
-  agentId: string;                    // Agent ID (used as memory namespace)
+  agentId: string; // Agent ID (used as memory namespace)
 
   // ─── Agent Loop ───
-  maxIterations: number;              // Max think/act/observe cycles (default: 10)
+  maxIterations: number; // Max think/act/observe cycles (default: 10)
 
   // ─── Memory ───
-  memoryTier: "1" | "2";             // "1" = FTS5 only, "2" = FTS5 + sqlite-vec (default: "1")
+  memoryTier: "1" | "2"; // "1" = FTS5 only, "2" = FTS5 + sqlite-vec (default: "1")
 
   // ─── Optional Phases (default: all false in Phase 1) ───
-  enableGuardrails: boolean;          // Phase 2: GuardrailService.check()
-  enableVerification: boolean;        // Phase 6: VerificationService.verify()
-  enableCostTracking: boolean;        // Phases 3 + 8: CostRouter + CostTracker
-  enableAudit: boolean;               // Phase 9: AuditService.log()
+  enableGuardrails: boolean; // Phase 2: GuardrailService.check()
+  enableVerification: boolean; // Phase 6: VerificationService.verify()
+  enableCostTracking: boolean; // Phases 3 + 8: CostRouter + CostTracker
+  enableAudit: boolean; // Phase 9: AuditService.log()
 
   // ─── LLM Defaults ───
-  defaultModel?: ModelConfig;         // Fallback model if CostRouter not enabled
+  defaultModel?: ModelConfig; // Fallback model if CostRouter not enabled
 }
 
 // Helper: sensible defaults for Phase 1
@@ -3044,21 +3282,21 @@ createRuntime({
 
 ### Layer Factory Summary
 
-| Factory | Package | Purpose |
-|---|---|---|
-| `createRuntime(opts)` | `@reactive-agents/runtime` | **Main entry point** — composes all layers |
-| `CoreServicesLive` | `@reactive-agents/core` | EventBus, AgentService, TaskService, CWM |
-| `createLLMLayer(opts)` | `@reactive-agents/llm-provider` | Anthropic/OpenAI/Ollama LLMService |
-| `createMemoryLayer("1"\|"2", opts)` | `@reactive-agents/memory` | bun:sqlite memory system |
-| `createToolsLayer(opts)` | `@reactive-agents/tools` | MCP client + built-in skills |
-| `createReasoningLayer(opts)` | `@reactive-agents/reasoning` | 5 reasoning strategies |
-| `createVerificationLayer(opts)` | `@reactive-agents/verification` | 5-layer hallucination detection |
-| `createCostLayer(opts)` | `@reactive-agents/cost` | Budget enforcement + model routing |
-| `createIdentityLayer(opts)` | `@reactive-agents/identity` | Ed25519 certs + RBAC + audit |
-| `createOrchestrationLayer(opts)` | `@reactive-agents/orchestration` | Workflows + AgentMesh + A2A |
-| `createObservabilityLayer(opts)` | `@reactive-agents/observability` | OpenTelemetry tracing + metrics |
-| `createInteractionLayer(opts)` | `@reactive-agents/interaction` | 5 interaction modes |
-| `createGuardrailsLayer(opts)` | `@reactive-agents/guardrails` | Contracts + PII + injection defense |
+| Factory                             | Package                          | Purpose                                    |
+| ----------------------------------- | -------------------------------- | ------------------------------------------ |
+| `createRuntime(opts)`               | `@reactive-agents/runtime`       | **Main entry point** — composes all layers |
+| `CoreServicesLive`                  | `@reactive-agents/core`          | EventBus, AgentService, TaskService, CWM   |
+| `createLLMLayer(opts)`              | `@reactive-agents/llm-provider`  | Anthropic/OpenAI/Ollama LLMService         |
+| `createMemoryLayer("1"\|"2", opts)` | `@reactive-agents/memory`        | bun:sqlite memory system                   |
+| `createToolsLayer(opts)`            | `@reactive-agents/tools`         | MCP client + built-in skills               |
+| `createReasoningLayer(opts)`        | `@reactive-agents/reasoning`     | 5 reasoning strategies                     |
+| `createVerificationLayer(opts)`     | `@reactive-agents/verification`  | 5-layer hallucination detection            |
+| `createCostLayer(opts)`             | `@reactive-agents/cost`          | Budget enforcement + model routing         |
+| `createIdentityLayer(opts)`         | `@reactive-agents/identity`      | Ed25519 certs + RBAC + audit               |
+| `createOrchestrationLayer(opts)`    | `@reactive-agents/orchestration` | Workflows + AgentMesh + A2A                |
+| `createObservabilityLayer(opts)`    | `@reactive-agents/observability` | OpenTelemetry tracing + metrics            |
+| `createInteractionLayer(opts)`      | `@reactive-agents/interaction`   | 5 interaction modes                        |
+| `createGuardrailsLayer(opts)`       | `@reactive-agents/guardrails`    | Contracts + PII + injection defense        |
 
 ---
 

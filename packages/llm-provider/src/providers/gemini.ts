@@ -457,6 +457,14 @@ export const GeminiProviderLive = Layer.effect(
           provider: "gemini" as const,
           model: config.defaultModel,
         }),
+
+      getStructuredOutputCapabilities: () =>
+        Effect.succeed({
+          nativeJsonMode: true,
+          jsonSchemaEnforcement: false,
+          prefillSupport: false,
+          grammarConstraints: false,
+        }),
     });
   }),
 );

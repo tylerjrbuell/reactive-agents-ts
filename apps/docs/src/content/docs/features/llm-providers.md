@@ -9,14 +9,14 @@ Reactive Agents supports multiple LLM providers through a unified `LLMService` i
 
 ## Supported Providers
 
-| Provider | Models | Tool Calling | Streaming | Embeddings | Prompt Caching |
-| -------- | ------ | :---: | :---: | :---: | :---: |
-| **Anthropic** | Claude 3.5 Haiku, Claude Sonnet 4, Claude Opus 4 | Yes | Yes | No (use OpenAI) | Yes |
-| **OpenAI** | GPT-4o, GPT-4o-mini | Yes | Yes | Yes | No |
-| **Google Gemini** | Gemini 2.0 Flash, Gemini 2.5 Pro | Yes | Yes | No | No |
-| **Ollama** | Any locally hosted model | Yes | Yes | Yes | No |
-| **LiteLLM** | 100+ models via LiteLLM proxy | Yes | Yes | No | No |
-| **Test** | Mock provider for testing | No | No | No | No |
+| Provider          | Models                                           | Tool Calling | Streaming |   Embeddings    | Prompt Caching |
+| ----------------- | ------------------------------------------------ | :----------: | :-------: | :-------------: | :------------: |
+| **Anthropic**     | Claude 3.5 Haiku, Claude Sonnet 4, Claude Opus 4 |     Yes      |    Yes    | No (use OpenAI) |      Yes       |
+| **OpenAI**        | GPT-4o, GPT-4o-mini                              |     Yes      |    Yes    |       Yes       |       No       |
+| **Google Gemini** | Gemini 2.0 Flash, Gemini 2.5 Pro                 |     Yes      |    Yes    |       No        |       No       |
+| **Ollama**        | Any locally hosted model                         |     Yes      |    Yes    |       Yes       |       No       |
+| **LiteLLM**       | 100+ models via LiteLLM proxy                    |     Yes      |    Yes    |       No        |       No       |
+| **Test**          | Mock provider for testing                        |      No      |    No     |       No        |       No       |
 
 ## Configuration
 
@@ -46,13 +46,13 @@ const agent = await ReactiveAgents.create()
 // Ollama (local)
 const agent = await ReactiveAgents.create()
   .withProvider("ollama")
-  .withModel("llama3")
+  .withModel("cogito:14b")
   .build();
 
 // LiteLLM proxy (100+ models)
 const agent = await ReactiveAgents.create()
   .withProvider("litellm")
-  .withModel("gpt-4o")   // any model supported by your LiteLLM proxy
+  .withModel("gpt-4o") // any model supported by your LiteLLM proxy
   .build();
 ```
 
@@ -80,15 +80,15 @@ LLM_TIMEOUT_MS=30000
 
 Pre-configured model presets with cost and capability data:
 
-| Preset | Provider | Cost/1M Input | Context Window | Quality |
-| ------ | -------- | ------------ | -------------- | ------- |
-| `claude-haiku` | Anthropic | $1.00 | 200K | 0.60 |
-| `claude-sonnet` | Anthropic | $3.00 | 200K | 0.85 |
-| `claude-opus` | Anthropic | $15.00 | 1M | 1.00 |
-| `gpt-4o-mini` | OpenAI | $0.15 | 128K | 0.55 |
-| `gpt-4o` | OpenAI | $2.50 | 128K | 0.80 |
-| `gemini-2.0-flash` | Gemini | $0.10 | 1M | 0.75 |
-| `gemini-2.5-pro` | Gemini | $1.25 | 1M | 0.95 |
+| Preset             | Provider  | Cost/1M Input | Context Window | Quality |
+| ------------------ | --------- | ------------- | -------------- | ------- |
+| `claude-haiku`     | Anthropic | $1.00         | 200K           | 0.60    |
+| `claude-sonnet`    | Anthropic | $3.00         | 200K           | 0.85    |
+| `claude-opus`      | Anthropic | $15.00        | 1M             | 1.00    |
+| `gpt-4o-mini`      | OpenAI    | $0.15         | 128K           | 0.55    |
+| `gpt-4o`           | OpenAI    | $2.50         | 128K           | 0.80    |
+| `gemini-2.0-flash` | Gemini    | $0.10         | 1M             | 0.75    |
+| `gemini-2.5-pro`   | Gemini    | $1.25         | 1M             | 0.95    |
 
 ```typescript
 import { ModelPresets } from "@reactive-agents/llm-provider";
@@ -110,15 +110,17 @@ When tools are enabled, the LLM can request tool calls. Each provider translates
 ```typescript
 const response = await llm.complete({
   messages: [{ role: "user", content: "What's the weather in Tokyo?" }],
-  tools: [{
-    name: "get_weather",
-    description: "Get current weather for a city",
-    inputSchema: {
-      type: "object",
-      properties: { city: { type: "string" } },
-      required: ["city"],
+  tools: [
+    {
+      name: "get_weather",
+      description: "Get current weather for a city",
+      inputSchema: {
+        type: "object",
+        properties: { city: { type: "string" } },
+        required: ["city"],
+      },
     },
-  }],
+  ],
 });
 
 if (response.toolCalls) {
@@ -138,7 +140,7 @@ import { makeCacheable } from "@reactive-agents/llm-provider";
 const message = {
   role: "user" as const,
   content: [
-    makeCacheable(largeSystemContext),    // Cached across requests
+    makeCacheable(largeSystemContext), // Cached across requests
     { type: "text" as const, text: dynamicUserInput },
   ],
 };
@@ -177,7 +179,7 @@ const WeatherSchema = Schema.Struct({
 const weather = await llm.completeStructured({
   messages: [{ role: "user", content: "Weather in Tokyo" }],
   outputSchema: WeatherSchema,
-  maxParseRetries: 2,  // Retries with error feedback on parse failure
+  maxParseRetries: 2, // Retries with error feedback on parse failure
 });
 // weather is fully typed: { city: string, temperature: number, conditions: string }
 ```
@@ -199,7 +201,7 @@ const agent = await ReactiveAgents.create()
   .withProvider("test")
   .withTestResponses({
     "capital of France": "Paris is the capital of France.",
-    "quantum": "Quantum mechanics describes nature at the atomic scale.",
+    quantum: "Quantum mechanics describes nature at the atomic scale.",
   })
   .build();
 

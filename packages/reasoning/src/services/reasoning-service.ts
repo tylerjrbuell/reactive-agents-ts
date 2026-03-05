@@ -38,6 +38,10 @@ export class ReasoningService extends Context.Tag("ReasoningService")<
       readonly contextProfile?: Partial<ContextProfile>;
       /** Custom system prompt for steering agent behavior */
       readonly systemPrompt?: string;
+      readonly taskId?: string;
+      readonly resultCompression?: { budget?: number; previewItems?: number; autoStore?: boolean; codeTransform?: boolean };
+      readonly agentId?: string;
+      readonly sessionId?: string;
     }) => Effect.Effect<ReasoningResult, ReasoningErrors>;
 
     /** Register a custom strategy function. */

@@ -8,3 +8,10 @@ bun.lockb
 
 # Astro generated type cache
 .astro/
+
+# Git worktrees
+.worktrees/
+
+# Messaging secrets
+signal-data/
+.env.telegram

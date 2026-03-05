@@ -48,6 +48,7 @@ These can be enabled independently:
 | Orchestration | `@reactive-agents/orchestration` | Multi-agent workflows |
 | Prompts | `@reactive-agents/prompts` | Template engine |
 | A2A | `@reactive-agents/a2a` | Agent-to-Agent protocol (JSON-RPC, Agent Cards, SSE) |
+| Gateway | `@reactive-agents/gateway` | Persistent autonomous harness: heartbeats, crons, webhooks, policy engine |
 
 ## Dependency Graph
 
@@ -65,6 +66,7 @@ Core ← Guardrails (standalone)
      ← Orchestration (standalone)
      ← Prompts (standalone)
      ← A2A (needs Core + Tools)
+     ← Gateway (needs Core EventBus)
 ```
 
 ## How Layers Compose

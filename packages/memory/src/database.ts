@@ -163,6 +163,46 @@ const SCHEMA_SQL = `
       INSERT INTO episodic_fts(rowid, id, content)
       VALUES (new.rowid, new.id, new.content);
     END;
+
+  -- Plan persistence tables
+  CREATE TABLE IF NOT EXISTS plans (
+    id          TEXT PRIMARY KEY,
+    task_id     TEXT NOT NULL,
+    agent_id    TEXT NOT NULL,
+    goal        TEXT NOT NULL,
+    mode        TEXT NOT NULL DEFAULT 'linear',
+    status      TEXT NOT NULL DEFAULT 'active',
+    version     INTEGER NOT NULL DEFAULT 1,
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL,
+    total_tokens INTEGER DEFAULT 0,
+    total_cost  REAL DEFAULT 0
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_plans_agent_status ON plans(agent_id, status);
+  CREATE INDEX IF NOT EXISTS idx_plans_task ON plans(task_id);
+
+  CREATE TABLE IF NOT EXISTS plan_steps (
+    id          TEXT PRIMARY KEY,
+    plan_id     TEXT NOT NULL REFERENCES plans(id),
+    seq         INTEGER NOT NULL,
+    title       TEXT NOT NULL,
+    instruction TEXT NOT NULL,
+    type        TEXT NOT NULL,
+    status      TEXT NOT NULL DEFAULT 'pending',
+    tool_name   TEXT,
+    tool_args   TEXT,
+    tool_hints  TEXT,
+    depends_on  TEXT,
+    result      TEXT,
+    error       TEXT,
+    retries     INTEGER DEFAULT 0,
+    tokens_used INTEGER DEFAULT 0,
+    started_at  TEXT,
+    completed_at TEXT
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_plan_steps_plan ON plan_steps(plan_id, seq);
 `;
 
 // ─── Live Implementation ───

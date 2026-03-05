@@ -46,6 +46,7 @@ The framework is modular — install only the packages you need:
 | `@reactive-agents/orchestration` | Multi-agent workflows | Optional |
 | `@reactive-agents/a2a` | Agent-to-Agent protocol, Agent Cards, JSON-RPC, SSE streaming | Optional |
 | `@reactive-agents/prompts` | Template engine, built-in prompt library | Optional |
+| `@reactive-agents/gateway` | Persistent autonomous harness: heartbeats, crons, webhooks, policy engine | Optional |
 
 ```bash
 bun add @reactive-agents/core @reactive-agents/runtime @reactive-agents/llm-provider effect

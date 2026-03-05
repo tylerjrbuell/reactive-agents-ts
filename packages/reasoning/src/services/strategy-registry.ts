@@ -8,6 +8,11 @@ import {
   type IterationLimitError,
 } from "../errors/errors.js";
 import type { LLMService } from "@reactive-agents/llm-provider";
+import type { ContextProfile } from "../context/context-profile.js";
+import type { ToolSchema } from "../strategies/shared/tool-utils.js";
+import type { ResultCompressionConfig } from "@reactive-agents/tools";
+import type { ThoughtKernel } from "../strategies/shared/kernel-state.js";
+import { reactKernel } from "../strategies/shared/react-kernel.js";
 import { executeReactive } from "../strategies/reactive.js";
 import { executeReflexion } from "../strategies/reflexion.js";
 import { executePlanExecute } from "../strategies/plan-execute.js";
@@ -21,8 +26,14 @@ export type StrategyFn = (input: {
   readonly taskType: string;
   readonly memoryContext: string;
   readonly availableTools: readonly string[];
+  readonly availableToolSchemas?: readonly ToolSchema[];
   readonly config: ReasoningConfig;
   readonly systemPrompt?: string;
+  readonly taskId?: string;
+  readonly resultCompression?: ResultCompressionConfig;
+  readonly contextProfile?: Partial<ContextProfile>;
+  readonly agentId?: string;
+  readonly sessionId?: string;
 }) => Effect.Effect<
   ReasoningResult,
   ExecutionError | IterationLimitError,
@@ -44,6 +55,20 @@ export class StrategyRegistry extends Context.Tag("StrategyRegistry")<
     ) => Effect.Effect<void>;
 
     readonly list: () => Effect.Effect<readonly ReasoningStrategy[]>;
+
+    /** Register a custom ThoughtKernel by name. */
+    readonly registerKernel: (
+      name: string,
+      kernel: ThoughtKernel,
+    ) => Effect.Effect<void>;
+
+    /** Retrieve a registered ThoughtKernel by name. */
+    readonly getKernel: (
+      name: string,
+    ) => Effect.Effect<ThoughtKernel, StrategyNotFoundError>;
+
+    /** List all registered kernel names. */
+    readonly listKernels: () => Effect.Effect<readonly string[]>;
   }
 >() {}
 
@@ -61,6 +86,11 @@ export const StrategyRegistryLive = Layer.effect(
         ["tree-of-thought", executeTreeOfThought],
         ["adaptive", executeAdaptive],
       ]),
+    );
+
+    // Ref-based mutable map of ThoughtKernels
+    const kernelRef = yield* Ref.make<Map<string, ThoughtKernel>>(
+      new Map<string, ThoughtKernel>([["react", reactKernel]]),
     );
 
     return {
@@ -86,6 +116,30 @@ export const StrategyRegistryLive = Layer.effect(
       list: () =>
         Ref.get(registryRef).pipe(
           Effect.map((m) => Array.from(m.keys()) as ReasoningStrategy[]),
+        ),
+
+      registerKernel: (name, kernel) =>
+        Ref.update(kernelRef, (m) => {
+          const next = new Map(m);
+          next.set(name, kernel);
+          return next;
+        }),
+
+      getKernel: (name) =>
+        Effect.gen(function* () {
+          const kernels = yield* Ref.get(kernelRef);
+          const kernel = kernels.get(name);
+          if (!kernel) {
+            return yield* Effect.fail(
+              new StrategyNotFoundError({ strategy: name as ReasoningStrategy }),
+            );
+          }
+          return kernel;
+        }),
+
+      listKernels: () =>
+        Ref.get(kernelRef).pipe(
+          Effect.map((m) => Array.from(m.keys())),
         ),
     };
   }),

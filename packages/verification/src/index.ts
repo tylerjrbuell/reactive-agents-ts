@@ -6,6 +6,7 @@ export type {
   VerificationResult,
   VerificationConfig,
   VerificationLLM,
+  HallucinationClaim,
 } from "./types.js";
 export {
   RiskLevel,
@@ -26,6 +27,7 @@ export { checkFactDecomposition, checkFactDecompositionLLM } from "./layers/fact
 export { checkMultiSource, checkMultiSourceLLM } from "./layers/multi-source.js";
 export { checkSelfConsistency } from "./layers/self-consistency.js";
 export { checkNli } from "./layers/nli.js";
+export { checkHallucination, checkHallucinationLLM, extractClaims } from "./layers/hallucination-detection.js";
 
 // ─── Service ───
 export { VerificationService, VerificationServiceLive } from "./verification-service.js";

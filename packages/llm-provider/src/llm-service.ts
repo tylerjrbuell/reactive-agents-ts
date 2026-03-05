@@ -6,6 +6,7 @@ import type {
   StructuredCompletionRequest,
   LLMMessage,
   ModelConfig,
+  StructuredOutputCapabilities,
 } from "./types.js";
 import type { LLMErrors } from "./errors.js";
 
@@ -65,5 +66,11 @@ export class LLMService extends Context.Tag("LLMService")<
      * Get current model configuration.
      */
     readonly getModelConfig: () => Effect.Effect<ModelConfig, never>;
+
+    /**
+     * Report structured output capabilities for this provider.
+     * Used by the structured output pipeline to select optimal JSON extraction strategy.
+     */
+    readonly getStructuredOutputCapabilities: () => Effect.Effect<StructuredOutputCapabilities, never>;
   }
 >() {}

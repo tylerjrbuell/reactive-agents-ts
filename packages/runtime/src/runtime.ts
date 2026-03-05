@@ -4,21 +4,30 @@ import { ExecutionEngineLive } from "./execution-engine.js";
 import type { ReactiveAgentsConfig } from "./types.js";
 import { defaultReactiveAgentsConfig } from "./types.js";
 import { CoreServicesLive, EventBusLive } from "@reactive-agents/core";
-import { createLLMProviderLayer } from "@reactive-agents/llm-provider";
+import {
+  createLLMProviderLayer,
+  getProviderDefaultModel,
+} from "@reactive-agents/llm-provider";
 import { createMemoryLayer } from "@reactive-agents/memory";
 
 // Optional package imports
 import { createGuardrailsLayer } from "@reactive-agents/guardrails";
 import { createVerificationLayer } from "@reactive-agents/verification";
 import { createCostLayer } from "@reactive-agents/cost";
-import { createReasoningLayer, defaultReasoningConfig } from "@reactive-agents/reasoning";
+import {
+  createReasoningLayer,
+  defaultReasoningConfig,
+} from "@reactive-agents/reasoning";
 import type { ReasoningConfig } from "@reactive-agents/reasoning";
 import { createToolsLayer } from "@reactive-agents/tools";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { ReasoningOptions, ObservabilityOptions } from "./builder.js";
 import type { ContextProfile } from "@reactive-agents/reasoning";
 import { createIdentityLayer } from "@reactive-agents/identity";
-import { createObservabilityLayer, MetricsCollectorLive } from "@reactive-agents/observability";
+import {
+  createObservabilityLayer,
+  MetricsCollectorLive,
+} from "@reactive-agents/observability";
 import { createInteractionLayer } from "@reactive-agents/interaction";
 import { createPromptLayer } from "@reactive-agents/prompts";
 import { createOrchestrationLayer } from "@reactive-agents/orchestration";
@@ -150,6 +159,30 @@ export interface RuntimeOptions {
    * Default: undefined (uses provider default if available)
    */
   model?: string;
+
+  /**
+   * Enable/disable thinking mode for thinking-capable models.
+   * - `true` — Always enable thinking
+   * - `false` — Always disable thinking
+   * - `undefined` — Auto-detect based on model capabilities
+   *
+   * Default: undefined (auto-detect)
+   */
+  thinking?: boolean;
+
+  /**
+   * Override default LLM temperature (0.0-1.0).
+   *
+   * Default: undefined (uses provider default)
+   */
+  temperature?: number;
+
+  /**
+   * Override default max output tokens.
+   *
+   * Default: undefined (uses provider default)
+   */
+  maxTokens?: number;
 
   /**
    * Memory system tier:
@@ -353,6 +386,56 @@ export interface RuntimeOptions {
    */
   a2aBasePath?: string;
 
+  // ─── Gateway Configuration ───
+
+  /**
+   * Enable the persistent gateway for autonomous agent behavior.
+   *
+   * Default: `false`
+   */
+  enableGateway?: boolean;
+
+  /**
+   * Gateway configuration options (heartbeat, crons, webhooks, policies).
+   */
+  gatewayOptions?: {
+    timezone?: string;
+    heartbeat?: {
+      intervalMs?: number;
+      policy?: string;
+      instruction?: string;
+      maxConsecutiveSkips?: number;
+    };
+    crons?: readonly {
+      schedule: string;
+      instruction: string;
+      agentId?: string;
+      priority?: string;
+      timezone?: string;
+      enabled?: boolean;
+    }[];
+    webhooks?: readonly {
+      path: string;
+      adapter: string;
+      secret?: string;
+      events?: readonly string[];
+    }[];
+    policies?: {
+      dailyTokenBudget?: number;
+      maxActionsPerHour?: number;
+      heartbeatPolicy?: string;
+      mergeWindowMs?: number;
+    };
+    channels?: {
+      accessPolicy?: string;
+      allowedSenders?: readonly string[];
+      blockedSenders?: readonly string[];
+      unknownSenderAction?: string;
+      replyToUnknown?: string;
+    };
+    port?: number;
+  };
+
   // ─── Context Engineering ───
 
   /**
@@ -406,10 +489,23 @@ export interface RuntimeOptions {
  * @see RuntimeOptions
  */
 export const createRuntime = (options: RuntimeOptions) => {
+  // Resolve default model: explicit > env var > provider registry fallback
+  // Note: empty strings are treated as unset (env vars can be "" after unsetting)
+  const resolvedModel =
+    options.model ||
+    process.env.LLM_DEFAULT_MODEL ||
+    (options.provider
+      ? getProviderDefaultModel(options.provider)
+      : undefined) ||
+    "claude-sonnet-4-20250514";
+
   const config: ReactiveAgentsConfig = {
     ...defaultReactiveAgentsConfig(options.agentId),
-    defaultModel: options.model,
+    defaultModel: resolvedModel,
     provider: options.provider,
+    thinking: options.thinking,
+    temperature: options.temperature,
+    maxTokens: options.maxTokens,
     memoryTier: options.memoryTier ?? "1",
     maxIterations: options.maxIterations ?? 10,
     enableGuardrails: options.enableGuardrails ?? false,
@@ -421,6 +517,7 @@ export const createRuntime = (options: RuntimeOptions) => {
     enableSelfImprovement: options.enableSelfImprovement ?? false,
     systemPrompt: options.systemPrompt,
     observabilityVerbosity: options.observabilityOptions?.verbosity,
+    logModelIO: options.observabilityOptions?.logModelIO,
     contextProfile: options.contextProfile,
     defaultStrategy: options.reasoningOptions?.defaultStrategy,
     resultCompression: options.resultCompression,
@@ -432,12 +529,19 @@ export const createRuntime = (options: RuntimeOptions) => {
   const eventBusLayer = EventBusLive;
   // Provide EventBusLive to MetricsCollectorLive so it can subscribe to ToolCallCompleted events
   // IMPORTANT: MetricsCollectorLive must have EventBus available when it initializes
-  const metricsCollectorLayer = MetricsCollectorLive.pipe(Layer.provide(eventBusLayer));
+  const metricsCollectorLayer = MetricsCollectorLive.pipe(
+    Layer.provide(eventBusLayer),
+  );
   const coreLayer = CoreServicesLive;
   const llmLayer = createLLMProviderLayer(
     options.provider ?? "test",
     options.testResponses,
-    options.model,
+    resolvedModel,
+    {
+      thinking: options.thinking,
+      temperature: options.temperature,
+      maxTokens: options.maxTokens,
+    },
   );
   const memoryLayer = createMemoryLayer(config.memoryTier, {
     agentId: options.agentId,
@@ -464,15 +568,23 @@ export const createRuntime = (options: RuntimeOptions) => {
   }
 
   if (options.enableKillSwitch) {
-    const { KillSwitchServiceLive } = require("@reactive-agents/guardrails") as typeof import("@reactive-agents/guardrails");
+    const { KillSwitchServiceLive } =
+      require("@reactive-agents/guardrails") as typeof import("@reactive-agents/guardrails");
     // Provide eventBusLayer so KillSwitchService captures the same EventBus instance
     // during its layer build (for AgentPaused/AgentResumed event emission).
-    runtime = Layer.merge(runtime, KillSwitchServiceLive().pipe(Layer.provide(eventBusLayer))) as any;
+    runtime = Layer.merge(
+      runtime,
+      KillSwitchServiceLive().pipe(Layer.provide(eventBusLayer)),
+    ) as any;
   }
 
   if (options.enableBehavioralContracts && options.behavioralContract) {
-    const { BehavioralContractServiceLive } = require("@reactive-agents/guardrails") as typeof import("@reactive-agents/guardrails");
-    runtime = Layer.merge(runtime, BehavioralContractServiceLive(options.behavioralContract)) as any;
+    const { BehavioralContractServiceLive } =
+      require("@reactive-agents/guardrails") as typeof import("@reactive-agents/guardrails");
+    runtime = Layer.merge(
+      runtime,
+      BehavioralContractServiceLive(options.behavioralContract),
+    ) as any;
   }
 
   if (options.enableVerification) {
@@ -486,7 +598,9 @@ export const createRuntime = (options: RuntimeOptions) => {
   // Build tools layer first — reasoning may depend on it
   // MCP servers implicitly enable tools
   let toolsLayer: Layer.Layer<any, any> | null = null;
-  const shouldEnableTools = options.enableTools || (options.mcpServers && options.mcpServers.length > 0);
+  const shouldEnableTools =
+    options.enableTools ||
+    (options.mcpServers && options.mcpServers.length > 0);
   if (shouldEnableTools) {
     // ToolService requires EventBus
     toolsLayer = createToolsLayer().pipe(Layer.provide(eventBusLayer));
@@ -554,7 +668,10 @@ export const createRuntime = (options: RuntimeOptions) => {
     };
     // Provide the shared metricsCollectorLayer so ObservabilityService uses the same instance
     // as ExecutionEngine, ensuring metrics flow through properly
-    const obsLayer = createObservabilityLayer(obsExporterConfig, metricsCollectorLayer);
+    const obsLayer = createObservabilityLayer(
+      obsExporterConfig,
+      metricsCollectorLayer,
+    );
     runtime = Layer.merge(runtime, obsLayer) as any;
   }
 
@@ -576,7 +693,59 @@ export const createRuntime = (options: RuntimeOptions) => {
 
   // A2A support - use extraLayers pattern for optional A2A
   if (options.enableA2A) {
-    runtime = Layer.merge(runtime, A2aExtraLayer(options.agentId, options.a2aPort ?? 3000)) as any;
+    runtime = Layer.merge(
+      runtime,
+      A2aExtraLayer(options.agentId, options.a2aPort ?? 3000),
+    ) as any;
+  }
+
+  // Gateway — compose GatewayService + SchedulerService when enabled.
+  // The persistent event loop itself starts via agent.start(); layer composition just makes
+  // the services resolvable from the ManagedRuntime.
+  // EventBus is passed to gateway services for observability when available.
+  if (options.enableGateway) {
+    const gatewayLayer = Layer.unwrapEffect(
+      Effect.gen(function* () {
+        const gw = yield* Effect.promise(
+          () => import("@reactive-agents/gateway"),
+        );
+
+        // Resolve EventBus from context for observability (optional).
+        // Use Effect.catchAll — yield* with a missing service produces a fiber failure,
+        // not a JS exception, so try/catch won't catch it.
+        const core = yield* Effect.promise(
+          () => import("@reactive-agents/core"),
+        );
+        type BusLike = { publish: (e: any) => Effect.Effect<void, never> };
+        const bus: BusLike | undefined = yield* Effect.gen(function* () {
+          const eb = yield* core.EventBus as any;
+          return { publish: (e: any) => (eb as any).publish(e) } as BusLike;
+        }).pipe(
+          Effect.catchAll(() =>
+            Effect.succeed(undefined as BusLike | undefined),
+          ),
+        );
+
+        const gwLayer = gw.GatewayServiceLive(
+          (options.gatewayOptions ?? {}) as any,
+          bus,
+        );
+        const schedLayer = gw.SchedulerServiceLive(
+          {
+            agentId: options.agentId,
+            timezone: options.gatewayOptions?.timezone as any,
+            heartbeat: options.gatewayOptions?.heartbeat as any,
+            crons: options.gatewayOptions?.crons as any,
+          },
+          bus,
+        );
+        return Layer.merge(gwLayer, schedLayer);
+      }),
+    );
+    runtime = Layer.merge(
+      runtime,
+      gatewayLayer.pipe(Layer.provide(eventBusLayer)),
+    ) as any;
   }
 
   if (options.extraLayers) {
@@ -600,13 +769,16 @@ export const createRuntime = (options: RuntimeOptions) => {
  *
  * @internal Called internally by `createRuntime()` when `enableA2A: true`
  */
-const A2aExtraLayer = (agentId: string, port: number): Layer.Layer<any, any> => {
+const A2aExtraLayer = (
+  agentId: string,
+  port: number,
+): Layer.Layer<any, any> => {
   // Use dynamic import() so Bun's mock.module() can intercept it in tests.
   // Layer.unwrapEffect lets us return a Layer from inside an async Effect.
   return Layer.unwrapEffect(
     Effect.promise(async () => {
       try {
-        const mod = await import("@reactive-agents/a2a") as any;
+        const mod = (await import("@reactive-agents/a2a")) as any;
         const { createA2AServerLayer } = mod;
         const agentCard = {
           id: agentId,

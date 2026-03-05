@@ -200,6 +200,8 @@ export type AgentEvent =
       readonly durationMs: number;
       /** True if tool executed successfully, false if error */
       readonly success: boolean;
+      /** Which kernel pass produced this call (e.g. "reflexion:generate", "plan-execute:step-2") */
+      readonly kernelPass?: string;
     }
   // ─── Phase completion events (from @reactive-agents/runtime) ───
   | {
@@ -237,6 +239,10 @@ export type AgentEvent =
       readonly action?: string;
       /** Tool result/observation from this step (optional) */
       readonly observation?: string;
+      /** Which kernel pass produced this step (e.g. "reflexion:improve-1", "tree-of-thought:execute") */
+      readonly kernelPass?: string;
+      /** Full LLM prompt trace for debug observability (system + user message) */
+      readonly prompt?: { readonly system: string; readonly user: string };
     }
   // ─── Agent lifecycle events (from @reactive-agents/guardrails) ───
   | {
@@ -375,6 +381,8 @@ export type AgentEvent =
       readonly iteration: number;
       /** Total tokens used up to this point */
       readonly totalTokens: number;
+      /** Which kernel pass produced this answer (e.g. "reflexion:generate", "plan-execute:step-2") */
+      readonly kernelPass?: string;
     }
   // ─── Safety / guardrail events ───
   | {
@@ -392,6 +400,189 @@ export type AgentEvent =
       /** True if violations were severe enough to block execution */
       readonly blocked: boolean;
     }
+  // ─── Gateway events (from @reactive-agents/gateway) ───
+  | {
+      /**
+       * Gateway started and is listening for events.
+       * Fired when GatewayService.start() completes initialization.
+       */
+      readonly _tag: "GatewayStarted";
+      /** Agent identifier */
+      readonly agentId: string;
+      /** Event source names that are active (e.g., ["heartbeat", "cron", "webhook"]) */
+      readonly sources: readonly string[];
+      /** Policy names applied to this gateway (e.g., ["daily-token-budget", "rate-limit"]) */
+      readonly policies: readonly string[];
+      /** Unix timestamp in milliseconds when gateway started */
+      readonly timestamp: number;
+    }
+  | {
+      /**
+       * Gateway stopped and is no longer listening.
+       * Fired when GatewayService.stop() completes shutdown.
+       */
+      readonly _tag: "GatewayStopped";
+      /** Agent identifier */
+      readonly agentId: string;
+      /** Reason for stopping (e.g., "user_requested", "budget_exhausted", "error") */
+      readonly reason: string;
+      /** Total uptime in milliseconds */
+      readonly uptime: number;
+      /** Unix timestamp in milliseconds when gateway stopped */
+      readonly timestamp: number;
+    }
+  | {
+      /**
+       * An external event was received by the gateway.
+       * Fired when any event source delivers an event to the input router.
+       */
+      readonly _tag: "GatewayEventReceived";
+      /** Agent identifier */
+      readonly agentId: string;
+      /** Event source that produced this event (e.g., "heartbeat", "webhook", "cron") */
+      readonly source: string;
+      /** Unique event identifier for correlation */
+      readonly eventId: string;
+      /** Unix timestamp in milliseconds when event was received */
+      readonly timestamp: number;
+    }
+  | {
+      /**
+       * A proactive action was initiated by the gateway.
+       * Fired when the gateway dispatches a task to the agent based on a received event.
+       */
+      readonly _tag: "ProactiveActionInitiated";
+      /** Agent identifier */
+      readonly agentId: string;
+      /** Event source that triggered this action */
+      readonly source: string;
+      /** Description of the task the agent will execute */
+      readonly taskDescription: string;
+      /** Unix timestamp in milliseconds when action was initiated */
+      readonly timestamp: number;
+    }
+  | {
+      /**
+       * A proactive action completed.
+       * Fired after the agent finishes executing a gateway-initiated task.
+       */
+      readonly _tag: "ProactiveActionCompleted";
+      /** Agent identifier */
+      readonly agentId: string;
+      /** Event source that triggered the original action */
+      readonly source: string;
+      /** True if the action executed successfully */
+      readonly success: boolean;
+      /** Total tokens consumed by this action */
+      readonly tokensUsed: number;
+      /** Total duration in milliseconds */
+      readonly durationMs: number;
+      /** Unix timestamp in milliseconds when action completed */
+      readonly timestamp: number;
+    }
+  | {
+      /**
+       * A proactive action was suppressed by policy.
+       * Fired when the policy engine blocks an event from triggering an action.
+       */
+      readonly _tag: "ProactiveActionSuppressed";
+      /** Agent identifier */
+      readonly agentId: string;
+      /** Event source that produced the suppressed event */
+      readonly source: string;
+      /** Human-readable reason for suppression */
+      readonly reason: string;
+      /** Policy name that triggered the suppression */
+      readonly policy: string;
+      /** Event identifier that was suppressed */
+      readonly eventId: string;
+      /** Unix timestamp in milliseconds when suppression occurred */
+      readonly timestamp: number;
+    }
+  | {
+      /**
+       * A policy engine made a decision about an event.
+       * Fired for every policy evaluation, whether allowed or denied.
+       */
+      readonly _tag: "PolicyDecisionMade";
+      /** Agent identifier */
+      readonly agentId: string;
+      /** Policy name that made the decision */
+      readonly policy: string;
+      /** Decision outcome (e.g., "allow", "deny", "defer") */
+      readonly decision: string;
+      /** Event identifier being evaluated */
+      readonly eventId: string;
+      /** Unix timestamp in milliseconds when decision was made */
+      readonly timestamp: number;
+    }
+  | {
+      /**
+       * A heartbeat tick was skipped.
+       * Fired when the heartbeat scheduler decides to skip based on policy (adaptive/conservative).
+       */
+      readonly _tag: "HeartbeatSkipped";
+      /** Agent identifier */
+      readonly agentId: string;
+      /** Reason for skipping (e.g., "no_changes", "rate_limited", "conservative_policy") */
+      readonly reason: string;
+      /** Number of consecutive skips including this one */
+      readonly consecutiveSkips: number;
+      /** Unix timestamp in milliseconds when skip occurred */
+      readonly timestamp: number;
+    }
+  | {
+      /**
+       * Multiple events were merged into a single action.
+       * Fired when the event deduplication/merge logic combines events within the merge window.
+       */
+      readonly _tag: "EventsMerged";
+      /** Agent identifier */
+      readonly agentId: string;
+      /** Number of events that were merged */
+      readonly mergedCount: number;
+      /** Key used for merging (e.g., source + event type) */
+      readonly mergeKey: string;
+      /** Unix timestamp in milliseconds when merge occurred */
+      readonly timestamp: number;
+    }
+  | {
+      /**
+       * A budget (token or action) was exhausted.
+       * Fired when policy enforcement detects that a budget limit has been reached.
+       */
+      readonly _tag: "BudgetExhausted";
+      /** Agent identifier */
+      readonly agentId: string;
+      /** Type of budget exhausted (e.g., "daily-tokens", "hourly-actions") */
+      readonly budgetType: string;
+      /** Budget limit that was reached */
+      readonly limit: number;
+      /** Amount used when limit was reached */
+      readonly used: number;
+      /** Unix timestamp in milliseconds when budget was exhausted */
+      readonly timestamp: number;
+    }
+  // ─── Channel / messaging events ───
+  | {
+      /**
+       * An incoming message was received from a messaging channel.
+       * Fired by ToolService when an MCP server sends a notifications/message notification.
+       */
+      readonly _tag: "ChannelMessageReceived";
+      /** Sender identifier (phone number, user ID, etc.) */
+      readonly sender: string;
+      /** Messaging platform name (e.g., "signal", "telegram") */
+      readonly platform: string;
+      /** Message text content */
+      readonly message: string;
+      /** Unix timestamp in milliseconds */
+      readonly timestamp: number;
+      /** MCP server name that received the message */
+      readonly mcpServer: string;
+      /** Optional group identifier */
+      readonly groupId?: string;
+    }
   // ─── Custom/extension events ───
   | {
       /**
@@ -403,17 +594,51 @@ export type AgentEvent =
       readonly type: string;
       /** Arbitrary custom payload */
       readonly payload: unknown;
+    }
+  // ─── Streaming events ───
+  | {
+      /**
+       * A complete text response arrived from the LLM (end of streaming).
+       * Fired once per LLM call after content_complete — NOT per token.
+       * For per-token events, subscribe to agent.runStream() TextDelta events instead.
+       */
+      readonly _tag: "TextDeltaReceived";
+      readonly taskId: string;
+      readonly text: string;
+      readonly timestamp: number;
+    }
+  | {
+      /**
+       * Agent stream started.
+       * Fired at the beginning of agent.runStream() execution.
+       */
+      readonly _tag: "AgentStreamStarted";
+      readonly taskId: string;
+      readonly agentId: string;
+      readonly density: string;
+      readonly timestamp: number;
+    }
+  | {
+      /**
+       * Agent stream completed.
+       * Fired when the stream reaches StreamCompleted or StreamError.
+       */
+      readonly _tag: "AgentStreamCompleted";
+      readonly taskId: string;
+      readonly agentId: string;
+      readonly success: boolean;
+      readonly durationMs: number;
     };
 
 /**
- * Discriminant tag union of all 22 agent event types.
+ * Discriminant tag union of all agent event types.
  * Derived directly from `AgentEvent["_tag"]` so it stays in sync with the union automatically.
  * Useful for writing generic event handlers, type guards, and filtering logic.
  *
  * @example
  * ```typescript
  * function onEvent(tag: AgentEventTag, handler: (event: AgentEvent) => void) {
- *   // tag is strictly one of the 22 event type names
+ *   // tag is strictly one of the 32 event type names
  * }
  * ```
  *
@@ -487,7 +712,7 @@ export type EventHandler = (event: AgentEvent) => Effect.Effect<void, never>;
  * });
  * ```
  *
- * @see AgentEvent — union of all 22 event variants the bus can carry
+ * @see AgentEvent — union of all event variants the bus can carry
  * @see EventBusLive — default Effect-TS Layer implementation
  * @see TypedEventHandler — type for tag-filtered event handlers
  */
