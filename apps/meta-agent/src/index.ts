@@ -26,7 +26,7 @@ console.log(`Mode: ${isDryRun ? "DRY RUN" : provider === "anthropic" ? "LIVE" : 
 
 const agentBuilder = ReactiveAgents.create()
   .withName("community-growth-agent")
-  .withProvider(provider === "anthropic" ? "anthropic" : "test")
+  .withProvider(provider)
   .withModel("claude-sonnet-4-20250514")
 
   // Persona: developer advocate, adds value first
