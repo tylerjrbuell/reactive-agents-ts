@@ -1,4 +1,4 @@
-import { Stream, Effect } from "effect";
+import { Stream, Effect, Fiber } from "effect";
 import type { AgentStreamEvent } from "./stream-types.js";
 import type { AgentResult } from "./builder.js";
 
@@ -25,13 +25,14 @@ export const AgentStream = {
    * Convert an Effect stream to a Server-Sent Events Response.
    * Each event is emitted as a JSON-encoded SSE line: `data: {...}\n\n`.
    * Compatible with Next.js App Router, Hono, Fastify, and any standard HTTP framework.
+   * The forked fiber is captured and interrupted when the HTTP client disconnects.
    */
   toSSE(
     stream: Stream.Stream<AgentStreamEvent, Error>,
   ): Response {
     const readable = new ReadableStream({
       start(controller) {
-        Effect.runFork(
+        const fiber = Effect.runFork(
           Stream.runForEach(stream, (event) =>
             Effect.sync(() => {
               controller.enqueue(
@@ -61,6 +62,11 @@ export const AgentStream = {
             ),
           ),
         );
+        return {
+          cancel() {
+            Effect.runFork(Fiber.interrupt(fiber));
+          },
+        };
       },
     });
     return new Response(readable, {
@@ -79,7 +85,7 @@ export const AgentStream = {
   toReadableStream(
     stream: Stream.Stream<AgentStreamEvent, Error>,
   ): ReadableStream<AgentStreamEvent> {
-    return Stream.toReadableStream(stream) as ReadableStream<AgentStreamEvent>;
+    return Stream.toReadableStream(stream);
   },
 
   /**
@@ -89,42 +95,48 @@ export const AgentStream = {
   toAsyncIterable(
     stream: Stream.Stream<AgentStreamEvent, Error>,
   ): AsyncIterable<AgentStreamEvent> {
-    return Stream.toAsyncIterable(stream) as AsyncIterable<AgentStreamEvent>;
+    return Stream.toAsyncIterable(stream);
   },
 
   /**
    * Collect a stream to a single AgentResult (equivalent to agent.run()).
-   * Waits for StreamCompleted then resolves. Throws if StreamError is received.
+   * Waits for StreamCompleted then resolves. Rejects via Effect error channel
+   * if StreamError is received — no imperative throw inside the accumulator.
    */
-  async collect(
+  collect(
     stream: Stream.Stream<AgentStreamEvent, Error>,
   ): Promise<AgentResult> {
     return Effect.runPromise(
       Stream.runFold(
         stream,
-        null as AgentResult | null,
+        { result: null as AgentResult | null, error: null as string | null },
         (acc, event) => {
           if (event._tag === "StreamCompleted") {
             return {
-              output: event.output,
-              success: true,
-              taskId: "",
-              agentId: "",
-              metadata: event.metadata,
-            } as AgentResult;
+              ...acc,
+              result: {
+                output: event.output,
+                success: true,
+                taskId: event.taskId ?? "",
+                agentId: event.agentId ?? "",
+                metadata: event.metadata,
+              } as AgentResult,
+            };
           }
           if (event._tag === "StreamError") {
-            throw new Error(event.cause);
+            return { ...acc, error: event.cause };
           }
           return acc;
         },
       ).pipe(
-        Effect.flatMap((result) =>
-          result
-            ? Effect.succeed(result)
-            : Effect.fail(
-                new Error("Stream ended without StreamCompleted event"),
-              ),
+        Effect.flatMap(({ result, error }) =>
+          error
+            ? Effect.fail(new Error(error))
+            : result
+              ? Effect.succeed(result)
+              : Effect.fail(
+                  new Error("Stream ended without StreamCompleted event"),
+                ),
         ),
       ),
     );
