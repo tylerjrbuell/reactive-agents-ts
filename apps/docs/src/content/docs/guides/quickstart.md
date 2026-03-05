@@ -23,8 +23,12 @@ Or manually:
 ```bash
 mkdir my-agent-app && cd my-agent-app
 bun init -y
-bun add reactive-agents effect
+bun add reactive-agents
 ```
+
+:::note[Effect dependency]
+`effect` ships as a dependency of `reactive-agents` and is installed automatically. Only add it explicitly (`bun add effect`) if your own code imports from `effect` directly.
+:::
 
 ## 2. Set Up Environment
 

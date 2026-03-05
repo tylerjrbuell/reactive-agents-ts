@@ -13,7 +13,7 @@
  *   bun run apps/examples/src/multi-agent/10-dynamic-spawning.ts  # test mode
  */
 
-import { ReactiveAgents } from "@reactive-agents/runtime";
+import { ReactiveAgents } from "reactive-agents";
 
 export interface ExampleResult {
   passed: boolean;

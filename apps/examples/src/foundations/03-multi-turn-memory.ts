@@ -13,7 +13,7 @@
  *   bun run apps/examples/src/foundations/03-multi-turn-memory.ts
  */
 
-import { ReactiveAgents } from "@reactive-agents/runtime";
+import { ReactiveAgents } from "reactive-agents";
 
 export interface ExampleResult {
   passed: boolean;

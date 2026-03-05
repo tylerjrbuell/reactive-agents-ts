@@ -74,8 +74,10 @@ Reactive Agents is designed for teams that need production-grade TypeScript AI a
 Install and run your first TypeScript AI agent in under 2 minutes.
 
 ```bash
-bun add reactive-agents effect
+bun add reactive-agents
 ```
+
+> **Note:** `effect` is included as a dependency of `reactive-agents` and installed automatically. If you import from `effect` directly in your own code (e.g. `import { Effect } from "effect"`), add it to your project explicitly: `bun add effect`.
 
 ```typescript
 import { ReactiveAgents } from "reactive-agents";

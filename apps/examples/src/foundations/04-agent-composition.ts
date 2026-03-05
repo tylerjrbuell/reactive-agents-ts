@@ -10,7 +10,7 @@
  *   bun run apps/examples/src/foundations/04-agent-composition.ts
  */
 
-import { ReactiveAgents } from "@reactive-agents/runtime";
+import { ReactiveAgents } from "reactive-agents";
 
 export interface ExampleResult {
   passed: boolean;

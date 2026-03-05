@@ -195,6 +195,29 @@ const EXAMPLES: ExampleMeta[] = [
     requiresKey: false,
     path: "./src/interaction/21-interaction-modes.ts",
   },
+  // gateway — offline (fast heartbeat interval in test mode)
+  {
+    num: "22",
+    label: "persistent-gateway",
+    category: "gateway",
+    requiresKey: false,
+    path: "./src/gateway/22-persistent-gateway.ts",
+  },
+  // streaming — offline
+  {
+    num: "23",
+    label: "token-streaming",
+    category: "streaming",
+    requiresKey: false,
+    path: "./src/streaming/23-token-streaming.ts",
+  },
+  {
+    num: "24",
+    label: "streaming-sse-server",
+    category: "streaming",
+    requiresKey: false,
+    path: "./src/streaming/24-streaming-sse-server.ts",
+  },
 ];
 
 // ─── Argument parsing ─────────────────────────────────────────────────────────

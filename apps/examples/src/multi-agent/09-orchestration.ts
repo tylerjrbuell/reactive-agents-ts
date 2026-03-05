@@ -14,7 +14,7 @@
  *   bun run apps/examples/src/multi-agent/09-orchestration.ts   # test mode
  */
 
-import { ReactiveAgents } from "@reactive-agents/runtime";
+import { ReactiveAgents } from "reactive-agents";
 
 export interface ExampleResult {
   passed: boolean;

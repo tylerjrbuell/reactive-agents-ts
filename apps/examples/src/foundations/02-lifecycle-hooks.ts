@@ -14,8 +14,8 @@
  */
 
 import { Effect } from "effect";
-import { ReactiveAgents } from "@reactive-agents/runtime";
-import type { LifecycleHook, ExecutionContext } from "@reactive-agents/runtime";
+import { ReactiveAgents } from "reactive-agents";
+import type { LifecycleHook, ExecutionContext } from "reactive-agents";
 
 export interface ExampleResult {
   passed: boolean;

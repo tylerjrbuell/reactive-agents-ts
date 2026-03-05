@@ -17,7 +17,7 @@
  *   ANTHROPIC_API_KEY=sk-ant-... bun run apps/examples/src/advanced/17-observability.ts
  *   bun run apps/examples/src/advanced/17-observability.ts  # test mode
  */
-import { ReactiveAgents } from "@reactive-agents/runtime";
+import { ReactiveAgents } from "reactive-agents";
 import { existsSync, unlinkSync } from "node:fs";
 
 export interface ExampleResult {

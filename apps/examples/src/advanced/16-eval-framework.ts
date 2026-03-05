@@ -12,7 +12,7 @@
  *   bun run apps/examples/src/advanced/16-eval-framework.ts  # test mode
  */
 import { Effect, Layer } from "effect";
-import { ReactiveAgents } from "@reactive-agents/runtime";
+import { ReactiveAgents } from "reactive-agents";
 import {
   EvalService,
   EvalServiceLive,

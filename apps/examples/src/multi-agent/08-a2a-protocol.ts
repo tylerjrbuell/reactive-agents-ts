@@ -10,7 +10,7 @@
  *   bun run apps/examples/src/multi-agent/08-a2a-protocol.ts
  */
 
-import { ReactiveAgents } from "@reactive-agents/runtime";
+import { ReactiveAgents } from "reactive-agents";
 import { generateAgentCard } from "@reactive-agents/a2a";
 
 export interface ExampleResult {
