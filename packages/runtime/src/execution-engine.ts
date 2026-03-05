@@ -1,4 +1,4 @@
-import { Effect, Context, Layer, Ref, Option } from "effect";
+import { Effect, Context, Layer, Ref, Option, Queue, Stream as EStream } from "effect";
 import type { ExecutionContext, ReactiveAgentsConfig } from "./types.js";
 import {
   ExecutionError,
@@ -10,6 +10,9 @@ import {
 } from "./errors.js";
 import { LifecycleHookRegistry } from "./hooks.js";
 import type { LifecycleHook } from "./types.js";
+
+import type { AgentStreamEvent, StreamDensity } from "./stream-types.js";
+import { StreamingTextCallback } from "@reactive-agents/core";
 
 // Import from other packages (type-only to avoid circular deps at runtime)
 import type { Task, TaskResult } from "@reactive-agents/core";
@@ -62,6 +65,11 @@ export class ExecutionEngine extends Context.Tag("ExecutionEngine")<
     ) => Effect.Effect<ExecutionContext | null, never>;
 
     readonly cancel: (taskId: string) => Effect.Effect<void, ExecutionError>;
+
+    readonly executeStream: (
+      task: Task,
+      options?: { density?: StreamDensity },
+    ) => Effect.Effect<EStream.Stream<AgentStreamEvent, Error>>;
   }
 >() {}
 
@@ -1674,6 +1682,111 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
               );
             }
             yield* Ref.update(cancelledTasks, (s) => new Set(s).add(taskId));
+          }),
+
+        executeStream: (task, options) =>
+          Effect.gen(function* () {
+            const density = options?.density ?? "tokens";
+            const queue = yield* Queue.bounded<AgentStreamEvent>(256);
+
+            // Helper: offer event to queue, ignoring errors if queue is shut down
+            const offerSafe = (event: AgentStreamEvent): Effect.Effect<void, never> =>
+              Queue.offer(queue, event).pipe(
+                Effect.catchAll(() => Effect.void),
+              );
+
+            // ── Full-density: forward EventBus events → queue ──
+            let unsubFn: (() => void) | null = null;
+            if (density === "full") {
+              const ebOpt = yield* Effect.serviceOption(EventBus).pipe(
+                Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
+              );
+              if (ebOpt._tag === "Some") {
+                const eb = ebOpt.value as EbLike & {
+                  subscribe: (
+                    handler: (e: AgentEvent) => Effect.Effect<void, never>,
+                  ) => Effect.Effect<() => void, never>;
+                };
+                unsubFn = yield* eb.subscribe((event: AgentEvent) =>
+                  Effect.gen(function* () {
+                    if (event._tag === "ExecutionPhaseEntered") {
+                      yield* offerSafe({
+                        _tag: "PhaseStarted",
+                        phase: event.phase,
+                        timestamp: Date.now(),
+                      });
+                    } else if (event._tag === "ExecutionPhaseCompleted") {
+                      yield* offerSafe({
+                        _tag: "PhaseCompleted",
+                        phase: event.phase,
+                        durationMs: event.durationMs,
+                      });
+                    } else if (
+                      event._tag === "ReasoningStepCompleted" &&
+                      (event as any).thought
+                    ) {
+                      yield* offerSafe({
+                        _tag: "ThoughtEmitted",
+                        content: (event as any).thought,
+                        iteration: event.step,
+                      });
+                    } else if (event._tag === "ToolCallStarted") {
+                      yield* offerSafe({
+                        _tag: "ToolCallStarted",
+                        toolName: (event as any).toolName,
+                        callId: (event as any).callId,
+                      });
+                    } else if (event._tag === "ToolCallCompleted") {
+                      yield* offerSafe({
+                        _tag: "ToolCallCompleted",
+                        toolName: (event as any).toolName,
+                        callId: (event as any).callId,
+                        durationMs: (event as any).durationMs,
+                        success: (event as any).success,
+                      });
+                    }
+                  }),
+                );
+              }
+            }
+
+            // ── Fork execute with StreamingTextCallback FiberRef set ──
+            // Queue is shut down in Effect.ensuring — this terminates the stream
+            // when execution completes or errors. No Effect.scoped needed: the
+            // queue and fiber outlive this Effect and are cleaned up by the ensuring.
+            yield* Effect.locally(
+              execute(task).pipe(
+                Effect.tap((taskResult) =>
+                  offerSafe({
+                    _tag: "StreamCompleted",
+                    output: String((taskResult as any).output ?? ""),
+                    metadata: (taskResult as any).metadata ?? {},
+                    taskId: String(task.id),
+                    agentId: String(task.agentId),
+                  }),
+                ),
+                Effect.catchAll((err: unknown) =>
+                  offerSafe({
+                    _tag: "StreamError",
+                    cause:
+                      typeof err === "object" &&
+                      err !== null &&
+                      "message" in err
+                        ? String((err as any).message)
+                        : String(err),
+                  }),
+                ),
+                Effect.ensuring(
+                  Effect.sync(() => {
+                    if (unsubFn) unsubFn();
+                  }).pipe(Effect.flatMap(() => Queue.shutdown(queue))),
+                ),
+              ),
+              StreamingTextCallback,
+              (text: string) => offerSafe({ _tag: "TextDelta", text }),
+            ).pipe(Effect.forkDaemon);
+
+            return EStream.fromQueue(queue);
           }),
       };
     }),
