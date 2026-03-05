@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/a2a",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -12,16 +12,16 @@
   },
   "dependencies": {
     "effect": "^3.10.0",
-    "@reactive-agents/core": "workspace:^",
-    "@reactive-agents/tools": "workspace:^"
+    "@reactive-agents/core": "workspace:*",
+    "@reactive-agents/tools": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.7.0",
     "bun-types": "latest",
-    "@reactive-agents/identity": "workspace:^"
+    "@reactive-agents/identity": "workspace:*"
   },
   "peerDependencies": {
-    "@reactive-agents/identity": "workspace:^"
+    "@reactive-agents/identity": "workspace:*"
   },
   "peerDependenciesMeta": {
     "@reactive-agents/identity": {

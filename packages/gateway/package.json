@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/gateway",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "effect": "^3.10.0",
-    "@reactive-agents/core": "workspace:^"
+    "@reactive-agents/core": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.7.0",
