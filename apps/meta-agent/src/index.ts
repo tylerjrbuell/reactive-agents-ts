@@ -13,8 +13,8 @@
  */
 
 import { ReactiveAgents } from "reactive-agents";
-import { communityMonitorTool } from "./tools/community-monitor.js";
-import { draftWriterTool } from "./tools/draft-writer.js";
+import { communityMonitorTool, communityMonitorHandler } from "./tools/community-monitor.js";
+import { draftWriterTool, draftWriterHandler } from "./tools/draft-writer.js";
 
 const isDryRun = process.argv.includes("--dry-run");
 const provider = process.env.ANTHROPIC_API_KEY ? "anthropic" : "test";
@@ -43,10 +43,12 @@ const agentBuilder = ReactiveAgents.create()
     tone: "friendly, technical, developer-to-developer",
   })
 
-  // Tools: search communities, fetch pages, save drafts, scratchpad for state
+  // Tools: built-ins (web-search, http-get, file-write, scratchpad) + custom community tools
   .withTools({
-    include: ["web-search", "http-get", "file-write", "scratchpad-write", "scratchpad-read"],
-    custom: [communityMonitorTool, draftWriterTool],
+    tools: [
+      { definition: communityMonitorTool, handler: communityMonitorHandler },
+      { definition: draftWriterTool, handler: draftWriterHandler },
+    ],
   })
 
   // Memory: remember what we've seen to avoid duplicate drafts
