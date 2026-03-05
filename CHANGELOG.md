@@ -6,6 +6,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 
 ---
 
+## [0.6.1] - 2026-03-05
+
+Patch release — fixes npm dependency resolution. v0.6.0 was published with stale `workspace:^` resolutions pointing to `^0.5.5` instead of `^0.6.0`. Also adds `@reactive-agents/gateway` and `@reactive-agents/testing` to the publish workflow (were missing from the PACKAGES list).
+
+### Fixed
+
+- All cross-package dependencies now resolve to `^0.6.1` (was `^0.5.5` in 0.6.0)
+- `@reactive-agents/gateway` added to npm publish workflow
+- `@reactive-agents/testing` added to npm publish workflow
+
+---
+
 ## [0.6.0] - 2026-03-04
 
 Agent Streaming, Gateway persistent agent harness, Composable Kernel Architecture, Structured Plan Engine, Strategy SDK Refactor, Foundation Fixes, documentation pass with 13 agent skills. 20 packages bumped to 0.6.0, 1,381 tests across 180 files.
