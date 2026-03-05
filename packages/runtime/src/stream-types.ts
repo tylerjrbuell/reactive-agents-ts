@@ -22,6 +22,8 @@ export type AgentStreamEvent =
       readonly _tag: "StreamCompleted";
       readonly output: string;
       readonly metadata: AgentResultMetadata;
+      readonly taskId?: string;
+      readonly agentId?: string;
     }
   | {
       /** Execution failed. Last event on a failed stream. */
