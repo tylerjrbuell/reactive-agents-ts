@@ -52,3 +52,6 @@ export type { AgentResult, AgentResultMetadata, AgentPersona } from "./builder.j
 // ─── Streaming ───
 export type { AgentStreamEvent, StreamDensity } from "./stream-types.js";
 export { AgentStream } from "./agent-stream.js";
+
+// ─── Deployment ───
+export { createSigtermHandler, registerShutdownHandlers } from "./sigterm.js";
