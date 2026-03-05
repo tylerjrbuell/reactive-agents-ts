@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "reactive-agents": "workspace:*",
+    "@reactive-agents/health": "workspace:*",
     "effect": "^3.10.0"
   },
   "devDependencies": {

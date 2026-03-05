@@ -12,7 +12,9 @@
  *   bun run src/index.ts --dry-run   # validate config without starting loop
  */
 
-import { ReactiveAgents } from "reactive-agents";
+import { ReactiveAgents, registerShutdownHandlers } from "reactive-agents";
+import { makeHealthService } from "@reactive-agents/health";
+import { Effect } from "effect";
 import { communityMonitorTool, communityMonitorHandler } from "./tools/community-monitor.js";
 import { draftWriterTool, draftWriterHandler } from "./tools/draft-writer.js";
 
@@ -131,15 +133,22 @@ console.log("Drafts will be saved to: apps/meta-agent/drafts/\n");
 
 const handle = agent.start();
 
-// Graceful shutdown on Ctrl+C
-process.on("SIGINT", async () => {
-  console.log("\nShutting down...");
-  const summary = await handle.stop();
-  console.log("Summary:", summary);
-  await agent.dispose();
-  process.exit(0);
-});
+// ─── Health server (for container deployments) ─────────────────────────────
 
-// Wait forever (or until stop() is called)
+const healthPort = parseInt(process.env.HEALTH_PORT ?? "3000");
+
+if (!isDryRun) {
+  const health = await Effect.runPromise(
+    makeHealthService({ port: healthPort, agentName: "community-growth-agent" }),
+  );
+  await Effect.runPromise(health.start());
+  console.log(`Health server: http://localhost:${healthPort}/health\n`);
+}
+
+// ─── Graceful shutdown (SIGTERM from docker stop, SIGINT from Ctrl+C) ──────
+
+registerShutdownHandlers(handle, () => agent.dispose(), { log: true });
+
+// Wait forever (or until shutdown signal)
 await handle.done;
 await agent.dispose();
