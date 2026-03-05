@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/cli",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "type": "module",
   "main": "./dist/index.js",
   "bin": {
@@ -28,11 +28,11 @@
   ],
   "dependencies": {
     "effect": "^3.10.0",
-    "@reactive-agents/core": "workspace:^",
-    "@reactive-agents/runtime": "workspace:^",
-    "@reactive-agents/eval": "workspace:^",
-    "@reactive-agents/llm-provider": "workspace:^",
-    "@reactive-agents/a2a": "workspace:^"
+    "@reactive-agents/core": "workspace:*",
+    "@reactive-agents/runtime": "workspace:*",
+    "@reactive-agents/eval": "workspace:*",
+    "@reactive-agents/llm-provider": "workspace:*",
+    "@reactive-agents/a2a": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.7.0",

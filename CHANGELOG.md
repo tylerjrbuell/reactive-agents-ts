@@ -6,6 +6,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 
 ---
 
+## [0.6.2] - 2026-03-05
+
+Patch release — fixes 0.x semver dependency resolution. `workspace:^` resolves to `^0.5.5` which in 0.x semver means `>=0.5.5 <0.6.0`, excluding `0.6.x`. Changed all `workspace:^` to `workspace:*` so published packages use exact version pins (e.g., `0.6.2`) which any higher version satisfies.
+
+### Fixed
+
+- All `workspace:^` changed to `workspace:*` across 7 package.json files
+- `bun add reactive-agents` and `bun add @reactive-agents/runtime` now correctly resolve to 0.6.2 sub-packages
+
+---
+
 ## [0.6.1] - 2026-03-05
 
 Patch release — fixes npm dependency resolution. v0.6.0 was published with stale `workspace:^` resolutions pointing to `^0.5.5` instead of `^0.6.0`. Also adds `@reactive-agents/gateway` and `@reactive-agents/testing` to the publish workflow (were missing from the PACKAGES list).
