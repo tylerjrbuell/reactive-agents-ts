@@ -7,6 +7,7 @@ import { runInspect } from "./commands/inspect.js";
 import { runAgent } from "./commands/run.js";
 import { runServe } from "./commands/serve.js";
 import { runDiscover } from "./commands/discover.js";
+import { runDeploy } from "./commands/deploy.js";
 import { printBanner, printVersion, VERSION } from "./banner.js";
 
 const HELP = `
@@ -22,6 +23,7 @@ const HELP = `
     eval run --suite <name>                           Run evaluation suite
     playground                                        Launch interactive REPL
     inspect <agent-id> [--trace last]                 Inspect agent state
+    deploy init [--topology single]                   Scaffold Docker deployment files
     help                                              Show this help
     version                                           Show version
 `.trimEnd();
@@ -56,6 +58,10 @@ export function main(argv: string[] = process.argv.slice(2)) {
 
     case "discover":
       runDiscover(argv.slice(1));
+      break;
+
+    case "deploy":
+      runDeploy(argv.slice(1));
       break;
 
     case "dev":
