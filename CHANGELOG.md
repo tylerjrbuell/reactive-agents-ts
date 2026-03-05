@@ -6,6 +6,28 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 
 ---
 
+## [0.6.3] - 2026-03-05
+
+Patch release — gateway and streaming examples, `AgentStream` API fix, and public re-exports.
+
+### Added
+
+- `apps/examples/src/gateway/22-persistent-gateway.ts` — runnable gateway example: `.withGateway()`, heartbeat, crons, policies, `agent.start()` / `handle.stop()`, `GatewaySummary`; works in test mode without an API key
+- `apps/examples/src/streaming/23-token-streaming.ts` — demonstrates `runStream()` in both `"tokens"` and `"full"` density modes
+- `apps/examples/src/streaming/24-streaming-sse-server.ts` — `AgentStream.toSSE()` SSE endpoint via `Bun.serve`; validates headers in test mode, starts a real HTTP server with an API key
+
+### Fixed
+
+- `AgentStream.toSSE()`, `toReadableStream()`, and `collect()` now accept `AsyncIterable<AgentStreamEvent>` (the return type of `agent.runStream()`) in addition to Effect `Stream` — the documented `AgentStream.toSSE(agent.runStream(...))` pattern now compiles and works correctly
+- All 20 existing examples updated to import from `"reactive-agents"` instead of `"@reactive-agents/runtime"` — copy-pasted code now works out of the box
+- `AgentStream`, `AgentStreamEvent`, and `StreamDensity` exported from the `reactive-agents` umbrella package
+
+### Changed
+
+- Clarified Effect install instructions: `effect` ships as a dependency of `reactive-agents`; only add it explicitly when importing from `effect` directly
+
+---
+
 ## [0.6.2] - 2026-03-05
 
 Patch release — fixes 0.x semver dependency resolution. `workspace:^` resolves to `^0.5.5` which in 0.x semver means `>=0.5.5 <0.6.0`, excluding `0.6.x`. Changed all `workspace:^` to `workspace:*` so published packages use exact version pins (e.g., `0.6.2`) which any higher version satisfies.
