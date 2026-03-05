@@ -1,0 +1,18 @@
+{
+  "name": "@reactive-agents/meta-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bun run src/index.ts",
+    "dry-run": "bun run src/index.ts --dry-run"
+  },
+  "dependencies": {
+    "reactive-agents": "workspace:*",
+    "effect": "^3.10.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "bun-types": "latest"
+  }
+}
