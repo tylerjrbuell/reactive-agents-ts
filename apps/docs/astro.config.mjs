@@ -37,6 +37,14 @@ export default defineConfig({
       customCss: ["./src/styles/custom.css"],
       sidebar: [
         {
+          label: "Rax CLI",
+          items: [
+            { label: "Rax as Artisan", link: "guides/cli-artisan/" },
+            { label: "Quickstart", link: "guides/quickstart/" },
+            { label: "Command Reference", link: "reference/cli/" },
+          ],
+        },
+        {
           label: "Getting Started",
           autogenerate: { directory: "guides" },
         },
