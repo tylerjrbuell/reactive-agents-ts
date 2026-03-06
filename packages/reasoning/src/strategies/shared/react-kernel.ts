@@ -521,6 +521,7 @@ function handleActing(
     yield* hooks.onObservation(
       transitionState(state, { steps: stepsWithAction }),
       observationContent,
+      obsResult.success,
     );
 
     // Check for post-action FINAL ANSWER (from the thought that triggered this action)

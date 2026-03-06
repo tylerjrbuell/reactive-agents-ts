@@ -86,7 +86,7 @@ export type EventBusInstance = {
 export interface KernelHooks {
   readonly onThought: (state: KernelState, thought: string) => Effect.Effect<void, never>;
   readonly onAction: (state: KernelState, tool: string, input: string) => Effect.Effect<void, never>;
-  readonly onObservation: (state: KernelState, result: string) => Effect.Effect<void, never>;
+  readonly onObservation: (state: KernelState, result: string, success: boolean) => Effect.Effect<void, never>;
   readonly onDone: (state: KernelState) => Effect.Effect<void, never>;
   readonly onError: (state: KernelState, error: string) => Effect.Effect<void, never>;
 }

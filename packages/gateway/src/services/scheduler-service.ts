@@ -104,7 +104,9 @@ export const SchedulerServiceLive = (
 
             for (const cron of parsedCrons) {
               if (cron.parsed) {
-                const tz = cron.entry.timezone ?? config.timezone;
+                // Always resolve a concrete timezone for cron evaluation and logging.
+                // Without this fallback, logs can show "(undefined)" and local-time drift.
+                const tz = cron.entry.timezone ?? config.timezone ?? "UTC";
 
                 // On first call, initialize lastCheckedMinute to currentMinute - 1
                 // so we only check the current minute, not back to epoch (which would be millions of iterations).

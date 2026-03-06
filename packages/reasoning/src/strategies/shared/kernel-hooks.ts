@@ -48,7 +48,7 @@ export function buildKernelHooks(eventBus: MaybeService<EventBusInstance>): Kern
         kernelPass: getKernelPass(state),
       }),
 
-    onObservation: (state: KernelState, result: string): Effect.Effect<void, never> => {
+    onObservation: (state: KernelState, result: string, success: boolean): Effect.Effect<void, never> => {
       const lastStep = state.steps[state.steps.length - 1];
       return Effect.all([
         publishReasoningStep(eventBus, {
@@ -66,7 +66,7 @@ export function buildKernelHooks(eventBus: MaybeService<EventBusInstance>): Kern
           toolName: (lastStep?.metadata?.toolUsed as string) ?? "unknown",
           callId: lastStep?.id ?? "unknown",
           durationMs: (lastStep?.metadata?.duration as number | undefined) ?? 0,
-          success: true,
+          success,
           kernelPass: getKernelPass(state),
         }),
       ]).pipe(Effect.asVoid);
