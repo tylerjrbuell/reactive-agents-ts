@@ -6,6 +6,30 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- `apps/cli/tests/cli-contracts.test.ts` — provider CLI contract tests for local Docker, Fly, Railway, Render, Cloud Run (`gcloud`), and DigitalOcean (`doctl`) command/flag compatibility; includes version baselines and optional slow container-image availability checks (`RUN_SLOW_TESTS=1`)
+- `rax playground` now launches a real interactive REPL session (single agent instance, `/help` + `/exit`, optional `--stream`) via `apps/cli/src/commands/playground.ts`
+- `rax inspect` now performs concrete local diagnostics (Docker/Compose checks, compose status, recent log matching by agent ID, optional `--json`) via `apps/cli/src/commands/inspect.ts`
+- `apps/meta-agent` now runs dedicated competitor intelligence crons every 12 hours with staggered tracks: TypeScript-first sweep (`0 */12 * * *`) and Python-first sweep (`30 */12 * * *`), tracking frameworks highlighted in current ecosystem analysis (LangChain/LangGraph, OpenAI Agents, AutoGen, CrewAI, SuperAGI, Mastra, Portkey, VoltAgent, Agentic.js)
+- `apps/meta-agent` now runs an hourly competitive scorecard cron (`0 * * * *`) that drafts evidence-backed summaries of where reactive-agents is excelling vs behind competition, including confidence levels and next-24h actions
+
+### Changed
+
+- `rax deploy` now uses provider adapter dispatch end-to-end from `apps/cli/src/commands/deploy/index.ts` with structured `--dry-run` preflight output and target auto-detection for `down/status/logs`
+- CLI help text updated in `apps/cli/src/index.ts` for all six deploy targets and `--dry-run`/mode-aware usage
+- CLI docs updated in `apps/docs/src/content/docs/reference/cli.md` and `apps/cli/README.md` with deploy command reference and provider contract baselines
+- `rax run --stream` is now fully implemented using `agent.runStream()` token output path (removed previous "not yet implemented" behavior) in `apps/cli/src/commands/run.ts`
+- `rax dev` now runs a real Bun watch workflow with entrypoint overrides (`--entry`, `--no-watch`) via `apps/cli/src/commands/dev.ts`
+- `rax serve` input validation tightened (provider validation, memory tier parsing) and generated project templates updated to current builder API signatures in `apps/cli/src/generators/project-generator.ts`
+
+### Fixed
+
+- Removed dead code in deploy dispatcher (`listProviders` unused import and unused parse-options parameter), keeping command routing paths minimal and aligned with registry-based adapters
+- **Metrics dashboard now correctly shows failed tool calls** — `ToolCallCompleted` events were always published with `success: true`, causing the metrics dashboard to show all tool executions as successful even when they failed (e.g., parameter validation errors). Updated `KernelHooks.onObservation` signature to pass success flag from `ObservationResult`, and updated all call sites in `react-kernel.ts` and `kernel-runner.ts` to propagate the actual success status. Tool errors now correctly display with ❌ in metrics instead of ✅.
+
 ## [0.6.3] - 2026-03-05
 
 Patch release — gateway and streaming examples, `AgentStream` API fix, and public re-exports.
