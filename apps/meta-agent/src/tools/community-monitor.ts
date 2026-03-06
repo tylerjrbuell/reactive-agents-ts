@@ -35,7 +35,16 @@ export const communityMonitorHandler = (
   const topics = (args.topics as string[] | undefined) ?? [
     "TypeScript AI agent framework",
     "LangChain TypeScript alternative",
+    "LangChain.js vs LangChain Python",
+    "LangGraph.js updates",
+    "OpenAI agents SDK TypeScript",
+    "Microsoft AutoGen Python",
+    "CrewAI framework",
+    "SuperAGI framework",
     "Mastra framework",
+    "Portkey AI gateway",
+    "VoltAgent framework",
+    "Agentic.js tools",
     "Effect-TS agents",
     "autonomous agents TypeScript",
     "AI agent observability TypeScript",
@@ -54,6 +63,7 @@ export const communityMonitorHandler = (
       "Use the web-search tool with each term to find recent discussions. " +
       "For each relevant thread found, evaluate: Is this a genuine opportunity to add value? " +
       "Would mentioning reactive-agents be helpful (not spammy)? " +
+      "Track recurring competitor names and summarize notable releases or positioning shifts. " +
       "Draft a response only if you can lead with value, not with promotion.",
   });
 };

@@ -15,3 +15,4 @@ bun.lockb
 # Messaging secrets
 signal-data/
 .env.telegram
+apps/meta-agent/.env.production

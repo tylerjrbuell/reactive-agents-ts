@@ -12,6 +12,8 @@ services:
       context: ../..
       dockerfile: apps/meta-agent/Dockerfile
     container_name: raxd-meta-agent
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     restart: unless-stopped
     env_file: .env.production
     cap_drop:
