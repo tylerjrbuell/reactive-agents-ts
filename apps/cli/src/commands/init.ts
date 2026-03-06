@@ -1,12 +1,13 @@
 import { join } from "node:path";
 import { generateProject, type ProjectTemplate } from "../generators/project-generator.js";
+import { fail, info, kv, section, success } from "../ui.js";
 
 const VALID_TEMPLATES: ProjectTemplate[] = ["minimal", "standard", "full"];
 
 export function runInit(args: string[]): void {
   const name = args[0];
   if (!name) {
-    console.error("Usage: reactive-agents init <project-name> [--template minimal|standard|full]");
+    console.error(fail("Usage: rax init <project-name> [--template minimal|standard|full]"));
     process.exit(1);
   }
 
@@ -15,24 +16,25 @@ export function runInit(args: string[]): void {
   if (templateIdx !== -1 && args[templateIdx + 1]) {
     const t = args[templateIdx + 1] as ProjectTemplate;
     if (!VALID_TEMPLATES.includes(t)) {
-      console.error(`Invalid template: ${t}. Valid options: ${VALID_TEMPLATES.join(", ")}`);
+      console.error(fail(`Invalid template: ${t}. Valid options: ${VALID_TEMPLATES.join(", ")}`));
       process.exit(1);
     }
     template = t;
   }
 
   const targetDir = join(process.cwd(), name);
-  console.log(`Creating project "${name}" with template "${template}"...`);
+  console.log(section("Project Init"));
+  console.log(info(`Creating project "${name}" with template "${template}"...`));
 
   const result = generateProject({ name, template, targetDir });
 
-  console.log(`Created ${result.files.length} files:`);
+  console.log(success(`Created ${result.files.length} files:`));
   for (const file of result.files) {
-    console.log(`  ${file}`);
+    console.log(`  - ${file}`);
   }
-  console.log(`\nNext steps:`);
-  console.log(`  cd ${name}`);
-  console.log(`  bun install`);
-  console.log(`  cp .env.example .env  # Add your API keys`);
-  console.log(`  bun run dev`);
+  console.log(section("Next Steps"));
+  console.log(kv("1", `cd ${name}`));
+  console.log(kv("2", "bun install"));
+  console.log(kv("3", "cp .env.example .env  # Add your API keys"));
+  console.log(kv("4", "bun run dev"));
 }

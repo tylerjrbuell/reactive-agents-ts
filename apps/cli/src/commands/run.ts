@@ -13,6 +13,16 @@ interface MCPConfigFile {
   }>;
 }
 
+function readErrorCause(err: unknown): string | undefined {
+  if (!(err instanceof Error)) return undefined;
+  if (err.cause !== undefined) {
+    return err.cause instanceof Error ? err.cause.message : String(err.cause);
+  }
+  const symbolCause = Reflect.get(err, Symbol.for("cause"));
+  if (symbolCause === undefined) return undefined;
+  return symbolCause instanceof Error ? symbolCause.message : String(symbolCause);
+}
+
 const VALID_PROVIDERS = ["anthropic", "openai", "ollama", "gemini", "litellm", "test"] as const;
 type Provider = (typeof VALID_PROVIDERS)[number];
 
@@ -107,11 +117,6 @@ export async function runAgent(args: string[]): Promise<void> {
     process.exit(1);
   }
 
-  // Warn about unimplemented --stream flag
-  if (stream) {
-    console.error("Note: --stream is not yet implemented. Running without streaming.");
-  }
-
   // Validate API key exists before building agent (fast fail)
   const keySpec = PROVIDER_API_KEYS[provider];
   if (keySpec && !process.env[keySpec.env]) {
@@ -180,8 +185,67 @@ export async function runAgent(args: string[]): Promise<void> {
       console.error(`Running: "${prompt}"\n`);
     }
 
-    const execSpinner = quiet ? null : createSpinner("Executing");
-    const result = await agent.run(prompt);
+    const execSpinner = quiet || stream ? null : createSpinner("Executing");
+    const result = stream
+      ? await (async () => {
+          if (!quiet) {
+            console.log("\n─── Streaming Output ───");
+          }
+
+          let output = "";
+          let streamError: string | null = null;
+          let finalMetadata:
+            | {
+                duration: number;
+                stepsCount: number;
+                cost: number;
+                strategyUsed?: string;
+              }
+            | undefined;
+
+          for await (const event of agent.runStream(prompt)) {
+            switch (event._tag) {
+              case "TextDelta":
+                process.stdout.write(event.text);
+                output += event.text;
+                break;
+              case "StreamCompleted":
+                finalMetadata = event.metadata;
+                if (!quiet) {
+                  process.stdout.write("\n");
+                }
+                break;
+              case "StreamError":
+                streamError = event.cause;
+                break;
+            }
+          }
+
+          if (streamError !== null) {
+            return {
+              success: false,
+              output,
+              metadata: {
+                duration: 0,
+                stepsCount: 0,
+                cost: 0,
+              },
+              error: streamError,
+            };
+          }
+
+          return {
+            success: true,
+            output,
+            metadata:
+              finalMetadata ?? {
+                duration: 0,
+                stepsCount: 0,
+                cost: 0,
+              },
+          };
+        })()
+      : await agent.run(prompt);
     execSpinner?.stop("Execution complete");
 
     if (result.success) {
@@ -200,18 +264,16 @@ export async function runAgent(args: string[]): Promise<void> {
         }
       }
     } else {
-      console.error("Agent execution failed.");
+      const errorDetail = "error" in result ? result.error : undefined;
+      console.error(`Agent execution failed.${errorDetail ? ` ${errorDetail}` : ""}`);
       process.exit(1);
     }
   } catch (err) {
     spinner?.fail("Build failed");
     const msg = err instanceof Error ? err.message : String(err);
-    // FiberFailure from Effect stores cause via [cause] symbol; check both
-    const rawCause = err instanceof Error
-      ? err.cause ?? (err as any)[Symbol.for("cause")]
-      : undefined;
-    const causeStr = rawCause
-      ? `\n  Caused by: ${rawCause instanceof Error ? rawCause.message : String(rawCause)}`
+    const cause = readErrorCause(err);
+    const causeStr = cause
+      ? `\n  Caused by: ${cause}`
       : "";
     console.error(`Error: ${msg}${causeStr}`);
     process.exit(1);

@@ -1,5 +1,12 @@
 import { ReactiveAgents } from "@reactive-agents/runtime";
 
+const VALID_PROVIDERS = ["anthropic", "openai", "ollama", "gemini", "litellm", "test"] as const;
+type Provider = (typeof VALID_PROVIDERS)[number];
+
+function isValidProvider(value: string): value is Provider {
+  return (VALID_PROVIDERS as readonly string[]).includes(value);
+}
+
 const HELP = `
   Usage: rax serve [options]
 
@@ -12,7 +19,7 @@ const HELP = `
     --model <string>    Model name
     --with-tools        Enable tools
     --with-reasoning    Enable reasoning strategies
-    --with-memory       Enable memory (tier 1 or 2)
+    --with-memory [n]   Enable memory (tier 1 or 2; default: 2)
     --help              Show this help
 `.trimEnd();
 
@@ -26,7 +33,7 @@ export function runServe(argv: string[]) {
 
   let port = 3000;
   let name = "agent";
-  let provider: "anthropic" | "openai" | "ollama" | "gemini" | "litellm" | "test" = "test";
+  let provider: Provider = "test";
   let model: string | undefined;
   let withTools = false;
   let withReasoning = false;
@@ -42,7 +49,18 @@ export function runServe(argv: string[]) {
         name = args[++i];
         break;
       case "--provider":
-        provider = args[++i] as any;
+        if (!args[i + 1]) {
+          console.error("Missing value for --provider");
+          process.exit(1);
+        }
+        {
+          const raw = args[++i];
+          if (!isValidProvider(raw)) {
+            console.error(`Unknown provider: \"${raw}\". Valid providers: ${VALID_PROVIDERS.join(", ")}`);
+            process.exit(1);
+          }
+          provider = raw;
+        }
         break;
       case "--model":
         model = args[++i];
@@ -54,7 +72,11 @@ export function runServe(argv: string[]) {
         withReasoning = true;
         break;
       case "--with-memory":
-        memoryTier = "2";
+        if (args[i + 1] === "1" || args[i + 1] === "2") {
+          memoryTier = args[++i] as "1" | "2";
+        } else {
+          memoryTier = "2";
+        }
         break;
     }
   }

@@ -1,11 +1,12 @@
 import { generateAgent, type AgentRecipe } from "../generators/agent-generator.js";
+import { fail, info, section, success } from "../ui.js";
 
 const VALID_RECIPES: AgentRecipe[] = ["basic", "researcher", "coder", "orchestrator"];
 
 export function runCreateAgent(args: string[]): void {
   const name = args[0];
   if (!name) {
-    console.error("Usage: reactive-agents create agent <name> [--recipe basic|researcher|coder|orchestrator]");
+    console.error(fail("Usage: rax create agent <name> [--recipe basic|researcher|coder|orchestrator]"));
     process.exit(1);
   }
 
@@ -14,13 +15,14 @@ export function runCreateAgent(args: string[]): void {
   if (recipeIdx !== -1 && args[recipeIdx + 1]) {
     const r = args[recipeIdx + 1] as AgentRecipe;
     if (!VALID_RECIPES.includes(r)) {
-      console.error(`Invalid recipe: ${r}. Valid options: ${VALID_RECIPES.join(", ")}`);
+      console.error(fail(`Invalid recipe: ${r}. Valid options: ${VALID_RECIPES.join(", ")}`));
       process.exit(1);
     }
     recipe = r;
   }
 
-  console.log(`Creating agent "${name}" with recipe "${recipe}"...`);
+  console.log(section("Create Agent"));
+  console.log(info(`Creating agent "${name}" with recipe "${recipe}"...`));
 
   const result = generateAgent({
     name,
@@ -28,5 +30,5 @@ export function runCreateAgent(args: string[]): void {
     targetDir: process.cwd(),
   });
 
-  console.log(`Created: ${result.filePath}`);
+  console.log(success(`Created: ${result.filePath}`));
 }
