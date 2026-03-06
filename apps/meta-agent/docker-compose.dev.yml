@@ -1,0 +1,21 @@
+# Meta-agent Docker development overrides
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+#
+# This enables fast local iteration without rebuilding on every code change.
+
+services:
+  agent:
+    # Re-run the process when source files change.
+    command: ["bun", "--watch", "run", "apps/meta-agent/src/index.ts"]
+
+    # Bind-mount source so edits are reflected immediately in-container.
+    volumes:
+      - ./src:/app/apps/meta-agent/src
+      - ./tools:/app/apps/meta-agent/tools
+      - ./drafts:/app/apps/meta-agent/drafts
+    env_file:
+      - .env
+    environment:
+      GATEWAY_TIMEZONE: ${GATEWAY_TIMEZONE:-UTC}

@@ -5,7 +5,18 @@
   "type": "module",
   "scripts": {
     "start": "bun run src/index.ts",
-    "dry-run": "bun run src/index.ts --dry-run"
+    "start:watch": "bun --watch run src/index.ts",
+    "dry-run": "bun run src/index.ts --dry-run",
+    "launch:local": "docker compose -f docker-compose.yml up --build",
+    "docker:up": "docker compose -f docker-compose.yml up -d --build",
+    "docker:dev": "docker compose -f docker-compose.yml -f docker-compose.dev.yml up",
+    "docker:dev:build": "docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build",
+    "docker:dev:down": "docker compose -f docker-compose.yml -f docker-compose.dev.yml down",
+    "docker:dev:fresh": "docker compose -f docker-compose.yml -f docker-compose.dev.yml down -v --remove-orphans && docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build",
+    "docker:dev:restart": "docker compose -f docker-compose.yml -f docker-compose.dev.yml restart agent",
+    "docker:dev:logs": "docker compose -f docker-compose.yml -f docker-compose.dev.yml logs --tail=200 agent",
+    "docker:dev:logs:follow": "docker compose -f docker-compose.yml -f docker-compose.dev.yml logs -f --tail=200 agent",
+    "docker:fresh": "docker compose -f docker-compose.yml down -v --remove-orphans && docker compose -f docker-compose.yml up -d --build"
   },
   "dependencies": {
     "reactive-agents": "workspace:*",
