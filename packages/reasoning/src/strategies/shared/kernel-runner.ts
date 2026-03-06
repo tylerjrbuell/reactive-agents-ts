@@ -116,7 +116,7 @@ export function runKernel(
 
         // Fire action + observation hooks
         yield* hooks.onAction(state, bareCall.tool, bareCall.input);
-        yield* hooks.onObservation(state, toolResult.content);
+        yield* hooks.onObservation(state, toolResult.content, toolResult.observationResult.success);
 
         // Update state with new steps and cleaned output
         const actionStep = makeStep("action", JSON.stringify({

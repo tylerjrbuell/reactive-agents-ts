@@ -53,7 +53,7 @@ describe("buildKernelHooks", () => {
     });
 
     it("onObservation returns without error", async () => {
-      await Effect.runPromise(hooks.onObservation(baseState(), "search results here"));
+      await Effect.runPromise(hooks.onObservation(baseState(), "search results here", true));
     });
 
     it("onDone returns without error", async () => {
@@ -132,7 +132,7 @@ describe("buildKernelHooks", () => {
         ],
       });
 
-      await Effect.runPromise(hooks.onObservation(state, "Found 3 results"));
+      await Effect.runPromise(hooks.onObservation(state, "Found 3 results", true));
 
       expect(events).toHaveLength(2);
 
@@ -166,11 +166,43 @@ describe("buildKernelHooks", () => {
         ],
       });
 
-      await Effect.runPromise(hooks.onObservation(state, "Written successfully"));
+      await Effect.runPromise(hooks.onObservation(state, "Written successfully", true));
 
       const toolEvent = events[1] as Record<string, unknown>;
       expect(toolEvent.toolName).toBe("file-write");
       expect(toolEvent.durationMs).toBe(0); // no duration metadata
+    });
+
+    it("onObservation publishes ToolCallCompleted with success: false for failed tools", async () => {
+      const { events, eb } = makeMockEventBus();
+      const hooks = buildKernelHooks(eb);
+
+      const state = transitionState(baseState(), {
+        steps: [
+          {
+            id: "step-003" as StepId,
+            type: "action" as const,
+            content: JSON.stringify({ tool: "draft-writer", input: '{"title":"test"}' }),
+            timestamp: new Date(),
+            metadata: { toolUsed: "draft-writer", duration: 100 },
+          },
+        ],
+      });
+
+      await Effect.runPromise(hooks.onObservation(state, "[Tool error: Missing required parameter \"type\"]", false));
+
+      expect(events).toHaveLength(2);
+
+      const reasoningEvent = events[0] as Record<string, unknown>;
+      expect(reasoningEvent._tag).toBe("ReasoningStepCompleted");
+      expect(reasoningEvent.observation).toBe("[Tool error: Missing required parameter \"type\"]");
+
+      const toolEvent = events[1] as Record<string, unknown>;
+      expect(toolEvent._tag).toBe("ToolCallCompleted");
+      expect(toolEvent.toolName).toBe("draft-writer");
+      expect(toolEvent.callId).toBe("step-003");
+      expect(toolEvent.durationMs).toBe(100);
+      expect(toolEvent.success).toBe(false); // ✅ Now correctly reflects failure
     });
 
     it("onObservation handles empty steps gracefully", async () => {
@@ -178,7 +210,7 @@ describe("buildKernelHooks", () => {
       const hooks = buildKernelHooks(eb);
 
       // No steps — edge case
-      await Effect.runPromise(hooks.onObservation(baseState(), "orphan observation"));
+      await Effect.runPromise(hooks.onObservation(baseState(), "orphan observation", false));
 
       expect(events).toHaveLength(2);
       const toolEvent = events[1] as Record<string, unknown>;
