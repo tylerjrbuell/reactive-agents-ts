@@ -1,9 +1,16 @@
 ---
 title: CLI Reference
-description: Command reference for the rax CLI.
+description: Command reference for Rax, the artisan CLI for Reactive Agents.
 ---
 
-The `rax` CLI provides project scaffolding, agent generation, and agent execution.
+`rax` is the artisan command line for Reactive Agents.
+
+`Rax` stands for **Reactive Agents Executable**.
+Think of it as the Reactive Agents equivalent of Laravel's Artisan CLI.
+
+Use it to scaffold projects, generate agents, run and stream tasks, inspect runtime state, serve A2A endpoints, and deploy across local and cloud targets.
+
+For workflow-first onboarding, start with [Rax as Artisan](../guides/cli-artisan/).
 
 ## Commands
 
@@ -45,7 +52,8 @@ rax create agent <name> [--recipe basic|researcher|coder|orchestrator]
 Run an agent with a prompt.
 
 ```bash
-rax run <prompt> [--provider anthropic|openai|ollama|test] [--model <model>] [--name <name>]
+rax run <prompt> [--provider anthropic|openai|ollama|gemini|litellm|test]
+          [--model <model>] [--name <name>] [--tools] [--reasoning] [--stream]
 ```
 
 **Example:**
@@ -111,13 +119,69 @@ Agent Card: researcher
   Endpoint: http://localhost:3000
 ```
 
-### `rax dev`
+### `rax deploy`
 
-Start the development server (placeholder).
+Deploy an agent using a provider adapter (local Docker, Fly.io, Railway, Render, Cloud Run, DigitalOcean).
 
 ```bash
-rax dev
+rax deploy up [--target local|fly|railway|render|cloudrun|digitalocean]
+              [--mode daemon|sdk]
+              [--dry-run]
+              [--scaffold-only]
+              [--name <agent-name>]
+
+rax deploy down [--target <target>]
+rax deploy status [--target <target>]
+rax deploy logs [-f] [--target <target>]
+rax deploy init   # legacy alias for `deploy up --scaffold-only`
 ```
+
+**Options:**
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--target` | `local` (auto-detected if config exists) | Deploy provider adapter |
+| `--mode` | `daemon` | `daemon` for full agent loop, `sdk` for HTTP API mode |
+| `--dry-run` | off | Run provider `preflight()` checks and print execution plan |
+| `--scaffold-only` | off | Generate config files only, do not deploy |
+| `--name` | auto-detected from `package.json` | Agent/app identifier |
+| `--follow`, `-f` | off | Follow logs for `deploy logs` |
+
+**Provider CLI Contracts:**
+
+These commands and flags are validated by `apps/cli/tests/cli-contracts.test.ts` to detect upstream CLI breaking changes early.
+
+| Provider | CLI | Contract Baseline |
+|----------|-----|-------------------|
+| local | Docker + Compose | Docker `>= 20`, Compose `>= 2`, supports `compose build/up/down/ps/logs`, `up -d`, `logs --tail/--follow`, `ps --format` |
+| fly | `flyctl` / `fly` | supports `auth whoami`, `launch --copy-config --name --no-deploy`, `deploy`, `status`, `logs`, `apps destroy --yes` |
+| railway | `railway` | supports `whoami`, `link`, `up`, `down --yes`, `status`, `logs`, `variables` |
+| render | `render` | supports `blueprint launch`, `services list` |
+| cloudrun | `gcloud` | SDK `>= 380`, supports `config get-value project`, `auth list --filter --format`, `run deploy --source --region --port --memory --timeout --allow-unauthenticated`, `run services describe/delete/update` |
+| digitalocean | `doctl` | `>= 1.72`, supports `account get --format --no-header`, `apps create/list/update/delete/logs`, `--spec`, `--format` |
+
+**Containerized CLI fallback:**
+
+For `flyctl`, `gcloud`, and `doctl`, `rax deploy` resolves local binaries first and can fall back to a Docker-wrapped CLI when Docker is available.
+
+**Contract test commands:**
+
+```bash
+bun test apps/cli/tests/cli-contracts.test.ts
+RUN_SLOW_TESTS=1 bun test apps/cli/tests/cli-contracts.test.ts
+```
+
+`RUN_SLOW_TESTS=1` enables container image availability checks for the fallback images.
+
+### `rax dev`
+
+Run your local entrypoint in watch mode.
+
+```bash
+rax dev [--entry src/index.ts] [--no-watch]
+```
+
+Default entrypoint is `src/index.ts`. Use `--entry` if your project uses a different file.
 
 ### `rax eval`
 
@@ -129,19 +193,23 @@ rax eval run --suite <suite-name>
 
 ### `rax playground`
 
-Launch interactive REPL (placeholder).
+Launch an interactive agent REPL session.
 
 ```bash
-rax playground
+rax playground [--provider <provider>] [--model <model>] [--tools] [--reasoning] [--stream]
 ```
+
+Use `/help` and `/exit` inside the session.
 
 ### `rax inspect`
 
-Inspect agent state (placeholder).
+Inspect local deployment/runtime signals for an `agentId`.
 
 ```bash
-rax inspect <agent-id> [--trace last]
+rax inspect <agent-id> [--logs-tail 200] [--json]
 ```
+
+This checks Docker/Compose availability, prints compose status, and scans recent logs for lines containing the provided `agentId`.
 
 ### `rax version`
 

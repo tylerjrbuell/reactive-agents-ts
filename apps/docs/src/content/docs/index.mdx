@@ -11,6 +11,10 @@ hero:
       link: guides/quickstart/
       icon: right-arrow
       variant: primary
+    - text: Meet Rax CLI
+      link: guides/cli-artisan/
+      icon: right-arrow
+      variant: secondary
     - text: View on GitHub
       link: https://github.com/tylerjrbuell/reactive-agents-ts
       icon: external
@@ -41,6 +45,38 @@ import HeroInteraction from "../../components/HeroInteraction.astro";
     <span class="ra-stat-label">Execution Phases</span>
   </div>
 </div>
+
+## Meet Rax, The Artisan CLI
+
+`Rax` means **Reactive Agents Executable**.
+
+It plays the same role for Reactive Agents that Artisan CLI plays for Laravel: the canonical command surface for the framework.
+
+`rax` is not an afterthought wrapper. It is the fastest path from idea to production agent: scaffold, run, inspect, serve, and deploy from one command surface.
+
+<CardGrid>
+  <Card title="Start in Minutes" icon="seti:terminal">
+    Create a full TypeScript agent project with templates tuned for minimal,
+    standard, or full production stacks.
+  </Card>
+  <Card title="Operate with Confidence" icon="puzzle">
+    Use a single CLI for local playground loops, runtime inspection, A2A serving,
+    and deployment adapters.
+  </Card>
+  <Card title="Artisan Workflow" icon="star">
+    Rax keeps the workflow sharp while preserving explicit control of framework
+    layers and builder APIs.
+  </Card>
+</CardGrid>
+
+```bash
+bunx rax init my-agent --template standard
+cd my-agent && bun install
+rax create agent researcher --recipe researcher
+rax run "Track this week's AI launches" --provider anthropic --reasoning --tools --stream
+```
+
+[Explore the Rax workflow ->](guides/cli-artisan/)
 
 ## Build Agents That Think, Act, and Learn
 
