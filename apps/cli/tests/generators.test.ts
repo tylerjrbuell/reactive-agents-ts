@@ -42,6 +42,12 @@ describe("Project Generator", () => {
     expect(pkg.dependencies["@reactive-agents/memory"]).toBe("latest");
     expect(pkg.dependencies["@reactive-agents/reasoning"]).toBe("latest");
     expect(pkg.dependencies["@reactive-agents/tools"]).toBe("latest");
+
+    const agentCode = readFileSync(join(TEST_DIR, "src", "agents", "my-agent.ts"), "utf-8");
+    expect(agentCode).toContain('.withMemory("1")');
+    expect(agentCode).toContain(".withReasoning()");
+    expect(agentCode).not.toContain("withMemory(true)");
+    expect(agentCode).not.toContain('withReasoning("reactive")');
   });
 
   it("should generate a full project with all deps", () => {
@@ -55,6 +61,12 @@ describe("Project Generator", () => {
     expect(pkg.dependencies["@reactive-agents/orchestration"]).toBe("latest");
     expect(pkg.dependencies["@reactive-agents/guardrails"]).toBe("latest");
     expect(pkg.dependencies["@reactive-agents/prompts"]).toBe("latest");
+
+    const agentCode = readFileSync(join(TEST_DIR, "src", "agents", "my-agent.ts"), "utf-8");
+    expect(agentCode).toContain(".withVerification()");
+    expect(agentCode).toContain(".withGuardrails()");
+    expect(agentCode).not.toContain("withVerification(true)");
+    expect(agentCode).not.toContain("withGuardrails(true)");
   });
 });
 

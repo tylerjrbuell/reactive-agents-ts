@@ -56,7 +56,7 @@ export function generateProject(config: ProjectConfig): { files: string[] } {
     version: "0.1.3",
     type: "module",
     scripts: {
-      dev: "bun run src/index.ts",
+      dev: "bun --watch run src/index.ts",
       build: "tsc --noEmit",
       test: "bun test",
     },
@@ -145,8 +145,8 @@ export const createMyAgent = () =>
   ReactiveAgents.create()
     .withProvider("anthropic")
     .withName("my-agent")
-    .withMemory(true)
-    .withReasoning("reactive")
+    .withMemory("1")
+    .withReasoning()
     .build();
 `;
     case "full":
@@ -156,10 +156,10 @@ export const createMyAgent = () =>
   ReactiveAgents.create()
     .withProvider("anthropic")
     .withName("my-agent")
-    .withMemory(true)
-    .withReasoning("reactive")
-    .withVerification(true)
-    .withGuardrails(true)
+    .withMemory("1")
+    .withReasoning()
+    .withVerification()
+    .withGuardrails()
     .build();
 `;
   }

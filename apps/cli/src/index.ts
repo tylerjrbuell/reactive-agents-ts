@@ -7,8 +7,9 @@ import { runInspect } from "./commands/inspect.js";
 import { runAgent } from "./commands/run.js";
 import { runServe } from "./commands/serve.js";
 import { runDiscover } from "./commands/discover.js";
-import { runDeploy } from "./commands/deploy.js";
+import { runDeploy } from "./commands/deploy/index.js";
 import { printBanner, printVersion, VERSION } from "./banner.js";
+import { fail, info } from "./ui.js";
 
 const HELP = `
   Usage: rax <command> [options]
@@ -19,17 +20,30 @@ const HELP = `
     run <prompt> [--provider ...] [--model ...]       Run an agent with a prompt
     serve [--port <n>] [--name <name>]               Start agent as A2A server
     discover <url>                                    Fetch and display remote agent card
-    dev                                               Start dev server
+    dev [--entry <path>] [--no-watch]                Run agent entrypoint in dev mode
     eval run --suite <name>                           Run evaluation suite
-    playground                                        Launch interactive REPL
-    inspect <agent-id> [--trace last]                 Inspect agent state
-    deploy init [--topology single]                   Scaffold Docker deployment files
+    playground [--provider ...] [--stream] [--memory] [--memory-tier 1|2]
+                  Launch interactive agent REPL
+    inspect <agent-id> [--logs-tail <n>]             Inspect local deployment signals/logs
+    deploy up [--target local|fly|railway|render|cloudrun|digitalocean] [--mode daemon|sdk] [--dry-run]
+                              Build + deploy agent container
+    deploy down [--target ...]                        Stop deployment (auto-detects target)
+    deploy status [--target ...]                      Show deployment status (auto-detects target)
+    deploy logs [-f] [--target ...]                   Tail deployment logs (auto-detects target)
+    deploy init                                       Scaffold deployment files only (legacy alias)
     help                                              Show this help
     version                                           Show version
 `.trimEnd();
 
 export function main(argv: string[] = process.argv.slice(2)) {
   const command = argv[0];
+  const runAsync = (task: Promise<void>) => {
+    void task.catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(fail(message));
+      process.exit(1);
+    });
+  };
 
   switch (command) {
     case "init":
@@ -41,15 +55,15 @@ export function main(argv: string[] = process.argv.slice(2)) {
       if (subcommand === "agent") {
         runCreateAgent(argv.slice(2));
       } else {
-        console.error(`Unknown create subcommand: ${subcommand}`);
-        console.error("Usage: rax create agent <name>");
+        console.error(fail(`Unknown create subcommand: ${subcommand}`));
+        console.error(info("Usage: rax create agent <name>"));
         process.exit(1);
       }
       break;
     }
 
     case "run":
-      runAgent(argv.slice(1));
+      runAsync(runAgent(argv.slice(1)));
       break;
 
     case "serve":
@@ -69,11 +83,11 @@ export function main(argv: string[] = process.argv.slice(2)) {
       break;
 
     case "eval":
-      runEval(argv.slice(1));
+      runAsync(runEval(argv.slice(1)));
       break;
 
     case "playground":
-      runPlayground(argv.slice(1));
+      runAsync(runPlayground(argv.slice(1)));
       break;
 
     case "inspect":
@@ -95,7 +109,7 @@ export function main(argv: string[] = process.argv.slice(2)) {
       break;
 
     default:
-      console.error(`Unknown command: ${command}`);
+      console.error(fail(`Unknown command: ${command}`));
       printBanner();
       console.log(HELP);
       process.exit(1);
