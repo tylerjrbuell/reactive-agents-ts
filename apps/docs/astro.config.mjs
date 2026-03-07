@@ -35,6 +35,16 @@ export default defineConfig({
       },
       lastUpdated: true,
       customCss: ["./src/styles/custom.css"],
+      head: [
+        {
+          tag: "script",
+          attrs: {
+            defer: true,
+            src: "http://10.204.221.118:3000/script.js",
+            "data-website-id": "4d58acb5-d15f-428c-8e0d-9f992fc5ba91",
+          },
+        },
+      ],
       sidebar: [
         {
           label: "Rax CLI",
