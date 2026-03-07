@@ -32,12 +32,21 @@ export default defineConfig({
       },
       lastUpdated: true,
       customCss: ["./src/styles/custom.css"],
+      head: [
+        {
+          tag: "script",
+          attrs: {
+            defer: true,
+            src: "https://analytics.reactiveagents.dev/script.js",
+            "data-website-id": "4d58acb5-d15f-428c-8e0d-9f992fc5ba91",
+          },
+        },
+      ],
       sidebar: [
         {
           label: "Rax CLI",
           items: [
             { label: "Rax as Artisan", link: "guides/cli-artisan/" },
-            { label: "Quickstart", link: "guides/quickstart/" },
             { label: "Command Reference", link: "reference/cli/" },
           ],
         },
