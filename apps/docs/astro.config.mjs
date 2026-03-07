@@ -39,6 +39,7 @@ export default defineConfig({
             defer: true,
             src: "https://analytics.reactiveagents.dev/script.js",
             "data-website-id": "4d58acb5-d15f-428c-8e0d-9f992fc5ba91",
+            "data-domains": "docs.reactiveagents.dev",
           },
         },
       ],
@@ -46,7 +47,7 @@ export default defineConfig({
         {
           label: "Rax CLI",
           items: [
-            { label: "Rax as Artisan", link: "guides/cli-artisan/" },
+            { label: "Meet Rax CLI", link: "guides/cli-artisan/" },
             { label: "Command Reference", link: "reference/cli/" },
           ],
         },
