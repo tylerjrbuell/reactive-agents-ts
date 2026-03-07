@@ -277,11 +277,27 @@ describe("CLI Contracts — gcloud", () => {
   const available = hasCommand("gcloud");
 
   it.skipIf(!available)("gcloud version returns parseable version", () => {
-    const { stdout, exitCode } = probe("gcloud version --format='value(version)'");
-    // gcloud version may return 0 or show multi-line output
-    const alt = probe("gcloud --version");
-    const output = exitCode === 0 ? stdout : alt.stdout;
-    const v = parseVersion(output);
+    // gcloud can emit version text in different formats across environments.
+    const compact = probe("gcloud version --format='value(version)'");
+    const standard = probe("gcloud --version");
+    const verbose = probe("gcloud version");
+    const json = probe("gcloud version --format=json");
+
+    const candidates = [
+      compact.stdout,
+      compact.stderr,
+      standard.stdout,
+      standard.stderr,
+      verbose.stdout,
+      verbose.stderr,
+      json.stdout,
+      json.stderr,
+    ].filter((s) => s.length > 0);
+
+    const v = candidates
+      .map((text) => parseVersion(text))
+      .find((parsed): parsed is { major: number; minor: number; patch: number } => parsed !== null) ?? null;
+
     expect(v).not.toBeNull();
   });
 
