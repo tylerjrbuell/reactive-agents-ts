@@ -2,13 +2,10 @@ import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
 import skills from "astro-skills";
 
-// Use a subpath base only when deploying to GitHub Pages.
-// Set GITHUB_PAGES=true in CI to enable it.
-const isGitHubPages = process.env.GITHUB_PAGES === "true";
-
 export default defineConfig({
-  site: "https://tylerjrbuell.github.io",
-  base: isGitHubPages ? "/reactive-agents-ts" : "/",
+  // Docs now deploy to a custom domain at the root path.
+  site: "https://docs.reactiveagents.dev",
+  base: "/",
   legacy: { collections: true },
   integrations: [
     skills(),
