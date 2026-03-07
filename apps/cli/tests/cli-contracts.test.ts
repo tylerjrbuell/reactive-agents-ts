@@ -299,7 +299,7 @@ describe("CLI Contracts — gcloud", () => {
       .find((parsed): parsed is { major: number; minor: number; patch: number } => parsed !== null) ?? null;
 
     expect(v).not.toBeNull();
-  });
+  }, 20_000);
 
   it.skipIf(!available)("gcloud version >= 380.0.0 (required for `run deploy --source`)", () => {
     const { stdout } = probe("gcloud --version");
