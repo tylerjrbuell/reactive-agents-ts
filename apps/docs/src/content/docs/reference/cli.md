@@ -10,7 +10,7 @@ Think of it as the Reactive Agents equivalent of Laravel's Artisan CLI.
 
 Use it to scaffold projects, generate agents, run and stream tasks, inspect runtime state, serve A2A endpoints, and deploy across local and cloud targets.
 
-For workflow-first onboarding, start with [Rax as Artisan](../guides/cli-artisan/).
+For workflow-first onboarding, start with [Rax as Artisan](/guides/cli-artisan/).
 
 ## Commands
 
