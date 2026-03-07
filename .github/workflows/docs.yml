@@ -33,8 +33,6 @@ jobs:
 
       - name: Build Astro site
         working-directory: apps/docs
-        env:
-          GITHUB_PAGES: "true"
         run: bunx astro build
 
       - name: Upload Pages artifact
