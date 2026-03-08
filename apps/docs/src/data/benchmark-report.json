@@ -1,0 +1,281 @@
+{
+  "timestamp": "2026-03-08T03:45:19.947Z",
+  "provider": "test",
+  "model": "default",
+  "tasks": [
+    {
+      "taskId": "t1-greeting",
+      "tier": "trivial",
+      "strategy": "single-shot",
+      "status": "pass",
+      "durationMs": 0.38989499999999566,
+      "tokensUsed": 0,
+      "estimatedCost": 0,
+      "iterations": 0,
+      "output": "benchmark-placeholder"
+    },
+    {
+      "taskId": "t2-math",
+      "tier": "trivial",
+      "strategy": "single-shot",
+      "status": "pass",
+      "durationMs": 0.031620000000003756,
+      "tokensUsed": 0,
+      "estimatedCost": 0,
+      "iterations": 0,
+      "output": "benchmark-placeholder"
+    },
+    {
+      "taskId": "t3-fact",
+      "tier": "trivial",
+      "strategy": "single-shot",
+      "status": "pass",
+      "durationMs": 0.021250000000009095,
+      "tokensUsed": 0,
+      "estimatedCost": 0,
+      "iterations": 0,
+      "output": "benchmark-placeholder"
+    },
+    {
+      "taskId": "t4-format",
+      "tier": "trivial",
+      "strategy": "single-shot",
+      "status": "pass",
+      "durationMs": 0.012509999999991805,
+      "tokensUsed": 0,
+      "estimatedCost": 0,
+      "iterations": 0,
+      "output": "benchmark-placeholder"
+    },
+    {
+      "taskId": "s1-summarize",
+      "tier": "simple",
+      "strategy": "single-shot",
+      "status": "pass",
+      "durationMs": 0.016030000000000655,
+      "tokensUsed": 0,
+      "estimatedCost": 0,
+      "iterations": 0,
+      "output": "benchmark-placeholder"
+    },
+    {
+      "taskId": "s2-translate",
+      "tier": "simple",
+      "strategy": "single-shot",
+      "status": "pass",
+      "durationMs": 0.024939000000017586,
+      "tokensUsed": 0,
+      "estimatedCost": 0,
+      "iterations": 0,
+      "output": "benchmark-placeholder"
+    },
+    {
+      "taskId": "s3-explain",
+      "tier": "simple",
+      "strategy": "single-shot",
+      "status": "pass",
+      "durationMs": 0.019710000000003447,
+      "tokensUsed": 0,
+      "estimatedCost": 0,
+      "iterations": 0,
+      "output": "benchmark-placeholder"
+    },
+    {
+      "taskId": "s4-regex",
+      "tier": "simple",
+      "strategy": "single-shot",
+      "status": "pass",
+      "durationMs": 0.024408999999991465,
+      "tokensUsed": 0,
+      "estimatedCost": 0,
+      "iterations": 0,
+      "output": "benchmark-placeholder"
+    },
+    {
+      "taskId": "m1-debug",
+      "tier": "moderate",
+      "strategy": "react",
+      "status": "pass",
+      "durationMs": 0.059708999999998014,
+      "tokensUsed": 0,
+      "estimatedCost": 0,
+      "iterations": 0,
+      "output": "benchmark-placeholder"
+    },
+    {
+      "taskId": "m2-refactor",
+      "tier": "moderate",
+      "strategy": "react",
+      "status": "pass",
+      "durationMs": 0.02658999999999878,
+      "tokensUsed": 0,
+      "estimatedCost": 0,
+      "iterations": 0,
+      "output": "benchmark-placeholder"
+    },
+    {
+      "taskId": "m3-compare",
+      "tier": "moderate",
+      "strategy": "react",
+      "status": "pass",
+      "durationMs": 0.017870000000016262,
+      "tokensUsed": 0,
+      "estimatedCost": 0,
+      "iterations": 0,
+      "output": "benchmark-placeholder"
+    },
+    {
+      "taskId": "m4-algorithm",
+      "tier": "moderate",
+      "strategy": "react",
+      "status": "pass",
+      "durationMs": 0.019379999999983966,
+      "tokensUsed": 0,
+      "estimatedCost": 0,
+      "iterations": 0,
+      "output": "benchmark-placeholder"
+    },
+    {
+      "taskId": "c1-architecture",
+      "tier": "complex",
+      "strategy": "plan-execute",
+      "status": "pass",
+      "durationMs": 0.01680000000001769,
+      "tokensUsed": 0,
+      "estimatedCost": 0,
+      "iterations": 0,
+      "output": "benchmark-placeholder"
+    },
+    {
+      "taskId": "c2-review",
+      "tier": "complex",
+      "strategy": "plan-execute",
+      "status": "pass",
+      "durationMs": 0.013069999999999027,
+      "tokensUsed": 0,
+      "estimatedCost": 0,
+      "iterations": 0,
+      "output": "benchmark-placeholder"
+    },
+    {
+      "taskId": "c3-test-gen",
+      "tier": "complex",
+      "strategy": "plan-execute",
+      "status": "pass",
+      "durationMs": 0.024779999999992697,
+      "tokensUsed": 0,
+      "estimatedCost": 0,
+      "iterations": 0,
+      "output": "benchmark-placeholder"
+    },
+    {
+      "taskId": "c4-migration",
+      "tier": "complex",
+      "strategy": "plan-execute",
+      "status": "pass",
+      "durationMs": 0.01474999999999227,
+      "tokensUsed": 0,
+      "estimatedCost": 0,
+      "iterations": 0,
+      "output": "benchmark-placeholder"
+    },
+    {
+      "taskId": "e1-optimization",
+      "tier": "expert",
+      "strategy": "tree-of-thought",
+      "status": "pass",
+      "durationMs": 0.019939999999991187,
+      "tokensUsed": 0,
+      "estimatedCost": 0,
+      "iterations": 0,
+      "output": "benchmark-placeholder"
+    },
+    {
+      "taskId": "e2-tradeoff",
+      "tier": "expert",
+      "strategy": "tree-of-thought",
+      "status": "pass",
+      "durationMs": 0.011799999999993815,
+      "tokensUsed": 0,
+      "estimatedCost": 0,
+      "iterations": 0,
+      "output": "benchmark-placeholder"
+    },
+    {
+      "taskId": "e3-concurrency",
+      "tier": "expert",
+      "strategy": "tree-of-thought",
+      "status": "pass",
+      "durationMs": 0.02081900000001724,
+      "tokensUsed": 0,
+      "estimatedCost": 0,
+      "iterations": 0,
+      "output": "benchmark-placeholder"
+    },
+    {
+      "taskId": "e4-dsl",
+      "tier": "expert",
+      "strategy": "tree-of-thought",
+      "status": "pass",
+      "durationMs": 0.023659999999978254,
+      "tokensUsed": 0,
+      "estimatedCost": 0,
+      "iterations": 0,
+      "output": "benchmark-placeholder"
+    }
+  ],
+  "overhead": [
+    {
+      "label": "runtime-creation",
+      "durationMs": 0.01356179999999938,
+      "samples": 10
+    },
+    {
+      "label": "runtime-creation-full",
+      "durationMs": 0.04699749999999767,
+      "samples": 10
+    },
+    {
+      "label": "complexity-classification",
+      "durationMs": 0.0029871699999989686,
+      "samples": 100
+    }
+  ],
+  "summary": {
+    "totalTasks": 20,
+    "passed": 20,
+    "failed": 0,
+    "errors": 0,
+    "totalDurationMs": 0.8095309999999927,
+    "totalTokens": 0,
+    "totalCost": 0,
+    "avgLatencyMs": 0.04047654999999963,
+    "byTier": {
+      "trivial": {
+        "passed": 4,
+        "total": 4,
+        "avgMs": 0.11381875000000008
+      },
+      "simple": {
+        "passed": 4,
+        "total": 4,
+        "avgMs": 0.02127200000000329
+      },
+      "moderate": {
+        "passed": 4,
+        "total": 4,
+        "avgMs": 0.030887249999999256
+      },
+      "complex": {
+        "passed": 4,
+        "total": 4,
+        "avgMs": 0.01735000000000042
+      },
+      "expert": {
+        "passed": 4,
+        "total": 4,
+        "avgMs": 0.019054749999995124
+      }
+    }
+  }
+}

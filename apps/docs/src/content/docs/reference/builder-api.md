@@ -103,11 +103,12 @@ See [Context Engineering](/guides/context-engineering/) for full tier defaults.
 | `withKillSwitch()` | Per-agent and global emergency halt capability via `KillSwitchService` |
 | `withBehavioralContracts(contract)` | Enforce typed behavioral boundaries: `deniedTools`, `allowedTools`, `maxIterations`. Throws `BehavioralContractError` on violation |
 | `withVerification()` | Semantic entropy, fact decomposition, and multi-source (LLM + Tavily) on output |
-| `withCostTracking()` | Budget enforcement, complexity routing, semantic caching |
+| `withCostTracking()` | Budget enforcement (persisted to SQLite), complexity routing (27 signals), semantic caching |
 | `withReasoning(options?)` | Structured reasoning (ReAct, Reflexion, Plan-Execute, ToT, Adaptive). Options: `{ defaultStrategy?, strategies?, adaptive?: { enabled?: boolean, learning?: boolean } }`. Set `adaptive.enabled: true` to auto-select strategy per task |
-| `withTools(options?)` | Tool registry with sandboxed execution (subprocess isolation via `Bun.spawn`). Options: `{ tools?: [{ definition, handler }], resultCompression?: ResultCompressionConfig }`. See [Tool Result Compression](/guides/tools/#tool-result-compression) |
+| `withTools(options?)` | Tool registry with sandboxed execution (subprocess isolation via `Bun.spawn`, Docker sandbox). Options: `{ tools?: [{ definition, handler }], resultCompression?: ResultCompressionConfig }`. See [Tool Result Compression](/guides/tools/#tool-result-compression) |
+| `withRequiredTools(config)` | Ensure agent calls critical tools before producing a final answer. Config: `{ tools?: string[], adaptive?: boolean, maxRetries?: number }` |
 | `withIdentity()` | Agent certificates (real Ed25519 keys) and RBAC |
-| `withObservability(options?)` | Distributed tracing, metrics, structured logging. Options: `{ verbosity?: "minimal" \| "normal" \| "verbose" \| "debug", live?: boolean, file?: string }` |
+| `withObservability(options?)` | Distributed tracing, metrics, OTLP export, structured logging. Options: `{ verbosity?: "minimal" \| "normal" \| "verbose" \| "debug", live?: boolean, file?: string }` |
 | `withInteraction()` | 5 interaction modes with adaptive transitions |
 | `withPrompts(options?)` | Version-controlled prompt template engine. Options: `{ templates?: PromptTemplate[] }` |
 | `withOrchestration()` | Multi-agent workflow coordination |
@@ -115,6 +116,34 @@ See [Context Engineering](/guides/context-engineering/) for full tier defaults.
 | `withAudit()` | Compliance audit trail logging |
 | `withEvents()` | Enable typed EventBus subscriptions via `agent.subscribe()` |
 | `withGateway(options?)` | Persistent autonomous gateway: adaptive heartbeats, cron scheduling, webhook ingestion, policy engine. Options: `{ heartbeat?: HeartbeatConfig, crons?: CronEntry[], webhooks?: WebhookConfig[], policies?: PolicyConfig }` |
+
+#### RequiredToolsConfig
+
+```typescript
+interface RequiredToolsConfig {
+  /** Static list of tool names the agent MUST call before answering. */
+  tools?: string[];
+  /** Enable adaptive inference — LLM analyzes task + tools to determine required tools. */
+  adaptive?: boolean;
+  /** Number of retry loops if required tools are missed (default: 2). */
+  maxRetries?: number;
+}
+```
+
+**Examples:**
+
+```typescript
+// Static required tools — agent must call web-search before answering
+.withRequiredTools({ tools: ["web-search"] })
+
+// Adaptive inference — LLM determines which tools are required per-task
+.withRequiredTools({ adaptive: true })
+
+// Both — static list as baseline, adaptive for additional inference
+.withRequiredTools({ tools: ["web-search"], adaptive: true, maxRetries: 3 })
+```
+
+When `adaptive: true`, the framework calls the LLM with the task description and available tool schemas to infer which tools are required. The inferred list is merged with any static `tools` list. A hallucination guard ensures only actual tool names are included.
 
 ### A2A Protocol
 

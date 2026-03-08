@@ -26,7 +26,7 @@ The cost layer analyzes each task and routes it to the optimal model tier:
 | **Sonnet** | Medium complexity — code OR analysis keywords | "Explain recursion", "Review this function" |
 | **Opus** | High complexity — code + multi-step + analysis | "Architect a microservices system with code examples" |
 
-The router uses heuristics: word count, presence of code blocks, multi-step instructions, and analysis keywords to classify complexity.
+The router uses 27 complexity signals: word count, code blocks, multi-step instructions, analysis keywords, math/logic expressions, constraint satisfaction, creative writing patterns, domain-specific indicators, and more.
 
 ```typescript
 // The execution engine calls routeToModel() during Phase 3 (Cost Route)
@@ -51,6 +51,10 @@ const costLayer = createCostLayer({
 ```
 
 When a budget limit is exceeded, the agent fails with a `BudgetExceededError` rather than silently overspending.
+
+### Budget Persistence
+
+Budget state is persisted to SQLite via `BudgetDB`, so cost tracking survives agent restarts. When an agent starts, the budget enforcer loads the most recent spend from the database and continues from where it left off — daily and monthly budgets are enforced across restarts without resetting.
 
 ## Semantic Caching
 

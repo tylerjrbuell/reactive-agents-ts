@@ -2,7 +2,7 @@
 
 ## Project Status
 
-**v0.6.0 — Gateway + Composable Kernel Architecture + Agent Streaming.** 19 packages + 2 apps built, 1,381 tests across 180 files. ThoughtKernel abstraction — swappable reasoning algorithms, immutable KernelState, universal KernelRunner with centralized hooks. Agent streaming via `runStream()` with FiberRef-based TextDelta propagation, Queue-backed event streams, and `AgentStream` adapters (SSE, ReadableStream, AsyncIterable).
+**v0.6.3 — Required Tools Guard, LLM Resilience, Benchmarks.** 20 packages + 2 apps built, 1,588 tests across 190 files. Required tools guard with adaptive LLM inference. Circuit breaker and embedding cache for LLM resilience. Budget persistence, telemetry system, Docker sandbox, tool result caching. Enhanced complexity router (27 signals), hybrid memory search, JSON repair. Benchmark suite (20 tasks × 5 tiers).
 
 - Phase 1: Core, LLM Provider, Memory, Reasoning, Tools, Interaction, Runtime
 - Phase 2: Guardrails, Verification, Cost
@@ -33,8 +33,8 @@
 
 ```bash
 bun install              # Install dependencies
-bun test                 # Run all tests (1381 tests, 180 files)
-bun run build            # Build all packages (16 packages, ESM + DTS)
+bun test                 # Run all tests (1588 tests, 190 files)
+bun run build            # Build all packages (20 packages, ESM + DTS)
 cd apps/docs && npx astro dev    # Start docs dev server
 cd apps/docs && npx astro build  # Build docs for production
 ```
@@ -202,6 +202,8 @@ packages/
   a2a/           — [v0.5] A2A protocol: Agent Cards, JSON-RPC server/client, SSE streaming
   gateway/       — Persistent autonomous agent harness: heartbeats, crons, webhooks, policy engine
   testing/       — Mock services (LLM, tools, EventBus), assertion helpers, test fixtures
+  benchmarks/    — Benchmark suite: 20 tasks × 5 tiers, overhead measurement, report generation
+  health/        — Health checks and readiness probes
   evolution/     — [PLANNED v1.1+] Group-Evolving Agents (GEA): strategy evolution, experience sharing
 apps/
   cli/           — `rax` CLI (init, create, run, dev, eval, playground, inspect)

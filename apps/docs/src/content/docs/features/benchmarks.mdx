@@ -1,0 +1,53 @@
+---
+title: Benchmarks
+description: Framework overhead benchmarks — 20 tasks across 5 complexity tiers with sub-millisecond execution overhead.
+sidebar:
+  order: 13
+---
+
+import BenchmarkResults from "../../../components/BenchmarkResults.astro";
+
+The `@reactive-agents/benchmarks` package measures framework overhead across 20 representative tasks spanning 5 complexity tiers. Benchmarks run with the test provider to isolate framework performance from LLM latency.
+
+## Results
+
+<BenchmarkResults />
+
+All overhead measurements are **sub-millisecond** — the framework adds negligible latency compared to LLM API calls (typically 500ms–5s).
+
+## Running Benchmarks
+
+```bash
+# Run with test provider (measures framework overhead only)
+cd packages/benchmarks
+bun run src/run.ts --provider test --output report.json
+
+# Run with a real provider (measures end-to-end latency)
+bun run src/run.ts --provider anthropic --output report.json
+```
+
+### CLI Options
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--provider` | LLM provider to use | `test` |
+| `--model` | Model name | Provider default |
+| `--output` | Path to save JSON report | _(none)_ |
+
+## What's Measured
+
+- **Runtime creation** — Time to call `createRuntime()` with minimal configuration. Tests the Effect-TS layer composition overhead.
+- **Runtime creation (full)** — Time to create a runtime with all features enabled (reasoning, guardrails, cost tracking, memory, verification, observability). Verifies that optional layers don't add startup cost when composed lazily.
+- **Complexity classification** — Time for the 27-signal complexity router to classify a task prompt. This runs synchronously on every request to select the optimal model tier.
+- **Task execution** — End-to-end time from `agent.run()` to result, including strategy selection, kernel execution, and result formatting. With the test provider, this isolates pure framework overhead.
+
+## Updating Results
+
+To regenerate the benchmark data displayed on this page:
+
+```bash
+cd packages/benchmarks
+bun run src/run.ts --provider test --output ../../apps/docs/src/data/benchmark-report.json
+```
+
+The page renders dynamically from the JSON report at build time — no manual table updates needed.

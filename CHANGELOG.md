@@ -10,25 +10,157 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 
 ### Added
 
+#### Required Tools Guard & Adaptive Inference (`@reactive-agents/runtime`, `@reactive-agents/reasoning`)
+
+Ensure agents use critical tools before producing a final answer — with optional LLM-powered inference for dynamic tool detection:
+
+- **`.withRequiredTools(config)`** — unified config API: `{ tools?: string[], adaptive?: boolean, maxRetries?: number }`
+  - `tools: ["web-search"]` — static tool list; agent must call these before answering
+  - `adaptive: true` — LLM analyzes the task and available tools to infer which are required (no static list needed)
+  - `maxRetries: 2` — number of retry loops if required tools are missed (default: 2)
+- **`inferRequiredTools()`** — structured-output LLM call that analyzes task + available tool schemas to determine required tools, with hallucination guard filtering against actual tool names
+- **Required tools threaded through all 5 strategies** — `requiredTools` and `maxRequiredToolRetries` added to `ReactiveInput`, `PlanExecuteInput`, `ReflexionInput`, `TreeOfThoughtInput`, `AdaptiveInput` and forwarded to kernel calls
+- **`KernelRunner` enforcement** — after kernel produces a final answer, runner checks if all required tools were called; if not, injects a nudge message and re-enters the kernel loop (up to `maxRetries` times)
+- **6 new tests** for `inferRequiredTools` covering empty tools, inferred names, hallucination filtering, malformed JSON, and system prompt threading
+
+#### Circuit Breaker (`@reactive-agents/llm-provider`)
+
+- **`CircuitBreaker`** — protects LLM calls with configurable failure thresholds and recovery timeouts. States: `CLOSED` → `OPEN` → `HALF_OPEN`. Prevents cascading failures during provider outages
+- **`CircuitBreakerConfig`** — `{ failureThreshold, resetTimeoutMs, halfOpenRequests }`
+- **4 new tests** covering state transitions, timeout recovery, and success reset
+
+#### Embedding Cache (`@reactive-agents/llm-provider`)
+
+- **`EmbeddingCache`** — LRU + TTL cache for embedding vectors. Avoids redundant embedding API calls for repeated text
+- **`EmbeddingCacheConfig`** — `{ maxSize, ttlMs }`
+- **4 new tests** covering cache hits/misses, TTL expiry, and eviction
+
+#### Token Counter Improvements (`@reactive-agents/llm-provider`)
+
+- **Model-specific token estimation** — refined token counting for Anthropic, OpenAI, and Gemini models using calibrated chars-per-token ratios
+- **3 new tests** for provider-specific counting accuracy
+
+#### Budget Persistence (`@reactive-agents/cost`)
+
+- **`BudgetDB`** — SQLite-backed persistence for budget state across agent restarts. Records per-session and daily spend with automatic recovery
+- **Enhanced `BudgetEnforcer`** — integrates with `BudgetDB` for durable spend tracking. Supports warm-start from persisted state
+- **4 new tests** for persistence, recovery, and cross-session continuity
+
+#### Enhanced Complexity Router (`@reactive-agents/cost`)
+
+- **27 complexity signals** — expanded heuristic classifier covers code blocks, math expressions, multi-part questions, constraint satisfaction, creative tasks, and domain-specific indicators
+- **3 new tests** for edge-case classification accuracy
+
+#### Memory Extractor Improvements (`@reactive-agents/memory`)
+
+- **Structured extraction pipeline** — extracts facts, decisions, preferences, and action items from conversation turns with confidence scoring
+- **Priority-based consolidation** — higher-confidence extractions override lower-confidence duplicates
+- **8 new tests** covering extraction categories, confidence scoring, and deduplication
+
+#### Hybrid Search (`@reactive-agents/memory`)
+
+- **FTS5 + semantic score fusion** — search results now combine keyword (FTS5) and vector (semantic) scores with configurable weighting
+- **Reciprocal Rank Fusion (RRF)** — merges ranked lists from both search backends into a single relevance-sorted result
+- **4 new tests** for hybrid scoring and rank fusion
+
+#### Telemetry System (`@reactive-agents/observability`)
+
+- **`TelemetryCollector`** — collects anonymized usage telemetry with configurable opt-in/opt-out and batched upload
+- **`LocalAggregator`** — aggregates telemetry events locally before transmission, computing percentiles, histograms, and counters
+- **`PrivacyPreserver`** — strips PII and sensitive data from telemetry payloads using pattern-based redaction and differential privacy noise injection
+- **`TelemetrySchema`** — typed telemetry event schemas covering LLM calls, tool usage, strategy selection, and cost tracking
+- **12 new tests** across telemetry collection, aggregation, privacy, and schema validation
+
+#### OTLP Exporter (`@reactive-agents/observability`)
+
+- **`OTLPExporter`** — exports traces and metrics to any OpenTelemetry-compatible backend (Jaeger, Grafana, Datadog, etc.) via OTLP/HTTP
+- **Enhanced `MetricsCollector`** — extended with histogram buckets, counter resets, and per-phase P50/P95 latency tracking
+
+#### Enhanced Tracer (`@reactive-agents/observability`)
+
+- **Span attributes** — traces now carry model name, provider, token counts, and cost as structured span attributes
+- **Parent-child span correlation** — proper parent span propagation through reasoning and tool execution
+
+#### Docker Sandbox (`@reactive-agents/tools`)
+
+- **`DockerSandbox`** — execute code in isolated Docker containers with resource limits (CPU, memory, timeout), network isolation, and volume mounts
+- **`DockerSandboxConfig`** — `{ image, memoryMb, cpuShares, timeoutMs, networkMode }`
+- **Docker execution skill** — `docker-execution.ts` tool handler for containerized code execution
+- **5 new tests** covering container lifecycle, resource limits, and error handling
+
+#### Tool Result Cache (`@reactive-agents/tools`)
+
+- **`ToolResultCache`** — LRU + TTL cache for tool execution results. Avoids redundant tool calls for identical inputs within a session
+- **`ToolResultCacheConfig`** — `{ maxSize, ttlMs, hashStrategy }`
+- **Wired into `ToolService`** — cache lookups happen transparently before tool execution
+- **6 new tests** covering hit/miss, TTL, eviction, and hash strategies
+
+#### JSON Repair (`@reactive-agents/reasoning`)
+
+- **`repairJson()`** enhanced — handles unbalanced braces/brackets, trailing commas inside nested structures, unquoted keys at any depth, and truncated JSON from interrupted LLM responses
+- **Structured output pipeline hardened** — retry loop now passes parse error context back to LLM for self-correction
+- **4 new tests** for deep nesting repair, truncation recovery, and edge cases
+
+#### Plan Wave Execution (`@reactive-agents/reasoning`)
+
+- **Parallel wave execution** — plan steps with no inter-dependencies execute concurrently in waves, with dependency ordering automatically resolved
+- **5 new tests** for wave detection, ordering, and parallel execution semantics
+
+#### Enhanced Context Utilities (`@reactive-agents/reasoning`)
+
+- **Improved token estimation** — context budget allocation now accounts for tool schema verbosity and system prompt length
+- **Step history compaction** — smarter progressive compaction preserves error steps and high-value observations
+
+#### Enhanced Tool Execution (`@reactive-agents/reasoning`)
+
+- **Retry with backoff** — tool execution failures trigger configurable retry with exponential backoff before marking as error
+- **Timeout enforcement** — per-tool timeout limits prevent runaway tool calls from blocking the reasoning loop
+
+#### Benchmark Suite (`@reactive-agents/benchmarks`) — New Package
+
+- **20 benchmark tasks** across 5 complexity tiers (trivial, simple, moderate, complex, expert)
+- **`runBenchmarks(options)`** — runs tasks with configurable provider, model, tier filter, and concurrency
+- **Framework overhead measurement** — measures runtime creation, full-feature runtime creation, and complexity classification latency
+- **CLI entry point** — `bun run src/run.ts [--provider test] [--tier simple,moderate] [--output report.json]`
+- **6 new tests** for task definitions, tier filtering, and ID uniqueness
+
+#### Builder API Extensions (`@reactive-agents/runtime`)
+
+- **Runtime type exports** — `RequiredToolsConfig`, `RequiredToolsSchema` exported from runtime index
+- **Builder validation tests** — 4 new tests for `withRequiredTools()` configuration patterns
+
+#### CLI Enhancements (`apps/cli`)
+
 - `apps/cli/tests/cli-contracts.test.ts` — provider CLI contract tests for local Docker, Fly, Railway, Render, Cloud Run (`gcloud`), and DigitalOcean (`doctl`) command/flag compatibility; includes version baselines and optional slow container-image availability checks (`RUN_SLOW_TESTS=1`)
 - `rax playground` now launches a real interactive REPL session (single agent instance, `/help` + `/exit`, optional `--stream`) via `apps/cli/src/commands/playground.ts`
 - `rax inspect` now performs concrete local diagnostics (Docker/Compose checks, compose status, recent log matching by agent ID, optional `--json`) via `apps/cli/src/commands/inspect.ts`
-- `apps/meta-agent` now runs dedicated competitor intelligence crons every 12 hours with staggered tracks: TypeScript-first sweep (`0 */12 * * *`) and Python-first sweep (`30 */12 * * *`), tracking frameworks highlighted in current ecosystem analysis (LangChain/LangGraph, OpenAI Agents, AutoGen, CrewAI, SuperAGI, Mastra, Portkey, VoltAgent, Agentic.js)
-- `apps/meta-agent` now runs an hourly competitive scorecard cron (`0 * * * *`) that drafts evidence-backed summaries of where reactive-agents is excelling vs behind competition, including confidence levels and next-24h actions
+- `apps/meta-agent` now runs dedicated competitor intelligence crons every 12 hours with staggered tracks: TypeScript-first sweep (`0 */12 * * *`) and Python-first sweep (`30 */12 * * *`)
+- `apps/meta-agent` now runs an hourly competitive scorecard cron (`0 * * * *`) that drafts evidence-backed summaries of where reactive-agents is excelling vs behind competition
 
 ### Changed
 
-- `rax deploy` now uses provider adapter dispatch end-to-end from `apps/cli/src/commands/deploy/index.ts` with structured `--dry-run` preflight output and target auto-detection for `down/status/logs`
-- CLI help text updated in `apps/cli/src/index.ts` for all six deploy targets and `--dry-run`/mode-aware usage
-- CLI docs updated in `apps/docs/src/content/docs/reference/cli.md` and `apps/cli/README.md` with deploy command reference and provider contract baselines
-- `rax run --stream` is now fully implemented using `agent.runStream()` token output path (removed previous "not yet implemented" behavior) in `apps/cli/src/commands/run.ts`
-- `rax dev` now runs a real Bun watch workflow with entrypoint overrides (`--entry`, `--no-watch`) via `apps/cli/src/commands/dev.ts`
-- `rax serve` input validation tightened (provider validation, memory tier parsing) and generated project templates updated to current builder API signatures in `apps/cli/src/generators/project-generator.ts`
+- `@reactive-agents/llm-provider`: Anthropic, OpenAI, Gemini, and Ollama providers now include circuit breaker protection and embedding cache integration
+- `@reactive-agents/cost`: Complexity router expanded from 12 to 27 complexity signals for more accurate model tier selection
+- `@reactive-agents/memory`: Semantic memory search now uses hybrid FTS5 + vector scoring with reciprocal rank fusion
+- `@reactive-agents/observability`: `MetricsCollector` extended with histogram buckets, P50/P95 latency, and OTLP export support
+- `@reactive-agents/reasoning`: Structured output pipeline enhanced with improved JSON repair and LLM-guided self-correction
+- `@reactive-agents/tools`: `ToolService` now transparently caches tool results via `ToolResultCache`
+- `@reactive-agents/verification`: `fact-decomposition` and `semantic-entropy` layers use refined confidence thresholds
+- `rax deploy` now uses provider adapter dispatch end-to-end with structured `--dry-run` preflight output and target auto-detection
+- `rax run --stream` is now fully implemented using `agent.runStream()` token output path
+- `rax dev` now runs a real Bun watch workflow with entrypoint overrides (`--entry`, `--no-watch`)
+- `rax serve` input validation tightened (provider validation, memory tier parsing)
 
 ### Fixed
 
-- Removed dead code in deploy dispatcher (`listProviders` unused import and unused parse-options parameter), keeping command routing paths minimal and aligned with registry-based adapters
-- **Metrics dashboard now correctly shows failed tool calls** — `ToolCallCompleted` events were always published with `success: true`, causing the metrics dashboard to show all tool executions as successful even when they failed (e.g., parameter validation errors). Updated `KernelHooks.onObservation` signature to pass success flag from `ObservationResult`, and updated all call sites in `react-kernel.ts` and `kernel-runner.ts` to propagate the actual success status. Tool errors now correctly display with ❌ in metrics instead of ✅.
+- **Duplicate prompt-trace events in reasoning loop** — `react-kernel.ts` emitted a `[prompt-trace]` thought event before every LLM call, causing doubled step counts in all 5 strategies. Removed the redundant event
+- **Metrics dashboard now correctly shows failed tool calls** — `ToolCallCompleted` events were always published with `success: true`; updated `KernelHooks.onObservation` to propagate actual success status from `ObservationResult`
+- Removed dead code in deploy dispatcher (`listProviders` unused import and unused parse-options parameter)
+
+### Stats
+
+- 1,588 tests across 190 files (was 1,381/180 in v0.6.0, +207 new tests)
+- 21 packages (was 20; added `@reactive-agents/benchmarks`)
 
 ## [0.6.3] - 2026-03-05
 
