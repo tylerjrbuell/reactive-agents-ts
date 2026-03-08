@@ -6,7 +6,7 @@
 
 **A composable, type-safe AI agent framework for TypeScript, built on Effect-TS.**
 
-Type-safe from prompt to production. 19 packages. 13 composable layers. 5 reasoning strategies. 10-phase execution engine. 8 built-in tools. Model-adaptive context engineering. Persistent autonomous gateway with adaptive heartbeats, crons, and webhooks. Structured agent steering via personas. Real Ed25519 cryptography, kill switch, behavioral contracts, cross-task self-improvement, and full real-time EventBus observability.
+Type-safe from prompt to production. 20 packages. 13 composable layers. 5 reasoning strategies. 10-phase execution engine. 8 built-in tools. Model-adaptive context engineering. Persistent autonomous gateway with adaptive heartbeats, crons, and webhooks. Required tools guard with adaptive LLM inference. Circuit breaker and embedding cache for LLM resilience. Structured agent steering via personas. Real Ed25519 cryptography, kill switch, behavioral contracts, cross-task self-improvement, and full real-time EventBus observability.
 
 [![CI](https://github.com/tylerjrbuell/reactive-agents-ts/actions/workflows/ci.yml/badge.svg)](https://github.com/tylerjrbuell/reactive-agents-ts/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/badge/npm-%40reactive--agents-CB3837?logo=npm)](https://www.npmjs.com/org/reactive-agents)
@@ -43,9 +43,13 @@ Most AI agent frameworks are dynamically typed, monolithic, and opaque. **Reacti
 - Multi-agent orchestration with A2A protocol and agent-as-tool composition
 - MCP client support for external tools and integrations
 - Built-in reasoning strategies: ReAct, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive
+- Required tools guard — ensure agents call critical tools before answering (static list or adaptive LLM inference)
 - Production guardrails: injection, PII, toxicity, kill switch, behavioral contracts
-- Real-time observability: EventBus events, tracing, live execution metrics dashboard
-- Cost and budget controls with model routing and semantic caching
+- LLM resilience: circuit breaker, embedding cache, budget persistence across restarts
+- Real-time observability: EventBus events, tracing, OTLP export, live execution metrics dashboard
+- Cost and budget controls with model routing, semantic caching, and 27 complexity signals
+- Telemetry system with privacy-preserving aggregation and local-first collection
+- Tool result caching and Docker sandbox execution for secure code evaluation
 - Local-first + cloud model support (Ollama, Anthropic, OpenAI, Gemini, LiteLLM)
 
 ## Use Cases
@@ -134,6 +138,11 @@ const agent = await ReactiveAgents.create()
   .withInteraction() // 5 autonomy modes
   .withOrchestration() // Multi-agent workflows
   .withSelfImprovement() // Cross-task strategy outcome learning
+  .withRequiredTools({
+    // Ensure agent calls critical tools before answering
+    tools: ["web-search"],  // or: adaptive: true — LLM infers required tools
+    maxRetries: 2,
+  })
   .withGateway({
     // Persistent autonomous harness
     heartbeat: { intervalMs: 1_800_000, policy: "adaptive" },
@@ -328,6 +337,7 @@ Switch providers with one line — agent code stays the same.
 | [`@reactive-agents/a2a`](packages/a2a)                     | A2A protocol: Agent Cards, JSON-RPC server/client, SSE streaming                |
 | [`@reactive-agents/gateway`](packages/gateway)             | Persistent autonomous agent harness: heartbeats, crons, webhooks, policy engine |
 | [`@reactive-agents/testing`](packages/testing)             | Testing utilities: mock services, assertions, test fixtures                     |
+| [`@reactive-agents/benchmarks`](packages/benchmarks)       | Benchmark suite: 20 tasks × 5 tiers, overhead measurement, report generation    |
 
 ## CLI (`rax`)
 

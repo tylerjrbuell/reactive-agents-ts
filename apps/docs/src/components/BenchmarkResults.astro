@@ -1,0 +1,241 @@
+---
+import benchmarkData from "../data/benchmark-report.json";
+
+const { tasks, overhead, summary } = benchmarkData;
+
+// Group tasks by tier
+const tiers = ["trivial", "simple", "moderate", "complex", "expert"] as const;
+const tierStrategyMap: Record<string, string> = {};
+const tasksByTier: Record<string, typeof tasks> = {};
+
+for (const task of tasks) {
+  if (!tasksByTier[task.tier]) tasksByTier[task.tier] = [];
+  tasksByTier[task.tier].push(task);
+  if (!tierStrategyMap[task.tier]) tierStrategyMap[task.tier] = task.strategy;
+}
+
+// Tier descriptions
+const tierDescriptions: Record<string, string> = {
+  trivial: "Greetings, arithmetic, factual recall, formatting",
+  simple: "Summarization, code translation, explanations, regex",
+  moderate: "Bug identification, refactoring, comparisons, algorithms",
+  complex: "System design, code review, test generation, migrations",
+  expert: "Performance optimization, architecture tradeoffs, concurrency, DSL design",
+};
+
+function formatMs(ms: number): string {
+  return ms < 0.01 ? "<0.01ms" : `${ms.toFixed(2)}ms`;
+}
+
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+---
+
+<div class="benchmark-results">
+  <div class="benchmark-meta">
+    <p>
+      <strong>Last run:</strong> {formatDate(benchmarkData.timestamp)} &middot;
+      <strong>Provider:</strong> <code>{benchmarkData.provider}</code> &middot;
+      <strong>Model:</strong> <code>{benchmarkData.model}</code>
+    </p>
+  </div>
+
+  <h3>Summary</h3>
+  <div class="benchmark-summary">
+    <div class="summary-card">
+      <span class="summary-value">{summary.passed}/{summary.totalTasks}</span>
+      <span class="summary-label">Tasks Passed</span>
+    </div>
+    <div class="summary-card">
+      <span class="summary-value">{formatMs(summary.avgLatencyMs)}</span>
+      <span class="summary-label">Avg Latency</span>
+    </div>
+    <div class="summary-card">
+      <span class="summary-value">{formatMs(summary.totalDurationMs)}</span>
+      <span class="summary-label">Total Duration</span>
+    </div>
+    <div class="summary-card">
+      <span class="summary-value">{summary.failed}</span>
+      <span class="summary-label">Failures</span>
+    </div>
+  </div>
+
+  <h3>Task Matrix</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Tier</th>
+        <th>Tasks</th>
+        <th>Strategy</th>
+        <th>Pass Rate</th>
+        <th>Avg Latency</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      {tiers.map((tier) => {
+        const tierData = summary.byTier[tier];
+        const strategy = tierStrategyMap[tier] || "—";
+        return tierData ? (
+          <tr>
+            <td><strong>{tier.charAt(0).toUpperCase() + tier.slice(1)}</strong></td>
+            <td>{tierData.total}</td>
+            <td><code>{strategy}</code></td>
+            <td>{tierData.passed}/{tierData.total} ({Math.round((tierData.passed / tierData.total) * 100)}%)</td>
+            <td>{formatMs(tierData.avgMs)}</td>
+            <td>{tierDescriptions[tier] || ""}</td>
+          </tr>
+        ) : null;
+      })}
+      <tr class="total-row">
+        <td><strong>Total</strong></td>
+        <td>{summary.totalTasks}</td>
+        <td>—</td>
+        <td><strong>{summary.passed}/{summary.totalTasks} ({Math.round((summary.passed / summary.totalTasks) * 100)}%)</strong></td>
+        <td><strong>{formatMs(summary.avgLatencyMs)}</strong></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Individual Tasks</h3>
+  {tiers.map((tier) => {
+    const tierTasks = tasksByTier[tier];
+    return tierTasks ? (
+      <details>
+        <summary><strong>{tier.charAt(0).toUpperCase() + tier.slice(1)}</strong> — {tierTasks.length} tasks</summary>
+        <table>
+          <thead>
+            <tr>
+              <th>Task ID</th>
+              <th>Strategy</th>
+              <th>Status</th>
+              <th>Duration</th>
+              <th>Tokens</th>
+              <th>Cost</th>
+            </tr>
+          </thead>
+          <tbody>
+            {tierTasks.map((task) => (
+              <tr>
+                <td><code>{task.taskId}</code></td>
+                <td><code>{task.strategy}</code></td>
+                <td>{task.status === "pass" ? "✅ Pass" : "❌ Fail"}</td>
+                <td>{formatMs(task.durationMs)}</td>
+                <td>{task.tokensUsed}</td>
+                <td>${task.estimatedCost.toFixed(4)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </details>
+    ) : null;
+  })}
+
+  <h3>Framework Overhead</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Measurement</th>
+        <th>Avg Duration</th>
+        <th>Samples</th>
+      </tr>
+    </thead>
+    <tbody>
+      {overhead.map((item) => (
+        <tr>
+          <td>{item.label.replace(/-/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase())}</td>
+          <td>{formatMs(item.durationMs)}</td>
+          <td>{item.samples}</td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+</div>
+
+<style>
+  .benchmark-results {
+    margin-top: 1rem;
+  }
+  .benchmark-meta {
+    background: var(--sl-color-gray-6);
+    border-radius: 0.5rem;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1.5rem;
+    font-size: 0.9rem;
+  }
+  .benchmark-meta code {
+    background: var(--sl-color-gray-5);
+    padding: 0.1rem 0.3rem;
+    border-radius: 0.25rem;
+    font-size: 0.85em;
+  }
+  .benchmark-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+  .summary-card {
+    background: var(--sl-color-gray-6);
+    border-radius: 0.5rem;
+    padding: 1rem;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  .summary-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--sl-color-white);
+  }
+  .summary-label {
+    font-size: 0.8rem;
+    color: var(--sl-color-gray-2);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1rem;
+  }
+  th, td {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--sl-color-gray-5);
+    text-align: left;
+  }
+  th {
+    background: var(--sl-color-gray-6);
+    font-weight: 600;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  .total-row td {
+    border-top: 2px solid var(--sl-color-gray-4);
+    background: var(--sl-color-gray-6);
+  }
+  details {
+    margin-bottom: 0.75rem;
+  }
+  details summary {
+    cursor: pointer;
+    padding: 0.5rem;
+    border-radius: 0.25rem;
+  }
+  details summary:hover {
+    background: var(--sl-color-gray-6);
+  }
+  details[open] summary {
+    margin-bottom: 0.5rem;
+  }
+</style>
