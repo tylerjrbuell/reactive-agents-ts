@@ -1810,12 +1810,7 @@ export class ReactiveAgentBuilder {
                     : JSON.stringify(args.task ?? "");
                 const subName =
                   typeof args.name === "string" ? args.name : "dynamic-agent";
-                const subModel =
-                  typeof args.model === "string" ? args.model : undefined;
-                const subMaxIter =
-                  typeof args.maxIterations === "number"
-                    ? args.maxIterations
-                    : defaultMaxIter;
+                const subMaxIter = defaultMaxIter;
 
                 // Extract optional persona parameters
                 const subPersona = {
@@ -1831,7 +1826,7 @@ export class ReactiveAgentBuilder {
                   {
                     name: subName,
                     provider: parentProvider,
-                    model: subModel ?? parentModel,
+                    model: parentModel,
                     maxIterations: subMaxIter,
                     persona:
                       subPersona.role ||
@@ -1870,6 +1865,7 @@ export class ReactiveAgentBuilder {
                       systemPrompt: composedSystemPrompt,
                       enableReasoning: opts.enableReasoning,
                       enableTools: opts.enableTools,
+                      mcpServers: mcpServers.length > 0 ? mcpServers : undefined,
                     });
                     const subEngine = await Effect.runPromise(
                       ExecutionEngine.pipe(Effect.provide(subRuntime)),

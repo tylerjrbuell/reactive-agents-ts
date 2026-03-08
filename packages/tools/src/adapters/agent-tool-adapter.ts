@@ -175,58 +175,43 @@ const deriveInputSchemaFromCapabilities = (
 export const createSpawnAgentTool = (): ToolDefinition => ({
   name: "spawn-agent",
   description:
-    "Dynamically spawn a focused sub-agent with a clean context window to handle a " +
-    "self-contained subtask. The sub-agent runs independently (no access to parent " +
-    "history) and returns a structured summary. Use this to delegate tasks that benefit " +
-    "from a fresh reasoning context or that might otherwise bloat the current window. " +
-    "IMPORTANT: use 'task' param (required), not 'input' or 'prompt'. " +
-    "Optionally steer sub-agent behavior via role, instructions, and tone.",
+    "Spawn a sub-agent to handle a self-contained subtask. The sub-agent has access to ALL " +
+    "the same tools as the parent (including MCP tools) but runs with a clean context window. " +
+    "IMPORTANT: Describe the task in natural language — the sub-agent will figure out which " +
+    "tools to use. Do NOT pass tool names as parameters. " +
+    "Use 'task' param (required) with a complete task description.",
   parameters: [
     {
       name: "task",
       type: "string" as const,
       description:
-        "Complete task description for the sub-agent. Be explicit — the sub-agent " +
-        "has no knowledge of the current conversation.",
+        "Complete natural-language task description. Be explicit about WHAT to do and " +
+        "what output you need — the sub-agent has no knowledge of the parent conversation. " +
+        "Example: 'List the 5 most recent commits from github.com/owner/repo and summarize them'",
       required: true,
     },
     {
       name: "name",
       type: "string" as const,
-      description: "Optional label for this sub-agent (appears in logs). Default: 'dynamic-agent'.",
-      required: false,
-    },
-    {
-      name: "model",
-      type: "string" as const,
-      description: "Optional model override. Inherits parent's model when omitted.",
-      required: false,
-    },
-    {
-      name: "maxIterations",
-      type: "number" as const,
-      description: "Maximum reasoning iterations (default: 5).",
+      description: "Short label for this sub-agent (appears in logs). Default: 'dynamic-agent'.",
       required: false,
     },
     {
       name: "role",
       type: "string" as const,
-      description: "Optional role/persona for the sub-agent (e.g., 'Data Analyst', 'Code Reviewer'). " +
-        "Steers how the agent approaches the task.",
+      description: "Optional role (e.g., 'researcher', 'code reviewer'). Steers approach.",
       required: false,
     },
     {
       name: "instructions",
       type: "string" as const,
-      description: "Optional behavioral instructions for the sub-agent (e.g., 'Focus on security', " +
-        "'Optimize for performance'). These guide the sub-agent's approach.",
+      description: "Optional behavioral instructions (e.g., 'Be concise', 'Focus on security').",
       required: false,
     },
     {
       name: "tone",
       type: "string" as const,
-      description: "Optional tone guidance for the sub-agent (e.g., 'professional', 'concise', 'detailed'). " +
-        "Influences communication style.",
+      description: "Optional tone (e.g., 'professional', 'casual'). Influences style.",
       required: false,
     },
   ],
