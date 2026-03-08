@@ -175,43 +175,42 @@ const deriveInputSchemaFromCapabilities = (
 export const createSpawnAgentTool = (): ToolDefinition => ({
   name: "spawn-agent",
   description:
-    "Spawn a sub-agent to handle a self-contained subtask. The sub-agent has access to ALL " +
-    "the same tools as the parent (including MCP tools) but runs with a clean context window. " +
-    "IMPORTANT: Describe the task in natural language — the sub-agent will figure out which " +
-    "tools to use. Do NOT pass tool names as parameters. " +
-    "Use 'task' param (required) with a complete task description.",
+    "Spawn a sub-agent to handle a self-contained subtask. The sub-agent automatically " +
+    "inherits all parent capabilities (tools, MCP servers, model, reasoning, guardrails) " +
+    "and runs with a fresh context window. Just describe the task — the framework handles " +
+    "all infrastructure. Optionally steer the sub-agent's approach with role/instructions.",
   parameters: [
     {
       name: "task",
       type: "string" as const,
       description:
-        "Complete natural-language task description. Be explicit about WHAT to do and " +
-        "what output you need — the sub-agent has no knowledge of the parent conversation. " +
-        "Example: 'List the 5 most recent commits from github.com/owner/repo and summarize them'",
+        "Complete task description in natural language. The sub-agent has no knowledge of " +
+        "the parent conversation — be explicit about what to do and what to return. " +
+        "Example: 'Fetch the 5 latest commits from github.com/owner/repo and return a bullet-point summary'",
       required: true,
     },
     {
       name: "name",
       type: "string" as const,
-      description: "Short label for this sub-agent (appears in logs). Default: 'dynamic-agent'.",
+      description: "Short label for logs. Default: 'dynamic-agent'.",
       required: false,
     },
     {
       name: "role",
       type: "string" as const,
-      description: "Optional role (e.g., 'researcher', 'code reviewer'). Steers approach.",
+      description: "Optional role to steer approach (e.g., 'researcher', 'code reviewer').",
       required: false,
     },
     {
       name: "instructions",
       type: "string" as const,
-      description: "Optional behavioral instructions (e.g., 'Be concise', 'Focus on security').",
+      description: "Optional behavioral guidance (e.g., 'Be concise', 'Focus on security issues').",
       required: false,
     },
     {
       name: "tone",
       type: "string" as const,
-      description: "Optional tone (e.g., 'professional', 'casual'). Influences style.",
+      description: "Optional tone (e.g., 'professional', 'casual', 'detailed').",
       required: false,
     },
   ],
