@@ -1,4 +1,4 @@
-import { writeFileSync, appendFileSync, mkdirSync } from "fs";
+import { mkdir, appendFile, writeFile } from "node:fs/promises";
 import { dirname } from "path";
 import type { LogEntry, Span, Metric } from "../types.js";
 
@@ -83,24 +83,24 @@ export const makeFileExporter = (options: FileExporterOptions = {}) => {
 
   let firstFlush = true;
 
-  const ensureDir = (fp: string): void => {
+  const ensureDir = async (fp: string): Promise<void> => {
     try {
-      mkdirSync(dirname(fp), { recursive: true });
+      await mkdir(dirname(fp), { recursive: true });
     } catch {
       // Directory already exists or not writable — suppress
     }
   };
 
-  const writeLines = (lines: string[]): void => {
+  const writeLines = async (lines: string[]): Promise<void> => {
     if (lines.length === 0) return;
     const content = lines.join("\n") + "\n";
     try {
-      ensureDir(filePath);
+      await ensureDir(filePath);
       if (mode === "overwrite" && firstFlush) {
-        writeFileSync(filePath, content, "utf-8");
+        await writeFile(filePath, content, "utf-8");
         firstFlush = false;
       } else {
-        appendFileSync(filePath, content, "utf-8");
+        await appendFile(filePath, content, "utf-8");
       }
     } catch {
       // File system errors are non-fatal for observability
@@ -108,8 +108,8 @@ export const makeFileExporter = (options: FileExporterOptions = {}) => {
   };
 
   /** Write an array of log entries to the JSONL file. Each entry becomes one `_type: "log"` line. */
-  const exportLogs = (logs: readonly LogEntry[]): void => {
-    writeLines(
+  const exportLogs = (logs: readonly LogEntry[]): Promise<void> => {
+    return writeLines(
       logs.map((l) =>
         JSON.stringify({
           _type: "log",
@@ -126,8 +126,8 @@ export const makeFileExporter = (options: FileExporterOptions = {}) => {
   };
 
   /** Write an array of trace spans to the JSONL file. Each span becomes one `_type: "span"` line. */
-  const exportSpans = (spans: readonly Span[]): void => {
-    writeLines(
+  const exportSpans = (spans: readonly Span[]): Promise<void> => {
+    return writeLines(
       spans.map((s) =>
         JSON.stringify({
           _type: "span",
@@ -150,8 +150,8 @@ export const makeFileExporter = (options: FileExporterOptions = {}) => {
   };
 
   /** Write an array of metric values to the JSONL file. Each metric becomes one `_type: "metric"` line. */
-  const exportMetrics = (metrics: readonly Metric[]): void => {
-    writeLines(
+  const exportMetrics = (metrics: readonly Metric[]): Promise<void> => {
+    return writeLines(
       metrics.map((m) =>
         JSON.stringify({
           _type: "metric",

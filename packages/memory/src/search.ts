@@ -119,15 +119,83 @@ export const MemorySearchServiceLive = Layer.effect(
           })) satisfies DailyLogEntry[];
         }),
 
-      // Tier 2 only — requires sqlite-vec extension loaded on db connection
-      searchVector: (_queryEmbedding, _agentId, _limit) =>
-        Effect.fail(
-          new DatabaseError({
-            message:
-              "Vector search requires Tier 2 (sqlite-vec). Use createMemoryLayer('2').",
-            operation: "search",
-          }),
-        ),
+      // Tier 2 — cosine similarity KNN on embedding BLOBs
+      searchVector: (queryEmbedding, agentId, limit) =>
+        Effect.gen(function* () {
+          // Fetch all entries with embeddings for this agent
+          const rows = yield* db.query<{
+            id: string;
+            agent_id: string;
+            content: string;
+            summary: string;
+            importance: number;
+            verified: number;
+            tags: string;
+            embedding: ArrayBuffer | null;
+            created_at: string;
+            updated_at: string;
+            access_count: number;
+            last_accessed_at: string;
+          }>(
+            `SELECT * FROM semantic_memory
+             WHERE agent_id = ? AND embedding IS NOT NULL`,
+            [agentId],
+          );
+
+          if (rows.length === 0) return [];
+
+          // Compute cosine similarity for each row
+          const scored = rows
+            .map((r) => {
+              if (!r.embedding) return null;
+              const buf = r.embedding instanceof ArrayBuffer
+                ? r.embedding
+                : (r.embedding as unknown as Uint8Array).buffer;
+              const stored = Array.from(new Float32Array(buf));
+              const sim = cosineSimilarity(queryEmbedding, stored);
+              return { row: r, similarity: sim };
+            })
+            .filter(
+              (x): x is { row: (typeof rows)[0]; similarity: number } =>
+                x !== null,
+            );
+
+          // Sort by similarity descending, take top N
+          scored.sort((a, b) => b.similarity - a.similarity);
+          const topN = scored.slice(0, limit);
+
+          return topN.map(({ row: r }) => ({
+            id: r.id as MemoryId,
+            agentId: r.agent_id,
+            content: r.content,
+            summary: r.summary,
+            importance: r.importance,
+            verified: Boolean(r.verified),
+            tags: JSON.parse(r.tags),
+            embedding: r.embedding
+              ? Array.from(new Float32Array(r.embedding))
+              : undefined,
+            createdAt: new Date(r.created_at),
+            updatedAt: new Date(r.updated_at),
+            accessCount: r.access_count,
+            lastAccessedAt: new Date(r.last_accessed_at),
+          })) satisfies SemanticEntry[];
+        }),
     };
   }),
 );
+
+/** Cosine similarity between two vectors. Returns 0 if either has zero magnitude. */
+function cosineSimilarity(a: readonly number[], b: readonly number[]): number {
+  const len = Math.min(a.length, b.length);
+  let dot = 0;
+  let magA = 0;
+  let magB = 0;
+  for (let i = 0; i < len; i++) {
+    dot += a[i]! * b[i]!;
+    magA += a[i]! * a[i]!;
+    magB += b[i]! * b[i]!;
+  }
+  const denom = Math.sqrt(magA) * Math.sqrt(magB);
+  return denom === 0 ? 0 : dot / denom;
+}

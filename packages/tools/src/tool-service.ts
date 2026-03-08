@@ -1,4 +1,4 @@
-import { Effect, Context, Layer } from "effect";
+import { Effect, Context, Layer, Option } from "effect";
 
 import type {
   ToolInput,
@@ -21,6 +21,7 @@ import { makeSandbox } from "./execution/sandbox.js";
 import { validateToolInput } from "./validation/input-validator.js";
 import { EventBus } from "@reactive-agents/core";
 import { builtinTools } from "./skills/builtin.js";
+import { ToolResultCache } from "./caching/tool-result-cache.js";
 
 // ─── Service Tag ───
 
@@ -321,6 +322,35 @@ export const ToolServiceLive = Layer.effect(
           input.arguments,
         );
 
+        // Step 2.5: Check cache (opt-in — ToolResultCache may not be provided)
+        const cacheOpt = yield* Effect.serviceOption(ToolResultCache);
+        if (Option.isSome(cacheOpt) && tool.definition.isCacheable !== false) {
+          const cached = yield* cacheOpt.value.check(
+            input.toolName,
+            validatedArgs,
+          );
+          if (cached) {
+            const executionTimeMs = Date.now() - startTime;
+            yield* eventBus.publish({
+              _tag: "Custom",
+              type: "tools.executed",
+              payload: {
+                toolName: input.toolName,
+                success: cached.success,
+                executionTimeMs,
+                cached: true,
+              },
+            });
+            return {
+              toolName: input.toolName,
+              success: cached.success,
+              result: cached.result,
+              executionTimeMs,
+              metadata: { cached: true },
+            } satisfies ToolOutput;
+          }
+        }
+
         // Step 3: Execute in sandbox with timeout
         const result = yield* sandbox.execute(
           () => tool.handler(validatedArgs),
@@ -331,6 +361,17 @@ export const ToolServiceLive = Layer.effect(
         );
 
         const executionTimeMs = Date.now() - startTime;
+
+        // Step 3.5: Store in cache if available
+        if (Option.isSome(cacheOpt) && tool.definition.isCacheable !== false) {
+          yield* cacheOpt.value.store(
+            input.toolName,
+            validatedArgs,
+            result,
+            true,
+            tool.definition.cacheTtlMs,
+          );
+        }
 
         // Step 4: Emit event
         yield* eventBus.publish({

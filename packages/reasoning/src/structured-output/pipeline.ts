@@ -1,11 +1,16 @@
 /**
  * Structured Output Pipeline — reliable JSON extraction from any LLM.
  *
- * 4-layer fallback:
+ * 5-layer fallback:
+ *   Layer 0: Provider-native structured output (completeStructured()) — fastest, most reliable
  *   Layer 1: High-signal prompting (schema as example, few-shot, "JSON only")
  *   Layer 2: JSON extraction & repair (pure functions, no LLM)
  *   Layer 3: Schema validation with Effect-TS coercion
  *   Layer 4: Retry with error feedback
+ *
+ * When the provider supports native JSON mode (OpenAI, Gemini, Ollama), the pipeline
+ * delegates to completeStructured() first for schema-enforced output. If that fails,
+ * it falls back to prompt engineering + repair.
  *
  * Observability: When EventBus is available, emits ReasoningStepCompleted events
  * with prompt/response data for logModelIO integration.
@@ -24,6 +29,8 @@ export interface StructuredOutputConfig<T> {
   readonly maxRetries?: number;
   readonly temperature?: number;
   readonly maxTokens?: number;
+  /** Skip completeStructured() and use prompt engineering only (default: false) */
+  readonly forcePromptMode?: boolean;
 }
 
 export interface StructuredOutputResult<T> {
@@ -31,11 +38,53 @@ export interface StructuredOutputResult<T> {
   readonly raw: string;
   readonly attempts: number;
   readonly repaired: boolean;
+  /** Whether the result came from native provider structured output */
+  readonly nativeMode: boolean;
 }
 
 /**
+ * Try provider-native structured output first (Layer 0).
+ * Returns the parsed data if the provider supports it and succeeds.
+ */
+const tryNativeStructuredOutput = <T>(
+  llm: LLMService["Type"],
+  config: StructuredOutputConfig<T>,
+  maxTokens: number,
+  temp: number,
+): Effect.Effect<StructuredOutputResult<T> | null, never> =>
+  Effect.gen(function* () {
+    const caps = yield* llm.getStructuredOutputCapabilities();
+    if (!caps.nativeJsonMode || config.forcePromptMode) return null;
+
+    const result = yield* llm.completeStructured({
+      messages: [{ role: "user", content: config.prompt }],
+      systemPrompt: config.systemPrompt,
+      outputSchema: config.schema,
+      maxTokens,
+      temperature: temp,
+      maxParseRetries: 1,
+    }).pipe(
+      Effect.map((data): StructuredOutputResult<T> => ({
+        data,
+        raw: JSON.stringify(data),
+        attempts: 1,
+        repaired: false,
+        nativeMode: true,
+      })),
+      // Catch both typed errors (Fail) and defects (Die/sync throws)
+      Effect.sandbox,
+      Effect.catchAll(() => Effect.succeed(null)),
+    );
+
+    return result;
+  });
+
+/**
  * Extract typed structured output from an LLM response.
- * Attempts parsing, repair, validation, and retry with error feedback.
+ *
+ * Strategy:
+ * 1. If the provider supports native JSON mode, try completeStructured() first
+ * 2. Fall back to prompt engineering + JSON repair + schema validation + retry
  */
 export const extractStructuredOutput = <T>(
   config: StructuredOutputConfig<T>,
@@ -52,6 +101,24 @@ export const extractStructuredOutput = <T>(
     );
     const eb = ebOpt._tag === "Some" ? ebOpt.value : null;
 
+    // Layer 0: Try provider-native structured output first
+    const nativeResult = yield* tryNativeStructuredOutput(llm, config, maxTokens, temp);
+    if (nativeResult !== null) {
+      if (eb) {
+        yield* eb.publish({
+          _tag: "ReasoningStepCompleted",
+          taskId: "structured-output",
+          strategy: "structured-output-native",
+          step: 1,
+          totalSteps: 1,
+          prompt: { system: config.systemPrompt ?? "", user: config.prompt },
+          thought: nativeResult.raw,
+        }).pipe(Effect.catchAll(() => Effect.void));
+      }
+      return nativeResult;
+    }
+
+    // Fallback: prompt engineering + repair pipeline
     let lastError: string | null = null;
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -113,7 +180,7 @@ export const extractStructuredOutput = <T>(
       try {
         const parsed = JSON.parse(jsonText);
         const data = Schema.decodeUnknownSync(config.schema)(parsed);
-        return { data, raw, attempts: attempt + 1, repaired };
+        return { data, raw, attempts: attempt + 1, repaired, nativeMode: false };
       } catch (e) {
         lastError = e instanceof Error ? e.message : String(e);
         if (attempt === maxRetries) {

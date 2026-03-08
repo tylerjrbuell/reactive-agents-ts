@@ -57,4 +57,68 @@ describe("Token Counter", () => {
     // Uses default: $3/1M input + $15/1M output
     expect(cost).toBeGreaterThan(0);
   });
+
+  it("estimates fewer tokens for natural language than code", async () => {
+    const prose = "The quick brown fox jumps over the lazy dog. ".repeat(50);
+    const code = 'function foo() { return { bar: [1, 2, 3], baz: "qux" }; }\n'.repeat(50);
+
+    const proseTokens = await Effect.runPromise(
+      estimateTokenCount([{ role: "user", content: prose }]),
+    );
+    const codeTokens = await Effect.runPromise(
+      estimateTokenCount([{ role: "user", content: code }]),
+    );
+
+    // Code has more tokens per character (~3 chars/token) vs prose (~4 chars/token)
+    // So for comparable-length strings, code should produce more tokens
+    expect(codeTokens).toBeGreaterThan(proseTokens);
+  });
+
+  it("uses higher token estimate for JSON content", async () => {
+    const json = '{"name": "test", "items": [{"id": 1}, {"id": 2}], "meta": {"key": "value"}}\n'.repeat(30);
+
+    const jsonTokens = await Effect.runPromise(
+      estimateTokenCount([{ role: "user", content: json }]),
+    );
+
+    // JSON has many structural chars → ~3 chars/token → more tokens than prose
+    const expectedMin = Math.ceil(json.length / 4); // Would be this at prose rate
+    expect(jsonTokens).toBeGreaterThan(expectedMin);
+  });
+
+  it("counts tool_use blocks at code density", async () => {
+    const result = await Effect.runPromise(
+      estimateTokenCount([
+        {
+          role: "assistant",
+          content: [
+            {
+              type: "tool_use" as const,
+              id: "call_1",
+              name: "search",
+              input: { query: "test", filters: { type: "code" } },
+            },
+          ],
+        },
+      ]),
+    );
+
+    // tool_use JSON is always counted at ~3 chars/token
+    expect(result).toBeGreaterThan(0);
+  });
+
+  it("adds per-message framing overhead", async () => {
+    const singleMsg = await Effect.runPromise(
+      estimateTokenCount([{ role: "user", content: "hi" }]),
+    );
+    const twoMsgs = await Effect.runPromise(
+      estimateTokenCount([
+        { role: "user", content: "hi" },
+        { role: "assistant", content: "hi" },
+      ]),
+    );
+
+    // Two messages should add ~4 tokens more framing overhead
+    expect(twoMsgs - singleMsg).toBeGreaterThanOrEqual(4);
+  });
 });

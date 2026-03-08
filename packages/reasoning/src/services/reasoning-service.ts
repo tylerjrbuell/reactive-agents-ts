@@ -42,6 +42,10 @@ export class ReasoningService extends Context.Tag("ReasoningService")<
       readonly resultCompression?: { budget?: number; previewItems?: number; autoStore?: boolean; codeTransform?: boolean };
       readonly agentId?: string;
       readonly sessionId?: string;
+      /** Tools that MUST be called before the agent can declare success */
+      readonly requiredTools?: readonly string[];
+      /** Max redirects when required tools are missing (default: 2) */
+      readonly maxRequiredToolRetries?: number;
     }) => Effect.Effect<ReasoningResult, ReasoningErrors>;
 
     /** Register a custom strategy function. */

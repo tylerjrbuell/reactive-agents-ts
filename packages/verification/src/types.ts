@@ -75,7 +75,7 @@ export type VerificationConfig = typeof VerificationConfigSchema.Type;
 /** LLM interface for tier-2 verification layers. Decoupled from @reactive-agents/llm-provider. */
 export type VerificationLLM = {
   complete: (req: any) => import("effect").Effect.Effect<{ content: string; usage?: { totalTokens?: number } }, any>;
-  embed: (texts: readonly string[], model?: string) => import("effect").Effect.Effect<readonly number[][], any>;
+  embed: (texts: readonly string[], model?: string) => import("effect").Effect.Effect<readonly (readonly number[])[], any>;
 };
 
 export const defaultVerificationConfig: VerificationConfig = {

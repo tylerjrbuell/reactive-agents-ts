@@ -1,6 +1,8 @@
 import { Effect, Ref } from "effect";
 import type { BudgetLimits, BudgetStatus } from "../types.js";
 import { BudgetExceededError } from "../errors.js";
+import type { BudgetDb } from "./budget-db.js";
+import { todayKey, monthKey } from "./budget-db.js";
 
 export interface BudgetState {
   readonly sessionSpend: Record<string, number>;  // sessionId -> total
@@ -11,15 +13,21 @@ export interface BudgetState {
 export interface BudgetEnforcer {
   readonly check: (estimatedCost: number, agentId: string, sessionId: string) => Effect.Effect<void, BudgetExceededError>;
   readonly record: (cost: number, agentId: string, sessionId: string) => Effect.Effect<void, never>;
-  readonly getStatus: (agentId: string) => Effect.Effect<BudgetStatus, never>;
+  readonly getStatus: (agentId: string, sessionId?: string) => Effect.Effect<BudgetStatus, never>;
+  /** Load persisted daily/monthly spend from SQLite for an agent. No-op without db. */
+  readonly hydrate: (agentId: string) => Effect.Effect<void, never>;
 }
 
-export const makeBudgetEnforcer = (limits: BudgetLimits) =>
+export const makeBudgetEnforcer = (limits: BudgetLimits, db?: BudgetDb) =>
   Effect.gen(function* () {
+    // Hydrate daily/monthly spend from SQLite if persistence is enabled
+    const initialDaily: Record<string, number> = {};
+    const initialMonthly: Record<string, number> = {};
+
     const stateRef = yield* Ref.make<BudgetState>({
       sessionSpend: {},
-      dailySpend: {},
-      monthlySpend: {},
+      dailySpend: initialDaily,
+      monthlySpend: initialMonthly,
     });
 
     const check = (
@@ -88,29 +96,38 @@ export const makeBudgetEnforcer = (limits: BudgetLimits) =>
       agentId: string,
       sessionId: string,
     ): Effect.Effect<void, never> =>
-      Ref.update(stateRef, (state) => ({
-        sessionSpend: {
-          ...state.sessionSpend,
-          [sessionId]: (state.sessionSpend[sessionId] ?? 0) + cost,
-        },
-        dailySpend: {
-          ...state.dailySpend,
-          [agentId]: (state.dailySpend[agentId] ?? 0) + cost,
-        },
-        monthlySpend: {
-          ...state.monthlySpend,
-          [agentId]: (state.monthlySpend[agentId] ?? 0) + cost,
-        },
-      }));
+      Effect.gen(function* () {
+        yield* Ref.update(stateRef, (state) => ({
+          sessionSpend: {
+            ...state.sessionSpend,
+            [sessionId]: (state.sessionSpend[sessionId] ?? 0) + cost,
+          },
+          dailySpend: {
+            ...state.dailySpend,
+            [agentId]: (state.dailySpend[agentId] ?? 0) + cost,
+          },
+          monthlySpend: {
+            ...state.monthlySpend,
+            [agentId]: (state.monthlySpend[agentId] ?? 0) + cost,
+          },
+        }));
 
-    const getStatus = (agentId: string): Effect.Effect<BudgetStatus, never> =>
+        // Write-through to SQLite if persistence is enabled
+        if (db) {
+          yield* db.addSpend(agentId, `daily:${todayKey()}`, cost);
+          yield* db.addSpend(agentId, `monthly:${monthKey()}`, cost);
+        }
+      });
+
+    const getStatus = (agentId: string, sessionId?: string): Effect.Effect<BudgetStatus, never> =>
       Effect.gen(function* () {
         const state = yield* Ref.get(stateRef);
         const daily = state.dailySpend[agentId] ?? 0;
         const monthly = state.monthlySpend[agentId] ?? 0;
+        const session = sessionId ? (state.sessionSpend[sessionId] ?? 0) : 0;
 
         return {
-          currentSession: 0,
+          currentSession: session,
           currentDaily: daily,
           currentMonthly: monthly,
           limits,
@@ -119,5 +136,18 @@ export const makeBudgetEnforcer = (limits: BudgetLimits) =>
         };
       });
 
-    return { check, record, getStatus } satisfies BudgetEnforcer;
+    const hydrate = (agentId: string): Effect.Effect<void, never> => {
+      if (!db) return Effect.void;
+      return Effect.gen(function* () {
+        const dailySpend = yield* db.loadSpend(agentId, `daily:${todayKey()}`);
+        const monthlySpend = yield* db.loadSpend(agentId, `monthly:${monthKey()}`);
+        yield* Ref.update(stateRef, (state) => ({
+          ...state,
+          dailySpend: { ...state.dailySpend, [agentId]: dailySpend },
+          monthlySpend: { ...state.monthlySpend, [agentId]: monthlySpend },
+        }));
+      });
+    };
+
+    return { check, record, getStatus, hydrate } satisfies BudgetEnforcer;
   });

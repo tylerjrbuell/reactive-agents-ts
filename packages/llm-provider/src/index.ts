@@ -97,3 +97,13 @@ export {
   createLLMProviderLayer,
   createLLMProviderLayerWithConfig,
 } from "./runtime.js";
+
+// ─── Embedding Cache ───
+export { makeEmbeddingCache } from "./embedding-cache.js";
+export type { EmbeddingCache } from "./embedding-cache.js";
+
+// ─── Circuit Breaker ───
+export { makeCircuitBreaker } from "./circuit-breaker.js";
+export type { CircuitBreaker } from "./circuit-breaker.js";
+export { defaultCircuitBreakerConfig } from "./retry.js";
+export type { CircuitBreakerConfig } from "./retry.js";

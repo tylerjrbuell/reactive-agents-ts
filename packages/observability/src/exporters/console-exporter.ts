@@ -168,7 +168,7 @@ const generateAlerts = (
  * Build DashboardData from metrics array and optional MetricsCollector.
  * Aggregates phase durations, tool metrics, and generates alerts.
  */
-const buildDashboardData = (
+export const buildDashboardData = (
   metrics: readonly Metric[],
   metricsCollector?: MetricsCollector,
 ): DashboardData => {

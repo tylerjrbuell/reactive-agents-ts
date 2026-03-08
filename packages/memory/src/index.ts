@@ -17,6 +17,7 @@ export type {
   MemoryBootstrapResult,
   EvictionPolicy,
   MemoryConfig,
+  MemoryLLM,
 } from "./types.js";
 
 // ─── Schemas ───
@@ -99,6 +100,7 @@ export {
 export {
   MemoryExtractor,
   MemoryExtractorLive,
+  MemoryExtractorTier2Live,
 } from "./extraction/memory-extractor.js";
 export {
   MemoryConsolidator,

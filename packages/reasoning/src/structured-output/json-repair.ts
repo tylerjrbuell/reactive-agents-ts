@@ -58,6 +58,15 @@ export function repairJson(input: string): string {
 
   let text = input;
 
+  // Strip single-line comments (// ...) outside strings
+  text = stripComments(text);
+
+  // Fix Python-style booleans/none: True→true, False→false, None→null
+  text = fixPythonLiterals(text);
+
+  // Fix NaN/Infinity → null (not valid JSON values)
+  text = fixNonFinite(text);
+
   // Fix single quotes → double quotes (outside of existing double-quoted strings)
   text = fixSingleQuotes(text);
 
@@ -71,6 +80,61 @@ export function repairJson(input: string): string {
   text = closeUnclosed(text);
 
   return text;
+}
+
+/**
+ * Strip single-line comments (// ...) outside of strings.
+ */
+function stripComments(text: string): string {
+  const result: string[] = [];
+  let inString = false;
+  let escape = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]!;
+    if (escape) { result.push(ch); escape = false; continue; }
+    if (ch === "\\") { result.push(ch); escape = true; continue; }
+    if (ch === '"') { inString = !inString; result.push(ch); continue; }
+    if (inString) { result.push(ch); continue; }
+
+    // Single-line comment: skip to end of line
+    if (ch === "/" && text[i + 1] === "/") {
+      const eol = text.indexOf("\n", i);
+      if (eol === -1) break;
+      i = eol - 1; // loop will increment
+      continue;
+    }
+    // Block comment: skip to */
+    if (ch === "/" && text[i + 1] === "*") {
+      const end = text.indexOf("*/", i + 2);
+      if (end === -1) break;
+      i = end + 1; // skip past */
+      continue;
+    }
+    result.push(ch);
+  }
+  return result.join("");
+}
+
+/**
+ * Replace Python-style boolean/none literals with JSON equivalents.
+ * Only replaces outside strings at word boundaries.
+ */
+function fixPythonLiterals(text: string): string {
+  return text
+    .replace(/\bTrue\b/g, "true")
+    .replace(/\bFalse\b/g, "false")
+    .replace(/\bNone\b/g, "null");
+}
+
+/**
+ * Replace NaN, Infinity, -Infinity with null (not valid JSON).
+ */
+function fixNonFinite(text: string): string {
+  return text
+    .replace(/\bNaN\b/g, "null")
+    .replace(/-Infinity\b/g, "null")
+    .replace(/\bInfinity\b/g, "null");
 }
 
 function fixSingleQuotes(text: string): string {

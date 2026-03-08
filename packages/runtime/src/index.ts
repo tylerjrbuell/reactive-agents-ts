@@ -51,6 +51,10 @@ export type {
   AgentResult,
   AgentResultMetadata,
   AgentPersona,
+  MemoryOptions,
+  CostTrackingOptions,
+  GuardrailsOptions,
+  VerificationOptions,
 } from "./builder.js";
 
 // ─── Streaming ───

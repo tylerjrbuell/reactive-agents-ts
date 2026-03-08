@@ -152,4 +152,64 @@ describe("extractStructuredOutput", () => {
 
     expect(result.data.name).toBe("with-example");
   });
+
+  it("sets nativeMode true when provider supports structured output", async () => {
+    // TestLLMService reports nativeJsonMode: true, so if completeStructured succeeds
+    // the result should have nativeMode: true
+    const layer = TestLLMServiceLayer({
+      "Extract": '{"name": "native", "count": 1}',
+    });
+
+    const result = await Effect.runPromise(
+      extractStructuredOutput({
+        schema: TestSchema,
+        prompt: "Extract the data",
+        maxRetries: 0,
+      }).pipe(Effect.provide(layer)),
+    );
+
+    expect(result.nativeMode).toBe(true);
+    expect(result.data.name).toBe("native");
+    expect(result.attempts).toBe(1);
+    expect(result.repaired).toBe(false);
+  });
+
+  it("falls back to prompt mode when forcePromptMode is set", async () => {
+    const layer = TestLLMServiceLayer({
+      "Extract": '{"name": "prompt-mode", "count": 2}',
+    });
+
+    const result = await Effect.runPromise(
+      extractStructuredOutput({
+        schema: TestSchema,
+        prompt: "Extract the data",
+        maxRetries: 0,
+        forcePromptMode: true,
+      }).pipe(Effect.provide(layer)),
+    );
+
+    expect(result.nativeMode).toBe(false);
+    expect(result.data.name).toBe("prompt-mode");
+  });
+
+  it("falls back to prompt mode when native structured output fails", async () => {
+    // Give a response that completeStructured will fail on (markdown fences),
+    // but prompt-mode extraction can repair
+    const layer = TestLLMServiceLayer({
+      "Extract": '```json\n{"name": "repaired-fallback", "count": 3}\n```',
+    });
+
+    const result = await Effect.runPromise(
+      extractStructuredOutput({
+        schema: TestSchema,
+        prompt: "Extract the data",
+        maxRetries: 0,
+      }).pipe(Effect.provide(layer)),
+    );
+
+    // Native mode failed (JSON.parse of markdown fences), fell back to prompt repair
+    expect(result.nativeMode).toBe(false);
+    expect(result.data.name).toBe("repaired-fallback");
+    expect(result.repaired).toBe(true);
+  });
 });

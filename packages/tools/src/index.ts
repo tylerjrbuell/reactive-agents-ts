@@ -51,6 +51,17 @@ export {
 
 // ─── Execution ───
 export { makeSandbox } from "./execution/sandbox.js";
+export {
+  makeDockerSandbox,
+  DEFAULT_DOCKER_CONFIG,
+  RUNNER_IMAGES,
+} from "./execution/docker-sandbox.js";
+export type {
+  DockerSandboxConfig,
+  DockerSandbox,
+  DockerExecResult,
+  RunnerLanguage,
+} from "./execution/docker-sandbox.js";
 
 // ─── Validation ───
 export { validateToolInput } from "./validation/input-validator.js";
@@ -69,6 +80,10 @@ export {
   codeExecuteTool,
   codeExecuteHandler,
 } from "./skills/code-execution.js";
+export {
+  dockerExecuteTool,
+  makeDockerExecuteHandler,
+} from "./skills/docker-execution.js";
 
 export {
   scratchpadWriteTool,
@@ -77,6 +92,10 @@ export {
   makeScratchpadWriteHandler,
   makeScratchpadReadHandler,
 } from "./skills/scratchpad.js";
+
+// ─── Caching ───
+export { ToolResultCache, ToolResultCacheLive } from "./caching/index.js";
+export type { ToolResultCacheConfig, ToolCacheStats } from "./caching/index.js";
 
 // ─── Runtime ───
 export { createToolsLayer, ToolsLayer } from "./runtime.js";

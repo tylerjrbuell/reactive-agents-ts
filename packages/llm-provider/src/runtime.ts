@@ -1,5 +1,6 @@
-import { Layer } from "effect";
+import { Effect, Layer } from "effect";
 import { LLMConfig, LLMConfigFromEnv, llmConfigFromEnv } from "./llm-config.js";
+import { LLMService } from "./llm-service.js";
 import { AnthropicProviderLive } from "./providers/anthropic.js";
 import { OpenAIProviderLive } from "./providers/openai.js";
 import { LocalProviderLive } from "./providers/local.js";
@@ -7,7 +8,40 @@ import { GeminiProviderLive } from "./providers/gemini.js";
 import { LiteLLMProviderLive } from "./providers/litellm.js";
 import { PromptManagerLive } from "./prompt-manager.js";
 import { TestLLMServiceLayer } from "./testing.js";
+import { makeEmbeddingCache } from "./embedding-cache.js";
+import { makeCircuitBreaker } from "./circuit-breaker.js";
+import type { CircuitBreakerConfig } from "./retry.js";
 
+/**
+ * Layer that wraps the underlying LLMService.embed() with a content-hash
+ * deduplication cache. Identical texts get cached embeddings without an API call.
+ */
+const EmbeddingCacheLayer = Layer.effect(
+  LLMService,
+  Effect.gen(function* () {
+    const llm = yield* LLMService;
+    const cache = makeEmbeddingCache(llm.embed);
+    return LLMService.of({ ...llm, embed: cache.embed });
+  }),
+);
+
+/**
+ * Layer that wraps LLMService.complete() and stream() with a circuit breaker.
+ * After N consecutive failures, fast-fails without hitting the provider.
+ */
+const makeCircuitBreakerLayer = (config?: Partial<CircuitBreakerConfig>) =>
+  Layer.effect(
+    LLMService,
+    Effect.gen(function* () {
+      const llm = yield* LLMService;
+      const breaker = makeCircuitBreaker(config);
+      return LLMService.of({
+        ...llm,
+        complete: (req) => breaker.protect(llm.complete(req)),
+        stream: (req) => breaker.protect(llm.stream(req)),
+      });
+    }),
+  );
 /**
  * Create the LLM provider layer for a specific provider.
  * Uses env vars for configuration by default.
@@ -17,6 +51,7 @@ export const createLLMProviderLayer = (
   testResponses?: Record<string, string>,
   model?: string,
   modelParams?: { thinking?: boolean; temperature?: number; maxTokens?: number },
+  circuitBreaker?: Partial<CircuitBreakerConfig>,
 ) => {
   if (provider === "test") {
     return Layer.mergeAll(
@@ -46,10 +81,17 @@ export const createLLMProviderLayer = (
             ? LiteLLMProviderLive
             : LocalProviderLive;
 
-  return Layer.mergeAll(
-    providerLayer.pipe(Layer.provide(configLayer)),
-    PromptManagerLive,
-  );
+  const baseProviderLayer = providerLayer.pipe(Layer.provide(configLayer));
+
+  // Stack: provider → circuit breaker (optional) → embedding cache
+  let llmLayer = EmbeddingCacheLayer.pipe(Layer.provide(baseProviderLayer));
+  if (circuitBreaker) {
+    llmLayer = EmbeddingCacheLayer.pipe(
+      Layer.provide(makeCircuitBreakerLayer(circuitBreaker).pipe(Layer.provide(baseProviderLayer))),
+    );
+  }
+
+  return Layer.mergeAll(llmLayer, PromptManagerLive);
 };
 
 /**
@@ -72,8 +114,10 @@ export const createLLMProviderLayerWithConfig = (
             ? LiteLLMProviderLive
             : LocalProviderLive;
 
+  const baseProviderLayer = providerLayer.pipe(Layer.provide(configLayer));
+
   return Layer.mergeAll(
-    providerLayer.pipe(Layer.provide(configLayer)),
+    EmbeddingCacheLayer.pipe(Layer.provide(baseProviderLayer)),
     PromptManagerLive,
   );
 };

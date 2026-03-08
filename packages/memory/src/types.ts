@@ -247,3 +247,17 @@ export const defaultMemoryConfig = (agentId: string): MemoryConfig => ({
     maxLinksPerEntry: 10,
   },
 });
+
+// ─── Memory LLM Interface ───
+
+/** Decoupled LLM interface for Tier 2 memory services (importance scoring, tag extraction). */
+export type MemoryLLM = {
+  readonly complete: (req: {
+    messages: readonly { role: string; content: string }[];
+    temperature?: number;
+    maxTokens?: number;
+  }) => import("effect").Effect.Effect<
+    { content: string; usage?: { totalTokens?: number } },
+    unknown
+  >;
+};

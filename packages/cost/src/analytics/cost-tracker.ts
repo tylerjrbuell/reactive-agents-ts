@@ -56,6 +56,13 @@ export const makeCostTracker = Effect.gen(function* () {
       const cacheHits = entries.filter((e) => e.cachedHit).length;
       const cacheMisses = entries.filter((e) => !e.cachedHit).length;
 
+      // Estimate savings: each cache hit avoided an LLM call at avgCostPerRequest
+      const nonCachedEntries = entries.filter((e) => !e.cachedHit);
+      const avgNonCachedCost = nonCachedEntries.length > 0
+        ? nonCachedEntries.reduce((sum, e) => sum + e.cost, 0) / nonCachedEntries.length
+        : 0;
+      const savings = cacheHits * avgNonCachedCost;
+
       const costByTier: Record<string, number> = {};
       for (const entry of entries) {
         costByTier[entry.tier] = (costByTier[entry.tier] ?? 0) + entry.cost;
@@ -73,7 +80,7 @@ export const makeCostTracker = Effect.gen(function* () {
         cacheHits,
         cacheMisses,
         cacheHitRate: entries.length > 0 ? cacheHits / entries.length : 0,
-        savings: 0,
+        savings,
         costByTier,
         costByAgent,
         avgCostPerRequest: entries.length > 0 ? totalCost / entries.length : 0,

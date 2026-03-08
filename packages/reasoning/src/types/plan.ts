@@ -156,3 +156,64 @@ export const resolveStepReferences = (
   }
   return result;
 };
+
+// ─── Dependency Analysis & Wave Scheduling ───
+
+const FROM_STEP_RE = /\{\{from_step:(s\d+)(?::summary)?\}\}/g;
+
+/**
+ * Extract all step IDs that a step depends on, from both `dependsOn` and
+ * `{{from_step:sN}}` references in toolArgs/instruction.
+ */
+export const extractDependencies = (step: PlanStep): ReadonlySet<string> => {
+  const deps = new Set<string>(step.dependsOn ?? []);
+  if (step.toolArgs) {
+    for (const value of Object.values(step.toolArgs)) {
+      if (typeof value === "string") {
+        for (const match of value.matchAll(FROM_STEP_RE)) {
+          deps.add(match[1]!);
+        }
+      }
+    }
+  }
+  for (const match of step.instruction.matchAll(FROM_STEP_RE)) {
+    deps.add(match[1]!);
+  }
+  return deps;
+};
+
+/**
+ * Group pending steps into parallel execution waves based on dependencies.
+ * Returns waves in execution order: wave[0] can run immediately, wave[1]
+ * after wave[0] completes, etc.
+ */
+export const computeWaves = (
+  steps: readonly PlanStep[],
+  completedIds: ReadonlySet<string>,
+): PlanStep[][] => {
+  const pending = steps.filter((s) => s.status !== "completed" && s.status !== "skipped");
+  const waves: PlanStep[][] = [];
+  const done = new Set(completedIds);
+
+  let remaining = [...pending];
+  while (remaining.length > 0) {
+    const wave = remaining.filter((s) => {
+      const deps = extractDependencies(s);
+      for (const dep of deps) {
+        if (!done.has(dep)) return false;
+      }
+      return true;
+    });
+
+    if (wave.length === 0) {
+      // Cycle or unresolvable — fall back to sequential
+      waves.push(remaining);
+      break;
+    }
+
+    waves.push(wave);
+    for (const s of wave) done.add(s.id);
+    remaining = remaining.filter((s) => !wave.includes(s));
+  }
+  return waves;
+};

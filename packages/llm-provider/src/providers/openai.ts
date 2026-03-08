@@ -230,50 +230,61 @@ export const OpenAIProviderLive = Layer.effect(
 
       completeStructured: (request) =>
         Effect.gen(function* () {
-          const schemaStr = JSON.stringify(
-            Schema.encodedSchema(request.outputSchema),
-            null,
-            2,
-          );
+          const jsonSchema = Schema.encodedSchema(request.outputSchema);
+          const schemaObj = JSON.parse(JSON.stringify(jsonSchema));
+          const schemaStr = JSON.stringify(schemaObj, null, 2);
+          const model = typeof request.model === 'string'
+            ? request.model
+            : request.model?.model ?? defaultModel;
+          const client = getClient();
+          const maxRetries = request.maxParseRetries ?? 2;
 
-          const messagesWithFormat: LLMMessage[] = [
+          // ── Native JSON Schema mode (gpt-4o-2024-08-06+, o-series, gpt-4.1) ──
+          // Use response_format with json_schema for strict enforcement.
+          const requestBody: Record<string, unknown> = {
+            model,
+            max_tokens: request.maxTokens ?? config.defaultMaxTokens,
+            temperature: request.temperature ?? config.defaultTemperature,
+            response_format: {
+              type: "json_schema",
+              json_schema: {
+                name: "structured_output",
+                strict: true,
+                schema: schemaObj,
+              },
+            },
+          };
+
+          const messages: LLMMessage[] = [
             ...request.messages,
             {
               role: "user" as const,
-              content: `\nRespond with ONLY valid JSON matching this schema:\n${schemaStr}\n\nNo markdown, no code fences, just raw JSON.`,
+              content: `Respond with JSON matching this schema:\n${schemaStr}`,
             },
           ];
 
           let lastError: unknown = null;
-          const maxRetries = request.maxParseRetries ?? 2;
 
           for (let attempt = 0; attempt <= maxRetries; attempt++) {
             const msgs =
               attempt === 0
-                ? messagesWithFormat
+                ? messages
                 : [
-                    ...messagesWithFormat,
+                    ...messages,
                     {
                       role: "assistant" as const,
                       content: String(lastError),
                     },
                     {
                       role: "user" as const,
-                      content: `That response was not valid JSON. The parse error was: ${String(lastError)}. Please try again with valid JSON only.`,
+                      content: `That response did not match the schema. Error: ${String(lastError)}. Please try again.`,
                     },
                   ];
 
-            const client = getClient();
             const completeResult = yield* Effect.tryPromise({
               try: () =>
                 (client as { chat: { completions: { create: (opts: unknown) => Promise<unknown> } } }).chat.completions.create({
-                  model: typeof request.model === 'string'
-                    ? request.model
-                    : request.model?.model ?? defaultModel,
-                  max_tokens:
-                    request.maxTokens ?? config.defaultMaxTokens,
-                  temperature:
-                    request.temperature ?? config.defaultTemperature,
+                  ...requestBody,
                   messages: toOpenAIMessages(msgs),
                 }),
               catch: (error) => toEffectError(error, "openai"),
@@ -281,9 +292,7 @@ export const OpenAIProviderLive = Layer.effect(
 
             const response = mapOpenAIResponse(
               completeResult as OpenAIRawResponse,
-              typeof request.model === 'string'
-                ? request.model
-                : request.model?.model ?? defaultModel,
+              model,
             );
 
             try {

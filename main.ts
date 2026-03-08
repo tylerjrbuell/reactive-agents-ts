@@ -80,7 +80,7 @@ const agent = await ReactiveAgents.create()
 
       // ─── Monday-Friday Morning Briefing ───
       {
-        schedule: "*/1 * * * 1-5", // 9:39 AM Mon-Fri
+        schedule: "1 * * * *", // 9:39 AM Mon-Fri
         instruction: `Your task is to send a Good morning briefing for ${RECIPIENT}. Use github/list_commits (owner: 'luduscom', repo: 'ludus-next', perPage: 10) to fetch recent commits since yesterday. Create a summary of the recent activity that includes:
 1. Total commits landed overnight
 2. Any major features or fixes

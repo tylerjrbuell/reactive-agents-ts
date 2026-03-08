@@ -1,12 +1,12 @@
 import { Effect, Context, Layer } from "effect";
 import type { LogLevel, Metric, AgentStateSnapshot, Span, LogEntry, SpanStatus } from "./types.js";
-import type { ExporterError } from "./errors.js";
+import { ExporterError } from "./errors.js";
 import { makeTracer } from "./tracing/tracer.js";
 import { makeStructuredLogger } from "./logging/structured-logger.js";
 import { makeMetricsCollector, MetricsCollectorTag } from "./metrics/metrics-collector.js";
 import { makeStateInspector } from "./debugging/state-inspector.js";
-import { makeConsoleExporter, makeFileExporter, makeLiveLogWriter } from "./exporters/index.js";
-import type { ConsoleExporterOptions, FileExporterOptions } from "./exporters/index.js";
+import { makeConsoleExporter, makeFileExporter, makeLiveLogWriter, setupOTLPExporter } from "./exporters/index.js";
+import type { ConsoleExporterOptions, FileExporterOptions, OTLPExporterConfig } from "./exporters/index.js";
 
 // ─── Verbosity / Exporter Config ───
 
@@ -73,6 +73,17 @@ export type ExporterConfig = {
    * @default false
    */
   readonly live?: boolean;
+
+  /**
+   * OTLP exporter configuration for sending spans/metrics to OTel-compatible backends.
+   * When provided, registers a global TracerProvider with OTLP HTTP exporters.
+   *
+   * @example
+   * ```typescript
+   * { otlp: { endpoint: "http://localhost:4318" } }
+   * ```
+   */
+  readonly otlp?: OTLPExporterConfig;
 };
 
 // ─── Service Tag ───
@@ -426,6 +437,11 @@ export const ObservabilityServiceLive = (exporterConfig: ExporterConfig = {}) =>
     Effect.gen(function* () {
       const verbosityLevel: VerbosityLevel = exporterConfig.verbosity ?? "normal";
 
+      // Setup OTLP exporter before tracer so global OTel provider is registered
+      const otlpShutdown = exporterConfig.otlp
+        ? setupOTLPExporter(exporterConfig.otlp)
+        : undefined;
+
       // Build live writer when live mode is enabled
       const liveWriter = exporterConfig.live
         ? makeLiveLogWriter(
@@ -495,9 +511,19 @@ export const ObservabilityServiceLive = (exporterConfig: ExporterConfig = {}) =>
               consoleExp.exportMetrics(allMetrics, metrics);
             }
             if (fileExp) {
-              fileExp.exportLogs(logs);
-              fileExp.exportSpans(spans);
-              fileExp.exportMetrics(allMetrics);
+              yield* Effect.promise(() =>
+                Promise.all([
+                  fileExp.exportLogs(logs),
+                  fileExp.exportSpans(spans),
+                  fileExp.exportMetrics(allMetrics),
+                ]),
+              );
+            }
+            if (otlpShutdown) {
+              yield* Effect.tryPromise({
+                try: () => otlpShutdown(),
+                catch: (err) => new ExporterError({ message: `OTLP shutdown failed: ${err}`, exporter: "otlp" }),
+              });
             }
           }) as Effect.Effect<void, ExporterError>,
       };

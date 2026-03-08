@@ -47,12 +47,17 @@ export {
 export type { ThoughtTracer, ThoughtNode } from "./debugging/thought-tracer.js";
 
 // ─── Exporters ───
-export { makeConsoleExporter, makeFileExporter, formatLogEntryLive, makeLiveLogWriter } from "./exporters/index.js";
+export { makeConsoleExporter, makeFileExporter, formatLogEntryLive, makeLiveLogWriter, setupOTLPExporter, buildDashboardData, formatMetricsDashboard } from "./exporters/index.js";
 export type {
   ConsoleExporter,
   ConsoleExporterOptions,
+  DashboardData,
+  DashboardPhase,
+  DashboardTool,
+  DashboardAlert,
   FileExporter,
   FileExporterOptions,
+  OTLPExporterConfig,
 } from "./exporters/index.js";
 
 // ─── Service ───
@@ -64,3 +69,29 @@ export type { ExporterConfig, VerbosityLevel } from "./observability-service.js"
 
 // ─── Runtime ───
 export { createObservabilityLayer } from "./runtime.js";
+
+// ─── Telemetry ───
+export {
+  TelemetryRecordSchema,
+  TelemetryAggregateSchema,
+  ModelTier,
+  SAFE_TOOL_NAMES,
+  preservePrivacy,
+  classifyModelTier,
+  bucketToHour,
+  sanitizeToolNames,
+  TelemetryAggregatorTag,
+  TelemetryAggregatorLive,
+  TelemetryCollectorTag,
+  TelemetryCollectorLive,
+} from "./telemetry/index.js";
+export type {
+  TelemetryRecord,
+  TelemetryAggregate,
+  RawRunData,
+  PrivacyConfig,
+  TelemetryAggregator,
+  TelemetryCollector,
+  TelemetryMode,
+  TelemetryConfig,
+} from "./telemetry/index.js";

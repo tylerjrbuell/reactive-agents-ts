@@ -144,16 +144,76 @@ describe("MemorySearchService", () => {
     expect(results[0]!.content).toContain("deployed");
   });
 
-  it("should fail for vector search in Tier 1", async () => {
-    const result = await run(
+  it("should return empty array for vector search when no embeddings exist", async () => {
+    const results = await run(
       Effect.gen(function* () {
         const search = yield* MemorySearchService;
-        return yield* search
-          .searchVector([0.1, 0.2, 0.3], "test-agent", 5)
-          .pipe(Effect.either);
+        return yield* search.searchVector([0.1, 0.2, 0.3], "test-agent", 5);
       }),
     );
 
-    expect(result._tag).toBe("Left");
+    expect(results).toEqual([]);
+  });
+
+  it("should find entries by vector similarity (KNN)", async () => {
+    const results = await run(
+      Effect.gen(function* () {
+        const db = yield* MemoryDatabase;
+        const search = yield* MemorySearchService;
+        const now = new Date().toISOString();
+
+        // Store entries with embeddings — v1 is similar to query, v2 is dissimilar
+        const embedding1 = Buffer.from(new Float32Array([0.9, 0.1, 0.0]).buffer);
+        const embedding2 = Buffer.from(new Float32Array([0.0, 0.1, 0.9]).buffer);
+        const embedding3 = Buffer.from(new Float32Array([0.85, 0.15, 0.05]).buffer);
+
+        yield* db.exec(
+          `INSERT INTO semantic_memory (id, agent_id, content, summary, importance, verified, tags, embedding, created_at, updated_at, access_count, last_accessed_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [`vec-1`, "test-agent", "Similar entry", "Similar", 0.8, 0, '["a"]', embedding1, now, now, 0, now],
+        );
+        yield* db.exec(
+          `INSERT INTO semantic_memory (id, agent_id, content, summary, importance, verified, tags, embedding, created_at, updated_at, access_count, last_accessed_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          ["vec-2", "test-agent", "Dissimilar entry", "Dissimilar", 0.5, 0, '["b"]', embedding2, now, now, 0, now],
+        );
+        yield* db.exec(
+          `INSERT INTO semantic_memory (id, agent_id, content, summary, importance, verified, tags, embedding, created_at, updated_at, access_count, last_accessed_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          ["vec-3", "test-agent", "Also similar entry", "Also similar", 0.7, 0, '["c"]', embedding3, now, now, 0, now],
+        );
+
+        // Query for entries similar to [1.0, 0.0, 0.0]
+        return yield* search.searchVector([1.0, 0.0, 0.0], "test-agent", 2);
+      }),
+    );
+
+    // Should return the 2 most similar entries (vec-1 and vec-3), ordered by similarity
+    expect(results.length).toBe(2);
+    expect(results[0]!.id).toBe("vec-1"); // Most similar to [1,0,0]
+    expect(results[1]!.id).toBe("vec-3"); // Second most similar
+  });
+
+  it("should respect limit in vector search", async () => {
+    const results = await run(
+      Effect.gen(function* () {
+        const db = yield* MemoryDatabase;
+        const search = yield* MemorySearchService;
+        const now = new Date().toISOString();
+
+        for (let i = 0; i < 5; i++) {
+          const emb = Buffer.from(new Float32Array([1.0 - i * 0.1, i * 0.1, 0]).buffer);
+          yield* db.exec(
+            `INSERT INTO semantic_memory (id, agent_id, content, summary, importance, verified, tags, embedding, created_at, updated_at, access_count, last_accessed_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [`lim-${i}`, "test-agent", `Entry ${i}`, `E${i}`, 0.5, 0, '[]', emb, now, now, 0, now],
+          );
+        }
+
+        return yield* search.searchVector([1.0, 0.0, 0.0], "test-agent", 3);
+      }),
+    );
+
+    expect(results.length).toBe(3);
   });
 });

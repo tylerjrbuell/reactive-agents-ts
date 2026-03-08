@@ -2,37 +2,55 @@ import { Effect } from "effect";
 import type { LLMMessage } from "./types.js";
 
 /**
+ * Estimate the chars-per-token ratio based on content characteristics.
+ * Code and JSON are denser (~3 chars/token) while natural language is ~4.
+ */
+function charsPerToken(text: string): number {
+  if (text.length === 0) return 4;
+  // Sample first 2000 chars for classification
+  const sample = text.slice(0, 2000);
+  const codeSignals = (sample.match(/[{}();=<>\[\]]/g) ?? []).length;
+  const jsonSignals = (sample.match(/"\w+"\s*:/g) ?? []).length;
+  const ratio = (codeSignals + jsonSignals) / sample.length;
+  // High density of code/JSON markers → lower chars-per-token
+  if (ratio > 0.08) return 3;    // Mostly code/JSON
+  if (ratio > 0.04) return 3.5;  // Mixed
+  return 4;                       // Natural language
+}
+
+/**
  * Estimate token count for messages.
- * Uses a simple heuristic: ~4 characters per token for English text.
+ * Uses content-aware heuristics: ~3 chars/token for code/JSON, ~4 for English text.
  * This is used as a fallback when the provider's token counting API is unavailable.
  */
 export const estimateTokenCount = (
   messages: readonly LLMMessage[],
 ): Effect.Effect<number, never> =>
   Effect.sync(() => {
-    let totalChars = 0;
+    let totalTokens = 0;
 
     for (const msg of messages) {
       if (typeof msg.content === "string") {
-        totalChars += msg.content.length;
+        totalTokens += Math.ceil(msg.content.length / charsPerToken(msg.content));
       } else {
         // Content blocks
         for (const block of msg.content) {
           if (block.type === "text") {
-            totalChars += block.text.length;
+            totalTokens += Math.ceil(block.text.length / charsPerToken(block.text));
           } else if (block.type === "tool_result") {
-            totalChars += block.content.length;
+            totalTokens += Math.ceil(block.content.length / charsPerToken(block.content));
           } else if (block.type === "tool_use") {
-            totalChars += JSON.stringify(block.input).length;
+            const json = JSON.stringify(block.input);
+            totalTokens += Math.ceil(json.length / 3); // Tool input is always JSON
           }
           // Images not counted in token estimation
         }
       }
       // Add overhead for role/message framing (~4 tokens per message)
-      totalChars += 16;
+      totalTokens += 4;
     }
 
-    return Math.ceil(totalChars / 4);
+    return totalTokens;
   });
 
 /**
