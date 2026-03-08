@@ -1549,6 +1549,15 @@ export class ReactiveAgentBuilder {
     const parentModel = this._model;
     const streamDensity = this._streamDensity;
 
+    // Capture parent config for sub-agent inheritance — sub-agents get
+    // the same infrastructure as the parent without explicit configuration.
+    const parentReasoningOptions = this._reasoningOptions;
+    const parentEnableGuardrails = this._enableGuardrails;
+    const parentEnableObservability = this._enableObservability;
+    const parentObservabilityOptions = this._observabilityOptions;
+    const parentContextProfile = this._contextProfile;
+    const parentEnableCostTracking = this._enableCostTracking;
+
     return Effect.gen(function* () {
       const engine = yield* ExecutionEngine.pipe(Effect.provide(baseRuntime));
 
@@ -1794,6 +1803,11 @@ export class ReactiveAgentBuilder {
           }
         }
 
+        // Mutable ref for the parent's ToolService — set during agentToolInitEffect,
+        // read by spawn handler at call time. This avoids duplicate MCP containers
+        // by letting sub-agents proxy tool calls through the parent's live connections.
+        let parentToolServiceRef: any = null;
+
         // Register the built-in spawn-agent tool when dynamic sub-agents are enabled.
         // The handler captures parentProvider/parentModel so spawned agents inherit
         // the parent's LLM config without any extra wiring required.
@@ -1810,9 +1824,8 @@ export class ReactiveAgentBuilder {
                     : JSON.stringify(args.task ?? "");
                 const subName =
                   typeof args.name === "string" ? args.name : "dynamic-agent";
-                const subMaxIter = defaultMaxIter;
 
-                // Extract optional persona parameters
+                // Extract optional persona parameters (LLM can steer sub-agent approach)
                 const subPersona = {
                   role: typeof args.role === "string" ? args.role : undefined,
                   instructions:
@@ -1827,7 +1840,7 @@ export class ReactiveAgentBuilder {
                     name: subName,
                     provider: parentProvider,
                     model: parentModel,
-                    maxIterations: subMaxIter,
+                    maxIterations: defaultMaxIter,
                     persona:
                       subPersona.role ||
                       subPersona.instructions ||
@@ -1857,6 +1870,27 @@ export class ReactiveAgentBuilder {
                         : personaPrompt;
                     }
 
+                    // ── Collect parent's MCP tool definitions for proxy ──
+                    // Instead of spawning duplicate Docker containers, we list
+                    // the parent's already-connected tools and register proxy
+                    // handlers that route calls through the parent's ToolService.
+                    let parentMcpToolDefs: any[] = [];
+                    if (parentToolServiceRef && mcpServers.length > 0) {
+                      try {
+                        const allTools = await Effect.runPromise(
+                          (parentToolServiceRef as any).listTools(),
+                        );
+                        parentMcpToolDefs = (allTools as any[]).filter(
+                          (t: any) => t.source === "mcp" || t.name?.includes("/"),
+                        );
+                      } catch {
+                        // Parent tools unavailable — sub-agent gets built-ins only
+                      }
+                    }
+
+                    // Sub-agent inherits parent's reasoning, guardrails,
+                    // observability, and context profile. MCP tools are proxied
+                    // from the parent (no duplicate containers).
                     const subRuntime = createRuntime({
                       agentId: opts.agentId,
                       provider: (opts.provider ?? "test") as ProviderName,
@@ -1865,29 +1899,64 @@ export class ReactiveAgentBuilder {
                       systemPrompt: composedSystemPrompt,
                       enableReasoning: opts.enableReasoning,
                       enableTools: opts.enableTools,
-                      mcpServers: mcpServers.length > 0 ? mcpServers : undefined,
+                      reasoningOptions: parentReasoningOptions,
+                      enableGuardrails: parentEnableGuardrails,
+                      enableObservability: parentEnableObservability,
+                      observabilityOptions: parentObservabilityOptions,
+                      contextProfile: parentContextProfile,
+                      enableCostTracking: parentEnableCostTracking,
                     });
-                    const subEngine = await Effect.runPromise(
-                      ExecutionEngine.pipe(Effect.provide(subRuntime)),
-                    );
-                    const taskObj: Task = {
-                      id: generateTaskId(),
-                      agentId: Schema.decodeSync(AgentId)(opts.agentId),
-                      type: "query" as const,
-                      input: { question: opts.task },
-                      priority: "medium" as const,
-                      status: "pending" as const,
-                      metadata: { tags: [] },
-                      createdAt: new Date(),
-                    };
+
+                    // Register proxied MCP tools + execute in one Effect scope
+                    const subEffect = Effect.gen(function* () {
+                      const subEngine = yield* ExecutionEngine;
+
+                      // Register parent's MCP tools as proxy handlers
+                      if (parentMcpToolDefs.length > 0) {
+                        const subToolsMod = yield* Effect.promise(
+                          () => import("@reactive-agents/tools"),
+                        );
+                        const subTs = yield* (
+                          subToolsMod.ToolService as unknown as import("effect").Context.Tag<
+                            any,
+                            any
+                          >
+                        );
+                        for (const toolDef of parentMcpToolDefs) {
+                          // Proxy handler routes calls to parent's live MCP connection
+                          const proxyHandler = (args: Record<string, unknown>) =>
+                            Effect.promise(async () => {
+                              return Effect.runPromise(
+                                (parentToolServiceRef as any).execute({
+                                  toolName: toolDef.name,
+                                  arguments: args,
+                                  agentId: opts.agentId,
+                                  sessionId: `sub-${subName}`,
+                                }),
+                              );
+                            });
+                          yield* (subTs as any).register(toolDef, proxyHandler);
+                        }
+                      }
+
+                      const taskObj: Task = {
+                        id: generateTaskId(),
+                        agentId: Schema.decodeSync(AgentId)(opts.agentId),
+                        type: "query" as const,
+                        input: { question: opts.task },
+                        priority: "medium" as const,
+                        status: "pending" as const,
+                        metadata: { tags: [] },
+                        createdAt: new Date(),
+                      };
+                      return yield* subEngine.execute(taskObj);
+                    }) as Effect.Effect<TaskResult, any, never>;
                     const result: TaskResult = await Effect.runPromise(
-                      subEngine
-                        .execute(taskObj)
-                        .pipe(
-                          Effect.provide(
-                            subRuntime as unknown as Layer.Layer<never>,
-                          ),
+                      subEffect.pipe(
+                        Effect.provide(
+                          subRuntime as unknown as Layer.Layer<never>,
                         ),
+                      ),
                     );
                     const _subElapsed = (
                       (Date.now() - _subStart) /
@@ -1937,6 +2006,8 @@ export class ReactiveAgentBuilder {
               yield* (ts as any).register(tool.definition, tool.handler);
             }
           }
+          // Capture parent ToolService ref so spawn-agent can proxy MCP tools
+          parentToolServiceRef = ts;
           // Register agent tools
           for (const { def, handler } of registrations) {
             yield* (ts as any).register(def, handler);
