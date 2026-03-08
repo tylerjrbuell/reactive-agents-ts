@@ -4,7 +4,11 @@ import { CONTEXT_PROFILES, mergeProfile } from "./context-profile.js";
 
 // ─── Model Name → Tier Heuristics ───
 
-const LOCAL_PATTERNS = [
+// Truly small models that should always be "local" tier
+const LOCAL_PATTERNS = ["tinyllama", "phi-2", "gemma-2b", "stablelm"];
+
+// Local models >=7B that deserve "mid" tier prompts and budgets
+const CAPABLE_LOCAL_PATTERNS = [
   "ollama:",
   "llama",
   "mistral",
@@ -16,7 +20,6 @@ const LOCAL_PATTERNS = [
   "codellama",
   "cogito",
   "gemma",
-  "tinyllama",
 ];
 
 const MID_PATTERNS = [
@@ -53,9 +56,19 @@ function tierFromModelName(model: string): ModelTier {
   // Frontier: check first since these are the most specific
   if (FRONTIER_PATTERNS.some((p) => lower.includes(p))) return "frontier";
 
-  // Local: check before mid/large since local models often contain
-  // substrings that overlap mid patterns (e.g., phi-3-mini has "mini")
+  // Truly small models → always local
   if (LOCAL_PATTERNS.some((p) => lower.includes(p))) return "local";
+
+  // Capable local models (>=7B) → mid by default, with size hinting
+  if (CAPABLE_LOCAL_PATTERNS.some((p) => lower.includes(p))) {
+    const sizeMatch = lower.match(/(\d+)b/);
+    if (sizeMatch) {
+      const size = parseInt(sizeMatch[1], 10);
+      if (size <= 3) return "local";
+      if (size >= 13) return "mid";
+    }
+    return "mid";
+  }
 
   // Mid: compound name patterns checked first
   if (lower.includes("gpt-4o-mini")) return "mid";
