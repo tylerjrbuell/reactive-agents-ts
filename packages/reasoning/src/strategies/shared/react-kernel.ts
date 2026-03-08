@@ -373,10 +373,23 @@ Think step-by-step, then either take ONE action or give your FINAL ANSWER:`;
     const { thinking: extractedThinking, content: cleanContent } = extractThinking(rawThought);
     const providerThinking = (thoughtResponse as any).thinking as string | undefined;
     const thinking = extractedThinking || providerThinking || null;
-    const thought = cleanContent || providerThinking || rawThought;
+    let thought = cleanContent || providerThinking || rawThought;
 
     const thoughtStep = makeStep("thought", thought, thinking ? { thinking } : undefined);
     const newSteps = [...state.steps, thoughtStep];
+
+    // Strip fabricated action/observation pairs — small models often "simulate"
+    // multiple tool calls in one thought. Only the FIRST ACTION is real; everything
+    // after a fabricated "Observation:" is hallucinated and must be stripped.
+    const firstActionIdx = thought.search(/ACTION:/i);
+    if (firstActionIdx >= 0) {
+      // Find the first "Observation:" AFTER the first ACTION
+      const afterAction = thought.slice(firstActionIdx);
+      const fabObsMatch = afterAction.match(/\nObservation[:\s]/i);
+      if (fabObsMatch && fabObsMatch.index !== undefined) {
+        thought = thought.slice(0, firstActionIdx + fabObsMatch.index).trimEnd();
+      }
+    }
 
     // Publish thought event
     yield* hooks.onThought(state, thought);
@@ -501,6 +514,22 @@ function handleActing(
       );
     });
 
+    // Side-effect guard — tools that mutate external state must not run twice
+    // even with different parameters (e.g. sending same message with slight rewording)
+    const SIDE_EFFECT_PREFIXES = ["send", "create", "delete", "push", "merge", "fork", "update", "assign", "remove"];
+    const isSideEffectTool = SIDE_EFFECT_PREFIXES.some(
+      (p) => toolRequest.tool.toLowerCase().includes(p),
+    );
+    const sideEffectAlreadyDone = isSideEffectTool && state.steps.some((step, idx) => {
+      if (step.type !== "action") return false;
+      try {
+        const prev = JSON.parse(step.content);
+        if (prev.tool !== toolRequest.tool) return false;
+      } catch { return false; }
+      const nextStep = state.steps[idx + 1];
+      return nextStep?.type === "observation" && nextStep.metadata?.observationResult?.success === true;
+    });
+
     const actionStep = makeStep("action", currentActionJson, { toolUsed: toolRequest.tool });
     const stepsWithAction = [...state.steps, actionStep];
 
@@ -536,6 +565,9 @@ function handleActing(
       observationContent = `${priorObsContent} [Already done — do NOT repeat. Continue with next task step or give FINAL ANSWER if all steps are complete.]`;
       obsResult = priorObsStep?.metadata?.observationResult ??
         makeObservationResult(toolRequest.tool, true, observationContent);
+    } else if (sideEffectAlreadyDone) {
+      observationContent = `⚠️ ${toolRequest.tool} already executed successfully with different parameters. Side-effect tools must NOT be called twice. Move on to the next step or give FINAL ANSWER.`;
+      obsResult = makeObservationResult(toolRequest.tool, true, observationContent);
     } else {
       const toolStartMs = Date.now();
       const toolObs = yield* executeToolCall(toolService, toolRequest, {

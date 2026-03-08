@@ -405,6 +405,20 @@ export function filterToolsByRelevance(
     (mentioned ? primary : secondary).push(tool);
   }
 
+  // Special case: delegation keywords → spawn-agent should be primary
+  const DELEGATION_KEYWORDS = ["delegate", "subagent", "sub-agent", "sub agent", "spawn", "parallel", "concurrently"];
+  const hasDelegation = DELEGATION_KEYWORDS.some((k) => taskLower.includes(k));
+  if (hasDelegation) {
+    const allTools = [...schemas];
+    const spawnTool = allTools.find((t) => t.name === "spawn-agent");
+    if (spawnTool && !primary.includes(spawnTool)) {
+      primary.push(spawnTool);
+      // Remove from secondary if it was there
+      const secIdx = secondary.indexOf(spawnTool);
+      if (secIdx >= 0) secondary.splice(secIdx, 1);
+    }
+  }
+
   return { primary, secondary };
 }
 
