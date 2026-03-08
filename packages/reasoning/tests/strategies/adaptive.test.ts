@@ -168,9 +168,11 @@ describe("AdaptiveStrategy", () => {
       "Think step-by-step": "FINAL ANSWER: Recovered with reactive fallback.",
     });
 
+    // Task must be >15 words with no tools to bypass heuristic pre-classifier
+    // and reach the LLM classification path that returns REFLEXION
     const result = await Effect.runPromise(
       executeAdaptive({
-        taskDescription: "Test fallback behavior",
+        taskDescription: "Analyze the following complex dataset and produce a comprehensive report that covers all key findings and anomalies detected",
         taskType: "query",
         memoryContext: "",
         availableTools: [],

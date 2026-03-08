@@ -91,6 +91,31 @@ const toEffectError = (error: unknown, provider: "anthropic"): LLMErrors => {
   });
 };
 
+// ── System prompt caching ────────────────────────────────────────────────────
+// Anthropic's prompt caching uses cache_control on content blocks.
+// System prompts >= ~1024 tokens benefit from ephemeral caching; the 5-min
+// cache window avoids re-processing the same system prompt across turns.
+
+const MIN_SYSTEM_CACHE_CHARS = 4096; // ~1024 tokens at ~4 chars/token
+
+type SystemParam =
+  | string
+  | Array<{ type: "text"; text: string; cache_control?: { type: "ephemeral" } }>;
+
+/**
+ * Build the Anthropic `system` parameter. For long system prompts, wrap in
+ * a content block with `cache_control: { type: "ephemeral" }`.
+ */
+const buildSystemParam = (systemPrompt: string | undefined): SystemParam | undefined => {
+  if (!systemPrompt) return undefined;
+  if (systemPrompt.length < MIN_SYSTEM_CACHE_CHARS) return systemPrompt;
+  return [{
+    type: "text",
+    text: systemPrompt,
+    cache_control: { type: "ephemeral" },
+  }];
+};
+
 // ─── Anthropic Provider Layer ───
 
 export const AnthropicProviderLive = Layer.effect(
@@ -126,7 +151,7 @@ export const AnthropicProviderLive = Layer.effect(
                 model,
                 max_tokens: request.maxTokens ?? config.defaultMaxTokens,
                 temperature: request.temperature ?? config.defaultTemperature,
-                system: request.systemPrompt,
+                system: buildSystemParam(request.systemPrompt),
                 messages: toAnthropicMessages(request.messages),
                 stop_sequences: request.stopSequences
                   ? [...request.stopSequences]
@@ -163,7 +188,7 @@ export const AnthropicProviderLive = Layer.effect(
               model,
               max_tokens: request.maxTokens ?? config.defaultMaxTokens,
               temperature: request.temperature ?? config.defaultTemperature,
-              system: request.systemPrompt,
+              system: buildSystemParam(request.systemPrompt),
               messages: toAnthropicMessages(request.messages),
             });
 
@@ -214,17 +239,14 @@ export const AnthropicProviderLive = Layer.effect(
 
       completeStructured: (request) =>
         Effect.gen(function* () {
-          const schemaStr = JSON.stringify(
-            Schema.encodedSchema(request.outputSchema),
-            null,
-            2,
-          );
+          const jsonSchema = Schema.encodedSchema(request.outputSchema);
+          const schemaStr = JSON.stringify(jsonSchema, null, 2);
 
           const messagesWithFormat: LLMMessage[] = [
             ...request.messages,
             {
               role: "user" as const,
-              content: `\nRespond with ONLY valid JSON matching this schema:\n${schemaStr}\n\nNo markdown, no code fences, just raw JSON.`,
+              content: `Respond with ONLY valid JSON matching this schema:\n${schemaStr}\n\nNo markdown, no code fences, just raw JSON.`,
             },
           ];
 
@@ -243,9 +265,13 @@ export const AnthropicProviderLive = Layer.effect(
                     },
                     {
                       role: "user" as const,
-                      content: `That response was not valid JSON. The parse error was: ${String(lastError)}. Please try again with valid JSON only.`,
+                      content: `That response did not match the schema. Error: ${String(lastError)}. Please try again with valid JSON only.`,
                     },
                   ];
+
+            // Convert + inject assistant prefill to bias toward JSON output
+            const anthropicMsgs = toAnthropicMessages(msgs);
+            anthropicMsgs.push({ role: "assistant", content: "{" });
 
             const completeResult = yield* Effect.tryPromise({
               try: () => {
@@ -257,8 +283,8 @@ export const AnthropicProviderLive = Layer.effect(
                   max_tokens:
                     request.maxTokens ?? config.defaultMaxTokens,
                   temperature: request.temperature ?? config.defaultTemperature,
-                  system: request.systemPrompt,
-                  messages: toAnthropicMessages(msgs),
+                  system: buildSystemParam(request.systemPrompt),
+                  messages: anthropicMsgs,
                 });
               },
               catch: (error) => toEffectError(error, "anthropic"),
@@ -271,8 +297,11 @@ export const AnthropicProviderLive = Layer.effect(
                 : request.model?.model ?? config.defaultModel,
             );
 
+            // Prepend the "{" prefill back to the response content
+            const fullContent = "{" + response.content;
+
             try {
-              const parsed = JSON.parse(response.content);
+              const parsed = JSON.parse(fullContent);
               const decoded = Schema.decodeUnknownEither(
                 request.outputSchema,
               )(parsed);

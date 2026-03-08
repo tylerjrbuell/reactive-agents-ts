@@ -52,7 +52,7 @@ export class LLMService extends Context.Tag("LLMService")<
     readonly embed: (
       texts: readonly string[],
       model?: string,
-    ) => Effect.Effect<readonly number[][], LLMErrors>;
+    ) => Effect.Effect<readonly (readonly number[])[], LLMErrors>;
 
     /**
      * Count tokens for a set of messages.

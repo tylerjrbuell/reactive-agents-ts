@@ -91,4 +91,130 @@ describe("ReactiveAgentBuilder", () => {
       });
     expect(builder).toBeDefined();
   });
+
+  // ─── Sprint 3: Builder DX Overhaul ───
+
+  describe("withMemory() DX overhaul", () => {
+    it("accepts legacy string tier '1'", async () => {
+      const agent = await ReactiveAgents.create()
+        .withProvider("test")
+        .withMemory("1")
+        .build();
+      expect(agent).toBeInstanceOf(ReactiveAgent);
+    });
+
+    it("accepts legacy string tier '2'", async () => {
+      const agent = await ReactiveAgents.create()
+        .withProvider("test")
+        .withMemory("2")
+        .build();
+      expect(agent).toBeInstanceOf(ReactiveAgent);
+    });
+
+    it("accepts named options with tier: 'standard'", async () => {
+      const agent = await ReactiveAgents.create()
+        .withProvider("test")
+        .withMemory({ tier: "standard" })
+        .build();
+      expect(agent).toBeInstanceOf(ReactiveAgent);
+    });
+
+    it("accepts named options with tier: 'enhanced'", async () => {
+      const agent = await ReactiveAgents.create()
+        .withProvider("test")
+        .withMemory({ tier: "enhanced" })
+        .build();
+      expect(agent).toBeInstanceOf(ReactiveAgent);
+    });
+
+    it("accepts named options with all config fields", async () => {
+      const agent = await ReactiveAgents.create()
+        .withProvider("test")
+        .withMemory({
+          tier: "standard",
+          capacity: 12,
+          evictionPolicy: "lru",
+          maxEntries: 500,
+          retainDays: 14,
+          importanceThreshold: 0.5,
+        })
+        .build();
+      expect(agent).toBeInstanceOf(ReactiveAgent);
+    });
+
+    it("accepts no arguments (default tier 1)", async () => {
+      const agent = await ReactiveAgents.create()
+        .withProvider("test")
+        .withMemory()
+        .build();
+      expect(agent).toBeInstanceOf(ReactiveAgent);
+    });
+  });
+
+  describe("withCostTracking() config passthrough", () => {
+    it("accepts no arguments (default limits)", async () => {
+      const agent = await ReactiveAgents.create()
+        .withProvider("test")
+        .withCostTracking()
+        .build();
+      expect(agent).toBeInstanceOf(ReactiveAgent);
+    });
+
+    it("accepts budget limit options", async () => {
+      const agent = await ReactiveAgents.create()
+        .withProvider("test")
+        .withCostTracking({ perRequest: 0.5, daily: 10.0, monthly: 100.0 })
+        .build();
+      expect(agent).toBeInstanceOf(ReactiveAgent);
+    });
+  });
+
+  describe("withGuardrails() config passthrough", () => {
+    it("accepts no arguments (all detectors on)", async () => {
+      const agent = await ReactiveAgents.create()
+        .withProvider("test")
+        .withGuardrails()
+        .build();
+      expect(agent).toBeInstanceOf(ReactiveAgent);
+    });
+
+    it("accepts options to toggle individual detectors", async () => {
+      const agent = await ReactiveAgents.create()
+        .withProvider("test")
+        .withGuardrails({ injection: true, pii: true, toxicity: false })
+        .build();
+      expect(agent).toBeInstanceOf(ReactiveAgent);
+    });
+
+    it("accepts customBlocklist", async () => {
+      const agent = await ReactiveAgents.create()
+        .withProvider("test")
+        .withGuardrails({ customBlocklist: ["forbidden-word"] })
+        .build();
+      expect(agent).toBeInstanceOf(ReactiveAgent);
+    });
+  });
+
+  describe("withVerification() config passthrough", () => {
+    it("accepts no arguments (default strategies)", async () => {
+      const agent = await ReactiveAgents.create()
+        .withProvider("test")
+        .withVerification()
+        .build();
+      expect(agent).toBeInstanceOf(ReactiveAgent);
+    });
+
+    it("accepts options to toggle strategies and set thresholds", async () => {
+      const agent = await ReactiveAgents.create()
+        .withProvider("test")
+        .withVerification({
+          hallucinationDetection: true,
+          hallucinationThreshold: 0.15,
+          passThreshold: 0.8,
+          semanticEntropy: false,
+        })
+        .build();
+      expect(agent).toBeInstanceOf(ReactiveAgent);
+    });
+  });
 });

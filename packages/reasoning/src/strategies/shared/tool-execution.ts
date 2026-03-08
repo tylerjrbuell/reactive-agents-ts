@@ -70,6 +70,65 @@ export function truncateForDisplay(result: string, maxChars: number): string {
 // ── Private helpers ──────────────────────────────────────────────────────────
 
 /**
+ * Map common tool error patterns to actionable recovery hints.
+ * Helps the LLM understand what went wrong and how to fix it.
+ */
+function getRecoveryHint(toolName: string, errorMsg: string): string {
+  const msg = errorMsg.toLowerCase();
+
+  // File not found
+  if (msg.includes("enoent") || msg.includes("not found") || msg.includes("no such file")) {
+    if (toolName === "file-read" || toolName === "file-write") {
+      return " → Try a different path or verify the file exists.";
+    }
+    return " → The requested resource was not found.";
+  }
+
+  // Permission errors
+  if (msg.includes("eacces") || msg.includes("permission denied") || msg.includes("forbidden") || msg.includes("403")) {
+    return " → Permission denied. You may not have access to this resource.";
+  }
+
+  // Timeout errors
+  if (msg.includes("timeout") || msg.includes("etimedout") || msg.includes("timed out") || msg.includes("econnaborted")) {
+    if (toolName === "web-search" || toolName === "http-get") {
+      return " → Request timed out. Try a more specific query or a different URL.";
+    }
+    return " → Operation timed out. Try again or simplify the request.";
+  }
+
+  // Network errors
+  if (msg.includes("econnrefused") || msg.includes("enotfound") || msg.includes("network") || msg.includes("dns")) {
+    return " → Network error. The service may be unreachable.";
+  }
+
+  // Rate limits
+  if (msg.includes("rate limit") || msg.includes("429") || msg.includes("too many requests")) {
+    return " → Rate limited. Wait before retrying or try a different approach.";
+  }
+
+  // Invalid arguments / validation
+  if (msg.includes("invalid") || msg.includes("validation") || msg.includes("schema") || msg.includes("required")) {
+    return " → Check argument format. Review the expected parameters above.";
+  }
+
+  // JSON parse errors
+  if (msg.includes("json") && (msg.includes("parse") || msg.includes("syntax") || msg.includes("unexpected"))) {
+    return " → Malformed JSON in arguments. Ensure valid JSON syntax.";
+  }
+
+  // Code execution errors
+  if (toolName === "code-execute") {
+    if (msg.includes("syntax")) return " → Fix the syntax error in your code.";
+    if (msg.includes("reference") || msg.includes("undefined")) return " → Check variable names and imports.";
+    return " → Code execution failed. Review the error and fix the code.";
+  }
+
+  return "";
+}
+
+
+/**
  * Normalize Python-style triple-quoted strings ("""...""") to valid JSON strings.
  * Some models (e.g., cogito, smaller Ollama models) produce these in ACTION outputs.
  */
@@ -304,19 +363,20 @@ export function executeToolCall(
               : typeof e === "object" && e !== null && "message" in e
                 ? String((e as { message: unknown }).message)
                 : String(e);
+          const hint = getRecoveryHint(toolRequest.tool, msg);
           return toolService.getTool(toolRequest.tool).pipe(
             Effect.map((toolDef) => {
               const paramHints = toolDef.parameters
                 .map((p) => `"${p.name}": "${p.type}${p.required ? ", required" : ", optional"}"`)
                 .join(", ");
-              const content = `[Tool error: ${msg}] Expected: ${toolRequest.tool}({${paramHints}})`;
+              const content = `[Tool error: ${msg}${hint}] Expected: ${toolRequest.tool}({${paramHints}})`;
               return {
                 content,
                 observationResult: makeObservationResult(toolRequest.tool, false, content),
               } satisfies ToolExecutionResult;
             }),
             Effect.catchAll(() => {
-              const content = `[Tool error: ${msg}]`;
+              const content = `[Tool error: ${msg}${hint}]`;
               return Effect.succeed({
                 content,
                 observationResult: makeObservationResult(toolRequest.tool, false, content),

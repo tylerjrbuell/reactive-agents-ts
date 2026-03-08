@@ -148,14 +148,14 @@ describe("ConsoleExporter (Phase 0.3)", () => {
 describe("FileExporter (Phase 0.3)", () => {
   const testFile = "/tmp/rax-test-exporter.jsonl";
 
-  test("writes valid JSONL log entries", () => {
+  test("writes valid JSONL log entries", async () => {
     if (existsSync(testFile)) unlinkSync(testFile);
     const exporter = makeFileExporter({ filePath: testFile, mode: "overwrite" });
     const logs: LogEntry[] = [
       { timestamp: new Date("2024-01-01T10:00:00Z"), level: "info", message: "Hello from agent" },
       { timestamp: new Date("2024-01-01T10:00:01Z"), level: "error", message: "Something failed", metadata: { code: 42 } },
     ];
-    exporter.exportLogs(logs);
+    await exporter.exportLogs(logs);
 
     const content = readFileSync(testFile, "utf-8");
     const lines = content.trim().split("\n");
@@ -167,7 +167,7 @@ describe("FileExporter (Phase 0.3)", () => {
     expect(first.message).toBe("Hello from agent");
   });
 
-  test("writes valid JSONL span entries with parentSpanId", () => {
+  test("writes valid JSONL span entries with parentSpanId", async () => {
     if (existsSync(testFile)) unlinkSync(testFile);
     const exporter = makeFileExporter({ filePath: testFile, mode: "overwrite" });
     const spans: Span[] = [
@@ -183,7 +183,7 @@ describe("FileExporter (Phase 0.3)", () => {
         events: [],
       },
     ];
-    exporter.exportSpans(spans);
+    await exporter.exportSpans(spans);
 
     const content = readFileSync(testFile, "utf-8");
     const parsed = JSON.parse(content.trim());
@@ -193,13 +193,13 @@ describe("FileExporter (Phase 0.3)", () => {
     expect(parsed.name).toBe("execution.phase.think");
   });
 
-  test("writes valid JSONL metric entries", () => {
+  test("writes valid JSONL metric entries", async () => {
     if (existsSync(testFile)) unlinkSync(testFile);
     const exporter = makeFileExporter({ filePath: testFile, mode: "overwrite" });
     const metrics: Metric[] = [
       { name: "execution.phase.count", type: "counter", value: 5, timestamp: new Date(), labels: { phase: "think" } },
     ];
-    exporter.exportMetrics(metrics);
+    await exporter.exportMetrics(metrics);
 
     const content = readFileSync(testFile, "utf-8");
     const parsed = JSON.parse(content.trim());
@@ -210,12 +210,12 @@ describe("FileExporter (Phase 0.3)", () => {
     expect(parsed.labels.phase).toBe("think");
   });
 
-  test("appends in append mode", () => {
+  test("appends in append mode", async () => {
     if (existsSync(testFile)) unlinkSync(testFile);
     const exporter = makeFileExporter({ filePath: testFile, mode: "append" });
     const log: LogEntry = { timestamp: new Date(), level: "info", message: "First" };
-    exporter.exportLogs([log]);
-    exporter.exportLogs([{ ...log, message: "Second" }]);
+    await exporter.exportLogs([log]);
+    await exporter.exportLogs([{ ...log, message: "Second" }]);
 
     const content = readFileSync(testFile, "utf-8");
     const lines = content.trim().split("\n").filter(Boolean);

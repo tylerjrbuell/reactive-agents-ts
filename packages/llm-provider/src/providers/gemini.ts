@@ -211,6 +211,8 @@ export const GeminiProviderLive = Layer.effect(
       systemPrompt?: string;
       stopSequences?: readonly string[];
       tools?: readonly { name: string; description: string; inputSchema: Record<string, unknown> }[];
+      responseMimeType?: string;
+      responseSchema?: Record<string, unknown>;
     }) => {
       const cfg: Record<string, unknown> = {
         maxOutputTokens: opts.maxTokens ?? config.defaultMaxTokens,
@@ -222,6 +224,8 @@ export const GeminiProviderLive = Layer.effect(
       if (opts.tools?.length) {
         cfg.tools = toGeminiTools([...opts.tools]);
       }
+      if (opts.responseMimeType) cfg.responseMimeType = opts.responseMimeType;
+      if (opts.responseSchema) cfg.responseSchema = opts.responseSchema;
       return cfg;
     };
 
@@ -341,17 +345,23 @@ export const GeminiProviderLive = Layer.effect(
 
       completeStructured: (request) =>
         Effect.gen(function* () {
-          const schemaStr = JSON.stringify(
-            Schema.encodedSchema(request.outputSchema),
-            null,
-            2,
-          );
+          const jsonSchema = Schema.encodedSchema(request.outputSchema);
+          const schemaObj = JSON.parse(JSON.stringify(jsonSchema));
+          const schemaStr = JSON.stringify(schemaObj, null, 2);
+
+          const client = yield* Effect.promise(() => getClient());
+          let model = typeof request.model === 'string'
+            ? request.model
+            : request.model?.model ?? config.defaultModel;
+          if (!model || model.startsWith("claude") || model.startsWith("gpt-")) {
+            model = GEMINI_DEFAULT_MODEL;
+          }
 
           const messagesWithFormat: LLMMessage[] = [
             ...request.messages,
             {
               role: "user" as const,
-              content: `\nRespond with ONLY valid JSON matching this schema:\n${schemaStr}\n\nNo markdown, no code fences, just raw JSON.`,
+              content: `Respond with JSON matching this schema:\n${schemaStr}`,
             },
           ];
 
@@ -370,18 +380,9 @@ export const GeminiProviderLive = Layer.effect(
                     },
                     {
                       role: "user" as const,
-                      content: `That response was not valid JSON. The parse error was: ${String(lastError)}. Please try again with valid JSON only.`,
+                      content: `That response did not match the schema. Error: ${String(lastError)}. Please try again.`,
                     },
                   ];
-
-            const client = yield* Effect.promise(() => getClient());
-            let model = typeof request.model === 'string'
-              ? request.model
-              : request.model?.model ?? config.defaultModel;
-            // If using non-Gemini default (e.g., Anthropic), fall back to Gemini default
-            if (!model || model.startsWith("claude") || model.startsWith("gpt-")) {
-              model = GEMINI_DEFAULT_MODEL;
-            }
 
             const response = yield* Effect.tryPromise({
               try: () =>
@@ -392,6 +393,8 @@ export const GeminiProviderLive = Layer.effect(
                     maxTokens: request.maxTokens,
                     temperature: request.temperature,
                     systemPrompt: request.systemPrompt,
+                    responseMimeType: "application/json",
+                    responseSchema: schemaObj,
                   }),
                 }),
               catch: toEffectError,

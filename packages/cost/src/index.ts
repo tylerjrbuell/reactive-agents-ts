@@ -44,6 +44,8 @@ export type { PromptCompressor } from "./compression/prompt-compressor.js";
 // ─── Budgets ───
 export { makeBudgetEnforcer } from "./budgets/budget-enforcer.js";
 export type { BudgetEnforcer, BudgetState } from "./budgets/budget-enforcer.js";
+export { makeBudgetDb, todayKey, monthKey } from "./budgets/budget-db.js";
+export type { BudgetDb } from "./budgets/budget-db.js";
 
 // ─── Analytics ───
 export { makeCostTracker } from "./analytics/cost-tracker.js";
@@ -51,6 +53,7 @@ export type { CostTracker } from "./analytics/cost-tracker.js";
 
 // ─── Service ───
 export { CostService, CostServiceLive } from "./cost-service.js";
+export type { CostServiceOptions } from "./cost-service.js";
 
 // ─── Runtime ───
 export { createCostLayer } from "./runtime.js";

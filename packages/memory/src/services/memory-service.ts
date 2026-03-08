@@ -105,9 +105,9 @@ export const MemoryServiceLive = (config: MemoryConfig) =>
               .ensureDirectory(agentId, basePath)
               .pipe(Effect.catchAll(() => Effect.void));
 
-            // Read memory.md for semantic context
-            const semanticContext = yield* fileSystem
-              .readMarkdown(agentId, basePath)
+            // Generate semantic context from live SQLite (not stale memory.md)
+            const semanticContext = yield* semantic
+              .generateMarkdown(agentId, config.semantic.maxMarkdownLines)
               .pipe(Effect.catchAll(() => Effect.succeed("")));
 
             // Get recent episodic entries (last 20)

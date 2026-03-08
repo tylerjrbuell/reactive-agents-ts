@@ -395,11 +395,18 @@ export const LocalProviderLive = Layer.effect(
 
       completeStructured: (request) =>
         Effect.gen(function* () {
-          const schemaStr = JSON.stringify(
-            Schema.encodedSchema(request.outputSchema),
-            null,
-            2,
-          );
+          const encodedSchema = Schema.encodedSchema(request.outputSchema);
+          const schemaObj = JSON.parse(JSON.stringify(encodedSchema));
+          const schemaStr = JSON.stringify(schemaObj, null, 2);
+
+          // Build Ollama-native format constraint.
+          // Ollama SDK ≥0.5 supports format: { type: "object", properties: ... }
+          // for schema-enforced JSON output (GBNF grammar under the hood).
+          // Fall back to format: "json" if the schema doesn't have properties.
+          const ollamaFormat: "json" | Record<string, unknown> =
+            schemaObj && typeof schemaObj === "object" && schemaObj.properties
+              ? (schemaObj as Record<string, unknown>)
+              : "json";
 
           const model =
             typeof request.model === "string"
@@ -447,7 +454,7 @@ export const LocalProviderLive = Layer.effect(
                   model,
                   messages: msgs,
                   stream: false,
-                  format: "json",
+                  format: ollamaFormat,
                   keep_alive: "5m",
                   options: {
                     temperature:
@@ -520,7 +527,7 @@ export const LocalProviderLive = Layer.effect(
       getStructuredOutputCapabilities: () =>
         Effect.succeed({
           nativeJsonMode: true,
-          jsonSchemaEnforcement: false,
+          jsonSchemaEnforcement: true,
           prefillSupport: false,
           grammarConstraints: true,
         }),

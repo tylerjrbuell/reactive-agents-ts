@@ -177,6 +177,23 @@ export const ToolDefinitionSchema = Schema.Struct({
    * - `"plugin"` — Loaded from an external plugin package
    */
   source: Schema.Literal("builtin", "mcp", "function", "plugin"),
+  /**
+   * Whether results from this tool can be cached for identical inputs.
+   *
+   * Side-effecting tools (file-write, code-execute, send-email) should set this to `false`.
+   * Read-only or deterministic tools (web-search, file-read, http-get) benefit from caching.
+   *
+   * @default undefined (cache service decides based on tool name)
+   */
+  isCacheable: Schema.optional(Schema.Boolean),
+  /**
+   * Custom TTL in milliseconds for cached results of this tool.
+   *
+   * Overrides the cache service's `defaultTtlMs`. Only relevant when caching is enabled.
+   *
+   * @default undefined (uses cache default, typically 300_000 = 5 min)
+   */
+  cacheTtlMs: Schema.optional(Schema.Number),
 });
 
 /**

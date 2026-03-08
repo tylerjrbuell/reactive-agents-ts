@@ -76,24 +76,48 @@ export const SemanticMemoryServiceLive = Layer.effect(
     return {
       store: (entry) =>
         Effect.gen(function* () {
-          yield* db.exec(
-            `INSERT OR REPLACE INTO semantic_memory
-             (id, agent_id, content, summary, importance, verified, tags, created_at, updated_at, access_count, last_accessed_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [
-              entry.id,
-              entry.agentId,
-              entry.content,
-              entry.summary,
-              entry.importance,
-              entry.verified ? 1 : 0,
-              JSON.stringify(entry.tags),
-              entry.createdAt.toISOString(),
-              entry.updatedAt.toISOString(),
-              entry.accessCount,
-              entry.lastAccessedAt.toISOString(),
-            ],
-          );
+          const hasEmbedding = entry.embedding && entry.embedding.length > 0;
+          if (hasEmbedding) {
+            const embBlob = Buffer.from(new Float32Array(entry.embedding!).buffer);
+            yield* db.exec(
+              `INSERT OR REPLACE INTO semantic_memory
+               (id, agent_id, content, summary, importance, verified, tags, embedding, created_at, updated_at, access_count, last_accessed_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [
+                entry.id,
+                entry.agentId,
+                entry.content,
+                entry.summary,
+                entry.importance,
+                entry.verified ? 1 : 0,
+                JSON.stringify(entry.tags),
+                embBlob,
+                entry.createdAt.toISOString(),
+                entry.updatedAt.toISOString(),
+                entry.accessCount,
+                entry.lastAccessedAt.toISOString(),
+              ],
+            );
+          } else {
+            yield* db.exec(
+              `INSERT OR REPLACE INTO semantic_memory
+               (id, agent_id, content, summary, importance, verified, tags, created_at, updated_at, access_count, last_accessed_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [
+                entry.id,
+                entry.agentId,
+                entry.content,
+                entry.summary,
+                entry.importance,
+                entry.verified ? 1 : 0,
+                JSON.stringify(entry.tags),
+                entry.createdAt.toISOString(),
+                entry.updatedAt.toISOString(),
+                entry.accessCount,
+                entry.lastAccessedAt.toISOString(),
+              ],
+            );
+          }
           return entry.id;
         }),
 

@@ -2,43 +2,184 @@ import { Effect } from "effect";
 import type { ModelTier, ModelCostConfig, ComplexityAnalysis } from "../types.js";
 import { RoutingError } from "../errors.js";
 
-// ─── Model cost configurations ───
+// ─── Provider type ───
 
-const MODEL_CONFIGS: Record<ModelTier, ModelCostConfig> = {
-  haiku: {
-    tier: "haiku",
-    provider: "anthropic",
-    model: "claude-haiku-4-5-20251001",
-    costPer1MInput: 1.0,
-    costPer1MOutput: 5.0,
-    maxContext: 200_000,
-    quality: 0.6,
-    speedTokensPerSec: 150,
+type Provider = "anthropic" | "openai" | "gemini" | "ollama" | "litellm";
+
+// ─── Model cost configurations per provider ───
+// Each provider maps haiku/sonnet/opus to its light/mid/heavy model.
+
+const PROVIDER_CONFIGS: Record<Provider, Record<ModelTier, ModelCostConfig>> = {
+  anthropic: {
+    haiku: {
+      tier: "haiku",
+      provider: "anthropic",
+      model: "claude-haiku-4-5-20251001",
+      costPer1MInput: 1.0,
+      costPer1MOutput: 5.0,
+      maxContext: 200_000,
+      quality: 0.6,
+      speedTokensPerSec: 150,
+    },
+    sonnet: {
+      tier: "sonnet",
+      provider: "anthropic",
+      model: "claude-sonnet-4-20250514",
+      costPer1MInput: 3.0,
+      costPer1MOutput: 15.0,
+      maxContext: 200_000,
+      quality: 0.85,
+      speedTokensPerSec: 80,
+    },
+    opus: {
+      tier: "opus",
+      provider: "anthropic",
+      model: "claude-opus-4-20250514",
+      costPer1MInput: 15.0,
+      costPer1MOutput: 75.0,
+      maxContext: 1_000_000,
+      quality: 1.0,
+      speedTokensPerSec: 40,
+    },
   },
-  sonnet: {
-    tier: "sonnet",
-    provider: "anthropic",
-    model: "claude-sonnet-4-20250514",
-    costPer1MInput: 3.0,
-    costPer1MOutput: 15.0,
-    maxContext: 200_000,
-    quality: 0.85,
-    speedTokensPerSec: 80,
+  openai: {
+    haiku: {
+      tier: "haiku",
+      provider: "openai",
+      model: "gpt-4o-mini",
+      costPer1MInput: 0.15,
+      costPer1MOutput: 0.6,
+      maxContext: 128_000,
+      quality: 0.5,
+      speedTokensPerSec: 200,
+    },
+    sonnet: {
+      tier: "sonnet",
+      provider: "openai",
+      model: "gpt-4o",
+      costPer1MInput: 2.5,
+      costPer1MOutput: 10.0,
+      maxContext: 128_000,
+      quality: 0.85,
+      speedTokensPerSec: 80,
+    },
+    opus: {
+      tier: "opus",
+      provider: "openai",
+      model: "o3",
+      costPer1MInput: 10.0,
+      costPer1MOutput: 40.0,
+      maxContext: 200_000,
+      quality: 1.0,
+      speedTokensPerSec: 30,
+    },
   },
-  opus: {
-    tier: "opus",
-    provider: "anthropic",
-    model: "claude-opus-4-20250514",
-    costPer1MInput: 15.0,
-    costPer1MOutput: 75.0,
-    maxContext: 1_000_000,
-    quality: 1.0,
-    speedTokensPerSec: 40,
+  gemini: {
+    haiku: {
+      tier: "haiku",
+      provider: "gemini",
+      model: "gemini-2.0-flash",
+      costPer1MInput: 0.1,
+      costPer1MOutput: 0.4,
+      maxContext: 1_000_000,
+      quality: 0.5,
+      speedTokensPerSec: 200,
+    },
+    sonnet: {
+      tier: "sonnet",
+      provider: "gemini",
+      model: "gemini-2.5-pro-preview-03-25",
+      costPer1MInput: 1.25,
+      costPer1MOutput: 10.0,
+      maxContext: 1_000_000,
+      quality: 0.85,
+      speedTokensPerSec: 60,
+    },
+    opus: {
+      tier: "opus",
+      provider: "gemini",
+      model: "gemini-2.5-pro-preview-03-25",
+      costPer1MInput: 1.25,
+      costPer1MOutput: 10.0,
+      maxContext: 1_000_000,
+      quality: 0.9,
+      speedTokensPerSec: 60,
+    },
+  },
+  ollama: {
+    haiku: {
+      tier: "haiku",
+      provider: "ollama",
+      model: "llama3.2:3b",
+      costPer1MInput: 0,
+      costPer1MOutput: 0,
+      maxContext: 128_000,
+      quality: 0.4,
+      speedTokensPerSec: 100,
+    },
+    sonnet: {
+      tier: "sonnet",
+      provider: "ollama",
+      model: "llama3.1:8b",
+      costPer1MInput: 0,
+      costPer1MOutput: 0,
+      maxContext: 128_000,
+      quality: 0.6,
+      speedTokensPerSec: 60,
+    },
+    opus: {
+      tier: "opus",
+      provider: "ollama",
+      model: "llama3.1:70b",
+      costPer1MInput: 0,
+      costPer1MOutput: 0,
+      maxContext: 128_000,
+      quality: 0.8,
+      speedTokensPerSec: 20,
+    },
+  },
+  litellm: {
+    haiku: {
+      tier: "haiku",
+      provider: "litellm",
+      model: "gpt-4o-mini",
+      costPer1MInput: 0.15,
+      costPer1MOutput: 0.6,
+      maxContext: 128_000,
+      quality: 0.5,
+      speedTokensPerSec: 200,
+    },
+    sonnet: {
+      tier: "sonnet",
+      provider: "litellm",
+      model: "gpt-4o",
+      costPer1MInput: 2.5,
+      costPer1MOutput: 10.0,
+      maxContext: 128_000,
+      quality: 0.85,
+      speedTokensPerSec: 80,
+    },
+    opus: {
+      tier: "opus",
+      provider: "litellm",
+      model: "claude-opus-4-20250514",
+      costPer1MInput: 15.0,
+      costPer1MOutput: 75.0,
+      maxContext: 1_000_000,
+      quality: 1.0,
+      speedTokensPerSec: 40,
+    },
   },
 };
 
-export const getModelCostConfig = (tier: ModelTier): ModelCostConfig =>
-  MODEL_CONFIGS[tier];
+// Backward-compatible default: Anthropic
+const MODEL_CONFIGS = PROVIDER_CONFIGS.anthropic;
+
+export const getModelCostConfig = (
+  tier: ModelTier,
+  provider?: Provider,
+): ModelCostConfig =>
+  (provider ? PROVIDER_CONFIGS[provider] : MODEL_CONFIGS)[tier];
 
 export const estimateTokens = (text: string): number =>
   Math.ceil(text.length / 4);
@@ -78,12 +219,13 @@ export const heuristicClassify = (task: string): ModelTier | null => {
 export const analyzeComplexity = (
   task: string,
   _context?: string,
+  provider?: Provider,
 ): Effect.Effect<ComplexityAnalysis, RoutingError> =>
   Effect.try({
     try: () => {
       const heuristic = heuristicClassify(task);
       const tier = heuristic ?? "sonnet";
-      const config = getModelCostConfig(tier);
+      const config = getModelCostConfig(tier, provider);
 
       const score =
         tier === "haiku" ? 0.2 :
@@ -110,7 +252,8 @@ export const analyzeComplexity = (
 export const routeToModel = (
   task: string,
   context?: string,
+  provider?: Provider,
 ): Effect.Effect<ModelCostConfig, RoutingError> =>
-  Effect.map(analyzeComplexity(task, context), (analysis) =>
-    getModelCostConfig(analysis.recommendedTier),
+  Effect.map(analyzeComplexity(task, context, provider), (analysis) =>
+    getModelCostConfig(analysis.recommendedTier, provider),
   );

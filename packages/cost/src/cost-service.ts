@@ -7,6 +7,7 @@ import { estimateTokens } from "./routing/complexity-router.js";
 import { makeSemanticCache, type EmbedFn } from "./caching/semantic-cache.js";
 import { makePromptCompressor } from "./compression/prompt-compressor.js";
 import { makeBudgetEnforcer } from "./budgets/budget-enforcer.js";
+import { makeBudgetDb } from "./budgets/budget-db.js";
 import { makeCostTracker } from "./analytics/cost-tracker.js";
 
 // ─── Service Tag ───
@@ -69,6 +70,8 @@ export type CostServiceOptions = {
   readonly embedFn?: EmbedFn;
   /** Optional LLM for prompt compression second pass (Tier 2). */
   readonly llm?: LLMForCost;
+  /** SQLite path for persisting daily/monthly budget state across restarts. */
+  readonly dbPath?: string;
 };
 
 export const CostServiceLive = (
@@ -80,7 +83,10 @@ export const CostServiceLive = (
     Effect.gen(function* () {
       const cache = yield* makeSemanticCache(options?.embedFn);
       const compressor = yield* makePromptCompressor(options?.llm);
-      const budget = yield* makeBudgetEnforcer(budgetLimits);
+      const budgetDb = options?.dbPath
+        ? yield* makeBudgetDb(options.dbPath)
+        : undefined;
+      const budget = yield* makeBudgetEnforcer(budgetLimits, budgetDb);
       const tracker = yield* makeCostTracker;
 
       return {

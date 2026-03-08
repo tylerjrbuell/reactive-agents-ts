@@ -13,13 +13,7 @@ type ExtendedCacheEntry = CacheEntry & { readonly embedding?: readonly number[] 
 export type EmbedFn = (texts: readonly string[]) => Effect.Effect<readonly (readonly number[])[], any>;
 
 function hashString(str: string): string {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = (hash << 5) - hash + char;
-    hash |= 0;
-  }
-  return hash.toString(36);
+  return Bun.hash(str).toString(36);
 }
 
 function cosineSimilarity(a: readonly number[], b: readonly number[]): number {

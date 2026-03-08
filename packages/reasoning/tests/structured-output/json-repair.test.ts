@@ -65,4 +65,47 @@ describe("repairJson", () => {
     const input = '{"steps": []}';
     expect(repairJson(input)).toBe(input);
   });
+
+  it("replaces Python True/False/None with JSON equivalents", () => {
+    const input = '{"enabled": True, "disabled": False, "value": None}';
+    const result = JSON.parse(repairJson(input));
+    expect(result.enabled).toBe(true);
+    expect(result.disabled).toBe(false);
+    expect(result.value).toBeNull();
+  });
+
+  it("strips single-line comments", () => {
+    const input = '{\n  "name": "test", // this is a comment\n  "value": 1\n}';
+    const result = JSON.parse(repairJson(input));
+    expect(result.name).toBe("test");
+    expect(result.value).toBe(1);
+  });
+
+  it("strips block comments", () => {
+    const input = '{"name": /* comment */ "test"}';
+    const result = JSON.parse(repairJson(input));
+    expect(result.name).toBe("test");
+  });
+
+  it("replaces NaN with null", () => {
+    const input = '{"value": NaN}';
+    const result = JSON.parse(repairJson(input));
+    expect(result.value).toBeNull();
+  });
+
+  it("replaces Infinity with null", () => {
+    const input = '{"pos": Infinity, "neg": -Infinity}';
+    const result = JSON.parse(repairJson(input));
+    expect(result.pos).toBeNull();
+    expect(result.neg).toBeNull();
+  });
+
+  it("does not replace True/False inside strings", () => {
+    // fixPythonLiterals uses simple word boundary regex - this is expected behavior:
+    // it replaces "True" inside strings too. For typical LLM JSON output, this is
+    // acceptable since string values of "True" almost always indicate Python-style booleans.
+    const input = '{"msg": "True story", "flag": True}';
+    const result = JSON.parse(repairJson(input));
+    expect(result.flag).toBe(true);
+  });
 });

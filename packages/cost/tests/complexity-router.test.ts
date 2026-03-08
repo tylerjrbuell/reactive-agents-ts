@@ -99,6 +99,42 @@ describe("Complexity Router", () => {
     expect(result.factors).toContain("multi-step");
   });
 
+  // ─── Provider-aware routing ───
+
+  test("routes to OpenAI models when provider is openai", async () => {
+    const config = await Effect.runPromise(routeToModel("What is 2+2?", undefined, "openai"));
+    expect(config.provider).toBe("openai");
+    expect(config.model).toBe("gpt-4o-mini");
+    expect(config.tier).toBe("haiku");
+  });
+
+  test("routes to Gemini models when provider is gemini", async () => {
+    const config = await Effect.runPromise(routeToModel("What is 2+2?", undefined, "gemini"));
+    expect(config.provider).toBe("gemini");
+    expect(config.model).toBe("gemini-2.0-flash");
+  });
+
+  test("getModelCostConfig returns provider-specific config", () => {
+    const openaiHaiku = getModelCostConfig("haiku", "openai");
+    expect(openaiHaiku.model).toBe("gpt-4o-mini");
+    expect(openaiHaiku.costPer1MInput).toBe(0.15);
+
+    const geminiSonnet = getModelCostConfig("sonnet", "gemini");
+    expect(geminiSonnet.model).toContain("gemini");
+  });
+
+  test("ollama models have zero cost", () => {
+    const config = getModelCostConfig("opus", "ollama");
+    expect(config.costPer1MInput).toBe(0);
+    expect(config.costPer1MOutput).toBe(0);
+  });
+
+  test("defaults to anthropic when no provider specified", () => {
+    const config = getModelCostConfig("sonnet");
+    expect(config.provider).toBe("anthropic");
+    expect(config.model).toContain("claude");
+  });
+
   test("analyzeComplexity includes correct factors for analysis tasks", async () => {
     const result = await Effect.runPromise(
       analyzeComplexity("Analyze the performance characteristics of this algorithm"),

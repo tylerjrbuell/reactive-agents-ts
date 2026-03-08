@@ -5,7 +5,7 @@ import type { LayerResult } from "../types.js";
 
 type LLMServiceLike = {
   complete: (req: any) => Effect.Effect<{ content: string; usage?: { totalTokens?: number } }, any>;
-  embed: (texts: readonly string[], model?: string) => Effect.Effect<readonly number[][], any>;
+  embed: (texts: readonly string[], model?: string) => Effect.Effect<readonly (readonly number[])[], any>;
 };
 
 // ─── Cosine Similarity Helper ───

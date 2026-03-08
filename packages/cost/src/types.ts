@@ -10,7 +10,7 @@ export type ModelTier = typeof ModelTier.Type;
 
 export const ModelCostConfigSchema = Schema.Struct({
   tier: ModelTier,
-  provider: Schema.Literal("anthropic", "openai", "ollama"),
+  provider: Schema.Literal("anthropic", "openai", "ollama", "gemini", "litellm"),
   model: Schema.String,
   costPer1MInput: Schema.Number,
   costPer1MOutput: Schema.Number,

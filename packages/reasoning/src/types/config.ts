@@ -24,6 +24,8 @@ export const TreeOfThoughtConfigSchema = Schema.Struct({
   breadth: Schema.Number.pipe(Schema.int(), Schema.positive()),
   depth: Schema.Number.pipe(Schema.int(), Schema.positive()),
   pruningThreshold: Schema.Number,
+  /** Maximum cost (USD) for the exploration phase before early-terminating. */
+  maxCost: Schema.optional(Schema.Number),
 });
 export type TreeOfThoughtConfig = typeof TreeOfThoughtConfigSchema.Type;
 
