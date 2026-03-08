@@ -240,6 +240,13 @@ declare module 'astro:content' {
   collection: "docs";
   data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
+"features/benchmarks.mdx": {
+	id: "features/benchmarks.mdx";
+  slug: "features/benchmarks";
+  body: string;
+  collection: "docs";
+  data: InferEntrySchema<"docs">
+} & { render(): Render[".mdx"] };
 "features/cost-tracking.md": {
 	id: "features/cost-tracking.md";
   slug: "features/cost-tracking";
@@ -292,6 +299,13 @@ declare module 'astro:content' {
 "features/prompts.md": {
 	id: "features/prompts.md";
   slug: "features/prompts";
+  body: string;
+  collection: "docs";
+  data: InferEntrySchema<"docs">
+} & { render(): Render[".md"] };
+"features/resilience.md": {
+	id: "features/resilience.md";
+  slug: "features/resilience";
   body: string;
   collection: "docs";
   data: InferEntrySchema<"docs">
