@@ -18,7 +18,7 @@ import { StreamingTextCallback } from "@reactive-agents/core";
 import type { Task, TaskResult } from "@reactive-agents/core";
 import type { TaskError } from "@reactive-agents/core";
 import type { ContextProfile } from "@reactive-agents/reasoning";
-import { inferRequiredTools } from "@reactive-agents/reasoning";
+import { inferRequiredTools, filterToolsByRelevance } from "@reactive-agents/reasoning";
 import { ToolService } from "@reactive-agents/tools";
 import { ObservabilityService } from "@reactive-agents/observability";
 import { GuardrailService, KillSwitchService, BehavioralContractService } from "@reactive-agents/guardrails";
@@ -579,20 +579,33 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   );
 
                   if (toolDefsForInfer.length > 0) {
-                    const inferred = yield* inferRequiredTools({
-                      taskDescription: extractTaskText(task.input),
-                      availableTools: toolDefsForInfer.map((t: any) => ({
-                        name: t.name as string,
-                        description: t.description as string,
-                        parameters: (t.parameters ?? []).map((p: any) => ({
-                          name: p.name as string,
-                          type: p.type as string,
-                          description: p.description as string,
-                          required: Boolean(p.required),
-                        })),
+                    const taskText = extractTaskText(task.input);
+                    const toolSchemas = toolDefsForInfer.map((t: any) => ({
+                      name: t.name as string,
+                      description: (t.description ?? "") as string,
+                      parameters: ((t.parameters ?? []) as any[]).map((p: any) => ({
+                        name: p.name as string,
+                        type: (p.type ?? "string") as string,
+                        description: (p.description ?? "") as string,
+                        required: Boolean(p.required),
                       })),
-                      systemPrompt: config.systemPrompt,
-                    }).pipe(Effect.catchAll(() => Effect.succeed([] as readonly string[])));
+                    }));
+
+                    // Fast path: heuristic keyword matching (no LLM call needed)
+                    const { primary } = filterToolsByRelevance(taskText, toolSchemas);
+                    let inferred: readonly string[];
+
+                    if (primary.length > 0) {
+                      // Heuristic found relevant tools — skip LLM inference
+                      inferred = primary.map(t => t.name);
+                    } else {
+                      // Heuristic found nothing — fall back to LLM inference
+                      inferred = yield* inferRequiredTools({
+                        taskDescription: taskText,
+                        availableTools: toolSchemas,
+                        systemPrompt: config.systemPrompt,
+                      }).pipe(Effect.catchAll(() => Effect.succeed([] as readonly string[])));
+                    }
 
                     if (inferred.length > 0) {
                       effectiveRequiredTools = [...inferred];
