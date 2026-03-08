@@ -130,7 +130,7 @@ describe("Instruction-aware tool filtering", () => {
     expect(content).toContain("List commits");
     expect(content).toContain("Send signal message");
     // Secondary tools should be names only
-    expect(content).toContain("Also available:");
+    expect(content).toContain("Also available (use by name):");
     // Secondary tools should NOT have descriptions
     expect(content).not.toContain("Tool 0 description");
   });
