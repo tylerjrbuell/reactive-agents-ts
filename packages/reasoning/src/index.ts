@@ -104,6 +104,9 @@ export {
 } from "./context/index.js";
 export type { ContextProfile, ContextBudget, BudgetSection } from "./context/index.js";
 
+// ─── Shared Utilities ───
+export { filterToolsByRelevance } from "./strategies/shared/tool-utils.js";
+
 // ─── Structured Output ───
 export { inferRequiredTools } from "./structured-output/infer-required-tools.js";
 export type { ToolSummary, InferRequiredToolsConfig } from "./structured-output/infer-required-tools.js";
