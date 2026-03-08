@@ -23,6 +23,7 @@ import { EventBus } from "@reactive-agents/core";
 import { KillSwitchService } from "@reactive-agents/guardrails";
 import type { AgentStreamEvent, StreamDensity } from "./stream-types.js";
 import { AgentStream } from "./agent-stream.js";
+import type { TelemetryConfig } from "@reactive-agents/observability";
 
 // ─── Provider Types ──────────────────────────────────────────────────────────
 
@@ -149,6 +150,107 @@ export interface ToolsOptions {
 export interface PromptsOptions {
   /** Array of custom prompt templates to register. Each template includes an ID, content, and optionally a tier specification. Default: [] */
   readonly templates?: ReadonlyArray<PromptTemplate>;
+}
+
+/**
+ * Options for `.withMemory()` — configure the 4-layer memory system.
+ *
+ * Replaces the opaque `"1"`/`"2"` tier strings with named, discoverable fields.
+ * Backward-compatible: passing a plain string still works.
+ *
+ * @example
+ * ```typescript
+ * agent.withMemory({ tier: "enhanced", dbPath: "./data/memory.db", capacity: 12 })
+ * ```
+ */
+export interface MemoryOptions {
+  /** Memory tier: `"standard"` (working only) or `"enhanced"` (full 4-layer + embeddings). Default: "standard" */
+  readonly tier?: "standard" | "enhanced";
+  /** Custom SQLite database path. Default: `.reactive-agents/memory/{agentId}/memory.db` */
+  readonly dbPath?: string;
+  /** Maximum compaction entries before pruning. Default: 1000 */
+  readonly maxEntries?: number;
+  /** Working memory slot capacity. Default: 7 */
+  readonly capacity?: number;
+  /** Working memory eviction policy. Default: "fifo" */
+  readonly evictionPolicy?: "fifo" | "lru" | "importance";
+  /** Days to retain episodic snapshots. Default: 30 */
+  readonly retainDays?: number;
+  /** Importance threshold for semantic memory inclusion. Default: 0.7 */
+  readonly importanceThreshold?: number;
+}
+
+/**
+ * Options for `.withCostTracking()` — configure budget limits for cost enforcement.
+ *
+ * All values are in USD. Omitted fields use framework defaults.
+ *
+ * @example
+ * ```typescript
+ * agent.withCostTracking({ perRequest: 0.50, daily: 10.0, monthly: 100.0 })
+ * ```
+ */
+export interface CostTrackingOptions {
+  /** Maximum cost per single LLM request (USD). Default: $1.00 */
+  readonly perRequest?: number;
+  /** Maximum cost per session (USD). Default: $5.00 */
+  readonly perSession?: number;
+  /** Maximum daily spend (USD). Default: $25.00 */
+  readonly daily?: number;
+  /** Maximum monthly spend (USD). Default: $200.00 */
+  readonly monthly?: number;
+}
+
+/**
+ * Options for `.withGuardrails()` — toggle individual guardrail detectors.
+ *
+ * All detectors default to `true` when guardrails are enabled.
+ *
+ * @example
+ * ```typescript
+ * agent.withGuardrails({ injection: true, pii: true, toxicity: false })
+ * ```
+ */
+export interface GuardrailsOptions {
+  /** Enable prompt injection detection. Default: true */
+  readonly injection?: boolean;
+  /** Enable PII detection and masking. Default: true */
+  readonly pii?: boolean;
+  /** Enable toxicity detection. Default: true */
+  readonly toxicity?: boolean;
+  /** Custom blocklist of words/phrases to reject. Default: undefined */
+  readonly customBlocklist?: readonly string[];
+}
+
+/**
+ * Options for `.withVerification()` — toggle individual verification strategies and thresholds.
+ *
+ * All strategies default to their framework defaults when verification is enabled.
+ *
+ * @example
+ * ```typescript
+ * agent.withVerification({ hallucinationDetection: true, passThreshold: 0.8 })
+ * ```
+ */
+export interface VerificationOptions {
+  /** Enable semantic entropy estimation. Default: true */
+  readonly semanticEntropy?: boolean;
+  /** Enable fact decomposition. Default: true */
+  readonly factDecomposition?: boolean;
+  /** Enable multi-source verification. Default: false */
+  readonly multiSource?: boolean;
+  /** Enable self-consistency checks. Default: true */
+  readonly selfConsistency?: boolean;
+  /** Enable natural language inference. Default: true */
+  readonly nli?: boolean;
+  /** Enable hallucination detection layer. Default: false */
+  readonly hallucinationDetection?: boolean;
+  /** Hallucination score threshold (0-1). Default: 0.10 */
+  readonly hallucinationThreshold?: number;
+  /** Overall pass threshold for verification (0-1). Default: 0.7 */
+  readonly passThreshold?: number;
+  /** Risk threshold below which outputs are flagged (0-1). Default: 0.5 */
+  readonly riskThreshold?: number;
 }
 
 /**
@@ -522,6 +624,11 @@ export class ReactiveAgentBuilder {
   private _enableTools: boolean = false;
   private _toolsOptions?: ToolsOptions;
   private _resultCompression?: ResultCompressionConfig;
+  private _requiredToolsConfig?: {
+    tools?: readonly string[];
+    adaptive?: boolean;
+    maxRetries?: number;
+  };
   private _enableIdentity: boolean = false;
   private _enableObservability: boolean = false;
   private _observabilityOptions?: ObservabilityOptions;
@@ -546,6 +653,12 @@ export class ReactiveAgentBuilder {
   private _enableSelfImprovement: boolean = false;
   private _enableEvents: boolean = false;
   private _streamDensity?: StreamDensity;
+  private _telemetryConfig?: TelemetryConfig;
+  private _memoryOptions?: MemoryOptions;
+  private _costTrackingOptions?: CostTrackingOptions;
+  private _guardrailsOptions?: GuardrailsOptions;
+  private _verificationOptions?: VerificationOptions;
+  private _circuitBreakerConfig?: Partial<import("@reactive-agents/llm-provider").CircuitBreakerConfig>;
 
   // ─── Identity ───
 
@@ -788,10 +901,18 @@ export class ReactiveAgentBuilder {
    * @example
    * ```typescript
    * builder.withMemory("2")
+   * builder.withMemory({ tier: "enhanced", dbPath: "./data/memory.db", capacity: 12 })
    * ```
    */
-  withMemory(tier: "1" | "2"): this {
-    this._memoryTier = tier;
+  withMemory(tierOrOptions?: "1" | "2" | MemoryOptions): this {
+    if (typeof tierOrOptions === "string") {
+      this._memoryTier = tierOrOptions;
+    } else if (tierOrOptions) {
+      if (tierOrOptions.tier) {
+        this._memoryTier = tierOrOptions.tier === "enhanced" ? "2" : "1";
+      }
+      this._memoryOptions = tierOrOptions;
+    }
     return this;
   }
 
@@ -848,35 +969,57 @@ export class ReactiveAgentBuilder {
   /**
    * Enable guardrails to protect against injection attacks and PII exposure.
    *
-   * Guardrails check user input for prompt injection attempts and mask personally identifiable information.
+   * Optionally provide configuration to toggle individual detectors.
    *
+   * @param options - Optional guardrail configuration
    * @returns `this` for chaining
    */
-  withGuardrails(): this {
+  withGuardrails(options?: GuardrailsOptions): this {
     this._enableGuardrails = true;
+    if (options) this._guardrailsOptions = options;
     return this;
   }
 
   /**
    * Enable semantic verification to assess confidence in agent outputs.
    *
-   * Verification uses semantic entropy, fact decomposition, and multi-source checking
-   * to estimate answer quality and flag uncertain outputs.
+   * Optionally provide configuration to toggle strategies and set thresholds.
    *
+   * @param options - Optional verification configuration
    * @returns `this` for chaining
    */
-  withVerification(): this {
+  withVerification(options?: VerificationOptions): this {
     this._enableVerification = true;
+    if (options) this._verificationOptions = options;
     return this;
   }
 
   /**
    * Enable cost tracking to monitor token consumption and estimate USD costs.
    *
+   * Optionally provide budget limits to enforce spending caps.
+   *
+   * @param options - Optional budget limit configuration (USD)
    * @returns `this` for chaining
    */
-  withCostTracking(): this {
+  withCostTracking(options?: CostTrackingOptions): this {
     this._enableCostTracking = true;
+    if (options) this._costTrackingOptions = options;
+    return this;
+  }
+
+  /**
+   * Enable circuit breaker for LLM provider calls.
+   *
+   * After `failureThreshold` consecutive failures, the breaker opens and fast-fails
+   * without hitting the provider. After `cooldownMs`, it enters half-open state
+   * to test if the provider has recovered.
+   *
+   * @param config - Optional circuit breaker thresholds
+   * @returns `this` for chaining
+   */
+  withCircuitBreaker(config?: Partial<import("@reactive-agents/llm-provider").CircuitBreakerConfig>): this {
+    this._circuitBreakerConfig = config ?? {};
     return this;
   }
 
@@ -943,6 +1086,41 @@ export class ReactiveAgentBuilder {
   }
 
   /**
+   * Configure tools that MUST be called before the agent can declare success.
+   *
+   * Supports explicit tool lists, adaptive LLM-powered inference, or both.
+   * If the agent attempts to end without using all required tools, the kernel
+   * redirects it back to "thinking" with feedback. After `maxRetries` redirects
+   * (default: 2), the task fails with a descriptive error.
+   *
+   * @param config - Required tools configuration
+   * @returns `this` for chaining
+   *
+   * @example
+   * ```typescript
+   * // Explicit required tools
+   * builder.withRequiredTools({ tools: ["web_search", "file_write"] })
+   *
+   * // Adaptive — LLM infers which tools are required
+   * builder.withRequiredTools({ adaptive: true })
+   *
+   * // Both — explicit tools + LLM infers additional ones
+   * builder.withRequiredTools({ adaptive: true, tools: ["send_message"], maxRetries: 3 })
+   * ```
+   */
+  withRequiredTools(config: {
+    /** Tool names that must be called during execution */
+    tools?: readonly string[];
+    /** Enable adaptive LLM inference of required tools */
+    adaptive?: boolean;
+    /** Max redirect attempts before failing (default: 2) */
+    maxRetries?: number;
+  }): this {
+    this._requiredToolsConfig = config;
+    return this;
+  }
+
+  /**
    * Enable agent identity and identity verification via Ed25519 certificates.
    *
    * Allows the agent to sign messages and verify the identity of other agents in a network.
@@ -984,6 +1162,27 @@ export class ReactiveAgentBuilder {
    */
   withStreaming(options?: { density?: StreamDensity }): this {
     this._streamDensity = options?.density ?? "tokens";
+    return this;
+  }
+
+  /**
+   * Enable opt-in anonymous telemetry for collective intelligence.
+   *
+   * Captures anonymized per-run metrics (strategy, model tier, token counts, latency,
+   * cost) with differential privacy (Laplacian noise). No raw prompts, API keys, or
+   * PII ever leave the local process.
+   *
+   * @param config - Telemetry mode and privacy settings
+   * @returns `this` for chaining
+   *
+   * @example
+   * ```typescript
+   * builder.withTelemetry({ mode: "contribute" })
+   * builder.withTelemetry({ mode: "isolated" }) // local-only, no sharing
+   * ```
+   */
+  withTelemetry(config?: TelemetryConfig): this {
+    this._telemetryConfig = config ?? { mode: "isolated" };
     return this;
   }
 
@@ -1328,6 +1527,13 @@ export class ReactiveAgentBuilder {
       gatewayOptions: this._gatewayOptions,
       contextProfile: this._contextProfile,
       resultCompression: this._resultCompression,
+      telemetryConfig: this._telemetryConfig,
+      memoryOptions: this._memoryOptions,
+      guardrailsOptions: this._guardrailsOptions,
+      verificationOptions: this._verificationOptions,
+      costTrackingOptions: this._costTrackingOptions,
+      circuitBreakerConfig: this._circuitBreakerConfig,
+      requiredTools: this._requiredToolsConfig,
     });
 
     const hooks = [...this._hooks];

@@ -303,6 +303,17 @@ export const ReactiveAgentsConfigSchema = Schema.Struct({
   ),
   /** Default stream density for runStream() — "tokens" emits only TextDelta, "full" emits all events */
   streamDensity: Schema.optional(Schema.Literal("tokens", "full")),
+  /** Required tools configuration — tools that MUST be called before the agent can declare success. */
+  requiredTools: Schema.optional(
+    Schema.Struct({
+      /** Tool names that must be called during execution */
+      tools: Schema.optional(Schema.Array(Schema.String)),
+      /** When true, the LLM analyzes the task + available tools before reasoning to infer which tools are required. Inferred tools are merged with any explicitly listed tools. */
+      adaptive: Schema.optional(Schema.Boolean),
+      /** Max redirects when required tools are missing (default: 2) */
+      maxRetries: Schema.optional(Schema.Number),
+    })
+  ),
 });
 export type ReactiveAgentsConfig = typeof ReactiveAgentsConfigSchema.Type;
 

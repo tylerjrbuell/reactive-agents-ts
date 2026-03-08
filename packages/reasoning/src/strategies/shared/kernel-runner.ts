@@ -32,6 +32,22 @@ import {
   type ThoughtKernel,
 } from "./kernel-state.js";
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/**
+ * Normalize action content for comparison — parses JSON and re-serializes with
+ * sorted keys so that `{"a":1,"b":2}` and `{"b":2,"a":1}` are treated as equal.
+ * Falls back to trimmed string comparison on parse failure.
+ */
+function normalizeActionContent(content: string): string {
+  try {
+    const parsed = JSON.parse(content);
+    return JSON.stringify(parsed, Object.keys(parsed).sort());
+  } catch {
+    return content.trim();
+  }
+}
+
 // ── Main entry point ──────────────────────────────────────────────────────────
 
 /**
@@ -87,6 +103,15 @@ export function runKernel(
     const mutableScratchpad = new Map<string, string>(state.scratchpad);
 
     // ── 6. Main loop ─────────────────────────────────────────────────────────
+    const loopCfg = options.loopDetection;
+    const maxSameTool = loopCfg?.maxSameToolCalls ?? 3;
+    const maxRepeatedThought = loopCfg?.maxRepeatedThoughts ?? 3;
+
+    // Required tools guard — tracks redirect attempts to prevent infinite loops
+    const requiredTools = input.requiredTools ?? [];
+    const maxRequiredToolRetries = input.maxRequiredToolRetries ?? 2;
+    let requiredToolRedirects = 0;
+
     while (
       state.status !== "done" &&
       state.status !== "failed" &&
@@ -97,6 +122,82 @@ export function runKernel(
       // Sync scratchpad: kernel may have added entries
       for (const [k, v] of state.scratchpad) {
         mutableScratchpad.set(k, v);
+      }
+
+      // ── Loop detection ───────────────────────────────────────────────────
+      // Check the most recent steps for patterns that indicate a stuck loop.
+      // Only fire if the loop hasn't already terminated (status still active).
+      if (state.status !== "done" && state.status !== "failed") {
+        const steps = state.steps;
+
+        // (a) Repeated tool calls: same tool + same args N times in a row
+        //     Normalizes JSON to catch formatting variants (key order, whitespace)
+        if (steps.length >= maxSameTool) {
+          const recentActions = steps
+            .slice(-maxSameTool)
+            .filter((s) => s.type === "action");
+          if (recentActions.length === maxSameTool) {
+            const firstNorm = normalizeActionContent(recentActions[0]!.content);
+            const allSame = recentActions.every((s) => normalizeActionContent(s.content) === firstNorm);
+            if (allSame) {
+              state = transitionState(state, {
+                status: "failed",
+                error: `Loop detected: same tool call repeated ${maxSameTool} times`,
+              });
+              break;
+            }
+          }
+        }
+
+        // (b) Repeated thoughts: identical thought content N times in recent history
+        if (steps.length >= maxRepeatedThought) {
+          const recentThoughts = steps
+            .slice(-maxRepeatedThought * 2) // look at a wider window
+            .filter((s) => s.type === "thought");
+          if (recentThoughts.length >= maxRepeatedThought) {
+            const lastThought = recentThoughts[recentThoughts.length - 1]!.content;
+            const matchCount = recentThoughts.filter(
+              (s) => s.content === lastThought,
+            ).length;
+            if (matchCount >= maxRepeatedThought) {
+              state = transitionState(state, {
+                status: "failed",
+                error: `Loop detected: identical thought repeated ${matchCount} times`,
+              });
+              break;
+            }
+          }
+        }
+      }
+
+      // ── Required tools guard (in-loop) ─────────────────────────────────
+      // When the kernel declares "done" but required tools haven't been called,
+      // redirect back to "thinking" with a feedback step — up to the retry limit.
+      if (state.status === "done" && requiredTools.length > 0) {
+        const missingTools = requiredTools.filter((t) => !state.toolsUsed.has(t));
+        if (missingTools.length > 0) {
+          requiredToolRedirects++;
+          if (requiredToolRedirects > maxRequiredToolRetries) {
+            state = transitionState(state, {
+              status: "failed",
+              error: `Required tools never called after ${maxRequiredToolRetries} redirect(s): ${missingTools.join(", ")}`,
+            });
+            break;
+          }
+          // Inject feedback and redirect back to thinking
+          const feedbackStep = makeStep(
+            "observation",
+            `⚠️ Required tools not yet used: ${missingTools.join(", ")}. ` +
+            `You MUST call ${missingTools.length === 1 ? "this tool" : "these tools"} before completing the task. ` +
+            `(Redirect ${requiredToolRedirects}/${maxRequiredToolRetries})`,
+          );
+          state = transitionState(state, {
+            status: "thinking",
+            output: null,
+            steps: [...state.steps, feedbackStep],
+          });
+          // Continue the loop — kernel will see the feedback in steps
+        }
       }
     }
 
@@ -133,6 +234,19 @@ export function runKernel(
           toolsUsed: newToolsUsed,
           scratchpad: mutableScratchpad,
           output: toolResult.content,
+        });
+      }
+    }
+
+    // ── 7b. Post-loop required tools check ───────────────────────────────────
+    // Final safety net: if the loop exited with "done" (e.g. via bare tool call
+    // guard or max iterations) but required tools still haven't been called, fail.
+    if (state.status === "done" && requiredTools.length > 0) {
+      const missingTools = requiredTools.filter((t) => !state.toolsUsed.has(t));
+      if (missingTools.length > 0) {
+        state = transitionState(state, {
+          status: "failed",
+          error: `Required tools never called: ${missingTools.join(", ")}`,
         });
       }
     }

@@ -31,6 +31,7 @@ import {
   filterToolsByRelevance,
 } from "./tool-utils.js";
 import { buildCompactedContext } from "./context-utils.js";
+import { progressiveSummarize } from "../../context/compaction.js";
 import { extractThinking } from "./thinking-utils.js";
 import { makeStep } from "./step-utils.js";
 import { executeToolCall, makeObservationResult } from "./tool-execution.js";
@@ -81,6 +82,14 @@ export interface ReActKernelInput {
    * tools (send, write, create, etc.) that already succeeded in a prior pass.
    */
   blockedTools?: readonly string[];
+  /**
+   * Tools that MUST be called before the agent can declare success.
+   * If the agent attempts to end without using all required tools,
+   * it will be redirected up to `maxRequiredToolRetries` times before failing.
+   */
+  requiredTools?: readonly string[];
+  /** Max redirects when required tools are missing (default: 2) */
+  maxRequiredToolRetries?: number;
 }
 
 export interface ReActKernelResult {
@@ -177,11 +186,35 @@ function buildInitialContext(
 
 /**
  * Build the system prompt text.
+ * Tier-adaptive: frontier/large models get detailed reasoning guidance;
+ * mid models get standard guidance; local models get minimal prompt.
  */
-function buildSystemPrompt(task: string, systemPrompt?: string): string {
-  return systemPrompt
-    ? `${systemPrompt}\n\nTask: ${task}`
-    : `You are a reasoning agent. Task: ${task}`;
+function buildSystemPrompt(
+  task: string,
+  systemPrompt?: string,
+  tier?: "local" | "mid" | "large" | "frontier",
+): string {
+  if (systemPrompt) {
+    return `${systemPrompt}\n\nTask: ${task}`;
+  }
+  const t = tier ?? "mid";
+  if (t === "local") {
+    return `You are a helpful assistant that uses tools when needed.\n\nTask: ${task}`;
+  }
+  if (t === "frontier" || t === "large") {
+    return `You are an expert reasoning agent. You think step by step, use tools precisely, and produce accurate, well-structured answers.
+
+When solving a task:
+- Break complex problems into sub-steps before acting.
+- Verify assumptions before drawing conclusions.
+- Use the most specific tool available rather than general-purpose ones.
+- If a tool result is unexpected, reason about why before retrying.
+- Prefer concise, direct answers once you have sufficient evidence.
+
+Task: ${task}`;
+  }
+  // mid tier
+  return `You are a reasoning agent. Think step by step and use available tools when needed.\n\nTask: ${task}`;
 }
 
 // ── reactKernel: ThoughtKernel ───────────────────────────────────────────────
@@ -229,10 +262,15 @@ function handleThinking(
       profile.toolSchemaDetail,
     );
 
-    const systemPromptText = buildSystemPrompt(input.task, input.systemPrompt);
+    const systemPromptText = buildSystemPrompt(input.task, input.systemPrompt, profile.tier);
 
-    // Build compacted context from initial context + accumulated steps
-    const compactedContext = buildCompactedContext(initialContext, state.steps, profile);
+    // Build compacted context from initial context + accumulated steps.
+    // Use 4-level progressive compaction for long conversations (handles budget
+    // pressure, error preservation, and tool-sequence grouping), falling back to
+    // simpler 2-level compaction for short conversations.
+    const compactedContext = state.steps.length > (profile.compactAfterSteps ?? 6)
+      ? progressiveSummarize(initialContext, state.steps, profile)
+      : buildCompactedContext(initialContext, state.steps, profile);
 
     // Add completed-actions summary (skip already-done steps)
     const completedSummary = buildCompletedSummary(state.steps);
@@ -250,14 +288,21 @@ RULES:
 
 Think step-by-step, then either take ONE action or give your FINAL ANSWER:`;
 
-    // Publish prompt trace event via hooks
-    yield* hooks.onThought(state, `[prompt-trace] ${thoughtPrompt.slice(0, 200)}`);
-
     // ── STREAM (with text delta emission) ──────────────────────────────────
+    // Token budget adapts to model tier: frontier models get more room for
+    // sophisticated reasoning; local models are capped to avoid wasted tokens.
+    const tierMaxTokens: Record<string, number> = {
+      local: 800,
+      mid: 1500,
+      large: 3000,
+      frontier: 4000,
+    };
+    const outputMaxTokens = tierMaxTokens[profile.tier] ?? 1500;
+
     const llmStreamEffect = llm.stream({
       messages: [{ role: "user", content: thoughtPrompt }],
       systemPrompt: systemPromptText,
-      maxTokens: 1500,
+      maxTokens: outputMaxTokens,
       temperature: temp,
       stopSequences: ["Observation:", "\nObservation:"],
     });
@@ -592,6 +637,8 @@ export const executeReActKernel = (
       agentId: input.agentId,
       sessionId: input.sessionId,
       blockedTools: input.blockedTools,
+      requiredTools: input.requiredTools,
+      maxRequiredToolRetries: input.maxRequiredToolRetries,
     }, {
       maxIterations: input.maxIterations ?? 10,
       strategy: input.parentStrategy ?? "react-kernel",

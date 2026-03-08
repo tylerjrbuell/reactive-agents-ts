@@ -45,6 +45,10 @@ interface ReactiveInput {
   readonly agentId?: string;
   /** Session ID for tool execution attribution. Falls back to "reasoning-session". */
   readonly sessionId?: string;
+  /** Tools that MUST be called before the agent can declare success */
+  readonly requiredTools?: readonly string[];
+  /** Max redirects when required tools are missing (default: 2) */
+  readonly maxRequiredToolRetries?: number;
 }
 
 // ── executeReactive ───────────────────────────────────────────────────────────
@@ -100,6 +104,8 @@ export const executeReactive = (
         input.config.strategies.reactive.temperature,
       agentId: input.agentId,
       sessionId: input.sessionId,
+      requiredTools: input.requiredTools,
+      maxRequiredToolRetries: input.maxRequiredToolRetries,
     };
 
     const state = yield* runKernel(reactKernel, kernelInput, {

@@ -22,11 +22,13 @@ import type { ReasoningConfig } from "@reactive-agents/reasoning";
 import { createToolsLayer } from "@reactive-agents/tools";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { ReasoningOptions, ObservabilityOptions } from "./builder.js";
+import type { TelemetryConfig } from "@reactive-agents/observability";
 import type { ContextProfile } from "@reactive-agents/reasoning";
 import { createIdentityLayer } from "@reactive-agents/identity";
 import {
   createObservabilityLayer,
   MetricsCollectorLive,
+  TelemetryCollectorLive,
 } from "@reactive-agents/observability";
 import { createInteractionLayer } from "@reactive-agents/interaction";
 import { createPromptLayer } from "@reactive-agents/prompts";
@@ -453,6 +455,82 @@ export interface RuntimeOptions {
    * Default: undefined (uses framework defaults)
    */
   resultCompression?: ResultCompressionConfig;
+
+  /**
+   * Telemetry configuration for opt-in anonymous run data collection.
+   * When provided, telemetry is enabled and EventBus events are captured.
+   *
+   * Default: undefined (no telemetry)
+   */
+  telemetryConfig?: TelemetryConfig;
+
+  // ─── Config Passthrough (Sprint 3 DX) ───
+
+  /**
+   * Memory system configuration (tier, dbPath, capacity, etc.).
+   * Passed through to `createMemoryLayer()`.
+   *
+   * Default: undefined (uses framework defaults)
+   */
+  memoryOptions?: import("./builder.js").MemoryOptions;
+
+  /**
+   * Guardrail detector toggles.
+   * Passed through to `createGuardrailsLayer()`.
+   *
+   * Default: undefined (all detectors enabled)
+   */
+  guardrailsOptions?: import("./builder.js").GuardrailsOptions;
+
+  /**
+   * Verification strategy toggles and thresholds.
+   * Passed through to `createVerificationLayer()`.
+   *
+   * Default: undefined (uses framework defaults)
+   */
+  verificationOptions?: import("./builder.js").VerificationOptions;
+
+  /**
+   * Cost tracking budget limits (USD).
+   * Passed through to `createCostLayer()`.
+   *
+   * Default: undefined (uses framework defaults)
+   */
+  costTrackingOptions?: import("./builder.js").CostTrackingOptions;
+
+  /**
+   * Circuit breaker configuration for LLM provider calls.
+   * When provided, wraps LLM complete/stream with circuit breaker protection.
+   *
+   * Default: undefined (no circuit breaker)
+   */
+  circuitBreakerConfig?: Partial<import("@reactive-agents/llm-provider").CircuitBreakerConfig>;
+
+  /**
+   * Required tools configuration — tools that MUST be called before the agent
+   * can declare success. Supports explicit tool lists, adaptive LLM inference,
+   * or both.
+   *
+   * @example
+   * ```typescript
+   * // Explicit tools only
+   * { requiredTools: { tools: ["web_search", "file_write"] } }
+   *
+   * // Adaptive inference — LLM determines required tools
+   * { requiredTools: { adaptive: true } }
+   *
+   * // Both — explicit tools + LLM infers additional ones
+   * { requiredTools: { tools: ["web_search"], adaptive: true, maxRetries: 3 } }
+   * ```
+   */
+  requiredTools?: {
+    /** Tool names that must be called during execution */
+    readonly tools?: readonly string[];
+    /** When true, the LLM analyzes task + available tools to infer required tools */
+    readonly adaptive?: boolean;
+    /** Max redirects when required tools are missing (default: 2) */
+    readonly maxRetries?: number;
+  };
 }
 
 /**
@@ -521,6 +599,13 @@ export const createRuntime = (options: RuntimeOptions) => {
     contextProfile: options.contextProfile,
     defaultStrategy: options.reasoningOptions?.defaultStrategy,
     resultCompression: options.resultCompression,
+    requiredTools: options.requiredTools
+      ? {
+          tools: options.requiredTools.tools ? [...options.requiredTools.tools] : undefined,
+          adaptive: options.requiredTools.adaptive,
+          maxRetries: options.requiredTools.maxRetries,
+        }
+      : undefined,
   };
 
   // ── Required layers ──
@@ -542,10 +627,41 @@ export const createRuntime = (options: RuntimeOptions) => {
       temperature: options.temperature,
       maxTokens: options.maxTokens,
     },
+    options.circuitBreakerConfig,
   );
-  const memoryLayer = createMemoryLayer(config.memoryTier, {
-    agentId: options.agentId,
-  });
+  const memoryOverrides: Record<string, unknown> = { agentId: options.agentId };
+  if (options.memoryOptions) {
+    const mo = options.memoryOptions;
+    if (mo.dbPath) memoryOverrides.dbPath = mo.dbPath;
+    if (mo.capacity || mo.evictionPolicy) {
+      memoryOverrides.working = {
+        capacity: mo.capacity ?? 7,
+        evictionPolicy: mo.evictionPolicy ?? "fifo",
+      };
+    }
+    if (mo.importanceThreshold !== undefined) {
+      memoryOverrides.semantic = {
+        maxMarkdownLines: 200,
+        importanceThreshold: mo.importanceThreshold,
+      };
+    }
+    if (mo.retainDays !== undefined) {
+      memoryOverrides.episodic = {
+        retainDays: mo.retainDays,
+        maxSnapshotsPerSession: 3,
+      };
+    }
+    if (mo.maxEntries !== undefined) {
+      memoryOverrides.compaction = {
+        strategy: "progressive",
+        maxEntries: mo.maxEntries,
+        intervalMs: 86_400_000,
+        similarityThreshold: 0.92,
+        decayFactor: 0.05,
+      };
+    }
+  }
+  const memoryLayer = createMemoryLayer(config.memoryTier, memoryOverrides as Parameters<typeof createMemoryLayer>[1]);
   const hookLayer = LifecycleHookRegistryLive;
   const engineLayer = ExecutionEngineLive(config).pipe(
     Layer.provide(hookLayer),
@@ -564,7 +680,18 @@ export const createRuntime = (options: RuntimeOptions) => {
   // ── Optional layers ──
 
   if (options.enableGuardrails) {
-    runtime = Layer.merge(runtime, createGuardrailsLayer()) as any;
+    const gc = options.guardrailsOptions;
+    const guardrailConfig = gc
+      ? {
+          enableInjectionDetection: gc.injection ?? true,
+          enablePiiDetection: gc.pii ?? true,
+          enableToxicityDetection: gc.toxicity ?? true,
+          ...(gc.customBlocklist
+            ? { customBlocklist: [...gc.customBlocklist] }
+            : {}),
+        }
+      : undefined;
+    runtime = Layer.merge(runtime, createGuardrailsLayer(guardrailConfig)) as any;
   }
 
   if (options.enableKillSwitch) {
@@ -588,11 +715,25 @@ export const createRuntime = (options: RuntimeOptions) => {
   }
 
   if (options.enableVerification) {
-    runtime = Layer.merge(runtime, createVerificationLayer()) as any;
+    const vc = options.verificationOptions;
+    const verificationConfig = vc
+      ? {
+          enableSemanticEntropy: vc.semanticEntropy ?? true,
+          enableFactDecomposition: vc.factDecomposition ?? true,
+          enableMultiSource: vc.multiSource ?? false,
+          enableSelfConsistency: vc.selfConsistency ?? true,
+          enableNli: vc.nli ?? true,
+          enableHallucinationDetection: vc.hallucinationDetection,
+          hallucinationThreshold: vc.hallucinationThreshold,
+          passThreshold: vc.passThreshold ?? 0.7,
+          riskThreshold: vc.riskThreshold ?? 0.5,
+        }
+      : undefined;
+    runtime = Layer.merge(runtime, createVerificationLayer(verificationConfig)) as any;
   }
 
   if (options.enableCostTracking) {
-    runtime = Layer.merge(runtime, createCostLayer()) as any;
+    runtime = Layer.merge(runtime, createCostLayer(options.costTrackingOptions)) as any;
   }
 
   // Build tools layer first — reasoning may depend on it
@@ -673,6 +814,13 @@ export const createRuntime = (options: RuntimeOptions) => {
       metricsCollectorLayer,
     );
     runtime = Layer.merge(runtime, obsLayer) as any;
+  }
+
+  if (options.telemetryConfig) {
+    const telemetryLayer = TelemetryCollectorLive(options.telemetryConfig).pipe(
+      Layer.provide(eventBusLayer),
+    );
+    runtime = Layer.merge(runtime, telemetryLayer) as any;
   }
 
   if (options.enableInteraction) {

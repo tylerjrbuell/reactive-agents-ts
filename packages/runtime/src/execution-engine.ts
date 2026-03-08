@@ -18,6 +18,7 @@ import { StreamingTextCallback } from "@reactive-agents/core";
 import type { Task, TaskResult } from "@reactive-agents/core";
 import type { TaskError } from "@reactive-agents/core";
 import type { ContextProfile } from "@reactive-agents/reasoning";
+import { inferRequiredTools } from "@reactive-agents/reasoning";
 import { ToolService } from "@reactive-agents/tools";
 import { ObservabilityService } from "@reactive-agents/observability";
 import { GuardrailService, KillSwitchService, BehavioralContractService } from "@reactive-agents/guardrails";
@@ -564,6 +565,77 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 }
 
                 // ── Phase 5: AGENT_LOOP ──
+
+                // ── Adaptive required tools inference (before reasoning) ──
+                let effectiveRequiredTools = config.requiredTools?.tools;
+                if (config.requiredTools?.adaptive && !config.requiredTools?.tools?.length) {
+                  const toolDefsForInfer = yield* Effect.serviceOption(ToolService).pipe(
+                    Effect.flatMap((opt) =>
+                      opt._tag === "Some"
+                        ? opt.value.listTools()
+                        : Effect.succeed([] as readonly any[]),
+                    ),
+                    Effect.catchAll(() => Effect.succeed([] as readonly any[])),
+                  );
+
+                  if (toolDefsForInfer.length > 0) {
+                    const inferred = yield* inferRequiredTools({
+                      taskDescription: extractTaskText(task.input),
+                      availableTools: toolDefsForInfer.map((t: any) => ({
+                        name: t.name as string,
+                        description: t.description as string,
+                        parameters: (t.parameters ?? []).map((p: any) => ({
+                          name: p.name as string,
+                          type: p.type as string,
+                          description: p.description as string,
+                          required: Boolean(p.required),
+                        })),
+                      })),
+                      systemPrompt: config.systemPrompt,
+                    }).pipe(Effect.catchAll(() => Effect.succeed([] as readonly string[])));
+
+                    if (inferred.length > 0) {
+                      effectiveRequiredTools = [...inferred];
+                      if (obs && isNormal) {
+                        yield* obs.info(`◉ [infer-tools] required: ${inferred.join(", ")}`)
+                          .pipe(Effect.catchAll(() => Effect.void));
+                      }
+                    }
+                  }
+                }
+
+                // ── Semantic cache check (before reasoning) ──
+                let cacheHit = false;
+                if (config.enableCostTracking) {
+                  const costOpt = yield* Effect.serviceOption(CostService).pipe(
+                    Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
+                  );
+                  if (costOpt._tag === "Some") {
+                    const taskText = extractTaskText(task.input);
+                    const cached = yield* costOpt.value.checkCache(taskText)
+                      .pipe(Effect.catchAll(() => Effect.succeed(null)));
+                    if (cached !== null) {
+                      cacheHit = true;
+                      ctx = {
+                        ...ctx,
+                        metadata: {
+                          ...ctx.metadata,
+                          lastResponse: cached,
+                          isComplete: true,
+                          cacheHit: true,
+                          stepsCount: 0,
+                          reasoningSteps: [],
+                          reasoningResult: { output: cached, status: "completed", metadata: { cost: 0, tokensUsed: 0, stepsCount: 0 } },
+                        },
+                      };
+                      if (obs && isNormal) {
+                        yield* obs.info("◉ [cache]      HIT — skipping reasoning")
+                          .pipe(Effect.catchAll(() => Effect.void));
+                      }
+                    }
+                  }
+                }
+
                 const reasoningOpt = yield* Effect.serviceOption(
                   Context.GenericTag<{
                     execute: (params: {
@@ -579,6 +651,8 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       resultCompression?: { budget?: number; previewItems?: number; autoStore?: boolean; codeTransform?: boolean };
                       agentId?: string;
                       sessionId?: string;
+                      requiredTools?: readonly string[];
+                      maxRequiredToolRetries?: number;
                     }) => Effect.Effect<{
                       output: unknown;
                       status: string;
@@ -598,7 +672,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   }>("ReasoningService"),
                 );
 
-                if (reasoningOpt._tag === "Some") {
+                if (reasoningOpt._tag === "Some" && !cacheHit) {
                   // ── Full reasoning path ──
                   // Fetch full tool definitions for rich schema injection into prompts
                   const availableToolDefs = yield* Effect.serviceOption(
@@ -666,12 +740,34 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
 
                   ctx = yield* guardedPhase(ctx, "think", (c) =>
                     Effect.gen(function* () {
+                      // ── Self-improvement read-back: surface prior strategy outcomes ──
+                      let memCtx = String((c.memoryContext as any)?.semanticContext ?? "");
+                      if (config.enableSelfImprovement) {
+                        const episodes = (c.memoryContext as any)?.recentEpisodes as
+                          | readonly { eventType?: string; content?: string; metadata?: Record<string, unknown> }[]
+                          | undefined;
+                        if (episodes && episodes.length > 0) {
+                          const selfImprovementEntries = episodes.filter(
+                            (e) => e.eventType === "strategy-outcome" || e.eventType === "reflexion-critique",
+                          );
+                          if (selfImprovementEntries.length > 0) {
+                            const formatted = selfImprovementEntries
+                              .map((e) => {
+                                const meta = e.metadata ?? {};
+                                const success = meta.success ? "✓" : "✗";
+                                const strategy = meta.strategy ?? "unknown";
+                                return `[${success} ${strategy}] ${e.content ?? ""}`;
+                              })
+                              .join("\n");
+                            memCtx = `${memCtx}\n\n--- Prior Strategy Outcomes ---\n${formatted}`;
+                          }
+                        }
+                      }
+
                       const result = yield* reasoningOpt.value.execute({
                         taskDescription: extractTaskText(task.input),
                         taskType: task.type,
-                        memoryContext: String(
-                          (c.memoryContext as any)?.semanticContext ?? "",
-                        ),
+                        memoryContext: memCtx,
                         availableTools: availableToolNames,
                         availableToolSchemas,
                         strategy: c.selectedStrategy ?? "reactive",
@@ -681,6 +777,8 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         resultCompression: config.resultCompression,
                         agentId: config.agentId,
                         sessionId: c.taskId,
+                        requiredTools: effectiveRequiredTools,
+                        maxRequiredToolRetries: config.requiredTools?.maxRetries,
                       });
                       return {
                         ...c,
@@ -834,7 +932,23 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     ...ctx,
                     iteration: (ctx.metadata.stepsCount as number | undefined) ?? 1,
                   };
-                } else {
+
+                  // ── Semantic cache store (after successful reasoning) ──
+                  if (config.enableCostTracking && ctx.metadata.lastResponse) {
+                    const costOpt2 = yield* Effect.serviceOption(CostService).pipe(
+                      Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
+                    );
+                    if (costOpt2._tag === "Some") {
+                      yield* costOpt2.value
+                        .cacheResponse(
+                          extractTaskText(task.input),
+                          String(ctx.metadata.lastResponse),
+                          String(ctx.selectedModel ?? "unknown"),
+                        )
+                        .pipe(Effect.catchAll(() => Effect.void));
+                    }
+                  }
+                } else if (!cacheHit) {
                   // ── Minimal direct-LLM loop ──
                   // Seed messages with the user's prompt before the first LLM call
                   ctx = {
@@ -1515,7 +1629,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                             inputTokens: 0,
                             outputTokens: c.tokensUsed,
                             cost: c.cost,
-                            cachedHit: false,
+                            cachedHit: cacheHit,
                             taskType: task.type,
                             latencyMs: Date.now() - c.startedAt.getTime(),
                           })
