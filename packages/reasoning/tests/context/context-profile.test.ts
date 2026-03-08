@@ -61,12 +61,25 @@ describe("resolveProfile", () => {
     expect(resolveProfile(1.0).tier).toBe("frontier");
   });
 
-  it("resolves local tier from model name patterns", () => {
-    expect(resolveProfile("ollama:qwen3:14b").tier).toBe("local");
-    expect(resolveProfile("llama-3.3-70b").tier).toBe("local");
-    expect(resolveProfile("mistral-7b").tier).toBe("local");
-    expect(resolveProfile("phi-3-mini").tier).toBe("local");
-    expect(resolveProfile("deepseek-coder").tier).toBe("local");
+  it("resolves local tier from truly small model patterns", () => {
+    expect(resolveProfile("tinyllama").tier).toBe("local");
+    expect(resolveProfile("phi-2").tier).toBe("local");
+    expect(resolveProfile("gemma-2b").tier).toBe("local");
+    expect(resolveProfile("stablelm").tier).toBe("local");
+  });
+
+  it("resolves mid tier from capable local models (>=7B)", () => {
+    expect(resolveProfile("ollama:qwen3:14b").tier).toBe("mid");
+    expect(resolveProfile("llama-3.3-70b").tier).toBe("mid");
+    expect(resolveProfile("mistral-7b").tier).toBe("mid");
+    expect(resolveProfile("phi-3-mini").tier).toBe("mid");
+    expect(resolveProfile("deepseek-coder").tier).toBe("mid");
+    expect(resolveProfile("cogito:14b").tier).toBe("mid");
+  });
+
+  it("resolves local tier for very small capable-pattern models (<=3B)", () => {
+    expect(resolveProfile("llama-3b").tier).toBe("local");
+    expect(resolveProfile("qwen-2b").tier).toBe("local");
   });
 
   it("resolves mid tier from model name patterns", () => {
