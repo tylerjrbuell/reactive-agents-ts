@@ -304,7 +304,7 @@ Think step-by-step, then either take ONE action or give your FINAL ANSWER:`;
       systemPrompt: systemPromptText,
       maxTokens: outputMaxTokens,
       temperature: temp,
-      stopSequences: ["Observation:", "\nObservation:"],
+      stopSequences: ["\nObservation:", "\nObservation: "],
     });
 
     const llmStream = yield* llmStreamEffect.pipe(
