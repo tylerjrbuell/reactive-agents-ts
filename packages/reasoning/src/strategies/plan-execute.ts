@@ -22,6 +22,7 @@ import {
   LLMPlanOutputSchema,
   hydratePlan,
   resolveStepReferences,
+  computeWaves,
 } from "../types/plan.js";
 import type { Plan, PlanStep, LLMPlanOutput } from "../types/plan.js";
 import { extractStructuredOutput } from "../structured-output/pipeline.js";
@@ -62,6 +63,10 @@ interface PlanExecuteInput {
   readonly agentId?: string;
   /** Session ID for tool execution attribution. Falls back to "reasoning-session". */
   readonly sessionId?: string;
+  /** Tools that MUST be called before the agent can declare success */
+  readonly requiredTools?: readonly string[];
+  /** Max redirects when required tools are missing (default: 2) */
+  readonly maxRequiredToolRetries?: number;
 }
 
 export const executePlanExecute = (
@@ -182,173 +187,188 @@ export const executePlanExecute = (
         kernelPass: `plan-execute:plan-${refinement + 1}`,
       });
 
-      // ── EXECUTE: Run each plan step sequentially (linear mode) ──
-      // Skip steps that are already completed from a prior refinement cycle
+      // ── EXECUTE: Run steps with dependency-aware wave scheduling ──
+      // Independent steps run concurrently; dependent steps wait for predecessors.
 
-      for (let i = 0; i < plan.steps.length; i++) {
-        const step = plan.steps[i]!;
+      const completedIds = new Set(completedSteps.map((s) => s.id));
+      const waves = computeWaves(plan.steps, completedIds);
 
-        // Skip already completed steps (carried forward from prior refinement)
-        if (step.status === "completed") {
-          yield* publishReasoningStep(eventBus, {
-            _tag: "ReasoningStepCompleted",
-            taskId: input.taskId ?? "plan-execute",
-            strategy: "plan-execute-reflect",
-            step: steps.length,
-            totalSteps: plan.steps.length,
-            observation: `[SKIP ${step.id}] ✓ Already completed: ${step.title}`,
-            kernelPass: `plan-execute:step-${i + 1}:skip`,
-          });
-          continue;
-        }
+      const waveLabel = waves.length > 1
+        ? `${waves.length} waves (${waves.map((w) => w.length).join("+")} steps)`
+        : `${plan.steps.length} steps sequential`;
 
-        step.status = "in_progress";
-        step.startedAt = new Date().toISOString();
+      yield* publishReasoningStep(eventBus, {
+        _tag: "ReasoningStepCompleted",
+        taskId: input.taskId ?? "plan-execute",
+        strategy: "plan-execute-reflect",
+        step: steps.length,
+        totalSteps: plan.steps.length,
+        thought: `[SCHEDULE] ${waveLabel}`,
+        kernelPass: `plan-execute:schedule`,
+      });
 
-        // Publish step start
-        const stepLabel = `${step.id}: ${step.title} (${step.type}${step.toolName ? ` → ${step.toolName}` : ""})`;
-        yield* publishReasoningStep(eventBus, {
-          _tag: "ReasoningStepCompleted",
-          taskId: input.taskId ?? "plan-execute",
-          strategy: "plan-execute-reflect",
-          step: steps.length,
-          totalSteps: plan.steps.length,
-          action: `[STEP ${i + 1}/${plan.steps.length}] ${stepLabel}`,
-          kernelPass: `plan-execute:step-${i + 1}:start`,
-        });
+      let waveFailed = false;
 
-        let stepSucceeded = false;
-        let stepResult: string = "";
-        let lastError: string | undefined;
+      for (const wave of waves) {
+        if (waveFailed) break;
 
-        // Retry loop (up to stepRetries attempts) using Effect.exit to catch all errors
-        for (let attempt = 0; attempt <= stepRetries; attempt++) {
-          if (attempt > 0) {
+        // Execute wave steps — concurrently if multiple, sequentially if one
+        const waveEffects = wave.map((step) => {
+          const stepIndex = plan.steps.indexOf(step);
+
+          return Effect.gen(function* () {
+            step.status = "in_progress";
+            step.startedAt = new Date().toISOString();
+
+            const stepLabel = `${step.id}: ${step.title} (${step.type}${step.toolName ? ` → ${step.toolName}` : ""})`;
             yield* publishReasoningStep(eventBus, {
               _tag: "ReasoningStepCompleted",
               taskId: input.taskId ?? "plan-execute",
               strategy: "plan-execute-reflect",
               step: steps.length,
               totalSteps: plan.steps.length,
-              thought: `[RETRY ${step.id} attempt ${attempt + 1}/${stepRetries + 1}] Previous error: ${lastError}`,
-              kernelPass: `plan-execute:step-${i + 1}:retry-${attempt}`,
+              action: `[STEP ${stepIndex + 1}/${plan.steps.length}] ${stepLabel}`,
+              kernelPass: `plan-execute:step-${stepIndex + 1}:start`,
             });
+
+            let stepSucceeded = false;
+            let stepResult = "";
+            let lastError: string | undefined;
+
+            for (let attempt = 0; attempt <= stepRetries; attempt++) {
+              if (attempt > 0) {
+                yield* publishReasoningStep(eventBus, {
+                  _tag: "ReasoningStepCompleted",
+                  taskId: input.taskId ?? "plan-execute",
+                  strategy: "plan-execute-reflect",
+                  step: steps.length,
+                  totalSteps: plan.steps.length,
+                  thought: `[RETRY ${step.id} attempt ${attempt + 1}/${stepRetries + 1}] Previous error: ${lastError}`,
+                  kernelPass: `plan-execute:step-${stepIndex + 1}:retry-${attempt}`,
+                });
+              }
+
+              const exit = yield* Effect.exit(
+                executeStep(
+                  step,
+                  stepIndex,
+                  plan,
+                  completedSteps,
+                  input,
+                  toolSummaries,
+                  services,
+                  stepKernelMaxIterations,
+                  attempt > 0 ? lastError : undefined,
+                ),
+              );
+
+              if (Exit.isSuccess(exit)) {
+                stepResult = exit.value.output;
+                stepSucceeded = true;
+                return { step, stepIndex, success: true, output: stepResult, tokens: exit.value.tokens, cost: exit.value.cost, error: undefined };
+              }
+              const squashed = Cause.squash(exit.cause);
+              lastError = squashed instanceof Error ? squashed.message : String(squashed);
+            }
+
+            return { step, stepIndex, success: false, output: `[Step failed after ${stepRetries + 1} attempts: ${lastError}]`, tokens: 0, cost: 0, error: lastError };
+          });
+        });
+
+        // Run wave concurrently (max 4 parallel steps)
+        const waveResults = yield* Effect.all(waveEffects, { concurrency: wave.length > 1 ? 4 : 1 });
+
+        // Apply results sequentially to maintain state consistency
+        for (const result of waveResults) {
+          const { step, stepIndex } = result;
+          totalTokens += result.tokens;
+          totalCost += result.cost;
+
+          if (result.success) {
+            step.status = "completed";
+            step.result = result.output;
+            step.completedAt = new Date().toISOString();
+            completedSteps.push(step);
+
+            if (Option.isSome(planStoreOpt)) {
+              yield* planStoreOpt.value.updateStepStatus(
+                step.id,
+                { status: "completed", result: result.output },
+              ).pipe(Effect.catchAll(() => Effect.void));
+            }
+          } else {
+            step.status = "failed";
+            step.error = result.output;
+            step.completedAt = new Date().toISOString();
+
+            yield* publishReasoningStep(eventBus, {
+              _tag: "ReasoningStepCompleted",
+              taskId: input.taskId ?? "plan-execute",
+              strategy: "plan-execute-reflect",
+              step: steps.length,
+              totalSteps: plan.steps.length,
+              observation: `[FAILED ${step.id}] ${result.error}`,
+              kernelPass: `plan-execute:step-${stepIndex + 1}:failed`,
+            });
+
+            if (Option.isSome(planStoreOpt)) {
+              yield* planStoreOpt.value.updateStepStatus(
+                step.id,
+                { status: "failed", error: result.output },
+              ).pipe(Effect.catchAll(() => Effect.void));
+            }
+
+            // Attempt inline patch
+            const patchResult = yield* patchPlan(
+              plan,
+              stepIndex,
+              input,
+              llm,
+              totalTokens,
+            ).pipe(Effect.catchAll(() => Effect.succeed(null)));
+
+            if (patchResult) {
+              totalTokens += patchResult.tokens;
+              const patchedSteps = patchResult.steps;
+              plan.steps.splice(
+                stepIndex + 1,
+                plan.steps.length - stepIndex - 1,
+                ...patchedSteps,
+              );
+
+              const patchDetail = patchedSteps.map((s) => `${s.id}: ${s.title}`).join(", ");
+              yield* publishReasoningStep(eventBus, {
+                _tag: "ReasoningStepCompleted",
+                taskId: input.taskId ?? "plan-execute",
+                strategy: "plan-execute-reflect",
+                step: steps.length,
+                totalSteps: plan.steps.length,
+                thought: `[PATCH] Replaced remaining steps: ${patchDetail}`,
+                kernelPass: `plan-execute:step-${stepIndex + 1}:patch`,
+              });
+              waveFailed = true; // Re-compute waves after patch
+            }
+
+            completedSteps.push(step);
           }
 
-          const exit = yield* Effect.exit(
-            executeStep(
-              step,
-              i,
-              plan,
-              completedSteps,
-              input,
-              toolSummaries,
-              services,
-              stepKernelMaxIterations,
-              attempt > 0 ? lastError : undefined,
+          steps.push(
+            makeStep(
+              result.success ? "observation" : "thought",
+              `[EXEC ${step.id}] ${result.success ? "✓" : "✗"} ${result.output}`,
             ),
           );
 
-          if (Exit.isSuccess(exit)) {
-            stepResult = exit.value.output;
-            totalTokens += exit.value.tokens;
-            totalCost += exit.value.cost;
-            stepSucceeded = true;
-            break;
-          } else {
-            const squashed = Cause.squash(exit.cause);
-            lastError =
-              squashed instanceof Error ? squashed.message : String(squashed);
-          }
-        }
-
-        if (!stepSucceeded) {
-          stepResult = `[Step failed after ${stepRetries + 1} attempts: ${lastError}]`;
-        }
-
-        if (stepSucceeded) {
-          step.status = "completed";
-          step.result = stepResult;
-          step.completedAt = new Date().toISOString();
-          completedSteps.push(step);
-
-          if (Option.isSome(planStoreOpt)) {
-            yield* planStoreOpt.value.updateStepStatus(
-              step.id,
-              { status: "completed", result: stepResult },
-            ).pipe(Effect.catchAll(() => Effect.void));
-          }
-        } else {
-          step.status = "failed";
-          step.error = stepResult;
-          step.completedAt = new Date().toISOString();
-
           yield* publishReasoningStep(eventBus, {
             _tag: "ReasoningStepCompleted",
             taskId: input.taskId ?? "plan-execute",
             strategy: "plan-execute-reflect",
             step: steps.length,
             totalSteps: plan.steps.length,
-            observation: `[FAILED ${step.id}] ${lastError}`,
-            kernelPass: `plan-execute:step-${i + 1}:failed`,
+            observation: `[EXEC ${step.id}] ${result.success ? "✓" : "✗"} ${result.output}`,
+            kernelPass: `plan-execute:step-${stepIndex + 1}:done`,
           });
-
-          if (Option.isSome(planStoreOpt)) {
-            yield* planStoreOpt.value.updateStepStatus(
-              step.id,
-              { status: "failed", error: stepResult },
-            ).pipe(Effect.catchAll(() => Effect.void));
-          }
-
-          // Attempt inline patch for remaining steps
-          const patchResult = yield* patchPlan(
-            plan,
-            i,
-            input,
-            llm,
-            totalTokens,
-          ).pipe(Effect.catchAll(() => Effect.succeed(null)));
-
-          if (patchResult) {
-            totalTokens += patchResult.tokens;
-            const patchedSteps = patchResult.steps;
-            plan.steps.splice(
-              i + 1,
-              plan.steps.length - i - 1,
-              ...patchedSteps,
-            );
-
-            const patchDetail = patchedSteps.map((s) => `${s.id}: ${s.title}`).join(", ");
-            yield* publishReasoningStep(eventBus, {
-              _tag: "ReasoningStepCompleted",
-              taskId: input.taskId ?? "plan-execute",
-              strategy: "plan-execute-reflect",
-              step: steps.length,
-              totalSteps: plan.steps.length,
-              thought: `[PATCH] Replaced remaining steps: ${patchDetail}`,
-              kernelPass: `plan-execute:step-${i + 1}:patch`,
-            });
-          }
-
-          completedSteps.push(step);
         }
-
-        steps.push(
-          makeStep(
-            stepSucceeded ? "observation" : "thought",
-            `[EXEC ${step.id}] ${stepSucceeded ? "✓" : "✗"} ${stepResult}`,
-          ),
-        );
-
-        yield* publishReasoningStep(eventBus, {
-          _tag: "ReasoningStepCompleted",
-          taskId: input.taskId ?? "plan-execute",
-          strategy: "plan-execute-reflect",
-          step: steps.length,
-          totalSteps: plan.steps.length,
-          observation: `[EXEC ${step.id}] ${stepSucceeded ? "✓" : "✗"} ${stepResult}`,
-          kernelPass: `plan-execute:step-${i + 1}:done`,
-        });
       }
 
       // ── REFLECT: Evaluate execution quality ──
@@ -720,6 +740,8 @@ function executeStep(
     resultCompression: input.resultCompression,
     agentId: input.agentId,
     sessionId: input.sessionId,
+    requiredTools: input.requiredTools,
+    maxRequiredToolRetries: input.maxRequiredToolRetries,
   }).pipe(
     Effect.map((kernelResult) => ({
       output: stripFinalAnswerPrefix(kernelResult.output || `[Step ${stepIndex + 1} completed]`),

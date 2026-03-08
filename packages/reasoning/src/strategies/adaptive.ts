@@ -55,6 +55,10 @@ interface AdaptiveInput {
   readonly agentId?: string;
   /** Session ID for tool execution attribution — forwarded to sub-strategies. */
   readonly sessionId?: string;
+  /** Tools that MUST be called before the agent can declare success */
+  readonly requiredTools?: readonly string[];
+  /** Max redirects when required tools are missing (default: 2) */
+  readonly maxRequiredToolRetries?: number;
 }
 
 type SubStrategy =
@@ -76,6 +80,31 @@ export const executeAdaptive = (
     const steps: ReasoningStep[] = [];
     const start = Date.now();
 
+    // ── Heuristic pre-classifier ──
+    // Avoid an LLM call for obvious cases. Only consult the LLM for ambiguous tasks.
+    const heuristicResult = heuristicClassify(input);
+
+    let selectedStrategy: SubStrategy;
+    let analysisTokens = 0;
+    let analysisCost = 0;
+
+    if (heuristicResult) {
+      selectedStrategy = heuristicResult;
+      steps.push(makeStep(
+        "thought",
+        `[ADAPTIVE] Heuristic pre-classifier selected: ${selectedStrategy} (no LLM call needed)`,
+      ));
+
+      yield* publishReasoningStep(ebOpt, {
+        _tag: "ReasoningStepCompleted",
+        taskId: input.taskId ?? "adaptive",
+        strategy: "adaptive",
+        step: 1,
+        totalSteps: 1,
+        thought: `[ADAPTIVE] Heuristic: ${selectedStrategy}`,
+        kernelPass: "adaptive:heuristic",
+      });
+    } else {
     // ── Analyze task to select strategy ──
     const classifyDefaultFallback = input.systemPrompt
       ? `${input.systemPrompt}\n\nYou are a task analyzer. Classify the task and recommend the best reasoning strategy. Respond with ONLY one of: REACTIVE, REFLEXION, PLAN_EXECUTE, TREE_OF_THOUGHT`
@@ -113,13 +142,15 @@ export const executeAdaptive = (
 
     // Strip <think> blocks from classification to prevent thinking from
     // being parsed as a strategy name.
-    const selectedStrategy = parseStrategySelection(
+    selectedStrategy = parseStrategySelection(
       stripThinking(analysisResponse.content),
     );
+    analysisTokens = analysisResponse.usage.totalTokens;
+    analysisCost = analysisResponse.usage.estimatedCost;
 
     steps.push(makeStep(
       "thought",
-      `[ADAPTIVE] Selected strategy: ${selectedStrategy} (analysis tokens: ${analysisResponse.usage.totalTokens})`,
+      `[ADAPTIVE] Selected strategy: ${selectedStrategy} (analysis tokens: ${analysisTokens})`,
     ));
 
     yield* publishReasoningStep(ebOpt, {
@@ -131,6 +162,7 @@ export const executeAdaptive = (
       thought: `[ADAPTIVE] Selected strategy: ${selectedStrategy}`,
       kernelPass: "adaptive:select",
     });
+    } // end else (LLM classification path)
 
     // ── Dispatch to selected strategy ──
     const subResult = yield* dispatchStrategy(selectedStrategy, input);
@@ -174,8 +206,8 @@ export const executeAdaptive = (
       output: finalSubResult.output,
       status: finalSubResult.status,
       start,
-      totalTokens: finalSubResult.metadata.tokensUsed + analysisResponse.usage.totalTokens,
-      totalCost: finalSubResult.metadata.cost + analysisResponse.usage.estimatedCost,
+      totalTokens: finalSubResult.metadata.tokensUsed + analysisTokens,
+      totalCost: finalSubResult.metadata.cost + analysisCost,
       extraMetadata: {
         // selectedStrategy = what the classifier chose; fallbackOccurred = true means
         // reactive actually produced the output (not selectedStrategy)
@@ -257,4 +289,38 @@ function dispatchStrategy(
     default:
       return executeReactive(input);
   }
+}
+
+/**
+ * Heuristic pre-classifier — handles obvious cases without an LLM call.
+ * Returns null for ambiguous tasks that require LLM classification.
+ */
+function heuristicClassify(input: AdaptiveInput): SubStrategy | null {
+  const task = input.taskDescription.toLowerCase();
+  const hasTools = input.availableTools.length > 0;
+  const wordCount = task.split(/\s+/).length;
+
+  // Short tasks with no tools → reactive (Q&A, simple lookup)
+  if (wordCount <= 15 && !hasTools) return "reactive";
+
+  // Plan patterns → plan-execute
+  const planPatterns = /\b(step[- ]by[- ]step|plan|phases?|stages?|pipeline|workflow|sequenc|first .* then|implement .* with .* and)\b/i;
+  if (planPatterns.test(task) && wordCount > 10) return "plan-execute-reflect";
+
+  // Numbered lists (1. ... 2. ... or "steps: ") → plan-execute
+  if (/\b\d+\.\s/.test(task) || /steps?:/i.test(task)) return "plan-execute-reflect";
+
+  // Exploration/comparison patterns → tree-of-thought
+  const totPatterns = /\b(compare|alternative|explore|brainstorm|creative|different (ways|approach|solution)|pros and cons|trade-?offs?)\b/i;
+  if (totPatterns.test(task)) return "tree-of-thought";
+
+  // Quality/iteration patterns → reflexion
+  const reflexionPatterns = /\b(review|critique|improve|refine|iterate|polish|rewrite|fix (and )?check|self-assess)\b/i;
+  if (reflexionPatterns.test(task) && wordCount > 8) return "reflexion";
+
+  // Short task with tools → reactive (direct tool use)
+  if (wordCount <= 20 && hasTools) return "reactive";
+
+  // Ambiguous — defer to LLM classifier
+  return null;
 }

@@ -57,6 +57,20 @@ export interface KernelInput {
   readonly agentId?: string;
   readonly sessionId?: string;
   readonly blockedTools?: readonly string[];
+  /**
+   * Tools that MUST be called before the agent can declare success.
+   * If the agent attempts to end without using all required tools,
+   * it will be redirected up to `maxRequiredToolRetries` times (default: 2)
+   * before failing with a descriptive error.
+   */
+  readonly requiredTools?: readonly string[];
+  /**
+   * Maximum number of times the kernel will redirect the agent back to
+   * "thinking" when required tools haven't been used. Default: 2.
+   * After this many redirects, the kernel fails with an error listing
+   * the tools that were never called.
+   */
+  readonly maxRequiredToolRetries?: number;
 }
 
 // ── Narrow service types ─────────────────────────────────────────────────────
@@ -115,6 +129,14 @@ export type ThoughtKernel = (
 
 // ── KernelRunOptions — Configuration for the kernel runner ───────────────────
 
+/** Loop detection configuration for kernel execution. */
+export interface LoopDetectionConfig {
+  /** Max consecutive calls to the same tool with the same args before aborting (default: 3) */
+  readonly maxSameToolCalls?: number;
+  /** Max identical thought strings in the last N steps before aborting (default: 3) */
+  readonly maxRepeatedThoughts?: number;
+}
+
 export interface KernelRunOptions {
   readonly maxIterations: number;
   readonly strategy: string;
@@ -122,6 +144,7 @@ export interface KernelRunOptions {
   readonly taskId?: string;
   readonly kernelPass?: string;
   readonly meta?: Record<string, unknown>;
+  readonly loopDetection?: LoopDetectionConfig;
 }
 
 // ── Factory functions ────────────────────────────────────────────────────────

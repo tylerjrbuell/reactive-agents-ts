@@ -104,5 +104,9 @@ export {
 } from "./context/index.js";
 export type { ContextProfile, ContextBudget, BudgetSection } from "./context/index.js";
 
+// ─── Structured Output ───
+export { inferRequiredTools } from "./structured-output/infer-required-tools.js";
+export type { ToolSummary, InferRequiredToolsConfig } from "./structured-output/infer-required-tools.js";
+
 // ─── Runtime ───
 export { createReasoningLayer } from "./runtime.js";

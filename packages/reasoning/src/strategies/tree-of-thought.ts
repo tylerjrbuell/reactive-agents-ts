@@ -40,6 +40,10 @@ interface TreeOfThoughtInput {
   readonly agentId?: string;
   /** Session ID for tool execution attribution. Falls back to "reasoning-session". */
   readonly sessionId?: string;
+  /** Tools that MUST be called before the agent can declare success */
+  readonly requiredTools?: readonly string[];
+  /** Max redirects when required tools are missing (default: 2) */
+  readonly maxRequiredToolRetries?: number;
 }
 
 interface ThoughtNode {
@@ -63,6 +67,7 @@ export const executeTreeOfThought = (
 
     const { breadth, depth, pruningThreshold } =
       input.config.strategies.treeOfThought;
+    const maxCost = input.config.strategies.treeOfThought.maxCost;
     const steps: ReasoningStep[] = [];
     const start = Date.now();
     let totalTokens = 0;
@@ -87,6 +92,12 @@ export const executeTreeOfThought = (
     // ── BFS expansion ──
     for (let d = 1; d <= depth; d++) {
       const nextFrontier: ThoughtNode[] = [];
+
+      // Budget guard: abort exploration if cost exceeds limit
+      if (maxCost !== undefined && totalCost >= maxCost) {
+        steps.push(makeStep("observation", `[TOT] Budget guard: cost $${totalCost.toFixed(4)} reached limit $${maxCost.toFixed(4)}. Stopping exploration.`));
+        break;
+      }
 
       for (const parent of frontier) {
         // Generate `breadth` candidate thoughts from this parent
@@ -266,6 +277,8 @@ export const executeTreeOfThought = (
       temperature: 0.7,
       agentId: input.agentId,
       sessionId: input.sessionId,
+      requiredTools: input.requiredTools,
+      maxRequiredToolRetries: input.maxRequiredToolRetries,
     }, {
       maxIterations: input.config.strategies.treeOfThought?.depth ?? 3,
       strategy: "tree-of-thought",

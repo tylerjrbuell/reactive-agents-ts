@@ -47,6 +47,10 @@ interface ReflexionInput {
   readonly agentId?: string;
   /** Session ID for tool execution attribution. Falls back to "reasoning-session". */
   readonly sessionId?: string;
+  /** Tools that MUST be called before the agent can declare success */
+  readonly requiredTools?: readonly string[];
+  /** Max redirects when required tools are missing (default: 2) */
+  readonly maxRequiredToolRetries?: number;
   /** Critiques from prior reflexion runs on similar tasks — populated from episodic memory */
   readonly priorCritiques?: readonly string[];
 }
@@ -106,6 +110,8 @@ export const executeReflexion = (
       temperature: 0.7,
       agentId: input.agentId,
       sessionId: input.sessionId,
+      requiredTools: input.requiredTools,
+      maxRequiredToolRetries: input.maxRequiredToolRetries,
     }, {
       maxIterations: input.config.strategies.reflexion?.kernelMaxIterations ?? 3,
       strategy: "reflexion",
@@ -279,6 +285,8 @@ export const executeReflexion = (
         agentId: input.agentId,
         sessionId: input.sessionId,
         blockedTools,
+        requiredTools: input.requiredTools,
+        maxRequiredToolRetries: input.maxRequiredToolRetries,
       }, {
         maxIterations: input.config.strategies.reflexion?.kernelMaxIterations ?? 3,
         strategy: "reflexion",
