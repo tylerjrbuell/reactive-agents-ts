@@ -1,0 +1,27 @@
+{
+  "name": "@reactive-agents/benchmarks",
+  "version": "0.6.3",
+  "type": "module",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsup --config ../../tsup.config.base.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "bench": "bun run src/run.ts"
+  },
+  "dependencies": {
+    "effect": "^3.10.0",
+    "@reactive-agents/core": "workspace:*",
+    "@reactive-agents/llm-provider": "workspace:*",
+    "@reactive-agents/reasoning": "workspace:*",
+    "@reactive-agents/cost": "workspace:*",
+    "@reactive-agents/runtime": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "bun-types": "latest"
+  },
+  "license": "MIT"
+}
