@@ -278,13 +278,13 @@ function handleThinking(
     const thoughtPrompt = `${compactedContext}${completedSummary}
 
 RULES:
-1. You MUST take action NOW. Do NOT ask for clarification — all information is in the Task above.
-2. ONE action per turn. Wait for the real result before proceeding.
-3. Use EXACT parameter names from tool schemas above — do NOT guess parameter names.
-4. When you have ALL required information, immediately write: FINAL ANSWER: <your answer>
-5. Check 'ALREADY DONE' above before acting. Skip completed steps.
-6. Do NOT fabricate results — wait for the real tool response.
-7. Trust your tool results. Once a tool succeeds, the action is done — do NOT repeat it.
+1. ONE action per turn. Wait for the real result before proceeding.
+2. Use EXACT parameter names from tool schemas above.
+3. When you have ALL required information: FINAL ANSWER: <your answer>
+4. Check 'ALREADY DONE' above. Skip completed steps.
+5. Do NOT fabricate or invent data. Only use information from tool results.
+6. When results show [STORED: _key], use ACTION: scratchpad-read({"key": "_key"}) to read full data BEFORE summarizing. Do NOT guess missing items from previews.
+7. Trust tool results. Once a tool succeeds, do NOT repeat it.
 
 Think step-by-step, then either take ONE action or give your FINAL ANSWER:`;
 
