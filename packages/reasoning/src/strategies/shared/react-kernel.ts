@@ -150,7 +150,7 @@ function buildInitialContext(
       if (detail === "names-only") {
         const toolNames = availableToolSchemas.map(t => t.name).join(", ");
         toolSection = `Tools: ${toolNames}\nTo use: ACTION: tool_name({"param": "value"})`;
-      } else if (detail === "names-and-types") {
+      } else if (detail === "names-and-types" || availableToolSchemas.length > 20) {
         const toolLines = availableToolSchemas.map(formatToolSchemaCompact).join("\n");
         toolSection = `Available Tools:\n${toolLines}\n\nTo use a tool: ACTION: tool_name({"param": "value"}) — use EXACT parameter names.`;
       } else {
@@ -165,8 +165,8 @@ function buildInitialContext(
       // Secondary tools: format based on tier
       let secondarySection = "";
       if (secondary.length > 0) {
-        if (detail === "names-only") {
-          secondarySection = `\nAlso available: ${secondary.map(t => t.name).join(", ")}`;
+        if (detail === "names-only" || secondary.length > 15) {
+          secondarySection = `\nAlso available (use by name): ${secondary.map(t => t.name).join(", ")}`;
         } else {
           secondarySection = `\nOther tools:\n${secondary.map(formatToolSchemaCompact).join("\n")}`;
         }
