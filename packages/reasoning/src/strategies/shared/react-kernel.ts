@@ -292,8 +292,8 @@ Think step-by-step, then either take ONE action or give your FINAL ANSWER:`;
     // Token budget adapts to model tier: frontier models get more room for
     // sophisticated reasoning; local models are capped to avoid wasted tokens.
     const tierMaxTokens: Record<string, number> = {
-      local: 800,
-      mid: 1500,
+      local: 1200,
+      mid: 2000,
       large: 3000,
       frontier: 4000,
     };

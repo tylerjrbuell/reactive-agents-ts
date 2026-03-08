@@ -33,7 +33,7 @@ export const CONTEXT_PROFILES: Record<ModelTier, ContextProfile> = {
     fewShotExampleCount: 0,
     compactAfterSteps: 4,
     fullDetailSteps: 2,
-    toolResultMaxChars: 400,
+    toolResultMaxChars: 600,
     contextBudgetPercent: 70,
     toolSchemaDetail: "names-and-types",
     maxIterations: 8,
