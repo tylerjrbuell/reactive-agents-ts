@@ -318,4 +318,416 @@ describe("runKernel", () => {
     expect(result.steps.length).toBe(0); // No extra steps added
     expect(result.toolsUsed.size).toBe(0);
   });
+
+  // ── Loop Detection ───────────────────────────────────────────────────────
+
+  it("detects repeated tool calls and aborts", async () => {
+    const toolAction = JSON.stringify({ tool: "web-search", input: '{"query":"test"}' });
+    let callCount = 0;
+
+    const repeatedToolKernel: ThoughtKernel = (state, _ctx) => {
+      callCount++;
+      return Effect.succeed(
+        transitionState(state, {
+          status: "thinking",
+          iteration: state.iteration + 1,
+          steps: [...state.steps, makeStep("action", toolAction)],
+        }),
+      );
+    };
+
+    const result = await Effect.runPromise(
+      runKernel(repeatedToolKernel, { task: "loop" }, {
+        maxIterations: 20,
+        strategy: "test",
+        kernelType: "test",
+        loopDetection: { maxSameToolCalls: 3 },
+      }).pipe(Effect.provide(testLayer)),
+    );
+
+    expect(result.status).toBe("failed");
+    expect(result.error).toContain("Loop detected");
+    expect(result.error).toContain("same tool call repeated 3 times");
+    expect(callCount).toBe(3);
+  });
+
+  it("detects repeated identical thoughts and aborts", async () => {
+    let callCount = 0;
+
+    const repeatedThoughtKernel: ThoughtKernel = (state, _ctx) => {
+      callCount++;
+      return Effect.succeed(
+        transitionState(state, {
+          status: "thinking",
+          iteration: state.iteration + 1,
+          steps: [
+            ...state.steps,
+            makeStep("thought", "I need to think about this more"),
+          ],
+        }),
+      );
+    };
+
+    const result = await Effect.runPromise(
+      runKernel(repeatedThoughtKernel, { task: "loop" }, {
+        maxIterations: 20,
+        strategy: "test",
+        kernelType: "test",
+        loopDetection: { maxRepeatedThoughts: 3 },
+      }).pipe(Effect.provide(testLayer)),
+    );
+
+    expect(result.status).toBe("failed");
+    expect(result.error).toContain("Loop detected");
+    expect(result.error).toContain("identical thought repeated");
+    expect(callCount).toBe(3);
+  });
+
+  it("does not trigger loop detection for different tool args", async () => {
+    let callCount = 0;
+
+    const variedToolKernel: ThoughtKernel = (state, _ctx) => {
+      callCount++;
+      const action = JSON.stringify({ tool: "web-search", input: `{"query":"test ${callCount}"}` });
+      if (callCount >= 5) {
+        return Effect.succeed(
+          transitionState(state, {
+            status: "done",
+            output: "found it",
+            iteration: state.iteration + 1,
+            steps: [...state.steps, makeStep("action", action)],
+          }),
+        );
+      }
+      return Effect.succeed(
+        transitionState(state, {
+          status: "thinking",
+          iteration: state.iteration + 1,
+          steps: [...state.steps, makeStep("action", action)],
+        }),
+      );
+    };
+
+    const result = await Effect.runPromise(
+      runKernel(variedToolKernel, { task: "varied" }, {
+        maxIterations: 20,
+        strategy: "test",
+        kernelType: "test",
+        loopDetection: { maxSameToolCalls: 3 },
+      }).pipe(Effect.provide(testLayer)),
+    );
+
+    expect(result.status).toBe("done");
+    expect(result.output).toBe("found it");
+    expect(callCount).toBe(5);
+  });
+
+  it("uses default loop detection thresholds when not configured", async () => {
+    const toolAction = JSON.stringify({ tool: "same-tool", input: "{}" });
+    let callCount = 0;
+
+    const repeatedKernel: ThoughtKernel = (state, _ctx) => {
+      callCount++;
+      return Effect.succeed(
+        transitionState(state, {
+          status: "thinking",
+          iteration: state.iteration + 1,
+          steps: [...state.steps, makeStep("action", toolAction)],
+        }),
+      );
+    };
+
+    // Default is maxSameToolCalls: 3
+    const result = await Effect.runPromise(
+      runKernel(repeatedKernel, { task: "defaults" }, {
+        maxIterations: 20,
+        strategy: "test",
+        kernelType: "test",
+        // No loopDetection config — uses defaults
+      }).pipe(Effect.provide(testLayer)),
+    );
+
+    expect(result.status).toBe("failed");
+    expect(result.error).toContain("Loop detected");
+    expect(callCount).toBe(3);
+  });
+});
+
+// ── Required Tools Guard Tests ───────────────────────────────────────────────
+
+describe("runKernel — required tools guard", () => {
+  const testLayer = TestLLMServiceLayer();
+
+  it("passes through when all required tools have been used", async () => {
+    // Kernel that uses a tool then declares done
+    let callCount = 0;
+    const toolUsingKernel: ThoughtKernel = (state, _ctx) => {
+      callCount++;
+      if (callCount === 1) {
+        const newTools = new Set(state.toolsUsed);
+        newTools.add("send_message");
+        return Effect.succeed(
+          transitionState(state, {
+            status: "thinking",
+            iteration: state.iteration + 1,
+            toolsUsed: newTools,
+            steps: [...state.steps, makeStep("action", "send_message")],
+          }),
+        );
+      }
+      return Effect.succeed(
+        transitionState(state, {
+          status: "done",
+          output: "Task complete",
+          iteration: state.iteration + 1,
+        }),
+      );
+    };
+
+    const result = await Effect.runPromise(
+      runKernel(toolUsingKernel, { task: "test", requiredTools: ["send_message"] }, {
+        maxIterations: 10,
+        strategy: "test",
+        kernelType: "test",
+      }).pipe(Effect.provide(testLayer)),
+    );
+
+    expect(result.status).toBe("done");
+    expect(result.output).toBe("Task complete");
+  });
+
+  it("redirects agent when required tools missing, then succeeds", async () => {
+    // Kernel that declares done first, then after seeing required tools feedback,
+    // calls the tool and declares done again
+    let callCount = 0;
+    const redirectKernel: ThoughtKernel = (state, _ctx) => {
+      callCount++;
+      if (callCount === 1) {
+        // First attempt: declare done without using the required tool
+        return Effect.succeed(
+          transitionState(state, {
+            status: "done",
+            output: "I'm done!",
+            iteration: state.iteration + 1,
+          }),
+        );
+      }
+      if (callCount === 2) {
+        // After redirect: call the required tool
+        const newTools = new Set(state.toolsUsed);
+        newTools.add("send_message");
+        return Effect.succeed(
+          transitionState(state, {
+            status: "thinking",
+            iteration: state.iteration + 1,
+            toolsUsed: newTools,
+            steps: [...state.steps, makeStep("action", "send_message")],
+          }),
+        );
+      }
+      // Third call: declare done for real
+      return Effect.succeed(
+        transitionState(state, {
+          status: "done",
+          output: "Done after sending message",
+          iteration: state.iteration + 1,
+        }),
+      );
+    };
+
+    const result = await Effect.runPromise(
+      runKernel(redirectKernel, { task: "test", requiredTools: ["send_message"] }, {
+        maxIterations: 10,
+        strategy: "test",
+        kernelType: "test",
+      }).pipe(Effect.provide(testLayer)),
+    );
+
+    expect(result.status).toBe("done");
+    expect(result.output).toBe("Done after sending message");
+    // Should have the feedback step in the steps
+    const feedbackSteps = result.steps.filter((s) =>
+      s.content.includes("Required tools not yet used"),
+    );
+    expect(feedbackSteps.length).toBe(1);
+    expect(feedbackSteps[0]!.content).toContain("send_message");
+    expect(feedbackSteps[0]!.content).toContain("Redirect 1/2");
+  });
+
+  it("fails after max retry limit is exceeded", async () => {
+    // Kernel that always declares done without using required tools
+    const stubbornKernel: ThoughtKernel = (state, _ctx) =>
+      Effect.succeed(
+        transitionState(state, {
+          status: "done",
+          output: "I refuse to use the tool",
+          iteration: state.iteration + 1,
+        }),
+      );
+
+    const result = await Effect.runPromise(
+      runKernel(stubbornKernel, { task: "test", requiredTools: ["send_message"] }, {
+        maxIterations: 20,
+        strategy: "test",
+        kernelType: "test",
+      }).pipe(Effect.provide(testLayer)),
+    );
+
+    expect(result.status).toBe("failed");
+    expect(result.error).toContain("Required tools never called");
+    expect(result.error).toContain("send_message");
+    expect(result.error).toContain("2 redirect(s)");
+  });
+
+  it("respects custom maxRequiredToolRetries", async () => {
+    let redirectCount = 0;
+    const stubbornKernel: ThoughtKernel = (state, _ctx) => {
+      // Count how many times we get redirected (status is "thinking" after a redirect)
+      if (state.status === "thinking" && state.steps.some((s) => s.content.includes("Required tools not yet used"))) {
+        redirectCount++;
+      }
+      return Effect.succeed(
+        transitionState(state, {
+          status: "done",
+          output: "Still refusing",
+          iteration: state.iteration + 1,
+        }),
+      );
+    };
+
+    const result = await Effect.runPromise(
+      runKernel(stubbornKernel, {
+        task: "test",
+        requiredTools: ["send_message"],
+        maxRequiredToolRetries: 1,
+      }, {
+        maxIterations: 20,
+        strategy: "test",
+        kernelType: "test",
+      }).pipe(Effect.provide(testLayer)),
+    );
+
+    expect(result.status).toBe("failed");
+    expect(result.error).toContain("1 redirect(s)");
+  });
+
+  it("tracks multiple required tools independently", async () => {
+    let callCount = 0;
+    const partialToolKernel: ThoughtKernel = (state, _ctx) => {
+      callCount++;
+      if (callCount === 1) {
+        // Use only one of two required tools
+        const newTools = new Set(state.toolsUsed);
+        newTools.add("search");
+        return Effect.succeed(
+          transitionState(state, {
+            status: "done",
+            output: "Searched but didn't send",
+            iteration: state.iteration + 1,
+            toolsUsed: newTools,
+          }),
+        );
+      }
+      if (callCount === 2) {
+        // After redirect, use the second tool
+        const newTools = new Set(state.toolsUsed);
+        newTools.add("send_message");
+        return Effect.succeed(
+          transitionState(state, {
+            status: "thinking",
+            iteration: state.iteration + 1,
+            toolsUsed: newTools,
+            steps: [...state.steps, makeStep("action", "send_message")],
+          }),
+        );
+      }
+      return Effect.succeed(
+        transitionState(state, {
+          status: "done",
+          output: "All tools used",
+          iteration: state.iteration + 1,
+        }),
+      );
+    };
+
+    const result = await Effect.runPromise(
+      runKernel(partialToolKernel, {
+        task: "test",
+        requiredTools: ["search", "send_message"],
+      }, {
+        maxIterations: 10,
+        strategy: "test",
+        kernelType: "test",
+      }).pipe(Effect.provide(testLayer)),
+    );
+
+    expect(result.status).toBe("done");
+    expect(result.output).toBe("All tools used");
+    // The redirect feedback should only mention the missing tool (send_message)
+    const feedbackSteps = result.steps.filter((s) =>
+      s.content.includes("Required tools not yet used"),
+    );
+    expect(feedbackSteps.length).toBe(1);
+    expect(feedbackSteps[0]!.content).toContain("send_message");
+    expect(feedbackSteps[0]!.content).not.toContain("search");
+  });
+
+  it("no guard fires when requiredTools is empty", async () => {
+    const result = await Effect.runPromise(
+      runKernel(doneKernel, { task: "test", requiredTools: [] }, {
+        maxIterations: 10,
+        strategy: "test",
+        kernelType: "test",
+      }).pipe(Effect.provide(testLayer)),
+    );
+
+    expect(result.status).toBe("done");
+    expect(result.output).toBe("Hello world");
+  });
+
+  it("no guard fires when requiredTools is undefined", async () => {
+    const result = await Effect.runPromise(
+      runKernel(doneKernel, { task: "test" }, {
+        maxIterations: 10,
+        strategy: "test",
+        kernelType: "test",
+      }).pipe(Effect.provide(testLayer)),
+    );
+
+    expect(result.status).toBe("done");
+    expect(result.output).toBe("Hello world");
+  });
+
+  it("post-loop check catches missing tools when max iterations exhausted", async () => {
+    // Kernel that uses a tool but never uses all required tools and hits max iterations
+    const incompleteKernel: ThoughtKernel = (state, _ctx) => {
+      const newTools = new Set(state.toolsUsed);
+      newTools.add("search");
+      return Effect.succeed(
+        transitionState(state, {
+          status: "done",
+          output: "Done with search only",
+          iteration: state.iteration + 1,
+          toolsUsed: newTools,
+        }),
+      );
+    };
+
+    // maxRequiredToolRetries: 0 means fail immediately without redirect
+    const result = await Effect.runPromise(
+      runKernel(incompleteKernel, {
+        task: "test",
+        requiredTools: ["search", "send_message"],
+        maxRequiredToolRetries: 0,
+      }, {
+        maxIterations: 5,
+        strategy: "test",
+        kernelType: "test",
+      }).pipe(Effect.provide(testLayer)),
+    );
+
+    expect(result.status).toBe("failed");
+    expect(result.error).toContain("Required tools never called");
+    expect(result.error).toContain("send_message");
+  });
 });
