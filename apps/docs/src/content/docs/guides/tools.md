@@ -203,7 +203,7 @@ const tool = adaptFunction({
 
 ## MCP Support
 
-Connect to [Model Context Protocol](https://modelcontextprotocol.io) servers for external tool discovery and execution. MCP tools are automatically prefixed with `{serverName}/` (e.g. `filesystem/read_file`) and injected into the agent's reasoning loop alongside built-in tools.
+Connect to [Model Context Protocol](https://modelcontextprotocol.io/docs/getting-started/intro) servers for external tool discovery and execution. MCP tools are automatically prefixed with `{serverName}/` (e.g. `filesystem/read_file`) and injected into the agent's reasoning loop alongside built-in tools.
 
 ### Transports
 
