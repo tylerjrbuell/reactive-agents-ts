@@ -289,9 +289,9 @@ describe("ReactiveStrategy — real tool execution", () => {
 
     await Effect.runPromise(program.pipe(Effect.provide(capturingLLMLayer)));
 
-    // The prompt should mention available tools and JSON format hint
+    // The prompt should mention available tools and include RULES block
     expect(capturedPrompt).toContain("web-search");
     expect(capturedPrompt).toContain("file-read");
-    expect(capturedPrompt).toContain("ACTION: tool_name(");
+    expect(capturedPrompt).toContain("RULES:");
   });
 });
