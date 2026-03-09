@@ -26,10 +26,6 @@ export default defineConfig({
         dark: "./src/assets/logo-dark.svg",
         replacesTitle: false,
       },
-      editLink: {
-        baseUrl:
-          "https://github.com/tylerjrbuell/reactive-agents-ts/edit/main/apps/docs/",
-      },
       lastUpdated: true,
       customCss: ["./src/styles/custom.css"],
       head: [
