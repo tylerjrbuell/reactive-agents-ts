@@ -93,6 +93,14 @@ export type {
   ErrorRecovery,
   ExperienceQueryResult,
 } from "./services/experience-store.js";
+export {
+  MemoryConsolidatorService,
+  MemoryConsolidatorServiceLive,
+} from "./services/memory-consolidator.js";
+export type {
+  ConsolidationResult,
+  ConsolidatorConfig,
+} from "./services/memory-consolidator.js";
 
 // ─── File System ───
 export {
