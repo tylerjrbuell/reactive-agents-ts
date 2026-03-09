@@ -23,6 +23,7 @@ import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { ToolSchema } from "./tool-utils.js";
 import {
   parseAllToolRequests,
+  parseToolRequestGroup,
   hasFinalAnswer,
   extractFinalAnswer,
   parseBareToolCall,
@@ -31,7 +32,7 @@ import { buildContext } from "../../context/context-engine.js";
 import type { MemoryItem } from "../../context/context-engine.js";
 import { extractThinking } from "./thinking-utils.js";
 import { makeStep } from "./step-utils.js";
-import { executeToolCall, makeObservationResult } from "./tool-execution.js";
+import { executeToolCall, executeToolGroup, makeObservationResult } from "./tool-execution.js";
 import { runKernel } from "./kernel-runner.js";
 import {
   transitionState,
@@ -361,6 +362,10 @@ function handleThinking(
 
     // ── TOOL REQUEST FOUND → transition to "acting" ─────────────────────────
     if (toolRequest) {
+      // Parse multi-tool group for parallel / chain dispatch
+      const toolRequestGroup = parseToolRequestGroup(thought);
+      const hasGroup = toolRequestGroup.mode !== "single" && toolRequestGroup.requests.length > 1;
+
       return transitionState(state, {
         steps: newSteps,
         tokens: newTokens,
@@ -369,6 +374,7 @@ function handleThinking(
         meta: {
           ...state.meta,
           pendingToolRequest: toolRequest,
+          pendingToolGroup: hasGroup ? toolRequestGroup : undefined,
           // Store thought + thinking for post-action FA check
           lastThought: thought,
           lastThinking: thinking,
@@ -473,24 +479,53 @@ function handleActing(
       obsResult = makeObservationResult(toolRequest.tool, true, observationContent);
     } else {
       const toolStartMs = Date.now();
-      const toolObs = yield* executeToolCall(toolService, toolRequest, {
+      const pendingGroup = state.meta.pendingToolGroup as import("./tool-utils.js").ToolRequestGroup | undefined;
+      const toolConfig = {
         profile,
         compression,
         scratchpad: state.scratchpad as Map<string, string>,
         agentId: input.agentId,
         sessionId: input.sessionId,
-      });
-      const toolDurationMs = Date.now() - toolStartMs;
-      observationContent = toolObs.content;
-      obsResult = toolObs.observationResult;
+      };
 
-      // Store actual duration in action step metadata
-      const lastActionStep = stepsWithAction[stepsWithAction.length - 1];
-      if (lastActionStep?.type === "action") {
-        stepsWithAction[stepsWithAction.length - 1] = {
-          ...lastActionStep,
-          metadata: { ...(lastActionStep.metadata ?? {}), duration: toolDurationMs },
-        };
+      if (pendingGroup && pendingGroup.mode !== "single" && pendingGroup.requests.length > 1) {
+        // Parallel or chain execution
+        const groupResult = yield* executeToolGroup(toolService, pendingGroup, toolConfig);
+        const toolDurationMs = Date.now() - toolStartMs;
+        observationContent = groupResult.combinedObservation;
+        // Use the last result's observationResult (or synthesize one from combined)
+        const lastResult = groupResult.results[groupResult.results.length - 1];
+        obsResult = lastResult?.observationResult ??
+          makeObservationResult(toolRequest.tool, true, observationContent);
+
+        // Track all tools used
+        for (const r of pendingGroup.requests) {
+          newToolsUsed.add(r.tool);
+        }
+
+        // Store duration in action step metadata
+        const lastActionStep = stepsWithAction[stepsWithAction.length - 1];
+        if (lastActionStep?.type === "action") {
+          stepsWithAction[stepsWithAction.length - 1] = {
+            ...lastActionStep,
+            metadata: { ...(lastActionStep.metadata ?? {}), duration: toolDurationMs },
+          };
+        }
+      } else {
+        // Single tool execution (existing path — backwards compatible)
+        const toolObs = yield* executeToolCall(toolService, toolRequest, toolConfig);
+        const toolDurationMs = Date.now() - toolStartMs;
+        observationContent = toolObs.content;
+        obsResult = toolObs.observationResult;
+
+        // Store actual duration in action step metadata
+        const lastActionStep = stepsWithAction[stepsWithAction.length - 1];
+        if (lastActionStep?.type === "action") {
+          stepsWithAction[stepsWithAction.length - 1] = {
+            ...lastActionStep,
+            metadata: { ...(lastActionStep.metadata ?? {}), duration: toolDurationMs },
+          };
+        }
       }
     }
 
@@ -524,6 +559,7 @@ function handleActing(
         meta: {
           ...state.meta,
           pendingToolRequest: undefined,
+          pendingToolGroup: undefined,
           lastThought: undefined,
           lastThinking: undefined,
         },
@@ -539,6 +575,7 @@ function handleActing(
       meta: {
         ...state.meta,
         pendingToolRequest: undefined,
+        pendingToolGroup: undefined,
         lastThought: undefined,
         lastThinking: undefined,
       },
