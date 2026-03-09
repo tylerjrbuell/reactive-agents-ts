@@ -320,6 +320,18 @@ export const ReactiveAgentsConfigSchema = Schema.Struct({
       maxRetries: Schema.optional(Schema.Number),
     })
   ),
+  /** Enable ExperienceStore cross-agent learning (records and queries tool-use patterns). */
+  enableExperienceLearning: Schema.optional(Schema.Boolean),
+  /** Enable MemoryConsolidatorService background memory intelligence. */
+  enableMemoryConsolidation: Schema.optional(Schema.Boolean),
+  /** Configuration for MemoryConsolidatorService. */
+  consolidationConfig: Schema.optional(
+    Schema.Struct({
+      threshold: Schema.optional(Schema.Number),
+      decayFactor: Schema.optional(Schema.Number),
+      pruneThreshold: Schema.optional(Schema.Number),
+    })
+  ),
 });
 export type ReactiveAgentsConfig = typeof ReactiveAgentsConfigSchema.Type;
 
