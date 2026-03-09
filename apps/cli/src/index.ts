@@ -4,6 +4,7 @@ import { runDev } from "./commands/dev.js";
 import { runEval } from "./commands/eval.js";
 import { runPlayground } from "./commands/playground.js";
 import { runInspect } from "./commands/inspect.js";
+import { runBench } from "./commands/bench.js";
 import { runAgent } from "./commands/run.js";
 import { runServe } from "./commands/serve.js";
 import { runDiscover } from "./commands/discover.js";
@@ -25,6 +26,8 @@ const HELP = `
     playground [--provider ...] [--stream] [--memory] [--memory-tier 1|2]
                   Launch interactive agent REPL
     inspect <agent-id> [--logs-tail <n>]             Inspect local deployment signals/logs
+    bench [--provider ...] [--model ...] [--tier ...] [--output ...]
+                  Run benchmark suite against an LLM provider
     deploy up [--target local|fly|railway|render|cloudrun|digitalocean] [--mode daemon|sdk] [--dry-run]
                               Build + deploy agent container
     deploy down [--target ...]                        Stop deployment (auto-detects target)
@@ -92,6 +95,10 @@ export function main(argv: string[] = process.argv.slice(2)) {
 
     case "inspect":
       runInspect(argv.slice(1));
+      break;
+
+    case "bench":
+      runAsync(runBench(argv.slice(1)));
       break;
 
     case "version":

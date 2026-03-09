@@ -4,6 +4,7 @@ export type {
   TaskResult,
   OverheadMeasurement,
   BenchmarkReport,
+  MultiModelReport,
   Tier,
 } from "./types.js";
 export { BENCHMARK_TASKS, getTasksByTier } from "./tasks.js";

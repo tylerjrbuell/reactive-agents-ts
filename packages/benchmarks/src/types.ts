@@ -12,10 +12,12 @@ export interface BenchmarkTask {
   readonly tier: Tier;
   readonly name: string;
   readonly prompt: string;
-  /** Optional expected output pattern (regex or substring). */
+  /** Optional expected output pattern (regex or substring with | separators). */
   readonly expected?: string;
-  /** Reasoning strategy to test. */
+  /** Reasoning strategy to test (undefined = single-shot). */
   readonly strategy?: "react" | "plan-execute" | "tree-of-thought";
+  /** Industry benchmark this task is aligned with. */
+  readonly benchmark?: string;
   /** Whether tools are required. */
   readonly requiresTools?: boolean;
 }
@@ -59,4 +61,10 @@ export interface BenchmarkReport {
     readonly avgLatencyMs: number;
     readonly byTier: Record<Tier, { passed: number; total: number; avgMs: number }>;
   };
+}
+
+/** Multi-model benchmark report — contains results from multiple provider/model runs. */
+export interface MultiModelReport {
+  readonly generatedAt: string;
+  readonly runs: readonly BenchmarkReport[];
 }

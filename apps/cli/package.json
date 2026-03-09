@@ -32,7 +32,8 @@
     "@reactive-agents/runtime": "workspace:*",
     "@reactive-agents/eval": "workspace:*",
     "@reactive-agents/llm-provider": "workspace:*",
-    "@reactive-agents/a2a": "workspace:*"
+    "@reactive-agents/a2a": "workspace:*",
+    "@reactive-agents/benchmarks": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.7.0",
