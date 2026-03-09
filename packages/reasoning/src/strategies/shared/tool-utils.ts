@@ -328,6 +328,66 @@ function parseLiteral(val: string): unknown {
   return val;
 }
 
+// ── Multi-tool Execution Groups ──────────────────────────────────────────────
+
+export interface ToolRequestGroup {
+  mode: "single" | "parallel" | "chain";
+  requests: { tool: string; input: string; transform?: string }[];
+}
+
+const SIDE_EFFECT_PREFIXES = [
+  "send_", "create_", "delete_", "push_", "merge_", "fork_",
+  "update_", "assign_", "remove_",
+];
+
+/**
+ * Parse a thought into a ToolRequestGroup.
+ *
+ * - Single ACTION → { mode: "single" }
+ * - ACTION + THEN → { mode: "chain" }  (chain takes precedence over parallel)
+ * - Multiple ACTION (no side-effects) → { mode: "parallel", max 3 }
+ * - Multiple ACTION with side-effect tool → { mode: "single" } (first only)
+ */
+export function parseToolRequestGroup(thought: string): ToolRequestGroup {
+  // Chain mode: THEN: keyword present — must be checked before length guard
+  // because THEN: lines are not ACTION: lines (parseAllToolRequests won't find them).
+  const hasThen = /\nTHEN:/i.test(thought);
+  if (hasThen) {
+    const lines = thought.split("\n");
+    const chainRequests: { tool: string; input: string; transform?: string }[] = [];
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (/^ACTION:/i.test(trimmed)) {
+        const req = parseToolRequest(trimmed);
+        if (req) chainRequests.push(req);
+      } else if (/^THEN:/i.test(trimmed)) {
+        const normalized = trimmed.replace(/^THEN:\s*/i, "ACTION: ");
+        const req = parseToolRequest(normalized);
+        if (req) chainRequests.push(req);
+      }
+    }
+    if (chainRequests.length > 0) {
+      return { mode: "chain", requests: chainRequests.slice(0, 3) };
+    }
+  }
+
+  const allRequests = parseAllToolRequests(thought);
+  if (allRequests.length <= 1) {
+    return { mode: "single", requests: allRequests };
+  }
+
+  // Parallel mode: check for side-effect tools
+  const hasSideEffect = allRequests.some((req) =>
+    SIDE_EFFECT_PREFIXES.some((p) => req.tool.toLowerCase().includes(p)),
+  );
+  if (hasSideEffect) {
+    // Side-effect tools must run one at a time — return only first
+    return { mode: "single", requests: [allRequests[0]!] };
+  }
+
+  return { mode: "parallel", requests: allRequests.slice(0, 3) };
+}
+
 // ── Tool Schema Formatting ────────────────────────────────────────────────────
 
 export interface ToolParamSchema {

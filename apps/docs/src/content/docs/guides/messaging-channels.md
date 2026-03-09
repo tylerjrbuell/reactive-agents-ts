@@ -33,7 +33,7 @@ Signal requires a real phone number and a captcha. Run the registration helper:
 ```
 
 This will:
-1. Ask you to solve a captcha at https://signalcaptchas.org/registration/generate.html
+1. Ask you to solve a captcha at https://signalcaptchas.org/registration/generate
 2. Send a verification code to your phone
 3. Store encrypted auth keys in `./signal-data/`
 

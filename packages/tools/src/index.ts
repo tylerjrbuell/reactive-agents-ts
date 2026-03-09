@@ -111,5 +111,19 @@ export {
   buildParentContextPrefix,
   MAX_RECURSION_DEPTH,
   MAX_PARENT_CONTEXT_CHARS,
+  ALWAYS_INCLUDE_TOOLS,
 } from "./adapters/agent-tool-adapter.js";
 export type { RemoteAgentClient, TaskResult, SubAgentConfig, SubAgentResult, ParentContext, ParentContextItem } from "./adapters/agent-tool-adapter.js";
+
+// ─── Meta-Tools ───
+export {
+  contextStatusTool,
+  makeContextStatusHandler,
+} from "./skills/context-status.js";
+export type { ContextStatusState } from "./skills/context-status.js";
+export {
+  taskCompleteTool,
+  shouldShowTaskComplete,
+  makeTaskCompleteHandler,
+} from "./skills/task-complete.js";
+export type { TaskCompleteVisibility, TaskCompleteState } from "./skills/task-complete.js";

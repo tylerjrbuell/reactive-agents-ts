@@ -88,10 +88,64 @@ When you enable `.withTools()`, these tools are automatically registered and ava
 | `file-read` | file | Read file contents (path-traversal protected) | — |
 | `file-write` | file | Write file contents (requires approval) | — |
 | `code-execute` | code | Execute code in a subprocess (`Bun.spawn`, `cwd: "/tmp"`, minimal env) | — |
+| `scratchpad-write` | memory | Persist notes outside the context window for later retrieval | — |
+| `scratchpad-read` | memory | Read a previously stored scratchpad note by key | — |
+
+### Meta-Tools
+
+Meta-tools provide agent self-awareness and guarded completion. They require live execution state and are registered by the kernel automatically — you cannot call them yourself from custom tool configs.
+
+| Tool | Description |
+|------|-------------|
+| `context-status` | Zero-parameter introspection: reports `iteration`, `maxIterations`, `remaining`, `toolsUsed`, `toolsPending`, `storedKeys`, `tokensUsed`. Always visible. |
+| `task-complete` | Explicit task completion with a `summary` parameter. **Visibility-gated**: only appears in the schema when all four conditions hold: all required tools called, iteration ≥ 2, no pending errors, at least one non-meta tool invoked. |
+
+The agent can call `context-status` any time it feels lost or needs to check progress. Once visible, `task-complete` signals definitive completion and ends the loop cleanly — avoiding false early-exits.
+
+```
+ACTION: context-status({})
+Observation: {"iteration":3,"maxIterations":10,"remaining":7,"toolsUsed":["file-read"],"toolsPending":["file-write"],"storedKeys":[],"tokensUsed":850}
+
+ACTION: task-complete({"summary": "Read config.json and updated the output path. File written successfully."})
+Observation: {"completed":true,"summary":"Read config.json and updated the output path. File written successfully."}
+```
+
+## Parallel and Chain Tool Execution
+
+Agents can issue multiple tool calls from a single thought step.
+
+### Parallel
+
+List multiple `ACTION:` lines in one thought and the framework executes them concurrently:
+
+```
+ACTION: web-search({"query": "TypeScript 5.7 release notes"})
+ACTION: http-get({"url": "https://api.example.com/status"})
+Observation (1/2): {"results": [...]}
+Observation (2/2): {"status": "ok"}
+```
+
+- Results are numbered and combined into a single observation block.
+- Capped at 3 simultaneous actions to prevent runaway fan-out.
+- Side-effect actions (`create_*`, `delete_*`, `send_*`, `push_*`, etc.) are automatically forced to single mode.
+
+### Chain
+
+Follow an `ACTION:` with `THEN:` and use `$RESULT` as a placeholder. The output of the first call is substituted into the second:
+
+```
+ACTION: file-read({"path": "package.json"})
+THEN: file-write({"path": "output.txt", "content": "Version: $RESULT"})
+Observation (chain): {"written": true, "path": "output.txt"}
+```
+
+- Execution is sequential; fails fast if any step errors.
+- `$RESULT` is replaced with the raw observation text from the prior step.
+- Capped at 3 chained steps.
 
 ### Web Search Configuration
 
-The `web-search` tool requires a [Tavily](https://tavily.com) API key. Without it, calls to `web-search` return an error telling the agent the tool is inactive:
+The `web-search` tool requires a [Tavily](https://www.tavily.com) API key. Without it, calls to `web-search` return an error telling the agent the tool is inactive:
 
 ```bash
 # .env
@@ -149,7 +203,7 @@ const tool = adaptFunction({
 
 ## MCP Support
 
-Connect to [Model Context Protocol](https://modelcontextprotocol.io) servers for external tool discovery and execution. MCP tools are automatically prefixed with `{serverName}/` (e.g. `filesystem/read_file`) and injected into the agent's reasoning loop alongside built-in tools.
+Connect to [Model Context Protocol](https://modelcontextprotocol.io/docs/getting-started/intro) servers for external tool discovery and execution. MCP tools are automatically prefixed with `{serverName}/` (e.g. `filesystem/read_file`) and injected into the agent's reasoning loop alongside built-in tools.
 
 ### Transports
 

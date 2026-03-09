@@ -8,6 +8,80 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 
 ## [Unreleased]
 
+---
+
+## [0.7.0] — 2026-03-08
+
+Context Engine & Memory Intelligence — per-iteration context scoring, cross-agent experience learning, background memory consolidation, meta-tools for agent self-awareness, and parallel/chain tool execution.
+
+### Added
+
+#### ContextEngine — Per-Iteration Context Scoring (`@reactive-agents/reasoning`)
+
+Replaces 6 static context builders (`buildInitialContext`, `buildCompactedContext`, `progressiveSummarize`, `buildCompletedSummary`, `buildPinnedToolReference`, `buildIterationAwareness`) with a unified pipeline:
+
+- **`buildContext(input: ContextBuildInput)`** — scores every history item per iteration using recency decay (`e^{-0.3 * iterDiff}`), keyword overlap relevance, type weight (obs 0.8 > action 0.6 > thought 0.4), failure urgency boost (1.5×), and pin score (1.0). Tool schemas always pinned; memory relevance threshold 0.3. Model-profile-adaptive full-detail step count.
+- **`scoreContextItem(item, context)`** — exported scoring primitive; useful for testing and external context assembly.
+- **`allocateContextBudget(profile, total)`** — exported budget-allocation primitive; returns per-section token budgets.
+
+#### ExperienceStore — Cross-Agent Learning (`@reactive-agents/memory`)
+
+SQLite-backed cross-run intelligence for tool pattern reuse and error recovery:
+
+- **`ExperienceStore.record(entry)`** — upserts `(taskType, patternKey)` row accumulating count, success rate, avg steps/tokens; upserts error recovery hints keyed by `(tool, errorPattern)`.
+- **`ExperienceStore.query(taskDescription, taskType, modelTier)`** — returns tool patterns (filtered to ≥50% confidence AND ≥2 occurrences) and error recovery hints; generates human-readable `tips[]` array injected at agent bootstrap.
+- **`.withExperienceLearning()`** builder method — enables `ExperienceStoreLive` in the runtime; execution engine injects tips at bootstrap and records outcomes after each run.
+
+#### MemoryConsolidatorService — Background Memory Intelligence (`@reactive-agents/memory`)
+
+Background decay/replay/compress cycle for episodic entries:
+
+- **`MemoryConsolidatorService.consolidate(agentId)`** — COMPRESS: decays all episodic `importance` × 0.95, prunes entries below 0.1. REPLAY: counts recent episodic entries added since last consolidation run. Persists state to `consolidation_state` SQLite table.
+- **`MemoryConsolidatorService.notifyEntry()`** — increments pending counter; returns `true` when threshold (default 10) reached to signal consolidation is due.
+- **`MemoryConsolidatorServiceLive(config?)`** — factory `Layer`; accepts `{ threshold?, decayFactor?, pruneThreshold? }`.
+- **`.withMemoryConsolidation(config?)`** builder method — enables `MemoryConsolidatorServiceLive` in the runtime.
+
+#### Meta-Tools — Agent Self-Awareness (`@reactive-agents/tools`)
+
+Two new kernel-level meta-tools for agent introspection and guarded completion:
+
+- **`context-status`** — zero-parameter tool that reports `iteration`, `maxIterations`, `remaining`, `toolsUsed`, `toolsPending`, `storedKeys`, `tokensUsed`. Always visible; helps agents orient when lost.
+- **`task-complete`** — single-parameter (`summary`) tool for explicit task signalling. Visibility-gated: only shown when all 4 conditions hold: (1) all required tools called, (2) iteration ≥ 2, (3) no pending errors, (4) at least one non-meta tool invoked.
+- **`makeContextStatusHandler(state)`** and **`makeTaskCompleteHandler(state)`** — factory functions for dynamic state wiring at kernel level.
+- **`shouldShowTaskComplete(input)`** — pure visibility predicate; exported for testing and custom kernels.
+- **`metaToolDefinitions`** array — exported for schema inspection without live state wiring.
+
+#### Parallel & Chain Tool Execution (`@reactive-agents/reasoning`)
+
+Agents can now issue multiple tool calls from a single thought:
+
+- **Parallel** — multiple `ACTION:` lines in a single thought → `Effect.all(..., { concurrency: "unbounded" })` → combined numbered observation. Capped at 3 to prevent runaway fan-out. Side-effect prefixes (`send_`, `create_`, `delete_`, etc.) force single mode.
+- **Chain** — `ACTION:` followed by `THEN:` → sequential execution with `$RESULT` placeholder forwarding between steps. Fails fast on any step error. Capped at 3.
+- **`parseToolRequestGroup(thought)`** — exported primitive returning `ToolRequestGroup { mode: "single"|"parallel"|"chain", requests }`.
+- **`executeToolGroup(toolService, group, config)`** — dispatches the group; single delegates to existing `executeToolCall`.
+
+#### Sub-Agent Fixes (`@reactive-agents/tools`)
+
+- **`ALWAYS_INCLUDE_TOOLS`** — constant `["scratchpad-read", "scratchpad-write"]` auto-merged into every sub-agent's tool list so sub-agents always have scratchpad access regardless of parent config.
+- **Iteration cap** — `effectiveMaxIter = Math.min(config.maxIterations ?? 6, 6)` prevents runaway sub-agents.
+- **Scratchpad key forwarding** — `SubAgentResult.forwardedScratchpadKeys` lists keys written with `sub:<agentName>:<key>` prefix; parent agent can read forwarded context.
+
+### Changed
+
+- `@reactive-agents/reasoning`: `react-kernel.ts` net −200 lines — 6 static context helpers replaced by single `buildContext()` call.
+- `@reactive-agents/memory`: new `services/` sub-directory with `ExperienceStoreLive` and `MemoryConsolidatorServiceLive` exported from `src/index.ts`.
+- `@reactive-agents/tools`: `src/index.ts` now exports `ALWAYS_INCLUDE_TOOLS`, `contextStatusTool`, `makeContextStatusHandler`, `ContextStatusState`, `taskCompleteTool`, `shouldShowTaskComplete`, `makeTaskCompleteHandler`, `TaskCompleteVisibility`, `TaskCompleteState`.
+- `@reactive-agents/reasoning`: `src/index.ts` now exports `buildContext`, `ContextBuildInput`, `ContextItem`, `MemoryItem`, `ScoringContext`, `BudgetResult`.
+
+### Stats
+
+- 1,735 tests across 211 files (was 1,588/190 in v0.6.3, +147 new tests)
+- 20 packages (unchanged)
+
+---
+
+## [0.6.4] — 2026-03-08 (pre-release)
+
 ### Added
 
 #### Required Tools Guard & Adaptive Inference (`@reactive-agents/runtime`, `@reactive-agents/reasoning`)
@@ -161,6 +235,8 @@ Ensure agents use critical tools before producing a final answer — with option
 
 - 1,588 tests across 190 files (was 1,381/180 in v0.6.0, +207 new tests)
 - 21 packages (was 20; added `@reactive-agents/benchmarks`)
+
+---
 
 ## [0.6.3] - 2026-03-05
 

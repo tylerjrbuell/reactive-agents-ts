@@ -2,7 +2,7 @@
 
 ## Project Status
 
-**v0.6.3 — Required Tools Guard, LLM Resilience, Benchmarks.** 20 packages + 2 apps built, 1,588 tests across 190 files. Required tools guard with adaptive LLM inference. Circuit breaker and embedding cache for LLM resilience. Budget persistence, telemetry system, Docker sandbox, tool result caching. Enhanced complexity router (27 signals), hybrid memory search, JSON repair. Benchmark suite (20 tasks × 5 tiers).
+**v0.7.0 — Context Engine & Memory Intelligence.** 20 packages + 2 apps built, 1,735 tests across 211 files. ContextEngine replaces 6 static context builders with per-iteration scoring (recency decay + relevance + type weight). ExperienceStore: cross-agent tool pattern and error recovery learning (SQLite-backed). MemoryConsolidatorService: background decay/replay/compress cycles. Meta-tools: context-status introspection, task-complete visibility gating. Parallel/chain tool execution from a single thought. Sub-agent auto-scratchpad, iteration cap, key forwarding. Builder: `.withExperienceLearning()`, `.withMemoryConsolidation()`. Required tools guard with adaptive LLM inference. Circuit breaker, embedding cache, LLM resilience. Budget persistence, telemetry, Docker sandbox, tool result caching. Benchmark suite (20 tasks × 5 tiers).
 
 - Phase 1: Core, LLM Provider, Memory, Reasoning, Tools, Interaction, Runtime
 - Phase 2: Guardrails, Verification, Cost
@@ -23,6 +23,7 @@
 - Structured Plan Engine: Plan-execute-reflect rewritten — structured JSON plans, 4-layer structured output pipeline (prompt → repair → validate → retry), provider-adaptive JSON capabilities, SQLite plan persistence (PlanStoreService wired into memory layer), hybrid step dispatch (tool_call direct, analysis single LLM call, composite scoped kernel), Effect.exit error handling, graduated retry → patch → replan, tier-adaptive prompt builders, `{{from_step:sN}}` cross-step references with self-reference guard, ToolCallCompleted EventBus integration, carry-forward refinement with all-steps-completed guard, granular observability events (1241 tests, 168 files)
 - Composable Kernel Architecture: ThoughtKernel abstraction — swappable reasoning algorithms, immutable KernelState, universal KernelRunner with centralized KernelHooks, reactive.ts collapsed 905→128 lines, shared tool-execution module, embedded tool call guard, double metrics fix, custom kernel registration via StrategyRegistry (1340 tests, 173 files)
 - Agent Streaming: `agent.runStream()` AsyncGenerator with FiberRef-based TextDelta propagation through react-kernel, Queue+forkDaemon stream backend in ExecutionEngine, `AgentStream` adapters (toSSE, toReadableStream, toAsyncIterable, collect), `.withStreaming()` builder option, AgentStreamStarted/Completed EventBus events (1381 tests, 180 files)
+- Context Engine & Memory Intelligence: ContextEngine per-iteration scoring, ExperienceStore cross-agent learning, MemoryConsolidatorService background consolidation, context-status + task-complete meta-tools, parallel/chain tool execution, sub-agent auto-scratchpad + iteration cap, `.withExperienceLearning()` + `.withMemoryConsolidation()` builder methods (1735 tests, 211 files)
 - Pre-release: tsup compiled output, Google Gemini provider, Reflexion reasoning strategy
 - Final Integration: All layers compose via `createRuntime()` and `ReactiveAgentBuilder`
 - Docs: Starlight (Astro) site at `apps/docs/`
@@ -33,7 +34,7 @@
 
 ```bash
 bun install              # Install dependencies
-bun test                 # Run all tests (1588 tests, 190 files)
+bun test                 # Run all tests (1735 tests, 211 files)
 bun run build            # Build all packages (20 packages, ESM + DTS)
 cd apps/docs && npx astro dev    # Start docs dev server
 cd apps/docs && npx astro build  # Build docs for production
