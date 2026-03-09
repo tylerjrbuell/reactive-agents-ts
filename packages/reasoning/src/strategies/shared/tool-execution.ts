@@ -174,12 +174,15 @@ function normalizeObservation(toolName: string, result: string): string {
     }
 
     if (typeof parsed.subAgentName === "string" && typeof parsed.summary === "string") {
-      const prefix = parsed.success ? "✓" : "✗";
-      const tokStr =
-        typeof parsed.tokensUsed === "number" && parsed.tokensUsed > 0
-          ? ` | ${parsed.tokensUsed} tok`
-          : "";
-      return `${prefix} [Sub-agent "${parsed.subAgentName}"${tokStr}]: ${String(parsed.summary).slice(0, 500)}`;
+      const icon = parsed.success ? "✓" : "✗";
+      const name = parsed.subAgentName;
+      const steps = typeof parsed.stepsCompleted === "number" ? `${parsed.stepsCompleted} steps` : "";
+      const toks = typeof parsed.tokensUsed === "number" && parsed.tokensUsed > 0 ? `${parsed.tokensUsed} tok` : "";
+      const meta = [steps, toks].filter(Boolean).join(", ");
+      const metaStr = meta ? ` (${meta})` : "";
+      // Generous limit — this is the primary handoff the parent reasons over
+      const content = String(parsed.summary).slice(0, 800);
+      return `${icon} Sub-agent "${name}"${metaStr}:\n${content}`;
     }
   } catch {
     // Not JSON — return as-is

@@ -168,7 +168,7 @@ export function initialKernelState(opts: KernelRunOptions): KernelState {
     status: "thinking",
     output: null,
     error: null,
-    meta: opts.meta ?? {},
+    meta: { ...(opts.meta ?? {}), maxIterations: opts.maxIterations },
   };
 }
 

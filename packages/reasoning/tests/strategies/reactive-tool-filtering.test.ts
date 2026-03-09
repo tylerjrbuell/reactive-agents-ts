@@ -126,12 +126,10 @@ describe("Instruction-aware tool filtering", () => {
     );
 
     const content = getCaptured();
-    // Primary tools should have full descriptions
-    expect(content).toContain("List commits");
-    expect(content).toContain("Send signal message");
-    // Secondary tools should be names only
-    expect(content).toContain("Also available (use by name):");
-    // Secondary tools should NOT have descriptions
+    // names-only profile: ALL tools shown as comma-separated names, no descriptions
+    expect(content).toContain("github/list_commits");
+    expect(content).toContain("signal/send_message_to_user");
+    // Descriptions should NOT appear in names-only mode
     expect(content).not.toContain("Tool 0 description");
   });
 
