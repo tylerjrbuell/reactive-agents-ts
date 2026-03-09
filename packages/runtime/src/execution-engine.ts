@@ -216,7 +216,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
 
         const phaseEffect = runPhase(ctx, phase, body, eb).pipe(
           // After phase completes: emit metrics + phase completed event
-          Effect.tap((result) => {
+          Effect.tap((_result) => {
             const durationMs = performance.now() - startMs;
             const sideEffects: Effect.Effect<void, never>[] = [];
 
