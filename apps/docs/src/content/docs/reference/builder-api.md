@@ -112,6 +112,8 @@ See [Context Engineering](/guides/context-engineering/) for full tier defaults.
 | `withInteraction()` | 5 interaction modes with adaptive transitions |
 | `withPrompts(options?)` | Version-controlled prompt template engine. Options: `{ templates?: PromptTemplate[] }` |
 | `withOrchestration()` | Multi-agent workflow coordination |
+| `withExperienceLearning()` | Enable cross-agent experience learning via `ExperienceStore`. Records tool patterns and error recoveries per task type; injects relevant tips at bootstrap. |
+| `withMemoryConsolidation(config?)` | Enable background memory consolidation via `MemoryConsolidatorService`. Decays unused episodic entries, replays recent history. Config: `{ threshold?: number, decayFactor?: number, pruneThreshold?: number }` |
 | `withSelfImprovement()` | Cross-task self-improvement: logs `StrategyOutcome` per task and retrieves relevant past outcomes at bootstrap to guide strategy selection |
 | `withAudit()` | Compliance audit trail logging |
 | `withEvents()` | Enable typed EventBus subscriptions via `agent.subscribe()` |
