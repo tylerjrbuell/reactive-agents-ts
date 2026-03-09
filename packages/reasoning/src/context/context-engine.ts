@@ -57,8 +57,33 @@ export interface ContextBuildInput {
   requiredTools?: readonly string[];
   priorContext?: string;
   memories?: MemoryItem[];
-  systemPrompt?: string;
 }
+
+// ── Constants ────────────────────────────────────────────────────────────────
+
+/** Exponential decay rate applied per iteration distance in recency scoring. */
+const RECENCY_DECAY_RATE = 0.3;
+
+/** Minimum relevance score for a memory item to be included in context. */
+const MEMORY_RELEVANCE_THRESHOLD = 0.3;
+
+/**
+ * Fraction of remaining iterations at which the "LAST CHANCE" urgency message
+ * is shown (e.g. 0.2 = last 20% of iterations).
+ */
+const URGENCY_LAST_CHANCE_THRESHOLD = 0.2;
+
+/**
+ * Fraction of remaining iterations at which the "Be decisive" urgency message
+ * is shown (e.g. 0.4 = last 40% of iterations).
+ */
+const URGENCY_DECISIVE_THRESHOLD = 0.4;
+
+/** Stop words excluded from keyword-overlap relevance scoring. */
+const STOP_WORDS = new Set([
+  "the", "a", "an", "is", "are", "was", "were", "to", "of", "in", "for",
+  "and", "or", "on", "at", "by", "with", "from", "that", "this", "it",
+]);
 
 // ── Scoring ──────────────────────────────────────────────────────────────────
 
@@ -91,7 +116,7 @@ export function scoreContextItem(item: ContextItem, ctx: ScoringContext): number
 
   // Recency: exponential decay based on iteration distance
   const iterDiff = Math.max(0, ctx.currentIteration - item.iteration);
-  const recencyScore = Math.exp(-0.3 * iterDiff);
+  const recencyScore = Math.exp(-RECENCY_DECAY_RATE * iterDiff);
 
   // Relevance: keyword overlap between item content and task
   const relevanceScore = computeKeywordOverlap(item.content, ctx.taskDescription);
@@ -110,14 +135,10 @@ export function scoreContextItem(item: ContextItem, ctx: ScoringContext): number
  * Returns 0.0-1.0 based on fraction of task keywords found in content.
  */
 function computeKeywordOverlap(content: string, taskDescription: string): number {
-  const stopWords = new Set([
-    "the", "a", "an", "is", "are", "was", "were", "to", "of", "in", "for",
-    "and", "or", "on", "at", "by", "with", "from", "that", "this", "it",
-  ]);
   const taskWords = taskDescription
     .toLowerCase()
     .split(/\s+/)
-    .filter((w) => w.length > 2 && !stopWords.has(w));
+    .filter((w) => w.length > 2 && !STOP_WORDS.has(w));
   if (taskWords.length === 0) return 0;
 
   const contentLower = content.toLowerCase();
@@ -134,7 +155,12 @@ function computeKeywordOverlap(content: string, taskDescription: string): number
  * - Pinned: ~15% (tool ref, task, rules — always included)
  * - Recent: ~45% (last N steps, N = profile.fullDetailSteps)
  * - Scored: ~25% (older steps ranked by score, compacted)
- * - Memory: ~10% (task-relevant memories with relevance >= 0.3)
+ * - Memory: ~10% (task-relevant memories with relevance >= MEMORY_RELEVANCE_THRESHOLD)
+ *
+ * @remarks This function is a lower-level primitive exported for callers who
+ * want programmatic access to the scored/bucketed result (e.g. custom renderers,
+ * tests, or advanced callers). `buildContext()` uses its own inline compaction
+ * logic and does not call this function directly.
  */
 export function allocateContextBudget(
   items: readonly ContextItem[],
@@ -187,15 +213,16 @@ export function allocateContextBudget(
  * Build the full context string for an LLM prompt.
  * Replaces 6 separate builders with a single scored, budgeted render.
  *
- * Section order (tool ref first, task last for recency bias):
- * 1. Tool reference (pinned, with required tool markers)
+ * Section order (task last for recency bias):
+ * 1. Prior context (if provided)
  * 2. Memory section (if relevant)
  * 3. Scored history (compacted older steps)
  * 4. Recent steps (full detail)
  * 5. Completed summary (tool usage tally)
- * 6. Task description
+ * 6. Pinned tool reference (compact, survives compaction)
  * 7. Iteration awareness (progressive urgency)
- * 8. RULES block (with dynamic required tool + delegation rules)
+ * 8. Task description
+ * 9. RULES block (with dynamic required tool + delegation rules)
  */
 export function buildContext(input: ContextBuildInput): string {
   const {
@@ -212,24 +239,21 @@ export function buildContext(input: ContextBuildInput): string {
 
   const sections: string[] = [];
 
-  // 1. Tool reference
-  sections.push(buildToolReference(task, availableToolSchemas, requiredTools, profile.toolSchemaDetail));
-
-  // 2. Prior context (if provided)
+  // 1. Prior context (if provided)
   if (priorContext) {
     sections.push(priorContext);
   }
 
-  // 3. Memory section
+  // 2. Memory section
   if (memories && memories.length > 0) {
-    const relevant = memories.filter((m) => m.relevance >= 0.3);
+    const relevant = memories.filter((m) => m.relevance >= MEMORY_RELEVANCE_THRESHOLD);
     if (relevant.length > 0) {
       const memLines = relevant.map((m) => `- ${m.content}`).join("\n");
       sections.push(`[Relevant memories]:\n${memLines}`);
     }
   }
 
-  // 4-5. Step history (scored older + recent)
+  // 3-4. Step history (scored older + recent)
   if (steps.length > 0) {
     const compactAfter = profile.compactAfterSteps ?? 6;
     const fullDetailN = profile.fullDetailSteps ?? 4;
@@ -258,25 +282,29 @@ export function buildContext(input: ContextBuildInput): string {
     }
   }
 
-  // 6. Completed summary
+  // 5. Completed summary
   const completedSummary = buildCompletedSummary(steps);
   if (completedSummary) {
     sections.push(completedSummary);
   }
 
-  // 7. Pinned tool reference (compact, survives compaction)
-  const pinnedRef = buildPinnedToolReference(availableToolSchemas, requiredTools, profile.toolSchemaDetail);
-  if (pinnedRef) {
-    sections.push(pinnedRef);
+  // 6. Pinned tool reference (compact, survives compaction)
+  if (!availableToolSchemas || availableToolSchemas.length === 0) {
+    sections.push("No tools available for this task.");
+  } else {
+    const pinnedRef = buildPinnedToolReference(availableToolSchemas, requiredTools, profile.toolSchemaDetail);
+    if (pinnedRef) {
+      sections.push(pinnedRef);
+    }
   }
 
-  // 8. Iteration awareness
+  // 7. Iteration awareness
   sections.push(buildIterationAwareness(iteration, maxIterations));
 
-  // 9. Task description (last for recency bias)
+  // 8. Task description (last for recency bias)
   sections.push(`Task: ${task}`);
 
-  // 10. RULES block
+  // 9. RULES block
   sections.push(buildRules(availableToolSchemas, requiredTools));
 
   return sections.join("\n\n");
@@ -414,10 +442,10 @@ function buildPinnedToolReference(
  */
 function buildIterationAwareness(iteration: number, maxIterations: number): string {
   const remaining = maxIterations - iteration;
-  if (remaining <= Math.ceil(maxIterations * 0.2)) {
+  if (remaining <= Math.ceil(maxIterations * URGENCY_LAST_CHANCE_THRESHOLD)) {
     return `[Iteration ${iteration + 1}/${maxIterations} \u2014 LAST CHANCE. Give FINAL ANSWER now or next turn.]`;
   }
-  if (remaining <= Math.ceil(maxIterations * 0.4)) {
+  if (remaining <= Math.ceil(maxIterations * URGENCY_DECISIVE_THRESHOLD)) {
     return `[Iteration ${iteration + 1}/${maxIterations} \u2014 ${remaining} remaining. Be decisive.]`;
   }
   return `[Iteration ${iteration + 1}/${maxIterations}]`;
