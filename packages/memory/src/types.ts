@@ -250,7 +250,7 @@ export const defaultMemoryConfig = (agentId: string): MemoryConfig => ({
 
 // ─── Memory LLM Interface ───
 
-/** Decoupled LLM interface for Tier 2 memory services (importance scoring, tag extraction). */
+/** Decoupled LLM interface for Tier 2 memory services (importance scoring, tag extraction, embeddings). */
 export type MemoryLLM = {
   readonly complete: (req: {
     messages: readonly { role: string; content: string }[];
@@ -260,4 +260,10 @@ export type MemoryLLM = {
     { content: string; usage?: { totalTokens?: number } },
     unknown
   >;
+
+  /** Generate embeddings for one or more texts. Optional for backward compatibility. */
+  readonly embed?: (
+    texts: readonly string[],
+    model?: string,
+  ) => import("effect").Effect.Effect<readonly (readonly number[])[], unknown>;
 };

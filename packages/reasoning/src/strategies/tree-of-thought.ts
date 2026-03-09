@@ -146,6 +146,12 @@ export const executeTreeOfThought = (
 
         // Score each candidate
         for (const candidate of candidates) {
+          // Budget guard: abort scoring if cost exceeds limit
+          if (maxCost !== undefined && totalCost >= maxCost) {
+            steps.push(makeStep("observation", `[TOT] Budget guard: cost $${totalCost.toFixed(4)} reached limit $${maxCost.toFixed(4)}. Stopping scoring.`));
+            break;
+          }
+
           const scoreResponse = yield* llm
             .complete({
               messages: [
