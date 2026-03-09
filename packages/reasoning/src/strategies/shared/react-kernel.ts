@@ -159,8 +159,12 @@ function buildInitialContext(
         toolSection = `Available Tools:\n${toolLines}\n\nTo use a tool: ACTION: tool_name({"param": "value"}) — use EXACT parameter names shown above, valid JSON only.`;
       }
     } else {
-      // Primary tools always get full schema
-      const primaryLines = formatToolSchemas(primary);
+      // Primary tools: format based on detail level (respect explicit overrides)
+      const primaryLines = detail === "names-only"
+        ? primary.map(t => t.name).join(", ")
+        : detail === "names-and-types"
+          ? primary.map(formatToolSchemaCompact).join("\n")
+          : formatToolSchemas(primary);
 
       // Secondary tools: format based on tier
       let secondarySection = "";
@@ -172,7 +176,14 @@ function buildInitialContext(
         }
       }
 
-      toolSection = `Available Tools:\n${primaryLines}${secondarySection}\n\nTo use a tool: ACTION: tool_name({"param": "value"}) — use EXACT parameter names shown above, valid JSON only.`;
+      if (detail === "names-only") {
+        const allNames = secondary.length > 0
+          ? `${primaryLines}, ${secondary.map(t => t.name).join(", ")}`
+          : primaryLines;
+        toolSection = `Tools: ${allNames}\nTo use: ACTION: tool_name({"param": "value"})`;
+      } else {
+        toolSection = `Available Tools:\n${primaryLines}${secondarySection}\n\nTo use a tool: ACTION: tool_name({"param": "value"}) — use EXACT parameter names shown above, valid JSON only.`;
+      }
     }
   } else {
     toolSection = "No tools available for this task.";
@@ -272,19 +283,41 @@ function handleThinking(
       ? progressiveSummarize(initialContext, state.steps, profile)
       : buildCompactedContext(initialContext, state.steps, profile);
 
-    // Add completed-actions summary (skip already-done steps)
+    // OPT-05: Compact completed-actions summary
     const completedSummary = buildCompletedSummary(state.steps);
 
-    const thoughtPrompt = `${compactedContext}${completedSummary}
+    // OPT-01 + OPT-02: Pinned tool reference with required tool markers
+    const pinnedRef = buildPinnedToolReference(
+      input.availableToolSchemas,
+      input.requiredTools,
+      profile.toolSchemaDetail,
+    );
+
+    // OPT-06: Iteration awareness with progressive urgency
+    const maxIter = (state.meta.maxIterations as number) ?? 10;
+    const iterAwareness = buildIterationAwareness(state.iteration, maxIter);
+
+    // Dynamic RULES with conditional entries
+    let ruleNum = 8;
+    const hasRequiredTools = (input.requiredTools?.length ?? 0) > 0;
+    const requiredToolRule = hasRequiredTools
+      ? `\n${ruleNum++}. \u2B50 REQUIRED tools (marked above) MUST be called before giving FINAL ANSWER. Plan your approach to include them.`
+      : "";
+    const hasSpawnAgent = input.availableToolSchemas?.some(t => t.name === "spawn-agent");
+    const delegationRule = hasSpawnAgent
+      ? `\n${ruleNum}. DELEGATION: When using spawn-agent, the sub-agent has NO knowledge of your conversation. Include ALL specific values in the "task" field: phone numbers, emails, URLs, repo names, file paths, IDs. Never use pronouns like "the user" or "the repo" \u2014 write the actual values.`
+      : "";
+
+    const thoughtPrompt = `${compactedContext}${completedSummary}${pinnedRef}${iterAwareness}
 
 RULES:
 1. ONE action per turn. Wait for the real result before proceeding.
-2. Use EXACT parameter names from tool schemas above.
+2. Use EXACT parameter names from the tool reference above.
 3. When you have ALL required information: FINAL ANSWER: <your answer>
 4. Check 'ALREADY DONE' above. Skip completed steps.
 5. Do NOT fabricate or invent data. Only use information from tool results.
 6. When results show [STORED: _key], use ACTION: scratchpad-read({"key": "_key"}) to read full data BEFORE summarizing. Do NOT guess missing items from previews.
-7. Trust tool results. Once a tool succeeds, do NOT repeat it.
+7. Trust tool results. Once a tool succeeds, do NOT repeat it.${requiredToolRule}${delegationRule}
 
 Think step-by-step, then either take ONE action or give your FINAL ANSWER:`;
 
@@ -711,22 +744,74 @@ export const executeReActKernel = (
  * Used to guide the model away from repeating done steps.
  */
 function buildCompletedSummary(steps: readonly ReasoningStep[]): string {
-  const successes: string[] = [];
-  const seen = new Set<string>();
-  for (const step of steps) {
-    if (step.type === "observation") {
-      if (step.metadata?.observationResult?.success !== true) continue;
-      const c = step.content.trim();
-      const key = c.slice(0, 60);
-      if (!seen.has(key)) {
-        seen.add(key);
-        successes.push(c.length > 80 ? c.slice(0, 80) + "\u2026" : c);
+  const toolCounts = new Map<string, number>();
+  for (let i = 0; i < steps.length; i++) {
+    const step = steps[i]!;
+    if (step.type !== "action") continue;
+    const next = steps[i + 1];
+    if (next?.type !== "observation" || next.metadata?.observationResult?.success !== true) continue;
+    try {
+      const parsed = JSON.parse(step.content);
+      if (parsed.tool) {
+        toolCounts.set(parsed.tool, (toolCounts.get(parsed.tool) ?? 0) + 1);
       }
-    }
+    } catch { /* not parseable */ }
   }
-  if (successes.length === 0) return "";
-  return (
-    `\n\nALREADY DONE — skip these, choose only from the REMAINING steps:\n${successes.map((s) => `- ${s}`).join("\n")}` +
-    `\n\u2190 Your NEXT action must be a step that is NOT listed above. \u2192`
-  );
+  if (toolCounts.size === 0) return "";
+  const parts = Array.from(toolCounts.entries())
+    .map(([tool, count]) => count > 1 ? `${tool} \u2713 (${count}x)` : `${tool} \u2713`)
+    .join(", ");
+  return `\n\nALREADY DONE: ${parts}\n\u2193 Pick your next action from tools NOT listed above.`;
+}
+
+/**
+ * OPT-01: Build a compact tool reference block pinned near the end of the
+ * thought prompt — survives compaction since it's rebuilt every iteration.
+ * OPT-02: Mark required tools with ⭐ so the agent plans proactively.
+ *
+ * Cost: ~100-200 tokens. Prevents: 2-4 wasted iterations from wrong param names.
+ */
+function buildPinnedToolReference(
+  availableToolSchemas?: readonly ToolSchema[],
+  requiredTools?: readonly string[],
+  toolSchemaDetail?: "names-only" | "names-and-types" | "full",
+): string {
+  if (!availableToolSchemas || availableToolSchemas.length === 0) return "";
+  const detail = toolSchemaDetail ?? "full";
+  const requiredSet = new Set(requiredTools ?? []);
+
+  // names-only: skip pinned reference — tools already shown as comma list
+  if (detail === "names-only") {
+    // Still mark required tools if any
+    if (requiredSet.size === 0) return "";
+    const reqNames = availableToolSchemas
+      .filter(t => requiredSet.has(t.name))
+      .map(t => t.name);
+    if (reqNames.length === 0) return "";
+    return `\n\n\u2B50 REQUIRED tools: ${reqNames.join(", ")}`;
+  }
+
+  const lines = availableToolSchemas.map(t => {
+    const params = t.parameters
+      .map(p => `${p.name}: ${p.type}${p.required ? " \u2605" : "?"}`)
+      .join(", ");
+    const req = requiredSet.has(t.name) ? " \u2B50 REQUIRED" : "";
+    return `  ${t.name}(${params})${req}`;
+  });
+  return `\n\n[Tool reference \u2014 EXACT parameter names]:\n${lines.join("\n")}`;
+}
+
+/**
+ * OPT-06: Build iteration awareness string.
+ * Progressive urgency: info \u2192 decisive \u2192 last chance.
+ */
+function buildIterationAwareness(iteration: number, maxIterations: number): string {
+  const remaining = maxIterations - iteration;
+  if (remaining <= Math.ceil(maxIterations * 0.2)) {
+    return `\n[Iteration ${iteration + 1}/${maxIterations} \u2014 LAST CHANCE. Give FINAL ANSWER now or next turn.]`;
+  }
+  if (remaining <= Math.ceil(maxIterations * 0.4)) {
+    return `\n[Iteration ${iteration + 1}/${maxIterations} \u2014 ${remaining} remaining. Be decisive.]`;
+  }
+  return `\n[Iteration ${iteration + 1}/${maxIterations}]`;
 }

@@ -5,6 +5,7 @@ import {
   GuardrailViolationError,
   KillSwitchTriggeredError,
   BehavioralContractViolationError,
+  BudgetExceededError,
   MaxIterationsError,
   type RuntimeErrors,
 } from "./errors.js";
@@ -283,6 +284,16 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
             // Default: true when debug, false otherwise.
             const logModelIO = config.logModelIO ?? isDebug;
 
+            // Log prefix for visual nesting (sub-agents use "  │ " to indent).
+            // Wrap obs methods once to auto-prepend prefix to all log lines.
+            const lp = config.logPrefix ?? "";
+            if (obs && lp) {
+              const origInfo = obs.info.bind(obs);
+              const origDebug = obs.debug.bind(obs);
+              (obs as any).info = (msg: string, meta?: Record<string, unknown>) => origInfo(`${lp}${msg}`, meta);
+              (obs as any).debug = (msg: string, meta?: Record<string, unknown>) => origDebug(`${lp}${msg}`, meta);
+            }
+
             // ── Phase 0.2: Acquire EventBus optionally ──
             const ebOpt = yield* Effect.serviceOption(EventBus).pipe(
               Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
@@ -516,6 +527,32 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       return { ...c, selectedModel: config.defaultModel };
                     }),
                   );
+
+                  // ── Budget pre-flight check: verify budget has room before reasoning ──
+                  const budgetCostOpt = yield* Effect.serviceOption(CostService).pipe(
+                    Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
+                  );
+                  if (budgetCostOpt._tag === "Some") {
+                    yield* budgetCostOpt.value
+                      .checkBudget(0, ctx.agentId, ctx.sessionId)
+                      .pipe(
+                        Effect.catchAll((budgetErr) => {
+                          const msg = "message" in budgetErr ? String(budgetErr.message) : "Budget exceeded";
+                          const budgetType = "budgetType" in budgetErr ? String(budgetErr.budgetType) : "unknown";
+                          const limit = "limit" in budgetErr ? Number(budgetErr.limit) : 0;
+                          const current = "current" in budgetErr ? Number(budgetErr.current) : 0;
+                          return Effect.fail(
+                            new BudgetExceededError({
+                              message: msg,
+                              taskId: ctx.taskId,
+                              budgetType,
+                              limit,
+                              current,
+                            }),
+                          );
+                        }),
+                      );
+                  }
                 }
 
                 // ── Phase 4: STRATEGY_SELECT ──
@@ -592,12 +629,27 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     }));
 
                     // Fast path: heuristic keyword matching (no LLM call needed)
+                    // For required tools, use strict name-only matching — description
+                    // matching is too broad and marks 50+ tools as "required".
+                    // Cap at 5 to prevent death spiral from over-requiring.
                     const { primary } = filterToolsByRelevance(taskText, toolSchemas);
                     let inferred: readonly string[];
 
-                    if (primary.length > 0) {
-                      // Heuristic found relevant tools — skip LLM inference
+                    // Only trust heuristic if it returns a reasonable number (≤5)
+                    if (primary.length > 0 && primary.length <= 5) {
+                      // Heuristic found a focused set — skip LLM inference
                       inferred = primary.map(t => t.name);
+                    } else if (primary.length > 5) {
+                      // Too many matches — heuristic is too broad for required tools.
+                      // Filter down to only tools whose name appears in the task text.
+                      const taskLower = taskText.toLowerCase();
+                      const nameMatched = primary.filter(t => {
+                        const parts = t.name.replace(/[/_-]/g, " ").toLowerCase().split(/\s+/);
+                        return parts.some(p => p.length > 3 && taskLower.includes(p));
+                      });
+                      inferred = nameMatched.length > 0 && nameMatched.length <= 5
+                        ? nameMatched.map(t => t.name)
+                        : []; // Fall through to LLM if still too many
                     } else {
                       // Heuristic found nothing — fall back to LLM inference
                       inferred = yield* inferRequiredTools({
@@ -698,8 +750,8 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     ),
                     Effect.catchAll(() => Effect.succeed([] as readonly any[])),
                   );
-                  const availableToolNames = availableToolDefs.map((t: any) => t.name as string);
-                  const availableToolSchemas = availableToolDefs.map((t: any) => ({
+                  let availableToolNames = availableToolDefs.map((t: any) => t.name as string);
+                  let availableToolSchemas = availableToolDefs.map((t: any) => ({
                     name: t.name as string,
                     description: t.description as string,
                     parameters: (t.parameters ?? []).map((p: any) => ({
@@ -709,6 +761,41 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       required: Boolean(p.required),
                     })),
                   }));
+
+                  // ── Adaptive tool filtering ──
+                  // When enabled, filter the tool schemas shown to the agent to only
+                  // task-relevant tools + essential built-ins. Reduces context noise
+                  // and improves small-model accuracy. All tools remain callable by name.
+                  if (config.adaptiveToolFiltering && availableToolSchemas.length > 10) {
+                    const taskTextForFilter = extractTaskText(task.input);
+                    const { primary } = filterToolsByRelevance(taskTextForFilter, availableToolSchemas);
+
+                    // Always include essential tools the agent needs for internal operations
+                    const ALWAYS_INCLUDE = new Set([
+                      "scratchpad-read", "scratchpad-write",
+                      "spawn-agent",
+                    ]);
+
+                    // Merge primary + always-include + required tools
+                    const requiredSet = new Set(effectiveRequiredTools ?? []);
+                    const filteredSet = new Set(primary.map(t => t.name));
+                    for (const name of ALWAYS_INCLUDE) filteredSet.add(name);
+                    for (const name of requiredSet) filteredSet.add(name);
+
+                    // Filter schemas to only those in the filtered set
+                    const filtered = availableToolSchemas.filter(t => filteredSet.has(t.name));
+
+                    // Only apply filtering if it actually reduces the set meaningfully
+                    if (filtered.length < availableToolSchemas.length && filtered.length >= 2) {
+                      const hiddenCount = availableToolSchemas.length - filtered.length;
+                      availableToolSchemas = filtered;
+                      availableToolNames = filtered.map(t => t.name);
+                      if (obs && isNormal) {
+                        yield* obs.info(`◉ [adaptive-tools] showing ${filtered.length} of ${filtered.length + hiddenCount} tools (${hiddenCount} hidden)`)
+                          .pipe(Effect.catchAll(() => Effect.void));
+                      }
+                    }
+                  }
 
                   // ── Subscribe to reasoning steps for live streaming ──
                   let unsubscribeReasoningSteps: (() => void) | null = null;
@@ -777,7 +864,14 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         }
                       }
 
-                      const result = yield* reasoningOpt.value.execute({
+                      type ReasoningResult = {
+                        output: unknown;
+                        status: string;
+                        steps?: readonly { id: string; type: string; content: string; metadata?: { toolUsed?: string; duration?: number } }[];
+                        metadata: { cost: number; tokensUsed: number; stepsCount: number; strategyFallback?: boolean; confidence?: number };
+                      };
+                      let result: ReasoningResult;
+                      const strategyEffect = reasoningOpt.value.execute({
                         taskDescription: extractTaskText(task.input),
                         taskType: task.type,
                         memoryContext: memCtx,
@@ -793,6 +887,21 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         requiredTools: effectiveRequiredTools,
                         maxRequiredToolRetries: config.requiredTools?.maxRetries,
                       });
+                      const strategyOutcome = yield* Effect.exit(strategyEffect);
+                      if (strategyOutcome._tag === "Success") {
+                        result = strategyOutcome.value as ReasoningResult;
+                      } else {
+                        const strategyError = strategyOutcome.cause;
+                        if (obs) {
+                          yield* obs.info(`⚠ Strategy failed, using fallback: ${String(strategyError)}`).pipe(Effect.catchAll(() => Effect.void));
+                        }
+                        result = {
+                          output: `Strategy execution failed: ${String(strategyError)}`,
+                          status: "error",
+                          steps: [],
+                          metadata: { cost: 0, tokensUsed: 0, stepsCount: 0, strategyFallback: true },
+                        };
+                      }
                       return {
                         ...c,
                         cost: c.cost + (result.metadata.cost ?? 0),
@@ -1014,6 +1123,11 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   let isComplete = false;
 
                   while (!isComplete && ctx.iteration <= ctx.maxIterations) {
+                    // ── Kill switch check at top of each iteration ──
+                    // This ensures pause/stop/terminate is honored before
+                    // any expensive operations (LLM calls, tool execution).
+                    yield* checkLifecycle(ctx.taskId);
+
                     // ── Behavioral contract: check iteration limit ──
                     if (config.enableBehavioralContracts) {
                       const bcOpt = yield* Effect.serviceOption(BehavioralContractService)
@@ -1026,6 +1140,47 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                             message: violation.message, taskId: ctx.taskId,
                             rule: violation.rule, violation: violation.message,
                           }));
+                        }
+                      }
+                    }
+
+                    // ── Per-iteration budget check ──
+                    if (config.enableCostTracking) {
+                      const iterBudgetOpt = yield* Effect.serviceOption(CostService).pipe(
+                        Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
+                      );
+                      if (iterBudgetOpt._tag === "Some") {
+                        // Pass accumulated cost as estimatedCost so the enforcer checks
+                        // whether current session/daily/monthly spend + this execution's
+                        // cost so far exceeds any limit.
+                        const budgetCheck = yield* iterBudgetOpt.value
+                          .checkBudget(ctx.cost, ctx.agentId, ctx.sessionId)
+                          .pipe(
+                            Effect.map(() => true),
+                            Effect.catchAll((budgetErr) => {
+                              if (obs) {
+                                const msg = "message" in budgetErr ? String(budgetErr.message) : "Budget exceeded";
+                                return obs.info(`⚠ [budget] ${msg} — stopping execution`).pipe(
+                                  Effect.catchAll(() => Effect.void),
+                                  Effect.map(() => false),
+                                );
+                              }
+                              return Effect.succeed(false);
+                            }),
+                          );
+                        if (!budgetCheck) {
+                          // Graceful stop — return what we have so far
+                          ctx = {
+                            ...ctx,
+                            metadata: {
+                              ...ctx.metadata,
+                              budgetExceeded: true,
+                              isComplete: true,
+                              lastResponse: ctx.metadata.lastResponse ?? "Execution stopped: budget limit exceeded.",
+                            },
+                          };
+                          isComplete = true;
+                          break;
                         }
                       }
                     }
@@ -1582,6 +1737,163 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   );
                 }
 
+                // ── Verification Quality Gate ──
+                // If verification rejected the response, retry the think phase
+                // with feedback so the agent can improve its answer.
+                if (config.enableVerification) {
+                  const vResult = ctx.metadata.verificationResult as
+                    | { passed?: boolean; recommendation?: string; overallScore?: number; layerResults?: unknown[] }
+                    | undefined;
+                  const vRetryCount = (ctx.metadata.verificationRetryCount as number) ?? 0;
+                  const maxVRetries = config.maxVerificationRetries ?? 1;
+
+                  if (
+                    vResult &&
+                    vResult.passed === false &&
+                    vResult.recommendation === "reject" &&
+                    vRetryCount < maxVRetries
+                  ) {
+                    if (obs) {
+                      yield* obs.info(
+                        `⚠ [verify] Response rejected (score: ${vResult.overallScore?.toFixed(2) ?? "?"}) — retrying think phase (attempt ${vRetryCount + 1}/${maxVRetries})`,
+                      ).pipe(Effect.catchAll(() => Effect.void));
+                    }
+
+                    // Build verification feedback for the next think iteration
+                    const feedbackParts: string[] = [
+                      `[Verification Feedback] Your previous response was rejected (score: ${vResult.overallScore?.toFixed(2) ?? "unknown"}).`,
+                    ];
+                    if (Array.isArray(vResult.layerResults)) {
+                      for (const lr of vResult.layerResults as Array<{ layerName?: string; passed?: boolean; details?: string }>) {
+                        if (lr.passed === false && lr.details) {
+                          feedbackParts.push(`- ${lr.layerName ?? "check"}: ${lr.details}`);
+                        }
+                      }
+                    }
+                    feedbackParts.push("Please revise your answer to address these issues.");
+
+                    // Inject feedback as a system message and reset completion state
+                    ctx = {
+                      ...ctx,
+                      messages: [
+                        ...ctx.messages,
+                        { role: "user", content: feedbackParts.join("\n") },
+                      ],
+                      metadata: {
+                        ...ctx.metadata,
+                        isComplete: false,
+                        verificationRetryCount: vRetryCount + 1,
+                        verificationFeedback: feedbackParts.join("\n"),
+                      },
+                    };
+
+                    // Re-run the think phase (single retry call)
+                    ctx = yield* guardedPhase(ctx, "think", (c) =>
+                      Effect.gen(function* () {
+                        const llm = yield* Context.GenericTag<{
+                          complete: (req: unknown) => Effect.Effect<{
+                            content: string;
+                            toolCalls?: unknown[];
+                            stopReason: string;
+                            usage?: {
+                              totalTokens?: number;
+                              estimatedCost?: number;
+                            };
+                          }>;
+                        }>("LLMService");
+
+                        const defaultPrompt =
+                          config.systemPrompt ?? "You are a helpful AI assistant.";
+                        const messagesToSend = [
+                          { role: "system", content: defaultPrompt },
+                          ...c.messages,
+                        ];
+
+                        const llmRequest = {
+                          messages: messagesToSend,
+                          model: c.selectedModel,
+                        };
+
+                        const response = yield* llm.complete(llmRequest);
+
+                        return {
+                          ...c,
+                          messages: [
+                            ...c.messages,
+                            { role: "assistant", content: response.content },
+                          ],
+                          tokensUsed:
+                            c.tokensUsed + (response.usage?.totalTokens ?? 0),
+                          cost: c.cost + (response.usage?.estimatedCost ?? 0),
+                          iteration: c.iteration + 1,
+                          metadata: {
+                            ...c.metadata,
+                            lastResponse: response.content,
+                          },
+                        };
+                      }) as unknown as Effect.Effect<ExecutionContext, never>,
+                    );
+
+                    // Re-run verification on the revised response
+                    if (config.enableVerification) {
+                      ctx = yield* guardedPhase(ctx, "verify", (c) =>
+                        Effect.gen(function* () {
+                          const verifyOpt = yield* Effect.serviceOption(
+                            VerificationService,
+                          ).pipe(
+                            Effect.catchAll(() =>
+                              Effect.succeed({ _tag: "None" as const }),
+                            ),
+                          );
+
+                          if (verifyOpt._tag === "Some") {
+                            const response = String(c.metadata.lastResponse ?? "");
+                            const input = extractTaskText(task.input);
+                            const result = yield* verifyOpt.value
+                              .verify(response, input)
+                              .pipe(
+                                Effect.catchAll(() =>
+                                  Effect.succeed({
+                                    overallScore: 0.5,
+                                    passed: true,
+                                    riskLevel: "medium" as const,
+                                    layerResults: [],
+                                    recommendation: "accept" as const,
+                                    verifiedAt: new Date(),
+                                  }),
+                                ),
+                              );
+
+                            return {
+                              ...c,
+                              agentState: "verifying" as const,
+                              metadata: {
+                                ...c.metadata,
+                                verificationResult: result,
+                                verificationScore: result.overallScore,
+                              },
+                            };
+                          }
+
+                          return c;
+                        }),
+                      );
+                    }
+
+                    // If still rejected after retry, log warning and continue
+                    const vResultAfterRetry = ctx.metadata.verificationResult as
+                      | { passed?: boolean; recommendation?: string; overallScore?: number }
+                      | undefined;
+                    if (vResultAfterRetry && vResultAfterRetry.passed === false) {
+                      if (obs) {
+                        yield* obs.info(
+                          `⚠ [verify] Response still rejected after ${vRetryCount + 1} retry(s) (score: ${vResultAfterRetry.overallScore?.toFixed(2) ?? "?"}) — proceeding anyway`,
+                        ).pipe(Effect.catchAll(() => Effect.void));
+                      }
+                    }
+                  }
+                }
+
                 // ── Phase 7: MEMORY_FLUSH ── H5
                 ctx = yield* guardedPhase(ctx, "memory-flush", (c) =>
                   Effect.gen(function* () {
@@ -1617,6 +1929,87 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       ),
                       Effect.catchAll(() => Effect.void),
                     );
+
+                    // Lightweight consolidation: decay unused memory entries
+                    yield* Effect.serviceOption(
+                      Context.GenericTag<{
+                        decayUnused: (
+                          agentId: string,
+                          decayFactor: number,
+                        ) => Effect.Effect<number>;
+                      }>("MemoryConsolidator"),
+                    ).pipe(
+                      Effect.flatMap((opt) =>
+                        opt._tag === "Some"
+                          ? opt.value
+                              .decayUnused(c.agentId, 0.05)
+                              .pipe(Effect.catchAll(() => Effect.succeed(0)))
+                          : Effect.succeed(0),
+                      ),
+                      Effect.catchAll(() => Effect.succeed(0)),
+                    );
+
+                    // ── Auto-extract semantic memories ──
+                    // Only extract when there's meaningful content:
+                    // tool calls happened OR response is substantial (>200 chars)
+                    const lastResponse = String(c.metadata.lastResponse ?? "");
+                    const hadToolCalls = c.toolResults.length > 0;
+                    const substantialResponse = lastResponse.length > 200;
+
+                    if (hadToolCalls || substantialResponse) {
+                      yield* Effect.serviceOption(
+                        Context.GenericTag<{
+                          extractFromConversation: (
+                            agentId: string,
+                            messages: readonly { role: string; content: string }[],
+                          ) => Effect.Effect<unknown[], unknown>;
+                        }>("MemoryExtractor"),
+                      ).pipe(
+                        Effect.flatMap((extractorOpt) => {
+                          if (extractorOpt._tag !== "Some") return Effect.void;
+                          const extractor = extractorOpt.value;
+
+                          // Build messages from the execution context
+                          const messages: { role: string; content: string }[] = [];
+                          // Add the task input as user message
+                          messages.push({ role: "user", content: String(task.input).slice(0, 1000) });
+                          // Add tool results as context
+                          for (const tr of c.toolResults) {
+                            const toolResult = tr as { toolName?: string; result?: unknown };
+                            messages.push({
+                              role: "assistant",
+                              content: `Tool ${toolResult.toolName ?? "unknown"}: ${String(toolResult.result ?? "").slice(0, 500)}`,
+                            });
+                          }
+                          // Add the final response
+                          if (lastResponse) {
+                            messages.push({ role: "assistant", content: lastResponse.slice(0, 2000) });
+                          }
+
+                          return Effect.gen(function* () {
+                            const entries = yield* extractor.extractFromConversation(c.agentId, messages);
+
+                            // Store extracted semantic entries via MemoryService
+                            if (entries.length > 0) {
+                              const memStoreOpt = yield* Effect.serviceOption(
+                                Context.GenericTag<{
+                                  storeSemantic: (entry: unknown) => Effect.Effect<unknown>;
+                                }>("MemoryService"),
+                              ).pipe(Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })));
+
+                              if (memStoreOpt._tag === "Some") {
+                                for (const entry of entries) {
+                                  yield* memStoreOpt.value
+                                    .storeSemantic(entry)
+                                    .pipe(Effect.catchAll(() => Effect.void));
+                                }
+                              }
+                            }
+                          });
+                        }),
+                        Effect.catchAll(() => Effect.void),
+                      );
+                    }
 
                     return { ...c, agentState: "flushing" as const };
                   }),
@@ -1695,7 +2088,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
 
                 // Build TaskResult — sanitize output to strip internal metadata
                 const rawOutput = ctx.metadata.lastResponse ?? null;
-                const rr = ctx.metadata.reasoningResult as { metadata?: { confidence?: number } } | undefined;
+                const rr = ctx.metadata.reasoningResult as { metadata?: { confidence?: number; strategyFallback?: boolean } } | undefined;
                 const result: TaskResult = {
                   taskId: task.id as any,
                   agentId: task.agentId,
@@ -1708,6 +2101,8 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     strategyUsed: ctx.selectedStrategy,
                     stepsCount: (ctx.metadata.stepsCount as number | undefined) ?? ctx.iteration,
                     ...(rr?.metadata?.confidence !== undefined ? { confidence: rr.metadata.confidence } : {}),
+                    ...(rr?.metadata?.strategyFallback === true ? { strategyFallback: true } : {}),
+                    ...(ctx.metadata.budgetExceeded ? { budgetExceeded: true } : {}),
                   },
                   completedAt: new Date(),
                 };

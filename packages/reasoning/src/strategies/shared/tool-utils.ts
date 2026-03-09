@@ -384,36 +384,85 @@ export interface FilteredTools {
 }
 
 /**
+ * Extract action keywords from a task description for fuzzy tool matching.
+ * Maps common task verbs/nouns to tool-relevant terms.
+ */
+const TASK_KEYWORD_MAP: Record<string, readonly string[]> = {
+  "send": ["send", "message", "notify", "signal"],
+  "message": ["send", "message", "signal", "chat"],
+  "search": ["search", "find", "query", "lookup"],
+  "fetch": ["get", "list", "read", "fetch", "retrieve"],
+  "commit": ["commit", "git", "list_commits", "get_commit"],
+  "pull request": ["pull_request", "pr", "merge"],
+  "issue": ["issue", "bug", "ticket"],
+  "write": ["write", "create", "save", "file"],
+  "read": ["read", "get", "file", "content"],
+  "summarize": ["search", "read", "get"],
+  "analyze": ["search", "read", "get", "code"],
+  "repository": ["repo", "repository", "github", "branch"],
+};
+
+/**
  * Split tool schemas into primary (mentioned in task) and secondary (other).
  * Primary tools get full descriptions; secondary get compact name+types only.
+ *
+ * Matching uses three strategies:
+ * 1. Name matching — tool name (or slug) appears in task text
+ * 2. Description matching — task keywords appear in tool description
+ * 3. Semantic keyword expansion — task verbs map to related tool terms
  */
 export function filterToolsByRelevance(
   taskDescription: string,
   schemas: readonly ToolSchema[],
 ): FilteredTools {
   const taskLower = taskDescription.toLowerCase();
+  const taskWords = taskLower.split(/\s+/);
   const primary: ToolSchema[] = [];
   const secondary: ToolSchema[] = [];
 
+  // Expand task keywords using the semantic map
+  const expandedKeywords = new Set<string>();
+  for (const word of taskWords) {
+    expandedKeywords.add(word);
+    for (const [trigger, synonyms] of Object.entries(TASK_KEYWORD_MAP)) {
+      if (word.includes(trigger) || trigger.includes(word)) {
+        for (const syn of synonyms) expandedKeywords.add(syn);
+      }
+    }
+  }
+
   for (const tool of schemas) {
+    // Strategy 1: Name matching (existing behavior)
     const nameVariants = [
       tool.name.toLowerCase(),
       tool.name.split("/").pop()?.toLowerCase() ?? "",
       tool.name.toLowerCase().replace(/[-_/]/g, " "),
     ];
-    const mentioned = nameVariants.some((v) => v && taskLower.includes(v));
-    (mentioned ? primary : secondary).push(tool);
+    const nameMentioned = nameVariants.some((v) => v && taskLower.includes(v));
+
+    // Strategy 2: Description keyword matching
+    const descLower = (tool.description ?? "").toLowerCase();
+    const descWords = descLower.split(/\s+/);
+    const descMatch = !nameMentioned && descWords.some((dw) =>
+      dw.length > 3 && expandedKeywords.has(dw),
+    );
+
+    // Strategy 3: Tool name slug matches expanded keywords
+    const slugParts = tool.name.toLowerCase().replace(/[-_/]/g, " ").split(/\s+/);
+    const slugMatch = !nameMentioned && !descMatch && slugParts.some((sp) =>
+      sp.length > 3 && expandedKeywords.has(sp),
+    );
+
+    (nameMentioned || descMatch || slugMatch ? primary : secondary).push(tool);
   }
 
   // Special case: delegation keywords → spawn-agent should be primary
   const DELEGATION_KEYWORDS = ["delegate", "subagent", "sub-agent", "sub agent", "spawn", "parallel", "concurrently"];
   const hasDelegation = DELEGATION_KEYWORDS.some((k) => taskLower.includes(k));
   if (hasDelegation) {
-    const allTools = [...schemas];
-    const spawnTool = allTools.find((t) => t.name === "spawn-agent");
+    const spawnTool = schemas.find((t) => t.name === "spawn-agent");
     if (spawnTool && !primary.includes(spawnTool)) {
       primary.push(spawnTool);
-      // Remove from secondary if it was there
       const secIdx = secondary.indexOf(spawnTool);
       if (secIdx >= 0) secondary.splice(secIdx, 1);
     }
