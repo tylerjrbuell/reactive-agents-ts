@@ -71,7 +71,7 @@ describe("createSubAgentExecutor", () => {
     expect(config.maxIterations).toBeUndefined();
   });
 
-  it("uses default maxIterations of 5 when not specified", async () => {
+  it("uses default maxIterations of 6 when not specified (capped at 6)", async () => {
     let capturedOpts: any;
     const executor = createSubAgentExecutor(
       { name: "default-iter" },
@@ -79,7 +79,7 @@ describe("createSubAgentExecutor", () => {
       0,
     );
     await executor("test");
-    expect(capturedOpts.maxIterations).toBe(5);
+    expect(capturedOpts.maxIterations).toBe(6);
   });
 
   it("respects custom maxIterations", async () => {
