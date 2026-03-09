@@ -14,6 +14,22 @@ import {
   makeScratchpadWriteHandler,
   makeScratchpadReadHandler,
 } from "./scratchpad.js";
+import { contextStatusTool, makeContextStatusHandler } from "./context-status.js";
+import { taskCompleteTool, makeTaskCompleteHandler } from "./task-complete.js";
+
+// Re-export meta-tool factories and types so callers can wire up dynamic state
+export {
+  contextStatusTool,
+  makeContextStatusHandler,
+  type ContextStatusState,
+} from "./context-status.js";
+export {
+  taskCompleteTool,
+  makeTaskCompleteHandler,
+  shouldShowTaskComplete,
+  type TaskCompleteState,
+  type TaskCompleteVisibility,
+} from "./task-complete.js";
 
 // Shared scratchpad store — one per tool service instance (reset per agent run)
 const scratchpadStoreRef = Ref.unsafeMake(new Map<string, string>());
@@ -21,6 +37,12 @@ const scratchpadStoreRef = Ref.unsafeMake(new Map<string, string>());
 /**
  * All built-in tools paired with their handlers.
  * Registered automatically when ToolServiceLive is created.
+ *
+ * Note: context-status and task-complete are meta-tools that require
+ * dynamic runtime state. They are exported separately via their factory
+ * functions (makeContextStatusHandler / makeTaskCompleteHandler) so the
+ * execution engine can wire in live state. They are NOT included here by
+ * default — the kernel registers them on demand.
  */
 export const builtinTools: ReadonlyArray<{
   definition: ToolDefinition;
@@ -33,4 +55,13 @@ export const builtinTools: ReadonlyArray<{
   { definition: codeExecuteTool, handler: codeExecuteHandler },
   { definition: scratchpadWriteTool, handler: makeScratchpadWriteHandler(scratchpadStoreRef) },
   { definition: scratchpadReadTool, handler: makeScratchpadReadHandler(scratchpadStoreRef) },
+];
+
+/**
+ * Meta-tool definitions (no default handlers — must be wired with live state).
+ * Exported for schema inspection, documentation, and dynamic registration.
+ */
+export const metaToolDefinitions: ReadonlyArray<ToolDefinition> = [
+  contextStatusTool,
+  taskCompleteTool,
 ];

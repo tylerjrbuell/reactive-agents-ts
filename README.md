@@ -6,7 +6,7 @@
 
 **A composable, type-safe AI agent framework for TypeScript, built on Effect-TS.**
 
-Type-safe from prompt to production. 20 packages. 13 composable layers. 5 reasoning strategies. 10-phase execution engine. 8 built-in tools. Model-adaptive context engineering. Persistent autonomous gateway with adaptive heartbeats, crons, and webhooks. Required tools guard with adaptive LLM inference. Circuit breaker and embedding cache for LLM resilience. Structured agent steering via personas. Real Ed25519 cryptography, kill switch, behavioral contracts, cross-task self-improvement, and full real-time EventBus observability.
+Type-safe from prompt to production. 20 packages. 13 composable layers. 5 reasoning strategies. 10-phase execution engine. 9 built-in tools. Per-iteration context scoring. Cross-agent experience learning. Persistent autonomous gateway with adaptive heartbeats, crons, and webhooks. Required tools guard with adaptive LLM inference. Circuit breaker and embedding cache for LLM resilience. Structured agent steering via personas. Real Ed25519 cryptography, kill switch, behavioral contracts, cross-task self-improvement, and full real-time EventBus observability.
 
 [![CI](https://github.com/tylerjrbuell/reactive-agents-ts/actions/workflows/ci.yml/badge.svg)](https://github.com/tylerjrbuell/reactive-agents-ts/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/badge/npm-%40reactive--agents-CB3837?logo=npm)](https://www.npmjs.com/org/reactive-agents)
@@ -322,7 +322,7 @@ Switch providers with one line — agent code stays the same.
 | [`@reactive-agents/core`](packages/core)                   | EventBus, AgentService, TaskService, types                                      |
 | [`@reactive-agents/runtime`](packages/runtime)             | ExecutionEngine, ReactiveAgentBuilder, `createRuntime()`                        |
 | [`@reactive-agents/llm-provider`](packages/llm-provider)   | LLM adapters (Anthropic, OpenAI, Gemini, Ollama, LiteLLM)                       |
-| [`@reactive-agents/memory`](packages/memory)               | Working, Semantic, Episodic, Procedural memory (bun:sqlite)                     |
+| [`@reactive-agents/memory`](packages/memory)               | Working, Semantic, Episodic, Procedural memory (bun:sqlite); ExperienceStore cross-agent learning; MemoryConsolidatorService background decay/replay |
 | [`@reactive-agents/reasoning`](packages/reasoning)         | 5 strategies: ReAct, Reflexion, Plan-Execute, ToT, Adaptive                     |
 | [`@reactive-agents/tools`](packages/tools)                 | Tool registry, sandboxed execution, MCP client                                  |
 | [`@reactive-agents/guardrails`](packages/guardrails)       | Injection, PII, toxicity detection                                              |

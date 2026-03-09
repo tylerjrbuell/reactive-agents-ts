@@ -86,17 +86,18 @@ describe("Instruction-aware tool filtering", () => {
     );
 
     const content = getCaptured();
-    // github/list_commits should have full schema (with description)
+    // Tool reference block should always be present with the new context engine
     expect(content).toContain("github/list_commits");
-    expect(content).toContain("List commits from a repo");
-    // Secondary tools should NOT have descriptions in default "full" tier secondary
-    // (they get compact format in the "Other tools:" section)
+    expect(content).toContain("[Tool reference");
+    // Tool names for all tools should appear in the pinned reference
+    expect(content).toContain("file-write");
+    expect(content).toContain("web-search");
   });
 
   it("secondary tools collapsed to names for local profile", async () => {
     const { layer, getCaptured } = await createCapturingLayer();
 
-    // Generate many tools, only mention 2 in task
+    // Generate many tools, only mention 2 in task; provide as requiredTools so they appear in names-only ref
     const tools = [
       makeTool("github/list_commits", "List commits", [{ name: "owner", type: "string", required: true }, { name: "repo", type: "string", required: true }]),
       makeTool("signal/send_message_to_user", "Send signal message", [{ name: "recipient", type: "string", required: true }, { name: "message", type: "string", required: true }]),
@@ -110,6 +111,7 @@ describe("Instruction-aware tool filtering", () => {
         memoryContext: "",
         availableTools: [],
         availableToolSchemas: tools,
+        requiredTools: ["github/list_commits", "signal/send_message_to_user"],
         config: testConfig,
         contextProfile: {
           tier: "local",
@@ -126,7 +128,7 @@ describe("Instruction-aware tool filtering", () => {
     );
 
     const content = getCaptured();
-    // names-only profile: ALL tools shown as comma-separated names, no descriptions
+    // names-only profile with required tools: required tool names appear in ref
     expect(content).toContain("github/list_commits");
     expect(content).toContain("signal/send_message_to_user");
     // Descriptions should NOT appear in names-only mode
@@ -155,10 +157,12 @@ describe("Instruction-aware tool filtering", () => {
     );
 
     const content = getCaptured();
-    // Primary (mentioned): full schema
-    expect(content).toContain("List commits");
-    // Secondary should be in "Other tools:" section with compact format (types but no descriptions)
-    expect(content).toContain("Other tools:");
+    // All tools appear in the pinned compact tool reference
+    expect(content).toContain("github/list_commits");
+    expect(content).toContain("file-write");
+    expect(content).toContain("web-search");
+    // New context engine uses compact pinned reference block
+    expect(content).toContain("[Tool reference");
   });
 
   it("all tools are secondary when none mentioned in task", async () => {
@@ -182,11 +186,12 @@ describe("Instruction-aware tool filtering", () => {
     );
 
     const content = getCaptured();
-    // Should fall back to showing all tools with tier-appropriate format (full by default)
+    // All tools appear in the pinned compact tool reference regardless of task keywords
     expect(content).toContain("file-write");
     expect(content).toContain("web-search");
-    // Should still have descriptions since it's full format for all-secondary fallback
-    expect(content).toContain("Write a file");
-    expect(content).toContain("Search the web");
+    // New context engine uses compact pinned reference (parameter names, not full descriptions)
+    expect(content).toContain("[Tool reference");
+    expect(content).toContain("path: string");
+    expect(content).toContain("query: string");
   });
 });

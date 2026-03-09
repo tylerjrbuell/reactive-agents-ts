@@ -216,7 +216,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
 
         const phaseEffect = runPhase(ctx, phase, body, eb).pipe(
           // After phase completes: emit metrics + phase completed event
-          Effect.tap((result) => {
+          Effect.tap((_result) => {
             const durationMs = performance.now() - startMs;
             const sideEffects: Effect.Effect<void, never>[] = [];
 
@@ -429,6 +429,30 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   const memInfo = `${semanticLines} semantic lines, ${episodicCount} episodic`;
                   yield* obs.info(`◉ [bootstrap]  ${memInfo} | ${bootstrapMs}ms`)
                     .pipe(Effect.catchAll(() => Effect.void));
+                }
+
+                // ── Experience tip injection (optional) ──
+                if (config.enableExperienceLearning) {
+                  const expOpt = yield* Effect.serviceOption(
+                    Context.GenericTag<{
+                      query: (desc: string, type: string, tier: string) => Effect.Effect<{ tips: readonly string[] }>;
+                    }>("ExperienceStore"),
+                  ).pipe(Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })));
+
+                  if (expOpt._tag === "Some") {
+                    const taskText = extractTaskText(task.input);
+                    const tips = yield* expOpt.value
+                      .query(taskText, task.type ?? "general", config.contextProfile?.tier ?? "mid")
+                      .pipe(Effect.catchAll(() => Effect.succeed({ tips: [] as readonly string[] })));
+
+                    if (tips.tips.length > 0) {
+                      ctx = { ...ctx, metadata: { ...ctx.metadata, experienceTips: tips.tips } };
+                      if (obs && isNormal) {
+                        yield* obs.info(`◉ [experience]  ${tips.tips.length} tip(s) from prior runs`)
+                          .pipe(Effect.catchAll(() => Effect.void));
+                      }
+                    }
+                  }
                 }
 
                 // ── Phase 2: GUARDRAIL (optional) ── H2
@@ -996,6 +1020,38 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                           }).pipe(Effect.catchAll(() => Effect.void));
                         }
                       }
+                    }
+                  }
+
+                  // ── Record experience for cross-agent learning ──
+                  if (config.enableExperienceLearning) {
+                    const expRecOpt = yield* Effect.serviceOption(
+                      Context.GenericTag<{
+                        record: (entry: unknown) => Effect.Effect<void>;
+                      }>("ExperienceStore"),
+                    ).pipe(Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })));
+
+                    if (expRecOpt._tag === "Some") {
+                      const reasoningStepsForExp = (ctx.metadata.reasoningSteps ?? []) as Array<{
+                        type: string;
+                        metadata?: { toolUsed?: string };
+                      }>;
+                      const toolsFromSteps = reasoningStepsForExp
+                        .filter(s => s.type === "action")
+                        .map(s => s.metadata?.toolUsed ?? "unknown")
+                        .filter((t, i, arr) => arr.indexOf(t) === i && t !== "unknown"); // unique, drop unknowns
+
+                      yield* expRecOpt.value.record({
+                        agentId: ctx.agentId,
+                        taskDescription: extractTaskText(task.input),
+                        taskType: task.type ?? "general",
+                        toolsUsed: toolsFromSteps,
+                        success: (ctx.metadata.reasoningResult as any)?.status === "completed",
+                        totalSteps: (ctx.metadata.stepsCount as number) ?? 0,
+                        totalTokens: ctx.tokensUsed,
+                        errors: [],
+                        modelTier: config.contextProfile?.tier ?? "mid",
+                      }).pipe(Effect.catchAll(() => Effect.void));
                     }
                   }
 

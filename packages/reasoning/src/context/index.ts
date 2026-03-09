@@ -27,3 +27,16 @@ export {
   groupToolSequences,
   progressiveSummarize,
 } from "./compaction.js";
+
+export {
+  scoreContextItem,
+  allocateContextBudget,
+  buildContext,
+} from "./context-engine.js";
+export type {
+  ContextItem,
+  MemoryItem,
+  ScoringContext,
+  BudgetResult,
+  ContextBuildInput,
+} from "./context-engine.js";

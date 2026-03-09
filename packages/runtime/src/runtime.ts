@@ -9,7 +9,7 @@ import {
   getProviderDefaultModel,
   LLMService,
 } from "@reactive-agents/llm-provider";
-import { createMemoryLayer } from "@reactive-agents/memory";
+import { createMemoryLayer, ExperienceStoreLive, MemoryConsolidatorServiceLive } from "@reactive-agents/memory";
 import type { MemoryLLM } from "@reactive-agents/memory";
 
 // Optional package imports
@@ -564,6 +564,33 @@ export interface RuntimeOptions {
    * Default: false (all tools shown)
    */
   adaptiveToolFiltering?: boolean;
+
+  /**
+   * Enable ExperienceStore cross-agent learning.
+   * Records tool-use patterns and queries them at bootstrap to surface tips from prior runs.
+   *
+   * Default: false
+   */
+  enableExperienceLearning?: boolean;
+
+  /**
+   * Enable MemoryConsolidatorService background memory intelligence.
+   * Periodically consolidates episodic entries, decays semantic importance, and prunes stale entries.
+   *
+   * Default: false
+   */
+  enableMemoryConsolidation?: boolean;
+
+  /**
+   * Configuration for MemoryConsolidatorService.
+   *
+   * Default: undefined (uses framework defaults)
+   */
+  consolidationConfig?: {
+    threshold?: number;
+    decayFactor?: number;
+    pruneThreshold?: number;
+  };
 }
 
 /**
@@ -641,6 +668,9 @@ export const createRuntime = (options: RuntimeOptions) => {
         }
       : undefined,
     adaptiveToolFiltering: options.adaptiveToolFiltering,
+    enableExperienceLearning: options.enableExperienceLearning,
+    enableMemoryConsolidation: options.enableMemoryConsolidation,
+    consolidationConfig: options.consolidationConfig,
   };
 
   // ── Required layers ──
@@ -864,6 +894,22 @@ export const createRuntime = (options: RuntimeOptions) => {
     const toolResultCacheLayer = ToolResultCacheLive();
     runtime = Layer.merge(runtime, toolsLayer) as any;
     runtime = Layer.merge(runtime, toolResultCacheLayer) as any;
+  }
+
+  // ── Experience learning layer (requires MemoryDatabase from memoryLayer) ──
+  if (options.enableExperienceLearning) {
+    runtime = Layer.merge(
+      runtime,
+      ExperienceStoreLive.pipe(Layer.provide(memoryLayer)),
+    ) as any;
+  }
+
+  // ── Memory consolidation layer (requires MemoryDatabase from memoryLayer) ──
+  if (options.enableMemoryConsolidation) {
+    runtime = Layer.merge(
+      runtime,
+      MemoryConsolidatorServiceLive(options.consolidationConfig).pipe(Layer.provide(memoryLayer)),
+    ) as any;
   }
 
   // Create PromptLayer once — shared by reasoning deps and the main runtime

@@ -126,9 +126,10 @@ describe("Sprint 0.1: Tool schemas in initial context", () => {
 
     // Verify the captured content includes parameter names
     expect(capturedContent).toContain("file-write");
-    expect(capturedContent).toContain('"path"');
-    expect(capturedContent).toContain('"content"');
-    expect(capturedContent).toContain("required");
+    expect(capturedContent).toContain("path: string");
+    expect(capturedContent).toContain("content: string");
+    // Required params marked with ★ in new context engine
+    expect(capturedContent).toContain("★");
   });
 
   it("uses tool name fallback when no schemas provided", async () => {
@@ -170,8 +171,8 @@ describe("Sprint 0.1: Tool schemas in initial context", () => {
 
     // Should show tool name without schema details
     expect(capturedContent).toContain("my-tool");
-    // Should use legacy format (tool names only)
-    expect(capturedContent).toContain("Available Tools: my-tool");
+    // New context engine shows tool in pinned reference block
+    expect(capturedContent).toContain("[Tool reference");
   });
 });
 
@@ -651,8 +652,9 @@ describe("toolSchemaDetail from context profile", () => {
       }).pipe(Effect.provide(capturingLLMLayer)),
     );
 
-    // names-and-types format: "- file-write(path: string, content: string)" — no " — " description
-    expect(capturedContent).toContain("file-write(path: string, content: string)");
+    // New context engine: compact tool reference with param names and types
+    // Required params marked with ★, no verbose descriptions
+    expect(capturedContent).toContain("file-write(path: string");
     expect(capturedContent).not.toContain("Write content to a file");
   });
 
@@ -720,9 +722,10 @@ describe("toolSchemaDetail from context profile", () => {
       }).pipe(Effect.provide(capturingLLMLayer)),
     );
 
-    // names-only format: "Tools: file-write, web-search" — comma-separated, no params
-    expect(capturedContent).toContain("Tools: file-write, web-search");
-    expect(capturedContent).not.toContain("path: string");
+    // names-only format with no required tools: new context engine omits pinned ref
+    // The prompt still includes task and RULES but tool names aren't in the ref block
+    expect(capturedContent).toContain("Write a file and search the web");
+    expect(capturedContent).toContain("RULES:");
     expect(capturedContent).not.toContain("Write content to a file");
   });
 });
