@@ -145,7 +145,7 @@ Observation (chain): {"written": true, "path": "output.txt"}
 
 ### Web Search Configuration
 
-The `web-search` tool requires a [Tavily](https://tavily.com) API key. Without it, calls to `web-search` return an error telling the agent the tool is inactive:
+The `web-search` tool requires a [Tavily](https://www.tavily.com) API key. Without it, calls to `web-search` return an error telling the agent the tool is inactive:
 
 ```bash
 # .env
