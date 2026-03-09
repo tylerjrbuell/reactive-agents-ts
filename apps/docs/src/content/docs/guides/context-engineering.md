@@ -54,6 +54,56 @@ const agent = await ReactiveAgents.create()
 | `promptVerbosity` | `"minimal" \| "standard" \| "full"` |
 | `toolSchemaDetail` | `"names-only" \| "names-and-types" \| "full"` |
 
+## ContextEngine — Per-Iteration Scoring
+
+The ContextEngine replaces static context builders with a **per-iteration scoring pipeline**. Every step in the agent's history gets a score each iteration, and the context window is assembled from the highest-scoring items within the available budget.
+
+### Scoring Algorithm
+
+Each history item receives a combined score:
+
+| Signal | Formula | Notes |
+|--------|---------|-------|
+| **Recency** | `e^{-0.3 × iterDiff}` | Exponential decay; items from 3 iterations ago score ~0.4 |
+| **Relevance** | keyword overlap with task | Stops words filtered; case-insensitive |
+| **Type weight** | obs 0.8 · action 0.6 · thought 0.4 | Observations carry the most signal |
+| **Urgency** | ×1.5 if step is a failure | Errors boosted so recovery context stays visible |
+| **Pin** | 1.0 | Tool schemas and system context always included |
+
+Pinned items (tool reference, rules block) always appear regardless of budget. Memory items with relevance below 0.3 are dropped.
+
+### Profile-Adaptive Detail
+
+The number of steps kept at full detail scales with the model tier:
+
+| Tier | Full-detail steps |
+|------|------------------|
+| `local` | 3 |
+| `mid` | 5 |
+| `large` | 7 |
+| `frontier` | 10 |
+
+Older steps are compacted to one-line summaries automatically.
+
+### Using the ContextEngine Directly
+
+```typescript
+import { buildContext } from "@reactive-agents/reasoning";
+import { CONTEXT_PROFILES } from "@reactive-agents/reasoning";
+
+const prompt = buildContext({
+  task: "Write a report on TypeScript performance",
+  iteration: 4,
+  maxIterations: 10,
+  steps: previousSteps,
+  memoryItems: semanticMemory,
+  toolSchemas: "web-search(query), file-write(path, content)",
+  profile: CONTEXT_PROFILES["mid"],
+});
+```
+
+The `buildContext` function is the same one the ReAct kernel uses internally — you can call it to assemble prompts for custom kernels or test harnesses.
+
 ## Progressive Context Compaction
 
 As agents work through multi-step tasks, context grows. Reactive Agents uses a four-level progressive compaction strategy:
