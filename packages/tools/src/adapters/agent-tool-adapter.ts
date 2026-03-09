@@ -5,6 +5,69 @@ import { ToolExecutionError } from "../errors.js";
 
 export const MAX_RECURSION_DEPTH = 3;
 
+/** Maximum characters of parent context to forward to sub-agents. */
+export const MAX_PARENT_CONTEXT_CHARS = 2000;
+
+/** Maximum characters per individual tool result summary. */
+const MAX_TOOL_RESULT_CHARS = 200;
+
+// ─── Parent Context ───
+
+export interface ParentContextItem {
+  /** Tool name that produced the result */
+  readonly toolName: string;
+  /** Summary of the tool result (will be truncated to MAX_TOOL_RESULT_CHARS) */
+  readonly result: string;
+}
+
+export interface ParentContext {
+  /** Recent tool results from the parent agent */
+  readonly toolResults?: readonly ParentContextItem[];
+  /** Working memory items from the parent agent */
+  readonly workingMemory?: readonly string[];
+  /** Parent's current task description */
+  readonly taskDescription?: string;
+}
+
+/**
+ * Build a structured prefix string from parent context for injection into
+ * sub-agent system prompts. Returns empty string if no context is provided.
+ * Output is bounded to MAX_PARENT_CONTEXT_CHARS.
+ */
+export const buildParentContextPrefix = (ctx: ParentContext | undefined): string => {
+  if (!ctx) return "";
+
+  const sections: string[] = [];
+
+  if (ctx.taskDescription) {
+    sections.push(`Parent task: ${ctx.taskDescription.slice(0, 200)}`);
+  }
+
+  if (ctx.toolResults && ctx.toolResults.length > 0) {
+    const items = ctx.toolResults.map((tr) => {
+      const result = tr.result.length > MAX_TOOL_RESULT_CHARS
+        ? tr.result.slice(0, MAX_TOOL_RESULT_CHARS) + "..."
+        : tr.result;
+      return `- ${tr.toolName}: ${result}`;
+    });
+    sections.push("Tool results:\n" + items.join("\n"));
+  }
+
+  if (ctx.workingMemory && ctx.workingMemory.length > 0) {
+    sections.push("Working memory:\n" + ctx.workingMemory.map((m) => `- ${m}`).join("\n"));
+  }
+
+  if (sections.length === 0) return "";
+
+  let prefix = "PARENT CONTEXT (use this data to avoid re-fetching):\n" + sections.join("\n\n");
+
+  if (prefix.length > MAX_PARENT_CONTEXT_CHARS) {
+    prefix = prefix.slice(0, MAX_PARENT_CONTEXT_CHARS - 3) + "...";
+  }
+
+  return prefix;
+};
+
 // ─── Sub-Agent Configuration ───
 
 export interface SubAgentConfig {
@@ -36,6 +99,7 @@ export interface SubAgentResult {
   readonly success: boolean;
   readonly summary: string;
   readonly tokensUsed: number;
+  readonly stepsCompleted?: number;
 }
 
 /**
@@ -64,8 +128,11 @@ export const createSubAgentExecutor = (
     enableTools: boolean;
     task: string;
     name: string;
-  }) => Promise<{ output: string; success: boolean; tokensUsed: number }>,
+    /** Whitelist of tool names — only these tools are available to the sub-agent. */
+    allowedTools?: readonly string[];
+  }) => Promise<{ output: string; success: boolean; tokensUsed: number; stepsCompleted?: number }>,
   depth: number = 0,
+  parentContextProvider?: () => ParentContext | undefined,
 ): ((task: string) => Promise<SubAgentResult>) => {
   return async (task: string): Promise<SubAgentResult> => {
     if (depth >= MAX_RECURSION_DEPTH) {
@@ -78,28 +145,46 @@ export const createSubAgentExecutor = (
     }
 
     try {
+      // Build parent context prefix if a provider was given
+      const parentCtx = parentContextProvider?.();
+      const parentPrefix = buildParentContextPrefix(parentCtx);
+
+      // Compose system prompt: parent context prefix + configured system prompt
+      let composedSystemPrompt = config.systemPrompt;
+      if (parentPrefix) {
+        composedSystemPrompt = composedSystemPrompt
+          ? `${parentPrefix}\n\n${composedSystemPrompt}`
+          : parentPrefix;
+      }
+
       const result = await executeFn({
         agentId: `sub-${config.name}-${Date.now()}`,
         provider: config.provider,
         model: config.model,
         maxIterations: config.maxIterations ?? 5,
-        systemPrompt: config.systemPrompt,
+        systemPrompt: composedSystemPrompt,
         persona: config.persona,
         enableReasoning: true,
         enableTools: true,
         task,
         name: config.name,
+        allowedTools: config.tools,
       });
 
-      const summary = result.output.length > 1500
-        ? result.output.slice(0, 1500) + "..."
-        : result.output;
+      // Extract a concise summary — strip ReAct artifacts and trim
+      let summary = result.output;
+      // Remove leading ReAct markers (FINAL ANSWER:, Thought:, etc.)
+      summary = summary.replace(/^(FINAL ANSWER:\s*|Thought:\s*|Answer:\s*)/i, "").trim();
+      if (summary.length > 1200) {
+        summary = summary.slice(0, 1200) + "…";
+      }
 
       return {
         subAgentName: config.name,
         success: result.success,
         summary,
         tokensUsed: result.tokensUsed,
+        stepsCompleted: result.stepsCompleted,
       };
     } catch (error) {
       return {
@@ -178,15 +263,20 @@ export const createSpawnAgentTool = (): ToolDefinition => ({
     "Spawn a sub-agent to handle a self-contained subtask. The sub-agent automatically " +
     "inherits all parent capabilities (tools, MCP servers, model, reasoning, guardrails) " +
     "and runs with a fresh context window. Just describe the task — the framework handles " +
-    "all infrastructure. Optionally steer the sub-agent's approach with role/instructions.",
+    "all infrastructure. Optionally steer the sub-agent's approach with role/instructions. " +
+    "Use 'tools' to restrict which tools the sub-agent can access.",
   parameters: [
     {
       name: "task",
       type: "string" as const,
       description:
-        "Complete task description in natural language. The sub-agent has no knowledge of " +
-        "the parent conversation — be explicit about what to do and what to return. " +
-        "Example: 'Fetch the 5 latest commits from github.com/owner/repo and return a bullet-point summary'",
+        "Complete, self-contained task description. The sub-agent has ZERO knowledge of " +
+        "your conversation — you MUST include ALL specific values it needs: phone numbers, " +
+        "email addresses, URLs, repository names, file paths, IDs, usernames, dates, etc. " +
+        "Never say 'send to the user' — say 'send to +1234567890'. Never say 'the repo' — " +
+        "say 'github.com/owner/repo'. The sub-agent cannot ask you for clarification. " +
+        "Example: 'Fetch the 5 latest commits from github.com/owner/repo, summarize them " +
+        "in 3 bullet points, then send the summary via Signal to +1234567890'",
       required: true,
     },
     {
@@ -211,6 +301,15 @@ export const createSpawnAgentTool = (): ToolDefinition => ({
       name: "tone",
       type: "string" as const,
       description: "Optional tone (e.g., 'professional', 'casual', 'detailed').",
+      required: false,
+    },
+    {
+      name: "tools",
+      type: "array" as const,
+      description:
+        "Optional whitelist of tool names the sub-agent can use. " +
+        "When set, only these tools are available — all others are filtered out. " +
+        "Example: ['web-search', 'file-read']. Default: all parent tools.",
       required: false,
     },
   ],
@@ -321,7 +420,6 @@ export const executeRemoteAgentTool = async (
   agentCardUrl: string
 ): Promise<TaskResult> => {
   const message = input.message as string;
-  const _stream = (input.stream as boolean) ?? false;
 
   if (!message) {
     throw new ToolExecutionError({

@@ -3,10 +3,10 @@ import { ReactiveAgents, ReactiveAgent } from "../src/index.js";
 import { resolveProfile } from "@reactive-agents/reasoning";
 
 describe("Builder auto-resolves context profile from model name", () => {
-  it("auto-resolves local profile for ollama model", async () => {
-    // resolveProfile should map "cogito:14b" to local tier
+  it("auto-resolves mid profile for capable local model", async () => {
+    // resolveProfile should map "cogito:14b" to mid tier (capable local model)
     const profile = resolveProfile("cogito:14b");
-    expect(profile.tier).toBe("local");
+    expect(profile.tier).toBe("mid");
 
     // Builder should auto-resolve and produce a valid agent
     const agent = await ReactiveAgents.create()
@@ -34,7 +34,7 @@ describe("Builder auto-resolves context profile from model name", () => {
   });
 
   it("explicit withContextProfile overrides auto-resolution", async () => {
-    // Even though model name would resolve to "local", explicit profile wins
+    // Even though model name would resolve to "mid", explicit profile wins
     const agent = await ReactiveAgents.create()
       .withName("override-test")
       .withProvider("test")
@@ -44,8 +44,8 @@ describe("Builder auto-resolves context profile from model name", () => {
 
     expect(agent).toBeInstanceOf(ReactiveAgent);
 
-    // Verify resolveProfile would have given "local" for this model
+    // Verify resolveProfile gives "mid" for this capable local model
     const autoResolved = resolveProfile("cogito:14b");
-    expect(autoResolved.tier).toBe("local");
+    expect(autoResolved.tier).toBe("mid");
   });
 });

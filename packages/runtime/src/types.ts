@@ -303,6 +303,12 @@ export const ReactiveAgentsConfigSchema = Schema.Struct({
   ),
   /** Default stream density for runStream() — "tokens" emits only TextDelta, "full" emits all events */
   streamDensity: Schema.optional(Schema.Literal("tokens", "full")),
+  /** Prefix prepended to all observability log lines (used for sub-agent indentation) */
+  logPrefix: Schema.optional(Schema.String),
+  /** Maximum retries when verification rejects the response (default: 1). Only used when enableVerification is true. */
+  maxVerificationRetries: Schema.optional(Schema.Number),
+  /** When true, only task-relevant tools are shown to the agent — reducing context noise for small models. All tools remain callable by name. */
+  adaptiveToolFiltering: Schema.optional(Schema.Boolean),
   /** Required tools configuration — tools that MUST be called before the agent can declare success. */
   requiredTools: Schema.optional(
     Schema.Struct({

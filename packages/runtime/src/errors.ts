@@ -47,13 +47,24 @@ export class BehavioralContractViolationError extends Data.TaggedError(
   readonly violation: string;
 }> {}
 
+export class BudgetExceededError extends Data.TaggedError(
+  "BudgetExceededError",
+)<{
+  readonly message: string;
+  readonly taskId: string;
+  readonly budgetType: string;
+  readonly limit: number;
+  readonly current: number;
+}> {}
+
 export type RuntimeErrors =
   | ExecutionError
   | HookError
   | MaxIterationsError
   | GuardrailViolationError
   | KillSwitchTriggeredError
-  | BehavioralContractViolationError;
+  | BehavioralContractViolationError
+  | BudgetExceededError;
 
 /**
  * Unwrap Effect FiberFailure / Cause nesting to extract a clean error message.
