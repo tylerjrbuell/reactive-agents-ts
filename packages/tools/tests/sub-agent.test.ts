@@ -2,9 +2,11 @@
 import { describe, it, expect } from "bun:test";
 import {
   createSubAgentExecutor,
+  buildParentContextPrefix,
   MAX_RECURSION_DEPTH,
+  MAX_PARENT_CONTEXT_CHARS,
 } from "../src/adapters/agent-tool-adapter.js";
-import type { SubAgentConfig, SubAgentResult } from "../src/adapters/agent-tool-adapter.js";
+import type { SubAgentConfig, SubAgentResult, ParentContext } from "../src/adapters/agent-tool-adapter.js";
 
 describe("createSubAgentExecutor", () => {
   it("returns structured SubAgentResult", async () => {
@@ -56,8 +58,8 @@ describe("createSubAgentExecutor", () => {
     );
     const result = await executor("test");
     expect(result.success).toBe(true);
-    expect(result.summary.length).toBeLessThanOrEqual(1503); // 1500 + "..."
-    expect(result.summary).toContain("...");
+    expect(result.summary.length).toBeLessThanOrEqual(1201); // 1200 + "…"
+    expect(result.summary).toContain("…");
   });
 
   it("config fields are optional except name", () => {
@@ -125,5 +127,130 @@ describe("createSubAgentExecutor", () => {
     expect(result.success).toBe(true);
     expect(result.summary).toBe("The answer is 42");
     expect(result.tokensUsed).toBe(100);
+  });
+
+  // ─── Parent Context Forwarding ───
+
+  it("forwards parent context as system prompt prefix", async () => {
+    let capturedOpts: any;
+    const parentCtx: ParentContext = {
+      toolResults: [
+        { toolName: "web-search", result: "Found 5 results about reactive agents" },
+      ],
+      taskDescription: "Research reactive agent frameworks",
+    };
+    const executor = createSubAgentExecutor(
+      { name: "ctx-agent" },
+      async (opts) => { capturedOpts = opts; return { output: "ok", success: true, tokensUsed: 10 }; },
+      0,
+      () => parentCtx,
+    );
+    await executor("summarize findings");
+    expect(capturedOpts.systemPrompt).toContain("PARENT CONTEXT");
+    expect(capturedOpts.systemPrompt).toContain("web-search");
+    expect(capturedOpts.systemPrompt).toContain("Found 5 results");
+    expect(capturedOpts.systemPrompt).toContain("Research reactive agent frameworks");
+  });
+
+  it("composes parent context with existing system prompt", async () => {
+    let capturedOpts: any;
+    const parentCtx: ParentContext = {
+      toolResults: [{ toolName: "http-get", result: "200 OK" }],
+    };
+    const executor = createSubAgentExecutor(
+      { name: "composed-agent", systemPrompt: "You are a researcher." },
+      async (opts) => { capturedOpts = opts; return { output: "ok", success: true, tokensUsed: 10 }; },
+      0,
+      () => parentCtx,
+    );
+    await executor("analyze data");
+    // Parent context comes first, then config system prompt
+    expect(capturedOpts.systemPrompt).toContain("PARENT CONTEXT");
+    expect(capturedOpts.systemPrompt).toContain("You are a researcher.");
+    const parentIdx = capturedOpts.systemPrompt.indexOf("PARENT CONTEXT");
+    const configIdx = capturedOpts.systemPrompt.indexOf("You are a researcher.");
+    expect(parentIdx).toBeLessThan(configIdx);
+  });
+
+  it("works without parent context (backward compat)", async () => {
+    let capturedOpts: any;
+    const executor = createSubAgentExecutor(
+      { name: "no-ctx-agent", systemPrompt: "Be concise." },
+      async (opts) => { capturedOpts = opts; return { output: "ok", success: true, tokensUsed: 10 }; },
+      0,
+      // No parentContextProvider
+    );
+    await executor("do something");
+    expect(capturedOpts.systemPrompt).toBe("Be concise.");
+  });
+
+  it("works when parentContextProvider returns undefined", async () => {
+    let capturedOpts: any;
+    const executor = createSubAgentExecutor(
+      { name: "undef-ctx-agent", systemPrompt: "Help me." },
+      async (opts) => { capturedOpts = opts; return { output: "ok", success: true, tokensUsed: 10 }; },
+      0,
+      () => undefined,
+    );
+    await executor("do something");
+    expect(capturedOpts.systemPrompt).toBe("Help me.");
+  });
+});
+
+describe("buildParentContextPrefix", () => {
+  it("returns empty string for undefined context", () => {
+    expect(buildParentContextPrefix(undefined)).toBe("");
+  });
+
+  it("returns empty string for empty context", () => {
+    expect(buildParentContextPrefix({ toolResults: [], workingMemory: [] })).toBe("");
+  });
+
+  it("includes tool results", () => {
+    const prefix = buildParentContextPrefix({
+      toolResults: [
+        { toolName: "web-search", result: "Found 3 articles" },
+        { toolName: "file-read", result: "File contents here" },
+      ],
+    });
+    expect(prefix).toContain("PARENT CONTEXT");
+    expect(prefix).toContain("web-search: Found 3 articles");
+    expect(prefix).toContain("file-read: File contents here");
+  });
+
+  it("includes working memory", () => {
+    const prefix = buildParentContextPrefix({
+      workingMemory: ["User prefers JSON output", "API key is valid"],
+    });
+    expect(prefix).toContain("Working memory:");
+    expect(prefix).toContain("User prefers JSON output");
+    expect(prefix).toContain("API key is valid");
+  });
+
+  it("includes task description", () => {
+    const prefix = buildParentContextPrefix({
+      taskDescription: "Analyze the codebase for security issues",
+    });
+    expect(prefix).toContain("Parent task: Analyze the codebase");
+  });
+
+  it("truncates individual tool results to 200 chars", () => {
+    const longResult = "x".repeat(300);
+    const prefix = buildParentContextPrefix({
+      toolResults: [{ toolName: "big-tool", result: longResult }],
+    });
+    // The result should be truncated to 200 chars + "..."
+    expect(prefix).not.toContain("x".repeat(201));
+    expect(prefix).toContain("...");
+  });
+
+  it("truncates total output to MAX_PARENT_CONTEXT_CHARS", () => {
+    const manyResults = Array.from({ length: 50 }, (_, i) => ({
+      toolName: `tool-${i}`,
+      result: "A".repeat(100),
+    }));
+    const prefix = buildParentContextPrefix({ toolResults: manyResults });
+    expect(prefix.length).toBeLessThanOrEqual(MAX_PARENT_CONTEXT_CHARS);
+    expect(prefix).toContain("...");
   });
 });

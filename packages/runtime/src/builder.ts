@@ -129,6 +129,34 @@ export interface ToolsOptions {
   }>;
   /** Tool result compression config — controls preview size, scratchpad overflow, and pipe transforms. */
   readonly resultCompression?: ResultCompressionConfig;
+  /**
+   * Whitelist of tool names to expose. When set, only these tools are available —
+   * all others (built-in, MCP, custom) are filtered out. Useful for creating focused agents.
+   *
+   * @example
+   * ```typescript
+   * agent.withTools({ allowedTools: ["web-search", "file-read"] })
+   * ```
+   *
+   * Default: undefined (all tools available)
+   */
+  readonly allowedTools?: readonly string[];
+  /**
+   * Enable adaptive tool filtering. When true, only task-relevant tools are shown
+   * to the agent — reducing context noise and improving small-model accuracy.
+   *
+   * Uses heuristic keyword + description matching to identify relevant tools,
+   * then presents only those plus essential built-ins (scratchpad, spawn-agent).
+   * All tools remain callable by exact name even if not shown.
+   *
+   * @example
+   * ```typescript
+   * agent.withTools({ adaptive: true })
+   * ```
+   *
+   * Default: false (all tools shown)
+   */
+  readonly adaptive?: boolean;
 }
 
 /**
@@ -287,6 +315,13 @@ export interface ObservabilityOptions {
    * Default: `false`
    */
   readonly live?: boolean;
+  /**
+   * Prefix prepended to all observability log lines.
+   * Used internally for sub-agent indentation (e.g., `"  │ "`).
+   *
+   * Default: `""` (no prefix)
+   */
+  readonly logPrefix?: string;
   /**
    * Path for JSONL file export. Each log entry is written as a JSON object on a separate line.
    * Useful for post-processing or long-term metric archival.
@@ -1534,6 +1569,8 @@ export class ReactiveAgentBuilder {
       costTrackingOptions: this._costTrackingOptions,
       circuitBreakerConfig: this._circuitBreakerConfig,
       requiredTools: this._requiredToolsConfig,
+      allowedTools: this._toolsOptions?.allowedTools,
+      adaptiveToolFiltering: this._toolsOptions?.adaptive,
     });
 
     const hooks = [...this._hooks];
@@ -1563,6 +1600,52 @@ export class ReactiveAgentBuilder {
 
       for (const hook of hooks) {
         yield* engine.registerHook(hook);
+      }
+
+      // Mutable ref for parent execution context — updated by the execution
+      // engine during the ACT phase so sub-agent handlers can read the parent's
+      // accumulated tool results and forward them as context.
+      let parentExecutionContextRef: {
+        toolResults: Array<{ toolName: string; result: string }>;
+        taskDescription?: string;
+      } | null = null;
+
+      /** Lazily read parent context from the mutable ref. */
+      const getParentContext = (): import("@reactive-agents/tools").ParentContext | undefined => {
+        if (!parentExecutionContextRef) return undefined;
+        const ctx = parentExecutionContextRef;
+        const items: Array<{ toolName: string; result: string }> = ctx.toolResults ?? [];
+        if (items.length === 0 && !ctx.taskDescription) return undefined;
+        return {
+          toolResults: items.map((tr) => ({
+            toolName: tr.toolName,
+            result: tr.result,
+          })),
+          taskDescription: ctx.taskDescription,
+        };
+      };
+
+      // Register internal hook to capture parent context for sub-agent forwarding.
+      // Task description is pre-set by runEffect() before execution starts.
+      // This hook updates tool results after each ACT phase.
+      if (agentTools.length > 0 || allowDynamicSubAgents) {
+        yield* engine.registerHook({
+          phase: "act" as const,
+          timing: "after" as const,
+          handler: (ctx: ExecutionContext) =>
+            Effect.sync(() => {
+              const toolResults = (ctx.toolResults ?? []).map((tr: any) => ({
+                toolName: String(tr.toolName ?? tr.name ?? "unknown"),
+                result: String(tr.result ?? tr.output ?? "").slice(0, 200),
+              }));
+              // Preserve task description set by runEffect(), update tool results
+              parentExecutionContextRef = {
+                toolResults,
+                taskDescription: parentExecutionContextRef?.taskDescription,
+              };
+              return ctx;
+            }),
+        });
       }
 
       // Register custom prompt templates if configured
@@ -1737,6 +1820,11 @@ export class ReactiveAgentBuilder {
                     : personaPrompt;
                 }
 
+                // When allowedTools is specified, those tools become required
+                const staticAllowed = opts.allowedTools;
+                const staticRequired = staticAllowed && staticAllowed.length > 0
+                  ? { tools: [...staticAllowed], adaptive: false, maxRetries: 2 }
+                  : undefined;
                 const subRuntime = createRuntime({
                   agentId: opts.agentId,
                   provider: (opts.provider ?? "test") as ProviderName,
@@ -1745,6 +1833,8 @@ export class ReactiveAgentBuilder {
                   systemPrompt: composedSystemPrompt,
                   enableReasoning: opts.enableReasoning,
                   enableTools: opts.enableTools,
+                  allowedTools: staticAllowed,
+                  requiredTools: staticRequired,
                 });
                 const subEngine = await Effect.runPromise(
                   ExecutionEngine.pipe(Effect.provide(subRuntime)),
@@ -1784,6 +1874,7 @@ export class ReactiveAgentBuilder {
                 };
               },
               0,
+              getParentContext,
             );
 
             const handler = (args: Record<string, unknown>) =>
@@ -1835,12 +1926,18 @@ export class ReactiveAgentBuilder {
                   tone: typeof args.tone === "string" ? args.tone : undefined,
                 };
 
+                // Extract optional tools whitelist from spawn-agent args
+                const subTools = Array.isArray(args.tools)
+                  ? (args.tools.filter((t: unknown) => typeof t === "string") as string[])
+                  : undefined;
+
                 const executor = toolsMod.createSubAgentExecutor(
                   {
                     name: subName,
                     provider: parentProvider,
                     model: parentModel,
                     maxIterations: defaultMaxIter,
+                    tools: subTools && subTools.length > 0 ? subTools : undefined,
                     persona:
                       subPersona.role ||
                       subPersona.instructions ||
@@ -1854,7 +1951,7 @@ export class ReactiveAgentBuilder {
                         ? opts.task.slice(0, 80) + "…"
                         : opts.task;
                     process.stdout.write(
-                      `\n  \x1b[36m┌─ [sub-agent: ${subName}]\x1b[0m → "${_taskPreview}"\n`,
+                      `\n  \x1b[36m┌── sub-agent: \x1b[1m${subName}\x1b[22m ──────────────────────────────\x1b[0m\n  \x1b[36m│\x1b[0m  task: "${_taskPreview}"\n`,
                     );
                     const _subStart = Date.now();
 
@@ -1891,6 +1988,12 @@ export class ReactiveAgentBuilder {
                     // Sub-agent inherits parent's reasoning, guardrails,
                     // observability, and context profile. MCP tools are proxied
                     // from the parent (no duplicate containers).
+                    // When allowedTools is specified, those tools become required —
+                    // if you're constrained to specific tools, you must use them.
+                    const subAllowed = opts.allowedTools;
+                    const subRequiredTools = subAllowed && subAllowed.length > 0
+                      ? { tools: [...subAllowed], adaptive: false, maxRetries: 2 }
+                      : undefined;
                     const subRuntime = createRuntime({
                       agentId: opts.agentId,
                       provider: (opts.provider ?? "test") as ProviderName,
@@ -1899,10 +2002,14 @@ export class ReactiveAgentBuilder {
                       systemPrompt: composedSystemPrompt,
                       enableReasoning: opts.enableReasoning,
                       enableTools: opts.enableTools,
+                      allowedTools: subAllowed,
+                      requiredTools: subRequiredTools,
                       reasoningOptions: parentReasoningOptions,
                       enableGuardrails: parentEnableGuardrails,
                       enableObservability: parentEnableObservability,
-                      observabilityOptions: parentObservabilityOptions,
+                      observabilityOptions: parentObservabilityOptions
+                        ? { ...parentObservabilityOptions, logPrefix: "  │ " }
+                        : { logPrefix: "  │ " },
                       contextProfile: parentContextProfile,
                       enableCostTracking: parentEnableCostTracking,
                     });
@@ -1965,16 +2072,20 @@ export class ReactiveAgentBuilder {
                     const _subIcon = result.success
                       ? "\x1b[32m✓\x1b[0m"
                       : "\x1b[31m✗\x1b[0m";
+                    const _subSteps = result.metadata.stepsCount ?? 0;
+                    const _subTok = result.metadata.tokensUsed;
                     process.stdout.write(
-                      `  \x1b[36m└─ [sub-agent: ${subName}]\x1b[0m ${_subIcon} done | ${result.metadata.tokensUsed} tok | ${_subElapsed}s\n\n`,
+                      `  \x1b[36m└── ${_subIcon} \x1b[1m${subName}\x1b[22m\x1b[0m  ${_subSteps} steps | ${_subTok} tok | ${_subElapsed}s\n\n`,
                     );
                     return {
                       output: String(result.output ?? ""),
                       success: result.success,
                       tokensUsed: result.metadata.tokensUsed,
+                      stepsCompleted: _subSteps,
                     };
                   },
                   0,
+                  getParentContext,
                 );
 
                 return executor(task);
@@ -2042,6 +2153,17 @@ export class ReactiveAgentBuilder {
         gatewayOptions?.heartbeat?.intervalMs,
         !!gatewayOptions?.heartbeat?.instruction,
         streamDensity,
+        // Pass a callback so run() can set the task description before execution starts.
+        // This ensures sub-agents spawned on the very first iteration have the full user prompt.
+        (agentTools.length > 0 || allowDynamicSubAgents)
+          ? (desc: string) => {
+              if (parentExecutionContextRef) {
+                parentExecutionContextRef.taskDescription = desc;
+              } else {
+                parentExecutionContextRef = { toolResults: [], taskDescription: desc };
+              }
+            }
+          : undefined,
       );
     }) as Effect.Effect<ReactiveAgent, Error>;
   }
@@ -2100,6 +2222,8 @@ export class ReactiveAgent {
     private readonly _hasCustomHeartbeatInstruction: boolean = false,
     /** @internal Default stream density set via `.withStreaming()`. */
     private readonly _defaultStreamDensity?: StreamDensity,
+    /** @internal Callback to set task description for parent context forwarding. */
+    private readonly _setTaskDescription?: (desc: string) => void,
   ) {}
 
   /**
@@ -2198,6 +2322,10 @@ export class ReactiveAgent {
    * ```
    */
   runEffect(input: string): Effect.Effect<AgentResult, Error> {
+    // Pre-set the task description so sub-agents spawned on the first iteration
+    // have access to the full user prompt (including phone numbers, URLs, etc.)
+    this._setTaskDescription?.(input.slice(0, 500));
+
     const task: Task = {
       id: generateTaskId(),
       agentId: Schema.decodeSync(AgentId)(this.agentId),
@@ -2251,6 +2379,9 @@ export class ReactiveAgent {
     input: string,
     options?: { density?: StreamDensity },
   ): AsyncGenerator<AgentStreamEvent> {
+    // Pre-set the task description for parent context forwarding
+    this._setTaskDescription?.(input.slice(0, 500));
+
     const task: Task = {
       id: generateTaskId(),
       agentId: Schema.decodeSync(AgentId)(this.agentId),

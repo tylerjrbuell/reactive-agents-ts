@@ -7,8 +7,10 @@ import { CoreServicesLive, EventBusLive } from "@reactive-agents/core";
 import {
   createLLMProviderLayer,
   getProviderDefaultModel,
+  LLMService,
 } from "@reactive-agents/llm-provider";
 import { createMemoryLayer } from "@reactive-agents/memory";
+import type { MemoryLLM } from "@reactive-agents/memory";
 
 // Optional package imports
 import { createGuardrailsLayer } from "@reactive-agents/guardrails";
@@ -19,7 +21,7 @@ import {
   defaultReasoningConfig,
 } from "@reactive-agents/reasoning";
 import type { ReasoningConfig } from "@reactive-agents/reasoning";
-import { createToolsLayer } from "@reactive-agents/tools";
+import { createToolsLayer, ToolResultCacheLive, ToolService, ToolNotFoundError } from "@reactive-agents/tools";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { ReasoningOptions, ObservabilityOptions } from "./builder.js";
 import type { TelemetryConfig } from "@reactive-agents/observability";
@@ -531,6 +533,37 @@ export interface RuntimeOptions {
     /** Max redirects when required tools are missing (default: 2) */
     readonly maxRetries?: number;
   };
+
+  /**
+   * Whitelist of tool names to expose. When set, only these tools are available —
+   * all others (built-in, MCP, custom) are filtered out at the ToolService level.
+   * All consumers (reasoning strategies, execution engine) see the filtered set.
+   *
+   * @example
+   * ```typescript
+   * { allowedTools: ["web-search", "file-read"] }
+   * ```
+   *
+   * Default: undefined (all tools available)
+   */
+  allowedTools?: readonly string[];
+
+  /**
+   * Enable adaptive tool filtering. When true, only task-relevant tools are shown
+   * to the agent at reasoning time — reducing context noise for small models.
+   * All tools remain callable by exact name even if not shown.
+   *
+   * Uses heuristic keyword + description matching to identify relevant tools.
+   * Essential built-in tools (scratchpad-read/write) are always included.
+   *
+   * @example
+   * ```typescript
+   * { adaptiveToolFiltering: true }
+   * ```
+   *
+   * Default: false (all tools shown)
+   */
+  adaptiveToolFiltering?: boolean;
 }
 
 /**
@@ -596,6 +629,7 @@ export const createRuntime = (options: RuntimeOptions) => {
     systemPrompt: options.systemPrompt,
     observabilityVerbosity: options.observabilityOptions?.verbosity,
     logModelIO: options.observabilityOptions?.logModelIO,
+    logPrefix: options.observabilityOptions?.logPrefix,
     contextProfile: options.contextProfile,
     defaultStrategy: options.reasoningOptions?.defaultStrategy,
     resultCompression: options.resultCompression,
@@ -606,6 +640,7 @@ export const createRuntime = (options: RuntimeOptions) => {
           maxRetries: options.requiredTools.maxRetries,
         }
       : undefined,
+    adaptiveToolFiltering: options.adaptiveToolFiltering,
   };
 
   // ── Required layers ──
@@ -661,7 +696,34 @@ export const createRuntime = (options: RuntimeOptions) => {
       };
     }
   }
-  const memoryLayer = createMemoryLayer(config.memoryTier, memoryOverrides as Parameters<typeof createMemoryLayer>[1]);
+  // Bridge LLMService.embed into MemoryLLM so semantic memory auto-generates embeddings
+  const memoryLayer = Layer.unwrapEffect(
+    Effect.gen(function* () {
+      const llm = yield* LLMService;
+      const bridgedLLM: MemoryLLM = {
+        complete: (req) =>
+          llm.complete({
+            messages: req.messages.map((m) => ({
+              role: m.role as "user" | "assistant" | "system",
+              content: m.content,
+            })),
+            temperature: req.temperature,
+            maxTokens: req.maxTokens,
+          }).pipe(
+            Effect.map((r) => ({
+              content: r.content,
+              usage: r.usage ? { totalTokens: r.usage.totalTokens } : undefined,
+            })),
+          ),
+        embed: (texts, model) => llm.embed(texts, model),
+      };
+      return createMemoryLayer(
+        config.memoryTier,
+        memoryOverrides as Parameters<typeof createMemoryLayer>[1],
+        bridgedLLM,
+      );
+    }),
+  ).pipe(Layer.provide(llmLayer));
   const hookLayer = LifecycleHookRegistryLive;
   const engineLayer = ExecutionEngineLive(config).pipe(
     Layer.provide(hookLayer),
@@ -743,10 +805,69 @@ export const createRuntime = (options: RuntimeOptions) => {
     options.enableTools ||
     (options.mcpServers && options.mcpServers.length > 0);
   if (shouldEnableTools) {
-    // ToolService requires EventBus
-    toolsLayer = createToolsLayer().pipe(Layer.provide(eventBusLayer));
+    // ToolService requires EventBus; ToolResultCache enables opt-in tool result caching
+    const baseToolsLayer = createToolsLayer().pipe(Layer.provide(eventBusLayer));
+
+    // If allowedTools is specified, wrap the ToolService with a filtering layer
+    // that restricts listTools, getTool, and toFunctionCallingFormat to only
+    // the whitelisted tool names. execute() also rejects non-allowed tools.
+    if (options.allowedTools && options.allowedTools.length > 0) {
+      const allowed = new Set(options.allowedTools);
+      toolsLayer = Layer.effect(
+        ToolService,
+        Effect.gen(function* () {
+          // Get the underlying ToolService from the base layer
+          const base = yield* ToolService.pipe(Effect.provide(baseToolsLayer));
+
+          return {
+            execute: (input: import("@reactive-agents/tools").ToolInput) => {
+              if (!allowed.has(input.toolName)) {
+                return Effect.fail(
+                  new ToolNotFoundError({
+                    message: `Tool "${input.toolName}" is not in the allowed tools list`,
+                    toolName: input.toolName,
+                  }),
+                );
+              }
+              return base.execute(input);
+            },
+            register: base.register,
+            connectMCPServer: base.connectMCPServer,
+            disconnectMCPServer: base.disconnectMCPServer,
+            listTools: (filter?: { category?: string; source?: string; riskLevel?: string }) =>
+              base.listTools(filter).pipe(
+                Effect.map((tools) => tools.filter((t) => allowed.has(t.name))),
+              ),
+            getTool: (name: string) => {
+              if (!allowed.has(name)) {
+                return Effect.fail(
+                  new ToolNotFoundError({
+                    message: `Tool "${name}" is not in the allowed tools list`,
+                    toolName: name,
+                  }),
+                );
+              }
+              return base.getTool(name);
+            },
+            toFunctionCallingFormat: () =>
+              base.toFunctionCallingFormat().pipe(
+                Effect.map((tools) => tools.filter((t) => allowed.has(t.name))),
+              ),
+            listMCPServers: base.listMCPServers,
+          };
+        }),
+      ).pipe(Layer.provide(baseToolsLayer));
+    } else {
+      toolsLayer = baseToolsLayer;
+    }
+
+    const toolResultCacheLayer = ToolResultCacheLive();
     runtime = Layer.merge(runtime, toolsLayer) as any;
+    runtime = Layer.merge(runtime, toolResultCacheLayer) as any;
   }
+
+  // Create PromptLayer once — shared by reasoning deps and the main runtime
+  const promptLayer = options.enablePrompts ? createPromptLayer() : null;
 
   if (options.enableReasoning) {
     // Build reasoning config from defaults + user overrides
@@ -786,8 +907,8 @@ export const createRuntime = (options: RuntimeOptions) => {
     if (toolsLayer) {
       reasoningDeps = Layer.merge(llmLayer, toolsLayer) as any;
     }
-    if (options.enablePrompts) {
-      reasoningDeps = Layer.merge(reasoningDeps, createPromptLayer()) as any;
+    if (promptLayer) {
+      reasoningDeps = Layer.merge(reasoningDeps, promptLayer) as any;
     }
     const reasoningLayer = createReasoningLayer(reasoningConfig).pipe(
       Layer.provide(reasoningDeps),
@@ -831,8 +952,8 @@ export const createRuntime = (options: RuntimeOptions) => {
     runtime = Layer.merge(runtime, interactionLayer) as any;
   }
 
-  if (options.enablePrompts) {
-    runtime = Layer.merge(runtime, createPromptLayer()) as any;
+  if (promptLayer) {
+    runtime = Layer.merge(runtime, promptLayer) as any;
   }
 
   if (options.enableOrchestration) {

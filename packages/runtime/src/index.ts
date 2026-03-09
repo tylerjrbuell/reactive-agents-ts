@@ -28,6 +28,8 @@ export {
   HookError,
   MaxIterationsError,
   GuardrailViolationError,
+  BudgetExceededError,
+  KillSwitchTriggeredError,
   unwrapError,
   type RuntimeErrors,
 } from "./errors.js";

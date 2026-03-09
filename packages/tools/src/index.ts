@@ -108,6 +108,8 @@ export {
   executeAgentTool,
   executeRemoteAgentTool,
   createSubAgentExecutor,
+  buildParentContextPrefix,
   MAX_RECURSION_DEPTH,
+  MAX_PARENT_CONTEXT_CHARS,
 } from "./adapters/agent-tool-adapter.js";
-export type { RemoteAgentClient, TaskResult, SubAgentConfig, SubAgentResult } from "./adapters/agent-tool-adapter.js";
+export type { RemoteAgentClient, TaskResult, SubAgentConfig, SubAgentResult, ParentContext, ParentContextItem } from "./adapters/agent-tool-adapter.js";
