@@ -239,12 +239,18 @@ export function buildContext(input: ContextBuildInput): string {
 
   const sections: string[] = [];
 
-  // 1. Prior context (if provided)
+  // 1. Full tool schemas — shown first so the model knows its capabilities
+  // before seeing any history. Critical for MCP tools with many parameters.
+  sections.push(
+    buildToolReference(task, availableToolSchemas, requiredTools, profile.toolSchemaDetail),
+  );
+
+  // 2. Prior context (if provided)
   if (priorContext) {
     sections.push(priorContext);
   }
 
-  // 2. Memory section
+  // 3. Memory section
   if (memories && memories.length > 0) {
     const relevant = memories.filter((m) => m.relevance >= MEMORY_RELEVANCE_THRESHOLD);
     if (relevant.length > 0) {
@@ -253,7 +259,7 @@ export function buildContext(input: ContextBuildInput): string {
     }
   }
 
-  // 3-4. Step history (scored older + recent)
+  // 4-5. Step history (scored older + recent)
   if (steps.length > 0) {
     const compactAfter = profile.compactAfterSteps ?? 6;
     const fullDetailN = profile.fullDetailSteps ?? 4;
@@ -282,29 +288,27 @@ export function buildContext(input: ContextBuildInput): string {
     }
   }
 
-  // 5. Completed summary
+  // 6. Completed summary
   const completedSummary = buildCompletedSummary(steps);
   if (completedSummary) {
     sections.push(completedSummary);
   }
 
-  // 6. Pinned tool reference (compact, survives compaction)
-  if (!availableToolSchemas || availableToolSchemas.length === 0) {
-    sections.push("No tools available for this task.");
-  } else {
+  // 7. Compact pinned tool reference (parameter names only — quick lookup near RULES)
+  if (availableToolSchemas && availableToolSchemas.length > 0) {
     const pinnedRef = buildPinnedToolReference(availableToolSchemas, requiredTools, profile.toolSchemaDetail);
     if (pinnedRef) {
       sections.push(pinnedRef);
     }
   }
 
-  // 7. Iteration awareness
+  // 8. Iteration awareness
   sections.push(buildIterationAwareness(iteration, maxIterations));
 
-  // 8. Task description (last for recency bias)
+  // 9. Task description (last for recency bias)
   sections.push(`Task: ${task}`);
 
-  // 9. RULES block
+  // 10. RULES block
   sections.push(buildRules(availableToolSchemas, requiredTools));
 
   return sections.join("\n\n");
