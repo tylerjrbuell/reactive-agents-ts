@@ -694,6 +694,9 @@ export class ReactiveAgentBuilder {
   private _guardrailsOptions?: GuardrailsOptions;
   private _verificationOptions?: VerificationOptions;
   private _circuitBreakerConfig?: Partial<import("@reactive-agents/llm-provider").CircuitBreakerConfig>;
+  private _enableExperienceLearning: boolean = false;
+  private _enableMemoryConsolidation: boolean = false;
+  private _consolidationConfig?: { threshold?: number; decayFactor?: number; pruneThreshold?: number };
 
   // ─── Identity ───
 
@@ -1319,6 +1322,34 @@ export class ReactiveAgentBuilder {
   }
 
   /**
+   * Enable ExperienceStore cross-agent learning.
+   *
+   * Records tool-use patterns and queries them at bootstrap to surface tips from
+   * prior runs. Tips are injected into the execution context as `experienceTips`.
+   *
+   * @returns `this` for chaining
+   */
+  withExperienceLearning(): this {
+    this._enableExperienceLearning = true;
+    return this;
+  }
+
+  /**
+   * Enable MemoryConsolidatorService background memory intelligence.
+   *
+   * Periodically consolidates episodic entries, decays semantic importance, and
+   * prunes low-importance entries to keep memory manageable.
+   *
+   * @param config - Optional consolidation thresholds
+   * @returns `this` for chaining
+   */
+  withMemoryConsolidation(config?: { threshold?: number; decayFactor?: number; pruneThreshold?: number }): this {
+    this._enableMemoryConsolidation = true;
+    if (config) this._consolidationConfig = config;
+    return this;
+  }
+
+  /**
    * Enable agent lifecycle events — allows subscribing to agent execution events.
    *
    * Enables the `.subscribe()` method on ReactiveAgent to listen for events like
@@ -1571,6 +1602,9 @@ export class ReactiveAgentBuilder {
       requiredTools: this._requiredToolsConfig,
       allowedTools: this._toolsOptions?.allowedTools,
       adaptiveToolFiltering: this._toolsOptions?.adaptive,
+      enableExperienceLearning: this._enableExperienceLearning,
+      enableMemoryConsolidation: this._enableMemoryConsolidation,
+      consolidationConfig: this._consolidationConfig,
     });
 
     const hooks = [...this._hooks];
