@@ -58,29 +58,6 @@ export class ExperienceStore extends Context.Tag("ExperienceStore")<
   }
 >() {}
 
-// ─── Table DDL ───
-
-const CREATE_TABLES_SQL = `
-  CREATE TABLE IF NOT EXISTS experience_tool_patterns (
-    task_type     TEXT NOT NULL,
-    pattern_key   TEXT NOT NULL,
-    tool_list     TEXT NOT NULL,
-    total_count   INTEGER NOT NULL DEFAULT 0,
-    success_count INTEGER NOT NULL DEFAULT 0,
-    total_steps   INTEGER NOT NULL DEFAULT 0,
-    total_tokens  INTEGER NOT NULL DEFAULT 0,
-    PRIMARY KEY (task_type, pattern_key)
-  );
-
-  CREATE TABLE IF NOT EXISTS experience_error_recoveries (
-    tool          TEXT NOT NULL,
-    error_pattern TEXT NOT NULL,
-    recovery      TEXT NOT NULL,
-    occurrences   INTEGER NOT NULL DEFAULT 0,
-    PRIMARY KEY (tool, error_pattern)
-  );
-`;
-
 // ─── Live Implementation ───
 
 export const ExperienceStoreLive = Layer.effect(
