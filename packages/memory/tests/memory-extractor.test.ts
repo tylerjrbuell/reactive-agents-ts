@@ -5,6 +5,7 @@ import {
   MemoryExtractorLive,
   MemoryExtractorTier2Live,
 } from "../src/index.js";
+import { createMemoryLayer } from "../src/runtime.js";
 import type { MemoryLLM } from "../src/index.js";
 
 const testMessages = [
@@ -233,5 +234,26 @@ describe("MemoryExtractor — Tier 2 (LLM-Enhanced)", () => {
     );
 
     expect(entries.length).toBe(5);
+  });
+});
+
+describe("MemoryExtractor — Layer Integration", () => {
+  it("createMemoryLayer includes MemoryExtractor (Tier 1)", async () => {
+    const memoryLayer = createMemoryLayer("1", { agentId: "layer-test" });
+
+    const entries = await Effect.runPromise(
+      MemoryExtractor.pipe(
+        Effect.flatMap((svc) =>
+          svc.extractFromConversation("layer-test", testMessages),
+        ),
+        Effect.provide(memoryLayer),
+      ),
+    );
+
+    // Should resolve without error (MemoryExtractor is in the layer)
+    expect(entries.length).toBeGreaterThan(0);
+    for (const e of entries) {
+      expect(e.agentId).toBe("layer-test");
+    }
   });
 });

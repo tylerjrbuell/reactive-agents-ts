@@ -3,6 +3,7 @@ import { EventBus } from "@reactive-agents/core";
 import type {
   MemoryBootstrapResult,
   MemoryConfig,
+  MemoryLLM,
   SemanticEntry,
   DailyLogEntry,
   WorkingMemoryItem,
@@ -78,7 +79,7 @@ export class MemoryService extends Context.Tag("MemoryService")<
 
 // ─── Live Implementation ───
 
-export const MemoryServiceLive = (config: MemoryConfig) =>
+export const MemoryServiceLive = (config: MemoryConfig, memoryLLM?: MemoryLLM) =>
   Layer.effect(
     MemoryService,
     Effect.gen(function* () {
@@ -160,7 +161,25 @@ export const MemoryServiceLive = (config: MemoryConfig) =>
 
         storeSemantic: (entry) =>
           Effect.gen(function* () {
-            const id = yield* semantic.store(entry);
+            // Auto-generate embedding if MemoryLLM.embed is available and entry has none
+            let entryToStore = entry;
+            if (
+              memoryLLM?.embed &&
+              (!entry.embedding || entry.embedding.length === 0)
+            ) {
+              const embeddingResult = yield* memoryLLM
+                .embed([entry.content])
+                .pipe(
+                  Effect.map((embeddings) =>
+                    embeddings.length > 0 ? [...embeddings[0]!] : undefined,
+                  ),
+                  Effect.catchAll(() => Effect.succeed(undefined as number[] | undefined)),
+                );
+              if (embeddingResult && embeddingResult.length > 0) {
+                entryToStore = { ...entry, embedding: embeddingResult };
+              }
+            }
+            const id = yield* semantic.store(entryToStore);
             // Auto-link if Zettelkasten enabled
             if (config.zettelkasten.enabled) {
               yield* zettel

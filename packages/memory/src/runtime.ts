@@ -9,7 +9,10 @@ import { ZettelkastenServiceLive } from "./indexing/zettelkasten.js";
 import { PlanStoreServiceLive } from "./services/plan-store.js";
 import { MemoryServiceLive } from "./services/memory-service.js";
 import { MemoryDatabaseLive } from "./database.js";
-import type { MemoryConfig } from "./types.js";
+import { MemoryConsolidatorLive } from "./extraction/memory-consolidator.js";
+import { MemoryExtractorLive, MemoryExtractorTier2Live } from "./extraction/memory-extractor.js";
+import { CompactionServiceLive } from "./compaction/compaction-service.js";
+import type { MemoryConfig, MemoryLLM } from "./types.js";
 import { defaultMemoryConfig } from "./types.js";
 
 /**
@@ -25,6 +28,7 @@ import { defaultMemoryConfig } from "./types.js";
 export const createMemoryLayer = (
   tier: "1" | "2",
   configOverrides?: Partial<MemoryConfig> & { agentId: string },
+  memoryLLM?: MemoryLLM,
 ) => {
   const agentId = configOverrides?.agentId ?? "default";
   const config: MemoryConfig = {
@@ -55,8 +59,21 @@ export const createMemoryLayer = (
   // File system layer (no deps)
   const fsLayer = MemoryFileSystemLive;
 
+  // Consolidator layer (depends on DB)
+  const consolidatorLayer = MemoryConsolidatorLive(config).pipe(
+    Layer.provide(dbLayer),
+  );
+
+  // Compaction layer (depends on DB)
+  const compactionLayer = CompactionServiceLive.pipe(Layer.provide(dbLayer));
+
+  // Memory extractor layer (Tier 2 if LLM available, otherwise Tier 1 heuristic)
+  const extractorLayer = memoryLLM
+    ? MemoryExtractorTier2Live(memoryLLM)
+    : MemoryExtractorLive;
+
   // Orchestrator layer
-  const memoryServiceLayer = MemoryServiceLive(config).pipe(
+  const memoryServiceLayer = MemoryServiceLive(config, memoryLLM).pipe(
     Layer.provide(Layer.mergeAll(workingLayer, coreServices, fsLayer)),
   );
 
@@ -66,5 +83,8 @@ export const createMemoryLayer = (
     coreServices,
     fsLayer,
     memoryServiceLayer,
+    consolidatorLayer,
+    compactionLayer,
+    extractorLayer,
   );
 };
