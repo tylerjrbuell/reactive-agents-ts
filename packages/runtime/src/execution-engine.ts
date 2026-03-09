@@ -1032,18 +1032,21 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     ).pipe(Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })));
 
                     if (expRecOpt._tag === "Some") {
-                      const thinkRes = ctx.metadata.reasoningResult as any;
-                      const toolsFromSteps = ((thinkRes?.steps ?? []) as Array<{type: string; metadata?: {toolUsed?: string}}>)
+                      const reasoningStepsForExp = (ctx.metadata.reasoningSteps ?? []) as Array<{
+                        type: string;
+                        metadata?: { toolUsed?: string };
+                      }>;
+                      const toolsFromSteps = reasoningStepsForExp
                         .filter(s => s.type === "action")
                         .map(s => s.metadata?.toolUsed ?? "unknown")
-                        .filter((t, i, arr) => arr.indexOf(t) === i); // unique
+                        .filter((t, i, arr) => arr.indexOf(t) === i && t !== "unknown"); // unique, drop unknowns
 
                       yield* expRecOpt.value.record({
                         agentId: ctx.agentId,
                         taskDescription: extractTaskText(task.input),
                         taskType: task.type ?? "general",
                         toolsUsed: toolsFromSteps,
-                        success: thinkRes?.status === "completed",
+                        success: (ctx.metadata.reasoningResult as any)?.status === "completed",
                         totalSteps: (ctx.metadata.stepsCount as number) ?? 0,
                         totalTokens: ctx.tokensUsed,
                         errors: [],
