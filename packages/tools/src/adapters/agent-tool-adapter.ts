@@ -8,6 +8,13 @@ export const MAX_RECURSION_DEPTH = 3;
 /** Maximum characters of parent context to forward to sub-agents. */
 export const MAX_PARENT_CONTEXT_CHARS = 2000;
 
+/**
+ * Tools that are always included in every sub-agent's tool scope regardless of
+ * what the parent configured. Sub-agents need scratchpad access to store/read
+ * intermediate results during reasoning.
+ */
+export const ALWAYS_INCLUDE_TOOLS = ["scratchpad-read", "scratchpad-write"] as const;
+
 /** Maximum characters per individual tool result summary. */
 const MAX_TOOL_RESULT_CHARS = 200;
 
@@ -100,6 +107,8 @@ export interface SubAgentResult {
   readonly summary: string;
   readonly tokensUsed: number;
   readonly stepsCompleted?: number;
+  /** Scratchpad keys forwarded to the parent with a `sub:<agentName>:` prefix */
+  readonly forwardedScratchpadKeys?: readonly string[];
 }
 
 /**
@@ -130,9 +139,18 @@ export const createSubAgentExecutor = (
     name: string;
     /** Whitelist of tool names — only these tools are available to the sub-agent. */
     allowedTools?: readonly string[];
-  }) => Promise<{ output: string; success: boolean; tokensUsed: number; stepsCompleted?: number }>,
+  }) => Promise<{
+    output: string;
+    success: boolean;
+    tokensUsed: number;
+    stepsCompleted?: number;
+    /** Scratchpad entries written by the sub-agent during execution */
+    scratchpadEntries?: ReadonlyMap<string, string> | Map<string, string>;
+  }>,
   depth: number = 0,
   parentContextProvider?: () => ParentContext | undefined,
+  /** Optional writer to forward sub-agent scratchpad entries to the parent */
+  parentScratchpadWriter?: (key: string, value: string) => void,
 ): ((task: string) => Promise<SubAgentResult>) => {
   return async (task: string): Promise<SubAgentResult> => {
     if (depth >= MAX_RECURSION_DEPTH) {
@@ -157,19 +175,41 @@ export const createSubAgentExecutor = (
           : parentPrefix;
       }
 
+      // Fix 1: Always include scratchpad tools in sub-agent tool scope so
+      // sub-agents can store/retrieve intermediate results during reasoning.
+      const baseTools = config.tools;
+      const effectiveTools: readonly string[] = baseTools !== undefined
+        ? [...new Set([...baseTools, ...ALWAYS_INCLUDE_TOOLS])]
+        : undefined as unknown as readonly string[];
+
+      // Fix 2: Cap sub-agent maxIterations to 6 to prevent spin-out.
+      // Sub-agents should complete focused tasks quickly; parents run longer.
+      const effectiveMaxIter = Math.min(config.maxIterations ?? 6, 6);
+
       const result = await executeFn({
         agentId: `sub-${config.name}-${Date.now()}`,
         provider: config.provider,
         model: config.model,
-        maxIterations: config.maxIterations ?? 5,
+        maxIterations: effectiveMaxIter,
         systemPrompt: composedSystemPrompt,
         persona: config.persona,
         enableReasoning: true,
         enableTools: true,
         task,
         name: config.name,
-        allowedTools: config.tools,
+        allowedTools: effectiveTools,
       });
+
+      // Fix 3: Forward sub-agent scratchpad entries to parent with a
+      // `sub:<agentName>:` prefix so parent agents can access sub-results.
+      const forwardedKeys: string[] = [];
+      if (result.scratchpadEntries && parentScratchpadWriter) {
+        for (const [key, value] of result.scratchpadEntries) {
+          const forwardedKey = `sub:${config.name}:${key}`;
+          parentScratchpadWriter(forwardedKey, value);
+          forwardedKeys.push(forwardedKey);
+        }
+      }
 
       // Extract a concise summary — strip ReAct artifacts and trim
       let summary = result.output;
@@ -179,12 +219,18 @@ export const createSubAgentExecutor = (
         summary = summary.slice(0, 1200) + "…";
       }
 
+      // Append forwarded key list to summary for parent agent visibility
+      if (forwardedKeys.length > 0) {
+        summary += `\n\n[Scratchpad keys forwarded to parent: ${forwardedKeys.join(", ")}]`;
+      }
+
       return {
         subAgentName: config.name,
         success: result.success,
         summary,
         tokensUsed: result.tokensUsed,
         stepsCompleted: result.stepsCompleted,
+        forwardedScratchpadKeys: forwardedKeys.length > 0 ? forwardedKeys : undefined,
       };
     } catch (error) {
       return {
