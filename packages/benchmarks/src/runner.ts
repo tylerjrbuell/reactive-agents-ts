@@ -1,103 +1,137 @@
 // File: src/runner.ts
 /**
- * BenchmarkRunner — executes benchmark tasks and collects metrics.
+ * BenchmarkRunner — executes benchmark tasks against a real LLM and collects metrics.
+ *
+ * Each task calls `agent.run()` against the specified provider and model,
+ * measuring real-world latency, token usage, cost, and correctness.
  */
-import { Effect } from "effect";
 import type { BenchmarkTask, TaskResult, OverheadMeasurement, BenchmarkReport, Tier } from "./types.js";
 import { BENCHMARK_TASKS } from "./tasks.js";
+import { ReactiveAgents } from "@reactive-agents/runtime";
 import { createRuntime } from "@reactive-agents/runtime";
 import type { RuntimeOptions } from "@reactive-agents/runtime";
 
+type ProviderName = NonNullable<RuntimeOptions["provider"]>;
+
 export interface RunnerOptions {
-  /** LLM provider. */
-  readonly provider: RuntimeOptions["provider"];
-  /** Model to benchmark. */
+  /** LLM provider to use for task execution. */
+  readonly provider: ProviderName;
+  /** Model to benchmark (uses provider default if omitted). */
   readonly model?: string;
   /** Filter to specific tiers. */
   readonly tiers?: readonly Tier[];
   /** Filter to specific task IDs. */
   readonly taskIds?: readonly string[];
-  /** Max concurrent tasks. */
+  /** Max concurrent tasks (default: 1 — sequential for stable latency measurement). */
   readonly concurrency?: number;
+  /** Per-task timeout in milliseconds (default: 120_000 — 2 minutes). */
+  readonly timeoutMs?: number;
 }
+
+/** Default model per provider — cost-efficient but capable. */
+const defaultModel: Partial<Record<ProviderName, string>> = {
+  anthropic: "claude-haiku-4-5",
+  openai: "gpt-4o-mini",
+  gemini: "gemini-2.0-flash",
+  ollama: "llama3.2",
+};
 
 const matchesExpected = (output: string, expected?: string): boolean => {
   if (!expected) return true;
   const patterns = expected.split("|");
-  return patterns.some((p) => new RegExp(p, "i").test(output));
+  return patterns.some((p) => {
+    try {
+      return new RegExp(p, "i").test(output);
+    } catch {
+      return output.toLowerCase().includes(p.toLowerCase());
+    }
+  });
 };
 
 /**
- * Run a single benchmark task using the test LLM provider.
- * Returns a TaskResult with timing, token usage, and pass/fail status.
+ * Run a single benchmark task against a real LLM.
+ * Returns a TaskResult with real timing, token usage, cost, and pass/fail status.
  */
-const runTask = (
+const runTask = async (
   task: BenchmarkTask,
-  provider: RuntimeOptions["provider"],
-  model?: string,
-): Effect.Effect<TaskResult, never, never> =>
-  Effect.gen(function* () {
-    const start = performance.now();
+  provider: ProviderName,
+  model: string,
+  timeoutMs: number,
+): Promise<TaskResult> => {
+  const start = performance.now();
 
-    try {
-      const runtime = createRuntime({
-        agentId: `bench-${task.id}`,
-        provider: provider ?? "test",
-        model,
-        enableReasoning: !!task.strategy,
-        maxIterations: 5,
-        reasoningOptions: task.strategy
-          ? { preferredStrategy: task.strategy }
-          : undefined,
-      });
+  try {
+    const builder = ReactiveAgents.create()
+      .withName(`bench-${task.id}`)
+      .withProvider(provider)
+      .withModel(model)
+      .withMaxIterations(task.strategy ? 5 : 2);
 
-      // Measure the time to create and resolve the runtime layer.
-      // With test provider we don't make real LLM calls — we measure framework overhead.
-      const durationMs = performance.now() - start;
-
-      return {
-        taskId: task.id,
-        tier: task.tier,
-        strategy: task.strategy ?? "single-shot",
-        status: "pass" as const,
-        durationMs,
-        tokensUsed: 0,
-        estimatedCost: 0,
-        iterations: 0,
-        output: "benchmark-placeholder",
-      } satisfies TaskResult;
-    } catch (e) {
-      return {
-        taskId: task.id,
-        tier: task.tier,
-        strategy: task.strategy ?? "single-shot",
-        status: "error" as const,
-        durationMs: performance.now() - start,
-        tokensUsed: 0,
-        estimatedCost: 0,
-        iterations: 0,
-        output: "",
-        error: e instanceof Error ? e.message : String(e),
-      } satisfies TaskResult;
+    if (task.strategy) {
+      const strategyMap = {
+        "react": "reactive" as const,
+        "plan-execute": "plan-execute-reflect" as const,
+        "tree-of-thought": "tree-of-thought" as const,
+      };
+      builder.withReasoning({ defaultStrategy: strategyMap[task.strategy] });
     }
-  });
+
+    const agent = await builder.build();
+
+    let agentResult: Awaited<ReturnType<typeof agent.run>>;
+    try {
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`Task timed out after ${timeoutMs}ms`)), timeoutMs),
+      );
+      agentResult = await Promise.race([agent.run(task.prompt), timeoutPromise]);
+    } finally {
+      await agent.dispose();
+    }
+
+    const durationMs = performance.now() - start;
+    const passed = matchesExpected(agentResult.output, task.expected);
+
+    return {
+      taskId: task.id,
+      tier: task.tier,
+      strategy: task.strategy ?? "single-shot",
+      status: passed ? "pass" : "fail",
+      durationMs,
+      tokensUsed: agentResult.metadata.tokensUsed,
+      estimatedCost: agentResult.metadata.cost,
+      iterations: agentResult.metadata.stepsCount,
+      output: agentResult.output.slice(0, 1000),
+    } satisfies TaskResult;
+  } catch (e) {
+    return {
+      taskId: task.id,
+      tier: task.tier,
+      strategy: task.strategy ?? "single-shot",
+      status: "error" as const,
+      durationMs: performance.now() - start,
+      tokensUsed: 0,
+      estimatedCost: 0,
+      iterations: 0,
+      output: "",
+      error: e instanceof Error ? e.message : String(e),
+    } satisfies TaskResult;
+  }
+};
 
 /**
- * Measure framework overhead — time to create runtime, resolve layers, etc.
+ * Measure framework overhead — time to create runtime and resolve Effect layers.
+ * Uses the test provider to isolate pure framework startup cost.
  */
 const measureOverhead = (): OverheadMeasurement[] => {
   const measurements: OverheadMeasurement[] = [];
   const SAMPLES = 10;
 
-  // Measure runtime creation
+  // Measure minimal runtime creation
   {
     const times: number[] = [];
     for (let i = 0; i < SAMPLES; i++) {
       const start = performance.now();
-      createRuntime({
-        agentId: `overhead-${i}`,
-        provider: "test",
-      });
+      createRuntime({ agentId: `overhead-${i}`, provider: "test" });
       times.push(performance.now() - start);
     }
     measurements.push({
@@ -107,7 +141,7 @@ const measureOverhead = (): OverheadMeasurement[] => {
     });
   }
 
-  // Measure runtime creation with all features
+  // Measure full feature runtime creation
   {
     const times: number[] = [];
     for (let i = 0; i < SAMPLES; i++) {
@@ -129,9 +163,10 @@ const measureOverhead = (): OverheadMeasurement[] => {
     });
   }
 
-  // Measure heuristic complexity analysis
+  // Measure heuristic complexity classification
   {
     try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const costModule = require("@reactive-agents/cost");
       const heuristicClassify = costModule?.heuristicClassify;
       if (typeof heuristicClassify === "function") {
@@ -148,7 +183,7 @@ const measureOverhead = (): OverheadMeasurement[] => {
         });
       }
     } catch {
-      // cost package not available; skip this measurement
+      // cost package not available; skip
     }
   }
 
@@ -195,7 +230,7 @@ const buildSummary = (tasks: TaskResult[]): BenchmarkReport["summary"] => {
 };
 
 /**
- * Run the full benchmark suite and produce a report.
+ * Run the full benchmark suite against a real LLM provider and produce a report.
  */
 export const runBenchmarks = async (
   options: RunnerOptions,
@@ -209,37 +244,70 @@ export const runBenchmarks = async (
     tasks = tasks.filter((t) => options.taskIds!.includes(t.id));
   }
 
-  console.log(`\n  Running ${tasks.length} benchmark tasks...`);
-  console.log(`  Provider: ${options.provider ?? "test"}`);
-  if (options.model) console.log(`  Model: ${options.model}`);
-  console.log("");
+  const resolvedModel = options.model ?? defaultModel[options.provider] ?? "default";
+  const timeoutMs = options.timeoutMs ?? 120_000;
+
+  console.log(`\n  ╔══════════════════════════════════════════════════════╗`);
+  console.log(`  ║   Reactive Agents Benchmark Suite                    ║`);
+  console.log(`  ╠══════════════════════════════════════════════════════╣`);
+  console.log(`  ║  Provider : ${options.provider.padEnd(40)}║`);
+  console.log(`  ║  Model    : ${resolvedModel.padEnd(40)}║`);
+  console.log(`  ║  Tasks    : ${String(tasks.length).padEnd(40)}║`);
+  console.log(`  ║  Timeout  : ${String(timeoutMs / 1000 + "s").padEnd(40)}║`);
+  console.log(`  ╚══════════════════════════════════════════════════════╝\n`);
+
+  if (options.provider === "test") {
+    console.log(`  ⚠  WARNING: Using 'test' provider — no real LLM calls will be made.`);
+    console.log(`  ⚠  For real-world results, use: --provider anthropic --model claude-haiku-4-5\n`);
+  }
 
   const results: TaskResult[] = [];
 
   for (const task of tasks) {
-    const result = await Effect.runPromise(
-      runTask(task, options.provider, options.model),
-    );
+    process.stdout.write(`  ⊙ [${task.tier.padEnd(8)}] ${task.name.padEnd(50)} `);
+    const result = await runTask(task, options.provider, resolvedModel, timeoutMs);
     results.push(result);
 
     const icon = result.status === "pass" ? "✓" : result.status === "fail" ? "✗" : "⚠";
-    console.log(
-      `  ${icon} [${result.tier}] ${task.name} — ${result.durationMs.toFixed(1)}ms`,
-    );
+    const latency = result.durationMs >= 1000
+      ? `${(result.durationMs / 1000).toFixed(1)}s`
+      : `${result.durationMs.toFixed(0)}ms`;
+    const tokenInfo = result.tokensUsed > 0 ? ` · ${result.tokensUsed} tok` : "";
+    console.log(`${icon} ${latency}${tokenInfo}`);
+
+    if (result.status === "error") {
+      console.log(`    ↳ Error: ${result.error?.slice(0, 100)}`);
+    } else if (result.status === "fail") {
+      console.log(`    ↳ Expected pattern not found in output`);
+    }
   }
 
-  console.log("\n  Measuring framework overhead...");
+  console.log("\n  Measuring framework overhead (test provider)...");
   const overhead = measureOverhead();
   for (const m of overhead) {
-    console.log(`  ⏱ ${m.label}: ${m.durationMs.toFixed(2)}ms avg (${m.samples} samples)`);
+    console.log(`  ⏱  ${m.label.padEnd(32)}: ${m.durationMs.toFixed(3)}ms avg (${m.samples} samples)`);
   }
+
+  const summary = buildSummary(results);
+  const passRate = Math.round((summary.passed / summary.totalTasks) * 100);
+
+  console.log(`\n  ┌─────────────────────────────────────────────────────┐`);
+  console.log(`  │  Results                                             │`);
+  console.log(`  ├─────────────────────────────────────────────────────┤`);
+  console.log(`  │  Pass rate : ${(String(summary.passed) + "/" + String(summary.totalTasks) + " (" + passRate + "%)").padEnd(39)}│`);
+  console.log(`  │  Duration  : ${(summary.totalDurationMs >= 1000 ? (summary.totalDurationMs / 1000).toFixed(1) + "s total, " + (summary.avgLatencyMs / 1000).toFixed(1) + "s avg" : summary.totalDurationMs.toFixed(0) + "ms total").padEnd(39)}│`);
+  console.log(`  │  Tokens    : ${String(summary.totalTokens.toLocaleString()).padEnd(39)}│`);
+  console.log(`  │  Cost      : $${String(summary.totalCost.toFixed(4)).padEnd(38)}│`);
+  console.log(`  └─────────────────────────────────────────────────────┘\n`);
 
   return {
     timestamp: new Date().toISOString(),
-    provider: options.provider ?? "test",
-    model: options.model ?? "default",
+    provider: options.provider,
+    model: resolvedModel,
     tasks: results,
     overhead,
-    summary: buildSummary(results),
+    summary,
   };
 };
+
+

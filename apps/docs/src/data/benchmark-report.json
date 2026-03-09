@@ -1,281 +1,290 @@
 {
-  "timestamp": "2026-03-08T03:45:19.947Z",
-  "provider": "test",
-  "model": "default",
-  "tasks": [
+  "generatedAt": "2026-03-08T13:27:18.249Z",
+  "runs": [
     {
-      "taskId": "t1-greeting",
-      "tier": "trivial",
-      "strategy": "single-shot",
-      "status": "pass",
-      "durationMs": 0.38989499999999566,
-      "tokensUsed": 0,
-      "estimatedCost": 0,
-      "iterations": 0,
-      "output": "benchmark-placeholder"
-    },
-    {
-      "taskId": "t2-math",
-      "tier": "trivial",
-      "strategy": "single-shot",
-      "status": "pass",
-      "durationMs": 0.031620000000003756,
-      "tokensUsed": 0,
-      "estimatedCost": 0,
-      "iterations": 0,
-      "output": "benchmark-placeholder"
-    },
-    {
-      "taskId": "t3-fact",
-      "tier": "trivial",
-      "strategy": "single-shot",
-      "status": "pass",
-      "durationMs": 0.021250000000009095,
-      "tokensUsed": 0,
-      "estimatedCost": 0,
-      "iterations": 0,
-      "output": "benchmark-placeholder"
-    },
-    {
-      "taskId": "t4-format",
-      "tier": "trivial",
-      "strategy": "single-shot",
-      "status": "pass",
-      "durationMs": 0.012509999999991805,
-      "tokensUsed": 0,
-      "estimatedCost": 0,
-      "iterations": 0,
-      "output": "benchmark-placeholder"
-    },
-    {
-      "taskId": "s1-summarize",
-      "tier": "simple",
-      "strategy": "single-shot",
-      "status": "pass",
-      "durationMs": 0.016030000000000655,
-      "tokensUsed": 0,
-      "estimatedCost": 0,
-      "iterations": 0,
-      "output": "benchmark-placeholder"
-    },
-    {
-      "taskId": "s2-translate",
-      "tier": "simple",
-      "strategy": "single-shot",
-      "status": "pass",
-      "durationMs": 0.024939000000017586,
-      "tokensUsed": 0,
-      "estimatedCost": 0,
-      "iterations": 0,
-      "output": "benchmark-placeholder"
-    },
-    {
-      "taskId": "s3-explain",
-      "tier": "simple",
-      "strategy": "single-shot",
-      "status": "pass",
-      "durationMs": 0.019710000000003447,
-      "tokensUsed": 0,
-      "estimatedCost": 0,
-      "iterations": 0,
-      "output": "benchmark-placeholder"
-    },
-    {
-      "taskId": "s4-regex",
-      "tier": "simple",
-      "strategy": "single-shot",
-      "status": "pass",
-      "durationMs": 0.024408999999991465,
-      "tokensUsed": 0,
-      "estimatedCost": 0,
-      "iterations": 0,
-      "output": "benchmark-placeholder"
-    },
-    {
-      "taskId": "m1-debug",
-      "tier": "moderate",
-      "strategy": "react",
-      "status": "pass",
-      "durationMs": 0.059708999999998014,
-      "tokensUsed": 0,
-      "estimatedCost": 0,
-      "iterations": 0,
-      "output": "benchmark-placeholder"
-    },
-    {
-      "taskId": "m2-refactor",
-      "tier": "moderate",
-      "strategy": "react",
-      "status": "pass",
-      "durationMs": 0.02658999999999878,
-      "tokensUsed": 0,
-      "estimatedCost": 0,
-      "iterations": 0,
-      "output": "benchmark-placeholder"
-    },
-    {
-      "taskId": "m3-compare",
-      "tier": "moderate",
-      "strategy": "react",
-      "status": "pass",
-      "durationMs": 0.017870000000016262,
-      "tokensUsed": 0,
-      "estimatedCost": 0,
-      "iterations": 0,
-      "output": "benchmark-placeholder"
-    },
-    {
-      "taskId": "m4-algorithm",
-      "tier": "moderate",
-      "strategy": "react",
-      "status": "pass",
-      "durationMs": 0.019379999999983966,
-      "tokensUsed": 0,
-      "estimatedCost": 0,
-      "iterations": 0,
-      "output": "benchmark-placeholder"
-    },
-    {
-      "taskId": "c1-architecture",
-      "tier": "complex",
-      "strategy": "plan-execute",
-      "status": "pass",
-      "durationMs": 0.01680000000001769,
-      "tokensUsed": 0,
-      "estimatedCost": 0,
-      "iterations": 0,
-      "output": "benchmark-placeholder"
-    },
-    {
-      "taskId": "c2-review",
-      "tier": "complex",
-      "strategy": "plan-execute",
-      "status": "pass",
-      "durationMs": 0.013069999999999027,
-      "tokensUsed": 0,
-      "estimatedCost": 0,
-      "iterations": 0,
-      "output": "benchmark-placeholder"
-    },
-    {
-      "taskId": "c3-test-gen",
-      "tier": "complex",
-      "strategy": "plan-execute",
-      "status": "pass",
-      "durationMs": 0.024779999999992697,
-      "tokensUsed": 0,
-      "estimatedCost": 0,
-      "iterations": 0,
-      "output": "benchmark-placeholder"
-    },
-    {
-      "taskId": "c4-migration",
-      "tier": "complex",
-      "strategy": "plan-execute",
-      "status": "pass",
-      "durationMs": 0.01474999999999227,
-      "tokensUsed": 0,
-      "estimatedCost": 0,
-      "iterations": 0,
-      "output": "benchmark-placeholder"
-    },
-    {
-      "taskId": "e1-optimization",
-      "tier": "expert",
-      "strategy": "tree-of-thought",
-      "status": "pass",
-      "durationMs": 0.019939999999991187,
-      "tokensUsed": 0,
-      "estimatedCost": 0,
-      "iterations": 0,
-      "output": "benchmark-placeholder"
-    },
-    {
-      "taskId": "e2-tradeoff",
-      "tier": "expert",
-      "strategy": "tree-of-thought",
-      "status": "pass",
-      "durationMs": 0.011799999999993815,
-      "tokensUsed": 0,
-      "estimatedCost": 0,
-      "iterations": 0,
-      "output": "benchmark-placeholder"
-    },
-    {
-      "taskId": "e3-concurrency",
-      "tier": "expert",
-      "strategy": "tree-of-thought",
-      "status": "pass",
-      "durationMs": 0.02081900000001724,
-      "tokensUsed": 0,
-      "estimatedCost": 0,
-      "iterations": 0,
-      "output": "benchmark-placeholder"
-    },
-    {
-      "taskId": "e4-dsl",
-      "tier": "expert",
-      "strategy": "tree-of-thought",
-      "status": "pass",
-      "durationMs": 0.023659999999978254,
-      "tokensUsed": 0,
-      "estimatedCost": 0,
-      "iterations": 0,
-      "output": "benchmark-placeholder"
-    }
-  ],
-  "overhead": [
-    {
-      "label": "runtime-creation",
-      "durationMs": 0.01356179999999938,
-      "samples": 10
-    },
-    {
-      "label": "runtime-creation-full",
-      "durationMs": 0.04699749999999767,
-      "samples": 10
-    },
-    {
-      "label": "complexity-classification",
-      "durationMs": 0.0029871699999989686,
-      "samples": 100
-    }
-  ],
-  "summary": {
-    "totalTasks": 20,
-    "passed": 20,
-    "failed": 0,
-    "errors": 0,
-    "totalDurationMs": 0.8095309999999927,
-    "totalTokens": 0,
-    "totalCost": 0,
-    "avgLatencyMs": 0.04047654999999963,
-    "byTier": {
-      "trivial": {
-        "passed": 4,
-        "total": 4,
-        "avgMs": 0.11381875000000008
-      },
-      "simple": {
-        "passed": 4,
-        "total": 4,
-        "avgMs": 0.02127200000000329
-      },
-      "moderate": {
-        "passed": 4,
-        "total": 4,
-        "avgMs": 0.030887249999999256
-      },
-      "complex": {
-        "passed": 4,
-        "total": 4,
-        "avgMs": 0.01735000000000042
-      },
-      "expert": {
-        "passed": 4,
-        "total": 4,
-        "avgMs": 0.019054749999995124
+      "timestamp": "2026-03-08T13:27:18.249Z",
+      "provider": "test",
+      "model": "default",
+      "tasks": [
+        {
+          "taskId": "t1-js-typeof",
+          "tier": "trivial",
+          "strategy": "single-shot",
+          "status": "fail",
+          "durationMs": 128.321547,
+          "tokensUsed": 0,
+          "estimatedCost": 0,
+          "iterations": 2,
+          "output": "Test response"
+        },
+        {
+          "taskId": "t2-binary-pow",
+          "tier": "trivial",
+          "strategy": "single-shot",
+          "status": "fail",
+          "durationMs": 89.48002500000001,
+          "tokensUsed": 0,
+          "estimatedCost": 0,
+          "iterations": 2,
+          "output": "Test response"
+        },
+        {
+          "taskId": "t3-asimov-laws",
+          "tier": "trivial",
+          "strategy": "single-shot",
+          "status": "fail",
+          "durationMs": 93.59546399999999,
+          "tokensUsed": 0,
+          "estimatedCost": 0,
+          "iterations": 2,
+          "output": "Test response"
+        },
+        {
+          "taskId": "t4-json-csv",
+          "tier": "trivial",
+          "strategy": "single-shot",
+          "status": "fail",
+          "durationMs": 82.09745900000007,
+          "tokensUsed": 0,
+          "estimatedCost": 0,
+          "iterations": 2,
+          "output": "Test response"
+        },
+        {
+          "taskId": "s1-fibonacci",
+          "tier": "simple",
+          "strategy": "single-shot",
+          "status": "fail",
+          "durationMs": 83.94791099999998,
+          "tokensUsed": 0,
+          "estimatedCost": 0,
+          "iterations": 2,
+          "output": "Test response"
+        },
+        {
+          "taskId": "s2-palindrome-bug",
+          "tier": "simple",
+          "strategy": "single-shot",
+          "status": "fail",
+          "durationMs": 84.83918200000005,
+          "tokensUsed": 0,
+          "estimatedCost": 0,
+          "iterations": 2,
+          "output": "Test response"
+        },
+        {
+          "taskId": "s3-bigO",
+          "tier": "simple",
+          "strategy": "single-shot",
+          "status": "pass",
+          "durationMs": 69.47327499999994,
+          "tokensUsed": 0,
+          "estimatedCost": 0,
+          "iterations": 2,
+          "output": "Test response"
+        },
+        {
+          "taskId": "s4-design-pattern",
+          "tier": "simple",
+          "strategy": "single-shot",
+          "status": "fail",
+          "durationMs": 88.77547200000004,
+          "tokensUsed": 0,
+          "estimatedCost": 0,
+          "iterations": 2,
+          "output": "Test response"
+        },
+        {
+          "taskId": "m1-merge-intervals",
+          "tier": "moderate",
+          "strategy": "react",
+          "status": "fail",
+          "durationMs": 92.76862199999994,
+          "tokensUsed": 808,
+          "estimatedCost": 0,
+          "iterations": 3,
+          "output": "Test response"
+        },
+        {
+          "taskId": "m2-word-problem",
+          "tier": "moderate",
+          "strategy": "react",
+          "status": "fail",
+          "durationMs": 85.8028119999999,
+          "tokensUsed": 722,
+          "estimatedCost": 0,
+          "iterations": 3,
+          "output": "Test response"
+        },
+        {
+          "taskId": "m3-sql-injection",
+          "tier": "moderate",
+          "strategy": "react",
+          "status": "fail",
+          "durationMs": 94.1677279999999,
+          "tokensUsed": 785,
+          "estimatedCost": 0,
+          "iterations": 3,
+          "output": "Test response"
+        },
+        {
+          "taskId": "m4-remove-duplicates",
+          "tier": "moderate",
+          "strategy": "react",
+          "status": "fail",
+          "durationMs": 90.87142099999983,
+          "tokensUsed": 803,
+          "estimatedCost": 0,
+          "iterations": 3,
+          "output": "Test response"
+        },
+        {
+          "taskId": "c1-distributed-queue",
+          "tier": "complex",
+          "strategy": "plan-execute",
+          "status": "error",
+          "durationMs": 64.89285100000006,
+          "tokensUsed": 0,
+          "estimatedCost": 0,
+          "iterations": 0,
+          "output": "",
+          "error": "Plan generation failed: Structured output failed after 3 attempts. Last error: JSON Parse error: Unexpected identifier \"Test\""
+        },
+        {
+          "taskId": "c2-auth-vulnerabilities",
+          "tier": "complex",
+          "strategy": "plan-execute",
+          "status": "error",
+          "durationMs": 58.66204400000015,
+          "tokensUsed": 0,
+          "estimatedCost": 0,
+          "iterations": 0,
+          "output": "",
+          "error": "Plan generation failed: Structured output failed after 3 attempts. Last error: JSON Parse error: Unexpected identifier \"Test\""
+        },
+        {
+          "taskId": "c3-test-suite",
+          "tier": "complex",
+          "strategy": "plan-execute",
+          "status": "error",
+          "durationMs": 57.205728000000136,
+          "tokensUsed": 0,
+          "estimatedCost": 0,
+          "iterations": 0,
+          "output": "",
+          "error": "Plan generation failed: Structured output failed after 3 attempts. Last error: JSON Parse error: Unexpected identifier \"Test\""
+        },
+        {
+          "taskId": "c4-db-decomposition",
+          "tier": "complex",
+          "strategy": "plan-execute",
+          "status": "error",
+          "durationMs": 60.13186799999994,
+          "tokensUsed": 0,
+          "estimatedCost": 0,
+          "iterations": 0,
+          "output": "",
+          "error": "Plan generation failed: Structured output failed after 3 attempts. Last error: JSON Parse error: Unexpected identifier \"Test\""
+        },
+        {
+          "taskId": "e1-lis-optimization",
+          "tier": "expert",
+          "strategy": "tree-of-thought",
+          "status": "fail",
+          "durationMs": 89.22252800000001,
+          "tokensUsed": 874,
+          "estimatedCost": 0,
+          "iterations": 8,
+          "output": "Test response"
+        },
+        {
+          "taskId": "e2-incident-response",
+          "tier": "expert",
+          "strategy": "tree-of-thought",
+          "status": "fail",
+          "durationMs": 87.42594599999984,
+          "tokensUsed": 869,
+          "estimatedCost": 0,
+          "iterations": 8,
+          "output": "Test response"
+        },
+        {
+          "taskId": "e3-logic-fallacy",
+          "tier": "expert",
+          "strategy": "tree-of-thought",
+          "status": "fail",
+          "durationMs": 76.76300199999991,
+          "tokensUsed": 828,
+          "estimatedCost": 0,
+          "iterations": 8,
+          "output": "Test response"
+        },
+        {
+          "taskId": "e4-crdt-design",
+          "tier": "expert",
+          "strategy": "tree-of-thought",
+          "status": "fail",
+          "durationMs": 129.249548,
+          "tokensUsed": 870,
+          "estimatedCost": 0,
+          "iterations": 8,
+          "output": "Test response"
+        }
+      ],
+      "overhead": [
+        {
+          "label": "runtime-creation",
+          "durationMs": 0.014335800000048948,
+          "samples": 10
+        },
+        {
+          "label": "runtime-creation-full",
+          "durationMs": 0.039486600000009274,
+          "samples": 10
+        },
+        {
+          "label": "complexity-classification",
+          "durationMs": 0.004020759999991697,
+          "samples": 100
+        }
+      ],
+      "summary": {
+        "totalTasks": 20,
+        "passed": 1,
+        "failed": 15,
+        "errors": 4,
+        "totalDurationMs": 1707.6944329999997,
+        "totalTokens": 6559,
+        "totalCost": 0,
+        "avgLatencyMs": 85.38472164999999,
+        "byTier": {
+          "trivial": {
+            "passed": 0,
+            "total": 4,
+            "avgMs": 98.37362375000002
+          },
+          "simple": {
+            "passed": 1,
+            "total": 4,
+            "avgMs": 81.75896
+          },
+          "moderate": {
+            "passed": 0,
+            "total": 4,
+            "avgMs": 90.90264574999989
+          },
+          "complex": {
+            "passed": 0,
+            "total": 4,
+            "avgMs": 60.22312275000007
+          },
+          "expert": {
+            "passed": 0,
+            "total": 4,
+            "avgMs": 95.66525599999994
+          }
+        }
       }
     }
-  }
+  ]
 }

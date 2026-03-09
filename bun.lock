@@ -19,11 +19,12 @@
         "reactive-agents": "dist/index.js",
       },
       "dependencies": {
-        "@reactive-agents/a2a": "workspace:^",
-        "@reactive-agents/core": "workspace:^",
-        "@reactive-agents/eval": "workspace:^",
-        "@reactive-agents/llm-provider": "workspace:^",
-        "@reactive-agents/runtime": "workspace:^",
+        "@reactive-agents/a2a": "workspace:*",
+        "@reactive-agents/benchmarks": "workspace:*",
+        "@reactive-agents/core": "workspace:*",
+        "@reactive-agents/eval": "workspace:*",
+        "@reactive-agents/llm-provider": "workspace:*",
+        "@reactive-agents/runtime": "workspace:*",
         "effect": "^3.10.0",
       },
       "devDependencies": {
@@ -103,6 +104,22 @@
       "optionalPeers": [
         "@reactive-agents/identity",
       ],
+    },
+    "packages/benchmarks": {
+      "name": "@reactive-agents/benchmarks",
+      "version": "0.6.3",
+      "dependencies": {
+        "@reactive-agents/core": "workspace:*",
+        "@reactive-agents/cost": "workspace:*",
+        "@reactive-agents/llm-provider": "workspace:*",
+        "@reactive-agents/reasoning": "workspace:*",
+        "@reactive-agents/runtime": "workspace:*",
+        "effect": "^3.10.0",
+      },
+      "devDependencies": {
+        "bun-types": "latest",
+        "typescript": "^5.7.0",
+      },
     },
     "packages/core": {
       "name": "@reactive-agents/core",
@@ -624,6 +641,8 @@
     "@protobufjs/utf8": ["@protobufjs/utf8@1.1.0", "", {}, "sha512-Vvn3zZrhQZkkBE8LSuW3em98c0FwgO4nxzv6OdSxPKJIEKY2bGbHn+mhGIPerzI4twdxaP8/0+06HBpwf345Lw=="],
 
     "@reactive-agents/a2a": ["@reactive-agents/a2a@workspace:packages/a2a"],
+
+    "@reactive-agents/benchmarks": ["@reactive-agents/benchmarks@workspace:packages/benchmarks"],
 
     "@reactive-agents/cli": ["@reactive-agents/cli@workspace:apps/cli"],
 

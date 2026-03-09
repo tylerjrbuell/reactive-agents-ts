@@ -1,10 +1,10 @@
 // File: src/run.ts
 /**
  * CLI entry point for running benchmarks.
- * Usage: bun run src/run.ts [--provider openai] [--model gpt-4o] [--tier simple,moderate] [--output report.json]
+ * Usage: bun run src/run.ts [--provider anthropic] [--model claude-haiku-4-5] [--tier simple,moderate] [--output report.json]
  */
 import { runBenchmarks } from "./runner.js";
-import type { Tier } from "./types.js";
+import type { MultiModelReport, Tier } from "./types.js";
 
 const args = process.argv.slice(2);
 const getArg = (flag: string): string | undefined => {
@@ -12,7 +12,7 @@ const getArg = (flag: string): string | undefined => {
   return idx >= 0 && idx + 1 < args.length ? args[idx + 1] : undefined;
 };
 
-const provider = (getArg("--provider") ?? "test") as "anthropic" | "openai" | "gemini" | "ollama" | "litellm" | "test";
+const provider = (getArg("--provider") ?? "anthropic") as "anthropic" | "openai" | "gemini" | "ollama" | "litellm" | "test";
 const model = getArg("--model");
 const tierArg = getArg("--tier");
 const tiers = tierArg ? tierArg.split(",") as Tier[] : undefined;
@@ -20,12 +20,25 @@ const output = getArg("--output");
 
 const report = await runBenchmarks({ provider, model, tiers });
 
-console.log(`\n  ── Summary ──`);
-console.log(`  Total: ${report.summary.totalTasks} | Pass: ${report.summary.passed} | Fail: ${report.summary.failed} | Errors: ${report.summary.errors}`);
-console.log(`  Duration: ${report.summary.totalDurationMs.toFixed(0)}ms | Avg: ${report.summary.avgLatencyMs.toFixed(1)}ms`);
-console.log(`  Tokens: ${report.summary.totalTokens} | Cost: $${report.summary.totalCost.toFixed(4)}`);
-
 if (output) {
-  await Bun.write(output, JSON.stringify(report, null, 2));
+  const append = args.includes("--append");
+  let multiReport: MultiModelReport;
+  if (append) {
+    try {
+      const existing = JSON.parse(await Bun.file(output).text()) as MultiModelReport;
+      const existingRuns = existing.runs.filter(
+        (r) => !(r.provider === report.provider && r.model === report.model),
+      );
+      multiReport = {
+        generatedAt: new Date().toISOString(),
+        runs: [...existingRuns, report],
+      };
+    } catch {
+      multiReport = { generatedAt: new Date().toISOString(), runs: [report] };
+    }
+  } else {
+    multiReport = { generatedAt: new Date().toISOString(), runs: [report] };
+  }
+  await Bun.write(output, JSON.stringify(multiReport, null, 2));
   console.log(`  Report saved to ${output}`);
 }

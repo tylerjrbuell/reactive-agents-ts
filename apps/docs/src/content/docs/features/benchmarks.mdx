@@ -1,53 +1,96 @@
 ---
 title: Benchmarks
-description: Framework overhead benchmarks — 20 tasks across 5 complexity tiers with sub-millisecond execution overhead.
+description: Real-world agentic benchmark suite — 20 tasks across 5 tiers aligned with HumanEval, SWE-bench, BIG-Bench Hard, GAIA, and AgentBench standards.
 sidebar:
   order: 13
 ---
 
 import BenchmarkResults from "../../../components/BenchmarkResults.astro";
 
-The `@reactive-agents/benchmarks` package measures framework overhead across 20 representative tasks spanning 5 complexity tiers. Benchmarks run with the test provider to isolate framework performance from LLM latency.
+The `@reactive-agents/benchmarks` package evaluates end-to-end agent performance across 20 tasks spanning 5 complexity tiers. Tasks are aligned with **leading agentic benchmark standards** used by the research community, and run against a real LLM to measure actual correctness, latency, token usage, and cost — not just framework overhead.
 
 ## Results
 
 <BenchmarkResults />
 
-All overhead measurements are **sub-millisecond** — the framework adds negligible latency compared to LLM API calls (typically 500ms–5s).
+## Benchmark Methodology
+
+### Industry Standard Alignment
+
+Each task tier maps to a recognized benchmark standard:
+
+| Tier | Strategy | Aligned With |
+|------|----------|--------------|
+| **Trivial** | Single-shot | MMLU-CS · MATH baseline · AgentEval |
+| **Simple** | Single-shot | HumanEval Easy · BIG-Bench Hard CS · MMLU-Pro SE |
+| **Moderate** | ReAct (reactive) | HumanEval Medium · BIG-Bench Hard · SWE-bench lite |
+| **Complex** | Plan-Execute-Reflect | AgentBench · SWE-bench Security · TestEval |
+| **Expert** | Tree-of-Thought | BIG-Bench Hard algorithms · GAIA Level 3 · MMLU-Pro CS |
+
+### What Each Benchmark Standard Covers
+
+- **[HumanEval](https://github.com/openai/human-eval)** (OpenAI) — 164 handcrafted code generation tasks evaluated by functional correctness. Our tasks include function implementation, algorithm design, and test generation.
+- **[SWE-bench](https://www.swebench.com/)** (Princeton) — Resolving real GitHub issues. We use SWE-bench patterns for bug identification, security vulnerability analysis, and multi-file code review.
+- **[BIG-Bench Hard](https://github.com/suzgunmirac/BIG-Bench-Hard)** (Google) — 23 challenging tasks where chain-of-thought is required. We include: algorithmic optimization, logic/fallacy analysis, multi-step word problems, and Big-O complexity reasoning.
+- **[GAIA](https://huggingface.co/datasets/gaiabenchmark/gaia)** (Meta) — Multi-step tasks requiring tool use and reasoning. Our Level 3 equivalent task tests production incident response requiring multi-domain knowledge synthesis.
+- **[AgentBench](https://github.com/THUDM/AgentBench)** (THUDM) — 8-environment agent evaluation. We use AgentBench patterns for system design, database decomposition, and migration planning tasks.
+- **[MMLU-Pro](https://github.com/TIGER-AI-Lab/MMLU-Pro)** — Professional knowledge across 14 domains. Tasks cover CS theory (CRDTs, design patterns), software engineering, and architecture decision-making.
+
+### Scoring
+
+A task **passes** if the LLM's output contains the expected pattern (case-insensitive regex). Patterns are crafted to require substantive, correct answers — they cannot be satisfied by generic responses:
+
+```
+SQL injection fix expected: "parameteriz|prepared|placeholder|$1|?"
+CRDT design expected: "CRDT|vector.?clock|logical.?time|merge|commutative|converge"
+```
 
 ## Running Benchmarks
 
 ```bash
-# Run with test provider (measures framework overhead only)
+# Run with Anthropic (recommended for real-world results)
 cd packages/benchmarks
-bun run src/run.ts --provider test --output report.json
-
-# Run with a real provider (measures end-to-end latency)
 bun run src/run.ts --provider anthropic --output report.json
+
+# Run with a specific model
+bun run src/run.ts --provider anthropic --model claude-opus-4-5 --output report.json
+
+# Run only trivial + simple tiers (quick sanity check)
+bun run src/run.ts --provider anthropic --tier trivial,simple
+
+# OpenAI
+bun run src/run.ts --provider openai --model gpt-4o --output report.json
+
+# Gemini
+bun run src/run.ts --provider gemini --model gemini-2.0-flash --output report.json
 ```
 
 ### CLI Options
 
 | Flag | Description | Default |
 |------|-------------|---------|
-| `--provider` | LLM provider to use | `test` |
-| `--model` | Model name | Provider default |
+| `--provider` | LLM provider (`anthropic`, `openai`, `gemini`, `ollama`, `litellm`) | `test` |
+| `--model` | Model name (uses provider default if omitted) | Provider default |
+| `--tier` | Comma-separated tier filter | All tiers |
 | `--output` | Path to save JSON report | _(none)_ |
 
-## What's Measured
+### Provider Defaults
 
-- **Runtime creation** — Time to call `createRuntime()` with minimal configuration. Tests the Effect-TS layer composition overhead.
-- **Runtime creation (full)** — Time to create a runtime with all features enabled (reasoning, guardrails, cost tracking, memory, verification, observability). Verifies that optional layers don't add startup cost when composed lazily.
-- **Complexity classification** — Time for the 27-signal complexity router to classify a task prompt. This runs synchronously on every request to select the optimal model tier.
-- **Task execution** — End-to-end time from `agent.run()` to result, including strategy selection, kernel execution, and result formatting. With the test provider, this isolates pure framework overhead.
+| Provider | Default Model | Rationale |
+|----------|--------------|-----------|
+| `anthropic` | `claude-haiku-4-5` | Fast, cost-efficient, strong reasoning |
+| `openai` | `gpt-4o-mini` | Cost-efficient with strong benchmark performance |
+| `gemini` | `gemini-2.0-flash` | Fast inference, competitive pricing |
+| `ollama` | `llama3.2` | Local inference, no API cost |
 
-## Updating Results
+## Updating the Displayed Results
 
-To regenerate the benchmark data displayed on this page:
+To regenerate the benchmark data shown on this page using the Anthropic provider:
 
 ```bash
 cd packages/benchmarks
-bun run src/run.ts --provider test --output ../../apps/docs/src/data/benchmark-report.json
+bun run src/run.ts --provider anthropic --output ../../apps/docs/src/data/benchmark-report.json
 ```
 
 The page renders dynamically from the JSON report at build time — no manual table updates needed.
+
