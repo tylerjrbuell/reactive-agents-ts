@@ -6,7 +6,7 @@ description: Build your first Reactive Agent in 5 minutes.
 ## Prerequisites
 
 - [Bun](https://bun.sh) v1.1+ (or Node.js 20+)
-- An API key from [Anthropic](https://console.anthropic.com), [Gemini](https://ai.google.dev/), [LiteLLM](https://litellm.ai) or [OpenAI](https://platform.openai.com)
+- An API key from [Anthropic](https://console.anthropic.com), [Gemini](https://ai.google.dev/), [LiteLLM](https://www.litellm.ai) or [OpenAI](https://platform.openai.com)
 
 The fastest path through this guide is the `rax` workflow (`Rax` = Reactive Agents Executable).
 
