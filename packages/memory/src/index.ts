@@ -83,6 +83,16 @@ export {
   PlanStoreService,
   PlanStoreServiceLive,
 } from "./services/plan-store.js";
+export {
+  ExperienceStore,
+  ExperienceStoreLive,
+} from "./services/experience-store.js";
+export type {
+  ExperienceRecord,
+  ToolPattern,
+  ErrorRecovery,
+  ExperienceQueryResult,
+} from "./services/experience-store.js";
 
 // ─── File System ───
 export {
