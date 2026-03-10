@@ -74,3 +74,15 @@ export {
   type DebriefInput,
   type ToolCallStat,
 } from "./debrief.js";
+
+// ─── Chat / Session ───
+export {
+  AgentSession,
+  directChat,
+  requiresTools,
+  buildContextSummary,
+  type ChatMessage,
+  type ChatReply,
+  type ChatOptions,
+  type SessionOptions,
+} from "./chat.js";
