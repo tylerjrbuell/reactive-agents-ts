@@ -37,6 +37,21 @@ describe("AgentResult enrichment", () => {
     await agent.dispose();
   });
 
+  it("result.debrief is undefined when memory is NOT enabled", async () => {
+    const agent = await ReactiveAgents.create()
+      .withName("no-memory-agent")
+      .withProvider("test")
+      .withReasoning({ defaultStrategy: "reactive" })
+      // No .withMemory() call
+      .build();
+
+    const result = await agent.run("Simple task without memory");
+
+    // Debrief should NOT be present without memory
+    expect(result.debrief).toBeUndefined();
+    await agent.dispose();
+  });
+
   it("AgentResult type has optional debrief, format, terminatedBy fields", async () => {
     // Type-level check — just verify the fields compile and are accessible
     const agent = await ReactiveAgents.create()
