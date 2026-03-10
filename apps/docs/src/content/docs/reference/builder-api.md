@@ -341,6 +341,59 @@ Run a task with the given input. Returns the result with output and metadata.
 
 Run a task as an Effect for composition.
 
+### `chat(message: string, options?: ChatOptions): Promise<ChatReply>`
+
+Conversational Q&A with the agent. Routes automatically:
+- **Direct LLM path** — for questions, summaries, and status checks (fast, no tools)
+- **ReAct loop path** — for tool-capable requests (search, fetch, write, create, etc.)
+
+Injects context from the last run's debrief so the agent can answer "what did you do last time?" accurately.
+
+```typescript
+const reply = await agent.chat("What did you accomplish last run?");
+console.log(reply.message);
+
+// Force tool-capable path
+const reply2 = await agent.chat("Search for the latest AI news", { useTools: true });
+console.log(reply2.toolsUsed); // ["web-search"]
+```
+
+```typescript
+interface ChatReply {
+  message: string;
+  toolsUsed?: string[];   // Set when tools were invoked
+  fromMemory?: boolean;   // Set when answered from debrief context
+}
+
+interface ChatOptions {
+  useTools?: boolean;     // Override auto-routing
+  maxIterations?: number; // Cap for tool-capable path (default: 5)
+}
+```
+
+### `session(options?: SessionOptions): AgentSession`
+
+Start a multi-turn conversation session with auto-managed history. Conversation history is forwarded to the LLM on every subsequent turn.
+
+```typescript
+const session = agent.session();
+
+const r1 = await session.chat("What are the key findings from your last run?");
+const r2 = await session.chat("Tell me more about the first finding");
+// r2 has full context of r1
+
+const history = session.history(); // ChatMessage[]
+await session.end();               // Clears history
+```
+
+```typescript
+interface AgentSession {
+  chat(message: string): Promise<ChatReply>;
+  history(): ChatMessage[];
+  end(): Promise<void>;
+}
+```
+
 ### `cancel(taskId: string): Promise<void>`
 
 Cancel a running task by its ID.
@@ -459,7 +512,44 @@ interface AgentResult {
     tokensUsed: number;     // Total tokens consumed across all LLM calls
     strategyUsed?: string;  // Reasoning strategy used (if reasoning enabled)
     stepsCount: number;     // Number of reasoning steps / iterations
+    confidence?: "high" | "medium" | "low";  // From final-answer tool
   };
+
+  // Enriched fields (present when reasoning is enabled)
+  format?: "text" | "json" | "markdown" | "csv" | "html"; // Output format declared by agent
+  terminatedBy?: "final_answer_tool" | "final_answer" | "max_iterations" | "end_turn";
+
+  // Debrief (present when .withMemory() + .withReasoning() are enabled)
+  debrief?: AgentDebrief;
+}
+```
+
+### `AgentDebrief`
+
+A structured post-run synthesis produced automatically when memory is enabled:
+
+```typescript
+interface AgentDebrief {
+  outcome: "success" | "partial" | "failed";
+  summary: string;                    // 2-3 sentence narrative
+  keyFindings: string[];
+  errorsEncountered: string[];
+  lessonsLearned: string[];           // Auto-fed to ExperienceStore
+  confidence: "high" | "medium" | "low";
+  caveats?: string;
+  toolsUsed: { name: string; calls: number; successRate: number }[];
+  metrics: { tokens: number; duration: number; iterations: number; cost: number };
+  markdown: string;                   // Pre-rendered Markdown version
+}
+```
+
+Access it from any run result:
+
+```typescript
+const result = await agent.run("Fetch the latest commits and summarize");
+if (result.debrief) {
+  console.log(result.debrief.summary);
+  console.log(result.debrief.markdown);
 }
 ```
 

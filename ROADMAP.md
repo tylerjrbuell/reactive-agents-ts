@@ -21,7 +21,39 @@ The roadmap below is about two things: **closing the gaps** that currently block
 
 ---
 
-## Current State — v0.5.6 ✅ (Feb 28, 2026)
+## Current State — v0.8.0 (unreleased) / v0.6.3 (npm) — Mar 10, 2026
+
+**20 packages, 1,773 tests across 217 files. v0.7.0 and v0.8.0 are complete on main/feature branch and pending npm publish.**
+
+### v0.6.3 → v0.7.0 (Shipped on main, pending npm)
+
+- ✅ **ContextEngine** — per-iteration context scoring (recency decay, relevance, type weight, failure boost)
+- ✅ **ExperienceStore** — cross-agent tool pattern and error recovery learning (SQLite-backed)
+- ✅ **MemoryConsolidatorService** — background decay/replay/compress for episodic memory
+- ✅ **Meta-tools** — `context-status` (always-on introspection) + `task-complete` (visibility-gated completion)
+- ✅ **Parallel/chain tool execution** — multiple `ACTION:` lines or `THEN:` chaining from single thought
+- ✅ **Required Tools Guard** — `.withRequiredTools()` ensures named tools called before completion
+- ✅ **Adaptive LLM inference** — heuristic-first tool selection, LLM fallback only when needed
+- ✅ **Circuit breaker** — exponential backoff, half-open probe for LLM provider resilience
+- ✅ **Embedding cache** — LRU cache for vector embeddings
+- ✅ **Budget persistence** — daily token budget survives process restarts
+- ✅ **Docker sandbox** — code-execute runs in isolated container with resource limits
+- ✅ **JSON repair** — malformed LLM outputs automatically repaired before parse
+- ✅ **`@reactive-agents/benchmarks`** — 20-task × 5-tier benchmark suite, `rax bench` CLI command
+- ✅ **ReAct quality sprint** — token budget increases, tier reclassification, anti-fabrication rules, heuristic tool inference
+
+### v0.7.0 → v0.8.0 (Feature branch, pending merge + npm)
+
+- ✅ **`final-answer` meta-tool** — hard-gates ReAct loop exit; replaces fragile text regex
+- ✅ **DebriefSynthesizer** — post-run structured synthesis: tool history + one LLM call → `AgentDebrief`
+- ✅ **DebriefStore** — SQLite persistence for run artifacts (`agent_debriefs` table in memory DB)
+- ✅ **Enriched `AgentResult`** — `debrief?`, `format?`, `terminatedBy?` optional fields (backward compatible)
+- ✅ **`agent.chat()`** — conversational Q&A with adaptive routing (direct LLM or ReAct loop)
+- ✅ **`agent.session()`** — multi-turn conversation with managed history and debrief context injection
+
+---
+
+## Historical State — v0.5.6 ✅ (Feb 28, 2026)
 
 **18 packages, 1001 tests across 139 files, fully composable via Effect-TS.**
 
@@ -352,12 +384,14 @@ Keeping this intentional:
 | v0.5.0 ✅ | **A2A interop, agent-as-tool, MCP SSE, foundation hardening, real-time observability** | **First TS framework with A2A + live reasoning visibility** |
 | v0.5.2 ✅ | **Ed25519 crypto, LiteLLM, kill switch, contracts, sandbox, self-improvement**         | **All 7 differentiators implemented — no competitor matches** |
 | v0.5.6 ✅ | **Agent Gateway: heartbeats, crons, webhooks, policy engine**                          | **Persistent autonomous agents — harness vs horse architecture** |
-| v0.6.0    | Docker sandbox, programmatic tool calling, CLI auto-generation                          | Multi-tool single-execution, 30-50% token reduction         |
-| v0.7.0    | Voice, UI, Edge                                                                        | Full-stack agent runtime no competitor matches              |
+| v0.7.0 ✅ | Required tools guard, circuit breaker, benchmarks, Docker sandbox, ContextEngine, ExperienceStore | Cross-agent learning + adaptive tool inference |
+| v0.8.0 ✅ | Final-answer hard gate, structured debriefs, agent.chat() + agent.session()           | Self-reporting agents with conversational Q&A |
+| v0.9.0    | Programmatic tool calling, Docker code execution (full), streaming UI hooks            | 30-50% token reduction, React/Next.js native   |
+| v1.0.0    | Stable release, published benchmarks, migration guides                                 | Production-grade, proven, documented            |
 | v1.0.0    | Stability, benchmarks                                                                  | Production-grade, proven, documented                        |
 | v1.1.0+   | Evolutionary intelligence                                                              | GEA-inspired zero-cost genome evolution                     |
 
 ---
 
-_Last updated: February 28, 2026 — v0.5.6 (1001 tests, 18 packages, gateway shipped), v0.6.0 planning_
+_Last updated: March 10, 2026 — v0.8.0 complete (1773 tests, 20 packages, debrief + chat shipped), v0.7.0 + v0.8.0 pending npm publish_
 _Grounded in: `spec/docs/12-market-validation-feb-2026.md`, `spec/docs/14-v0.5-comprehensive-plan.md`_
