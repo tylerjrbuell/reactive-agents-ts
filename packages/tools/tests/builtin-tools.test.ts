@@ -7,6 +7,7 @@ import { httpGetHandler } from "../src/skills/http-client.js";
 import { fileReadHandler, fileWriteHandler } from "../src/skills/file-operations.js";
 import { webSearchHandler } from "../src/skills/web-search.js";
 import { codeExecuteHandler } from "../src/skills/code-execution.js";
+import { ToolExecutionError } from "../src/errors.js";
 
 // ─── Temp directory for file tests (under cwd to pass path traversal check) ───
 
@@ -59,20 +60,18 @@ describe("Built-in Tool Handlers", () => {
     expect(contents).toBe("written by test");
   });
 
-  it("webSearchHandler returns stub when no API key", async () => {
+  it("webSearchHandler throws error when no API key", async () => {
     // Ensure no API key is set
     const original = process.env.TAVILY_API_KEY;
     delete process.env.TAVILY_API_KEY;
 
     try {
       const result = await Effect.runPromise(
-        webSearchHandler({ query: "test query" }),
+        webSearchHandler({ query: "test query" }).pipe(Effect.flip),
       );
 
-      const typed = result as { query: string; results: unknown[]; error: string };
-      expect(typed.query).toBe("test query");
-      expect(typed.results).toEqual([]);
-      expect(typed.error).toContain("TAVILY_API_KEY");
+      expect(result).toBeInstanceOf(ToolExecutionError);
+      expect(result.message).toContain("TAVILY_API_KEY");
     } finally {
       if (original) process.env.TAVILY_API_KEY = original;
     }

@@ -30,6 +30,8 @@ export type { Tracer } from "./tracing/tracer.js";
 // ─── Logging ───
 export { makeStructuredLogger } from "./logging/structured-logger.js";
 export type { StructuredLogger, LiveLogWriter } from "./logging/structured-logger.js";
+export { createProgressLogger, ProgressLogger } from "./logging/progress-logger.js";
+export type { IterationProgress } from "./logging/progress-logger.js";
 
 // ─── Metrics ───
 export { makeMetricsCollector, MetricsCollectorTag, MetricsCollectorLive } from "./metrics/metrics-collector.js";
