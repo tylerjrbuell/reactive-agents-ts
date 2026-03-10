@@ -20,6 +20,12 @@ import type { StreamEvent } from "@reactive-agents/llm-provider";
 import { StreamingTextCallback } from "@reactive-agents/core";
 import type { ContextProfile } from "../../context/context-profile.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
+import {
+  finalAnswerTool,
+  makeFinalAnswerHandler,
+  shouldShowFinalAnswer,
+  type FinalAnswerCapture,
+} from "@reactive-agents/tools";
 import type { ToolSchema } from "./tool-utils.js";
 import {
   parseAllToolRequests,
@@ -104,7 +110,7 @@ export interface ReActKernelResult {
   /** Number of iterations completed */
   iterations: number;
   /** How the loop terminated */
-  terminatedBy: "final_answer" | "max_iterations" | "end_turn";
+  terminatedBy: "final_answer" | "final_answer_tool" | "max_iterations" | "end_turn";
 }
 
 /**
@@ -180,10 +186,40 @@ function handleThinking(
     const systemPromptText = buildSystemPrompt(input.task, input.systemPrompt, profile.tier);
 
     const maxIter = (state.meta.maxIterations as number) ?? 10;
+
+    // ── Dynamic meta-tool injection (final-answer) ───────────────────────────
+    // When all required tools have been called and the agent is ready to complete,
+    // inject the final-answer tool into the available tool schemas so the LLM
+    // can discover and use it as the preferred termination mechanism.
+    const hasNonMetaToolCalledForThink = [...state.toolsUsed].some(
+      (t) => t !== "final-answer" && t !== "task-complete" && t !== "context-status" && t !== "scratchpad-write" && t !== "scratchpad-read",
+    );
+    const hasErrorsForThink = state.steps.some(
+      (s) => s.type === "observation" && s.metadata?.observationResult?.success === false,
+    );
+    const finalAnswerVisible = shouldShowFinalAnswer({
+      requiredToolsCalled: state.toolsUsed,
+      requiredTools: [...(input.requiredTools ?? [])],
+      iteration: state.iteration,
+      hasErrors: hasErrorsForThink,
+      hasNonMetaToolCalled: hasNonMetaToolCalledForThink,
+    });
+
+    const augmentedToolSchemas: readonly import("./tool-utils.js").ToolSchema[] = finalAnswerVisible
+      ? [
+          ...(input.availableToolSchemas ?? []),
+          {
+            name: finalAnswerTool.name,
+            description: finalAnswerTool.description,
+            parameters: finalAnswerTool.parameters,
+          },
+        ]
+      : (input.availableToolSchemas ?? []);
+
     const thoughtPrompt = buildContext({
       task: input.task,
       steps: state.steps,
-      availableToolSchemas: input.availableToolSchemas,
+      availableToolSchemas: augmentedToolSchemas,
       requiredTools: input.requiredTools,
       iteration: state.iteration,
       maxIterations: maxIter,
@@ -454,6 +490,95 @@ function handleActing(
     // Hard side-effect guard — refuse to execute blocked tools from prior passes
     const isBlocked = input.blockedTools?.includes(toolRequest.tool) ?? false;
 
+    // ── FINAL-ANSWER HARD GATE ───────────────────────────────────────────────
+    // When the model calls the `final-answer` meta-tool, run the handler directly
+    // (bypassing ToolService) and, if accepted:true, hard-exit the kernel loop.
+    if (toolRequest.tool === "final-answer" && !isBlocked) {
+      const META_TOOLS = new Set(["final-answer", "task-complete", "context-status", "scratchpad-write", "scratchpad-read"]);
+      const hasNonMetaToolCalled = [...state.toolsUsed].some((t) => !META_TOOLS.has(t));
+      const requiredTools = input.requiredTools ?? [];
+      // For the hard-gate we relax the visibility guard:
+      // - All required tools must be called (if any)
+      // - At least one non-meta tool must have been used (or no required tools)
+      // - We skip hasErrors (model chose to finalize; trust its judgment)
+      // - We skip iteration≥2 (already in acting phase after ≥1 think→act cycle)
+      const allRequiredMet = requiredTools.every((t) => state.toolsUsed.has(t));
+      const canComplete = allRequiredMet && (hasNonMetaToolCalled || requiredTools.length === 0);
+
+      let parsedArgs: Record<string, unknown> = {};
+      try {
+        parsedArgs = JSON.parse(toolRequest.input) as Record<string, unknown>;
+      } catch {
+        // fall through with empty args — handler will return accepted:false
+      }
+
+      const handlerResult = yield* makeFinalAnswerHandler({ canComplete })({ ...parsedArgs });
+      const resultObj = handlerResult as Record<string, unknown>;
+
+      if (resultObj.accepted === true) {
+        const capture = resultObj._capture as FinalAnswerCapture;
+        // Note: hooks.onAction already fired above (line 485). No double-fire.
+        const finalObsContent = `✓ final-answer accepted: ${capture.output}`;
+        const finalObsStep = makeStep("observation", finalObsContent, {
+          observationResult: makeObservationResult("final-answer", true, finalObsContent),
+        });
+
+        yield* hooks.onObservation(
+          transitionState(state, { steps: stepsWithAction }),
+          finalObsContent,
+          true,
+        );
+
+        return transitionState(state, {
+          steps: [...stepsWithAction, finalObsStep],
+          toolsUsed: newToolsUsed,
+          status: "done",
+          output: capture.output,
+          iteration: state.iteration + 1,
+          meta: {
+            ...state.meta,
+            terminatedBy: "final_answer_tool" as const,
+            finalAnswerCapture: capture,
+            pendingToolRequest: undefined,
+            pendingToolGroup: undefined,
+            lastThought: undefined,
+            lastThinking: undefined,
+          },
+        });
+      }
+
+      // accepted: false — produce an error observation and let the loop continue
+      // Note: hooks.onAction already fired above (line 485). No double-fire.
+      const rejectionMsg = typeof resultObj.error === "string"
+        ? resultObj.error
+        : "final-answer rejected: conditions not yet met. Complete required steps first.";
+      observationContent = `⚠️ ${rejectionMsg}`;
+      obsResult = makeObservationResult("final-answer", false, observationContent);
+
+      yield* hooks.onObservation(
+        transitionState(state, { steps: stepsWithAction }),
+        observationContent,
+        false,
+      );
+
+      const rejectObsStep = makeStep("observation", observationContent, { observationResult: obsResult });
+      newToolsUsed.add("final-answer");
+
+      return transitionState(state, {
+        steps: [...stepsWithAction, rejectObsStep],
+        toolsUsed: newToolsUsed,
+        status: "thinking",
+        iteration: state.iteration + 1,
+        meta: {
+          ...state.meta,
+          pendingToolRequest: undefined,
+          pendingToolGroup: undefined,
+          lastThought: undefined,
+          lastThinking: undefined,
+        },
+      });
+    }
+
     if (isBlocked) {
       observationContent = `\u26A0\uFE0F BLOCKED: ${toolRequest.tool} already executed successfully in a prior pass. This tool has side effects and MUST NOT be called again. Move on to the next step or give FINAL ANSWER.`;
       obsResult = makeObservationResult(toolRequest.tool, true, observationContent);
@@ -620,12 +745,14 @@ export const executeReActKernel = (
     });
 
     // Determine terminatedBy from state
-    const terminatedBy: "final_answer" | "max_iterations" | "end_turn" =
-      state.meta.terminatedBy === "end_turn"
-        ? "end_turn"
-        : state.status === "done"
-          ? "final_answer"
-          : "max_iterations";
+    const terminatedBy: "final_answer" | "final_answer_tool" | "max_iterations" | "end_turn" =
+      state.meta.terminatedBy === "final_answer_tool"
+        ? "final_answer_tool"
+        : state.meta.terminatedBy === "end_turn"
+          ? "end_turn"
+          : state.status === "done"
+            ? "final_answer"
+            : "max_iterations";
 
     // When max iterations reached (no explicit output), fall back to last thought content
     // to match the original executeReActKernel behavior.
