@@ -18,7 +18,7 @@ import type { PromptTemplate } from "@reactive-agents/prompts";
 import type { Task, TaskResult } from "@reactive-agents/core";
 import type { TaskError } from "@reactive-agents/core";
 import { generateTaskId, AgentId } from "@reactive-agents/core";
-import type { AgentEvent } from "@reactive-agents/core";
+import type { AgentEvent, OutputFormat, TerminatedBy } from "@reactive-agents/core";
 import { EventBus } from "@reactive-agents/core";
 import { KillSwitchService } from "@reactive-agents/guardrails";
 import type { AgentStreamEvent, StreamDensity } from "./stream-types.js";
@@ -554,9 +554,9 @@ export interface AgentResult {
   readonly metadata: AgentResultMetadata;
   // New optional fields — backward compatible
   /** Output format detected or declared by the agent. */
-  readonly format?: "text" | "json" | "markdown" | "csv" | "html";
+  readonly format?: OutputFormat;
   /** How the agent loop was terminated. */
-  readonly terminatedBy?: "final_answer_tool" | "final_answer" | "max_iterations" | "end_turn";
+  readonly terminatedBy?: TerminatedBy;
   /** Structured post-run debrief synthesized after the kernel exits. */
   readonly debrief?: import("./debrief.js").AgentDebrief;
 }
@@ -2388,8 +2388,8 @@ export class ReactiveAgent {
         this.engine.execute(task).pipe(
           Effect.map((result: TaskResult) => {
             const r = result as TaskResult & {
-              format?: "text" | "json" | "markdown" | "csv" | "html";
-              terminatedBy?: "final_answer_tool" | "final_answer" | "max_iterations" | "end_turn";
+              format?: OutputFormat;
+              terminatedBy?: TerminatedBy;
               debrief?: import("./debrief.js").AgentDebrief;
             };
             const agentResult: AgentResult = {
