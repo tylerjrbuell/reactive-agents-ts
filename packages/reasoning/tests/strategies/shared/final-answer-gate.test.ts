@@ -72,6 +72,10 @@ describe("final-answer hard gate", () => {
 
     expect(result.terminatedBy).toBe("final_answer_tool");
     expect(result.output).toBe("Task complete. Wrote hello to out.txt.");
+    expect(result.finalAnswerCapture).toBeDefined();
+    expect(result.finalAnswerCapture?.output).toBe("Task complete. Wrote hello to out.txt.");
+    expect(result.finalAnswerCapture?.format).toBe("text");
+    expect(result.finalAnswerCapture?.summary).toBe("Wrote a file");
   });
 
   it("stores finalAnswerCapture in meta when final-answer tool exits the loop", async () => {

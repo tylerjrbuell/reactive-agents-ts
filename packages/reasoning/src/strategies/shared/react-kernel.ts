@@ -111,6 +111,8 @@ export interface ReActKernelResult {
   iterations: number;
   /** How the loop terminated */
   terminatedBy: "final_answer" | "final_answer_tool" | "max_iterations" | "end_turn";
+  /** Captured final-answer tool payload — present when terminatedBy === "final_answer_tool" */
+  finalAnswerCapture?: FinalAnswerCapture;
 }
 
 /**
@@ -768,6 +770,7 @@ export const executeReActKernel = (
       toolsUsed: [...state.toolsUsed],
       iterations: state.iteration,
       terminatedBy,
+      finalAnswerCapture: state.meta.finalAnswerCapture as FinalAnswerCapture | undefined,
     };
   });
 
