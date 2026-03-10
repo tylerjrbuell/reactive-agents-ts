@@ -522,6 +522,8 @@ export interface AgentResultMetadata {
   readonly strategyUsed?: string;
   /** Number of reasoning iterations/steps taken to complete the task. */
   readonly stepsCount: number;
+  /** Confidence level of the result. */
+  readonly confidence?: "high" | "medium" | "low";
 }
 
 /**
@@ -550,6 +552,13 @@ export interface AgentResult {
   readonly agentId: string;
   /** Metadata about the execution (duration, cost, tokens, strategy, steps). */
   readonly metadata: AgentResultMetadata;
+  // New optional fields — backward compatible
+  /** Output format detected or declared by the agent. */
+  readonly format?: "text" | "json" | "markdown" | "csv" | "html";
+  /** How the agent loop was terminated. */
+  readonly terminatedBy?: "final_answer_tool" | "final_answer" | "max_iterations" | "end_turn";
+  /** Structured post-run debrief synthesized after the kernel exits. */
+  readonly debrief?: import("./debrief.js").AgentDebrief;
 }
 
 // ─── Persona Composition Helper ───────────────────────────────────────────────
@@ -2374,13 +2383,24 @@ export class ReactiveAgent {
     return Effect.promise(() =>
       this.runtime.runPromise(
         this.engine.execute(task).pipe(
-          Effect.map((result: TaskResult) => ({
-            output: String(result.output ?? ""),
-            success: result.success,
-            taskId: String(result.taskId),
-            agentId: String(result.agentId),
-            metadata: result.metadata as AgentResultMetadata,
-          })),
+          Effect.map((result: TaskResult) => {
+            const r = result as TaskResult & {
+              format?: "text" | "json" | "markdown" | "csv" | "html";
+              terminatedBy?: "final_answer_tool" | "final_answer" | "max_iterations" | "end_turn";
+              debrief?: import("./debrief.js").AgentDebrief;
+            };
+            const agentResult: AgentResult = {
+              output: String(r.output ?? ""),
+              success: r.success,
+              taskId: String(r.taskId),
+              agentId: String(r.agentId),
+              metadata: r.metadata as AgentResultMetadata,
+              ...(r.format !== undefined ? { format: r.format } : {}),
+              ...(r.terminatedBy !== undefined ? { terminatedBy: r.terminatedBy } : {}),
+              ...(r.debrief !== undefined ? { debrief: r.debrief } : {}),
+            };
+            return agentResult;
+          }),
           Effect.mapError(
             (e: RuntimeErrors | TaskError) =>
               new Error("message" in e ? e.message : String(e)),

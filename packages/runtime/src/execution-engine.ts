@@ -27,6 +27,8 @@ import { VerificationService } from "@reactive-agents/verification";
 import { CostService } from "@reactive-agents/cost";
 import { EventBus } from "@reactive-agents/core";
 import type { AgentEvent } from "@reactive-agents/core";
+import { synthesizeDebrief, type DebriefInput, type AgentDebrief } from "./debrief.js";
+import { DebriefStoreService } from "@reactive-agents/memory";
 
 // ─── Narrow service types for optional deps ───
 
@@ -2144,14 +2146,124 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
 
                 // Build TaskResult — sanitize output to strip internal metadata
                 const rawOutput = ctx.metadata.lastResponse ?? null;
-                const rr = ctx.metadata.reasoningResult as { metadata?: { confidence?: number; strategyFallback?: boolean } } | undefined;
-                const result: TaskResult = {
+                const rr = ctx.metadata.reasoningResult as { metadata?: { confidence?: number; strategyFallback?: boolean; terminatedBy?: string; finalAnswerCapture?: unknown } } | undefined;
+                const sanitizedOutput = typeof rawOutput === "string" ? sanitizeOutput(rawOutput) : rawOutput;
+
+                // ── Debrief Synthesis (best-effort, never blocks the result) ──
+                // Extract terminatedBy from reasoning metadata, with fallback inference
+                const terminatedByRaw = (rr?.metadata?.terminatedBy ?? "end_turn") as
+                  "final_answer_tool" | "final_answer" | "max_iterations" | "end_turn";
+
+                // Collect tool stats from action steps
+                const rrSteps = (ctx.metadata.reasoningSteps ?? []) as Array<{
+                  type: string;
+                  metadata?: { toolUsed?: string; duration?: number; observationResult?: { success?: boolean } };
+                }>;
+                const toolStatsMap = new Map<string, { calls: number; errors: number; totalDurationMs: number }>();
+                for (const step of rrSteps) {
+                  if (step.type === "action" && step.metadata?.toolUsed) {
+                    const name = step.metadata.toolUsed;
+                    const existing = toolStatsMap.get(name) ?? { calls: 0, errors: 0, totalDurationMs: 0 };
+                    const durationMs = step.metadata?.duration ?? 0;
+                    // Find next observation to check success
+                    const stepIdx = rrSteps.indexOf(step);
+                    const nextStep = stepIdx >= 0 ? rrSteps[stepIdx + 1] : undefined;
+                    const isError = nextStep?.type === "observation"
+                      ? (nextStep.metadata?.observationResult?.success === false)
+                      : false;
+                    toolStatsMap.set(name, {
+                      calls: existing.calls + 1,
+                      errors: existing.errors + (isError ? 1 : 0),
+                      totalDurationMs: existing.totalDurationMs + durationMs,
+                    });
+                  }
+                }
+                const toolCallHistory: DebriefInput["toolCallHistory"] = Array.from(toolStatsMap.entries()).map(
+                  ([name, stat]) => ({
+                    name,
+                    calls: stat.calls,
+                    errors: stat.errors,
+                    avgDurationMs: stat.calls > 0 ? Math.round(stat.totalDurationMs / stat.calls) : 0,
+                  }),
+                );
+
+                // Collect errors — look for [Tool error: ...] patterns in observations
+                const errorsFromLoop: string[] = [];
+                for (const step of rrSteps) {
+                  if (step.type === "observation") {
+                    const content = (step as { content?: string }).content ?? "";
+                    const match = content.match(/\[Tool error: ([^\]]+)\]/);
+                    if (match?.[1]) errorsFromLoop.push(match[1]);
+                  }
+                }
+
+                const executionDurationMs = Date.now() - ctx.startedAt.getTime();
+
+                const debriefInput: DebriefInput = {
+                  taskPrompt: extractTaskText(task.input),
+                  agentId: ctx.agentId,
+                  taskId: ctx.taskId,
+                  terminatedBy: terminatedByRaw,
+                  finalAnswerCapture: rr?.metadata?.finalAnswerCapture as any,
+                  toolCallHistory,
+                  errorsFromLoop,
+                  metrics: {
+                    tokens: ctx.tokensUsed,
+                    duration: executionDurationMs,
+                    iterations: (ctx.metadata.stepsCount as number | undefined) ?? ctx.iteration,
+                    cost: ctx.cost,
+                  },
+                };
+
+                // Synthesize debrief (best-effort, only on the reasoning path).
+                // Skipped for the direct-LLM path (rr === undefined) to avoid
+                // injecting an extra LLM call where callers don't expect it.
+                // Also requires LLMService to be available in context — use serviceOption to check.
+                const debrief: AgentDebrief | undefined = yield* (rr !== undefined
+                  ? Effect.serviceOption(
+                      Context.GenericTag<{ complete: (req: unknown) => Effect.Effect<unknown> }>("LLMService"),
+                    ).pipe(
+                      Effect.flatMap((llmOpt) => {
+                        if (llmOpt._tag !== "Some") return Effect.succeed(undefined as AgentDebrief | undefined);
+                        return synthesizeDebrief(debriefInput).pipe(
+                          Effect.map((d) => d as AgentDebrief),
+                          Effect.catchAll(() => Effect.succeed(undefined as AgentDebrief | undefined)),
+                        );
+                      }),
+                      Effect.catchAll(() => Effect.succeed(undefined as AgentDebrief | undefined)),
+                    )
+                  : Effect.succeed(undefined as AgentDebrief | undefined));
+
+                // Persist debrief if DebriefStoreService is available
+                if (debrief !== undefined) {
+                  yield* Effect.serviceOption(DebriefStoreService).pipe(
+                    Effect.flatMap((storeOpt) => {
+                      if (storeOpt._tag !== "Some") return Effect.void;
+                      return storeOpt.value.save({
+                        taskId: ctx.taskId,
+                        agentId: ctx.agentId,
+                        taskPrompt: extractTaskText(task.input),
+                        terminatedBy: terminatedByRaw,
+                        output: String(sanitizedOutput ?? ""),
+                        outputFormat: "text",
+                        debrief: debrief as any,
+                      }).pipe(Effect.catchAll(() => Effect.void));
+                    }),
+                    Effect.catchAll(() => Effect.void),
+                  );
+                }
+
+                const result: TaskResult & {
+                  format?: string;
+                  terminatedBy?: string;
+                  debrief?: AgentDebrief;
+                } = {
                   taskId: task.id as any,
                   agentId: task.agentId,
-                  output: typeof rawOutput === "string" ? sanitizeOutput(rawOutput) : rawOutput,
+                  output: sanitizedOutput,
                   success: true,
                   metadata: {
-                    duration: Date.now() - ctx.startedAt.getTime(),
+                    duration: executionDurationMs,
                     cost: ctx.cost,
                     tokensUsed: ctx.tokensUsed,
                     strategyUsed: ctx.selectedStrategy,
@@ -2161,6 +2273,9 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     ...(ctx.metadata.budgetExceeded ? { budgetExceeded: true } : {}),
                   },
                   completedAt: new Date(),
+                  format: "text",
+                  terminatedBy: terminatedByRaw,
+                  ...(debrief !== undefined ? { debrief } : {}),
                 };
 
                 if (obs) {

@@ -122,6 +122,16 @@ export const executeReactive = (
       [...state.steps].filter((s) => s.type === "thought").pop()?.content ??
       null;
 
+    // Derive terminatedBy from kernel state
+    const terminatedBy: "final_answer" | "final_answer_tool" | "max_iterations" | "end_turn" =
+      state.meta.terminatedBy === "final_answer_tool"
+        ? "final_answer_tool"
+        : state.meta.terminatedBy === "end_turn"
+          ? "end_turn"
+          : state.status === "done"
+            ? "final_answer"
+            : "max_iterations";
+
     return buildStrategyResult({
       strategy: "reactive",
       steps: [...state.steps],
@@ -130,5 +140,11 @@ export const executeReactive = (
       start,
       totalTokens: state.tokens,
       totalCost: state.cost,
+      extraMetadata: {
+        terminatedBy,
+        ...(state.meta.finalAnswerCapture !== undefined
+          ? { finalAnswerCapture: state.meta.finalAnswerCapture }
+          : {}),
+      },
     });
   });
