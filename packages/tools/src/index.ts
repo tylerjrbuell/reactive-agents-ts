@@ -127,3 +127,9 @@ export {
   makeTaskCompleteHandler,
 } from "./skills/task-complete.js";
 export type { TaskCompleteVisibility, TaskCompleteState } from "./skills/task-complete.js";
+export {
+  finalAnswerTool,
+  makeFinalAnswerHandler,
+  shouldShowFinalAnswer,
+} from "./skills/final-answer.js";
+export type { FinalAnswerVisibility, FinalAnswerState, FinalAnswerCapture } from "./skills/final-answer.js";
