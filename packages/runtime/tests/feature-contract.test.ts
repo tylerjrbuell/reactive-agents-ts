@@ -554,7 +554,8 @@ describe("TaskResult shape contracts", () => {
       }).pipe(Effect.provide(testLayer)),
     );
 
-    expect(result.metadata.confidence).toBe(0.8);
+    // confidence is now a string categorical ("high" | "medium" | "low"); 0.8 maps to "high"
+    expect(result.metadata.confidence).toBe("high");
   });
 
   it("result.agentId matches the configured agent", async () => {

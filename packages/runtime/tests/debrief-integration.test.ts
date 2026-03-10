@@ -16,6 +16,8 @@ describe("AgentResult enrichment", () => {
     // These fields should now exist (may be undefined if not using final-answer tool, but type should exist)
     expect("terminatedBy" in result).toBe(true);
     expect("format" in result).toBe(true);
+    // terminatedBy is always populated on the reasoning path
+    expect(result.terminatedBy).toBeDefined();
     await agent.dispose();
   });
 
