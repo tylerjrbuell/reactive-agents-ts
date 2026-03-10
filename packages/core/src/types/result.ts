@@ -42,6 +42,19 @@ export const ResultMetadataSchema = Schema.Struct({
 });
 export type ResultMetadata = typeof ResultMetadataSchema.Type;
 
+// ─── Output Format & Termination Reason ───
+
+export const OutputFormat = Schema.Literal("text", "json", "markdown", "csv", "html");
+export type OutputFormat = typeof OutputFormat.Type;
+
+export const TerminatedBy = Schema.Literal(
+  "final_answer_tool",
+  "final_answer",
+  "max_iterations",
+  "end_turn",
+);
+export type TerminatedBy = typeof TerminatedBy.Type;
+
 // ─── Task Result ───
 
 export const TaskResultSchema = Schema.Struct({
