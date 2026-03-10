@@ -16,6 +16,7 @@ import {
 } from "./scratchpad.js";
 import { contextStatusTool, makeContextStatusHandler } from "./context-status.js";
 import { taskCompleteTool, makeTaskCompleteHandler } from "./task-complete.js";
+import { finalAnswerTool } from "./final-answer.js";
 
 // Re-export meta-tool factories and types so callers can wire up dynamic state
 export {
@@ -30,6 +31,14 @@ export {
   type TaskCompleteState,
   type TaskCompleteVisibility,
 } from "./task-complete.js";
+export {
+  finalAnswerTool,
+  makeFinalAnswerHandler,
+  shouldShowFinalAnswer,
+  type FinalAnswerState,
+  type FinalAnswerVisibility,
+  type FinalAnswerCapture,
+} from "./final-answer.js";
 
 // Shared scratchpad store — one per tool service instance (reset per agent run)
 const scratchpadStoreRef = Ref.unsafeMake(new Map<string, string>());
@@ -64,4 +73,5 @@ export const builtinTools: ReadonlyArray<{
 export const metaToolDefinitions: ReadonlyArray<ToolDefinition> = [
   contextStatusTool,
   taskCompleteTool,
+  finalAnswerTool,
 ];
