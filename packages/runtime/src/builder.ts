@@ -34,6 +34,7 @@ import {
   type ChatReply,
   type SessionOptions,
 } from "./chat.js";
+import type { AgentDebrief } from "./debrief.js";
 
 // ─── Provider Types ──────────────────────────────────────────────────────────
 
@@ -568,7 +569,7 @@ export interface AgentResult {
   /** How the agent loop was terminated. */
   readonly terminatedBy?: TerminatedBy;
   /** Structured post-run debrief synthesized after the kernel exits. */
-  readonly debrief?: import("./debrief.js").AgentDebrief;
+  readonly debrief?: AgentDebrief;
 }
 
 // ─── Persona Composition Helper ───────────────────────────────────────────────
@@ -2283,7 +2284,7 @@ export class ReactiveAgent {
   ) {}
 
   /** @internal Last debrief from a completed run — used as context in chat() calls. */
-  private _lastDebrief?: import("./debrief.js").AgentDebrief;
+  private _lastDebrief?: AgentDebrief;
   /** @internal Conversation history for the agent-level chat context. */
   private _chatHistory: ChatMessage[] = [];
 
@@ -2405,7 +2406,7 @@ export class ReactiveAgent {
             const r = result as TaskResult & {
               format?: OutputFormat;
               terminatedBy?: TerminatedBy;
-              debrief?: import("./debrief.js").AgentDebrief;
+              debrief?: AgentDebrief;
             };
             const agentResult: AgentResult = {
               output: String(r.output ?? ""),
@@ -2496,15 +2497,26 @@ export class ReactiveAgent {
    * const reply2 = await agent.chat("Search for latest news", { useTools: true });
    * ```
    */
-  async chat(message: string, options?: ChatOptions): Promise<ChatReply> {
+  async chat(
+    message: string,
+    options?: ChatOptions,
+    _history?: ChatMessage[],
+  ): Promise<ChatReply> {
     const useTools = options?.useTools ?? requiresTools(message);
     const contextSummary = buildContextSummary(this._lastDebrief);
 
     if (!useTools) {
       // Direct LLM path — fast, no tool overhead
-      return this.runtime.runPromise(
-        directChat(message, this._chatHistory, contextSummary),
+      // Use caller-supplied history (session context) or fall back to agent-level history
+      const reply = await this.runtime.runPromise(
+        directChat(message, _history ?? this._chatHistory, contextSummary),
       );
+      // Accumulate into agent-level history when called outside a session
+      if (!_history) {
+        this._chatHistory.push({ role: "user", content: message, timestamp: Date.now() });
+        this._chatHistory.push({ role: "assistant", content: reply.message, timestamp: Date.now() });
+      }
+      return reply;
     }
 
     // Tool-capable path — full agent run with capped iterations
@@ -2532,8 +2544,9 @@ export class ReactiveAgent {
    * await session.end();
    * ```
    */
-  session(_options?: SessionOptions): AgentSession {
-    return new AgentSession((msg) => this.chat(msg));
+  session(options?: SessionOptions): AgentSession {
+    // options.persistOnEnd: deferred — episodic memory persistence not yet wired
+    return new AgentSession((msg, history) => this.chat(msg, undefined, history));
   }
 
   /**

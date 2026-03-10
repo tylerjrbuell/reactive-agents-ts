@@ -62,4 +62,25 @@ describe("agent.chat()", () => {
     await session.end();
     await agent.dispose();
   });
+
+  it("session preserves history across turns for multi-turn context", async () => {
+    const agent = await ReactiveAgents.create()
+      .withName("multi-turn-test")
+      .withProvider("test")
+      .withReasoning({ defaultStrategy: "reactive" })
+      .build();
+
+    const session = agent.session();
+    await session.chat("Turn 1");
+    await session.chat("Turn 2");
+
+    const history = session.history();
+    expect(history.length).toBe(4); // 2 user + 2 assistant
+    expect(history[0].role).toBe("user");
+    expect(history[1].role).toBe("assistant");
+    await session.end();
+    // history cleared after end
+    expect(session.history().length).toBe(0);
+    await agent.dispose();
+  });
 });
