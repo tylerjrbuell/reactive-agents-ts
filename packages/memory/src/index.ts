@@ -139,4 +139,5 @@ export {
   DebriefStoreLive,
   type DebriefRecord,
   type SaveDebriefInput,
+  type AgentDebriefShape,
 } from "./services/debrief-store.js";

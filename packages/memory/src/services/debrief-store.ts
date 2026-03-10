@@ -1,5 +1,6 @@
-import { Context, Effect, Layer } from "effect";
-import { Database } from "bun:sqlite";
+import { Effect, Context, Layer } from "effect";
+import { DatabaseError } from "../errors.js";
+import { MemoryDatabase } from "../database.js";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -41,64 +42,84 @@ export interface SaveDebriefInput {
   debrief: AgentDebriefShape;
 }
 
-// ─── Service Interface ─────────────────────────────────────────────────────
-
-export interface IDebriefStore {
-  save(input: SaveDebriefInput): Effect.Effect<void, never>;
-  findByTaskId(taskId: string): Effect.Effect<DebriefRecord | null, never>;
-  listByAgent(agentId: string, limit: number): Effect.Effect<DebriefRecord[], never>;
-}
+// ─── Service Tag ───────────────────────────────────────────────────────────
 
 export class DebriefStoreService extends Context.Tag("DebriefStoreService")<
   DebriefStoreService,
-  IDebriefStore
+  {
+    /** Persist a completed agent run debrief. */
+    readonly save: (input: SaveDebriefInput) => Effect.Effect<void, DatabaseError>;
+
+    /** Look up a debrief by the task ID that produced it. */
+    readonly findByTaskId: (
+      taskId: string,
+    ) => Effect.Effect<DebriefRecord | null, DatabaseError>;
+
+    /** List recent debriefs for an agent, newest first. */
+    readonly listByAgent: (
+      agentId: string,
+      limit: number,
+    ) => Effect.Effect<DebriefRecord[], DatabaseError>;
+  }
 >() {}
 
 // ─── Live Layer ─────────────────────────────────────────────────────────────
 
-export const DebriefStoreLive = (dbPath: string): Layer.Layer<DebriefStoreService> =>
-  Layer.effect(
-    DebriefStoreService,
-    Effect.sync(() => {
-      const db = new Database(dbPath, { create: true });
-      db.run("PRAGMA journal_mode=WAL;");
-      db.run(`
-        CREATE TABLE IF NOT EXISTS agent_debriefs (
-          id              TEXT PRIMARY KEY,
-          task_id         TEXT NOT NULL,
-          agent_id        TEXT NOT NULL,
-          created_at      INTEGER NOT NULL,
-          task_prompt     TEXT NOT NULL,
-          terminated_by   TEXT NOT NULL,
-          output          TEXT NOT NULL,
-          output_format   TEXT NOT NULL,
-          debrief_json    TEXT NOT NULL,
-          debrief_markdown TEXT NOT NULL,
-          tokens_used     INTEGER,
-          duration_ms     INTEGER,
-          iterations      INTEGER,
-          outcome         TEXT NOT NULL
-        );
-        CREATE INDEX IF NOT EXISTS idx_debriefs_agent_id ON agent_debriefs(agent_id);
-        CREATE INDEX IF NOT EXISTS idx_debriefs_task_id ON agent_debriefs(task_id);
-        CREATE INDEX IF NOT EXISTS idx_debriefs_created_at ON agent_debriefs(created_at DESC);
-      `);
+export const DebriefStoreLive: Layer.Layer<
+  DebriefStoreService,
+  DatabaseError,
+  MemoryDatabase
+> = Layer.effect(
+  DebriefStoreService,
+  Effect.gen(function* () {
+    const db = yield* MemoryDatabase;
 
-      const save = (input: SaveDebriefInput): Effect.Effect<void, never> =>
-        Effect.sync(() => {
-          const id = `dbrf_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-          const now = Date.now();
-          db.prepare(`
-            INSERT INTO agent_debriefs
-              (id, task_id, agent_id, created_at, task_prompt, terminated_by,
-               output, output_format, debrief_json, debrief_markdown,
-               tokens_used, duration_ms, iterations, outcome)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `).run(
-            id,
+    // Create table + indexes if not yet present (safe: IF NOT EXISTS)
+    yield* db.exec(
+      `CREATE TABLE IF NOT EXISTS agent_debriefs (
+        id               TEXT PRIMARY KEY,
+        task_id          TEXT NOT NULL,
+        agent_id         TEXT NOT NULL,
+        created_at       INTEGER NOT NULL,
+        task_prompt      TEXT NOT NULL,
+        terminated_by    TEXT NOT NULL,
+        output           TEXT NOT NULL,
+        output_format    TEXT NOT NULL,
+        debrief_json     TEXT NOT NULL,
+        debrief_markdown TEXT NOT NULL,
+        tokens_used      INTEGER,
+        duration_ms      INTEGER,
+        iterations       INTEGER,
+        outcome          TEXT NOT NULL
+      )`,
+      [],
+    );
+    yield* db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_debriefs_agent_id   ON agent_debriefs(agent_id)`,
+      [],
+    );
+    yield* db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_debriefs_task_id    ON agent_debriefs(task_id)`,
+      [],
+    );
+    yield* db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_debriefs_created_at ON agent_debriefs(created_at DESC)`,
+      [],
+    );
+
+    const save = (input: SaveDebriefInput): Effect.Effect<void, DatabaseError> =>
+      db
+        .exec(
+          `INSERT INTO agent_debriefs
+             (id, task_id, agent_id, created_at, task_prompt, terminated_by,
+              output, output_format, debrief_json, debrief_markdown,
+              tokens_used, duration_ms, iterations, outcome)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            `dbrf_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
             input.taskId,
             input.agentId,
-            now,
+            Date.now(),
             input.taskPrompt,
             input.terminatedBy,
             input.output,
@@ -109,29 +130,38 @@ export const DebriefStoreLive = (dbPath: string): Layer.Layer<DebriefStoreServic
             input.debrief.metrics.duration,
             input.debrief.metrics.iterations,
             input.debrief.outcome,
-          );
-        });
+          ],
+        )
+        .pipe(Effect.asVoid);
 
-      const findByTaskId = (taskId: string): Effect.Effect<DebriefRecord | null, never> =>
-        Effect.sync(() => {
-          const row = db.prepare(
-            "SELECT * FROM agent_debriefs WHERE task_id = ? LIMIT 1"
-          ).get(taskId) as Record<string, unknown> | null;
-          if (!row) return null;
-          return rowToRecord(row);
-        });
+    const findByTaskId = (
+      taskId: string,
+    ): Effect.Effect<DebriefRecord | null, DatabaseError> =>
+      db
+        .query<Record<string, unknown>>(
+          `SELECT * FROM agent_debriefs WHERE task_id = ? LIMIT 1`,
+          [taskId],
+        )
+        .pipe(
+          Effect.map((rows) => (rows.length > 0 ? rowToRecord(rows[0]!) : null)),
+        );
 
-      const listByAgent = (agentId: string, limit: number): Effect.Effect<DebriefRecord[], never> =>
-        Effect.sync(() => {
-          const rows = db.prepare(
-            "SELECT * FROM agent_debriefs WHERE agent_id = ? ORDER BY created_at DESC LIMIT ?"
-          ).all(agentId, limit) as Record<string, unknown>[];
-          return rows.map(rowToRecord);
-        });
+    const listByAgent = (
+      agentId: string,
+      limit: number,
+    ): Effect.Effect<DebriefRecord[], DatabaseError> =>
+      db
+        .query<Record<string, unknown>>(
+          `SELECT * FROM agent_debriefs WHERE agent_id = ? ORDER BY created_at DESC LIMIT ?`,
+          [agentId, limit],
+        )
+        .pipe(Effect.map((rows) => rows.map(rowToRecord)));
 
-      return { save, findByTaskId, listByAgent };
-    })
-  );
+    return { save, findByTaskId, listByAgent };
+  }),
+);
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
 
 function rowToRecord(row: Record<string, unknown>): DebriefRecord {
   return {
