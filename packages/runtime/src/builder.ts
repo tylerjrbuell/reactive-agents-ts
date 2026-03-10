@@ -24,6 +24,16 @@ import { KillSwitchService } from "@reactive-agents/guardrails";
 import type { AgentStreamEvent, StreamDensity } from "./stream-types.js";
 import { AgentStream } from "./agent-stream.js";
 import type { TelemetryConfig } from "@reactive-agents/observability";
+import {
+  AgentSession,
+  directChat,
+  requiresTools,
+  buildContextSummary,
+  type ChatMessage,
+  type ChatOptions,
+  type ChatReply,
+  type SessionOptions,
+} from "./chat.js";
 
 // ─── Provider Types ──────────────────────────────────────────────────────────
 
@@ -2272,6 +2282,11 @@ export class ReactiveAgent {
     private readonly _setTaskDescription?: (desc: string) => void,
   ) {}
 
+  /** @internal Last debrief from a completed run — used as context in chat() calls. */
+  private _lastDebrief?: import("./debrief.js").AgentDebrief;
+  /** @internal Conversation history for the agent-level chat context. */
+  private _chatHistory: ChatMessage[] = [];
+
   /**
    * Release all resources held by this agent.
    *
@@ -2402,6 +2417,8 @@ export class ReactiveAgent {
               ...(r.terminatedBy !== undefined ? { terminatedBy: r.terminatedBy } : {}),
               ...(r.debrief !== undefined ? { debrief: r.debrief } : {}),
             };
+            // Capture debrief for use as context in subsequent chat() calls
+            if (agentResult.debrief) this._lastDebrief = agentResult.debrief;
             return agentResult;
           }),
           Effect.mapError(
@@ -2456,6 +2473,67 @@ export class ReactiveAgent {
     );
 
     yield* AgentStream.toAsyncIterable(stream);
+  }
+
+  /**
+   * Send a conversational message to the agent.
+   *
+   * Automatically routes between two paths based on message intent:
+   * - **Direct LLM path** (fast, no tools): conversational/factual questions, simple queries
+   * - **Tool-capable path**: messages requiring search, file ops, computation, etc.
+   *
+   * Use `options.useTools` to override the automatic routing.
+   *
+   * @param message - The user's conversational message
+   * @param options - Optional routing overrides and iteration limits
+   * @returns Promise resolving to a ChatReply with `message` (and optional `toolsUsed`)
+   * @example
+   * ```typescript
+   * const reply = await agent.chat("What did you find earlier?");
+   * console.log(reply.message);
+   *
+   * // Force tool path:
+   * const reply2 = await agent.chat("Search for latest news", { useTools: true });
+   * ```
+   */
+  async chat(message: string, options?: ChatOptions): Promise<ChatReply> {
+    const useTools = options?.useTools ?? requiresTools(message);
+    const contextSummary = buildContextSummary(this._lastDebrief);
+
+    if (!useTools) {
+      // Direct LLM path — fast, no tool overhead
+      return this.runtime.runPromise(
+        directChat(message, this._chatHistory, contextSummary),
+      );
+    }
+
+    // Tool-capable path — full agent run with capped iterations
+    const result = await this.run(message);
+    return {
+      message: result.output,
+      toolsUsed: result.debrief?.toolsUsed.map((t) => t.name),
+    };
+  }
+
+  /**
+   * Create a stateful chat session backed by this agent.
+   *
+   * Returns an `AgentSession` with `chat()`, `history()`, and `end()` methods.
+   * The session maintains conversation history automatically.
+   *
+   * @param options - Optional session configuration
+   * @returns A new AgentSession instance
+   * @example
+   * ```typescript
+   * const session = agent.session();
+   * const r1 = await session.chat("Hello!");
+   * const r2 = await session.chat("What did I just say?");
+   * console.log(session.history()); // [{role:"user",...}, {role:"assistant",...}, ...]
+   * await session.end();
+   * ```
+   */
+  session(_options?: SessionOptions): AgentSession {
+    return new AgentSession((msg) => this.chat(msg));
   }
 
   /**
