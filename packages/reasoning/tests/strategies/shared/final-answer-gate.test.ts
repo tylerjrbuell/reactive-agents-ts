@@ -65,7 +65,6 @@ describe("final-answer hard gate", () => {
         task: "Write hello to a file",
         systemPrompt: "You are a helpful assistant.",
         availableToolSchemas: [],
-        config: { maxIterations: 10, minIterations: 0 },
         maxIterations: 10,
       }).pipe(Effect.provide(llmLayer)),
     );
