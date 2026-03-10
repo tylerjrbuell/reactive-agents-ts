@@ -157,3 +157,82 @@ export function createMockLLMFromMap(responses: Record<string, string>) {
   );
   return createMockLLM(rules);
 }
+
+/**
+ * Create a test LLM Layer that returns responses in sequence.
+ * Each call to `complete()` returns the next response in the array.
+ * After all responses are exhausted, repeats the last one.
+ *
+ * Useful for testing services that make a fixed number of LLM calls.
+ */
+export function createTestLLMServiceLayer(
+  responses: Array<{ content: string; stopReason: "end_turn" | "max_tokens" | "stop_sequence" | "tool_use" }>,
+): Layer.Layer<LLMService> {
+  let index = 0;
+
+  const service = {
+    complete: (_request: {
+      messages: readonly { role: string; content: unknown }[];
+      systemPrompt?: string;
+    }) =>
+      Effect.gen(function* () {
+        const resp = responses[index] ?? responses[responses.length - 1];
+        if (index < responses.length - 1) index++;
+
+        return {
+          content: resp?.content ?? "",
+          stopReason: (resp?.stopReason ?? "end_turn") as CompletionResponse["stopReason"],
+          usage: {
+            inputTokens: 0,
+            outputTokens: 0,
+            totalTokens: 0,
+            estimatedCost: 0,
+          },
+          model: "mock",
+        } satisfies CompletionResponse;
+      }),
+
+    stream: (_request: {
+      messages: readonly { role: string; content: unknown }[];
+    }) =>
+      Effect.gen(function* () {
+        const resp = responses[index] ?? responses[responses.length - 1];
+        if (index < responses.length - 1) index++;
+        const content = resp?.content ?? "";
+
+        return Stream.make(
+          { type: "text_delta" as const, text: content } satisfies StreamEvent,
+          { type: "content_complete" as const, content } satisfies StreamEvent,
+          {
+            type: "usage" as const,
+            usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0, estimatedCost: 0 },
+          } satisfies StreamEvent,
+        ) as Stream.Stream<StreamEvent, never>;
+      }),
+
+    completeStructured: (_request: unknown) => Effect.succeed({} as never),
+
+    embed: (texts: readonly string[]) =>
+      Effect.succeed(texts.map(() => new Array(768).fill(0))),
+
+    countTokens: (_messages: readonly { content: unknown }[]) =>
+      Effect.succeed(0),
+
+    getModelConfig: () =>
+      Effect.succeed({
+        provider: "anthropic" as const,
+        model: "mock",
+        contextWindow: 8000,
+        id: "mock",
+      }),
+
+    getStructuredOutputCapabilities: () =>
+      Effect.succeed({
+        supportsNativeJson: false,
+        supportsJsonMode: false,
+        supportsToolForcing: false,
+      }),
+  };
+
+  return Layer.succeed(LLMService, service as any);
+}
