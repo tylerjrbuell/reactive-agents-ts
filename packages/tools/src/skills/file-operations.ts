@@ -47,14 +47,38 @@ export const fileReadHandler = (
       const filePath = args.path as string;
       const encoding = (args.encoding as BufferEncoding) ?? "utf-8";
 
+      if (!filePath || typeof filePath !== "string") {
+        throw new Error("path parameter must be a non-empty string");
+      }
+
       // Security: resolve path and check it's within allowed directory
       const resolved = path.resolve(filePath);
       const allowedBase = process.cwd();
-      if (!resolved.startsWith(allowedBase)) {
-        throw new Error(`Path traversal detected: ${filePath}`);
+      const normalizedBase = path.normalize(allowedBase);
+      const normalizedResolved = path.normalize(resolved);
+
+      if (!normalizedResolved.startsWith(normalizedBase)) {
+        throw new Error(
+          `Path traversal detected: ${filePath} resolves to ${resolved} outside of ${allowedBase}`,
+        );
       }
 
-      return await fs.readFile(resolved, { encoding });
+      // Retry logic with exponential backoff (up to 3 attempts)
+      let lastError: Error | null = null;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          return await fs.readFile(resolved, { encoding });
+        } catch (e) {
+          lastError = e instanceof Error ? e : new Error(String(e));
+          if (attempt < 3) {
+            // Exponential backoff: 100ms, 200ms
+            const delayMs = 100 * Math.pow(2, attempt - 1);
+            await new Promise((resolve) => setTimeout(resolve, delayMs));
+          }
+        }
+      }
+
+      throw lastError;
     },
     catch: (e) =>
       new ToolExecutionError({

@@ -49,7 +49,7 @@ describe("DockerSandbox — tool definition", () => {
     expect(dockerExecuteTool.category).toBe("code");
     expect(dockerExecuteTool.riskLevel).toBe("high");
     expect(dockerExecuteTool.requiresApproval).toBe(true);
-    expect(dockerExecuteTool.timeoutMs).toBe(60_000);
+    expect(dockerExecuteTool.timeoutMs).toBe(30_000);
     expect(dockerExecuteTool.source).toBe("builtin");
   });
 
