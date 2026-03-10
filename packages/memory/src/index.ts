@@ -133,3 +133,10 @@ export {
 
 // ─── Runtime ───
 export { createMemoryLayer } from "./runtime.js";
+
+export {
+  DebriefStoreService,
+  DebriefStoreLive,
+  type DebriefRecord,
+  type SaveDebriefInput,
+} from "./services/debrief-store.js";
