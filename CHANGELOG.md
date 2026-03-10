@@ -10,9 +10,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 
 ---
 
-## [0.7.0] — 2026-03-08
+## [0.7.0] — 2026-03-10
 
-Context Engine & Memory Intelligence — per-iteration context scoring, cross-agent experience learning, background memory consolidation, meta-tools for agent self-awareness, and parallel/chain tool execution.
+Quality & reliability sprint: required tools guard, circuit breaker, embedding cache, benchmarks, Docker sandbox, adaptive LLM inference, heuristic-first tool selection, sub-agent MCP inheritance, ContextEngine scoring, ExperienceStore, MemoryConsolidatorService, meta-tools, and parallel/chain tool execution.
 
 ### Added
 
@@ -48,6 +48,83 @@ Two new kernel-level meta-tools for agent introspection and guarded completion:
 - **`context-status`** — zero-parameter tool that reports `iteration`, `maxIterations`, `remaining`, `toolsUsed`, `toolsPending`, `storedKeys`, `tokensUsed`. Always visible; helps agents orient when lost.
 - **`task-complete`** — single-parameter (`summary`) tool for explicit task signalling. Visibility-gated: only shown when all 4 conditions hold: (1) all required tools called, (2) iteration ≥ 2, (3) no pending errors, (4) at least one non-meta tool invoked.
 - **`makeContextStatusHandler(state)`** and **`makeTaskCompleteHandler(state)`** — factory functions for dynamic state wiring at kernel level.
+- **`shouldShowTaskComplete(input)`** — pure visibility predicate; exported for testing and custom kernels.
+- **`metaToolDefinitions`** array — exported for schema inspection without live state wiring.
+
+#### Parallel & Chain Tool Execution (`@reactive-agents/reasoning`)
+
+Agents can now issue multiple tool calls from a single thought:
+
+- **Parallel** — multiple `ACTION:` lines in a single thought → `Effect.all(..., { concurrency: "unbounded" })` → combined numbered observation. Capped at 3 to prevent runaway fan-out. Side-effect prefixes (`send_`, `create_`, `delete_`, etc.) force single mode.
+- **Chain** — `ACTION:` followed by `THEN:` → sequential execution with `$RESULT` placeholder forwarding between steps. Fails fast on any step error. Capped at 3.
+- **`parseToolRequestGroup(thought)`** — exported primitive returning `ToolRequestGroup { mode: "single"|"parallel"|"chain", requests }`.
+- **`executeToolGroup(toolService, group, config)`** — dispatches the group; single delegates to existing `executeToolCall`.
+
+#### Sub-Agent Fixes (`@reactive-agents/tools`)
+
+- **`ALWAYS_INCLUDE_TOOLS`** — constant `["scratchpad-read", "scratchpad-write"]` auto-merged into every sub-agent's tool list so sub-agents always have scratchpad access regardless of parent config.
+- **Iteration cap** — `effectiveMaxIter = Math.min(config.maxIterations ?? 6, 6)` prevents runaway sub-agents.
+- **Scratchpad key forwarding** — `SubAgentResult.forwardedScratchpadKeys` lists keys written with `sub:<agentName>:<key>` prefix; parent agent can read forwarded context.
+
+#### Required Tools Guard + Adaptive LLM Inference (`@reactive-agents/runtime`)
+
+Guarantees that the agent must call specific tools before it can complete a task:
+
+- **`.withRequiredTools({ tools: string[], adaptive?: boolean })`** — lists tools the agent must invoke before `final-answer` or `task-complete` become visible. Prevents premature task signalling.
+- **Adaptive inference** — when `adaptive: true`, the runtime uses heuristic keyword matching to automatically select required tools from the available set without an extra LLM call. Falls back to a single LLM selection call only when heuristics are inconclusive.
+- **Sub-agent inheritance** — required tools config propagates to statically-defined sub-agents so constraints are preserved across delegation boundaries.
+- **Smart MCP tool inheritance** — sub-agents now proxy their parent's MCP tools automatically. No need to re-declare `withMCP()` on each sub-agent config.
+
+#### Quality & Resilience Batch (`@reactive-agents/runtime`, `@reactive-agents/llm-provider`)
+
+Production-readiness improvements:
+
+- **Circuit breaker** — `CircuitBreakerService` wraps LLM calls with configurable failure threshold, timeout, and half-open probe. Prevents cascading failures on provider outages.
+- **Embedding cache** — LRU cache for embedding vectors; repeated semantic queries skip the embedding API call entirely. Configurable size and TTL.
+- **Budget persistence** — daily token budget state survives process restarts via SQLite. Agents won't exceed their configured budgets across restarts.
+- **Telemetry** — structured telemetry events emitted to EventBus for external monitoring integrations.
+- **Docker sandbox** — code execution tool now runs in an isolated Docker container with `--cap-drop ALL --security-opt no-new-privileges --memory 512m`. Falls back to subprocess sandbox when Docker is unavailable.
+- **JSON repair** — malformed LLM JSON outputs (missing quotes, trailing commas, truncated objects) are automatically repaired before parse rather than failing.
+- **Tool result caching** — deterministic tool calls (read-only, same inputs) can be cached per session to avoid redundant API calls.
+
+#### Benchmarks Package (`@reactive-agents/benchmarks`)
+
+New package for measuring framework overhead and reasoning quality:
+
+- **20 benchmark tasks** across 5 complexity tiers (trivial → expert).
+- **`rax bench`** CLI command — runs the full suite and renders a results table.
+- **Overhead measurement** — isolates framework time from LLM time; tracks tokens, duration, iterations per task.
+- **`BenchmarkResults` Astro component** — renders live benchmark data in the docs site.
+
+#### ReAct Quality Improvements (`@reactive-agents/reasoning`)
+
+Eight targeted fixes to improve local-model reliability:
+
+- **Token budget increases** — local tier 800 → 1,200 tokens, mid tier 1,500 → 2,000 tokens. Prevents context truncation on longer tasks.
+- **Model tier reclassification** — capable local models (7B+, e.g., qwen3:14b, cogito) now classified as `mid` tier, enabling better prompt templates and higher budgets.
+- **Heuristic-first tool selection** — keyword match attempted before any LLM call for adaptive tool inference; LLM only invoked when heuristics are inconclusive. Reduces overhead ~40% on tool selection.
+- **Stop sequence hardening** — `\nObservation:` (newline-prefixed) prevents mid-sentence cuts from false stop sequence matches.
+- **Anti-fabrication rule** — RULES section tightened: explicit "never fabricate tool results" instruction added alongside scratchpad guidance.
+- **Secondary tool collapsing** — tool sets >15 have secondary tools collapsed to names-only in context. Prevents token budget overflow on large MCP server collections.
+- **Side-effect duplicate guard** — side-effect tools (`send_`, `create_`, `delete_`, etc.) blocked from re-execution when already in completed steps.
+- **Delegation keyword matching** — improved sub-task routing in multi-agent flows.
+
+#### Context Engine Fixes (`@reactive-agents/reasoning`)
+
+- **Full tool schemas at context top** — all tool definitions (name + parameters) now included at the top of every context window, not just the compact summary. Fixes MCP tool call failures where agents couldn't see required parameter shapes.
+- **Namespaced tool filtering** — `filterToolsByRelevance` no longer false-positives on namespace names (e.g., all 40+ `github/*` tools no longer shown as primary when the task merely mentions "GitHub"). Only matches on distinctive local slug parts.
+
+### Changed
+
+- `@reactive-agents/reasoning`: `react-kernel.ts` net −200 lines — 6 static context helpers replaced by single `buildContext()` call.
+- `@reactive-agents/memory`: new `services/` sub-directory with `ExperienceStoreLive` and `MemoryConsolidatorServiceLive` exported from `src/index.ts`.
+- `@reactive-agents/tools`: `src/index.ts` now exports `ALWAYS_INCLUDE_TOOLS`, `contextStatusTool`, `makeContextStatusHandler`, `ContextStatusState`, `taskCompleteTool`, `shouldShowTaskComplete`, `makeTaskCompleteHandler`, `TaskCompleteVisibility`, `TaskCompleteState`.
+- `@reactive-agents/reasoning`: `src/index.ts` now exports `buildContext`, `ContextBuildInput`, `ContextItem`, `MemoryItem`, `ScoringContext`, `BudgetResult`.
+
+### Stats
+
+- 1,735 tests across 211 files (was 1,588/190 in v0.6.3, +147 new tests)
+- 20 packages + 1 new (`@reactive-agents/benchmarks`)
 - **`shouldShowTaskComplete(input)`** — pure visibility predicate; exported for testing and custom kernels.
 - **`metaToolDefinitions`** array — exported for schema inspection without live state wiring.
 
