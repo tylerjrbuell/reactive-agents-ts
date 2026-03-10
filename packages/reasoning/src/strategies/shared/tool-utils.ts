@@ -492,28 +492,67 @@ export function filterToolsByRelevance(
   }
 
   for (const tool of schemas) {
-    // Strategy 1: Name matching (existing behavior)
-    const nameVariants = [
-      tool.name.toLowerCase(),
-      tool.name.split("/").pop()?.toLowerCase() ?? "",
-      tool.name.toLowerCase().replace(/[-_/]/g, " "),
-    ];
-    const nameMentioned = nameVariants.some((v) => v && taskLower.includes(v));
+    const isNamespaced = tool.name.includes("/");
+    const localSlug = isNamespaced
+      ? (tool.name.split("/").pop()?.toLowerCase() ?? "")
+      : tool.name.toLowerCase();
 
-    // Strategy 2: Description keyword matching
-    const descLower = (tool.description ?? "").toLowerCase();
-    const descWords = descLower.split(/\s+/);
-    const descMatch = !nameMentioned && descWords.some((dw) =>
-      dw.length > 3 && expandedKeywords.has(dw),
-    );
+    if (isNamespaced) {
+      // Namespaced MCP tools (e.g. "github/list_commits"):
+      // ONLY match by local slug — never by description or namespace name.
+      // This prevents all 40+ "github/*" tools from being primary when task says "GitHub".
+      const localSlugSpaced = localSlug.replace(/[-_]/g, " ");
+      // Check 1: full local slug appears verbatim in task (e.g. "list_commits" in task)
+      const fullSlugMatch = taskLower.includes(localSlug) || taskLower.includes(localSlugSpaced);
+      // Check 2: distinctive slug parts (non-generic action verbs) match raw task words.
+      // Uses raw task words — NOT expanded keywords — to avoid matching all tools in a
+      // namespace just because the task mentions the namespace (e.g. "GitHub").
+      const rawTaskWords = new Set(taskWords);
+      const allSlugParts = localSlugSpaced.split(/\s+/);
+      // Strip generic tokens (CRUD verbs + context nouns) that appear in most tool
+      // names and/or task text without carrying discriminative signal.
+      const GENERIC_SLUG_TOKENS = new Set([
+        // Common CRUD / action verbs
+        "list", "get", "create", "update", "delete", "add", "set", "check",
+        "find", "fetch", "read", "write", "send", "push", "pull", "from",
+        "make", "edit", "open", "close", "move", "copy", "show", "view",
+        // Common context nouns that appear in task descriptions but don't uniquely
+        // identify a specific tool action
+        "repo", "repository", "file", "files", "branch", "branches",
+        "content", "contents", "data", "info", "item", "items",
+        "name", "path", "type", "user", "users", "team", "org",
+      ]);
+      const distinctiveParts = allSlugParts.filter(
+        (sp) => sp.length > 3 && !GENERIC_SLUG_TOKENS.has(sp),
+      );
+      // If the tool has distinctive parts, require at least one to be in the task.
+      // If all parts are generic (e.g. "get_data"), fall back to full-slug verbatim.
+      const slugPartsMatch = distinctiveParts.length > 0
+        ? distinctiveParts.some((sp) => rawTaskWords.has(sp))
+        : false;
+      (fullSlugMatch || slugPartsMatch ? primary : secondary).push(tool);
+    } else {
+      // Built-in tools: use all three matching strategies
+      const nameVariants = [
+        tool.name.toLowerCase(),
+        localSlug,
+        tool.name.toLowerCase().replace(/[-_]/g, " "),
+      ];
+      const nameMentioned = nameVariants.some((v) => v && taskLower.includes(v));
 
-    // Strategy 3: Tool name slug matches expanded keywords
-    const slugParts = tool.name.toLowerCase().replace(/[-_/]/g, " ").split(/\s+/);
-    const slugMatch = !nameMentioned && !descMatch && slugParts.some((sp) =>
-      sp.length > 3 && expandedKeywords.has(sp),
-    );
+      const descLower = (tool.description ?? "").toLowerCase();
+      const descWords = descLower.split(/\s+/);
+      const descMatch = !nameMentioned && descWords.some((dw) =>
+        dw.length > 3 && expandedKeywords.has(dw),
+      );
 
-    (nameMentioned || descMatch || slugMatch ? primary : secondary).push(tool);
+      const slugParts = localSlug.replace(/[-_]/g, " ").split(/\s+/);
+      const slugMatch = !nameMentioned && !descMatch && slugParts.some((sp) =>
+        sp.length > 3 && expandedKeywords.has(sp),
+      );
+
+      (nameMentioned || descMatch || slugMatch ? primary : secondary).push(tool);
+    }
   }
 
   // Special case: delegation keywords → spawn-agent should be primary
