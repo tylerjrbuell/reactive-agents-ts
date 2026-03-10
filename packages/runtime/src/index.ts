@@ -65,3 +65,12 @@ export { AgentStream } from "./agent-stream.js";
 
 // ─── Deployment ───
 export { createSigtermHandler, registerShutdownHandlers } from "./sigterm.js";
+
+// ─── Debrief ───
+export {
+  synthesizeDebrief,
+  formatDebriefMarkdown,
+  type AgentDebrief,
+  type DebriefInput,
+  type ToolCallStat,
+} from "./debrief.js";
