@@ -2215,11 +2215,12 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   },
                 };
 
-                // Synthesize debrief (best-effort, only on the reasoning path).
-                // Skipped for the direct-LLM path (rr === undefined) to avoid
-                // injecting an extra LLM call where callers don't expect it.
+                // Synthesize debrief (best-effort, only on the reasoning path with memory enabled).
+                // Gated on BOTH: rr !== undefined (reasoning path was used) AND config.enableMemory
+                // (user opted in with .withMemory()). Skipped otherwise to avoid injecting extra
+                // LLM calls in direct-LLM path tests and non-memory configurations.
                 // Also requires LLMService to be available in context — use serviceOption to check.
-                const debrief: AgentDebrief | undefined = yield* (rr !== undefined
+                const debrief: AgentDebrief | undefined = yield* (rr !== undefined && config.enableMemory
                   ? Effect.serviceOption(
                       Context.GenericTag<{ complete: (req: unknown) => Effect.Effect<unknown> }>("LLMService"),
                     ).pipe(
@@ -2268,7 +2269,13 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     tokensUsed: ctx.tokensUsed,
                     strategyUsed: ctx.selectedStrategy,
                     stepsCount: (ctx.metadata.stepsCount as number | undefined) ?? ctx.iteration,
-                    ...(rr?.metadata?.confidence !== undefined ? { confidence: rr.metadata.confidence } : {}),
+                    ...(rr?.metadata?.confidence !== undefined ? {
+                      confidence: (rr.metadata.confidence >= 0.7
+                        ? "high"
+                        : rr.metadata.confidence >= 0.4
+                          ? "medium"
+                          : "low") as "high" | "medium" | "low",
+                    } : {}),
                     ...(rr?.metadata?.strategyFallback === true ? { strategyFallback: true } : {}),
                     ...(ctx.metadata.budgetExceeded ? { budgetExceeded: true } : {}),
                   },

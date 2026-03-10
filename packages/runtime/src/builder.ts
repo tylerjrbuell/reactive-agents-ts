@@ -657,6 +657,7 @@ export class ReactiveAgentBuilder {
   private _temperature?: number;
   private _maxTokens?: number;
   private _memoryTier: "1" | "2" = "1";
+  private _enableMemory: boolean = false;
   private _hooks: LifecycleHook[] = [];
   private _maxIterations: number = 10;
   private _enableGuardrails: boolean = false;
@@ -952,6 +953,7 @@ export class ReactiveAgentBuilder {
    * ```
    */
   withMemory(tierOrOptions?: "1" | "2" | MemoryOptions): this {
+    this._enableMemory = true;
     if (typeof tierOrOptions === "string") {
       this._memoryTier = tierOrOptions;
     } else if (tierOrOptions) {
@@ -1611,6 +1613,7 @@ export class ReactiveAgentBuilder {
       requiredTools: this._requiredToolsConfig,
       allowedTools: this._toolsOptions?.allowedTools,
       adaptiveToolFiltering: this._toolsOptions?.adaptive,
+      enableMemory: this._enableMemory,
       enableExperienceLearning: this._enableExperienceLearning,
       enableMemoryConsolidation: this._enableMemoryConsolidation,
       consolidationConfig: this._consolidationConfig,

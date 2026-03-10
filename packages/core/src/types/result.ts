@@ -36,7 +36,7 @@ export const ResultMetadataSchema = Schema.Struct({
   duration: Schema.Number,
   cost: Schema.Number,
   tokensUsed: Schema.Number,
-  confidence: Schema.optional(Schema.Number.pipe(Schema.between(0, 1))),
+  confidence: Schema.optional(Schema.Literal("high", "medium", "low")),
   strategyUsed: Schema.optional(Schema.String),
   stepsCount: Schema.optional(Schema.Number),
 });
