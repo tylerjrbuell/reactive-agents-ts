@@ -21,9 +21,9 @@ The roadmap below is about two things: **closing the gaps** that currently block
 
 ---
 
-## Current State — v0.5.6 ✅ (Feb 28, 2026)
+## Current State — v0.7.0 ✅ (Mar 10, 2026)
 
-**18 packages, 1001 tests across 139 files, fully composable via Effect-TS.**
+**20 packages + 1 new benchmark suite, 1,735 tests across 211 files, fully composable via Effect-TS.**
 
 ### v0.4.0 → v0.5.2 History
 
