@@ -287,6 +287,7 @@ describe("H1: Observability Integration", () => {
         captureSnapshot: () => Effect.succeed({} as any),
         getSnapshots: () => Effect.succeed([]),
         flush: () => Effect.void,
+        verbosity: () => "normal",
       },
     );
 

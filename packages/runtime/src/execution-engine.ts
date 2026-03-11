@@ -21,7 +21,7 @@ import type { TaskError } from "@reactive-agents/core";
 import type { ContextProfile } from "@reactive-agents/reasoning";
 import { inferRequiredTools, filterToolsByRelevance } from "@reactive-agents/reasoning";
 import { ToolService } from "@reactive-agents/tools";
-import { ObservabilityService } from "@reactive-agents/observability";
+import { ObservabilityService, createProgressLogger } from "@reactive-agents/observability";
 import { GuardrailService, KillSwitchService, BehavioralContractService } from "@reactive-agents/guardrails";
 import { VerificationService } from "@reactive-agents/verification";
 import { CostService } from "@reactive-agents/cost";
@@ -1180,6 +1180,10 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
 
                   let isComplete = false;
 
+                  // Create progress logger for per-iteration visibility
+                  const verbosity = obs ? (obs.verbosity() as "minimal" | "normal" | "verbose" | "debug") : "minimal";
+                  const progressLogger = createProgressLogger(verbosity);
+
                   while (!isComplete && ctx.iteration <= ctx.maxIterations) {
                     // ── Kill switch check at top of each iteration ──
                     // This ensures pause/stop/terminate is honored before
@@ -1471,6 +1475,14 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         }) as unknown as Effect.Effect<ExecutionContext, never>,
                     );
 
+                    // Log thought phase for per-iteration progress visibility
+                    yield* progressLogger.logIteration({
+                      iteration: ctx.iteration,
+                      maxIterations: ctx.maxIterations,
+                      phase: "thought",
+                      content: ctx.metadata.lastResponse as string,
+                    }).pipe(Effect.catchAll(() => Effect.void));
+
                     // 5b. ACT (if tool calls present) — call real ToolService
                     const pendingCalls =
                       (ctx.metadata.pendingToolCalls as unknown[]) ?? [];
@@ -1602,6 +1614,14 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                                     ),
                                   );
 
+                                // Log tool execution for progress visibility
+                                yield* progressLogger.logToolExecution(
+                                  toolName,
+                                  toolResult.success ? "success" : "error",
+                                  toolResult.durationMs,
+                                  toolResult.success ? undefined : (toolResult.result as string),
+                                ).pipe(Effect.catchAll(() => Effect.void));
+
                                 // Phase 0.2: Publish ToolCallCompleted
                                 if (eb) {
                                   yield* eb.publish({
@@ -1626,6 +1646,18 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                           };
                         }),
                       );
+
+                      // Log action phase for each tool call
+                      for (const toolResult of (ctx.toolResults.slice(-pendingCalls.length) as any[])) {
+                        yield* progressLogger.logIteration({
+                          iteration: ctx.iteration,
+                          maxIterations: ctx.maxIterations,
+                          phase: "action",
+                          content: `Tool: ${toolResult.toolName}`,
+                          toolName: toolResult.toolName,
+                          toolStatus: toolResult.success ? "success" : "error",
+                        }).pipe(Effect.catchAll(() => Effect.void));
+                      }
 
                       // 5c. OBSERVE — H5: also log episodic memories
                       ctx = yield* guardedPhase(ctx, "observe", (c) =>
@@ -1714,10 +1746,42 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                           };
                         }),
                       );
+
+                      // Log observation phase with summary
+                      const recentResults = (ctx.toolResults.slice(-pendingCalls.length) as any[]);
+                      for (const toolResult of recentResults) {
+                        const resultPreview = typeof toolResult.result === "string"
+                          ? toolResult.result.slice(0, 100)
+                          : JSON.stringify(toolResult.result).slice(0, 100);
+                        yield* progressLogger.logIteration({
+                          iteration: ctx.iteration,
+                          maxIterations: ctx.maxIterations,
+                          phase: "observation",
+                          content: resultPreview,
+                          toolName: toolResult.toolName,
+                          toolStatus: toolResult.success ? "success" : "error",
+                          errorMessage: toolResult.success ? undefined : (toolResult.result as string),
+                        }).pipe(Effect.catchAll(() => Effect.void));
+                      }
+
+                      // Log iteration summary
+                      yield* progressLogger.logIterationSummary(
+                        ctx.iteration,
+                        ctx.tokensUsed,
+                        recentResults.map((r: any) => r.toolName),
+                      ).pipe(Effect.catchAll(() => Effect.void));
                     } else {
                       // 5d. LOOP_CHECK
                       isComplete = Boolean(ctx.metadata.isComplete);
                       ctx = { ...ctx, iteration: ctx.iteration + 1 };
+
+                      // Log iteration summary even when no tools called
+                      yield* progressLogger.logIterationSummary(
+                        ctx.iteration - 1,
+                        ctx.tokensUsed,
+                        [],
+                        isComplete ? "final-answer" : "no-tools",
+                      ).pipe(Effect.catchAll(() => Effect.void));
                     }
                   }
 
