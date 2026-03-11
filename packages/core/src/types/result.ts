@@ -39,6 +39,7 @@ export const ResultMetadataSchema = Schema.Struct({
   confidence: Schema.optional(Schema.Literal("high", "medium", "low")),
   strategyUsed: Schema.optional(Schema.String),
   stepsCount: Schema.optional(Schema.Number),
+  iterations: Schema.optional(Schema.Number),
 });
 export type ResultMetadata = typeof ResultMetadataSchema.Type;
 

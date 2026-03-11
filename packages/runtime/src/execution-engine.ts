@@ -2218,6 +2218,19 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 const terminatedByRaw = (rr?.metadata?.terminatedBy ?? "end_turn") as
                   "final_answer_tool" | "final_answer" | "max_iterations" | "end_turn";
 
+                // Publish FinalAnswerProduced event when final-answer tool is called
+                if (terminatedByRaw === "final_answer_tool" && eb) {
+                  const capture = rr?.metadata?.finalAnswerCapture as any;
+                  yield* eb.publish({
+                    _tag: "FinalAnswerProduced",
+                    taskId: ctx.taskId,
+                    strategy: ctx.selectedStrategy ?? "unknown",
+                    answer: capture?.output ?? sanitizedOutput ?? "",
+                    iteration: ctx.iteration,
+                    totalTokens: ctx.tokensUsed,
+                  }).pipe(Effect.catchAll(() => Effect.void));
+                }
+
                 // Collect tool stats from action steps
                 const rrSteps = (ctx.metadata.reasoningSteps ?? []) as Array<{
                   type: string;
@@ -2274,7 +2287,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   metrics: {
                     tokens: ctx.tokensUsed,
                     duration: executionDurationMs,
-                    iterations: (ctx.metadata.stepsCount as number | undefined) ?? ctx.iteration,
+                    iterations: ctx.iteration,
                     cost: ctx.cost,
                   },
                 };
@@ -2333,6 +2346,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     tokensUsed: ctx.tokensUsed,
                     strategyUsed: ctx.selectedStrategy,
                     stepsCount: (ctx.metadata.stepsCount as number | undefined) ?? ctx.iteration,
+                    iterations: ctx.iteration,
                     ...(rr?.metadata?.confidence !== undefined ? {
                       confidence: (rr.metadata.confidence >= 0.7
                         ? "high"

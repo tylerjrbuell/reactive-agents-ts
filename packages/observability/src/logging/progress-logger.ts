@@ -59,7 +59,7 @@ export class ProgressLogger {
           // Show current thinking at normal verbosity
           const summary = progress.content.substring(0, 80);
           const msg = `  ┄ ${iterLabel} [thought] ${summary}${progress.content.length > 80 ? "..." : ""}`;
-          yield* obs.debug(msg).pipe(Effect.catchAll(() => Effect.void));
+          yield* obs.info(msg).pipe(Effect.catchAll(() => Effect.void));
           break;
         }
 
@@ -113,7 +113,7 @@ export class ProgressLogger {
       if (status === "error" || status === "timeout") {
         yield* obs.warn(msg).pipe(Effect.catchAll(() => Effect.void));
       } else {
-        yield* obs.debug(msg).pipe(Effect.catchAll(() => Effect.void));
+        yield* obs.info(msg).pipe(Effect.catchAll(() => Effect.void));
       }
     });
   }
@@ -164,7 +164,7 @@ export class ProgressLogger {
       const reason = completionReason ? ` — ${completionReason}` : "";
       const msg = `  ✓ Iter ${iteration}: ${tokensUsed} tok, ${tools}${reason}`;
 
-      yield* obs.debug(msg).pipe(Effect.catchAll(() => Effect.void));
+      yield* obs.info(msg).pipe(Effect.catchAll(() => Effect.void));
     });
   }
 }
