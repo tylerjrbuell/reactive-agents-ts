@@ -2327,6 +2327,9 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     strategyUsed: ctx.selectedStrategy,
                     stepsCount: (ctx.metadata.stepsCount as number | undefined) ?? ctx.iteration,
                     iterations: ctx.iteration,
+                    // Forward reasoning steps so chat() can access tool results and analysis.
+                    // Cast needed: reasoningSteps is an internal field not in the public TaskResult type.
+                    ...(ctx.metadata.reasoningSteps ? { reasoningSteps: ctx.metadata.reasoningSteps } as any : {}),
                     ...(rr?.metadata?.confidence !== undefined ? {
                       confidence: (rr.metadata.confidence >= 0.7
                         ? "high"

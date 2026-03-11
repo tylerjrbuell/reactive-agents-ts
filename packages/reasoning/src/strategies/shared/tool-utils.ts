@@ -66,7 +66,12 @@ function parseToolRequestBase(
   const prefixMatch = thought.match(/ACTION:\s*([\w\/\-]+)\(/i);
   if (!prefixMatch) return null;
 
-  const tool = prefixMatch[1];
+  // Normalize underscores to hyphens for built-in tools — small models often
+  // write final_answer instead of final-answer, scratchpad_read instead of scratchpad-read, etc.
+  const rawTool = prefixMatch[1];
+  const HYPHENATED_BUILTINS = new Set(["final-answer", "scratchpad-read", "scratchpad-write", "file-read", "file-write", "web-search", "http-get", "code-execute", "context-status", "task-complete", "spawn-agent"]);
+  const normalized = rawTool.replace(/_/g, "-");
+  const tool = HYPHENATED_BUILTINS.has(normalized) ? normalized : rawTool;
   const argsStart = (prefixMatch.index ?? 0) + prefixMatch[0].length;
   const rest = thought.slice(argsStart);
 
