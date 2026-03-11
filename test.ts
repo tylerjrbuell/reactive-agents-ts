@@ -39,7 +39,7 @@ let builder = ReactiveAgents.create()
   .withMCP(mcpServers)
   .withTools({ adaptive: true })
   .withReasoning({ defaultStrategy: "reactive" })
-  .withObservability({ verbosity: "verbose", live: true, logModelIO: false })
+  .withObservability({ verbosity: "normal", live: true, logModelIO: false })
   .withRequiredTools({ adaptive: true })
   .withMemory({ tier: "enhanced", dbPath: "./memory-db" })
   .withMemoryConsolidation({
