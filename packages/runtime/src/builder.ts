@@ -1956,12 +1956,24 @@ export class ReactiveAgentBuilder {
         // by letting sub-agents proxy tool calls through the parent's live connections.
         let parentToolServiceRef: any = null;
 
+        // Derive a descriptive kebab-case name from a task description.
+        // Extracts the primary action verb + object from the task text.
+        const deriveSubAgentName = (task: string): string => {
+          const lower = task.toLowerCase().replace(/[^a-z0-9\s]/g, " ").trim();
+          const words = lower.split(/\s+/).filter((w) => w.length > 2);
+          // Skip filler words to find meaningful action + object
+          const FILLER = new Set(["the", "and", "for", "from", "with", "that", "this", "via", "into", "then", "also", "all", "its", "are", "was", "has", "have", "been", "will", "can", "should"]);
+          const meaningful = words.filter((w) => !FILLER.has(w)).slice(0, 3);
+          if (meaningful.length === 0) return "sub-agent";
+          return meaningful.join("-").slice(0, 30);
+        };
+
         // Register the built-in spawn-agent tool when dynamic sub-agents are enabled.
         // The handler captures parentProvider/parentModel so spawned agents inherit
         // the parent's LLM config without any extra wiring required.
         if (allowDynamicSubAgents) {
           const spawnToolDef = toolsMod.createSpawnAgentTool();
-          const defaultMaxIter = dynamicSubAgentOptions?.maxIterations ?? 5;
+          const defaultMaxIter = dynamicSubAgentOptions?.maxIterations ?? 4;
 
           const spawnHandler = (args: Record<string, unknown>) =>
             Effect.tryPromise({
@@ -1970,8 +1982,12 @@ export class ReactiveAgentBuilder {
                   typeof args.task === "string"
                     ? args.task
                     : JSON.stringify(args.task ?? "");
+                // Derive a descriptive name from the task if the LLM didn't provide one.
+                // Extract key action words to build a meaningful kebab-case label.
                 const subName =
-                  typeof args.name === "string" ? args.name : "dynamic-agent";
+                  typeof args.name === "string" && args.name.trim().length > 0
+                    ? args.name.trim()
+                    : deriveSubAgentName(task);
 
                 // Extract optional persona parameters (LLM can steer sub-agent approach)
                 const subPersona = {
@@ -2047,7 +2063,29 @@ export class ReactiveAgentBuilder {
                     // from the parent (no duplicate containers).
                     // When allowedTools is specified, those tools become required —
                     // if you're constrained to specific tools, you must use them.
-                    const subAllowed = opts.allowedTools;
+                    //
+                    // Auto-scope: when no explicit tool whitelist was given,
+                    // auto-filter MCP tools by task relevance so the sub-agent
+                    // doesn't see all 40+ tools (reduces context noise + confusion).
+                    let subAllowed = opts.allowedTools;
+                    if ((!subAllowed || subAllowed.length === 0) && parentMcpToolDefs.length > 0) {
+                      const { filterToolsByRelevance } = await import("@reactive-agents/reasoning");
+                      const mcpSchemas = parentMcpToolDefs.map((t: any) => ({
+                        name: t.name as string,
+                        description: (t.description ?? "") as string,
+                        parameters: ((t.parameters ?? []) as any[]).map((p: any) => ({
+                          name: p.name as string,
+                          type: (p.type ?? "string") as string,
+                          description: p.description as string | undefined,
+                          required: p.required as boolean | undefined,
+                        })),
+                      }));
+                      const filtered = filterToolsByRelevance(opts.task, mcpSchemas);
+                      // Only scope if filtering actually reduces the set meaningfully
+                      if (filtered.primary.length > 0 && filtered.primary.length < mcpSchemas.length * 0.7) {
+                        subAllowed = [...filtered.primary.map((t) => t.name), ...toolsMod.ALWAYS_INCLUDE_TOOLS];
+                      }
+                    }
                     const subRequiredTools = subAllowed && subAllowed.length > 0
                       ? { tools: [...subAllowed], adaptive: false, maxRetries: 2 }
                       : undefined;
