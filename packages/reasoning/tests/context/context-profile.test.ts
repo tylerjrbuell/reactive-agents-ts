@@ -105,6 +105,6 @@ describe("resolveProfile", () => {
     const profile = resolveProfile("local", { toolResultMaxChars: 600 });
     expect(profile.tier).toBe("local");
     expect(profile.toolResultMaxChars).toBe(600);
-    expect(profile.compactAfterSteps).toBe(4);
+    expect(profile.compactAfterSteps).toBe(5);
   });
 });

@@ -19,7 +19,7 @@ import { StreamingTextCallback } from "@reactive-agents/core";
 import type { Task, TaskResult } from "@reactive-agents/core";
 import type { TaskError } from "@reactive-agents/core";
 import type { ContextProfile } from "@reactive-agents/reasoning";
-import { inferRequiredTools, filterToolsByRelevance } from "@reactive-agents/reasoning";
+import { inferRequiredTools, classifyToolRelevance, filterToolsByRelevance } from "@reactive-agents/reasoning";
 import { ToolService } from "@reactive-agents/tools";
 import { ObservabilityService, createProgressLogger } from "@reactive-agents/observability";
 import { GuardrailService, KillSwitchService, BehavioralContractService } from "@reactive-agents/guardrails";
@@ -610,18 +610,19 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   }),
                 );
 
+                // ── Single tool registry fetch (reused for logging, classification, and reasoning) ──
+                const cachedToolDefs = yield* Effect.serviceOption(ToolService).pipe(
+                  Effect.flatMap((opt) =>
+                    opt._tag === "Some"
+                      ? opt.value.listTools()
+                      : Effect.succeed([] as readonly any[]),
+                  ),
+                  Effect.catchAll(() => Effect.succeed([] as readonly any[])),
+                );
+
                 // ── Log strategy-select summary ──
                 if (obs && isNormal) {
-                  const toolNames = yield* Effect.serviceOption(ToolService).pipe(
-                    Effect.flatMap((opt) =>
-                      opt._tag === "Some"
-                        ? opt.value.listTools().pipe(
-                            Effect.map((tools) => tools.map((t) => t.name).join(", ")),
-                          )
-                        : Effect.succeed(""),
-                    ),
-                    Effect.catchAll(() => Effect.succeed("")),
-                  );
+                  const toolNames = cachedToolDefs.map((t: any) => t.name as string).join(", ");
                   const toolsInfo = toolNames ? ` | tools: ${toolNames}` : "";
                   yield* obs.info(`◉ [strategy]   ${ctx.selectedStrategy ?? "reactive"}${toolsInfo}`)
                     .pipe(Effect.catchAll(() => Effect.void));
@@ -629,21 +630,18 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
 
                 // ── Phase 5: AGENT_LOOP ──
 
-                // ── Adaptive required tools inference (before reasoning) ──
+                // ── LLM-based tool classification (required + relevant) ──
+                // Single structured-output call replaces both heuristic required-tools
+                // inference and adaptive tool filtering. Semantic understanding > keywords.
                 let effectiveRequiredTools = config.requiredTools?.tools;
-                if (config.requiredTools?.adaptive && !config.requiredTools?.tools?.length) {
-                  const toolDefsForInfer = yield* Effect.serviceOption(ToolService).pipe(
-                    Effect.flatMap((opt) =>
-                      opt._tag === "Some"
-                        ? opt.value.listTools()
-                        : Effect.succeed([] as readonly any[]),
-                    ),
-                    Effect.catchAll(() => Effect.succeed([] as readonly any[])),
-                  );
-
-                  if (toolDefsForInfer.length > 0) {
-                    const taskText = extractTaskText(task.input);
-                    const toolSchemas = toolDefsForInfer.map((t: any) => ({
+                let classifiedRelevantTools: readonly string[] | undefined;
+                const needsClassification =
+                  (config.requiredTools?.adaptive && !config.requiredTools?.tools?.length) ||
+                  config.adaptiveToolFiltering;
+                if (needsClassification) {
+                  const classifyResult = yield* classifyToolRelevance({
+                    taskDescription: extractTaskText(task.input),
+                    availableTools: cachedToolDefs.map((t: any) => ({
                       name: t.name as string,
                       description: (t.description ?? "") as string,
                       parameters: ((t.parameters ?? []) as any[]).map((p: any) => ({
@@ -652,45 +650,25 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         description: (p.description ?? "") as string,
                         required: Boolean(p.required),
                       })),
-                    }));
+                    })),
+                    systemPrompt: config.systemPrompt,
+                  }).pipe(
+                    // Degrade gracefully if LLM call fails — empty arrays = no filtering
+                    Effect.catchAll(() => Effect.succeed({ required: [] as readonly string[], relevant: [] as readonly string[] })),
+                  );
 
-                    // Fast path: heuristic keyword matching (no LLM call needed)
-                    // For required tools, use strict name-only matching — description
-                    // matching is too broad and marks 50+ tools as "required".
-                    // Cap at 5 to prevent death spiral from over-requiring.
-                    const { primary } = filterToolsByRelevance(taskText, toolSchemas);
-                    let inferred: readonly string[];
-
-                    // Only trust heuristic if it returns a reasonable number (≤5)
-                    if (primary.length > 0 && primary.length <= 5) {
-                      // Heuristic found a focused set — skip LLM inference
-                      inferred = primary.map(t => t.name);
-                    } else if (primary.length > 5) {
-                      // Too many matches — heuristic is too broad for required tools.
-                      // Filter down to only tools whose name appears in the task text.
-                      const taskLower = taskText.toLowerCase();
-                      const nameMatched = primary.filter(t => {
-                        const parts = t.name.replace(/[/_-]/g, " ").toLowerCase().split(/\s+/);
-                        return parts.some(p => p.length > 3 && taskLower.includes(p));
-                      });
-                      inferred = nameMatched.length > 0 && nameMatched.length <= 5
-                        ? nameMatched.map(t => t.name)
-                        : []; // Fall through to LLM if still too many
-                    } else {
-                      // Heuristic found nothing — fall back to LLM inference
-                      inferred = yield* inferRequiredTools({
-                        taskDescription: taskText,
-                        availableTools: toolSchemas,
-                        systemPrompt: config.systemPrompt,
-                      }).pipe(Effect.catchAll(() => Effect.succeed([] as readonly string[])));
+                  if (classifyResult.required.length > 0 && !config.requiredTools?.tools?.length) {
+                    effectiveRequiredTools = [...classifyResult.required];
+                    if (obs && isNormal) {
+                      yield* obs.info(`◉ [classify]   required: ${classifyResult.required.join(", ")}`)
+                        .pipe(Effect.catchAll(() => Effect.void));
                     }
-
-                    if (inferred.length > 0) {
-                      effectiveRequiredTools = [...inferred];
-                      if (obs && isNormal) {
-                        yield* obs.info(`◉ [infer-tools] required: ${inferred.join(", ")}`)
-                          .pipe(Effect.catchAll(() => Effect.void));
-                      }
+                  }
+                  if (classifyResult.relevant.length > 0) {
+                    classifiedRelevantTools = classifyResult.relevant;
+                    if (obs && isNormal) {
+                      yield* obs.info(`◉ [classify]   relevant: ${classifyResult.relevant.join(", ")}`)
+                        .pipe(Effect.catchAll(() => Effect.void));
                     }
                   }
                 }
@@ -735,6 +713,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       memoryContext: string;
                       availableTools: readonly string[];
                       availableToolSchemas?: readonly { name: string; description: string; parameters: readonly { name: string; type: string; description: string; required: boolean }[] }[];
+                      allToolSchemas?: readonly { name: string; description: string; parameters: readonly { name: string; type: string; description: string; required: boolean }[] }[];
                       strategy?: string;
                       contextProfile?: Partial<ContextProfile>;
                       systemPrompt?: string;
@@ -765,19 +744,9 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
 
                 if (reasoningOpt._tag === "Some" && !cacheHit) {
                   // ── Full reasoning path ──
-                  // Fetch full tool definitions for rich schema injection into prompts
-                  const availableToolDefs = yield* Effect.serviceOption(
-                    ToolService,
-                  ).pipe(
-                    Effect.flatMap((opt) =>
-                      opt._tag === "Some"
-                        ? opt.value.listTools()
-                        : Effect.succeed([] as readonly any[]),
-                    ),
-                    Effect.catchAll(() => Effect.succeed([] as readonly any[])),
-                  );
-                  let availableToolNames = availableToolDefs.map((t: any) => t.name as string);
-                  let availableToolSchemas = availableToolDefs.map((t: any) => ({
+                  // Reuse cached tool definitions (fetched once above)
+                  let availableToolNames = cachedToolDefs.map((t: any) => t.name as string);
+                  let availableToolSchemas = cachedToolDefs.map((t: any) => ({
                     name: t.name as string,
                     description: t.description as string,
                     parameters: (t.parameters ?? []).map((p: any) => ({
@@ -788,23 +757,33 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     })),
                   }));
 
-                  // ── Adaptive tool filtering ──
-                  // When enabled, filter the tool schemas shown to the agent to only
-                  // task-relevant tools + essential built-ins. Reduces context noise
-                  // and improves small-model accuracy. All tools remain callable by name.
-                  if (config.adaptiveToolFiltering && availableToolSchemas.length > 10) {
-                    const taskTextForFilter = extractTaskText(task.input);
-                    const { primary } = filterToolsByRelevance(taskTextForFilter, availableToolSchemas);
+                  // Snapshot the full unfiltered schemas for the completion guard
+                  const allToolSchemas = [...availableToolSchemas];
 
+                  // ── Adaptive tool filtering ──
+                  // When LLM classification produced relevant tools, use those.
+                  // Otherwise fall back to heuristic filtering.
+                  // All tools remain callable by name — filtering only affects what's
+                  // shown in the prompt to reduce context noise.
+                  if (config.adaptiveToolFiltering && availableToolSchemas.length > 10) {
                     // Always include essential tools the agent needs for internal operations
                     const ALWAYS_INCLUDE = new Set([
                       "scratchpad-read", "scratchpad-write",
                       "spawn-agent",
                     ]);
 
-                    // Merge primary + always-include + required tools
                     const requiredSet = new Set(effectiveRequiredTools ?? []);
-                    const filteredSet = new Set(primary.map(t => t.name));
+                    let filteredSet: Set<string>;
+
+                    if (classifiedRelevantTools && classifiedRelevantTools.length > 0) {
+                      // LLM-classified: use required + relevant from classification
+                      filteredSet = new Set([...classifiedRelevantTools, ...requiredSet]);
+                    } else {
+                      // Fallback: heuristic keyword matching
+                      const taskTextForFilter = extractTaskText(task.input);
+                      const { primary } = filterToolsByRelevance(taskTextForFilter, availableToolSchemas);
+                      filteredSet = new Set(primary.map(t => t.name));
+                    }
                     for (const name of ALWAYS_INCLUDE) filteredSet.add(name);
                     for (const name of requiredSet) filteredSet.add(name);
 
@@ -903,6 +882,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         memoryContext: memCtx,
                         availableTools: availableToolNames,
                         availableToolSchemas,
+                        allToolSchemas,
                         strategy: c.selectedStrategy ?? "reactive",
                         contextProfile: config.contextProfile,
                         systemPrompt: config.systemPrompt,

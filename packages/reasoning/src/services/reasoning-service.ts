@@ -33,6 +33,12 @@ export class ReasoningService extends Context.Tag("ReasoningService")<
         description: string;
         parameters: readonly { name: string; type: string; description: string; required: boolean }[];
       }[];
+      /** Full unfiltered tool schemas for completion guard namespace detection */
+      readonly allToolSchemas?: readonly {
+        name: string;
+        description: string;
+        parameters: readonly { name: string; type: string; description: string; required: boolean }[];
+      }[];
       readonly strategy?: ReasoningStrategy;
       /** Context profile for model-adaptive context engineering */
       readonly contextProfile?: Partial<ContextProfile>;

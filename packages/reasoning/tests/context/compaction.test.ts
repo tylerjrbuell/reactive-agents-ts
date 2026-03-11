@@ -180,10 +180,10 @@ describe("progressiveSummarize", () => {
   });
 
   it("uses profile thresholds for compaction boundaries", () => {
-    const localProfile = CONTEXT_PROFILES.local; // compactAfterSteps: 4, fullDetailSteps: 2
-    const steps = Array.from({ length: 5 }, (_, i) => step("thought", `Step ${i}`));
+    const localProfile = CONTEXT_PROFILES.local; // compactAfterSteps: 5, fullDetailSteps: 3
+    const steps = Array.from({ length: 6 }, (_, i) => step("thought", `Step ${i}`));
     const result = progressiveSummarize("Ctx:", steps, localProfile);
-    // With local profile (compactAfterSteps=4), 5 steps should trigger compaction
+    // With local profile (compactAfterSteps=5), 6 steps should trigger compaction
     expect(result).toContain("[Recent steps]");
   });
 

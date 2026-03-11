@@ -59,6 +59,27 @@ export interface ContextBuildInput {
   memories?: MemoryItem[];
 }
 
+/** Input for the static system prompt builder. */
+export interface StaticContextInput {
+  task: string;
+  profile: ContextProfile;
+  availableToolSchemas?: readonly ToolSchema[];
+  requiredTools?: readonly string[];
+}
+
+/** Input for the dynamic per-iteration context builder. */
+export interface DynamicContextInput {
+  task: string;
+  steps: readonly ReasoningStep[];
+  iteration: number;
+  maxIterations: number;
+  profile: ContextProfile;
+  availableToolSchemas?: readonly ToolSchema[];
+  requiredTools?: readonly string[];
+  priorContext?: string;
+  memories?: MemoryItem[];
+}
+
 // ── Constants ────────────────────────────────────────────────────────────────
 
 /** Exponential decay rate applied per iteration distance in recency scoring. */
@@ -309,7 +330,99 @@ export function buildContext(input: ContextBuildInput): string {
   sections.push(`Task: ${task}`);
 
   // 10. RULES block
-  sections.push(buildRules(availableToolSchemas, requiredTools));
+  sections.push(buildRules(availableToolSchemas, requiredTools, profile.tier));
+
+  return sections.join("\n\n");
+}
+
+// ── Split Context Builders (system prompt + per-iteration) ──────────────────
+
+/**
+ * Build the STATIC portion of context — tool schemas, RULES, task description.
+ * This content is identical across all iterations and belongs in the system prompt
+ * to avoid token waste from repetition.
+ */
+export function buildStaticContext(input: StaticContextInput): string {
+  const { task, profile, availableToolSchemas, requiredTools } = input;
+  const sections: string[] = [];
+
+  // Tool reference (full schemas — no pinned duplicate needed since both
+  // tool ref and RULES are together in the system prompt now)
+  sections.push(
+    buildToolReference(task, availableToolSchemas, requiredTools, profile.toolSchemaDetail),
+  );
+
+  // Task description
+  sections.push(`Task: ${task}`);
+
+  // RULES block
+  sections.push(buildRules(availableToolSchemas, requiredTools, profile.tier));
+
+  return sections.join("\n\n");
+}
+
+/**
+ * Build the DYNAMIC portion of context — step history, memories, iteration
+ * awareness, and completed summary. This changes every iteration.
+ */
+export function buildDynamicContext(input: DynamicContextInput): string {
+  const {
+    steps, iteration, maxIterations, profile,
+    priorContext, memories, availableToolSchemas, requiredTools,
+  } = input;
+
+  const sections: string[] = [];
+
+  // Prior context (reflexion critique, plan-execute plan, etc.)
+  if (priorContext) sections.push(priorContext);
+
+  // Memory section
+  if (memories && memories.length > 0) {
+    const relevant = memories.filter((m) => m.relevance >= MEMORY_RELEVANCE_THRESHOLD);
+    if (relevant.length > 0) {
+      const memLines = relevant.map((m) => `- ${m.content}`).join("\n");
+      sections.push(`[Relevant memories]:\n${memLines}`);
+    }
+  }
+
+  // Step history (scored older + recent)
+  if (steps.length > 0) {
+    const compactAfter = profile.compactAfterSteps ?? 6;
+    const fullDetailN = profile.fullDetailSteps ?? 4;
+
+    if (steps.length <= compactAfter) {
+      const stepLines = steps.map(formatStepForContext).join("\n");
+      sections.push(stepLines);
+    } else {
+      const recentCutoff = steps.length - fullDetailN;
+      const olderSteps = steps.slice(0, recentCutoff);
+      const recentSteps = steps.slice(recentCutoff);
+
+      if (olderSteps.length > 0) {
+        const summaryLines = olderSteps.map(summarizeStepForContext);
+        sections.push(
+          `[Earlier steps — ${olderSteps.length} steps]:\n${summaryLines.join("\n")}`,
+        );
+      }
+      const recentLines = recentSteps.map(formatStepForContext).join("\n");
+      sections.push(`[Recent steps]:\n${recentLines}`);
+    }
+  }
+
+  // Completed summary
+  const completedSummary = buildCompletedSummary(steps);
+  if (completedSummary) sections.push(completedSummary);
+
+  // Iteration awareness
+  sections.push(buildIterationAwareness(iteration, maxIterations));
+
+  // Reminder of final-answer tool when visible (nudge toward structured exit)
+  const finalAnswerSchema = (availableToolSchemas ?? []).find((t) => t.name === "final-answer");
+  if (finalAnswerSchema) {
+    sections.push(
+      `💡 The final-answer tool is available. When ALL steps are complete, call ACTION: final-answer({"output": "...", "format": "text", "summary": "..."}) instead of writing FINAL ANSWER in text.`,
+    );
+  }
 
   return sections.join("\n\n");
 }
@@ -457,33 +570,58 @@ function buildIterationAwareness(iteration: number, maxIterations: number): stri
 
 /**
  * Build the RULES block with dynamic entries for required tools and delegation.
+ * Tier-adaptive: local/mid models get 5 core rules; large/frontier get full set.
  */
 function buildRules(
   availableToolSchemas?: readonly ToolSchema[],
   requiredTools?: readonly string[],
+  tier?: "local" | "mid" | "large" | "frontier",
 ): string {
+  const t = tier ?? "mid";
+  const hasSpawnAgent = availableToolSchemas?.some((s) => s.name === "spawn-agent");
+  const hasStoredResults = availableToolSchemas?.some((s) => s.name === "scratchpad-read");
+
+  // Core rules — always included, small-model-safe count
   const rules: string[] = [
-    "1. ONE action per turn. Wait for the real result before proceeding.",
-    "2. Use EXACT parameter names from the tool reference above.",
-    "3. When you have ALL required information: FINAL ANSWER: <your answer>",
-    "4. Check 'ALREADY DONE' above. Skip completed steps.",
-    "5. Do NOT fabricate or invent data. Only use information from tool results.",
-    '6. When results show [STORED: _key], use ACTION: scratchpad-read({"key": "_key"}) to read full data BEFORE summarizing. Do NOT guess missing items from previews.',
-    "7. Trust tool results. Once a tool succeeds, do NOT repeat it.",
+    "1. ONE action per turn. Wait for the result before proceeding.",
+    "2. Use EXACT parameter names from the tool reference.",
+    "3. Do NOT fabricate data. Only use information from tool results.",
+    "4. Once a tool succeeds, do NOT repeat it.",
   ];
 
-  let ruleNum = 8;
+  let ruleNum = 5;
+
+  // Required tools rule — always included when applicable
   if (requiredTools && requiredTools.length > 0) {
     rules.push(
-      `${ruleNum++}. \u2B50 REQUIRED tools (marked above) MUST be called before giving FINAL ANSWER. Plan your approach to include them.`,
+      `${ruleNum++}. ⭐ REQUIRED tools MUST be called before giving FINAL ANSWER.`,
     );
   }
 
-  const hasSpawnAgent = availableToolSchemas?.some((t) => t.name === "spawn-agent");
-  if (hasSpawnAgent) {
-    rules.push(
-      `${ruleNum}. DELEGATION: When using spawn-agent, the sub-agent has NO knowledge of your conversation. Include ALL specific values in the "task" field: phone numbers, emails, URLs, repo names, file paths, IDs. Never use pronouns like "the user" or "the repo" \u2014 write the actual values.`,
-    );
+  // Conditional rules — only for larger models or when the feature is active
+  if (t === "large" || t === "frontier") {
+    if (hasStoredResults) {
+      rules.push(
+        `${ruleNum++}. When results show [STORED: _key], use ACTION: scratchpad-read({"key": "_key"}) to read full data.`,
+      );
+    }
+    if (hasSpawnAgent) {
+      rules.push(
+        `${ruleNum++}. DELEGATION: spawn-agent has NO context. Include ALL values (numbers, URLs, IDs) in the "task" field.`,
+      );
+    }
+  } else {
+    // For local/mid: only add scratchpad rule if scratchpad-read is available (concise version)
+    if (hasStoredResults) {
+      rules.push(
+        `${ruleNum++}. [STORED: _key] means data was saved. Use scratchpad-read to get it.`,
+      );
+    }
+    if (hasSpawnAgent) {
+      rules.push(
+        `${ruleNum++}. spawn-agent has NO context. Put ALL values in the "task" field.`,
+      );
+    }
   }
 
   return `RULES:\n${rules.join("\n")}`;

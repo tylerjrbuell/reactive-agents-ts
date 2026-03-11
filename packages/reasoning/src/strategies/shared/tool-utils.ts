@@ -521,6 +521,12 @@ export function filterToolsByRelevance(
         "repo", "repository", "file", "files", "branch", "branches",
         "content", "contents", "data", "info", "item", "items",
         "name", "path", "type", "user", "users", "team", "org",
+        // Common words that appear in both tasks and tool slugs without
+        // uniquely identifying a specific tool
+        "message", "messages", "comment", "comments", "release", "releases",
+        "latest", "label", "labels", "status", "result", "results",
+        "request", "review", "search", "code", "tags", "group",
+        "pending", "reply", "issue", "issues",
       ]);
       const distinctiveParts = allSlugParts.filter(
         (sp) => sp.length > 3 && !GENERIC_SLUG_TOKENS.has(sp),
@@ -633,15 +639,21 @@ export function compressToolResult(
         })
         .join("\n");
 
-      const remaining = parsed.length - previewItems;
+      const shownCount = Math.min(previewItems, parsed.length);
+      const remaining = parsed.length - shownCount;
       const moreStr = remaining > 0 ? `\n  ...${remaining} more` : "";
+      // When the preview covers most/all items, tell the agent it can proceed
+      // without a scratchpad-read — avoids wasting an iteration.
+      const coverageHint = remaining <= 2
+        ? `\n  ✓ Preview covers ${remaining === 0 ? "all" : "nearly all"} items — you can use this data directly.`
+        : `\n  — use scratchpad-read("${key}") ONLY if you need items beyond the preview.`;
       const content =
         `[STORED: ${key} | ${toolName}]\n` +
         `Type: Array(${parsed.length}) | Schema: ${schema}\n` +
-        `Preview (first ${Math.min(previewItems, parsed.length)}):\n` +
+        `Preview (first ${shownCount}):\n` +
         items +
         moreStr +
-        `\n  — use scratchpad-read("${key}") or | transform: to access full data`;
+        coverageHint;
 
       return { content, stored: { key, value: result } };
     }

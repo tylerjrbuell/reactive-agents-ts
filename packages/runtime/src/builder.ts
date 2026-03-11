@@ -2285,6 +2285,8 @@ export class ReactiveAgent {
 
   /** @internal Last debrief from a completed run — used as context in chat() calls. */
   private _lastDebrief?: AgentDebrief;
+  /** @internal Tool observations from the last run — gives chat access to actual data. */
+  private _lastRunObservations: string[] = [];
   /** @internal Conversation history for the agent-level chat context. */
   private _chatHistory: ChatMessage[] = [];
 
@@ -2420,6 +2422,16 @@ export class ReactiveAgent {
             };
             // Capture debrief for use as context in subsequent chat() calls
             if (agentResult.debrief) this._lastDebrief = agentResult.debrief;
+            // Capture tool observations so chat() has access to actual data
+            const steps = ((r.metadata as any)?.reasoningSteps ?? []) as Array<{
+              type: string;
+              content: string;
+              metadata?: { observationResult?: { success?: boolean }; toolUsed?: string };
+            }>;
+            this._lastRunObservations = steps
+              .filter((s) => s.type === "observation" && s.metadata?.observationResult?.success !== false)
+              .map((s) => s.content)
+              .filter((c) => c.length > 10 && !c.startsWith("⚠️") && !c.startsWith("✓ final-answer"));
             return agentResult;
           }),
           Effect.mapError(
@@ -2503,7 +2515,7 @@ export class ReactiveAgent {
     _history?: ChatMessage[],
   ): Promise<ChatReply> {
     const useTools = options?.useTools ?? requiresTools(message);
-    const contextSummary = buildContextSummary(this._lastDebrief);
+    const contextSummary = buildContextSummary(this._lastDebrief, this._lastRunObservations);
 
     if (!useTools) {
       // Direct LLM path — fast, no tool overhead
@@ -2520,7 +2532,11 @@ export class ReactiveAgent {
     }
 
     // Tool-capable path — full agent run with capped iterations
-    const result = await this.run(message);
+    // Prepend prior run context so the agent knows what happened before
+    const enrichedMessage = contextSummary
+      ? `Context from prior run:\n${contextSummary}\n\nNew request: ${message}`
+      : message;
+    const result = await this.run(enrichedMessage);
     return {
       message: result.output,
       toolsUsed: result.debrief?.toolsUsed.map((t) => t.name),

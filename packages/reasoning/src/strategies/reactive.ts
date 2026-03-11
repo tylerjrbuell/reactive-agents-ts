@@ -30,6 +30,8 @@ interface ReactiveInput {
   readonly memoryContext: string;
   /** Full tool schemas with parameter info — preferred over toolNames */
   readonly availableToolSchemas?: readonly ToolSchema[];
+  /** Full unfiltered tool schemas — used by completion guard to detect all namespaces */
+  readonly allToolSchemas?: readonly ToolSchema[];
   /** Fallback: tool names only (legacy) */
   readonly availableTools: readonly string[];
   readonly config: ReasoningConfig;
@@ -96,6 +98,7 @@ export const executeReactive = (
       task: input.taskDescription,
       systemPrompt: input.systemPrompt,
       availableToolSchemas: toolSchemas,
+      allToolSchemas: input.allToolSchemas,
       priorContext,
       contextProfile: input.contextProfile,
       resultCompression: input.resultCompression,

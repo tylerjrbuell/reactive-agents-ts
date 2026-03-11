@@ -50,6 +50,8 @@ export interface KernelInput {
   readonly task: string;
   readonly systemPrompt?: string;
   readonly availableToolSchemas?: readonly ToolSchema[];
+  /** Full unfiltered tool schemas — used by completion guard to detect all MCP namespaces */
+  readonly allToolSchemas?: readonly ToolSchema[];
   readonly priorContext?: string;
   readonly contextProfile?: Partial<ContextProfile>;
   readonly resultCompression?: ResultCompressionConfig;
@@ -135,6 +137,8 @@ export interface LoopDetectionConfig {
   readonly maxSameToolCalls?: number;
   /** Max identical thought strings in the last N steps before aborting (default: 3) */
   readonly maxRepeatedThoughts?: number;
+  /** Max consecutive thought steps without any tool action before aborting (default: 3) */
+  readonly maxConsecutiveThoughts?: number;
 }
 
 export interface KernelRunOptions {

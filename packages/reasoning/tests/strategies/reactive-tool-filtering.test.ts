@@ -22,13 +22,16 @@ function makeStreamResponse(content: string): Stream.Stream<StreamEvent, never> 
 }
 
 // Helper to create a capturing LLM layer
+// Tool schemas are now in systemPrompt, so capture both system + user content
 async function createCapturingLayer() {
   let capturedContent = "";
   const { LLMService: LLMSvc } = await import("@reactive-agents/llm-provider");
   const layer = Layer.succeed(LLMSvc, {
     complete: (req: any) => {
       const lastMsg = req.messages[req.messages.length - 1];
-      capturedContent = typeof lastMsg?.content === "string" ? lastMsg.content : "";
+      const userContent = typeof lastMsg?.content === "string" ? lastMsg.content : "";
+      const sysContent = typeof req.systemPrompt === "string" ? req.systemPrompt : "";
+      capturedContent = sysContent + "\n" + userContent;
       return Effect.succeed({
         content: "FINAL ANSWER: done",
         stopReason: "end_turn" as const,
@@ -38,7 +41,9 @@ async function createCapturingLayer() {
     },
     stream: (req: any) => {
       const lastMsg = req.messages[req.messages.length - 1];
-      capturedContent = typeof lastMsg?.content === "string" ? lastMsg.content : "";
+      const userContent = typeof lastMsg?.content === "string" ? lastMsg.content : "";
+      const sysContent = typeof req.systemPrompt === "string" ? req.systemPrompt : "";
+      capturedContent = sysContent + "\n" + userContent;
       return Effect.succeed(makeStreamResponse("FINAL ANSWER: done"));
     },
     completeStructured: () => Effect.succeed({} as any),
@@ -86,10 +91,8 @@ describe("Instruction-aware tool filtering", () => {
     );
 
     const content = getCaptured();
-    // Tool reference block should always be present with the new context engine
+    // Tool names should appear in the tool reference section
     expect(content).toContain("github/list_commits");
-    expect(content).toContain("[Tool reference");
-    // Tool names for all tools should appear in the pinned reference
     expect(content).toContain("file-write");
     expect(content).toContain("web-search");
   });
@@ -157,12 +160,10 @@ describe("Instruction-aware tool filtering", () => {
     );
 
     const content = getCaptured();
-    // All tools appear in the pinned compact tool reference
+    // All tools appear in the tool reference section
     expect(content).toContain("github/list_commits");
     expect(content).toContain("file-write");
     expect(content).toContain("web-search");
-    // New context engine uses compact pinned reference block
-    expect(content).toContain("[Tool reference");
   });
 
   it("all tools are secondary when none mentioned in task", async () => {
@@ -186,12 +187,11 @@ describe("Instruction-aware tool filtering", () => {
     );
 
     const content = getCaptured();
-    // All tools appear in the pinned compact tool reference regardless of task keywords
+    // All tools appear in the tool reference section regardless of task keywords
     expect(content).toContain("file-write");
     expect(content).toContain("web-search");
-    // New context engine uses compact pinned reference (parameter names, not full descriptions)
-    expect(content).toContain("[Tool reference");
-    expect(content).toContain("path: string");
-    expect(content).toContain("query: string");
+    // Parameter names appear in the tool reference
+    expect(content).toContain("path");
+    expect(content).toContain("query");
   });
 });
