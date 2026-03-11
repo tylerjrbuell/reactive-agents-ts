@@ -146,6 +146,46 @@ function normalizeTripleQuotes(input: string): string {
 }
 
 /**
+ * Escape literal control characters (newlines, tabs, CRs) that appear inside
+ * JSON string values. LLMs frequently produce JSON with unescaped newlines in
+ * multi-line message content, which causes JSON.parse() to fail.
+ *
+ * Walks the string character-by-character, tracking whether we're inside a
+ * JSON string (between unescaped double-quotes). Inside strings, replaces
+ * literal \n → \\n, \r → \\r, \t → \\t.
+ */
+function repairJsonControlChars(json: string): string {
+  let inString = false;
+  let escaped = false;
+  let result = "";
+  for (let i = 0; i < json.length; i++) {
+    const ch = json[i]!;
+    if (escaped) {
+      result += ch;
+      escaped = false;
+      continue;
+    }
+    if (ch === "\\") {
+      escaped = true;
+      result += ch;
+      continue;
+    }
+    if (ch === '"') {
+      inString = !inString;
+      result += ch;
+      continue;
+    }
+    if (inString) {
+      if (ch === "\n") { result += "\\n"; continue; }
+      if (ch === "\r") { result += "\\r"; continue; }
+      if (ch === "\t") { result += "\\t"; continue; }
+    }
+    result += ch;
+  }
+  return result;
+}
+
+/**
  * Normalize tool-specific raw output to compact semantic representations.
  */
 function normalizeObservation(toolName: string, result: string): string {
@@ -202,8 +242,11 @@ function resolveToolArgs(
   const trimmed = normalizeTripleQuotes(toolRequest.input.trim());
 
   if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+    // Escape literal newlines/tabs/CRs inside JSON string values —
+    // LLMs often produce unescaped control characters that break JSON.parse.
+    const repaired = repairJsonControlChars(trimmed);
     try {
-      const parsed = JSON.parse(trimmed);
+      const parsed = JSON.parse(repaired);
       if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
         return Effect.succeed(parsed as Record<string, unknown>);
       }

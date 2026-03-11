@@ -138,6 +138,8 @@ describe("runKernel", () => {
         maxIterations: 3,
         strategy: "guard",
         kernelType: "test",
+        // Disable consecutive-thought loop detection so we test pure max-iterations guard
+        loopDetection: { maxConsecutiveThoughts: 999, maxRepeatedThoughts: 999, maxSameToolCalls: 999 },
       }).pipe(Effect.provide(testLayer)),
     );
 

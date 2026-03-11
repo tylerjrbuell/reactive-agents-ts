@@ -32,6 +32,8 @@ export {
   scoreContextItem,
   allocateContextBudget,
   buildContext,
+  buildStaticContext,
+  buildDynamicContext,
 } from "./context-engine.js";
 export type {
   ContextItem,
@@ -39,4 +41,6 @@ export type {
   ScoringContext,
   BudgetResult,
   ContextBuildInput,
+  StaticContextInput,
+  DynamicContextInput,
 } from "./context-engine.js";

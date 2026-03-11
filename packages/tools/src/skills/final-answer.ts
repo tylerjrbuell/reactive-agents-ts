@@ -56,21 +56,22 @@ export interface FinalAnswerVisibility {
 /**
  * Returns true when it is appropriate to show the final-answer tool in the schema.
  *
- * All four conditions must hold:
+ * Conditions:
  * 1. Every required tool has been called.
  * 2. At least 2 iterations have elapsed (prevents instant completion).
- * 3. No pending errors exist.
- * 4. At least one non-meta tool has been invoked.
+ * 3. At least one non-meta tool has been invoked.
+ * 4. No pending errors exist — BUT after iteration 4, errors are forgiven
+ *    (the agent has had enough time to recover; blocking it causes spinning).
  */
 export function shouldShowFinalAnswer(input: FinalAnswerVisibility): boolean {
   // All required tools must be called
   if (!input.requiredTools.every((t) => input.requiredToolsCalled.has(t))) return false;
   // Must be at least iteration 2
   if (input.iteration < 2) return false;
-  // No pending errors
-  if (input.hasErrors) return false;
   // At least one non-meta tool must have been called
   if (!input.hasNonMetaToolCalled) return false;
+  // Errors block early completion but are forgiven after iteration 4
+  if (input.hasErrors && input.iteration < 4) return false;
   return true;
 }
 

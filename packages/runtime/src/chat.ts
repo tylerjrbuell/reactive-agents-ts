@@ -30,24 +30,83 @@ export interface SessionOptions {
 
 // ─── Intent classifier (heuristic, zero tokens) ────────────────────────────
 
+/**
+ * Heuristic intent classifier — returns true when the message NEEDS tools
+ * to answer (e.g. "search for X", "send a message to Y").
+ *
+ * Returns false for conversational / reflective messages even if they contain
+ * tool-adjacent words like "found", "sent", "created" — these refer to past
+ * actions, not new tool invocations.
+ *
+ * Priority: false positives (routing to tool path unnecessarily) are worse
+ * than false negatives (missing a tool need) because the tool path loses
+ * chat context. When in doubt, route to direct LLM.
+ */
 const TOOL_INTENT_PATTERNS = [
-  /\b(search|fetch|find|get|check|look up|what is the current|what are the latest)\b/i,
-  /\b(write|create|save|send|post|update|delete)\b/i,
-  /\b(run|execute|calculate|compute)\b/i,
+  // Active imperatives — user wants the agent to DO something now
+  /\b(search for|fetch|look up|what is the current|what are the latest)\b/i,
+  /\b(write to|create a|save to|send a|post to|update the|delete the)\b/i,
+  /\b(run this|execute this|calculate|compute)\b/i,
+];
+
+// Conversational patterns that override tool intent — past tense, reflective
+const CHAT_OVERRIDE_PATTERNS = [
+  /\b(what did you|tell me about|which one|summarize|explain|describe|how did)\b/i,
+  /\b(in the last run|earlier|previous|before)\b/i,
 ];
 
 export function requiresTools(message: string): boolean {
+  // Conversational overrides take priority — these are about past actions, not new ones
+  if (CHAT_OVERRIDE_PATTERNS.some((p) => p.test(message))) return false;
   return TOOL_INTENT_PATTERNS.some((p) => p.test(message));
 }
 
 // ─── Context builder from debrief ─────────────────────────────────────────
 
-export function buildContextSummary(lastDebrief?: AgentDebrief): string {
+export function buildContextSummary(
+  lastDebrief?: AgentDebrief,
+  observations?: readonly string[],
+): string {
   if (!lastDebrief) return "";
-  const parts = [`Last run summary: ${lastDebrief.summary}`];
+  const parts = [
+    `## Last Run Results`,
+    `Outcome: ${lastDebrief.outcome} (confidence: ${lastDebrief.confidence})`,
+    `Summary: ${lastDebrief.summary}`,
+  ];
   if (lastDebrief.keyFindings.length > 0) {
-    parts.push(`Key findings: ${lastDebrief.keyFindings.join("; ")}`);
+    parts.push(`Key findings:\n${lastDebrief.keyFindings.map((f) => `- ${f}`).join("\n")}`);
   }
+  if (lastDebrief.toolsUsed.length > 0) {
+    parts.push(`Tools used: ${lastDebrief.toolsUsed.map((t) => `${t.name} (${t.calls}x, ${t.successRate}% success)`).join(", ")}`);
+  }
+  if (lastDebrief.errorsEncountered.length > 0) {
+    parts.push(`Errors: ${lastDebrief.errorsEncountered.join("; ")}`);
+  }
+  if (lastDebrief.metrics) {
+    parts.push(`Metrics: ${lastDebrief.metrics.iterations} iterations, ${lastDebrief.metrics.tokens} tokens, ${(lastDebrief.metrics.duration / 1000).toFixed(1)}s`);
+  }
+
+  // Include actual tool results so the chat can reference specific data
+  if (observations && observations.length > 0) {
+    // Cap total observation text to ~3000 chars to avoid blowing up context
+    let totalChars = 0;
+    const included: string[] = [];
+    for (const obs of observations) {
+      if (totalChars + obs.length > 3000) {
+        // Truncate long observations to fit within budget
+        const remaining = 3000 - totalChars;
+        if (remaining > 100) {
+          included.push(obs.slice(0, remaining) + "…");
+        }
+        break;
+      }
+      included.push(obs);
+      totalChars += obs.length;
+    }
+    parts.push(`\n## Tool Results (from last run)\n${included.map((o, i) => `### Result ${i + 1}\n${o}`).join("\n\n")}`);
+  }
+
+  parts.push(`\nUse this information to answer questions about what you did, found, or accomplished. Reference specific data from tool results when answering.`);
   return parts.join("\n");
 }
 

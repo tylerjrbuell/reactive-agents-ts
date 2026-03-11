@@ -242,11 +242,13 @@ describe("ReactiveStrategy — real tool execution", () => {
     // When availableTools is populated, the context should mention them
     let capturedPrompt = "";
 
+    // Tool schemas and RULES are now in systemPrompt, so capture both
     const capturingLLMLayer = Layer.succeed(LLMService, {
-      complete: (req: { messages: { role: string; content: string }[] }) => {
+      complete: (req: any) => {
         const lastMsg = req.messages[req.messages.length - 1];
-        capturedPrompt =
-          typeof lastMsg?.content === "string" ? lastMsg.content : "";
+        const userContent = typeof lastMsg?.content === "string" ? lastMsg.content : "";
+        const sysContent = typeof req.systemPrompt === "string" ? req.systemPrompt : "";
+        capturedPrompt = sysContent + "\n" + userContent;
         return Effect.succeed({
           content: "FINAL ANSWER: done",
           stopReason: "end_turn" as const,
@@ -259,10 +261,11 @@ describe("ReactiveStrategy — real tool execution", () => {
           model: "test",
         });
       },
-      stream: (req: { messages: { role: string; content: string }[] }) => {
+      stream: (req: any) => {
         const lastMsg = req.messages[req.messages.length - 1];
-        capturedPrompt =
-          typeof lastMsg?.content === "string" ? lastMsg.content : "";
+        const userContent = typeof lastMsg?.content === "string" ? lastMsg.content : "";
+        const sysContent = typeof req.systemPrompt === "string" ? req.systemPrompt : "";
+        capturedPrompt = sysContent + "\n" + userContent;
         return Effect.succeed(
           Stream.make(
             { type: "text_delta" as const, text: "FINAL ANSWER: done" },

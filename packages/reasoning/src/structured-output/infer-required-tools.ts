@@ -1,10 +1,11 @@
 /**
- * Adaptive Required Tools Inference — LLM-powered pre-reasoning analysis.
+ * Adaptive Tool Classification — LLM-powered pre-reasoning analysis.
  *
- * Analyzes the task description and available tool definitions to determine
- * which tools MUST be called for the task to be considered complete.
- * Feeds results into the existing `requiredTools` guard in the kernel runner.
+ * Analyzes the task description and available tool definitions to determine:
+ *   1. Which tools MUST be called for the task to be considered complete (required)
+ *   2. Which tools are relevant and should be shown to the agent (relevant)
  *
+ * Feeds results into the `requiredTools` guard and adaptive tool filtering.
  * Uses the structured output pipeline (5-layer fallback) for reliable extraction.
  */
 import { Effect, Schema } from "effect";
@@ -22,6 +23,13 @@ const InferredToolSchema = Schema.Struct({
 const InferRequiredToolsResultSchema = Schema.Struct({
   requiredTools: Schema.Array(InferredToolSchema),
   reasoning: Schema.String,
+});
+
+// ── Schema for the combined classification result ──
+
+const ToolClassificationResultSchema = Schema.Struct({
+  required: Schema.Array(Schema.String),
+  relevant: Schema.Array(Schema.String),
 });
 
 type InferRequiredToolsResult = typeof InferRequiredToolsResultSchema.Type;
@@ -133,4 +141,93 @@ Respond with JSON matching this schema:
     );
 
     return validated.map((t) => t.name);
+  });
+
+// ── Combined tool classification result ──
+
+export interface ToolClassificationResult {
+  /** Tools that MUST be called for the task to succeed */
+  readonly required: readonly string[];
+  /** Tools that are relevant and should be shown to the agent (includes required) */
+  readonly relevant: readonly string[];
+}
+
+/**
+ * LLM-powered tool classification — determines both required and relevant tools
+ * in a single structured output call.
+ *
+ * Replaces heuristic keyword matching with semantic understanding of the task.
+ * Used by the execution engine for:
+ *   1. Adaptive tool filtering (show only relevant tools to reduce context noise)
+ *   2. Required tools enforcement (agent must call these before completing)
+ *
+ * The call is cheap (~200-400 tokens) and runs once before reasoning starts.
+ */
+export const classifyToolRelevance = (
+  config: InferRequiredToolsConfig,
+): Effect.Effect<ToolClassificationResult, Error, LLMService> =>
+  Effect.gen(function* () {
+    if (config.availableTools.length === 0) {
+      return { required: [], relevant: [] };
+    }
+
+    // Build compact tool list — name + truncated description only (no params, saves tokens)
+    const toolLines = config.availableTools
+      .map((t) => `- ${t.name}: ${(t.description || "no description").slice(0, 100)}`)
+      .join("\n");
+
+    const prompt = `Given this task and tool list, classify which tools are needed.
+
+TASK: ${config.taskDescription}
+
+TOOLS:
+${toolLines}
+
+Respond with JSON:
+{
+  "required": ["tools the task CANNOT succeed without"],
+  "relevant": ["tools that MAY help but aren't strictly required"]
+}
+
+Rules:
+- "required" = tools that MUST be called. The task explicitly asks for an action that only this tool can perform (e.g. "send a Signal message" → signal/send_message_to_user). Be strict — typically 1-3 tools.
+- "relevant" = tools that could assist the agent (e.g. tools from the same service namespace as required tools, or tools whose capabilities match the task context). Always include scratchpad-read, scratchpad-write.
+- If the task mentions a service name (e.g. "Signal", "GitHub"), include the SPECIFIC action tools needed, not all tools from that namespace.
+- An empty required list is valid for simple questions that need no tools.
+- Use EXACT tool names from the list above.`;
+
+    const result = yield* extractStructuredOutput({
+      schema: ToolClassificationResultSchema,
+      prompt,
+      systemPrompt: "You are a tool classifier. Output only valid JSON. Be precise.",
+      maxRetries: 1,
+      temperature: 0,
+      maxTokens: 500,
+    });
+
+    // Validate tool names against available set
+    const availableNames = new Set(config.availableTools.map((t) => t.name));
+    const required = result.data.required.filter((n) => availableNames.has(n));
+    const relevant = result.data.relevant.filter((n) => availableNames.has(n));
+
+    // Emit EventBus event for observability
+    yield* Effect.serviceOption(EventBus).pipe(
+      Effect.flatMap((opt) =>
+        opt._tag === "Some"
+          ? opt.value
+              .publish({
+                _tag: "ReasoningStepCompleted",
+                taskId: "classify-tool-relevance",
+                strategy: "classify-tool-relevance",
+                step: 1,
+                totalSteps: 1,
+                thought: `Classified tools — required: [${required.join(", ")}], relevant: [${relevant.join(", ")}]`,
+              })
+              .pipe(Effect.catchAll(() => Effect.void))
+          : Effect.void,
+      ),
+      Effect.catchAll(() => Effect.void),
+    );
+
+    return { required, relevant };
   });
