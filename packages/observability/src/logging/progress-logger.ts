@@ -1,5 +1,5 @@
-import type { ObservabilityService } from "../service.js";
 import { Effect } from "effect";
+import { ObservabilityService } from "../observability-service.js";
 
 export interface IterationProgress {
   readonly iteration: number;
@@ -17,7 +17,7 @@ export interface IterationProgress {
  *
  * Usage:
  * ```ts
- * const logger = new ProgressLogger(obs, verbosity);
+ * const logger = new ProgressLogger(verbosity);
  * yield* logger.logIteration({
  *   iteration: 1,
  *   phase: "thought",
@@ -27,7 +27,6 @@ export interface IterationProgress {
  */
 export class ProgressLogger {
   constructor(
-    private obs: ObservabilityService | undefined,
     private verbosity: "minimal" | "normal" | "verbose" | "debug",
   ) {}
 
@@ -39,51 +38,55 @@ export class ProgressLogger {
    * - Errors with context
    */
   logIteration(progress: IterationProgress): Effect.Effect<void> {
-    if (!this.obs) return Effect.void;
+    const verbosity = this.verbosity;
+    return Effect.gen(function* () {
+      const obsOption = yield* Effect.serviceOption(ObservabilityService);
+      if (!obsOption._tag || obsOption._tag === "None") return;
 
-    const isNormal = this.verbosity !== "minimal";
-    const isVerbose = this.verbosity === "verbose" || this.verbosity === "debug";
+      const obs = obsOption.value;
+      const isNormal = verbosity !== "minimal";
+      const isVerbose = verbosity === "verbose" || verbosity === "debug";
 
-    if (!isNormal) return Effect.void;
+      if (!isNormal) return;
 
-    // Format iteration header
-    const iterLabel = progress.maxIterations
-      ? `[${progress.iteration}/${progress.maxIterations}]`
-      : `[${progress.iteration}]`;
+      // Format iteration header
+      const iterLabel = progress.maxIterations
+        ? `[${progress.iteration}/${progress.maxIterations}]`
+        : `[${progress.iteration}]`;
 
-    switch (progress.phase) {
-      case "thought": {
-        // Show current thinking at normal verbosity
-        const summary = progress.content.substring(0, 80);
-        const msg = `  ┄ ${iterLabel} [thought] ${summary}${progress.content.length > 80 ? "..." : ""}`;
-        return this.obs.debug(msg).pipe(Effect.catchAll(() => Effect.void));
-      }
-
-      case "action": {
-        // Show tool call at normal verbosity
-        if (progress.toolName) {
-          const status = progress.toolStatus === "error" ? "❌" : "→";
-          const msg = `  ┄ ${iterLabel} [action]  ${progress.toolName}() ${status}`;
-          return this.obs.info(msg).pipe(Effect.catchAll(() => Effect.void));
+      switch (progress.phase) {
+        case "thought": {
+          // Show current thinking at normal verbosity
+          const summary = progress.content.substring(0, 80);
+          const msg = `  ┄ ${iterLabel} [thought] ${summary}${progress.content.length > 80 ? "..." : ""}`;
+          yield* obs.debug(msg).pipe(Effect.catchAll(() => Effect.void));
+          break;
         }
-        break;
-      }
 
-      case "observation": {
-        // Show tool result at verbose verbosity
-        if (isVerbose && progress.toolName) {
-          const status = progress.toolStatus === "success" ? "✓" : "⚠";
-          const msg = `  ┄ ${iterLabel} [obs]     ${progress.toolName}: ${status}`;
-          return this.obs.debug(msg).pipe(Effect.catchAll(() => Effect.void));
-        } else if (progress.toolStatus === "error" && progress.errorMessage) {
-          const msg = `  ✗ ${iterLabel} [error]   ${progress.toolName ?? "unknown"}: ${progress.errorMessage}`;
-          return this.obs.warn(msg).pipe(Effect.catchAll(() => Effect.void));
+        case "action": {
+          // Show tool call at normal verbosity
+          if (progress.toolName) {
+            const status = progress.toolStatus === "error" ? "❌" : "→";
+            const msg = `  ┄ ${iterLabel} [action]  ${progress.toolName}() ${status}`;
+            yield* obs.info(msg).pipe(Effect.catchAll(() => Effect.void));
+          }
+          break;
         }
-        break;
-      }
-    }
 
-    return Effect.void;
+        case "observation": {
+          // Show tool result at verbose verbosity
+          if (isVerbose && progress.toolName) {
+            const status = progress.toolStatus === "success" ? "✓" : "⚠";
+            const msg = `  ┄ ${iterLabel} [obs]     ${progress.toolName}: ${status}`;
+            yield* obs.debug(msg).pipe(Effect.catchAll(() => Effect.void));
+          } else if (progress.toolStatus === "error" && progress.errorMessage) {
+            const msg = `  ✗ ${iterLabel} [error]   ${progress.toolName ?? "unknown"}: ${progress.errorMessage}`;
+            yield* obs.warn(msg).pipe(Effect.catchAll(() => Effect.void));
+          }
+          break;
+        }
+      }
+    });
   }
 
   /**
@@ -95,17 +98,24 @@ export class ProgressLogger {
     durationMs: number,
     errorMessage?: string,
   ): Effect.Effect<void> {
-    if (!this.obs) return Effect.void;
+    const verbosity = this.verbosity;
+    return Effect.gen(function* () {
+      const obsOption = yield* Effect.serviceOption(ObservabilityService);
+      if (!obsOption._tag || obsOption._tag === "None") return;
 
-    const isNormal = this.verbosity !== "minimal";
-    if (!isNormal) return Effect.void;
+      const obs = obsOption.value;
+      const isNormal = verbosity !== "minimal";
+      if (!isNormal) return;
 
-    const statusIcon = status === "success" ? "✓" : status === "error" ? "✗" : status === "timeout" ? "⏱" : "→";
-    const msg = `    ${statusIcon} ${toolName.padEnd(15)} ${durationMs.toString().padStart(4)}ms${errorMessage ? ` — ${errorMessage}` : ""}`;
+      const statusIcon = status === "success" ? "✓" : status === "error" ? "✗" : status === "timeout" ? "⏱" : "→";
+      const msg = `    ${statusIcon} ${toolName.padEnd(15)} ${durationMs.toString().padStart(4)}ms${errorMessage ? ` — ${errorMessage}` : ""}`;
 
-    return status === "error" || status === "timeout"
-      ? this.obs.warn(msg).pipe(Effect.catchAll(() => Effect.void))
-      : this.obs.debug(msg).pipe(Effect.catchAll(() => Effect.void));
+      if (status === "error" || status === "timeout") {
+        yield* obs.warn(msg).pipe(Effect.catchAll(() => Effect.void));
+      } else {
+        yield* obs.debug(msg).pipe(Effect.catchAll(() => Effect.void));
+      }
+    });
   }
 
   /**
@@ -116,13 +126,18 @@ export class ProgressLogger {
     label: string,
     details?: Record<string, unknown>,
   ): Effect.Effect<void> {
-    if (!this.obs) return Effect.void;
+    const verbosity = this.verbosity;
+    return Effect.gen(function* () {
+      const obsOption = yield* Effect.serviceOption(ObservabilityService);
+      if (!obsOption._tag || obsOption._tag === "None") return;
 
-    const isVerbose = this.verbosity === "verbose" || this.verbosity === "debug";
-    if (!isVerbose) return Effect.void;
+      const obs = obsOption.value;
+      const isVerbose = verbosity === "verbose" || verbosity === "debug";
+      if (!isVerbose) return;
 
-    const msg = `  📍 [${iteration}] ${label}${details ? ` ${JSON.stringify(details)}` : ""}`;
-    return this.obs.info(msg).pipe(Effect.catchAll(() => Effect.void));
+      const msg = `  📍 [${iteration}] ${label}${details ? ` ${JSON.stringify(details)}` : ""}`;
+      yield* obs.info(msg).pipe(Effect.catchAll(() => Effect.void));
+    });
   }
 
   /**
@@ -134,27 +149,31 @@ export class ProgressLogger {
     toolsExecuted: string[],
     completionReason?: string,
   ): Effect.Effect<void> {
-    if (!this.obs) return Effect.void;
+    const verbosity = this.verbosity;
+    return Effect.gen(function* () {
+      const obsOption = yield* Effect.serviceOption(ObservabilityService);
+      if (!obsOption._tag || obsOption._tag === "None") return;
 
-    const isVerbose = this.verbosity === "verbose" || this.verbosity === "debug";
-    const isNormal = this.verbosity !== "minimal";
+      const obs = obsOption.value;
+      const isVerbose = verbosity === "verbose" || verbosity === "debug";
+      const isNormal = verbosity !== "minimal";
 
-    if (!isVerbose && !isNormal) return Effect.void;
+      if (!isVerbose && !isNormal) return;
 
-    const tools = toolsExecuted.length > 0 ? `${toolsExecuted.length} tools` : "no tools";
-    const reason = completionReason ? ` — ${completionReason}` : "";
-    const msg = `  ✓ Iter ${iteration}: ${tokensUsed} tok, ${tools}${reason}`;
+      const tools = toolsExecuted.length > 0 ? `${toolsExecuted.length} tools` : "no tools";
+      const reason = completionReason ? ` — ${completionReason}` : "";
+      const msg = `  ✓ Iter ${iteration}: ${tokensUsed} tok, ${tools}${reason}`;
 
-    return this.obs.debug(msg).pipe(Effect.catchAll(() => Effect.void));
+      yield* obs.debug(msg).pipe(Effect.catchAll(() => Effect.void));
+    });
   }
 }
 
 /**
- * Helper to create a progress logger from observability service
+ * Helper to create a progress logger
  */
 export function createProgressLogger(
-  obs: ObservabilityService | undefined,
   verbosity: "minimal" | "normal" | "verbose" | "debug",
 ): ProgressLogger {
-  return new ProgressLogger(obs, verbosity);
+  return new ProgressLogger(verbosity);
 }
