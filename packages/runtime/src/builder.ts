@@ -2422,16 +2422,35 @@ export class ReactiveAgent {
             };
             // Capture debrief for use as context in subsequent chat() calls
             if (agentResult.debrief) this._lastDebrief = agentResult.debrief;
-            // Capture tool observations so chat() has access to actual data
+            // Capture reasoning context so chat() has access to actual data.
+            // Includes: tool observations + agent analysis thoughts (which contain
+            // the synthesized data from tool results, not just compressed previews).
             const steps = ((r.metadata as any)?.reasoningSteps ?? []) as Array<{
               type: string;
               content: string;
               metadata?: { observationResult?: { success?: boolean }; toolUsed?: string };
             }>;
-            this._lastRunObservations = steps
-              .filter((s) => s.type === "observation" && s.metadata?.observationResult?.success !== false)
-              .map((s) => s.content)
-              .filter((c) => c.length > 10 && !c.startsWith("⚠️") && !c.startsWith("✓ final-answer"));
+            const contextParts: string[] = [];
+            for (let i = 0; i < steps.length; i++) {
+              const s = steps[i]!;
+              if (s.type === "observation") {
+                // Include successful observations (tool results)
+                if (s.metadata?.observationResult?.success !== false &&
+                    s.content.length > 10 &&
+                    !s.content.startsWith("⚠️") &&
+                    !s.content.startsWith("✓ final-answer")) {
+                  contextParts.push(`[Tool result]: ${s.content}`);
+                }
+              } else if (s.type === "thought" && i > 0) {
+                // Include analysis thoughts that follow observations — these contain
+                // the actual synthesized data (e.g. commit summaries, parsed results).
+                const prev = steps[i - 1];
+                if (prev?.type === "observation" && s.content.length > 50) {
+                  contextParts.push(`[Agent analysis]: ${s.content}`);
+                }
+              }
+            }
+            this._lastRunObservations = contextParts;
             return agentResult;
           }),
           Effect.mapError(
