@@ -182,9 +182,9 @@ export const createSubAgentExecutor = (
         ? [...new Set([...baseTools, ...ALWAYS_INCLUDE_TOOLS])]
         : undefined as unknown as readonly string[];
 
-      // Fix 2: Cap sub-agent maxIterations to 6 to prevent spin-out.
-      // Sub-agents should complete focused tasks quickly; parents run longer.
-      const effectiveMaxIter = Math.min(config.maxIterations ?? 6, 6);
+      // Fix 2: Cap sub-agent maxIterations to 4 to prevent spin-out.
+      // Sub-agents should complete focused tasks quickly (1-3 steps typical).
+      const effectiveMaxIter = Math.min(config.maxIterations ?? 4, 4);
 
       const result = await executeFn({
         agentId: `sub-${config.name}-${Date.now()}`,
@@ -328,8 +328,11 @@ export const createSpawnAgentTool = (): ToolDefinition => ({
     {
       name: "name",
       type: "string" as const,
-      description: "Short label for logs. Default: 'dynamic-agent'.",
-      required: false,
+      description:
+        "Descriptive kebab-case name for this sub-agent (e.g., 'commit-summarizer', " +
+        "'signal-notifier', 'code-reviewer'). Appears in logs and metrics. " +
+        "MUST reflect the sub-agent's specific purpose — never use generic names.",
+      required: true,
     },
     {
       name: "role",

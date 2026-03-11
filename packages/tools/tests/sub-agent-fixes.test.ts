@@ -1,7 +1,7 @@
 // File: tests/sub-agent-fixes.test.ts
 // Tests for the three sub-agent fixes:
 // 1. Auto-include scratchpad tools
-// 2. Cap maxIterations to 6
+// 2. Cap maxIterations to 4
 // 3. Forward scratchpad keys with sub: prefix
 import { describe, it, expect } from "bun:test";
 import {
@@ -91,8 +91,8 @@ describe("Fix 1: auto-include scratchpad tools", () => {
 
 // ─── Fix 2: Cap maxIterations to 6 ───
 
-describe("Fix 2: cap sub-agent maxIterations to 6", () => {
-  it("caps sub-agent maxIterations to 6 even when parent has higher max", async () => {
+describe("Fix 2: cap sub-agent maxIterations to 4", () => {
+  it("caps sub-agent maxIterations to 4 even when parent has higher max", async () => {
     let capturedOpts: any;
     const executor = createSubAgentExecutor(
       { name: "high-iter-agent", maxIterations: 20 },
@@ -103,10 +103,10 @@ describe("Fix 2: cap sub-agent maxIterations to 6", () => {
       0,
     );
     await executor("test");
-    expect(capturedOpts.maxIterations).toBe(6);
+    expect(capturedOpts.maxIterations).toBe(4);
   });
 
-  it("uses 6 as the default maxIterations (was 5 before fix)", async () => {
+  it("uses 4 as the default maxIterations", async () => {
     let capturedOpts: any;
     const executor = createSubAgentExecutor(
       { name: "default-iter-agent" },
@@ -117,7 +117,7 @@ describe("Fix 2: cap sub-agent maxIterations to 6", () => {
       0,
     );
     await executor("test");
-    expect(capturedOpts.maxIterations).toBe(6);
+    expect(capturedOpts.maxIterations).toBe(4);
   });
 
   it("preserves lower maxIterations values below the cap", async () => {
@@ -134,10 +134,10 @@ describe("Fix 2: cap sub-agent maxIterations to 6", () => {
     expect(capturedOpts.maxIterations).toBe(3);
   });
 
-  it("caps exactly at the boundary (maxIterations=6 stays 6)", async () => {
+  it("caps exactly at the boundary (maxIterations=4 stays 4)", async () => {
     let capturedOpts: any;
     const executor = createSubAgentExecutor(
-      { name: "boundary-agent", maxIterations: 6 },
+      { name: "boundary-agent", maxIterations: 4 },
       async (opts) => {
         capturedOpts = opts;
         return { output: "ok", success: true, tokensUsed: 0 };
@@ -145,10 +145,10 @@ describe("Fix 2: cap sub-agent maxIterations to 6", () => {
       0,
     );
     await executor("test");
-    expect(capturedOpts.maxIterations).toBe(6);
+    expect(capturedOpts.maxIterations).toBe(4);
   });
 
-  it("caps maxIterations=100 down to 6", async () => {
+  it("caps maxIterations=100 down to 4", async () => {
     let capturedOpts: any;
     const executor = createSubAgentExecutor(
       { name: "huge-iter-agent", maxIterations: 100 },
@@ -159,7 +159,7 @@ describe("Fix 2: cap sub-agent maxIterations to 6", () => {
       0,
     );
     await executor("test");
-    expect(capturedOpts.maxIterations).toBe(6);
+    expect(capturedOpts.maxIterations).toBe(4);
   });
 });
 
