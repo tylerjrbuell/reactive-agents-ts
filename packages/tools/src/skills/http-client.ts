@@ -9,7 +9,7 @@ export const httpGetTool: ToolDefinition = {
     "Fetch content from a specific URL via HTTP GET. " +
     "Use when you have an exact URL to retrieve (API endpoint, direct link, raw file). " +
     "JSON responses are automatically parsed into objects; other responses are returned as text. " +
-    "Returns { status, statusText, headers, body } — check status === 200 for success.",
+    "Returns { status, statusText, body } — check status === 200 for success.",
   parameters: [
     {
       name: "url",
@@ -30,7 +30,7 @@ export const httpGetTool: ToolDefinition = {
     },
   ],
   returnType:
-    "{ status: number, statusText: string, headers: object, body: string | object }",
+    "{ status: number, statusText: string, body: string | object }",
   category: "http",
   riskLevel: "medium",
   timeoutMs: 15_000,
@@ -59,7 +59,6 @@ export const httpGetHandler = (
       return {
         status: response.status,
         statusText: response.statusText,
-        headers: Object.fromEntries(response.headers.entries()),
         body,
       };
     },
