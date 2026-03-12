@@ -39,6 +39,10 @@ export async function runCreateAgent(args: string[]): Promise<void> {
     const name = await promptUser("Agent name", defaultName);
     const provider = await promptUser("Provider", "anthropic", VALID_PROVIDERS);
     const recipe = await promptUser("Recipe", "basic", VALID_RECIPES);
+    const featuresStr = await promptUser("Features (comma-separated)", "reasoning,tools");
+    const features = featuresStr.split(",").map((f: string) => f.trim()).filter(Boolean);
+
+    args = [name, "--recipe", recipe, "--provider", provider, "--features", features.join(",")];
 
     console.log(info(`Creating agent "${name}" with recipe "${recipe}" and provider "${provider}"...`));
 
