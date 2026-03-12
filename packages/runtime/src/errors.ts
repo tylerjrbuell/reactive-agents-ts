@@ -273,7 +273,7 @@ function extractRootTaggedError(error: unknown): unknown {
  */
 export function unwrapErrorWithSuggestion(error: unknown): Error {
   const base = unwrapError(error);
-  const original = (base as Record<string, unknown>)._originalTaggedError ?? error;
+  const original = (base as unknown as Record<string, unknown>)._originalTaggedError ?? error;
   const ctx = errorContext(original);
   if (ctx.suggestion && !base.message.includes("Consider:") && !base.message.includes("Options:")) {
     base.message = `${base.message}\n  → ${ctx.suggestion}`;
@@ -296,7 +296,7 @@ export function unwrapError(error: unknown): Error {
   if (isKnownTaggedError(error)) {
     const msg = (error as { message: string }).message;
     const err = new Error(cleanMessage(msg));
-    (err as Record<string, unknown>)._originalTaggedError = error;
+    (err as unknown as Record<string, unknown>)._originalTaggedError = error;
     return err;
   }
 
@@ -310,7 +310,7 @@ export function unwrapError(error: unknown): Error {
   if (root && isKnownTaggedError(root)) {
     const msg = (root as { message: string }).message;
     const err = new Error(cleanMessage(msg));
-    (err as Record<string, unknown>)._originalTaggedError = root;
+    (err as unknown as Record<string, unknown>)._originalTaggedError = root;
     return err;
   }
 

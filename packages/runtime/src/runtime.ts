@@ -599,6 +599,18 @@ export interface RuntimeOptions {
     decayFactor?: number;
     pruneThreshold?: number;
   };
+
+  /** Per-execution timeout in milliseconds. If set, execution is aborted after this duration. */
+  executionTimeoutMs?: number;
+
+  /** LLM call retry policy for transient errors (rate limits, network failures). */
+  retryPolicy?: {
+    maxRetries: number;
+    backoffMs: number;
+  };
+
+  /** Semantic cache TTL in milliseconds. Cached responses older than this are evicted. */
+  cacheTimeoutMs?: number;
 }
 
 /**
@@ -680,6 +692,9 @@ export const createRuntime = (options: RuntimeOptions) => {
     enableExperienceLearning: options.enableExperienceLearning,
     enableMemoryConsolidation: options.enableMemoryConsolidation,
     consolidationConfig: options.consolidationConfig,
+    executionTimeoutMs: options.executionTimeoutMs,
+    retryPolicy: options.retryPolicy,
+    cacheTimeoutMs: options.cacheTimeoutMs,
   };
 
   // ── Required layers ──
