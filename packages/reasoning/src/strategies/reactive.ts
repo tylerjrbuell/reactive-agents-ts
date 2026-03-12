@@ -51,6 +51,12 @@ interface ReactiveInput {
   readonly requiredTools?: readonly string[];
   /** Max redirects when required tools are missing (default: 2) */
   readonly maxRequiredToolRetries?: number;
+  /** Dynamic strategy switching configuration */
+  readonly strategySwitching?: {
+    readonly enabled: boolean;
+    readonly maxSwitches?: number;
+    readonly fallbackStrategy?: string;
+  };
 }
 
 // ── executeReactive ───────────────────────────────────────────────────────────
@@ -117,6 +123,14 @@ export const executeReactive = (
       kernelType: "react",
       taskId: input.taskId ?? "reactive",
       kernelPass: "reactive:main",
+      strategySwitching: input.strategySwitching
+        ? {
+            enabled: input.strategySwitching.enabled,
+            maxSwitches: input.strategySwitching.maxSwitches,
+            fallbackStrategy: input.strategySwitching.fallbackStrategy,
+            availableStrategies: ["reactive", "plan-execute-reflect", "reflexion", "tree-of-thought"],
+          }
+        : undefined,
     });
 
     // When max iterations reached (no explicit output), fall back to last thought

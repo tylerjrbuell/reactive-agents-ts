@@ -124,5 +124,9 @@ export type { ToolSchema, ToolParamSchema } from "./strategies/shared/tool-utils
 export { inferRequiredTools, classifyToolRelevance } from "./structured-output/infer-required-tools.js";
 export type { ToolSummary, InferRequiredToolsConfig, ToolClassificationResult } from "./structured-output/infer-required-tools.js";
 
+// ─── Strategy Switching ───
+export type { StrategyHandoff, StrategyEvaluation } from "./strategies/shared/strategy-evaluator.js";
+export { buildHandoff, evaluateStrategySwitch } from "./strategies/shared/strategy-evaluator.js";
+
 // ─── Runtime ───
 export { createReasoningLayer } from "./runtime.js";

@@ -52,6 +52,12 @@ export class ReasoningService extends Context.Tag("ReasoningService")<
       readonly requiredTools?: readonly string[];
       /** Max redirects when required tools are missing (default: 2) */
       readonly maxRequiredToolRetries?: number;
+      /** Dynamic strategy switching configuration */
+      readonly strategySwitching?: {
+        readonly enabled: boolean;
+        readonly maxSwitches?: number;
+        readonly fallbackStrategy?: string;
+      };
     }) => Effect.Effect<ReasoningResult, ReasoningErrors>;
 
     /** Register a custom strategy function. */

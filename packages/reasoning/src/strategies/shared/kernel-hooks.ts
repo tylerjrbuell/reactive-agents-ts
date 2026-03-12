@@ -84,5 +84,9 @@ export function buildKernelHooks(eventBus: MaybeService<EventBusInstance>): Kern
       }),
 
     onError: (_state: KernelState, _error: string): Effect.Effect<void, never> => Effect.void,
+
+    onIterationProgress: (_state: KernelState, _toolsThisStep: readonly string[]): Effect.Effect<void, never> => Effect.void,
+
+    onStrategySwitched: (_state: KernelState, _from: string, _to: string, _reason: string): Effect.Effect<void, never> => Effect.void,
   };
 }

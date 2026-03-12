@@ -31,6 +31,7 @@ import {
   type KernelRunOptions,
   type ThoughtKernel,
 } from "./kernel-state.js";
+import { evaluateStrategySwitch, buildHandoff } from "./strategy-evaluator.js";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -103,6 +104,8 @@ export function runKernel(
     const mutableScratchpad = new Map<string, string>(state.scratchpad);
 
     // ── 6. Main loop ─────────────────────────────────────────────────────────
+    // Track which tools were used before this iteration to compute per-step tools.
+    let prevToolsUsed = new Set<string>();
     const loopCfg = options.loopDetection;
     const maxSameTool = loopCfg?.maxSameToolCalls ?? 3;
     const maxRepeatedThought = loopCfg?.maxRepeatedThoughts ?? 3;
@@ -113,23 +116,40 @@ export function runKernel(
     const maxRequiredToolRetries = input.maxRequiredToolRetries ?? 2;
     let requiredToolRedirects = 0;
 
+    // Strategy switching state
+    let switchCount = 0;
+    const triedStrategies: string[] = [options.strategy ?? "reactive"];
+    // currentOptions tracks the active strategy name for the current pass
+    let currentOptions = options;
+    // currentInput tracks per-pass input (may carry handoff priorContext)
+    let currentInput: KernelInput = input;
+    // currentContext tracks the KernelContext (rebuilt when input changes on switch)
+    let currentContext: KernelContext = context;
+
     while (
       state.status !== "done" &&
       state.status !== "failed" &&
-      state.iteration < options.maxIterations
+      state.iteration < currentOptions.maxIterations
     ) {
-      state = yield* kernel(state, context);
+      state = yield* kernel(state, currentContext);
 
       // Sync scratchpad: kernel may have added entries
       for (const [k, v] of state.scratchpad) {
         mutableScratchpad.set(k, v);
       }
 
+      // ── Iteration progress hook ──────────────────────────────────────────
+      // Compute which tools were called in THIS iteration (new since prev step).
+      const toolsThisStep = [...state.toolsUsed].filter((t) => !prevToolsUsed.has(t));
+      yield* hooks.onIterationProgress(state, toolsThisStep);
+      prevToolsUsed = new Set(state.toolsUsed);
+
       // ── Loop detection ───────────────────────────────────────────────────
       // Check the most recent steps for patterns that indicate a stuck loop.
       // Only fire if the loop hasn't already terminated (status still active).
       if (state.status !== "done" && state.status !== "failed") {
         const steps = state.steps;
+        let loopMsg: string | null = null;
 
         // (a) Repeated tool calls: same tool + same args N times in a row
         //     Filter first, then take the last N — ensures we compare actual
@@ -140,44 +160,135 @@ export function runKernel(
           const firstNorm = normalizeActionContent(recentActions[0]!.content);
           const allSame = recentActions.every((s) => normalizeActionContent(s.content) === firstNorm);
           if (allSame) {
-            state = transitionState(state, {
-              status: "failed",
-              error: `Loop detected: same tool call repeated ${maxSameTool} times`,
-            });
-            break;
+            loopMsg = `Loop detected: same tool call repeated ${maxSameTool} times`;
           }
         }
 
         // (b) Repeated thoughts: identical thought content N times in recent history
-        const allThoughts = steps.filter((s) => s.type === "thought");
-        if (allThoughts.length >= maxRepeatedThought) {
-          const recentThoughts = allThoughts.slice(-maxRepeatedThought);
-          const lastThought = recentThoughts[recentThoughts.length - 1]!.content;
-          const allSameThought = recentThoughts.every((s) => s.content === lastThought);
-          if (allSameThought) {
-            state = transitionState(state, {
-              status: "failed",
-              error: `Loop detected: identical thought repeated ${maxRepeatedThought} times`,
-            });
-            break;
+        if (loopMsg === null) {
+          const allThoughts = steps.filter((s) => s.type === "thought");
+          if (allThoughts.length >= maxRepeatedThought) {
+            const recentThoughts = allThoughts.slice(-maxRepeatedThought);
+            const lastThought = recentThoughts[recentThoughts.length - 1]!.content;
+            const allSameThought = recentThoughts.every((s) => s.content === lastThought);
+            if (allSameThought) {
+              loopMsg = `Loop detected: identical thought repeated ${maxRepeatedThought} times`;
+            }
           }
         }
 
         // (c) Consecutive thoughts without any action — agent is stuck thinking
         //     without making progress. Count trailing thought steps (no action between them).
-        let consecutiveThoughts = 0;
-        for (let i = steps.length - 1; i >= 0; i--) {
-          if (steps[i]!.type === "thought") consecutiveThoughts++;
-          else break; // any non-thought (action/observation) resets the streak
+        if (loopMsg === null) {
+          let consecutiveThoughts = 0;
+          for (let i = steps.length - 1; i >= 0; i--) {
+            if (steps[i]!.type === "thought") consecutiveThoughts++;
+            else break; // any non-thought (action/observation) resets the streak
+          }
+          if (consecutiveThoughts >= maxConsecutiveThoughts) {
+            loopMsg = `Loop detected: ${consecutiveThoughts} consecutive thoughts without any tool action`;
+          }
         }
-        if (consecutiveThoughts >= maxConsecutiveThoughts) {
+
+        // ── Strategy switching ────────────────────────────────────────────
+        if (loopMsg !== null) {
+          const switchCfg = options.strategySwitching;
+          const maxSwitches = switchCfg?.maxSwitches ?? 1;
+
+          if (switchCfg?.enabled && switchCount < maxSwitches) {
+            // Transition to "evaluating" while we decide
+            state = transitionState(state, { status: "evaluating" });
+
+            let evaluation: { shouldSwitch: boolean; recommendedStrategy: string; reasoning: string };
+
+            if (switchCfg.fallbackStrategy) {
+              // Skip LLM evaluator — use fallback directly
+              evaluation = {
+                shouldSwitch: true,
+                recommendedStrategy: switchCfg.fallbackStrategy,
+                reasoning: "fallback strategy configured",
+              };
+            } else {
+              // Ask the LLM evaluator to pick the best alternative
+              const available = switchCfg.availableStrategies ?? [];
+              evaluation = yield* evaluateStrategySwitch(
+                state,
+                currentInput.task ?? "",
+                available,
+                triedStrategies,
+              );
+            }
+
+            if (evaluation.shouldSwitch && evaluation.recommendedStrategy) {
+              const fromStrategy = triedStrategies[triedStrategies.length - 1] ?? "unknown";
+              const toStrategy = evaluation.recommendedStrategy;
+
+              // Fire hook
+              yield* hooks.onStrategySwitched(state, fromStrategy, toStrategy, evaluation.reasoning);
+
+              // Build handoff context for the new strategy
+              const handoff = buildHandoff(
+                state,
+                currentInput.task ?? "",
+                fromStrategy,
+                loopMsg,
+                switchCount + 1,
+              );
+
+              const handoffSummary = [
+                `Strategy Switch Handoff (switch #${handoff.switchNumber}):`,
+                `Previous strategy: ${handoff.previousStrategy}`,
+                `Steps completed: ${handoff.stepsCompleted}`,
+                `Failure reason: ${handoff.failureReason}`,
+                `Tools called: ${handoff.toolsCalled.join(", ") || "none"}`,
+                `Key observations:\n${handoff.keyObservations.join("\n") || "(none)"}`,
+              ].join("\n");
+
+              // Re-init state with the new strategy
+              switchCount++;
+              triedStrategies.push(toStrategy);
+
+              currentOptions = {
+                ...options,
+                strategy: toStrategy,
+              };
+
+              // Reset state — fresh iteration count, carry forward toolsUsed
+              state = initialKernelState(currentOptions);
+
+              // Build updated input with handoff context
+              const existingPrior = currentInput.priorContext
+                ? `${currentInput.priorContext}\n\n${handoffSummary}`
+                : handoffSummary;
+
+              currentInput = {
+                ...currentInput,
+                priorContext: existingPrior,
+              };
+
+              // Rebuild context with the updated input
+              currentContext = {
+                ...context,
+                input: currentInput,
+              };
+
+              // Reset per-loop tracking
+              prevToolsUsed = new Set<string>();
+              requiredToolRedirects = 0;
+
+              // Continue the outer while loop with fresh state
+              continue;
+            }
+          }
+
+          // Fall through to standard failure
           state = transitionState(state, {
             status: "failed",
-            error: `Loop detected: ${consecutiveThoughts} consecutive thoughts without any tool action`,
+            error: loopMsg,
           });
           break;
         }
-      }
+      } // end if (state.status !== "done" && state.status !== "failed")
 
       // ── Required tools guard (in-loop) ─────────────────────────────────
       // When the kernel declares "done" but required tools haven't been called,

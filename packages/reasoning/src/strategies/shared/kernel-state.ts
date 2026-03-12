@@ -15,7 +15,7 @@ import type { ToolSchema } from "./tool-utils.js";
 
 // ── Kernel Status ────────────────────────────────────────────────────────────
 
-export type KernelStatus = "thinking" | "acting" | "observing" | "done" | "failed";
+export type KernelStatus = "thinking" | "acting" | "observing" | "done" | "failed" | "evaluating";
 
 // ── KernelState — Immutable, serializable reasoning state ────────────────────
 
@@ -105,6 +105,8 @@ export interface KernelHooks {
   readonly onObservation: (state: KernelState, result: string, success: boolean) => Effect.Effect<void, never>;
   readonly onDone: (state: KernelState) => Effect.Effect<void, never>;
   readonly onError: (state: KernelState, error: string) => Effect.Effect<void, never>;
+  readonly onIterationProgress: (state: KernelState, toolsThisStep: readonly string[]) => Effect.Effect<void, never>;
+  readonly onStrategySwitched: (state: KernelState, from: string, to: string, reason: string) => Effect.Effect<void, never>;
 }
 
 // ── KernelContext — Injected into every kernel call ──────────────────────────
@@ -149,6 +151,17 @@ export interface KernelRunOptions {
   readonly kernelPass?: string;
   readonly meta?: Record<string, unknown>;
   readonly loopDetection?: LoopDetectionConfig;
+  /** Dynamic strategy switching configuration */
+  readonly strategySwitching?: {
+    /** Enable automatic strategy switching when a loop is detected */
+    readonly enabled: boolean;
+    /** Maximum number of strategy switches allowed (default: 1) */
+    readonly maxSwitches?: number;
+    /** Skip the LLM evaluator and switch directly to this strategy */
+    readonly fallbackStrategy?: string;
+    /** Strategies available to switch to */
+    readonly availableStrategies?: readonly string[];
+  };
 }
 
 // ── Factory functions ────────────────────────────────────────────────────────
@@ -258,4 +271,6 @@ export const noopHooks: KernelHooks = {
   onObservation: () => Effect.void,
   onDone: () => Effect.void,
   onError: () => Effect.void,
+  onIterationProgress: () => Effect.void,
+  onStrategySwitched: () => Effect.void,
 };
