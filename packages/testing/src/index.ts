@@ -17,3 +17,15 @@ export {
   assertCostUnder,
 } from "./helpers/assertions.js";
 export { createTestLLM } from "./helpers/agent.js";
+
+// ─── Stream Assertions ───
+export { expectStream } from "./assertions/stream.js";
+export type { StreamExpectation } from "./assertions/stream.js";
+
+// ─── Scenario Fixtures ───
+export {
+  createGuardrailBlockScenario,
+  createBudgetExhaustedScenario,
+  createMaxIterationsScenario,
+} from "./fixtures/scenarios.js";
+export type { ScenarioFixture } from "./fixtures/scenarios.js";
