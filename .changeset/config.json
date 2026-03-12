@@ -30,8 +30,5 @@
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
-  "ignore": [
-    "@reactive-agents/benchmarks",
-    "@reactive-agents/health"
-  ]
+  "ignore": []
 }
