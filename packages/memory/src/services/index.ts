@@ -27,3 +27,10 @@ export type {
   SaveDebriefInput,
   AgentDebriefShape,
 } from "./debrief-store.js";
+
+export { SessionStoreService, SessionStoreLive } from "./session-store.js";
+export type {
+  SessionRecord,
+  SaveSessionInput,
+  ChatMessageShape,
+} from "./session-store.js";

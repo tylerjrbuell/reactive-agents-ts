@@ -141,3 +141,11 @@ export {
   type SaveDebriefInput,
   type AgentDebriefShape,
 } from "./services/debrief-store.js";
+
+export {
+  SessionStoreService,
+  SessionStoreLive,
+  type SessionRecord,
+  type SaveSessionInput,
+  type ChatMessageShape,
+} from "./services/session-store.js";

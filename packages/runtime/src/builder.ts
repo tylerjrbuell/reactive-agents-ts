@@ -2805,9 +2805,33 @@ export class ReactiveAgent {
    * await session.end();
    * ```
    */
-  session(options?: SessionOptions): AgentSession {
-    // options.persistOnEnd: deferred — episodic memory persistence not yet wired
-    return new AgentSession((msg, history, opts) => this.chat(msg, opts, history));
+  session(options?: SessionOptions & { persist?: boolean; id?: string; maxAgeDays?: number }): AgentSession {
+    const persist = options?.persist ?? false;
+    const sessionId = options?.id ?? `sess_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const self = this;
+
+    const onSave = persist
+      ? async (history: ChatMessage[]) => {
+          await self.runtime.runPromise(
+            Effect.gen(function* () {
+              const memMod = yield* Effect.promise(() => import("@reactive-agents/memory"));
+              const storeOpt = yield* Effect.serviceOption(memMod.SessionStoreService);
+              if (storeOpt._tag !== "Some") return;
+              yield* storeOpt.value.save({
+                sessionId,
+                agentId: self.agentId,
+                messages: history,
+              });
+            }).pipe(Effect.catchAll(() => Effect.void)),
+          );
+        }
+      : undefined;
+
+    return new AgentSession(
+      (msg, history, opts) => this.chat(msg, opts, history),
+      undefined,
+      onSave,
+    );
   }
 
   /**

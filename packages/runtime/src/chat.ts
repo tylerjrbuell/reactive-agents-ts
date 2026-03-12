@@ -189,7 +189,11 @@ export class AgentSession {
   constructor(
     private readonly chatFn: (message: string, history: ChatMessage[], options?: ChatOptions) => Promise<ChatReply>,
     private readonly onEnd?: (history: ChatMessage[]) => Promise<void>,
-  ) {}
+    private readonly onSave?: (history: ChatMessage[]) => Promise<void>,
+    initialHistory?: ChatMessage[],
+  ) {
+    if (initialHistory) this._history = [...initialHistory];
+  }
 
   async chat(message: string, options?: ChatOptions): Promise<ChatReply> {
     const reply = await this.chatFn(message, this._history, options);
@@ -203,6 +207,7 @@ export class AgentSession {
   }
 
   async end(): Promise<void> {
+    if (this.onSave) await this.onSave(this._history);
     if (this.onEnd) await this.onEnd(this._history);
     this._history = [];
   }
