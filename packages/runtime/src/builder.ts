@@ -741,6 +741,7 @@ export class ReactiveAgentBuilder {
   private _guardrailsOptions?: GuardrailsOptions;
   private _verificationOptions?: VerificationOptions;
   private _circuitBreakerConfig?: Partial<import("@reactive-agents/llm-provider").CircuitBreakerConfig>;
+  private _fallbackConfig?: { provider?: string[]; model?: string[]; errorThreshold?: number };
   private _enableExperienceLearning: boolean = false;
   private _enableMemoryConsolidation: boolean = false;
   private _consolidationConfig?: { threshold?: number; decayFactor?: number; pruneThreshold?: number };
@@ -1561,6 +1562,29 @@ export class ReactiveAgentBuilder {
    */
   withCacheTimeout(ms: number): this {
     this._cacheTimeoutMs = ms;
+    return this;
+  }
+
+  /**
+   * Configure provider and model fallbacks for graceful degradation.
+   *
+   * When the primary provider errors consecutively (3x by default), switches
+   * to the next provider in the chain. On 429 rate limits, falls back to a
+   * cheaper model from the same provider.
+   *
+   * @param config - Fallback chain configuration with provider, model, and error threshold
+   * @returns `this` for chaining
+   * @example
+   * ```typescript
+   * builder.withFallbacks({
+   *   provider: ["anthropic", "openai"],
+   *   model: ["claude-sonnet-4-20250514", "claude-haiku-3-20250520"],
+   *   errorThreshold: 3,
+   * })
+   * ```
+   */
+  withFallbacks(config: { provider?: string[]; model?: string[]; errorThreshold?: number }): this {
+    this._fallbackConfig = config;
     return this;
   }
 

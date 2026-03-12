@@ -107,3 +107,7 @@ export { makeCircuitBreaker } from "./circuit-breaker.js";
 export type { CircuitBreaker } from "./circuit-breaker.js";
 export { defaultCircuitBreakerConfig } from "./retry.js";
 export type { CircuitBreakerConfig } from "./retry.js";
+
+// ─── Fallback Chain ───
+export { FallbackChain } from "./fallback-chain.js";
+export type { FallbackConfig } from "./fallback-chain.js";
