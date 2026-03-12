@@ -32,6 +32,8 @@ export { makeStructuredLogger } from "./logging/structured-logger.js";
 export type { StructuredLogger, LiveLogWriter } from "./logging/structured-logger.js";
 export { createProgressLogger, ProgressLogger } from "./logging/progress-logger.js";
 export type { IterationProgress } from "./logging/progress-logger.js";
+export { makeLoggerService } from "./logging/logger-service.js";
+export type { LoggerService, LoggingConfig } from "./logging/logger-service.js";
 
 // ─── Metrics ───
 export { makeMetricsCollector, MetricsCollectorTag, MetricsCollectorLive } from "./metrics/metrics-collector.js";

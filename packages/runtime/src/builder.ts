@@ -737,6 +737,7 @@ export class ReactiveAgentBuilder {
   private _streamDensity?: StreamDensity;
   private _telemetryConfig?: TelemetryConfig;
   private _memoryOptions?: MemoryOptions;
+  private _loggingConfig?: { level?: string; format?: string; output?: string | WritableStream };
   private _costTrackingOptions?: CostTrackingOptions;
   private _guardrailsOptions?: GuardrailsOptions;
   private _verificationOptions?: VerificationOptions;
@@ -1275,6 +1276,31 @@ export class ReactiveAgentBuilder {
    */
   withTelemetry(config?: TelemetryConfig): this {
     this._telemetryConfig = config ?? { mode: "isolated" };
+    return this;
+  }
+
+  /**
+   * Configure structured logging with level filtering, format selection, and output routing.
+   *
+   * The logger filters by the configured level and formats messages as plain text or JSON.
+   * Output can be routed to console, files (with rotation), or custom WritableStream.
+   *
+   * @param config - Logging configuration
+   * @param config.level - Minimum log level: "debug" | "info" | "warn" | "error" (default: "info")
+   * @param config.format - Output format: "text" | "json" (default: "text")
+   * @param config.output - Output destination: "console" | "file" | WritableStream (default: "console")
+   * @param config.filePath - File path for file output (required when output: "file")
+   * @param config.maxFileSizeBytes - Max file size before rotation (default: 10MB)
+   * @param config.maxFiles - Max rotated files to keep (default: 5)
+   * @returns `this` for chaining
+   * @example
+   * ```typescript
+   * builder.withLogging({ level: "info", format: "json", output: "file", filePath: "./logs/agent.log" })
+   * builder.withLogging({ level: "debug", format: "text", output: "console" })
+   * ```
+   */
+  withLogging(config: { level?: string; format?: string; output?: string | WritableStream; filePath?: string; maxFileSizeBytes?: number; maxFiles?: number }): this {
+    this._loggingConfig = config;
     return this;
   }
 
