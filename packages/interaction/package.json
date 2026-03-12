@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/interaction",
-  "version": "0.7.7",
+  "version": "0.7.8",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -12,9 +12,9 @@
   },
   "dependencies": {
     "effect": "^3.10.0",
-    "@reactive-agents/core": "0.7.7",
-    "@reactive-agents/reasoning": "0.7.7",
-    "@reactive-agents/observability": "0.7.7",
+    "@reactive-agents/core": "0.7.8",
+    "@reactive-agents/reasoning": "0.7.8",
+    "@reactive-agents/observability": "0.7.8",
     "ulid": "^2.3.0"
   },
   "devDependencies": {
