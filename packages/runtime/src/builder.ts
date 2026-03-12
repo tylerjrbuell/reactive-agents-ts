@@ -259,6 +259,12 @@ export interface GuardrailsOptions {
   readonly toxicity?: boolean;
   /** Custom blocklist of words/phrases to reject. Default: undefined */
   readonly customBlocklist?: readonly string[];
+  /** Detection score thresholds (0.0–1.0). Lower = more sensitive, higher = more permissive. */
+  readonly thresholds?: {
+    readonly injection?: number;
+    readonly pii?: number;
+    readonly toxicity?: number;
+  };
 }
 
 /**
@@ -705,6 +711,10 @@ export class ReactiveAgentBuilder {
   private _persona?: AgentPersona;
   private _enableKillSwitch: boolean = false;
   private _enableBehavioralContracts: boolean = false;
+  private _strictValidation: boolean = false;
+  private _executionTimeoutMs?: number;
+  private _retryPolicy?: { maxRetries: number; backoffMs: number };
+  private _cacheTimeoutMs?: number;
   private _behavioralContract?: import("@reactive-agents/guardrails").BehavioralContract;
   private _enableSelfImprovement: boolean = false;
   private _enableEvents: boolean = false;
@@ -966,6 +976,10 @@ export class ReactiveAgentBuilder {
   withMemory(tierOrOptions?: "1" | "2" | MemoryOptions): this {
     this._enableMemory = true;
     if (typeof tierOrOptions === "string") {
+      const newForm = tierOrOptions === "2"
+        ? '.withMemory({ tier: "enhanced" })'
+        : ".withMemory()";
+      console.warn(`⚠ withMemory("${tierOrOptions}") is deprecated. Use ${newForm} instead.`);
       this._memoryTier = tierOrOptions;
     } else if (tierOrOptions) {
       if (tierOrOptions.tier) {
@@ -1463,6 +1477,51 @@ export class ReactiveAgentBuilder {
     return this;
   }
 
+  // ─── Build Options ───
+
+  /**
+   * Enable strict build-time validation. Missing API keys and model/provider
+   * mismatches become hard errors instead of warnings.
+   */
+  withStrictValidation(): this {
+    this._strictValidation = true;
+    return this;
+  }
+
+  /**
+   * Set a timeout for agent execution. If the agent doesn't complete within
+   * this duration, execution is aborted and an error is thrown.
+   * @param ms - Timeout in milliseconds
+   * @example .withTimeout(30_000) // 30 seconds
+   */
+  withTimeout(ms: number): this {
+    this._executionTimeoutMs = ms;
+    return this;
+  }
+
+  /**
+   * Configure retry policy for LLM calls. When an LLM call fails with a
+   * transient error (rate limit, network), it will be retried with exponential backoff.
+   * @param policy.maxRetries - Maximum number of retries (default: 0 = no retries)
+   * @param policy.backoffMs - Base backoff duration in milliseconds (doubled each retry)
+   * @example .withRetryPolicy({ maxRetries: 3, backoffMs: 1000 })
+   */
+  withRetryPolicy(policy: { maxRetries: number; backoffMs: number }): this {
+    this._retryPolicy = policy;
+    return this;
+  }
+
+  /**
+   * Set the TTL for semantic cache entries. Cached LLM responses older than
+   * this duration will be evicted.
+   * @param ms - Cache TTL in milliseconds (default: 3,600,000 = 1 hour)
+   * @example .withCacheTimeout(600_000) // 10 minutes
+   */
+  withCacheTimeout(ms: number): this {
+    this._cacheTimeoutMs = ms;
+    return this;
+  }
+
   // ─── Extra Layers ───
 
   /**
@@ -1502,6 +1561,27 @@ export class ReactiveAgentBuilder {
       const { resolveProfile } = await import("@reactive-agents/reasoning");
       this._contextProfile = resolveProfile(this._model);
     }
+
+    // Build-time validation
+    const { validateBuild, logBuildInfo } = await import("./build-validation.js");
+    let defaultModel = "unknown";
+    try {
+      const { getProviderDefaultModel } = await import("@reactive-agents/llm-provider");
+      defaultModel = getProviderDefaultModel(this._provider) ?? "unknown";
+    } catch {
+      // ignore — provider defaults unavailable
+    }
+    const validation = validateBuild(this._provider, this._model, defaultModel, this._strictValidation);
+    for (const warning of validation.warnings) {
+      console.warn(`⚠ ${warning}`);
+    }
+    if (validation.errors.length > 0) {
+      throw new Error(
+        `Build validation failed:\n${validation.errors.map((e) => `  • ${e}`).join("\n")}`,
+      );
+    }
+    logBuildInfo(this._provider, validation.resolvedModel);
+
     return Effect.runPromise(this.buildEffect()).catch((e) => {
       throw unwrapError(e);
     });
@@ -1549,19 +1629,22 @@ export class ReactiveAgentBuilder {
    * ```
    */
   buildEffect(): Effect.Effect<ReactiveAgent, Error> {
-    // Validate provider API key exists at build time (fast fail)
-    const keyMap: Record<string, string | undefined> = {
-      anthropic: "ANTHROPIC_API_KEY",
-      openai: "OPENAI_API_KEY",
-      gemini: "GOOGLE_API_KEY",
-    };
-    const requiredKey = keyMap[this._provider];
-    if (requiredKey && !process.env[requiredKey]) {
-      return Effect.fail(
-        new Error(
-          `Missing API key: ${requiredKey} is not set. Provider "${this._provider}" requires it.`,
-        ),
-      );
+    // Validate provider API key exists at build time (fast fail in strict mode, warn in non-strict)
+    // Non-strict warnings are already emitted by build() before calling buildEffect().
+    if (this._strictValidation) {
+      const keyMap: Record<string, string | undefined> = {
+        anthropic: "ANTHROPIC_API_KEY",
+        openai: "OPENAI_API_KEY",
+        gemini: "GOOGLE_API_KEY",
+      };
+      const requiredKey = keyMap[this._provider];
+      if (requiredKey && !process.env[requiredKey]) {
+        return Effect.fail(
+          new Error(
+            `Missing API key: ${requiredKey} is not set. Provider "${this._provider}" requires it.`,
+          ),
+        );
+      }
     }
 
     const agentId = `${this._name}-${Date.now()}`;
@@ -1628,6 +1711,9 @@ export class ReactiveAgentBuilder {
       enableExperienceLearning: this._enableExperienceLearning,
       enableMemoryConsolidation: this._enableMemoryConsolidation,
       consolidationConfig: this._consolidationConfig,
+      executionTimeoutMs: this._executionTimeoutMs,
+      retryPolicy: this._retryPolicy,
+      cacheTimeoutMs: this._cacheTimeoutMs,
     });
 
     const hooks = [...this._hooks];

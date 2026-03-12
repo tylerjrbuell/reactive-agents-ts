@@ -11,6 +11,7 @@ describe("Smoke: Error Recovery", () => {
       await ReactiveAgents.create()
         .withName("missing-key")
         .withProvider("anthropic")
+        .withStrictValidation()
         .build();
 
       expect(true).toBe(false); // Should not reach here

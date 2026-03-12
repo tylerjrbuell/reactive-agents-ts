@@ -334,6 +334,17 @@ export const ReactiveAgentsConfigSchema = Schema.Struct({
       pruneThreshold: Schema.optional(Schema.Number),
     })
   ),
+  /** Per-execution timeout in milliseconds. If set, execution is aborted after this duration. */
+  executionTimeoutMs: Schema.optional(Schema.Number),
+  /** LLM call retry policy for transient errors (rate limits, network failures). */
+  retryPolicy: Schema.optional(
+    Schema.Struct({
+      maxRetries: Schema.Number,
+      backoffMs: Schema.Number,
+    })
+  ),
+  /** Semantic cache TTL in milliseconds. Cached responses older than this are evicted. */
+  cacheTimeoutMs: Schema.optional(Schema.Number),
 });
 export type ReactiveAgentsConfig = typeof ReactiveAgentsConfigSchema.Type;
 
