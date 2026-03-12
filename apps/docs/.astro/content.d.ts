@@ -373,6 +373,13 @@ declare module 'astro:content' {
   collection: "docs";
   data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
+"guides/hooks.md": {
+	id: "guides/hooks.md";
+  slug: "guides/hooks";
+  body: string;
+  collection: "docs";
+  data: InferEntrySchema<"docs">
+} & { render(): Render[".md"] };
 "guides/installation.md": {
 	id: "guides/installation.md";
   slug: "guides/installation";
@@ -390,6 +397,13 @@ declare module 'astro:content' {
 "guides/introduction.md": {
 	id: "guides/introduction.md";
   slug: "guides/introduction";
+  body: string;
+  collection: "docs";
+  data: InferEntrySchema<"docs">
+} & { render(): Render[".md"] };
+"guides/local-models.md": {
+	id: "guides/local-models.md";
+  slug: "guides/local-models";
   body: string;
   collection: "docs";
   data: InferEntrySchema<"docs">
@@ -467,6 +481,13 @@ declare module 'astro:content' {
 "reference/cli.md": {
 	id: "reference/cli.md";
   slug: "reference/cli";
+  body: string;
+  collection: "docs";
+  data: InferEntrySchema<"docs">
+} & { render(): Render[".md"] };
+"reference/configuration.md": {
+	id: "reference/configuration.md";
+  slug: "reference/configuration";
   body: string;
   collection: "docs";
   data: InferEntrySchema<"docs">

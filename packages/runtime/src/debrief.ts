@@ -4,34 +4,83 @@ import type { FinalAnswerCapture } from "@reactive-agents/tools";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
+/**
+ * Aggregated statistics for a single tool across all calls during an execution.
+ *
+ * Used by `DebriefInput` to summarize tool usage for the debrief synthesis prompt.
+ */
 export interface ToolCallStat {
+  /** Tool name */
   name: string;
+  /** Total number of times this tool was called */
   calls: number;
+  /** Number of calls that resulted in an error */
   errors: number;
+  /** Average execution time across all calls in milliseconds */
   avgDurationMs: number;
 }
 
+/**
+ * Input to the `synthesizeDebrief` function — raw execution signals collected
+ * by the ExecutionEngine after the reasoning loop exits.
+ */
 export interface DebriefInput {
+  /** The original task prompt the agent was given */
   taskPrompt: string;
+  /** Agent identifier */
   agentId: string;
+  /** Task identifier */
   taskId: string;
+  /** How the agent loop terminated */
   terminatedBy: "final_answer_tool" | "final_answer" | "max_iterations" | "end_turn";
+  /** Structured capture from the `final-answer` tool (if used) */
   finalAnswerCapture?: FinalAnswerCapture;
+  /** Per-tool aggregated call statistics */
   toolCallHistory: ToolCallStat[];
+  /** Error messages collected during loop execution */
   errorsFromLoop: string[];
+  /** Quantitative execution metrics */
   metrics: { tokens: number; duration: number; iterations: number; cost: number };
 }
 
+/**
+ * Structured post-run analysis produced by `synthesizeDebrief`.
+ *
+ * Generated via a single small LLM call after execution completes.
+ * Included in `AgentResult.debrief` when memory is enabled.
+ * Persisted to SQLite via `DebriefStore` (`agent_debriefs` table) when memory is enabled.
+ *
+ * @example
+ * ```typescript
+ * const result = await agent.run("Research TypeScript frameworks");
+ * if (result.debrief) {
+ *   console.log(result.debrief.outcome);      // "success"
+ *   console.log(result.debrief.summary);      // "The agent researched..."
+ *   console.log(result.debrief.keyFindings);  // ["Finding 1", ...]
+ *   console.log(result.debrief.markdown);     // Pre-rendered markdown report
+ * }
+ * ```
+ */
 export interface AgentDebrief {
+  /** Overall execution outcome */
   outcome: "success" | "partial" | "failed";
+  /** One-paragraph summary of what the agent did and accomplished */
   summary: string;
+  /** Key facts or results discovered during execution */
   keyFindings: string[];
+  /** Errors encountered during execution (tool failures, guardrail blocks, etc.) */
   errorsEncountered: string[];
+  /** Lessons learned that may improve future executions on similar tasks */
   lessonsLearned: string[];
+  /** Agent's self-assessed confidence in the result */
   confidence: "high" | "medium" | "low";
+  /** Caveats or limitations of the result (undefined if none) */
   caveats?: string;
+  /** Summary of tools used with call counts and success rates */
   toolsUsed: { name: string; calls: number; successRate: number }[];
+  /** Quantitative execution metrics */
   metrics: { tokens: number; duration: number; iterations: number; cost: number };
+  /** Pre-rendered markdown version of the full debrief report */
   markdown: string;
 }
 

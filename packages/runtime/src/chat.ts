@@ -4,24 +4,48 @@ import type { AgentDebrief } from "./debrief.js";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
+/**
+ * A single message in a chat session history.
+ *
+ * Used internally by `AgentSession` to maintain conversation context
+ * and by `agent.chat()` for multi-turn interactions.
+ */
 export interface ChatMessage {
+  /** Who sent this message: "user" for caller input, "assistant" for agent replies */
   role: "user" | "assistant";
+  /** Message content */
   content: string;
+  /** Unix timestamp in milliseconds when the message was added */
   timestamp: number;
 }
 
+/**
+ * Response returned by `agent.chat()` or `session.chat()`.
+ *
+ * Contains the agent's reply text plus optional metadata about how
+ * the response was produced (tools used, token count, cost).
+ */
 export interface ChatReply {
+  /** The agent's response text */
   message: string;
+  /** Names of tools called during response generation (tool-capable path only) */
   toolsUsed?: string[];
+  /** Whether the response was served from prior memory or debrief context */
   fromMemory?: boolean;
-  /** Token count from the LLM response (when available). */
+  /** Token count from the LLM response (when available) */
   tokens?: number;
-  /** Reasoning steps taken (tool-capable path only). */
+  /** Reasoning steps taken (tool-capable path only) */
   steps?: number;
-  /** Estimated cost in USD (when available). */
+  /** Estimated cost in USD (when available) */
   cost?: number;
 }
 
+/**
+ * Options for `agent.chat()` — override automatic routing behavior.
+ *
+ * By default, the agent auto-detects whether tools are needed based on
+ * the message content. Use these options to force a specific path.
+ */
 export interface ChatOptions {
   /** Override automatic tool-need detection. Default: auto-detected via heuristic */
   useTools?: boolean;
@@ -29,6 +53,9 @@ export interface ChatOptions {
   maxIterations?: number;
 }
 
+/**
+ * Options for `agent.session()` — configure session lifecycle behavior.
+ */
 export interface SessionOptions {
   /** Write conversation to episodic memory on session.end(). Default: false */
   persistOnEnd?: boolean;
