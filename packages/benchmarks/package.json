@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/benchmarks",
-  "version": "0.7.0",
+  "version": "0.7.5",
   "type": "module",
   "private": true,
   "main": "./dist/index.js",

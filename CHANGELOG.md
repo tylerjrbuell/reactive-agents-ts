@@ -10,9 +10,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 
 ---
 
-## [0.8.0] — 2026-03-10
+## [0.7.5] — 2026-03-11
 
-Final Answer hard gate, structured run debriefs, SQLite debrief persistence, enriched `AgentResult`, and `agent.chat()` / `agent.session()` for conversational interaction.
+Final Answer hard gate, structured run debriefs, SQLite debrief persistence, enriched `AgentResult`, `agent.chat()` / `agent.session()` for conversational interaction, ProgressLogger for per-iteration observability, context splitting for 500–700 token/iteration savings, sub-agent performance improvements, CLI visual polish, and `rax demo` / `rax playground` REPL.
 
 ### Added
 
@@ -70,6 +70,59 @@ Two new methods on `ReactiveAgent` for Q&A outside of `run()`:
 - **Debrief context injection** — `agent.chat()` automatically injects `lastDebrief.summary` + `keyFindings` as system context so the agent can answer "what did you do last time?" accurately.
 - **Agent-level history accumulation** — direct `agent.chat()` calls (outside a session) accumulate in `_chatHistory` so follow-up questions have prior context.
 - **`requiresTools(message)`**, **`directChat()`**, **`buildContextSummary()`** exported from `@reactive-agents/runtime` for custom routing implementations.
+
+#### ProgressLogger — Per-Iteration Observability (`@reactive-agents/observability`)
+
+New `ProgressLogger` utility wired into the execution engine's 10-phase loop:
+
+- **`logIteration(n, phase)`**, **`logToolExecution(name, status, duration)`**, **`logCheckpoint(msg)`**, **`logIterationSummary(result)`** — structured per-iteration output at `verbose`/`debug` verbosity levels with graceful fallback.
+- Integrated with `ObservabilityService` — no extra builder call required; appears automatically at `verbosity: "verbose"` or higher.
+- `TaskResult.metadata` gains an **`iterations`** field (distinct from `stepsCount`) tracked throughout the execution loop and forwarded to debrief metrics.
+- `ResultMetadataSchema` updated with optional `iterations` field.
+
+#### Agent Performance Optimizations (`@reactive-agents/reasoning`)
+
+Context and loop optimizations that reduce tokens-per-iteration by 500–700:
+
+- **Context splitting** — static context (system prompt: tool schemas + RULES) built once per run; dynamic context (history, observations) rebuilt per iteration. Eliminates repeated schema tokens from every LLM call.
+- **Pure-thought circuit breaker** — fails after 3 consecutive thought steps with no action, preventing reasoning spirals.
+- **Single tool list fetch** — consolidates triple `listTools()` calls into one cached fetch per run.
+- **Tier-adaptive RULES** — 4 core rules for `local`/`mid` models; full rule set for `large`/`frontier` models.
+- **Richer tool result previews** — 3→5 items with smart coverage hints to reduce unnecessary scratchpad-read iterations.
+- **LLM-based tool classification** — structured output pipeline for required/relevant tool inference, replacing keyword heuristics.
+- **Dynamic completion guard on all exit paths** — `final-answer` tool, `"FINAL ANSWER:"` text, and `end_turn` all pass through `checkCompletionGaps()`.
+- **Final-answer error forgiveness** — errors forgiven after iteration 4 to prevent spinning when early tool failures are recoverable.
+
+#### Sub-Agent Performance Improvements (`@reactive-agents/tools`)
+
+- **Delegation-aware completion guard** — `detectCompletionGaps()` recognizes `spawn-agent` delegations and skips namespaces handled by sub-agents, preventing false "incomplete task" loops.
+- **Word-boundary namespace matching** — prevents false positives when forwarded text contains namespace keywords incidentally.
+- **Auto-scope sub-agent tools** — `filterToolsByRelevance()` applied automatically when no explicit tool whitelist is given, reducing sub-agent context noise.
+- **Lower sub-agent iteration cap** — 6→4 max iterations for sub-agents (focused tasks complete in 1–3 steps).
+- **`name` parameter required on `spawn-agent`** — descriptive kebab-case guidance enforced. Fallback `deriveSubAgentName()` extracts meaningful words from the task (replaces generic "dynamic-agent").
+
+#### CLI Visual Polish + `rax demo` + `rax playground` REPL (`@reactive-agents/cli`)
+
+- **`rax demo`** — zero-config scripted demo with test provider, paced output, and professional metrics dashboard. Designed for `npx reactive-agents demo` onboarding flow.
+- **`rax playground` REPL rewrite** — full rewrite using `agent.session()`. Supports 11 slash commands (`/help`, `/exit`, `/clear`, `/model`, `/provider`, `/tools`, `/stream`, `/verbose`, `/history`, `/reset`, `/debrief`), inline spinners safe for readline, and provider/model switching mid-session.
+- **UI overhaul** — chalk/ora/boxen brand colors, `banner()`, `agentResponse()`, `renderDashboard()`, `inlineSpinner()` for readline-safe feedback.
+- **`ChatReply` enriched** — `tokens`, `steps`, `cost` fields added from LLM response metadata.
+- **`AgentSession.chat()` accepts `ChatOptions`** — `useTools` passthrough for per-message tool control.
+- **Meta-package bin wrapper** — `packages/reactive-agents` now exposes a `reactive-agents` binary for `npx reactive-agents` support.
+- **Docs** — animated `TerminalReplay` component added to the Starlight docs site; `npx reactive-agents demo` CTA on the landing page.
+
+#### Built-in Tool Hardening (`@reactive-agents/tools`)
+
+- **`web-search`** — throws `ToolExecutionError` on missing `TAVILY_API_KEY` instead of returning empty results. Prevents agents wasting iterations distinguishing "no results" from "search unavailable".
+- **`http-get`** — returns only `{ status, statusText, body }`, dropping all response headers (~20–30 per request, 500–1000+ tokens). Description updated to match actual return type.
+- **`docker-execution`** — timeout reduced 60s→30s for faster failure detection in agent loops.
+- **`file-read`** — exponential backoff retry (3 attempts, 100ms→200ms) with path normalization.
+
+#### Chat Context Forwarding (`@reactive-agents/runtime`)
+
+- `agent.chat()` and `agent.session()` now receive actual tool observations and analysis thoughts from the most recent `agent.run()`, not just the final answer text.
+- `reasoningSteps` forwarded from execution context to `TaskResult.metadata`; `buildContextSummary()` captures `[Tool result]` and `[Agent analysis]` steps (capped at 3K chars).
+- Tool name normalization — underscore→hyphen for built-in tools (e.g. `final_answer`→`final-answer`) handles small-model naming inconsistencies.
 
 ### Changed
 
