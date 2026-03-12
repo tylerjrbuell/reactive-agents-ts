@@ -1,6 +1,6 @@
 # @reactive-agents/observability
 
-Observability for the [Reactive Agents](https://tylerjrbuell.github.io/reactive-agents-ts/) framework.
+Observability for the [Reactive Agents](https://docs.reactiveagents.dev/) framework.
 
 Adds distributed tracing, metrics, and structured logging to every phase of the agent execution engine.
 
@@ -42,4 +42,4 @@ think → act → observe → verify → memory-flush → complete
 
 ## Documentation
 
-Full documentation at [tylerjrbuell.github.io/reactive-agents-ts](https://tylerjrbuell.github.io/reactive-agents-ts/)
+Full documentation at [docs.reactiveagents.dev](https://docs.reactiveagents.dev/)

@@ -40,7 +40,7 @@
     }
   },
   "description": "Memory system for Reactive Agents — Working, Semantic, Episodic, and Procedural memory backed by bun:sqlite",
-  "homepage": "https://tylerjrbuell.github.io/reactive-agents-ts/",
+  "homepage": "https://docs.reactiveagents.dev/",
   "bugs": {
     "url": "https://github.com/tylerjrbuell/reactive-agents-ts/issues"
   }

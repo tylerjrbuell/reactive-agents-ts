@@ -41,7 +41,7 @@
     }
   },
   "description": "Evaluation framework for Reactive Agents — LLM-as-judge scoring, regression detection, dataset loading",
-  "homepage": "https://tylerjrbuell.github.io/reactive-agents-ts/",
+  "homepage": "https://docs.reactiveagents.dev/",
   "bugs": {
     "url": "https://github.com/tylerjrbuell/reactive-agents-ts/issues"
   }

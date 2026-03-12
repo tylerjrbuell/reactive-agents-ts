@@ -1,6 +1,6 @@
 # @reactive-agents/reasoning
 
-Reasoning strategies for the [Reactive Agents](https://tylerjrbuell.github.io/reactive-agents-ts/) framework.
+Reasoning strategies for the [Reactive Agents](https://docs.reactiveagents.dev/) framework.
 
 Adds structured thinking to agents via ReAct, Plan-Execute, Tree-of-Thought, and Reflexion strategies.
 
@@ -110,4 +110,4 @@ console.log(result.status); // "completed" | "partial"
 
 ## Documentation
 
-Full documentation at [tylerjrbuell.github.io/reactive-agents-ts/guides/reasoning/](https://tylerjrbuell.github.io/reactive-agents-ts/guides/reasoning/)
+Full documentation at [docs.reactiveagents.dev/guides/reasoning/](https://docs.reactiveagents.dev/guides/reasoning/)

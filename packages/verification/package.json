@@ -42,7 +42,7 @@
     }
   },
   "description": "Output verification for Reactive Agents — semantic entropy and fact decomposition",
-  "homepage": "https://tylerjrbuell.github.io/reactive-agents-ts/",
+  "homepage": "https://docs.reactiveagents.dev/",
   "bugs": {
     "url": "https://github.com/tylerjrbuell/reactive-agents-ts/issues"
   }

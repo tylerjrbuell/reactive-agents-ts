@@ -1,6 +1,6 @@
 # @reactive-agents/cost
 
-Cost management for the [Reactive Agents](https://tylerjrbuell.github.io/reactive-agents-ts/) framework.
+Cost management for the [Reactive Agents](https://docs.reactiveagents.dev/) framework.
 
 Automatically routes tasks to the cheapest capable model and enforces per-request and session budgets.
 
@@ -45,4 +45,4 @@ console.log(result.metadata.modelUsed); // "claude-haiku-4-5" (auto-routed)
 
 ## Documentation
 
-Full documentation at [tylerjrbuell.github.io/reactive-agents-ts](https://tylerjrbuell.github.io/reactive-agents-ts/)
+Full documentation at [docs.reactiveagents.dev](https://docs.reactiveagents.dev/)

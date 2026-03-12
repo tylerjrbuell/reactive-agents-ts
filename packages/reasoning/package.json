@@ -45,7 +45,7 @@
     }
   },
   "description": "Reasoning strategies for Reactive Agents — ReAct, Plan-Execute, and Tree-of-Thought",
-  "homepage": "https://tylerjrbuell.github.io/reactive-agents-ts/",
+  "homepage": "https://docs.reactiveagents.dev/",
   "bugs": {
     "url": "https://github.com/tylerjrbuell/reactive-agents-ts/issues"
   }

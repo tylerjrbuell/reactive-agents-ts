@@ -1,6 +1,6 @@
 # @reactive-agents/eval
 
-Evaluation framework for [Reactive Agents](https://tylerjrbuell.github.io/reactive-agents-ts/) — benchmark agent quality, track regressions, and run automated test suites.
+Evaluation framework for [Reactive Agents](https://docs.reactiveagents.dev/) — benchmark agent quality, track regressions, and run automated test suites.
 
 ## Installation
 
@@ -67,4 +67,4 @@ const store = createEvalStore("./eval-history.db");
 
 ## Documentation
 
-Full documentation at [tylerjrbuell.github.io/reactive-agents-ts](https://tylerjrbuell.github.io/reactive-agents-ts/)
+Full documentation at [docs.reactiveagents.dev](https://docs.reactiveagents.dev/)

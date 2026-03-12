@@ -617,7 +617,7 @@ Key features:
 24 runnable examples work without an API key (test mode).
 
 GitHub: https://github.com/tylerjrbuell/reactive-agents-ts
-Docs: https://tylerjrbuell.github.io/reactive-agents-ts/
+Docs: https://docs.reactiveagents.dev/
 npm: https://npmjs.com/package/reactive-agents
 
 Happy to answer questions about the architecture or the Effect-TS approach.
@@ -790,7 +790,7 @@ git commit -m "docs(distribution): add adoption distribution materials
 ```bash
 gh repo edit tylerjrbuell/reactive-agents-ts \
   --description "Composable TypeScript AI agent framework — Effect-TS type safety, 5 reasoning strategies, persistent gateway, real-time streaming, multi-agent A2A" \
-  --homepage "https://tylerjrbuell.github.io/reactive-agents-ts/"
+  --homepage "https://docs.reactiveagents.dev/"
 ```
 
 **Step 2: Add missing topics** (currently missing: `mcp`, `ai-agents`, `streaming`, `gateway`, `bun`)
@@ -884,7 +884,7 @@ git commit -m "docs: add CONTRIBUTING.md for community onboarding"
 title: Why I Built a TypeScript AI Agent Framework on Effect-TS
 published: false
 tags: typescript, ai, agents, effectts
-canonical_url: https://tylerjrbuell.github.io/reactive-agents-ts/
+canonical_url: https://docs.reactiveagents.dev/
 ---
 
 [~800 words covering:]

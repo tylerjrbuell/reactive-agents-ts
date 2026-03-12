@@ -1,6 +1,6 @@
 # @reactive-agents/runtime
 
-The execution runtime for [Reactive Agents](https://tylerjrbuell.github.io/reactive-agents-ts/).
+The execution runtime for [Reactive Agents](https://docs.reactiveagents.dev/).
 
 Contains the 10-phase `ExecutionEngine`, the `ReactiveAgentBuilder` fluent API, and `createRuntime()` — the function that wires all optional layers together.
 
@@ -90,4 +90,4 @@ Each phase supports `before`, `after`, and `on-error` lifecycle hooks.
 
 ## Documentation
 
-Full documentation at [tylerjrbuell.github.io/reactive-agents-ts](https://tylerjrbuell.github.io/reactive-agents-ts/)
+Full documentation at [docs.reactiveagents.dev](https://docs.reactiveagents.dev/)

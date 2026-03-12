@@ -48,7 +48,7 @@
     }
   },
   "description": "LLM provider adapters for Reactive Agents — Anthropic, OpenAI, Ollama, and test providers",
-  "homepage": "https://tylerjrbuell.github.io/reactive-agents-ts/",
+  "homepage": "https://docs.reactiveagents.dev/",
   "bugs": {
     "url": "https://github.com/tylerjrbuell/reactive-agents-ts/issues"
   }
