@@ -10,6 +10,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 
 ---
 
+## [0.7.6] — 2026-03-12
+
+Patch release fixing install failures caused by incorrect dependency resolution in published packages.
+
+### Fixed
+
+- **`workspace:*` resolution in npm publish** — `bun publish` was resolving `workspace:*` to the already-published npm version (e.g. `0.7.0`) instead of the local workspace version (`0.7.5`). All packages in `reactive-agents@0.7.5` were incorrectly pinned to their previous release. Fixed with `scripts/resolve-workspace-deps.mjs`, which rewrites `workspace:*` to exact local versions before every `bun publish`.
+- **`@reactive-agents/benchmarks` in CLI dependencies** — `@reactive-agents/benchmarks` is a private package (not published to npm) but was listed in `@reactive-agents/cli` `dependencies`, causing install failures. Moved to `devDependencies`. `rax bench` now emits a clear error message when run outside the repo.
+- **Publish workflow hardening** — pre-publish guard rejects any `workspace:` references that survive resolution; post-publish `npm view` check confirms the live manifest is clean.
+- **Adopted `changesets`** for version management and publishing — eliminates the entire class of `workspace:*` resolution bugs going forward.
+
+---
+
 ## [0.7.5] — 2026-03-11
 
 Final Answer hard gate, structured run debriefs, SQLite debrief persistence, enriched `AgentResult`, `agent.chat()` / `agent.session()` for conversational interaction, ProgressLogger for per-iteration observability, context splitting for 500–700 token/iteration savings, sub-agent performance improvements, CLI visual polish, and `rax demo` / `rax playground` REPL.
