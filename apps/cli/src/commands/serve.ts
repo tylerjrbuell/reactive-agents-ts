@@ -1,4 +1,6 @@
 import { ReactiveAgents } from "@reactive-agents/runtime";
+import chalk from "chalk";
+import { banner, kv, success } from "../ui.js";
 
 const VALID_PROVIDERS = ["anthropic", "openai", "ollama", "gemini", "litellm", "test"] as const;
 type Provider = (typeof VALID_PROVIDERS)[number];
@@ -81,12 +83,12 @@ export function runServe(argv: string[]) {
     }
   }
 
-  console.log(`Starting A2A server: ${name}`);
-  console.log(`Port: ${port}`);
-  console.log(`Provider: ${provider}${model ? ` (${model})` : ""}`);
-  console.log(`Tools: ${withTools ? "enabled" : "disabled"}`);
-  console.log(`Reasoning: ${withReasoning ? "enabled" : "disabled"}`);
-  console.log(`Memory: ${memoryTier ? `tier ${memoryTier}` : "disabled"}`);
+  banner("rax serve", `Starting A2A server: ${name}`);
+  console.log(kv("Port", String(port)));
+  console.log(kv("Provider", `${provider}${model ? ` (${model})` : ""}`));
+  console.log(kv("Tools", withTools ? "enabled" : "disabled"));
+  console.log(kv("Reasoning", withReasoning ? "enabled" : "disabled"));
+  console.log(kv("Memory", memoryTier ? `tier ${memoryTier}` : "disabled"));
 
   let builder = ReactiveAgents.create()
     .withName(name)
@@ -249,9 +251,11 @@ async function startServer(
     },
   });
 
-  console.log(`\nA2A server ready! Agent Card available at http://localhost:${port}/.well-known/agent.json`);
-  console.log(`JSON-RPC endpoint: http://localhost:${port}/`);
-  console.log("Use Ctrl+C to stop");
+  console.log("");
+  console.log(success(`A2A server ready on port ${port}`));
+  console.log(kv("Agent Card", `http://localhost:${port}/.well-known/agent.json`));
+  console.log(kv("JSON-RPC", `http://localhost:${port}/`));
+  console.log(chalk.hex("#6b7280")("\nUse Ctrl+C to stop"));
 
   // Keep the process alive
   process.on("SIGINT", () => {

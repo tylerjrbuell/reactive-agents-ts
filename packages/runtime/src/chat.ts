@@ -14,6 +14,12 @@ export interface ChatReply {
   message: string;
   toolsUsed?: string[];
   fromMemory?: boolean;
+  /** Token count from the LLM response (when available). */
+  tokens?: number;
+  /** Reasoning steps taken (tool-capable path only). */
+  steps?: number;
+  /** Estimated cost in USD (when available). */
+  cost?: number;
 }
 
 export interface ChatOptions {
@@ -140,7 +146,11 @@ export function directChat(
         Effect.mapError((e) => new Error(String(e))),
       );
 
-    return { message: response.content } satisfies ChatReply;
+    return {
+      message: response.content,
+      tokens: response.usage?.totalTokens,
+      cost: response.usage?.estimatedCost,
+    } satisfies ChatReply;
   });
 }
 
@@ -150,12 +160,12 @@ export class AgentSession {
   private _history: ChatMessage[] = [];
 
   constructor(
-    private readonly chatFn: (message: string, history: ChatMessage[]) => Promise<ChatReply>,
+    private readonly chatFn: (message: string, history: ChatMessage[], options?: ChatOptions) => Promise<ChatReply>,
     private readonly onEnd?: (history: ChatMessage[]) => Promise<void>,
   ) {}
 
-  async chat(message: string): Promise<ChatReply> {
-    const reply = await this.chatFn(message, this._history);
+  async chat(message: string, options?: ChatOptions): Promise<ChatReply> {
+    const reply = await this.chatFn(message, this._history, options);
     this._history.push({ role: "user", content: message, timestamp: Date.now() });
     this._history.push({ role: "assistant", content: reply.message, timestamp: Date.now() });
     return reply;
