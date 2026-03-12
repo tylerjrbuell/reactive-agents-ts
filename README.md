@@ -142,6 +142,37 @@ for await (const event of agent.runStream("Analyze this dataset")) {
 }
 ```
 
+### Lifecycle Hooks
+
+Intercept any of the 10 execution phases with before, after, or error hooks:
+
+```typescript
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withReasoning()
+  .withTools()
+  .withHook({
+    phase: "think",
+    timing: "after",
+    handler: (ctx) => {
+      console.log(`Step ${ctx.metadata.stepsCount}: ${ctx.metadata.strategyUsed}`);
+      return Effect.succeed(ctx);
+    },
+  })
+  .withHook({
+    phase: "act",
+    timing: "after",
+    handler: (ctx) => {
+      const lastTool = ctx.scratchpad.get("_last_tool_name");
+      if (lastTool) console.log(`Tool called: ${lastTool}`);
+      return Effect.succeed(ctx);
+    },
+  })
+  .build();
+```
+
+Available phases: `bootstrap`, `guardrail`, `cost-route`, `strategy`, `think`, `act`, `observe`, `verify`, `memory-flush`, `complete`. Each supports `before`, `after`, and `on-error` timing.
+
 ## Comparison
 
 How Reactive Agents compares to other TypeScript agent frameworks on shipped, working features:
