@@ -12,16 +12,16 @@
   },
   "dependencies": {
     "effect": "^3.10.0",
-    "@reactive-agents/core": "workspace:*",
-    "@reactive-agents/tools": "workspace:*"
+    "@reactive-agents/core": "0.7.7",
+    "@reactive-agents/tools": "0.7.7"
   },
   "devDependencies": {
     "typescript": "^5.7.0",
     "bun-types": "latest",
-    "@reactive-agents/identity": "workspace:*"
+    "@reactive-agents/identity": "0.7.7"
   },
   "peerDependencies": {
-    "@reactive-agents/identity": "workspace:*"
+    "@reactive-agents/identity": "0.7.7"
   },
   "peerDependenciesMeta": {
     "@reactive-agents/identity": {

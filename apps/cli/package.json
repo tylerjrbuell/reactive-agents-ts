@@ -28,17 +28,17 @@
   ],
   "dependencies": {
     "effect": "^3.10.0",
-    "@reactive-agents/core": "workspace:*",
-    "@reactive-agents/runtime": "workspace:*",
-    "@reactive-agents/eval": "workspace:*",
-    "@reactive-agents/llm-provider": "workspace:*",
-    "@reactive-agents/a2a": "workspace:*",
+    "@reactive-agents/core": "0.7.7",
+    "@reactive-agents/runtime": "0.7.7",
+    "@reactive-agents/eval": "0.7.7",
+    "@reactive-agents/llm-provider": "0.7.7",
+    "@reactive-agents/a2a": "0.7.7",
     "chalk": "^5.4.0",
     "ora": "^8.2.0",
     "boxen": "^8.0.1"
   },
   "devDependencies": {
-    "@reactive-agents/benchmarks": "workspace:*",
+    "@reactive-agents/benchmarks": "0.7.7",
     "typescript": "^5.7.0",
     "bun-types": "latest"
   },

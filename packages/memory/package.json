@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "effect": "^3.10.0",
-    "@reactive-agents/core": "workspace:*"
+    "@reactive-agents/core": "0.7.7"
   },
   "devDependencies": {
     "typescript": "^5.7.0",
