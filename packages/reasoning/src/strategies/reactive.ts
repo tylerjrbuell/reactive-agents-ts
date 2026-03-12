@@ -30,6 +30,8 @@ interface ReactiveInput {
   readonly memoryContext: string;
   /** Full tool schemas with parameter info — preferred over toolNames */
   readonly availableToolSchemas?: readonly ToolSchema[];
+  /** Full unfiltered tool schemas — used by completion guard to detect all namespaces */
+  readonly allToolSchemas?: readonly ToolSchema[];
   /** Fallback: tool names only (legacy) */
   readonly availableTools: readonly string[];
   readonly config: ReasoningConfig;
@@ -96,6 +98,7 @@ export const executeReactive = (
       task: input.taskDescription,
       systemPrompt: input.systemPrompt,
       availableToolSchemas: toolSchemas,
+      allToolSchemas: input.allToolSchemas,
       priorContext,
       contextProfile: input.contextProfile,
       resultCompression: input.resultCompression,
@@ -122,6 +125,16 @@ export const executeReactive = (
       [...state.steps].filter((s) => s.type === "thought").pop()?.content ??
       null;
 
+    // Derive terminatedBy from kernel state
+    const terminatedBy: "final_answer" | "final_answer_tool" | "max_iterations" | "end_turn" =
+      state.meta.terminatedBy === "final_answer_tool"
+        ? "final_answer_tool"
+        : state.meta.terminatedBy === "end_turn"
+          ? "end_turn"
+          : state.status === "done"
+            ? "final_answer"
+            : "max_iterations";
+
     return buildStrategyResult({
       strategy: "reactive",
       steps: [...state.steps],
@@ -130,5 +143,11 @@ export const executeReactive = (
       start,
       totalTokens: state.tokens,
       totalCost: state.cost,
+      extraMetadata: {
+        terminatedBy,
+        ...(state.meta.finalAnswerCapture !== undefined
+          ? { finalAnswerCapture: state.meta.finalAnswerCapture }
+          : {}),
+      },
     });
   });

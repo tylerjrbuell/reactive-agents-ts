@@ -207,6 +207,107 @@ When observability is enabled, the execution engine automatically:
 
 No manual instrumentation needed — just enable `.withObservability()` and everything is traced.
 
+## Telemetry System
+
+Reactive Agents includes a **privacy-first telemetry system** that collects performance and behavior data locally. All data remains on your machine by default — nothing is sent to external servers without explicit opt-in.
+
+### What Gets Collected
+
+The telemetry system automatically aggregates:
+
+- **Execution metrics**: phase durations, token usage, cost per run
+- **Tool execution data**: which tools were called, success/error rates, latency
+- **Strategy selection**: which reasoning strategy was chosen and why
+- **Error tracking**: error types, frequencies, and recovery outcomes
+- **Context metrics**: context window usage, compaction effectiveness
+
+### Privacy Guarantees
+
+| Aspect | Guarantee |
+|--------|-----------|
+| **Local-first** | All data stored in your SQLite database (`memory-db` by default) |
+| **No PII** | Agent inputs are never logged; only metadata (token counts, durations) |
+| **Opt-in export** | Telemetry only leaves your machine if you explicitly call `exportTelemetry()` |
+| **Data ownership** | You control what's collected and when it's cleared |
+
+### Aggregation Strategy
+
+Telemetry data is aggregated by:
+- **Time windows** (per hour, per day, per week)
+- **Task type** (inferred from tool usage patterns)
+- **Strategy** (which reasoning mode was used)
+- **Model** (which LLM provider and model)
+- **Custom labels** (agent name, environment, etc.)
+
+```typescript
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withReasoning()
+  .withObservability({ verbosity: "normal" })
+  .build();
+
+// Telemetry is collected automatically to local SQLite
+const result = await agent.run("Fetch and summarize top 5 HN posts");
+
+// Later: Query aggregated telemetry
+const telemetry = yield* obs.getTelemetry({
+  timeRange: { start: new Date("2026-03-01"), end: new Date("2026-03-10") },
+  groupBy: ["strategy", "model"],
+});
+
+console.log(telemetry);
+// {
+//   "react:claude-sonnet": { avgDuration: 4500, totalTokens: 125000, cost: 0.25, runCount: 42 },
+//   "tree-of-thought:claude-opus": { avgDuration: 8200, totalTokens: 245000, cost: 0.85, runCount: 18 }
+// }
+```
+
+### Configuring Telemetry
+
+By default, telemetry is enabled when observability is enabled. To disable:
+
+```typescript
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withObservability({ verbosity: "normal", telemetry: { enabled: false } })
+  .build();
+```
+
+To customize what's collected:
+
+```typescript
+.withObservability({
+  verbosity: "normal",
+  telemetry: {
+    enabled: true,
+    collectPhaseMetrics: true,   // Record duration of each phase
+    collectToolMetrics: true,    // Track which tools are called
+    collectTokenMetrics: true,   // Record token usage per run
+    collectCostMetrics: true,    // Track estimated costs
+    collectErrors: true,         // Log error types and frequencies
+    retentionDays: 30,          // Keep 30 days of data (default)
+  }
+})
+```
+
+### Exporting Telemetry
+
+To export aggregated telemetry for analysis:
+
+```typescript
+const exported = yield* obs.exportTelemetry({
+  format: "json",  // or "csv"
+  aggregation: "daily",  // or "hourly", "weekly"
+  metrics: ["duration", "tokens", "cost"],
+});
+
+// Save to file
+import { writeFileSync } from "fs";
+writeFileSync("telemetry-export.json", JSON.stringify(exported, null, 2));
+```
+
+The export contains **aggregated statistics only** — no raw request data, no inputs, no conversation history.
+
 ## ThoughtTracer
 
 `ThoughtTracer` captures reasoning steps from all 5 strategies automatically via the EventBus. Add it via `ThoughtTracerLive`:

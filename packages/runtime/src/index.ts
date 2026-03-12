@@ -65,3 +65,24 @@ export { AgentStream } from "./agent-stream.js";
 
 // ─── Deployment ───
 export { createSigtermHandler, registerShutdownHandlers } from "./sigterm.js";
+
+// ─── Debrief ───
+export {
+  synthesizeDebrief,
+  formatDebriefMarkdown,
+  type AgentDebrief,
+  type DebriefInput,
+  type ToolCallStat,
+} from "./debrief.js";
+
+// ─── Chat / Session ───
+export {
+  AgentSession,
+  directChat,
+  requiresTools,
+  buildContextSummary,
+  type ChatMessage,
+  type ChatReply,
+  type ChatOptions,
+  type SessionOptions,
+} from "./chat.js";

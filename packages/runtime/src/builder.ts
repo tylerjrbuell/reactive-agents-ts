@@ -18,12 +18,23 @@ import type { PromptTemplate } from "@reactive-agents/prompts";
 import type { Task, TaskResult } from "@reactive-agents/core";
 import type { TaskError } from "@reactive-agents/core";
 import { generateTaskId, AgentId } from "@reactive-agents/core";
-import type { AgentEvent } from "@reactive-agents/core";
+import type { AgentEvent, OutputFormat, TerminatedBy } from "@reactive-agents/core";
 import { EventBus } from "@reactive-agents/core";
 import { KillSwitchService } from "@reactive-agents/guardrails";
 import type { AgentStreamEvent, StreamDensity } from "./stream-types.js";
 import { AgentStream } from "./agent-stream.js";
 import type { TelemetryConfig } from "@reactive-agents/observability";
+import {
+  AgentSession,
+  directChat,
+  requiresTools,
+  buildContextSummary,
+  type ChatMessage,
+  type ChatOptions,
+  type ChatReply,
+  type SessionOptions,
+} from "./chat.js";
+import type { AgentDebrief } from "./debrief.js";
 
 // ─── Provider Types ──────────────────────────────────────────────────────────
 
@@ -522,6 +533,8 @@ export interface AgentResultMetadata {
   readonly strategyUsed?: string;
   /** Number of reasoning iterations/steps taken to complete the task. */
   readonly stepsCount: number;
+  /** Confidence level of the result. */
+  readonly confidence?: "high" | "medium" | "low";
 }
 
 /**
@@ -550,6 +563,13 @@ export interface AgentResult {
   readonly agentId: string;
   /** Metadata about the execution (duration, cost, tokens, strategy, steps). */
   readonly metadata: AgentResultMetadata;
+  // New optional fields — backward compatible
+  /** Output format detected or declared by the agent. */
+  readonly format?: OutputFormat;
+  /** How the agent loop was terminated. */
+  readonly terminatedBy?: TerminatedBy;
+  /** Structured post-run debrief synthesized after the kernel exits. */
+  readonly debrief?: AgentDebrief;
 }
 
 // ─── Persona Composition Helper ───────────────────────────────────────────────
@@ -648,6 +668,7 @@ export class ReactiveAgentBuilder {
   private _temperature?: number;
   private _maxTokens?: number;
   private _memoryTier: "1" | "2" = "1";
+  private _enableMemory: boolean = false;
   private _hooks: LifecycleHook[] = [];
   private _maxIterations: number = 10;
   private _enableGuardrails: boolean = false;
@@ -943,6 +964,7 @@ export class ReactiveAgentBuilder {
    * ```
    */
   withMemory(tierOrOptions?: "1" | "2" | MemoryOptions): this {
+    this._enableMemory = true;
     if (typeof tierOrOptions === "string") {
       this._memoryTier = tierOrOptions;
     } else if (tierOrOptions) {
@@ -1602,6 +1624,7 @@ export class ReactiveAgentBuilder {
       requiredTools: this._requiredToolsConfig,
       allowedTools: this._toolsOptions?.allowedTools,
       adaptiveToolFiltering: this._toolsOptions?.adaptive,
+      enableMemory: this._enableMemory,
       enableExperienceLearning: this._enableExperienceLearning,
       enableMemoryConsolidation: this._enableMemoryConsolidation,
       consolidationConfig: this._consolidationConfig,
@@ -1933,12 +1956,24 @@ export class ReactiveAgentBuilder {
         // by letting sub-agents proxy tool calls through the parent's live connections.
         let parentToolServiceRef: any = null;
 
+        // Derive a descriptive kebab-case name from a task description.
+        // Extracts the primary action verb + object from the task text.
+        const deriveSubAgentName = (task: string): string => {
+          const lower = task.toLowerCase().replace(/[^a-z0-9\s]/g, " ").trim();
+          const words = lower.split(/\s+/).filter((w) => w.length > 2);
+          // Skip filler words to find meaningful action + object
+          const FILLER = new Set(["the", "and", "for", "from", "with", "that", "this", "via", "into", "then", "also", "all", "its", "are", "was", "has", "have", "been", "will", "can", "should"]);
+          const meaningful = words.filter((w) => !FILLER.has(w)).slice(0, 3);
+          if (meaningful.length === 0) return "sub-agent";
+          return meaningful.join("-").slice(0, 30);
+        };
+
         // Register the built-in spawn-agent tool when dynamic sub-agents are enabled.
         // The handler captures parentProvider/parentModel so spawned agents inherit
         // the parent's LLM config without any extra wiring required.
         if (allowDynamicSubAgents) {
           const spawnToolDef = toolsMod.createSpawnAgentTool();
-          const defaultMaxIter = dynamicSubAgentOptions?.maxIterations ?? 5;
+          const defaultMaxIter = dynamicSubAgentOptions?.maxIterations ?? 4;
 
           const spawnHandler = (args: Record<string, unknown>) =>
             Effect.tryPromise({
@@ -1947,8 +1982,12 @@ export class ReactiveAgentBuilder {
                   typeof args.task === "string"
                     ? args.task
                     : JSON.stringify(args.task ?? "");
+                // Derive a descriptive name from the task if the LLM didn't provide one.
+                // Extract key action words to build a meaningful kebab-case label.
                 const subName =
-                  typeof args.name === "string" ? args.name : "dynamic-agent";
+                  typeof args.name === "string" && args.name.trim().length > 0
+                    ? args.name.trim()
+                    : deriveSubAgentName(task);
 
                 // Extract optional persona parameters (LLM can steer sub-agent approach)
                 const subPersona = {
@@ -2024,7 +2063,29 @@ export class ReactiveAgentBuilder {
                     // from the parent (no duplicate containers).
                     // When allowedTools is specified, those tools become required —
                     // if you're constrained to specific tools, you must use them.
-                    const subAllowed = opts.allowedTools;
+                    //
+                    // Auto-scope: when no explicit tool whitelist was given,
+                    // auto-filter MCP tools by task relevance so the sub-agent
+                    // doesn't see all 40+ tools (reduces context noise + confusion).
+                    let subAllowed = opts.allowedTools;
+                    if ((!subAllowed || subAllowed.length === 0) && parentMcpToolDefs.length > 0) {
+                      const { filterToolsByRelevance } = await import("@reactive-agents/reasoning");
+                      const mcpSchemas = parentMcpToolDefs.map((t: any) => ({
+                        name: t.name as string,
+                        description: (t.description ?? "") as string,
+                        parameters: ((t.parameters ?? []) as any[]).map((p: any) => ({
+                          name: p.name as string,
+                          type: (p.type ?? "string") as string,
+                          description: p.description as string | undefined,
+                          required: p.required as boolean | undefined,
+                        })),
+                      }));
+                      const filtered = filterToolsByRelevance(opts.task, mcpSchemas);
+                      // Only scope if filtering actually reduces the set meaningfully
+                      if (filtered.primary.length > 0 && filtered.primary.length < mcpSchemas.length * 0.7) {
+                        subAllowed = [...filtered.primary.map((t) => t.name), ...toolsMod.ALWAYS_INCLUDE_TOOLS];
+                      }
+                    }
                     const subRequiredTools = subAllowed && subAllowed.length > 0
                       ? { tools: [...subAllowed], adaptive: false, maxRetries: 2 }
                       : undefined;
@@ -2260,6 +2321,13 @@ export class ReactiveAgent {
     private readonly _setTaskDescription?: (desc: string) => void,
   ) {}
 
+  /** @internal Last debrief from a completed run — used as context in chat() calls. */
+  private _lastDebrief?: AgentDebrief;
+  /** @internal Tool observations from the last run — gives chat access to actual data. */
+  private _lastRunObservations: string[] = [];
+  /** @internal Conversation history for the agent-level chat context. */
+  private _chatHistory: ChatMessage[] = [];
+
   /**
    * Release all resources held by this agent.
    *
@@ -2374,13 +2442,55 @@ export class ReactiveAgent {
     return Effect.promise(() =>
       this.runtime.runPromise(
         this.engine.execute(task).pipe(
-          Effect.map((result: TaskResult) => ({
-            output: String(result.output ?? ""),
-            success: result.success,
-            taskId: String(result.taskId),
-            agentId: String(result.agentId),
-            metadata: result.metadata as AgentResultMetadata,
-          })),
+          Effect.map((result: TaskResult) => {
+            const r = result as TaskResult & {
+              format?: OutputFormat;
+              terminatedBy?: TerminatedBy;
+              debrief?: AgentDebrief;
+            };
+            const agentResult: AgentResult = {
+              output: String(r.output ?? ""),
+              success: r.success,
+              taskId: String(r.taskId),
+              agentId: String(r.agentId),
+              metadata: r.metadata as AgentResultMetadata,
+              ...(r.format !== undefined ? { format: r.format } : {}),
+              ...(r.terminatedBy !== undefined ? { terminatedBy: r.terminatedBy } : {}),
+              ...(r.debrief !== undefined ? { debrief: r.debrief } : {}),
+            };
+            // Capture debrief for use as context in subsequent chat() calls
+            if (agentResult.debrief) this._lastDebrief = agentResult.debrief;
+            // Capture reasoning context so chat() has access to actual data.
+            // Includes: tool observations + agent analysis thoughts (which contain
+            // the synthesized data from tool results, not just compressed previews).
+            const steps = ((r.metadata as any)?.reasoningSteps ?? []) as Array<{
+              type: string;
+              content: string;
+              metadata?: { observationResult?: { success?: boolean }; toolUsed?: string };
+            }>;
+            const contextParts: string[] = [];
+            for (let i = 0; i < steps.length; i++) {
+              const s = steps[i]!;
+              if (s.type === "observation") {
+                // Include successful observations (tool results)
+                if (s.metadata?.observationResult?.success !== false &&
+                    s.content.length > 10 &&
+                    !s.content.startsWith("⚠️") &&
+                    !s.content.startsWith("✓ final-answer")) {
+                  contextParts.push(`[Tool result]: ${s.content}`);
+                }
+              } else if (s.type === "thought" && i > 0) {
+                // Include analysis thoughts that follow observations — these contain
+                // the actual synthesized data (e.g. commit summaries, parsed results).
+                const prev = steps[i - 1];
+                if (prev?.type === "observation" && s.content.length > 50) {
+                  contextParts.push(`[Agent analysis]: ${s.content}`);
+                }
+              }
+            }
+            this._lastRunObservations = contextParts;
+            return agentResult;
+          }),
           Effect.mapError(
             (e: RuntimeErrors | TaskError) =>
               new Error("message" in e ? e.message : String(e)),
@@ -2433,6 +2543,86 @@ export class ReactiveAgent {
     );
 
     yield* AgentStream.toAsyncIterable(stream);
+  }
+
+  /**
+   * Send a conversational message to the agent.
+   *
+   * Automatically routes between two paths based on message intent:
+   * - **Direct LLM path** (fast, no tools): conversational/factual questions, simple queries
+   * - **Tool-capable path**: messages requiring search, file ops, computation, etc.
+   *
+   * Use `options.useTools` to override the automatic routing.
+   *
+   * @param message - The user's conversational message
+   * @param options - Optional routing overrides and iteration limits
+   * @returns Promise resolving to a ChatReply with `message` (and optional `toolsUsed`)
+   * @example
+   * ```typescript
+   * const reply = await agent.chat("What did you find earlier?");
+   * console.log(reply.message);
+   *
+   * // Force tool path:
+   * const reply2 = await agent.chat("Search for latest news", { useTools: true });
+   * ```
+   */
+  async chat(
+    message: string,
+    options?: ChatOptions,
+    _history?: ChatMessage[],
+  ): Promise<ChatReply> {
+    const useTools = options?.useTools ?? requiresTools(message);
+    const contextSummary = buildContextSummary(this._lastDebrief, this._lastRunObservations);
+
+    if (!useTools) {
+      // Direct LLM path — fast, no tool overhead
+      // Use caller-supplied history (session context) or fall back to agent-level history
+      const reply = await this.runtime.runPromise(
+        directChat(message, _history ?? this._chatHistory, contextSummary),
+      );
+      // Accumulate into agent-level history when called outside a session
+      if (!_history) {
+        this._chatHistory.push({ role: "user", content: message, timestamp: Date.now() });
+        this._chatHistory.push({ role: "assistant", content: reply.message, timestamp: Date.now() });
+      }
+      return reply;
+    }
+
+    // Tool-capable path — full agent run with capped iterations
+    // Prepend prior run context so the agent knows what happened before
+    const enrichedMessage = contextSummary
+      ? `Context from prior run:\n${contextSummary}\n\nNew request: ${message}`
+      : message;
+    const result = await this.run(enrichedMessage);
+    return {
+      message: result.output,
+      toolsUsed: result.debrief?.toolsUsed.map((t) => t.name),
+      tokens: result.metadata.tokensUsed,
+      steps: result.metadata.stepsCount,
+      cost: result.metadata.cost,
+    };
+  }
+
+  /**
+   * Create a stateful chat session backed by this agent.
+   *
+   * Returns an `AgentSession` with `chat()`, `history()`, and `end()` methods.
+   * The session maintains conversation history automatically.
+   *
+   * @param options - Optional session configuration
+   * @returns A new AgentSession instance
+   * @example
+   * ```typescript
+   * const session = agent.session();
+   * const r1 = await session.chat("Hello!");
+   * const r2 = await session.chat("What did I just say?");
+   * console.log(session.history()); // [{role:"user",...}, {role:"assistant",...}, ...]
+   * await session.end();
+   * ```
+   */
+  session(options?: SessionOptions): AgentSession {
+    // options.persistOnEnd: deferred — episodic memory persistence not yet wired
+    return new AgentSession((msg, history, opts) => this.chat(msg, opts, history));
   }
 
   /**

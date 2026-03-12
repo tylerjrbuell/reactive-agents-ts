@@ -1,9 +1,9 @@
 ---
 title: Reactive Agents
-description: The composable AI agent framework for TypeScript. Type-safe, observable, and production-ready.
+description: The open-source agent framework built for control, not magic. Type-safe, observable, and composable.
 template: splash
 hero:
-  tagline: "Every capability is an independent, composable layer. 20 packages. One command. Type-safe from prompt to production with Effect-TS."
+  tagline: "The open-source agent framework built for control, not magic. Every decision is controllable, observable, and auditable. Agent intelligence through engineering, not just bigger models."
   image:
     file: ../../assets/logo-dark.svg
   actions:
@@ -22,6 +22,7 @@ hero:
 
 import { Card, CardGrid, Tabs, TabItem } from "@astrojs/starlight/components";
 import HeroInteraction from "../../components/HeroInteraction.astro";
+import TerminalReplay from "../../components/TerminalReplay.astro";
 
 <div class="ra-stats">
   <div class="ra-stat">
@@ -29,12 +30,12 @@ import HeroInteraction from "../../components/HeroInteraction.astro";
     <span class="ra-stat-label">Packages</span>
   </div>
   <div class="ra-stat">
-    <span class="ra-stat-value">1,700+</span>
+    <span class="ra-stat-value">1,773+</span>
     <span class="ra-stat-label">Tests</span>
   </div>
   <div class="ra-stat">
-    <span class="ra-stat-value">6</span>
-    <span class="ra-stat-label">LLM Providers</span>
+    <span class="ra-stat-value">40+</span>
+    <span class="ra-stat-label">LLM Providers via LiteLLM</span>
   </div>
   <div class="ra-stat">
     <span class="ra-stat-value">5</span>
@@ -46,15 +47,67 @@ import HeroInteraction from "../../components/HeroInteraction.astro";
   </div>
 </div>
 
-## Build Agents That Think, Act, and Learn
+<TerminalReplay />
 
-Most agent frameworks give you a chat loop and call it a day. Reactive Agents gives you a **10-phase execution engine**, **5 reasoning strategies**, **4-tier memory**, **A2A protocol for agent interop**, **persistent autonomous gateway**, and **14 composable layers** — all fully typed, all independently toggleable.
+## See It In Action
+
+```typescript
+import { ReactiveAgents } from "reactive-agents";
+
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withReasoning()                          // ReAct loop: Think → Act → Observe
+  .withTools()                              // Built-in: web-search, file-read, code-execute
+  .withObservability({ verbosity: "normal" })
+  .build();
+
+const result = await agent.run("Find the top 3 TypeScript testing frameworks and compare them");
+```
+
+Every run produces a professional metrics dashboard — automatically, with zero instrumentation:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ ✅ Agent Execution Summary                                  │
+├─────────────────────────────────────────────────────────────┤
+│ Status:    ✅ Success   Duration: 13.9s   Steps: 7          │
+│ Tokens:    1,963        Cost: ~$0.003     Model: claude-3.5 │
+└─────────────────────────────────────────────────────────────┘
+
+📊 Execution Timeline
+├─ [bootstrap]       100ms    ✅
+├─ [guardrail]        50ms    ✅
+├─ [strategy]         50ms    ✅
+├─ [think]        10,001ms    ⚠️  (7 iter, 72% of time)
+├─ [act]           1,000ms    ✅  (2 tools)
+├─ [observe]         500ms    ✅
+├─ [memory-flush]    200ms    ✅
+└─ [complete]         28ms    ✅
+
+🔧 Tool Execution (2 called)
+├─ web-search    ✅ 3 calls, 450ms avg
+└─ file-write    ✅ 2 calls, 280ms avg
+```
+
+---
+
+## Install
+
+```bash
+bun add reactive-agents    # or: npm install reactive-agents
+```
+
+That's it. One package, 20 composable layers. Enable what you need, skip what you don't.
+
+---
+
+## Why Reactive Agents?
 
 <CardGrid stagger>
   <Card title="Type-Safe from End to End" icon="seti:typescript">
     Every agent, tool, memory entry, and LLM call is validated by Effect-TS
     schemas. Catch errors at compile time. Runtime validation at every service
-    boundary. No `any` leaking through your agent stack.
+    boundary. Typed errors mean failures are explicit, not surprises.
   </Card>
   <Card title="Composable Layer Architecture" icon="puzzle">
     Enable exactly the capabilities you need. Memory without guardrails? Just
@@ -64,79 +117,76 @@ Most agent frameworks give you a chat loop and call it a day. Reactive Agents gi
   </Card>
   <Card title="Observable Execution Engine" icon="magnifier">
     Every agent task flows through a deterministic 10-phase lifecycle with
-    before/after/error hooks. When observability is enabled, every phase emits
-    spans and metrics. You see exactly what your agent decided and why.
+    before/after/error hooks. Every phase emits spans, metrics, and EventBus
+    events. You see exactly what your agent decided, why, and how long it took.
   </Card>
   <Card title="5 Reasoning Strategies" icon="star">
     ReAct for tool use. Reflexion for self-improvement. Plan-Execute for
     structured work. Tree-of-Thought for creative exploration. Adaptive to
     auto-select the best strategy. Register your own strategies too.
   </Card>
-  <Card title="Composable Kernel Architecture" icon="setting">
-    Every reasoning strategy runs on a swappable ThoughtKernel abstraction.
-    Register custom kernels via StrategyRegistry, or use the built-in ReAct
-    kernel. KernelRunner handles the universal execution loop, tool call guards,
-    and EventBus wiring — strategies stay focused on policy, not plumbing.
+  <Card title="Model-Adaptive Intelligence" icon="setting">
+    Context profiles tune prompts, budgets, and tool strategies per model tier.
+    LLM-based tool classification, completion gap detection, and circuit breakers
+    help smaller models punch above their weight — same code, better results
+    across the full model spectrum.
   </Card>
-  <Card title="Multi-Agent & A2A Protocol" icon="rocket">
-    Build teams of specialized agents that collaborate via the A2A
-    (Agent-to-Agent) protocol. Dynamic agent spawning, agent-as-tool
-    composition, SSE streaming, and structured JSON-RPC communication. Scale
-    from single agents to orchestrated multi-agent workflows.
-  </Card>
-  <Card title="40+ LLM Providers" icon="external">
-    Native support for Anthropic, OpenAI, Google Gemini, Ollama, and 35+ more
-    via LiteLLM. Mix providers per-agent, route by cost/capability, or use
-    multiple models in parallel. Fallback chains and A/B testing built in.
+  <Card title="Great DX" icon="rocket">
+    60 seconds to your first agent. Progressive disclosure — start with 3 lines,
+    add reasoning, memory, guardrails, and observability as you need them. The
+    builder API reads like a sentence. `rax` CLI scaffolds, runs, and inspects.
   </Card>
 </CardGrid>
 
 ---
 
-## Quick Example
+## More Examples
 
 <Tabs>
-  <TabItem label="Simple Agent">
+  <TabItem label="Streaming">
 ```typescript
-import { ReactiveAgents } from "reactive-agents";
+// Token-by-token streaming via AsyncGenerator
+for await (const event of agent.runStream("Write a haiku about TypeScript")) {
+  if (event._tag === "TextDelta") process.stdout.write(event.text);
+  if (event._tag === "StreamCompleted") console.log("\nDone!");
+}
 
-const agent = await ReactiveAgents.create()
-.withName("assistant")
-.withProvider("anthropic")
-.withModel("claude-sonnet-4-20250514")
-.build();
-
-const result = await agent.run("Explain quantum entanglement");
-console.log(result.output);
-
-````
+// One-liner SSE endpoint
+Bun.serve({ fetch: (req) => AgentStream.toSSE(agent.runStream("Hello")) });
+```
   </TabItem>
-  <TabItem label="With Tools + Reasoning">
+  <TabItem label="Conversational Chat">
 ```typescript
-import { ReactiveAgents } from "reactive-agents";
-import { defineTool } from "@reactive-agents/tools";
-import { Effect, Schema } from "effect";
+// Multi-turn conversation with memory
+const session = agent.session();
 
-const searchTool = defineTool({
-  name: "web_search",
-  description: "Search the web",
-  input: Schema.Struct({ query: Schema.String }),
-  handler: ({ query }) => Effect.succeed(`Results for: ${query}`),
-});
+await session.chat("What's the capital of France?");
+// → "Paris is the capital of France."
 
+await session.chat("What's the population?");
+// → "Paris has approximately 2.1 million residents..."
+// (remembers context from previous turn)
+```
+  </TabItem>
+  <TabItem label="Persistent Gateway">
+```typescript
+// Autonomous agent that runs 24/7
 const agent = await ReactiveAgents.create()
-  .withName("researcher")
   .withProvider("anthropic")
-  .withReasoning()           // ReAct loop: Think -> Act -> Observe
-  .withTools([searchTool])   // Tools are called during reasoning
-  .withMemory("1")           // Persistent memory across sessions
+  .withReasoning()
+  .withTools()
+  .withGateway({
+    heartbeat: { intervalMs: 3_600_000, policy: "adaptive" },
+    crons: [{ schedule: "0 9 * * MON", instruction: "Weekly report" }],
+    webhooks: [{ path: "/github", adapter: "github" }],
+    policies: { dailyTokenBudget: 50_000 },
+  })
   .build();
 
-const result = await agent.run("What happened in AI this week?");
-````
-
+const handle = agent.start();  // Runs forever, Ctrl+C to stop
+```
   </TabItem>
-  <TabItem label="Production Stack">
+  <TabItem label="Full Production Stack">
 ```typescript
 const agent = await ReactiveAgents.create()
   .withName("production-agent")
@@ -168,24 +218,25 @@ const agent = await ReactiveAgents.create()
 
 <CardGrid>
   <Card title="vs. LangChain / LlamaIndex" icon="document">
-    Those frameworks are Python-first, dynamically typed, and monolithic.
-    Reactive Agents is TypeScript-native, statically typed with Effect-TS
-    schemas, and fully modular — you only load what you use.
+    Python-first, dynamically typed, monolithic. Reactive Agents is
+    TypeScript-native with Effect-TS type safety, fully modular layers, and
+    built-in observability — you see every decision your agent makes, not just
+    the final output.
   </Card>
   <Card title="vs. Vercel AI SDK" icon="document">
-    Vercel AI SDK handles streaming and tool calling well but stops there.
-    Reactive Agents adds reasoning strategies, persistent memory, guardrails,
-    verification, cost routing, observability, and multi-agent orchestration.
+    Great for streaming and tool calling, but stops there. Reactive Agents adds
+    5 reasoning strategies, persistent 4-tier memory, guardrails, verification,
+    cost routing, and a 10-phase execution engine with full observability.
   </Card>
   <Card title="vs. AutoGen / CrewAI" icon="document">
-    Multi-agent frameworks that lack type safety, composable architecture, or
-    fine-grained observability. Reactive Agents gives you all three plus a
-    10-phase execution engine you can hook into at any point.
+    Multi-agent frameworks without type safety, composable architecture, or
+    model-adaptive intelligence. Reactive Agents gives you all three — plus
+    model-adaptive context profiles that help local models perform far beyond naive prompting.
   </Card>
   <Card title="vs. Building From Scratch" icon="document">
-    You get 19 production-ready packages with 1,350+ tests, covering memory,
-    reasoning, tools, A2A protocol, gateway, safety, cost, identity, and
-    orchestration. Focus on your agent's logic, not infrastructure.
+    20 production-ready packages with 1,773+ tests covering memory, reasoning,
+    tools, A2A protocol, gateway, safety, cost, identity, and orchestration.
+    Focus on your agent's logic, not infrastructure.
   </Card>
 </CardGrid>
 

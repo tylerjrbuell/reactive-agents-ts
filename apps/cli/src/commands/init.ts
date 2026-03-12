@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { generateProject, type ProjectTemplate } from "../generators/project-generator.js";
-import { fail, info, kv, section, success } from "../ui.js";
+import { banner, fail, info, kv, section, success } from "../ui.js";
 
 const VALID_TEMPLATES: ProjectTemplate[] = ["minimal", "standard", "full"];
 
@@ -23,7 +23,7 @@ export function runInit(args: string[]): void {
   }
 
   const targetDir = join(process.cwd(), name);
-  console.log(section("Project Init"));
+  banner("rax init", `Creating "${name}" with template "${template}"`);
   console.log(info(`Creating project "${name}" with template "${template}"...`));
 
   const result = generateProject({ name, template, targetDir });

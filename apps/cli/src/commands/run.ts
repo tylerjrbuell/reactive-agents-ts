@@ -1,7 +1,9 @@
 import { ReactiveAgents } from "@reactive-agents/runtime";
+import chalk from "chalk";
 
 import { existsSync, readFileSync } from "fs";
 import { resolve } from "path";
+import { createSpinner, kv, muted, divider, fail } from "../ui.js";
 
 interface MCPConfigFile {
   servers: Array<{
@@ -39,24 +41,6 @@ function isValidProvider(p: string): p is Provider {
   return (VALID_PROVIDERS as readonly string[]).includes(p);
 }
 
-/** Simple stderr spinner for long-running operations. */
-function createSpinner(message: string) {
-  const frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-  let i = 0;
-  const interval = setInterval(() => {
-    process.stderr.write(`\r${frames[i++ % frames.length]} ${message}`);
-  }, 80);
-  return {
-    stop(finalMessage?: string) {
-      clearInterval(interval);
-      process.stderr.write(`\r${finalMessage ?? `✓ ${message}`}\n`);
-    },
-    fail(finalMessage: string) {
-      clearInterval(interval);
-      process.stderr.write(`\r✗ ${finalMessage}\n`);
-    },
-  };
-}
 
 export async function runAgent(args: string[]): Promise<void> {
   // Parse arguments
@@ -144,7 +128,7 @@ export async function runAgent(args: string[]): Promise<void> {
   }
 
   // Build agent
-  const spinner = quiet ? null : createSpinner(`Building agent "${name}" with provider: ${provider}`);
+  const spin = quiet ? null : createSpinner(`Building agent "${name}" with provider: ${provider}`);
 
   let builder = ReactiveAgents.create()
     .withName(name)
@@ -170,22 +154,22 @@ export async function runAgent(args: string[]): Promise<void> {
 
   try {
     const agent = await builder.build();
-    spinner?.stop(`Agent ready: ${agent.agentId}`);
+    spin?.stop(`Agent ready: ${agent.agentId}`);
 
     if (verbose) {
-      console.error(`  Provider: ${provider}`);
-      if (model) console.error(`  Model: ${model}`);
-      console.error(`  Tools: ${enableTools ? "enabled" : "disabled"}`);
-      console.error(`  Reasoning: ${enableReasoning ? "enabled" : "disabled"}`);
-      if (mcpConfig) console.error(`  MCP servers: ${mcpConfig.servers.length}`);
-      console.error("");
+      console.log(kv("Provider", provider));
+      if (model) console.log(kv("Model", model));
+      console.log(kv("Tools", enableTools ? "enabled" : "disabled"));
+      console.log(kv("Reasoning", enableReasoning ? "enabled" : "disabled"));
+      if (mcpConfig) console.log(kv("MCP servers", String(mcpConfig.servers.length)));
+      console.log("");
     }
 
     if (!quiet) {
       console.error(`Running: "${prompt}"\n`);
     }
 
-    const execSpinner = quiet || stream ? null : createSpinner("Executing");
+    const execSpin = quiet || stream ? null : createSpinner("Executing...");
     const result = stream
       ? await (async () => {
           if (!quiet) {
@@ -246,21 +230,25 @@ export async function runAgent(args: string[]): Promise<void> {
           };
         })()
       : await agent.run(prompt);
-    execSpinner?.stop("Execution complete");
+    execSpin?.stop("Execution complete");
 
     if (result.success) {
       if (quiet) {
         // Quiet mode: output only, no chrome
         console.log(result.output || "");
       } else {
-        console.log("\n─── Output ───");
-        console.log(result.output || "(no output)");
-        console.log("\n─── Metadata ───");
-        console.log(`  Duration: ${result.metadata.duration}ms`);
-        console.log(`  Steps: ${result.metadata.stepsCount}`);
-        console.log(`  Cost: $${result.metadata.cost.toFixed(6)}`);
+        console.log("");
+        divider();
+        console.log(chalk.bold("\nOutput:"));
+        console.log(result.output || muted("(no output)"));
+        console.log("");
+        divider();
+        console.log(chalk.bold("\nMetrics:"));
+        console.log(kv("Duration", `${result.metadata.duration}ms`));
+        console.log(kv("Steps", String(result.metadata.stepsCount)));
+        console.log(kv("Cost", `$${result.metadata.cost.toFixed(6)}`));
         if (verbose && result.metadata.strategyUsed) {
-          console.log(`  Strategy: ${result.metadata.strategyUsed}`);
+          console.log(kv("Strategy", result.metadata.strategyUsed));
         }
       }
     } else {
@@ -269,7 +257,7 @@ export async function runAgent(args: string[]): Promise<void> {
       process.exit(1);
     }
   } catch (err) {
-    spinner?.fail("Build failed");
+    spin?.fail("Build failed");
     const msg = err instanceof Error ? err.message : String(err);
     const cause = readErrorCause(err);
     const causeStr = cause

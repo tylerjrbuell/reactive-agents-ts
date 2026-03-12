@@ -252,7 +252,7 @@ describe("buildContext", () => {
     ];
     const input = makeInput({ availableToolSchemas: tools });
     const ctx = buildContext(input);
-    expect(ctx).toContain("DELEGATION");
+    expect(ctx).toContain("spawn-agent");
   });
 
   test("includes completed summary when steps have successful actions", () => {

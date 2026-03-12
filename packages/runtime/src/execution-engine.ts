@@ -19,14 +19,16 @@ import { StreamingTextCallback } from "@reactive-agents/core";
 import type { Task, TaskResult } from "@reactive-agents/core";
 import type { TaskError } from "@reactive-agents/core";
 import type { ContextProfile } from "@reactive-agents/reasoning";
-import { inferRequiredTools, filterToolsByRelevance } from "@reactive-agents/reasoning";
+import { inferRequiredTools, classifyToolRelevance, filterToolsByRelevance } from "@reactive-agents/reasoning";
 import { ToolService } from "@reactive-agents/tools";
-import { ObservabilityService } from "@reactive-agents/observability";
+import { ObservabilityService, createProgressLogger } from "@reactive-agents/observability";
 import { GuardrailService, KillSwitchService, BehavioralContractService } from "@reactive-agents/guardrails";
 import { VerificationService } from "@reactive-agents/verification";
 import { CostService } from "@reactive-agents/cost";
 import { EventBus } from "@reactive-agents/core";
 import type { AgentEvent } from "@reactive-agents/core";
+import { synthesizeDebrief, type DebriefInput, type AgentDebrief } from "./debrief.js";
+import { DebriefStoreService } from "@reactive-agents/memory";
 
 // ─── Narrow service types for optional deps ───
 
@@ -608,18 +610,19 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   }),
                 );
 
+                // ── Single tool registry fetch (reused for logging, classification, and reasoning) ──
+                const cachedToolDefs = yield* Effect.serviceOption(ToolService).pipe(
+                  Effect.flatMap((opt) =>
+                    opt._tag === "Some"
+                      ? opt.value.listTools()
+                      : Effect.succeed([] as readonly any[]),
+                  ),
+                  Effect.catchAll(() => Effect.succeed([] as readonly any[])),
+                );
+
                 // ── Log strategy-select summary ──
                 if (obs && isNormal) {
-                  const toolNames = yield* Effect.serviceOption(ToolService).pipe(
-                    Effect.flatMap((opt) =>
-                      opt._tag === "Some"
-                        ? opt.value.listTools().pipe(
-                            Effect.map((tools) => tools.map((t) => t.name).join(", ")),
-                          )
-                        : Effect.succeed(""),
-                    ),
-                    Effect.catchAll(() => Effect.succeed("")),
-                  );
+                  const toolNames = cachedToolDefs.map((t: any) => t.name as string).join(", ");
                   const toolsInfo = toolNames ? ` | tools: ${toolNames}` : "";
                   yield* obs.info(`◉ [strategy]   ${ctx.selectedStrategy ?? "reactive"}${toolsInfo}`)
                     .pipe(Effect.catchAll(() => Effect.void));
@@ -627,21 +630,18 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
 
                 // ── Phase 5: AGENT_LOOP ──
 
-                // ── Adaptive required tools inference (before reasoning) ──
+                // ── LLM-based tool classification (required + relevant) ──
+                // Single structured-output call replaces both heuristic required-tools
+                // inference and adaptive tool filtering. Semantic understanding > keywords.
                 let effectiveRequiredTools = config.requiredTools?.tools;
-                if (config.requiredTools?.adaptive && !config.requiredTools?.tools?.length) {
-                  const toolDefsForInfer = yield* Effect.serviceOption(ToolService).pipe(
-                    Effect.flatMap((opt) =>
-                      opt._tag === "Some"
-                        ? opt.value.listTools()
-                        : Effect.succeed([] as readonly any[]),
-                    ),
-                    Effect.catchAll(() => Effect.succeed([] as readonly any[])),
-                  );
-
-                  if (toolDefsForInfer.length > 0) {
-                    const taskText = extractTaskText(task.input);
-                    const toolSchemas = toolDefsForInfer.map((t: any) => ({
+                let classifiedRelevantTools: readonly string[] | undefined;
+                const needsClassification =
+                  (config.requiredTools?.adaptive && !config.requiredTools?.tools?.length) ||
+                  config.adaptiveToolFiltering;
+                if (needsClassification) {
+                  const classifyResult = yield* classifyToolRelevance({
+                    taskDescription: extractTaskText(task.input),
+                    availableTools: cachedToolDefs.map((t: any) => ({
                       name: t.name as string,
                       description: (t.description ?? "") as string,
                       parameters: ((t.parameters ?? []) as any[]).map((p: any) => ({
@@ -650,45 +650,25 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         description: (p.description ?? "") as string,
                         required: Boolean(p.required),
                       })),
-                    }));
+                    })),
+                    systemPrompt: config.systemPrompt,
+                  }).pipe(
+                    // Degrade gracefully if LLM call fails — empty arrays = no filtering
+                    Effect.catchAll(() => Effect.succeed({ required: [] as readonly string[], relevant: [] as readonly string[] })),
+                  );
 
-                    // Fast path: heuristic keyword matching (no LLM call needed)
-                    // For required tools, use strict name-only matching — description
-                    // matching is too broad and marks 50+ tools as "required".
-                    // Cap at 5 to prevent death spiral from over-requiring.
-                    const { primary } = filterToolsByRelevance(taskText, toolSchemas);
-                    let inferred: readonly string[];
-
-                    // Only trust heuristic if it returns a reasonable number (≤5)
-                    if (primary.length > 0 && primary.length <= 5) {
-                      // Heuristic found a focused set — skip LLM inference
-                      inferred = primary.map(t => t.name);
-                    } else if (primary.length > 5) {
-                      // Too many matches — heuristic is too broad for required tools.
-                      // Filter down to only tools whose name appears in the task text.
-                      const taskLower = taskText.toLowerCase();
-                      const nameMatched = primary.filter(t => {
-                        const parts = t.name.replace(/[/_-]/g, " ").toLowerCase().split(/\s+/);
-                        return parts.some(p => p.length > 3 && taskLower.includes(p));
-                      });
-                      inferred = nameMatched.length > 0 && nameMatched.length <= 5
-                        ? nameMatched.map(t => t.name)
-                        : []; // Fall through to LLM if still too many
-                    } else {
-                      // Heuristic found nothing — fall back to LLM inference
-                      inferred = yield* inferRequiredTools({
-                        taskDescription: taskText,
-                        availableTools: toolSchemas,
-                        systemPrompt: config.systemPrompt,
-                      }).pipe(Effect.catchAll(() => Effect.succeed([] as readonly string[])));
+                  if (classifyResult.required.length > 0 && !config.requiredTools?.tools?.length) {
+                    effectiveRequiredTools = [...classifyResult.required];
+                    if (obs && isNormal) {
+                      yield* obs.info(`◉ [classify]   required: ${classifyResult.required.join(", ")}`)
+                        .pipe(Effect.catchAll(() => Effect.void));
                     }
-
-                    if (inferred.length > 0) {
-                      effectiveRequiredTools = [...inferred];
-                      if (obs && isNormal) {
-                        yield* obs.info(`◉ [infer-tools] required: ${inferred.join(", ")}`)
-                          .pipe(Effect.catchAll(() => Effect.void));
-                      }
+                  }
+                  if (classifyResult.relevant.length > 0) {
+                    classifiedRelevantTools = classifyResult.relevant;
+                    if (obs && isNormal) {
+                      yield* obs.info(`◉ [classify]   relevant: ${classifyResult.relevant.join(", ")}`)
+                        .pipe(Effect.catchAll(() => Effect.void));
                     }
                   }
                 }
@@ -733,6 +713,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       memoryContext: string;
                       availableTools: readonly string[];
                       availableToolSchemas?: readonly { name: string; description: string; parameters: readonly { name: string; type: string; description: string; required: boolean }[] }[];
+                      allToolSchemas?: readonly { name: string; description: string; parameters: readonly { name: string; type: string; description: string; required: boolean }[] }[];
                       strategy?: string;
                       contextProfile?: Partial<ContextProfile>;
                       systemPrompt?: string;
@@ -763,19 +744,9 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
 
                 if (reasoningOpt._tag === "Some" && !cacheHit) {
                   // ── Full reasoning path ──
-                  // Fetch full tool definitions for rich schema injection into prompts
-                  const availableToolDefs = yield* Effect.serviceOption(
-                    ToolService,
-                  ).pipe(
-                    Effect.flatMap((opt) =>
-                      opt._tag === "Some"
-                        ? opt.value.listTools()
-                        : Effect.succeed([] as readonly any[]),
-                    ),
-                    Effect.catchAll(() => Effect.succeed([] as readonly any[])),
-                  );
-                  let availableToolNames = availableToolDefs.map((t: any) => t.name as string);
-                  let availableToolSchemas = availableToolDefs.map((t: any) => ({
+                  // Reuse cached tool definitions (fetched once above)
+                  let availableToolNames = cachedToolDefs.map((t: any) => t.name as string);
+                  let availableToolSchemas = cachedToolDefs.map((t: any) => ({
                     name: t.name as string,
                     description: t.description as string,
                     parameters: (t.parameters ?? []).map((p: any) => ({
@@ -786,23 +757,33 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     })),
                   }));
 
-                  // ── Adaptive tool filtering ──
-                  // When enabled, filter the tool schemas shown to the agent to only
-                  // task-relevant tools + essential built-ins. Reduces context noise
-                  // and improves small-model accuracy. All tools remain callable by name.
-                  if (config.adaptiveToolFiltering && availableToolSchemas.length > 10) {
-                    const taskTextForFilter = extractTaskText(task.input);
-                    const { primary } = filterToolsByRelevance(taskTextForFilter, availableToolSchemas);
+                  // Snapshot the full unfiltered schemas for the completion guard
+                  const allToolSchemas = [...availableToolSchemas];
 
+                  // ── Adaptive tool filtering ──
+                  // When LLM classification produced relevant tools, use those.
+                  // Otherwise fall back to heuristic filtering.
+                  // All tools remain callable by name — filtering only affects what's
+                  // shown in the prompt to reduce context noise.
+                  if (config.adaptiveToolFiltering && availableToolSchemas.length > 10) {
                     // Always include essential tools the agent needs for internal operations
                     const ALWAYS_INCLUDE = new Set([
                       "scratchpad-read", "scratchpad-write",
                       "spawn-agent",
                     ]);
 
-                    // Merge primary + always-include + required tools
                     const requiredSet = new Set(effectiveRequiredTools ?? []);
-                    const filteredSet = new Set(primary.map(t => t.name));
+                    let filteredSet: Set<string>;
+
+                    if (classifiedRelevantTools && classifiedRelevantTools.length > 0) {
+                      // LLM-classified: use required + relevant from classification
+                      filteredSet = new Set([...classifiedRelevantTools, ...requiredSet]);
+                    } else {
+                      // Fallback: heuristic keyword matching
+                      const taskTextForFilter = extractTaskText(task.input);
+                      const { primary } = filterToolsByRelevance(taskTextForFilter, availableToolSchemas);
+                      filteredSet = new Set(primary.map(t => t.name));
+                    }
                     for (const name of ALWAYS_INCLUDE) filteredSet.add(name);
                     for (const name of requiredSet) filteredSet.add(name);
 
@@ -901,6 +882,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         memoryContext: memCtx,
                         availableTools: availableToolNames,
                         availableToolSchemas,
+                        allToolSchemas,
                         strategy: c.selectedStrategy ?? "reactive",
                         contextProfile: config.contextProfile,
                         systemPrompt: config.systemPrompt,
@@ -1177,6 +1159,10 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   );
 
                   let isComplete = false;
+
+                  // Create progress logger for per-iteration visibility
+                  const verbosity = obs ? (obs.verbosity() as "minimal" | "normal" | "verbose" | "debug") : "minimal";
+                  const progressLogger = createProgressLogger(verbosity);
 
                   while (!isComplete && ctx.iteration <= ctx.maxIterations) {
                     // ── Kill switch check at top of each iteration ──
@@ -1469,6 +1455,14 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         }) as unknown as Effect.Effect<ExecutionContext, never>,
                     );
 
+                    // Log thought phase for per-iteration progress visibility
+                    yield* progressLogger.logIteration({
+                      iteration: ctx.iteration,
+                      maxIterations: ctx.maxIterations,
+                      phase: "thought",
+                      content: ctx.metadata.lastResponse as string,
+                    }).pipe(Effect.catchAll(() => Effect.void));
+
                     // 5b. ACT (if tool calls present) — call real ToolService
                     const pendingCalls =
                       (ctx.metadata.pendingToolCalls as unknown[]) ?? [];
@@ -1600,6 +1594,14 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                                     ),
                                   );
 
+                                // Log tool execution for progress visibility
+                                yield* progressLogger.logToolExecution(
+                                  toolName,
+                                  toolResult.success ? "success" : "error",
+                                  toolResult.durationMs,
+                                  toolResult.success ? undefined : (toolResult.result as string),
+                                ).pipe(Effect.catchAll(() => Effect.void));
+
                                 // Phase 0.2: Publish ToolCallCompleted
                                 if (eb) {
                                   yield* eb.publish({
@@ -1624,6 +1626,18 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                           };
                         }),
                       );
+
+                      // Log action phase for each tool call
+                      for (const toolResult of (ctx.toolResults.slice(-pendingCalls.length) as any[])) {
+                        yield* progressLogger.logIteration({
+                          iteration: ctx.iteration,
+                          maxIterations: ctx.maxIterations,
+                          phase: "action",
+                          content: `Tool: ${toolResult.toolName}`,
+                          toolName: toolResult.toolName,
+                          toolStatus: toolResult.success ? "success" : "error",
+                        }).pipe(Effect.catchAll(() => Effect.void));
+                      }
 
                       // 5c. OBSERVE — H5: also log episodic memories
                       ctx = yield* guardedPhase(ctx, "observe", (c) =>
@@ -1712,10 +1726,42 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                           };
                         }),
                       );
+
+                      // Log observation phase with summary
+                      const recentResults = (ctx.toolResults.slice(-pendingCalls.length) as any[]);
+                      for (const toolResult of recentResults) {
+                        const resultPreview = typeof toolResult.result === "string"
+                          ? toolResult.result.slice(0, 100)
+                          : JSON.stringify(toolResult.result).slice(0, 100);
+                        yield* progressLogger.logIteration({
+                          iteration: ctx.iteration,
+                          maxIterations: ctx.maxIterations,
+                          phase: "observation",
+                          content: resultPreview,
+                          toolName: toolResult.toolName,
+                          toolStatus: toolResult.success ? "success" : "error",
+                          errorMessage: toolResult.success ? undefined : (toolResult.result as string),
+                        }).pipe(Effect.catchAll(() => Effect.void));
+                      }
+
+                      // Log iteration summary
+                      yield* progressLogger.logIterationSummary(
+                        ctx.iteration,
+                        ctx.tokensUsed,
+                        recentResults.map((r: any) => r.toolName),
+                      ).pipe(Effect.catchAll(() => Effect.void));
                     } else {
                       // 5d. LOOP_CHECK
                       isComplete = Boolean(ctx.metadata.isComplete);
                       ctx = { ...ctx, iteration: ctx.iteration + 1 };
+
+                      // Log iteration summary even when no tools called
+                      yield* progressLogger.logIterationSummary(
+                        ctx.iteration - 1,
+                        ctx.tokensUsed,
+                        [],
+                        isComplete ? "final-answer" : "no-tools",
+                      ).pipe(Effect.catchAll(() => Effect.void));
                     }
                   }
 
@@ -2144,23 +2190,160 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
 
                 // Build TaskResult — sanitize output to strip internal metadata
                 const rawOutput = ctx.metadata.lastResponse ?? null;
-                const rr = ctx.metadata.reasoningResult as { metadata?: { confidence?: number; strategyFallback?: boolean } } | undefined;
-                const result: TaskResult = {
+                const rr = ctx.metadata.reasoningResult as { metadata?: { confidence?: number; strategyFallback?: boolean; terminatedBy?: string; finalAnswerCapture?: unknown } } | undefined;
+                const sanitizedOutput = typeof rawOutput === "string" ? sanitizeOutput(rawOutput) : rawOutput;
+
+                // ── Debrief Synthesis (best-effort, never blocks the result) ──
+                // Extract terminatedBy from reasoning metadata, with fallback inference
+                const terminatedByRaw = (rr?.metadata?.terminatedBy ?? "end_turn") as
+                  "final_answer_tool" | "final_answer" | "max_iterations" | "end_turn";
+
+                // Publish FinalAnswerProduced event when final-answer tool is called
+                if (terminatedByRaw === "final_answer_tool" && eb) {
+                  const capture = rr?.metadata?.finalAnswerCapture as any;
+                  yield* eb.publish({
+                    _tag: "FinalAnswerProduced",
+                    taskId: ctx.taskId,
+                    strategy: ctx.selectedStrategy ?? "unknown",
+                    answer: capture?.output ?? sanitizedOutput ?? "",
+                    iteration: ctx.iteration,
+                    totalTokens: ctx.tokensUsed,
+                  }).pipe(Effect.catchAll(() => Effect.void));
+                }
+
+                // Collect tool stats from action steps
+                const rrSteps = (ctx.metadata.reasoningSteps ?? []) as Array<{
+                  type: string;
+                  metadata?: { toolUsed?: string; duration?: number; observationResult?: { success?: boolean } };
+                }>;
+                const toolStatsMap = new Map<string, { calls: number; errors: number; totalDurationMs: number }>();
+                for (const step of rrSteps) {
+                  if (step.type === "action" && step.metadata?.toolUsed) {
+                    const name = step.metadata.toolUsed;
+                    const existing = toolStatsMap.get(name) ?? { calls: 0, errors: 0, totalDurationMs: 0 };
+                    const durationMs = step.metadata?.duration ?? 0;
+                    // Find next observation to check success
+                    const stepIdx = rrSteps.indexOf(step);
+                    const nextStep = stepIdx >= 0 ? rrSteps[stepIdx + 1] : undefined;
+                    const isError = nextStep?.type === "observation"
+                      ? (nextStep.metadata?.observationResult?.success === false)
+                      : false;
+                    toolStatsMap.set(name, {
+                      calls: existing.calls + 1,
+                      errors: existing.errors + (isError ? 1 : 0),
+                      totalDurationMs: existing.totalDurationMs + durationMs,
+                    });
+                  }
+                }
+                const toolCallHistory: DebriefInput["toolCallHistory"] = Array.from(toolStatsMap.entries()).map(
+                  ([name, stat]) => ({
+                    name,
+                    calls: stat.calls,
+                    errors: stat.errors,
+                    avgDurationMs: stat.calls > 0 ? Math.round(stat.totalDurationMs / stat.calls) : 0,
+                  }),
+                );
+
+                // Collect errors — look for [Tool error: ...] patterns in observations
+                const errorsFromLoop: string[] = [];
+                for (const step of rrSteps) {
+                  if (step.type === "observation") {
+                    const content = (step as { content?: string }).content ?? "";
+                    const match = content.match(/\[Tool error: ([^\]]+)\]/);
+                    if (match?.[1]) errorsFromLoop.push(match[1]);
+                  }
+                }
+
+                const executionDurationMs = Date.now() - ctx.startedAt.getTime();
+
+                const debriefInput: DebriefInput = {
+                  taskPrompt: extractTaskText(task.input),
+                  agentId: ctx.agentId,
+                  taskId: ctx.taskId,
+                  terminatedBy: terminatedByRaw,
+                  finalAnswerCapture: rr?.metadata?.finalAnswerCapture as any,
+                  toolCallHistory,
+                  errorsFromLoop,
+                  metrics: {
+                    tokens: ctx.tokensUsed,
+                    duration: executionDurationMs,
+                    iterations: ctx.iteration,
+                    cost: ctx.cost,
+                  },
+                };
+
+                // Synthesize debrief (best-effort, only on the reasoning path with memory enabled).
+                // Gated on BOTH: rr !== undefined (reasoning path was used) AND config.enableMemory
+                // (user opted in with .withMemory()). Skipped otherwise to avoid injecting extra
+                // LLM calls in direct-LLM path tests and non-memory configurations.
+                // Also requires LLMService to be available in context — use serviceOption to check.
+                const debrief: AgentDebrief | undefined = yield* (rr !== undefined && config.enableMemory
+                  ? Effect.serviceOption(
+                      Context.GenericTag<{ complete: (req: unknown) => Effect.Effect<unknown> }>("LLMService"),
+                    ).pipe(
+                      Effect.flatMap((llmOpt) => {
+                        if (llmOpt._tag !== "Some") return Effect.succeed(undefined as AgentDebrief | undefined);
+                        return synthesizeDebrief(debriefInput).pipe(
+                          Effect.map((d) => d as AgentDebrief),
+                          Effect.catchAll(() => Effect.succeed(undefined as AgentDebrief | undefined)),
+                        );
+                      }),
+                      Effect.catchAll(() => Effect.succeed(undefined as AgentDebrief | undefined)),
+                    )
+                  : Effect.succeed(undefined as AgentDebrief | undefined));
+
+                // Persist debrief if DebriefStoreService is available
+                if (debrief !== undefined) {
+                  yield* Effect.serviceOption(DebriefStoreService).pipe(
+                    Effect.flatMap((storeOpt) => {
+                      if (storeOpt._tag !== "Some") return Effect.void;
+                      return storeOpt.value.save({
+                        taskId: ctx.taskId,
+                        agentId: ctx.agentId,
+                        taskPrompt: extractTaskText(task.input),
+                        terminatedBy: terminatedByRaw,
+                        output: String(sanitizedOutput ?? ""),
+                        outputFormat: "text",
+                        debrief: debrief as any,
+                      }).pipe(Effect.catchAll(() => Effect.void));
+                    }),
+                    Effect.catchAll(() => Effect.void),
+                  );
+                }
+
+                const result: TaskResult & {
+                  format?: string;
+                  terminatedBy?: string;
+                  debrief?: AgentDebrief;
+                } = {
                   taskId: task.id as any,
                   agentId: task.agentId,
-                  output: typeof rawOutput === "string" ? sanitizeOutput(rawOutput) : rawOutput,
+                  output: sanitizedOutput,
                   success: true,
                   metadata: {
-                    duration: Date.now() - ctx.startedAt.getTime(),
+                    duration: executionDurationMs,
                     cost: ctx.cost,
                     tokensUsed: ctx.tokensUsed,
                     strategyUsed: ctx.selectedStrategy,
                     stepsCount: (ctx.metadata.stepsCount as number | undefined) ?? ctx.iteration,
-                    ...(rr?.metadata?.confidence !== undefined ? { confidence: rr.metadata.confidence } : {}),
+                    iterations: ctx.iteration,
+                    // Forward reasoning steps so chat() can access tool results and analysis.
+                    // Cast needed: reasoningSteps is an internal field not in the public TaskResult type.
+                    ...(ctx.metadata.reasoningSteps ? { reasoningSteps: ctx.metadata.reasoningSteps } as any : {}),
+                    ...(rr?.metadata?.confidence !== undefined ? {
+                      confidence: (rr.metadata.confidence >= 0.7
+                        ? "high"
+                        : rr.metadata.confidence >= 0.4
+                          ? "medium"
+                          : "low") as "high" | "medium" | "low",
+                    } : {}),
                     ...(rr?.metadata?.strategyFallback === true ? { strategyFallback: true } : {}),
                     ...(ctx.metadata.budgetExceeded ? { budgetExceeded: true } : {}),
                   },
                   completedAt: new Date(),
+                  format: "text",
+                  terminatedBy: terminatedByRaw,
+                  ...(debrief !== undefined ? { debrief } : {}),
                 };
 
                 if (obs) {

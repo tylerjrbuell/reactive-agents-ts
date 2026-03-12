@@ -207,6 +207,67 @@ html {
   border-left-color: rgba(109, 40, 217, 0.1);
 }
 
+/* ── Try It Now CTA ────────────────────────────────────────── */
+.ra-try-it {
+  margin: 2rem auto 2.5rem;
+  max-width: 480px;
+  text-align: center;
+}
+
+.ra-try-it-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.ra-try-it-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ra-cyan);
+  opacity: 0.85;
+}
+
+.ra-try-it-command {
+  background: rgba(139, 92, 246, 0.08);
+  border: 1.5px solid rgba(139, 92, 246, 0.25);
+  border-radius: 10px;
+  padding: 0.75rem 1.8rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.ra-try-it-command:hover {
+  border-color: var(--ra-violet);
+  box-shadow: 0 0 20px rgba(139, 92, 246, 0.15);
+}
+
+.ra-try-it-command code {
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--ra-violet);
+  background: none !important;
+  padding: 0 !important;
+  letter-spacing: 0.01em;
+}
+
+.ra-try-it-hint {
+  font-size: 0.75rem;
+  color: var(--sl-color-gray-3);
+  opacity: 0.7;
+}
+
+/* Light mode try-it */
+[data-theme="light"] .ra-try-it-command {
+  background: rgba(139, 92, 246, 0.04);
+  border-color: rgba(139, 92, 246, 0.2);
+}
+
+[data-theme="light"] .ra-try-it-command code {
+  color: var(--ra-violet-deep);
+}
+
 /* ── Buttons ────────────────────────────────────────────────── */
 .sl-link-button {
   transition:

@@ -86,7 +86,7 @@ export function runKernel(
       profile,
       compression: input.resultCompression ?? {
         budget: profile.toolResultMaxChars ?? 800,
-        previewItems: 3,
+        previewItems: 5,
         autoStore: true,
         codeTransform: true,
       },
@@ -106,6 +106,7 @@ export function runKernel(
     const loopCfg = options.loopDetection;
     const maxSameTool = loopCfg?.maxSameToolCalls ?? 3;
     const maxRepeatedThought = loopCfg?.maxRepeatedThoughts ?? 3;
+    const maxConsecutiveThoughts = loopCfg?.maxConsecutiveThoughts ?? 3;
 
     // Required tools guard — tracks redirect attempts to prevent infinite loops
     const requiredTools = input.requiredTools ?? [];
@@ -131,42 +132,50 @@ export function runKernel(
         const steps = state.steps;
 
         // (a) Repeated tool calls: same tool + same args N times in a row
-        //     Normalizes JSON to catch formatting variants (key order, whitespace)
-        if (steps.length >= maxSameTool) {
-          const recentActions = steps
-            .slice(-maxSameTool)
-            .filter((s) => s.type === "action");
-          if (recentActions.length === maxSameTool) {
-            const firstNorm = normalizeActionContent(recentActions[0]!.content);
-            const allSame = recentActions.every((s) => normalizeActionContent(s.content) === firstNorm);
-            if (allSame) {
-              state = transitionState(state, {
-                status: "failed",
-                error: `Loop detected: same tool call repeated ${maxSameTool} times`,
-              });
-              break;
-            }
+        //     Filter first, then take the last N — ensures we compare actual
+        //     actions, not a mix of action/thought/observation steps.
+        const allActions = steps.filter((s) => s.type === "action");
+        if (allActions.length >= maxSameTool) {
+          const recentActions = allActions.slice(-maxSameTool);
+          const firstNorm = normalizeActionContent(recentActions[0]!.content);
+          const allSame = recentActions.every((s) => normalizeActionContent(s.content) === firstNorm);
+          if (allSame) {
+            state = transitionState(state, {
+              status: "failed",
+              error: `Loop detected: same tool call repeated ${maxSameTool} times`,
+            });
+            break;
           }
         }
 
         // (b) Repeated thoughts: identical thought content N times in recent history
-        if (steps.length >= maxRepeatedThought) {
-          const recentThoughts = steps
-            .slice(-maxRepeatedThought * 2) // look at a wider window
-            .filter((s) => s.type === "thought");
-          if (recentThoughts.length >= maxRepeatedThought) {
-            const lastThought = recentThoughts[recentThoughts.length - 1]!.content;
-            const matchCount = recentThoughts.filter(
-              (s) => s.content === lastThought,
-            ).length;
-            if (matchCount >= maxRepeatedThought) {
-              state = transitionState(state, {
-                status: "failed",
-                error: `Loop detected: identical thought repeated ${matchCount} times`,
-              });
-              break;
-            }
+        const allThoughts = steps.filter((s) => s.type === "thought");
+        if (allThoughts.length >= maxRepeatedThought) {
+          const recentThoughts = allThoughts.slice(-maxRepeatedThought);
+          const lastThought = recentThoughts[recentThoughts.length - 1]!.content;
+          const allSameThought = recentThoughts.every((s) => s.content === lastThought);
+          if (allSameThought) {
+            state = transitionState(state, {
+              status: "failed",
+              error: `Loop detected: identical thought repeated ${maxRepeatedThought} times`,
+            });
+            break;
           }
+        }
+
+        // (c) Consecutive thoughts without any action — agent is stuck thinking
+        //     without making progress. Count trailing thought steps (no action between them).
+        let consecutiveThoughts = 0;
+        for (let i = steps.length - 1; i >= 0; i--) {
+          if (steps[i]!.type === "thought") consecutiveThoughts++;
+          else break; // any non-thought (action/observation) resets the streak
+        }
+        if (consecutiveThoughts >= maxConsecutiveThoughts) {
+          state = transitionState(state, {
+            status: "failed",
+            error: `Loop detected: ${consecutiveThoughts} consecutive thoughts without any tool action`,
+          });
+          break;
         }
       }
 

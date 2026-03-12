@@ -39,6 +39,8 @@ export {
   ResultMetadataSchema,
   ReasoningStepSchema,
   StepType,
+  OutputFormat,
+  TerminatedBy,
 } from "./types/result.js";
 
 export { MessageId, MessageSchema, MessageType } from "./types/message.js";

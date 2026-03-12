@@ -121,8 +121,8 @@ export { filterToolsByRelevance } from "./strategies/shared/tool-utils.js";
 export type { ToolSchema, ToolParamSchema } from "./strategies/shared/tool-utils.js";
 
 // ─── Structured Output ───
-export { inferRequiredTools } from "./structured-output/infer-required-tools.js";
-export type { ToolSummary, InferRequiredToolsConfig } from "./structured-output/infer-required-tools.js";
+export { inferRequiredTools, classifyToolRelevance } from "./structured-output/infer-required-tools.js";
+export type { ToolSummary, InferRequiredToolsConfig, ToolClassificationResult } from "./structured-output/infer-required-tools.js";
 
 // ─── Runtime ───
 export { createReasoningLayer } from "./runtime.js";

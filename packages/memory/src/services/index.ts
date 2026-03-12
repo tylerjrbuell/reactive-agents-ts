@@ -17,3 +17,13 @@ export type {
   ConsolidationResult,
   ConsolidatorConfig,
 } from "./memory-consolidator.js";
+
+export {
+  DebriefStoreService,
+  DebriefStoreLive,
+} from "./debrief-store.js";
+export type {
+  DebriefRecord,
+  SaveDebriefInput,
+  AgentDebriefShape,
+} from "./debrief-store.js";

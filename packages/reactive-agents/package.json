@@ -1,9 +1,13 @@
 {
   "name": "reactive-agents",
-  "version": "0.7.0",
+  "version": "0.7.5",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "bin": {
+    "rax": "bin/rax.js",
+    "reactive-agents": "bin/rax.js"
+  },
   "description": "The composable AI agent framework built on Effect-TS — install everything with one package",
   "keywords": [
     "ai",
@@ -39,6 +43,7 @@
   },
   "files": [
     "dist",
+    "bin",
     "README.md",
     "LICENSE"
   ],
@@ -59,7 +64,8 @@
     "@reactive-agents/orchestration": "workspace:*",
     "@reactive-agents/prompts": "workspace:*",
     "@reactive-agents/eval": "workspace:*",
-    "@reactive-agents/a2a": "workspace:*"
+    "@reactive-agents/a2a": "workspace:*",
+    "@reactive-agents/cli": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.7.0",

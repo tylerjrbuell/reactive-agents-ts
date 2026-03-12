@@ -320,6 +320,8 @@ export const ReactiveAgentsConfigSchema = Schema.Struct({
       maxRetries: Schema.optional(Schema.Number),
     })
   ),
+  /** Enable memory layer — set to true when .withMemory() is called. Controls debrief synthesis. */
+  enableMemory: Schema.optional(Schema.Boolean),
   /** Enable ExperienceStore cross-agent learning (records and queries tool-use patterns). */
   enableExperienceLearning: Schema.optional(Schema.Boolean),
   /** Enable MemoryConsolidatorService background memory intelligence. */

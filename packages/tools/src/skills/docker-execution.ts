@@ -37,7 +37,7 @@ export const dockerExecuteTool: ToolDefinition = {
     "{ executed: false, error: string } on failure",
   category: "code",
   riskLevel: "high",
-  timeoutMs: 60_000,
+  timeoutMs: 30_000,
   requiresApproval: true,
   source: "builtin",
 };
