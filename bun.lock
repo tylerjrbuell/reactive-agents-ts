@@ -14,7 +14,7 @@
     },
     "apps/cli": {
       "name": "@reactive-agents/cli",
-      "version": "0.7.6",
+      "version": "0.7.8",
       "bin": {
         "rax": "dist/index.js",
         "reactive-agents": "dist/index.js",
@@ -50,7 +50,7 @@
     },
     "apps/examples": {
       "name": "@reactive-agents/examples",
-      "version": "0.1.0",
+      "version": "0.1.2",
       "dependencies": {
         "@reactive-agents/a2a": "workspace:*",
         "@reactive-agents/core": "workspace:*",
@@ -78,7 +78,7 @@
     },
     "apps/meta-agent": {
       "name": "@reactive-agents/meta-agent",
-      "version": "0.1.0",
+      "version": "0.1.2",
       "dependencies": {
         "@reactive-agents/health": "workspace:*",
         "effect": "^3.10.0",
@@ -91,19 +91,19 @@
     },
     "packages/a2a": {
       "name": "@reactive-agents/a2a",
-      "version": "0.7.6",
+      "version": "0.7.8",
       "dependencies": {
-        "@reactive-agents/core": "workspace:*",
-        "@reactive-agents/tools": "workspace:*",
+        "@reactive-agents/core": "0.7.8",
+        "@reactive-agents/tools": "0.7.8",
         "effect": "^3.10.0",
       },
       "devDependencies": {
-        "@reactive-agents/identity": "workspace:*",
+        "@reactive-agents/identity": "0.7.8",
         "bun-types": "latest",
         "typescript": "^5.7.0",
       },
       "peerDependencies": {
-        "@reactive-agents/identity": "workspace:*",
+        "@reactive-agents/identity": "0.7.8",
       },
       "optionalPeers": [
         "@reactive-agents/identity",
@@ -111,7 +111,7 @@
     },
     "packages/benchmarks": {
       "name": "@reactive-agents/benchmarks",
-      "version": "0.7.6",
+      "version": "0.7.8",
       "dependencies": {
         "@reactive-agents/core": "workspace:*",
         "@reactive-agents/cost": "workspace:*",
@@ -127,7 +127,7 @@
     },
     "packages/core": {
       "name": "@reactive-agents/core",
-      "version": "0.7.6",
+      "version": "0.7.8",
       "dependencies": {
         "effect": "^3.10.0",
         "ulid": "^2.3.0",
@@ -139,11 +139,11 @@
     },
     "packages/cost": {
       "name": "@reactive-agents/cost",
-      "version": "0.7.6",
+      "version": "0.7.8",
       "dependencies": {
-        "@reactive-agents/core": "workspace:*",
-        "@reactive-agents/llm-provider": "workspace:*",
-        "@reactive-agents/memory": "workspace:*",
+        "@reactive-agents/core": "0.7.8",
+        "@reactive-agents/llm-provider": "0.7.8",
+        "@reactive-agents/memory": "0.7.8",
         "effect": "^3.10.0",
       },
       "devDependencies": {
@@ -153,7 +153,7 @@
     },
     "packages/eval": {
       "name": "@reactive-agents/eval",
-      "version": "0.7.6",
+      "version": "0.7.8",
       "dependencies": {
         "@reactive-agents/core": "workspace:*",
         "@reactive-agents/llm-provider": "workspace:*",
@@ -166,9 +166,9 @@
     },
     "packages/gateway": {
       "name": "@reactive-agents/gateway",
-      "version": "0.7.6",
+      "version": "0.7.8",
       "dependencies": {
-        "@reactive-agents/core": "workspace:*",
+        "@reactive-agents/core": "0.7.8",
         "effect": "^3.10.0",
       },
       "devDependencies": {
@@ -178,10 +178,10 @@
     },
     "packages/guardrails": {
       "name": "@reactive-agents/guardrails",
-      "version": "0.7.6",
+      "version": "0.7.8",
       "dependencies": {
-        "@reactive-agents/core": "workspace:*",
-        "@reactive-agents/llm-provider": "workspace:*",
+        "@reactive-agents/core": "0.7.8",
+        "@reactive-agents/llm-provider": "0.7.8",
         "effect": "^3.10.0",
       },
       "devDependencies": {
@@ -202,10 +202,10 @@
     },
     "packages/identity": {
       "name": "@reactive-agents/identity",
-      "version": "0.7.6",
+      "version": "0.7.8",
       "dependencies": {
         "@noble/ed25519": "^2.0.0",
-        "@reactive-agents/core": "workspace:*",
+        "@reactive-agents/core": "0.7.8",
         "effect": "^3.10.0",
       },
       "devDependencies": {
@@ -215,11 +215,11 @@
     },
     "packages/interaction": {
       "name": "@reactive-agents/interaction",
-      "version": "0.7.6",
+      "version": "0.7.8",
       "dependencies": {
-        "@reactive-agents/core": "workspace:*",
-        "@reactive-agents/observability": "workspace:*",
-        "@reactive-agents/reasoning": "workspace:*",
+        "@reactive-agents/core": "0.7.8",
+        "@reactive-agents/observability": "0.7.8",
+        "@reactive-agents/reasoning": "0.7.8",
         "effect": "^3.10.0",
         "ulid": "^2.3.0",
       },
@@ -230,9 +230,9 @@
     },
     "packages/llm-provider": {
       "name": "@reactive-agents/llm-provider",
-      "version": "0.7.6",
+      "version": "0.7.8",
       "dependencies": {
-        "@reactive-agents/core": "workspace:*",
+        "@reactive-agents/core": "0.7.8",
         "effect": "^3.10.0",
       },
       "devDependencies": {
@@ -250,9 +250,9 @@
     },
     "packages/memory": {
       "name": "@reactive-agents/memory",
-      "version": "0.7.6",
+      "version": "0.7.8",
       "dependencies": {
-        "@reactive-agents/core": "workspace:*",
+        "@reactive-agents/core": "0.7.8",
         "effect": "^3.10.0",
       },
       "devDependencies": {
@@ -262,7 +262,7 @@
     },
     "packages/observability": {
       "name": "@reactive-agents/observability",
-      "version": "0.7.6",
+      "version": "0.7.8",
       "dependencies": {
         "@opentelemetry/api": "^1.9.0",
         "@opentelemetry/exporter-metrics-otlp-http": "^0.213.0",
@@ -271,7 +271,7 @@
         "@opentelemetry/sdk-metrics": "^2.6.0",
         "@opentelemetry/sdk-trace-base": "^2.6.0",
         "@opentelemetry/semantic-conventions": "^1.40.0",
-        "@reactive-agents/core": "workspace:*",
+        "@reactive-agents/core": "0.7.8",
         "effect": "^3.10.0",
       },
       "devDependencies": {
@@ -281,13 +281,13 @@
     },
     "packages/orchestration": {
       "name": "@reactive-agents/orchestration",
-      "version": "0.7.6",
+      "version": "0.7.8",
       "dependencies": {
-        "@reactive-agents/core": "workspace:*",
-        "@reactive-agents/cost": "workspace:*",
-        "@reactive-agents/identity": "workspace:*",
-        "@reactive-agents/llm-provider": "workspace:*",
-        "@reactive-agents/reasoning": "workspace:*",
+        "@reactive-agents/core": "0.7.8",
+        "@reactive-agents/cost": "0.7.8",
+        "@reactive-agents/identity": "0.7.8",
+        "@reactive-agents/llm-provider": "0.7.8",
+        "@reactive-agents/reasoning": "0.7.8",
         "effect": "^3.10.0",
       },
       "devDependencies": {
@@ -297,9 +297,9 @@
     },
     "packages/prompts": {
       "name": "@reactive-agents/prompts",
-      "version": "0.7.6",
+      "version": "0.7.8",
       "dependencies": {
-        "@reactive-agents/core": "workspace:*",
+        "@reactive-agents/core": "0.7.8",
         "effect": "^3.10.0",
       },
       "devDependencies": {
@@ -309,7 +309,7 @@
     },
     "packages/reactive-agents": {
       "name": "reactive-agents",
-      "version": "0.7.6",
+      "version": "0.7.8",
       "bin": {
         "rax": "bin/rax.js",
         "reactive-agents": "bin/rax.js",
@@ -341,13 +341,13 @@
     },
     "packages/reasoning": {
       "name": "@reactive-agents/reasoning",
-      "version": "0.7.6",
+      "version": "0.7.8",
       "dependencies": {
-        "@reactive-agents/core": "workspace:*",
-        "@reactive-agents/llm-provider": "workspace:*",
-        "@reactive-agents/memory": "workspace:*",
-        "@reactive-agents/prompts": "workspace:*",
-        "@reactive-agents/tools": "workspace:*",
+        "@reactive-agents/core": "0.7.8",
+        "@reactive-agents/llm-provider": "0.7.8",
+        "@reactive-agents/memory": "0.7.8",
+        "@reactive-agents/prompts": "0.7.8",
+        "@reactive-agents/tools": "0.7.8",
         "effect": "^3.10.0",
         "ulid": "^2.3.0",
       },
@@ -358,23 +358,24 @@
     },
     "packages/runtime": {
       "name": "@reactive-agents/runtime",
-      "version": "0.7.6",
+      "version": "0.7.8",
       "dependencies": {
-        "@reactive-agents/a2a": "workspace:*",
-        "@reactive-agents/core": "workspace:*",
-        "@reactive-agents/cost": "workspace:*",
-        "@reactive-agents/gateway": "workspace:*",
-        "@reactive-agents/guardrails": "workspace:*",
-        "@reactive-agents/identity": "workspace:*",
-        "@reactive-agents/interaction": "workspace:*",
-        "@reactive-agents/llm-provider": "workspace:*",
-        "@reactive-agents/memory": "workspace:*",
-        "@reactive-agents/observability": "workspace:*",
-        "@reactive-agents/orchestration": "workspace:*",
-        "@reactive-agents/prompts": "workspace:*",
-        "@reactive-agents/reasoning": "workspace:*",
-        "@reactive-agents/tools": "workspace:*",
-        "@reactive-agents/verification": "workspace:*",
+        "@reactive-agents/a2a": "0.7.8",
+        "@reactive-agents/core": "0.7.8",
+        "@reactive-agents/cost": "0.7.8",
+        "@reactive-agents/gateway": "0.7.8",
+        "@reactive-agents/guardrails": "0.7.8",
+        "@reactive-agents/health": "0.7.6",
+        "@reactive-agents/identity": "0.7.8",
+        "@reactive-agents/interaction": "0.7.8",
+        "@reactive-agents/llm-provider": "0.7.8",
+        "@reactive-agents/memory": "0.7.8",
+        "@reactive-agents/observability": "0.7.8",
+        "@reactive-agents/orchestration": "0.7.8",
+        "@reactive-agents/prompts": "0.7.8",
+        "@reactive-agents/reasoning": "0.7.8",
+        "@reactive-agents/tools": "0.7.8",
+        "@reactive-agents/verification": "0.7.8",
         "effect": "^3.10.0",
       },
       "devDependencies": {
@@ -384,7 +385,7 @@
     },
     "packages/testing": {
       "name": "@reactive-agents/testing",
-      "version": "0.7.6",
+      "version": "0.7.8",
       "dependencies": {
         "@reactive-agents/core": "workspace:^",
         "@reactive-agents/llm-provider": "workspace:^",
@@ -398,10 +399,10 @@
     },
     "packages/tools": {
       "name": "@reactive-agents/tools",
-      "version": "0.7.6",
+      "version": "0.7.8",
       "dependencies": {
-        "@reactive-agents/a2a": "workspace:*",
-        "@reactive-agents/core": "workspace:*",
+        "@reactive-agents/a2a": "0.7.8",
+        "@reactive-agents/core": "0.7.8",
         "effect": "^3.10.0",
       },
       "devDependencies": {
@@ -411,11 +412,11 @@
     },
     "packages/verification": {
       "name": "@reactive-agents/verification",
-      "version": "0.7.6",
+      "version": "0.7.8",
       "dependencies": {
-        "@reactive-agents/core": "workspace:*",
-        "@reactive-agents/llm-provider": "workspace:*",
-        "@reactive-agents/memory": "workspace:*",
+        "@reactive-agents/core": "0.7.8",
+        "@reactive-agents/llm-provider": "0.7.8",
+        "@reactive-agents/memory": "0.7.8",
         "effect": "^3.10.0",
       },
       "devDependencies": {

@@ -35,6 +35,8 @@ import {
   type SessionOptions,
 } from "./chat.js";
 import type { AgentDebrief } from "./debrief.js";
+import { Health } from "@reactive-agents/health";
+import { makeHealthService } from "@reactive-agents/health";
 
 // ─── Provider Types ──────────────────────────────────────────────────────────
 
@@ -747,6 +749,7 @@ export class ReactiveAgentBuilder {
   private _enableMemoryConsolidation: boolean = false;
   private _consolidationConfig?: { threshold?: number; decayFactor?: number; pruneThreshold?: number };
   private _errorHandler?: (error: RuntimeErrors | Error, context: { taskId: string; phase: string; iteration: number; lastStep?: string }) => void;
+  private _enableHealthCheck: boolean = false;
 
   // ─── Identity ───
 
@@ -1581,6 +1584,28 @@ export class ReactiveAgentBuilder {
   }
 
   /**
+   * Enable health checks for this agent.
+   *
+   * Adds an `agent.health()` method that returns the current health status
+   * with individual check results. Useful for Kubernetes liveness/readiness probes.
+   *
+   * @returns `this` for chaining
+   * @example
+   * ```typescript
+   * const agent = await ReactiveAgents.create()
+   *   .withProvider("anthropic")
+   *   .withHealthCheck()
+   *   .build();
+   * const health = await agent.health();
+   * // { status: "healthy", checks: [...] }
+   * ```
+   */
+  withHealthCheck(): this {
+    this._enableHealthCheck = true;
+    return this;
+  }
+
+  /**
    * Set the TTL for semantic cache entries. Cached LLM responses older than
    * this duration will be evicted.
    * @param ms - Cache TTL in milliseconds (default: 3,600,000 = 1 hour)
@@ -1828,6 +1853,8 @@ export class ReactiveAgentBuilder {
     const parentModel = this._model;
     const streamDensity = this._streamDensity;
     const errorHandler = this._errorHandler;
+    const enableHealthCheck = this._enableHealthCheck;
+    const agentIdCapture = agentId;
 
     // Capture parent config for sub-agent inheritance — sub-agents get
     // the same infrastructure as the parent without explicit configuration.
@@ -2420,6 +2447,19 @@ export class ReactiveAgentBuilder {
         );
       }
 
+      // Wire health layer when enabled
+      if (enableHealthCheck) {
+        const healthServiceLayer = Layer.effect(
+          Health,
+          makeHealthService({ port: 0, agentName: agentIdCapture }),
+        ).pipe(Layer.provide(fullRuntime as unknown as Layer.Layer<any>));
+
+        fullRuntime = Layer.merge(
+          fullRuntime as unknown as Layer.Layer<any>,
+          healthServiceLayer,
+        );
+      }
+
       // Create a ManagedRuntime so all facade calls (run, subscribe, pause, etc.)
       // share the same layer scope and the same service instances (EventBus, KillSwitch, etc.).
       const managedRuntime = ManagedRuntime.make(
@@ -2552,6 +2592,45 @@ export class ReactiveAgent {
       );
     }
     await this.runtime.dispose();
+  }
+
+  /**
+   * Check the health status of this agent and its dependencies.
+   *
+   * Returns a structured health response with individual check results.
+   * When health checks are not enabled (.withHealthCheck() not called),
+   * returns a basic "healthy" response with no checks.
+   *
+   * @example
+   * ```typescript
+   * const health = await agent.health();
+   * if (health.status === "unhealthy") {
+   *   console.error("Agent unhealthy:", health.checks.filter(c => !c.healthy));
+   * }
+   * ```
+   */
+  async health(): Promise<{
+    status: "healthy" | "degraded" | "unhealthy";
+    checks: Array<{ name: string; healthy: boolean; durationMs: number; lastError?: string }>;
+  }> {
+    return this.runtime.runPromise(
+      Effect.gen(function* () {
+        const healthOpt = yield* Effect.serviceOption(Health);
+        if (healthOpt._tag !== "Some") {
+          return { status: "healthy" as const, checks: [] };
+        }
+        const response = yield* healthOpt.value.check();
+        return {
+          status: response.status,
+          checks: response.checks.map((c) => ({
+            name: c.name,
+            healthy: c.healthy,
+            durationMs: c.durationMs,
+            lastError: c.message,
+          })),
+        };
+      }).pipe(Effect.catchAll(() => Effect.succeed({ status: "healthy" as const, checks: [] }))),
+    );
   }
 
   /**
