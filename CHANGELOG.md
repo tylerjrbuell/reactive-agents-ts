@@ -1396,7 +1396,7 @@ The 10-phase execution engine now calls every configured service. Agents can thi
 - `rax dev`, `rax eval`, `rax playground`, `rax inspect` — development utilities
 
 #### Documentation
-- Starlight (Astro) documentation site at https://tylerjrbuell.github.io/reactive-agents-ts/
+- Starlight (Astro) documentation site at https://docs.reactiveagents.dev/
 - 16 pages covering guides, concepts, and API reference
 
 #### CI/CD

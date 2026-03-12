@@ -54,7 +54,7 @@
     }
   },
   "description": "Runtime for Reactive Agents — ExecutionEngine, ReactiveAgentBuilder, and createRuntime",
-  "homepage": "https://tylerjrbuell.github.io/reactive-agents-ts/",
+  "homepage": "https://docs.reactiveagents.dev/",
   "bugs": {
     "url": "https://github.com/tylerjrbuell/reactive-agents-ts/issues"
   }

@@ -17,7 +17,7 @@ Every decision controllable, observable, and auditable. 20 packages. 13 composab
 [![Bun](https://img.shields.io/badge/Bun-compatible-FBF0DF?logo=bun&logoColor=000000)](https://bun.sh)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/tylerjrbuell/reactive-agents-ts/pulls)
 
-[Documentation](https://tylerjrbuell.github.io/reactive-agents-ts/) · [Discord](https://discord.gg/498xEG5A) · [Quick Start](#quick-start) · [Features](#features) · [Comparison](#comparison) · [Architecture](#architecture) · [Packages](#packages)
+[Documentation](https://docs.reactiveagents.dev/) · [Discord](https://discord.gg/498xEG5A) · [Quick Start](#quick-start) · [Features](#features) · [Comparison](#comparison) · [Architecture](#architecture) · [Packages](#packages)
 
 </div>
 
@@ -457,12 +457,12 @@ LLM_DEFAULT_MODEL=claude-sonnet-4-20250514
 
 ## Documentation
 
-Full documentation at **[tylerjrbuell.github.io/reactive-agents-ts](https://tylerjrbuell.github.io/reactive-agents-ts/)**
+Full documentation at **[docs.reactiveagents.dev](https://docs.reactiveagents.dev/)**
 
-- [Getting Started](https://tylerjrbuell.github.io/reactive-agents-ts/guides/quickstart/) -- Build an agent in 5 minutes
-- [Reasoning Strategies](https://tylerjrbuell.github.io/reactive-agents-ts/guides/reasoning/) -- All 5 strategies explained
-- [Architecture](https://tylerjrbuell.github.io/reactive-agents-ts/concepts/architecture/) -- Layer system deep dive
-- [Cookbook](https://tylerjrbuell.github.io/reactive-agents-ts/cookbook/testing-agents/) -- Testing, multi-agent patterns, production deployment
+- [Getting Started](https://docs.reactiveagents.dev/guides/quickstart/) -- Build an agent in 5 minutes
+- [Reasoning Strategies](https://docs.reactiveagents.dev/guides/reasoning/) -- All 5 strategies explained
+- [Architecture](https://docs.reactiveagents.dev/concepts/architecture/) -- Layer system deep dive
+- [Cookbook](https://docs.reactiveagents.dev/cookbook/testing-agents/) -- Testing, multi-agent patterns, production deployment
 
 ## Getting Help
 

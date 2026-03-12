@@ -47,7 +47,7 @@
     }
   },
   "description": "Observability for Reactive Agents — distributed tracing, metrics, and structured logging",
-  "homepage": "https://tylerjrbuell.github.io/reactive-agents-ts/",
+  "homepage": "https://docs.reactiveagents.dev/",
   "bugs": {
     "url": "https://github.com/tylerjrbuell/reactive-agents-ts/issues"
   }

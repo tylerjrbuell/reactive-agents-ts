@@ -1,6 +1,6 @@
 # @reactive-agents/llm-provider
 
-LLM provider adapters for the [Reactive Agents](https://tylerjrbuell.github.io/reactive-agents-ts/) framework.
+LLM provider adapters for the [Reactive Agents](https://docs.reactiveagents.dev/) framework.
 
 Provides a unified `LLMService` interface with adapters for Anthropic, OpenAI, Google Gemini, Ollama, and a deterministic test provider.
 
@@ -111,4 +111,4 @@ const layer = TestLLMServiceLayer({
 
 ## Documentation
 
-Full documentation at [tylerjrbuell.github.io/reactive-agents-ts](https://tylerjrbuell.github.io/reactive-agents-ts/)
+Full documentation at [docs.reactiveagents.dev](https://docs.reactiveagents.dev/)

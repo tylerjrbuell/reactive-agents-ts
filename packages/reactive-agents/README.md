@@ -69,4 +69,4 @@ bun add @reactive-agents/core @reactive-agents/runtime @reactive-agents/llm-prov
 
 ## Documentation
 
-Full documentation at [tylerjrbuell.github.io/reactive-agents-ts](https://tylerjrbuell.github.io/reactive-agents-ts/)
+Full documentation at [docs.reactiveagents.dev](https://docs.reactiveagents.dev/)

@@ -1,6 +1,6 @@
 # @reactive-agents/memory
 
-Memory system for the [Reactive Agents](https://tylerjrbuell.github.io/reactive-agents-ts/) framework.
+Memory system for the [Reactive Agents](https://docs.reactiveagents.dev/) framework.
 
 Four memory types backed by `bun:sqlite` — Working, Semantic, Episodic, and Procedural — with FTS5 full-text search (Tier 1) and optional vector embeddings (Tier 2).
 
@@ -49,4 +49,4 @@ OPENAI_API_KEY=sk-...
 
 ## Documentation
 
-Full documentation at [tylerjrbuell.github.io/reactive-agents-ts/guides/memory/](https://tylerjrbuell.github.io/reactive-agents-ts/guides/memory/)
+Full documentation at [docs.reactiveagents.dev/guides/memory/](https://docs.reactiveagents.dev/guides/memory/)

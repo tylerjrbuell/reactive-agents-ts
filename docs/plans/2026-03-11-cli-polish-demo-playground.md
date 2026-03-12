@@ -584,7 +584,7 @@ export async function runDemo(_args: string[]): Promise<void> {
   divider();
   console.log(`\n${chalk.hex("#8b5cf6").bold("🚀 Liked what you saw?")}\n`);
   console.log(`   ${chalk.bold("bun add reactive-agents")}`);
-  console.log(`   ${muted("Docs:")}  ${chalk.underline("https://tylerjrbuell.github.io/reactive-agents-ts/")}`);
+  console.log(`   ${muted("Docs:")}  ${chalk.underline("https://docs.reactiveagents.dev/")}`);
   console.log(`   ${muted("GitHub:")} ${chalk.underline("https://github.com/tylerjrbuell/reactive-agents-ts")}`);
   console.log("");
 }

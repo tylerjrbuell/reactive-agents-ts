@@ -1,6 +1,6 @@
 # @reactive-agents/core
 
-Core services and types for the [Reactive Agents](https://tylerjrbuell.github.io/reactive-agents-ts/) framework.
+Core services and types for the [Reactive Agents](https://docs.reactiveagents.dev/) framework.
 
 Provides the foundational building blocks that all other packages depend on: the EventBus, AgentService, TaskService, and shared schemas.
 
@@ -47,4 +47,4 @@ const result = await Effect.runPromise(
 
 ## Documentation
 
-Full documentation at [tylerjrbuell.github.io/reactive-agents-ts](https://tylerjrbuell.github.io/reactive-agents-ts/)
+Full documentation at [docs.reactiveagents.dev](https://docs.reactiveagents.dev/)

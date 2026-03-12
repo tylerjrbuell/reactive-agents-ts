@@ -40,7 +40,7 @@
     }
   },
   "description": "Prompt management for Reactive Agents — template engine and built-in prompt library",
-  "homepage": "https://tylerjrbuell.github.io/reactive-agents-ts/",
+  "homepage": "https://docs.reactiveagents.dev/",
   "bugs": {
     "url": "https://github.com/tylerjrbuell/reactive-agents-ts/issues"
   }

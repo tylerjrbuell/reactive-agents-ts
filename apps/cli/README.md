@@ -90,4 +90,4 @@ rax run "Summarize the state of fusion energy" --provider anthropic
 
 ## Documentation
 
-Full documentation at [tylerjrbuell.github.io/reactive-agents-ts/reference/cli/](https://tylerjrbuell.github.io/reactive-agents-ts/reference/cli/)
+Full documentation at [docs.reactiveagents.dev/reference/cli/](https://docs.reactiveagents.dev/reference/cli/)

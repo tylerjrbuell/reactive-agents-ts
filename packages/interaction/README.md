@@ -1,6 +1,6 @@
 # @reactive-agents/interaction
 
-Interaction modes for the [Reactive Agents](https://tylerjrbuell.github.io/reactive-agents-ts/) framework.
+Interaction modes for the [Reactive Agents](https://docs.reactiveagents.dev/) framework.
 
 Gives agents 5 levels of autonomy — from fully autonomous to human-in-the-loop collaborative — with dynamic transitions based on confidence and cost.
 
@@ -43,4 +43,4 @@ Modes transition automatically — an autonomous agent escalates to `consultativ
 
 ## Documentation
 
-Full documentation at [tylerjrbuell.github.io/reactive-agents-ts/guides/interaction-modes/](https://tylerjrbuell.github.io/reactive-agents-ts/guides/interaction-modes/)
+Full documentation at [docs.reactiveagents.dev/guides/interaction-modes/](https://docs.reactiveagents.dev/guides/interaction-modes/)

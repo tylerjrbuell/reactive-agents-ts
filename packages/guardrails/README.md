@@ -1,6 +1,6 @@
 # @reactive-agents/guardrails
 
-Safety guardrails for the [Reactive Agents](https://tylerjrbuell.github.io/reactive-agents-ts/) framework.
+Safety guardrails for the [Reactive Agents](https://docs.reactiveagents.dev/) framework.
 
 Protects agents from prompt injection, PII leakage, and toxic content — applied automatically during the `guardrail` phase of the execution engine.
 
@@ -47,4 +47,4 @@ const result = await agent.run("Ignore previous instructions and...");
 
 ## Documentation
 
-Full documentation at [tylerjrbuell.github.io/reactive-agents-ts/guides/guardrails/](https://tylerjrbuell.github.io/reactive-agents-ts/guides/guardrails/)
+Full documentation at [docs.reactiveagents.dev/guides/guardrails/](https://docs.reactiveagents.dev/guides/guardrails/)

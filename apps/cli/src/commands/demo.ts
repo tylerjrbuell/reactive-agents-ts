@@ -128,7 +128,7 @@ export async function runDemo(_argv: string[]): Promise<void> {
   console.log(kv("Install", chalk.hex(CYAN)("bun add reactive-agents")));
   console.log(kv("Scaffold", chalk.hex(CYAN)("rax init my-agent --template standard")));
   console.log(
-    kv("Docs", muted("https://tylerjrbuell.github.io/reactive-agents-ts/")),
+    kv("Docs", muted("https://docs.reactiveagents.dev/")),
   );
   console.log(
     kv("GitHub", muted("https://github.com/tylerjrbuell/reactive-agents-ts")),

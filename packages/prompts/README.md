@@ -1,6 +1,6 @@
 # @reactive-agents/prompts
 
-Prompt management for the [Reactive Agents](https://tylerjrbuell.github.io/reactive-agents-ts/) framework.
+Prompt management for the [Reactive Agents](https://docs.reactiveagents.dev/) framework.
 
 A template engine with variable interpolation and a built-in library of agent prompts for common use cases.
 
@@ -73,4 +73,4 @@ const customAgent = await ReactiveAgents.create()
 
 ## Documentation
 
-Full documentation at [tylerjrbuell.github.io/reactive-agents-ts](https://tylerjrbuell.github.io/reactive-agents-ts/)
+Full documentation at [docs.reactiveagents.dev](https://docs.reactiveagents.dev/)

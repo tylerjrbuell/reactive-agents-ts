@@ -28,7 +28,7 @@ Key features:
 24 runnable examples work without an API key (test mode).
 
 GitHub: https://github.com/tylerjrbuell/reactive-agents-ts
-Docs: https://tylerjrbuell.github.io/reactive-agents-ts/
+Docs: https://docs.reactiveagents.dev/
 npm: https://npmjs.com/package/reactive-agents
 
 Happy to answer questions about the architecture or the Effect-TS approach.

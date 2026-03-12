@@ -1,6 +1,6 @@
 # @reactive-agents/identity
 
-Identity and access control for the [Reactive Agents](https://tylerjrbuell.github.io/reactive-agents-ts/) framework.
+Identity and access control for the [Reactive Agents](https://docs.reactiveagents.dev/) framework.
 
 Manages agent certificates and role-based access control (RBAC) so agents can safely act on behalf of users with well-defined permissions.
 
@@ -33,4 +33,4 @@ const agent = await ReactiveAgents.create()
 
 ## Documentation
 
-Full documentation at [tylerjrbuell.github.io/reactive-agents-ts](https://tylerjrbuell.github.io/reactive-agents-ts/)
+Full documentation at [docs.reactiveagents.dev](https://docs.reactiveagents.dev/)

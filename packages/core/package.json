@@ -40,7 +40,7 @@
     }
   },
   "description": "Core services for Reactive Agents — EventBus, AgentService, TaskService, and shared types",
-  "homepage": "https://tylerjrbuell.github.io/reactive-agents-ts/",
+  "homepage": "https://docs.reactiveagents.dev/",
   "bugs": {
     "url": "https://github.com/tylerjrbuell/reactive-agents-ts/issues"
   }

@@ -1,6 +1,6 @@
 # @reactive-agents/tools
 
-Tool system for the [Reactive Agents](https://tylerjrbuell.github.io/reactive-agents-ts/) framework.
+Tool system for the [Reactive Agents](https://docs.reactiveagents.dev/) framework.
 
 Provides a type-safe tool registry, sandboxed execution, and an MCP (Model Context Protocol) client.
 
@@ -99,4 +99,4 @@ const program = Effect.gen(function* () {
 
 ## Documentation
 
-Full documentation at [tylerjrbuell.github.io/reactive-agents-ts/guides/tools/](https://tylerjrbuell.github.io/reactive-agents-ts/guides/tools/)
+Full documentation at [docs.reactiveagents.dev/guides/tools/](https://docs.reactiveagents.dev/guides/tools/)

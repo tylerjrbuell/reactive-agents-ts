@@ -1,6 +1,6 @@
 # @reactive-agents/verification
 
-Output verification for the [Reactive Agents](https://tylerjrbuell.github.io/reactive-agents-ts/) framework.
+Output verification for the [Reactive Agents](https://docs.reactiveagents.dev/) framework.
 
 Reduces hallucinations by measuring semantic entropy (consistency across multiple samples) and decomposing claims into verifiable facts.
 
@@ -36,4 +36,4 @@ When confidence is below the threshold, the agent can re-sample or escalate to t
 
 ## Documentation
 
-Full documentation at [tylerjrbuell.github.io/reactive-agents-ts](https://tylerjrbuell.github.io/reactive-agents-ts/)
+Full documentation at [docs.reactiveagents.dev](https://docs.reactiveagents.dev/)

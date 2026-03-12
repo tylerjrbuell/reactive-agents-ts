@@ -163,7 +163,7 @@ $ rax demo
 🚀 Liked what you saw?
 
    bun add reactive-agents
-   Docs: https://tylerjrbuell.github.io/reactive-agents-ts/
+   Docs: https://docs.reactiveagents.dev/
    GitHub: https://github.com/tylerjrbuell/reactive-agents-ts
 ```
 

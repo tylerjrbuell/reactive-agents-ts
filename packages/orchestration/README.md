@@ -1,6 +1,6 @@
 # @reactive-agents/orchestration
 
-Multi-agent orchestration for the [Reactive Agents](https://tylerjrbuell.github.io/reactive-agents-ts/) framework.
+Multi-agent orchestration for the [Reactive Agents](https://docs.reactiveagents.dev/) framework.
 
 Coordinate fleets of agents in parallel or sequential workflows, with typed message passing and failure handling.
 
@@ -39,4 +39,4 @@ const result = await workflow.run({
 
 ## Documentation
 
-Full documentation at [tylerjrbuell.github.io/reactive-agents-ts](https://tylerjrbuell.github.io/reactive-agents-ts/)
+Full documentation at [docs.reactiveagents.dev](https://docs.reactiveagents.dev/)

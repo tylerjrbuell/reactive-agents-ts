@@ -43,7 +43,7 @@
     }
   },
   "description": "Interaction modes for Reactive Agents — 5 autonomy modes, checkpoints, and human collaboration",
-  "homepage": "https://tylerjrbuell.github.io/reactive-agents-ts/",
+  "homepage": "https://docs.reactiveagents.dev/",
   "bugs": {
     "url": "https://github.com/tylerjrbuell/reactive-agents-ts/issues"
   }
