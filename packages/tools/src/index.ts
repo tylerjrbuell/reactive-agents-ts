@@ -115,6 +115,9 @@ export {
 } from "./adapters/agent-tool-adapter.js";
 export type { RemoteAgentClient, TaskResult, SubAgentConfig, SubAgentResult, ParentContext, ParentContextItem } from "./adapters/agent-tool-adapter.js";
 
+// ─── Builder ───
+export { ToolBuilder } from "./tool-builder.js";
+
 // ─── Meta-Tools ───
 export {
   contextStatusTool,
