@@ -8,5 +8,13 @@ export default defineConfig({
   splitting: false,
   sourcemap: true,
   banner: { js: "#!/usr/bin/env bun" },
-  external: ["effect", "@reactive-agents/core", "@reactive-agents/runtime", "@reactive-agents/benchmarks"],
+  external: [
+    "effect",
+    "@reactive-agents/core",
+    "@reactive-agents/runtime",
+    "@reactive-agents/benchmarks",
+    "chalk",
+    "ora",
+    "boxen",
+  ],
 });

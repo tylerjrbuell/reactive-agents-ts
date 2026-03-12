@@ -2597,6 +2597,9 @@ export class ReactiveAgent {
     return {
       message: result.output,
       toolsUsed: result.debrief?.toolsUsed.map((t) => t.name),
+      tokens: result.metadata.tokensUsed,
+      steps: result.metadata.stepsCount,
+      cost: result.metadata.cost,
     };
   }
 
@@ -2619,7 +2622,7 @@ export class ReactiveAgent {
    */
   session(options?: SessionOptions): AgentSession {
     // options.persistOnEnd: deferred — episodic memory persistence not yet wired
-    return new AgentSession((msg, history) => this.chat(msg, undefined, history));
+    return new AgentSession((msg, history, opts) => this.chat(msg, opts, history));
   }
 
   /**

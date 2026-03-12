@@ -1,11 +1,38 @@
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
+import { writeFileSync } from "node:fs";
+import chalk from "chalk";
 import { ReactiveAgents } from "@reactive-agents/runtime";
+import type { AgentDebrief } from "@reactive-agents/runtime";
+import {
+  banner,
+  spinner,
+  inlineSpinner,
+  info,
+  success,
+  warn,
+  fail,
+  kv,
+  muted,
+  divider,
+  agentResponse,
+  toolCall,
+  metricsSummary,
+  box,
+} from "../ui.js";
 
-const HELP = `
+// ── Constants ────────────────────────────────────────────────
+
+const VALID_PROVIDERS = ["anthropic", "openai", "ollama", "gemini", "litellm", "test"] as const;
+type Provider = (typeof VALID_PROVIDERS)[number];
+
+const VALID_MEMORY_TIERS = ["1", "2"] as const;
+type MemoryTier = (typeof VALID_MEMORY_TIERS)[number];
+
+const HELP_TEXT = `
   Usage: rax playground [options]
 
-  Launch an interactive prompt loop backed by a single agent session.
+  Launch an interactive REPL backed by a persistent agent session.
 
   Options:
     --provider <name>   Provider: anthropic|openai|ollama|gemini|litellm|test (default: test)
@@ -18,19 +45,56 @@ const HELP = `
     --stream            Stream token output
     --help              Show this help
 
-  Commands:
+  Slash Commands:
+    /help               Show slash commands
+    /tools              Show available tools
+    /memory             Show session conversation turns
+    /debrief            Show last run debrief
+    /metrics            Show last run metrics dashboard
+    /strategy           Show current reasoning strategy
+    /provider [name]    Switch provider: anthropic|openai|ollama|gemini|litellm|test
+    /model [name]       Switch model (e.g. llama3.2, gpt-4o, claude-sonnet-4-20250514)
+    /clear              Clear conversation history
+    /save [path]        Save transcript to markdown file
     /exit               Quit the playground
-    /help               Show command help
-    /memory             Show memory status and recent turns
-    /memory clear       Clear in-session conversation history
-    /memory on          Enable session memory context injection
-    /memory off         Disable session memory context injection
 `.trimEnd();
 
-const VALID_PROVIDERS = ["anthropic", "openai", "ollama", "gemini", "litellm", "test"] as const;
-type Provider = (typeof VALID_PROVIDERS)[number];
-const VALID_MEMORY_TIERS = ["1", "2"] as const;
-type MemoryTier = (typeof VALID_MEMORY_TIERS)[number];
+const SLASH_HELP = [
+  `  ${chalk.bold("/help")}              Show this list`,
+  `  ${chalk.bold("/tools")}             Show available tools`,
+  `  ${chalk.bold("/memory")}            Show session conversation turns`,
+  `  ${chalk.bold("/debrief")}           Show last run debrief`,
+  `  ${chalk.bold("/metrics")}           Show last run metrics dashboard`,
+  `  ${chalk.bold("/strategy")}          Show current reasoning strategy`,
+  `  ${chalk.bold("/provider [name]")}   Switch provider (anthropic, openai, ollama, ...)`,
+  `  ${chalk.bold("/model [name]")}      Switch model (llama3.2, gpt-4o, ...)`,
+  `  ${chalk.bold("/clear")}             Clear conversation history`,
+  `  ${chalk.bold("/save [path]")}       Save transcript to markdown file`,
+  `  ${chalk.bold("/exit")}              Quit the playground`,
+].join("\n");
+
+// ── Types ────────────────────────────────────────────────────
+
+interface Turn {
+  user: string;
+  agent: string;
+  toolsUsed?: string[];
+  durationMs: number;
+  tokens?: number;
+}
+
+interface PlaygroundConfig {
+  provider: Provider;
+  model: string | undefined;
+  name: string;
+  enableTools: boolean;
+  enableReasoning: boolean;
+  enableMemory: boolean;
+  memoryTier: MemoryTier;
+  stream: boolean;
+}
+
+// ── Helpers ──────────────────────────────────────────────────
 
 function isValidProvider(value: string): value is Provider {
   return (VALID_PROVIDERS as readonly string[]).includes(value);
@@ -40,219 +104,506 @@ function isValidMemoryTier(value: string): value is MemoryTier {
   return (VALID_MEMORY_TIERS as readonly string[]).includes(value);
 }
 
-function buildPromptWithHistory(
-  line: string,
-  history: ReadonlyArray<{ user: string; agent: string }>,
-): string {
-  if (history.length === 0) return line;
-
-  const recent = history.slice(-8);
-  const transcript = recent
-    .map((turn, index) => `Turn ${index + 1}\nUser: ${turn.user}\nAssistant: ${turn.agent}`)
-    .join("\n\n");
-
-  return [
-    "Conversation context from this playground session:",
-    transcript,
-    "",
-    "Instruction: If the user asks about previously shared personal preferences/details from this same session (for example name), answer using the session context above.",
-    "Current user message:",
-    line,
-  ].join("\n");
-}
-
-export async function runPlayground(args: string[]): Promise<void> {
-  if (args.includes("--help") || args.includes("-h")) {
-    console.log(HELP);
-    return;
-  }
-
-  let provider: Provider = "test";
-  let model: string | undefined;
-  let name = "playground-agent";
-  let enableTools = false;
-  let enableReasoning = false;
-  let enableMemory = false;
-  let memoryTier: MemoryTier = "1";
-  let stream = false;
-
-  const formatThought = (content: string): string => content.replace(/\s+/g, " ").trim();
+function parseArgs(args: string[]): PlaygroundConfig | null {
+  const config: PlaygroundConfig = {
+    provider: "test",
+    model: undefined,
+    name: "playground-agent",
+    enableTools: false,
+    enableReasoning: false,
+    enableMemory: false,
+    memoryTier: "1",
+    stream: false,
+  };
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
+    if (arg === "--help" || arg === "-h") return null;
+
     if (arg === "--provider" && args[i + 1]) {
       const raw = args[++i];
       if (!isValidProvider(raw)) {
-        console.error(`Unknown provider: \"${raw}\". Valid providers: ${VALID_PROVIDERS.join(", ")}`);
+        console.error(fail(`Unknown provider: "${raw}". Valid: ${VALID_PROVIDERS.join(", ")}`));
         process.exit(1);
       }
-      provider = raw;
+      config.provider = raw;
     } else if (arg === "--model" && args[i + 1]) {
-      model = args[++i];
+      config.model = args[++i];
     } else if (arg === "--name" && args[i + 1]) {
-      name = args[++i];
+      config.name = args[++i];
     } else if (arg === "--tools") {
-      enableTools = true;
+      config.enableTools = true;
     } else if (arg === "--reasoning") {
-      enableReasoning = true;
+      config.enableReasoning = true;
     } else if (arg === "--memory") {
-      enableMemory = true;
+      config.enableMemory = true;
     } else if (arg === "--memory-tier" && args[i + 1]) {
       const rawTier = args[++i];
       if (!isValidMemoryTier(rawTier)) {
-        console.error(`Invalid memory tier: \"${rawTier}\". Valid tiers: ${VALID_MEMORY_TIERS.join(", ")}`);
+        console.error(fail(`Invalid memory tier: "${rawTier}". Valid: ${VALID_MEMORY_TIERS.join(", ")}`));
         process.exit(1);
       }
-      enableMemory = true;
-      memoryTier = rawTier;
+      config.enableMemory = true;
+      config.memoryTier = rawTier;
     } else if (arg === "--stream") {
-      stream = true;
+      config.stream = true;
     }
   }
 
-  let builder = ReactiveAgents.create().withName(name).withProvider(provider);
-  if (model) builder = builder.withModel(model);
-  if (enableTools) builder = builder.withTools();
-  if (enableReasoning) builder = builder.withReasoning();
-  if (enableMemory) builder = builder.withMemory(memoryTier);
+  return config;
+}
 
-  const agent = await builder.build();
+async function buildAgent(config: PlaygroundConfig) {
+  let builder = ReactiveAgents.create()
+    .withName(config.name)
+    .withProvider(config.provider);
 
-  console.log(`Playground ready. Agent: ${agent.agentId}`);
-  console.log("Type /help for commands, /exit to quit.\n");
+  if (config.model) builder = builder.withModel(config.model);
+  if (config.enableTools) builder = builder.withTools();
+  if (config.enableReasoning) builder = builder.withReasoning();
+  if (config.enableMemory) builder = builder.withMemory(config.memoryTier);
 
-  const conversationHistory: Array<{ user: string; agent: string }> = [];
+  return builder.build();
+}
+
+function showConfig(config: PlaygroundConfig): void {
+  console.log(kv("Provider", config.provider));
+  if (config.model) console.log(kv("Model", config.model));
+  console.log(kv("Tools", config.enableTools ? "enabled" : "disabled"));
+  console.log(kv("Reasoning", config.enableReasoning ? "enabled" : "disabled"));
+  console.log(kv("Memory", config.enableMemory ? `enabled (tier ${config.memoryTier})` : "disabled"));
+  console.log(kv("Streaming", config.stream ? "enabled" : "disabled"));
+  console.log();
+}
+
+function formatTranscript(turns: Turn[]): string {
+  const lines: string[] = [
+    `# Playground Transcript`,
+    ``,
+    `**Date:** ${new Date().toISOString()}`,
+    `**Turns:** ${turns.length}`,
+    ``,
+    `---`,
+    ``,
+  ];
+
+  for (let i = 0; i < turns.length; i++) {
+    const t = turns[i];
+    lines.push(`### Turn ${i + 1}`);
+    lines.push(``);
+    lines.push(`**User:** ${t.user}`);
+    lines.push(``);
+    lines.push(`**Agent:** ${t.agent}`);
+    if (t.toolsUsed && t.toolsUsed.length > 0) {
+      lines.push(`**Tools:** ${t.toolsUsed.join(", ")}`);
+    }
+    lines.push(`**Duration:** ${t.durationMs}ms`);
+    lines.push(``);
+  }
+
+  return lines.join("\n");
+}
+
+function showDebrief(debrief: AgentDebrief | undefined): void {
+  if (!debrief) {
+    console.log(warn("No debrief available. Run a message first."));
+    return;
+  }
+
+  const content = [
+    `${chalk.bold("Outcome:")} ${debrief.outcome}  ${chalk.bold("Confidence:")} ${debrief.confidence}`,
+    ``,
+    `${chalk.bold("Summary:")} ${debrief.summary}`,
+  ];
+
+  if (debrief.keyFindings.length > 0) {
+    content.push(``);
+    content.push(chalk.bold("Key Findings:"));
+    for (const f of debrief.keyFindings) content.push(`  - ${f}`);
+  }
+
+  if (debrief.errorsEncountered.length > 0) {
+    content.push(``);
+    content.push(chalk.bold("Errors:"));
+    for (const e of debrief.errorsEncountered) content.push(`  - ${e}`);
+  }
+
+  if (debrief.lessonsLearned.length > 0) {
+    content.push(``);
+    content.push(chalk.bold("Lessons:"));
+    for (const l of debrief.lessonsLearned) content.push(`  - ${l}`);
+  }
+
+  if (debrief.toolsUsed.length > 0) {
+    content.push(``);
+    content.push(chalk.bold("Tools:"));
+    for (const t of debrief.toolsUsed) {
+      content.push(`  - ${t.name}: ${t.calls}x, ${t.successRate}% success`);
+    }
+  }
+
+  if (debrief.metrics) {
+    content.push(``);
+    content.push(
+      `${chalk.bold("Metrics:")} ${debrief.metrics.iterations} iters, ${debrief.metrics.tokens} tokens, ${(debrief.metrics.duration / 1000).toFixed(1)}s`,
+    );
+  }
+
+  if (debrief.caveats && debrief.caveats.length > 0) {
+    content.push(``);
+    content.push(chalk.bold("Caveats:"));
+    for (const c of debrief.caveats) content.push(`  - ${c}`);
+  }
+
+  box(content.join("\n"), { title: chalk.bold(" Debrief "), borderColor: "#8b5cf6" });
+}
+
+// ── Main ─────────────────────────────────────────────────────
+
+export async function runPlayground(args: string[]): Promise<void> {
+  const config = parseArgs(args);
+  if (!config) {
+    console.log(HELP_TEXT);
+    return;
+  }
+
+  // Show banner + config
+  banner("rax playground", "Interactive agent REPL with session memory");
+  showConfig(config);
+
+  // Build agent
+  const buildSpin = spinner("Building agent...");
+  let agent: Awaited<ReturnType<typeof buildAgent>>;
+  try {
+    agent = await buildAgent(config);
+    buildSpin.succeed(`Agent ready: ${agent.agentId}`);
+  } catch (err) {
+    buildSpin.fail(`Build failed: ${err instanceof Error ? err.message : String(err)}`);
+    process.exit(1);
+  }
+
+  // Create session
+  let session = agent.session();
+  const turns: Turn[] = [];
+
+  console.log(muted("Type a message to chat, or /help for commands."));
+  console.log();
 
   const rl = createInterface({ input, output });
 
+  // Graceful Ctrl+C
+  const onSigint = () => {
+    console.log(muted("\nGoodbye!"));
+    rl.close();
+  };
+  process.on("SIGINT", onSigint);
+
   try {
     while (true) {
-      const line = (await rl.question("you> ")).trim();
+      let line: string;
+      try {
+        line = (await rl.question(chalk.hex("#8b5cf6")("you> "))).trim();
+      } catch {
+        // Ctrl+D or readline close
+        break;
+      }
+
       if (!line) continue;
-      if (line === "/exit" || line === "/quit") break;
-      if (line === "/help") {
-        console.log("Commands: /help, /exit, /memory, /memory clear, /memory on, /memory off\n");
-        continue;
-      }
-      if (line === "/memory") {
-        const status = enableMemory ? `enabled (tier ${memoryTier})` : "disabled";
-        console.log(`memory> ${status}`);
-        if (conversationHistory.length === 0) {
-          console.log("memory> no conversation history saved\n");
-          continue;
-        }
 
-        const recent = conversationHistory.slice(-5);
-        console.log(`memory> showing ${recent.length} most recent turn(s):`);
-        for (let i = 0; i < recent.length; i++) {
-          const turn = recent[i];
-          const userPreview = turn.user.replace(/\s+/g, " ").slice(0, 80);
-          const agentPreview = turn.agent.replace(/\s+/g, " ").slice(0, 80);
-          console.log(`  ${i + 1}. user: ${userPreview}${turn.user.length > 80 ? "..." : ""}`);
-          console.log(`     agent: ${agentPreview}${turn.agent.length > 80 ? "..." : ""}`);
-        }
-        console.log("");
-        continue;
-      }
-      if (line === "/memory clear") {
-        conversationHistory.length = 0;
-        console.log("memory> cleared session history\n");
-        continue;
-      }
-      if (line === "/memory on") {
-        enableMemory = true;
-        console.log(`memory> enabled (tier ${memoryTier})\n`);
-        continue;
-      }
-      if (line === "/memory off") {
-        enableMemory = false;
-        console.log("memory> disabled\n");
-        continue;
-      }
+      // ── Slash commands ──────────────────────────────────
+      if (line.startsWith("/")) {
+        const [cmd, ...rest] = line.split(/\s+/);
+        const arg0 = rest.join(" ").trim();
 
-      const prompt = enableMemory
-        ? buildPromptWithHistory(line, conversationHistory)
-        : line;
+        switch (cmd) {
+          case "/exit":
+          case "/quit": {
+            console.log(muted("Goodbye!"));
+            rl.close();
+            return;
+          }
 
-      if (stream) {
-        process.stdout.write("agent> ");
+          case "/help": {
+            console.log();
+            console.log(chalk.bold("Slash Commands:"));
+            console.log(SLASH_HELP);
+            console.log();
+            continue;
+          }
 
-        let printedToolEvent = false;
-        for await (const event of agent.runStream(prompt, { density: "full" })) {
-          switch (event._tag) {
-            case "TextDelta":
-              process.stdout.write(event.text);
-              break;
-            case "ThoughtEmitted":
-              process.stdout.write(`\nthought> ${formatThought(event.content)}\n`);
-              if (printedToolEvent) {
-                process.stdout.write("agent> ");
-                printedToolEvent = false;
+          case "/tools": {
+            console.log(
+              info(
+                config.enableTools
+                  ? "Tools are enabled. Available tools depend on the agent's tool registry."
+                  : "Tools are disabled. Use --tools flag to enable.",
+              ),
+            );
+            console.log();
+            continue;
+          }
+
+          case "/memory": {
+            if (turns.length === 0) {
+              console.log(info("No conversation turns yet."));
+              console.log();
+              continue;
+            }
+            console.log(chalk.bold(`Session History (${turns.length} turn${turns.length === 1 ? "" : "s"}):`));
+            const recent = turns.slice(-8);
+            for (let i = 0; i < recent.length; i++) {
+              const t = recent[i];
+              const idx = turns.length - recent.length + i + 1;
+              const userPreview = t.user.replace(/\s+/g, " ").slice(0, 80);
+              const agentPreview = t.agent.replace(/\s+/g, " ").slice(0, 80);
+              console.log(
+                `  ${muted(`${idx}.`)} ${chalk.bold("user:")} ${userPreview}${t.user.length > 80 ? "..." : ""}`,
+              );
+              console.log(
+                `     ${chalk.bold("agent:")} ${agentPreview}${t.agent.length > 80 ? "..." : ""}`,
+              );
+              if (t.toolsUsed && t.toolsUsed.length > 0) {
+                console.log(`     ${muted(`tools: ${t.toolsUsed.join(", ")}`)}`);
               }
-              break;
-            case "ToolCallStarted":
-              process.stdout.write(`\naction> ${event.toolName} (call ${event.callId})\n`);
-              process.stdout.write("agent> ");
-              printedToolEvent = true;
-              break;
-            case "ToolCallCompleted":
-              process.stdout.write(`\nresult> ${event.toolName} ${event.success ? "ok" : "error"} (${event.durationMs}ms)\n`);
-              process.stdout.write("agent> ");
-              printedToolEvent = true;
-              break;
-            case "StreamError":
-              process.stdout.write(`\n[stream error] ${event.cause}\n`);
-              break;
-            case "StreamCompleted":
-              conversationHistory.push({ user: line, agent: event.output });
-              break;
-            default:
-              break;
+              console.log(`     ${muted(`${t.durationMs}ms`)}`);
+            }
+            console.log();
+            continue;
+          }
+
+          case "/debrief": {
+            showDebrief((agent as any)._lastDebrief as AgentDebrief | undefined);
+            console.log();
+            continue;
+          }
+
+          case "/metrics": {
+            console.log(warn("No metrics dashboard available for chat-mode interactions."));
+            console.log();
+            continue;
+          }
+
+          case "/strategy": {
+            console.log(
+              info(
+                config.enableReasoning
+                  ? "Reasoning enabled (strategy selected adaptively per query)."
+                  : "Reasoning disabled. Direct LLM chat mode.",
+              ),
+            );
+            console.log();
+            continue;
+          }
+
+          case "/provider": {
+            if (!arg0) {
+              console.log(info(`Current provider: ${config.provider}`));
+              console.log(muted(`  Available: ${VALID_PROVIDERS.join(", ")}`));
+              console.log();
+              continue;
+            }
+            if (!isValidProvider(arg0)) {
+              console.log(fail(`Unknown provider: "${arg0}". Valid: ${VALID_PROVIDERS.join(", ")}`));
+              console.log();
+              continue;
+            }
+            config.provider = arg0;
+            {
+              const spin = inlineSpinner(`Switching to provider: ${arg0}...`);
+              try {
+                await agent.dispose().catch(() => {});
+                agent = await buildAgent(config);
+                session = agent.session();
+                spin.succeed(`Switched to ${arg0}. Agent: ${agent.agentId}`);
+                console.log(muted("  Session history preserved, agent rebuilt."));
+              } catch (err) {
+                spin.fail(`Rebuild failed: ${err instanceof Error ? err.message : String(err)}`);
+              }
+            }
+            console.log();
+            continue;
+          }
+
+          case "/model": {
+            if (!arg0) {
+              console.log(info(`Current model: ${config.model ?? "(default)"}`));
+              console.log(info(`Current provider: ${config.provider}`));
+              console.log();
+              continue;
+            }
+            // If the user typed a provider name, switch provider instead
+            if (isValidProvider(arg0)) {
+              console.log(warn(`"${arg0}" is a provider, not a model. Switching provider instead.`));
+              console.log(muted(`  Use /model <model-name> for a specific model (e.g. llama3.2, gpt-4o).`));
+              config.provider = arg0 as Provider;
+              config.model = undefined;
+            } else {
+              config.model = arg0;
+            }
+            {
+              const label = config.model ? `model: ${config.model}` : `provider: ${config.provider}`;
+              const spin = inlineSpinner(`Switching to ${label}...`);
+              try {
+                await agent.dispose().catch(() => {});
+                agent = await buildAgent(config);
+                session = agent.session();
+                spin.succeed(`Switched to ${config.model ?? config.provider}. Agent: ${agent.agentId}`);
+                console.log(muted("  Session history preserved, agent rebuilt."));
+              } catch (err) {
+                spin.fail(`Rebuild failed: ${err instanceof Error ? err.message : String(err)}`);
+              }
+            }
+            console.log();
+            continue;
+          }
+
+          case "/clear": {
+            turns.length = 0;
+            try { await session.end(); } catch { /* best effort */ }
+            session = agent.session();
+            console.log(success("Conversation history cleared."));
+            console.log();
+            continue;
+          }
+
+          case "/save": {
+            const path = arg0 || `playground-${Date.now()}.md`;
+            try {
+              writeFileSync(path, formatTranscript(turns), "utf-8");
+              console.log(success(`Transcript saved to ${path}`));
+            } catch (err) {
+              console.log(fail(`Save failed: ${err instanceof Error ? err.message : String(err)}`));
+            }
+            console.log();
+            continue;
+          }
+
+          default: {
+            console.log(warn(`Unknown command: ${cmd}. Type /help for available commands.`));
+            console.log();
+            continue;
           }
         }
-        process.stdout.write("\n\n");
-      } else {
+      }
+
+      // ── Chat message ───────────────────────────────────
+      const startMs = Date.now();
+
+      if (config.stream) {
+        // Streaming mode — use agent.runStream()
+        process.stdout.write(chalk.hex("#06b6d4")("agent> "));
+
         let outputText = "";
         let streamError: string | null = null;
+        const toolsUsed: string[] = [];
 
-        for await (const event of agent.runStream(prompt, { density: "full" })) {
-          switch (event._tag) {
-            case "TextDelta":
-              outputText += event.text;
-              break;
-            case "ThoughtEmitted":
-              console.log(`thought> ${formatThought(event.content)}`);
-              break;
-            case "ToolCallStarted":
-              console.log(`action> ${event.toolName} (call ${event.callId})`);
-              break;
-            case "ToolCallCompleted":
-              console.log(`result> ${event.toolName} ${event.success ? "ok" : "error"} (${event.durationMs}ms)`);
-              break;
-            case "StreamCompleted":
-              if (outputText.length === 0) {
-                outputText = event.output;
-              }
-              conversationHistory.push({ user: line, agent: event.output });
-              break;
-            case "StreamError":
-              streamError = event.cause;
-              break;
-            default:
-              break;
+        try {
+          for await (const event of agent.runStream(line, { density: "full" })) {
+            switch (event._tag) {
+              case "TextDelta":
+                process.stdout.write(event.text);
+                outputText += event.text;
+                break;
+              case "ThoughtEmitted":
+                process.stdout.write(`\n`);
+                console.log(muted(`  thought> ${event.content.replace(/\s+/g, " ").trim()}`));
+                process.stdout.write(chalk.hex("#06b6d4")("agent> "));
+                break;
+              case "ToolCallStarted":
+                process.stdout.write(`\n`);
+                toolCall(event.toolName, "start");
+                process.stdout.write(chalk.hex("#06b6d4")("agent> "));
+                toolsUsed.push(event.toolName);
+                break;
+              case "ToolCallCompleted":
+                process.stdout.write(`\n`);
+                toolCall(event.toolName, event.success ? "done" : "error", event.durationMs);
+                process.stdout.write(chalk.hex("#06b6d4")("agent> "));
+                break;
+              case "StreamCompleted":
+                if (!outputText) outputText = event.output;
+                break;
+              case "StreamError":
+                streamError = event.cause;
+                break;
+            }
           }
+        } catch (err) {
+          streamError = err instanceof Error ? err.message : String(err);
         }
+
+        process.stdout.write("\n");
+
+        const durationMs = Date.now() - startMs;
 
         if (streamError) {
-          console.error(`agent> [failed] ${streamError}\n`);
-          continue;
+          console.log(fail(`Error: ${streamError}`));
+        } else {
+          metricsSummary({
+            duration: durationMs,
+            steps: 0,
+            tokens: 0,
+            tools: toolsUsed.length,
+            success: true,
+          });
         }
 
-        console.log(`agent> ${outputText}\n`);
+        turns.push({
+          user: line,
+          agent: outputText,
+          toolsUsed: toolsUsed.length > 0 ? toolsUsed : undefined,
+          durationMs,
+        });
+      } else {
+        // Non-streaming — use session.chat() for stateful conversation
+        const chatSpin = inlineSpinner("Thinking...");
+
+        try {
+          const chatOpts = config.enableTools ? { useTools: true } : undefined;
+          const reply = await session.chat(line, chatOpts);
+          const durationMs = Date.now() - startMs;
+          chatSpin.stop();
+
+          // Display response
+          agentResponse(reply.message);
+
+          // One-liner summary
+          metricsSummary({
+            duration: durationMs,
+            steps: reply.steps ?? 0,
+            tokens: reply.tokens ?? 0,
+            tools: reply.toolsUsed?.length ?? 0,
+            success: true,
+          });
+
+          turns.push({
+            user: line,
+            agent: reply.message,
+            toolsUsed: reply.toolsUsed,
+            durationMs,
+          });
+        } catch (err) {
+          const durationMs = Date.now() - startMs;
+          chatSpin.fail("Failed");
+
+          const msg = err instanceof Error ? err.message : String(err);
+          console.log(fail(`Error: ${msg}`));
+
+          turns.push({
+            user: line,
+            agent: `[error] ${msg}`,
+            durationMs,
+          });
+        }
       }
+
+      console.log();
     }
   } finally {
+    process.removeListener("SIGINT", onSigint);
     rl.close();
-    await agent.dispose();
+    try { await session.end(); } catch { /* best effort */ }
+    try { await agent.dispose(); } catch { /* best effort */ }
+    console.log(muted("Session ended."));
   }
 }

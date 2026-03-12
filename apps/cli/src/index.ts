@@ -5,6 +5,7 @@ import { runEval } from "./commands/eval.js";
 import { runPlayground } from "./commands/playground.js";
 import { runInspect } from "./commands/inspect.js";
 import { runBench } from "./commands/bench.js";
+import { runDemo } from "./commands/demo.js";
 import { runAgent } from "./commands/run.js";
 import { runServe } from "./commands/serve.js";
 import { runDiscover } from "./commands/discover.js";
@@ -28,6 +29,7 @@ const HELP = `
     inspect <agent-id> [--logs-tail <n>]             Inspect local deployment signals/logs
     bench [--provider ...] [--model ...] [--tier ...] [--output ...]
                   Run benchmark suite against an LLM provider
+    demo                                        Run a zero-config live demo (no API key needed)
     deploy up [--target local|fly|railway|render|cloudrun|digitalocean] [--mode daemon|sdk] [--dry-run]
                               Build + deploy agent container
     deploy down [--target ...]                        Stop deployment (auto-detects target)
@@ -36,6 +38,9 @@ const HELP = `
     deploy init                                       Scaffold deployment files only (legacy alias)
     help                                              Show this help
     version                                           Show version
+
+  Quick start:
+    rax demo                                    See reactive-agents in action (no setup needed)
 `.trimEnd();
 
 export function main(argv: string[] = process.argv.slice(2)) {
@@ -99,6 +104,10 @@ export function main(argv: string[] = process.argv.slice(2)) {
 
     case "bench":
       runAsync(runBench(argv.slice(1)));
+      break;
+
+    case "demo":
+      runAsync(runDemo(argv.slice(1)));
       break;
 
     case "version":
