@@ -33,12 +33,12 @@
     "@reactive-agents/eval": "workspace:*",
     "@reactive-agents/llm-provider": "workspace:*",
     "@reactive-agents/a2a": "workspace:*",
-    "@reactive-agents/benchmarks": "workspace:*",
     "chalk": "^5.4.0",
     "ora": "^8.2.0",
     "boxen": "^8.0.1"
   },
   "devDependencies": {
+    "@reactive-agents/benchmarks": "workspace:*",
     "typescript": "^5.7.0",
     "bun-types": "latest"
   },
