@@ -24,11 +24,26 @@ export type AgentStreamEvent =
       readonly metadata: AgentResultMetadata;
       readonly taskId?: string;
       readonly agentId?: string;
+      readonly toolSummary?: ReadonlyArray<{ readonly name: string; readonly calls: number; readonly avgMs: number }>;
     }
   | {
       /** Execution failed. Last event on a failed stream. */
       readonly _tag: "StreamError";
       readonly cause: string;
+    }
+  | {
+      /** Reports progress after each reasoning iteration. Useful for progress bars and UI updates. */
+      readonly _tag: "IterationProgress";
+      readonly iteration: number;
+      readonly maxIterations: number;
+      readonly toolsCalledThisStep?: readonly string[];
+      readonly status: string;
+    }
+  | {
+      /** Emitted when the stream is cancelled via AbortSignal. Last event when cancelled. */
+      readonly _tag: "StreamCancelled";
+      readonly reason: string;
+      readonly iterationsCompleted: number;
     }
   // ─── Full density only ───
   | {

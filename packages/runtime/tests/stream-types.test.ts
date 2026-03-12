@@ -31,6 +31,52 @@ describe("AgentStreamEvent types", () => {
   });
 });
 
+describe("AgentStreamEvent new variants", () => {
+  it("IterationProgress is a valid AgentStreamEvent shape", () => {
+    const event: AgentStreamEvent = {
+      _tag: "IterationProgress",
+      iteration: 3,
+      maxIterations: 10,
+      toolsCalledThisStep: ["web-search"],
+      status: "thinking",
+    };
+    expect(event._tag).toBe("IterationProgress");
+  });
+
+  it("StreamCancelled is a valid AgentStreamEvent shape", () => {
+    const event: AgentStreamEvent = {
+      _tag: "StreamCancelled",
+      reason: "User cancelled",
+      iterationsCompleted: 5,
+    };
+    expect(event._tag).toBe("StreamCancelled");
+  });
+
+  it("StreamCompleted with toolSummary is valid", () => {
+    const event: AgentStreamEvent = {
+      _tag: "StreamCompleted",
+      output: "done",
+      metadata: { stepsCount: 3, tokensUsed: 500, duration: 1200, cost: 0 },
+      toolSummary: [{ name: "web-search", calls: 2, avgMs: 150 }],
+    };
+    expect(event._tag).toBe("StreamCompleted");
+    expect((event as any).toolSummary).toHaveLength(1);
+  });
+
+  it("type discrimination works for IterationProgress", () => {
+    const event: AgentStreamEvent = {
+      _tag: "IterationProgress",
+      iteration: 1,
+      maxIterations: 5,
+      status: "acting",
+    };
+    if (event._tag === "IterationProgress") {
+      expect(event.iteration).toBe(1);
+      expect(event.maxIterations).toBe(5);
+    }
+  });
+});
+
 describe("AgentStream adapters", () => {
   it("collect() resolves on StreamCompleted", async () => {
     const stream = Stream.make<AgentStreamEvent>(

@@ -345,6 +345,18 @@ export const ReactiveAgentsConfigSchema = Schema.Struct({
   ),
   /** Semantic cache TTL in milliseconds. Cached responses older than this are evicted. */
   cacheTimeoutMs: Schema.optional(Schema.Number),
+  /** Dynamic strategy switching configuration. When enabled, the kernel automatically
+   *  switches reasoning strategies on loop detection instead of failing immediately. */
+  strategySwitching: Schema.optional(
+    Schema.Struct({
+      /** Enable automatic strategy switching when a loop is detected (default: false) */
+      enabled: Schema.Boolean,
+      /** Maximum number of strategy switches per run (default: 1) */
+      maxSwitches: Schema.optional(Schema.Number),
+      /** Skip LLM evaluation and switch directly to this strategy */
+      fallbackStrategy: Schema.optional(Schema.String),
+    })
+  ),
 });
 export type ReactiveAgentsConfig = typeof ReactiveAgentsConfigSchema.Type;
 

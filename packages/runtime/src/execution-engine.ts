@@ -892,6 +892,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         sessionId: c.taskId,
                         requiredTools: effectiveRequiredTools,
                         maxRequiredToolRetries: config.requiredTools?.maxRetries,
+                        strategySwitching: config.strategySwitching,
                       });
                       const strategyOutcome = yield* Effect.exit(strategyEffect);
                       if (strategyOutcome._tag === "Success") {
@@ -2473,12 +2474,18 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
             yield* Effect.locally(
               execute(task).pipe(
                 Effect.tap((taskResult) => {
+                  // Build toolSummary from debrief.toolsUsed if available
+                  const debriefToolsUsed = (taskResult as any).debrief?.toolsUsed as Array<{ name: string; calls: number; successRate: number }> | undefined;
+                  const toolSummary = debriefToolsUsed && debriefToolsUsed.length > 0
+                    ? debriefToolsUsed.map((t) => ({ name: t.name, calls: t.calls, avgMs: 0 }))
+                    : [];
                   const completedEvent: AgentStreamEvent = {
                     _tag: "StreamCompleted",
                     output: String((taskResult as any).output ?? ""),
                     metadata: (taskResult as any).metadata ?? {},
                     taskId: String(task.id),
                     agentId: String(task.agentId),
+                    ...(toolSummary.length > 0 ? { toolSummary } : {}),
                   };
                   const offer = Queue.offer(queue, completedEvent);
                   if (!eb) return offer;

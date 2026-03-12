@@ -111,6 +111,22 @@ export interface ReasoningOptions {
   readonly strategies?: Partial<ReasoningConfig["strategies"]>;
   /** Adaptive reasoning settings (e.g., confidence thresholds, backoff strategies). Default: {} */
   readonly adaptive?: Partial<ReasoningConfig["adaptive"]>;
+  /**
+   * Enable automatic strategy switching when the agent gets stuck in a loop.
+   * When enabled, the kernel will evaluate an alternative strategy instead of failing immediately.
+   * Default: false
+   */
+  readonly enableStrategySwitching?: boolean;
+  /**
+   * Maximum number of strategy switches allowed per run. Default: 1.
+   * Only used when `enableStrategySwitching` is true.
+   */
+  readonly maxStrategySwitches?: number;
+  /**
+   * Skip the LLM evaluator and switch directly to this fallback strategy.
+   * Only used when `enableStrategySwitching` is true.
+   */
+  readonly fallbackStrategy?: string;
 }
 
 /**
@@ -728,6 +744,7 @@ export class ReactiveAgentBuilder {
   private _enableExperienceLearning: boolean = false;
   private _enableMemoryConsolidation: boolean = false;
   private _consolidationConfig?: { threshold?: number; decayFactor?: number; pruneThreshold?: number };
+  private _errorHandler?: (error: RuntimeErrors | Error, context: { taskId: string; phase: string; iteration: number; lastStep?: string }) => void;
 
   // ─── Identity ───
 
@@ -1512,6 +1529,31 @@ export class ReactiveAgentBuilder {
   }
 
   /**
+   * Register a global error handler called whenever `agent.run()` encounters a runtime error.
+   *
+   * The handler is for logging/reporting only — it cannot prevent error propagation.
+   * Errors still reject the `run()` promise even when a handler is registered.
+   * If the handler itself throws, the exception is silently caught and ignored.
+   *
+   * @param handler - Callback receiving the error and execution context
+   * @returns `this` for chaining
+   * @example
+   * ```typescript
+   * agent
+   *   .withErrorHandler((err, ctx) => {
+   *     console.error(`[${ctx.phase}] Agent error:`, err.message);
+   *     myMonitoring.capture(err);
+   *   })
+   * ```
+   */
+  withErrorHandler(
+    handler: (error: RuntimeErrors | Error, context: { taskId: string; phase: string; iteration: number; lastStep?: string }) => void
+  ): this {
+    this._errorHandler = handler;
+    return this;
+  }
+
+  /**
    * Set the TTL for semantic cache entries. Cached LLM responses older than
    * this duration will be evicted.
    * @param ms - Cache TTL in milliseconds (default: 3,600,000 = 1 hour)
@@ -1714,6 +1756,13 @@ export class ReactiveAgentBuilder {
       executionTimeoutMs: this._executionTimeoutMs,
       retryPolicy: this._retryPolicy,
       cacheTimeoutMs: this._cacheTimeoutMs,
+      strategySwitching: this._reasoningOptions?.enableStrategySwitching
+        ? {
+            enabled: true,
+            maxSwitches: this._reasoningOptions.maxStrategySwitches,
+            fallbackStrategy: this._reasoningOptions.fallbackStrategy,
+          }
+        : undefined,
     });
 
     const hooks = [...this._hooks];
@@ -1728,6 +1777,7 @@ export class ReactiveAgentBuilder {
     const parentProvider = this._provider;
     const parentModel = this._model;
     const streamDensity = this._streamDensity;
+    const errorHandler = this._errorHandler;
 
     // Capture parent config for sub-agent inheritance — sub-agents get
     // the same infrastructure as the parent without explicit configuration.
@@ -2345,6 +2395,7 @@ export class ReactiveAgentBuilder {
               }
             }
           : undefined,
+        errorHandler,
       );
     }) as Effect.Effect<ReactiveAgent, Error>;
   }
@@ -2405,6 +2456,8 @@ export class ReactiveAgent {
     private readonly _defaultStreamDensity?: StreamDensity,
     /** @internal Callback to set task description for parent context forwarding. */
     private readonly _setTaskDescription?: (desc: string) => void,
+    /** @internal Optional error handler registered via .withErrorHandler(). */
+    private readonly _errorHandler?: (error: RuntimeErrors | Error, context: { taskId: string; phase: string; iteration: number; lastStep?: string }) => void,
   ) {}
 
   /** @internal Last debrief from a completed run — used as context in chat() calls. */
@@ -2489,7 +2542,19 @@ export class ReactiveAgent {
    */
   async run(input: string): Promise<AgentResult> {
     return Effect.runPromise(this.runEffect(input)).catch((e) => {
-      throw unwrapError(e);
+      const unwrapped = unwrapError(e);
+      if (this._errorHandler) {
+        try {
+          this._errorHandler(unwrapped as RuntimeErrors | Error, {
+            taskId: "unknown",
+            phase: "execution",
+            iteration: 0,
+          });
+        } catch {
+          // Handler exceptions are silently ignored — never replace the original error
+        }
+      }
+      throw unwrapped;
     });
   }
 
@@ -2591,44 +2656,78 @@ export class ReactiveAgent {
    *
    * Returns an AsyncIterable that yields `AgentStreamEvent` objects as the agent works.
    * Text tokens arrive as `TextDelta` events. The stream always ends with either
-   * `StreamCompleted` (success) or `StreamError` (failure).
+   * `StreamCompleted` (success), `StreamError` (failure), or `StreamCancelled` (aborted).
    *
    * @param input - The task prompt or question
    * @param options - Optional streaming configuration
    * @param options.density - `"tokens"` (default) for text deltas only, `"full"` for phase/tool events too
-   * @returns AsyncIterable of AgentStreamEvent
+   * @param options.signal - Optional AbortSignal for cancelling the stream
+   * @returns AsyncGenerator of AgentStreamEvent
    * @example
    * ```typescript
-   * for await (const event of agent.runStream("Write a haiku")) {
+   * const ctrl = new AbortController();
+   * for await (const event of agent.runStream("Write a haiku", { signal: ctrl.signal })) {
    *   if (event._tag === "TextDelta") process.stdout.write(event.text);
    *   if (event._tag === "StreamCompleted") console.log("\nDone!");
    * }
+   * // Cancel from outside: ctrl.abort();
    * ```
    */
   async *runStream(
     input: string,
-    options?: { density?: StreamDensity },
+    options?: { density?: StreamDensity; signal?: AbortSignal },
   ): AsyncGenerator<AgentStreamEvent> {
-    // Pre-set the task description for parent context forwarding
-    this._setTaskDescription?.(input.slice(0, 500));
+    const signal = options?.signal;
 
-    const task: Task = {
-      id: generateTaskId(),
-      agentId: Schema.decodeSync(AgentId)(this.agentId),
-      type: "query" as const,
-      input: { question: input },
-      priority: "medium" as const,
-      status: "pending" as const,
-      metadata: { tags: [] },
-      createdAt: new Date(),
-    };
+    // If already aborted before we start, yield StreamCancelled immediately
+    if (signal?.aborted) {
+      yield { _tag: "StreamCancelled", reason: "Aborted before start", iterationsCompleted: 0 } satisfies AgentStreamEvent;
+      return;
+    }
 
-    const density = options?.density ?? this._defaultStreamDensity ?? "tokens";
-    const stream = await this.runtime.runPromise(
-      this.engine.executeStream(task, { density }),
-    );
+    // Set up cancellation tracking
+    let cancelled = false;
+    let iterationsCompleted = 0;
+    const onAbort = (): void => { cancelled = true; };
+    signal?.addEventListener("abort", onAbort);
 
-    yield* AgentStream.toAsyncIterable(stream);
+    try {
+      // Pre-set the task description for parent context forwarding
+      this._setTaskDescription?.(input.slice(0, 500));
+
+      const task: Task = {
+        id: generateTaskId(),
+        agentId: Schema.decodeSync(AgentId)(this.agentId),
+        type: "query" as const,
+        input: { question: input },
+        priority: "medium" as const,
+        status: "pending" as const,
+        metadata: { tags: [] },
+        createdAt: new Date(),
+      };
+
+      const density = options?.density ?? this._defaultStreamDensity ?? "tokens";
+      const stream = await this.runtime.runPromise(
+        this.engine.executeStream(task, { density }),
+      );
+
+      for await (const event of AgentStream.toAsyncIterable(stream)) {
+        // Track iteration count from IterationProgress events
+        if (event._tag === "IterationProgress") {
+          iterationsCompleted = (event as any).iteration ?? iterationsCompleted;
+        }
+
+        yield event;
+
+        // Check for cancellation after each yield
+        if (cancelled) {
+          yield { _tag: "StreamCancelled", reason: signal?.reason ?? "Cancelled", iterationsCompleted } satisfies AgentStreamEvent;
+          return;
+        }
+      }
+    } finally {
+      signal?.removeEventListener("abort", onAbort);
+    }
   }
 
   /**
