@@ -307,21 +307,21 @@ describe("CLI Contracts — gcloud", () => {
     expect(v).not.toBeNull();
     // `gcloud run deploy --source .` requires SDK 380+
     expect(versionGte(v!, { major: 380, minor: 0, patch: 0 })).toBe(true);
-  });
+  }, 20_000);
 
   it.skipIf(!available)("gcloud config get-value subcommand exists", () => {
     // Our adapter calls: gcloud config get-value project
     const { stdout, stderr } = probe("gcloud config get-value --help");
     const combined = stdout + stderr;
     expect(combined.toLowerCase()).not.toContain("invalid choice");
-  });
+  }, 20_000);
 
   it.skipIf(!available)("gcloud auth list supports --filter and --format flags", () => {
     // Our adapter calls: gcloud auth list --filter=status:ACTIVE --format='value(account)'
     const { stdout, stderr } = probe("gcloud auth list --help");
     const help = stdout + stderr;
     expectFlags(help, ["--filter", "--format"]);
-  });
+  }, 20_000);
 
   it.skipIf(!available)("gcloud run deploy supports expected flags", () => {
     const { stdout, stderr } = probe("gcloud run deploy --help");
@@ -335,7 +335,7 @@ describe("CLI Contracts — gcloud", () => {
       "--timeout",
       "--allow-unauthenticated",
     ]);
-  });
+  }, 20_000);
 
   it.skipIf(!available)("gcloud run services subcommands exist: describe, delete, logs", () => {
     const { stdout: descHelp, stderr: descErr } = probe("gcloud run services describe --help");
@@ -343,19 +343,19 @@ describe("CLI Contracts — gcloud", () => {
 
     const { stdout: delHelp, stderr: delErr } = probe("gcloud run services delete --help");
     expect((delHelp + delErr).toLowerCase()).not.toContain("invalid choice");
-  });
+  }, 20_000);
 
   it.skipIf(!available)("gcloud run services delete supports --quiet flag", () => {
     const { stdout, stderr } = probe("gcloud run services delete --help");
     const help = stdout + stderr;
     expectFlags(help, ["--quiet"]);
-  });
+  }, 20_000);
 
   it.skipIf(!available)("gcloud run services update supports --set-secrets", () => {
     const { stdout, stderr } = probe("gcloud run services update --help");
     const help = stdout + stderr;
     expectFlags(help, ["--set-secrets"]);
-  });
+  }, 20_000);
 });
 
 // ─── Test: DigitalOcean CLI (doctl) ─────────────────────────────────────────
