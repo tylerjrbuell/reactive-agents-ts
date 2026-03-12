@@ -10,7 +10,136 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 
 ---
 
-## [0.7.0] — 2026-03-10
+## [0.7.5] — 2026-03-11
+
+Final Answer hard gate, structured run debriefs, SQLite debrief persistence, enriched `AgentResult`, `agent.chat()` / `agent.session()` for conversational interaction, ProgressLogger for per-iteration observability, context splitting for 500–700 token/iteration savings, sub-agent performance improvements, CLI visual polish, and `rax demo` / `rax playground` REPL.
+
+### Added
+
+#### `final-answer` Meta-Tool — Hard ReAct Loop Exit (`@reactive-agents/tools`, `@reactive-agents/reasoning`)
+
+Replaces the fragile `"FINAL ANSWER:"` text-regex approach with a structured tool call that hard-terminates the loop:
+
+- **`finalAnswerTool`** — meta-tool with parameters: `output` (the deliverable), `format` (`"text"|"json"|"markdown"|"csv"|"html"`), `summary` (agent self-report), `confidence?` (`"high"|"medium"|"low"`).
+- **Format validation** — `json` format triggers `JSON.parse` check; rejected output returns `{ accepted: false, error }` and the loop continues.
+- **Hard gate** — when `accepted: true`, `react-kernel.ts` immediately transitions to `status: "done"` with `terminatedBy: "final_answer_tool"`. No further iterations.
+- **Visibility gating** — same 4-condition guard as `task-complete`: iteration ≥ 2, all required tools called, no pending errors, at least one non-meta tool invoked.
+- **`"FINAL ANSWER:"` text matching preserved** as a dumb-model fallback (`terminatedBy: "final_answer"`).
+- **`shouldShowFinalAnswer(input)`** — pure visibility predicate, exported for testing.
+- **`FinalAnswerCapture`** interface — `{ output, format, summary, confidence? }` — propagated through `ReActKernelResult.finalAnswerCapture` for downstream consumers.
+
+#### DebriefSynthesizer — Post-Run Structured Synthesis (`@reactive-agents/runtime`)
+
+After every run (when `.withMemory()` + `.withReasoning()` are enabled), a two-step debrief runs automatically:
+
+- **Step 1 — Deterministic signal collection (zero tokens)**: tool call history, errors from loop, metrics (tokens/duration/iterations/cost), agent self-report from `final-answer` call.
+- **Step 2 — One small LLM call**: structured output requesting `{ summary, keyFindings, errorsEncountered, lessonsLearned, caveats }`. Falls back to agent self-report on JSON parse failure.
+- **`synthesizeDebrief(input: DebriefInput): Effect<AgentDebrief, Error, LLMService>`** — exported function.
+- **`formatDebriefMarkdown(d)`** — deterministic Markdown renderer; produces `## Summary`, `## Key Findings`, `## Lessons Learned`, `## Tools Used`, `## Metrics` sections.
+- **`deriveOutcome()`** — `"success"` when `terminatedBy` is `final_answer_tool|final_answer` and no errors; `"partial"` otherwise.
+
+#### DebriefStore — SQLite Persistence (`@reactive-agents/memory`)
+
+New `agent_debriefs` table alongside episodic/semantic/procedural memory in the existing memory DB:
+
+- **`DebriefStoreService`** — `Context.Tag` with `save()`, `findByTaskId()`, `listByAgent(agentId, limit)` methods.
+- **`DebriefStoreLive`** — `Layer.Layer<DebriefStoreService, DatabaseError, MemoryDatabase>`. Uses shared `MemoryDatabase` connection (WAL mode). No separate DB file.
+- Schema: `id`, `task_id`, `agent_id`, `created_at`, `task_prompt`, `terminated_by`, `output`, `output_format`, `debrief_json`, `debrief_markdown`, `tokens_used`, `duration_ms`, `iterations`, `outcome`. Indexed on `agent_id`, `task_id`, `created_at`.
+- Automatic — enabled whenever `.withMemory()` is configured. No extra builder call needed.
+
+#### Enriched `AgentResult` — New Optional Fields (`@reactive-agents/runtime`, `@reactive-agents/core`)
+
+`AgentResult` gains three backward-compatible optional fields:
+
+- **`result.format?`** — `OutputFormat` (`"text"|"json"|"markdown"|"csv"|"html"`) declared by the agent via `final-answer`.
+- **`result.terminatedBy?`** — `TerminatedBy` (`"final_answer_tool"|"final_answer"|"max_iterations"|"end_turn"`) — how the run ended.
+- **`result.debrief?`** — full `AgentDebrief` struct (present when memory + reasoning both enabled).
+- **`result.metadata.confidence?`** — `"high"|"medium"|"low"` from the `final-answer` tool call.
+- **`OutputFormat`** and **`TerminatedBy`** exported as Schema types from `@reactive-agents/core`.
+- **`AgentDebrief`** exported from `@reactive-agents/runtime`.
+
+#### `agent.chat()` + `agent.session()` — Conversational Interaction (`@reactive-agents/runtime`)
+
+Two new methods on `ReactiveAgent` for Q&A outside of `run()`:
+
+- **`agent.chat(message, options?): Promise<ChatReply>`** — adaptive routing: heuristic intent classifier routes action-oriented messages through a lightweight ReAct loop; conversational questions go direct to the LLM with debrief context injected.
+- **`agent.session(options?): AgentSession`** — multi-turn conversation with auto-managed history. History is forwarded to the LLM on every turn for genuine multi-turn context.
+- **`ChatReply`** — `{ message: string, toolsUsed?: string[], fromMemory?: boolean }`.
+- **`AgentSession`** — `{ chat(msg): Promise<ChatReply>, history(): ChatMessage[], end(): Promise<void> }`. History cleared on `end()`.
+- **Intent routing** — zero-token heuristic: patterns like `search|fetch|find|get|write|create|send|run|execute` route to ReAct; all others go direct LLM.
+- **Debrief context injection** — `agent.chat()` automatically injects `lastDebrief.summary` + `keyFindings` as system context so the agent can answer "what did you do last time?" accurately.
+- **Agent-level history accumulation** — direct `agent.chat()` calls (outside a session) accumulate in `_chatHistory` so follow-up questions have prior context.
+- **`requiresTools(message)`**, **`directChat()`**, **`buildContextSummary()`** exported from `@reactive-agents/runtime` for custom routing implementations.
+
+#### ProgressLogger — Per-Iteration Observability (`@reactive-agents/observability`)
+
+New `ProgressLogger` utility wired into the execution engine's 10-phase loop:
+
+- **`logIteration(n, phase)`**, **`logToolExecution(name, status, duration)`**, **`logCheckpoint(msg)`**, **`logIterationSummary(result)`** — structured per-iteration output at `verbose`/`debug` verbosity levels with graceful fallback.
+- Integrated with `ObservabilityService` — no extra builder call required; appears automatically at `verbosity: "verbose"` or higher.
+- `TaskResult.metadata` gains an **`iterations`** field (distinct from `stepsCount`) tracked throughout the execution loop and forwarded to debrief metrics.
+- `ResultMetadataSchema` updated with optional `iterations` field.
+
+#### Agent Performance Optimizations (`@reactive-agents/reasoning`)
+
+Context and loop optimizations that reduce tokens-per-iteration by 500–700:
+
+- **Context splitting** — static context (system prompt: tool schemas + RULES) built once per run; dynamic context (history, observations) rebuilt per iteration. Eliminates repeated schema tokens from every LLM call.
+- **Pure-thought circuit breaker** — fails after 3 consecutive thought steps with no action, preventing reasoning spirals.
+- **Single tool list fetch** — consolidates triple `listTools()` calls into one cached fetch per run.
+- **Tier-adaptive RULES** — 4 core rules for `local`/`mid` models; full rule set for `large`/`frontier` models.
+- **Richer tool result previews** — 3→5 items with smart coverage hints to reduce unnecessary scratchpad-read iterations.
+- **LLM-based tool classification** — structured output pipeline for required/relevant tool inference, replacing keyword heuristics.
+- **Dynamic completion guard on all exit paths** — `final-answer` tool, `"FINAL ANSWER:"` text, and `end_turn` all pass through `checkCompletionGaps()`.
+- **Final-answer error forgiveness** — errors forgiven after iteration 4 to prevent spinning when early tool failures are recoverable.
+
+#### Sub-Agent Performance Improvements (`@reactive-agents/tools`)
+
+- **Delegation-aware completion guard** — `detectCompletionGaps()` recognizes `spawn-agent` delegations and skips namespaces handled by sub-agents, preventing false "incomplete task" loops.
+- **Word-boundary namespace matching** — prevents false positives when forwarded text contains namespace keywords incidentally.
+- **Auto-scope sub-agent tools** — `filterToolsByRelevance()` applied automatically when no explicit tool whitelist is given, reducing sub-agent context noise.
+- **Lower sub-agent iteration cap** — 6→4 max iterations for sub-agents (focused tasks complete in 1–3 steps).
+- **`name` parameter required on `spawn-agent`** — descriptive kebab-case guidance enforced. Fallback `deriveSubAgentName()` extracts meaningful words from the task (replaces generic "dynamic-agent").
+
+#### CLI Visual Polish + `rax demo` + `rax playground` REPL (`@reactive-agents/cli`)
+
+- **`rax demo`** — zero-config scripted demo with test provider, paced output, and professional metrics dashboard. Designed for `npx reactive-agents demo` onboarding flow.
+- **`rax playground` REPL rewrite** — full rewrite using `agent.session()`. Supports 11 slash commands (`/help`, `/exit`, `/clear`, `/model`, `/provider`, `/tools`, `/stream`, `/verbose`, `/history`, `/reset`, `/debrief`), inline spinners safe for readline, and provider/model switching mid-session.
+- **UI overhaul** — chalk/ora/boxen brand colors, `banner()`, `agentResponse()`, `renderDashboard()`, `inlineSpinner()` for readline-safe feedback.
+- **`ChatReply` enriched** — `tokens`, `steps`, `cost` fields added from LLM response metadata.
+- **`AgentSession.chat()` accepts `ChatOptions`** — `useTools` passthrough for per-message tool control.
+- **Meta-package bin wrapper** — `packages/reactive-agents` now exposes a `reactive-agents` binary for `npx reactive-agents` support.
+- **Docs** — animated `TerminalReplay` component added to the Starlight docs site; `npx reactive-agents demo` CTA on the landing page.
+
+#### Built-in Tool Hardening (`@reactive-agents/tools`)
+
+- **`web-search`** — throws `ToolExecutionError` on missing `TAVILY_API_KEY` instead of returning empty results. Prevents agents wasting iterations distinguishing "no results" from "search unavailable".
+- **`http-get`** — returns only `{ status, statusText, body }`, dropping all response headers (~20–30 per request, 500–1000+ tokens). Description updated to match actual return type.
+- **`docker-execution`** — timeout reduced 60s→30s for faster failure detection in agent loops.
+- **`file-read`** — exponential backoff retry (3 attempts, 100ms→200ms) with path normalization.
+
+#### Chat Context Forwarding (`@reactive-agents/runtime`)
+
+- `agent.chat()` and `agent.session()` now receive actual tool observations and analysis thoughts from the most recent `agent.run()`, not just the final answer text.
+- `reasoningSteps` forwarded from execution context to `TaskResult.metadata`; `buildContextSummary()` captures `[Tool result]` and `[Agent analysis]` steps (capped at 3K chars).
+- Tool name normalization — underscore→hyphen for built-in tools (e.g. `final_answer`→`final-answer`) handles small-model naming inconsistencies.
+
+### Changed
+
+- `@reactive-agents/core`: `ResultMetadataSchema.confidence` changed from `Schema.Number.pipe(Schema.between(0, 1))` to `Schema.Literal("high", "medium", "low")`. More readable, consistent with `AgentDebrief.confidence`.
+- `@reactive-agents/runtime`: `AgentResult.format` and `AgentResult.terminatedBy` use `OutputFormat` and `TerminatedBy` imported from `@reactive-agents/core` — single source of truth.
+- `@reactive-agents/reasoning`: `terminatedBy` union in `react-kernel.ts` extended with `"final_answer_tool"` value.
+- `@reactive-agents/tools`: `metaToolDefinitions` array now includes `finalAnswerTool` alongside `contextStatusTool` and `taskCompleteTool`.
+- `@reactive-agents/memory`: `agent_debriefs` DDL added to `MemoryDatabase` schema alongside existing tables.
+
+### Stats
+
+- 1,773 tests across 217 files (was 1,735/211 in v0.7.0, +38 new tests)
+- 20 packages (unchanged)
+
+---
+
+## [0.7.0] — 2026-03-08
 
 Quality & reliability sprint: required tools guard, circuit breaker, embedding cache, benchmarks, Docker sandbox, adaptive LLM inference, heuristic-first tool selection, sub-agent MCP inheritance, ContextEngine scoring, ExperienceStore, MemoryConsolidatorService, meta-tools, and parallel/chain tool execution.
 
@@ -125,35 +254,6 @@ Eight targeted fixes to improve local-model reliability:
 
 - 1,735 tests across 211 files (was 1,588/190 in v0.6.3, +147 new tests)
 - 20 packages + 1 new (`@reactive-agents/benchmarks`)
-- **`shouldShowTaskComplete(input)`** — pure visibility predicate; exported for testing and custom kernels.
-- **`metaToolDefinitions`** array — exported for schema inspection without live state wiring.
-
-#### Parallel & Chain Tool Execution (`@reactive-agents/reasoning`)
-
-Agents can now issue multiple tool calls from a single thought:
-
-- **Parallel** — multiple `ACTION:` lines in a single thought → `Effect.all(..., { concurrency: "unbounded" })` → combined numbered observation. Capped at 3 to prevent runaway fan-out. Side-effect prefixes (`send_`, `create_`, `delete_`, etc.) force single mode.
-- **Chain** — `ACTION:` followed by `THEN:` → sequential execution with `$RESULT` placeholder forwarding between steps. Fails fast on any step error. Capped at 3.
-- **`parseToolRequestGroup(thought)`** — exported primitive returning `ToolRequestGroup { mode: "single"|"parallel"|"chain", requests }`.
-- **`executeToolGroup(toolService, group, config)`** — dispatches the group; single delegates to existing `executeToolCall`.
-
-#### Sub-Agent Fixes (`@reactive-agents/tools`)
-
-- **`ALWAYS_INCLUDE_TOOLS`** — constant `["scratchpad-read", "scratchpad-write"]` auto-merged into every sub-agent's tool list so sub-agents always have scratchpad access regardless of parent config.
-- **Iteration cap** — `effectiveMaxIter = Math.min(config.maxIterations ?? 6, 6)` prevents runaway sub-agents.
-- **Scratchpad key forwarding** — `SubAgentResult.forwardedScratchpadKeys` lists keys written with `sub:<agentName>:<key>` prefix; parent agent can read forwarded context.
-
-### Changed
-
-- `@reactive-agents/reasoning`: `react-kernel.ts` net −200 lines — 6 static context helpers replaced by single `buildContext()` call.
-- `@reactive-agents/memory`: new `services/` sub-directory with `ExperienceStoreLive` and `MemoryConsolidatorServiceLive` exported from `src/index.ts`.
-- `@reactive-agents/tools`: `src/index.ts` now exports `ALWAYS_INCLUDE_TOOLS`, `contextStatusTool`, `makeContextStatusHandler`, `ContextStatusState`, `taskCompleteTool`, `shouldShowTaskComplete`, `makeTaskCompleteHandler`, `TaskCompleteVisibility`, `TaskCompleteState`.
-- `@reactive-agents/reasoning`: `src/index.ts` now exports `buildContext`, `ContextBuildInput`, `ContextItem`, `MemoryItem`, `ScoringContext`, `BudgetResult`.
-
-### Stats
-
-- 1,735 tests across 211 files (was 1,588/190 in v0.6.3, +147 new tests)
-- 20 packages (unchanged)
 
 ---
 

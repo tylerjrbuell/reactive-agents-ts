@@ -198,6 +198,14 @@ export interface RuntimeOptions {
   memoryTier?: "1" | "2";
 
   /**
+   * Whether the memory layer was explicitly enabled via `.withMemory()`.
+   * Controls debrief synthesis — debriefs are only synthesized when memory is enabled.
+   *
+   * Default: `false`
+   */
+  enableMemory?: boolean;
+
+  /**
    * Maximum reasoning iterations before the agent stops (regardless of success).
    * Prevents infinite reasoning loops.
    *
@@ -668,6 +676,7 @@ export const createRuntime = (options: RuntimeOptions) => {
         }
       : undefined,
     adaptiveToolFiltering: options.adaptiveToolFiltering,
+    enableMemory: options.enableMemory ?? false,
     enableExperienceLearning: options.enableExperienceLearning,
     enableMemoryConsolidation: options.enableMemoryConsolidation,
     consolidationConfig: options.consolidationConfig,

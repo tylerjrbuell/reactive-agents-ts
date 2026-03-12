@@ -20,6 +20,12 @@ import type { StreamEvent } from "@reactive-agents/llm-provider";
 import { StreamingTextCallback } from "@reactive-agents/core";
 import type { ContextProfile } from "../../context/context-profile.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
+import {
+  finalAnswerTool,
+  makeFinalAnswerHandler,
+  shouldShowFinalAnswer,
+  type FinalAnswerCapture,
+} from "@reactive-agents/tools";
 import type { ToolSchema } from "./tool-utils.js";
 import {
   parseAllToolRequests,
@@ -28,7 +34,7 @@ import {
   extractFinalAnswer,
   parseBareToolCall,
 } from "./tool-utils.js";
-import { buildContext } from "../../context/context-engine.js";
+import { buildContext, buildStaticContext, buildDynamicContext } from "../../context/context-engine.js";
 import type { MemoryItem } from "../../context/context-engine.js";
 import { extractThinking } from "./thinking-utils.js";
 import { makeStep } from "./step-utils.js";
@@ -40,6 +46,90 @@ import {
   type KernelContext,
   type ThoughtKernel,
 } from "./kernel-state.js";
+
+// ── Dynamic task completion guard ────────────────────────────────────────────
+
+/**
+ * Lightweight heuristic that checks whether the agent's tool usage covers the
+ * key actions described in the task.  Works by:
+ *  1. Detecting MCP namespaces referenced in the task (e.g. "signal", "github")
+ *  2. Checking if at least one tool from each namespace was actually called
+ *  3. Matching common action-verb patterns to tool categories
+ *
+ * Returns an array of human-readable gap descriptions (empty = all good).
+ */
+function detectCompletionGaps(
+  task: string,
+  toolsUsed: ReadonlySet<string>,
+  allToolSchemas: readonly ToolSchema[],
+  steps?: readonly { type: string; content: string }[],
+): string[] {
+  const taskLower = task.toLowerCase();
+  const gaps: string[] = [];
+
+  // ── Sub-agent delegation awareness ───────────────────────────────────────
+  // If spawn-agent was used and its observation shows success for a namespace,
+  // treat that namespace as satisfied — the sub-agent handled it.
+  const delegatedNamespaces = new Set<string>();
+  if (toolsUsed.has("spawn-agent") && steps) {
+    for (const s of steps) {
+      if (s.type !== "observation") continue;
+      const content = s.content.toLowerCase();
+      // Sub-agent success observations contain tool names or namespace references
+      // e.g. "signal/send_message_to_user" or "github/list_commits"
+      const nsMatches = content.matchAll(/(\w+)\/\w+/g);
+      for (const m of nsMatches) {
+        delegatedNamespaces.add(m[1]!.toLowerCase());
+      }
+      // Also detect explicit success indicators mentioning namespaces
+      if (content.includes("success") || content.includes("sent") || content.includes("completed")) {
+        // Extract namespace-like words from the observation
+        for (const ns of allToolSchemas.map((s) => s.name.includes("/") ? s.name.split("/")[0]!.toLowerCase() : null).filter(Boolean)) {
+          if (ns && content.includes(ns)) delegatedNamespaces.add(ns);
+        }
+      }
+    }
+  }
+
+  // Collect ALL MCP namespaces from the full tool registry (not the filtered
+  // adaptive subset) so that we catch references even when tools are hidden.
+  const namespaces = new Set<string>();
+  for (const s of allToolSchemas) {
+    if (s.name.includes("/")) namespaces.add(s.name.split("/")[0]!.toLowerCase());
+  }
+
+  // For each namespace, check if the task references it AND no tool from it was used.
+  // Use word-boundary matching to avoid false positives (e.g. "signal" in "signaling").
+  for (const ns of namespaces) {
+    // Word-boundary check: namespace must appear as a distinct word in the task,
+    // not as a substring of another word or inside quoted content being forwarded.
+    const nsRegex = new RegExp(`\\b${ns}\\b`, "i");
+    const taskMentionsNs = nsRegex.test(taskLower);
+    if (!taskMentionsNs) continue;
+
+    // Skip if a sub-agent already handled this namespace
+    if (delegatedNamespaces.has(ns)) continue;
+
+    const usedFromNs = [...toolsUsed].some((t) => t.toLowerCase().startsWith(ns + "/"));
+    if (!usedFromNs) {
+      gaps.push(`Task mentions "${ns}" but no ${ns}/* tool was called — use the appropriate ${ns}/* tool`);
+    }
+  }
+
+  // Common action-verb → tool-category heuristics for built-in tools
+  const ACTION_TOOL_MAP: [RegExp, string, (used: ReadonlySet<string>) => boolean][] = [
+    [/\b(search|look up|find online|google)\b/i, "web-search", (u) => u.has("web-search")],
+    [/\b(write to|save to|create) (a )?file\b/i, "file-write", (u) => u.has("file-write")],
+    [/\b(read|open|load) (a |the )?file\b/i, "file-read", (u) => u.has("file-read")],
+  ];
+  for (const [pattern, toolName, check] of ACTION_TOOL_MAP) {
+    if (pattern.test(taskLower) && !check(toolsUsed)) {
+      gaps.push(`Task asks to "${pattern.source.replace(/\\b|\(.*?\)/g, "").trim()}" but ${toolName} was not called`);
+    }
+  }
+
+  return gaps;
+}
 
 // ── Public input / output types ──────────────────────────────────────────────
 
@@ -74,6 +164,12 @@ export interface ReActKernelInput {
   /** Session ID for tool execution attribution. Falls back to "reasoning-session". */
   sessionId?: string;
   /**
+   * Full unfiltered tool schemas from the registry. Used by the dynamic task
+   * completion guard to detect MCP namespaces referenced in the task, even
+   * when adaptive filtering has hidden some tools from the LLM prompt.
+   */
+  allToolSchemas?: readonly ToolSchema[];
+  /**
    * Tools that MUST NOT be executed — hard code-level guard.
    * When the model requests a blocked tool, a synthetic observation is returned
    * instead of executing. Used by reflexion to prevent re-executing side-effect
@@ -104,7 +200,9 @@ export interface ReActKernelResult {
   /** Number of iterations completed */
   iterations: number;
   /** How the loop terminated */
-  terminatedBy: "final_answer" | "max_iterations" | "end_turn";
+  terminatedBy: "final_answer" | "final_answer_tool" | "max_iterations" | "end_turn";
+  /** Captured final-answer tool payload — present when terminatedBy === "final_answer_tool" */
+  finalAnswerCapture?: FinalAnswerCapture;
 }
 
 /**
@@ -177,13 +275,53 @@ function handleThinking(
     const strategy = state.strategy;
     const temp = input.temperature ?? profile.temperature ?? 0.7;
 
-    const systemPromptText = buildSystemPrompt(input.task, input.systemPrompt, profile.tier);
-
     const maxIter = (state.meta.maxIterations as number) ?? 10;
-    const thoughtPrompt = buildContext({
+
+    // ── Dynamic meta-tool injection (final-answer) ───────────────────────────
+    // When all required tools have been called and the agent is ready to complete,
+    // inject the final-answer tool into the available tool schemas so the LLM
+    // can discover and use it as the preferred termination mechanism.
+    const hasNonMetaToolCalledForThink = [...state.toolsUsed].some(
+      (t) => t !== "final-answer" && t !== "task-complete" && t !== "context-status" && t !== "scratchpad-write" && t !== "scratchpad-read",
+    );
+    const hasErrorsForThink = state.steps.some(
+      (s) => s.type === "observation" && s.metadata?.observationResult?.success === false,
+    );
+    const finalAnswerVisible = shouldShowFinalAnswer({
+      requiredToolsCalled: state.toolsUsed,
+      requiredTools: [...(input.requiredTools ?? [])],
+      iteration: state.iteration,
+      hasErrors: hasErrorsForThink,
+      hasNonMetaToolCalled: hasNonMetaToolCalledForThink,
+    });
+
+    const augmentedToolSchemas: readonly import("./tool-utils.js").ToolSchema[] = finalAnswerVisible
+      ? [
+          ...(input.availableToolSchemas ?? []),
+          {
+            name: finalAnswerTool.name,
+            description: finalAnswerTool.description,
+            parameters: finalAnswerTool.parameters,
+          },
+        ]
+      : (input.availableToolSchemas ?? []);
+
+    // ── Split context: static in system prompt, dynamic in user message ─────
+    // Static content (tool schemas, RULES, task) is sent once in the system prompt
+    // to avoid repeating ~500-700 tokens of identical content every iteration.
+    const staticContext = buildStaticContext({
+      task: input.task,
+      profile,
+      availableToolSchemas: augmentedToolSchemas,
+      requiredTools: input.requiredTools,
+    });
+    const baseSystemPrompt = buildSystemPrompt(input.task, input.systemPrompt, profile.tier);
+    const systemPromptText = `${baseSystemPrompt}\n\n${staticContext}`;
+
+    const thoughtPrompt = buildDynamicContext({
       task: input.task,
       steps: state.steps,
-      availableToolSchemas: input.availableToolSchemas,
+      availableToolSchemas: augmentedToolSchemas,
       requiredTools: input.requiredTools,
       iteration: state.iteration,
       maxIterations: maxIter,
@@ -319,6 +457,31 @@ function handleThinking(
       allToolRequests[0] ??
       null;
 
+    // ── Shared completion guard helper ────────────────────────────────────────
+    // Checks if the agent's tool usage satisfies task requirements before allowing exit.
+    // Returns a redirect message if gaps exist and retries haven't been exhausted.
+    const checkCompletionGaps = (): string | null => {
+      // Count prior completion-guard redirects to prevent infinite loops
+      const priorRedirects = newSteps.filter(
+        (s) => s.type === "observation" && s.content.startsWith("⚠️ Not done yet"),
+      ).length;
+      // Allow exit after 1 redirect (to avoid infinite loop)
+      if (priorRedirects >= 1) return null;
+
+      const allSchemas = input.allToolSchemas ?? input.availableToolSchemas ?? [];
+      if (allSchemas.length === 0) return null;
+
+      const gaps = detectCompletionGaps(
+        input.task,
+        new Set([...state.toolsUsed]),
+        allSchemas,
+        [...state.steps, ...newSteps],
+      );
+      if (gaps.length === 0) return null;
+
+      return `⚠️ Not done yet — missing steps:\n${gaps.map((g) => `  • ${g}`).join("\n")}\nComplete these actions before finishing.`;
+    };
+
     // ── FINAL ANSWER CHECK (no pending action) ──────────────────────────────
     const hasFA = hasFinalAnswer(thought) || (!!thinking && hasFinalAnswer(thinking));
     if (!toolRequest && hasFA) {
@@ -331,6 +494,21 @@ function handleThinking(
       if (embeddedToolCall) {
         toolRequest = embeddedToolCall;
       } else {
+        // ── Completion guard: check for task gaps before allowing exit ──
+        const gapMsg = checkCompletionGaps();
+        if (gapMsg) {
+          const gapStep = makeStep("observation", gapMsg, {
+            observationResult: makeObservationResult("completion-guard", false, gapMsg),
+          });
+          yield* hooks.onObservation(state, gapMsg, false);
+          return transitionState(state, {
+            steps: [...newSteps, gapStep],
+            tokens: newTokens,
+            cost: newCost,
+            iteration: state.iteration + 1,
+            // Stay in thinking — redirect agent to address gaps
+          });
+        }
         return transitionState(state, {
           steps: newSteps,
           tokens: newTokens,
@@ -349,6 +527,21 @@ function handleThinking(
       thought.trim().length >= 50 &&
       (thoughtResponse as { stopReason?: string }).stopReason === "end_turn"
     ) {
+      // ── Completion guard: check for task gaps before allowing exit ──
+      const gapMsg = checkCompletionGaps();
+      if (gapMsg) {
+        const gapStep = makeStep("observation", gapMsg, {
+          observationResult: makeObservationResult("completion-guard", false, gapMsg),
+        });
+        yield* hooks.onObservation(state, gapMsg, false);
+        return transitionState(state, {
+          steps: [...newSteps, gapStep],
+          tokens: newTokens,
+          cost: newCost,
+          iteration: state.iteration + 1,
+          // Stay in thinking — redirect agent to address gaps
+        });
+      }
       return transitionState(state, {
         steps: newSteps,
         tokens: newTokens,
@@ -453,6 +646,118 @@ function handleActing(
 
     // Hard side-effect guard — refuse to execute blocked tools from prior passes
     const isBlocked = input.blockedTools?.includes(toolRequest.tool) ?? false;
+
+    // ── FINAL-ANSWER HARD GATE ───────────────────────────────────────────────
+    // When the model calls the `final-answer` meta-tool, run the handler directly
+    // (bypassing ToolService) and, if accepted:true, hard-exit the kernel loop.
+    if (toolRequest.tool === "final-answer" && !isBlocked) {
+      const META_TOOLS = new Set(["final-answer", "task-complete", "context-status", "scratchpad-write", "scratchpad-read"]);
+      const hasNonMetaToolCalled = [...state.toolsUsed].some((t) => !META_TOOLS.has(t));
+      const requiredTools = input.requiredTools ?? [];
+      // For the hard-gate we relax the visibility guard:
+      // - All required tools must be called (if any)
+      // - At least one non-meta tool must have been used (or no required tools)
+      // - We skip hasErrors (model chose to finalize; trust its judgment)
+      // - We skip iteration≥2 (already in acting phase after ≥1 think→act cycle)
+      const allRequiredMet = requiredTools.every((t) => state.toolsUsed.has(t));
+      let canComplete = allRequiredMet && (hasNonMetaToolCalled || requiredTools.length === 0);
+
+      // ── Dynamic task completion guard ──────────────────────────────────────
+      // Check if the agent's tool usage actually covers the task requirements.
+      // Allow override after 1 redirect to prevent infinite loops.
+      let completionGapMessage: string | undefined;
+      const priorFinalAnswerAttempts = state.steps.filter(
+        (s) => s.type === "observation" && s.content.startsWith("⚠️") && s.content.includes("final-answer"),
+      ).length;
+      if (canComplete && priorFinalAnswerAttempts < 1) {
+        const gaps = detectCompletionGaps(
+          input.task,
+          state.toolsUsed,
+          input.allToolSchemas ?? input.availableToolSchemas ?? [],
+          state.steps,
+        );
+        if (gaps.length > 0) {
+          canComplete = false;
+          completionGapMessage = `Not done yet — missing steps:\n${gaps.map((g) => `  • ${g}`).join("\n")}\nComplete these actions before calling final-answer.`;
+        }
+      }
+
+      let parsedArgs: Record<string, unknown> = {};
+      try {
+        parsedArgs = JSON.parse(toolRequest.input) as Record<string, unknown>;
+      } catch {
+        // fall through with empty args — handler will return accepted:false
+      }
+
+      const handlerResult = yield* makeFinalAnswerHandler({
+        canComplete,
+        pendingTools: completionGapMessage ? [completionGapMessage] : undefined,
+      })({ ...parsedArgs });
+      const resultObj = handlerResult as Record<string, unknown>;
+
+      if (resultObj.accepted === true) {
+        const capture = resultObj._capture as FinalAnswerCapture;
+        // Note: hooks.onAction already fired above (line 485). No double-fire.
+        const finalObsContent = `✓ final-answer accepted: ${capture.output}`;
+        const finalObsStep = makeStep("observation", finalObsContent, {
+          observationResult: makeObservationResult("final-answer", true, finalObsContent),
+        });
+
+        yield* hooks.onObservation(
+          transitionState(state, { steps: stepsWithAction }),
+          finalObsContent,
+          true,
+        );
+
+        return transitionState(state, {
+          steps: [...stepsWithAction, finalObsStep],
+          toolsUsed: newToolsUsed,
+          status: "done",
+          output: capture.output,
+          iteration: state.iteration + 1,
+          meta: {
+            ...state.meta,
+            terminatedBy: "final_answer_tool" as const,
+            finalAnswerCapture: capture,
+            pendingToolRequest: undefined,
+            pendingToolGroup: undefined,
+            lastThought: undefined,
+            lastThinking: undefined,
+          },
+        });
+      }
+
+      // accepted: false — produce an error observation and let the loop continue
+      // Note: hooks.onAction already fired above (line 485). No double-fire.
+      const rejectionMsg = typeof resultObj.error === "string"
+        ? resultObj.error
+        : "final-answer rejected: conditions not yet met. Complete required steps first.";
+      observationContent = `⚠️ ${rejectionMsg}`;
+      obsResult = makeObservationResult("final-answer", false, observationContent);
+
+      yield* hooks.onObservation(
+        transitionState(state, { steps: stepsWithAction }),
+        observationContent,
+        false,
+      );
+
+      const rejectObsStep = makeStep("observation", observationContent, { observationResult: obsResult });
+      newToolsUsed.add("final-answer");
+
+      return transitionState(state, {
+        steps: [...stepsWithAction, rejectObsStep],
+        toolsUsed: newToolsUsed,
+        status: "thinking",
+        iteration: state.iteration + 1,
+        meta: {
+          ...state.meta,
+          pendingToolRequest: undefined,
+          pendingToolGroup: undefined,
+          lastThought: undefined,
+          lastThinking: undefined,
+        },
+      });
+    }
 
     if (isBlocked) {
       observationContent = `\u26A0\uFE0F BLOCKED: ${toolRequest.tool} already executed successfully in a prior pass. This tool has side effects and MUST NOT be called again. Move on to the next step or give FINAL ANSWER.`;
@@ -620,12 +925,14 @@ export const executeReActKernel = (
     });
 
     // Determine terminatedBy from state
-    const terminatedBy: "final_answer" | "max_iterations" | "end_turn" =
-      state.meta.terminatedBy === "end_turn"
-        ? "end_turn"
-        : state.status === "done"
-          ? "final_answer"
-          : "max_iterations";
+    const terminatedBy: "final_answer" | "final_answer_tool" | "max_iterations" | "end_turn" =
+      state.meta.terminatedBy === "final_answer_tool"
+        ? "final_answer_tool"
+        : state.meta.terminatedBy === "end_turn"
+          ? "end_turn"
+          : state.status === "done"
+            ? "final_answer"
+            : "max_iterations";
 
     // When max iterations reached (no explicit output), fall back to last thought content
     // to match the original executeReActKernel behavior.
@@ -641,6 +948,7 @@ export const executeReActKernel = (
       toolsUsed: [...state.toolsUsed],
       iterations: state.iteration,
       terminatedBy,
+      finalAnswerCapture: state.meta.finalAnswerCapture as FinalAnswerCapture | undefined,
     };
   });
 

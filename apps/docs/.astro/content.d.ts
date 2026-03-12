@@ -254,6 +254,13 @@ declare module 'astro:content' {
   collection: "docs";
   data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
+"features/debrief-chat.md": {
+	id: "features/debrief-chat.md";
+  slug: "features/debrief-chat";
+  body: string;
+  collection: "docs";
+  data: InferEntrySchema<"docs">
+} & { render(): Render[".md"] };
 "features/eval.md": {
 	id: "features/eval.md";
   slug: "features/eval";

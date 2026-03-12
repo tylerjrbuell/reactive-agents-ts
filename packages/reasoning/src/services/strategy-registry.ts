@@ -27,6 +27,7 @@ export type StrategyFn = (input: {
   readonly memoryContext: string;
   readonly availableTools: readonly string[];
   readonly availableToolSchemas?: readonly ToolSchema[];
+  readonly allToolSchemas?: readonly ToolSchema[];
   readonly config: ReasoningConfig;
   readonly systemPrompt?: string;
   readonly taskId?: string;

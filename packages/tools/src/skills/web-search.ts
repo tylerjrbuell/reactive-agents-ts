@@ -47,53 +47,45 @@ export const webSearchHandler = (
       const maxResults = (args.maxResults as number) ?? 5;
 
       const apiKey = process.env.TAVILY_API_KEY;
-      if (apiKey) {
-        const response = await fetch("https://api.tavily.com/search", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            query,
-            max_results: maxResults,
-            api_key: apiKey,
-          }),
-        });
-
-        if (!response.ok) {
-          throw new Error(
-            `Tavily API returned ${response.status}: ${response.statusText}`,
-          );
-        }
-
-        const data = (await response.json()) as {
-          results: Array<{
-            title: string;
-            url: string;
-            content: string;
-            score: number;
-          }>;
-        };
-
-        return {
-          query,
-          maxResults,
-          results: data.results.map((r) => ({
-            title: r.title,
-            url: r.url,
-            content: r.content,
-          })),
-        };
+      if (!apiKey) {
+        throw new Error(
+          "TAVILY_API_KEY is not set. Set it in your environment to enable web search.",
+        );
       }
 
-      // No API key — warn the user
-      console.warn(
-        "[web-search] TAVILY_API_KEY is not set. Web search is inactive. " +
-          "Set TAVILY_API_KEY in your environment to enable real web search results.",
-      );
+      const response = await fetch("https://api.tavily.com/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query,
+          max_results: maxResults,
+          api_key: apiKey,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(
+          `Tavily API returned ${response.status}: ${response.statusText}`,
+        );
+      }
+
+      const data = (await response.json()) as {
+        results: Array<{
+          title: string;
+          url: string;
+          content: string;
+          score: number;
+        }>;
+      };
+
       return {
         query,
         maxResults,
-        results: [],
-        error: "Web search is not activated — TAVILY_API_KEY is missing. Set it in your .env file.",
+        results: data.results.map((r) => ({
+          title: r.title,
+          url: r.url,
+          content: r.content,
+        })),
       };
     },
     catch: (e) =>

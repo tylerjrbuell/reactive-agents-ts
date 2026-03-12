@@ -1,29 +1,61 @@
 # Reactive Agents — Roadmap
 
-> **Grounded in market validation, February 2026.**
+> **The open-source agent framework built for control, not magic.**
 > Ordered by competitive impact and developer value. Items within each milestone are sequenced by dependency and urgency.
 
 ---
 
 ## Strategic Context
 
-The agent framework landscape has clarified significantly. TypeScript-first frameworks (Vercel AI SDK, Mastra, Google ADK, AWS Strands) are mainstream. **Seven capabilities remain uniquely ours** — no competitor has implemented them:
+The agent framework landscape is crowded. TypeScript-first frameworks (Vercel AI SDK, Mastra, Google ADK, AWS Strands) are mainstream. Most optimize for the happy path — simple demos that work with frontier models. **We optimize for control.** The capabilities that set us apart:
 
-1. Multi-strategy reasoning with AI selection
-2. 5-layer hallucination verification
-3. Cost-first architecture (semantic caching, complexity routing, prompt compression)
-4. Zettelkasten knowledge graphs in memory
-5. Cryptographic agent identity (Ed25519 certificates)
-6. Versioned prompt engineering with A/B testing
-7. Cross-task self-improvement (learned strategy preferences)
+1. **5 reasoning strategies** with adaptive selection — ReAct, Plan-Execute, Tree-of-Thought, Reflexion, Adaptive
+2. **Model-adaptive context profiles** — 4 tiers (local/mid/large/frontier) with calibrated thresholds, so agents work well on local models, not just GPT-4
+3. **Composable kernel SDK** — swappable reasoning algorithms, immutable state, universal hooks
+4. **Professional observability** — auto-instrumented metrics dashboard, per-phase timing, EventBus-driven with zero manual wiring
+5. **DX-first design** — every capability opt-in via `.withX()`, 10-phase engine invisible behind `ReactiveAgents.create().build()`
+6. **Cost-first architecture** — semantic caching, complexity routing, prompt compression, budget enforcement
+7. **Cryptographic agent identity** — real Ed25519 certificates, RBAC, behavioral contracts
 
-The roadmap below is about two things: **closing the gaps** that currently block production adoption, and **doubling down on what makes us irreplaceable**.
+The roadmap below is about two things: **closing the gaps** that currently block production adoption, and **proving our strengths with published benchmarks and real-world results**.
 
 ---
 
-## Current State — v0.7.0 ✅ (Mar 10, 2026)
+## Current State — v0.8.0 (unreleased) / v0.6.3 (npm) — Mar 10, 2026
 
-**20 packages + 1 new benchmark suite, 1,735 tests across 211 files, fully composable via Effect-TS.**
+**20 packages, 1,773 tests across 217 files. v0.7.0 and v0.8.0 are complete on main/feature branch and pending npm publish.**
+
+### v0.6.3 → v0.7.0 (Shipped on main, pending npm)
+
+- ✅ **ContextEngine** — per-iteration context scoring (recency decay, relevance, type weight, failure boost)
+- ✅ **ExperienceStore** — cross-agent tool pattern and error recovery learning (SQLite-backed)
+- ✅ **MemoryConsolidatorService** — background decay/replay/compress for episodic memory
+- ✅ **Meta-tools** — `context-status` (always-on introspection) + `task-complete` (visibility-gated completion)
+- ✅ **Parallel/chain tool execution** — multiple `ACTION:` lines or `THEN:` chaining from single thought
+- ✅ **Required Tools Guard** — `.withRequiredTools()` ensures named tools called before completion
+- ✅ **Adaptive LLM inference** — heuristic-first tool selection, LLM fallback only when needed
+- ✅ **Circuit breaker** — exponential backoff, half-open probe for LLM provider resilience
+- ✅ **Embedding cache** — LRU cache for vector embeddings
+- ✅ **Budget persistence** — daily token budget survives process restarts
+- ✅ **Docker sandbox** — code-execute runs in isolated container with resource limits
+- ✅ **JSON repair** — malformed LLM outputs automatically repaired before parse
+- ✅ **`@reactive-agents/benchmarks`** — 20-task × 5-tier benchmark suite, `rax bench` CLI command
+- ✅ **ReAct quality sprint** — token budget increases, tier reclassification, anti-fabrication rules, heuristic tool inference
+
+### v0.7.0 → v0.8.0 (Feature branch, pending merge + npm)
+
+- ✅ **`final-answer` meta-tool** — hard-gates ReAct loop exit; replaces fragile text regex
+- ✅ **DebriefSynthesizer** — post-run structured synthesis: tool history + one LLM call → `AgentDebrief`
+- ✅ **DebriefStore** — SQLite persistence for run artifacts (`agent_debriefs` table in memory DB)
+- ✅ **Enriched `AgentResult`** — `debrief?`, `format?`, `terminatedBy?` optional fields (backward compatible)
+- ✅ **`agent.chat()`** — conversational Q&A with adaptive routing (direct LLM or ReAct loop)
+- ✅ **`agent.session()`** — multi-turn conversation with managed history and debrief context injection
+
+---
+
+## Historical State — v0.5.6 ✅ (Feb 28, 2026)
+
+**18 packages, 1001 tests across 139 files, fully composable via Effect-TS.**
 
 ### v0.4.0 → v0.5.2 History
 
@@ -65,11 +97,11 @@ The roadmap below is about two things: **closing the gaps** that currently block
 - ✅ **Prompt A/B experiment framework** — `ExperimentService` with deterministic cohort assignment, outcome recording, winner selection
 - ✅ **Cross-task self-improvement** — episodic memory logs strategy outcomes; adaptive strategy queries past experience to bias selection
 - ✅ **Professional metrics dashboard** — `MetricsCollector` auto-subscribes to EventBus, `formatMetricsDashboard()` renders header + timeline + tools + alerts
-- ✅ **Agent Gateway** — `@reactive-agents/gateway` — persistent autonomous harness with adaptive heartbeats, cron scheduling, webhook ingestion (GitHub + generic adapters), composable policy engine (4 built-in policies), "Harness vs Horse" architecture (deterministic infrastructure, LLM only when needed)
+- ✅ **Agent Gateway** — `@reactive-agents/gateway` — persistent autonomous harness with adaptive heartbeats, cron scheduling, webhook ingestion (GitHub + generic adapters), composable policy engine (4 built-in policies)
 
 ### What's Scaffolded / Incomplete
 
-- ⚠️ Docker container sandbox (subprocess done; full Docker isolation with network/memory limits deferred to v0.7.0)
+- ⚠️ Docker container sandbox (subprocess done; full Docker isolation with network/memory limits deferred)
 - ⚠️ Programmatic tool calling strategy (spec'd, depends on Docker sandbox)
 - ⚠️ Streaming service (spec'd, not wired)
 
@@ -105,145 +137,65 @@ See `spec/docs/14-v0.5-comprehensive-plan.md` for the full plan. All items shipp
 
 ---
 
-## v0.6.0 — Docker Sandbox & CLI Auto-Generation
-
-**Target: 90 days**
+## v0.6.0 — Docker Sandbox & Trust Layer ✅ (Shipped early in v0.5.2–v0.5.6)
 
 ### ✅ Shipped Early (in v0.5.2)
 
-The following v0.6.0 items were completed ahead of schedule in v0.5.2:
-
-- ✅ **LiteLLM Provider Adapter** — `packages/llm-provider/src/providers/litellm.ts`, configurable via `LITELLM_BASE_URL`, covers 40+ providers
-- ✅ **Ed25519 Agent Certificates** — real `crypto.subtle.generateKey("Ed25519")`, signature verification, SHA-256 fingerprints, rotation/revocation
-- ✅ **Kill Switch + Behavioral Contracts** — `KillSwitchService` (per-agent + global), `BehavioralContractService` (tool/output/iteration constraints), integrated into execution engine
-- ✅ **Multi-source verification** — LLM claim extraction + Tavily search corroboration, replaces hardcoded stub
-- ✅ **Prompt A/B experiments** — `ExperimentService` with deterministic cohort assignment, outcome recording, winner selection
+- ✅ **LiteLLM Provider Adapter** — configurable via `LITELLM_BASE_URL`, covers 40+ providers
+- ✅ **Ed25519 Agent Certificates** — real `crypto.subtle.generateKey("Ed25519")`, signature verification, rotation/revocation
+- ✅ **Kill Switch + Behavioral Contracts** — per-agent + global halt, tool/output/iteration constraints
+- ✅ **Multi-source verification** — LLM claim extraction + Tavily search corroboration
+- ✅ **Prompt A/B experiments** — deterministic cohort assignment, outcome recording, winner selection
 - ✅ **Cross-task self-improvement** — episodic memory logs strategy outcomes, adaptive strategy queries past experience
 - ✅ **Code sandbox (subprocess)** — `Bun.spawn()` isolation with minimal env, no secrets leaked
 
-### Remaining v0.6.0 Items
+---
 
-### Programmatic Tool Calling + Docker Sandbox
+## v0.9.0 — Benchmarks, Docker Sandbox & Adoption Push
 
-The problem with the current ReAct loop (confirmed by debug traces)
+**Focus: prove the framework works, make it easy to adopt.**
 
-Scenario 5 produced 7 round trips to accomplish: compute factorial → save to file.
-Thought: I'll use code-execute... ← LLM call #1
-Action: code-execute(...)
-Obs: { executed: false } ← context bloat
-Thought: stub returned nothing, so 7!... ← LLM call #2
-Action: file-write({"path": ...})
-Obs: { written: true, path: ... } ← more context
-Thought: confirm done, FINAL ANSWER ← LLM call #3
+### Published Benchmarks
 
-With programmatic tool calling, the LLM writes one code block that does all of it:
-const result = await tools.codeExecute({ code: "..." }); // real
-const n = parseInt(result.output);
-await tools.fileWrite({ path: "./factorial_7.txt", content: String(n) });
-return `Computed factorial: ${n}, saved to ./factorial_7.txt`;
-That's 1 LLM call → 1 sandbox execution → 1 observation back into context. The intermediate results live and die inside the container
-scope.
+- 20-task x 5-model-tier benchmark suite with public results
+- Comparison against LangChain, Vercel AI SDK, Mastra on token efficiency, latency, and correctness
+- Per-strategy breakdown (ReAct vs Plan-Execute vs ToT) across model tiers
+- Results published to docs site and GitHub README
+
+### Docker Code Sandbox (Full Isolation)
+
+- `DockerSandboxService` — real container execution with security hardening (network isolation, read-only rootfs, resource limits)
+- Replaces subprocess sandbox for `code-execute` tool
+- `--sandbox docker` flag on `rax run`
+
+### Programmatic Tool Calling
+
+- LLM outputs code blocks that call tools programmatically inside the sandbox
+- `ToolsBridgeServer` on Unix socket routes container tool calls through ToolService (same auth/audit path)
+- 1 LLM call + 1 sandbox execution = 1 observation — 30-50% token reduction on multi-step tasks
+- See `spec/docs/` for detailed architecture
+
+### README & Docs Polish
+
+- Getting started guide rewritten for new users
+- Real-world example apps (researcher, code reviewer, data analyst)
+- API reference generated from TypeDoc
+- Docs site updated with benchmark results
 
 ---
 
-Two distinct systems, both needed
+## v1.0.0 — Stable Release
 
-System 1: Docker Code Sandbox (packages/tools/src/execution/docker-sandbox.ts)
+**Focus: stable API, proven benchmarks, and migration paths for adoption.**
 
-Replaces the stub. All code-execute calls go through here. Security profile:
-
-docker run --rm
---network none # no internet from container
---read-only # root fs immutable
---tmpfs /tmp:size=50m # writable memory-only scratch space
---cap-drop ALL # strip all Linux capabilities
---no-new-privileges # no setuid/sudo escalation
---memory 256m # hard memory cap
---memory-swap 256m # no swap to disk
---cpus 0.5 # CPU throttle
---pids-limit 50 # no fork bombs
---user 1000:1000 # non-root
-ghcr.io/reactive-agents/code-runner:bun # minimal Bun image
-
-Returns { stdout, stderr, exitCode, durationMs }. File I/O to the host goes through the tools bridge only (container has --network
-none).
-
-System 2: Tools Bridge + Programmatic Strategy
-
-A thin HTTP server on a Unix socket that runs on the host, routing LLM-generated code's tool calls through ToolService. The container
-gets --env TOOLS_BRIDGE_SOCKET=/run/bridge.sock and network access restricted to only that socket.
-
-Container (isolated) Host
-┌─────────────────────┐ ┌─────────────────────┐
-│ LLM-generated code │ unix sock │ ToolsBridgeServer │
-│ tools.webSearch() │────────────▶│ → ToolService │
-│ tools.fileWrite() │────────────▶│ → validates + audits│
-│ return finalResult │ │ → EventBus.publish() │
-└─────────────────────┘ └─────────────────────┘
-↓
-ONE observation in context
-
-The bridge enforces the same ToolService authorization model — riskLevel, requiresApproval, guardrails — so no bypass is possible.
-The LLM can write loops, conditionals, intermediate filtering, all of which stay inside the container scope.
-
----
-
-Phased plan
-
-┌───────┬──────────────────────────────────────────────────────────────────────────────────┬─────────────────────────────────────┐
-│ Phase │ Deliverable │ Unlocks │
-├───────┼──────────────────────────────────────────────────────────────────────────────────┼─────────────────────────────────────┤
-│ 1 │ DockerSandboxService — real container execution, security hardening, image │ Real code-execute results in │
-│ │ management │ existing tests │
-├───────┼──────────────────────────────────────────────────────────────────────────────────┼─────────────────────────────────────┤
-│ 2 │ ToolsBridgeServer — Unix socket server wrapping ToolService, injected into │ Multi-tool code in single container │
-│ │ containers │ execution │
-├───────┼──────────────────────────────────────────────────────────────────────────────────┼─────────────────────────────────────┤
-│ 3 │ programmatic reasoning strategy — LLM outputs code blocks, one execution = one │ 30–50% token reduction on │
-│ │ observation, compacted context │ multi-step tasks │
-├───────┼──────────────────────────────────────────────────────────────────────────────────┼─────────────────────────────────────┤
-│ 4 │ Prebuilt runner images (bun, python-slim, node) published to GHCR │ Multi-language support │
-└───────┴──────────────────────────────────────────────────────────────────────────────────┴─────────────────────────────────────┘
-
-Phase 1 is self-contained and immediately valuable — it fixes the code-execute stub and makes Scenario 5 in test.ts actually work.
-Phases 2–3 are the novel contribution, and Phase 4 is operational hardening.
-
----
-
-What's already in place
-
-- ToolService.execute() — the authorization + audit path the bridge will call through
-- execution/sandbox.ts — the timeout/defect wrapper stays, the Docker layer sits inside it
-- ToolDefinition.riskLevel + requiresApproval — already the right fields for per-tool sandbox policy
-- rax CLI structure — rax run is the natural entry point for --sandbox docker flag
-- EventBus — every tool call through the bridge can publish ToolCallStarted/Completed events, giving full observability inside
-  programmatic executions
-
----
-
-Want to proceed with Phase 1 — the real Docker sandbox — as the first concrete deliverable? That's the foundation everything else
-builds on, and it's independently shippable. Or if you want to design Phase 2–3 architecture first (the bridge + programmatic
-strategy), we can spec those out before writing code.
-
----
-
-## v0.7.0 — Voice, UI & Edge
-
-**Target: 180 days**
-
-### Voice / Realtime Agent Support
-
-AWS Strands, OpenAI, and Google ADK all ship voice agent capabilities. This is the fastest-growing agent segment.
-
-- Bidirectional audio streaming via WebRTC or WebSockets
-- Integration with realtime speech APIs (OpenAI Realtime, Gemini Live)
-- `@reactive-agents/voice` package with `VoiceAgent` builder
-- Turn-taking, interruption handling, and silence detection
-- Works with our 5 interaction modes — voice calls can trigger `collaborative` mode checkpoints
+- Semantic versioning commitment — no breaking changes without major version
+- Compiled output stable across all packages
+- A2A Protocol at spec v1.0
+- Published benchmark comparison against LangChain, Vercel AI SDK, Mastra
+- Migration guides from LangChain and Vercel AI SDK
+- Community growth targets: 1K GitHub stars, 500 npm weekly downloads
 
 ### `@reactive-agents/react` — UI Framework Integration
-
-Vercel AI SDK dominates the TS/React narrative with `useChat`, `useCompletion`. We need native React hooks that expose our richer agent state.
 
 ```tsx
 import { useAgent, useAgentStream } from "@reactive-agents/react";
@@ -261,43 +213,45 @@ function ChatUI() {
 - `AgentProvider` context for app-wide agent configuration
 - Compatible with Next.js, Remix, Vite
 
-### Edge / WASM Target
-
-Deploy agents to Cloudflare Workers, Deno Deploy, and Bun Edge.
-
-- Replace `bun:sqlite` with a WASM SQLite build for edge environments
-- Tree-shake memory tiers: Tier 1 (FTS5) works on edge, Tier 2 (vector) requires more compute
-- `@reactive-agents/edge` compatibility shim
-- Vercel Edge Functions support
-
 ---
 
-## v1.0.0 — Stable Release
+## v1.1.0+ — Strategy Evolution & Platform Expansion
 
-**Target: 270 days**
+### Strategy Evolution
 
-- Semantic versioning commitment — no breaking changes without major version
-- Compiled output stable across all packages
-- A2A Protocol at spec v1.0
-- All 7 unique differentiators fully implemented and tested
-- Performance benchmarks published against LangChain, Vercel AI SDK, Mastra
-- Enterprise support tier documentation
-- Migration guide from LangChain, CrewAI, AutoGPT
+- Agents improve their own reasoning approach over time based on task outcomes
+- `AgentGenome` — serializable strategy configuration evolved through fitness evaluation
+- `FitnessEvaluator` — drives `@reactive-agents/eval` to score genome fitness
+- Evolved strategies baked into config — no extra LLM calls at runtime
 
----
+### Expanded Local Model Optimization
 
-## v1.1.0+ — Evolutionary Intelligence (Phase 5)
+- Model-specific prompt tuning profiles (Llama, Mistral, Qwen, Gemma families)
+- Automatic tier detection from model name/size
+- Local model benchmark suite with optimization recommendations
 
-Inspired by UC Santa Barbara **Group-Evolving Agents (GEA)** research (Feb 2026).
+### Plugin Marketplace
 
-### `@reactive-agents/evolution`
+- Community-contributed tool adapters, reasoning kernels, and memory backends
+- `rax install <plugin>` for one-command setup
+- Published plugin SDK with validation and testing helpers
 
-- **AgentGenome** — serializable strategy configuration evolved through fitness evaluation
-- **ExperiencePool** — shared episodic and procedural memory across agent groups
-- **FitnessEvaluator** — drives `@reactive-agents/eval` to score genome fitness
-- **Zero-cost deployment** — evolved strategies baked into config, no extra LLM calls at runtime
-- **Cross-model transfer** — genomes evolved on one model deploy to another
-- **A2A integration** — genomes shared via Agent Card metadata
+### Node.js Runtime Compatibility & Browser Execution
+
+Make the framework runnable on Node.js (not just Bun) and browser environments (WebContainers/StackBlitz):
+
+- **Lazy memory layer** — `createRuntime()` currently initializes `memoryLayer` unconditionally even when `enableMemory: false`; make it truly lazy/optional so runtimes without SQLite can start cleanly
+- **SQLite abstraction** — replace direct `bun:sqlite` dependency with a backend interface that supports `better-sqlite3` (Node.js) and `sql.js` (WASM/browser)
+- **Runtime-guarded Bun APIs** — audit all `Bun.spawn`, `Bun.file`, `Bun.serve` usage; add runtime detection with Node.js fallbacks (`child_process`, `fs`, `http`)
+- **WebContainer demo** — `npx reactive-agents demo` runs in StackBlitz/WebContainers for embedded docs playground and zero-install onboarding
+
+**Impact:** Unlocks Node.js users, StackBlitz/CodeSandbox embeds, and browser-based interactive docs — removes the single biggest adoption barrier for teams not on Bun.
+
+### Messaging Channel Integrations
+
+- Discord, Signal, Telegram agent frontends via MCP transports
+- `@reactive-agents/channels` package with adapter pattern
+- Persistent sessions across messaging platforms using existing `agent.session()` API
 
 ---
 
@@ -350,14 +304,15 @@ Keeping this intentional:
 | v0.3.0 ✅ | **All services wired, 5 strategies, OpenAI tools, full docs**                          | **Adaptive meta-strategy + fully observable engine**        |
 | v0.4.0 ✅ | Enhanced builder, structured tool results, EvalStore                                   | Composable builder options + persistent eval                |
 | v0.5.0 ✅ | **A2A interop, agent-as-tool, MCP SSE, foundation hardening, real-time observability** | **First TS framework with A2A + live reasoning visibility** |
-| v0.5.2 ✅ | **Ed25519 crypto, LiteLLM, kill switch, contracts, sandbox, self-improvement**         | **All 7 differentiators implemented — no competitor matches** |
-| v0.5.6 ✅ | **Agent Gateway: heartbeats, crons, webhooks, policy engine**                          | **Persistent autonomous agents — harness vs horse architecture** |
-| v0.6.0    | Docker sandbox, programmatic tool calling, CLI auto-generation                          | Multi-tool single-execution, 30-50% token reduction         |
-| v0.7.0    | Voice, UI, Edge                                                                        | Full-stack agent runtime no competitor matches              |
-| v1.0.0    | Stability, benchmarks                                                                  | Production-grade, proven, documented                        |
-| v1.1.0+   | Evolutionary intelligence                                                              | GEA-inspired zero-cost genome evolution                     |
+| v0.5.2 ✅ | **Ed25519 crypto, LiteLLM, kill switch, contracts, sandbox, self-improvement**         | **Control-first architecture — no competitor matches**      |
+| v0.5.6 ✅ | **Agent Gateway: heartbeats, crons, webhooks, policy engine**                          | **Persistent autonomous agents with deterministic infrastructure** |
+| v0.7.0 ✅ | Required tools guard, circuit breaker, benchmarks, Docker sandbox, ContextEngine, ExperienceStore | Cross-agent learning + adaptive tool inference |
+| v0.8.0 ✅ | Final-answer hard gate, structured debriefs, agent.chat() + agent.session()           | Self-reporting agents with conversational Q&A |
+| v0.9.0    | Published benchmarks, programmatic tool calling, Docker sandbox (full)                 | 30-50% token reduction, proven public results               |
+| v1.0.0    | Stable API, migration guides, React hooks                                              | Production-grade with UI integration                        |
+| v1.1.0+   | Strategy evolution, local model optimization, plugin marketplace                       | Self-improving agents + community ecosystem                 |
 
 ---
 
-_Last updated: February 28, 2026 — v0.5.6 (1001 tests, 18 packages, gateway shipped), v0.6.0 planning_
+_Last updated: March 11, 2026 — v0.8.0 complete (1773 tests, 20 packages, debrief + chat shipped), v0.7.0 + v0.8.0 pending npm publish_
 _Grounded in: `spec/docs/12-market-validation-feb-2026.md`, `spec/docs/14-v0.5-comprehensive-plan.md`_

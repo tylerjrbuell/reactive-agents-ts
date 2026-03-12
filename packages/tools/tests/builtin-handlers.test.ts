@@ -155,37 +155,31 @@ describe("fileWriteHandler — error cases", () => {
 // ═══════════════════════════════════════════════════════════════════════
 
 describe("webSearchHandler — error cases", () => {
-  it("should return error with clear message when no API key", async () => {
+  it("should throw error when no API key is set", async () => {
     const original = process.env.TAVILY_API_KEY;
     delete process.env.TAVILY_API_KEY;
 
     try {
       const result = await Effect.runPromise(
-        webSearchHandler({ query: "test query" }),
+        webSearchHandler({ query: "test query" }).pipe(Effect.flip),
       );
-      const typed = result as {
-        query: string;
-        results: unknown[];
-        error: string;
-      };
-      expect(typed.query).toBe("test query");
-      expect(typed.results).toEqual([]);
-      expect(typed.error).toContain("TAVILY_API_KEY");
+      expect(result).toBeInstanceOf(ToolExecutionError);
+      expect(result.message).toContain("TAVILY_API_KEY");
     } finally {
       if (original) process.env.TAVILY_API_KEY = original;
     }
   });
 
-  it("should include maxResults in stub response when no API key", async () => {
+  it("should throw error even with maxResults parameter when no API key", async () => {
     const original = process.env.TAVILY_API_KEY;
     delete process.env.TAVILY_API_KEY;
 
     try {
       const result = await Effect.runPromise(
-        webSearchHandler({ query: "test", maxResults: 3 }),
+        webSearchHandler({ query: "test", maxResults: 3 }).pipe(Effect.flip),
       );
-      const typed = result as { maxResults: number };
-      expect(typed.maxResults).toBe(3);
+      expect(result).toBeInstanceOf(ToolExecutionError);
+      expect(result.message).toContain("TAVILY_API_KEY");
     } finally {
       if (original) process.env.TAVILY_API_KEY = original;
     }
