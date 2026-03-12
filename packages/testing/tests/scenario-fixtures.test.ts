@@ -9,7 +9,7 @@ describe("Scenario fixtures", () => {
   test("createGuardrailBlockScenario returns config and expected error tag", () => {
     const scenario = createGuardrailBlockScenario();
     expect(scenario.config).toBeDefined();
-    expect(scenario.expectedErrorTag).toBe("GuardrailViolationError");
+    expect(scenario.expectedErrorTag).toBe("ViolationError");
     expect(scenario.triggerInput).toBeTruthy();
   });
 

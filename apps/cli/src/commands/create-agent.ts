@@ -37,8 +37,19 @@ export async function runCreateAgent(args: string[]): Promise<void> {
     console.log(section("Create Agent (Interactive)"));
 
     const name = await promptUser("Agent name", defaultName);
-    const provider = await promptUser("Provider", "anthropic", VALID_PROVIDERS);
-    const recipe = await promptUser("Recipe", "basic", VALID_RECIPES);
+
+    let provider = await promptUser("Provider", "anthropic", VALID_PROVIDERS);
+    while (!VALID_PROVIDERS.includes(provider)) {
+      console.log(`Invalid provider. Choose from: ${VALID_PROVIDERS.join(", ")}`);
+      provider = await promptUser("Provider", "anthropic", VALID_PROVIDERS);
+    }
+
+    let recipe = await promptUser("Recipe", "basic", VALID_RECIPES);
+    while (!VALID_RECIPES.includes(recipe)) {
+      console.log(`Invalid recipe. Choose from: ${VALID_RECIPES.join(", ")}`);
+      recipe = await promptUser("Recipe", "basic", VALID_RECIPES);
+    }
+
     const featuresStr = await promptUser("Features (comma-separated)", "reasoning,tools");
     const features = featuresStr.split(",").map((f: string) => f.trim()).filter(Boolean);
 
