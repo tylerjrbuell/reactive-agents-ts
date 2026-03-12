@@ -59,35 +59,38 @@ jobs:
           )
 
           for pkg in "${PACKAGES[@]}"; do
-            echo "Publishing $pkg..."
+            echo "::group::Publishing $pkg"
             cd "$pkg"
 
-            # bun publish does NOT correctly resolve workspace:* to local versions —
-            # it uses the already-published npm version instead. Pre-process package.json
-            # to replace workspace:* with the actual local version before publishing.
+            PKG_NAME=$(node -p "require('./package.json').name")
             PKG_VERSION=$(node -p "require('./package.json').version")
-            # Replace all workspace:* dep references with the real version of each workspace pkg
-            node -e "
-              const fs = require('fs');
-              const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-              const replace = (deps) => {
-                if (!deps) return;
-                for (const [name, ver] of Object.entries(deps)) {
-                  if (ver === 'workspace:*') {
-                    // Read the actual version from the workspace package
-                    const pkgPath = require.resolve(name + '/package.json', { paths: ['$GITHUB_WORKSPACE'] });
-                    deps[name] = require(pkgPath).version;
-                  }
-                }
-              };
-              replace(pkg.dependencies);
-              replace(pkg.peerDependencies);
-              replace(pkg.optionalDependencies);
-              fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2));
-            "
 
-            bun publish --access public --no-git-checks || echo "⚠️  $pkg: already published or error, skipping"
+            # bun publish resolves workspace:* to the already-published npm version,
+            # not the local workspace version. Use our script to fix this first.
+            node "$GITHUB_WORKSPACE/scripts/resolve-workspace-deps.mjs" . "$GITHUB_WORKSPACE"
+
+            # Verify no workspace: references remain before publishing
+            if grep -q '"workspace:' package.json; then
+              echo "❌ ERROR: workspace: references still present in $pkg/package.json after resolution!"
+              cat package.json
+              exit 1
+            fi
+
+            bun publish --access public --no-git-checks \
+              && echo "✅ Published $PKG_NAME@$PKG_VERSION" \
+              || echo "⚠️  $PKG_NAME@$PKG_VERSION: already published, skipping"
+
+            # Post-publish sanity check: verify the published manifest has correct versions
+            sleep 2
+            PUBLISHED_DEPS=$(npm view "$PKG_NAME@$PKG_VERSION" dependencies 2>/dev/null || echo "")
+            if echo "$PUBLISHED_DEPS" | grep -q "workspace:"; then
+              echo "❌ CRITICAL: Published $PKG_NAME@$PKG_VERSION contains workspace: references!"
+              exit 1
+            fi
+            echo "✅ Dep check passed for $PKG_NAME@$PKG_VERSION"
+
             cd "$GITHUB_WORKSPACE"
+            echo "::endgroup::"
           done
 
   release:
