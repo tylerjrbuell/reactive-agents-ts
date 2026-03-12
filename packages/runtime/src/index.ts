@@ -30,8 +30,12 @@ export {
   GuardrailViolationError,
   BudgetExceededError,
   KillSwitchTriggeredError,
+  BehavioralContractViolationError,
   unwrapError,
+  unwrapErrorWithSuggestion,
+  errorContext,
   type RuntimeErrors,
+  type ErrorContext,
 } from "./errors.js";
 
 // ─── Services ───
