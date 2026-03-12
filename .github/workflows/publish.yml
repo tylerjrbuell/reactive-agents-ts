@@ -61,7 +61,31 @@ jobs:
           for pkg in "${PACKAGES[@]}"; do
             echo "Publishing $pkg..."
             cd "$pkg"
-            # bun publish resolves workspace:* → real version numbers automatically
+
+            # bun publish does NOT correctly resolve workspace:* to local versions —
+            # it uses the already-published npm version instead. Pre-process package.json
+            # to replace workspace:* with the actual local version before publishing.
+            PKG_VERSION=$(node -p "require('./package.json').version")
+            # Replace all workspace:* dep references with the real version of each workspace pkg
+            node -e "
+              const fs = require('fs');
+              const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+              const replace = (deps) => {
+                if (!deps) return;
+                for (const [name, ver] of Object.entries(deps)) {
+                  if (ver === 'workspace:*') {
+                    // Read the actual version from the workspace package
+                    const pkgPath = require.resolve(name + '/package.json', { paths: ['$GITHUB_WORKSPACE'] });
+                    deps[name] = require(pkgPath).version;
+                  }
+                }
+              };
+              replace(pkg.dependencies);
+              replace(pkg.peerDependencies);
+              replace(pkg.optionalDependencies);
+              fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2));
+            "
+
             bun publish --access public --no-git-checks || echo "⚠️  $pkg: already published or error, skipping"
             cd "$GITHUB_WORKSPACE"
           done
