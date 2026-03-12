@@ -18,7 +18,7 @@
     "@opentelemetry/sdk-metrics": "^2.6.0",
     "@opentelemetry/sdk-trace-base": "^2.6.0",
     "@opentelemetry/semantic-conventions": "^1.40.0",
-    "@reactive-agents/core": "workspace:*",
+    "@reactive-agents/core": "0.7.7",
     "effect": "^3.10.0"
   },
   "devDependencies": {

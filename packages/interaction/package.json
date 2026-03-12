@@ -12,9 +12,9 @@
   },
   "dependencies": {
     "effect": "^3.10.0",
-    "@reactive-agents/core": "workspace:*",
-    "@reactive-agents/reasoning": "workspace:*",
-    "@reactive-agents/observability": "workspace:*",
+    "@reactive-agents/core": "0.7.7",
+    "@reactive-agents/reasoning": "0.7.7",
+    "@reactive-agents/observability": "0.7.7",
     "ulid": "^2.3.0"
   },
   "devDependencies": {

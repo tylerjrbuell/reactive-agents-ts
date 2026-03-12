@@ -21,7 +21,7 @@
     "docs:preview": "cd apps/docs && bun x astro preview",
     "changeset": "changeset",
     "version": "changeset version",
-    "release": "bun run build && changeset publish"
+    "release": "bun run build && node scripts/resolve-workspace-deps.mjs && changeset publish"
   },
   "license": "MIT",
   "repository": {
