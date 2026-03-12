@@ -157,6 +157,7 @@ Run this checklist:
 - [ ] All tests pass (`bun test`)
 - [ ] Build succeeds (`bun run build`)
 - [ ] Documentation updated (see below)
+- [ ] Changeset added (`bun run changeset`) — see Release Workflow below
 - [ ] No new `TODO`/`FIXME` without a tracking issue
 - [ ] Pattern compliance verified (`/review-patterns <changed-files>`)
 
@@ -176,31 +177,7 @@ Run this checklist:
 | **New LLM provider**           | `README.md` (providers table), `apps/docs/src/content/docs/features/llm-providers.md`, `CLAUDE.md` (env vars if needed)               |
 | **New feature page needed**    | `apps/docs/src/content/docs/features/<name>.md` or `guides/<name>.md`                                                                 |
 | **API signature change**       | Search all docs for old signature and update: `grep -r "oldMethod" apps/docs/`                                                        |
-| **Version bump / release**     | `CHANGELOG.md` (new entry), all `package.json` files, `CLAUDE.md` status                                                              |
-
-### CHANGELOG Format
-
-Follow [Keep a Changelog](https://keepachangelog.com/). Each release entry must include:
-
-```markdown
-## [X.Y.Z] — YYYY-MM-DD
-
-### Added
-
-- Feature descriptions with package scope
-
-### Changed
-
-- Package version bumps with context
-
-### Fixed
-
-- Bug fixes with root cause
-
-### Stats
-
-- N tests across M files (was P/Q)
-```
+| **Version bump / release**     | Add a changeset (`bun run changeset`) — versions and CHANGELOG are managed automatically                                              |
 
 ### Docs Site (Starlight/Astro)
 
@@ -309,14 +286,70 @@ When creating a new package (e.g., `@reactive-agents/a2a`):
 
 ### Before Any Release
 
-| Check            | Details                                |
-| ---------------- | -------------------------------------- |
-| All above        | Plus full integration test             |
-| CHANGELOG        | New version entry with all sections    |
-| Package versions | All bumped consistently                |
-| Docs site builds | `cd apps/docs && npx astro build`      |
-| README current   | Stats, packages, examples all accurate |
-| ROADMAP updated  | Shipped items marked, new targets set  |
+| Check            | Details                                                       |
+| ---------------- | ------------------------------------------------------------- |
+| All above        | Plus full integration test                                    |
+| Changeset added  | `bun run changeset` with a clear summary of all changes       |
+| Docs site builds | `bun run docs:build`                                          |
+| README current   | Stats, packages, examples all accurate                        |
+| ROADMAP updated  | Shipped items marked, new targets set                         |
+
+> **Do not manually bump versions or edit CHANGELOG.** The `changesets/action` PR handles both automatically when the "chore: version packages" PR is merged. See Release Workflow below.
+
+---
+
+## Release Workflow
+
+This project uses **[Changesets](https://github.com/changesets/changesets)** for versioning and publishing. Never manually bump `package.json` versions or edit `CHANGELOG.md` for new releases.
+
+### Day-to-day: adding a changeset
+
+Every PR that changes user-facing behaviour **must** include a changeset:
+
+```bash
+bun run changeset
+# prompts: which packages changed? → select all (they're in a fixed group)
+# bump type? → patch / minor / major
+# summary? → one line description
+```
+
+This creates `.changeset/<random-name>.md`. Commit it with your code.
+
+### Release cycle
+
+```
+feature work + bun run changeset
+        ↓  push to main
+changesets/action detects pending changesets
+        ↓  opens "chore: version packages" PR automatically
+PR shows: version bumps for all packages + generated CHANGELOG entries
+        ↓  review and merge when ready to release
+changeset publish runs → builds, resolves workspace deps, publishes to npm
+        ↓
+GitHub Release created automatically with CHANGELOG notes
+```
+
+### Bump types
+
+| Type | When to use | Example |
+|---|---|---|
+| `patch` | Bug fixes, test fixes, docs | `0.7.6 → 0.7.7` |
+| `minor` | New features, backwards-compatible API additions | `0.7.6 → 0.8.0` |
+| `major` | Breaking API changes | `0.7.6 → 1.0.0` |
+
+All 20 publishable packages move together (fixed group) — bumping any one package bumps all.
+
+### Private packages (never published)
+
+`@reactive-agents/benchmarks` and `@reactive-agents/health` have `"private": true` and are excluded from all publishing automatically. Do not remove this flag.
+
+### Key files
+
+| File | Purpose |
+|---|---|
+| `.changeset/config.json` | Fixed group of all packages, public access |
+| `.github/workflows/publish.yml` | Runs `changesets/action` on every push to `main` |
+| `package.json` `release` script | `bun run build && changeset publish` |
 
 ---
 
@@ -343,7 +376,8 @@ When creating a new package (e.g., `@reactive-agents/a2a`):
 4. **`mock.module()` in Bun** only intercepts ES `import()`, not CJS `require()`
 5. **ReasoningService.execute** takes single params object, not positional args
 6. **Starlight content config** must be `src/content/config.ts` not `src/content.config.ts`
-7. **`workspace:^`** for internal deps (not `workspace:*`) to fix CI DTS builds
+7. **`workspace:*` is fine for internal deps** — `changeset publish` resolves these correctly. Do not manually replace them with pinned versions.
+8. **Never manually bump versions** — `bun run changeset` + the "chore: version packages" PR handles all version bumps and CHANGELOG entries. Manual edits will conflict with changesets.
 
 ---
 
