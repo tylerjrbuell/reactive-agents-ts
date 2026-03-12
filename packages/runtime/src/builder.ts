@@ -744,7 +744,7 @@ export class ReactiveAgentBuilder {
   private _guardrailsOptions?: GuardrailsOptions;
   private _verificationOptions?: VerificationOptions;
   private _circuitBreakerConfig?: Partial<import("@reactive-agents/llm-provider").CircuitBreakerConfig>;
-  private _fallbackConfig?: { provider?: string[]; model?: string[]; errorThreshold?: number };
+  private _fallbackConfig?: { providers?: string[]; models?: string[]; errorThreshold?: number };
   private _enableExperienceLearning: boolean = false;
   private _enableMemoryConsolidation: boolean = false;
   private _consolidationConfig?: { threshold?: number; decayFactor?: number; pruneThreshold?: number };
@@ -1628,13 +1628,13 @@ export class ReactiveAgentBuilder {
    * @example
    * ```typescript
    * builder.withFallbacks({
-   *   provider: ["anthropic", "openai"],
-   *   model: ["claude-sonnet-4-20250514", "claude-haiku-3-20250520"],
+   *   providers: ["anthropic", "openai"],
+   *   models: ["claude-sonnet-4-20250514", "claude-haiku-3-20250520"],
    *   errorThreshold: 3,
    * })
    * ```
    */
-  withFallbacks(config: { provider?: string[]; model?: string[]; errorThreshold?: number }): this {
+  withFallbacks(config: { providers?: string[]; models?: string[]; errorThreshold?: number }): this {
     this._fallbackConfig = config;
     return this;
   }

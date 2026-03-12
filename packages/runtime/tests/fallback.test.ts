@@ -5,7 +5,7 @@ describe("Builder fallback integration", () => {
   test(".withFallbacks() sets fallback config on builder", () => {
     const builder = new ReactiveAgentBuilder();
     const result = builder.withFallbacks({
-      provider: ["anthropic", "openai"],
+      providers: ["anthropic", "openai"],
       errorThreshold: 5,
     });
     // withFallbacks returns this for chaining
@@ -17,8 +17,8 @@ describe("Builder fallback integration", () => {
     const result = builder
       .withName("test-agent")
       .withFallbacks({
-        provider: ["anthropic", "openai"],
-        model: ["claude-sonnet", "claude-haiku"],
+        providers: ["anthropic", "openai"],
+        models: ["claude-sonnet", "claude-haiku"],
         errorThreshold: 3,
       })
       .withProvider("anthropic");
@@ -28,8 +28,8 @@ describe("Builder fallback integration", () => {
   test(".withFallbacks() with all optional fields", () => {
     const builder = new ReactiveAgentBuilder();
     const result = builder.withFallbacks({
-      provider: ["anthropic", "openai", "gemini"],
-      model: ["claude-sonnet-4-20250514", "claude-haiku-3-20250520"],
+      providers: ["anthropic", "openai", "gemini"],
+      models: ["claude-sonnet-4-20250514", "claude-haiku-3-20250520"],
       errorThreshold: 5,
     });
     expect(result).toBe(builder);
@@ -38,7 +38,7 @@ describe("Builder fallback integration", () => {
   test(".withFallbacks() with partial config", () => {
     const builder = new ReactiveAgentBuilder();
     const result = builder.withFallbacks({
-      provider: ["anthropic", "openai"],
+      providers: ["anthropic", "openai"],
     });
     expect(result).toBe(builder);
   });
