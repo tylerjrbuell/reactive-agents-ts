@@ -61,7 +61,7 @@ export function main(argv: string[] = process.argv.slice(2)) {
     case "create": {
       const subcommand = argv[1];
       if (subcommand === "agent") {
-        runCreateAgent(argv.slice(2));
+        runAsync(runCreateAgent(argv.slice(2)));
       } else {
         console.error(fail(`Unknown create subcommand: ${subcommand}`));
         console.error(info("Usage: rax create agent <name>"));
