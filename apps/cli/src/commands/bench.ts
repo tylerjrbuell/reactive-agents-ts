@@ -1,6 +1,5 @@
 // File: apps/cli/src/commands/bench.ts
 import { info } from "../ui.js";
-import type { Tier } from "@reactive-agents/benchmarks";
 
 export async function runBench(argv: string[]) {
   const getArg = (flag: string): string | undefined => {
@@ -8,14 +7,21 @@ export async function runBench(argv: string[]) {
     return idx >= 0 && idx + 1 < argv.length ? argv[idx + 1] : undefined;
   };
 
+  let benchmarks: typeof import("@reactive-agents/benchmarks");
+  try {
+    benchmarks = await import("@reactive-agents/benchmarks");
+  } catch {
+    console.error("rax bench requires @reactive-agents/benchmarks, which is only available inside the reactive-agents-ts repo.");
+    process.exit(1);
+  }
+  const { runBenchmarks } = benchmarks;
+
   const provider = (getArg("--provider") ?? "test") as
     | "anthropic" | "openai" | "gemini" | "ollama" | "litellm" | "test";
   const model = getArg("--model");
   const tierArg = getArg("--tier");
-  const tiers = tierArg ? (tierArg.split(",") as Tier[]) : undefined;
+  const tiers = tierArg ? (tierArg.split(",") as any[]) : undefined;
   const output = getArg("--output");
-
-  const { runBenchmarks } = await import("@reactive-agents/benchmarks");
 
   const report = await runBenchmarks({ provider, model, tiers });
 
