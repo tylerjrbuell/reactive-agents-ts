@@ -1093,10 +1093,9 @@ describe("Global error handler", () => {
       // Expected — handler should have been called if an error occurred
     }
 
-    // If the agent errored, the handler should have been called
-    // If it didn't error, that's fine too — means no error to handle
-    // The key assertion is that the mechanism is wired correctly
-    expect((builder as any)._errorHandler).toBeDefined();
+    // Verify the handler mechanism is wired — check via the agent's
+    // internal config (not `builder`, which is scoped to a different test)
+    expect((agent as any)._errorHandler ?? (agent as any).config?.errorHandler).toBeDefined();
   });
 
   test("error handler does not suppress error propagation", async () => {
@@ -2061,14 +2060,10 @@ export interface StrategySwitchingRunOptions {
   readonly task?: string;
 }
 
+// Add this field to the existing KernelRunOptions interface
+// (do NOT replace the whole interface — just add the new field):
 export interface KernelRunOptions {
-  readonly maxIterations: number;
-  readonly strategy: string;
-  readonly kernelType: string;
-  readonly taskId?: string;
-  readonly kernelPass?: string;
-  readonly meta?: Record<string, unknown>;
-  readonly loopDetection?: LoopDetectionConfig;
+  // ... existing fields (maxIterations, strategy, kernelType, etc.) ...
   readonly strategySwitching?: StrategySwitchingRunOptions;
 }
 ```
@@ -2125,8 +2120,8 @@ After the main loop (line 211), before the embedded tool call guard (line 213), 
             reasoning: "Using configured fallback strategy",
           };
         } else {
-          // LLM evaluator call
-          const { evaluateStrategySwitch } = await import("./strategy-evaluator.js");
+          // LLM evaluator call — use Effect.promise for idiomatic dynamic import
+          const { evaluateStrategySwitch } = yield* Effect.promise(() => import("./strategy-evaluator.js"));
           evalResult = yield* evaluateStrategySwitch({
             task: switching.task ?? input.task,
             currentStrategy: options.strategy,
@@ -2143,7 +2138,7 @@ After the main loop (line 211), before the embedded tool call guard (line 213), 
 
         if (evalResult.shouldSwitch && evalResult.recommendedStrategy) {
           // Build handoff and store in state meta for the caller to use
-          const { formatHandoffContext } = await import("./strategy-evaluator.js");
+          const { formatHandoffContext } = yield* Effect.promise(() => import("./strategy-evaluator.js"));
           const handoff = {
             originalTask: switching.task ?? input.task,
             previousStrategy: options.strategy,
@@ -2229,11 +2224,8 @@ Add to `packages/reasoning/tests/strategy-switching.test.ts`:
 
 ```typescript
 describe("EventBus strategy switching events", () => {
-  test("StrategySwitchEvaluated event has required fields", async () => {
-    // Import the type from core
-    const { type } = await import("@reactive-agents/core");
-
-    // Type-level verification
+  test("StrategySwitchEvaluated event has required fields", () => {
+    // Type-level verification — event shape matches AgentEvent union
     const event = {
       _tag: "StrategySwitchEvaluated" as const,
       taskId: "task-1",
@@ -2318,6 +2310,17 @@ describe("Builder integration", () => {
     expect((builder as any)._reasoningOptions.fallbackStrategy).toBe("plan-execute-reflect");
   });
 });
+```
+
+- [ ] **Step 19b: Export new reasoning types from package index**
+
+In `packages/reasoning/src/index.ts`, add exports for the new strategy switching types and functions:
+
+```typescript
+// ─── Strategy Switching ──────────────────────────────────────────────────────
+export type { StrategySwitchingConfig } from "./types/config.js";
+export type { StrategyHandoff, StrategyEvalResult } from "./strategies/shared/strategy-evaluator.js";
+export { evaluateStrategySwitch, formatHandoffContext } from "./strategies/shared/strategy-evaluator.js";
 ```
 
 - [ ] **Step 20: Run all strategy switching tests**
@@ -2413,5 +2416,5 @@ docs: update CLAUDE.md for Phase 2 completion (items 2.1–2.8)
 **Total new tests:** ~26–30
 **Total new doc pages:** 4
 **New builder methods:** `.withErrorHandler()`
-**New exports:** `ToolBuilder`, `ErrorHandler`, `ErrorHandlerContext`
+**New exports:** `ToolBuilder`, `ErrorHandler`, `ErrorHandlerContext`, `evaluateStrategySwitch`, `formatHandoffContext` (from `@reactive-agents/reasoning`)
 **New types:** `IterationProgress`, `StreamCancelled`, `StrategySwitchEvaluated`, `StrategySwitched`, `StrategySwitchingConfig`, `StrategyHandoff`, `StrategyEvalResult`
