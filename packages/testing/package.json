@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/testing",
-  "version": "0.7.7",
+  "version": "0.7.8",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -11,9 +11,9 @@
     "test:watch": "bun test --watch"
   },
   "dependencies": {
-    "@reactive-agents/core": "0.7.7",
-    "@reactive-agents/llm-provider": "0.7.7",
-    "@reactive-agents/tools": "0.7.7",
+    "@reactive-agents/core": "0.7.8",
+    "@reactive-agents/llm-provider": "0.7.8",
+    "@reactive-agents/tools": "0.7.8",
     "effect": "^3.10.0"
   },
   "devDependencies": {

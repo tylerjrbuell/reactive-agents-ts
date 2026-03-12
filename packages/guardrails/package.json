@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/guardrails",
-  "version": "0.7.7",
+  "version": "0.7.8",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -12,8 +12,8 @@
   },
   "dependencies": {
     "effect": "^3.10.0",
-    "@reactive-agents/core": "0.7.7",
-    "@reactive-agents/llm-provider": "0.7.7"
+    "@reactive-agents/core": "0.7.8",
+    "@reactive-agents/llm-provider": "0.7.8"
   },
   "devDependencies": {
     "typescript": "^5.7.0",

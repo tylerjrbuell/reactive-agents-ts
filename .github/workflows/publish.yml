@@ -34,14 +34,33 @@ jobs:
           bun test
 
       - name: Create Release PR or Publish
+        id: changesets
         uses: changesets/action@v1
         with:
           # When changesets are present: opens/updates a "Version Packages" PR
-          # When that PR is merged: publishes to npm and creates a GitHub release
+          # When that PR is merged: publishes to npm
           publish: bun run release
           title: "chore: version packages"
           commit: "chore: version packages"
-          createGithubReleases: true
+          # Disable per-package releases — we create one consolidated release below
+          createGithubReleases: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create consolidated GitHub release
+        if: steps.changesets.outputs.published == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=$(node -p "require('./packages/reactive-agents/package.json').version")
+          NOTES=$(node -p "
+            const fs = require('fs');
+            const log = fs.readFileSync('./packages/reactive-agents/CHANGELOG.md', 'utf8');
+            const match = log.match(/## \d+\.\d+\.\d+\n\n([\s\S]*?)(?=\n## |\$)/);
+            match ? match[1].trim() : 'See CHANGELOG.md for details.';
+          ")
+          gh release create "v${VERSION}" \
+            --title "v${VERSION}" \
+            --notes "${NOTES}" \
+            --target main
