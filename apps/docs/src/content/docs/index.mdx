@@ -23,83 +23,68 @@ hero:
 import { Card, CardGrid, Tabs, TabItem } from "@astrojs/starlight/components";
 import HeroInteraction from "../../components/HeroInteraction.astro";
 import TerminalReplay from "../../components/TerminalReplay.astro";
+import FeatureCarousel from "../../components/FeatureCarousel.astro";
 
-<div class="ra-stats">
-  <div class="ra-stat">
-    <span class="ra-stat-value">20</span>
-    <span class="ra-stat-label">Packages</span>
-  </div>
-  <div class="ra-stat">
-    <span class="ra-stat-value">1,773+</span>
-    <span class="ra-stat-label">Tests</span>
-  </div>
-  <div class="ra-stat">
-    <span class="ra-stat-value">40+</span>
-    <span class="ra-stat-label">LLM Providers via LiteLLM</span>
-  </div>
-  <div class="ra-stat">
-    <span class="ra-stat-value">5</span>
-    <span class="ra-stat-label">Reasoning Strategies</span>
-  </div>
-  <div class="ra-stat">
-    <span class="ra-stat-value">10</span>
-    <span class="ra-stat-label">Execution Phases</span>
+<div class="ra-panel ra-stats-panel">
+  <div class="ra-panel-inner ra-stats">
+    <div class="ra-stat">
+      <span class="ra-stat-value">20</span>
+      <span class="ra-stat-label">Packages</span>
+    </div>
+    <div class="ra-stat">
+      <span class="ra-stat-value">1,773+</span>
+      <span class="ra-stat-label">Tests</span>
+    </div>
+    <div class="ra-stat">
+      <span class="ra-stat-value">40+</span>
+      <span class="ra-stat-label">LLM Providers</span>
+    </div>
+    <div class="ra-stat">
+      <span class="ra-stat-value">5</span>
+      <span class="ra-stat-label">Reasoning Strategies</span>
+    </div>
+    <div class="ra-stat">
+      <span class="ra-stat-value">10</span>
+      <span class="ra-stat-label">Execution Phases</span>
+    </div>
   </div>
 </div>
 
-<TerminalReplay />
+<FeatureCarousel />
 
-## See It In Action
+<div class="ra-section-card ra-panel">
+  <div class="ra-panel-inner">
+
+## Start in 60 Seconds
+
+```bash
+bun add reactive-agents    # or: npm install reactive-agents
+```
 
 ```typescript
 import { ReactiveAgents } from "reactive-agents";
 
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
-  .withReasoning()                          // ReAct loop: Think → Act → Observe
-  .withTools()                              // Built-in: web-search, file-read, code-execute
-  .withObservability({ verbosity: "normal" })
+  .withReasoning()    // ReAct loop: Think → Act → Observe
+  .withTools()        // Built-in: web-search, file-read, code-execute
+  .withObservability()
   .build();
 
-const result = await agent.run("Find the top 3 TypeScript testing frameworks and compare them");
+const result = await agent.run("Find the top 3 TypeScript testing frameworks");
+console.log(result.output);
 ```
 
-Every run produces a professional metrics dashboard — automatically, with zero instrumentation:
+One package. 20 composable layers. Enable exactly what you need — skip everything you don't.
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│ ✅ Agent Execution Summary                                  │
-├─────────────────────────────────────────────────────────────┤
-│ Status:    ✅ Success   Duration: 13.9s   Steps: 7          │
-│ Tokens:    1,963        Cost: ~$0.003     Model: claude-3.5 │
-└─────────────────────────────────────────────────────────────┘
+<TerminalReplay />
 
-📊 Execution Timeline
-├─ [bootstrap]       100ms    ✅
-├─ [guardrail]        50ms    ✅
-├─ [strategy]         50ms    ✅
-├─ [think]        10,001ms    ⚠️  (7 iter, 72% of time)
-├─ [act]           1,000ms    ✅  (2 tools)
-├─ [observe]         500ms    ✅
-├─ [memory-flush]    200ms    ✅
-└─ [complete]         28ms    ✅
+  </div>
+</div>
 
-🔧 Tool Execution (2 called)
-├─ web-search    ✅ 3 calls, 450ms avg
-└─ file-write    ✅ 2 calls, 280ms avg
-```
 
----
-
-## Install
-
-```bash
-bun add reactive-agents    # or: npm install reactive-agents
-```
-
-That's it. One package, 20 composable layers. Enable what you need, skip what you don't.
-
----
+<div class="ra-section-card ra-panel">
+  <div class="ra-panel-inner">
 
 ## Why Reactive Agents?
 
@@ -138,81 +123,11 @@ That's it. One package, 20 composable layers. Enable what you need, skip what yo
   </Card>
 </CardGrid>
 
----
+  </div>
+</div>
 
-## More Examples
-
-<Tabs>
-  <TabItem label="Streaming">
-```typescript
-// Token-by-token streaming via AsyncGenerator
-for await (const event of agent.runStream("Write a haiku about TypeScript")) {
-  if (event._tag === "TextDelta") process.stdout.write(event.text);
-  if (event._tag === "StreamCompleted") console.log("\nDone!");
-}
-
-// One-liner SSE endpoint
-Bun.serve({ fetch: (req) => AgentStream.toSSE(agent.runStream("Hello")) });
-```
-  </TabItem>
-  <TabItem label="Conversational Chat">
-```typescript
-// Multi-turn conversation with memory
-const session = agent.session();
-
-await session.chat("What's the capital of France?");
-// → "Paris is the capital of France."
-
-await session.chat("What's the population?");
-// → "Paris has approximately 2.1 million residents..."
-// (remembers context from previous turn)
-```
-  </TabItem>
-  <TabItem label="Persistent Gateway">
-```typescript
-// Autonomous agent that runs 24/7
-const agent = await ReactiveAgents.create()
-  .withProvider("anthropic")
-  .withReasoning()
-  .withTools()
-  .withGateway({
-    heartbeat: { intervalMs: 3_600_000, policy: "adaptive" },
-    crons: [{ schedule: "0 9 * * MON", instruction: "Weekly report" }],
-    webhooks: [{ path: "/github", adapter: "github" }],
-    policies: { dailyTokenBudget: 50_000 },
-  })
-  .build();
-
-const handle = agent.start();  // Runs forever, Ctrl+C to stop
-```
-  </TabItem>
-  <TabItem label="Full Production Stack">
-```typescript
-const agent = await ReactiveAgents.create()
-  .withName("production-agent")
-  .withProvider("anthropic")
-  .withModel("claude-sonnet-4-20250514")
-  .withReasoning()           // 5 reasoning strategies
-  .withTools([...myTools])   // Sandboxed tool execution
-  .withMemory("2")           // Vector + FTS5 search
-  .withGuardrails()          // Injection, PII, toxicity detection
-  .withVerification()        // Semantic entropy fact-checking
-  .withCostTracking()        // Budget enforcement + model routing
-  .withObservability()       // Distributed tracing + metrics
-  .withIdentity()            // RBAC + agent certificates
-  .withInteraction()         // 5 autonomy modes
-  .withAudit()               // Compliance audit trail
-  .withGateway({             // Persistent autonomous harness
-    heartbeat: { intervalMs: 1_800_000, policy: "adaptive" },
-    crons: [{ schedule: "0 9 * * MON", instruction: "Weekly review" }],
-    policies: { dailyTokenBudget: 50_000 },
-  })
-  .build();
-```
-  </TabItem>
-</Tabs>
-
----
+<div class="ra-section-card ra-panel">
+  <div class="ra-panel-inner">
 
 ## How It's Different
 
@@ -240,37 +155,90 @@ const agent = await ReactiveAgents.create()
   </Card>
 </CardGrid>
 
----
+  </div>
+</div>
+
+<div class="ra-section-card ra-panel">
+  <div class="ra-panel-inner">
+
+## Common Patterns
+
+<Tabs>
+  <TabItem label="Streaming">
+```typescript
+// Token-by-token streaming via AsyncGenerator
+for await (const event of agent.runStream("Write a haiku about TypeScript")) {
+  if (event._tag === "TextDelta") process.stdout.write(event.text);
+  if (event._tag === "IterationProgress") console.log(`Step ${event.iteration}/${event.maxIterations}`);
+  if (event._tag === "StreamCompleted") console.log("\nDone!");
+}
+
+// One-liner SSE endpoint
+Bun.serve({ fetch: (req) => AgentStream.toSSE(agent.runStream("Hello")) });
+```
+  </TabItem>
+  <TabItem label="Chat Sessions">
+```typescript
+// Multi-turn conversation with memory
+const session = agent.session();
+
+await session.chat("What's the capital of France?");
+// → "Paris is the capital of France."
+
+await session.chat("What's the population?");
+// → "Paris has approximately 2.1 million residents..."
+// (remembers context from previous turn)
+```
+  </TabItem>
+  <TabItem label="Persistent Gateway">
+```typescript
+// Autonomous agent that runs 24/7
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withReasoning()
+  .withTools()
+  .withGateway({
+    heartbeat: { intervalMs: 3_600_000, policy: "adaptive" },
+    crons: [{ schedule: "0 9 * * MON", instruction: "Weekly report" }],
+    webhooks: [{ path: "/github", adapter: "github" }],
+    policies: { dailyTokenBudget: 50_000 },
+  })
+  .build();
+
+agent.start();  // Runs forever, Ctrl+C to stop
+```
+  </TabItem>
+</Tabs>
+
+  </div>
+</div>
+
+<div class="ra-section-card ra-panel">
+  <div class="ra-panel-inner">
 
 ## Architecture at a Glance
 
 ```
 ReactiveAgentBuilder
-  -> createRuntime()
-    -> CoreServices    (EventBus, AgentService, TaskService)
-    -> LLMProvider     (Anthropic, OpenAI, Gemini, Ollama, LiteLLM 40+)
-    -> Memory          (Working, Semantic, Episodic, Procedural)
-    -> Reasoning       (ReAct, Reflexion, Plan-Execute, ToT, Adaptive)
-    -> Tools           (Registry, Sandbox, MCP Client)
-    -> A2A             (Agent Cards, JSON-RPC, SSE Streaming)
-    -> Guardrails      (Injection, PII, Toxicity, Contracts)
-    -> Verification    (Semantic Entropy, Fact Decomposition, Hallucination Detection)
-    -> Cost            (Complexity Router, Budget Enforcer)
-    -> Identity        (Certificates, RBAC)
-    -> Observability   (Tracing, Metrics, Structured Logging)
-    -> Interaction     (5 Modes, Checkpoints, Preference Learning)
-    -> Orchestration   (Multi-Agent Workflows)
-    -> Prompts         (Template Engine, Built-in Library)
-    -> Gateway         (Heartbeats, Crons, Webhooks, Policy Engine)
-    -> ExecutionEngine (10-phase lifecycle with hooks)
+  → CoreServices    (EventBus, AgentService, TaskService)
+  → LLMProvider     (Anthropic, OpenAI, Gemini, Ollama, LiteLLM 40+)
+  → Memory          (Working, Semantic, Episodic, Procedural)
+  → Reasoning       (ReAct, Reflexion, Plan-Execute, ToT, Adaptive)
+  → Tools           (Registry, Sandbox, MCP Client)
+  → A2A             (Agent Cards, JSON-RPC, SSE Streaming)
+  → Guardrails      (Injection, PII, Toxicity, Behavioral Contracts)
+  → Verification    (Semantic Entropy, Fact Decomposition, Hallucination Detection)
+  → Cost            (Complexity Router, Budget Enforcer)
+  → Identity        (Certificates, RBAC)
+  → Observability   (Tracing, Metrics, Structured Logging)
+  → Interaction     (5 Modes, Checkpoints, Preference Learning)
+  → Gateway         (Heartbeats, Crons, Webhooks, Policy Engine)
+  → ExecutionEngine (10-phase lifecycle with hooks)
 ```
 
-## 20 Packages, One Command
+[See full installation guide &rarr;](guides/installation/)
 
-```bash
-bun add reactive-agents
-```
-
-Or install individual packages for minimal bundle size. [See installation guide &rarr;](guides/installation/)
+  </div>
+</div>
 
 <HeroInteraction />

@@ -1,0 +1,740 @@
+---
+// FeatureCarousel.astro — Tabbed feature-showcase for the hero page
+// Code content defined here to avoid Astro parsing { } as template expressions
+
+const codes: Record<string, string> = {
+  p0: [
+    `<span class="rk">const</span> agent <span class="rp">=</span> <span class="rk">await</span> ReactiveAgents`,
+    `  <span class="rp">.</span><span class="rm">create</span><span class="rp">()</span>`,
+    `  <span class="rp">.</span><span class="rm">withProvider</span><span class="rp">(</span><span class="rs">"anthropic"</span><span class="rp">)</span>`,
+    `  <span class="rp">.</span><span class="rm">withReasoning</span><span class="rp">()</span>      <span class="rc">// ReAct</span>`,
+    `  <span class="rp">.</span><span class="rm">withTools</span><span class="rp">()</span>           <span class="rc">// Built-ins</span>`,
+    `  <span class="rp">.</span><span class="rm">withMemory</span><span class="rp">(&#123;</span>`,
+    `    tier<span class="rp">:</span> <span class="rs">"enhanced"</span>`,
+    `  <span class="rp">&#125;)</span>`,
+    `  <span class="rp">.</span><span class="rm">withObservability</span><span class="rp">()</span>`,
+    `  <span class="rp">.</span><span class="rm">build</span><span class="rp">();</span>`,
+    ``,
+    `<span class="rk">const</span> result <span class="rp">=</span> <span class="rk">await</span>`,
+    `  agent<span class="rp">.</span><span class="rm">run</span><span class="rp">(</span>task<span class="rp">);</span>`,
+    `<span class="rc">// .output .metadata .debrief</span>`,
+  ].join('\n'),
+
+  p1: [
+    `<span class="ro">┌──────────────────────────────┐</span>`,
+    `<span class="ro">│</span> <span class="rg">✅ Execution Summary</span>          <span class="ro">│</span>`,
+    `<span class="ro">├──────────────────────────────┤</span>`,
+    `<span class="ro">│</span> Duration<span class="rp">:</span> 13.9s  Steps<span class="rp">:</span> 7    <span class="ro">│</span>`,
+    `<span class="ro">│</span> Tokens<span class="rp">:</span>  1<span class="rp">,</span>963  Cost<span class="rp">: ~</span>$0.003 <span class="ro">│</span>`,
+    `<span class="ro">└──────────────────────────────┘</span>`,
+    ``,
+    `<span class="rm">📊 Execution Timeline</span>`,
+    `<span class="rp">├─</span> [bootstrap]   100ms <span class="rg">✅</span>`,
+    `<span class="rp">├─</span> [guardrail]    50ms <span class="rg">✅</span>`,
+    `<span class="rp">├─</span> [think]    10<span class="rp">,</span>001ms <span class="ry">⚠️</span> 7 iter`,
+    `<span class="rp">├─</span> [act]       1<span class="rp">,</span>000ms <span class="rg">✅</span> 2 tools`,
+    `<span class="rp">└─</span> [complete]     28ms <span class="rg">✅</span>`,
+  ].join('\n'),
+
+  p2: [
+    `<span class="rp">.</span><span class="rm">withGuardrails</span><span class="rp">(&#123;</span>`,
+    `  thresholds<span class="rp">: &#123;</span>`,
+    `    injection<span class="rp">:</span> <span class="rn">0.8</span><span class="rp">,</span>`,
+    `    pii<span class="rp">:</span>       <span class="rn">0.7</span>`,
+    `  <span class="rp">&#125;,</span>`,
+    `<span class="rp">&#125;)</span>`,
+    `<span class="rp">.</span><span class="rm">withKillSwitch</span><span class="rp">()</span>`,
+    `<span class="rp">.</span><span class="rm">withBehavioralContracts</span><span class="rp">(&#123;</span>`,
+    `  toolDenyList<span class="rp">: [</span><span class="rs">"shell-execute"</span><span class="rp">],</span>`,
+    `  maxIterations<span class="rp">:</span> <span class="rn">20</span><span class="rp">,</span>`,
+    `<span class="rp">&#125;)</span>`,
+    `<span class="rp">.</span><span class="rm">withCostTracking</span><span class="rp">(&#123;</span>`,
+    `  budget<span class="rp">: &#123;</span> perRequest<span class="rp">:</span> <span class="rn">0.10</span> <span class="rp">&#125;,</span>`,
+    `<span class="rp">&#125;)</span>`,
+  ].join('\n'),
+
+  p3: [
+    `<span class="rk">for await</span> <span class="rp">(</span><span class="rk">const</span> e <span class="rk">of</span>`,
+    `  agent<span class="rp">.</span><span class="rm">runStream</span><span class="rp">(</span>task<span class="rp">, &#123;</span>`,
+    `    signal<span class="rp">:</span> ctrl<span class="rp">.</span>signal<span class="rp">,</span>`,
+    `  <span class="rp">&#125;)) &#123;</span>`,
+    `  <span class="rk">if</span> <span class="rp">(</span>e<span class="rp">.</span>_tag <span class="rp">===</span> <span class="rs">"TextDelta"</span><span class="rp">)</span>`,
+    `    write<span class="rp">(</span>e<span class="rp">.</span>text<span class="rp">);</span>`,
+    `  <span class="rk">if</span> <span class="rp">(</span>e<span class="rp">.</span>_tag <span class="rp">===</span> <span class="rs">"IterationProgress"</span><span class="rp">)</span>`,
+    `    log<span class="rp">(</span>e<span class="rp">.</span>iteration<span class="rp">,</span> e<span class="rp">.</span>maxIterations<span class="rp">);</span>`,
+    `<span class="rp">&#125;</span>`,
+  ].join('\n'),
+
+  p4: [
+    `<span class="rc"># scaffold a new project</span>`,
+    `<span class="rg">$</span> rax init my-agent \\`,
+    `    <span class="rm">--template</span> standard`,
+    ``,
+    `<span class="rc"># run with cloud provider</span>`,
+    `<span class="rg">$</span> rax run <span class="rs">"Analyze codebase"</span> \\`,
+    `    <span class="rm">--provider</span> anthropic`,
+    ``,
+    `<span class="rc"># run local — zero API cost</span>`,
+    `<span class="rg">$</span> rax run <span class="rs">"Summarize logs"</span> \\`,
+    `    <span class="rm">--provider</span> ollama \\`,
+    `    <span class="rm">--model</span> qwen3:14b`,
+  ].join('\n'),
+};
+---
+
+<section class="fc-wrap" aria-label="Platform feature overview">
+  <div class="fc-outer">
+    <div class="fc-win" id="ra-fc">
+
+      <!-- ── Tab bar ─────────────────────────────────── -->
+      <div class="fc-header">
+        <nav class="fc-tabs" role="tablist" aria-label="Feature categories">
+          <button class="fc-tab active" data-tab="0" role="tab" aria-selected="true">Builder API</button>
+          <button class="fc-tab" data-tab="1" role="tab" aria-selected="false">Observability</button>
+          <button class="fc-tab" data-tab="2" role="tab" aria-selected="false">Safety</button>
+          <button class="fc-tab" data-tab="3" role="tab" aria-selected="false">Production</button>
+          <button class="fc-tab" data-tab="4" role="tab" aria-selected="false">Dev Experience</button>
+        </nav>
+      </div>
+
+      <!-- ── Progress bar ─────────────────────────────── -->
+      <div class="fc-prog-track" aria-hidden="true">
+        <div class="fc-prog-fill" id="ra-fc-prog"></div>
+      </div>
+
+      <!-- ── Panels ─────────────────────────────────── -->
+      <div class="fc-panels">
+
+        <!-- Panel 0: Builder API -->
+        <div class="fc-panel active" data-panel="0" role="tabpanel">
+          <div class="fc-body">
+            <div class="fc-grid">
+              <div class="fc-item">
+                <span class="fc-icon">⚡</span>
+                <div><p class="fc-name">Fluent Builder API</p><p class="fc-desc">Chain capabilities like a sentence — readable and naturally discoverable</p></div>
+              </div>
+              <div class="fc-item">
+                <span class="fc-icon">🔌</span>
+                <div><p class="fc-name">40+ LLM Providers</p><p class="fc-desc">Anthropic, OpenAI, Gemini, Ollama, LiteLLM — one unified interface</p></div>
+              </div>
+              <div class="fc-item">
+                <span class="fc-icon">🧠</span>
+                <div><p class="fc-name">5 Reasoning Strategies</p><p class="fc-desc">ReAct, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive</p></div>
+              </div>
+              <div class="fc-item">
+                <span class="fc-icon">🔧</span>
+                <div><p class="fc-name">Built-in Tool Suite</p><p class="fc-desc">web-search, file-read, code-execute, http-get, calculator</p></div>
+              </div>
+              <div class="fc-item">
+                <span class="fc-icon">💾</span>
+                <div><p class="fc-name">4-Tier Memory</p><p class="fc-desc">Working, Semantic, Episodic, Procedural — all composable layers</p></div>
+              </div>
+              <div class="fc-item">
+                <span class="fc-icon">🔒</span>
+                <div><p class="fc-name">Effect-TS Type Safety</p><p class="fc-desc">RuntimeErrors union, typed hooks, zero runtime surprises</p></div>
+              </div>
+            </div>
+            <div class="fc-code-box">
+              <div class="fc-code-label">builder api</div>
+              <pre class="fc-code" set:html={codes.p0}></pre>
+            </div>
+          </div>
+        </div>
+
+        <!-- Panel 1: Observability -->
+        <div class="fc-panel" data-panel="1" role="tabpanel">
+          <div class="fc-body">
+            <div class="fc-grid">
+              <div class="fc-item">
+                <span class="fc-icon">📊</span>
+                <div><p class="fc-name">10-Phase Execution Engine</p><p class="fc-desc">bootstrap → guardrail → think → act → observe → complete</p></div>
+              </div>
+              <div class="fc-item">
+                <span class="fc-icon">🔔</span>
+                <div><p class="fc-name">EventBus Auto-Wiring</p><p class="fc-desc">Zero manual instrumentation — MetricsCollector subscribes automatically</p></div>
+              </div>
+              <div class="fc-item">
+                <span class="fc-icon">⚡</span>
+                <div><p class="fc-name">Live Log Streaming</p><p class="fc-desc">Real-time phase events at 4 verbosity levels: minimal → debug</p></div>
+              </div>
+              <div class="fc-item">
+                <span class="fc-icon">🔍</span>
+                <div><p class="fc-name">Distributed Tracing</p><p class="fc-desc">OpenTelemetry spans with correlation IDs across every phase</p></div>
+              </div>
+              <div class="fc-item">
+                <span class="fc-icon">💡</span>
+                <div><p class="fc-name">Smart Alerts</p><p class="fc-desc">Bottleneck detection, budget warnings, optimization suggestions</p></div>
+              </div>
+              <div class="fc-item">
+                <span class="fc-icon">📈</span>
+                <div><p class="fc-name">Cost Metrics</p><p class="fc-desc">Token count and USD estimate tracked and reported per run</p></div>
+              </div>
+            </div>
+            <div class="fc-code-box fc-code-box--mono">
+              <div class="fc-code-label">dashboard output</div>
+              <pre class="fc-code" set:html={codes.p1}></pre>
+            </div>
+          </div>
+        </div>
+
+        <!-- Panel 2: Safety -->
+        <div class="fc-panel" data-panel="2" role="tabpanel">
+          <div class="fc-body">
+            <div class="fc-grid">
+              <div class="fc-item">
+                <span class="fc-icon">🛡️</span>
+                <div><p class="fc-name">Prompt Injection Detection</p><p class="fc-desc">Blocks injection attacks with configurable threshold scoring</p></div>
+              </div>
+              <div class="fc-item">
+                <span class="fc-icon">🔏</span>
+                <div><p class="fc-name">PII &amp; Toxicity Scrubbing</p><p class="fc-desc">Auto-detects sensitive data and toxic content before LLM ingestion</p></div>
+              </div>
+              <div class="fc-item">
+                <span class="fc-icon">⛔</span>
+                <div><p class="fc-name">Kill Switch</p><p class="fc-desc">Pause, resume, or terminate any running agent with zero state corruption</p></div>
+              </div>
+              <div class="fc-item">
+                <span class="fc-icon">📋</span>
+                <div><p class="fc-name">Behavioral Contracts</p><p class="fc-desc">Tool deny lists, iteration caps, and output pattern enforcement</p></div>
+              </div>
+              <div class="fc-item">
+                <span class="fc-icon">💰</span>
+                <div><p class="fc-name">Budget Enforcement</p><p class="fc-desc">Per-request, daily, monthly cost caps — auto-halts before overspend</p></div>
+              </div>
+              <div class="fc-item">
+                <span class="fc-icon">✅</span>
+                <div><p class="fc-name">Approval Gates</p><p class="fc-desc">Human-in-the-loop confirmation for high-risk tool execution</p></div>
+              </div>
+            </div>
+            <div class="fc-code-box">
+              <div class="fc-code-label">safety config</div>
+              <pre class="fc-code" set:html={codes.p2}></pre>
+            </div>
+          </div>
+        </div>
+
+        <!-- Panel 3: Production -->
+        <div class="fc-panel" data-panel="3" role="tabpanel">
+          <div class="fc-body">
+            <div class="fc-grid">
+              <div class="fc-item">
+                <span class="fc-icon">🌊</span>
+                <div><p class="fc-name">Token Streaming</p><p class="fc-desc">AsyncGenerator with TextDelta, IterationProgress, and SSE adapter</p></div>
+              </div>
+              <div class="fc-item">
+                <span class="fc-icon">🤖</span>
+                <div><p class="fc-name">Persistent Gateway</p><p class="fc-desc">24/7 agent harness with crons, webhooks, adaptive heartbeats</p></div>
+              </div>
+              <div class="fc-item">
+                <span class="fc-icon">🔗</span>
+                <div><p class="fc-name">A2A Protocol</p><p class="fc-desc">Agent-to-agent JSON-RPC 2.0 with SSE streaming and Agent Cards</p></div>
+              </div>
+              <div class="fc-item">
+                <span class="fc-icon">🧪</span>
+                <div><p class="fc-name">Hallucination Detection</p><p class="fc-desc">Semantic entropy + fact decomposition verification layer</p></div>
+              </div>
+              <div class="fc-item">
+                <span class="fc-icon">💬</span>
+                <div><p class="fc-name">Chat Sessions</p><p class="fc-desc">Multi-turn conversation with adaptive routing and persistent memory</p></div>
+              </div>
+              <div class="fc-item">
+                <span class="fc-icon">🔁</span>
+                <div><p class="fc-name">Error Recovery</p><p class="fc-desc">Retry policies, global error handler, clean FiberFailure unwrapping</p></div>
+              </div>
+            </div>
+            <div class="fc-code-box">
+              <div class="fc-code-label">streaming</div>
+              <pre class="fc-code" set:html={codes.p3}></pre>
+            </div>
+          </div>
+        </div>
+
+        <!-- Panel 4: Dev Experience -->
+        <div class="fc-panel" data-panel="4" role="tabpanel">
+          <div class="fc-body">
+            <div class="fc-grid">
+              <div class="fc-item">
+                <span class="fc-icon">⚡</span>
+                <div><p class="fc-name">60 Seconds to First Agent</p><p class="fc-desc">One install, three lines — then layer in capabilities as you need them</p></div>
+              </div>
+              <div class="fc-item">
+                <span class="fc-icon">🛠️</span>
+                <div><p class="fc-name">rax CLI</p><p class="fc-desc">Scaffold, run, inspect, eval, benchmark — full workflow from terminal</p></div>
+              </div>
+              <div class="fc-item">
+                <span class="fc-icon">📦</span>
+                <div><p class="fc-name">20 Modular Packages</p><p class="fc-desc">Install only what you need — no bloat, no hidden coupling between layers</p></div>
+              </div>
+              <div class="fc-item">
+                <span class="fc-icon">🧪</span>
+                <div><p class="fc-name">1,773+ Tests</p><p class="fc-desc">217 test files across all packages — battle-tested, production-ready</p></div>
+              </div>
+              <div class="fc-item">
+                <span class="fc-icon">🤖</span>
+                <div><p class="fc-name">Local Model Support</p><p class="fc-desc">Ollama, LM Studio, any OpenAI-compatible endpoint — zero cloud required</p></div>
+              </div>
+              <div class="fc-item">
+                <span class="fc-icon">🔌</span>
+                <div><p class="fc-name">MCP Client Built-in</p><p class="fc-desc">Use any Model Context Protocol server as a native tool source</p></div>
+              </div>
+            </div>
+            <div class="fc-code-box fc-code-box--mono">
+              <div class="fc-code-label">rax cli</div>
+              <pre class="fc-code" set:html={codes.p4}></pre>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /fc-panels -->
+    </div><!-- /fc-win -->
+  </div><!-- /fc-outer -->
+</section>
+
+<style>
+/* ── Wrapper & entrance ──────────────────────────────────────── */
+.fc-wrap {
+  margin: 0 auto 4rem;
+  max-width: 980px;
+  animation: fc-fade-up 0.55s ease-out 0.2s both;
+}
+
+@keyframes fc-fade-up {
+  from { opacity: 0; transform: translateY(22px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Gradient border shell ──────────────────────────────────── */
+.fc-outer {
+  padding: 1px;
+  border-radius: 20px;
+  background: linear-gradient(
+    135deg,
+    rgba(139, 92, 246, 0.6)  0%,
+    rgba(6, 182, 212, 0.3)   50%,
+    rgba(139, 92, 246, 0.6)  100%
+  );
+  box-shadow:
+    0 0 0 1px rgba(139, 92, 246, 0.06),
+    0 10px 40px rgba(0, 0, 0, 0.45),
+    0 0 90px rgba(139, 92, 246, 0.07);
+  animation: fc-glow 8s ease-in-out infinite;
+}
+
+@keyframes fc-glow {
+  0%, 100% {
+    box-shadow:
+      0 0 0 1px rgba(139, 92, 246, 0.06),
+      0 10px 40px rgba(0, 0, 0, 0.45),
+      0 0 90px rgba(139, 92, 246, 0.07);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px rgba(6, 182, 212, 0.1),
+      0 10px 40px rgba(0, 0, 0, 0.45),
+      0 0 90px rgba(6, 182, 212, 0.09);
+  }
+}
+
+/* ── Window card ─────────────────────────────────────────────── */
+.fc-win {
+  background: #12131a;
+  border-radius: 19px;
+  overflow: hidden;
+}
+
+/* ── Header / Tab strip ─────────────────────────────────────── */
+.fc-header {
+  background: rgba(139, 92, 246, 0.04);
+  border-bottom: 1px solid rgba(139, 92, 246, 0.13);
+  padding: 13px 20px 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fc-tabs {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+}
+
+.fc-tab {
+  appearance: none;
+  -webkit-appearance: none;
+  margin: 0;
+  background: rgba(139, 92, 246, 0.04);
+  border: 1px solid rgba(139, 92, 246, 0.1);
+  border-radius: 999px;
+  color: rgba(148, 163, 184, 0.6);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  padding: 0 15px;
+  height: 30px;
+  min-height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  vertical-align: middle;
+}
+
+.fc-tab:hover:not(.active) {
+  background: rgba(139, 92, 246, 0.09);
+  border-color: rgba(139, 92, 246, 0.22);
+  color: rgba(196, 181, 253, 0.85);
+}
+
+.fc-tab.active {
+  background: linear-gradient(
+    135deg,
+    rgba(139, 92, 246, 0.22) 0%,
+    rgba(6, 182, 212, 0.1)   100%
+  );
+  border-color: rgba(139, 92, 246, 0.48);
+  color: #c4b5fd;
+}
+
+/* ── Progress bar ────────────────────────────────────────────── */
+.fc-prog-track {
+  height: 2px;
+  background: rgba(139, 92, 246, 0.08);
+  overflow: hidden;
+}
+
+.fc-prog-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #8b5cf6 0%, #06b6d4 100%);
+  border-radius: 0 2px 2px 0;
+}
+
+.fc-prog-fill.running {
+  animation: fc-prog-go 6s linear forwards;
+}
+
+@keyframes fc-prog-go {
+  from { width: 0% }
+  to   { width: 100% }
+}
+
+/* ── Panels ──────────────────────────────────────────────────── */
+.fc-panels {
+  position: relative;
+}
+
+.fc-panel {
+  display: none;
+}
+
+.fc-panel.active {
+  display: block;
+  animation: fc-enter 0.3s ease forwards;
+}
+
+@keyframes fc-enter {
+  from { opacity: 0; transform: translateY(5px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Body — two-column split ─────────────────────────────────── */
+.fc-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  padding: 26px 24px 28px;
+  align-items: start;
+}
+
+/* ── Feature item grid ───────────────────────────────────────── */
+.fc-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px 20px;
+}
+
+.fc-item {
+  display: flex;
+  gap: 11px;
+  align-items: flex-start;
+}
+
+.fc-icon {
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(139, 92, 246, 0.09);
+  border: 1px solid rgba(139, 92, 246, 0.16);
+  border-radius: 9px;
+  font-size: 1.05rem;
+  line-height: 1;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.fc-item:hover .fc-icon {
+  background: rgba(139, 92, 246, 0.17);
+  border-color: rgba(139, 92, 246, 0.32);
+}
+
+.fc-name {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #dde2ee;
+  margin: 0 0 3px;
+  line-height: 1.3;
+}
+
+.fc-desc {
+  font-size: 0.715rem;
+  color: rgba(148, 163, 184, 0.75);
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* ── Code box ────────────────────────────────────────────────── */
+.fc-code-box {
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(139, 92, 246, 0.12);
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.fc-code-label {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: #06b6d4;
+  opacity: 0.65;
+  padding: 9px 15px 7px;
+  border-bottom: 1px solid rgba(139, 92, 246, 0.08);
+  flex-shrink: 0;
+  margin: 0;
+}
+
+.fc-code {
+  font-family: "Geist Mono", "Cascadia Code", "Fira Code", ui-monospace, monospace !important;
+  font-size: 0.72rem !important;
+  line-height: 1.72 !important;
+  margin: 0 !important;
+  padding: 14px 16px !important;
+  overflow-x: auto;
+  color: #c8d1e4 !important;
+  white-space: pre !important;
+  flex: 1;
+  /* Override Starlight's expressive-code styles */
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+}
+
+/* Syntax token coloring */
+.fc-code :global(.rk) { color: #c4b5fd; }
+.fc-code :global(.rm) { color: #67e8f9; }
+.fc-code :global(.rs) { color: #86efac; }
+.fc-code :global(.rc) { color: #475569; font-style: italic; }
+.fc-code :global(.rp) { color: #8892a4; }
+.fc-code :global(.rn) { color: #fbbf24; }
+.fc-code :global(.rg) { color: #4ade80; }
+.fc-code :global(.ry) { color: #facc15; }
+.fc-code :global(.ro) { color: #3d4a60; }
+
+/* ── Responsive ──────────────────────────────────────────────── */
+@media (max-width: 860px) {
+  .fc-body {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+  .fc-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .fc-code-box {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .fc-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .fc-tab {
+    font-size: 0.74rem;
+    padding: 0 10px;
+    height: 28px;
+  }
+  .fc-header {
+    padding: 12px 14px 10px;
+  }
+  .fc-body {
+    padding: 20px 18px 22px;
+  }
+}
+
+@media (max-width: 440px) {
+  .fc-grid {
+    grid-template-columns: 1fr;
+  }
+  .fc-tab {
+    font-size: 0.7rem;
+    padding: 0 8px;
+    height: 26px;
+  }
+}
+
+/* ── Light mode ──────────────────────────────────────────────── */
+:global([data-theme="light"]) .fc-win {
+  background: #f9f9fd;
+}
+
+:global([data-theme="light"]) .fc-outer {
+  background: linear-gradient(
+    135deg,
+    rgba(109, 40, 217, 0.45) 0%,
+    rgba(8, 145, 178, 0.28)  50%,
+    rgba(109, 40, 217, 0.45) 100%
+  );
+  box-shadow:
+    0 0 0 1px rgba(109, 40, 217, 0.1),
+    0 4px 16px rgba(0, 0, 0, 0.1),
+    0 12px 40px rgba(0, 0, 0, 0.12),
+    0 0 60px rgba(109, 40, 217, 0.08);
+  animation: none;
+}
+
+:global([data-theme="light"]) .fc-header {
+  background: rgba(109, 40, 217, 0.03);
+  border-bottom-color: rgba(109, 40, 217, 0.1);
+}
+
+:global([data-theme="light"]) .fc-tab {
+  color: rgba(71, 85, 105, 0.65);
+}
+
+:global([data-theme="light"]) .fc-tab:hover:not(.active) {
+  background: rgba(109, 40, 217, 0.06);
+  border-color: rgba(109, 40, 217, 0.2);
+  color: #5b21b6;
+}
+
+:global([data-theme="light"]) .fc-tab.active {
+  background: linear-gradient(135deg, rgba(109, 40, 217, 0.12), rgba(8, 145, 178, 0.07));
+  border-color: rgba(109, 40, 217, 0.38);
+  color: #5b21b6;
+}
+
+:global([data-theme="light"]) .fc-icon {
+  background: rgba(109, 40, 217, 0.06);
+  border-color: rgba(109, 40, 217, 0.11);
+}
+
+:global([data-theme="light"]) .fc-item:hover .fc-icon {
+  background: rgba(109, 40, 217, 0.11);
+  border-color: rgba(109, 40, 217, 0.22);
+}
+
+:global([data-theme="light"]) .fc-name {
+  color: #1e293b;
+}
+
+:global([data-theme="light"]) .fc-desc {
+  color: rgba(71, 85, 105, 0.85);
+}
+
+:global([data-theme="light"]) .fc-code-box {
+  background: rgba(248, 250, 252, 0.9);
+  border-color: rgba(109, 40, 217, 0.09);
+}
+
+:global([data-theme="light"]) .fc-code-label {
+  color: #0369a1;
+  border-bottom-color: rgba(109, 40, 217, 0.07);
+}
+
+:global([data-theme="light"]) .fc-code { color: #334155 !important; }
+:global([data-theme="light"]) .fc-code :global(.rk) { color: #7c3aed; }
+:global([data-theme="light"]) .fc-code :global(.rm) { color: #0369a1; }
+:global([data-theme="light"]) .fc-code :global(.rs) { color: #15803d; }
+:global([data-theme="light"]) .fc-code :global(.rc) { color: #94a3b8; font-style: italic; }
+:global([data-theme="light"]) .fc-code :global(.rp) { color: #64748b; }
+:global([data-theme="light"]) .fc-code :global(.rn) { color: #b45309; }
+:global([data-theme="light"]) .fc-code :global(.rg) { color: #15803d; }
+:global([data-theme="light"]) .fc-code :global(.ry) { color: #b45309; }
+:global([data-theme="light"]) .fc-code :global(.ro) { color: #94a3b8; }
+</style>
+
+<script is:inline>
+  document.addEventListener('DOMContentLoaded', function () {
+    var win = document.getElementById('ra-fc');
+    if (!win) return;
+
+    var tabs   = Array.from(win.querySelectorAll('.fc-tab'));
+    var panels = Array.from(win.querySelectorAll('.fc-panel'));
+    var pfill  = document.getElementById('ra-fc-prog');
+    var TOTAL  = tabs.length;
+    var DELAY  = 6000;
+
+    var current = 0;
+    var paused  = false;
+    var timer   = null;
+
+    function goTo(n) {
+      var next = ((n % TOTAL) + TOTAL) % TOTAL;
+
+      tabs[current].classList.remove('active');
+      tabs[current].setAttribute('aria-selected', 'false');
+      panels[current].classList.remove('active');
+
+      tabs[next].classList.add('active');
+      tabs[next].setAttribute('aria-selected', 'true');
+      panels[next].classList.add('active');
+
+      current = next;
+      restartProgress();
+    }
+
+    function restartProgress() {
+      if (!pfill) return;
+      pfill.classList.remove('running');
+      void pfill.offsetWidth;
+      pfill.classList.add('running');
+    }
+
+    function startAutoAdvance() {
+      if (timer) clearInterval(timer);
+      timer = setInterval(function () {
+        if (!paused) goTo(current + 1);
+      }, DELAY);
+    }
+
+    tabs.forEach(function (tab, i) {
+      tab.addEventListener('click', function () {
+        goTo(i);
+        startAutoAdvance();
+      });
+    });
+
+    win.addEventListener('mouseenter', function () { paused = true; });
+    win.addEventListener('mouseleave', function () { paused = false; });
+    win.addEventListener('focusin',    function () { paused = true; });
+    win.addEventListener('focusout',   function () { paused = false; });
+
+    restartProgress();
+    startAutoAdvance();
+  });
+</script>

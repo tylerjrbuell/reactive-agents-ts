@@ -145,22 +145,62 @@ html {
   -webkit-text-fill-color: transparent;
 }
 
+/* ── Shared panel glow animation (matches carousel) ─────────── */
+@keyframes ra-panel-glow {
+  0%, 100% {
+    box-shadow:
+      0 0 0 1px rgba(139, 92, 246, 0.06),
+      0 10px 40px rgba(0, 0, 0, 0.45),
+      0 0 90px rgba(139, 92, 246, 0.07);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px rgba(6, 182, 212, 0.1),
+      0 10px 40px rgba(0, 0, 0, 0.45),
+      0 0 90px rgba(6, 182, 212, 0.09);
+  }
+}
+
+/* ── Gradient-border panel — exact carousel treatment ───────── */
+.ra-panel {
+  position: relative;
+  max-width: 980px;
+  margin-left: auto;
+  margin-right: auto;
+  padding: 1px;
+  border-radius: 20px;
+  background: linear-gradient(
+    135deg,
+    rgba(139, 92, 246, 0.6)  0%,
+    rgba(6, 182, 212, 0.3)   50%,
+    rgba(139, 92, 246, 0.6)  100%
+  );
+  box-shadow:
+    0 0 0 1px rgba(139, 92, 246, 0.06),
+    0 10px 40px rgba(0, 0, 0, 0.45),
+    0 0 90px rgba(139, 92, 246, 0.07);
+  animation: ra-panel-glow 8s ease-in-out infinite;
+}
+
+.ra-panel-inner {
+  background: #12131a;
+  border-radius: 19px;
+  padding: 2.5rem 2.8rem;
+}
+
 /* ── Stats bar ──────────────────────────────────────────────── */
+.ra-stats-panel {
+  margin: 2.5rem auto 3.5rem;
+}
+
 .ra-stats {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   align-items: center;
-  margin: 2.5rem auto;
   padding: 2rem 0.5rem;
-  max-width: 900px;
-  border-radius: 12px;
-  background: rgba(139, 92, 246, 0.06);
-  border: 1px solid rgba(139, 92, 246, 0.18);
-  animation: ra-fade-up 0.5s ease-out 0.15s both;
 }
 
 /* Reset any Starlight markdown-content margins on stat children */
-.ra-stats,
 .ra-stats * {
   margin-top: 0 !important;
   margin-bottom: 0 !important;
@@ -169,7 +209,7 @@ html {
 .ra-stat {
   text-align: center;
   padding: 0 0.25rem;
-  border-left: 1px solid rgba(139, 92, 246, 0.12);
+  border-left: 1px solid rgba(139, 92, 246, 0.18);
 }
 .ra-stat:first-child {
   border-left: none;
@@ -198,13 +238,44 @@ html {
   padding-top: 0.4rem;
 }
 
-/* Light mode stats */
-[data-theme="light"] .ra-stats {
-  background: rgba(109, 40, 217, 0.04);
-  border-color: rgba(109, 40, 217, 0.14);
+/* ── Section cards ───────────────────────────────────────────── */
+.ra-section-card {
+  margin-bottom: 2.5rem;
+  animation: ra-fade-up 0.5s ease-out both;
 }
-[data-theme="light"] .ra-stat + .ra-stat {
-  border-left-color: rgba(109, 40, 217, 0.1);
+
+.ra-section-card .ra-panel-inner h2 {
+  margin-top: 0 !important;
+}
+
+/* Terminal at bottom of a panel — pulls edge-to-edge flush with panel edges */
+.ra-panel-inner .terminal-replay {
+  margin: 2rem -2.8rem -2.5rem;
+  border-radius: 0 0 19px 19px;
+}
+
+/* ── Light mode ─────────────────────────────────────────────── */
+[data-theme="light"] .ra-panel {
+  background: linear-gradient(
+    135deg,
+    rgba(109, 40, 217, 0.45) 0%,
+    rgba(8, 145, 178, 0.28)  50%,
+    rgba(109, 40, 217, 0.45) 100%
+  );
+  box-shadow:
+    0 0 0 1px rgba(109, 40, 217, 0.1),
+    0 4px 16px rgba(0, 0, 0, 0.1),
+    0 12px 40px rgba(0, 0, 0, 0.12),
+    0 0 60px rgba(109, 40, 217, 0.08);
+  animation: none;
+}
+
+[data-theme="light"] .ra-panel-inner {
+  background: #ffffff;
+}
+
+[data-theme="light"] .ra-stat {
+  border-left-color: rgba(109, 40, 217, 0.12);
 }
 
 /* ── Try It Now CTA ────────────────────────────────────────── */

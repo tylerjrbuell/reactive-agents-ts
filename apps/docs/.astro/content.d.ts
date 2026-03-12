@@ -345,6 +345,13 @@ declare module 'astro:content' {
   collection: "docs";
   data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
+"guides/choosing-strategies.md": {
+	id: "guides/choosing-strategies.md";
+  slug: "guides/choosing-strategies";
+  body: string;
+  collection: "docs";
+  data: InferEntrySchema<"docs">
+} & { render(): Render[".md"] };
 "guides/cli-artisan.md": {
 	id: "guides/cli-artisan.md";
   slug: "guides/cli-artisan";
@@ -422,6 +429,20 @@ declare module 'astro:content' {
   collection: "docs";
   data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
+"guides/migrating-from-langchain.md": {
+	id: "guides/migrating-from-langchain.md";
+  slug: "guides/migrating-from-langchain";
+  body: string;
+  collection: "docs";
+  data: InferEntrySchema<"docs">
+} & { render(): Render[".md"] };
+"guides/production-checklist.md": {
+	id: "guides/production-checklist.md";
+  slug: "guides/production-checklist";
+  body: string;
+  collection: "docs";
+  data: InferEntrySchema<"docs">
+} & { render(): Render[".md"] };
 "guides/quickstart.md": {
 	id: "guides/quickstart.md";
   slug: "guides/quickstart";
@@ -439,6 +460,13 @@ declare module 'astro:content' {
 "guides/security-hardening.md": {
 	id: "guides/security-hardening.md";
   slug: "guides/security-hardening";
+  body: string;
+  collection: "docs";
+  data: InferEntrySchema<"docs">
+} & { render(): Render[".md"] };
+"guides/sub-agents.md": {
+	id: "guides/sub-agents.md";
+  slug: "guides/sub-agents";
   body: string;
   collection: "docs";
   data: InferEntrySchema<"docs">
