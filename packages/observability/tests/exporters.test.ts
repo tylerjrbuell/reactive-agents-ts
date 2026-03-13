@@ -370,7 +370,6 @@ describe("DashboardFormatter (Task 2)", () => {
 
     // Verify header sections exist
     expect(output).toContain("Agent Execution Summary");
-    expect(output).toContain("✔ Success");
     expect(output).toContain("Success");
     expect(output).toContain("13.9s");
     expect(output).toContain("1,963");
@@ -463,7 +462,7 @@ describe("DashboardFormatter (Task 2)", () => {
     const output = formatMetricsDashboard(data);
 
     expect(output).toContain("Agent Execution Summary");
-    expect(output).toContain("✖ Failed");
+    expect(output).toContain("Failed");
   });
 
   test("formatMetricsDashboard() includes tool error indicators", () => {

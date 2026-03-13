@@ -535,9 +535,9 @@ export const formatMetricsDashboard = (data: DashboardData): string => {
     : C_YELLOW;
 
   const statusLabel =
-    data.status === "success" ? "✔ Success"
-    : data.status === "error"  ? "✖ Failed"
-    : "⚠ Partial";
+    data.status === "success" ? "Success"
+    : data.status === "error"  ? "Failed"
+    : "Partial";
 
   const durationStr = formatDuration(data.totalDuration);
   const isLocalProvider =
