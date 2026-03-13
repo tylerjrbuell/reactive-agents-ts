@@ -275,14 +275,11 @@ export interface GuardrailsOptions {
   readonly pii?: boolean;
   /** Enable toxicity detection. Default: true */
   readonly toxicity?: boolean;
-  /** Custom blocklist of words/phrases to reject. Default: undefined */
+  /**
+   * Custom list of words or phrases that will cause the input to be rejected.
+   * Checked as case-insensitive substring matches.
+   */
   readonly customBlocklist?: readonly string[];
-  /** Detection score thresholds (0.0–1.0). Lower = more sensitive, higher = more permissive. */
-  readonly thresholds?: {
-    readonly injection?: number;
-    readonly pii?: number;
-    readonly toxicity?: number;
-  };
 }
 
 /**

@@ -29,10 +29,10 @@ describe("Builder convenience methods", () => {
     await agent.dispose();
   });
 
-  test("withGuardrails accepts thresholds inline", async () => {
+  test("withGuardrails accepts customBlocklist", async () => {
     const agent = await ReactiveAgents.create()
       .withProvider("test")
-      .withGuardrails({ injection: true, pii: true, thresholds: { injection: 0.9, pii: 0.85 } })
+      .withGuardrails({ injection: true, pii: true, customBlocklist: ["forbidden-phrase"] })
       .build();
     expect(agent).toBeDefined();
     await agent.dispose();
@@ -44,7 +44,7 @@ describe("Builder convenience methods", () => {
       .withTimeout(5000)
       .withRetryPolicy({ maxRetries: 2, backoffMs: 500 })
       .withCacheTimeout(600_000)
-      .withGuardrails({ thresholds: { injection: 0.95 } })
+      .withGuardrails({ injection: true })
       .withStrictValidation()
       .build();
     expect(agent).toBeDefined();
