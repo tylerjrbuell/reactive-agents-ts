@@ -1,4 +1,4 @@
-import { Effect, Context, Layer, Ref, Option, Queue, Stream as EStream } from "effect";
+import { Effect, Context, Layer, Ref, Option, Queue, Stream as EStream, Duration } from "effect";
 import type { ExecutionContext, ReactiveAgentsConfig } from "./types.js";
 import {
   ExecutionError,
@@ -262,7 +262,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
         ) as Effect.Effect<ExecutionContext, E | RuntimeErrors>;
       };
 
-      const execute = (task: Task): Effect.Effect<TaskResult, RuntimeErrors> =>
+      let execute = (task: Task): Effect.Effect<TaskResult, RuntimeErrors> =>
         (
           Effect.gen(function* () {
             const now = new Date();
@@ -2421,6 +2421,24 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
             }),
           ),
         ) as Effect.Effect<TaskResult, RuntimeErrors>;
+
+      // Wrap execute with per-execution timeout if configured
+      if (config.executionTimeoutMs) {
+        const timeoutMs = config.executionTimeoutMs;
+        const _base = execute;
+        execute = (task2: Task) =>
+          _base(task2).pipe(
+            Effect.timeoutFail({
+              duration: Duration.millis(timeoutMs),
+              onTimeout: () =>
+                new ExecutionError({
+                  message: `Execution timed out after ${timeoutMs}ms`,
+                  taskId: task2.id,
+                  phase: "think",
+                }),
+            }),
+          );
+      }
 
       return {
         execute,

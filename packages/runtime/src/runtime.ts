@@ -1,4 +1,4 @@
-import { Layer, Effect, Context } from "effect";
+import { Layer, Effect, Context, Schedule, Duration } from "effect";
 import { LifecycleHookRegistryLive } from "./hooks.js";
 import { ExecutionEngineLive } from "./execution-engine.js";
 import type { ReactiveAgentsConfig } from "./types.js";
@@ -851,6 +851,28 @@ export const createRuntime = (options: RuntimeOptions) => {
         )
       : (llmLayer as Layer.Layer<LLMService>);
 
+  // Apply retry policy: wrap complete() with Effect.retry so transient LLM
+  // failures (rate limits, network errors) automatically back off and retry.
+  const finalLlmLayer: Layer.Layer<LLMService> =
+    options.retryPolicy
+      ? Layer.effect(
+          LLMService,
+          Effect.gen(function* () {
+            const svc = yield* LLMService.pipe(
+              Effect.provide(effectiveLlmLayer as Layer.Layer<LLMService, never, never>),
+            );
+            const retrySchedule = Schedule.recurs(options.retryPolicy!.maxRetries).pipe(
+              Schedule.intersect(Schedule.spaced(Duration.millis(options.retryPolicy!.backoffMs))),
+            );
+            return {
+              ...svc,
+              complete: (req: Parameters<typeof svc.complete>[0]) =>
+                svc.complete(req).pipe(Effect.retry(retrySchedule)),
+            } as Context.Tag.Service<LLMService>;
+          }),
+        )
+      : effectiveLlmLayer;
+
   const memoryOverrides: Record<string, unknown> = { agentId: options.agentId };
   if (options.memoryOptions) {
     const mo = options.memoryOptions;
@@ -910,7 +932,7 @@ export const createRuntime = (options: RuntimeOptions) => {
         bridgedLLM,
       );
     }),
-  ).pipe(Layer.provide(effectiveLlmLayer));
+  ).pipe(Layer.provide(finalLlmLayer));
   const hookLayer = LifecycleHookRegistryLive;
   const engineLayer = ExecutionEngineLive(config).pipe(
     Layer.provide(hookLayer),
@@ -920,7 +942,7 @@ export const createRuntime = (options: RuntimeOptions) => {
   let runtime = Layer.mergeAll(
     coreLayer,
     eventBusLayer,
-    effectiveLlmLayer,
+    finalLlmLayer,
     memoryLayer,
     hookLayer,
     engineLayer,
@@ -1116,9 +1138,9 @@ export const createRuntime = (options: RuntimeOptions) => {
       : defaultReasoningConfig;
 
     // ReasoningService requires LLMService, optionally ToolService + PromptService
-    let reasoningDeps = effectiveLlmLayer;
+    let reasoningDeps = finalLlmLayer;
     if (toolsLayer) {
-      reasoningDeps = Layer.merge(effectiveLlmLayer, toolsLayer) as any;
+      reasoningDeps = Layer.merge(finalLlmLayer, toolsLayer) as any;
     }
     if (promptLayer) {
       reasoningDeps = Layer.merge(reasoningDeps, promptLayer) as any;
