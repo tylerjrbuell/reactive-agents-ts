@@ -345,6 +345,16 @@ export const ReactiveAgentsConfigSchema = Schema.Struct({
   ),
   /** Semantic cache TTL in milliseconds. Cached responses older than this are evicted. */
   cacheTimeoutMs: Schema.optional(Schema.Number),
+  /** Session persistence configuration. When persist is true, SessionStoreLive must be
+   *  in the runtime layer (requires memory layer to be active). */
+  session: Schema.optional(
+    Schema.Struct({
+      /** Enable SQLite-backed session persistence. Default: false */
+      persist: Schema.optional(Schema.Boolean),
+      /** Max age of sessions to retain in days. Default: 30 */
+      maxAgeDays: Schema.optional(Schema.Number),
+    })
+  ),
   /** Dynamic strategy switching configuration. When enabled, the kernel automatically
    *  switches reasoning strategies on loop detection instead of failing immediately. */
   strategySwitching: Schema.optional(

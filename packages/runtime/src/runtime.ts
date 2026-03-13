@@ -9,7 +9,7 @@ import {
   getProviderDefaultModel,
   LLMService,
 } from "@reactive-agents/llm-provider";
-import { createMemoryLayer, ExperienceStoreLive, MemoryConsolidatorServiceLive } from "@reactive-agents/memory";
+import { createMemoryLayer, ExperienceStoreLive, MemoryConsolidatorServiceLive, SessionStoreLive } from "@reactive-agents/memory";
 import type { MemoryLLM } from "@reactive-agents/memory";
 
 // Optional package imports
@@ -611,6 +611,23 @@ export interface RuntimeOptions {
 
   /** Semantic cache TTL in milliseconds. Cached responses older than this are evicted. */
   cacheTimeoutMs?: number;
+
+  /**
+   * Enable SQLite-backed session persistence via SessionStoreLive.
+   * Requires the memory layer to be active (`enableMemory: true` or `memoryTier` set).
+   * When false (default), `agent.session({ persist: true })` silently no-ops.
+   *
+   * Default: `false`
+   */
+  sessionPersist?: boolean;
+
+  /**
+   * Max age of sessions to retain in days when session persistence is enabled.
+   * Sessions older than this will be eligible for cleanup.
+   *
+   * Default: undefined (no automatic cleanup)
+   */
+  sessionMaxAgeDays?: number;
 }
 
 /**
@@ -695,6 +712,12 @@ export const createRuntime = (options: RuntimeOptions) => {
     executionTimeoutMs: options.executionTimeoutMs,
     retryPolicy: options.retryPolicy,
     cacheTimeoutMs: options.cacheTimeoutMs,
+    session: options.sessionPersist
+      ? {
+          persist: options.sessionPersist,
+          maxAgeDays: options.sessionMaxAgeDays,
+        }
+      : undefined,
   };
 
   // ── Required layers ──
@@ -933,6 +956,16 @@ export const createRuntime = (options: RuntimeOptions) => {
     runtime = Layer.merge(
       runtime,
       MemoryConsolidatorServiceLive(options.consolidationConfig).pipe(Layer.provide(memoryLayer)),
+    ) as any;
+  }
+
+  // ── Session persistence layer (requires MemoryDatabase from memoryLayer) ──
+  // Only wired when sessionPersist is true. Without memory, SessionStoreService will not be
+  // in the runtime and agent.session({ persist: true }) will silently no-op via Effect.serviceOption.
+  if (options.sessionPersist) {
+    runtime = Layer.merge(
+      runtime,
+      SessionStoreLive.pipe(Layer.provide(memoryLayer)),
     ) as any;
   }
 

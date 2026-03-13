@@ -750,6 +750,8 @@ export class ReactiveAgentBuilder {
   private _consolidationConfig?: { threshold?: number; decayFactor?: number; pruneThreshold?: number };
   private _errorHandler?: (error: RuntimeErrors | Error, context: { taskId: string; phase: string; iteration: number; lastStep?: string }) => void;
   private _enableHealthCheck: boolean = false;
+  private _sessionPersist: boolean = false;
+  private _sessionMaxAgeDays?: number;
 
   // ─── Identity ───
 
@@ -1831,6 +1833,8 @@ export class ReactiveAgentBuilder {
       executionTimeoutMs: this._executionTimeoutMs,
       retryPolicy: this._retryPolicy,
       cacheTimeoutMs: this._cacheTimeoutMs,
+      sessionPersist: this._sessionPersist,
+      sessionMaxAgeDays: this._sessionMaxAgeDays,
       strategySwitching: this._reasoningOptions?.enableStrategySwitching
         ? {
             enabled: true,
@@ -2935,7 +2939,8 @@ export class ReactiveAgent {
    * ```
    */
   session(options?: SessionOptions & { persist?: boolean; id?: string; maxAgeDays?: number }): AgentSession {
-    const persist = options?.persist ?? false;
+    const persist = options?.persist ?? this._sessionPersist;
+    const _maxAgeDays = options?.maxAgeDays ?? this._sessionMaxAgeDays;
     const sessionId = options?.id ?? `sess_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const self = this;
 
