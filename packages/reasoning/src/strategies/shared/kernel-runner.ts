@@ -219,6 +219,9 @@ export function runKernel(
               );
             }
 
+            // Fire evaluated hook regardless of whether switch will happen — observability
+            yield* hooks.onStrategySwitchEvaluated(state, evaluation);
+
             if (evaluation.shouldSwitch && evaluation.recommendedStrategy) {
               const fromStrategy = triedStrategies[triedStrategies.length - 1] ?? "unknown";
               const toStrategy = evaluation.recommendedStrategy;

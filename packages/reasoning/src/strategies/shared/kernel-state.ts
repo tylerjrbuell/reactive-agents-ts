@@ -107,6 +107,10 @@ export interface KernelHooks {
   readonly onError: (state: KernelState, error: string) => Effect.Effect<void, never>;
   readonly onIterationProgress: (state: KernelState, toolsThisStep: readonly string[]) => Effect.Effect<void, never>;
   readonly onStrategySwitched: (state: KernelState, from: string, to: string, reason: string) => Effect.Effect<void, never>;
+  readonly onStrategySwitchEvaluated: (
+    state: KernelState,
+    evaluation: { shouldSwitch: boolean; recommendedStrategy: string; reasoning: string }
+  ) => Effect.Effect<void, never>;
 }
 
 // ── KernelContext — Injected into every kernel call ──────────────────────────
@@ -273,4 +277,5 @@ export const noopHooks: KernelHooks = {
   onError: () => Effect.void,
   onIterationProgress: () => Effect.void,
   onStrategySwitched: () => Effect.void,
+  onStrategySwitchEvaluated: () => Effect.void,
 };

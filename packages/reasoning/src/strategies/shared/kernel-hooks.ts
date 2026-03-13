@@ -87,6 +87,24 @@ export function buildKernelHooks(eventBus: MaybeService<EventBusInstance>): Kern
 
     onIterationProgress: (_state: KernelState, _toolsThisStep: readonly string[]): Effect.Effect<void, never> => Effect.void,
 
-    onStrategySwitched: (_state: KernelState, _from: string, _to: string, _reason: string): Effect.Effect<void, never> => Effect.void,
+    onStrategySwitched: (state: KernelState, from: string, to: string, reason: string): Effect.Effect<void, never> =>
+      publishReasoningStep(eventBus, {
+        _tag: "StrategySwitched",
+        taskId: state.taskId,
+        from,
+        to,
+        reason,
+        timestamp: Date.now(),
+      }),
+
+    onStrategySwitchEvaluated: (state: KernelState, evaluation: { shouldSwitch: boolean; recommendedStrategy: string; reasoning: string }): Effect.Effect<void, never> =>
+      publishReasoningStep(eventBus, {
+        _tag: "StrategySwitchEvaluated",
+        taskId: state.taskId,
+        shouldSwitch: evaluation.shouldSwitch,
+        recommendedStrategy: evaluation.recommendedStrategy,
+        reasoning: evaluation.reasoning,
+        timestamp: Date.now(),
+      }),
   };
 }

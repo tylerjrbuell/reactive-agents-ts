@@ -595,6 +595,42 @@ export type AgentEvent =
       /** Arbitrary custom payload */
       readonly payload: unknown;
     }
+  // ─── Strategy switching events (from @reactive-agents/reasoning) ───
+  | {
+      /**
+       * A strategy switch evaluator ran and produced a recommendation.
+       * Fired regardless of whether the evaluator decided to switch — allows
+       * observing "evaluator ran but decided not to switch" scenarios.
+       */
+      readonly _tag: "StrategySwitchEvaluated";
+      /** Unique task identifier */
+      readonly taskId: string;
+      /** Whether the evaluator recommends switching */
+      readonly shouldSwitch: boolean;
+      /** Strategy the evaluator recommends switching to (empty string if shouldSwitch is false) */
+      readonly recommendedStrategy: string;
+      /** Brief explanation from the evaluator */
+      readonly reasoning: string;
+      /** Unix timestamp in milliseconds */
+      readonly timestamp: number;
+    }
+  | {
+      /**
+       * A strategy switch actually occurred.
+       * Fired when the kernel transitions from one reasoning strategy to another.
+       */
+      readonly _tag: "StrategySwitched";
+      /** Unique task identifier */
+      readonly taskId: string;
+      /** Strategy name being switched from */
+      readonly from: string;
+      /** Strategy name being switched to */
+      readonly to: string;
+      /** Human-readable reason for the switch */
+      readonly reason: string;
+      /** Unix timestamp in milliseconds */
+      readonly timestamp: number;
+    }
   // ─── Streaming events ───
   | {
       /**
