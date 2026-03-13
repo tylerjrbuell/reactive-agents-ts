@@ -32,10 +32,11 @@ rax init <name> [--template minimal|standard|full]
 
 ### `rax create agent`
 
-Generate an agent file from a recipe.
+Generate an agent file from a recipe, or use `--interactive` for guided scaffolding.
 
 ```bash
 rax create agent <name> [--recipe basic|researcher|coder|orchestrator]
+rax create agent <name> --interactive
 ```
 
 **Recipes:**
@@ -46,6 +47,31 @@ rax create agent <name> [--recipe basic|researcher|coder|orchestrator]
 | `researcher` | Agent with memory + reasoning |
 | `coder` | Agent optimized for code tasks |
 | `orchestrator` | Multi-agent orchestrator with memory |
+
+**Interactive mode:**
+
+The `--interactive` flag launches a readline-based wizard that prompts you for:
+- Agent name and description
+- Provider and model selection
+- Which capabilities to enable (reasoning, memory, guardrails, tools, etc.)
+- Reasoning strategy preference
+- Output format (TypeScript file, project directory, or stdout)
+
+```bash
+$ rax create agent my-agent --interactive
+
+? Agent name: my-research-agent
+? Description: Searches the web and summarizes findings
+? Provider: anthropic
+? Model: claude-sonnet-4-20250514
+? Enable reasoning? Yes
+? Reasoning strategy: adaptive
+? Enable tools? Yes
+? Enable memory? Yes
+? Enable guardrails? No
+
+✔ Generated: src/agents/my-research-agent.ts
+```
 
 ### `rax run`
 

@@ -6,7 +6,7 @@
 
 **The open-source agent framework built for control, not magic.**
 
-Every decision controllable, observable, and auditable. 20 packages. 13 composable layers. 5 reasoning strategies. 6 LLM providers. Model-adaptive context profiles. 10-phase execution engine with lifecycle hooks. 1,773 tests across 217 files. Built on Effect-TS for type safety from prompt to production.
+Every decision controllable, observable, and auditable. 21 packages. 13 composable layers. 5 reasoning strategies. 6 LLM providers. Model-adaptive context profiles. 10-phase execution engine with lifecycle hooks. 1,921 tests across 239 files. Built on Effect-TS for type safety from prompt to production.
 
 [![CI](https://github.com/tylerjrbuell/reactive-agents-ts/actions/workflows/ci.yml/badge.svg)](https://github.com/tylerjrbuell/reactive-agents-ts/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/badge/npm-%40reactive--agents-CB3837?logo=npm)](https://www.npmjs.com/org/reactive-agents)
@@ -44,9 +44,9 @@ Most AI agent frameworks are dynamically typed, monolithic, and opaque. They ass
 - **6 LLM providers** -- Anthropic, OpenAI, Google Gemini, Ollama (local), LiteLLM (40+ models), Test (deterministic)
 - **Model-adaptive context profiles** -- 4 tiers (local, mid, large, frontier) with tier-aware prompts, compaction, and truncation
 - **4-layer memory** -- working, episodic, semantic (vector + FTS5), procedural (bun:sqlite); ExperienceStore for cross-agent learning; background consolidation + decay
-- **Real-time token streaming** + SSE via `agent.runStream()` with AsyncGenerator and FiberRef-based TextDelta propagation
+- **Real-time token streaming** + SSE via `agent.runStream()` with AbortSignal cancellation, `IterationProgress` + `StreamCancelled` events, and `StreamCompleted.toolSummary`
 - **Persistent autonomous gateway** -- adaptive heartbeats, cron scheduling, webhook ingestion (GitHub adapter), composable policy engine
-- **Agent debrief + conversational chat** -- `agent.chat()` and `agent.session()` for adaptive Q&A; post-run `DebriefSynthesizer` produces structured summaries persisted to SQLite
+- **Agent debrief + conversational chat** -- `agent.chat()` and `agent.session()` (with optional SQLite persistence via `SessionStoreService`) for adaptive Q&A; post-run `DebriefSynthesizer` produces structured summaries persisted to SQLite
 - **A2A multi-agent protocol** -- Agent Cards, JSON-RPC 2.0 server/client, SSE streaming, agent-as-tool composition
 - **Multi-agent orchestration** -- sequential, parallel, pipeline, and map-reduce workflows with dynamic sub-agent spawning
 - **Production guardrails** -- injection detection, PII filtering, toxicity blocking, kill switch, behavioral contracts
@@ -54,7 +54,12 @@ Most AI agent frameworks are dynamically typed, monolithic, and opaque. They ass
 - **Cost tracking** -- complexity routing across 27 signals, semantic caching, budget enforcement with persistence across restarts
 - **Professional metrics dashboard** -- EventBus-driven execution timeline, tool call summary, smart alerts, and cost estimation (zero manual instrumentation)
 - **Required tools guard** -- ensure agents call critical tools before answering (static list or adaptive LLM inference)
-- **1,773 tests** across 217 files
+- **Builder hardening** -- `withStrictValidation()`, `withTimeout()`, `withRetryPolicy()`, `withCacheTimeout()`, consolidated `withGuardrails()` thresholds, `withErrorHandler()`, `withFallbacks()`, `withLogging()`, `withHealthCheck()`, automatic strategy switching
+- **ToolBuilder fluent API** -- define tools without raw schema objects
+- **Provider fallback chains** -- `FallbackChain` + `withFallbacks()` for graceful degradation across providers/models
+- **Structured logging** -- `makeLoggerService()` with level filtering, JSON/text format, and file output with rotation via `withLogging()`
+- **Health checks** -- `withHealthCheck()` + `agent.health()` returns `{ status, checks[] }`
+- **1,921 tests** across 239 files
 
 ## Quick Start
 
@@ -109,6 +114,19 @@ const agent = await ReactiveAgents.create()
     tools: ["web-search"],
     maxRetries: 2,
   })
+  .withStrictValidation()                                // Throw at build time if required config is missing
+  .withTimeout(60_000)                                   // Execution timeout (ms)
+  .withRetryPolicy({ maxRetries: 3, backoff: "exponential" }) // Retry on transient LLM failures
+  .withCacheTimeout(3_600_000)                           // Semantic cache TTL (ms)
+  .withErrorHandler((err, ctx) => {                      // Global error callback
+    console.error("Agent error:", err.message);
+  })
+  .withFallbacks({                                       // Provider/model fallback chain
+    providers: ["anthropic", "openai"],
+    errorThreshold: 3,
+  })
+  .withLogging({ level: "info", format: "json", output: "file" }) // Structured logging
+  .withHealthCheck()                                     // Enable agent.health() probe
   .withGateway({                                         // Persistent autonomous harness
     heartbeat: { intervalMs: 1_800_000, policy: "adaptive" },
     crons: [{ schedule: "0 9 * * MON", instruction: "Weekly review" }],
@@ -133,13 +151,23 @@ await session.send("Which errors were most frequent?");
 
 ### Streaming
 
-Tokens arrive as they're generated via AsyncGenerator:
+Tokens arrive as they're generated via AsyncGenerator. Pass an `AbortSignal` to cancel mid-stream:
 
 ```typescript
-for await (const event of agent.runStream("Analyze this dataset")) {
+const controller = new AbortController();
+
+for await (const event of agent.runStream("Analyze this dataset", { signal: controller.signal })) {
   if (event._tag === "TextDelta") process.stdout.write(event.text);
-  if (event._tag === "StreamCompleted") console.log("\nDone!");
+  if (event._tag === "IterationProgress") console.log(`Step ${event.iteration}/${event.maxIterations}`);
+  if (event._tag === "StreamCancelled") console.log("Stream cancelled");
+  if (event._tag === "StreamCompleted") {
+    console.log("\nDone!");
+    // event.toolSummary: Array<{ toolName, calls, successRate }>
+  }
 }
+
+// Cancel from elsewhere (e.g., HTTP request abort)
+controller.abort();
 ```
 
 ### Lifecycle Hooks
@@ -192,7 +220,7 @@ How Reactive Agents compares to other TypeScript agent frameworks on shipped, wo
 | Persistent gateway            | Yes             | --           | --            | --     |
 | Agent debrief + chat          | Yes             | --           | --            | --     |
 | Metrics dashboard             | Yes             | LangSmith    | --            | --     |
-| Test suite                    | 1,773 tests     | --           | --            | --     |
+| Test suite                    | 1,921 tests     | --           | --            | --     |
 
 ## Use Cases
 
@@ -271,6 +299,16 @@ Every phase supports `before`, `after`, and `on-error` lifecycle hooks. When obs
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withReasoning({ defaultStrategy: "adaptive" })
+  .build();
+
+// Automatic strategy switching on loop detection
+const agent2 = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withReasoning({
+    enableStrategySwitching: true,
+    maxStrategySwitches: 1,
+    fallbackStrategy: "plan-execute-reflect",
+  })
   .build();
 ```
 
@@ -372,7 +410,8 @@ Enable with:
 
 ```bash
 rax init my-project --template full              # Scaffold a project
-rax create agent researcher --recipe researcher   # Generate an agent
+rax create agent researcher --recipe researcher   # Generate an agent from recipe
+rax create agent my-agent --interactive           # Interactive scaffolding (readline prompts)
 rax run "Explain quantum computing" --provider anthropic  # Run an agent
 ```
 
@@ -380,10 +419,31 @@ rax run "Explain quantum computing" --provider anthropic  # Run an agent
 
 Tools are registered at build time or via `ToolService.register()`. Built-in tools (web search, file I/O, HTTP, code execution, scratchpad, spawn-agent) are available automatically when the relevant builder methods are enabled.
 
+Use the `ToolBuilder` fluent API to define tools without raw schema objects:
+
 ```typescript
 import { ReactiveAgents } from "reactive-agents";
+import { ToolBuilder } from "@reactive-agents/tools";
 import { Effect } from "effect";
 
+const webSearchTool = ToolBuilder.create("web_search")
+  .description("Search the web for current information")
+  .param("query", "string", "Search query", { required: true })
+  .riskLevel("low")
+  .timeout(10_000)
+  .handler((args) => Effect.succeed(`Results for: ${args.query}`))
+  .build();
+
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withReasoning()
+  .withTools({ tools: [webSearchTool] })
+  .build();
+```
+
+Or use raw schema objects directly:
+
+```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withReasoning()
@@ -394,12 +454,7 @@ const agent = await ReactiveAgents.create()
           name: "web_search",
           description: "Search the web for current information",
           parameters: [
-            {
-              name: "query",
-              type: "string",
-              description: "Search query",
-              required: true,
-            },
+            { name: "query", type: "string", description: "Search query", required: true },
           ],
           riskLevel: "low",
           timeoutMs: 10_000,
@@ -449,6 +504,24 @@ const result = await agent.run("What is the capital of France?");
 // result.output -> "Paris is the capital of France."
 ```
 
+The `@reactive-agents/testing` package includes streaming assertions and pre-built scenario fixtures:
+
+```typescript
+import { expectStream, createGuardrailBlockScenario, createBudgetExhaustedScenario } from "@reactive-agents/testing";
+
+// Stream assertions
+const stream = agent.runStream("Write a haiku");
+await expectStream(stream)
+  .toEmitTextDeltas()
+  .toComplete()
+  .toEmitEvents(["TextDelta", "StreamCompleted"]);
+
+// Pre-built scenario fixtures
+const scenario = createGuardrailBlockScenario(); // agent + prompt that triggers guardrail
+const budget = createBudgetExhaustedScenario();  // agent + prompt that exhausts budget
+const maxIter = createMaxIterationsScenario();   // agent + prompt that hits max iterations
+```
+
 ## FAQ
 
 ### Which models and providers are supported?
@@ -457,7 +530,7 @@ Reactive Agents supports 6 providers: Anthropic, OpenAI, Google Gemini, Ollama (
 
 ### Is this framework production-ready?
 
-Yes -- it includes guardrails, budget controls, auditability, observability, Ed25519 identity, and composable service layers for testable deployments. 1,773 tests across 217 files.
+Yes -- it includes guardrails, budget controls, auditability, observability, Ed25519 identity, and composable service layers for testable deployments. 1,921 tests across 239 files.
 
 ### Can I run fully local agents?
 
@@ -471,8 +544,8 @@ See the [comparison table](#comparison). The key differences are: full Effect-TS
 
 ```bash
 bun install              # Install dependencies
-bun test                 # Run full test suite (1,773 tests, 217 files)
-bun run build            # Build all packages (20 packages, ESM + DTS)
+bun test                 # Run full test suite (1,921 tests, 239 files)
+bun run build            # Build all packages (21 packages, ESM + DTS)
 ```
 
 ## Environment Variables

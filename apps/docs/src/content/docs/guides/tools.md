@@ -175,6 +175,58 @@ Tool inputs are validated against their schemas before execution:
 
 Invalid inputs are rejected before the tool handler runs.
 
+## ToolBuilder Fluent API
+
+The `ToolBuilder` provides a fluent, type-safe API for defining tools without raw schema objects. It eliminates the boilerplate of `definition` + `handler` pairs.
+
+```typescript
+import { ToolBuilder } from "@reactive-agents/tools";
+import { Effect } from "effect";
+
+// Basic tool
+const calculator = ToolBuilder.create("calculator")
+  .description("Perform arithmetic calculations")
+  .param("expression", "string", "Math expression to evaluate", { required: true })
+  .riskLevel("low")
+  .timeout(5_000)
+  .handler((args) => Effect.try(() => String(eval(String(args.expression)))))
+  .build();
+
+// Tool with multiple params and enum
+const fileOp = ToolBuilder.create("file-operation")
+  .description("Perform a file system operation")
+  .param("path", "string", "File path", { required: true })
+  .param("operation", "string", "Operation to perform", { required: true, enum: ["read", "write", "delete"] })
+  .param("content", "string", "Content for write operations", { required: false })
+  .riskLevel("medium")
+  .requiresApproval(true)
+  .timeout(10_000)
+  .handler(async (args) => {
+    // ... implementation
+    return Effect.succeed("done");
+  })
+  .build();
+
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withReasoning()
+  .withTools({ tools: [calculator, fileOp] })
+  .build();
+```
+
+### ToolBuilder Methods
+
+| Method | Description |
+|--------|-------------|
+| `ToolBuilder.create(name)` | Start a new tool definition |
+| `.description(text)` | Set the tool description (shown to LLM) |
+| `.param(name, type, description, options?)` | Add a parameter. `options`: `{ required?, enum?, default? }` |
+| `.riskLevel(level)` | `"low" \| "medium" \| "high"` |
+| `.timeout(ms)` | Execution timeout in milliseconds |
+| `.requiresApproval(bool)` | Whether the tool requires human approval before execution |
+| `.handler(fn)` | Set the handler function. Receives typed args, returns `Effect<string>` |
+| `.build()` | Produce a `{ definition, handler }` tool object |
+
 ## Function Adapter
 
 Convert plain functions into tool definitions:

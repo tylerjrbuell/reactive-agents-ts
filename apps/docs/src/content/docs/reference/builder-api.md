@@ -70,6 +70,10 @@ interface ModelParams {
 | ------ | --------- | ----------- |
 | `withMaxIterations` | `(n: number) => this` | Max agent loop iterations (default: 10) |
 | `withContextProfile` | `(profile: Partial<ContextProfile>) => this` | Model-adaptive context overrides: compaction thresholds, tool result size limits, budget |
+| `withStrictValidation` | `() => this` | Throw at build time if required config is missing (provider, model, etc.) |
+| `withTimeout` | `(ms: number) => this` | Execution timeout in milliseconds. Throws `TimeoutError` if exceeded |
+| `withRetryPolicy` | `(policy: RetryPolicy) => this` | Retry on transient LLM failures. `{ maxRetries: number, backoff: "fixed" \| "linear" \| "exponential" }` |
+| `withCacheTimeout` | `(ms: number) => this` | Semantic cache TTL in milliseconds. Entries older than this are evicted |
 
 #### ContextProfile fields
 
@@ -99,12 +103,12 @@ See [Context Engineering](/guides/context-engineering/) for full tier defaults.
 
 | Method | Description |
 | ------ | ----------- |
-| `withGuardrails()` | Injection, PII, toxicity detection on input |
+| `withGuardrails(thresholds?)` | Injection, PII, toxicity detection on input. Pass consolidated `{ injectionThreshold?, piiThreshold?, toxicityThreshold? }` to customize detection sensitivity. Old separate-param form is deprecated |
 | `withKillSwitch()` | Per-agent and global emergency halt capability via `KillSwitchService` |
 | `withBehavioralContracts(contract)` | Enforce typed behavioral boundaries: `deniedTools`, `allowedTools`, `maxIterations`. Throws `BehavioralContractError` on violation |
 | `withVerification()` | Semantic entropy, fact decomposition, and multi-source (LLM + Tavily) on output |
 | `withCostTracking()` | Budget enforcement (persisted to SQLite), complexity routing (27 signals), semantic caching |
-| `withReasoning(options?)` | Structured reasoning (ReAct, Reflexion, Plan-Execute, ToT, Adaptive). Options: `{ defaultStrategy?, strategies?, adaptive?: { enabled?: boolean, learning?: boolean } }`. Set `adaptive.enabled: true` to auto-select strategy per task |
+| `withReasoning(options?)` | Structured reasoning (ReAct, Reflexion, Plan-Execute, ToT, Adaptive). Options: `{ defaultStrategy?, strategies?, adaptive?: { enabled?: boolean, learning?: boolean }, enableStrategySwitching?: boolean, maxStrategySwitches?: number, fallbackStrategy?: string }`. Set `enableStrategySwitching: true` to automatically switch strategy on loop detection |
 | `withTools(options?)` | Tool registry with sandboxed execution (subprocess isolation via `Bun.spawn`, Docker sandbox). Options: `{ tools?: [{ definition, handler }], resultCompression?: ResultCompressionConfig }`. See [Tool Result Compression](/guides/tools/#tool-result-compression) |
 | `withRequiredTools(config)` | Ensure agent calls critical tools before producing a final answer. Config: `{ tools?: string[], adaptive?: boolean, maxRetries?: number }` |
 | `withIdentity()` | Agent certificates (real Ed25519 keys) and RBAC |
@@ -118,6 +122,10 @@ See [Context Engineering](/guides/context-engineering/) for full tier defaults.
 | `withAudit()` | Compliance audit trail logging |
 | `withEvents()` | Enable typed EventBus subscriptions via `agent.subscribe()` |
 | `withGateway(options?)` | Persistent autonomous gateway: adaptive heartbeats, cron scheduling, webhook ingestion, policy engine. Options: `{ heartbeat?: HeartbeatConfig, crons?: CronEntry[], webhooks?: WebhookConfig[], policies?: PolicyConfig }` |
+| `withErrorHandler(handler)` | Register a global error callback for logging/monitoring. `(err: AgentError, ctx: ErrorContext) => void`. For observation only — does not swallow or transform errors |
+| `withFallbacks(config)` | Provider/model fallback chain via `FallbackChain`. Config: `{ providers?: string[], models?: string[], errorThreshold?: number }`. On consecutive failures ≥ `errorThreshold`, the agent transparently retries with the next provider/model |
+| `withLogging(config)` | Structured logging via `makeLoggerService()`. Config: `{ level?: "debug" \| "info" \| "warn" \| "error", format?: "json" \| "text", output?: "console" \| "file", filePath?: string, maxFileSizeMb?: number, maxFiles?: number }` |
+| `withHealthCheck()` | Enable `agent.health()` which returns `{ status: "healthy" \| "degraded" \| "unhealthy", checks: HealthCheck[] }`. Each check reports on a specific subsystem (LLM, memory, tools, etc.) |
 
 #### RequiredToolsConfig
 
@@ -375,22 +383,64 @@ interface ChatOptions {
 
 Start a multi-turn conversation session with auto-managed history. Conversation history is forwarded to the LLM on every subsequent turn.
 
+Pass `{ persist: true, id: "my-session" }` to persist conversation history to SQLite via `SessionStoreService`. Persistent sessions survive process restarts and can be resumed by passing the same `id`.
+
 ```typescript
+// In-memory session (default)
 const session = agent.session();
 
 const r1 = await session.chat("What are the key findings from your last run?");
 const r2 = await session.chat("Tell me more about the first finding");
 // r2 has full context of r1
 
+// Persisted session — survives process restarts
+const persistedSession = agent.session({ persist: true, id: "research-session-1" });
+await persistedSession.chat("Start researching quantum computing");
+// On next run, restore the session:
+const restoredSession = agent.session({ persist: true, id: "research-session-1" });
+await restoredSession.chat("Continue where we left off");
+
 const history = session.history(); // ChatMessage[]
-await session.end();               // Clears history
+await session.end();               // Clears history (and DB record if persisted)
 ```
 
 ```typescript
+interface SessionOptions {
+  persist?: boolean;   // Persist history to SQLite via SessionStoreService
+  id?: string;         // Session ID for persistence (auto-generated if omitted)
+}
+
 interface AgentSession {
   chat(message: string): Promise<ChatReply>;
   history(): ChatMessage[];
   end(): Promise<void>;
+}
+```
+
+### `health(): Promise<HealthResult>`
+
+Requires `.withHealthCheck()` to be enabled.
+
+Returns a structured health snapshot of all agent subsystems. Use for readiness probes, liveness checks, and monitoring dashboards.
+
+```typescript
+const health = await agent.health();
+console.log(health.status);  // "healthy" | "degraded" | "unhealthy"
+
+for (const check of health.checks) {
+  console.log(`${check.name}: ${check.status} — ${check.message}`);
+}
+```
+
+```typescript
+interface HealthResult {
+  status: "healthy" | "degraded" | "unhealthy";
+  checks: Array<{
+    name: string;
+    status: "pass" | "warn" | "fail";
+    message?: string;
+    durationMs?: number;
+  }>;
 }
 ```
 

@@ -130,6 +130,53 @@ console.log(patterns);
 "
 ```
 
+## SessionStoreService — Persistent Chat Sessions
+
+`SessionStoreService` persists conversation history to SQLite so sessions survive process restarts and can be resumed later. Enable it via `agent.session({ persist: true })`.
+
+### Enabling
+
+```typescript
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withMemory({ tier: "1", dbPath: "./memory-db" })
+  .withReasoning()
+  .build();
+
+// Start a named session — persisted to SQLite
+const session = agent.session({ persist: true, id: "my-project-session" });
+await session.chat("What are the main risks in this architecture?");
+await session.chat("How would you mitigate the top one?");
+
+// On next process start, restore by ID
+const restoredSession = agent.session({ persist: true, id: "my-project-session" });
+const reply = await restoredSession.chat("Continue from where we left off");
+// The agent has full history of the previous conversation
+```
+
+### How It Works
+
+Each session is stored as a row in the `agent_sessions` SQLite table (in the same database as memory). The session record contains:
+- Session ID (user-provided or auto-generated UUID)
+- Agent ID and provider
+- Full message history as JSON
+- Created/updated timestamps
+
+When `persist: true` is passed and an `id` is provided, the session is loaded from the database at construction time. Each new message is written back immediately.
+
+Sessions are cleaned up by calling `session.end()`, which removes the database record.
+
+### Inspecting Sessions
+
+```bash
+bun -e "
+import { Database } from 'bun:sqlite';
+const db = new Database('./memory-db');
+const sessions = db.query('SELECT id, agent_id, created_at, json_array_length(messages) as msg_count FROM agent_sessions').all();
+console.table(sessions);
+"
+```
+
 ## MemoryConsolidatorService — Background Memory Intelligence
 
 The MemoryConsolidatorService runs background maintenance cycles on episodic memory: decaying stale entries, pruning noise, and replaying recent experience for potential semantic promotion.

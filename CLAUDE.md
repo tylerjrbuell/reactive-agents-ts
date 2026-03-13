@@ -2,7 +2,7 @@
 
 ## Project Status
 
-**v0.7.5 — Final Answer, Debrief & Chat.** 20 packages + 2 apps built, 1,773 tests across 217 files. `final-answer` meta-tool hard-gates the ReAct loop exit (replaces fragile text regex). `DebriefSynthesizer` post-run service: collects execution signals + one LLM call → structured `AgentDebrief` (summary, key findings, lessons, errors, metrics). `DebriefStore` persists run artifacts to SQLite (`agent_debriefs` table). `AgentResult` enriched with `debrief?`, `format?`, `terminatedBy?`. `agent.chat()` + `agent.session()` for conversational Q&A with adaptive routing (direct LLM for questions, ReAct loop for tool-capable queries). `OutputFormat` + `TerminatedBy` canonical types. Unified `confidence` type (`"high"|"medium"|"low"`).
+**v0.8.x — Adoption Readiness.** 21 packages + 2 apps built, 1,921 tests across 239 files. Builder hardening: `withStrictValidation()`, `withTimeout()`, `withRetryPolicy()`, `withCacheTimeout()`, consolidated `withGuardrails()` thresholds, `withErrorHandler()`, `withFallbacks()`, `withLogging()`, `withHealthCheck()`. Strategy switching: `withReasoning({ enableStrategySwitching: true })`. Stream improvements: AbortSignal cancellation, `IterationProgress` event, `StreamCancelled` event, `StreamCompleted.toolSummary`. `ToolBuilder` fluent API. `SessionStoreService` SQLite-backed chat session persistence. `FallbackChain` in `@reactive-agents/llm-provider`. `makeLoggerService()` structured logging with rotation. `expectStream()` streaming test assertions + scenario fixtures. `agent.health()` health probes. `rax create agent --interactive`. Final Answer, Debrief & Chat: `final-answer` meta-tool hard-gates the ReAct loop exit (replaces fragile text regex). `DebriefSynthesizer` post-run service: collects execution signals + one LLM call → structured `AgentDebrief` (summary, key findings, lessons, errors, metrics). `DebriefStore` persists run artifacts to SQLite (`agent_debriefs` table). `AgentResult` enriched with `debrief?`, `format?`, `terminatedBy?`. `agent.chat()` + `agent.session()` for conversational Q&A with adaptive routing (direct LLM for questions, ReAct loop for tool-capable queries). `OutputFormat` + `TerminatedBy` canonical types. Unified `confidence` type (`"high"|"medium"|"low"`).
 
 - Phase 1: Core, LLM Provider, Memory, Reasoning, Tools, Interaction, Runtime
 - Phase 2: Guardrails, Verification, Cost
@@ -25,6 +25,7 @@
 - Agent Streaming: `agent.runStream()` AsyncGenerator with FiberRef-based TextDelta propagation through react-kernel, Queue+forkDaemon stream backend in ExecutionEngine, `AgentStream` adapters (toSSE, toReadableStream, toAsyncIterable, collect), `.withStreaming()` builder option, AgentStreamStarted/Completed EventBus events (1381 tests, 180 files)
 - Context Engine & Memory Intelligence: ContextEngine per-iteration scoring, ExperienceStore cross-agent learning, MemoryConsolidatorService background consolidation, context-status + task-complete meta-tools, parallel/chain tool execution, sub-agent auto-scratchpad + iteration cap, `.withExperienceLearning()` + `.withMemoryConsolidation()` builder methods (1735 tests, 211 files)
 - Final Answer, Debrief & Chat: `final-answer` hard-gate tool, `DebriefSynthesizer` + `DebriefStore` SQLite persistence, `AgentResult` enriched with `debrief?`/`format?`/`terminatedBy?`, `agent.chat()` + `agent.session()` adaptive conversational interaction (1773 tests, 217 files)
+- Adoption Readiness Phases 1–3: Builder hardening (`withStrictValidation`, `withTimeout`, `withRetryPolicy`, `withCacheTimeout`, consolidated `withGuardrails`, `withErrorHandler`, `withFallbacks`, `withLogging`, `withHealthCheck`), strategy switching, AbortSignal stream cancellation, `IterationProgress`/`StreamCancelled` events, `StreamCompleted.toolSummary`, `ToolBuilder` fluent API, `SessionStoreService` SQLite session persistence, `FallbackChain` provider fallbacks, `makeLoggerService()` structured logging, `expectStream()` streaming test assertions + scenario fixtures, `rax create agent --interactive` (1921 tests, 239 files)
 - Pre-release: tsup compiled output, Google Gemini provider, Reflexion reasoning strategy
 - Final Integration: All layers compose via `createRuntime()` and `ReactiveAgentBuilder`
 - Docs: Starlight (Astro) site at `apps/docs/`
@@ -35,8 +36,8 @@
 
 ```bash
 bun install              # Install dependencies
-bun test                 # Run all tests (1773 tests, 217 files)
-bun run build            # Build all packages (20 packages, ESM + DTS)
+bun test                 # Run all tests (1921 tests, 239 files)
+bun run build            # Build all packages (21 packages, ESM + DTS)
 cd apps/docs && npx astro dev    # Start docs dev server
 cd apps/docs && npx astro build  # Build docs for production
 ```
@@ -74,8 +75,29 @@ const runtime = createRuntime({
 const agent = await ReactiveAgents.create()
   .withName("my-agent")
   .withProvider("anthropic")
-  .withReasoning()
-  .withGuardrails()
+  .withStrictValidation()                // Throw at build time if required config is missing
+  .withTimeout(30_000)                   // 30s execution timeout
+  .withRetryPolicy({ maxRetries: 3, backoff: "exponential" })  // Retry on transient LLM errors
+  .withCacheTimeout(3_600_000)           // Semantic cache TTL (1h)
+  .withReasoning({
+    enableStrategySwitching: true,       // Auto-switch strategy on loop detection
+    maxStrategySwitches: 1,
+    fallbackStrategy: "plan-execute-reflect",
+  })
+  .withGuardrails({                      // Consolidated thresholds (replaces separate params)
+    injectionThreshold: 0.8,
+    piiThreshold: 0.9,
+    toxicityThreshold: 0.7,
+  })
+  .withFallbacks({                       // Provider/model fallback chain
+    providers: ["anthropic", "openai"],
+    errorThreshold: 3,
+  })
+  .withLogging({ level: "info", format: "json", output: "file" })
+  .withErrorHandler((err, ctx) => {      // Global error callback for logging/monitoring
+    console.error("Agent error:", err);
+  })
+  .withHealthCheck()                     // Enable agent.health() probe
   .withGateway({
     heartbeat: { intervalMs: 1800000, policy: "adaptive" },
     crons: [{ schedule: "0 9 * * MON", instruction: "Review open PRs" }],
@@ -83,11 +105,18 @@ const agent = await ReactiveAgents.create()
   })
   .build();
 const result = await agent.run("Hello");
+const health = await agent.health();   // { status: "healthy", checks: [...] }
 
 // Streaming — tokens arrive as TextDelta events
-for await (const event of agent.runStream("Hello")) {
+const controller = new AbortController();
+for await (const event of agent.runStream("Hello", { signal: controller.signal })) {
   if (event._tag === "TextDelta") process.stdout.write(event.text);
-  if (event._tag === "StreamCompleted") console.log("\nDone!");
+  if (event._tag === "IterationProgress") console.log(`Step ${event.iteration}/${event.maxIterations}`);
+  if (event._tag === "StreamCancelled") console.log("Cancelled");
+  if (event._tag === "StreamCompleted") {
+    console.log("\nDone!");
+    console.log(event.toolSummary); // Array of tool usage summary
+  }
 }
 ```
 
@@ -188,7 +217,7 @@ See `AGENTS.md` for full workflow instructions.
 packages/
   core/          — EventBus, AgentService, TaskService, types
   llm-provider/  — LLM adapters (Anthropic, OpenAI, Gemini, Ollama, LiteLLM, Test)
-  memory/        — Working, Semantic, Episodic, Procedural (bun:sqlite)
+  memory/        — Working, Semantic, Episodic, Procedural (bun:sqlite); SessionStoreService for SQLite-backed chat session persistence
   reasoning/     — ReAct, Plan-Execute, ToT strategies
   tools/         — Tool registry, sandbox, MCP client
   guardrails/    — Injection, PII, toxicity detection

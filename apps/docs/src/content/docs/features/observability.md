@@ -308,6 +308,58 @@ writeFileSync("telemetry-export.json", JSON.stringify(exported, null, 2));
 
 The export contains **aggregated statistics only** — no raw request data, no inputs, no conversation history.
 
+## Standalone Structured Logging
+
+For applications that want structured logging independently of full observability, use `makeLoggerService()` from `@reactive-agents/observability` and the `withLogging()` builder method.
+
+### Builder Integration
+
+```typescript
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withReasoning()
+  .withLogging({
+    level: "info",          // "debug" | "info" | "warn" | "error"
+    format: "json",         // "json" | "text"
+    output: "file",         // "console" | "file"
+    filePath: "./logs/agent.log",
+    maxFileSizeMb: 10,      // Rotate after 10 MB
+    maxFiles: 5,            // Keep 5 rotated files
+  })
+  .build();
+```
+
+When `output: "console"`, logs are written to stdout with level-based filtering. When `output: "file"`, logs are written to the specified file with automatic rotation.
+
+### makeLoggerService
+
+For direct use in Effect programs:
+
+```typescript
+import { makeLoggerService } from "@reactive-agents/observability";
+import { Effect } from "effect";
+
+const LoggerLive = makeLoggerService({
+  level: "warn",
+  format: "json",
+  output: "console",
+});
+
+const program = Effect.gen(function* () {
+  const logger = yield* LoggerLive;
+  yield* logger.info("Agent started", { agentId: "my-agent" });
+  yield* logger.warn("High token usage", { tokensUsed: 45000, budget: 50000 });
+  yield* logger.error("Tool call failed", new Error("timeout"), { tool: "web-search" });
+});
+```
+
+### Log Rotation
+
+When `output: "file"` is configured:
+- The current log file is written to `filePath`
+- When the file exceeds `maxFileSizeMb`, it is renamed to `{filePath}.1` and a new file is started
+- Up to `maxFiles` rotated files are kept; older ones are deleted automatically
+
 ## ThoughtTracer
 
 `ThoughtTracer` captures reasoning steps from all 5 strategies automatically via the EventBus. Add it via `ThoughtTracerLive`:

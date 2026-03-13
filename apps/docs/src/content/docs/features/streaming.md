@@ -36,24 +36,34 @@ Every event carries a `_tag` discriminant. Narrow with `switch` or `if` — Type
 ```typescript
 type AgentStreamEvent =
   | { _tag: "TextDelta"; text: string }
-  | { _tag: "StreamCompleted"; output: string; metadata: AgentResultMetadata; taskId?: string; agentId?: string }
+  | { _tag: "StreamCompleted"; output: string; metadata: AgentResultMetadata; taskId?: string; agentId?: string; toolSummary?: ToolSummaryEntry[] }
   | { _tag: "StreamError"; cause: string }
+  | { _tag: "StreamCancelled"; reason: string }
+  | { _tag: "IterationProgress"; iteration: number; maxIterations: number; tokensUsed: number }
   | { _tag: "PhaseStarted"; phase: string; timestamp: number }
   | { _tag: "PhaseCompleted"; phase: string; durationMs: number }
   | { _tag: "ThoughtEmitted"; content: string; iteration: number }
   | { _tag: "ToolCallStarted"; toolName: string; callId: string }
   | { _tag: "ToolCallCompleted"; toolName: string; callId: string; durationMs: number; success: boolean };
+
+interface ToolSummaryEntry {
+  toolName: string;
+  calls: number;
+  successRate: number;  // 0.0–1.0
+}
 ```
 
 ### Always Emitted
 
-These three events are emitted regardless of density mode:
+These events are emitted regardless of density mode:
 
 | Event | Shape | Description |
 |-------|-------|-------------|
 | `TextDelta` | `{ text: string }` | A text token from the LLM. High-frequency during inference. |
-| `StreamCompleted` | `{ output, metadata, taskId?, agentId? }` | Execution succeeded. Always the last event on a successful stream. |
+| `StreamCompleted` | `{ output, metadata, taskId?, agentId?, toolSummary? }` | Execution succeeded. Always the last event on a successful stream. `toolSummary` contains per-tool call counts and success rates. |
 | `StreamError` | `{ cause: string }` | Execution failed. Always the last event on a failed stream. |
+| `StreamCancelled` | `{ reason: string }` | Stream was aborted via `AbortSignal`. Always the last event on a cancelled stream. |
+| `IterationProgress` | `{ iteration, maxIterations, tokensUsed }` | Emitted at the start of each reasoning iteration. Useful for progress bars and loop monitoring. |
 
 ### Full Density Only
 
@@ -71,8 +81,8 @@ These five events are only emitted when density is `"full"`:
 
 | Mode | Events Emitted | Use Case |
 |------|---------------|----------|
-| `"tokens"` | TextDelta + StreamCompleted + StreamError | Chat UIs — minimal overhead, just the text |
-| `"full"` | All 8 event types | Dev tools, dashboards — full lifecycle visibility |
+| `"tokens"` | TextDelta, StreamCompleted, StreamError, StreamCancelled, IterationProgress | Chat UIs — tokens and progress with minimal overhead |
+| `"full"` | All event types | Dev tools, dashboards — full lifecycle visibility |
 
 **Precedence:** per-call `options.density` > builder `.withStreaming({ density })` > config default > `"tokens"`.
 
@@ -107,6 +117,51 @@ for await (const event of agent.runStream("Analyze this data", { density: "full"
   }
 }
 ```
+
+## Cancellation with AbortSignal
+
+Pass a standard `AbortSignal` to cancel a running stream. When the signal fires, the execution fiber is interrupted and a `StreamCancelled` event is emitted as the final event.
+
+```typescript
+const controller = new AbortController();
+
+// Cancel after 10 seconds
+setTimeout(() => controller.abort(), 10_000);
+
+for await (const event of agent.runStream("Write a long essay", { signal: controller.signal })) {
+  if (event._tag === "TextDelta") process.stdout.write(event.text);
+  if (event._tag === "StreamCancelled") {
+    console.log("\nCancelled:", event.reason);
+    break;
+  }
+  if (event._tag === "StreamCompleted") console.log("\nDone!");
+}
+```
+
+**HTTP request abort (Next.js / Hono example):**
+
+```typescript
+// Next.js App Router route handler
+export async function POST(req: Request) {
+  const body = await req.json();
+
+  return new Response(
+    new ReadableStream({
+      async start(controller) {
+        for await (const event of agent.runStream(body.prompt, { signal: req.signal })) {
+          if (event._tag === "TextDelta")
+            controller.enqueue(new TextEncoder().encode(event.text));
+          if (event._tag === "StreamCompleted" || event._tag === "StreamCancelled")
+            controller.close();
+        }
+      },
+    }),
+    { headers: { "Content-Type": "text/plain; charset=utf-8" } },
+  );
+}
+```
+
+When the HTTP client closes the connection, `req.signal` fires automatically and the agent stops generating, saving tokens.
 
 ## AgentStream Adapters
 
@@ -235,6 +290,8 @@ console.log(result.metadata); // { stepsCount, tokensUsed, ... }
 | `.withStreaming({ density: "full" })` | Enable streaming with full event density |
 | `agent.runStream(input)` | Stream with builder-configured density |
 | `agent.runStream(input, { density: "full" })` | Stream with per-call density override |
+| `agent.runStream(input, { signal })` | Stream with AbortSignal cancellation |
+| `agent.runStream(input, { density: "full", signal })` | Density override + cancellation combined |
 
 ### EventBus Events
 

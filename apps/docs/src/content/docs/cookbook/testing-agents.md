@@ -286,6 +286,68 @@ assertStepCount(result, { min: 1, max: 5 });
 assertCostUnder(result, 0.01);
 ```
 
+### Stream Assertions
+
+Use `expectStream()` for fluent assertions on streaming agents:
+
+```typescript
+import { expectStream } from "@reactive-agents/testing";
+
+test("stream emits text deltas and completes", async () => {
+  const agent = await ReactiveAgents.create()
+    .withProvider("test")
+    .withTestResponses({ default: "Hello world" })
+    .withStreaming()
+    .build();
+
+  const stream = agent.runStream("Say hello");
+  await expectStream(stream)
+    .toEmitTextDeltas()                                // at least one TextDelta emitted
+    .toComplete()                                      // StreamCompleted is the last event
+    .toEmitEvents(["TextDelta", "StreamCompleted"]);   // specific event tags emitted
+});
+
+test("stream can be cancelled", async () => {
+  const controller = new AbortController();
+  controller.abort();
+
+  const stream = agent.runStream("Long task", { signal: controller.signal });
+  await expectStream(stream)
+    .toBeCancelled();  // StreamCancelled is the last event
+});
+```
+
+### Scenario Fixtures
+
+Pre-built scenarios for testing edge cases without writing full mocks:
+
+```typescript
+import {
+  createGuardrailBlockScenario,
+  createBudgetExhaustedScenario,
+  createMaxIterationsScenario,
+} from "@reactive-agents/testing";
+
+test("guardrail blocks injection attempt", async () => {
+  const { agent, prompt } = await createGuardrailBlockScenario();
+  await expect(agent.run(prompt)).rejects.toThrow();
+});
+
+test("budget exhaustion returns graceful error", async () => {
+  const { agent, prompt } = await createBudgetExhaustedScenario();
+  const result = await agent.run(prompt);
+  expect(result.success).toBe(false);
+  expect(result.terminatedBy).toBe("budget_exhausted");
+});
+
+test("max iterations terminates cleanly", async () => {
+  const { agent, prompt } = await createMaxIterationsScenario();
+  const result = await agent.run(prompt);
+  expect(result.terminatedBy).toBe("max_iterations");
+  expect(result.success).toBe(false);
+});
+```
+
 ## Tips
 
 - **Use `"test"` provider** for all unit and integration tests — it's fast and deterministic
