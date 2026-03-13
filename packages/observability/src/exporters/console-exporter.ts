@@ -4,25 +4,43 @@ import type {
   MetricsCollector,
   ToolSummary,
 } from "../metrics/metrics-collector.js";
+import chalk from "chalk";
+import boxen from "boxen";
 
-// ─── ANSI Colors ───
+// ─── Brand Palette ───
+const C_VIOLET = "#8b5cf6";
+const C_CYAN   = "#06b6d4";
+const C_GREEN  = "#22c55e";
+const C_YELLOW = "#eab308";
+const C_RED    = "#ef4444";
+const C_DIM    = "#6b7280";
 
-const RESET = "\x1b[0m";
-const BOLD = "\x1b[1m";
-const DIM = "\x1b[2m";
-const RED = "\x1b[31m";
-const GREEN = "\x1b[32m";
-const YELLOW = "\x1b[33m";
-const BLUE = "\x1b[34m";
-const CYAN = "\x1b[36m";
-const GRAY = "\x1b[90m";
-
-const LOG_COLORS: Record<string, string> = {
-  debug: GRAY,
-  info: GREEN,
-  warn: YELLOW,
-  error: RED,
+const LOG_COLORS: Record<string, (s: string) => string> = {
+  debug: (s) => chalk.hex(C_DIM)(s),
+  info:  (s) => chalk.hex(C_GREEN)(s),
+  warn:  (s) => chalk.hex(C_YELLOW)(s),
+  error: (s) => chalk.hex(C_RED)(s),
 };
+
+// ─── Emoji-aware padding ───
+
+/**
+ * Returns the visual terminal width of a string.
+ * Most characters = 1 column; emoji (Extended_Pictographic) = 2 columns.
+ */
+const visualWidth = (s: string): number => {
+  let w = 0;
+  for (const ch of s) {
+    w += /\p{Extended_Pictographic}/u.test(ch) ? 2 : 1;
+  }
+  return w;
+};
+
+/**
+ * Pad a string to a target visual width, accounting for emoji double-width.
+ */
+const padEndVisual = (s: string, width: number): string =>
+  s + " ".repeat(Math.max(0, width - visualWidth(s)));
 
 // ─── Dashboard Data Structure ───
 
@@ -381,25 +399,24 @@ export const makeConsoleExporter = (options: ConsoleExporterOptions = {}) => {
     );
     if (filtered.length === 0) return;
 
-    console.log(`\n${BOLD}${CYAN}═══ Logs (${filtered.length}) ═══${RESET}`);
+    console.log(`\n${chalk.hex(C_CYAN).bold(`═══ Logs (${filtered.length}) ═══`)}`);
     for (const entry of filtered) {
-      const color = LOG_COLORS[entry.level] ?? RESET;
+      const colorFn = LOG_COLORS[entry.level] ?? ((s: string) => s);
       const ts = entry.timestamp.toISOString().slice(11, 23);
       const level = entry.level.toUpperCase().padEnd(5);
       const meta = entry.metadata
-        ? ` ${GRAY}${JSON.stringify(entry.metadata)}${RESET}`
+        ? ` ${chalk.hex(C_DIM)(JSON.stringify(entry.metadata))}`
         : "";
       console.log(
-        `  ${GRAY}${ts}${RESET} ${color}${BOLD}${level}${RESET} ${entry.message}${meta}`,
+        `  ${chalk.hex(C_DIM)(ts)} ${colorFn(chalk.bold(level))} ${entry.message}${meta}`,
       );
     }
   };
 
   const exportSpans = (spans: readonly Span[]): void => {
     if (!showSpans || spans.length === 0) return;
-    console.log(`\n${BOLD}${CYAN}═══ Spans (${spans.length}) ═══${RESET}`);
+    console.log(`\n${chalk.hex(C_CYAN).bold(`═══ Spans (${spans.length}) ═══`)}`);
 
-    // Build parent → children map for tree display
     const spanMap = new Map(spans.map((s) => [s.spanId, s]));
     const childrenMap = new Map<string | undefined, Span[]>();
     for (const span of spans) {
@@ -411,31 +428,26 @@ export const makeConsoleExporter = (options: ConsoleExporterOptions = {}) => {
     const printTree = (span: Span, indent: number): void => {
       const prefix = "  " + "  ".repeat(indent);
       const durationMs = span.attributes["duration_ms"] as number | undefined;
-      const durStr =
-        durationMs !== undefined
-          ? ` ${DIM}(${durationMs.toFixed(1)}ms)${RESET}`
-          : "";
-      const statusColor =
-        span.status === "ok" ? GREEN : span.status === "error" ? RED : GRAY;
-      const statusIcon =
-        span.status === "ok" ? "✓" : span.status === "error" ? "✗" : "○";
+      const durStr = durationMs !== undefined
+        ? ` ${chalk.hex(C_DIM)(`(${durationMs.toFixed(1)}ms)`)}`
+        : "";
+      const [statusColor, statusIcon] =
+        span.status === "ok"
+          ? [chalk.hex(C_GREEN), "✓"]
+          : span.status === "error"
+            ? [chalk.hex(C_RED), "✗"]
+            : [chalk.hex(C_DIM), "○"];
       console.log(
-        `${prefix}${statusColor}${statusIcon}${RESET} ${BOLD}${span.name}${RESET}${durStr} ${GRAY}[${span.traceId.slice(0, 8)}…]${RESET}`,
+        `${prefix}${statusColor(statusIcon)} ${chalk.bold(span.name)}${durStr} ${chalk.hex(C_DIM)(`[${span.traceId.slice(0, 8)}…]`)}`,
       );
-
-      const children = childrenMap.get(span.spanId) ?? [];
-      for (const child of children) printTree(child, indent + 1);
+      for (const child of childrenMap.get(span.spanId) ?? []) {
+        printTree(child, indent + 1);
+      }
     };
 
-    // Print root spans (no parent) first
-    const roots = childrenMap.get(undefined) ?? [];
-    for (const root of roots) printTree(root, 0);
-
-    // Any orphaned spans (parent not in current batch)
+    for (const root of childrenMap.get(undefined) ?? []) printTree(root, 0);
     for (const span of spans) {
-      if (span.parentSpanId && !spanMap.has(span.parentSpanId)) {
-        printTree(span, 0);
-      }
+      if (span.parentSpanId && !spanMap.has(span.parentSpanId)) printTree(span, 0);
     }
   };
 
@@ -445,12 +457,9 @@ export const makeConsoleExporter = (options: ConsoleExporterOptions = {}) => {
   ): void => {
     if (!showMetrics || metrics.length === 0) return;
 
-    // Build dashboard data from metrics and collector
     const dashboardData = buildDashboardData(metrics, metricsCollector);
-
-    // Format and output the dashboard
     const dashboard = formatMetricsDashboard(dashboardData);
-    console.log(`\n${BOLD}${CYAN}═══ Metrics Summary ═══${RESET}`);
+    console.log(`\n${chalk.hex(C_CYAN).bold("═══ Metrics Summary ═══")}`);
     console.log(dashboard);
   };
 
@@ -462,16 +471,16 @@ export type ConsoleExporter = ReturnType<typeof makeConsoleExporter>;
 // ─── Live Log Writer ───
 
 /**
- * Format a single log entry as an ANSI-colored single line (no newline).
+ * Format a single log entry as a chalk-colored single line (no newline).
  */
 export const formatLogEntryLive = (entry: LogEntry): string => {
-  const color = LOG_COLORS[entry.level] ?? RESET;
+  const colorFn = LOG_COLORS[entry.level] ?? ((s: string) => s);
   const ts = entry.timestamp.toISOString().slice(11, 23);
   const level = entry.level.toUpperCase().padEnd(5);
   const meta = entry.metadata
-    ? ` ${GRAY}${JSON.stringify(entry.metadata)}${RESET}`
+    ? ` ${chalk.hex(C_DIM)(JSON.stringify(entry.metadata))}`
     : "";
-  return `  ${GRAY}${ts}${RESET} ${color}${BOLD}${level}${RESET} ${entry.message}${meta}`;
+  return `  ${chalk.hex(C_DIM)(ts)} ${colorFn(chalk.bold(level))} ${entry.message}${meta}`;
 };
 
 /**
@@ -515,130 +524,104 @@ export const formatNumber = (n: number): string => {
 };
 
 /**
- * Get status icon based on status string.
- */
-const getStatusIcon = (
-  status: "ok" | "warning" | "error" | "success" | "partial",
-): string => {
-  if (status === "ok" || status === "success") return "✅";
-  if (status === "warning" || status === "partial") return "⚠️";
-  return "❌";
-};
-
-/**
- * Get alert icon based on level.
- */
-const getAlertIcon = (level: "warning" | "error" | "info"): string => {
-  if (level === "warning") return "⚠️";
-  if (level === "error") return "❌";
-  return "ℹ️";
-};
-
-/**
  * Format a DashboardData object into a beautiful, scannable dashboard output.
  */
 export const formatMetricsDashboard = (data: DashboardData): string => {
   const lines: string[] = [];
 
-  // Helper to build a box line accounting for emoji visual width (2 columns per emoji)
-  const BOX_WIDTH = 72;
-  const buildBoxLine = (content: string): string => {
-    // Approximate visual width in terminal columns.
-    // Treat most characters as width 1, and common emoji symbols as width 2.
-    const emojiPattern = /\p{Extended_Pictographic}/gu;
+  // ── Header box ──────────────────────────────────────────────────────────
+  const borderColor =
+    data.status === "success" ? C_GREEN
+    : data.status === "error" ? C_RED
+    : C_YELLOW;
 
-    let visualWidth = 0;
-    for (const ch of content) {
-      visualWidth += emojiPattern.test(ch) ? 2 : 1;
-    }
-
-    const padding = Math.max(0, BOX_WIDTH - visualWidth);
-    return `│ ${content}${" ".repeat(padding)} │`;
-  };
-
-  // Header card with box drawing
-  const statusIcon = getStatusIcon(data.status);
-  const headerLines = [
-    `┌${"─".repeat(BOX_WIDTH + 2)}┐`,
-    buildBoxLine(`📄 Agent Execution Summary`),
-    `├${"─".repeat(BOX_WIDTH + 2)}┤`,
-  ];
-
-  // Build status line
   const statusText =
-    data.status === "success"
-      ? "Success"
-      : data.status === "error"
-        ? "Error"
-        : "Partial";
+    data.status === "success" ? chalk.hex(C_GREEN)("✔ Success")
+    : data.status === "error" ? chalk.hex(C_RED)("✖ Failed")
+    : chalk.hex(C_YELLOW)("⚠ Partial");
+
   const durationStr = formatDuration(data.totalDuration);
-  const statusLine = `${statusIcon} ${statusText.padEnd(7)}  Duration: ${durationStr.padStart(7)}  Steps: ${data.stepCount}`;
-  headerLines.push(buildBoxLine(statusLine));
-
-  // Build model/provider line
-  const modelLine = `Model: ${data.modelName.padEnd(15)} (${data.provider})  Tokens: ${formatNumber(data.tokenCount)}`;
-  headerLines.push(buildBoxLine(modelLine));
-
-  // Build cost line - only for cloud providers (not local models like ollama)
   const isLocalProvider =
     data.provider?.toLowerCase().includes("ollama") ||
     data.provider?.toLowerCase().includes("test");
+
+  const headerLines = [
+    `${chalk.bold("Status:")}   ${statusText}   ${chalk.bold("Duration:")} ${durationStr}   ${chalk.bold("Steps:")} ${data.stepCount}`,
+    `${chalk.bold("Model:")}    ${data.modelName}   (${data.provider})   ${chalk.bold("Tokens:")} ${formatNumber(data.tokenCount)}`,
+  ];
   if (!isLocalProvider) {
-    const costLine = `Cost: ~$${data.estimatedCost.toFixed(3)}`;
-    headerLines.push(buildBoxLine(costLine));
+    headerLines.push(`${chalk.bold("Cost:")}     ~$${data.estimatedCost.toFixed(3)}`);
   }
 
-  headerLines.push(`└${"─".repeat(BOX_WIDTH + 2)}┘`);
-  lines.push(...headerLines);
+  lines.push(
+    boxen(headerLines.join("\n"), {
+      title: chalk.bold("Agent Execution Summary"),
+      titleAlignment: "left",
+      padding: { top: 0, bottom: 0, left: 1, right: 1 },
+      borderStyle: "round",
+      borderColor,
+    }),
+  );
 
-  // Execution Timeline section (only if phases exist)
+  // ── Execution Timeline ───────────────────────────────────────────────────
   if (data.phases.length > 0) {
     lines.push("");
-    lines.push(`${CYAN}${BOLD}📊 Execution Timeline${RESET}`);
-    // Find max phase name length for alignment
-    const maxPhaseNameLen = Math.max(
-      ...data.phases.map((p) => p.name.length),
-      10,
-    );
+    lines.push(chalk.hex(C_CYAN).bold("📊 Execution Timeline"));
+
+    // Phase names don't contain emoji — safe to use regular padEnd
+    const maxPhaseNameLen = Math.max(...data.phases.map((p) => p.name.length + 2), 12);
+
     for (let i = 0; i < data.phases.length; i++) {
       const phase = data.phases[i];
       const isLast = i === data.phases.length - 1;
       const prefix = isLast ? "└─" : "├─";
-      const icon = getStatusIcon(phase.status);
-      const durationStr = formatDuration(phase.duration).padStart(8);
-      const detailsStr = phase.details ? `  (${phase.details})` : "";
-      const phaseName = `[${phase.name}]`.padEnd(maxPhaseNameLen + 2);
-      lines.push(`${prefix} ${phaseName} ${durationStr}  ${icon}${detailsStr}`);
+      const phaseName = chalk.hex(C_DIM)(`[${phase.name}]`.padEnd(maxPhaseNameLen));
+      const durStr = formatDuration(phase.duration).padStart(8);
+
+      // Status icon — at end of line, no padding needed after it
+      const icon =
+        phase.status === "warning" ? chalk.hex(C_YELLOW)("⚠")
+        : phase.status === "error" ? chalk.hex(C_RED)("✖")
+        : chalk.hex(C_GREEN)("✔");
+
+      const detailsStr = phase.details ? chalk.hex(C_DIM)(` (${phase.details})`) : "";
+      lines.push(`${prefix} ${phaseName} ${durStr}  ${icon}${detailsStr}`);
     }
   }
 
-  // Tool Execution section (only if tools exist)
+  // ── Tool Execution ───────────────────────────────────────────────────────
   if (data.tools.length > 0) {
     lines.push("");
-    lines.push(
-      `${CYAN}${BOLD}🔧 Tool Execution (${data.tools.length} called)${RESET}`,
-    );
+    lines.push(chalk.hex(C_CYAN).bold(`🔧 Tool Execution (${data.tools.length} called)`));
+
     for (let i = 0; i < data.tools.length; i++) {
       const tool = data.tools[i];
       const isLast = i === data.tools.length - 1;
       const prefix = isLast ? "└─" : "├─";
-      const icon = tool.errorCount > 0 ? "⚠️" : "✅";
+      const icon = tool.errorCount > 0 ? chalk.hex(C_YELLOW)("⚠") : chalk.hex(C_GREEN)("✔");
       const avgStr = formatDuration(tool.avgDuration);
+      const errStr = tool.errorCount > 0
+        ? chalk.hex(C_RED)(` ${tool.errorCount} errors`)
+        : "";
       lines.push(
-        `${prefix} ${tool.name.padEnd(15)} ${icon} ${tool.callCount} calls, ${avgStr} avg`,
+        `${prefix} ${chalk.hex(C_CYAN)(tool.name)}  ${icon} ${tool.callCount} calls, ${avgStr} avg${errStr}`,
       );
     }
   }
 
-  // Alerts & Insights section (only if alerts exist)
+  // ── Alerts & Insights ────────────────────────────────────────────────────
   if (data.alerts.length > 0) {
     lines.push("");
-    lines.push(`${CYAN}${BOLD}⚠️  Alerts & Insights${RESET}`);
+    lines.push(chalk.hex(C_YELLOW).bold("⚠  Alerts & Insights"));
+
     for (let i = 0; i < data.alerts.length; i++) {
       const alert = data.alerts[i];
       const isLast = i === data.alerts.length - 1;
       const prefix = isLast ? "└─" : "├─";
-      const icon = getAlertIcon(alert.level);
+      const icon =
+        alert.level === "error" ? chalk.hex(C_RED)("✖")
+        : alert.level === "warning" ? chalk.hex(C_YELLOW)("⚠")
+        : chalk.hex(C_DIM)("ℹ");
       lines.push(`${prefix} ${icon}  ${alert.message}`);
     }
   }

@@ -369,7 +369,7 @@ describe("DashboardFormatter (Task 2)", () => {
 
     // Verify header sections exist
     expect(output).toContain("Agent Execution Summary");
-    expect(output).toContain("✅");
+    expect(output).toContain("✔ Success");
     expect(output).toContain("Success");
     expect(output).toContain("13.9s");
     expect(output).toContain("1,963");
@@ -387,7 +387,7 @@ describe("DashboardFormatter (Task 2)", () => {
     expect(output).toContain("web-search");
 
     // Verify alerts section
-    expect(output).toContain("⚠️  Alerts & Insights");
+    expect(output).toContain("Alerts & Insights");
     expect(output).toContain("think phase blocked ≥10s");
   });
 
@@ -412,7 +412,7 @@ describe("DashboardFormatter (Task 2)", () => {
     const lines = output.split("\n");
     const thinkLine = lines.find(l => l.includes("[think]"));
     expect(thinkLine).toBeDefined();
-    expect(thinkLine).toContain("⚠️");
+    expect(thinkLine).toContain("⚠");
   });
 
   test("formatMetricsDashboard() omits empty sections", () => {
@@ -459,8 +459,7 @@ describe("DashboardFormatter (Task 2)", () => {
     const output = formatMetricsDashboard(data);
 
     expect(output).toContain("Agent Execution Summary");
-    expect(output).toContain("Error");
-    expect(output).toContain("❌");
+    expect(output).toContain("✖ Failed");
   });
 
   test("formatMetricsDashboard() includes tool error indicators", () => {
@@ -483,7 +482,7 @@ describe("DashboardFormatter (Task 2)", () => {
     expect(output).toContain("🔧 Tool Execution");
     expect(output).toContain("file-write");
     // Tool with errors should show warning
-    expect(output).toContain("⚠️");
+    expect(output).toContain("⚠");
   });
 });
 
@@ -595,7 +594,7 @@ describe("Task 4: exportMetrics() Dashboard Integration", () => {
       const combined = output.join("\n");
       // At ~$0.0015 per 1K tokens, 1000 tokens should cost ~$0.0015
       // But due to rounding in the display, it shows as $0.002 (rounded up)
-      expect(combined).toContain("Cost: ~$0.002");
+      expect(combined).toContain("~$0.002");
     } finally {
       console.log = origLog;
     }
@@ -635,9 +634,9 @@ describe("Task 4: exportMetrics() Dashboard Integration", () => {
       exporter.exportMetrics(metrics);
 
       const combined = output.join("\n");
-      // Overall status is success; phase timeline still shows ⚠️ for slow phases
+      // Overall status is success; phase timeline still shows ⚠ for slow phases
       expect(combined).toContain("Success");
-      expect(combined).toContain("⚠️");
+      expect(combined).toContain("⚠");
     } finally {
       console.log = origLog;
     }
