@@ -65,7 +65,7 @@ export { GeminiProviderLive } from "./providers/gemini.js";
 export { LiteLLMProviderLive } from "./providers/litellm.js";
 
 // ─── Testing ───
-export { TestLLMService, TestLLMServiceLayer } from "./testing.js";
+export { TestLLMService, TestLLMServiceLayer, type TestTurn, type ToolCallSpec } from "./testing.js";
 
 // ─── Utilities ───
 export { estimateTokenCount, calculateCost } from "./token-counter.js";

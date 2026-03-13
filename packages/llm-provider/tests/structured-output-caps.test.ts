@@ -5,7 +5,7 @@ import type { StructuredOutputCapabilities } from "../src/types.js";
 
 describe("StructuredOutputCapabilities", () => {
   it("TestLLMService reports all capabilities as true", async () => {
-    const layer = TestLLMServiceLayer({});
+    const layer = TestLLMServiceLayer();
     const caps = await Effect.runPromise(
       Effect.gen(function* () {
         const llm = yield* LLMService;

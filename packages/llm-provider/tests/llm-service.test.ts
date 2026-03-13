@@ -2,10 +2,11 @@ import { describe, it, expect } from "bun:test";
 import { Effect, Stream } from "effect";
 import { LLMService, TestLLMServiceLayer } from "../src/index.js";
 
-const TestLayer = TestLLMServiceLayer({
-  "capital of France": "Paris is the capital of France.",
-  "quantum": "Quantum computing uses qubits for parallel computation.",
-});
+const TestLayer = TestLLMServiceLayer([
+  { match: "capital of France", text: "Paris is the capital of France." },
+  { match: "quantum", text: "Quantum computing uses qubits for parallel computation." },
+  { text: "Test response" },
+]);
 
 const run = <A>(effect: Effect.Effect<A, unknown, LLMService>) =>
   Effect.runPromise(effect.pipe(Effect.provide(TestLayer)));
