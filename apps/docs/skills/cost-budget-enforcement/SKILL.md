@@ -69,17 +69,42 @@ console.log(`Tokens used: ${tokens}`);
 console.log(`Estimated cost: $${cost.toFixed(6)}`);
 ```
 
-### Budget Enforcement
+### Daily Token Budget via Gateway Policies
 
-While a formal `.withBudget()` policy engine is planned, you can enforce simple budgets by checking the cost metadata after each run.
+For persistent agents with daily token caps, use the gateway's built-in policy engine. It tracks token usage via the EventBus and emits a `BudgetExhausted` event when the daily limit is hit.
+
+```typescript
+import { ReactiveAgents } from "@reactive-agents/runtime";
+
+const agent = await ReactiveAgents.create()
+  .withName("budget-agent")
+  .withProvider("anthropic")
+  .withCostTracking()
+  .withGateway({
+    policies: {
+      dailyTokenBudget: 50_000,   // Hard cap: 50k tokens per day
+      maxActionsPerHour: 30,      // Rate limit: 30 tool calls per hour
+    },
+  })
+  .build();
+
+// Subscribe to budget events for monitoring
+await agent.subscribe("BudgetExhausted", (event) => {
+  console.warn(`Budget hit: ${event.tokensUsed} / ${event.dailyBudget} tokens`);
+});
+```
+
+### Manual Per-Run Budget Check
+
+For non-gateway agents, check cost metadata after each run:
 
 ```typescript
 let totalCost = 0;
-const monthlyBudget = 5.00; // $5.00
+const dailyBudget = 1.00; // $1.00
 
 async function runWithBudget(prompt: string) {
-  if (totalCost >= monthlyBudget) {
-    console.error("Monthly budget exceeded. Halting operations.");
+  if (totalCost >= dailyBudget) {
+    console.error("Daily budget exceeded. Halting operations.");
     return;
   }
 
@@ -87,18 +112,9 @@ async function runWithBudget(prompt: string) {
   const runCost = result.metadata.cost ?? 0;
   totalCost += runCost;
 
-  console.log(`Run cost: $${runCost.toFixed(6)}, Total cost: $${totalCost.toFixed(6)}`);
-
-  if (totalCost >= monthlyBudget) {
-    console.warn("Warning: Monthly budget has now been exceeded.");
-  }
-
+  console.log(`Run cost: $${runCost.toFixed(6)}, Total: $${totalCost.toFixed(6)}`);
   return result;
 }
-
-// Example usage
-await runWithBudget("First task");
-await runWithBudget("Second task");
 ```
 
 ## Pitfalls to avoid

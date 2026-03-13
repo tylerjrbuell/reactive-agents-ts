@@ -115,6 +115,90 @@ Selects the most appropriate strategy per-iteration based on observed task chara
 
 ---
 
+## Automatic Strategy Switching
+
+When you enable strategy switching, the framework monitors execution and can automatically switch to a different strategy mid-run if the current one appears to be stuck.
+
+```typescript
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withReasoning({
+    enableStrategySwitching: true,  // default: false
+    maxStrategySwitches: 2,         // default: 1
+  })
+  .build();
+```
+
+### What triggers a switch
+
+The kernel runner detects a loop condition when any of the following occur repeatedly within a sliding window of recent steps:
+
+- The same tool is called with identical arguments multiple times
+- The same thought text appears in consecutive iterations
+- Multiple consecutive `think` steps occur without any `act` step in between
+
+When a loop is detected, the framework pauses execution and evaluates whether to continue with the current strategy or hand off to a different one.
+
+### Evaluation mechanism
+
+By default, an **LLM evaluator** is called with the current task, the last few steps, and a summary of the stuck pattern. It returns a recommended strategy and a rationale. The evaluation result is surfaced as an EventBus event (`StrategySwitchEvaluated`) before any switch occurs.
+
+If you want deterministic switching without an extra LLM call, set `fallbackStrategy` directly:
+
+```typescript
+.withReasoning({
+  enableStrategySwitching: true,
+  fallbackStrategy: "plan-execute-reflect",  // skip LLM evaluator, always switch to this
+})
+```
+
+When `fallbackStrategy` is set, the evaluator is bypassed and the agent switches immediately to the named strategy.
+
+### Handoff context
+
+When a strategy switch occurs, the new strategy receives a `StrategyHandoff` object containing:
+- The task description
+- All steps completed so far (thoughts, actions, observations)
+- The stuck pattern that triggered the switch
+- The evaluator's rationale (or `"fallback"` if `fallbackStrategy` was used)
+
+This ensures the new strategy can pick up where the old one left off rather than restarting from scratch.
+
+### EventBus events
+
+Two events are emitted around strategy switches. Subscribe to them via `agent.subscribe()` for observability or custom logic:
+
+| Event | When emitted | Key fields |
+|-------|-------------|------------|
+| `StrategySwitchEvaluated` | After the evaluator runs, before switching | `taskId`, `fromStrategy`, `recommendedStrategy`, `rationale`, `willSwitch` |
+| `StrategySwitched` | After the switch completes | `taskId`, `fromStrategy`, `toStrategy`, `switchNumber`, `stepsCarriedOver` |
+
+```typescript
+await agent.subscribe("StrategySwitchEvaluated", (event) => {
+  console.log(`[eval] ${event.fromStrategy} → ${event.recommendedStrategy}: ${event.rationale}`);
+});
+
+await agent.subscribe("StrategySwitched", (event) => {
+  console.log(`[switch ${event.switchNumber}] ${event.fromStrategy} → ${event.toStrategy}`);
+  console.log(`  ${event.stepsCarriedOver} steps carried over`);
+});
+```
+
+### Switch cap
+
+`maxStrategySwitches` (default: 1) limits how many times the strategy can change within a single run. Once the cap is reached, the framework continues with the last active strategy regardless of further loop detection, and logs a warning.
+
+### When to use it
+
+Strategy switching is most useful when:
+- You're running tasks with **unknown complexity** and don't want to over-provision (e.g., start with ReAct, escalate to Plan-Execute-Reflect only if needed)
+- You're experimenting with agent behavior and want a safety net against runaway loops
+- You're running a **mixed workload** where the primary task is clear but subtasks may vary
+
+For tasks where you already know the complexity profile, it's more token-efficient to pick the right strategy upfront using the decision tree above.
+
+---
+
 ## Local Model Recommendations
 
 ### 4B models (e.g., phi-4-mini, gemma-3-4b)
@@ -177,9 +261,14 @@ const agent = await ReactiveAgents.create()
   .build();
 
 // Dynamic strategy switching (auto-switches when stuck)
+// See "Automatic Strategy Switching" section above for full options and EventBus events
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
-  .withReasoning({ enableStrategySwitching: true, maxStrategySwitches: 2 })
+  .withReasoning({
+    enableStrategySwitching: true,
+    maxStrategySwitches: 2,
+    // fallbackStrategy: "plan-execute-reflect",  // optional: skip LLM evaluator
+  })
   .build();
 ```
 

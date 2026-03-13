@@ -4,7 +4,7 @@ description: Build agents that stream tokens and lifecycle events to users in re
 compatibility: Reactive Agents projects using agent.runStream(), AgentStream, .withStreaming().
 metadata:
   author: reactive-agents
-  version: "1.0"
+  version: "1.1"
 ---
 
 # Streaming Real-Time Agents
@@ -79,13 +79,9 @@ Bun.serve({
     const url = new URL(req.url);
     if (url.pathname === "/stream") {
       const prompt = url.searchParams.get("q") ?? "Hello";
-      const stream = await agent.runtime.runPromise(
-        agent.engine.executeStream(
-          { id: "task-1", input: prompt, agentId: "streamer" },
-          { density: "tokens" },
-        ),
-      );
-      return AgentStream.toSSE(stream);
+      // Collect into a ReadableStream and pipe as SSE
+      const events = agent.runStream(prompt, { density: "tokens" });
+      return AgentStream.toSSE(await AgentStream.toReadableStream(events));
     }
     return new Response("Not found", { status: 404 });
   },
@@ -115,13 +111,36 @@ for await (const event of agent.runStream("Research and summarize", { density: "
     case "ToolCallCompleted":
       console.log(`  tool: ${event.toolName} ${event.success ? "ok" : "FAIL"} ${event.durationMs}ms`);
       break;
+    case "IterationProgress":
+      // Emitted after each reasoning iteration (density: "full" only)
+      console.log(`  iteration ${event.iteration}/${event.maxIterations} — ${event.status}`);
+      break;
     case "StreamCompleted":
       console.log(`\nDone — ${event.output.length} chars`);
+      if (event.toolSummary) {
+        console.log(`Tools called: ${event.toolSummary.map(t => t.name).join(", ")}`);
+      }
+      break;
+    case "StreamCancelled":
+      console.log(`\nCancelled after ${event.iterationsCompleted} iterations`);
       break;
     case "StreamError":
       console.error(`\nError: ${event.cause}`);
       break;
   }
+}
+```
+
+### Cancellation via AbortSignal
+
+```typescript
+const controller = new AbortController();
+setTimeout(() => controller.abort(), 5000); // Cancel after 5s
+
+for await (const event of agent.runStream("Long task", { signal: controller.signal })) {
+  if (event._tag === "TextDelta") process.stdout.write(event.text);
+  if (event._tag === "StreamCancelled") console.log("\nStream cancelled.");
+  if (event._tag === "StreamCompleted") console.log("\nDone.");
 }
 ```
 

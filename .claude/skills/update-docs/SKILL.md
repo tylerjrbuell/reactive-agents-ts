@@ -117,14 +117,52 @@ Content here...
 
 Sidebar is auto-generated from directory structure. Use `sidebar: { order: N }` in frontmatter to control ordering.
 
-## Step 6: Update ROADMAP.md
+## Step 6: Update Agent Skills (`apps/docs/skills/`)
+
+The `apps/docs/skills/` directory contains skills used by agents to build with this framework. These must stay accurate — stale code examples or wrong API signatures directly cause agent errors.
+
+### Always check after:
+- Builder method signatures change (`.withReasoning()`, `.withTools()`, `.withMemory()`, etc.)
+- New builder methods are added (`.withFallbacks()`, `.withLogging()`, `.withHealthCheck()`, etc.)
+- New stream event types are added (`IterationProgress`, `StreamCancelled`, etc.)
+- New conversational APIs added (`agent.chat()`, `agent.session()`)
+- Config field names change (e.g., `resultCompression` field names)
+- New strategy options added (`enableStrategySwitching`, etc.)
+
+### Skills index
+
+| Skill file | What to check |
+|---|---|
+| `reasoning-strategy-selection/SKILL.md` | `withReasoning()` options, strategy names, `enableStrategySwitching` |
+| `streaming-real-time-agents/SKILL.md` | Stream event variants, `runStream()` signature, `AgentStream` adapters |
+| `reactive-agents-framework/SKILL.md` | Builder chains, new methods (`chat()`, `session()`, `withFallbacks()`, etc.) |
+| `context-engineering-optimization/SKILL.md` | `withContextProfile()` tiers, `resultCompression` field names |
+| `memory-consolidation/SKILL.md` | Memory tiers, `withMemoryConsolidation()`, `session({ persist: true })` |
+| `cost-budget-enforcement/SKILL.md` | Budget APIs, gateway `policies.dailyTokenBudget` |
+| `observability-instrumentation/SKILL.md` | Verbosity levels, EventBus events, `withLogging()`, `withErrorHandler()` |
+| `a2a-specialized-agents/SKILL.md` | `withAgentTool()`, `withRemoteAgent()` signatures |
+| `gateway-persistent-scheduled-agents/SKILL.md` | Gateway config shape, policy fields |
+| `identity-and-guardrails/SKILL.md` | `withGuardrails()` thresholds, `withBehavioralContracts()` |
+| `mcp-tool-integration/SKILL.md` | `withMCP()` transport config, disposal patterns |
+| `multi-agent-orchestration/SKILL.md` | Workflow patterns, `withDynamicSubAgents()` |
+| `verification-pipeline-design/SKILL.md` | `withVerification()` options |
+
+### How to update
+
+1. For each skill affected by the change, open the file
+2. Update code examples to use the current API
+3. Update builder patterns in the "Agent objective" or "Implementation baseline" sections
+4. Bump `version` in the frontmatter if the change is significant
+5. Do NOT change prose that is still accurate — minimal diffs only
+
+## Step 7: Update ROADMAP.md
 
 If a milestone shipped:
 - Move items from "target" to "✅ Released" with actual date
 - Update the "Current State" section
 - Update the Competitive Positioning table
 
-## Step 7: Verify
+## Step 8: Verify
 
 ```bash
 # Docs build
@@ -134,7 +172,7 @@ cd apps/docs && npx astro build
 grep -r "0\.3\.0\|300 tests\|15 packages" README.md CLAUDE.md apps/docs/
 ```
 
-## Step 8: Update AGENTS.md
+## Step 9: Update AGENTS.md
 
 If workflow patterns changed, update the relevant section in `AGENTS.md`.
 

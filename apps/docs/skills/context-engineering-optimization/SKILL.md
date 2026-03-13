@@ -86,12 +86,11 @@ import { ReactiveAgents } from "@reactive-agents/runtime";
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withTools({
-    // Configuration for how tool results are compressed
     resultCompression: {
-      // For large text outputs, keep the first and last 1024 characters
-      maxTextLength: 2048,
-      // For large JSON objects/arrays, show the first 5 and last 2 items
-      maxJsonItems: 7,
+      budget: 2000,         // Max chars for compressed tool result
+      previewItems: 5,      // Items shown for JSON arrays/objects
+      autoStore: true,      // Overflow stored in scratchpad automatically
+      codeTransform: true,  // Apply pipe transforms (| transform: <expr>)
     }
   })
   .build();

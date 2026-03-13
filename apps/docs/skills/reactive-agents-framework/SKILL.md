@@ -4,7 +4,7 @@ description: Build specialized production agents with the Reactive Agents builde
 compatibility: Reactive Agents TypeScript projects using @reactive-agents/runtime and Effect-TS layers.
 metadata:
   author: reactive-agents
-  version: "1.0"
+  version: "1.1"
 ---
 
 # Reactive Agents Framework
@@ -56,6 +56,43 @@ const scheduledOpsAgent = await ReactiveAgents.create()
 - Persistent automation: gateway + policies + observability.
 - Integration-heavy agents: tools + MCP + guardrails.
 - Multi-agent systems: A2A + agent-tool delegation + orchestration.
+- Conversational Q&A: `agent.chat()` for direct questions, `agent.session()` for multi-turn.
+- Production hardening: `withFallbacks()`, `withLogging()`, `withErrorHandler()`, `withHealthCheck()`.
+
+## Conversational patterns
+
+```ts
+// Single conversational turn (routes directly to LLM for questions, ReAct for tool tasks)
+const reply = await agent.chat("What did you accomplish last run?");
+console.log(reply.message);
+
+// Multi-turn session with history
+const session = agent.session();
+await session.chat("Start researching quantum computing");
+await session.chat("Summarize what you found so far");
+await session.end();
+
+// Persistent session — survives process restarts
+const session = agent.session({ persist: true, id: "research-001" });
+await session.chat("Continue where we left off");
+```
+
+## Production hardening
+
+```ts
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withReasoning()
+  .withFallbacks({ providers: ["anthropic", "openai"], errorThreshold: 2 })
+  .withLogging({ level: "info", format: "json", output: "file", filePath: "/var/log/agent.jsonl" })
+  .withErrorHandler((err, ctx) => metrics.increment("agent.error", { phase: ctx.phase }))
+  .withHealthCheck()
+  .withStrictValidation()  // Throws at build time if config is incomplete
+  .build();
+
+const health = await agent.health();
+console.log(health.status); // "healthy" | "degraded" | "unhealthy"
+```
 
 ## Expected implementation output
 
@@ -68,3 +105,4 @@ const scheduledOpsAgent = await ReactiveAgents.create()
 - Enabling many layers without a clear use-case objective.
 - Skipping observability for long-running or delegated workflows.
 - Using implicit model defaults when reproducibility matters.
+- Not calling `dispose()` (or using `await using`) when MCP transports are active.

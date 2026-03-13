@@ -108,7 +108,7 @@ See [Context Engineering](/guides/context-engineering/) for full tier defaults.
 | `withBehavioralContracts(contract)` | Enforce typed behavioral boundaries: `deniedTools`, `allowedTools`, `maxIterations`. Throws `BehavioralContractError` on violation |
 | `withVerification()` | Semantic entropy, fact decomposition, and multi-source (LLM + Tavily) on output |
 | `withCostTracking()` | Budget enforcement (persisted to SQLite), complexity routing (27 signals), semantic caching |
-| `withReasoning(options?)` | Structured reasoning (ReAct, Reflexion, Plan-Execute, ToT, Adaptive). Options: `{ defaultStrategy?, strategies?, adaptive?: { enabled?: boolean, learning?: boolean }, enableStrategySwitching?: boolean, maxStrategySwitches?: number, fallbackStrategy?: string }`. Set `enableStrategySwitching: true` to automatically switch strategy on loop detection |
+| `withReasoning(options?)` | Structured reasoning (ReAct, Reflexion, Plan-Execute, ToT, Adaptive). See [ReasoningOptions](#reasoningoptions) below |
 | `withTools(options?)` | Tool registry with sandboxed execution (subprocess isolation via `Bun.spawn`, Docker sandbox). Options: `{ tools?: [{ definition, handler }], resultCompression?: ResultCompressionConfig }`. See [Tool Result Compression](/guides/tools/#tool-result-compression) |
 | `withRequiredTools(config)` | Ensure agent calls critical tools before producing a final answer. Config: `{ tools?: string[], adaptive?: boolean, maxRetries?: number }` |
 | `withIdentity()` | Agent certificates (real Ed25519 keys) and RBAC |
@@ -126,6 +126,75 @@ See [Context Engineering](/guides/context-engineering/) for full tier defaults.
 | `withFallbacks(config)` | Provider/model fallback chain via `FallbackChain`. Config: `{ providers?: string[], models?: string[], errorThreshold?: number }`. On consecutive failures ≥ `errorThreshold`, the agent transparently retries with the next provider/model |
 | `withLogging(config)` | Structured logging via `makeLoggerService()`. Config: `{ level?: "debug" \| "info" \| "warn" \| "error", format?: "json" \| "text", output?: "console" \| "file", filePath?: string, maxFileSizeMb?: number, maxFiles?: number }` |
 | `withHealthCheck()` | Enable `agent.health()` which returns `{ status: "healthy" \| "degraded" \| "unhealthy", checks: HealthCheck[] }`. Each check reports on a specific subsystem (LLM, memory, tools, etc.) |
+
+#### ReasoningOptions
+
+```typescript
+interface ReasoningOptions {
+  /**
+   * Which strategy to use. Defaults to "react".
+   * "adaptive" requires adaptive.enabled: true.
+   */
+  defaultStrategy?: "react" | "reflexion" | "plan-execute-reflect" | "tree-of-thought" | "adaptive";
+
+  /** Per-strategy overrides (e.g., custom prompts or tuning). Rarely needed. */
+  strategies?: Partial<ReasoningConfig["strategies"]>;
+
+  /** Adaptive strategy config. Must set enabled: true when defaultStrategy is "adaptive". */
+  adaptive?: {
+    enabled?: boolean;   // Required for adaptive strategy
+    learning?: boolean;  // Enable cross-run learning (default: false)
+  };
+
+  /** Max iterations of the reasoning loop (default: 10). */
+  maxIterations?: number;
+
+  /**
+   * Automatically switch to a better-suited strategy when the current one appears stuck
+   * (repeated tool calls, repeated thoughts, or consecutive think-only steps).
+   * Default: false.
+   */
+  enableStrategySwitching?: boolean;
+
+  /**
+   * Maximum number of strategy switches allowed in a single run.
+   * Default: 1.
+   */
+  maxStrategySwitches?: number;
+
+  /**
+   * When set, bypasses the LLM evaluator and always switches to this strategy on loop
+   * detection. Useful when you want deterministic switching without the extra LLM call.
+   * Example: "plan-execute-reflect"
+   */
+  fallbackStrategy?: string;
+}
+```
+
+**Examples:**
+
+```typescript
+// Default: ReAct with no options
+.withReasoning()
+
+// Switch to Plan-Execute-Reflect strategy
+.withReasoning({ defaultStrategy: "plan-execute-reflect" })
+
+// Adaptive strategy (must set adaptive.enabled)
+.withReasoning({ defaultStrategy: "adaptive", adaptive: { enabled: true } })
+
+// Auto-switch when stuck, up to 2 times, via LLM evaluator
+.withReasoning({ enableStrategySwitching: true, maxStrategySwitches: 2 })
+
+// Auto-switch deterministically (no extra LLM call) to plan-execute-reflect
+.withReasoning({ enableStrategySwitching: true, fallbackStrategy: "plan-execute-reflect" })
+```
+
+When `enableStrategySwitching` is active, two EventBus events are emitted around each switch:
+- `StrategySwitchEvaluated` — after the evaluator runs, before the switch (includes `willSwitch`, `rationale`, `recommendedStrategy`)
+- `StrategySwitched` — after the new strategy takes over (includes `fromStrategy`, `toStrategy`, `switchNumber`, `stepsCarriedOver`)
+
+See [Automatic Strategy Switching](/guides/choosing-strategies/#automatic-strategy-switching) for full details on loop detection triggers, handoff context, and EventBus subscription examples.
 
 #### RequiredToolsConfig
 
@@ -547,6 +616,8 @@ yield* eventBus.on("ReasoningStepCompleted", onStepComplete);
 | `HeartbeatSkipped` | `agentId`, `consecutiveSkips`, `reason` |
 | `EventsMerged` | `agentId`, `mergedCount`, `mergeKey` |
 | `BudgetExhausted` | `agentId`, `tokensUsed`, `dailyBudget` |
+| `StrategySwitchEvaluated` | `taskId`, `fromStrategy`, `recommendedStrategy`, `rationale`, `willSwitch` |
+| `StrategySwitched` | `taskId`, `fromStrategy`, `toStrategy`, `switchNumber`, `stepsCarriedOver` |
 
 ## AgentResult
 

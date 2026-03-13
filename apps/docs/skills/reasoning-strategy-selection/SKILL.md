@@ -4,7 +4,7 @@ description: Select and configure the right Reactive Agents reasoning strategy f
 compatibility: Reactive Agents TypeScript projects using the reasoning layer.
 metadata:
   author: reactive-agents
-  version: "1.0"
+  version: "1.1"
 ---
 
 # Reasoning Strategy Selection
@@ -31,7 +31,8 @@ When implementing task-specific reasoning, generate code that:
 2. Use `reactive` for repetitive low-complexity tasks.
 3. Use `plan-execute` for structured multi-step execution flows.
 4. Use `tree-of-thought` for branching exploration of difficult problems.
-5. Add guardrails and verification when confidence is below thresholds.
+5. Enable `enableStrategySwitching` when task complexity is unpredictable — automatically escalates on loop detection.
+6. Add guardrails and verification when confidence is below thresholds.
 
 ## Implementation baseline
 
@@ -39,10 +40,27 @@ When implementing task-specific reasoning, generate code that:
 .withReasoning({
   defaultStrategy: "adaptive",
   maxIterations: 8,
+  // Optional: auto-switch strategy if the agent gets stuck
+  // enableStrategySwitching: true,
+  // maxStrategySwitches: 2,
 })
 .withVerification()
 .withCostTracking()
 ```
+
+## Strategy switching
+
+When `enableStrategySwitching: true`, the framework detects loop patterns (repeated tool calls, repeated thoughts, consecutive think-only steps) and automatically switches to a better strategy mid-run.
+
+```ts
+// LLM evaluator picks the best strategy to switch to
+.withReasoning({ enableStrategySwitching: true, maxStrategySwitches: 2 })
+
+// Deterministic switch — no LLM call, always switches to plan-execute-reflect
+.withReasoning({ enableStrategySwitching: true, fallbackStrategy: "plan-execute-reflect" })
+```
+
+Subscribe to `StrategySwitchEvaluated` and `StrategySwitched` EventBus events for observability.
 
 ## Code Examples
 

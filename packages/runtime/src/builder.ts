@@ -1835,13 +1835,6 @@ export class ReactiveAgentBuilder {
       cacheTimeoutMs: this._cacheTimeoutMs,
       sessionPersist: this._sessionPersist,
       sessionMaxAgeDays: this._sessionMaxAgeDays,
-      strategySwitching: this._reasoningOptions?.enableStrategySwitching
-        ? {
-            enabled: true,
-            maxSwitches: this._reasoningOptions.maxStrategySwitches,
-            fallbackStrategy: this._reasoningOptions.fallbackStrategy,
-          }
-        : undefined,
     });
 
     const hooks = [...this._hooks];
@@ -1858,6 +1851,8 @@ export class ReactiveAgentBuilder {
     const streamDensity = this._streamDensity;
     const errorHandler = this._errorHandler;
     const enableHealthCheck = this._enableHealthCheck;
+    const sessionPersist = this._sessionPersist;
+    const sessionMaxAgeDays = this._sessionMaxAgeDays;
     const agentIdCapture = agentId;
 
     // Capture parent config for sub-agent inheritance — sub-agents get
@@ -2490,6 +2485,8 @@ export class ReactiveAgentBuilder {
             }
           : undefined,
         errorHandler,
+        sessionPersist,
+        sessionMaxAgeDays,
       );
     }) as Effect.Effect<ReactiveAgent, Error>;
   }
@@ -2552,6 +2549,10 @@ export class ReactiveAgent {
     private readonly _setTaskDescription?: (desc: string) => void,
     /** @internal Optional error handler registered via .withErrorHandler(). */
     private readonly _errorHandler?: (error: RuntimeErrors | Error, context: { taskId: string; phase: string; iteration: number; lastStep?: string }) => void,
+    /** @internal Whether session persistence was enabled at build time. */
+    private readonly _sessionPersist: boolean = false,
+    /** @internal Max age of sessions in days at build time. */
+    private readonly _sessionMaxAgeDays?: number,
   ) {}
 
   /** @internal Last debrief from a completed run — used as context in chat() calls. */

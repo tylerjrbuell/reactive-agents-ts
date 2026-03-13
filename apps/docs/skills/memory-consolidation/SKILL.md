@@ -79,8 +79,45 @@ for (const q of questions) {
 - Retrieval/promotion criteria that can be tested with repeated tasks.
 - Observability hooks for memory effectiveness and drift.
 
+## Session persistence
+
+For multi-turn conversations that need to survive process restarts, enable session persistence:
+
+```ts
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withMemory("1")
+  .withReasoning()
+  .build();
+
+// Persistent session — saved to SQLite via SessionStoreService
+const session = agent.session({ persist: true, id: "user-session-42" });
+await session.chat("Start researching quantum computing");
+// On next process start, restore the session by passing the same id:
+const restored = agent.session({ persist: true, id: "user-session-42" });
+await restored.chat("Continue where we left off");
+```
+
+Session persistence requires `.withMemory()` to be enabled (memory layer provides the SQLite store).
+
+## Background consolidation
+
+```ts
+// Enable background decay + consolidation
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withMemory("2")
+  .withMemoryConsolidation({
+    threshold: 50,       // Trigger consolidation after 50 episodic entries
+    decayFactor: 0.05,   // 5% importance decay per consolidation cycle
+    pruneThreshold: 0.1, // Prune entries with importance below 10%
+  })
+  .build();
+```
+
 ## Pitfalls to avoid
 
 - Dumping full transcripts into every prompt.
 - Promoting low-confidence facts into semantic memory.
 - Never pruning stale episodic artifacts.
+- Using `agent.session({ persist: true })` without `.withMemory()` — it silently no-ops.

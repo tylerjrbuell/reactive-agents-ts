@@ -122,12 +122,8 @@ const coordinator = await ReactiveAgents.create()
   .withName("coordinator")
   .withProvider("anthropic")
   .withTools()
-  // Register the remote agent by its URL
-  .withRemoteAgent({
-    name: "remote-research-delegate",
-    description: "Delegates research to a remote specialist",
-    url: "http://localhost:8081/api/remote-researcher",
-  })
+  // Register the remote agent by name and URL
+  .withRemoteAgent("remote-research-delegate", "http://localhost:8081/api/remote-researcher")
   .build();
 
 const result = await coordinator.run("Use the remote delegate to explain quantum computing.");

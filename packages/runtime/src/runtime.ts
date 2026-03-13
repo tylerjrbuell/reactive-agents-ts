@@ -718,6 +718,13 @@ export const createRuntime = (options: RuntimeOptions) => {
           maxAgeDays: options.sessionMaxAgeDays,
         }
       : undefined,
+    strategySwitching: options.reasoningOptions?.enableStrategySwitching
+      ? {
+          enabled: true,
+          maxSwitches: options.reasoningOptions.maxStrategySwitches,
+          fallbackStrategy: options.reasoningOptions.fallbackStrategy,
+        }
+      : undefined,
   };
 
   // ── Required layers ──

@@ -100,8 +100,44 @@ When `verbosity` is `"normal"` or higher, a summary dashboard is printed upon co
 └─ ⚠️  think phase blocked ≥10s (LLM latency)
 ```
 
+### Structured logging and error hooks
+
+For file-based structured logging and error monitoring, combine `withLogging()` and `withErrorHandler()`:
+
+```typescript
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withObservability({ verbosity: "normal", live: true })
+  // Structured JSON logs to file with rotation
+  .withLogging({
+    level: "info",
+    format: "json",
+    output: "file",
+    filePath: "/var/log/agent.jsonl",
+    maxFileSizeMb: 50,
+    maxFiles: 7,
+  })
+  // Error callback for external monitoring (Sentry, Datadog, etc.)
+  .withErrorHandler((err, ctx) => {
+    console.error(`[${ctx.phase}] iteration ${ctx.iteration}: ${err.message}`);
+  })
+  .build();
+```
+
+### Strategy switch observability
+
+```typescript
+await agent.subscribe("StrategySwitchEvaluated", (event) => {
+  console.log(`Eval: ${event.fromStrategy} → ${event.recommendedStrategy} (will switch: ${event.willSwitch})`);
+});
+await agent.subscribe("StrategySwitched", (event) => {
+  console.log(`Switched: ${event.fromStrategy} → ${event.toStrategy} (#${event.switchNumber})`);
+});
+```
+
 ## Pitfalls to avoid
 
 - Relying on ad-hoc `console.log` for root cause analysis.
 - Missing correlation IDs across sub-agent calls.
 - No alerting on long think/tool phases.
+- Using `withObservability()` without `withErrorHandler()` — errors go to the EventBus but aren't forwarded to external systems.

@@ -723,6 +723,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       sessionId?: string;
                       requiredTools?: readonly string[];
                       maxRequiredToolRetries?: number;
+                      strategySwitching?: { enabled: boolean; maxSwitches?: number; fallbackStrategy?: string };
                     }) => Effect.Effect<{
                       output: unknown;
                       status: string;
