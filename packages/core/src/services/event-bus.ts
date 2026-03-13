@@ -402,6 +402,23 @@ export type AgentEvent =
       /** Which kernel pass produced this answer (e.g. "reflexion:generate", "plan-execute:step-2") */
       readonly kernelPass?: string;
     }
+  // ─── Reasoning failure event ───
+  | {
+      /**
+       * The reasoning kernel terminated with a failure status.
+       * Fired by the kernel runner when status === "failed" (not "done").
+       * Enables observability of reasoning failures distinct from task-level failures.
+       */
+      readonly _tag: "ReasoningFailed";
+      /** Unique task identifier */
+      readonly taskId: string;
+      /** Active reasoning strategy at time of failure */
+      readonly strategy: string;
+      /** Error message describing the failure */
+      readonly error: string;
+      /** Iteration number at which the failure occurred */
+      readonly iteration: number;
+    }
   // ─── Safety / guardrail events ───
   | {
       /**

@@ -205,9 +205,30 @@ declare module 'astro:content' {
   collection: "docs";
   data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
+"cookbook/building-tools.md": {
+	id: "cookbook/building-tools.md";
+  slug: "cookbook/building-tools";
+  body: string;
+  collection: "docs";
+  data: InferEntrySchema<"docs">
+} & { render(): Render[".md"] };
+"cookbook/chat-and-sessions.md": {
+	id: "cookbook/chat-and-sessions.md";
+  slug: "cookbook/chat-and-sessions";
+  body: string;
+  collection: "docs";
+  data: InferEntrySchema<"docs">
+} & { render(): Render[".md"] };
 "cookbook/custom-strategies.md": {
 	id: "cookbook/custom-strategies.md";
   slug: "cookbook/custom-strategies";
+  body: string;
+  collection: "docs";
+  data: InferEntrySchema<"docs">
+} & { render(): Render[".md"] };
+"cookbook/error-handling.md": {
+	id: "cookbook/error-handling.md";
+  slug: "cookbook/error-handling";
   body: string;
   collection: "docs";
   data: InferEntrySchema<"docs">
@@ -222,6 +243,13 @@ declare module 'astro:content' {
 "cookbook/production-deployment.md": {
 	id: "cookbook/production-deployment.md";
   slug: "cookbook/production-deployment";
+  body: string;
+  collection: "docs";
+  data: InferEntrySchema<"docs">
+} & { render(): Render[".md"] };
+"cookbook/streaming-responses.md": {
+	id: "cookbook/streaming-responses.md";
+  slug: "cookbook/streaming-responses";
   body: string;
   collection: "docs";
   data: InferEntrySchema<"docs">

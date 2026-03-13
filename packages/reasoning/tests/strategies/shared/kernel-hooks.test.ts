@@ -250,13 +250,17 @@ describe("buildKernelHooks", () => {
       expect(event.answer).toBe("");
     });
 
-    it("onError returns without publishing (no-op)", async () => {
+    it("onError publishes ReasoningFailed event", async () => {
       const { events, eb } = makeMockEventBus();
       const hooks = buildKernelHooks(eb);
 
       await Effect.runPromise(hooks.onError(baseState(), "something broke"));
 
-      expect(events).toHaveLength(0);
+      expect(events).toHaveLength(1);
+      const event = events[0] as Record<string, unknown>;
+      expect(event._tag).toBe("ReasoningFailed");
+      expect(event.error).toBe("something broke");
+      expect(event.strategy).toBe("test");
     });
   });
 });

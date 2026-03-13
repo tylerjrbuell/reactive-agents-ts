@@ -61,12 +61,30 @@ const deleteFileTool = new ToolBuilder("delete-file")
   .description("Permanently delete a file from disk")
   .param("path", "string", "File path to delete", { required: true })
   .riskLevel("high")           // "low" | "medium" | "high" | "critical"
-  .requiresApproval()          // pauses agent and asks user before executing
+  .requiresApproval()          // sets definition.requiresApproval = true
   .timeout(5_000)
   .build();
 ```
 
-With `requiresApproval()`, the agent pauses before executing and resumes once the user approves via `.resume()`.
+`requiresApproval()` stores a boolean flag on the `ToolDefinition`. The framework does **not** automatically pause agent execution — the flag is metadata that your application code can read to implement its own approval gate.
+
+The flag is visible in `listTools()` output and on the definition returned by `build()`, so you can check it in a custom execution pipeline:
+
+```typescript
+// Example: check the flag before passing a tool to ToolService
+const { definition, handler } = new ToolBuilder("delete-file")
+  .description("Permanently delete a file from disk")
+  .param("path", "string", "File path to delete", { required: true })
+  .riskLevel("high")
+  .requiresApproval()
+  .build();
+
+if (definition.requiresApproval) {
+  const approved = await askUser(`Approve execution of "${definition.name}"?`);
+  if (!approved) throw new Error("User denied approval");
+}
+// proceed to register / execute
+```
 
 ## Tool Categories
 

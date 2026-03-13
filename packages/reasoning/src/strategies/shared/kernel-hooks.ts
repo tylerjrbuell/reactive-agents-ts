@@ -83,7 +83,14 @@ export function buildKernelHooks(eventBus: MaybeService<EventBusInstance>): Kern
         kernelPass: getKernelPass(state),
       }),
 
-    onError: (_state: KernelState, _error: string): Effect.Effect<void, never> => Effect.void,
+    onError: (state: KernelState, error: string): Effect.Effect<void, never> =>
+      publishReasoningStep(eventBus, {
+        _tag: "ReasoningFailed",
+        taskId: state.taskId,
+        strategy: state.strategy,
+        error,
+        iteration: state.iteration,
+      }),
 
     onIterationProgress: (state: KernelState, toolsThisStep: readonly string[]): Effect.Effect<void, never> =>
       publishReasoningStep(eventBus, {

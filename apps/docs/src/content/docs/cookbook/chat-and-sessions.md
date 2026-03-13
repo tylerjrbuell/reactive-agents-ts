@@ -19,8 +19,7 @@ const agent = await ReactiveAgents.create()
   .build();
 
 const reply = await agent.chat("What is the capital of France?");
-console.log(reply.text);       // "Paris"
-console.log(reply.routed);     // "direct" — no tools needed
+console.log(reply.message);    // "Paris"
 ```
 
 ## Multi-Turn Session
@@ -31,10 +30,10 @@ console.log(reply.routed);     // "direct" — no tools needed
 const session = agent.session();
 
 const r1 = await session.chat("My name is Alex.");
-console.log(r1.text); // "Nice to meet you, Alex!"
+console.log(r1.message); // "Nice to meet you, Alex!"
 
 const r2 = await session.chat("What's my name?");
-console.log(r2.text); // "Your name is Alex."
+console.log(r2.message); // "Your name is Alex."
 
 // Inspect current history
 console.log(session.history());
@@ -45,43 +44,46 @@ console.log(session.history());
 // ]
 ```
 
-## Routing: Direct vs. ReAct
+## Routing: Direct vs. Tool Path
 
-The session automatically routes each message:
+The session automatically routes each message. Messages with action keywords ("search for", "fetch", "create a", etc.) route to the full ReAct loop with tools; conversational messages go directly to the LLM:
 
 ```typescript
 const session = agent.session();
 
-// "direct" — pure Q&A, no tools needed → fast, cheap
+// Conversational — goes directly to the LLM (fast, cheap)
 const r1 = await session.chat("What's 2 + 2?");
-console.log(r1.routed); // "direct"
+console.log(r1.message); // "4"
 
-// "react" — tool use required → full ReAct loop
+// Action keyword — routes to the tool path
 const r2 = await session.chat("Search the web for today's top AI news");
-console.log(r2.routed); // "react"
+console.log(r2.toolsUsed); // ["web-search"]
 ```
 
-The heuristic checks for tool-indicative keywords and task complexity. Override routing explicitly:
+Override routing explicitly with `useTools`:
 
 ```typescript
-const reply = await session.chat("Summarize the README", { forceReact: true });
+const reply = await session.chat("Summarize the README", { useTools: true });
 ```
 
 ## Persisted Sessions
 
-Sessions can be persisted to SQLite so they survive process restarts:
+Sessions can be persisted to SQLite so they survive process restarts. Enable persistence when calling `agent.session()`:
 
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
-  .withSession({ persist: true })   // enable persistence
+  .withMemory()   // memory layer required for SQLite-backed session persistence
   .build();
 
-// Resume an existing session by ID
+// Create or resume a session by ID
 const session = agent.session({ id: "user-123-support", persist: true });
 
 const reply = await session.chat("Where were we?");
-// Agent recalls previous turns from the database
+// On subsequent runs with the same ID, prior history is restored from the DB
+
+// Flush to storage when done
+await session.end();
 ```
 
 Sessions are stored in the memory database under the `agent_sessions` table.
@@ -105,16 +107,14 @@ const reply = await session.chat("How do I add a new package?");
 
 ## Streaming Chat
 
-Combine chat routing with streaming output:
+Stream tokens from a chat turn using `agent.runStream()`:
 
 ```typescript
-const session = agent.session();
-
 process.stdout.write("Assistant: ");
-for await (const event of session.chatStream("Explain recursion with an example")) {
+for await (const event of agent.runStream("Explain recursion with an example")) {
   if (event._tag === "TextDelta") process.stdout.write(event.text);
+  if (event._tag === "StreamCompleted") console.log("\nDone!");
 }
-console.log();
 ```
 
 ## Interactive CLI Loop
@@ -138,7 +138,7 @@ const ask = () => {
   rl.question("You: ", async (input) => {
     if (input.trim() === "exit") return rl.close();
     const reply = await session.chat(input.trim());
-    console.log(`Assistant: ${reply.text}\n`);
+    console.log(`Assistant: ${reply.message}\n`);
     ask();
   });
 };
@@ -150,25 +150,25 @@ ask();
 
 ```typescript
 interface ChatReply {
-  text: string;                      // the assistant's response
-  routed: "direct" | "react";       // which path was taken
-  tokensUsed?: number;               // token count for this turn
-  toolsUsed?: string[];              // tools called (react path only)
-  confidence?: "high" | "medium" | "low";
+  message: string;          // the assistant's response text
+  toolsUsed?: string[];     // tools called (when tools were needed)
+  fromMemory?: boolean;     // true if response used prior run context
+  tokens?: number;          // token count for this turn (when available)
+  steps?: number;           // reasoning steps taken (tool path only)
+  cost?: number;            // estimated cost in USD (when available)
 }
 ```
 
-## Session Limits and Cleanup
+## Session Cleanup
+
+Call `session.end()` to flush history to memory (if persistence is enabled) and clear the in-memory conversation:
 
 ```typescript
-const agent = await ReactiveAgents.create()
-  .withProvider("anthropic")
-  .withSession({
-    persist: true,
-    maxAgeDays: 30,    // auto-expire sessions older than 30 days
-  })
-  .build();
+const session = agent.session({ persist: true, id: "user-123" });
 
-// Clear a session's history
-session.clear();
+await session.chat("Hello, what can you do?");
+await session.chat("Search for TypeScript best practices");
+
+// Flush to storage and clear in-memory history
+await session.end();
 ```
