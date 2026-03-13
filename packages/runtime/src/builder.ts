@@ -1514,16 +1514,33 @@ export class ReactiveAgentBuilder {
   /**
    * Configure mock LLM responses for testing (provider: "test" only).
    *
-   * Maps input patterns to predefined outputs. Useful for testing agent behavior
-   * without hitting real LLM APIs.
+   * Maps regex patterns to predefined output strings. The test provider checks
+   * each key as a `new RegExp(key)` against the incoming prompt and returns the
+   * value for the first match. Use `".*"` as a catch-all fallback.
    *
-   * @param responses - Map of input pattern → output string
+   * **Important behavior notes:**
+   * - Patterns are treated as JavaScript regular expressions, not plain strings.
+   *   Escape regex metacharacters (`.`, `?`, `+`, etc.) if you want literal matches.
+   * - The test provider always completes successfully on the first iteration —
+   *   it does **not** trigger `MaxIterationsError` regardless of the response text.
+   *   To test error-path behavior, inject errors via `withErrorHandler()` or use
+   *   a Layer that returns a failing `LLMService`.
+   * - If no pattern matches, the test provider returns an empty string.
+   *
+   * @param responses - Map of regex pattern → output string
    * @returns `this` for chaining
    * @example
    * ```typescript
+   * // Exact-ish match (escape dots for safety)
    * builder.withTestResponses({
-   *   "What is 2+2?": "4",
-   *   ".*search.*": "No results found"
+   *   "What is 2\\+2\\?": "4",
+   * })
+   *
+   * // Keyword match
+   * builder.withTestResponses({
+   *   ".*search.*": "No results found",
+   *   ".*capital.*France.*": "Paris is the capital of France.",
+   *   ".*": "Default test response",   // catch-all — must be last
    * })
    * ```
    */
