@@ -1304,7 +1304,7 @@ export class ReactiveAgentBuilder {
    * builder.withLogging({ level: "debug", format: "text", output: "console" })
    * ```
    */
-  withLogging(config: { level?: string; format?: string; output?: string | WritableStream; filePath?: string; maxFileSizeBytes?: number; maxFiles?: number }): this {
+  withLogging(config: { level?: "debug" | "info" | "warn" | "error"; format?: "text" | "json"; output?: "console" | "file" | WritableStream; filePath?: string; maxFileSizeBytes?: number; maxFiles?: number }): this {
     this._loggingConfig = config;
     return this;
   }
@@ -1435,15 +1435,21 @@ export class ReactiveAgentBuilder {
   }
 
   /**
-   * Enable agent lifecycle events — allows subscribing to agent execution events.
+   * Semantic marker for event subscription intent — no configuration effect.
    *
-   * Enables the `.subscribe()` method on ReactiveAgent to listen for events like
-   * `"AgentStarted"`, `"LLMRequestStarted"`, `"ToolCallStarted"`, `"AgentCompleted"`, etc.
+   * The EventBus is always active on every agent; `withEvents()` is optional and
+   * exists purely for readability. Calling `.subscribe()` on the built agent works
+   * whether or not `withEvents()` was called.
    *
    * @returns `this` for chaining
    * @example
    * ```typescript
-   * const unsub = await agent.subscribe("ToolCallCompleted", (event) => {
+   * const agent = await ReactiveAgents.create()
+   *   .withProvider("anthropic")
+   *   .withEvents()  // optional — subscribe() always works
+   *   .build();
+   *
+   * agent.subscribe("ToolCallCompleted", (event) => {
    *   console.log(`Tool ${event.toolName} took ${event.durationMs}ms`);
    * });
    * ```

@@ -61,6 +61,16 @@ export type {
   CostTrackingOptions,
   GuardrailsOptions,
   VerificationOptions,
+  ProviderName,
+  ReasoningOptions,
+  ToolsOptions,
+  PromptsOptions,
+  ObservabilityOptions,
+  A2AOptions,
+  GatewayOptions,
+  GatewaySummary,
+  GatewayHandle,
+  AgentToolOptions,
 } from "./builder.js";
 
 // ─── Streaming ───

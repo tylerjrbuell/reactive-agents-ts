@@ -116,7 +116,7 @@ const agent = await ReactiveAgents.create()
   })
   .withStrictValidation()                                // Throw at build time if required config is missing
   .withTimeout(60_000)                                   // Execution timeout (ms)
-  .withRetryPolicy({ maxRetries: 3, backoff: "exponential" }) // Retry on transient LLM failures
+  .withRetryPolicy({ maxRetries: 3, backoffMs: 1_000 })       // Retry on transient LLM failures
   .withCacheTimeout(3_600_000)                           // Semantic cache TTL (ms)
   .withErrorHandler((err, ctx) => {                      // Global error callback
     console.error("Agent error:", err.message);
@@ -125,7 +125,7 @@ const agent = await ReactiveAgents.create()
     providers: ["anthropic", "openai"],
     errorThreshold: 3,
   })
-  .withLogging({ level: "info", format: "json", output: "file" }) // Structured logging
+  .withLogging({ level: "info", format: "json", filePath: "./agent.log" }) // Structured logging
   .withHealthCheck()                                     // Enable agent.health() probe
   .withGateway({                                         // Persistent autonomous harness
     heartbeat: { intervalMs: 1_800_000, policy: "adaptive" },
