@@ -8,7 +8,7 @@ export class ToolBuilder {
   private _timeoutMs = 30_000;
   private _requiresApproval = false;
   private _returnType?: string;
-  private _category?: string;
+  private _category?: ToolDefinition["category"];
   private _handler?: (...args: unknown[]) => unknown;
 
   constructor(name: string) {
@@ -57,7 +57,7 @@ export class ToolBuilder {
     return this;
   }
 
-  category(cat: string): this {
+  category(cat: ToolDefinition["category"]): this {
     this._category = cat;
     return this;
   }

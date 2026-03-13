@@ -85,7 +85,15 @@ export function buildKernelHooks(eventBus: MaybeService<EventBusInstance>): Kern
 
     onError: (_state: KernelState, _error: string): Effect.Effect<void, never> => Effect.void,
 
-    onIterationProgress: (_state: KernelState, _toolsThisStep: readonly string[]): Effect.Effect<void, never> => Effect.void,
+    onIterationProgress: (state: KernelState, toolsThisStep: readonly string[]): Effect.Effect<void, never> =>
+      publishReasoningStep(eventBus, {
+        _tag: "ReasoningIterationProgress",
+        taskId: state.taskId,
+        iteration: state.iteration,
+        maxIterations: (state.meta.maxIterations as number | undefined) ?? 10,
+        strategy: state.strategy,
+        toolsThisStep,
+      }),
 
     onStrategySwitched: (state: KernelState, from: string, to: string, reason: string): Effect.Effect<void, never> =>
       publishReasoningStep(eventBus, {

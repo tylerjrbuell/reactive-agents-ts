@@ -1,3 +1,6 @@
+import { section, info, success, fail, warn, kv, spinner, box, muted } from "../ui.js";
+import chalk from "chalk";
+
 const HELP = `
   Usage: rax discover <url>
 
@@ -13,7 +16,7 @@ const HELP = `
 
 export function runDiscover(argv: string[]) {
   const args = argv.slice();
-  
+
   if (args.includes("--help") || args.includes("-h")) {
     console.log(HELP);
     return;
@@ -36,14 +39,13 @@ export function runDiscover(argv: string[]) {
   }
 
   if (!url) {
-    console.error("Error: URL is required");
-    console.error("Usage: rax discover <url>");
+    console.error(fail("Error: URL is required"));
+    console.error(muted("Usage: rax discover <url>"));
     process.exit(1);
   }
 
   const agentCardUrl = url.endsWith("/") ? `${url}agent/card` : `${url}/agent/card`;
-
-  console.log(`Fetching Agent Card from: ${agentCardUrl}\n`);
+  const spin = spinner(`Fetching Agent Card from ${agentCardUrl}`);
 
   fetch(agentCardUrl)
     .then((res) => {
@@ -53,31 +55,46 @@ export function runDiscover(argv: string[]) {
       return res.json();
     })
     .then((card) => {
+      spin.succeed("Agent Card retrieved");
+
       if (asJson) {
         console.log(JSON.stringify(card, null, 2));
-      } else {
-        console.log("Agent Card:");
-        console.log("===========");
-        console.log(`Name:        ${card.name}`);
-        console.log(`Description: ${card.description || "N/A"}`);
-        console.log(`Version:     ${card.version}`);
-        console.log(`URL:         ${card.url}`);
-        console.log(`Provider:    ${card.provider?.organization || "N/A"}`);
-        console.log("\nCapabilities:");
-        console.log(`  Streaming:               ${card.capabilities?.streaming ? "✓" : "✗"}`);
-        console.log(`  Push Notifications:      ${card.capabilities?.pushNotifications ? "✓" : "✗"}`);
-        console.log(`  State Transition History: ${card.capabilities?.stateTransitionHistory ? "✓" : "✗"}`);
-        
-        if (card.skills?.length) {
-          console.log("\nSkills:");
-          for (const skill of card.skills) {
-            console.log(`  - ${skill.name}: ${skill.description || "No description"}`);
-          }
+        return;
+      }
+
+      console.log(section("Agent Card"));
+      console.log(kv("Name", chalk.bold(card.name ?? "N/A")));
+      console.log(kv("Description", card.description ?? "N/A"));
+      console.log(kv("Version", card.version ?? "N/A"));
+      console.log(kv("URL", card.url ?? "N/A"));
+      console.log(kv("Provider", card.provider?.organization ?? "N/A"));
+
+      console.log(section("Capabilities"));
+      const cap = card.capabilities ?? {};
+      const check = (v: unknown) => (v ? success("yes") : fail("no"));
+      console.log(kv("Streaming", check(cap.streaming)));
+      console.log(kv("Push Notifications", check(cap.pushNotifications)));
+      console.log(kv("State Transition History", check(cap.stateTransitionHistory)));
+
+      if (card.skills?.length) {
+        console.log(section("Skills"));
+        for (const skill of card.skills) {
+          console.log(info(`${chalk.bold(skill.name)}: ${skill.description ?? "No description"}`));
+        }
+      }
+
+      if (card.defaultInputModes?.length || card.defaultOutputModes?.length) {
+        console.log(section("I/O Modes"));
+        if (card.defaultInputModes?.length) {
+          console.log(kv("Input", card.defaultInputModes.join(", ")));
+        }
+        if (card.defaultOutputModes?.length) {
+          console.log(kv("Output", card.defaultOutputModes.join(", ")));
         }
       }
     })
-    .catch((err) => {
-      console.error(`Error fetching Agent Card: ${err.message}`);
+    .catch((err: Error) => {
+      spin.fail(`Failed to fetch Agent Card: ${err.message}`);
       process.exit(1);
     });
 }

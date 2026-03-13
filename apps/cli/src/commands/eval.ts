@@ -6,11 +6,11 @@ import {
   DatasetServiceLive,
 } from "@reactive-agents/eval";
 import {
-  LLMService,
   TestLLMServiceLayer,
   AnthropicProviderLive,
   OpenAIProviderLive,
 } from "@reactive-agents/llm-provider";
+import { section, info, success, fail, kv, spinner, muted } from "../ui.js";
 
 const USAGE =
   "Usage: rax eval run --suite <path> [--provider anthropic|openai|test] [--agent <name>]";
@@ -18,7 +18,7 @@ const USAGE =
 export async function runEval(args: string[]): Promise<void> {
   const subcommand = args[0];
   if (subcommand !== "run") {
-    console.error(USAGE);
+    console.error(fail(USAGE));
     process.exit(1);
   }
 
@@ -34,7 +34,7 @@ export async function runEval(args: string[]): Promise<void> {
   }
 
   if (!suitePath) {
-    console.error(USAGE);
+    console.error(fail(USAGE));
     process.exit(1);
   }
 
@@ -47,43 +47,54 @@ export async function runEval(args: string[]): Promise<void> {
     const ds = yield* DatasetService;
     const evalService = yield* EvalService;
 
-    console.log(`Loading suite: ${suite}`);
+    const loadSpin = spinner(`Loading suite: ${suite}`);
     const evalSuite = yield* ds.loadSuite(suite);
-    console.log(
-      `Suite: "${evalSuite.name}" — ${evalSuite.cases.length} cases, dimensions: ${evalSuite.dimensions.join(", ")}`,
-    );
-    console.log(`Provider: ${provider}  Agent: ${agentConfig}\n`);
+    loadSpin.succeed(`Suite loaded: ${evalSuite.name}`);
 
+    console.log(kv("Cases", String(evalSuite.cases.length)));
+    console.log(kv("Dimensions", evalSuite.dimensions.join(", ")));
+    console.log(kv("Provider", provider));
+    console.log(kv("Agent", agentConfig));
+
+    const runSpin = spinner(`Running ${evalSuite.cases.length} eval cases...`);
     const run = yield* evalService.runSuite(evalSuite, agentConfig);
+    runSpin.succeed("Eval complete");
+
     const s = run.summary;
 
-    console.log("─── Summary ───");
-    console.log(
-      `  Pass: ${s.passed}/${s.totalCases}   Avg Score: ${(s.avgScore * 100).toFixed(1)}%   Cost: $${s.totalCostUsd.toFixed(5)}`,
-    );
+    console.log(section("Summary"));
+    console.log(kv("Pass", `${s.passed}/${s.totalCases}`));
+    console.log(kv("Avg Score", `${(s.avgScore * 100).toFixed(1)}%`));
+    console.log(kv("Cost", `$${s.totalCostUsd.toFixed(5)}`));
 
-    console.log("\n─── Dimension Scores ───");
+    console.log(section("Dimension Scores"));
     for (const [dim, avg] of Object.entries(s.dimensionAverages)) {
       const bar = "█".repeat(Math.round(avg * 20)).padEnd(20, "░");
-      console.log(`  ${dim.padEnd(16)} ${bar} ${(avg * 100).toFixed(1)}%`);
+      const pct = `${(avg * 100).toFixed(1)}%`;
+      console.log(`  ${dim.padEnd(16)} ${muted(bar)} ${pct}`);
     }
 
-    console.log("\n─── Case Results ───");
+    console.log(section("Case Results"));
     for (const r of run.results) {
-      const icon = r.passed ? "✓" : "✗";
-      console.log(`  ${icon} ${r.caseId.padEnd(24)} ${(r.overallScore * 100).toFixed(1)}%`);
+      const score = `${(r.overallScore * 100).toFixed(1)}%`;
+      const label = r.caseId.padEnd(24);
+      console.log(
+        r.passed ? success(`${label} ${score}`) : fail(`${label} ${score}`),
+      );
     }
 
     if (s.failed > 0) {
-      console.log(`\n${s.failed} case(s) failed.`);
+      console.log(`\n${fail(`${s.failed} case(s) failed.`)}`);
       process.exit(1);
+    } else {
+      console.log(`\n${success("All cases passed.")}`);
     }
   });
 
   try {
     await Effect.runPromise(program.pipe(Effect.provide(fullLayer)));
   } catch (err) {
-    console.error("Eval error:", err instanceof Error ? err.message : String(err));
+    console.error(fail(`Eval error: ${err instanceof Error ? err.message : String(err)}`));
     process.exit(1);
   }
 }

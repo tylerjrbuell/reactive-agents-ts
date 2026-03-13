@@ -3,7 +3,8 @@ import { LifecycleHookRegistryLive } from "./hooks.js";
 import { ExecutionEngineLive } from "./execution-engine.js";
 import type { ReactiveAgentsConfig } from "./types.js";
 import { defaultReactiveAgentsConfig } from "./types.js";
-import { CoreServicesLive, EventBusLive } from "@reactive-agents/core";
+import { CoreServicesLive, EventBusLive, EventBus } from "@reactive-agents/core";
+import type { AgentEvent } from "@reactive-agents/core";
 import {
   createLLMProviderLayer,
   getProviderDefaultModel,
@@ -628,6 +629,24 @@ export interface RuntimeOptions {
    * Default: undefined (no automatic cleanup)
    */
   sessionMaxAgeDays?: number;
+
+  /**
+   * Structured logging configuration. When provided, a logger tap is wired into the
+   * EventBus and emits structured log entries for all agent lifecycle events in real time.
+   *
+   * Supports `"console"`, `"file"` (with rotation), or a custom `WritableStream`.
+   *
+   * Default: undefined (no structured logging)
+   */
+  loggingConfig?: import("@reactive-agents/observability").LoggingConfig;
+
+  /**
+   * Enable the health check service. Exposes `agent.health()` to return subsystem
+   * readiness status across LLM, memory, tools, and guardrails layers.
+   *
+   * Default: `false`
+   */
+  enableHealthCheck?: boolean;
 }
 
 /**
@@ -1052,6 +1071,103 @@ export const createRuntime = (options: RuntimeOptions) => {
       Layer.provide(eventBusLayer),
     );
     runtime = Layer.merge(runtime, telemetryLayer) as any;
+  }
+
+  // ── Structured logging tap — subscribes to EventBus and writes to configured output ──
+  if (options.loggingConfig) {
+    const { makeLoggerService } =
+      require("@reactive-agents/observability") as typeof import("@reactive-agents/observability");
+    const loggerCfg = options.loggingConfig;
+    const loggerTapLayer = Layer.effectDiscard(
+      Effect.gen(function* () {
+        const logger = makeLoggerService(loggerCfg);
+        const eb = yield* EventBus;
+
+        type E<T extends AgentEvent["_tag"]> = Extract<AgentEvent, { _tag: T }>;
+
+        yield* eb.on("AgentStarted", (event: E<"AgentStarted">) =>
+          Effect.sync(() =>
+            logger.info("[agent:started]", { agentId: event.agentId, taskId: event.taskId }),
+          ),
+        );
+
+        yield* eb.on("AgentCompleted", (event: E<"AgentCompleted">) =>
+          Effect.sync(() =>
+            event.success
+              ? logger.info("[agent:completed]", {
+                  agentId: event.agentId,
+                  taskId: event.taskId,
+                  durationMs: event.durationMs,
+                  totalTokens: event.totalTokens,
+                  totalIterations: event.totalIterations,
+                })
+              : logger.warn("[agent:failed]", {
+                  agentId: event.agentId,
+                  taskId: event.taskId,
+                  durationMs: event.durationMs,
+                }),
+          ),
+        );
+
+        yield* eb.on("ExecutionPhaseCompleted", (event: E<"ExecutionPhaseCompleted">) =>
+          Effect.sync(() =>
+            logger.debug(`[phase:${event.phase}]`, {
+              taskId: event.taskId,
+              durationMs: event.durationMs,
+            }),
+          ),
+        );
+
+        yield* eb.on("ToolCallCompleted", (event: E<"ToolCallCompleted">) =>
+          Effect.sync(() => {
+            if (event.success) {
+              logger.info(`[tool:${event.toolName}]`, {
+                taskId: event.taskId,
+                durationMs: event.durationMs,
+              });
+            } else {
+              logger.warn(`[tool:${event.toolName}:error]`, {
+                taskId: event.taskId,
+                durationMs: event.durationMs,
+              });
+            }
+          }),
+        );
+
+        yield* eb.on("LLMRequestCompleted", (event: E<"LLMRequestCompleted">) =>
+          Effect.sync(() =>
+            logger.debug("[llm:completed]", {
+              taskId: event.taskId,
+              model: event.model,
+              tokensUsed: event.tokensUsed,
+              durationMs: event.durationMs,
+            }),
+          ),
+        );
+
+        yield* eb.on("GuardrailViolationDetected", (event: E<"GuardrailViolationDetected">) =>
+          Effect.sync(() =>
+            logger.warn("[guardrail:violation]", {
+              taskId: event.taskId,
+              blocked: event.blocked,
+              violations: event.violations,
+            }),
+          ),
+        );
+      }),
+    ).pipe(Layer.provide(eventBusLayer));
+    runtime = Layer.merge(runtime, loggerTapLayer) as any;
+  }
+
+  // ── Health check service ──
+  if (options.enableHealthCheck) {
+    const { Health, makeHealthService } =
+      require("@reactive-agents/health") as typeof import("@reactive-agents/health");
+    const healthLayer = Layer.effect(
+      Health,
+      makeHealthService({ port: 0, agentName: options.agentId }),
+    );
+    runtime = Layer.merge(runtime, healthLayer) as any;
   }
 
   if (options.enableInteraction) {

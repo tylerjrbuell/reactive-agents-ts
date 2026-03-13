@@ -135,9 +135,16 @@ export function evaluateStrategySwitch(
 
     const content = yield* llm
       .complete({
-        prompt,
-        systemPrompt:
-          "You are a reasoning strategy evaluator. Respond only with valid JSON — no markdown, no prose outside the JSON object.",
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are a reasoning strategy evaluator. Respond only with valid JSON — no markdown, no prose outside the JSON object.",
+          },
+          { role: "user", content: prompt },
+        ],
+        temperature: 0,
+        maxTokens: 256,
       })
       .pipe(
         Effect.map((r) => r.content),

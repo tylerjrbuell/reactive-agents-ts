@@ -373,6 +373,13 @@ declare module 'astro:content' {
   collection: "docs";
   data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
+"guides/cost-optimization.md": {
+	id: "guides/cost-optimization.md";
+  slug: "guides/cost-optimization";
+  body: string;
+  collection: "docs";
+  data: InferEntrySchema<"docs">
+} & { render(): Render[".md"] };
 "guides/guardrails.md": {
 	id: "guides/guardrails.md";
   slug: "guides/guardrails";

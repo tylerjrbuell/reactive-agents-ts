@@ -244,6 +244,24 @@ export type AgentEvent =
       /** Full LLM prompt trace for debug observability (system + user message) */
       readonly prompt?: { readonly system: string; readonly user: string };
     }
+  // ─── Iteration progress (from @reactive-agents/reasoning) ───
+  | {
+      /**
+       * A reasoning iteration completed within the kernel loop.
+       * Fired after each Think→Act→Observe cycle, enabling real-time progress reporting.
+       */
+      readonly _tag: "ReasoningIterationProgress";
+      /** Unique task identifier */
+      readonly taskId: string;
+      /** Current iteration number (1-based) */
+      readonly iteration: number;
+      /** Max iterations allowed for this execution */
+      readonly maxIterations: number;
+      /** Active reasoning strategy */
+      readonly strategy: string;
+      /** Tool names called in this iteration (may be empty if pure thinking step) */
+      readonly toolsThisStep: readonly string[];
+    }
   // ─── Agent lifecycle events (from @reactive-agents/guardrails) ───
   | {
       /**

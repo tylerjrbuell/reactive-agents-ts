@@ -2470,6 +2470,19 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
               } as AgentEvent).pipe(Effect.catchAll(() => Effect.void));
             }
 
+            // Subscribe to ReasoningIterationProgress events — push them as IterationProgress stream events
+            if (eb) {
+              yield* eb.on("ReasoningIterationProgress", (event) =>
+                Queue.offer(queue, {
+                  _tag: "IterationProgress",
+                  iteration: event.iteration,
+                  maxIterations: event.maxIterations,
+                  toolsCalledThisStep: event.toolsThisStep,
+                  status: `iteration ${event.iteration}/${event.maxIterations}`,
+                } as AgentStreamEvent).pipe(Effect.catchAll(() => Effect.void)),
+              ).pipe(Effect.catchAll(() => Effect.void));
+            }
+
             // Fork execution within the Effect context (services available).
             // Events are pushed to the queue; no Queue.shutdown (preserves items).
             yield* Effect.locally(
@@ -2539,7 +2552,8 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 Effect.map((event) => {
                   const isTerminal =
                     event._tag === "StreamCompleted" ||
-                    event._tag === "StreamError";
+                    event._tag === "StreamError" ||
+                    event._tag === "StreamCancelled";
                   return Option.some([event, isTerminal] as const);
                 }),
               );
