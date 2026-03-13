@@ -6,12 +6,11 @@ import {
   agentResponse,
   thinking,
   metricsSummary,
-  renderDashboard,
   divider,
   kv,
   muted,
-  type DashboardData,
 } from "../ui.js";
+import { formatMetricsDashboard, type DashboardData } from "@reactive-agents/observability";
 import { demoResponses, DEMO_TASK } from "./demo-responses.js";
 
 const VIOLET = "#8b5cf6";
@@ -99,16 +98,16 @@ export async function runDemo(_argv: string[]): Promise<void> {
     modelName: "test",
     provider: "test",
     phases: [
-      { name: "bootstrap", duration: 45, status: "success" },
-      { name: "strategy", duration: 30, status: "success" },
-      { name: "think", duration: Math.round(presentedDuration * 0.65), status: "success", detail: "3 iterations" },
-      { name: "complete", duration: 15, status: "success" },
+      { name: "bootstrap", duration: 45, status: "ok" },
+      { name: "strategy", duration: 30, status: "ok" },
+      { name: "think", duration: Math.round(presentedDuration * 0.65), status: "ok", details: "3 iterations" },
+      { name: "complete", duration: 15, status: "ok" },
     ],
     tools: [],
     alerts: [],
   };
 
-  renderDashboard(dashboardData);
+  console.log(formatMetricsDashboard(dashboardData));
   console.log();
 
   metricsSummary({
