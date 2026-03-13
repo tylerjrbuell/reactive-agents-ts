@@ -1,9 +1,7 @@
 import { ReactiveAgents } from "@reactive-agents/runtime";
-import chalk from "chalk";
-
 import { existsSync, readFileSync } from "fs";
 import { resolve } from "path";
-import { createSpinner, kv, muted, divider, fail } from "../ui.js";
+import { createSpinner, kv, muted, fail, section, info } from "../ui.js";
 
 interface MCPConfigFile {
   servers: Array<{
@@ -60,7 +58,7 @@ export async function runAgent(args: string[]): Promise<void> {
     if (arg === "--provider" && args[i + 1]) {
       const raw = args[++i];
       if (!isValidProvider(raw)) {
-        console.error(`Unknown provider: "${raw}". Valid providers: ${VALID_PROVIDERS.join(", ")}`);
+        console.error(fail(`Unknown provider: "${raw}". Valid: ${VALID_PROVIDERS.join(", ")}`));
         process.exit(1);
       }
       provider = raw;
@@ -87,25 +85,25 @@ export async function runAgent(args: string[]): Promise<void> {
 
   const prompt = promptParts.join(" ");
   if (!prompt) {
-    console.error("Usage: rax run <prompt> [options]\n");
-    console.error("Options:");
-    console.error("  --provider <name>    Provider: anthropic, openai, ollama, gemini, litellm, test");
-    console.error("  --model <model>      Model identifier");
-    console.error("  --name <name>        Agent name (default: cli-agent)");
-    console.error("  --tools              Enable tool calling");
-    console.error("  --reasoning          Enable reasoning strategies");
-    console.error("  --mcp-config <path>  Path to MCP server config JSON");
-    console.error("  --verbose, -v        Show phase-by-phase execution details");
-    console.error("  --quiet, -q          Show only output (no metadata)");
-    console.error("  --stream             Stream LLM output tokens");
+    console.error(fail("Usage: rax run <prompt> [options]\n"));
+    console.error(section("Options"));
+    console.error(kv("--provider <name>", "anthropic, openai, ollama, gemini, litellm, test"));
+    console.error(kv("--model <model>", "Model identifier"));
+    console.error(kv("--name <name>", "Agent name (default: cli-agent)"));
+    console.error(kv("--tools", "Enable tool calling"));
+    console.error(kv("--reasoning", "Enable reasoning strategies"));
+    console.error(kv("--mcp-config <path>", "Path to MCP server config JSON"));
+    console.error(kv("--verbose, -v", "Show phase-by-phase execution details"));
+    console.error(kv("--quiet, -q", "Show only output (no metadata)"));
+    console.error(kv("--stream", "Stream LLM output tokens"));
     process.exit(1);
   }
 
   // Validate API key exists before building agent (fast fail)
   const keySpec = PROVIDER_API_KEYS[provider];
   if (keySpec && !process.env[keySpec.env]) {
-    console.error(`Missing API key: ${keySpec.env} is not set.`);
-    console.error(`Set it with: export ${keySpec.env}=<your-key>`);
+    console.error(fail(`Missing API key: ${keySpec.env} is not set.`));
+    console.error(info(`Set it with: export ${keySpec.env}=<your-key>`));
     process.exit(1);
   }
 
@@ -117,11 +115,11 @@ export async function runAgent(args: string[]): Promise<void> {
       const raw = readFileSync(mcpConfigPath ?? configFile, "utf-8");
       mcpConfig = JSON.parse(raw) as MCPConfigFile;
       if (!quiet) {
-        console.log(`Loaded MCP config: ${mcpConfig.servers.length} server(s)`);
+        console.log(info(`Loaded MCP config: ${mcpConfig.servers.length} server(s)`));
       }
     } catch (err) {
       if (mcpConfigPath) {
-        console.error(`Failed to load MCP config from ${mcpConfigPath}: ${err}`);
+        console.error(fail(`Failed to load MCP config from ${mcpConfigPath}: ${err}`));
         process.exit(1);
       }
     }
@@ -166,14 +164,14 @@ export async function runAgent(args: string[]): Promise<void> {
     }
 
     if (!quiet) {
-      console.error(`Running: "${prompt}"\n`);
+      console.log(info(`Running: "${prompt}"\n`));
     }
 
     const execSpin = quiet || stream ? null : createSpinner("Executing...");
     const result = stream
       ? await (async () => {
           if (!quiet) {
-            console.log("\n─── Streaming Output ───");
+            console.log(section("Streaming Output"));
           }
 
           let output = "";
@@ -237,13 +235,9 @@ export async function runAgent(args: string[]): Promise<void> {
         // Quiet mode: output only, no chrome
         console.log(result.output || "");
       } else {
-        console.log("");
-        divider();
-        console.log(chalk.bold("\nOutput:"));
+        console.log(section("Output"));
         console.log(result.output || muted("(no output)"));
-        console.log("");
-        divider();
-        console.log(chalk.bold("\nMetrics:"));
+        console.log(section("Metrics"));
         console.log(kv("Duration", `${result.metadata.duration}ms`));
         console.log(kv("Steps", String(result.metadata.stepsCount)));
         console.log(kv("Cost", `$${result.metadata.cost.toFixed(6)}`));
@@ -253,7 +247,7 @@ export async function runAgent(args: string[]): Promise<void> {
       }
     } else {
       const errorDetail = "error" in result ? result.error : undefined;
-      console.error(`Agent execution failed.${errorDetail ? ` ${errorDetail}` : ""}`);
+      console.error(fail(`Agent execution failed.${errorDetail ? ` ${errorDetail}` : ""}`));
       process.exit(1);
     }
   } catch (err) {
@@ -263,7 +257,7 @@ export async function runAgent(args: string[]): Promise<void> {
     const causeStr = cause
       ? `\n  Caused by: ${cause}`
       : "";
-    console.error(`Error: ${msg}${causeStr}`);
+    console.error(fail(`${msg}${causeStr}`));
     process.exit(1);
   }
 }

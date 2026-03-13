@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import { exec, getComposeStatus, hasCommand, isDockerRunning } from "./deploy/exec.js";
+import { section, success, fail, warn, kv, muted, box } from "../ui.js";
 
 const HELP = `
   Usage: rax inspect <agent-id> [options]
@@ -23,13 +24,13 @@ interface InspectReport {
 
 export function runInspect(args: string[]): void {
   if (args.includes("--help") || args.includes("-h")) {
-    console.log(HELP);
+    box(HELP, { title: " rax inspect " });
     return;
   }
 
   const agentId = args.find((arg) => !arg.startsWith("--"));
   if (!agentId) {
-    console.error("Usage: rax inspect <agent-id> [--logs-tail 200] [--json]");
+    console.error(fail("Usage: rax inspect <agent-id> [--logs-tail 200] [--json]"));
     process.exit(1);
   }
 
@@ -103,23 +104,31 @@ export function runInspect(args: string[]): void {
     return;
   }
 
-  console.log(`Inspecting agent: ${report.agentId}`);
-  console.log(`Directory: ${report.cwd}`);
-  console.log(`Timestamp: ${report.timestamp}\n`);
+  console.log(section(`Inspecting agent: ${report.agentId}`));
+  console.log(kv("Directory", report.cwd));
+  console.log(kv("Timestamp", report.timestamp));
+  console.log("");
 
-  console.log("Checks:");
+  console.log(section("Checks"));
   for (const check of report.checks) {
-    console.log(`  ${check.ok ? "✓" : "✗"} ${check.label}: ${check.detail}`);
+    const detail = check.detail ? `: ${check.detail}` : "";
+    if (check.ok) {
+      console.log(success(`${check.label}${detail}`));
+    } else {
+      console.log(fail(`${check.label}${detail}`));
+    }
   }
 
   if (report.composeStatus) {
-    console.log("\nCompose Status:");
-    console.log(report.composeStatus);
+    console.log("");
+    console.log(section("Compose Status"));
+    console.log(muted(report.composeStatus));
   }
 
-  console.log("\nRecent Log Matches:");
+  console.log("");
+  console.log(section("Recent Log Matches"));
   if (report.logMatches.length === 0) {
-    console.log(`  (no log lines containing \"${report.agentId}\" in last ${logsTail} lines)`);
+    console.log(muted(`  (no log lines containing "${report.agentId}" in last ${logsTail} lines)`));
   } else {
     for (const line of report.logMatches) {
       console.log(`  ${line}`);
@@ -127,6 +136,7 @@ export function runInspect(args: string[]): void {
   }
 
   if (!composeFileExists) {
-    console.log("\nTip: run inspect from a deployment directory containing docker-compose.yml.");
+    console.log("");
+    console.log(warn("Run inspect from a deployment directory containing docker-compose.yml."));
   }
 }

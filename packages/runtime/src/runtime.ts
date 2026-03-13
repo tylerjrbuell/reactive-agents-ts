@@ -1,4 +1,4 @@
-import { Layer, Effect } from "effect";
+import { Layer, Effect, Context } from "effect";
 import { LifecycleHookRegistryLive } from "./hooks.js";
 import { ExecutionEngineLive } from "./execution-engine.js";
 import type { ReactiveAgentsConfig } from "./types.js";
@@ -647,6 +647,24 @@ export interface RuntimeOptions {
    * Default: `false`
    */
   enableHealthCheck?: boolean;
+
+  /**
+   * Graceful degradation configuration. When provided, the runtime creates a
+   * composite LLM service that automatically falls back to the next provider
+   * if the current one fails. Providers are tried in order; the primary
+   * `provider` is always first.
+   *
+   * @example
+   * ```typescript
+   * createRuntime({
+   *   provider: "anthropic",
+   *   fallbackConfig: { providers: ["anthropic", "openai"], errorThreshold: 2 },
+   * })
+   * ```
+   *
+   * Default: undefined (no fallback, single provider)
+   */
+  fallbackConfig?: { providers?: string[]; models?: string[]; errorThreshold?: number };
 }
 
 /**
@@ -767,6 +785,72 @@ export const createRuntime = (options: RuntimeOptions) => {
     },
     options.circuitBreakerConfig,
   );
+
+  // Build effectiveLlmLayer: if fallbackConfig has additional providers, wrap
+  // the primary layer with Effect.catchAll chains so failures cascade through
+  // fallback providers automatically.
+  const fallbackProviders = (options.fallbackConfig?.providers ?? []).filter(
+    (p) => p !== (options.provider ?? "test"),
+  );
+  const effectiveLlmLayer: Layer.Layer<LLMService> =
+    fallbackProviders.length > 0
+      ? Layer.effect(
+          LLMService,
+          Effect.gen(function* () {
+            const primary = yield* LLMService.pipe(
+              Effect.provide(llmLayer as Layer.Layer<LLMService, never, never>),
+            );
+            const fallbacks = yield* Effect.all(
+              fallbackProviders.map((fp) =>
+                LLMService.pipe(
+                  Effect.provide(
+                    createLLMProviderLayer(fp as Parameters<typeof createLLMProviderLayer>[0], undefined, undefined, {
+                      temperature: options.temperature,
+                      maxTokens: options.maxTokens,
+                    }) as Layer.Layer<LLMService, never, never>,
+                  ),
+                ),
+              ),
+              { concurrency: "unbounded" },
+            );
+            const all = [primary, ...fallbacks];
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            return {
+              complete: (req: Parameters<typeof primary.complete>[0]) => {
+                let effect = primary.complete(req);
+                for (const fb of fallbacks) {
+                  const captured = fb;
+                  effect = effect.pipe(Effect.catchAll(() => captured.complete(req)));
+                }
+                return effect;
+              },
+              stream: (req: Parameters<typeof primary.stream>[0]) => primary.stream(req),
+              completeStructured: (req: Parameters<typeof primary.completeStructured>[0]) => {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                let effect = primary.completeStructured(req as any) as any;
+                for (const fb of fallbacks) {
+                  const captured = fb;
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  effect = effect.pipe(Effect.catchAll(() => captured.completeStructured(req as any)));
+                }
+                return effect;
+              },
+              embed: (texts: Parameters<typeof primary.embed>[0], model: Parameters<typeof primary.embed>[1]) => {
+                let effect = primary.embed(texts, model);
+                for (const fb of all.slice(1)) {
+                  const captured = fb;
+                  effect = effect.pipe(Effect.catchAll(() => captured.embed(texts, model)));
+                }
+                return effect;
+              },
+              countTokens: (msgs: Parameters<typeof primary.countTokens>[0]) => primary.countTokens(msgs),
+              getModelConfig: () => primary.getModelConfig(),
+              getStructuredOutputCapabilities: () => primary.getStructuredOutputCapabilities(),
+            } as Context.Tag.Service<LLMService>;
+          }),
+        )
+      : (llmLayer as Layer.Layer<LLMService>);
+
   const memoryOverrides: Record<string, unknown> = { agentId: options.agentId };
   if (options.memoryOptions) {
     const mo = options.memoryOptions;
@@ -826,7 +910,7 @@ export const createRuntime = (options: RuntimeOptions) => {
         bridgedLLM,
       );
     }),
-  ).pipe(Layer.provide(llmLayer));
+  ).pipe(Layer.provide(effectiveLlmLayer));
   const hookLayer = LifecycleHookRegistryLive;
   const engineLayer = ExecutionEngineLive(config).pipe(
     Layer.provide(hookLayer),
@@ -836,7 +920,7 @@ export const createRuntime = (options: RuntimeOptions) => {
   let runtime = Layer.mergeAll(
     coreLayer,
     eventBusLayer,
-    llmLayer,
+    effectiveLlmLayer,
     memoryLayer,
     hookLayer,
     engineLayer,
@@ -1032,9 +1116,9 @@ export const createRuntime = (options: RuntimeOptions) => {
       : defaultReasoningConfig;
 
     // ReasoningService requires LLMService, optionally ToolService + PromptService
-    let reasoningDeps = llmLayer;
+    let reasoningDeps = effectiveLlmLayer;
     if (toolsLayer) {
-      reasoningDeps = Layer.merge(llmLayer, toolsLayer) as any;
+      reasoningDeps = Layer.merge(effectiveLlmLayer, toolsLayer) as any;
     }
     if (promptLayer) {
       reasoningDeps = Layer.merge(reasoningDeps, promptLayer) as any;

@@ -6,6 +6,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import type { DeployProvider, DeployTarget, DeployContext, PreflightReport, PreflightCheck } from "./types.js";
 import { resolveCli } from "./exec.js";
+import { section, info, success, fail, warn, kv, muted } from "../../ui.js";
 
 // ─── Import all adapters ────────────────────────────────────────────────────
 
@@ -79,17 +80,12 @@ export function detectTarget(cwd: string): DeployTarget | null {
 
 // ─── Preflight / Dry-Run Rendering ──────────────────────────────────────────
 
-const STATUS_ICONS: Record<PreflightCheck["status"], string> = {
-  pass: "✅",
-  fail: "❌",
-  warn: "⚠️ ",
-};
-
 /** Print a structured preflight report to stdout */
 export function printPreflightReport(report: PreflightReport) {
   const { provider, checks, plan, filesToCreate, ok } = report;
 
-  console.log(`\n  🔍 Preflight Report — target: ${provider}\n`);
+  console.log(section(`Preflight Report — target: ${provider}`));
+  console.log("");
 
   // CLI resolution info
   const p = providers.get(provider);
@@ -97,50 +93,57 @@ export function printPreflightReport(report: PreflightReport) {
     const resolved = resolveCli(p.cliNames);
     if (resolved) {
       const src = resolved.source === "local" ? "local binary" : "Docker container";
-      console.log(`  CLI: ${resolved.command} (${src})${resolved.version ? ` — ${resolved.version}` : ""}`);
+      console.log(kv("CLI", `${resolved.command} (${src})${resolved.version ? ` — ${resolved.version}` : ""}`));
     } else {
-      console.log(`  CLI: not found — install: ${p.installHint}`);
+      console.log(warn(`CLI not found — install: ${p.installHint}`));
       if (p.cliNames.some((n) => ["flyctl", "gcloud", "doctl"].includes(n))) {
-        console.log(`       or Docker will be used as fallback if available`);
+        console.log(muted("       or Docker will be used as fallback if available"));
       }
     }
-    console.log();
+    console.log("");
   }
 
   // Checks table
-  console.log("  Checks:");
+  console.log(section("Checks"));
   for (const check of checks) {
-    const icon = STATUS_ICONS[check.status];
     const detail = check.detail ? ` — ${check.detail}` : "";
-    console.log(`    ${icon} ${check.label}${detail}`);
+    if (check.status === "pass") {
+      console.log(success(`${check.label}${detail}`));
+    } else if (check.status === "fail") {
+      console.log(fail(`${check.label}${detail}`));
+    } else {
+      console.log(warn(`${check.label}${detail}`));
+    }
   }
 
   // Files
   if (filesToCreate.length > 0) {
-    console.log("\n  Files to create:");
+    console.log("");
+    console.log(section("Files to create"));
     for (const f of filesToCreate) {
-      console.log(`    + ${f}`);
+      console.log(info(`+ ${f}`));
     }
   }
 
   // Execution plan
   if (plan.length > 0) {
-    console.log("\n  Execution plan:");
+    console.log("");
+    console.log(section("Execution plan"));
     for (let i = 0; i < plan.length; i++) {
-      console.log(`    ${i + 1}. ${plan[i]}`);
+      console.log(kv(`${i + 1}`, plan[i]));
     }
   }
 
   // Result
-  console.log();
+  console.log("");
   if (ok) {
-    console.log("  ✅ Preflight passed — ready to deploy.\n");
+    console.log(success("Preflight passed — ready to deploy."));
   } else {
     const failures = checks.filter((c) => c.status === "fail");
-    console.log(`  ❌ Preflight failed — ${failures.length} issue(s) to resolve:\n`);
+    console.log(fail(`Preflight failed — ${failures.length} issue(s) to resolve:`));
     for (const f of failures) {
-      console.log(`     • ${f.label}${f.detail ? `: ${f.detail}` : ""}`);
+      console.log(muted(`     • ${f.label}${f.detail ? `: ${f.detail}` : ""}`));
     }
-    console.log();
   }
+  console.log("");
 }

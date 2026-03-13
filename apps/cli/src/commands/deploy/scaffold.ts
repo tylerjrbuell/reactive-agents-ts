@@ -6,6 +6,7 @@ import { composeSingleTemplate, composeMonorepoTemplate } from "../../templates/
 import { sdkServerTemplate, sdkDockerfileTemplate, sdkDockerfileMonorepoTemplate } from "../../templates/sdk-server.js";
 import { raxdConfigTemplate } from "../../templates/raxd-config.js";
 import type { DeployTarget, ScaffoldResult } from "./types.js";
+import { info, warn, success, muted } from "../../ui.js";
 
 /** Walk up from cwd looking for a workspace root (package.json with "workspaces") */
 export function detectMonorepoRoot(from: string): string | null {
@@ -117,8 +118,8 @@ export function scaffoldDocker(
     appPath = relative(monorepoRoot, cwd).replace(/\\/g, "/");
     const contextPath = relative(cwd, monorepoRoot).replace(/\\/g, "/");
 
-    console.log(`  monorepo detected (root: ${monorepoRoot})`);
-    console.log(`  app path: ${appPath}`);
+    console.log(info(`monorepo detected (root: ${monorepoRoot})`));
+    console.log(info(`app path: ${appPath}`));
 
     files = [
       { path: "Dockerfile", content: dockerfileMonorepoTemplate(name, appPath) },
@@ -131,9 +132,9 @@ export function scaffoldDocker(
     const rootDockerIgnore = join(monorepoRoot, ".dockerignore");
     if (!existsSync(rootDockerIgnore)) {
       writeFileSync(rootDockerIgnore, MONOREPO_DOCKERIGNORE, "utf-8");
-      console.log(`  create ${contextPath}/.dockerignore (build context root)`);
+      console.log(success(`create ${contextPath}/.dockerignore (build context root)`));
     } else {
-      console.log(`  skip ${contextPath}/.dockerignore (already exists)`);
+      console.log(muted(`  skip ${contextPath}/.dockerignore (already exists)`));
     }
   } else {
     files = [
@@ -152,11 +153,11 @@ export function scaffoldDocker(
   for (const file of files) {
     const fullPath = join(cwd, file.path);
     if (existsSync(fullPath)) {
-      console.log(`  skip ${file.path} (already exists)`);
+      console.log(muted(`  skip ${file.path} (already exists)`));
       skipped++;
     } else {
       writeFileSync(fullPath, file.content, "utf-8");
-      console.log(`  create ${file.path}`);
+      console.log(success(`create ${file.path}`));
       created++;
       createdFiles.push(file.path);
     }
@@ -177,8 +178,8 @@ export function checkEnvFile(cwd: string): boolean {
   const envPath = join(cwd, ".env.production");
   if (existsSync(envPath)) return true;
 
-  console.log("\n  ⚠️  No .env.production found.");
-  console.log("  Copy .env.production.example → .env.production and add your API keys.\n");
+  console.log(warn("No .env.production found."));
+  console.log(info("Copy .env.production.example → .env.production and add your API keys."));
   return false;
 }
 
@@ -224,11 +225,11 @@ export function scaffoldSdkServer(
   for (const file of files) {
     const fullPath = join(cwd, file.path);
     if (existsSync(fullPath)) {
-      console.log(`  skip ${file.path} (already exists)`);
+      console.log(muted(`  skip ${file.path} (already exists)`));
       skipped++;
     } else {
       writeFileSync(fullPath, file.content, "utf-8");
-      console.log(`  create ${file.path}`);
+      console.log(success(`create ${file.path}`));
       created++;
       createdFiles.push(file.path);
     }

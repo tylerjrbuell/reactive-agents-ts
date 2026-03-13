@@ -1837,6 +1837,7 @@ export class ReactiveAgentBuilder {
       sessionMaxAgeDays: this._sessionMaxAgeDays,
       loggingConfig: this._loggingConfig as import("@reactive-agents/observability").LoggingConfig | undefined,
       enableHealthCheck: this._enableHealthCheck,
+      fallbackConfig: this._fallbackConfig,
     });
 
     const hooks = [...this._hooks];

@@ -6,6 +6,7 @@ import type { DeployOptions, DeployTarget, DeployMode, DeployContext } from "./t
 import { VALID_TARGETS, VALID_MODES } from "./types.js";
 import { scaffoldSdkServer, detectAgentName, detectMonorepoRoot } from "./scaffold.js";
 import { getProvider, detectTarget, printPreflightReport } from "./registry.js";
+import { banner, kv, info, fail, box } from "../../ui.js";
 
 const HELP = `
   Usage: rax deploy <command> [options]
@@ -84,11 +85,11 @@ export function runDeploy(argv: string[]) {
     case "--help":
     case "-h":
     case undefined:
-      console.log(HELP);
+      box(HELP, { title: " rax deploy " });
       break;
     default:
-      console.error(`Unknown deploy subcommand: ${subcommand}`);
-      console.log(HELP);
+      console.error(fail(`Unknown deploy subcommand: ${subcommand}`));
+      box(HELP, { title: " rax deploy " });
       process.exit(1);
   }
 }
@@ -144,7 +145,7 @@ function parseOptions(argv: string[]): DeployOptions {
         break;
       case "--help":
       case "-h":
-        console.log(HELP);
+        box(HELP, { title: " rax deploy " });
         process.exit(0);
     }
   }
@@ -158,12 +159,12 @@ function parseOptions(argv: string[]): DeployOptions {
   }
 
   if (!VALID_TARGETS.includes(opts.target)) {
-    console.error(`Unknown target: "${opts.target}". Available: ${VALID_TARGETS.join(", ")}`);
+    console.error(fail(`Unknown target: "${opts.target}". Available: ${VALID_TARGETS.join(", ")}`));
     process.exit(1);
   }
 
   if (!VALID_MODES.includes(opts.mode)) {
-    console.error(`Unknown mode: "${opts.mode}". Available: ${VALID_MODES.join(", ")}`);
+    console.error(fail(`Unknown mode: "${opts.mode}". Available: ${VALID_MODES.join(", ")}`));
     process.exit(1);
   }
 
@@ -189,7 +190,7 @@ function buildContext(opts: DeployOptions): DeployContext {
 
 function runDeployUp(argv: string[]) {
   if (argv.includes("--help") || argv.includes("-h")) {
-    console.log(HELP);
+    box(HELP, { title: " rax deploy " });
     return;
   }
 
@@ -197,7 +198,11 @@ function runDeployUp(argv: string[]) {
   const ctx = buildContext(opts);
   const provider = getProvider(opts.target);
 
-  console.log(`\n🚀 rax deploy up — target: ${opts.target}, mode: ${opts.mode}, agent: ${opts.name}\n`);
+  banner("rax deploy up");
+  console.log(kv("Target", opts.target));
+  console.log(kv("Mode", opts.mode));
+  console.log(kv("Agent", opts.name));
+  console.log("");
 
   // Dry-run: run preflight only and print report
   if (opts.dryRun) {
@@ -210,11 +215,12 @@ function runDeployUp(argv: string[]) {
   if (opts.mode === "sdk") {
     const serverPath = join(ctx.cwd, "server.ts");
     if (!existsSync(serverPath)) {
-      console.log("  Scaffolding SDK server...\n");
+      console.log(info("Scaffolding SDK server..."));
       scaffoldSdkServer(ctx.cwd, opts.name);
     } else {
-      console.log("  SDK server.ts already exists\n");
+      console.log(info("SDK server.ts already exists"));
     }
+    console.log("");
   }
 
   // Delegate to provider adapter
@@ -225,7 +231,7 @@ function runDeployUp(argv: string[]) {
 
 function runDeployLifecycle(command: "down" | "status" | "logs", argv: string[]) {
   if (argv.includes("--help") || argv.includes("-h")) {
-    console.log(HELP);
+    box(HELP, { title: " rax deploy " });
     return;
   }
 

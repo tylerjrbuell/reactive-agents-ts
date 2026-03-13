@@ -1,6 +1,5 @@
 import { ReactiveAgents } from "@reactive-agents/runtime";
-import chalk from "chalk";
-import { banner, kv, success } from "../ui.js";
+import { banner, kv, success, fail, info, muted, box } from "../ui.js";
 
 const VALID_PROVIDERS = ["anthropic", "openai", "ollama", "gemini", "litellm", "test"] as const;
 type Provider = (typeof VALID_PROVIDERS)[number];
@@ -29,7 +28,7 @@ export function runServe(argv: string[]) {
   const args = argv.slice();
 
   if (args.includes("--help") || args.includes("-h")) {
-    console.log(HELP);
+    box(HELP, { title: " rax serve " });
     return;
   }
 
@@ -52,13 +51,13 @@ export function runServe(argv: string[]) {
         break;
       case "--provider":
         if (!args[i + 1]) {
-          console.error("Missing value for --provider");
+          console.error(fail("Missing value for --provider"));
           process.exit(1);
         }
         {
           const raw = args[++i];
           if (!isValidProvider(raw)) {
-            console.error(`Unknown provider: \"${raw}\". Valid providers: ${VALID_PROVIDERS.join(", ")}`);
+            console.error(fail(`Unknown provider: "${raw}". Valid providers: ${VALID_PROVIDERS.join(", ")}`));
             process.exit(1);
           }
           provider = raw;
@@ -113,7 +112,7 @@ async function startServer(
   try {
     agent = await agentPromise;
   } catch (err) {
-    console.error("Failed to build agent:", err);
+    console.error(fail(`Failed to build agent: ${err}`));
     process.exit(1);
   }
 
@@ -255,11 +254,11 @@ async function startServer(
   console.log(success(`A2A server ready on port ${port}`));
   console.log(kv("Agent Card", `http://localhost:${port}/.well-known/agent.json`));
   console.log(kv("JSON-RPC", `http://localhost:${port}/`));
-  console.log(chalk.hex("#6b7280")("\nUse Ctrl+C to stop"));
+  console.log(muted("\nUse Ctrl+C to stop"));
 
   // Keep the process alive
   process.on("SIGINT", () => {
-    console.log("\nShutting down A2A server...");
+    console.log(info("Shutting down A2A server..."));
     server.stop(true);
     process.exit(0);
   });
