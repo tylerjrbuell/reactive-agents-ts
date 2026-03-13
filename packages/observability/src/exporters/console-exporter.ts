@@ -8,7 +8,6 @@ import chalk from "chalk";
 import boxen from "boxen";
 
 // ─── Brand Palette ───
-const C_VIOLET = "#8b5cf6";
 const C_CYAN   = "#06b6d4";
 const C_GREEN  = "#22c55e";
 const C_YELLOW = "#eab308";
@@ -535,10 +534,10 @@ export const formatMetricsDashboard = (data: DashboardData): string => {
     : data.status === "error" ? C_RED
     : C_YELLOW;
 
-  const statusText =
-    data.status === "success" ? chalk.hex(C_GREEN)("✔ Success")
-    : data.status === "error" ? chalk.hex(C_RED)("✖ Failed")
-    : chalk.hex(C_YELLOW)("⚠ Partial");
+  const statusLabel =
+    data.status === "success" ? "✔ Success"
+    : data.status === "error"  ? "✖ Failed"
+    : "⚠ Partial";
 
   const durationStr = formatDuration(data.totalDuration);
   const isLocalProvider =
@@ -546,11 +545,11 @@ export const formatMetricsDashboard = (data: DashboardData): string => {
     data.provider?.toLowerCase().includes("test");
 
   const headerLines = [
-    `${chalk.bold("Status:")}   ${statusText}   ${chalk.bold("Duration:")} ${durationStr}   ${chalk.bold("Steps:")} ${data.stepCount}`,
-    `${chalk.bold("Model:")}    ${data.modelName}   (${data.provider})   ${chalk.bold("Tokens:")} ${formatNumber(data.tokenCount)}`,
+    `Status:   ${statusLabel}   Duration: ${durationStr}   Steps: ${data.stepCount}`,
+    `Model:    ${data.modelName}   (${data.provider})   Tokens: ${formatNumber(data.tokenCount)}`,
   ];
   if (!isLocalProvider) {
-    headerLines.push(`${chalk.bold("Cost:")}     ~$${data.estimatedCost.toFixed(3)}`);
+    headerLines.push(`Cost:     ~$${data.estimatedCost.toFixed(3)}`);
   }
 
   lines.push(
@@ -575,17 +574,18 @@ export const formatMetricsDashboard = (data: DashboardData): string => {
       const phase = data.phases[i];
       const isLast = i === data.phases.length - 1;
       const prefix = isLast ? "└─" : "├─";
+
+      const icon =
+        phase.status === "warning" ? "⚠️"
+        : phase.status === "error"  ? "❌"
+        : "✅";
+
+      // Pad before applying chalk so ANSI codes don't skew padEnd math
       const phaseName = chalk.hex(C_DIM)(`[${phase.name}]`.padEnd(maxPhaseNameLen));
       const durStr = formatDuration(phase.duration).padStart(8);
-
-      // Status icon — at end of line, no padding needed after it
-      const icon =
-        phase.status === "warning" ? chalk.hex(C_YELLOW)("⚠")
-        : phase.status === "error" ? chalk.hex(C_RED)("✖")
-        : chalk.hex(C_GREEN)("✔");
-
       const detailsStr = phase.details ? chalk.hex(C_DIM)(` (${phase.details})`) : "";
-      lines.push(`${prefix} ${phaseName} ${durStr}  ${icon}${detailsStr}`);
+
+      lines.push(`${prefix} ${icon}  ${phaseName} ${durStr}${detailsStr}`);
     }
   }
 
@@ -594,17 +594,24 @@ export const formatMetricsDashboard = (data: DashboardData): string => {
     lines.push("");
     lines.push(chalk.hex(C_CYAN).bold(`🔧 Tool Execution (${data.tools.length} called)`));
 
+    const maxToolNameLen = Math.max(...data.tools.map((t) => t.name.length), 10);
+
     for (let i = 0; i < data.tools.length; i++) {
       const tool = data.tools[i];
       const isLast = i === data.tools.length - 1;
       const prefix = isLast ? "└─" : "├─";
-      const icon = tool.errorCount > 0 ? chalk.hex(C_YELLOW)("⚠") : chalk.hex(C_GREEN)("✔");
+
+      const icon = tool.errorCount > 0 ? "⚠️" : "✅";
+
+      // Pad name before chalk so ANSI codes don't skew column alignment
+      const toolName = chalk.hex(C_CYAN)(tool.name.padEnd(maxToolNameLen));
       const avgStr = formatDuration(tool.avgDuration);
       const errStr = tool.errorCount > 0
         ? chalk.hex(C_RED)(` ${tool.errorCount} errors`)
         : "";
+
       lines.push(
-        `${prefix} ${chalk.hex(C_CYAN)(tool.name)}  ${icon} ${tool.callCount} calls, ${avgStr} avg${errStr}`,
+        `${prefix} ${icon}  ${toolName}  ${tool.callCount} calls, ${avgStr} avg${errStr}`,
       );
     }
   }
@@ -612,16 +619,16 @@ export const formatMetricsDashboard = (data: DashboardData): string => {
   // ── Alerts & Insights ────────────────────────────────────────────────────
   if (data.alerts.length > 0) {
     lines.push("");
-    lines.push(chalk.hex(C_YELLOW).bold("⚠  Alerts & Insights"));
+    lines.push(chalk.hex(C_YELLOW).bold("⚠️  Alerts & Insights"));
 
     for (let i = 0; i < data.alerts.length; i++) {
       const alert = data.alerts[i];
       const isLast = i === data.alerts.length - 1;
       const prefix = isLast ? "└─" : "├─";
       const icon =
-        alert.level === "error" ? chalk.hex(C_RED)("✖")
-        : alert.level === "warning" ? chalk.hex(C_YELLOW)("⚠")
-        : chalk.hex(C_DIM)("ℹ");
+        alert.level === "error"   ? "❌"
+        : alert.level === "warning" ? "⚠️"
+        : "ℹ️";
       lines.push(`${prefix} ${icon}  ${alert.message}`);
     }
   }

@@ -348,6 +348,7 @@ describe("DashboardFormatter (Task 2)", () => {
       tokenCount: 1963,
       estimatedCost: 0.003,
       modelName: "claude-3.5",
+      provider: "anthropic",
       phases: [
         { name: "bootstrap", duration: 100, status: "ok" },
         { name: "think", duration: 10001, status: "warning", details: "7 iter, 72% of time" },
@@ -399,6 +400,7 @@ describe("DashboardFormatter (Task 2)", () => {
       tokenCount: 1500,
       estimatedCost: 0.002,
       modelName: "claude-3",
+      provider: "anthropic",
       phases: [
         { name: "think", duration: 11000, status: "warning" },
       ],
@@ -412,7 +414,7 @@ describe("DashboardFormatter (Task 2)", () => {
     const lines = output.split("\n");
     const thinkLine = lines.find(l => l.includes("[think]"));
     expect(thinkLine).toBeDefined();
-    expect(thinkLine).toContain("⚠");
+    expect(thinkLine).toContain("⚠️");
   });
 
   test("formatMetricsDashboard() omits empty sections", () => {
@@ -423,6 +425,7 @@ describe("DashboardFormatter (Task 2)", () => {
       tokenCount: 800,
       estimatedCost: 0.001,
       modelName: "claude-3",
+      provider: "anthropic",
       phases: [],
       tools: [],
       alerts: [],
@@ -436,7 +439,7 @@ describe("DashboardFormatter (Task 2)", () => {
     // But sections for empty data should not appear
     expect(output).not.toContain("📊 Execution Timeline");
     expect(output).not.toContain("🔧 Tool Execution");
-    expect(output).not.toContain("⚠️  Alerts & Insights");
+    expect(output).not.toContain("Alerts & Insights");
   });
 
   test("formatMetricsDashboard() formats error status correctly", () => {
@@ -447,6 +450,7 @@ describe("DashboardFormatter (Task 2)", () => {
       tokenCount: 500,
       estimatedCost: 0.001,
       modelName: "claude-3",
+      provider: "anthropic",
       phases: [
         { name: "bootstrap", duration: 100, status: "error" },
       ],
@@ -470,6 +474,7 @@ describe("DashboardFormatter (Task 2)", () => {
       tokenCount: 1000,
       estimatedCost: 0.001,
       modelName: "claude-3",
+      provider: "anthropic",
       phases: [],
       tools: [
         { name: "file-write", callCount: 3, successCount: 2, errorCount: 1, avgDuration: 400 },
@@ -481,8 +486,8 @@ describe("DashboardFormatter (Task 2)", () => {
 
     expect(output).toContain("🔧 Tool Execution");
     expect(output).toContain("file-write");
-    // Tool with errors should show warning
-    expect(output).toContain("⚠");
+    // Tool with errors should show warning emoji
+    expect(output).toContain("⚠️");
   });
 });
 
@@ -634,9 +639,9 @@ describe("Task 4: exportMetrics() Dashboard Integration", () => {
       exporter.exportMetrics(metrics);
 
       const combined = output.join("\n");
-      // Overall status is success; phase timeline still shows ⚠ for slow phases
+      // Overall status is success; phase timeline still shows ⚠️ for slow phases
       expect(combined).toContain("Success");
-      expect(combined).toContain("⚠");
+      expect(combined).toContain("⚠️");
     } finally {
       console.log = origLog;
     }
