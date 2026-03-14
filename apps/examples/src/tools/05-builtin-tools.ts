@@ -49,11 +49,11 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
     .withTools()
     .withReasoning({ defaultStrategy: "reactive" })
     .withMaxIterations(6)
-    .withTestResponses({
-      "write": `ACTION: file-write\n{"path":"${DEMO_FILE}","content":"${DEMO_CONTENT}"}\nFINAL ANSWER: I wrote "${DEMO_CONTENT}" to ${DEMO_FILE} successfully.`,
-      "file": `ACTION: file-write\n{"path":"${DEMO_FILE}","content":"${DEMO_CONTENT}"}\nFINAL ANSWER: I wrote "${DEMO_CONTENT}" to ${DEMO_FILE} successfully.`,
-      "": `FINAL ANSWER: I wrote "${DEMO_CONTENT}" to ${DEMO_FILE} successfully.`,
-    })
+    .withTestScenario([
+      { match: "write", text: `ACTION: file-write\n{"path":"${DEMO_FILE}","content":"${DEMO_CONTENT}"}\nFINAL ANSWER: I wrote "${DEMO_CONTENT}" to ${DEMO_FILE} successfully.` },
+      { match: "file", text: `ACTION: file-write\n{"path":"${DEMO_FILE}","content":"${DEMO_CONTENT}"}\nFINAL ANSWER: I wrote "${DEMO_CONTENT}" to ${DEMO_FILE} successfully.` },
+      { text: `FINAL ANSWER: I wrote "${DEMO_CONTENT}" to ${DEMO_FILE} successfully.` },
+    ])
     .build();
 
   const result = await agent.run(

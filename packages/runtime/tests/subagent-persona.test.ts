@@ -5,7 +5,6 @@ describe("Sub-agent Persona Support", () => {
   it("withAgentTool accepts persona configuration", async () => {
     const agent = await ReactiveAgents.create()
       .withName("test-agent")
-      .withProvider("test")
       .withAgentTool("data-analyst", {
         name: "data-analyst",
         description: "Analyzes data and generates reports",
@@ -16,7 +15,7 @@ describe("Sub-agent Persona Support", () => {
         },
         systemPrompt: "You have access to data analysis tools.",
       })
-      .withTestResponses({ "test-input": "test-output" })
+      .withTestScenario([{ match: "test-input", text: "test-output" }])
       .build();
 
     expect(agent).toBeDefined();
@@ -26,9 +25,8 @@ describe("Sub-agent Persona Support", () => {
   it("withDynamicSubAgents enables spawn-agent tool with persona support", async () => {
     const agent = await ReactiveAgents.create()
       .withName("test-agent-dynamic")
-      .withProvider("test")
       .withDynamicSubAgents({ maxIterations: 3 })
-      .withTestResponses({ "test-input": "test-output" })
+      .withTestScenario([{ match: "test-input", text: "test-output" }])
       .build();
 
     expect(agent).toBeDefined();
@@ -38,7 +36,6 @@ describe("Sub-agent Persona Support", () => {
   it("static subagent persona and systemPrompt compose correctly", async () => {
     const agent = await ReactiveAgents.create()
       .withName("test-agent-static")
-      .withProvider("test")
       .withAgentTool("researcher", {
         name: "researcher",
         persona: {
@@ -48,7 +45,7 @@ describe("Sub-agent Persona Support", () => {
         },
         systemPrompt: "Focus on recent publications.",
       })
-      .withTestResponses({ "test-input": "test-output" })
+      .withTestScenario([{ match: "test-input", text: "test-output" }])
       .build();
 
     expect(agent).toBeDefined();
@@ -65,7 +62,6 @@ describe("Sub-agent Persona Support", () => {
 
     const agent = await ReactiveAgents.create()
       .withName("test-qa")
-      .withProvider("test")
       .withAgentTool("qa-agent", {
         name: "qa-agent",
         persona: {
@@ -75,7 +71,7 @@ describe("Sub-agent Persona Support", () => {
           tone: persona.tone,
         },
       })
-      .withTestResponses({ "test-input": "test-output" })
+      .withTestScenario([{ match: "test-input", text: "test-output" }])
       .build();
 
     expect(agent).toBeDefined();

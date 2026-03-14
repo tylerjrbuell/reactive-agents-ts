@@ -47,10 +47,10 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
     .withMemory("1")
     .withSelfImprovement()
     .withMaxIterations(5)
-    .withTestResponses({
-      "9": "FINAL ANSWER: 9 × 8 = 72",
-      "": "FINAL ANSWER: 72",
-    })
+    .withTestScenario([
+      { match: "9", text: "FINAL ANSWER: 9 × 8 = 72" },
+      { text: "FINAL ANSWER: 72" },
+    ])
     .build();
 
   const run1 = await agent1.run("What is 9 × 8?");
@@ -67,10 +67,10 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
     .withMemory("1")
     .withSelfImprovement()
     .withMaxIterations(5)
-    .withTestResponses({
-      "6": "FINAL ANSWER: 6 × 7 = 42",
-      "": "FINAL ANSWER: 42",
-    })
+    .withTestScenario([
+      { match: "6", text: "FINAL ANSWER: 6 × 7 = 42" },
+      { text: "FINAL ANSWER: 42" },
+    ])
     .build();
 
   const run2 = await agent2.run("What is 6 × 7?");
@@ -87,10 +87,10 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
     .withMemory("1")
     .withSelfImprovement()
     .withMaxIterations(5)
-    .withTestResponses({
-      "capital": "FINAL ANSWER: Paris is the capital of France.",
-      "": "FINAL ANSWER: Paris",
-    })
+    .withTestScenario([
+      { match: "capital", text: "FINAL ANSWER: Paris is the capital of France." },
+      { text: "FINAL ANSWER: Paris" },
+    ])
     .build();
 
   const run3 = await agent3.run("What is the capital of France?");

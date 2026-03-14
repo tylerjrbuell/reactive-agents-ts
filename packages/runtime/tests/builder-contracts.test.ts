@@ -145,8 +145,7 @@ describe("withErrorHandler — fires on execution failure", () => {
     // We test this by verifying the error handler captures the error when agent.run() throws.
     const builderErrors: unknown[] = [];
     const agent = await ReactiveAgents.create()
-      .withProvider("test")
-      .withTestResponses({ ".*": "FINAL ANSWER: done" })
+      .withTestScenario([{ text: "FINAL ANSWER: done" }])
       .withErrorHandler((err) => {
         builderErrors.push(err);
       })
@@ -163,8 +162,7 @@ describe("withErrorHandler — fires on execution failure", () => {
 
     const agent = await ReactiveAgents.create()
       .withName("test-agent")
-      .withProvider("test")
-      .withTestResponses({ ".*": "FINAL ANSWER: done" })
+      .withTestScenario([{ text: "FINAL ANSWER: done" }])
       .withErrorHandler((err) => {
         errors.push(err);
       })
@@ -185,9 +183,8 @@ describe("withStrictValidation — throws at build time for missing API keys", (
   it("builds successfully with test provider (no API key needed)", async () => {
     // test provider has no required API key — strict validation passes
     const agent = await ReactiveAgents.create()
-      .withProvider("test")
       .withStrictValidation()
-      .withTestResponses({ ".*": "done" })
+      .withTestScenario([{ text: "done" }])
       .build();
 
     expect(agent).toBeDefined();
@@ -244,8 +241,7 @@ describe("withStrictValidation — throws at build time for missing API keys", (
 describe("withReasoning({ enableStrategySwitching: true }) — config flows through", () => {
   it("agent builds and runs without crashing when strategy switching is enabled", async () => {
     const agent = await ReactiveAgents.create()
-      .withProvider("test")
-      .withTestResponses({ ".*": "FINAL ANSWER: done" })
+      .withTestScenario([{ text: "FINAL ANSWER: done" }])
       .withReasoning({
         enableStrategySwitching: true,
         maxStrategySwitches: 1,
@@ -262,8 +258,7 @@ describe("withReasoning({ enableStrategySwitching: true }) — config flows thro
 
   it("agent runs correctly with strategy switching when paired with maxIterations", async () => {
     const agent = await ReactiveAgents.create()
-      .withProvider("test")
-      .withTestResponses({ ".*": "FINAL ANSWER: done" })
+      .withTestScenario([{ text: "FINAL ANSWER: done" }])
       .withReasoning({ enableStrategySwitching: true })
       .withMaxIterations(5)
       .build();

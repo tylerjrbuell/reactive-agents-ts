@@ -54,9 +54,7 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
     const agent = await b
       .withReasoning({ defaultStrategy: strategy })
       .withMaxIterations(5)
-      .withTestResponses({
-        "": `FINAL ANSWER: [${strategy}] Agent memory enables persistent context across conversation turns, allowing coherent multi-turn interactions.`,
-      })
+      .withTestScenario([{ text: `FINAL ANSWER: [${strategy}] Agent memory enables persistent context across conversation turns, allowing coherent multi-turn interactions.` }])
       .build();
 
     const result = await agent.run(TASK);

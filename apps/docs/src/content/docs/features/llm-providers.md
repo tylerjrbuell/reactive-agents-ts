@@ -194,15 +194,14 @@ All providers include built-in retry logic with exponential backoff for transien
 
 ## Testing
 
-Use the test provider for deterministic, offline testing:
+Use `withTestScenario()` for deterministic, offline testing:
 
 ```typescript
 const agent = await ReactiveAgents.create()
-  .withProvider("test")
-  .withTestResponses({
-    "capital of France": "Paris is the capital of France.",
-    quantum: "Quantum mechanics describes nature at the atomic scale.",
-  })
+  .withTestScenario([
+    { match: "capital of France", text: "Paris is the capital of France." },
+    { match: "quantum", text: "Quantum mechanics describes nature at the atomic scale." },
+  ])
   .build();
 
 const result = await agent.run("What is the capital of France?");

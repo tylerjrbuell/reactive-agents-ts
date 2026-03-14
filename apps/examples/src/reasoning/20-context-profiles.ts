@@ -37,19 +37,13 @@ export async function run(): Promise<ExampleResult> {
   const [localAgent, frontierAgent] = await Promise.all([
     ReactiveAgents.create()
       .withName("local-tier-agent")
-      .withProvider("test")
+      .withTestScenario([{ text: "FINAL ANSWER: 42 (local tier — compact context, minimal prompt)" }])
       .withContextProfile({ tier: "local" })
-      .withTestResponses({
-        "": "FINAL ANSWER: 42 (local tier — compact context, minimal prompt)",
-      })
       .build(),
     ReactiveAgents.create()
       .withName("frontier-tier-agent")
-      .withProvider("test")
+      .withTestScenario([{ text: "FINAL ANSWER: 42 (frontier tier — full context budget, rich schema)" }])
       .withContextProfile({ tier: "frontier" })
-      .withTestResponses({
-        "": "FINAL ANSWER: 42 (frontier tier — full context budget, rich schema)",
-      })
       .build(),
   ]);
 
@@ -68,19 +62,13 @@ export async function run(): Promise<ExampleResult> {
   const [midAgent, largeAgent] = await Promise.all([
     ReactiveAgents.create()
       .withName("mid-tier-agent")
-      .withProvider("test")
+      .withTestScenario([{ text: "FINAL ANSWER: mid tier response with balanced context budget" }])
       .withContextProfile({ tier: "mid" })
-      .withTestResponses({
-        "": "FINAL ANSWER: mid tier response with balanced context budget",
-      })
       .build(),
     ReactiveAgents.create()
       .withName("large-tier-agent")
-      .withProvider("test")
+      .withTestScenario([{ text: "FINAL ANSWER: large tier response with extended context window" }])
       .withContextProfile({ tier: "large" })
-      .withTestResponses({
-        "": "FINAL ANSWER: large tier response with extended context window",
-      })
       .build(),
   ]);
 

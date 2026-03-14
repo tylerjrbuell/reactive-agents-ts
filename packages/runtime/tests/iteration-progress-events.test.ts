@@ -33,8 +33,7 @@ describe("IterationProgress events in runStream()", () => {
   it("at least one IterationProgress event is emitted during a run", async () => {
     const events = await collectStreamEvents(
       ReactiveAgents.create()
-        .withProvider("test")
-        .withTestResponses({ ".*": "FINAL ANSWER: done" })
+        .withTestScenario([{ text: "FINAL ANSWER: done" }])
         .withReasoning()
         .withMaxIterations(3),
     );
@@ -46,8 +45,7 @@ describe("IterationProgress events in runStream()", () => {
   it("all IterationProgress events have iteration >= 1", async () => {
     const events = await collectStreamEvents(
       ReactiveAgents.create()
-        .withProvider("test")
-        .withTestResponses({ ".*": "FINAL ANSWER: done" })
+        .withTestScenario([{ text: "FINAL ANSWER: done" }])
         .withReasoning()
         .withMaxIterations(3),
     );
@@ -67,8 +65,7 @@ describe("IterationProgress events in runStream()", () => {
     // We verify it is a positive number (not zero or negative).
     const events = await collectStreamEvents(
       ReactiveAgents.create()
-        .withProvider("test")
-        .withTestResponses({ ".*": "FINAL ANSWER: done" })
+        .withTestScenario([{ text: "FINAL ANSWER: done" }])
         .withReasoning()
         .withMaxIterations(5),
     );
@@ -87,8 +84,7 @@ describe("IterationProgress events in runStream()", () => {
   it("StreamCompleted is emitted after IterationProgress events", async () => {
     const events = await collectStreamEvents(
       ReactiveAgents.create()
-        .withProvider("test")
-        .withTestResponses({ ".*": "FINAL ANSWER: done" })
+        .withTestScenario([{ text: "FINAL ANSWER: done" }])
         .withReasoning()
         .withMaxIterations(3),
     );
@@ -109,8 +105,7 @@ describe("IterationProgress events in runStream()", () => {
   it("stream always terminates with StreamCompleted (not hanging)", async () => {
     const events = await collectStreamEvents(
       ReactiveAgents.create()
-        .withProvider("test")
-        .withTestResponses({ ".*": "FINAL ANSWER: done" })
+        .withTestScenario([{ text: "FINAL ANSWER: done" }])
         .withReasoning()
         .withMaxIterations(3),
     );
@@ -124,8 +119,7 @@ describe("IterationProgress events in runStream()", () => {
   it("IterationProgress events have a status field", async () => {
     const events = await collectStreamEvents(
       ReactiveAgents.create()
-        .withProvider("test")
-        .withTestResponses({ ".*": "FINAL ANSWER: done" })
+        .withTestScenario([{ text: "FINAL ANSWER: done" }])
         .withReasoning()
         .withMaxIterations(3),
     );
@@ -143,8 +137,7 @@ describe("IterationProgress events in runStream()", () => {
   it("iteration numbers are monotonically increasing across IterationProgress events", async () => {
     const events = await collectStreamEvents(
       ReactiveAgents.create()
-        .withProvider("test")
-        .withTestResponses({ ".*": "FINAL ANSWER: done" })
+        .withTestScenario([{ text: "FINAL ANSWER: done" }])
         .withReasoning()
         .withMaxIterations(5),
     );

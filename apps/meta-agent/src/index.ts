@@ -174,11 +174,10 @@ const agentBuilder = ReactiveAgents.create()
 // Add test responses only in test mode (no real API key)
 const agent = await (provider === "test"
   ? agentBuilder
-      .withTestResponses({
-        "Check developer":
-          "FINAL ANSWER: Monitored communities. Found 2 relevant threads. Saved drafts.",
-        "": "FINAL ANSWER: Community check complete. No new opportunities found.",
-      })
+      .withTestScenario([
+        { match: "Check developer", text: "FINAL ANSWER: Monitored communities. Found 2 relevant threads. Saved drafts." },
+        { text: "FINAL ANSWER: Community check complete. No new opportunities found." },
+      ])
       .withMaxIterations(10)
       .build()
   : agentBuilder.build());

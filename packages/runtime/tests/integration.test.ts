@@ -88,7 +88,6 @@ describe("Full Layer Integration", () => {
   it("should build a ReactiveAgent with all features via builder", async () => {
     const agent = await ReactiveAgents.create()
       .withName("full-featured-agent")
-      .withProvider("test")
       .withModel("test-model")
       .withMemory("1")
       .withMaxIterations(5)
@@ -103,9 +102,7 @@ describe("Full Layer Integration", () => {
       .withPrompts()
       .withOrchestration()
       .withAudit()
-      .withTestResponses({
-        "Hello": "Hi there! How can I help you?",
-      })
+      .withTestScenario([{ match: "Hello", text: "Hi there! How can I help you?" }])
       .build();
 
     expect(agent).toBeInstanceOf(ReactiveAgent);
@@ -115,7 +112,6 @@ describe("Full Layer Integration", () => {
   it("should run end-to-end through builder with all features", async () => {
     const agent = await ReactiveAgents.create()
       .withName("e2e-agent")
-      .withProvider("test")
       .withModel("test-model")
       .withGuardrails()
       .withVerification()
@@ -128,9 +124,7 @@ describe("Full Layer Integration", () => {
       .withPrompts()
       .withOrchestration()
       .withAudit()
-      .withTestResponses({
-        "reasoning agent": "FINAL ANSWER: The answer is 42.",
-      })
+      .withTestScenario([{ match: "reasoning agent", text: "FINAL ANSWER: The answer is 42." }])
       .build();
 
     const result = await agent.run("What is the meaning of life?");

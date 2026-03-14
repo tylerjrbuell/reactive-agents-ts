@@ -166,8 +166,7 @@ describe("Performance Benchmarks", () => {
   it("agent.run() e2e with test provider: < 100ms", async () => {
     const agent = await ReactiveAgents.create()
       .withName("bench-agent")
-      .withProvider("test")
-      .withTestResponses({ default: "Benchmark response" })
+      .withTestScenario([{ text: "Benchmark response" }])
       .build();
 
     const start = performance.now();
@@ -181,8 +180,7 @@ describe("Performance Benchmarks", () => {
   it("agent.run() with all layers enabled: < 200ms", async () => {
     const agent = await ReactiveAgents.create()
       .withName("bench-full")
-      .withProvider("test")
-      .withTestResponses({ default: "FINAL ANSWER: Full benchmark." })
+      .withTestScenario([{ text: "FINAL ANSWER: Full benchmark." }])
       .withReasoning()
       .withTools()
       .withGuardrails()

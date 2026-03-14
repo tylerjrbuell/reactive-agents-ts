@@ -5,9 +5,8 @@ describe("Smoke: Memory Integration", () => {
   it("agent with memory tier 1 completes bootstrap + flush", async () => {
     const agent = await ReactiveAgents.create()
       .withName("memory-t1")
-      .withProvider("test")
       .withMemory("1")
-      .withTestResponses({ default: "Memory test response." })
+      .withTestScenario([{ text: "Memory test response." }])
       .build();
 
     const result = await agent.run("Hello with memory");
@@ -18,9 +17,8 @@ describe("Smoke: Memory Integration", () => {
   it("multi-turn: two sequential agent.run() calls succeed", async () => {
     const agent = await ReactiveAgents.create()
       .withName("memory-multi")
-      .withProvider("test")
       .withMemory("1")
-      .withTestResponses({ default: "Turn response." })
+      .withTestScenario([{ text: "Turn response." }])
       .build();
 
     const result1 = await agent.run("First question");
@@ -33,9 +31,8 @@ describe("Smoke: Memory Integration", () => {
   it("memory + reasoning combination works", async () => {
     const agent = await ReactiveAgents.create()
       .withName("memory-reasoning")
-      .withProvider("test")
       .withMemory("1")
-      .withTestResponses({ default: "FINAL ANSWER: Memory and reasoning combined." })
+      .withTestScenario([{ text: "FINAL ANSWER: Memory and reasoning combined." }])
       .withReasoning()
       .build();
 

@@ -39,10 +39,7 @@ export async function run(): Promise<ExampleResult> {
 
   const autoAgent = await ReactiveAgents.create()
     .withName("autonomous-agent")
-    .withProvider("test")
-    .withTestResponses({
-      "": "FINAL ANSWER: Task completed autonomously without human interaction.",
-    })
+    .withTestScenario([{ text: "FINAL ANSWER: Task completed autonomously without human interaction." }])
     .build();
 
   const autoResult = await autoAgent.run("What is the sum of 5 + 3?");
@@ -55,11 +52,8 @@ export async function run(): Promise<ExampleResult> {
 
   const interactionAgent = await ReactiveAgents.create()
     .withName("interaction-agent")
-    .withProvider("test")
+    .withTestScenario([{ text: "FINAL ANSWER: Task completed with interaction layer enabled." }])
     .withInteraction()
-    .withTestResponses({
-      "": "FINAL ANSWER: Task completed with interaction layer enabled.",
-    })
     .build();
 
   const interactionResult = await interactionAgent.run(
@@ -76,11 +70,8 @@ export async function run(): Promise<ExampleResult> {
 
   const supervisedAgent = await ReactiveAgents.create()
     .withName("supervised-agent")
-    .withProvider("test")
+    .withTestScenario([{ text: "FINAL ANSWER: Task completed with supervision checkpoints active." }])
     .withKillSwitch()
-    .withTestResponses({
-      "": "FINAL ANSWER: Task completed with supervision checkpoints active.",
-    })
     .build();
 
   const supervisedResult = await supervisedAgent.run(
@@ -97,13 +88,10 @@ export async function run(): Promise<ExampleResult> {
 
   const fullSupervisedAgent = await ReactiveAgents.create()
     .withName("full-supervised-agent")
-    .withProvider("test")
+    .withTestScenario([{ text: "FINAL ANSWER: Task completed under full supervision stack." }])
     .withInteraction()
     .withKillSwitch()
     .withGuardrails()
-    .withTestResponses({
-      "": "FINAL ANSWER: Task completed under full supervision stack.",
-    })
     .build();
 
   const fullResult = await fullSupervisedAgent.run(

@@ -39,8 +39,10 @@ export async function runDemo(_argv: string[]): Promise<void> {
   const buildSpin = spinner("Building agent...");
   const agent = await ReactiveAgents.create()
     .withName("demo-agent")
-    .withProvider("test")
-    .withTestResponses(demoResponses)
+    .withTestScenario([
+      { match: "Find the top 3 TypeScript testing frameworks", text: demoResponses["Find the top 3 TypeScript testing frameworks"] },
+      { text: demoResponses[""] },
+    ])
     .build();
   await sleep(600);
   buildSpin.succeed("Agent ready");

@@ -7,8 +7,7 @@ describe("withErrorHandler", () => {
     const errors: unknown[] = [];
     const agent = await ReactiveAgents.create()
       .withName("test-agent")
-      .withProvider("test")
-      .withTestResponses({ ".*": "done" })
+      .withTestScenario([{ text: "done" }])
       .withMaxIterations(1)
       .withErrorHandler((err, ctx) => {
         errors.push(err);
@@ -26,8 +25,7 @@ describe("withErrorHandler", () => {
   it("withErrorHandler does not break normal execution", async () => {
     const agent = await ReactiveAgents.create()
       .withName("test-agent")
-      .withProvider("test")
-      .withTestResponses({ ".*": "42" })
+      .withTestScenario([{ text: "42" }])
       .withErrorHandler(() => { /* no-op */ })
       .build();
     const result = await agent.run("What is 6 * 7?");
@@ -39,8 +37,7 @@ describe("withErrorHandler", () => {
     const received: Array<{ message: string }> = [];
     const agent = await ReactiveAgents.create()
       .withName("test-agent")
-      .withProvider("test")
-      .withTestResponses({ ".*": "done" })
+      .withTestScenario([{ text: "done" }])
       .withErrorHandler((err) => {
         received.push({ message: (err as Error).message || String(err) });
       })
@@ -61,8 +58,7 @@ describe("withErrorHandler", () => {
   it("no handler configured — normal execution works (no regression)", async () => {
     const agent = await ReactiveAgents.create()
       .withName("test-agent")
-      .withProvider("test")
-      .withTestResponses({ ".*": "hello" })
+      .withTestScenario([{ text: "hello" }])
       .build();
     const result = await agent.run("Hello");
     expect(result.output).toBeDefined();
@@ -73,8 +69,7 @@ describe("withErrorHandler", () => {
     // Create agent with handler that throws — verify it doesn't crash the build
     const agent = await ReactiveAgents.create()
       .withName("test-agent")
-      .withProvider("test")
-      .withTestResponses({ ".*": "done" })
+      .withTestScenario([{ text: "done" }])
       .withErrorHandler(() => { throw new Error("handler crash"); })
       .build();
     expect(agent).toBeDefined();

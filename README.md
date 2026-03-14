@@ -490,14 +490,13 @@ Sub-agents receive a clean context window, inherit the parent's provider and mod
 
 ## Testing
 
-Built-in test provider for deterministic, offline tests:
+Built-in test scenario support for deterministic, offline tests:
 
 ```typescript
 const agent = await ReactiveAgents.create()
-  .withProvider("test")
-  .withTestResponses({
-    "capital of France": "Paris is the capital of France.",
-  })
+  .withTestScenario([
+    { match: "capital of France", text: "Paris is the capital of France." },
+  ])
   .build();
 
 const result = await agent.run("What is the capital of France?");
@@ -526,7 +525,7 @@ const maxIter = createMaxIterationsScenario();   // agent + prompt that hits max
 
 ### Which models and providers are supported?
 
-Reactive Agents supports 6 providers: Anthropic, OpenAI, Google Gemini, Ollama (local models), LiteLLM (40+ models via proxy), and a Test provider for deterministic offline testing.
+Reactive Agents supports 6 providers: Anthropic, OpenAI, Google Gemini, Ollama (local models), LiteLLM (40+ models via proxy), and a Test provider for deterministic offline testing via `withTestScenario()`.
 
 ### Is this framework production-ready?
 

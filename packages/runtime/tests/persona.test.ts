@@ -5,14 +5,13 @@ describe("Agent Persona / Steering API", () => {
   it("withPersona() builder method works", async () => {
     const agent = await ReactiveAgents.create()
       .withName("test-agent")
-      .withProvider("test")
       .withPersona({
         role: "Senior Software Engineer",
         background: "Expert in TypeScript and distributed systems",
         instructions: "Always explain your reasoning step by step",
         tone: "professional and concise",
       })
-      .withTestResponses({ "test-input": "test-output" })
+      .withTestScenario([{ match: "test-input", text: "test-output" }])
       .build();
 
     expect(agent).toBeDefined();
@@ -22,13 +21,12 @@ describe("Agent Persona / Steering API", () => {
   it("withPersona() + withSystemPrompt() composition works", async () => {
     const agent = await ReactiveAgents.create()
       .withName("test-agent-2")
-      .withProvider("test")
       .withPersona({
         role: "Data Scientist",
         instructions: "Use Python and R",
       })
       .withSystemPrompt("Additional context about this agent.")
-      .withTestResponses({ "test-input": "test-output" })
+      .withTestScenario([{ match: "test-input", text: "test-output" }])
       .build();
 
     expect(agent).toBeDefined();
@@ -37,12 +35,11 @@ describe("Agent Persona / Steering API", () => {
   it("withPersona() alone works", async () => {
     const agent = await ReactiveAgents.create()
       .withName("test-agent-3")
-      .withProvider("test")
       .withPersona({
         role: "Product Manager",
         tone: "collaborative",
       })
-      .withTestResponses({ "test-input": "test-output" })
+      .withTestScenario([{ match: "test-input", text: "test-output" }])
       .build();
 
     expect(agent).toBeDefined();

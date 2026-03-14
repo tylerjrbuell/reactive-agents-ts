@@ -13,7 +13,7 @@ import type { AgentEvent } from "@reactive-agents/core";
 type ReasoningStepEvent = Extract<AgentEvent, { _tag: "ReasoningStepCompleted" }>;
 
 const collectReasoningEvents = async (
-  llmResponses: Record<string, string>,
+  llmResponses: Array<{ match?: string; text: string }>,
   taskDescription: string,
 ): Promise<ReasoningStepEvent[]> => {
   const captured: ReasoningStepEvent[] = [];
@@ -54,7 +54,7 @@ const collectReasoningEvents = async (
 describe("reactive strategy ReasoningStepCompleted events", () => {
   test("ReasoningStepCompleted published for thought step", async () => {
     const events = await collectReasoningEvents(
-      { "Think step-by-step": "FINAL ANSWER: The answer is 42." },
+      [{ match: "Think step-by-step", text: "FINAL ANSWER: The answer is 42." }],
       "Think step-by-step about this",
     );
 
@@ -65,7 +65,7 @@ describe("reactive strategy ReasoningStepCompleted events", () => {
 
   test("ReasoningStepCompleted has correct strategy field", async () => {
     const events = await collectReasoningEvents(
-      { "What is 2+2": "FINAL ANSWER: 4." },
+      [{ match: "What is 2+2", text: "FINAL ANSWER: 4." }],
       "What is 2+2",
     );
 
@@ -77,9 +77,9 @@ describe("reactive strategy ReasoningStepCompleted events", () => {
   });
 
   test("events NOT published (no error) when EventBus absent from context", async () => {
-    const llmLayer = TestLLMServiceLayer({
-      "no bus test": "FINAL ANSWER: done.",
-    });
+    const llmLayer = TestLLMServiceLayer([
+      { match: "no bus test", text: "FINAL ANSWER: done." },
+    ]);
 
     // Run WITHOUT EventBus — should not throw
     await expect(
@@ -97,7 +97,7 @@ describe("reactive strategy ReasoningStepCompleted events", () => {
 
   test("step counter increases with each published event", async () => {
     const events = await collectReasoningEvents(
-      { "multi step task": "FINAL ANSWER: Complete." },
+      [{ match: "multi step task", text: "FINAL ANSWER: Complete." }],
       "multi step task",
     );
 
@@ -110,9 +110,9 @@ describe("reactive strategy ReasoningStepCompleted events", () => {
 
   test("ThoughtTracer captures steps via EventBus end-to-end", async () => {
     const { ThoughtTracerService, ThoughtTracerLive } = await import("@reactive-agents/observability");
-    const llmLayer = TestLLMServiceLayer({
-      "tracer integration": "FINAL ANSWER: tracer works.",
-    });
+    const llmLayer = TestLLMServiceLayer([
+      { match: "tracer integration", text: "FINAL ANSWER: tracer works." },
+    ]);
 
     // Layer.provideMerge(ThoughtTracerLive, EventBusLive): provides EventBus to
     // ThoughtTracerLive AND keeps both services available downstream.
@@ -139,9 +139,9 @@ describe("reactive strategy ReasoningStepCompleted events", () => {
 
   test("action events contain tool info", async () => {
     const captured: ReasoningStepEvent[] = [];
-    const llmLayer = TestLLMServiceLayer({
-      "use a tool": 'ACTION: my-tool({"query": "test"})\nFINAL ANSWER: done.',
-    });
+    const llmLayer = TestLLMServiceLayer([
+      { match: "use a tool", text: 'ACTION: my-tool({"query": "test"})\nFINAL ANSWER: done.' },
+    ]);
 
     await Effect.runPromise(
       Effect.gen(function* () {

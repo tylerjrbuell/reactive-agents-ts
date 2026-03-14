@@ -79,12 +79,12 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
         maxActionsPerHour: 20,       // rate-limit autonomous actions
       },
     })
-    .withTestResponses({
+    .withTestScenario([
       // Deterministic responses for test mode
-      "Check for": "FINAL ANSWER: Status OK. No pending tasks or anomalies detected.",
-      "pending":   "FINAL ANSWER: No pending items found. All systems nominal.",
-      "":          "FINAL ANSWER: Heartbeat acknowledged. No action required.",
-    })
+      { match: "Check for", text: "FINAL ANSWER: Status OK. No pending tasks or anomalies detected." },
+      { match: "pending", text: "FINAL ANSWER: No pending items found. All systems nominal." },
+      { text: "FINAL ANSWER: Heartbeat acknowledged. No action required." },
+    ])
     .withMaxIterations(3)
     .build();
 

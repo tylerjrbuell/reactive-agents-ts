@@ -82,8 +82,7 @@ describe("agent.chat() reply shape", () => {
   it("returns a ChatReply with a non-empty message string on direct path", async () => {
     const agent = await ReactiveAgents.create()
       .withName("chat-shape-direct")
-      .withProvider("test")
-      .withTestResponses({ ".*": "Hello from the test LLM" })
+      .withTestScenario([{ text: "Hello from the test LLM" }])
       .build();
 
     let reply;
@@ -100,8 +99,7 @@ describe("agent.chat() reply shape", () => {
   it("direct path does NOT populate toolsUsed or steps", async () => {
     const agent = await ReactiveAgents.create()
       .withName("chat-direct-no-tools-used")
-      .withProvider("test")
-      .withTestResponses({ ".*": "Sure, happy to help!" })
+      .withTestScenario([{ text: "Sure, happy to help!" }])
       .build();
 
     let reply;
@@ -124,8 +122,7 @@ describe("session.history() accumulates turns", () => {
   it("history is empty before first chat turn", async () => {
     const agent = await ReactiveAgents.create()
       .withName("session-empty-history")
-      .withProvider("test")
-      .withTestResponses({ ".*": "OK" })
+      .withTestScenario([{ text: "OK" }])
       .build();
 
     try {
@@ -139,8 +136,7 @@ describe("session.history() accumulates turns", () => {
   it("each turn adds user + assistant messages to history", async () => {
     const agent = await ReactiveAgents.create()
       .withName("session-history-turns")
-      .withProvider("test")
-      .withTestResponses({ ".*": "Got it" })
+      .withTestScenario([{ text: "Got it" }])
       .build();
 
     try {
@@ -169,8 +165,7 @@ describe("session.history() accumulates turns", () => {
   it("session.end() clears history", async () => {
     const agent = await ReactiveAgents.create()
       .withName("session-end-clears")
-      .withProvider("test")
-      .withTestResponses({ ".*": "OK" })
+      .withTestScenario([{ text: "OK" }])
       .build();
 
     try {
@@ -187,8 +182,7 @@ describe("session.history() accumulates turns", () => {
   it("history() returns a copy — mutations do not affect internal state", async () => {
     const agent = await ReactiveAgents.create()
       .withName("session-history-copy")
-      .withProvider("test")
-      .withTestResponses({ ".*": "Noted" })
+      .withTestScenario([{ text: "Noted" }])
       .build();
 
     try {
@@ -212,8 +206,7 @@ describe("ChatOptions.useTools override", () => {
   it("useTools: false forces direct path even for tool-intent phrasing", async () => {
     const agent = await ReactiveAgents.create()
       .withName("chat-override-direct")
-      .withProvider("test")
-      .withTestResponses({ ".*": "Forced direct reply" })
+      .withTestScenario([{ text: "Forced direct reply" }])
       .withTools({
         tools: [
           { definition: makeToolDef("noop"), handler: makeToolHandler("noop") },

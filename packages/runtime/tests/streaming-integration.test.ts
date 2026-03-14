@@ -5,8 +5,7 @@ import type { AgentStreamEvent } from "../src/stream-types.js";
 describe("Streaming integration", () => {
   it("runStream() output matches run() output", async () => {
     const agent = await ReactiveAgents.create()
-      .withProvider("test")
-      .withTestResponses({ compute: "FINAL ANSWER: 42" })
+      .withTestScenario([{ match: "compute", text: "FINAL ANSWER: 42" }])
       .build();
 
     const runResult = await agent.run("compute");
@@ -24,8 +23,7 @@ describe("Streaming integration", () => {
 
   it("stream ends with StreamCompleted on success", async () => {
     const agent = await ReactiveAgents.create()
-      .withProvider("test")
-      .withTestResponses({ done: "FINAL ANSWER: done" })
+      .withTestScenario([{ match: "done", text: "FINAL ANSWER: done" }])
       .build();
 
     const events: AgentStreamEvent[] = [];
@@ -40,8 +38,7 @@ describe("Streaming integration", () => {
 
   it("for-await-of consumes all events", async () => {
     const agent = await ReactiveAgents.create()
-      .withProvider("test")
-      .withTestResponses({ iter: "FINAL ANSWER: works" })
+      .withTestScenario([{ match: "iter", text: "FINAL ANSWER: works" }])
       .build();
 
     const events: AgentStreamEvent[] = [];
@@ -56,8 +53,7 @@ describe("Streaming integration", () => {
 
   it("withStreaming() sets default density", async () => {
     const agent = await ReactiveAgents.create()
-      .withProvider("test")
-      .withTestResponses({ x: "FINAL ANSWER: y" })
+      .withTestScenario([{ match: "x", text: "FINAL ANSWER: y" }])
       .withStreaming({ density: "tokens" })
       .build();
 
@@ -72,15 +68,15 @@ describe("Streaming integration", () => {
   });
 
   it("concurrent runStream calls are independent", async () => {
-    const agent = await ReactiveAgents.create()
-      .withProvider("test")
-      .withTestResponses({
-        a: "FINAL ANSWER: alpha",
-        b: "FINAL ANSWER: beta",
-      })
+    // Each agent gets its own scenario cursor, so concurrent calls are truly independent
+    const agentA = await ReactiveAgents.create()
+      .withTestScenario([{ text: "FINAL ANSWER: alpha" }])
+      .build();
+    const agentB = await ReactiveAgents.create()
+      .withTestScenario([{ text: "FINAL ANSWER: beta" }])
       .build();
 
-    const collect = async (input: string) => {
+    const collect = async (agent: any, input: string) => {
       const all: AgentStreamEvent[] = [];
       for await (const e of agent.runStream(input)) {
         all.push(e);
@@ -89,10 +85,11 @@ describe("Streaming integration", () => {
     };
 
     const [eventsA, eventsB] = await Promise.all([
-      collect("a"),
-      collect("b"),
+      collect(agentA, "a"),
+      collect(agentB, "b"),
     ]);
-    await agent.dispose();
+    await agentA.dispose();
+    await agentB.dispose();
 
     const completedA = eventsA.find((e) => e._tag === "StreamCompleted") as any;
     const completedB = eventsB.find((e) => e._tag === "StreamCompleted") as any;
@@ -102,8 +99,7 @@ describe("Streaming integration", () => {
 
   it("TextDelta events arrive with reasoning enabled", async () => {
     const agent = await ReactiveAgents.create()
-      .withProvider("test")
-      .withTestResponses({ greet: "FINAL ANSWER: hello world" })
+      .withTestScenario([{ match: "greet", text: "FINAL ANSWER: hello world" }])
       .withReasoning()
       .build();
 
@@ -121,8 +117,7 @@ describe("Streaming integration", () => {
 
   it("StreamCompleted metadata contains taskId and agentId", async () => {
     const agent = await ReactiveAgents.create()
-      .withProvider("test")
-      .withTestResponses({ meta: "FINAL ANSWER: metadata" })
+      .withTestScenario([{ match: "meta", text: "FINAL ANSWER: metadata" }])
       .build();
 
     let completed: AgentStreamEvent | undefined;

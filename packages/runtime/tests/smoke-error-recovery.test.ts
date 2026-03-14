@@ -40,8 +40,7 @@ describe("Smoke: Error Recovery", () => {
   it("agent.run() returns structured output", async () => {
     const agent = await ReactiveAgents.create()
       .withName("structured-output")
-      .withProvider("test")
-      .withTestResponses({ default: "Structured response" })
+      .withTestScenario([{ text: "Structured response" }])
       .build();
 
     const result = await agent.run("Test input");

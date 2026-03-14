@@ -53,10 +53,10 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
   const agent = await b
     .withReasoning()
     .withStreaming({ density: "tokens" }) // explicit — "tokens" is also the default
-    .withTestResponses({
-      "haiku": "FINAL ANSWER: Bytes arrive in flow\nEach token joins the next one\nOutput grows complete",
-      "":      "FINAL ANSWER: Streaming is working.",
-    })
+    .withTestScenario([
+      { match: "haiku", text: "FINAL ANSWER: Bytes arrive in flow\nEach token joins the next one\nOutput grows complete" },
+      { text: "FINAL ANSWER: Streaming is working." },
+    ])
     .withMaxIterations(3)
     .build();
 
@@ -100,10 +100,10 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
     .withReasoning()
     .withTools()
     .withStreaming({ density: "full" })
-    .withTestResponses({
-      "event types": "FINAL ANSWER: TextDelta, PhaseStarted, PhaseCompleted, ThoughtEmitted, ToolCallStarted, ToolCallCompleted, StreamCompleted, StreamError.",
-      "":            "FINAL ANSWER: Full-density streaming works.",
-    })
+    .withTestScenario([
+      { match: "event types", text: "FINAL ANSWER: TextDelta, PhaseStarted, PhaseCompleted, ThoughtEmitted, ToolCallStarted, ToolCallCompleted, StreamCompleted, StreamError." },
+      { text: "FINAL ANSWER: Full-density streaming works." },
+    ])
     .withMaxIterations(3)
     .build();
 

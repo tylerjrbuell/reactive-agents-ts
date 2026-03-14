@@ -37,8 +37,7 @@ describe("ReactiveAgent.gatewayStatus()", () => {
     const { ReactiveAgents } = await import("../src/builder");
     const agent = await ReactiveAgents.create()
       .withName("gw-status-active")
-      .withProvider("test")
-      .withTestResponses({ default: "FINAL ANSWER: ok" })
+      .withTestScenario([{ text: "FINAL ANSWER: ok" }])
       .withGateway({
         heartbeat: { intervalMs: 50 },
         policies: { dailyTokenBudget: 100000 },

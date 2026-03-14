@@ -99,7 +99,7 @@ Every aspect of Reactive Agents is configurable through the builder API. This pa
 | Method | Default | Description |
 |--------|---------|-------------|
 | `.withStrictValidation()` | `false` | Make build-time warnings (missing API keys, model mismatches) into hard errors |
-| `.withTestResponses(map)` | none | Deterministic test responses: `Record<string, string>` |
+| `.withTestScenario(steps)` | none | Deterministic test scenario: `TestScenarioStep[]` where each step is `{ match?: string, text: string }` |
 | `.withLayers(layers)` | none | Inject custom Effect-TS layers |
 
 ## Environment Variables

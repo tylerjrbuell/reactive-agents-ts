@@ -65,9 +65,9 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
     .withName("hooked-agent")
     .withProvider(provider);
   if (opts?.model) builder = builder.withModel(opts.model);
-  builder = builder.withTestResponses({
-      "Reactive Agents": "Reactive Agents is a TypeScript framework for building AI agents with Effect-TS. It features 10-phase execution, memory persistence, and lifecycle hooks.",
-    })
+  builder = builder.withTestScenario([
+      { match: "Reactive Agents", text: "Reactive Agents is a TypeScript framework for building AI agents with Effect-TS. It features 10-phase execution, memory persistence, and lifecycle hooks." },
+    ])
     .withMaxIterations(3);
 
   for (const hook of hooks) {

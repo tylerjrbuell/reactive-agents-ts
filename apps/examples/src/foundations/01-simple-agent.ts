@@ -39,10 +39,10 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
     .withProvider(provider);
   if (opts?.model) b = b.withModel(opts.model);
   const agent = await b
-    .withTestResponses({
+    .withTestScenario([
       // Test responses used only in test mode
-      "capital of France": "The capital of France is Paris. It has been the capital since the 10th century and is known for landmarks like the Eiffel Tower, the Louvre, and Notre-Dame Cathedral.",
-    })
+      { match: "capital of France", text: "The capital of France is Paris. It has been the capital since the 10th century and is known for landmarks like the Eiffel Tower, the Louvre, and Notre-Dame Cathedral." },
+    ])
     .withMaxIterations(3)
     .build();
 

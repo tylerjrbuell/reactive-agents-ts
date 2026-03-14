@@ -50,10 +50,10 @@ async function buildAgent(provider: PN, model?: string) {
   return b
     .withReasoning()
     .withStreaming()
-    .withTestResponses({
-      "haiku":   "FINAL ANSWER: Data in the stream\nBytes flow one by one to you\nOutput is complete",
-      "":        "FINAL ANSWER: SSE stream delivered successfully.",
-    })
+    .withTestScenario([
+      { match: "haiku", text: "FINAL ANSWER: Data in the stream\nBytes flow one by one to you\nOutput is complete" },
+      { text: "FINAL ANSWER: SSE stream delivered successfully." },
+    ])
     .withMaxIterations(3)
     .build();
 }

@@ -7,9 +7,9 @@ import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 
 describe("ReactiveStrategy", () => {
   it("should execute ReAct loop and return completed result", async () => {
-    const layer = TestLLMServiceLayer({
-      "Think step-by-step": "FINAL ANSWER: The capital of France is Paris.",
-    });
+    const layer = TestLLMServiceLayer([
+      { match: "Think step-by-step", text: "FINAL ANSWER: The capital of France is Paris." },
+    ]);
 
     const program = executeReactive({
       taskDescription: "What is the capital of France?",
@@ -32,7 +32,7 @@ describe("ReactiveStrategy", () => {
 
   it("should return partial result when max iterations reached", async () => {
     // This layer returns responses that never contain "FINAL ANSWER"
-    const layer = TestLLMServiceLayer({});
+    const layer = TestLLMServiceLayer();
     // Default TestLLMService returns "Test response" which has no FINAL ANSWER
 
     const program = executeReactive({
@@ -60,11 +60,10 @@ describe("ReactiveStrategy", () => {
 
   it("should parse tool requests and add action + observation steps", async () => {
     let callCount = 0;
-    const layer = TestLLMServiceLayer({
-      "Think step-by-step":
-        "I need to search for this. ACTION: search(capital of France)",
-      "search": "FINAL ANSWER: Paris is the capital of France.",
-    });
+    const layer = TestLLMServiceLayer([
+      { match: "Think step-by-step", text: "I need to search for this. ACTION: search(capital of France)" },
+      { match: "search", text: "FINAL ANSWER: Paris is the capital of France." },
+    ]);
 
     const program = executeReactive({
       taskDescription: "What is the capital of France?",
@@ -102,9 +101,9 @@ describe("ReactiveStrategy", () => {
   });
 
   it("should track token usage and cost across iterations", async () => {
-    const layer = TestLLMServiceLayer({
-      "Think step-by-step": "FINAL ANSWER: Done.",
-    });
+    const layer = TestLLMServiceLayer([
+      { match: "Think step-by-step", text: "FINAL ANSWER: Done." },
+    ]);
 
     const program = executeReactive({
       taskDescription: "Simple task",
@@ -124,9 +123,9 @@ describe("ReactiveStrategy", () => {
   });
 
   it("should complete on first iteration when LLM gives final answer immediately", async () => {
-    const layer = TestLLMServiceLayer({
-      "Think step-by-step": "FINAL ANSWER: 42",
-    });
+    const layer = TestLLMServiceLayer([
+      { match: "Think step-by-step", text: "FINAL ANSWER: 42" },
+    ]);
 
     const program = executeReactive({
       taskDescription: "What is the answer?",

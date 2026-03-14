@@ -79,9 +79,9 @@ describe("Strategy switching smoke test", () => {
     // Basic smoke: just verify the code path runs without errors when
     // strategySwitching is enabled. The TestLLMService returns a default
     // response that eventually terminates (partial result at maxIterations).
-    const layer = TestLLMServiceLayer({
-      "Think step-by-step": "FINAL ANSWER: smoke test passed.",
-    });
+    const layer = TestLLMServiceLayer([
+      { match: "Think step-by-step", text: "FINAL ANSWER: smoke test passed." },
+    ]);
 
     const result = await Effect.runPromise(
       executeReactive({
@@ -231,7 +231,7 @@ describe("enableStrategySwitching affects outcomes on looping kernel", () => {
     // We use a low maxIterations with a non-FINAL-ANSWER response to let the
     // kernel run to maxIterations. The key signal: with switching enabled,
     // the config object is passed through (no error about unknown config).
-    const layer = TestLLMServiceLayer({}); // default: "Test response" — no FINAL ANSWER
+    const layer = TestLLMServiceLayer(); // default: "Test response" — no FINAL ANSWER
 
     const result = await Effect.runPromise(
       executeReactive({

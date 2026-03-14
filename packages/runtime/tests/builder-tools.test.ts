@@ -20,11 +20,8 @@ describe("ReactiveAgentBuilder — Tools & MCP", () => {
   it("should run a task with tools enabled and return AgentResult", async () => {
     const agent = await ReactiveAgents.create()
       .withName("tool-agent")
-      .withProvider("test")
       .withTools()
-      .withTestResponses({
-        "": "Tools are available.",
-      })
+      .withTestScenario([{ text: "Tools are available." }])
       .build();
 
     const result = await agent.run("What tools do you have?");
@@ -63,12 +60,9 @@ describe("ReactiveAgentBuilder — Tools & MCP", () => {
   it("full pipeline: agent.run() with test provider + tools returns result", async () => {
     const agent = await ReactiveAgents.create()
       .withName("full-pipeline")
-      .withProvider("test")
       .withTools()
       .withReasoning()
-      .withTestResponses({
-        "": "I used the web-search tool.",
-      })
+      .withTestScenario([{ text: "I used the web-search tool." }])
       .build();
 
     const result = await agent.run("Search for something");

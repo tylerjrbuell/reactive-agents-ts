@@ -159,10 +159,10 @@ describe("Sprint 0.1: Tool schemas in initial context", () => {
 describe("Sprint 0.2: Error messages enriched with tool schema", () => {
   it("observation contains schema hint when tool fails with missing param", async () => {
     // LLM first calls file-write with wrong args (missing path), then gives FINAL ANSWER
-    const testLLMLayer = TestLLMServiceLayer({
-      "step-by-step": 'I need to write the file. ACTION: file-write({"file": "test.md", "content": "hello"})',
-      "Tool error": "FINAL ANSWER: I encountered an error.",
-    });
+    const testLLMLayer = TestLLMServiceLayer([
+      { match: "step-by-step", text: 'I need to write the file. ACTION: file-write({"file": "test.md", "content": "hello"})' },
+      { match: "Tool error", text: "FINAL ANSWER: I encountered an error." },
+    ]);
 
     const toolsLayer = createToolsLayer();
 
@@ -202,10 +202,10 @@ describe("Sprint 0.2: Error messages enriched with tool schema", () => {
 
 describe("Sprint 1C: Tool result summarization", () => {
   it("short tool results are returned unchanged", async () => {
-    const testLLMLayer = TestLLMServiceLayer({
-      "step-by-step": 'ACTION: echo({"text": "hello"})',
-      "result": "FINAL ANSWER: Done.",
-    });
+    const testLLMLayer = TestLLMServiceLayer([
+      { match: "step-by-step", text: 'ACTION: echo({"text": "hello"})' },
+      { match: "result", text: "FINAL ANSWER: Done." },
+    ]);
 
     const toolsLayer = createToolsLayer();
     const shortResult = "short result";
@@ -246,10 +246,10 @@ describe("Sprint 1C: Tool result summarization", () => {
   });
 
   it("large tool results are truncated with omission marker", async () => {
-    const testLLMLayer = TestLLMServiceLayer({
-      "step-by-step": 'ACTION: big-data({"query": "all"})',
-      "STORED:": "FINAL ANSWER: Got compressed data.",
-    });
+    const testLLMLayer = TestLLMServiceLayer([
+      { match: "step-by-step", text: 'ACTION: big-data({"query": "all"})' },
+      { match: "STORED:", text: "FINAL ANSWER: Got compressed data." },
+    ]);
 
     const toolsLayer = createToolsLayer();
     // Generate a result > 800 chars
@@ -425,7 +425,7 @@ describe("Sprint 2D: Early termination on end_turn", () => {
 
   it("does NOT trigger early termination for short responses (< 50 chars)", async () => {
     // Short "Test response" (13 chars) should not trigger early exit
-    const layer = TestLLMServiceLayer({});
+    const layer = TestLLMServiceLayer();
     // Default response: "Test response" (13 chars) — below the 50-char threshold
 
     const result = await Effect.runPromise(

@@ -515,7 +515,7 @@ What the builder has today (30+ methods):
 .withObservability()  .withInteraction()  .withPrompts()  .withOrchestration()
 .withKillSwitch()  .withBehavioralContracts()  .withSelfImprovement()
 .withEvents()  .withAgentTool()  .withRemoteAgent()  .withDynamicSubAgents()
-.withA2A()  .withGateway()  .withTestResponses()  .withHook()  .withLayers()
+.withA2A()  .withGateway()  .withTestScenario()  .withHook()  .withLayers()
 ```
 
 What the spec additionally requires:

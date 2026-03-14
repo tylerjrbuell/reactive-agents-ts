@@ -11,7 +11,7 @@ describe("react-kernel streaming", () => {
       Effect.locally(
         executeReActKernel({ task: "Say hello", maxIterations: 2 }).pipe(
           Effect.provide(
-            TestLLMServiceLayer({ "Task:": "FINAL ANSWER: hello" }),
+            TestLLMServiceLayer([{ match: "Task:", text: "FINAL ANSWER: hello" }]),
           ),
         ),
         StreamingTextCallback,
@@ -27,7 +27,7 @@ describe("react-kernel streaming", () => {
     const result = await Effect.runPromise(
       executeReActKernel({ task: "Say hi", maxIterations: 2 }).pipe(
         Effect.provide(
-          TestLLMServiceLayer({ "Task:": "FINAL ANSWER: hi" }),
+          TestLLMServiceLayer([{ match: "Task:", text: "FINAL ANSWER: hi" }]),
         ),
       ),
     );
@@ -41,7 +41,7 @@ describe("react-kernel streaming", () => {
       Effect.locally(
         executeReActKernel({ task: "What is 2+2?", maxIterations: 2 }).pipe(
           Effect.provide(
-            TestLLMServiceLayer({ "Task:": "FINAL ANSWER: 4" }),
+            TestLLMServiceLayer([{ match: "Task:", text: "FINAL ANSWER: 4" }]),
           ),
         ),
         StreamingTextCallback,

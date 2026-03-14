@@ -43,7 +43,7 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
   let b = ReactiveAgents.create().withName("eval-subject").withProvider(provider);
   if (opts?.model) b = b.withModel(opts.model);
   const agent = await b
-    .withTestResponses({ "": "FINAL ANSWER: Paris is the capital of France." })
+    .withTestScenario([{ text: "FINAL ANSWER: Paris is the capital of France." }])
     .build();
 
   const agentResult = await agent.run("What is the capital of France?");
@@ -83,11 +83,11 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
 
   // EvalServiceLive requires LLMService for LLM-as-judge scoring
   // In test mode, provide TestLLMServiceLayer which returns deterministic responses
-  const testLLMLayer = TestLLMServiceLayer({
-    "accuracy": "SCORE: 0.9\nRATIONALE: The output correctly identifies Paris as the capital of France.",
-    "relevance": "SCORE: 1.0\nRATIONALE: The answer is directly relevant to the question asked.",
-    "": "SCORE: 0.85\nRATIONALE: Good response.",
-  });
+  const testLLMLayer = TestLLMServiceLayer([
+    { match: "accuracy", text: "SCORE: 0.9\nRATIONALE: The output correctly identifies Paris as the capital of France." },
+    { match: "relevance", text: "SCORE: 1.0\nRATIONALE: The answer is directly relevant to the question asked." },
+    { text: "SCORE: 0.85\nRATIONALE: Good response." },
+  ]);
   const evalLayer = EvalServiceLive.pipe(Layer.provide(testLLMLayer));
 
   const evalResult = await Effect.runPromise(

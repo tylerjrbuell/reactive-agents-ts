@@ -78,12 +78,12 @@ describe("PlanExecuteStrategy (Structured Plan Engine)", () => {
     // 2. "OVERALL GOAL" matches the step execution prompt from buildStepExecutionPrompt
     // 3. "GOAL:" matches the reflection prompt from buildReflectionPrompt
     // 4. "Synthesize" matches the synthesis prompt
-    const layer = TestLLMServiceLayer({
-      "planning agent": TWO_STEP_ANALYSIS_PLAN,
-      "OVERALL GOAL": "FINAL ANSWER: Step analysis completed successfully.",
-      "GOAL:": "SATISFIED: All steps completed and the task is fully addressed.",
-      "Synthesize": "The topic has been thoroughly researched and summarized with key findings.",
-    });
+    const layer = TestLLMServiceLayer([
+      { match: "planning agent", text: TWO_STEP_ANALYSIS_PLAN },
+      { match: "OVERALL GOAL", text: "FINAL ANSWER: Step analysis completed successfully." },
+      { match: "GOAL:", text: "SATISFIED: All steps completed and the task is fully addressed." },
+      { match: "Synthesize", text: "The topic has been thoroughly researched and summarized with key findings." },
+    ]);
 
     const program = executePlanExecute({
       taskDescription: "Research quantum computing trends",
@@ -124,16 +124,16 @@ describe("PlanExecuteStrategy (Structured Plan Engine)", () => {
   });
 
   it("should return partial result when max refinements reached without satisfaction", async () => {
-    const layer = TestLLMServiceLayer({
-      "planning agent": makePlanJson([
+    const layer = TestLLMServiceLayer([
+      { match: "planning agent", text: makePlanJson([
         {
           title: "Investigate",
           instruction: "Investigate the problem",
           type: "analysis",
         },
-      ]),
-      "OVERALL GOAL": "FINAL ANSWER: Investigation completed.",
-    });
+      ]) },
+      { match: "OVERALL GOAL", text: "FINAL ANSWER: Investigation completed." },
+    ]);
     // No reflection pattern → defaults to "Test response" which won't match SATISFIED:
 
     const program = executePlanExecute({
@@ -176,18 +176,18 @@ describe("PlanExecuteStrategy (Structured Plan Engine)", () => {
   });
 
   it("should track token usage and cost across plan-execute-reflect cycle", async () => {
-    const layer = TestLLMServiceLayer({
-      "planning agent": makePlanJson([
+    const layer = TestLLMServiceLayer([
+      { match: "planning agent", text: makePlanJson([
         {
           title: "Look up answer",
           instruction: "Find the answer",
           type: "analysis",
         },
-      ]),
-      "OVERALL GOAL": "FINAL ANSWER: The answer is 42.",
-      "GOAL:": "SATISFIED: Task fully addressed.",
-      "Synthesize": "The answer is 42.",
-    });
+      ]) },
+      { match: "OVERALL GOAL", text: "FINAL ANSWER: The answer is 42." },
+      { match: "GOAL:", text: "SATISFIED: Task fully addressed." },
+      { match: "Synthesize", text: "The answer is 42." },
+    ]);
 
     const program = executePlanExecute({
       taskDescription: "Simple task",
@@ -243,12 +243,12 @@ describe("PlanExecuteStrategy (Structured Plan Engine)", () => {
       ToolService.of(mockToolService),
     );
 
-    const llmLayer = TestLLMServiceLayer({
-      "planning agent": TOOL_AND_ANALYSIS_PLAN,
-      "OVERALL GOAL": "FINAL ANSWER: Summary of the search results.",
-      "GOAL:": "SATISFIED: All steps completed.",
-      "Synthesize": "The synthesized final answer from search results.",
-    });
+    const llmLayer = TestLLMServiceLayer([
+      { match: "planning agent", text: TOOL_AND_ANALYSIS_PLAN },
+      { match: "OVERALL GOAL", text: "FINAL ANSWER: Summary of the search results." },
+      { match: "GOAL:", text: "SATISFIED: All steps completed." },
+      { match: "Synthesize", text: "The synthesized final answer from search results." },
+    ]);
 
     const program = executePlanExecute({
       taskDescription: "Search and summarize test data",
@@ -279,18 +279,18 @@ describe("PlanExecuteStrategy (Structured Plan Engine)", () => {
   });
 
   it("should use ReAct kernel for analysis steps", async () => {
-    const layer = TestLLMServiceLayer({
-      "planning agent": makePlanJson([
+    const layer = TestLLMServiceLayer([
+      { match: "planning agent", text: makePlanJson([
         {
           title: "Analyze data",
           instruction: "Perform deep analysis of the data",
           type: "analysis",
         },
-      ]),
-      "OVERALL GOAL": "FINAL ANSWER: Deep analysis shows positive trends.",
-      "GOAL:": "SATISFIED: Analysis complete.",
-      "Synthesize": "Analysis reveals positive trends in the data.",
-    });
+      ]) },
+      { match: "OVERALL GOAL", text: "FINAL ANSWER: Deep analysis shows positive trends." },
+      { match: "GOAL:", text: "SATISFIED: Analysis complete." },
+      { match: "Synthesize", text: "Analysis reveals positive trends in the data." },
+    ]);
 
     const program = executePlanExecute({
       taskDescription: "Analyze market data trends",
@@ -355,11 +355,11 @@ describe("PlanExecuteStrategy (Structured Plan Engine)", () => {
       ToolService.of(mockToolService),
     );
 
-    const llmLayer = TestLLMServiceLayer({
-      "planning agent": REFERENCE_PLAN,
-      "GOAL:": "SATISFIED: Data fetched and processed.",
-      "Synthesize": "Data was fetched and written to file.",
-    });
+    const llmLayer = TestLLMServiceLayer([
+      { match: "planning agent", text: REFERENCE_PLAN },
+      { match: "GOAL:", text: "SATISFIED: Data fetched and processed." },
+      { match: "Synthesize", text: "Data was fetched and written to file." },
+    ]);
 
     const program = executePlanExecute({
       taskDescription: "Fetch and process data",
@@ -402,8 +402,8 @@ describe("PlanExecuteStrategy (Structured Plan Engine)", () => {
   });
 
   it("should produce a synthesized final answer via LLM after reflection satisfies", async () => {
-    const layer = TestLLMServiceLayer({
-      "planning agent": makePlanJson([
+    const layer = TestLLMServiceLayer([
+      { match: "planning agent", text: makePlanJson([
         {
           title: "Research topic",
           instruction: "Research quantum computing",
@@ -414,12 +414,11 @@ describe("PlanExecuteStrategy (Structured Plan Engine)", () => {
           instruction: "Summarize the research",
           type: "analysis",
         },
-      ]),
-      "OVERALL GOAL": "FINAL ANSWER: Research findings are detailed.",
-      "GOAL:": "SATISFIED: Task complete.",
-      "Synthesize":
-        "The final synthesized answer: Quantum computing is advancing rapidly with key breakthroughs.",
-    });
+      ]) },
+      { match: "OVERALL GOAL", text: "FINAL ANSWER: Research findings are detailed." },
+      { match: "GOAL:", text: "SATISFIED: Task complete." },
+      { match: "Synthesize", text: "The final synthesized answer: Quantum computing is advancing rapidly with key breakthroughs." },
+    ]);
 
     const result = await Effect.runPromise(
       executePlanExecute({

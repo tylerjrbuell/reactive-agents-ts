@@ -25,11 +25,8 @@ describe("ReactiveAgentBuilder", () => {
   it("should run a task and return AgentResult", async () => {
     const agent = await ReactiveAgents.create()
       .withName("test-agent")
-      .withProvider("test")
       .withModel("test-model")
-      .withTestResponses({
-        "What is 2+2": "The answer is 4.",
-      })
+      .withTestScenario([{ match: "What is 2+2", text: "The answer is 4." }])
       .build();
 
     const result = await agent.run("What is 2+2?");

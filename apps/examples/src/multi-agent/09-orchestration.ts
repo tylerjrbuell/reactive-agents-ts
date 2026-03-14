@@ -43,26 +43,26 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
 
   const researchAgent = await mkBase("researcher")
     .withMaxIterations(3)
-    .withTestResponses({
-      "research": "FINAL ANSWER: Research complete. AI safety involves ensuring AI systems behave as intended and avoid harmful outcomes.",
-      "": "FINAL ANSWER: Research complete. AI safety involves ensuring AI systems behave as intended.",
-    })
+    .withTestScenario([
+      { match: "research", text: "FINAL ANSWER: Research complete. AI safety involves ensuring AI systems behave as intended and avoid harmful outcomes." },
+      { text: "FINAL ANSWER: Research complete. AI safety involves ensuring AI systems behave as intended." },
+    ])
     .build();
 
   const writerAgent = await mkBase("writer")
     .withMaxIterations(3)
-    .withTestResponses({
-      "draft": "FINAL ANSWER: Draft complete. Summary: AI safety is the discipline of ensuring AI systems are aligned with human values.",
-      "": "FINAL ANSWER: Draft complete. Summary: AI safety ensures alignment with human values.",
-    })
+    .withTestScenario([
+      { match: "draft", text: "FINAL ANSWER: Draft complete. Summary: AI safety is the discipline of ensuring AI systems are aligned with human values." },
+      { text: "FINAL ANSWER: Draft complete. Summary: AI safety ensures alignment with human values." },
+    ])
     .build();
 
   const reviewerAgent = await mkBase("reviewer")
     .withMaxIterations(3)
-    .withTestResponses({
-      "review": "FINAL ANSWER: Review passed. The summary is accurate, clear, and appropriately concise.",
-      "": "FINAL ANSWER: Review passed. The summary is accurate and concise.",
-    })
+    .withTestScenario([
+      { match: "review", text: "FINAL ANSWER: Review passed. The summary is accurate, clear, and appropriately concise." },
+      { text: "FINAL ANSWER: Review passed. The summary is accurate and concise." },
+    ])
     .build();
 
   // ─── Define workflow steps ──────────────────────────────────────────────────

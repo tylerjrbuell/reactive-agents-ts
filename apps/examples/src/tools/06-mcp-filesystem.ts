@@ -30,7 +30,7 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
   type PN = "anthropic" | "openai" | "ollama" | "gemini" | "litellm" | "test";
   const provider = (opts?.provider ?? (process.env.ANTHROPIC_API_KEY ? "anthropic" : "test")) as PN;
   const useReal = provider !== "test";
-  // When not using real MCP, fall back to test provider so withTestResponses works.
+  // When not using real MCP, fall back to test provider so withTestScenario works.
   const effectiveProvider = (useReal ? provider : "test") as PN;
 
   console.log("\n=== MCP Filesystem Example ===");
@@ -49,9 +49,7 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
       args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
     }] : [])
     .withMaxIterations(10)
-    .withTestResponses({
-      "": "FINAL ANSWER: The /tmp directory contains temporary files managed by the operating system. MCP filesystem access is working.",
-    })
+    .withTestScenario([{ text: "FINAL ANSWER: The /tmp directory contains temporary files managed by the operating system. MCP filesystem access is working." }])
     .build();
 
   const result = await agent.run("What files or directories are available? Give a brief summary.");

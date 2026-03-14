@@ -54,9 +54,7 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
       deniedTools: ["web-search"],
       maxIterations: 4,
     })
-    .withTestResponses({
-      "": "FINAL ANSWER: I answered this from my training knowledge without using web-search (which is denied by my behavioral contract).",
-    })
+    .withTestScenario([{ text: "FINAL ANSWER: I answered this from my training knowledge without using web-search (which is denied by my behavioral contract)." }])
     .build();
 
   const contractResult = await contractAgent.run(
@@ -72,9 +70,7 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
 
   const ksAgent = await mkBase("killswitch-demo")
     .withKillSwitch()
-    .withTestResponses({
-      "": "FINAL ANSWER: Task completed after pause/resume cycle.",
-    })
+    .withTestScenario([{ text: "FINAL ANSWER: Task completed after pause/resume cycle." }])
     .build();
 
   // Pause the agent, then resume after a short delay

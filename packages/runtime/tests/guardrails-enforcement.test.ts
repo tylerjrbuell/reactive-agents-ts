@@ -18,8 +18,7 @@ describe("withGuardrails() enforcement", () => {
 
     const agent = await ReactiveAgents.create()
       .withName("test-agent")
-      .withProvider("test")
-      .withTestResponses({ ".*": "I will comply" })
+      .withTestScenario([{ text: "I will comply" }])
       .withGuardrails({ injection: true })
       .build();
 
@@ -46,8 +45,7 @@ describe("withGuardrails() enforcement", () => {
 
     const agent = await ReactiveAgents.create()
       .withName("test-agent")
-      .withProvider("test")
-      .withTestResponses({ ".*": "Paris is the capital of France." })
+      .withTestScenario([{ text: "Paris is the capital of France." }])
       .withGuardrails({ injection: true, pii: true, toxicity: true })
       .build();
 
@@ -66,8 +64,7 @@ describe("withGuardrails() enforcement", () => {
     // Even with guardrails on, the happy path must work end-to-end.
     const agent = await ReactiveAgents.create()
       .withName("test-agent")
-      .withProvider("test")
-      .withTestResponses({ ".*": "The answer is 42." })
+      .withTestScenario([{ text: "The answer is 42." }])
       .withGuardrails()
       .build();
 
@@ -88,8 +85,7 @@ describe("withGuardrails() enforcement", () => {
 
     const agent = await ReactiveAgents.create()
       .withName("test-agent")
-      .withProvider("test")
-      .withTestResponses({ ".*": "ok" })
+      .withTestScenario([{ text: "ok" }])
       .withGuardrails({ injection: true })
       .build();
 
@@ -109,8 +105,7 @@ describe("withGuardrails() enforcement", () => {
 
     const agent = await ReactiveAgents.create()
       .withName("test-agent")
-      .withProvider("test")
-      .withTestResponses({ ".*": "ok" })
+      .withTestScenario([{ text: "ok" }])
       .withGuardrails({ injection: true })
       .build();
 

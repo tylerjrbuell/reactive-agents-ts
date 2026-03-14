@@ -7,11 +7,11 @@ import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 
 describe("TreeOfThoughtStrategy", () => {
   it("should execute tree exploration and return completed result", async () => {
-    const layer = TestLLMServiceLayer({
-      "Generate exactly": "1. Approach via historical analysis\n2. Approach via geographical lookup",
-      "Rate this thought": "0.8",
-      "Selected Approach": "FINAL ANSWER: Paris is the capital of France.",
-    });
+    const layer = TestLLMServiceLayer([
+      { match: "Generate exactly", text: "1. Approach via historical analysis\n2. Approach via geographical lookup" },
+      { match: "Rate this thought", text: "0.8" },
+      { match: "Selected Approach", text: "FINAL ANSWER: Paris is the capital of France." },
+    ]);
 
     const program = executeTreeOfThought({
       taskDescription: "What is the capital of France?",
@@ -41,11 +41,11 @@ describe("TreeOfThoughtStrategy", () => {
 
   it("should prune branches below threshold and still produce a result", async () => {
     // All scores below pruning threshold will cause early termination
-    const layer = TestLLMServiceLayer({
-      "Generate exactly": "1. A weak approach\n2. Another weak approach",
-      "Rate this thought": "0.1",
-      "Selected Approach": "FINAL ANSWER: Best effort answer despite low scores.",
-    });
+    const layer = TestLLMServiceLayer([
+      { match: "Generate exactly", text: "1. A weak approach\n2. Another weak approach" },
+      { match: "Rate this thought", text: "0.1" },
+      { match: "Selected Approach", text: "FINAL ANSWER: Best effort answer despite low scores." },
+    ]);
 
     const program = executeTreeOfThought({
       taskDescription: "A difficult exploratory task",
@@ -79,11 +79,11 @@ describe("TreeOfThoughtStrategy", () => {
   });
 
   it("should track token usage across expansion, scoring, and synthesis", async () => {
-    const layer = TestLLMServiceLayer({
-      "Generate exactly": "1. First thought\n2. Second thought",
-      "Rate this thought": "0.7",
-      "Selected Approach": "FINAL ANSWER: Final synthesized answer.",
-    });
+    const layer = TestLLMServiceLayer([
+      { match: "Generate exactly", text: "1. First thought\n2. Second thought" },
+      { match: "Rate this thought", text: "0.7" },
+      { match: "Selected Approach", text: "FINAL ANSWER: Final synthesized answer." },
+    ]);
 
     const program = executeTreeOfThought({
       taskDescription: "Simple task",
@@ -113,11 +113,11 @@ describe("TreeOfThoughtStrategy", () => {
     // All scoring returns 0.2 (below default 0.5 threshold)
     // Score 0.2 is below both the original threshold (0.5) AND the adaptive threshold (0.35),
     // so rescue fails — but the adaptive step is still emitted in the failure branch
-    const layer = TestLLMServiceLayer({
-      "explore solution": "1. Approach one\n2. Approach two",
-      "Rate this thought": "0.2",
-      "Think step-by-step": "FINAL ANSWER: Recovered despite low scores.",
-    });
+    const layer = TestLLMServiceLayer([
+      { match: "explore solution", text: "1. Approach one\n2. Approach two" },
+      { match: "Rate this thought", text: "0.2" },
+      { match: "Think step-by-step", text: "FINAL ANSWER: Recovered despite low scores." },
+    ]);
 
     const result = await Effect.runPromise(
       executeTreeOfThought({
@@ -147,11 +147,11 @@ describe("TreeOfThoughtStrategy", () => {
   it("adaptive pruning rescue-success: continues with rescued nodes when score is between adaptive and original threshold", async () => {
     // Score 0.4: below pruningThreshold 0.5, but above adaptive threshold 0.35 (0.5 - 0.15)
     // → frontier = rescued nodes; loop continues
-    const layer = TestLLMServiceLayer({
-      "explore solution": "1. A feasible approach\n2. Another approach",
-      "Rate this thought": "0.4",
-      "Think step-by-step": "FINAL ANSWER: Completed via rescued path.",
-    });
+    const layer = TestLLMServiceLayer([
+      { match: "explore solution", text: "1. A feasible approach\n2. Another approach" },
+      { match: "Rate this thought", text: "0.4" },
+      { match: "Think step-by-step", text: "FINAL ANSWER: Completed via rescued path." },
+    ]);
 
     const result = await Effect.runPromise(
       executeTreeOfThought({
@@ -182,11 +182,11 @@ describe("TreeOfThoughtStrategy", () => {
 
   it("parses scores in percentage format (75% → 0.75) and allows paths above threshold", async () => {
     // Score returned as "75%" — should parse to 0.75, above 0.5 threshold → tree proceeds
-    const layer = TestLLMServiceLayer({
-      "explore solution": "1. Approach A\n2. Approach B",
-      "Rate this thought": "75%",
-      "Think step-by-step": "FINAL ANSWER: Answer from percentage-scored path.",
-    });
+    const layer = TestLLMServiceLayer([
+      { match: "explore solution", text: "1. Approach A\n2. Approach B" },
+      { match: "Rate this thought", text: "75%" },
+      { match: "Think step-by-step", text: "FINAL ANSWER: Answer from percentage-scored path." },
+    ]);
 
     const result = await Effect.runPromise(
       executeTreeOfThought({
@@ -210,12 +210,12 @@ describe("TreeOfThoughtStrategy", () => {
   });
 
   it("Phase 2 execution produces a structured final answer via kernel", async () => {
-    const layer = TestLLMServiceLayer({
-      "explore solution": "1. Approach A with recursion\n2. Approach B with iteration",
-      "Rate this thought": "0.8",
+    const layer = TestLLMServiceLayer([
+      { match: "explore solution", text: "1. Approach A with recursion\n2. Approach B with iteration" },
+      { match: "Rate this thought", text: "0.8" },
       // Phase 2 kernel call — matches "Selected Approach" in the priorContext
-      "Selected Approach": "FINAL ANSWER: The best approach uses iteration for O(n) complexity.",
-    });
+      { match: "Selected Approach", text: "FINAL ANSWER: The best approach uses iteration for O(n) complexity." },
+    ]);
 
     const result = await Effect.runPromise(
       executeTreeOfThought({

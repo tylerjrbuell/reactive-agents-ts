@@ -9,7 +9,7 @@ Reactive Agents is designed for testability. The Layer system lets you swap any 
 
 ## Basic Testing
 
-Use the test provider for offline, deterministic tests:
+Use `withTestScenario()` for offline, deterministic tests:
 
 ```typescript
 import { ReactiveAgents } from "reactive-agents";
@@ -19,11 +19,10 @@ describe("Research Agent", () => {
   test("answers questions about capitals", async () => {
     const agent = await ReactiveAgents.create()
       .withName("test-agent")
-      .withProvider("test")
-      .withTestResponses({
-        "capital of France": "Paris is the capital of France.",
-        "capital of Japan": "Tokyo is the capital of Japan.",
-      })
+      .withTestScenario([
+        { match: "capital of France", text: "Paris is the capital of France." },
+        { match: "capital of Japan", text: "Tokyo is the capital of Japan." },
+      ])
       .build();
 
     const result = await agent.run("What is the capital of France?");
@@ -35,7 +34,7 @@ describe("Research Agent", () => {
 });
 ```
 
-The test provider matches the longest substring found in the input against the response map. This means `"What is the capital of France?"` matches the `"capital of France"` key.
+The test scenario matches the longest `match` substring found in the input. This means `"What is the capital of France?"` matches the `"capital of France"` step. Steps without a `match` field act as a default fallback.
 
 ## Testing with Tools
 
@@ -47,10 +46,9 @@ import { Effect } from "effect";
 test("agent uses tools", async () => {
   const agent = await ReactiveAgents.create()
     .withName("test-agent")
-    .withProvider("test")
-    .withTestResponses({
-      default: "Based on my research, the answer is 42.",
-    })
+    .withTestScenario([
+      { text: "Based on my research, the answer is 42." },
+    ])
     .withTools({
       tools: [{
         definition: {
@@ -115,8 +113,7 @@ test("hooks fire in order", async () => {
 
   const agent = await ReactiveAgents.create()
     .withName("test-agent")
-    .withProvider("test")
-    .withTestResponses({ default: "Hello" })
+    .withTestScenario([{ text: "Hello" }])
     .withHook({
       phase: "bootstrap",
       timing: "after",
@@ -159,8 +156,7 @@ Verify that unsafe inputs are blocked:
 test("guardrails block injection attacks", async () => {
   const agent = await ReactiveAgents.create()
     .withName("test-agent")
-    .withProvider("test")
-    .withTestResponses({ default: "OK" })
+    .withTestScenario([{ text: "OK" }])
     .withGuardrails()
     .build();
 
@@ -204,10 +200,9 @@ Capture and compare agent outputs across test runs:
 test("output matches snapshot", async () => {
   const agent = await ReactiveAgents.create()
     .withName("test-agent")
-    .withProvider("test")
-    .withTestResponses({
-      "explain recursion": "Recursion is when a function calls itself.",
-    })
+    .withTestScenario([
+      { match: "explain recursion", text: "Recursion is when a function calls itself." },
+    ])
     .build();
 
   const result = await agent.run("Explain recursion");
@@ -295,8 +290,7 @@ import { expectStream } from "@reactive-agents/testing";
 
 test("stream emits text deltas and completes", async () => {
   const agent = await ReactiveAgents.create()
-    .withProvider("test")
-    .withTestResponses({ default: "Hello world" })
+    .withTestScenario([{ text: "Hello world" }])
     .withStreaming()
     .build();
 
@@ -350,7 +344,7 @@ test("max iterations terminates cleanly", async () => {
 
 ## Tips
 
-- **Use `"test"` provider** for all unit and integration tests — it's fast and deterministic
+- **Use `withTestScenario()`** for all unit and integration tests — it's fast and deterministic
 - **Use `@reactive-agents/testing`** for lower-level mock services and assertions
 - **Mock tools** with `Effect.succeed()` handlers to avoid network calls
 - **Test each feature independently** — guardrails, reasoning, tools, memory each have independent test surfaces

@@ -39,11 +39,11 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
     .withProvider(provider);
   if (opts?.model) b = b.withModel(opts.model);
   const agent = await b
-    .withTestResponses({
-      "complement each other": "TypeScript provides the type system foundation, while Effect-TS builds on it to add runtime safety guarantees. Together, they enable fully type-safe applications with managed side effects, structured error handling, and automatic dependency injection.",
-      "Effect-TS": "Effect-TS is a powerful TypeScript library for building robust, type-safe applications. It provides algebraic effects, dependency injection via Context/Layer, structured errors, and composable concurrency primitives.",
-      "TypeScript": "TypeScript is a strongly-typed superset of JavaScript developed by Microsoft. It adds static types, interfaces, and compilation to JavaScript, making it easier to build and maintain large applications.",
-    })
+    .withTestScenario([
+      { match: "complement each other", text: "TypeScript provides the type system foundation, while Effect-TS builds on it to add runtime safety guarantees. Together, they enable fully type-safe applications with managed side effects, structured error handling, and automatic dependency injection." },
+      { match: "Effect-TS", text: "Effect-TS is a powerful TypeScript library for building robust, type-safe applications. It provides algebraic effects, dependency injection via Context/Layer, structured errors, and composable concurrency primitives." },
+      { match: "TypeScript", text: "TypeScript is a strongly-typed superset of JavaScript developed by Microsoft. It adds static types, interfaces, and compilation to JavaScript, making it easier to build and maintain large applications." },
+    ])
     .withMemory("1")
     .withMaxIterations(3)
     .build();

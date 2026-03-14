@@ -38,9 +38,9 @@ const mockLLM = Layer.succeed(LLMService, {
  * Reflexion needs a mock that returns SATISFIED for critique prompts.
  * The critique prompt contains "Evaluate whether".
  */
-const reflexionLLM = TestLLMServiceLayer({
-  "Evaluate whether": "SATISFIED: The response is accurate and complete.",
-});
+const makeReflexionLLM = () => TestLLMServiceLayer([
+  { match: "Evaluate whether", text: "SATISFIED: The response is accurate and complete." },
+]);
 
 const baseInput = {
   taskDescription: "Say hello",
@@ -55,16 +55,16 @@ const baseInput = {
  * Build a TestLLMServiceLayer that returns valid JSON for extractStructuredOutput
  * and text for reflection/synthesis.
  */
-const planExecuteLLM = TestLLMServiceLayer({
-  "planning agent": JSON.stringify({
+const makePlanExecuteLLM = () => TestLLMServiceLayer([
+  { match: "planning agent", text: JSON.stringify({
     steps: [
       { title: "Do the task", instruction: "Complete the task", type: "analysis" },
     ],
-  }),
-  "OVERALL GOAL": "FINAL ANSWER: test result",
-  "GOAL:": "SATISFIED: Done.",
-  "Synthesize": "Final synthesized answer.",
-});
+  }) },
+  { match: "OVERALL GOAL", text: "FINAL ANSWER: test result" },
+  { match: "GOAL:", text: "SATISFIED: Done." },
+  { match: "Synthesize", text: "Final synthesized answer." },
+]);
 
 describe("Strategy threading", () => {
   it("reflexion accepts resultCompression", async () => {
@@ -72,7 +72,7 @@ describe("Strategy threading", () => {
       executeReflexion({
         ...baseInput,
         resultCompression: { budget: 400, previewItems: 2 },
-      }).pipe(Effect.provide(reflexionLLM)),
+      }).pipe(Effect.provide(makeReflexionLLM())),
     );
     expect(result.status).toBe("completed");
   });
@@ -82,7 +82,7 @@ describe("Strategy threading", () => {
       executePlanExecute({
         ...baseInput,
         resultCompression: { budget: 400, previewItems: 2 },
-      }).pipe(Effect.provide(planExecuteLLM)),
+      }).pipe(Effect.provide(makePlanExecuteLLM())),
     );
     expect(result.status).toBe("completed");
   });
@@ -109,7 +109,7 @@ describe("Strategy threading", () => {
       },
     };
     const result = await Effect.runPromise(
-      executeReflexion({ ...baseInput, config }).pipe(Effect.provide(reflexionLLM)),
+      executeReflexion({ ...baseInput, config }).pipe(Effect.provide(makeReflexionLLM())),
     );
     expect(result.status).toBe("completed");
   });
@@ -120,7 +120,7 @@ describe("Strategy threading", () => {
         ...baseInput,
         agentId: "test-agent-123",
         sessionId: "test-session-456",
-      }).pipe(Effect.provide(reflexionLLM)),
+      }).pipe(Effect.provide(makeReflexionLLM())),
     );
     expect(result.status).toBe("completed");
   });
@@ -131,7 +131,7 @@ describe("Strategy threading", () => {
         ...baseInput,
         agentId: "test-agent-123",
         sessionId: "test-session-456",
-      }).pipe(Effect.provide(planExecuteLLM)),
+      }).pipe(Effect.provide(makePlanExecuteLLM())),
     );
     expect(result.status).toBe("completed");
   });
@@ -152,7 +152,7 @@ describe("Strategy threading", () => {
       executeReflexion({
         ...baseInput,
         priorCritiques: ["Previous run found the answer lacked error handling"],
-      }).pipe(Effect.provide(reflexionLLM)),
+      }).pipe(Effect.provide(makeReflexionLLM())),
     );
     expect(result.status).toBe("completed");
     // Critiques should be stored in result metadata for downstream persistence
@@ -164,7 +164,7 @@ describe("Strategy threading", () => {
     const result = await Effect.runPromise(
       executeReflexion({
         ...baseInput,
-      }).pipe(Effect.provide(reflexionLLM)),
+      }).pipe(Effect.provide(makeReflexionLLM())),
     );
     expect(result.status).toBe("completed");
     expect(Array.isArray(result.metadata.reflexionCritiques)).toBe(true);
@@ -182,7 +182,7 @@ describe("Strategy threading", () => {
       },
     };
     const result = await Effect.runPromise(
-      executePlanExecute({ ...baseInput, config }).pipe(Effect.provide(planExecuteLLM)),
+      executePlanExecute({ ...baseInput, config }).pipe(Effect.provide(makePlanExecuteLLM())),
     );
     expect(result.status).toBe("completed");
   });
@@ -231,7 +231,7 @@ describe("Kernel pass attribution", () => {
     const result = await Effect.runPromise(
       executeReflexion({
         ...baseInput,
-      }).pipe(Effect.provide(Layer.merge(reflexionLLM, ebLayer))),
+      }).pipe(Effect.provide(Layer.merge(makeReflexionLLM(), ebLayer))),
     );
     expect(result.status).toBe("completed");
 
@@ -253,7 +253,7 @@ describe("Kernel pass attribution", () => {
     const result = await Effect.runPromise(
       executePlanExecute({
         ...baseInput,
-      }).pipe(Effect.provide(Layer.merge(planExecuteLLM, ebLayer))),
+      }).pipe(Effect.provide(Layer.merge(makePlanExecuteLLM(), ebLayer))),
     );
     expect(result.status).toBe("completed");
 

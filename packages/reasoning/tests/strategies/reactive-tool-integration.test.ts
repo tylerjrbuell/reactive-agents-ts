@@ -90,10 +90,10 @@ describe("ReactiveStrategy — real tool execution", () => {
     // LLM sequence:
     // 1. First thought (no Observation yet): request tool call with JSON args
     // 2. After Observation appears in context: give final answer
-    const testLLMLayer = TestLLMServiceLayer({
-      Observation: "FINAL ANSWER: The sum of 2 and 3 is 5.",
-      "step-by-step": 'I need to add these numbers. ACTION: add({"a": 2, "b": 3})',
-    });
+    const testLLMLayer = TestLLMServiceLayer([
+      { match: "step-by-step", text: 'I need to add these numbers. ACTION: add({"a": 2, "b": 3})' },
+      { match: "Observation", text: "FINAL ANSWER: The sum of 2 and 3 is 5." },
+    ]);
 
     const toolsLayer = createToolsLayer();
 
@@ -136,10 +136,10 @@ describe("ReactiveStrategy — real tool execution", () => {
   it("executes tool with string arg mapped to first parameter", async () => {
     // The LLM uses plain-string format: ACTION: greet(Alice)
     // The strategy should map "Alice" → {name: "Alice"}
-    const testLLMLayer = TestLLMServiceLayer({
-      Observation: "FINAL ANSWER: Done.",
-      "step-by-step": "ACTION: greet(Alice)",
-    });
+    const testLLMLayer = TestLLMServiceLayer([
+      { match: "step-by-step", text: "ACTION: greet(Alice)" },
+      { match: "Observation", text: "FINAL ANSWER: Done." },
+    ]);
 
     const toolsLayer = createToolsLayer();
 
@@ -172,10 +172,10 @@ describe("ReactiveStrategy — real tool execution", () => {
 
   it("notes tool unavailability when ToolService is not in context", async () => {
     // No ToolService provided — observation should clearly state it's unavailable
-    const testLLMLayer = TestLLMServiceLayer({
-      "ToolService is not available": "FINAL ANSWER: No tools available.",
-      "step-by-step": 'I need to add. ACTION: add({"a": 1, "b": 2})',
-    });
+    const testLLMLayer = TestLLMServiceLayer([
+      { match: "ToolService is not available", text: "FINAL ANSWER: No tools available." },
+      { match: "step-by-step", text: 'I need to add. ACTION: add({"a": 1, "b": 2})' },
+    ]);
 
     const program = executeReactive({
       taskDescription: "Add 1 and 2",
@@ -198,10 +198,10 @@ describe("ReactiveStrategy — real tool execution", () => {
   });
 
   it("captures tool execution errors as observations (does not throw)", async () => {
-    const testLLMLayer = TestLLMServiceLayer({
-      "Tool error": "FINAL ANSWER: The tool failed.",
-      "step-by-step": 'ACTION: broken-tool({"x": 42})',
-    });
+    const testLLMLayer = TestLLMServiceLayer([
+      { match: "Tool error", text: "FINAL ANSWER: The tool failed." },
+      { match: "step-by-step", text: 'ACTION: broken-tool({"x": 42})' },
+    ]);
 
     const toolsLayer = createToolsLayer();
 

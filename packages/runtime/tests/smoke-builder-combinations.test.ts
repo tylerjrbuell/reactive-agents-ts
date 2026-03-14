@@ -28,10 +28,7 @@ describe("Smoke: Builder Combinations", () => {
   it("reasoning only", async () => {
     const agent = await ReactiveAgents.create()
       .withName("reasoning-only")
-      .withProvider("test")
-      .withTestResponses({
-        default: "FINAL ANSWER: Hello back!",
-      })
+      .withTestScenario([{ text: "FINAL ANSWER: Hello back!" }])
       .withReasoning()
       .build();
 
@@ -43,10 +40,7 @@ describe("Smoke: Builder Combinations", () => {
   it("tools + reasoning", async () => {
     const agent = await ReactiveAgents.create()
       .withName("tools-reasoning")
-      .withProvider("test")
-      .withTestResponses({
-        default: "FINAL ANSWER: Combined result.",
-      })
+      .withTestScenario([{ text: "FINAL ANSWER: Combined result." }])
       .withTools()
       .withReasoning()
       .build();
@@ -59,10 +53,7 @@ describe("Smoke: Builder Combinations", () => {
   it("full (all 11 optional features)", async () => {
     const agent = await ReactiveAgents.create()
       .withName("full-featured")
-      .withProvider("test")
-      .withTestResponses({
-        default: "FINAL ANSWER: Fully loaded.",
-      })
+      .withTestScenario([{ text: "FINAL ANSWER: Fully loaded." }])
       .withReasoning()
       .withTools()
       .withGuardrails()
@@ -109,10 +100,7 @@ describe("Smoke: Builder Combinations", () => {
   it("with reasoning options (defaultStrategy)", async () => {
     const agent = await ReactiveAgents.create()
       .withName("reasoning-options")
-      .withProvider("test")
-      .withTestResponses({
-        default: "FINAL ANSWER: Strategy configured.",
-      })
+      .withTestScenario([{ text: "FINAL ANSWER: Strategy configured." }])
       .withReasoning({ defaultStrategy: "reactive" })
       .build();
 

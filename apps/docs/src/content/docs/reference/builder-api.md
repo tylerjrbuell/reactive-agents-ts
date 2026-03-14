@@ -304,7 +304,7 @@ type ExecutionPhase =
 
 | Method | Signature | Description |
 | ------ | --------- | ----------- |
-| `withTestResponses` | `(responses: Record<string, string>) => this` | Set canned test responses (uses `"test"` provider) |
+| `withTestScenario` | `(steps: TestScenarioStep[]) => this` | Set a deterministic test scenario (auto-sets `"test"` provider). Each step: `{ match?: string, text: string }` |
 
 ### Advanced
 

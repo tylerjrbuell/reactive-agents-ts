@@ -30,10 +30,7 @@ export async function run(): Promise<ExampleResult> {
 
   const specialist = await ReactiveAgents.create()
     .withName("specialist-agent")
-    .withProvider("test")
-    .withTestResponses({
-      "": "The answer is 42. This is the ultimate answer to life, the universe, and everything.",
-    })
+    .withTestScenario([{ text: "The answer is 42. This is the ultimate answer to life, the universe, and everything." }])
     .withMaxIterations(3)
     .build();
 

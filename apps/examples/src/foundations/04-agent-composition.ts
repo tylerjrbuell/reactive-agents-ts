@@ -29,10 +29,9 @@ export async function run(): Promise<ExampleResult> {
 
   const researcher = await ReactiveAgents.create()
     .withName("researcher")
-    .withProvider("test")
-    .withTestResponses({
-      "quantum": "Based on my research, quantum computing uses qubits which can exist in superposition, enabling parallel computation of multiple states simultaneously.",
-    })
+    .withTestScenario([
+      { match: "quantum", text: "Based on my research, quantum computing uses qubits which can exist in superposition, enabling parallel computation of multiple states simultaneously." },
+    ])
     .withMaxIterations(3)
     .build();
 
@@ -43,10 +42,9 @@ export async function run(): Promise<ExampleResult> {
 
   const coordinator = await ReactiveAgents.create()
     .withName("coordinator")
-    .withProvider("test")
-    .withTestResponses({
-      "quantum": "I'll coordinate the research task. The researcher agent found that quantum computing uses qubits in superposition for parallel computation.",
-    })
+    .withTestScenario([
+      { match: "quantum", text: "I'll coordinate the research task. The researcher agent found that quantum computing uses qubits in superposition for parallel computation." },
+    ])
     .withTools()
     .withAgentTool("research-delegate", {
       name: "researcher",

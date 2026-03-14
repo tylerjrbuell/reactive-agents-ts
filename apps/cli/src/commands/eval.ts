@@ -107,6 +107,6 @@ function buildLLMLayer(provider: "anthropic" | "openai" | "test") {
       return OpenAIProviderLive;
     case "test":
     default:
-      return TestLLMServiceLayer({ default: "0.8" });
+      return TestLLMServiceLayer([{ text: "0.8" }]);
   }
 }

@@ -10,9 +10,9 @@ const TestSchema = Schema.Struct({
 
 describe("extractStructuredOutput", () => {
   it("extracts valid JSON on first attempt", async () => {
-    const layer = TestLLMServiceLayer({
-      "Extract": '{"name": "test", "count": 42}',
-    });
+    const layer = TestLLMServiceLayer([
+      { match: "Extract", text: '{"name": "test", "count": 42}' },
+    ]);
 
     const result = await Effect.runPromise(
       extractStructuredOutput({
@@ -29,9 +29,9 @@ describe("extractStructuredOutput", () => {
   });
 
   it("repairs JSON with markdown fences", async () => {
-    const layer = TestLLMServiceLayer({
-      "Extract": '```json\n{"name": "fixed", "count": 7}\n```',
-    });
+    const layer = TestLLMServiceLayer([
+      { match: "Extract", text: '```json\n{"name": "fixed", "count": 7}\n```' },
+    ]);
 
     const result = await Effect.runPromise(
       extractStructuredOutput({
@@ -46,9 +46,9 @@ describe("extractStructuredOutput", () => {
   });
 
   it("repairs trailing commas", async () => {
-    const layer = TestLLMServiceLayer({
-      "Extract": '{"name": "comma", "count": 3,}',
-    });
+    const layer = TestLLMServiceLayer([
+      { match: "Extract", text: '{"name": "comma", "count": 3,}' },
+    ]);
 
     const result = await Effect.runPromise(
       extractStructuredOutput({
@@ -67,10 +67,11 @@ describe("extractStructuredOutput", () => {
     // Note: "previous response" pattern must come first because the retry prompt
     // also contains "Extract the data" (in "Original request:"), and TestLLMServiceLayer
     // checks patterns in insertion order, returning the first match.
-    const layer = TestLLMServiceLayer({
-      "previous response was not valid": '{"name": "retried", "count": 99}',
-      "Extract the data": '{"wrong": "shape"}',
-    });
+    const layer = TestLLMServiceLayer([
+      { text: '{"wrong": "shape"}' },
+      { text: '{"wrong": "shape"}' },
+      { text: '{"name": "retried", "count": 99}' },
+    ]);
 
     const result = await Effect.runPromise(
       extractStructuredOutput({
@@ -85,9 +86,9 @@ describe("extractStructuredOutput", () => {
   });
 
   it("uses custom system prompt", async () => {
-    const layer = TestLLMServiceLayer({
-      "planning agent": '{"name": "planned", "count": 1}',
-    });
+    const layer = TestLLMServiceLayer([
+      { match: "planning agent", text: '{"name": "planned", "count": 1}' },
+    ]);
 
     const result = await Effect.runPromise(
       extractStructuredOutput({
@@ -102,9 +103,9 @@ describe("extractStructuredOutput", () => {
   });
 
   it("strips <think> blocks before JSON extraction", async () => {
-    const layer = TestLLMServiceLayer({
-      "Extract": '<think>\nLet me think about this...\nThe name should be "thought" and count 99.\n</think>\n{"name": "thought", "count": 99}',
-    });
+    const layer = TestLLMServiceLayer([
+      { match: "Extract", text: '<think>\nLet me think about this...\nThe name should be "thought" and count 99.\n</think>\n{"name": "thought", "count": 99}' },
+    ]);
 
     const result = await Effect.runPromise(
       extractStructuredOutput({
@@ -120,9 +121,9 @@ describe("extractStructuredOutput", () => {
   });
 
   it("strips <think> blocks that contain JSON-like content", async () => {
-    const layer = TestLLMServiceLayer({
-      "Extract": '<think>\nI could return {"name": "wrong", "count": 0} but let me reconsider.\n</think>\n{"name": "correct", "count": 42}',
-    });
+    const layer = TestLLMServiceLayer([
+      { match: "Extract", text: '<think>\nI could return {"name": "wrong", "count": 0} but let me reconsider.\n</think>\n{"name": "correct", "count": 42}' },
+    ]);
 
     const result = await Effect.runPromise(
       extractStructuredOutput({
@@ -137,9 +138,9 @@ describe("extractStructuredOutput", () => {
   });
 
   it("includes few-shot examples in prompt", async () => {
-    const layer = TestLLMServiceLayer({
-      "Example": '{"name": "with-example", "count": 5}',
-    });
+    const layer = TestLLMServiceLayer([
+      { match: "Example", text: '{"name": "with-example", "count": 5}' },
+    ]);
 
     const result = await Effect.runPromise(
       extractStructuredOutput({
@@ -156,9 +157,9 @@ describe("extractStructuredOutput", () => {
   it("sets nativeMode true when provider supports structured output", async () => {
     // TestLLMService reports nativeJsonMode: true, so if completeStructured succeeds
     // the result should have nativeMode: true
-    const layer = TestLLMServiceLayer({
-      "Extract": '{"name": "native", "count": 1}',
-    });
+    const layer = TestLLMServiceLayer([
+      { match: "Extract", text: '{"name": "native", "count": 1}' },
+    ]);
 
     const result = await Effect.runPromise(
       extractStructuredOutput({
@@ -175,9 +176,9 @@ describe("extractStructuredOutput", () => {
   });
 
   it("falls back to prompt mode when forcePromptMode is set", async () => {
-    const layer = TestLLMServiceLayer({
-      "Extract": '{"name": "prompt-mode", "count": 2}',
-    });
+    const layer = TestLLMServiceLayer([
+      { match: "Extract", text: '{"name": "prompt-mode", "count": 2}' },
+    ]);
 
     const result = await Effect.runPromise(
       extractStructuredOutput({
@@ -195,9 +196,9 @@ describe("extractStructuredOutput", () => {
   it("falls back to prompt mode when native structured output fails", async () => {
     // Give a response that completeStructured will fail on (markdown fences),
     // but prompt-mode extraction can repair
-    const layer = TestLLMServiceLayer({
-      "Extract": '```json\n{"name": "repaired-fallback", "count": 3}\n```',
-    });
+    const layer = TestLLMServiceLayer([
+      { match: "Extract", text: '```json\n{"name": "repaired-fallback", "count": 3}\n```' },
+    ]);
 
     const result = await Effect.runPromise(
       extractStructuredOutput({

@@ -51,9 +51,7 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
 
   const verifiedAgent = await mkBase("verified-agent")
     .withVerification()
-    .withTestResponses({
-      "": "FINAL ANSWER: The Eiffel Tower is 330 meters tall and located in Paris, France. It was completed in 1889 and was designed by Gustave Eiffel.",
-    })
+    .withTestScenario([{ text: "FINAL ANSWER: The Eiffel Tower is 330 meters tall and located in Paris, France. It was completed in 1889 and was designed by Gustave Eiffel." }])
     .build();
 
   const verifiedResult = await verifiedAgent.run(
@@ -69,9 +67,7 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
   console.log("\nPart 2: Unverified agent (baseline, no verification layer)");
 
   const baselineAgent = await mkBase("baseline-agent")
-    .withTestResponses({
-      "": "FINAL ANSWER: The Eiffel Tower is in Paris. It is very tall and was built a long time ago.",
-    })
+    .withTestScenario([{ text: "FINAL ANSWER: The Eiffel Tower is in Paris. It is very tall and was built a long time ago." }])
     .build();
 
   const baselineResult = await baselineAgent.run(

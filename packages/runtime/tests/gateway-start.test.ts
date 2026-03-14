@@ -15,8 +15,7 @@ describe("ReactiveAgent.start() — gateway loop", () => {
     const { ReactiveAgents } = await import("../src/builder");
     const agent = await ReactiveAgents.create()
       .withName("gw-handle")
-      .withProvider("test")
-      .withTestResponses({ default: "FINAL ANSWER: done" })
+      .withTestScenario([{ text: "FINAL ANSWER: done" }])
       .withGateway({
         heartbeat: { intervalMs: 50 },
         policies: { dailyTokenBudget: 100000 },
@@ -44,8 +43,7 @@ describe("ReactiveAgent.start() — gateway loop", () => {
     const { ReactiveAgents } = await import("../src/builder");
     const agent = await ReactiveAgents.create()
       .withName("gw-done")
-      .withProvider("test")
-      .withTestResponses({ default: "FINAL ANSWER: ok" })
+      .withTestScenario([{ text: "FINAL ANSWER: ok" }])
       .withGateway({
         heartbeat: { intervalMs: 50 },
         policies: { dailyTokenBudget: 100000 },
@@ -68,8 +66,7 @@ describe("ReactiveAgent.start() — gateway loop", () => {
     const { ReactiveAgents } = await import("../src/builder");
     const agent = await ReactiveAgents.create()
       .withName("gw-runs")
-      .withProvider("test")
-      .withTestResponses({ default: "FINAL ANSWER: done" })
+      .withTestScenario([{ text: "FINAL ANSWER: done" }])
       .withGateway({
         heartbeat: { intervalMs: 50 },
         // No budget limits, so adaptive heartbeat should allow at least some executions

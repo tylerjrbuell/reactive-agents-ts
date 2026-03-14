@@ -65,16 +65,15 @@ import { ReactiveAgents } from "@reactive-agents/runtime";
 // 1. Build a specialist agent with a focused role
 const researcher = await ReactiveAgents.create()
   .withName("researcher")
-  .withProvider("test") // Use a real provider in production
-  .withTestResponses({
-    "quantum": "Based on my research, quantum computing uses qubits which can exist in superposition, enabling parallel computation of multiple states simultaneously.",
-  })
+  .withTestScenario([
+    { match: "quantum", text: "Based on my research, quantum computing uses qubits which can exist in superposition, enabling parallel computation of multiple states simultaneously." },
+  ]) // Use a real provider in production
   .build();
 
 // 2. Build a coordinator that uses the specialist as a tool
 const coordinator = await ReactiveAgents.create()
   .withName("coordinator")
-  .withProvider("test")
+  .withTestScenario([{ text: "Summary of quantum computing research." }])
   .withTools()
   // Register the local agent as a callable tool
   .withAgentTool("research-delegate", {

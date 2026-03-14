@@ -40,9 +40,9 @@ const stepTypes = (steps: readonly ReasoningStep[]) =>
 
 describe("Quality Regression: Strategy Step Types", () => {
   it("ReAct produces thought → observation sequence with FINAL ANSWER", async () => {
-    const llmLayer = TestLLMServiceLayer({
-      default: "Thought: I need to answer the question directly.\nFINAL ANSWER: The answer is 42.",
-    });
+    const llmLayer = TestLLMServiceLayer([
+      { text: "Thought: I need to answer the question directly.\nFINAL ANSWER: The answer is 42." },
+    ]);
 
     const result = await Effect.runPromise(
       executeReactive(makeInput("What is the answer?")).pipe(
@@ -58,12 +58,12 @@ describe("Quality Regression: Strategy Step Types", () => {
   });
 
   it("Reflexion produces generation → critique → improvement cycle", async () => {
-    const llmLayer = TestLLMServiceLayer({
-      // First call: initial generation
-      default: "Initial response about quantum mechanics.",
+    const llmLayer = TestLLMServiceLayer([
       // Critique trigger: the critique prompt includes "critique"
-      "critique": "SATISFIED: The response is complete and accurate.",
-    });
+      { match: "critique", text: "SATISFIED: The response is complete and accurate." },
+      // First call: initial generation (catch-all)
+      { text: "Initial response about quantum mechanics." },
+    ]);
 
     const result = await Effect.runPromise(
       executeReflexion(makeInput("Explain quantum mechanics")).pipe(
@@ -85,16 +85,16 @@ describe("Quality Regression: Strategy Step Types", () => {
         { title: "Summarize results", instruction: "Summarize findings", type: "analysis" },
       ],
     });
-    const llmLayer = TestLLMServiceLayer({
-      // Plan generation — extractStructuredOutput needs valid JSON
-      "planning agent": planJson,
+    const llmLayer = TestLLMServiceLayer([
+      // Plan generation -- extractStructuredOutput needs valid JSON
+      { match: "planning agent", text: planJson },
       // Step execution via ReAct kernel
-      "OVERALL GOAL": "FINAL ANSWER: Step completed successfully.",
+      { match: "OVERALL GOAL", text: "FINAL ANSWER: Step completed successfully." },
       // Reflection
-      "GOAL:": "SATISFIED: The plan was executed correctly.",
+      { match: "GOAL:", text: "SATISFIED: The plan was executed correctly." },
       // Synthesis
-      "Synthesize": "AI safety research findings summarized successfully.",
-    });
+      { match: "Synthesize", text: "AI safety research findings summarized successfully." },
+    ]);
 
     const result = await Effect.runPromise(
       executePlanExecute(makeInput("Research AI safety")).pipe(
@@ -110,14 +110,14 @@ describe("Quality Regression: Strategy Step Types", () => {
   });
 
   it("Tree-of-Thought produces branching with scores + synthesis", async () => {
-    const llmLayer = TestLLMServiceLayer({
-      // Expansion: generate candidate thoughts
-      default: "Candidate thought: Approach the problem by breaking it into components.",
+    const llmLayer = TestLLMServiceLayer([
       // Scoring: return a numeric score
-      "score": "0.8",
+      { match: "score", text: "0.8" },
       // Synthesis: final answer
-      "synthesize": "The best approach is the component-based one.",
-    });
+      { match: "synthesize", text: "The best approach is the component-based one." },
+      // Expansion: generate candidate thoughts (catch-all)
+      { text: "Candidate thought: Approach the problem by breaking it into components." },
+    ]);
 
     const result = await Effect.runPromise(
       executeTreeOfThought(makeInput("Design a data structure")).pipe(
@@ -134,12 +134,12 @@ describe("Quality Regression: Strategy Step Types", () => {
 
   it("Adaptive classifies task and delegates to appropriate strategy", async () => {
     // Provide StrategyRegistry for adaptive to use
-    const llmLayer = TestLLMServiceLayer({
-      // Classification response — must include a strategy name
-      default: "reactive",
+    const llmLayer = TestLLMServiceLayer([
       // Delegated strategy's response
-      "FINAL ANSWER": "FINAL ANSWER: The adaptive result.",
-    });
+      { match: "FINAL ANSWER", text: "FINAL ANSWER: The adaptive result." },
+      // Classification response -- must include a strategy name (catch-all)
+      { text: "reactive" },
+    ]);
 
     const strategyLayer = StrategyRegistryLive;
 
@@ -159,22 +159,22 @@ describe("Quality Regression: Strategy Step Types", () => {
         { title: "Do the task", instruction: "Complete the task", type: "analysis" },
       ],
     });
-    const llmLayer = TestLLMServiceLayer({
+    const makeLLMLayer = () => TestLLMServiceLayer([
       // Plan-execute: extractStructuredOutput needs JSON for plan generation
-      "planning agent": planJson,
+      { match: "planning agent", text: planJson },
       // Plan-execute: step execution via ReAct kernel
-      "OVERALL GOAL": "FINAL ANSWER: Test result.",
+      { match: "OVERALL GOAL", text: "FINAL ANSWER: Test result." },
       // Plan-execute: reflection
-      "GOAL:": "SATISFIED: Good.",
+      { match: "GOAL:", text: "SATISFIED: Good." },
       // Plan-execute: synthesis
-      "Synthesize": "Final synthesized test result.",
+      { match: "Synthesize", text: "Final synthesized test result." },
       // Reflexion critique
-      "critique": "SATISFIED: Good.",
+      { match: "critique", text: "SATISFIED: Good." },
       // ToT scoring
-      "score": "0.7",
+      { match: "score", text: "0.7" },
       // Default for reactive, reflexion generate, ToT expansion
-      default: "FINAL ANSWER: Test result.",
-    });
+      { text: "FINAL ANSWER: Test result." },
+    ]);
 
     const strategies = [
       { name: "reactive", fn: executeReactive },
@@ -186,7 +186,7 @@ describe("Quality Regression: Strategy Step Types", () => {
     for (const { name, fn } of strategies) {
       const result = await Effect.runPromise(
         fn(makeInput(`Test ${name}`)).pipe(
-          Effect.provide(llmLayer),
+          Effect.provide(makeLLMLayer()),
         ),
       );
 

@@ -8,8 +8,7 @@ import { ObservabilityService, ObservabilityServiceLive } from "@reactive-agents
 const buildAgent = async (verbosity: "minimal" | "normal" | "verbose" | "debug") =>
   ReactiveAgents.create()
     .withName("verbosity-test")
-    .withProvider("test")
-    .withTestResponses({ "verbosity test": "The answer is correct." })
+    .withTestScenario([{ match: "verbosity test", text: "The answer is correct." }])
     .withObservability({ verbosity, live: false })
     .build();
 

@@ -113,10 +113,7 @@ describe("Behavioral Contract Enforcement", () => {
   it("normal execution without contracts succeeds (regression guard)", async () => {
     const agent = await ReactiveAgents.create()
       .withName("no-contract-agent")
-      .withProvider("test")
-      .withTestResponses({
-        "test": "Hello from the agent",
-      })
+      .withTestScenario([{ match: "test", text: "Hello from the agent" }])
       .build();
 
     const result = await agent.run("test task");

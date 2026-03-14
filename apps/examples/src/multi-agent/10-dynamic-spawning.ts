@@ -41,11 +41,11 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
     .withDynamicSubAgents({ maxIterations: 4 })
     .withReasoning({ defaultStrategy: "reactive" })
     .withMaxIterations(8)
-    .withTestResponses({
-      "spawn":    "FINAL ANSWER: I delegated to a specialist sub-agent. The sub-agent completed the task and returned: SPAWN_COMPLETED",
-      "delegate": "FINAL ANSWER: I delegated to a specialist sub-agent. The sub-agent completed the task and returned: SPAWN_COMPLETED",
-      "":         "FINAL ANSWER: Task delegated to sub-agent. Result: SPAWN_COMPLETED",
-    })
+    .withTestScenario([
+      { match: "spawn", text: "FINAL ANSWER: I delegated to a specialist sub-agent. The sub-agent completed the task and returned: SPAWN_COMPLETED" },
+      { match: "delegate", text: "FINAL ANSWER: I delegated to a specialist sub-agent. The sub-agent completed the task and returned: SPAWN_COMPLETED" },
+      { text: "FINAL ANSWER: Task delegated to sub-agent. Result: SPAWN_COMPLETED" },
+    ])
     .build();
 
   console.log("Running parent agent (will spawn sub-agent)...");

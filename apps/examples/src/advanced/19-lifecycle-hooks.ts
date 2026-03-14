@@ -18,10 +18,7 @@ async function main() {
 
   const agent = await ReactiveAgents.create()
     .withName("hooks-demo")
-    .withProvider("test")
-    .withTestResponses({
-      ".*": "The answer is 42.",
-    })
+    .withTestScenario([{ text: "The answer is 42." }])
     .withReasoning()
     .withTools()
     // Hook 1: Log when reasoning starts

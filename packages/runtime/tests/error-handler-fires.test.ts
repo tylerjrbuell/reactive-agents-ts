@@ -31,8 +31,7 @@ describe("withErrorHandler fires on actual errors", () => {
 
     const agent = await ReactiveAgents.create()
       .withName("test-agent")
-      .withProvider("test")
-      .withTestResponses({ ".*": "ok" })
+      .withTestScenario([{ text: "ok" }])
       .withGuardrails({ injection: true })
       .withErrorHandler((err) => {
         caughtErrors.push(err);
@@ -55,8 +54,7 @@ describe("withErrorHandler fires on actual errors", () => {
 
     const agent = await ReactiveAgents.create()
       .withName("test-agent")
-      .withProvider("test")
-      .withTestResponses({ ".*": "ok" })
+      .withTestScenario([{ text: "ok" }])
       .withGuardrails({ injection: true })
       .withErrorHandler((err) => {
         receivedError = err;
@@ -82,8 +80,7 @@ describe("withErrorHandler fires on actual errors", () => {
 
     const agent = await ReactiveAgents.create()
       .withName("test-agent")
-      .withProvider("test")
-      .withTestResponses({ ".*": "ok" })
+      .withTestScenario([{ text: "ok" }])
       .withGuardrails({ injection: true })
       .withErrorHandler((_err, ctx) => {
         contexts.push(ctx);
@@ -112,8 +109,7 @@ describe("withErrorHandler fires on actual errors", () => {
 
     const agent = await ReactiveAgents.create()
       .withName("test-agent")
-      .withProvider("test")
-      .withTestResponses({ ".*": "ok" })
+      .withTestScenario([{ text: "ok" }])
       .withGuardrails({ injection: true })
       .withErrorHandler(() => {
         handlerFired = true;
@@ -138,8 +134,7 @@ describe("withErrorHandler fires on actual errors", () => {
 
     const agent = await ReactiveAgents.create()
       .withName("test-agent")
-      .withProvider("test")
-      .withTestResponses({ ".*": "ok" })
+      .withTestScenario([{ text: "ok" }])
       .withGuardrails({ injection: true })
       .withErrorHandler(() => {
         errorCount.push(1);

@@ -41,7 +41,7 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
 
   const agent = await mkBase("cost-tracked-agent")
     .withCostTracking()
-    .withTestResponses({ "": "FINAL ANSWER: The answer is 42. Task completed within budget." })
+    .withTestScenario([{ text: "FINAL ANSWER: The answer is 42. Task completed within budget." }])
     .build();
 
   const result = await agent.run("What is 6 × 7?");
@@ -58,10 +58,10 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
 
   const agent2 = await mkBase("multi-run-agent")
     .withCostTracking()
-    .withTestResponses({
-      "France": "FINAL ANSWER: Paris is the capital of France.",
-      "": "FINAL ANSWER: Tokyo is the capital of Japan.",
-    })
+    .withTestScenario([
+      { match: "France", text: "FINAL ANSWER: Paris is the capital of France." },
+      { text: "FINAL ANSWER: Tokyo is the capital of Japan." },
+    ])
     .build();
 
   const run1 = await agent2.run("What is the capital of France?");

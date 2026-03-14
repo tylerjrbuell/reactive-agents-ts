@@ -5,8 +5,7 @@ describe("StreamCompleted toolSummary", () => {
   it("StreamCompleted has toolSummary array structure", async () => {
     const agent = await ReactiveAgents.create()
       .withName("test-agent")
-      .withProvider("test")
-      .withTestResponses({ ".*": "done" })
+      .withTestScenario([{ text: "done" }])
       .build();
     let completed: any;
     for await (const event of agent.runStream("test")) {
@@ -28,8 +27,7 @@ describe("StreamCompleted toolSummary", () => {
   it("StreamCompleted metadata is present", async () => {
     const agent = await ReactiveAgents.create()
       .withName("test-agent")
-      .withProvider("test")
-      .withTestResponses({ ".*": "done" })
+      .withTestScenario([{ text: "done" }])
       .build();
     let completed: any;
     for await (const event of agent.runStream("test")) {

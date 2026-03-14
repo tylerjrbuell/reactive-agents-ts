@@ -17,11 +17,8 @@ describe("Tool Filtering — allowedTools", () => {
     // Build an agent with only "file-read" allowed
     const agent = await ReactiveAgents.create()
       .withName("restricted-agent")
-      .withProvider("test")
       .withTools({ allowedTools: ["file-read"] })
-      .withTestResponses({
-        "": "Done.",
-      })
+      .withTestScenario([{ text: "Done." }])
       .build();
 
     // Run a task — the agent should work fine
@@ -32,11 +29,8 @@ describe("Tool Filtering — allowedTools", () => {
   it("no allowedTools = all built-in tools available (backward compat)", async () => {
     const agent = await ReactiveAgents.create()
       .withName("full-tools-agent")
-      .withProvider("test")
       .withTools()
-      .withTestResponses({
-        "": "All tools available.",
-      })
+      .withTestScenario([{ text: "All tools available." }])
       .build();
 
     const result = await agent.run("What tools?");
@@ -47,11 +41,8 @@ describe("Tool Filtering — allowedTools", () => {
     // Empty array should not activate filtering
     const agent = await ReactiveAgents.create()
       .withName("empty-filter-agent")
-      .withProvider("test")
       .withTools({ allowedTools: [] })
-      .withTestResponses({
-        "": "All tools.",
-      })
+      .withTestScenario([{ text: "All tools." }])
       .build();
 
     const result = await agent.run("List tools");
@@ -61,7 +52,6 @@ describe("Tool Filtering — allowedTools", () => {
   it("allowedTools works with custom tools", async () => {
     const agent = await ReactiveAgents.create()
       .withName("custom-filtered")
-      .withProvider("test")
       .withTools({
         tools: [
           {
@@ -84,9 +74,7 @@ describe("Tool Filtering — allowedTools", () => {
         // Only allow the custom tool, not the other one or built-ins
         allowedTools: ["my-custom-tool"],
       })
-      .withTestResponses({
-        "": "Done with custom.",
-      })
+      .withTestScenario([{ text: "Done with custom." }])
       .build();
 
     const result = await agent.run("Use custom tool");
@@ -98,7 +86,6 @@ describe("Sub-agent tool filtering — withAgentTool", () => {
   it("static sub-agent with tools config should build", async () => {
     const agent = await ReactiveAgents.create()
       .withName("parent-agent")
-      .withProvider("test")
       .withTools()
       .withReasoning()
       .withAgentTool("researcher", {
@@ -107,9 +94,7 @@ describe("Sub-agent tool filtering — withAgentTool", () => {
         tools: ["web-search"],
         maxIterations: 3,
       })
-      .withTestResponses({
-        "": "Delegated to researcher.",
-      })
+      .withTestScenario([{ text: "Delegated to researcher." }])
       .build();
 
     expect(agent).toBeInstanceOf(ReactiveAgent);
@@ -135,13 +120,10 @@ describe("spawn-agent tool parameter — tools", () => {
   it("dynamic sub-agents with withDynamicSubAgents should build", async () => {
     const agent = await ReactiveAgents.create()
       .withName("spawner-agent")
-      .withProvider("test")
       .withTools()
       .withReasoning()
       .withDynamicSubAgents({ maxIterations: 3 })
-      .withTestResponses({
-        "": "Spawned a sub-agent.",
-      })
+      .withTestScenario([{ text: "Spawned a sub-agent." }])
       .build();
 
     expect(agent).toBeInstanceOf(ReactiveAgent);

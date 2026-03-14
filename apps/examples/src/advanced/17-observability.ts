@@ -29,7 +29,7 @@ export interface ExampleResult {
 }
 
 // Always use test provider — this example demonstrates instrumentation, not LLM quality.
-// Swap to "anthropic" (and remove withTestResponses) to observe real LLM execution.
+// Swap to "anthropic" (and remove withTestScenario) to observe real LLM execution.
 const PROVIDER = "test" as const;
 const LOG_FILE = "/tmp/example_17_obs.jsonl";
 
@@ -50,7 +50,7 @@ export async function run(): Promise<ExampleResult> {
     .withName("observed-agent")
     .withProvider(PROVIDER)
     .withObservability({ verbosity: "normal", live: false, file: LOG_FILE })
-    .withTestResponses({ "": "FINAL ANSWER: Observability demo complete. All phases tracked." })
+    .withTestScenario([{ text: "FINAL ANSWER: Observability demo complete. All phases tracked." }])
     .build();
 
   const result1 = await agent1.run("Run a task to demonstrate full observability tracking.");
@@ -68,7 +68,7 @@ export async function run(): Promise<ExampleResult> {
     .withName("verbose-agent")
     .withProvider(PROVIDER)
     .withObservability({ verbosity: "verbose", live: false })
-    .withTestResponses({ "": "FINAL ANSWER: Verbose mode captures all phase details." })
+    .withTestScenario([{ text: "FINAL ANSWER: Verbose mode captures all phase details." }])
     .build();
 
   const result2 = await agent2.run("Demonstrate verbose observability output.");
@@ -82,7 +82,7 @@ export async function run(): Promise<ExampleResult> {
     .withName("minimal-agent")
     .withProvider(PROVIDER)
     .withObservability({ verbosity: "minimal", live: false })
-    .withTestResponses({ "": "FINAL ANSWER: Minimal mode suppresses all observability output." })
+    .withTestScenario([{ text: "FINAL ANSWER: Minimal mode suppresses all observability output." }])
     .build();
 
   const result3 = await agent3.run("Run silently.");

@@ -5,8 +5,7 @@ import type { AgentStreamEvent } from "../src/stream-types.js";
 describe("ReactiveAgent.runStream", () => {
   it("yields StreamCompleted with the final output", async () => {
     const agent = await ReactiveAgents.create()
-      .withProvider("test")
-      .withTestResponses({ hello: "FINAL ANSWER: streaming works" })
+      .withTestScenario([{ match: "hello", text: "FINAL ANSWER: streaming works" }])
       .build();
 
     const events: AgentStreamEvent[] = [];
@@ -24,8 +23,7 @@ describe("ReactiveAgent.runStream", () => {
 
   it("last event is always a terminal event", async () => {
     const agent = await ReactiveAgents.create()
-      .withProvider("test")
-      .withTestResponses({ test: "FINAL ANSWER: done" })
+      .withTestScenario([{ match: "test", text: "FINAL ANSWER: done" }])
       .build();
 
     const events: AgentStreamEvent[] = [];
@@ -41,8 +39,7 @@ describe("ReactiveAgent.runStream", () => {
 
   it("run() still works alongside runStream()", async () => {
     const agent = await ReactiveAgents.create()
-      .withProvider("test")
-      .withTestResponses({ collect: "FINAL ANSWER: collected" })
+      .withTestScenario([{ match: "collect", text: "FINAL ANSWER: collected" }])
       .build();
 
     const result = await agent.run("collect");
@@ -54,8 +51,7 @@ describe("ReactiveAgent.runStream", () => {
 
   it("emits TextDelta events with reasoning enabled", async () => {
     const agent = await ReactiveAgents.create()
-      .withProvider("test")
-      .withTestResponses({ greet: "FINAL ANSWER: hello world" })
+      .withTestScenario([{ match: "greet", text: "FINAL ANSWER: hello world" }])
       .withReasoning()
       .build();
 
@@ -74,11 +70,10 @@ describe("ReactiveAgent.runStream", () => {
 
   it("concurrent streams do not interfere", async () => {
     const agent = await ReactiveAgents.create()
-      .withProvider("test")
-      .withTestResponses({
-        first: "FINAL ANSWER: alpha",
-        second: "FINAL ANSWER: beta",
-      })
+      .withTestScenario([
+        { match: "first", text: "FINAL ANSWER: alpha" },
+        { match: "second", text: "FINAL ANSWER: beta" },
+      ])
       .build();
 
     const collect = async (input: string) => {

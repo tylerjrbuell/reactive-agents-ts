@@ -132,16 +132,15 @@ Each phase supports `before`, `after`, and `on-error` timing.
 
 ## Testing
 
-Use the test provider for deterministic tests:
+Use `withTestScenario()` for deterministic tests:
 
 ```typescript
 const agent = await ReactiveAgents.create()
   .withName("test-agent")
-  .withProvider("test")
-  .withTestResponses({
-    "capital of France": "Paris is the capital of France.",
-    "quantum": "Quantum mechanics describes nature at the atomic scale.",
-  })
+  .withTestScenario([
+    { match: "capital of France", text: "Paris is the capital of France." },
+    { match: "quantum", text: "Quantum mechanics describes nature at the atomic scale." },
+  ])
   .build();
 
 const result = await agent.run("What is the capital of France?");

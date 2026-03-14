@@ -5,8 +5,7 @@ describe("runStream cancellation", () => {
   it("accepts signal option without type error", async () => {
     const agent = await ReactiveAgents.create()
       .withName("test-agent")
-      .withProvider("test")
-      .withTestResponses({ ".*": "done" })
+      .withTestScenario([{ text: "done" }])
       .withKillSwitch()
       .build();
     const ctrl = new AbortController();
@@ -22,8 +21,7 @@ describe("runStream cancellation", () => {
   it("already-aborted signal yields StreamCancelled immediately", async () => {
     const agent = await ReactiveAgents.create()
       .withName("test-agent")
-      .withProvider("test")
-      .withTestResponses({ ".*": "done" })
+      .withTestScenario([{ text: "done" }])
       .withKillSwitch()
       .build();
     const ctrl = new AbortController();
@@ -39,8 +37,7 @@ describe("runStream cancellation", () => {
   it("stream without signal works normally", async () => {
     const agent = await ReactiveAgents.create()
       .withName("test-agent")
-      .withProvider("test")
-      .withTestResponses({ ".*": "hello" })
+      .withTestScenario([{ text: "hello" }])
       .build();
     const events: string[] = [];
     for await (const event of agent.runStream("test")) {
@@ -53,8 +50,7 @@ describe("runStream cancellation", () => {
   it("StreamCancelled includes iterationsCompleted field", async () => {
     const agent = await ReactiveAgents.create()
       .withName("test-agent")
-      .withProvider("test")
-      .withTestResponses({ ".*": "done" })
+      .withTestScenario([{ text: "done" }])
       .withKillSwitch()
       .build();
     const ctrl = new AbortController();

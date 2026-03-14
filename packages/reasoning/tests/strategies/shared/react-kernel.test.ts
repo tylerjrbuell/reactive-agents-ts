@@ -12,9 +12,9 @@ import { CONTEXT_PROFILES } from "../../../src/context/context-profile.js";
 
 describe("executeReActKernel", () => {
   it("produces a final answer for a simple task (no tools)", async () => {
-    const layer = TestLLMServiceLayer({
-      "Task:": "FINAL ANSWER: The answer is 42.",
-    });
+    const layer = TestLLMServiceLayer([
+      { match: "Task:", text: "FINAL ANSWER: The answer is 42." },
+    ]);
     const result = await Effect.runPromise(
       executeReActKernel({
         task: "What is 6 times 7?",
@@ -27,9 +27,9 @@ describe("executeReActKernel", () => {
   });
 
   it("terminates at maxIterations when no final answer produced", async () => {
-    const layer = TestLLMServiceLayer({
-      "Task:": "I need to think more about this complex problem.",
-    });
+    const layer = TestLLMServiceLayer([
+      { match: "Task:", text: "I need to think more about this complex problem." },
+    ]);
     const result = await Effect.runPromise(
       executeReActKernel({
         task: "Solve an extremely hard problem",
@@ -43,9 +43,9 @@ describe("executeReActKernel", () => {
 
   it("injects priorContext into the thought prompt", async () => {
     // The TestLLM matches on "critique says" — proving priorContext was injected
-    const layer = TestLLMServiceLayer({
-      "critique says": "FINAL ANSWER: Improved response incorporating the critique feedback.",
-    });
+    const layer = TestLLMServiceLayer([
+      { match: "critique says", text: "FINAL ANSWER: Improved response incorporating the critique feedback." },
+    ]);
     const result = await Effect.runPromise(
       executeReActKernel({
         task: "Explain quantum computing",
@@ -58,9 +58,9 @@ describe("executeReActKernel", () => {
   });
 
   it("records steps for each iteration", async () => {
-    const layer = TestLLMServiceLayer({
-      "Task:": "FINAL ANSWER: Done.",
-    });
+    const layer = TestLLMServiceLayer([
+      { match: "Task:", text: "FINAL ANSWER: Done." },
+    ]);
     const result = await Effect.runPromise(
       executeReActKernel({ task: "Simple task", maxIterations: 3 }).pipe(
         Effect.provide(layer),
@@ -71,9 +71,9 @@ describe("executeReActKernel", () => {
   });
 
   it("returns tokens and cost from LLM usage", async () => {
-    const layer = TestLLMServiceLayer({
-      "Task:": "FINAL ANSWER: Result.",
-    });
+    const layer = TestLLMServiceLayer([
+      { match: "Task:", text: "FINAL ANSWER: Result." },
+    ]);
     const result = await Effect.runPromise(
       executeReActKernel({ task: "Simple task" }).pipe(Effect.provide(layer)),
     );
@@ -83,9 +83,9 @@ describe("executeReActKernel", () => {
   it("handles early end_turn termination on substantive response (no tools)", async () => {
     // end_turn with ≥50 chars and no tool call should terminate as "end_turn"
     const longResponse = "A".repeat(60);
-    const layer = TestLLMServiceLayer({
-      "Task:": longResponse,
-    });
+    const layer = TestLLMServiceLayer([
+      { match: "Task:", text: longResponse },
+    ]);
     const result = await Effect.runPromise(
       executeReActKernel({ task: "Simple task", maxIterations: 3 }).pipe(
         Effect.provide(layer),
@@ -98,9 +98,9 @@ describe("executeReActKernel", () => {
   it("blocks execution of tools listed in blockedTools", async () => {
     // The model tries to call signal/send_message_to_user, which is blocked.
     // The kernel should return a synthetic BLOCKED observation instead of executing.
-    const layer = TestLLMServiceLayer({
-      "Task:": 'ACTION: signal/send_message_to_user({"recipient": "+123", "message": "hi"})',
-    });
+    const layer = TestLLMServiceLayer([
+      { match: "Task:", text: 'ACTION: signal/send_message_to_user({"recipient": "+123", "message": "hi"})' },
+    ]);
 
     const result = await Effect.runPromise(
       executeReActKernel({
@@ -142,9 +142,9 @@ describe("reactKernel (ThoughtKernel direct)", () => {
   }
 
   it("thinking + FINAL ANSWER transitions to done", async () => {
-    const layer = TestLLMServiceLayer({
-      "Task:": "FINAL ANSWER: The answer is 42.",
-    });
+    const layer = TestLLMServiceLayer([
+      { match: "Task:", text: "FINAL ANSWER: The answer is 42." },
+    ]);
 
     const state = initialKernelState({
       maxIterations: 3,
@@ -166,9 +166,9 @@ describe("reactKernel (ThoughtKernel direct)", () => {
   });
 
   it("thinking + ACTION transitions to acting with pendingToolRequest", async () => {
-    const layer = TestLLMServiceLayer({
-      "Task:": 'ACTION: web-search({"query": "hello world"})',
-    });
+    const layer = TestLLMServiceLayer([
+      { match: "Task:", text: 'ACTION: web-search({"query": "hello world"})' },
+    ]);
 
     const state = initialKernelState({
       maxIterations: 3,
@@ -191,7 +191,7 @@ describe("reactKernel (ThoughtKernel direct)", () => {
   });
 
   it("acting transitions to thinking after tool execution (no ToolService)", async () => {
-    const layer = TestLLMServiceLayer({});
+    const layer = TestLLMServiceLayer();
 
     // Start in acting state with a pending tool request
     const state: KernelState = {

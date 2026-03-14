@@ -11,8 +11,7 @@ describe("Health check builder integration", () => {
   test("agent.health() returns healthy status with no registered checks", async () => {
     const agent = await new ReactiveAgentBuilder()
       .withName("health-test")
-      .withProvider("test")
-      .withTestResponses({ default: "ok" })
+      .withTestScenario([{ text: "ok" }])
       .withHealthCheck()
       .build();
     const health = await agent.health();
@@ -24,8 +23,7 @@ describe("Health check builder integration", () => {
   test("agent.health() works without withHealthCheck() (returns basic healthy)", async () => {
     const agent = await new ReactiveAgentBuilder()
       .withName("no-health")
-      .withProvider("test")
-      .withTestResponses({ default: "ok" })
+      .withTestScenario([{ text: "ok" }])
       .build();
     const health = await agent.health();
     expect(health.status).toBe("healthy");
@@ -36,8 +34,7 @@ describe("Health check builder integration", () => {
   test("health response includes check details when checks are registered", async () => {
     const agent = await new ReactiveAgentBuilder()
       .withName("health-detail")
-      .withProvider("test")
-      .withTestResponses({ default: "ok" })
+      .withTestScenario([{ text: "ok" }])
       .withHealthCheck()
       .build();
     const health = await agent.health();

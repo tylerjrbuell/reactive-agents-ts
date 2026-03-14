@@ -119,9 +119,7 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
       },
     })
     .withObservability({ verbosity: "normal" })
-    .withTestResponses({
-      "": "FINAL ANSWER: No new messages on any platform. All channels quiet.",
-    })
+    .withTestScenario([{ text: "FINAL ANSWER: No new messages on any platform. All channels quiet." }])
     .build();
 
   // In test mode, run a single check to verify the agent builds and runs

@@ -60,14 +60,13 @@ bun test packages/core                # Single package
 bun test --watch                      # Watch mode
 ```
 
-Tests use the built-in `test` LLM provider for deterministic, API-free testing:
+Tests use `withTestScenario()` for deterministic, API-free testing:
 
 ```typescript
 import { ReactiveAgents } from "reactive-agents";
 
 const agent = await ReactiveAgents.create()
-  .withProvider("test")
-  .withTestResponses({ "your query": "your response" })
+  .withTestScenario([{ match: "your query", text: "your response" }])
   .build();
 ```
 

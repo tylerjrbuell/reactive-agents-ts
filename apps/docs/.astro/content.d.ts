@@ -240,6 +240,13 @@ declare module 'astro:content' {
   collection: "docs";
   data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
+"cookbook/observability-metrics.md": {
+	id: "cookbook/observability-metrics.md";
+  slug: "cookbook/observability-metrics";
+  body: string;
+  collection: "docs";
+  data: InferEntrySchema<"docs">
+} & { render(): Render[".md"] };
 "cookbook/production-deployment.md": {
 	id: "cookbook/production-deployment.md";
   slug: "cookbook/production-deployment";

@@ -8,7 +8,6 @@ import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 // Helper to run reflexion with a TestLLM layer
 const run = (
   overrides?: Partial<typeof defaultReasoningConfig.strategies.reflexion>,
-  testResponses?: Record<string, string>,
 ) => {
   const config = {
     ...defaultReasoningConfig,
@@ -21,7 +20,7 @@ const run = (
     },
   };
 
-  const layer = TestLLMServiceLayer(testResponses ?? {});
+  const layer = TestLLMServiceLayer();
 
   return Effect.runPromise(
     executeReflexion({
@@ -58,9 +57,9 @@ describe("ReflexionStrategy", () => {
   it("completes immediately when critique is SATISFIED", async () => {
     // TestLLMServiceLayer returns "Test response" by default for non-matching prompts.
     // We need to match on critique prompt. The critique prompt includes "Evaluate whether"
-    const layer = TestLLMServiceLayer({
-      "Evaluate whether": "SATISFIED: The response is accurate and complete.",
-    });
+    const layer = TestLLMServiceLayer([
+      { match: "Evaluate whether", text: "SATISFIED: The response is accurate and complete." },
+    ]);
 
     const result = await Effect.runPromise(
       executeReflexion({
@@ -106,9 +105,9 @@ describe("ReflexionStrategy", () => {
     const partial = await run({ maxRetries: 1 });
 
     // Satisfied on first critique — completed result (high confidence)
-    const layer = TestLLMServiceLayer({
-      "Evaluate whether": "SATISFIED: Great response.",
-    });
+    const layer = TestLLMServiceLayer([
+      { match: "Evaluate whether", text: "SATISFIED: Great response." },
+    ]);
     const completed = await Effect.runPromise(
       executeReflexion({
         taskDescription: "Task",
@@ -134,7 +133,7 @@ describe("ReflexionStrategy", () => {
     let capturedPrompt = "";
     // We can't easily inspect the LLM call here with TestLLMService,
     // but we can verify it runs without error when memory context is provided
-    const layer = TestLLMServiceLayer({ "memory": "Test response." });
+    const layer = TestLLMServiceLayer([{ match: "memory", text: "Test response." }]);
 
     const result = await Effect.runPromise(
       executeReflexion({
@@ -169,9 +168,9 @@ describe("ReflexionStrategy", () => {
 
   it("exits early when critique is stagnant (same as previous)", async () => {
     // TestLLMService returns the SAME critique every time → stagnant → bail early
-    const layer = TestLLMServiceLayer({
-      "Evaluate whether": "The response is missing detail about superposition.",
-    });
+    const layer = TestLLMServiceLayer([
+      { match: "Evaluate whether", text: "The response is missing detail about superposition." },
+    ]);
 
     const result = await Effect.runPromise(
       executeReflexion({
@@ -196,10 +195,10 @@ describe("ReflexionStrategy", () => {
   });
 
   it("caps previousCritiques at 3 entries regardless of maxRetries", async () => {
-    const layer = TestLLMServiceLayer({
-      "Evaluate whether": "The response lacks examples.",
-      default: "An improved response.",
-    });
+    const layer = TestLLMServiceLayer([
+      { match: "Evaluate whether", text: "The response lacks examples." },
+      { text: "An improved response." },
+    ]);
 
     const result = await Effect.runPromise(
       executeReflexion({
@@ -226,10 +225,10 @@ describe("ReflexionStrategy", () => {
     // The generation kernel call will get a prompt containing "quantum computing" →
     // the layer returns a FINAL ANSWER string so the kernel terminates immediately.
     // The critique prompt contains "Evaluate whether" → SATISFIED → completed.
-    const layer = TestLLMServiceLayer({
-      "Evaluate whether": "SATISFIED: The response is thorough and well-researched.",
-      "quantum computing": "FINAL ANSWER: A complete response generated with tool awareness.",
-    });
+    const layer = TestLLMServiceLayer([
+      { match: "quantum computing", text: "FINAL ANSWER: A complete response generated with tool awareness." },
+      { match: "Evaluate whether", text: "SATISFIED: The response is thorough and well-researched." },
+    ]);
 
     const result = await Effect.runPromise(
       executeReflexion({
@@ -253,12 +252,12 @@ describe("ReflexionStrategy", () => {
     // The improvement prompt includes the critique text (via buildGenerationPrompt).
     // We match on a unique string that appears only in the critique to verify the
     // improvement LLM call received the critique context.
-    const layer = TestLLMServiceLayer({
-      // Critique prompt matches "Evaluate whether" → unsatisfied critique
-      "Evaluate whether": "The response misses superposition details uniqueMarker99.",
-      // Improvement prompt includes critique text → "uniqueMarker99" appears → improved response
-      "uniqueMarker99": "FINAL ANSWER: Improved explanation with superposition examples.",
-    });
+    const layer = TestLLMServiceLayer([
+      // Critique prompt matches "Evaluate whether" -> unsatisfied critique
+      { match: "Evaluate whether", text: "The response misses superposition details uniqueMarker99." },
+      // Improvement prompt includes critique text -> "uniqueMarker99" appears -> improved response
+      { match: "uniqueMarker99", text: "FINAL ANSWER: Improved explanation with superposition examples." },
+    ]);
 
     const result = await Effect.runPromise(
       executeReflexion({
@@ -285,9 +284,9 @@ describe("ReflexionStrategy", () => {
 
   it("uses thinking content as critique when clean content is empty", async () => {
     // Simulate Ollama think:true where entire critique is in <think> block
-    const layer = TestLLMServiceLayer({
-      "Evaluate whether": "<think>UNSATISFIED: The response needs more detail.</think>",
-    });
+    const layer = TestLLMServiceLayer([
+      { match: "Evaluate whether", text: "<think>UNSATISFIED: The response needs more detail.</think>" },
+    ]);
 
     const result = await Effect.runPromise(
       executeReflexion({

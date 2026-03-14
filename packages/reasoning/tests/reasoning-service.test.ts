@@ -7,9 +7,9 @@ import { defaultReasoningConfig } from "../src/types/config.js";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 
 describe("ReasoningService", () => {
-  const llmLayer = TestLLMServiceLayer({
-    "Think step-by-step": "FINAL ANSWER: The answer is 42.",
-  });
+  const llmLayer = TestLLMServiceLayer([
+    { match: "Think step-by-step", text: "FINAL ANSWER: The answer is 42." },
+  ]);
 
   const reasoningLayer = createReasoningLayer({
     ...defaultReasoningConfig,

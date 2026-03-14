@@ -36,7 +36,7 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
   type PN = "anthropic" | "openai" | "ollama" | "gemini" | "litellm" | "test";
   const provider = (opts?.provider ?? (process.env.ANTHROPIC_API_KEY ? "anthropic" : "test")) as PN;
   // useReal requires both a non-test provider AND a GitHub token.
-  // If either is missing, fall back to test mode entirely so withTestResponses works.
+  // If either is missing, fall back to test mode entirely so withTestScenario works.
   const useReal = provider !== "test" && Boolean(process.env.GITHUB_PERSONAL_ACCESS_TOKEN);
   const effectiveProvider = (useReal ? provider : "test") as PN;
 
@@ -56,9 +56,7 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
       args: ["-y", "@modelcontextprotocol/server-github"],
     }] : [])
     .withMaxIterations(5)
-    .withTestResponses({
-      "": "FINAL ANSWER: The octocat/Hello-World repository is a public demo repository on GitHub used for testing. It has several open issues and is widely forked.",
-    })
+    .withTestScenario([{ text: "FINAL ANSWER: The octocat/Hello-World repository is a public demo repository on GitHub used for testing. It has several open issues and is widely forked." }])
     .build();
 
   const result = await agent.run(

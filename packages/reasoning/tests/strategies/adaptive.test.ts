@@ -7,12 +7,12 @@ import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 
 describe("AdaptiveStrategy", () => {
   it("should analyze task, select reactive strategy, and return completed result", async () => {
-    const layer = TestLLMServiceLayer({
+    const layer = TestLLMServiceLayer([
       // Analysis prompt triggers strategy selection
-      "Classify the task": "REACTIVE",
+      { match: "Classify the task", text: "REACTIVE" },
       // Then the reactive sub-strategy runs
-      "Think step-by-step": "FINAL ANSWER: The capital of France is Paris.",
-    });
+      { match: "Think step-by-step", text: "FINAL ANSWER: The capital of France is Paris." },
+    ]);
 
     const program = executeAdaptive({
       taskDescription: "What is the capital of France?",
@@ -43,9 +43,9 @@ describe("AdaptiveStrategy", () => {
   it("should default to reactive when analysis response is unrecognized", async () => {
     // Default "Test response" won't match any strategy keyword,
     // so parseStrategySelection defaults to "reactive"
-    const layer = TestLLMServiceLayer({
-      "Think step-by-step": "FINAL ANSWER: Done.",
-    });
+    const layer = TestLLMServiceLayer([
+      { match: "Think step-by-step", text: "FINAL ANSWER: Done." },
+    ]);
 
     const program = executeAdaptive({
       taskDescription: "A simple question",
@@ -78,21 +78,21 @@ describe("AdaptiveStrategy", () => {
         { title: "Build pipeline", instruction: "Build the data pipeline", type: "analysis" },
       ],
     });
-    const layer = TestLLMServiceLayer({
+    const layer = TestLLMServiceLayer([
       // The analysis prompt should contain past experience text
-      "Past experience": "PLAN_EXECUTE",
-      "Classify the task": "PLAN_EXECUTE",
+      { match: "Past experience", text: "PLAN_EXECUTE" },
+      { match: "Classify the task", text: "PLAN_EXECUTE" },
       // Plan generation: extractStructuredOutput needs valid JSON
-      "planning agent": planJson,
+      { match: "planning agent", text: planJson },
       // Step execution via ReAct kernel
-      "OVERALL GOAL": "FINAL ANSWER: Pipeline built successfully.",
+      { match: "OVERALL GOAL", text: "FINAL ANSWER: Pipeline built successfully." },
       // Reflection
-      "GOAL:": "SATISFIED: Pipeline complete.",
+      { match: "GOAL:", text: "SATISFIED: Pipeline complete." },
       // Synthesis
-      "Synthesize": "Data pipeline built successfully with 3 stages.",
+      { match: "Synthesize", text: "Data pipeline built successfully with 3 stages." },
       // Sub-strategy response (fallback)
-      "Think step-by-step": "FINAL ANSWER: Done with experience-informed strategy.",
-    });
+      { match: "Think step-by-step", text: "FINAL ANSWER: Done with experience-informed strategy." },
+    ]);
 
     const program = executeAdaptive({
       taskDescription: "Build a multi-step data pipeline",
@@ -129,10 +129,10 @@ describe("AdaptiveStrategy", () => {
   });
 
   it("should combine token usage from analysis and sub-strategy", async () => {
-    const layer = TestLLMServiceLayer({
-      "Classify the task": "REACTIVE",
-      "Think step-by-step": "FINAL ANSWER: 42",
-    });
+    const layer = TestLLMServiceLayer([
+      { match: "Classify the task", text: "REACTIVE" },
+      { match: "Think step-by-step", text: "FINAL ANSWER: 42" },
+    ]);
 
     const program = executeAdaptive({
       taskDescription: "What is the answer?",
@@ -156,17 +156,17 @@ describe("AdaptiveStrategy", () => {
   it("falls back to reactive when selected sub-strategy returns partial status", async () => {
     // reflexion with maxRetries=1 returns partial (loop runs once, no SATISFIED)
     // reactive fallback returns completed (FINAL ANSWER)
-    const layer = TestLLMServiceLayer({
-      // Adaptive analysis → select REFLEXION
-      "Classify the task": "REFLEXION",
+    const layer = TestLLMServiceLayer([
+      // Adaptive analysis -> select REFLEXION
+      { match: "Classify the task", text: "REFLEXION" },
       // Reflexion initial generation (systemPrompt contains "task execution agent")
-      "task execution agent": "Initial attempt at an answer.",
+      { match: "task execution agent", text: "Initial attempt at an answer." },
       // Reflexion critique (content contains "Evaluate whether")
-      // No SATISFIED: prefix → not satisfied; maxRetries=1 so loop exits → partial
-      "Evaluate whether": "This response lacks detail and accuracy.",
+      // No SATISFIED: prefix -> not satisfied; maxRetries=1 so loop exits -> partial
+      { match: "Evaluate whether", text: "This response lacks detail and accuracy." },
       // Reactive fallback (content contains "Think step-by-step")
-      "Think step-by-step": "FINAL ANSWER: Recovered with reactive fallback.",
-    });
+      { match: "Think step-by-step", text: "FINAL ANSWER: Recovered with reactive fallback." },
+    ]);
 
     // Task must be >15 words with no tools to bypass heuristic pre-classifier
     // and reach the LLM classification path that returns REFLEXION

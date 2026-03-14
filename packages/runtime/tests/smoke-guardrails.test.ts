@@ -5,8 +5,7 @@ describe("Smoke: Guardrails Integration", () => {
   it("injection attempt is blocked before LLM call", async () => {
     const agent = await ReactiveAgents.create()
       .withName("guardrail-test")
-      .withProvider("test")
-      .withTestResponses({ default: "Should not reach this" })
+      .withTestScenario([{ text: "Should not reach this" }])
       .withGuardrails()
       .build();
 
@@ -25,10 +24,7 @@ describe("Smoke: Guardrails Integration", () => {
   it("clean input passes through to execution", async () => {
     const agent = await ReactiveAgents.create()
       .withName("guardrail-clean")
-      .withProvider("test")
-      .withTestResponses({
-        "weather": "The weather is sunny today.",
-      })
+      .withTestScenario([{ match: "weather", text: "The weather is sunny today." }])
       .withGuardrails()
       .build();
 
@@ -40,10 +36,7 @@ describe("Smoke: Guardrails Integration", () => {
   it("guardrails + reasoning work together", async () => {
     const agent = await ReactiveAgents.create()
       .withName("guardrail-reasoning")
-      .withProvider("test")
-      .withTestResponses({
-        default: "FINAL ANSWER: All clear.",
-      })
+      .withTestScenario([{ text: "FINAL ANSWER: All clear." }])
       .withGuardrails()
       .withReasoning()
       .build();
