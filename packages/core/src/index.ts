@@ -91,3 +91,15 @@ export { CoreServicesLive } from "./runtime.js";
 
 // ─── Streaming ───
 export { StreamingTextCallback } from "./streaming.js";
+
+// ─── Entropy Sensor Tag (for reactive-intelligence layer) ───
+export { EntropySensorService } from "./services/entropy-sensor-tag.js";
+export type {
+  KernelStateLike,
+  TokenLogprobLike,
+  EntropyScoreLike,
+  EntropyTrajectoryLike,
+  ModelCalibrationLike,
+  ContextSectionLike,
+  ContextPressureLike,
+} from "./services/entropy-sensor-tag.js";
