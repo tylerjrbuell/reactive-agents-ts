@@ -27,7 +27,8 @@
     "@reactive-agents/orchestration": "0.7.8",
     "@reactive-agents/gateway": "0.7.8",
     "@reactive-agents/a2a": "0.7.8",
-    "@reactive-agents/health": "0.7.6"
+    "@reactive-agents/health": "0.7.6",
+    "@reactive-agents/reactive-intelligence": "0.7.8"
   },
   "devDependencies": {
     "typescript": "^5.7.0",

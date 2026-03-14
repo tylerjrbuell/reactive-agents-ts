@@ -748,6 +748,8 @@ export class ReactiveAgentBuilder {
   private _consolidationConfig?: { threshold?: number; decayFactor?: number; pruneThreshold?: number };
   private _errorHandler?: (error: RuntimeErrors | Error, context: { taskId: string; phase: string; iteration: number; lastStep?: string }) => void;
   private _enableHealthCheck: boolean = false;
+  private _enableReactiveIntelligence: boolean = false;
+  private _reactiveIntelligenceOptions?: Partial<import("@reactive-agents/reactive-intelligence").ReactiveIntelligenceConfig>;
   private _sessionPersist: boolean = false;
   private _sessionMaxAgeDays?: number;
 
@@ -1630,6 +1632,19 @@ export class ReactiveAgentBuilder {
   }
 
   /**
+   * Enable the Reactive Intelligence Layer — entropy-based metacognitive sensing.
+   *
+   * The Entropy Sensor monitors reasoning quality per-iteration across 5 sources
+   * (token, structural, semantic, behavioral, context pressure) and publishes
+   * EntropyScored events to the EventBus for observability.
+   */
+  withReactiveIntelligence(options?: Partial<import("@reactive-agents/reactive-intelligence").ReactiveIntelligenceConfig>): this {
+    this._enableReactiveIntelligence = true;
+    if (options) this._reactiveIntelligenceOptions = options;
+    return this;
+  }
+
+  /**
    * Set the TTL for semantic cache entries. Cached LLM responses older than
    * this duration will be evicted.
    * @param ms - Cache TTL in milliseconds (default: 3,600,000 = 1 hour)
@@ -1859,6 +1874,8 @@ export class ReactiveAgentBuilder {
       sessionMaxAgeDays: this._sessionMaxAgeDays,
       loggingConfig: this._loggingConfig as import("@reactive-agents/observability").LoggingConfig | undefined,
       enableHealthCheck: this._enableHealthCheck,
+      enableReactiveIntelligence: this._enableReactiveIntelligence,
+      reactiveIntelligenceOptions: this._reactiveIntelligenceOptions,
       fallbackConfig: this._fallbackConfig,
     });
 

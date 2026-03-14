@@ -37,6 +37,7 @@ import {
 import { createInteractionLayer } from "@reactive-agents/interaction";
 import { createPromptLayer } from "@reactive-agents/prompts";
 import { createOrchestrationLayer } from "@reactive-agents/orchestration";
+import { createReactiveIntelligenceLayer } from "@reactive-agents/reactive-intelligence";
 
 // ─── Runtime Options ───
 
@@ -648,6 +649,12 @@ export interface RuntimeOptions {
    * Default: `false`
    */
   enableHealthCheck?: boolean;
+
+  /** Enable the Reactive Intelligence layer (entropy sensing). */
+  enableReactiveIntelligence?: boolean;
+
+  /** Configuration for reactive intelligence. */
+  reactiveIntelligenceOptions?: Record<string, unknown>;
 
   /**
    * Graceful degradation configuration. When provided, the runtime creates a
@@ -1275,6 +1282,11 @@ export const createRuntime = (options: RuntimeOptions) => {
       makeHealthService({ port: 0, agentName: options.agentId }),
     );
     runtime = Layer.merge(runtime, healthLayer) as any;
+  }
+
+  // ── Reactive Intelligence (entropy sensing) ──
+  if (options.enableReactiveIntelligence) {
+    runtime = Layer.merge(runtime, createReactiveIntelligenceLayer(options.reactiveIntelligenceOptions as any)) as any;
   }
 
   if (options.enableInteraction) {
