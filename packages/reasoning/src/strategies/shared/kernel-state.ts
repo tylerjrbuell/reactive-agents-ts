@@ -149,6 +149,12 @@ export interface KernelRunOptions {
   readonly kernelPass?: string;
   readonly meta?: Record<string, unknown>;
   readonly loopDetection?: LoopDetectionConfig;
+  /** Task description for entropy-based intelligence routing */
+  readonly taskDescription?: string;
+  /** Model identifier for entropy-based intelligence routing */
+  readonly modelId?: string;
+  /** LLM temperature for entropy-based intelligence routing */
+  readonly temperature?: number;
 }
 
 // ── Factory functions ────────────────────────────────────────────────────────
@@ -159,6 +165,16 @@ export interface KernelRunOptions {
  * Uses mutable Set/Map internally (they satisfy ReadonlySet/ReadonlyMap).
  */
 export function initialKernelState(opts: KernelRunOptions): KernelState {
+  // Build entropy meta only when at least one entropy field is provided
+  const hasEntropy = opts.taskDescription !== undefined || opts.modelId !== undefined || opts.temperature !== undefined;
+  const entropyMeta = hasEntropy
+    ? {
+        ...(opts.taskDescription !== undefined ? { taskDescription: opts.taskDescription } : {}),
+        ...(opts.modelId !== undefined ? { modelId: opts.modelId } : {}),
+        ...(opts.temperature !== undefined ? { temperature: opts.temperature } : {}),
+      }
+    : undefined;
+
   return {
     taskId: opts.taskId ?? "",
     strategy: opts.strategy,
@@ -172,7 +188,11 @@ export function initialKernelState(opts: KernelRunOptions): KernelState {
     status: "thinking",
     output: null,
     error: null,
-    meta: { ...(opts.meta ?? {}), maxIterations: opts.maxIterations },
+    meta: {
+      ...(opts.meta ?? {}),
+      maxIterations: opts.maxIterations,
+      ...(entropyMeta ? { entropy: entropyMeta } : {}),
+    },
   };
 }
 
