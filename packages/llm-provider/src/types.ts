@@ -674,6 +674,30 @@ export const ToolCallSchema = Schema.Struct({
  */
 export type ToolCall = Schema.Schema.Type<typeof ToolCallSchema>;
 
+// ─── Token Log Probabilities ───
+
+/**
+ * Log probability information for a single token.
+ * Returned by providers that support logprobs (OpenAI, Ollama).
+ *
+ * @example
+ * ```typescript
+ * const logprob: TokenLogprob = {
+ *   token: "Paris",
+ *   logprob: -0.0234,
+ *   topLogprobs: [
+ *     { token: "Paris", logprob: -0.0234 },
+ *     { token: "London", logprob: -3.89 },
+ *   ]
+ * };
+ * ```
+ */
+export type TokenLogprob = {
+  readonly token: string;
+  readonly logprob: number;
+  readonly topLogprobs?: readonly { token: string; logprob: number }[];
+};
+
 // ─── Completion Request ───
 
 /**
@@ -716,6 +740,10 @@ export type CompletionRequest = {
   readonly tools?: readonly ToolDefinition[];
   /** System prompt (optional, prepended to user messages) */
   readonly systemPrompt?: string;
+  /** Request log probabilities for each output token (optional) */
+  readonly logprobs?: boolean;
+  /** Number of most likely tokens to return log probabilities for (optional, 1-20) */
+  readonly topLogprobs?: number;
 };
 
 // ─── Completion Response ───
@@ -748,6 +776,23 @@ export const CompletionResponseSchema = Schema.Struct({
   toolCalls: Schema.optional(Schema.Array(ToolCallSchema)),
   /** Internal reasoning from thinking models (e.g. <think> blocks from qwen3, DeepSeek-R1) */
   thinking: Schema.optional(Schema.String),
+  /** Token-level log probabilities (when requested via logprobs in CompletionRequest) */
+  logprobs: Schema.optional(
+    Schema.Array(
+      Schema.Struct({
+        token: Schema.String,
+        logprob: Schema.Number,
+        topLogprobs: Schema.optional(
+          Schema.Array(
+            Schema.Struct({
+              token: Schema.String,
+              logprob: Schema.Number,
+            }),
+          ),
+        ),
+      }),
+    ),
+  ),
 });
 
 /**
