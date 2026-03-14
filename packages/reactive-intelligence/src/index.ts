@@ -1,6 +1,7 @@
 // @reactive-agents/reactive-intelligence
 // Phase 1: Entropy Sensor
 
+// ── Types ──
 export type {
   TokenLogprob,
   TokenEntropy,
@@ -25,3 +26,30 @@ export type {
   CalibrationDrift,
   ReactiveDecision,
 } from "./events.js";
+
+// ── Sensor modules ──
+export { computeTokenEntropy } from "./sensor/token-entropy.js";
+export { computeStructuralEntropy } from "./sensor/structural-entropy.js";
+export { computeSemanticEntropy, updateCentroid } from "./sensor/semantic-entropy.js";
+export { computeBehavioralEntropy } from "./sensor/behavioral-entropy.js";
+export { computeContextPressure } from "./sensor/context-pressure.js";
+export { computeCompositeEntropy } from "./sensor/composite.js";
+export { computeEntropyTrajectory, iterationWeight, classifyTrajectoryShape } from "./sensor/entropy-trajectory.js";
+export { cosineSimilarity } from "./sensor/math-utils.js";
+
+// ── Calibration ──
+export { lookupModel, MODEL_REGISTRY } from "./calibration/model-registry.js";
+export { computeConformalThreshold, computeCalibration } from "./calibration/conformal.js";
+export { CalibrationStore } from "./calibration/calibration-store.js";
+
+// ── Service ──
+export {
+  EntropySensorServiceLive,
+  meanStructural,
+  meanBehavioral,
+  fallbackScore,
+  uncalibratedDefault,
+} from "./sensor/entropy-sensor-service.js";
+
+// ── Runtime ──
+export { createReactiveIntelligenceLayer } from "./runtime.js";
