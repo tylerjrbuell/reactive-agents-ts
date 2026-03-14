@@ -131,7 +131,7 @@ export const TestLLMService = (
           } satisfies CompletionResponse;
         }
 
-        const content = "json" in turn ? JSON.stringify(turn.json) : turn.text;
+        const content = "json" in turn ? JSON.stringify(turn.json) : "text" in turn ? turn.text : "";
         return {
           content,
           stopReason: "end_turn" as const,
@@ -180,7 +180,7 @@ export const TestLLMService = (
         );
       }
 
-      const content = "json" in turn ? JSON.stringify(turn.json) : turn.text;
+      const content = "json" in turn ? JSON.stringify(turn.json) : "text" in turn ? turn.text : "";
       const inputTokens = Math.ceil(searchText.length / 4);
       const outputTokens = Math.ceil(content.length / 4);
 

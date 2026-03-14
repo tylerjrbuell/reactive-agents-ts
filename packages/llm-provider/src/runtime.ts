@@ -8,6 +8,7 @@ import { GeminiProviderLive } from "./providers/gemini.js";
 import { LiteLLMProviderLive } from "./providers/litellm.js";
 import { PromptManagerLive } from "./prompt-manager.js";
 import { TestLLMServiceLayer } from "./testing.js";
+import type { TestTurn } from "./testing.js";
 import { makeEmbeddingCache } from "./embedding-cache.js";
 import { makeCircuitBreaker } from "./circuit-breaker.js";
 import type { CircuitBreakerConfig } from "./retry.js";
@@ -48,14 +49,14 @@ const makeCircuitBreakerLayer = (config?: Partial<CircuitBreakerConfig>) =>
  */
 export const createLLMProviderLayer = (
   provider: "anthropic" | "openai" | "ollama" | "gemini" | "litellm" | "test" = "anthropic",
-  testResponses?: Record<string, string>,
+  testScenario?: TestTurn[],
   model?: string,
   modelParams?: { thinking?: boolean; temperature?: number; maxTokens?: number },
   circuitBreaker?: Partial<CircuitBreakerConfig>,
 ) => {
   if (provider === "test") {
     return Layer.mergeAll(
-      TestLLMServiceLayer(testResponses ?? {}),
+      TestLLMServiceLayer(testScenario ?? [{ text: "" }]),
       PromptManagerLive,
     );
   }

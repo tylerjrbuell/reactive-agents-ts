@@ -10,6 +10,7 @@ import {
   getProviderDefaultModel,
   LLMService,
 } from "@reactive-agents/llm-provider";
+import type { TestTurn } from "@reactive-agents/llm-provider";
 import { createMemoryLayer, ExperienceStoreLive, MemoryConsolidatorServiceLive, SessionStoreLive } from "@reactive-agents/memory";
 import type { MemoryLLM } from "@reactive-agents/memory";
 
@@ -220,7 +221,7 @@ export interface RuntimeOptions {
    *
    * Default: undefined (no mocking)
    */
-  testResponses?: Record<string, string>;
+  testScenario?: TestTurn[];
 
   /**
    * Additional Effect-TS layers to compose into the runtime.
@@ -776,7 +777,7 @@ export const createRuntime = (options: RuntimeOptions) => {
   const coreLayer = CoreServicesLive;
   const llmLayer = createLLMProviderLayer(
     options.provider ?? "test",
-    options.testResponses,
+    options.testScenario,
     resolvedModel,
     {
       thinking: options.thinking,

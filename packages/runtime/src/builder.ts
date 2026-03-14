@@ -1,6 +1,7 @@
 import { Effect, Layer, Schema, ManagedRuntime, Stream as EStream } from "effect";
 import { createRuntime } from "./runtime.js";
 import type { MCPServerConfig } from "./runtime.js";
+import type { TestTurn } from "@reactive-agents/llm-provider";
 import { ExecutionEngine } from "./execution-engine.js";
 import type { LifecycleHook, ExecutionContext, ModelParams } from "./types.js";
 import type { RuntimeErrors } from "./errors.js";
@@ -48,7 +49,7 @@ import { makeHealthService } from "@reactive-agents/health";
  * - `"ollama"` — Local models via Ollama (no API key needed)
  * - `"gemini"` — Google Gemini models (requires `GOOGLE_API_KEY`)
  * - `"litellm"` — LiteLLM proxy for 40+ provider models
- * - `"test"` — Mock LLM for testing (uses `withTestResponses()`)
+ * - `"test"` — Mock LLM for testing (uses `withTestScenario()`)
  */
 export type ProviderName =
   | "anthropic"
@@ -713,7 +714,7 @@ export class ReactiveAgentBuilder {
   private _enablePrompts: boolean = false;
   private _promptsOptions?: PromptsOptions;
   private _enableOrchestration: boolean = false;
-  private _testResponses?: Record<string, string>;
+  private _testScenario?: TestTurn[];
   private _extraLayers?: Layer.Layer<any, any>;
   private _mcpServers: MCPServerConfig[] = [];
   private _systemPrompt?: string;
@@ -1509,40 +1510,41 @@ export class ReactiveAgentBuilder {
   // ─── Testing ───
 
   /**
-   * Configure mock LLM responses for testing (provider: "test" only).
+   * Configure a deterministic multi-turn scenario for the test LLM provider.
    *
-   * Maps regex patterns to predefined output strings. The test provider checks
-   * each key as a `new RegExp(key)` against the incoming prompt and returns the
-   * value for the first match. Use `".*"` as a catch-all fallback.
+   * Turns are consumed sequentially. Each turn produces one LLM response:
+   * - `{ text: "..." }` — plain text, stopReason: "end_turn"
+   * - `{ toolCall: { name, args } }` — single tool call, stopReason: "tool_use"
+   * - `{ toolCalls: [...] }` — parallel tool calls, stopReason: "tool_use"
+   * - `{ json: value }` — structured output for completeStructured(), stopReason: "end_turn"
+   * - `{ error: "message" }` — throws with that message
    *
-   * **Important behavior notes:**
-   * - Patterns are treated as JavaScript regular expressions, not plain strings.
-   *   Escape regex metacharacters (`.`, `?`, `+`, etc.) if you want literal matches.
-   * - The test provider always completes successfully on the first iteration —
-   *   it does **not** trigger `MaxIterationsError` regardless of the response text.
-   *   To test error-path behavior, inject errors via `withErrorHandler()` or use
-   *   a Layer that returns a failing `LLMService`.
-   * - If no pattern matches, the test provider returns an empty string.
+   * Add `match?: string` to any turn to guard it with a regex — the turn is only
+   * consumed when the LLM input matches the pattern. End scenarios with an
+   * unconditional turn as catch-all. The last turn repeats when exhausted.
    *
-   * @param responses - Map of regex pattern → output string
+   * Automatically sets the provider to "test".
+   *
+   * @param turns - Array of test turns to consume sequentially
    * @returns `this` for chaining
    * @example
    * ```typescript
-   * // Exact-ish match (escape dots for safety)
-   * builder.withTestResponses({
-   *   "What is 2\\+2\\?": "4",
-   * })
+   * // Simple text response
+   * .withTestScenario([{ text: "Paris is the capital of France." }])
    *
-   * // Keyword match
-   * builder.withTestResponses({
-   *   ".*search.*": "No results found",
-   *   ".*capital.*France.*": "Paris is the capital of France.",
-   *   ".*": "Default test response",   // catch-all — must be last
-   * })
+   * // Tool loop then final answer
+   * .withTestScenario([
+   *   { toolCall: { name: "web-search", args: { query: "AI news" } } },
+   *   { text: "Here is the summary." },
+   * ])
+   *
+   * // Error injection
+   * .withTestScenario([{ error: "rate_limit_exceeded" }])
    * ```
    */
-  withTestResponses(responses: Record<string, string>): this {
-    this._testResponses = responses;
+  withTestScenario(turns: TestTurn[]): this {
+    this._testScenario = turns;
+    this._provider = "test";
     return this;
   }
 
@@ -1825,7 +1827,7 @@ export class ReactiveAgentBuilder {
       enableBehavioralContracts: this._enableBehavioralContracts,
       behavioralContract: this._behavioralContract,
       enableSelfImprovement: this._enableSelfImprovement,
-      testResponses: this._testResponses,
+      testScenario: this._testScenario,
       extraLayers: this._extraLayers,
       systemPrompt: composedSystemPrompt,
       mcpServers: this._mcpServers.length > 0 ? this._mcpServers : undefined,
