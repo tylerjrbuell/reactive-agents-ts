@@ -23,7 +23,7 @@ describe("agent.chat()", () => {
   it("chat() returns a ChatReply with a message string", async () => {
     const agent = await ReactiveAgents.create()
       .withName("chat-reply-test")
-      .withProvider("test")
+      .withTestScenario([{ text: "FINAL ANSWER: 4" }])
       .withReasoning({ defaultStrategy: "reactive" })
       .build();
 

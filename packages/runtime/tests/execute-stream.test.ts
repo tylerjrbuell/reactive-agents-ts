@@ -8,7 +8,7 @@ describe("ExecutionEngine.executeStream", () => {
   const runtime = createRuntime({
     agentId: "test-agent",
     provider: "test",
-    testResponses: { "Hello": "FINAL ANSWER: Hi there" },
+    testScenario: [{ match: "Hello", text: "FINAL ANSWER: Hi there" }],
   });
 
   // Minimal task shape using casts (same pattern as execution-engine.test.ts)

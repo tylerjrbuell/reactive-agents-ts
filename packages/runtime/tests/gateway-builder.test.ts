@@ -18,7 +18,7 @@ describe("Builder .withGateway()", () => {
     const { ReactiveAgents } = await import("../src/builder");
     const agent = await ReactiveAgents.create()
       .withName("test-gw")
-      .withProvider("test")
+      .withTestScenario([{ text: "Gateway test response." }])
       .withGateway({
         heartbeat: { intervalMs: 60000 },
         policies: { dailyTokenBudget: 10000 },
