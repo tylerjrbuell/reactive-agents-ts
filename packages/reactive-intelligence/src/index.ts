@@ -18,3 +18,10 @@ export type {
   ReactiveIntelligenceConfig,
 } from "./types.js";
 export { defaultReactiveIntelligenceConfig } from "./types.js";
+
+export type {
+  EntropyScored,
+  ContextWindowWarning,
+  CalibrationDrift,
+  ReactiveDecision,
+} from "./events.js";
