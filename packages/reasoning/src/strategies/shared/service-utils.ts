@@ -9,7 +9,7 @@ import { Effect } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { ToolService } from "@reactive-agents/tools";
 import { PromptService } from "@reactive-agents/prompts";
-import { EventBus } from "@reactive-agents/core";
+import { EventBus, EntropySensorService } from "@reactive-agents/core";
 
 // ── Narrow types — shared types from kernel-state, prompt type local ─────────
 
@@ -24,6 +24,9 @@ type PromptServiceInstance = {
   ) => Effect.Effect<{ content: string }, unknown>;
 };
 
+/** Narrow EntropySensorService surface used by kernel runner */
+type EntropySensorInstance = typeof EntropySensorService.Type;
+
 // ── Resolved services bundle ──────────────────────────────────────────────────
 
 export type StrategyServices = {
@@ -35,6 +38,8 @@ export type StrategyServices = {
   promptService: MaybeService<PromptServiceInstance>;
   /** EventBus — None when observability layer is absent */
   eventBus: MaybeService<EventBusInstance>;
+  /** Entropy sensor — None when reactive intelligence layer is absent */
+  entropySensor: MaybeService<EntropySensorInstance>;
 };
 
 /**
@@ -71,7 +76,12 @@ export const resolveStrategyServices: Effect.Effect<
   );
   const eventBus = ebOptRaw as MaybeService<EventBusInstance>;
 
-  return { llm, toolService, promptService, eventBus };
+  const entropySensorOptRaw = yield* Effect.serviceOption(EntropySensorService).pipe(
+    Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
+  );
+  const entropySensor = entropySensorOptRaw as MaybeService<EntropySensorInstance>;
+
+  return { llm, toolService, promptService, eventBus, entropySensor };
 });
 
 /**

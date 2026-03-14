@@ -106,6 +106,7 @@ export function runKernel(
     // ── 6. Main loop ─────────────────────────────────────────────────────────
     // Track which tools were used before this iteration to compute per-step tools.
     let prevToolsUsed = new Set<string>();
+    let prevStepCount = 0;
     const loopCfg = options.loopDetection;
     const maxSameTool = loopCfg?.maxSameToolCalls ?? 3;
     const maxRepeatedThought = loopCfg?.maxRepeatedThoughts ?? 3;
@@ -137,6 +138,61 @@ export function runKernel(
       for (const [k, v] of state.scratchpad) {
         mutableScratchpad.set(k, v);
       }
+
+      // ── Entropy scoring (post-kernel, pre-loop-detection) ──────────────
+      if (services.entropySensor._tag === "Some") {
+        const newThoughtSteps = state.steps.filter(
+          (s, idx) => s.type === "thought" && idx >= prevStepCount,
+        );
+        if (newThoughtSteps.length > 0) {
+          const latestThought = newThoughtSteps[newThoughtSteps.length - 1]!;
+          const priorThoughts = state.steps
+            .slice(0, prevStepCount)
+            .filter((s) => s.type === "thought");
+          const priorThought = priorThoughts.length > 0
+            ? priorThoughts[priorThoughts.length - 1]!.content
+            : undefined;
+
+          yield* services.entropySensor.value
+            .score({
+              thought: latestThought.content ?? "",
+              taskDescription: (state.meta.entropy as any)?.taskDescription ?? "",
+              strategy: state.strategy,
+              iteration: state.iteration,
+              maxIterations: (state.meta.maxIterations as number) ?? 10,
+              modelId: (state.meta.entropy as any)?.modelId ?? "unknown",
+              temperature: (state.meta.entropy as any)?.temperature ?? 0,
+              priorThought,
+              logprobs: (state.meta.entropy as any)?.lastLogprobs,
+              kernelState: state,
+            })
+            .pipe(
+              Effect.tap((score: any) => {
+                const entropyMeta = (state.meta as any).entropy ?? {};
+                const history = entropyMeta.entropyHistory ?? [];
+                history.push(score);
+                (state.meta as any).entropy = { ...entropyMeta, entropyHistory: history };
+
+                if (eventBus._tag === "Some") {
+                  return eventBus.value.publish({
+                    _tag: "EntropyScored",
+                    taskId: state.taskId,
+                    iteration: score.iteration,
+                    composite: score.composite,
+                    sources: score.sources,
+                    trajectory: score.trajectory,
+                    confidence: score.confidence,
+                    modelTier: score.modelTier,
+                    iterationWeight: score.iterationWeight,
+                  });
+                }
+                return Effect.void;
+              }),
+              Effect.catchAll(() => Effect.void),
+            );
+        }
+      }
+      prevStepCount = state.steps.length;
 
       // ── Iteration progress hook ──────────────────────────────────────────
       // Compute which tools were called in THIS iteration (new since prev step).
