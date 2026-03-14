@@ -2,7 +2,7 @@
 
 ## Project Status
 
-**v0.8.x — Adoption Readiness.** 21 packages + 2 apps built, 2,048 tests across 258 files. Builder hardening: `withStrictValidation()`, `withTimeout()`, `withRetryPolicy()`, `withCacheTimeout()`, consolidated `withGuardrails()` thresholds, `withErrorHandler()`, `withFallbacks()`, `withLogging()`, `withHealthCheck()`. Strategy switching: `withReasoning({ enableStrategySwitching: true })`. Stream improvements: AbortSignal cancellation, `IterationProgress` event, `StreamCancelled` event, `StreamCompleted.toolSummary`. `ToolBuilder` fluent API. `SessionStoreService` SQLite-backed chat session persistence. `FallbackChain` in `@reactive-agents/llm-provider`. `makeLoggerService()` structured logging with rotation. `expectStream()` streaming test assertions + scenario fixtures. `agent.health()` health probes. `rax create agent --interactive`. Final Answer, Debrief & Chat: `final-answer` meta-tool hard-gates the ReAct loop exit (replaces fragile text regex). `DebriefSynthesizer` post-run service: collects execution signals + one LLM call → structured `AgentDebrief` (summary, key findings, lessons, errors, metrics). `DebriefStore` persists run artifacts to SQLite (`agent_debriefs` table). `AgentResult` enriched with `debrief?`, `format?`, `terminatedBy?`. `agent.chat()` + `agent.session()` for conversational Q&A with adaptive routing (direct LLM for questions, ReAct loop for tool-capable queries). `OutputFormat` + `TerminatedBy` canonical types. Unified `confidence` type (`"high"|"medium"|"low"`).
+**v0.8.x — Adoption Readiness.** 22 packages + 2 apps built, 2,091 tests across 274 files. Builder hardening: `withStrictValidation()`, `withTimeout()`, `withRetryPolicy()`, `withCacheTimeout()`, consolidated `withGuardrails()` thresholds, `withErrorHandler()`, `withFallbacks()`, `withLogging()`, `withHealthCheck()`. Strategy switching: `withReasoning({ enableStrategySwitching: true })`. Stream improvements: AbortSignal cancellation, `IterationProgress` event, `StreamCancelled` event, `StreamCompleted.toolSummary`. `ToolBuilder` fluent API. `SessionStoreService` SQLite-backed chat session persistence. `FallbackChain` in `@reactive-agents/llm-provider`. `makeLoggerService()` structured logging with rotation. `expectStream()` streaming test assertions + scenario fixtures. `agent.health()` health probes. `rax create agent --interactive`. Final Answer, Debrief & Chat: `final-answer` meta-tool hard-gates the ReAct loop exit (replaces fragile text regex). `DebriefSynthesizer` post-run service: collects execution signals + one LLM call → structured `AgentDebrief` (summary, key findings, lessons, errors, metrics). `DebriefStore` persists run artifacts to SQLite (`agent_debriefs` table). `AgentResult` enriched with `debrief?`, `format?`, `terminatedBy?`. `agent.chat()` + `agent.session()` for conversational Q&A with adaptive routing (direct LLM for questions, ReAct loop for tool-capable queries). `OutputFormat` + `TerminatedBy` canonical types. Unified `confidence` type (`"high"|"medium"|"low"`).
 
 - Phase 1: Core, LLM Provider, Memory, Reasoning, Tools, Interaction, Runtime
 - Phase 2: Guardrails, Verification, Cost
@@ -27,6 +27,7 @@
 - Final Answer, Debrief & Chat: `final-answer` hard-gate tool, `DebriefSynthesizer` + `DebriefStore` SQLite persistence, `AgentResult` enriched with `debrief?`/`format?`/`terminatedBy?`, `agent.chat()` + `agent.session()` adaptive conversational interaction (1773 tests, 217 files)
 - Adoption Readiness Phases 1–3: Builder hardening (`withStrictValidation`, `withTimeout`, `withRetryPolicy`, `withCacheTimeout`, consolidated `withGuardrails`, `withErrorHandler`, `withFallbacks`, `withLogging`, `withHealthCheck`), strategy switching, AbortSignal stream cancellation, `IterationProgress`/`StreamCancelled` events, `StreamCompleted.toolSummary`, `ToolBuilder` fluent API, `SessionStoreService` SQLite session persistence, `FallbackChain` provider fallbacks, `makeLoggerService()` structured logging, `expectStream()` streaming test assertions + scenario fixtures, `rax create agent --interactive` (1900 tests, 241 files)
 - Test Scenario Provider: `withTestScenario(TestTurn[])` replaces `withTestResponses` — sequential turn consumption with text/toolCall/toolCalls/json/error turns, match guards, auto-provider, tool loop testing (2,048 tests, 258 files)
+- Reactive Intelligence Layer (Phase 1): Entropy Sensor — 5 entropy sources (token, structural, semantic, behavioral, context pressure), composite scorer with adaptive weights, conformal calibration, trajectory analysis (converging/flat/diverging/v-recovery/oscillating), model registry, `EntropySensorService` Effect-TS service, KernelRunner integration (post-kernel scoring), `.withReactiveIntelligence()` builder API, 65-example validation dataset with accuracy gates (2,091 tests, 274 files)
 - Pre-release: tsup compiled output, Google Gemini provider, Reflexion reasoning strategy
 - Final Integration: All layers compose via `createRuntime()` and `ReactiveAgentBuilder`
 - Docs: Starlight (Astro) site at `apps/docs/`
@@ -37,8 +38,8 @@
 
 ```bash
 bun install              # Install dependencies
-bun test                 # Run all tests (2048 tests, 258 files)
-bun run build            # Build all packages (21 packages, ESM + DTS)
+bun test                 # Run all tests (2091 tests, 274 files)
+bun run build            # Build all packages (22 packages, ESM + DTS)
 cd apps/docs && npx astro dev    # Start docs dev server
 cd apps/docs && npx astro build  # Build docs for production
 ```
@@ -245,6 +246,7 @@ packages/
   testing/       — Mock services (LLM, tools, EventBus), assertion helpers, test fixtures
   benchmarks/    — Benchmark suite: 20 tasks × 5 tiers, overhead measurement, report generation
   health/        — Health checks and readiness probes
+  reactive-intelligence/ — Entropy Sensor, reactive controller (Phase 2), learning engine (Phase 3)
   evolution/     — [PLANNED v1.1+] Group-Evolving Agents (GEA): strategy evolution, experience sharing
 apps/
   cli/           — `rax` CLI (init, create, run, dev, eval, playground, inspect)
