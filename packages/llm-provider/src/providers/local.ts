@@ -9,6 +9,7 @@ import type {
   LLMMessage,
   ToolDefinition,
   ToolCall,
+  TokenLogprob,
 } from "../types.js";
 import { estimateTokenCount } from "../token-counter.js";
 import { retryPolicy } from "../retry.js";
@@ -259,6 +260,10 @@ export const LocalProviderLive = Layer.effect(
                   stop: request.stopSequences
                     ? [...request.stopSequences]
                     : undefined,
+                  ...(request.logprobs ? { logprobs: true } : {}),
+                  ...(request.topLogprobs != null
+                    ? { top_logprobs: request.topLogprobs }
+                    : {}),
                 },
               });
             },
@@ -282,6 +287,31 @@ export const LocalProviderLive = Layer.effect(
 
           const hasToolCalls = toolCalls && toolCalls.length > 0;
 
+          // Extract logprobs from Ollama response if present
+          const rawLogprobs = (
+            response as {
+              logprobs?: Array<{
+                token: string;
+                logprob: number;
+                top_logprobs?: Array<{ token: string; logprob: number }>;
+              }>;
+            }
+          ).logprobs;
+          const logprobs: TokenLogprob[] | undefined = rawLogprobs
+            ? rawLogprobs.map((lp) => ({
+                token: lp.token,
+                logprob: lp.logprob,
+                ...(lp.top_logprobs
+                  ? {
+                      topLogprobs: lp.top_logprobs.map((tlp) => ({
+                        token: tlp.token,
+                        logprob: tlp.logprob,
+                      })),
+                    }
+                  : {}),
+              }))
+            : undefined;
+
           return {
             content,
             stopReason: hasToolCalls
@@ -300,6 +330,7 @@ export const LocalProviderLive = Layer.effect(
             model: response.model ?? model,
             toolCalls,
             ...(thinkingContent ? { thinking: thinkingContent } : {}),
+            ...(logprobs ? { logprobs } : {}),
           } satisfies CompletionResponse;
         }).pipe(
           Effect.retry(retryPolicy),

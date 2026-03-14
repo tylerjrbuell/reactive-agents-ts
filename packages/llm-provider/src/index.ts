@@ -19,6 +19,7 @@ export type {
   StructuredCompletionRequest,
   TruncationStrategy,
   StructuredOutputCapabilities,
+  TokenLogprob,
 } from "./types.js";
 
 // ─── Schemas ───

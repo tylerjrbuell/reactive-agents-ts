@@ -14,6 +14,7 @@ import type {
   LLMMessage,
   ToolDefinition,
   ToolCall,
+  TokenLogprob,
 } from "../types.js";
 import { calculateCost, estimateTokenCount } from "../token-counter.js";
 import { retryPolicy } from "../retry.js";
@@ -121,6 +122,13 @@ export const OpenAIProviderLive = Layer.effect(
                   ? [...request.stopSequences]
                   : undefined,
           };
+
+          if (request.logprobs) {
+            requestBody.logprobs = true;
+            if (request.topLogprobs != null) {
+              requestBody.top_logprobs = request.topLogprobs;
+            }
+          }
 
           if (request.tools && request.tools.length > 0) {
             requestBody.tools = request.tools.map(toOpenAITool);
@@ -382,6 +390,12 @@ type OpenAIToolCall = {
   function: { name: string; arguments: string };
 };
 
+type OpenAILogprobContent = {
+  token: string;
+  logprob: number;
+  top_logprobs?: Array<{ token: string; logprob: number }>;
+};
+
 type OpenAIRawResponse = {
   choices: Array<{
     message: {
@@ -390,6 +404,9 @@ type OpenAIRawResponse = {
       tool_calls?: OpenAIToolCall[];
     };
     finish_reason: string;
+    logprobs?: {
+      content?: OpenAILogprobContent[];
+    } | null;
   }>;
   usage: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
   model: string;
@@ -430,6 +447,23 @@ const mapOpenAIResponse = (
       })
     : undefined;
 
+  // Extract logprobs from OpenAI response if present
+  const rawLogprobs = response.choices[0]?.logprobs?.content;
+  const logprobs: TokenLogprob[] | undefined = rawLogprobs
+    ? rawLogprobs.map((lp) => ({
+        token: lp.token,
+        logprob: lp.logprob,
+        ...(lp.top_logprobs
+          ? {
+              topLogprobs: lp.top_logprobs.map((tlp) => ({
+                token: tlp.token,
+                logprob: tlp.logprob,
+              })),
+            }
+          : {}),
+      }))
+    : undefined;
+
   return {
     content,
     stopReason,
@@ -445,5 +479,6 @@ const mapOpenAIResponse = (
     },
     model: response.model ?? model,
     toolCalls,
+    ...(logprobs ? { logprobs } : {}),
   };
 };
