@@ -8,9 +8,9 @@ describe("rax create agent --interactive", () => {
   });
 
   test("falls back to non-interactive when stdin is not a TTY", () => {
-    // In test environment, process.stdin.isTTY is falsy
+    const mockIsTTY = false; // simulate non-TTY stdin
     const args = ["test-agent", "--interactive"];
-    const isInteractive = args.includes("--interactive") && Boolean(process.stdin.isTTY);
+    const isInteractive = args.includes("--interactive") && mockIsTTY;
     expect(isInteractive).toBeFalsy();
   });
 

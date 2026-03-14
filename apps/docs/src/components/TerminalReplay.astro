@@ -155,14 +155,14 @@
   // Terminal replay frames — each frame is [delay_ms, html_content]
   // The content uses span classes for coloring
   const FRAMES: [number, string][] = [
-    // Banner (left-border only)
-    [300, `<span class="t-violet">╭──────────────────────────────────────────────────────────</span>`],
+    // Banner
+    [300, `<span class="t-violet">╭──────────────────────────────────────────────────────────╮</span>`],
     [30, `<span class="t-violet">│</span>`],
     [30, `<span class="t-violet">│</span>   <span class="t-violet t-bold">Reactive Agents — Live Demo</span>`],
     [30, `<span class="t-violet">│</span>   <span class="t-dim">The open-source agent framework built for control,</span>`],
     [30, `<span class="t-violet">│</span>   <span class="t-dim">not magic.</span>`],
     [30, `<span class="t-violet">│</span>`],
-    [30, `<span class="t-violet">╰──────────────────────────────────────────────────────────</span>`],
+    [30, `<span class="t-violet">╰──────────────────────────────────────────────────────────╯</span>`],
     [200, ``],
 
     // Task
@@ -191,8 +191,8 @@
     [300, `<span class="t-green">✔</span> Completed in 2.8s`],
     [300, ``],
 
-    // Agent response box (left-border only — avoids emoji width alignment issues)
-    [100, `<span class="t-cyan">╭─ Agent ──────────────────────────────────────────────────</span>`],
+    // Agent response box
+    [100, `<span class="t-cyan">╭─ Agent ──────────────────────────────────────────────────╮</span>`],
     [30, `<span class="t-cyan">│</span> <span class="t-bold">## Top 3 TypeScript Testing Frameworks (2026)</span>`],
     [30, `<span class="t-cyan">│</span>`],
     [30, `<span class="t-cyan">│</span>  Framework     Speed        DX          TypeScript`],
@@ -206,14 +206,14 @@
     [30, `<span class="t-cyan">│</span> <span class="t-bold">Jest</span> — Largest ecosystem, mature plugins, needs ts-jest.`],
     [30, `<span class="t-cyan">│</span>`],
     [30, `<span class="t-cyan">│</span> <span class="t-bold">Recommendation:</span> Vitest for most TypeScript projects.`],
-    [30, `<span class="t-cyan">╰──────────────────────────────────────────────────────────</span>`],
+    [30, `<span class="t-cyan">╰──────────────────────────────────────────────────────────╯</span>`],
     [300, ``],
 
-    // Dashboard (left-border only)
-    [100, `<span class="t-green">╭─ Execution Summary ──────────────────────────────────────</span>`],
+    // Dashboard
+    [100, `<span class="t-green">╭─ Execution Summary ──────────────────────────────────────╮</span>`],
     [30, `<span class="t-green">│</span> <span class="t-bold">Status:</span>  <span class="t-green">✔ Success</span>   <span class="t-bold">Duration:</span> 2.8s   <span class="t-bold">Steps:</span> 3`],
     [30, `<span class="t-green">│</span> <span class="t-bold">Tokens:</span>  314         <span class="t-bold">Cost:</span> ~$0.0009    <span class="t-bold">Model:</span> test`],
-    [30, `<span class="t-green">╰──────────────────────────────────────────────────────────</span>`],
+    [30, `<span class="t-green">╰──────────────────────────────────────────────────────────╯</span>`],
     [200, ``],
 
     // Timeline
@@ -285,7 +285,7 @@
       cursor!.classList.remove('hidden');
 
       try {
-        await typeCommand('npx reactive-agents demo', signal);
+        await typeCommand('rax demo', signal);
         await playFrames(signal);
       } catch (e) {
         if (e instanceof DOMException && e.name === 'AbortError') return;

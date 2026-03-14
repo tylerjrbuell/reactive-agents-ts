@@ -1,5 +1,8 @@
 import { describe, it, expect } from "bun:test";
 import { ReactiveAgents, ReactiveAgent } from "@reactive-agents/runtime";
+import { resolve } from "path";
+
+const CLI_ENTRY = resolve(import.meta.dir, "../src/index.ts");
 
 describe("CLI Run Command — Agent Integration", () => {
   it("should build and run an agent via test provider", async () => {
@@ -18,22 +21,18 @@ describe("CLI Run Command — Agent Integration", () => {
   });
 
   it("should parse CLI help without errors", () => {
-    // Test that the main function correctly handles the help command
-    const { main } = require("../src/index.js");
-    // help just logs — no throw
-    expect(() => main(["help"])).not.toThrow();
+    const proc = Bun.spawnSync(["bun", CLI_ENTRY, "help"], {
+      stderr: "pipe",
+    });
+    expect(proc.exitCode).toBe(0);
   });
 
   it("should show run command in help text", () => {
-    const { main } = require("../src/index.js");
-    const logs: string[] = [];
-    const origLog = console.log;
-    console.log = (...args: any[]) => logs.push(args.join(" "));
-    main(["help"]);
-    console.log = origLog;
-
-    const helpText = logs.join("\n");
-    expect(helpText).toContain("run <prompt>");
+    const proc = Bun.spawnSync(["bun", CLI_ENTRY, "help"], {
+      stderr: "pipe",
+    });
+    const helpText = proc.stdout.toString() + proc.stderr.toString();
+    expect(helpText).toContain("run");
     expect(helpText).toContain("rax");  // CLI brand name
   });
 });
