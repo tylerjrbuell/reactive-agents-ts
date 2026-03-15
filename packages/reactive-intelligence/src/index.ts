@@ -65,6 +65,9 @@ export { TelemetryClient } from "./telemetry/telemetry-client.js";
 
 // ── Learning ──
 export { classifyTaskCategory } from "./learning/task-classifier.js";
+export { BanditStore } from "./learning/bandit-store.js";
+export type { ArmStats } from "./learning/bandit-store.js";
+export { selectArm, updateArm } from "./learning/bandit.js";
 
 // ── Runtime ──
 export { createReactiveIntelligenceLayer } from "./runtime.js";
