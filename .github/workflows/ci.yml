@@ -59,7 +59,7 @@ jobs:
             --exclude "^/favicon"
             --exclude "^/\.well-known/"
             --exclude "^https://tylerjrbuell\.github\.io/"
-            --exclude "^https://docs\.reactiveagents\.dev/404/?$"
+            --exclude "^https://docs\.reactiveagents\.dev/"
             --exclude "^https://huggingface\.co/datasets/"
             --exclude "^https://console\.anthropic\.com"
             --exclude "^https://my\.telegram\.org/"

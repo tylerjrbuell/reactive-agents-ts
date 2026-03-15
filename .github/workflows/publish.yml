@@ -54,13 +54,28 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION=$(node -p "require('./packages/reactive-agents/package.json').version")
-          NOTES=$(node -p "
+
+          # Extract release notes for this version from root CHANGELOG.md
+          # Tries exact version match first, falls back to first version section
+          node -e "
             const fs = require('fs');
-            const log = fs.readFileSync('./packages/reactive-agents/CHANGELOG.md', 'utf8');
-            const match = log.match(/## \d+\.\d+\.\d+\n\n([\s\S]*?)(?=\n## |\$)/);
-            match ? match[1].trim() : 'See CHANGELOG.md for details.';
-          ")
+            const version = '${VERSION}';
+            const log = fs.readFileSync('./CHANGELOG.md', 'utf8');
+
+            // Try exact version match: ## [0.8.0] or ## 0.8.0
+            const escaped = version.replace(/\./g, '\\\\.');
+            const exact = log.match(new RegExp('## \\\\[?' + escaped + '\\\\]?[^\\n]*\\n([\\s\\S]*?)(?=\\n---\\n|\\n## \\\\[?\\d+\\\\.\\d+\\\\.\\d+|$)'));
+
+            if (exact) {
+              fs.writeFileSync('/tmp/release-notes.md', exact[0].trim());
+            } else {
+              // Fall back to first non-Unreleased version section
+              const first = log.match(/## \[?\d+\.\d+\.\d+\]?[^\n]*\n([\s\S]*?)(?=\n---\n|\n## \[?\d+\.\d+\.\d+|$)/);
+              fs.writeFileSync('/tmp/release-notes.md', first ? first[0].trim() : 'See CHANGELOG.md for details.');
+            }
+          "
+
           gh release create "v${VERSION}" \
             --title "v${VERSION}" \
-            --notes "${NOTES}" \
+            --notes-file /tmp/release-notes.md \
             --target main

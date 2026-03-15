@@ -270,7 +270,7 @@ console.log(result.metadata);  // { cost: 0, tokensUsed, duration }
 
 ### For More Detail
 
-See the **[Local Models Guide](./local-models.md)** for:
+See the **[Local Models Guide](/guides/local-models/)** for:
 - Detailed per-task model recommendations
 - Performance tuning
 - Common pitfalls and fixes
@@ -292,6 +292,6 @@ Before deploying to production:
 
 ## Next Steps
 
-- Configure budgets with [Cost Tracking](../cost-tracking/)
-- Choose a model with [Choosing a Stack](./choosing-a-stack.md)
-- Set up monitoring with [Observability](../observability/)
+- Configure budgets with [Cost Tracking](/features/cost-tracking/)
+- Choose a model with [Choosing a Stack](/guides/choosing-a-stack/)
+- Set up monitoring with [Observability](/features/observability/)
