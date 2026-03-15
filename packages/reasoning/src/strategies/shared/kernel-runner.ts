@@ -194,6 +194,54 @@ export function runKernel(
       }
       prevStepCount = state.steps.length;
 
+      // ── Reactive Controller evaluation ──────────────────────────────────
+      if (services.reactiveController._tag === "Some") {
+        const entropyHistory = ((state.meta as any).entropy?.entropyHistory ?? []) as readonly any[];
+        if (entropyHistory.length > 0) {
+          const latestScore = entropyHistory[entropyHistory.length - 1];
+          const decisions = yield* services.reactiveController.value.evaluate({
+            entropyHistory,
+            iteration: state.iteration,
+            maxIterations: currentOptions.maxIterations,
+            strategy: state.strategy,
+            calibration: {
+              highEntropyThreshold: 0.8,
+              convergenceThreshold: 0.4,
+              calibrated: false,
+              sampleCount: 0,
+            },
+            config: (state.meta as any).entropy?.controllerConfig ?? {
+              earlyStop: true,
+              contextCompression: true,
+              strategySwitch: true,
+            },
+            contextPressure: latestScore?.sources?.contextPressure ?? 0,
+            behavioralLoopScore: latestScore?.sources?.behavioral ?? 0,
+          });
+
+          for (const decision of decisions) {
+            // Publish ReactiveDecision event
+            if (eventBus._tag === "Some") {
+              yield* eventBus.value.publish({
+                _tag: "ReactiveDecision",
+                taskId: state.taskId,
+                iteration: state.iteration,
+                decision: (decision as any).decision,
+                reason: (decision as any).reason,
+                entropyBefore: latestScore?.composite ?? 0,
+              }).pipe(Effect.catchAll(() => Effect.void));
+            }
+
+            // Execute decisions
+            if ((decision as any).decision === "early-stop") {
+              (state.meta as any).earlyStopSignaled = true;
+            }
+            // strategy-switch and compress decisions are informational —
+            // strategy-switch is handled by the existing loop detection + switching mechanism
+          }
+        }
+      }
+
       // ── Iteration progress hook ──────────────────────────────────────────
       // Compute which tools were called in THIS iteration (new since prev step).
       const toolsThisStep = [...state.toolsUsed].filter((t) => !prevToolsUsed.has(t));

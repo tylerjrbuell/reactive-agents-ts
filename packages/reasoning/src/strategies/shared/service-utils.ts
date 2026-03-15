@@ -5,7 +5,7 @@
  * top of every strategy file, and the copy-pasted `compilePromptOrFallback`
  * and EventBus publish boilerplate.
  */
-import { Effect } from "effect";
+import { Context, Effect } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { ToolService } from "@reactive-agents/tools";
 import { PromptService } from "@reactive-agents/prompts";
@@ -27,6 +27,36 @@ type PromptServiceInstance = {
 /** Narrow EntropySensorService surface used by kernel runner */
 type EntropySensorInstance = typeof EntropySensorService.Type;
 
+/** Narrow ReactiveControllerService surface — resolved via GenericTag to avoid
+ *  depending on @reactive-agents/reactive-intelligence from the reasoning package. */
+type ReactiveControllerInstance = {
+  readonly evaluate: (params: {
+    readonly entropyHistory: readonly {
+      readonly composite: number;
+      readonly trajectory: { readonly shape: string; readonly derivative: number; readonly momentum: number };
+    }[];
+    readonly iteration: number;
+    readonly maxIterations: number;
+    readonly strategy: string;
+    readonly calibration: {
+      readonly highEntropyThreshold: number;
+      readonly convergenceThreshold: number;
+      readonly calibrated: boolean;
+      readonly sampleCount: number;
+    };
+    readonly config: {
+      readonly earlyStop: boolean;
+      readonly contextCompression: boolean;
+      readonly strategySwitch: boolean;
+    };
+    readonly contextPressure: number;
+    readonly behavioralLoopScore: number;
+  }) => Effect.Effect<readonly { readonly decision: string; readonly reason: string }[]>;
+};
+
+/** GenericTag for ReactiveControllerService — avoids cross-package dependency */
+const ReactiveControllerTag = Context.GenericTag<ReactiveControllerInstance>("ReactiveControllerService");
+
 // ── Resolved services bundle ──────────────────────────────────────────────────
 
 export type StrategyServices = {
@@ -40,6 +70,8 @@ export type StrategyServices = {
   eventBus: MaybeService<EventBusInstance>;
   /** Entropy sensor — None when reactive intelligence layer is absent */
   entropySensor: MaybeService<EntropySensorInstance>;
+  /** Reactive controller — None when reactive intelligence controller is absent */
+  reactiveController: MaybeService<ReactiveControllerInstance>;
 };
 
 /**
@@ -81,7 +113,12 @@ export const resolveStrategyServices: Effect.Effect<
   );
   const entropySensor = entropySensorOptRaw as MaybeService<EntropySensorInstance>;
 
-  return { llm, toolService, promptService, eventBus, entropySensor };
+  const reactiveControllerOptRaw = yield* Effect.serviceOption(ReactiveControllerTag).pipe(
+    Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
+  );
+  const reactiveController = reactiveControllerOptRaw as MaybeService<ReactiveControllerInstance>;
+
+  return { llm, toolService, promptService, eventBus, entropySensor, reactiveController };
 });
 
 /**
