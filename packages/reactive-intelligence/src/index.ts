@@ -57,5 +57,9 @@ export {
 // ── Controller ──
 export { ReactiveControllerService, ReactiveControllerServiceLive } from "./controller/controller-service.js";
 
+// ── Telemetry ──
+export { getOrCreateInstallId } from "./telemetry/install-id.js";
+export { signPayload } from "./telemetry/signing.js";
+
 // ── Runtime ──
 export { createReactiveIntelligenceLayer } from "./runtime.js";
