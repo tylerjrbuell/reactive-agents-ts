@@ -374,7 +374,83 @@ docker compose up -d
 curl http://localhost:3000/health
 ```
 
-HTTPS via Cloudflare tunnel or nginx reverse proxy with Let's Encrypt in front of the Pi. The container only exposes HTTP on 3000 — TLS terminates at the edge.
+---
+
+## Cloudflare Tunnel Setup
+
+You already have a tunnel running for `analytics.reactiveagents.dev`. Add the telemetry API as a second public hostname on the same tunnel — no new tunnel needed.
+
+### 1. Add hostname to existing tunnel
+
+```bash
+# On the Pi, edit the tunnel config
+# (usually at ~/.cloudflared/config.yml or /etc/cloudflared/config.yml)
+```
+
+Add an ingress entry for the telemetry service:
+
+```yaml
+tunnel: <your-existing-tunnel-id>
+credentials-file: /path/to/credentials.json
+
+ingress:
+  # Existing: analytics dashboard
+  - hostname: analytics.reactiveagents.dev
+    service: http://localhost:<analytics-port>
+
+  # New: telemetry API
+  - hostname: api.reactiveagents.dev
+    service: http://localhost:3000
+
+  # Catch-all (required by cloudflared)
+  - service: http_status:404
+```
+
+### 2. Add DNS record in Cloudflare dashboard
+
+1. Go to Cloudflare dashboard → `reactiveagents.dev` → DNS
+2. Add record:
+   - Type: `CNAME`
+   - Name: `api`
+   - Target: `<your-tunnel-id>.cfargotunnel.com`
+   - Proxy: ON (orange cloud)
+
+This is the same pattern as your `analytics` subdomain — just a new CNAME pointing to the same tunnel.
+
+### 3. Restart cloudflared to pick up the new ingress
+
+```bash
+sudo systemctl restart cloudflared
+# Or if running as a Docker container:
+docker restart cloudflared
+```
+
+### 4. Verify
+
+```bash
+curl https://api.reactiveagents.dev/health
+# → { "status": "ok", "uptime": ..., "dbSizeBytes": ... }
+```
+
+### 5. Update telemetry endpoint
+
+The framework's default telemetry endpoint should point to:
+```
+https://api.reactiveagents.dev/v1/reports
+```
+
+### Cloudflare settings (recommended)
+
+In Cloudflare dashboard → `reactiveagents.dev` → SSL/TLS:
+- Mode: **Full (strict)** — Cloudflare handles TLS, tunnel is encrypted end-to-end
+- Minimum TLS version: **1.2**
+
+Under Security → WAF:
+- Rate limiting is handled in-app (100 req/min), but you can add a Cloudflare rule as a second layer: Block IPs with >200 requests/minute to `/v1/reports`
+
+Under Caching:
+- Cache GET endpoints (`/v1/profiles/*`, `/v1/skills`, `/v1/stats`) with a 5-minute TTL
+- Never cache POST (`/v1/reports`) — this is the default
 
 ---
 
