@@ -1,5 +1,6 @@
 import { describe, test, expect, afterEach } from "bun:test";
 import { ReactiveAgents } from "../src";
+import { validateProviderConnection } from "../src/build-validation";
 
 describe("Build-time validation", () => {
   const originalEnv = { ...process.env };
@@ -32,15 +33,10 @@ describe("Build-time validation", () => {
   });
 
   test("skips API key check for ollama provider", async () => {
-    const warnings: string[] = [];
-    const origWarn = console.warn;
-    console.warn = (msg: string) => warnings.push(msg);
-
-    const agent = await ReactiveAgents.create().withProvider("ollama").build();
-
-    console.warn = origWarn;
-    await agent.dispose();
-    expect(warnings.some((w) => w.includes("API_KEY"))).toBe(false);
+    // Ollama doesn't require an API key, but build will fail if service is unreachable
+    await expect(
+      ReactiveAgents.create().withProvider("ollama").build(),
+    ).rejects.toThrow(/Cannot connect to Ollama|Provider connection failed/);
   });
 
   test("skips validation for test provider", async () => {
@@ -69,6 +65,23 @@ describe("Build-time validation", () => {
     console.warn = origWarn;
     await agent.dispose();
     expect(warnings.some((w) => w.includes("gpt-4o") && w.includes("anthropic"))).toBe(true);
+  });
+
+  test("ollama connection check fails when service is unreachable", async () => {
+    const result = await validateProviderConnection("ollama", "http://localhost:19999");
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain("Cannot connect to Ollama");
+    expect(result.error).toContain("ollama serve");
+  });
+
+  test("connection check passes for non-local providers", async () => {
+    const result = await validateProviderConnection("anthropic");
+    expect(result.ok).toBe(true);
+  });
+
+  test("connection check passes for test provider", async () => {
+    const result = await validateProviderConnection("test");
+    expect(result.ok).toBe(true);
   });
 
   test("logs resolved provider info on build", async () => {

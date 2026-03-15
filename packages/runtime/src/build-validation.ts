@@ -64,6 +64,32 @@ export function validateBuild(
   return { warnings, errors, resolvedModel };
 }
 
+/**
+ * Pre-flight connection check for local providers (e.g. Ollama).
+ * Verifies the service is reachable before building the agent.
+ */
+export async function validateProviderConnection(
+  provider: ProviderName,
+  ollamaEndpoint?: string,
+): Promise<{ ok: boolean; error?: string }> {
+  if (provider === "ollama") {
+    const endpoint = ollamaEndpoint ?? process.env.OLLAMA_ENDPOINT ?? "http://localhost:11434";
+    try {
+      const res = await fetch(`${endpoint}/api/tags`, { signal: AbortSignal.timeout(3000) });
+      if (!res.ok) {
+        return { ok: false, error: `Ollama returned HTTP ${res.status}. Is the service running at ${endpoint}?` };
+      }
+      return { ok: true };
+    } catch {
+      return {
+        ok: false,
+        error: `Cannot connect to Ollama at ${endpoint}. Is the Ollama service running?\n  Start it with: ollama serve`,
+      };
+    }
+  }
+  return { ok: true };
+}
+
 export function logBuildInfo(provider: ProviderName, resolvedModel: string): void {
   const keyName = PROVIDER_API_KEY_MAP[provider];
   const hasKey = keyName ? !!process.env[keyName] : false;

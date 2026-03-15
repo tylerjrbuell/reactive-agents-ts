@@ -1719,7 +1719,7 @@ export class ReactiveAgentBuilder {
     }
 
     // Build-time validation
-    const { validateBuild, logBuildInfo } = await import("./build-validation.js");
+    const { validateBuild, validateProviderConnection, logBuildInfo } = await import("./build-validation.js");
     let defaultModel = "unknown";
     try {
       const { getProviderDefaultModel } = await import("@reactive-agents/llm-provider");
@@ -1736,6 +1736,13 @@ export class ReactiveAgentBuilder {
         `Build validation failed:\n${validation.errors.map((e) => `  • ${e}`).join("\n")}`,
       );
     }
+
+    // Pre-flight connection check for local providers
+    const conn = await validateProviderConnection(this._provider);
+    if (!conn.ok) {
+      throw new Error(`Provider connection failed: ${conn.error}`);
+    }
+
     logBuildInfo(this._provider, validation.resolvedModel);
 
     return Effect.runPromise(this.buildEffect()).catch((e) => {
