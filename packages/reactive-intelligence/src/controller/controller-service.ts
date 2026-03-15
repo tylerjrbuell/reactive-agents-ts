@@ -1,6 +1,7 @@
 import { Context, Effect, Layer } from "effect";
 import type { ControllerDecision, ReactiveControllerConfig, ControllerEvalParams } from "../types.js";
 import { evaluateEarlyStop } from "./early-stop.js";
+import { evaluateStrategySwitch } from "./strategy-switch.js";
 
 export class ReactiveControllerService extends Context.Tag("ReactiveControllerService")<
   ReactiveControllerService,
@@ -20,6 +21,11 @@ export const ReactiveControllerServiceLive = (
         if (params.config.earlyStop) {
           const earlyStop = evaluateEarlyStop(params);
           if (earlyStop) decisions.push(earlyStop);
+        }
+        // Strategy-switch evaluator (Task 2D)
+        if (params.config.strategySwitch) {
+          const strategySwitch = evaluateStrategySwitch(params);
+          if (strategySwitch) decisions.push(strategySwitch);
         }
         // Additional evaluators will be wired in Tasks 2B-4
         return decisions;
