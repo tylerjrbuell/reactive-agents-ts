@@ -2,6 +2,7 @@ import { Context, Effect, Layer } from "effect";
 import type { ControllerDecision, ReactiveControllerConfig, ControllerEvalParams } from "../types.js";
 import { evaluateEarlyStop } from "./early-stop.js";
 import { evaluateStrategySwitch } from "./strategy-switch.js";
+import { evaluateCompression } from "./context-compressor.js";
 
 export class ReactiveControllerService extends Context.Tag("ReactiveControllerService")<
   ReactiveControllerService,
@@ -27,7 +28,11 @@ export const ReactiveControllerServiceLive = (
           const strategySwitch = evaluateStrategySwitch(params);
           if (strategySwitch) decisions.push(strategySwitch);
         }
-        // Additional evaluators will be wired in Tasks 2B-4
+        // Context-compression evaluator (Task 2C)
+        if (params.config.contextCompression) {
+          const compression = evaluateCompression(params);
+          if (compression) decisions.push(compression);
+        }
         return decisions;
       }),
   });
