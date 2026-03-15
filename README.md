@@ -6,7 +6,7 @@
 
 **The open-source agent framework built for control, not magic.**
 
-Every decision controllable, observable, and auditable. 21 packages. 13 composable layers. 5 reasoning strategies. 6 LLM providers. Model-adaptive context profiles. 10-phase execution engine with lifecycle hooks. 1,921 tests across 239 files. Built on Effect-TS for type safety from prompt to production.
+Every decision controllable, observable, and auditable. 22 packages. 13 composable layers. 5 reasoning strategies. 6 LLM providers. Model-adaptive context profiles. 10-phase execution engine with lifecycle hooks. 2,091 tests across 274 files. Built on Effect-TS for type safety from prompt to production.
 
 [![CI](https://github.com/tylerjrbuell/reactive-agents-ts/actions/workflows/ci.yml/badge.svg)](https://github.com/tylerjrbuell/reactive-agents-ts/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/badge/npm-%40reactive--agents-CB3837?logo=npm)](https://www.npmjs.com/org/reactive-agents)
@@ -59,7 +59,8 @@ Most AI agent frameworks are dynamically typed, monolithic, and opaque. They ass
 - **Provider fallback chains** -- `FallbackChain` + `withFallbacks()` for graceful degradation across providers/models
 - **Structured logging** -- `makeLoggerService()` with level filtering, JSON/text format, and file output with rotation via `withLogging()`
 - **Health checks** -- `withHealthCheck()` + `agent.health()` returns `{ status, checks[] }`
-- **1,921 tests** across 239 files
+- **Reactive intelligence** -- 5-source entropy sensor (token, structural, semantic, behavioral, context pressure), conformal calibration, trajectory classification, `.withReactiveIntelligence()` builder method
+- **2,091 tests** across 274 files
 
 ## Quick Start
 
@@ -220,7 +221,7 @@ How Reactive Agents compares to other TypeScript agent frameworks on shipped, wo
 | Persistent gateway            | Yes             | --           | --            | --     |
 | Agent debrief + chat          | Yes             | --           | --            | --     |
 | Metrics dashboard             | Yes             | LangSmith    | --            | --     |
-| Test suite                    | 1,921 tests     | --           | --            | --     |
+| Test suite                    | 2,091 tests     | --           | --            | --     |
 
 ## Use Cases
 
@@ -370,6 +371,7 @@ const agent = await ReactiveAgents.create()
 | [`@reactive-agents/testing`](packages/testing)             | Mock services (LLM, tools, EventBus), assertion helpers, deterministic test fixtures |
 | [`@reactive-agents/benchmarks`](packages/benchmarks)       | Benchmark suite: 20 tasks x 5 tiers, overhead measurement, report generation    |
 | [`@reactive-agents/health`](packages/health)               | Health checks and readiness probes for production deployments                    |
+| [`@reactive-agents/reactive-intelligence`](packages/reactive-intelligence) | Metacognitive entropy sensor: 5 entropy sources, composite scoring, conformal calibration, trajectory classification |
 
 ## Observability & Metrics Dashboard
 
@@ -529,7 +531,7 @@ Reactive Agents supports 6 providers: Anthropic, OpenAI, Google Gemini, Ollama (
 
 ### Is this framework production-ready?
 
-Yes -- it includes guardrails, budget controls, auditability, observability, Ed25519 identity, and composable service layers for testable deployments. 1,921 tests across 239 files.
+Yes -- it includes guardrails, budget controls, auditability, observability, Ed25519 identity, and composable service layers for testable deployments. 2,091 tests across 274 files.
 
 ### Can I run fully local agents?
 
@@ -543,8 +545,8 @@ See the [comparison table](#comparison). The key differences are: full Effect-TS
 
 ```bash
 bun install              # Install dependencies
-bun test                 # Run full test suite (1,921 tests, 239 files)
-bun run build            # Build all packages (21 packages, ESM + DTS)
+bun test                 # Run full test suite (2,091 tests, 274 files)
+bun run build            # Build all packages (22 packages, ESM + DTS)
 ```
 
 ## Environment Variables
