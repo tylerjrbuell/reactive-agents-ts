@@ -1,5 +1,6 @@
 import { Context, Effect, Layer } from "effect";
 import type { ControllerDecision, ReactiveControllerConfig, ControllerEvalParams } from "../types.js";
+import { evaluateEarlyStop } from "./early-stop.js";
 
 export class ReactiveControllerService extends Context.Tag("ReactiveControllerService")<
   ReactiveControllerService,
@@ -15,7 +16,12 @@ export const ReactiveControllerServiceLive = (
     evaluate: (params) =>
       Effect.sync(() => {
         const decisions: ControllerDecision[] = [];
-        // Individual evaluators will be wired in Tasks 2-4
+        // Early-stop evaluator (Task 2A)
+        if (params.config.earlyStop) {
+          const earlyStop = evaluateEarlyStop(params);
+          if (earlyStop) decisions.push(earlyStop);
+        }
+        // Additional evaluators will be wired in Tasks 2B-4
         return decisions;
       }),
   });
