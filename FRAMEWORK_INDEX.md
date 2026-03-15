@@ -34,9 +34,10 @@
                    │
           ┌────────▼──────────┐     ┌───────────────────┐
           │      Core         │     │ Reactive Intelli-  │
-          │ EventBus, Types   │     │ gence (Entropy     │
-          │ Agent/Task Service│     │ Sensor, Calibration│
-          └───────────────────┘     └───────────────────┘
+          │ EventBus, Types   │     │ gence (Sensor,     │
+          │ Agent/Task Service│     │ Controller, Learn, │
+          └───────────────────┘     │ Telemetry)         │
+                                    └───────────────────┘
 ```
 
 ---
@@ -203,6 +204,56 @@ EntropySensorService.score({thought, modelId, iteration, ...})
 
 ---
 
+## Reactive Controller
+
+After each entropy score, the controller evaluates 3 decisions:
+
+| Decision | Trigger | Action |
+|----------|---------|--------|
+| Early-stop (2A) | Converging trajectory for 2+ iterations + below threshold | Signal kernel to produce final answer |
+| Compress (2C) | Context pressure > 80% | Compress low-signal context sections |
+| Switch strategy (2D) | Flat trajectory for 3+ iterations + high loop score | Trigger strategy switching |
+
+Key files:
+- `reactive-intelligence/src/controller/controller-service.ts` — ReactiveControllerService
+- `reactive-intelligence/src/controller/early-stop.ts` — evaluateEarlyStop()
+- `reactive-intelligence/src/controller/context-compressor.ts` — evaluateCompression()
+- `reactive-intelligence/src/controller/strategy-switch.ts` — evaluateStrategySwitch()
+
+---
+
+## Learning Engine
+
+Post-run learning that accumulates knowledge across runs:
+
+| Component | What It Does |
+|-----------|-------------|
+| Conformal Calibration | Per-model entropy thresholds (20 runs → statistical bounds) |
+| Thompson Sampling Bandit | Learns which strategies work for which model × task combinations |
+| Skill Synthesis | Extracts reusable "recipes" from high-signal runs |
+| Task Classifier | Keyword heuristic for task categorization (no LLM) |
+
+Key files:
+- `reactive-intelligence/src/learning/learning-engine.ts` — LearningEngineService
+- `reactive-intelligence/src/learning/bandit.ts` — selectArm(), updateArm()
+- `reactive-intelligence/src/learning/bandit-store.ts` — BanditStore (SQLite)
+- `reactive-intelligence/src/learning/skill-synthesis.ts` — shouldSynthesizeSkill(), extractSkillFragment()
+- `reactive-intelligence/src/learning/task-classifier.ts` — classifyTaskCategory()
+
+---
+
+## Telemetry Client
+
+Anonymous entropy data collection for the cloud intelligence platform:
+
+Key files:
+- `reactive-intelligence/src/telemetry/telemetry-client.ts` — TelemetryClient
+- `reactive-intelligence/src/telemetry/types.ts` — RunReport, SkillFragment
+- `reactive-intelligence/src/telemetry/signing.ts` — signPayload() (HMAC-SHA256)
+- `reactive-intelligence/src/telemetry/install-id.ts` — getOrCreateInstallId()
+
+---
+
 ## EventBus Event Flow
 
 ```
@@ -290,11 +341,11 @@ Execution completes
 | 17 | `testing` | Mock LLM/Tools/EventBus, assertions | ~40 | `makeMockLLM()`, `expectStream()` |
 | 18 | `benchmarks` | 20-task benchmark suite | ~20 | Private (not published) |
 | 19 | `health` | Health checks, readiness probes | ~20 | Private (not published) |
-| 20 | `reactive-intelligence` | Entropy sensor, calibration, trajectory | ~60 | `EntropySensorService` |
+| 20 | `reactive-intelligence` | Entropy sensor, reactive controller, learning engine, telemetry | ~120 | `EntropySensorService`, `ReactiveControllerService`, `LearningEngineService` |
 | 21 | `runtime` | ExecutionEngine, Builder, createRuntime() | ~200 | `ReactiveAgents`, `ExecutionEngine` |
 | 22 | `reactive-agents` (facade) | Public API re-export | — | `ReactiveAgents` |
 
-**Total: 2,091 tests across 274 files**
+**Total: 2,151 tests across 286 files**
 
 ---
 
