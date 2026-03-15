@@ -372,6 +372,7 @@ export const LocalProviderLive = Layer.effect(
                   config.thinking,
                 );
 
+                const wantLogprobs = request.logprobs ?? false;
                 const stream = await client.chat({
                   model,
                   messages: msgs,
@@ -383,10 +384,12 @@ export const LocalProviderLive = Layer.effect(
                     temperature:
                       request.temperature ?? config.defaultTemperature,
                     num_predict: request.maxTokens ?? config.defaultMaxTokens,
+                    ...(wantLogprobs ? { logprobs: true } : {}),
                   },
                 });
 
                 let fullContent = "";
+                const accumulatedLogprobs: TokenLogprob[] = [];
 
                 for await (const chunk of stream) {
                   if (chunk.message?.content) {
@@ -397,11 +400,33 @@ export const LocalProviderLive = Layer.effect(
                     });
                   }
 
+                  // Accumulate per-chunk logprobs when available
+                  if (wantLogprobs) {
+                    const chunkLp = (chunk as any).logprobs;
+                    if (Array.isArray(chunkLp)) {
+                      for (const lp of chunkLp) {
+                        accumulatedLogprobs.push({
+                          token: lp.token,
+                          logprob: lp.logprob,
+                          ...(lp.top_logprobs
+                            ? { topLogprobs: lp.top_logprobs.map((t: any) => ({ token: t.token, logprob: t.logprob })) }
+                            : {}),
+                        });
+                      }
+                    }
+                  }
+
                   if (chunk.done) {
                     emit.single({
                       type: "content_complete",
                       content: fullContent,
                     });
+                    if (accumulatedLogprobs.length > 0) {
+                      emit.single({
+                        type: "logprobs",
+                        logprobs: accumulatedLogprobs,
+                      });
+                    }
                     emit.single({
                       type: "usage",
                       usage: {

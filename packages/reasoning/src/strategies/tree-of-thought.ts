@@ -44,6 +44,10 @@ interface TreeOfThoughtInput {
   readonly requiredTools?: readonly string[];
   /** Max redirects when required tools are missing (default: 2) */
   readonly maxRequiredToolRetries?: number;
+  /** Model identifier for routing/entropy scoring */
+  readonly modelId?: string;
+  /** LLM temperature override */
+  readonly temperature?: number;
 }
 
 interface ThoughtNode {
@@ -291,6 +295,9 @@ export const executeTreeOfThought = (
       kernelType: "react",
       taskId: input.taskId,
       kernelPass: "tree-of-thought:execute",
+      modelId: input.modelId,
+      taskDescription: input.taskDescription,
+      temperature: 0.7,
     });
 
     totalTokens += execState.tokens;

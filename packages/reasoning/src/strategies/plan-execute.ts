@@ -67,6 +67,10 @@ interface PlanExecuteInput {
   readonly requiredTools?: readonly string[];
   /** Max redirects when required tools are missing (default: 2) */
   readonly maxRequiredToolRetries?: number;
+  /** Model identifier for routing/entropy scoring */
+  readonly modelId?: string;
+  /** LLM temperature override */
+  readonly temperature?: number;
 }
 
 export const executePlanExecute = (
@@ -742,6 +746,8 @@ function executeStep(
     sessionId: input.sessionId,
     requiredTools: input.requiredTools,
     maxRequiredToolRetries: input.maxRequiredToolRetries,
+    modelId: input.modelId,
+    exitOnAllToolsCalled: true,
   }).pipe(
     Effect.map((kernelResult) => ({
       output: stripFinalAnswerPrefix(kernelResult.output || `[Step ${stepIndex + 1} completed]`),

@@ -200,6 +200,37 @@ export function runKernel(
       yield* hooks.onIterationProgress(state, toolsThisStep);
       prevToolsUsed = new Set(state.toolsUsed);
 
+      // ── Early exit: primary scoped tools called ─────────────────────────
+      // For composite steps in plan-execute, exit as soon as all primary
+      // (non-utility) tools have been called. Utility tools like scratchpad
+      // are optional — the agent may not need them for every step.
+      if (
+        currentOptions.exitOnAllToolsCalled &&
+        state.status !== "done" &&
+        state.status !== "failed" &&
+        currentInput.availableToolSchemas &&
+        currentInput.availableToolSchemas.length > 0 &&
+        state.toolsUsed.size > 0
+      ) {
+        const UTILITY_TOOLS = new Set(["scratchpad-write", "scratchpad-read"]);
+        const primaryTools = currentInput.availableToolSchemas
+          .map((t) => t.name)
+          .filter((name) => !UTILITY_TOOLS.has(name));
+        // If there are primary tools, check if all were called
+        // If ALL tools are utility tools, don't early-exit (let LLM finish naturally)
+        if (primaryTools.length > 0) {
+          const allPrimaryCalled = primaryTools.every((name) => state.toolsUsed.has(name));
+          if (allPrimaryCalled) {
+            const lastObs = [...state.steps].reverse().find((s) => s.type === "observation");
+            state = transitionState(state, {
+              status: "done",
+              output: lastObs?.content ?? state.output ?? "[All tools executed successfully]",
+            });
+            (state.meta as any).terminatedBy = "all_tools_called";
+          }
+        }
+      }
+
       // ── Loop detection ───────────────────────────────────────────────────
       // Check the most recent steps for patterns that indicate a stuck loop.
       // Only fire if the loop hasn't already terminated (status still active).

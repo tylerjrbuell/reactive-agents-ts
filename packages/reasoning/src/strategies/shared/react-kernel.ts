@@ -184,6 +184,10 @@ export interface ReActKernelInput {
   requiredTools?: readonly string[];
   /** Max redirects when required tools are missing (default: 2) */
   maxRequiredToolRetries?: number;
+  /** Model identifier for routing/entropy scoring */
+  modelId?: string;
+  /** Exit kernel loop when all scoped tools have been called successfully */
+  exitOnAllToolsCalled?: boolean;
 }
 
 export interface ReActKernelResult {
@@ -341,12 +345,15 @@ function handleThinking(
     };
     const outputMaxTokens = tierMaxTokens[profile.tier] ?? 1500;
 
+    // Request logprobs when entropy sensor may be active (modelId present in meta)
+    const wantLogprobs = (state.meta.entropy as any)?.modelId !== undefined;
     const llmStreamEffect = llm.stream({
       messages: [{ role: "user", content: thoughtPrompt }],
       systemPrompt: systemPromptText,
       maxTokens: outputMaxTokens,
       temperature: temp,
       stopSequences: ["\nObservation:", "\nObservation: "],
+      ...(wantLogprobs ? { logprobs: true, topLogprobs: 5 } : {}),
     });
 
     const llmStream = yield* llmStreamEffect.pipe(
@@ -381,6 +388,7 @@ function handleThinking(
       totalTokens: 0,
       estimatedCost: 0,
     };
+    let accumulatedLogprobs: { token: string; logprob: number; topLogprobs?: readonly { token: string; logprob: number }[] }[] = [];
 
     const textDeltaCb = yield* FiberRef.get(StreamingTextCallback);
 
@@ -395,9 +403,17 @@ function handleThinking(
           accumulatedContent = event.content;
         } else if (event.type === "usage") {
           accumulatedUsage = event.usage;
+        } else if (event.type === "logprobs") {
+          accumulatedLogprobs = [...accumulatedLogprobs, ...event.logprobs];
         }
       }),
     ).pipe(Effect.catchAll(() => Effect.void));
+
+    // Store logprobs in entropy meta for the entropy sensor
+    if (accumulatedLogprobs.length > 0) {
+      const entropyMeta = (state.meta.entropy as any) ?? {};
+      (state.meta as any).entropy = { ...entropyMeta, lastLogprobs: accumulatedLogprobs };
+    }
 
     // Build response shape matching original llm.complete() return
     const thoughtResponse = {
@@ -922,6 +938,10 @@ export const executeReActKernel = (
       kernelType: "react",
       taskId: input.taskId,
       kernelPass: input.kernelPass,
+      modelId: input.modelId,
+      taskDescription: input.task,
+      temperature: input.temperature,
+      exitOnAllToolsCalled: input.exitOnAllToolsCalled,
     });
 
     // Determine terminatedBy from state

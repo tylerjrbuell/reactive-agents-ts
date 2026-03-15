@@ -302,6 +302,14 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
             );
             const eb: EbLike | null = ebOpt._tag === "Some" ? ebOpt.value : null;
 
+            // ── Collect ToolCallCompleted events for debrief ──
+            const toolCallLog: { toolName: string; durationMs: number; success: boolean }[] = [];
+            if (eb) {
+              yield* eb.on("ToolCallCompleted", (event) =>
+                Effect.sync(() => { toolCallLog.push({ toolName: event.toolName, durationMs: event.durationMs, success: event.success }); }),
+              );
+            }
+
             // ── Acquire KillSwitchService optionally ──
             const ksOpt = config.enableKillSwitch
               ? yield* Effect.serviceOption(KillSwitchService).pipe(
@@ -724,6 +732,8 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       requiredTools?: readonly string[];
                       maxRequiredToolRetries?: number;
                       strategySwitching?: { enabled: boolean; maxSwitches?: number; fallbackStrategy?: string };
+                      modelId?: string;
+                      temperature?: number;
                     }) => Effect.Effect<{
                       output: unknown;
                       status: string;
@@ -894,6 +904,8 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         requiredTools: effectiveRequiredTools,
                         maxRequiredToolRetries: config.requiredTools?.maxRetries,
                         strategySwitching: config.strategySwitching,
+                        modelId: String(config.defaultModel ?? ""),
+                        temperature: config.contextProfile?.temperature as number | undefined,
                       });
                       const strategyOutcome = yield* Effect.exit(strategyEffect);
                       if (strategyOutcome._tag === "Success") {
@@ -2213,29 +2225,16 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   }).pipe(Effect.catchAll(() => Effect.void));
                 }
 
-                // Collect tool stats from action steps
-                const rrSteps = (ctx.metadata.reasoningSteps ?? []) as Array<{
-                  type: string;
-                  metadata?: { toolUsed?: string; duration?: number; observationResult?: { success?: boolean } };
-                }>;
+                // Collect tool stats from ToolCallCompleted events (deterministic,
+                // works across all strategies including plan-execute composite steps)
                 const toolStatsMap = new Map<string, { calls: number; errors: number; totalDurationMs: number }>();
-                for (const step of rrSteps) {
-                  if (step.type === "action" && step.metadata?.toolUsed) {
-                    const name = step.metadata.toolUsed;
-                    const existing = toolStatsMap.get(name) ?? { calls: 0, errors: 0, totalDurationMs: 0 };
-                    const durationMs = step.metadata?.duration ?? 0;
-                    // Find next observation to check success
-                    const stepIdx = rrSteps.indexOf(step);
-                    const nextStep = stepIdx >= 0 ? rrSteps[stepIdx + 1] : undefined;
-                    const isError = nextStep?.type === "observation"
-                      ? (nextStep.metadata?.observationResult?.success === false)
-                      : false;
-                    toolStatsMap.set(name, {
-                      calls: existing.calls + 1,
-                      errors: existing.errors + (isError ? 1 : 0),
-                      totalDurationMs: existing.totalDurationMs + durationMs,
-                    });
-                  }
+                for (const tc of toolCallLog) {
+                  const existing = toolStatsMap.get(tc.toolName) ?? { calls: 0, errors: 0, totalDurationMs: 0 };
+                  toolStatsMap.set(tc.toolName, {
+                    calls: existing.calls + 1,
+                    errors: existing.errors + (tc.success ? 0 : 1),
+                    totalDurationMs: existing.totalDurationMs + tc.durationMs,
+                  });
                 }
                 const toolCallHistory: DebriefInput["toolCallHistory"] = Array.from(toolStatsMap.entries()).map(
                   ([name, stat]) => ({
@@ -2246,11 +2245,15 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   }),
                 );
 
-                // Collect errors — look for [Tool error: ...] patterns in observations
+                // Collect errors from tool call log + reasoning step observations
                 const errorsFromLoop: string[] = [];
+                for (const tc of toolCallLog) {
+                  if (!tc.success) errorsFromLoop.push(`Tool ${tc.toolName} failed`);
+                }
+                const rrSteps = (ctx.metadata.reasoningSteps ?? []) as Array<{ type: string; content?: string }>;
                 for (const step of rrSteps) {
                   if (step.type === "observation") {
-                    const content = (step as { content?: string }).content ?? "";
+                    const content = step.content ?? "";
                     const match = content.match(/\[Tool error: ([^\]]+)\]/);
                     if (match?.[1]) errorsFromLoop.push(match[1]);
                   }

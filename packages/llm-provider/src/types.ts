@@ -860,6 +860,12 @@ export type StreamEvent =
       readonly usage: TokenUsage;
     }
   | {
+      /** Token-level log probabilities (accumulated over the full response) */
+      readonly type: "logprobs";
+      /** Per-token logprob data */
+      readonly logprobs: readonly TokenLogprob[];
+    }
+  | {
       /** Error occurred during streaming */
       readonly type: "error";
       /** Error message */

@@ -172,6 +172,9 @@ export interface KernelRunOptions {
   readonly modelId?: string;
   /** LLM temperature for entropy-based intelligence routing */
   readonly temperature?: number;
+  /** When true, exit the kernel loop as soon as all scoped tools have been called successfully.
+   *  Used by plan-execute composite steps to avoid looping after all tool hints are satisfied. */
+  readonly exitOnAllToolsCalled?: boolean;
 }
 
 // ── Factory functions ────────────────────────────────────────────────────────

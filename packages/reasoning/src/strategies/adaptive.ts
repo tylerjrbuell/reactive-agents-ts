@@ -59,6 +59,10 @@ interface AdaptiveInput {
   readonly requiredTools?: readonly string[];
   /** Max redirects when required tools are missing (default: 2) */
   readonly maxRequiredToolRetries?: number;
+  /** Model identifier for routing/entropy scoring */
+  readonly modelId?: string;
+  /** LLM temperature override */
+  readonly temperature?: number;
 }
 
 type SubStrategy =

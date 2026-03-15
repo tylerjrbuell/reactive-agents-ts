@@ -57,6 +57,10 @@ interface ReactiveInput {
     readonly maxSwitches?: number;
     readonly fallbackStrategy?: string;
   };
+  /** Model ID for entropy sensor scoring */
+  readonly modelId?: string;
+  /** LLM sampling temperature — forwarded to entropy sensor */
+  readonly temperature?: number;
 }
 
 // ── executeReactive ───────────────────────────────────────────────────────────
@@ -123,6 +127,9 @@ export const executeReactive = (
       kernelType: "react",
       taskId: input.taskId ?? "reactive",
       kernelPass: "reactive:main",
+      taskDescription: input.taskDescription,
+      modelId: input.modelId,
+      temperature: kernelInput.temperature,
       strategySwitching: input.strategySwitching
         ? {
             enabled: input.strategySwitching.enabled,

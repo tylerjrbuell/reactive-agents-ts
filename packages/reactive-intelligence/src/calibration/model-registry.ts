@@ -37,13 +37,18 @@ export function lookupModel(
   // 1. Exact match
   if (MODEL_REGISTRY[id]) return MODEL_REGISTRY[id]!;
 
-  // 2. Prefix match — find longest matching key
+  // 2. Prefix match (bidirectional) — find longest matching key
+  //    "claude-sonnet-4-20250514" matches key "claude-sonnet-4" (id starts with key)
+  //    "cogito" matches key "cogito:14b" (key starts with id)
   let bestMatch: ModelRegistryEntry | undefined;
   let bestLen = 0;
   for (const key of Object.keys(MODEL_REGISTRY)) {
     if (id.startsWith(key) && key.length > bestLen) {
       bestMatch = MODEL_REGISTRY[key]!;
       bestLen = key.length;
+    } else if (key.startsWith(id) && id.length > bestLen) {
+      bestMatch = MODEL_REGISTRY[key]!;
+      bestLen = id.length;
     }
   }
   if (bestMatch) return bestMatch;

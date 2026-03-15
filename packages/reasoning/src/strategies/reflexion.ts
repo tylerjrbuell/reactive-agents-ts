@@ -53,6 +53,10 @@ interface ReflexionInput {
   readonly maxRequiredToolRetries?: number;
   /** Critiques from prior reflexion runs on similar tasks — populated from episodic memory */
   readonly priorCritiques?: readonly string[];
+  /** Model identifier for routing/entropy scoring */
+  readonly modelId?: string;
+  /** LLM temperature override */
+  readonly temperature?: number;
 }
 
 /**
@@ -118,6 +122,9 @@ export const executeReflexion = (
       kernelType: "react",
       taskId: input.taskId,
       kernelPass: "reflexion:generate",
+      modelId: input.modelId,
+      taskDescription: input.taskDescription,
+      temperature: 0.7,
     });
 
     let currentResponse = genState.output
@@ -293,6 +300,9 @@ export const executeReflexion = (
         kernelType: "react",
         taskId: input.taskId,
         kernelPass: `reflexion:improve-${attempt}`,
+        modelId: input.modelId,
+        taskDescription: input.taskDescription,
+        temperature: 0.6,
       });
 
       const improveOutput = improveState.output

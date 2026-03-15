@@ -90,10 +90,12 @@ function deriveOutcome(
   terminatedBy: DebriefInput["terminatedBy"],
   errorsFromLoop: string[],
 ): AgentDebrief["outcome"] {
-  if (terminatedBy === "final_answer_tool" || terminatedBy === "final_answer") {
-    return errorsFromLoop.length > 0 ? "partial" : "success";
+  // max_iterations is the only termination that signals incomplete work
+  if (terminatedBy === "max_iterations") {
+    return "partial";
   }
-  return "partial";
+  // final_answer, final_answer_tool, end_turn — clean terminations
+  return errorsFromLoop.length > 0 ? "partial" : "success";
 }
 
 // ─── LLM synthesis ────────────────────────────────────────────────────────

@@ -6,6 +6,15 @@ type StepLike = {
   metadata?: Record<string, unknown>;
 };
 
+/** Normalize action JSON for comparison — re-serializes to canonical form. */
+function normalizeActionJson(content: string): string {
+  try {
+    return JSON.stringify(JSON.parse(content));
+  } catch {
+    return content.replace(/\s+/g, " ").trim();
+  }
+}
+
 const COMPLETION_MARKERS = [
   "therefore", "the answer is", "in conclusion", "final answer",
   "to summarize", "in summary",
@@ -42,17 +51,32 @@ export function computeBehavioralEntropy(params: {
     : 0;
 
   // ── Loop detection: identical consecutive actions ──
+  // Normalize action content for comparison — handles JSON formatting differences
+  // and also checks tool names from metadata for structural matching.
   let loopDetectionScore = 0;
-  if (actionSteps.length >= 3) {
-    const lastN = actionSteps.slice(-3);
-    const contents = lastN.map((s) => s.content ?? "");
-    const allSame = contents.every((c) => c === contents[0]);
-    if (allSame && contents[0] !== "") loopDetectionScore = 1.0;
-    else {
-      // Partial: check if last 2 are same
-      const last2 = actionSteps.slice(-2);
-      const c2 = last2.map((s) => s.content ?? "");
-      if (c2[0] === c2[1] && c2[0] !== "") loopDetectionScore = 0.5;
+  if (actionSteps.length >= 2) {
+    const last2 = actionSteps.slice(-2);
+    const isSameAction = (a: StepLike, b: StepLike): boolean => {
+      // Check tool name match first (most reliable)
+      const toolA = a.metadata?.toolUsed as string | undefined;
+      const toolB = b.metadata?.toolUsed as string | undefined;
+      if (toolA && toolB && toolA === toolB) {
+        // Same tool — check if args are equivalent
+        const contentA = normalizeActionJson(a.content ?? "");
+        const contentB = normalizeActionJson(b.content ?? "");
+        return contentA === contentB;
+      }
+      // Fall back to raw content comparison
+      return (a.content ?? "") === (b.content ?? "") && (a.content ?? "") !== "";
+    };
+
+    if (isSameAction(last2[0]!, last2[1]!)) {
+      // 2 consecutive identical actions — already a strong loop signal
+      loopDetectionScore = 0.8;
+      // Check for 3+
+      if (actionSteps.length >= 3 && isSameAction(actionSteps[actionSteps.length - 3]!, last2[0]!)) {
+        loopDetectionScore = 1.0;
+      }
     }
   }
 

@@ -45,6 +45,10 @@ export type StrategyFn = (input: {
     readonly maxSwitches?: number;
     readonly fallbackStrategy?: string;
   };
+  /** Model ID for entropy sensor scoring (e.g. "cogito:14b", "claude-sonnet-4") */
+  readonly modelId?: string;
+  /** LLM sampling temperature — forwarded to entropy sensor for weight adjustment */
+  readonly temperature?: number;
 }) => Effect.Effect<
   ReasoningResult,
   ExecutionError | IterationLimitError,
