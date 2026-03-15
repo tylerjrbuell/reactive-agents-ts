@@ -2,7 +2,7 @@
 
 ## Project Status
 
-**v0.8.x — Adoption Readiness.** 22 packages + 2 apps built, 2,151 tests across 286 files. Builder hardening: `withStrictValidation()`, `withTimeout()`, `withRetryPolicy()`, `withCacheTimeout()`, consolidated `withGuardrails()` thresholds, `withErrorHandler()`, `withFallbacks()`, `withLogging()`, `withHealthCheck()`. Strategy switching: `withReasoning({ enableStrategySwitching: true })`. Stream improvements: AbortSignal cancellation, `IterationProgress` event, `StreamCancelled` event, `StreamCompleted.toolSummary`. `ToolBuilder` fluent API. `SessionStoreService` SQLite-backed chat session persistence. `FallbackChain` in `@reactive-agents/llm-provider`. `makeLoggerService()` structured logging with rotation. `expectStream()` streaming test assertions + scenario fixtures. `agent.health()` health probes. `rax create agent --interactive`. Final Answer, Debrief & Chat: `final-answer` meta-tool hard-gates the ReAct loop exit (replaces fragile text regex). `DebriefSynthesizer` post-run service: collects execution signals + one LLM call → structured `AgentDebrief` (summary, key findings, lessons, errors, metrics). `DebriefStore` persists run artifacts to SQLite (`agent_debriefs` table). `AgentResult` enriched with `debrief?`, `format?`, `terminatedBy?`. `agent.chat()` + `agent.session()` for conversational Q&A with adaptive routing (direct LLM for questions, ReAct loop for tool-capable queries). `OutputFormat` + `TerminatedBy` canonical types. Unified `confidence` type (`"high"|"medium"|"low"`).
+**v0.8.x — Adoption Readiness.** 22 packages + 2 apps built, 2,189 tests across 287 files. Builder hardening: `withStrictValidation()`, `withTimeout()`, `withRetryPolicy()`, `withCacheTimeout()`, consolidated `withGuardrails()` thresholds, `withErrorHandler()`, `withFallbacks()`, `withLogging()`, `withHealthCheck()`. Strategy switching: `withReasoning({ enableStrategySwitching: true })`. Stream improvements: AbortSignal cancellation, `IterationProgress` event, `StreamCancelled` event, `StreamCompleted.toolSummary`. `ToolBuilder` fluent API. `SessionStoreService` SQLite-backed chat session persistence. `FallbackChain` in `@reactive-agents/llm-provider`. `makeLoggerService()` structured logging with rotation. `expectStream()` streaming test assertions + scenario fixtures. `agent.health()` health probes. `rax create agent --interactive`. Final Answer, Debrief & Chat: `final-answer` meta-tool hard-gates the ReAct loop exit (replaces fragile text regex). `DebriefSynthesizer` post-run service: collects execution signals + one LLM call → structured `AgentDebrief` (summary, key findings, lessons, errors, metrics). `DebriefStore` persists run artifacts to SQLite (`agent_debriefs` table). `AgentResult` enriched with `debrief?`, `format?`, `terminatedBy?`. `agent.chat()` + `agent.session()` for conversational Q&A with adaptive routing (direct LLM for questions, ReAct loop for tool-capable queries). `OutputFormat` + `TerminatedBy` canonical types. Unified `confidence` type (`"high"|"medium"|"low"`).
 
 - Phase 1: Core, LLM Provider, Memory, Reasoning, Tools, Interaction, Runtime
 - Phase 2: Guardrails, Verification, Cost
@@ -28,7 +28,7 @@
 - Adoption Readiness Phases 1–3: Builder hardening (`withStrictValidation`, `withTimeout`, `withRetryPolicy`, `withCacheTimeout`, consolidated `withGuardrails`, `withErrorHandler`, `withFallbacks`, `withLogging`, `withHealthCheck`), strategy switching, AbortSignal stream cancellation, `IterationProgress`/`StreamCancelled` events, `StreamCompleted.toolSummary`, `ToolBuilder` fluent API, `SessionStoreService` SQLite session persistence, `FallbackChain` provider fallbacks, `makeLoggerService()` structured logging, `expectStream()` streaming test assertions + scenario fixtures, `rax create agent --interactive` (1900 tests, 241 files)
 - Test Scenario Provider: `withTestScenario(TestTurn[])` replaces `withTestResponses` — sequential turn consumption with text/toolCall/toolCalls/json/error turns, match guards, auto-provider, tool loop testing (2,048 tests, 258 files)
 - Reactive Intelligence Layer (Phase 1): Entropy Sensor — 5 entropy sources (token, structural, semantic, behavioral, context pressure), composite scorer with adaptive weights, conformal calibration, trajectory analysis (converging/flat/diverging/v-recovery/oscillating), model registry, `EntropySensorService` Effect-TS service, KernelRunner integration (post-kernel scoring), `.withReactiveIntelligence()` builder API, 65-example validation dataset with accuracy gates (2,091 tests, 274 files)
-- Reactive Intelligence Pipeline (Phases 2–4): Reactive Controller (early-stop, context compression, strategy switch), Local Learning Engine (conformal calibration, Thompson Sampling bandit, skill synthesis), Telemetry Client (RunReport, HMAC signing, fire-and-forget POST to api.reactiveagents.dev) (2,151 tests, 286 files)
+- Reactive Intelligence Pipeline (Phases 2–4): Reactive Controller (early-stop, context compression, strategy switch), Local Learning Engine (conformal calibration, Thompson Sampling bandit, skill synthesis), Telemetry Client (RunReport, HMAC signing, fire-and-forget POST to api.reactiveagents.dev) (2,189 tests, 287 files)
 - Pre-release: tsup compiled output, Google Gemini provider, Reflexion reasoning strategy
 - Final Integration: All layers compose via `createRuntime()` and `ReactiveAgentBuilder`
 - Docs: Starlight (Astro) site at `apps/docs/`
@@ -39,7 +39,7 @@
 
 ```bash
 bun install              # Install dependencies
-bun test                 # Run all tests (2151 tests, 286 files)
+bun test                 # Run all tests (2189 tests, 287 files)
 bun run build            # Build all packages (22 packages, ESM + DTS)
 cd apps/docs && npx astro dev    # Start docs dev server
 cd apps/docs && npx astro build  # Build docs for production
@@ -192,6 +192,8 @@ Skills in `.claude/skills/` are loaded automatically.
 | `spec/docs/11-missing-capabilities-enhancement.md` | guardrails, eval, prompts, CLI |
 | `spec/docs/12-market-validation-feb-2026.md` | Competitive analysis, A2A priority |
 | `spec/docs/14-v0.5-comprehensive-plan.md` | v0.5 plan: A2A, agent-as-tool, MCP, test hardening |
+| `docs/superpowers/specs/2026-03-14-reactive-intelligence-full-pipeline.md` | `@reactive-agents/reactive-intelligence` (Phases 2–4: controller, learning, telemetry) |
+| `docs/superpowers/specs/2026-03-14-reactive-telemetry-server.md` | Reactive Telemetry Server (api.reactiveagents.dev) |
 
 ---
 
