@@ -17,6 +17,9 @@ export type {
   EntropyMeta,
   ModelRegistryEntry,
   ReactiveIntelligenceConfig,
+  ControllerDecision,
+  ReactiveControllerConfig,
+  ControllerEvalParams,
 } from "./types.js";
 export { defaultReactiveIntelligenceConfig } from "./types.js";
 
@@ -50,6 +53,9 @@ export {
   fallbackScore,
   uncalibratedDefault,
 } from "./sensor/entropy-sensor-service.js";
+
+// ── Controller ──
+export { ReactiveControllerService, ReactiveControllerServiceLive } from "./controller/controller-service.js";
 
 // ── Runtime ──
 export { createReactiveIntelligenceLayer } from "./runtime.js";

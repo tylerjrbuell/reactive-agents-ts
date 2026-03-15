@@ -156,6 +156,41 @@ export type ReactiveIntelligenceConfig = {
   readonly models?: Record<string, ModelRegistryEntry>;
 };
 
+// ─── Controller Types (Phase 2) ───
+
+export type ControllerDecision =
+  | { readonly decision: "early-stop"; readonly reason: string; readonly iterationsSaved: number }
+  | { readonly decision: "compress"; readonly sections: readonly string[]; readonly estimatedSavings: number }
+  | { readonly decision: "switch-strategy"; readonly from: string; readonly to: string; readonly reason: string };
+
+export type ReactiveControllerConfig = {
+  readonly earlyStop: boolean;
+  readonly contextCompression: boolean;
+  readonly strategySwitch: boolean;
+  readonly earlyStopConvergenceCount?: number;
+  readonly flatIterationsBeforeSwitch?: number;
+  readonly compressionThreshold?: number;
+};
+
+export type ControllerEvalParams = {
+  readonly entropyHistory: readonly {
+    readonly composite: number;
+    readonly trajectory: { readonly shape: string; readonly derivative: number; readonly momentum: number };
+  }[];
+  readonly iteration: number;
+  readonly maxIterations: number;
+  readonly strategy: string;
+  readonly calibration: {
+    readonly highEntropyThreshold: number;
+    readonly convergenceThreshold: number;
+    readonly calibrated: boolean;
+    readonly sampleCount: number;
+  };
+  readonly config: ReactiveControllerConfig;
+  readonly contextPressure: number;
+  readonly behavioralLoopScore: number;
+};
+
 export const defaultReactiveIntelligenceConfig: ReactiveIntelligenceConfig = {
   entropy: {
     enabled: true,
