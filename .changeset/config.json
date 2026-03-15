@@ -21,6 +21,7 @@
       "@reactive-agents/a2a",
       "@reactive-agents/gateway",
       "@reactive-agents/testing",
+      "@reactive-agents/reactive-intelligence",
       "@reactive-agents/runtime",
       "reactive-agents",
       "@reactive-agents/cli"
