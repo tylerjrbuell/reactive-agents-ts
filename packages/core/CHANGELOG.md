@@ -1,5 +1,11 @@
 # @reactive-agents/core
 
+## 0.8.0
+
+### Minor Changes
+
+- 93eac55: v0.8.0 — Reactive Intelligence, Adoption Readiness, Test Scenario Provider. See CHANGELOG.md for full details.
+
 ## 0.7.8
 
 ### Patch Changes

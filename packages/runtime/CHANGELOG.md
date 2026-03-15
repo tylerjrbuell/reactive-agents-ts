@@ -1,5 +1,27 @@
 # @reactive-agents/runtime
 
+## 0.8.0
+
+### Patch Changes
+
+- Updated dependencies [93eac55]
+  - @reactive-agents/core@0.8.0
+  - @reactive-agents/a2a@0.8.0
+  - @reactive-agents/cost@0.8.0
+  - @reactive-agents/gateway@0.8.0
+  - @reactive-agents/guardrails@0.8.0
+  - @reactive-agents/identity@0.8.0
+  - @reactive-agents/interaction@0.8.0
+  - @reactive-agents/llm-provider@0.8.0
+  - @reactive-agents/memory@0.8.0
+  - @reactive-agents/observability@0.8.0
+  - @reactive-agents/orchestration@0.8.0
+  - @reactive-agents/prompts@0.8.0
+  - @reactive-agents/reactive-intelligence@0.8.0
+  - @reactive-agents/reasoning@0.8.0
+  - @reactive-agents/tools@0.8.0
+  - @reactive-agents/verification@0.8.0
+
 ## 0.7.8
 
 ### Patch Changes
