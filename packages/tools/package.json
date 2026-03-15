@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/tools",
-  "version": "0.7.8",
+  "version": "0.8.0",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -12,8 +12,8 @@
   },
   "dependencies": {
     "effect": "^3.10.0",
-    "@reactive-agents/core": "0.7.8",
-    "@reactive-agents/a2a": "0.7.8"
+    "@reactive-agents/core": "0.8.0",
+    "@reactive-agents/a2a": "0.8.0"
   },
   "devDependencies": {
     "typescript": "^5.7.0",
