@@ -59,6 +59,7 @@ export type {
   DashboardPhase,
   DashboardTool,
   DashboardAlert,
+  DashboardEntropyPoint,
   FileExporter,
   FileExporterOptions,
   OTLPExporterConfig,

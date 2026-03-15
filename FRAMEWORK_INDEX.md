@@ -345,7 +345,7 @@ Execution completes
 | 21 | `runtime` | ExecutionEngine, Builder, createRuntime() | ~200 | `ReactiveAgents`, `ExecutionEngine` |
 | 22 | `reactive-agents` (facade) | Public API re-export | — | `ReactiveAgents` |
 
-**Total: 2,189 tests across 287 files**
+**Total: 2,194 tests across 288 files**
 
 ---
 

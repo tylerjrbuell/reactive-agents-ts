@@ -345,6 +345,13 @@ declare module 'astro:content' {
   collection: "docs";
   data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
+"features/reactive-intelligence.md": {
+	id: "features/reactive-intelligence.md";
+  slug: "features/reactive-intelligence";
+  body: string;
+  collection: "docs";
+  data: InferEntrySchema<"docs">
+} & { render(): Render[".md"] };
 "features/resilience.md": {
 	id: "features/resilience.md";
   slug: "features/resilience";

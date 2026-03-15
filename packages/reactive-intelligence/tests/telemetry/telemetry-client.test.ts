@@ -3,8 +3,8 @@ import { TelemetryClient } from "../../src/telemetry/telemetry-client.js";
 import type { RunReport } from "../../src/telemetry/types.js";
 
 const mockReport: RunReport = {
+  id: "test-run-id",
   installId: "test-install-id",
-  runId: "test-run-id",
   modelId: "claude-sonnet-4-20250514",
   modelTier: "frontier",
   provider: "anthropic",
@@ -37,6 +37,7 @@ const mockReport: RunReport = {
   totalIterations: 3,
   totalTokens: 1500,
   durationMs: 5000,
+  clientVersion: "0.8.0",
 };
 
 describe("TelemetryClient", () => {

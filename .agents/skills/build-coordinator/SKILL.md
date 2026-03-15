@@ -10,7 +10,7 @@ argument-hint: <feature-description-or-package-list>
 
 ## Overview
 
-This skill guides the **team lead** in organizing and delegating cross-cutting work across the 22-package Reactive Agents monorepo (2,189 tests across 287 files). All initial packages are built and shipping — this skill is for **incremental features, refactors, and cross-package changes** rather than building from scratch.
+This skill guides the **team lead** in organizing and delegating cross-cutting work across the 22-package Reactive Agents monorepo (2,194 tests across 288 files). All initial packages are built and shipping — this skill is for **incremental features, refactors, and cross-package changes** rather than building from scratch.
 
 ## Team Structure
 
@@ -111,7 +111,7 @@ Before allowing dependent work to start:
 After all changes are complete:
 
 ```
-1. Run full test suite: bun test (expect 2,189+ tests passing)
+1. Run full test suite: bun test (expect 2,194+ tests passing)
 2. Run full build: bun run build (22 packages, ESM + DTS)
 3. Verify cross-package imports resolve correctly
 4. Check no circular dependencies introduced

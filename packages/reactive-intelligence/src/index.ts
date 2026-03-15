@@ -72,5 +72,8 @@ export { shouldSynthesizeSkill, extractSkillFragment } from "./learning/skill-sy
 export { LearningEngineService, LearningEngineServiceLive } from "./learning/learning-engine.js";
 export type { RunCompletedData, LearningResult } from "./learning/learning-engine.js";
 
+// ── Event Subscriber ──
+export { subscribeEntropyScoring } from "./sensor/entropy-event-subscriber.js";
+
 // ── Runtime ──
 export { createReactiveIntelligenceLayer } from "./runtime.js";

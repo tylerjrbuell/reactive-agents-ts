@@ -770,6 +770,8 @@ export const createRuntime = (options: RuntimeOptions) => {
           fallbackStrategy: options.reasoningOptions.fallbackStrategy,
         }
       : undefined,
+    enableReactiveIntelligence: options.enableReactiveIntelligence,
+    reactiveIntelligenceOptions: options.reactiveIntelligenceOptions,
   };
 
   // ── Required layers ──

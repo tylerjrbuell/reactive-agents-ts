@@ -6,7 +6,7 @@
 
 **The open-source agent framework built for control, not magic.**
 
-Every decision controllable, observable, and auditable. 22 packages. 13 composable layers. 5 reasoning strategies. 6 LLM providers. Model-adaptive context profiles. 10-phase execution engine with lifecycle hooks. 2,189 tests across 287 files. Built on Effect-TS for type safety from prompt to production.
+Every decision controllable, observable, and auditable. 22 packages. composable layers. 5 reasoning strategies. 6 LLM providers. Model-adaptive context profiles. 10-phase execution engine with lifecycle hooks. 2,194 tests across 288 files. Built on Effect-TS for type safety from prompt to production.
 
 [![CI](https://github.com/tylerjrbuell/reactive-agents-ts/actions/workflows/ci.yml/badge.svg)](https://github.com/tylerjrbuell/reactive-agents-ts/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/badge/npm-%40reactive--agents-CB3837?logo=npm)](https://www.npmjs.com/org/reactive-agents)
@@ -60,7 +60,7 @@ Most AI agent frameworks are dynamically typed, monolithic, and opaque. They ass
 - **Structured logging** -- `makeLoggerService()` with level filtering, JSON/text format, and file output with rotation via `withLogging()`
 - **Health checks** -- `withHealthCheck()` + `agent.health()` returns `{ status, checks[] }`
 - **Reactive intelligence** -- 5-source entropy sensor, reactive controller (early-stop, context compression, strategy switch), local learning engine (conformal calibration, Thompson Sampling bandit, skill synthesis), telemetry client (api.reactiveagents.dev), `.withReactiveIntelligence()` builder method
-- **2,189 tests** across 287 files
+- **2,194 tests** across 288 files
 
 ## Quick Start
 
@@ -146,8 +146,8 @@ const answer = await agent.chat("What's the status of the deployment?");
 
 // Multi-turn session
 const session = agent.session();
-await session.send("Summarize yesterday's logs");
-await session.send("Which errors were most frequent?");
+await session.chat("Summarize yesterday's logs");
+await session.chat("Which errors were most frequent?");
 ```
 
 ### Streaming
@@ -221,7 +221,7 @@ How Reactive Agents compares to other TypeScript agent frameworks on shipped, wo
 | Persistent gateway            | Yes             | --           | --            | --     |
 | Agent debrief + chat          | Yes             | --           | --            | --     |
 | Metrics dashboard             | Yes             | LangSmith    | --            | --     |
-| Test suite                    | 2,189 tests     | --           | --            | --     |
+| Test suite                    | 2,194 tests     | --           | --            | --     |
 
 ## Use Cases
 
@@ -320,7 +320,7 @@ const agent2 = await ReactiveAgents.create()
 | **Anthropic**     | Claude Haiku, Sonnet, Opus    |      Yes     |    Yes    |
 | **OpenAI**        | GPT-4o, GPT-4o-mini           |      Yes     |    Yes    |
 | **Google Gemini** | Gemini Flash, Pro             |      Yes     |    Yes    |
-| **Ollama**        | Any local model               |      --      |    Yes    |
+| **Ollama**        | Any local model               |     Yes      |    Yes    |
 | **LiteLLM**       | 40+ models via LiteLLM proxy  |      Yes     |    Yes    |
 | **Test**          | Mock (deterministic)          |      --      |    --     |
 
@@ -531,7 +531,7 @@ Reactive Agents supports 6 providers: Anthropic, OpenAI, Google Gemini, Ollama (
 
 ### Is this framework production-ready?
 
-Yes -- it includes guardrails, budget controls, auditability, observability, Ed25519 identity, and composable service layers for testable deployments. 2,189 tests across 287 files.
+Yes -- it includes guardrails, budget controls, auditability, observability, Ed25519 identity, and composable service layers for testable deployments. 2,194 tests across 288 files.
 
 ### Can I run fully local agents?
 
@@ -539,13 +539,13 @@ Yes -- use Ollama with local models plus context profiles tuned for local infere
 
 ### How does this compare to LangChain or Vercel AI SDK?
 
-See the [comparison table](#comparison). The key differences are: full Effect-TS type safety, 13 composable layers instead of a monolithic runtime, 5 reasoning strategies with adaptive selection, and model-adaptive context profiles that help local models perform far beyond naive prompting.
+See the [comparison table](#comparison). The key differences are: full Effect-TS type safety, composable layers instead of a monolithic runtime, 5 reasoning strategies with adaptive selection, and model-adaptive context profiles that help local models perform far beyond naive prompting.
 
 ## Development
 
 ```bash
 bun install              # Install dependencies
-bun test                 # Run full test suite (2,189 tests, 287 files)
+bun test                 # Run full test suite (2,194 tests, 288 files)
 bun run build            # Build all packages (22 packages, ESM + DTS)
 ```
 

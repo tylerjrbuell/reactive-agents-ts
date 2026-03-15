@@ -25,10 +25,11 @@ import { ObservabilityService, createProgressLogger } from "@reactive-agents/obs
 import { GuardrailService, KillSwitchService, BehavioralContractService } from "@reactive-agents/guardrails";
 import { VerificationService } from "@reactive-agents/verification";
 import { CostService } from "@reactive-agents/cost";
-import { EventBus } from "@reactive-agents/core";
-import type { AgentEvent } from "@reactive-agents/core";
+import { EventBus, EntropySensorService } from "@reactive-agents/core";
+import type { AgentEvent, KernelStateLike } from "@reactive-agents/core";
 import { synthesizeDebrief, type DebriefInput, type AgentDebrief } from "./debrief.js";
 import { DebriefStoreService } from "@reactive-agents/memory";
+import { TelemetryClient as TelemetryClientImpl, classifyTaskCategory as classifyTaskCategoryFn, lookupModel as lookupModelFn } from "@reactive-agents/reactive-intelligence";
 
 // ─── Narrow service types for optional deps ───
 
@@ -308,6 +309,100 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
               yield* eb.on("ToolCallCompleted", (event) =>
                 Effect.sync(() => { toolCallLog.push({ toolName: event.toolName, durationMs: event.durationMs, success: event.success }); }),
               );
+            }
+
+            // ── Collect EntropyScored events for telemetry + dashboard ──
+            const entropyLog: {
+              iteration: number;
+              composite: number;
+              sources: { token: number | null; structural: number; semantic: number | null; behavioral: number; contextPressure: number };
+              trajectory: { derivative: number; shape: string; momentum: number };
+              confidence: "high" | "medium" | "low";
+            }[] = [];
+            const entropySeenIterations = new Set<string>();
+            if (eb) {
+              yield* eb.on("EntropyScored", (event) =>
+                Effect.sync(() => {
+                  // Dedup: kernel-runner inline scoring + event subscriber may both
+                  // publish EntropyScored for the same (taskId, iteration) pair.
+                  const key = `${event.taskId}:${event.iteration}`;
+                  if (entropySeenIterations.has(key)) return;
+                  entropySeenIterations.add(key);
+                  entropyLog.push({
+                    iteration: event.iteration,
+                    composite: event.composite,
+                    sources: event.sources,
+                    trajectory: event.trajectory,
+                    confidence: event.confidence,
+                  });
+                }),
+              );
+            }
+
+            // ── EventBus-driven entropy scoring ──
+            // Subscribe to ReasoningStepCompleted events from ALL strategies and score
+            // thoughts via EntropySensorService. This covers strategies like plan-execute
+            // that bypass kernel-runner's inline scoring.
+            // Dedup: tracks (taskId, step) pairs to avoid double-scoring with kernel-runner.
+            if (eb && config.enableReactiveIntelligence) {
+              const esOpt = yield* Effect.serviceOption(EntropySensorService).pipe(
+                Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
+              );
+              if (esOpt._tag === "Some") {
+                const sensor = esOpt.value;
+                const scoredPairs = new Set<string>();
+                const taskThoughts = new Map<string, { thoughts: string[]; steps: { type: string; content: string }[]; toolsUsed: Set<string> }>();
+
+                yield* eb.on("ReasoningStepCompleted", (event) =>
+                  Effect.gen(function* () {
+                    if (!event.thought) return;
+                    const dedupKey = `${event.taskId}:${event.step}`;
+                    if (scoredPairs.has(dedupKey)) return;
+
+                    let tState = taskThoughts.get(event.taskId);
+                    if (!tState) {
+                      tState = { thoughts: [], steps: [], toolsUsed: new Set() };
+                      taskThoughts.set(event.taskId, tState);
+                    }
+                    tState.steps.push({ type: "thought", content: event.thought });
+                    if (event.action) {
+                      tState.steps.push({ type: "action", content: event.action });
+                      try { const p = JSON.parse(event.action); if (p.tool) tState.toolsUsed.add(p.tool); } catch {}
+                    }
+                    if (event.observation) tState.steps.push({ type: "observation", content: event.observation });
+
+                    const priorThought = tState.thoughts.length > 0 ? tState.thoughts[tState.thoughts.length - 1] : undefined;
+                    tState.thoughts.push(event.thought);
+
+                    const kernelState: KernelStateLike = {
+                      taskId: event.taskId, strategy: event.strategy, kernelType: "event-subscriber",
+                      steps: tState.steps.map((s) => ({ type: s.type, content: s.content })),
+                      toolsUsed: tState.toolsUsed, iteration: event.step, tokens: 0,
+                      status: "thinking", output: null, error: null, meta: {},
+                    };
+
+                    const score = yield* sensor.score({
+                      thought: event.thought, taskDescription: "", strategy: event.strategy,
+                      iteration: event.step, maxIterations: config.maxIterations ?? 10,
+                      modelId: "unknown", temperature: 0, priorThought, kernelState,
+                    });
+
+                    scoredPairs.add(dedupKey);
+
+                    yield* eb.publish({
+                      _tag: "EntropyScored", taskId: event.taskId, iteration: score.iteration,
+                      composite: score.composite, sources: score.sources,
+                      trajectory: {
+                        derivative: score.trajectory.derivative,
+                        shape: score.trajectory.shape as "converging" | "flat" | "diverging" | "v-recovery" | "oscillating",
+                        momentum: score.trajectory.momentum,
+                      },
+                      confidence: score.confidence,
+                      modelTier: score.modelTier, iterationWeight: score.iterationWeight,
+                    });
+                  }).pipe(Effect.catchAll(() => Effect.void)),
+                );
+              }
             }
 
             // ── Acquire KillSwitchService optionally ──
@@ -2387,6 +2482,67 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     .pipe(Effect.catchAll(() => Effect.void));
                 }
 
+                // ── Record entropy metrics for dashboard ──
+                if (obs && entropyLog.length > 0) {
+                  for (const pt of entropyLog) {
+                    yield* obs.setGauge("entropy.composite", pt.composite, {
+                      taskId: ctx.taskId,
+                      iteration: String(pt.iteration),
+                      shape: pt.trajectory.shape,
+                      confidence: pt.confidence,
+                    }).pipe(Effect.catchAll(() => Effect.void));
+                  }
+                }
+
+                // ── Telemetry: build RunReport and fire-and-forget ──
+                if (config.enableReactiveIntelligence && entropyLog.length > 0) {
+                  try {
+                    const riOpts = config.reactiveIntelligenceOptions as Record<string, unknown> | undefined;
+                    const telemetryCfg = riOpts?.telemetry;
+                    const telemetryEnabled = telemetryCfg === undefined || telemetryCfg === true ||
+                      (typeof telemetryCfg === "object" && telemetryCfg !== null && (telemetryCfg as any).enabled !== false);
+
+                    if (telemetryEnabled) {
+                      const endpoint = typeof telemetryCfg === "object" && telemetryCfg !== null
+                        ? (telemetryCfg as any).endpoint : undefined;
+                      const client = new TelemetryClientImpl(endpoint);
+
+                      const modelId = String(ctx.selectedModel ?? config.defaultModel ?? "unknown");
+                      const modelEntry = lookupModelFn(modelId);
+                      const taskText = extractTaskText(task.input);
+                      const toolsUsed = [...new Set(toolCallLog.map(t => t.toolName))];
+                      const strategySwitched = !!(rr?.metadata as any)?.strategyFallback;
+
+                      const outcome: "success" | "partial" | "failure" =
+                        terminatedByRaw === "max_iterations" ? "partial"
+                        : errorsFromLoop.length > 0 && terminatedByRaw !== "final_answer_tool" && terminatedByRaw !== "final_answer" ? "failure"
+                        : "success";
+
+                      client.send({
+                        id: ctx.taskId,
+                        installId: client.getInstallId(),
+                        modelId,
+                        modelTier: modelEntry.tier,
+                        provider: String(config.provider ?? "unknown"),
+                        taskCategory: classifyTaskCategoryFn(taskText),
+                        toolCount: toolCallLog.length,
+                        toolsUsed,
+                        strategyUsed: ctx.selectedStrategy ?? "reactive",
+                        strategySwitched,
+                        entropyTrace: entropyLog,
+                        terminatedBy: terminatedByRaw,
+                        outcome,
+                        totalIterations: ctx.iteration,
+                        totalTokens: ctx.tokensUsed,
+                        durationMs: executionDurationMs,
+                        clientVersion: "0.8.0",
+                      });
+                    }
+                  } catch {
+                    // Telemetry must never affect agent — silent failure
+                  }
+                }
+
                 // Phase 0.2: Publish TaskCompleted
                 if (eb) {
                   yield* eb.publish({
@@ -2394,6 +2550,11 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     taskId: task.id,
                     success: true,
                   }).pipe(Effect.catchAll(() => Effect.void));
+                }
+
+                // Attach entropy trace to result metadata for dashboard consumption
+                if (entropyLog.length > 0) {
+                  (result.metadata as any).entropyTrace = entropyLog;
                 }
 
                 return result;

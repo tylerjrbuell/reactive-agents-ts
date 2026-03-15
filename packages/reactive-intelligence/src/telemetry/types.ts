@@ -25,8 +25,8 @@ export type SkillFragment = {
 };
 
 export type RunReport = {
+  readonly id: string;
   readonly installId: string;
-  readonly runId: string;
   readonly modelId: string;
   readonly modelTier: "frontier" | "local" | "unknown";
   readonly provider: string;
@@ -57,5 +57,6 @@ export type RunReport = {
   readonly totalIterations: number;
   readonly totalTokens: number;
   readonly durationMs: number;
-  readonly skillFragment?: SkillFragment;
+  readonly skillFragment?: SkillFragment | null;
+  readonly clientVersion: string;
 };

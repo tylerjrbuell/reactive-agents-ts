@@ -38,10 +38,9 @@ const codes: Record<string, string> = {
 
   p2: [
     `<span class="rp">.</span><span class="rm">withGuardrails</span><span class="rp">(&#123;</span>`,
-    `  thresholds<span class="rp">: &#123;</span>`,
-    `    injection<span class="rp">:</span> <span class="rn">0.8</span><span class="rp">,</span>`,
-    `    pii<span class="rp">:</span>       <span class="rn">0.7</span>`,
-    `  <span class="rp">&#125;,</span>`,
+    `  injectionThreshold<span class="rp">:</span> <span class="rn">0.8</span><span class="rp">,</span>`,
+    `  piiThreshold<span class="rp">:</span>       <span class="rn">0.9</span><span class="rp">,</span>`,
+    `  toxicityThreshold<span class="rp">:</span>  <span class="rn">0.7</span><span class="rp">,</span>`,
     `<span class="rp">&#125;)</span>`,
     `<span class="rp">.</span><span class="rm">withKillSwitch</span><span class="rp">()</span>`,
     `<span class="rp">.</span><span class="rm">withBehavioralContracts</span><span class="rp">(&#123;</span>`,
@@ -79,6 +78,22 @@ const codes: Record<string, string> = {
     `    <span class="rm">--provider</span> ollama \\`,
     `    <span class="rm">--model</span> qwen3:14b`,
   ].join('\n'),
+
+  p5: [
+    `<span class="rp">.</span><span class="rm">withReactiveIntelligence</span><span class="rp">(&#123;</span>`,
+    `  controller<span class="rp">: &#123;</span>`,
+    `    earlyStop<span class="rp">:</span> <span class="rn">true</span><span class="rp">,</span>`,
+    `    contextCompression<span class="rp">:</span> <span class="rn">true</span><span class="rp">,</span>`,
+    `    strategySwitch<span class="rp">:</span> <span class="rn">true</span><span class="rp">,</span>`,
+    `  <span class="rp">&#125;,</span>`,
+    `<span class="rp">&#125;)</span>`,
+    ``,
+    `<span class="rc">// Dashboard output:</span>`,
+    `<span class="rm">🧠 Reasoning Signal</span>`,
+    `<span class="rp">├─</span> Grade<span class="rp">:</span> <span class="rg">B</span>  Signal<span class="rp">:</span> converging <span class="rg">↘</span>`,
+    `<span class="rp">├─</span> Trace<span class="rp">:</span> <span class="rm">████▓▒░</span> <span class="rn">0.65</span>→<span class="rn">0.25</span>`,
+    `<span class="rp">└─</span> <span class="ry">Tip</span><span class="rp">:</span> Enable earlyStop`,
+  ].join('\n'),
 };
 ---
 
@@ -90,10 +105,11 @@ const codes: Record<string, string> = {
       <div class="fc-header">
         <nav class="fc-tabs" role="tablist" aria-label="Feature categories">
           <button class="fc-tab active" data-tab="0" role="tab" aria-selected="true">Builder API</button>
-          <button class="fc-tab" data-tab="1" role="tab" aria-selected="false">Observability</button>
-          <button class="fc-tab" data-tab="2" role="tab" aria-selected="false">Safety</button>
-          <button class="fc-tab" data-tab="3" role="tab" aria-selected="false">Production</button>
-          <button class="fc-tab" data-tab="4" role="tab" aria-selected="false">Dev Experience</button>
+          <button class="fc-tab" data-tab="1" role="tab" aria-selected="false">Intelligence</button>
+          <button class="fc-tab" data-tab="2" role="tab" aria-selected="false">Observability</button>
+          <button class="fc-tab" data-tab="3" role="tab" aria-selected="false">Safety</button>
+          <button class="fc-tab" data-tab="4" role="tab" aria-selected="false">Production</button>
+          <button class="fc-tab" data-tab="5" role="tab" aria-selected="false">Dev Experience</button>
         </nav>
       </div>
 
@@ -115,7 +131,7 @@ const codes: Record<string, string> = {
               </div>
               <div class="fc-item">
                 <span class="fc-icon">🔌</span>
-                <div><p class="fc-name">40+ LLM Providers</p><p class="fc-desc">Anthropic, OpenAI, Gemini, Ollama, LiteLLM — one unified interface</p></div>
+                <div><p class="fc-name">6 LLM Providers</p><p class="fc-desc">Anthropic, OpenAI, Gemini, Ollama, LiteLLM (40+ models) — one unified interface</p></div>
               </div>
               <div class="fc-item">
                 <span class="fc-icon">🧠</span>
@@ -141,8 +157,44 @@ const codes: Record<string, string> = {
           </div>
         </div>
 
-        <!-- Panel 1: Observability -->
+        <!-- Panel 1: Intelligence -->
         <div class="fc-panel" data-panel="1" role="tabpanel">
+          <div class="fc-body">
+            <div class="fc-grid">
+              <div class="fc-item">
+                <span class="fc-icon">🧠</span>
+                <div><p class="fc-name">5 Entropy Sources</p><p class="fc-desc">Token, structural, semantic, behavioral, context pressure — real-time reasoning quality</p></div>
+              </div>
+              <div class="fc-item">
+                <span class="fc-icon">⚡</span>
+                <div><p class="fc-name">Early Stop</p><p class="fc-desc">Detect convergence and stop early — save tokens and time automatically</p></div>
+              </div>
+              <div class="fc-item">
+                <span class="fc-icon">🔄</span>
+                <div><p class="fc-name">Strategy Switching</p><p class="fc-desc">Auto-switch reasoning strategy when entropy shows the agent is stuck</p></div>
+              </div>
+              <div class="fc-item">
+                <span class="fc-icon">📊</span>
+                <div><p class="fc-name">Trajectory Analysis</p><p class="fc-desc">Track entropy over time: converging, flat, diverging, oscillating</p></div>
+              </div>
+              <div class="fc-item">
+                <span class="fc-icon">🎯</span>
+                <div><p class="fc-name">Per-Model Calibration</p><p class="fc-desc">Conformal thresholds adapt to each model's characteristics over time</p></div>
+              </div>
+              <div class="fc-item">
+                <span class="fc-icon">📈</span>
+                <div><p class="fc-name">Local Learning</p><p class="fc-desc">Thompson Sampling bandit learns optimal strategies per task category</p></div>
+              </div>
+            </div>
+            <div class="fc-code-box fc-code-box--mono">
+              <div class="fc-code-label">reactive intelligence</div>
+              <pre class="fc-code" set:html={codes.p5}></pre>
+            </div>
+          </div>
+        </div>
+
+        <!-- Panel 2: Observability -->
+        <div class="fc-panel" data-panel="2" role="tabpanel">
           <div class="fc-body">
             <div class="fc-grid">
               <div class="fc-item">
@@ -177,8 +229,8 @@ const codes: Record<string, string> = {
           </div>
         </div>
 
-        <!-- Panel 2: Safety -->
-        <div class="fc-panel" data-panel="2" role="tabpanel">
+        <!-- Panel 3: Safety -->
+        <div class="fc-panel" data-panel="3" role="tabpanel">
           <div class="fc-body">
             <div class="fc-grid">
               <div class="fc-item">
@@ -213,8 +265,8 @@ const codes: Record<string, string> = {
           </div>
         </div>
 
-        <!-- Panel 3: Production -->
-        <div class="fc-panel" data-panel="3" role="tabpanel">
+        <!-- Panel 4: Production -->
+        <div class="fc-panel" data-panel="4" role="tabpanel">
           <div class="fc-body">
             <div class="fc-grid">
               <div class="fc-item">
@@ -249,8 +301,8 @@ const codes: Record<string, string> = {
           </div>
         </div>
 
-        <!-- Panel 4: Dev Experience -->
-        <div class="fc-panel" data-panel="4" role="tabpanel">
+        <!-- Panel 5: Dev Experience -->
+        <div class="fc-panel" data-panel="5" role="tabpanel">
           <div class="fc-body">
             <div class="fc-grid">
               <div class="fc-item">
@@ -263,11 +315,11 @@ const codes: Record<string, string> = {
               </div>
               <div class="fc-item">
                 <span class="fc-icon">📦</span>
-                <div><p class="fc-name">20 Modular Packages</p><p class="fc-desc">Install only what you need — no bloat, no hidden coupling between layers</p></div>
+                <div><p class="fc-name">22 Modular Packages</p><p class="fc-desc">Install only what you need — no bloat, no hidden coupling between layers</p></div>
               </div>
               <div class="fc-item">
                 <span class="fc-icon">🧪</span>
-                <div><p class="fc-name">1,773+ Tests</p><p class="fc-desc">217 test files across all packages — battle-tested, production-ready</p></div>
+                <div><p class="fc-name">2,190+ Tests</p><p class="fc-desc">288 test files across all packages — battle-tested, production-ready</p></div>
               </div>
               <div class="fc-item">
                 <span class="fc-icon">🤖</span>

@@ -72,7 +72,7 @@ interface ModelParams {
 | `withContextProfile` | `(profile: Partial<ContextProfile>) => this` | Model-adaptive context overrides: compaction thresholds, tool result size limits, budget |
 | `withStrictValidation` | `() => this` | Throw at build time if required config is missing (provider, model, etc.) |
 | `withTimeout` | `(ms: number) => this` | Execution timeout in milliseconds. Throws `TimeoutError` if exceeded |
-| `withRetryPolicy` | `(policy: RetryPolicy) => this` | Retry on transient LLM failures. `{ maxRetries: number, backoff: "fixed" \| "linear" \| "exponential" }` |
+| `withRetryPolicy` | `(policy: RetryPolicy) => this` | Retry on transient LLM failures. `{ maxRetries: number, backoffMs: number }` |
 | `withCacheTimeout` | `(ms: number) => this` | Semantic cache TTL in milliseconds. Entries older than this are evicted |
 
 #### ContextProfile fields
@@ -126,6 +126,7 @@ See [Context Engineering](/guides/context-engineering/) for full tier defaults.
 | `withFallbacks(config)` | Provider/model fallback chain via `FallbackChain`. Config: `{ providers?: string[], models?: string[], errorThreshold?: number }`. On consecutive failures ≥ `errorThreshold`, the agent transparently retries with the next provider/model |
 | `withLogging(config)` | Structured logging via `makeLoggerService()`. Config: `{ level?: "debug" \| "info" \| "warn" \| "error", format?: "json" \| "text", output?: "console" \| "file", filePath?: string, maxFileSizeMb?: number, maxFiles?: number }` |
 | `withHealthCheck()` | Enable `agent.health()` which returns `{ status: "healthy" \| "degraded" \| "unhealthy", checks: HealthCheck[] }`. Each check reports on a specific subsystem (LLM, memory, tools, etc.) |
+| `withReactiveIntelligence(config?)` | Entropy sensing, reactive controller, local learning, and telemetry. Config: `{ entropy?: { enabled?, tokenEntropy?, semanticEntropy? }, controller?: { earlyStop?, contextCompression?, strategySwitch? }, telemetry?: boolean }`. See [Reactive Intelligence](/features/reactive-intelligence/) |
 
 #### ReasoningOptions
 

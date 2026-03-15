@@ -2,7 +2,7 @@
 
 ## Project Status
 
-**v0.8.x — Adoption Readiness.** 22 packages + 2 apps built, 2,189 tests across 287 files. Builder hardening: `withStrictValidation()`, `withTimeout()`, `withRetryPolicy()`, `withCacheTimeout()`, consolidated `withGuardrails()` thresholds, `withErrorHandler()`, `withFallbacks()`, `withLogging()`, `withHealthCheck()`. Strategy switching: `withReasoning({ enableStrategySwitching: true })`. Stream improvements: AbortSignal cancellation, `IterationProgress` event, `StreamCancelled` event, `StreamCompleted.toolSummary`. `ToolBuilder` fluent API. `SessionStoreService` SQLite-backed chat session persistence. `FallbackChain` in `@reactive-agents/llm-provider`. `makeLoggerService()` structured logging with rotation. `expectStream()` streaming test assertions + scenario fixtures. `agent.health()` health probes. `rax create agent --interactive`. Final Answer, Debrief & Chat: `final-answer` meta-tool hard-gates the ReAct loop exit (replaces fragile text regex). `DebriefSynthesizer` post-run service: collects execution signals + one LLM call → structured `AgentDebrief` (summary, key findings, lessons, errors, metrics). `DebriefStore` persists run artifacts to SQLite (`agent_debriefs` table). `AgentResult` enriched with `debrief?`, `format?`, `terminatedBy?`. `agent.chat()` + `agent.session()` for conversational Q&A with adaptive routing (direct LLM for questions, ReAct loop for tool-capable queries). `OutputFormat` + `TerminatedBy` canonical types. Unified `confidence` type (`"high"|"medium"|"low"`).
+**v0.8.x — Adoption Readiness.** 22 packages + 2 apps built, 2,194 tests across 288 files. Builder hardening: `withStrictValidation()`, `withTimeout()`, `withRetryPolicy()`, `withCacheTimeout()`, consolidated `withGuardrails()` thresholds, `withErrorHandler()`, `withFallbacks()`, `withLogging()`, `withHealthCheck()`. Strategy switching: `withReasoning({ enableStrategySwitching: true })`. Stream improvements: AbortSignal cancellation, `IterationProgress` event, `StreamCancelled` event, `StreamCompleted.toolSummary`. `ToolBuilder` fluent API. `SessionStoreService` SQLite-backed chat session persistence. `FallbackChain` in `@reactive-agents/llm-provider`. `makeLoggerService()` structured logging with rotation. `expectStream()` streaming test assertions + scenario fixtures. `agent.health()` health probes. `rax create agent --interactive`. Final Answer, Debrief & Chat: `final-answer` meta-tool hard-gates the ReAct loop exit (replaces fragile text regex). `DebriefSynthesizer` post-run service: collects execution signals + one LLM call → structured `AgentDebrief` (summary, key findings, lessons, errors, metrics). `DebriefStore` persists run artifacts to SQLite (`agent_debriefs` table). `AgentResult` enriched with `debrief?`, `format?`, `terminatedBy?`. `agent.chat()` + `agent.session()` for conversational Q&A with adaptive routing (direct LLM for questions, ReAct loop for tool-capable queries). `OutputFormat` + `TerminatedBy` canonical types. Unified `confidence` type (`"high"|"medium"|"low"`).
 
 - Phase 1: Core, LLM Provider, Memory, Reasoning, Tools, Interaction, Runtime
 - Phase 2: Guardrails, Verification, Cost
@@ -28,7 +28,7 @@
 - Adoption Readiness Phases 1–3: Builder hardening (`withStrictValidation`, `withTimeout`, `withRetryPolicy`, `withCacheTimeout`, consolidated `withGuardrails`, `withErrorHandler`, `withFallbacks`, `withLogging`, `withHealthCheck`), strategy switching, AbortSignal stream cancellation, `IterationProgress`/`StreamCancelled` events, `StreamCompleted.toolSummary`, `ToolBuilder` fluent API, `SessionStoreService` SQLite session persistence, `FallbackChain` provider fallbacks, `makeLoggerService()` structured logging, `expectStream()` streaming test assertions + scenario fixtures, `rax create agent --interactive` (1900 tests, 241 files)
 - Test Scenario Provider: `withTestScenario(TestTurn[])` replaces `withTestResponses` — sequential turn consumption with text/toolCall/toolCalls/json/error turns, match guards, auto-provider, tool loop testing (2,048 tests, 258 files)
 - Reactive Intelligence Layer (Phase 1): Entropy Sensor — 5 entropy sources (token, structural, semantic, behavioral, context pressure), composite scorer with adaptive weights, conformal calibration, trajectory analysis (converging/flat/diverging/v-recovery/oscillating), model registry, `EntropySensorService` Effect-TS service, KernelRunner integration (post-kernel scoring), `.withReactiveIntelligence()` builder API, 65-example validation dataset with accuracy gates (2,091 tests, 274 files)
-- Reactive Intelligence Pipeline (Phases 2–4): Reactive Controller (early-stop, context compression, strategy switch), Local Learning Engine (conformal calibration, Thompson Sampling bandit, skill synthesis), Telemetry Client (RunReport, HMAC signing, fire-and-forget POST to api.reactiveagents.dev) (2,189 tests, 287 files)
+- Reactive Intelligence Pipeline (Phases 2–4): Reactive Controller (early-stop, context compression, strategy switch), Local Learning Engine (conformal calibration, Thompson Sampling bandit, skill synthesis), Telemetry Client (RunReport, HMAC signing, fire-and-forget POST to api.reactiveagents.dev), EventBus-driven entropy scoring (all strategies), dashboard entropy signals section, telemetry pipeline integration (2,194 tests, 288 files)
 - Pre-release: tsup compiled output, Google Gemini provider, Reflexion reasoning strategy
 - Final Integration: All layers compose via `createRuntime()` and `ReactiveAgentBuilder`
 - Docs: Starlight (Astro) site at `apps/docs/`
@@ -39,7 +39,7 @@
 
 ```bash
 bun install              # Install dependencies
-bun test                 # Run all tests (2189 tests, 287 files)
+bun test                 # Run all tests (2194 tests, 288 files)
 bun run build            # Build all packages (22 packages, ESM + DTS)
 cd apps/docs && npx astro dev    # Start docs dev server
 cd apps/docs && npx astro build  # Build docs for production
@@ -80,7 +80,7 @@ const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withStrictValidation()                // Throw at build time if required config is missing
   .withTimeout(30_000)                   // 30s execution timeout
-  .withRetryPolicy({ maxRetries: 3, backoff: "exponential" })  // Retry on transient LLM errors
+  .withRetryPolicy({ maxRetries: 3, backoffMs: 1_000 })  // Retry on transient LLM errors
   .withCacheTimeout(3_600_000)           // Semantic cache TTL (1h)
   .withReasoning({
     enableStrategySwitching: true,       // Auto-switch strategy on loop detection
@@ -96,7 +96,7 @@ const agent = await ReactiveAgents.create()
     providers: ["anthropic", "openai"],
     errorThreshold: 3,
   })
-  .withLogging({ level: "info", format: "json", output: "file" })
+  .withLogging({ level: "info", format: "json", output: "file", filePath: "./agent.log" })
   .withErrorHandler((err, ctx) => {      // Global error callback for logging/monitoring
     console.error("Agent error:", err);
   })
@@ -197,16 +197,6 @@ Skills in `.claude/skills/` are loaded automatically.
 
 ---
 
-## v0.5 Active Development
-
-**Current plan:** `spec/docs/14-v0.5-comprehensive-plan.md`
-
-Sprint order: Housekeeping → A2A Core → Agent-as-Tool + MCP → Test Hardening → Builder/DX → Integration + Release
-
-New package: `@reactive-agents/a2a` (JSON-RPC 2.0, Agent Cards, SSE streaming)
-
----
-
 ## Documentation Update Requirements
 
 **After ANY code change**, check if these need updating:
@@ -249,7 +239,7 @@ packages/
   testing/       — Mock services (LLM, tools, EventBus), assertion helpers, test fixtures
   benchmarks/    — Benchmark suite: 20 tasks × 5 tiers, overhead measurement, report generation
   health/        — Health checks and readiness probes
-  reactive-intelligence/ — Entropy Sensor (5 sources), Reactive Controller (early-stop, compression, strategy switch), Learning Engine (calibration, bandit, skill synthesis), Telemetry Client
+  reactive-intelligence/ — Entropy Sensor (5 sources), Reactive Controller (early-stop, compression, strategy switch), Learning Engine (calibration, bandit, skill synthesis), Telemetry Client, EventBus-driven entropy subscriber
   evolution/     — [PLANNED v1.1+] Group-Evolving Agents (GEA): strategy evolution, experience sharing
 apps/
   cli/           — `rax` CLI (init, create, run, dev, eval, playground, inspect)

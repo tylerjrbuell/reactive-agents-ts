@@ -63,6 +63,24 @@ export interface DashboardAlert {
   readonly message: string;
 }
 
+export interface DashboardEntropyPoint {
+  readonly iteration: number;
+  readonly composite: number;
+  readonly trajectory: {
+    readonly shape: string;
+    readonly derivative: number;
+    readonly momentum: number;
+  };
+  readonly confidence: "high" | "medium" | "low";
+  readonly sources: {
+    readonly token: number | null;
+    readonly structural: number;
+    readonly semantic: number | null;
+    readonly behavioral: number;
+    readonly contextPressure: number;
+  };
+}
+
 export interface DashboardData {
   readonly status: "success" | "error" | "partial";
   readonly totalDuration: number; // milliseconds
@@ -74,6 +92,7 @@ export interface DashboardData {
   readonly phases: readonly DashboardPhase[];
   readonly tools: readonly DashboardTool[];
   readonly alerts: readonly DashboardAlert[];
+  readonly entropyTrace?: readonly DashboardEntropyPoint[];
 }
 
 // ─── Console Exporter ───
@@ -138,6 +157,7 @@ const generateAlerts = (
   phases: readonly DashboardPhase[],
   tools: readonly DashboardTool[],
   stepCount: number,
+  entropyTrace?: readonly DashboardEntropyPoint[],
 ): readonly DashboardAlert[] => {
   const alerts: DashboardAlert[] = [];
 
@@ -178,6 +198,33 @@ const generateAlerts = (
     });
   }
 
+  // Entropy-informed alerts
+  if (entropyTrace && entropyTrace.length > 0) {
+    const last = entropyTrace[entropyTrace.length - 1];
+    const mean = entropyTrace.reduce((s, p) => s + p.composite, 0) / entropyTrace.length;
+
+    if (last.trajectory.shape === "diverging") {
+      alerts.push({
+        level: "warning",
+        message: "Entropy diverging — model became less certain over iterations",
+      });
+    }
+
+    if (last.trajectory.shape === "flat" && entropyTrace.length >= 3 && mean > 0.5) {
+      alerts.push({
+        level: "warning",
+        message: "Entropy flat with high uncertainty — model may be stuck in a reasoning loop",
+      });
+    }
+
+    if (mean < 0.3 && last.trajectory.shape === "converging") {
+      alerts.push({
+        level: "info",
+        message: "Low entropy + converging — strong reasoning signal, task well-suited for this model",
+      });
+    }
+  }
+
   return alerts;
 };
 
@@ -188,6 +235,7 @@ const generateAlerts = (
 export const buildDashboardData = (
   metrics: readonly Metric[],
   metricsCollector?: MetricsCollector,
+  entropyTraceOverride?: readonly DashboardEntropyPoint[],
 ): DashboardData => {
   // Count total tokens from metrics
   let tokenCount = 0;
@@ -365,8 +413,32 @@ export const buildDashboardData = (
     }
   }
 
+  // Extract entropy trace from gauge metrics
+  const entropyPoints = new Map<number, DashboardEntropyPoint>();
+  for (const metric of metrics) {
+    if (metric.type === "gauge" && metric.name === "entropy.composite" && metric.labels) {
+      const iteration = parseInt(metric.labels.iteration ?? "0", 10);
+      if (!entropyPoints.has(iteration)) {
+        entropyPoints.set(iteration, {
+          iteration,
+          composite: metric.value,
+          trajectory: {
+            shape: metric.labels.shape ?? "unknown",
+            derivative: 0,
+            momentum: 0,
+          },
+          confidence: (metric.labels.confidence as "high" | "medium" | "low") ?? "low",
+          sources: { token: null, structural: 0, semantic: null, behavioral: 0, contextPressure: 0 },
+        });
+      }
+    }
+  }
+  const entropyTrace = entropyTraceOverride ?? (entropyPoints.size > 0
+    ? [...entropyPoints.values()].sort((a, b) => a.iteration - b.iteration)
+    : undefined);
+
   const estimatedCost = calculateCost(tokenCount);
-  const alerts = generateAlerts(phases, tools, stepCount);
+  const alerts = generateAlerts(phases, tools, stepCount, entropyTrace);
 
   return {
     status,
@@ -379,6 +451,7 @@ export const buildDashboardData = (
     phases,
     tools,
     alerts,
+    entropyTrace,
   };
 };
 
@@ -613,6 +686,155 @@ export const formatMetricsDashboard = (data: DashboardData): string => {
       lines.push(
         `${prefix} ${icon}  ${toolName}  ${tool.callCount} calls, ${avgStr} avg${errStr}`,
       );
+    }
+  }
+
+  // ── Entropy Signal ──────────────────────────────────────────────────────
+  if (data.entropyTrace && data.entropyTrace.length > 0) {
+    lines.push("");
+    lines.push(chalk.hex(C_CYAN).bold("🧠 Reasoning Signal"));
+
+    const trace = data.entropyTrace;
+    const first = trace[0];
+    const last = trace[trace.length - 1];
+    const meanComposite = trace.reduce((s, p) => s + p.composite, 0) / trace.length;
+
+    // Shape distribution
+    const shapes = new Map<string, number>();
+    for (const pt of trace) {
+      shapes.set(pt.trajectory.shape, (shapes.get(pt.trajectory.shape) ?? 0) + 1);
+    }
+    const dominantShape = [...shapes.entries()].sort((a, b) => b[1] - a[1])[0][0];
+
+    // Signal quality assessment
+    const converged = last.trajectory.shape === "converging";
+    const flat = last.trajectory.shape === "flat";
+    const diverging = last.trajectory.shape === "diverging";
+    const oscillating = last.trajectory.shape === "oscillating";
+
+    // Overall grade: A/B/C/D/F based on convergence + mean entropy
+    const grade = converged && meanComposite < 0.35 ? "A"
+      : converged && meanComposite < 0.55 ? "B"
+      : flat && meanComposite < 0.45 ? "B"
+      : flat && meanComposite < 0.65 ? "C"
+      : diverging ? "D"
+      : oscillating ? "C"
+      : meanComposite > 0.7 ? "F"
+      : "C";
+
+    const gradeColor = grade === "A" ? C_GREEN : grade === "B" ? C_GREEN : grade === "C" ? C_YELLOW : C_RED;
+    const gradeLabel = chalk.hex(gradeColor).bold(grade);
+
+    const signalLabel = converged ? chalk.hex(C_GREEN)("converged")
+      : flat ? chalk.hex(C_YELLOW)("flat")
+      : diverging ? chalk.hex(C_RED)("diverging")
+      : oscillating ? chalk.hex(C_YELLOW)("oscillating")
+      : chalk.hex(C_DIM)(last.trajectory.shape);
+
+    // Delta from first to last
+    const delta = last.composite - first.composite;
+    const deltaStr = delta <= 0
+      ? chalk.hex(C_GREEN)(`${delta.toFixed(3)}`)
+      : chalk.hex(C_RED)(`+${delta.toFixed(3)}`);
+
+    // Efficiency: how many tokens per unit of entropy reduction
+    const entropyReduction = Math.max(0, first.composite - last.composite);
+    const tokensPerReduction = entropyReduction > 0.01 && data.tokenCount > 0
+      ? Math.round(data.tokenCount / (entropyReduction * 100))
+      : null;
+
+    lines.push(`├─ Grade: ${gradeLabel}   Signal: ${signalLabel}   Mean: ${meanComposite.toFixed(3)}   Delta: ${deltaStr}`);
+
+    // Actionable summary line
+    const summaryParts: string[] = [];
+    if (converged) {
+      if (meanComposite < 0.35) summaryParts.push("Model solved this efficiently");
+      else summaryParts.push("Model converged but with moderate uncertainty");
+    } else if (flat) {
+      summaryParts.push("Model stalled — entropy didn't decrease across iterations");
+    } else if (diverging) {
+      summaryParts.push("Model became more confused over time");
+    } else if (oscillating) {
+      summaryParts.push("Model alternated between progress and confusion");
+    }
+
+    if (tokensPerReduction !== null) {
+      summaryParts.push(`${tokensPerReduction} tok/% entropy reduced`);
+    }
+
+    if (summaryParts.length > 0) {
+      lines.push(`├─ ${chalk.hex(C_DIM)(summaryParts.join(" · "))}`);
+    }
+
+    // Source breakdown — show which entropy sources dominated
+    const avgSources = {
+      structural: trace.reduce((s, p) => s + p.sources.structural, 0) / trace.length,
+      behavioral: trace.reduce((s, p) => s + p.sources.behavioral, 0) / trace.length,
+      contextPressure: trace.reduce((s, p) => s + p.sources.contextPressure, 0) / trace.length,
+      token: trace.reduce((s, p) => s + (p.sources.token ?? 0), 0) / trace.length,
+      semantic: trace.reduce((s, p) => s + (p.sources.semantic ?? 0), 0) / trace.length,
+    };
+
+    // Find dominant source
+    const sourceEntries = [
+      { name: "structural", val: avgSources.structural, label: "response structure varies" },
+      { name: "behavioral", val: avgSources.behavioral, label: "repetitive tool patterns" },
+      { name: "context", val: avgSources.contextPressure, label: "context window pressure" },
+      { name: "token", val: avgSources.token, label: "token-level uncertainty" },
+      { name: "semantic", val: avgSources.semantic, label: "semantic drift" },
+    ].filter(s => s.val > 0.1).sort((a, b) => b.val - a.val);
+
+    if (sourceEntries.length > 0) {
+      const topSources = sourceEntries.slice(0, 3).map(s => {
+        const color = s.val > 0.6 ? C_RED : s.val > 0.35 ? C_YELLOW : C_GREEN;
+        return `${s.name} ${chalk.hex(color)(s.val.toFixed(2))}`;
+      });
+      lines.push(`├─ Sources: ${topSources.join(chalk.hex(C_DIM)(" · "))}`);
+    }
+
+    // Per-iteration sparkline
+    const maxBar = 20;
+    for (let i = 0; i < trace.length; i++) {
+      const pt = trace[i];
+      const isLast = i === trace.length - 1;
+      const prefix = isLast ? "└─" : "├─";
+      const barLen = Math.round(pt.composite * maxBar);
+      const barColor = pt.composite > 0.6 ? C_RED : pt.composite > 0.35 ? C_YELLOW : C_GREEN;
+      const bar = chalk.hex(barColor)("█".repeat(barLen)) + chalk.hex(C_DIM)("░".repeat(maxBar - barLen));
+      const shapeIcon = pt.trajectory.shape === "converging" ? "↘" : pt.trajectory.shape === "diverging" ? "↗" : pt.trajectory.shape === "oscillating" ? "~" : "→";
+      lines.push(`${prefix}  iter ${String(pt.iteration).padStart(2)} ${bar} ${pt.composite.toFixed(3)} ${chalk.hex(C_DIM)(shapeIcon)}`);
+    }
+
+    // Actionable recommendations based on signal
+    const recommendations: string[] = [];
+    if (diverging) {
+      recommendations.push("Try a simpler prompt or break the task into sub-tasks");
+      if (avgSources.behavioral > 0.5) recommendations.push("Reduce available tools to only what's needed");
+    }
+    if (flat && data.stepCount > 3) {
+      recommendations.push("Consider enabling strategy switching (.withReasoning({ enableStrategySwitching: true }))");
+      if (avgSources.structural > 0.6) recommendations.push("Add more structure to the prompt (examples, step-by-step format)");
+    }
+    if (oscillating) {
+      recommendations.push("Model is uncertain — try a higher-capability model or more specific instructions");
+    }
+    if (meanComposite > 0.6 && converged) {
+      recommendations.push("Converged but with high entropy — the answer may lack confidence");
+    }
+    if (avgSources.contextPressure > 0.5) {
+      recommendations.push("Context window under pressure — enable compression or reduce tool result size");
+    }
+    if (grade === "A" && data.stepCount > 5) {
+      recommendations.push("Strong signal — could complete faster with early-stop (.withReactiveIntelligence({ controller: { earlyStop: true } }))");
+    }
+
+    if (recommendations.length > 0) {
+      lines.push(`${chalk.hex(C_DIM)("   ┈┈┈")}`);
+      for (let i = 0; i < recommendations.length; i++) {
+        const isLast = i === recommendations.length - 1;
+        const prefix = isLast ? "└─" : "├─";
+        lines.push(`${prefix} ${chalk.hex(C_DIM)("💡")} ${chalk.hex(C_DIM)(recommendations[i])}`);
+      }
     }
   }
 

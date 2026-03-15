@@ -153,6 +153,10 @@ export type ReactiveIntelligenceConfig = {
     readonly skillSynthesis?: boolean;
     readonly skillDir?: string;
   };
+  readonly telemetry?: boolean | {
+    readonly enabled: boolean;
+    readonly endpoint?: string;
+  };
   readonly models?: Record<string, ModelRegistryEntry>;
 };
 
@@ -209,4 +213,5 @@ export const defaultReactiveIntelligenceConfig: ReactiveIntelligenceConfig = {
     banditSelection: false,
     skillSynthesis: false,
   },
+  telemetry: true,
 };

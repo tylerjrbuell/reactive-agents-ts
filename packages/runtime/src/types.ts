@@ -367,6 +367,10 @@ export const ReactiveAgentsConfigSchema = Schema.Struct({
       fallbackStrategy: Schema.optional(Schema.String),
     })
   ),
+  /** Enable the Reactive Intelligence layer (entropy sensing + telemetry). */
+  enableReactiveIntelligence: Schema.optional(Schema.Boolean),
+  /** Reactive Intelligence configuration (telemetry, controller, learning). */
+  reactiveIntelligenceOptions: Schema.optional(Schema.Unknown),
 });
 export type ReactiveAgentsConfig = typeof ReactiveAgentsConfigSchema.Type;
 
