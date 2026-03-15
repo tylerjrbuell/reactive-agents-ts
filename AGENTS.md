@@ -100,14 +100,25 @@ Foundation (no reactive-agents deps)
 
 ---
 
+## Coding Standards
+
+**Read `CODING_STANDARDS.md` before writing any code.** It covers Effect-TS patterns, type safety, service definitions, error handling, naming, testing, file structure, and anti-patterns. All agents and contributors must conform.
+
+Key references:
+- `FRAMEWORK_INDEX.md` — comprehensive system map with file-level navigation, data flows, and architecture diagrams
+- `CODING_STANDARDS.md` — authoritative coding standards (types, services, errors, testing, naming, performance)
+- `.claude/skills/effect-ts-patterns/SKILL.md` — Effect-TS pattern reference (Schema.Struct, Context.Tag, Layer, Ref)
+- `.claude/skills/review-patterns/SKILL.md` — 8-category compliance checklist for code review
+
 ## Golden Rules
 
 1. **Read before writing.** Always read existing files before editing. Understand patterns before introducing new code.
 2. **Follow Effect-TS patterns.** Load the `effect-ts-patterns` skill. No `throw`, no raw `await`, no plain interfaces.
 3. **Type safety first (no `any`).** Treat TypeScript types as part of the public API. Do not use `any` (including `as any` casts) or leave arguments/returns untyped—prefer precise types, generics, and tagged unions so IDE IntelliSense stays rich, accurate, and powered by the latest TypeScript features.
 4. **Control and observability over magic.** No black-box helpers or hidden globals. New code must expose explicit configuration, emit structured events/traces, and integrate with existing observability (EventBus, ThoughtTracer, tracing) so every decision is explainable and replayable.
-5. **Keep docs truthful.** Every code change that affects public API, test counts, or capabilities must update documentation (see Documentation Workflow below).
-6. **Test everything.** New services need tests. New features need integration tests. Run `bun test` before declaring work complete.
+5. **Deterministic over LLM-driven.** If a field can be computed from available data (tool stats from EventBus, outcome from terminatedBy, metrics from usage), compute it. Don't ask the LLM.
+6. **Keep docs truthful.** Every code change that affects public API, test counts, or capabilities must update documentation (see Documentation Workflow below).
+7. **Test everything.** New services need tests. New features need integration tests. Run `bun test` before declaring work complete.
 7. **One concern per commit.** Don't mix unrelated changes.
 8. **Write JSDoc comments.** Every public API needs a JSDoc comment.
 
