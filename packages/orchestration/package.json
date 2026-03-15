@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/orchestration",
-  "version": "0.7.8",
+  "version": "1.0.0",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -12,11 +12,11 @@
   },
   "dependencies": {
     "effect": "^3.10.0",
-    "@reactive-agents/core": "0.7.8",
-    "@reactive-agents/llm-provider": "0.7.8",
-    "@reactive-agents/identity": "0.7.8",
-    "@reactive-agents/reasoning": "0.7.8",
-    "@reactive-agents/cost": "0.7.8"
+    "@reactive-agents/core": "1.0.0",
+    "@reactive-agents/llm-provider": "1.0.0",
+    "@reactive-agents/identity": "1.0.0",
+    "@reactive-agents/reasoning": "1.0.0",
+    "@reactive-agents/cost": "1.0.0"
   },
   "devDependencies": {
     "typescript": "^5.7.0",
