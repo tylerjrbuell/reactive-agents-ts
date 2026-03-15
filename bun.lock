@@ -341,6 +341,19 @@
         "typescript": "^5.7.0",
       },
     },
+    "packages/reactive-intelligence": {
+      "name": "@reactive-agents/reactive-intelligence",
+      "version": "0.7.8",
+      "dependencies": {
+        "@reactive-agents/core": "0.7.8",
+        "@reactive-agents/llm-provider": "0.7.8",
+        "effect": "^3.10.0",
+      },
+      "devDependencies": {
+        "bun-types": "latest",
+        "typescript": "^5.7.0",
+      },
+    },
     "packages/reasoning": {
       "name": "@reactive-agents/reasoning",
       "version": "0.7.8",
@@ -375,6 +388,7 @@
         "@reactive-agents/observability": "0.7.8",
         "@reactive-agents/orchestration": "0.7.8",
         "@reactive-agents/prompts": "0.7.8",
+        "@reactive-agents/reactive-intelligence": "0.7.8",
         "@reactive-agents/reasoning": "0.7.8",
         "@reactive-agents/tools": "0.7.8",
         "@reactive-agents/verification": "0.7.8",
@@ -735,6 +749,8 @@
     "@reactive-agents/orchestration": ["@reactive-agents/orchestration@workspace:packages/orchestration"],
 
     "@reactive-agents/prompts": ["@reactive-agents/prompts@workspace:packages/prompts"],
+
+    "@reactive-agents/reactive-intelligence": ["@reactive-agents/reactive-intelligence@workspace:packages/reactive-intelligence"],
 
     "@reactive-agents/reasoning": ["@reactive-agents/reasoning@workspace:packages/reasoning"],
 
