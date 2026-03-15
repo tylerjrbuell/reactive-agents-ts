@@ -60,6 +60,8 @@ export { ReactiveControllerService, ReactiveControllerServiceLive } from "./cont
 // ── Telemetry ──
 export { getOrCreateInstallId } from "./telemetry/install-id.js";
 export { signPayload } from "./telemetry/signing.js";
+export type { RunReport, SkillFragment } from "./telemetry/types.js";
+export { TelemetryClient } from "./telemetry/telemetry-client.js";
 
 // ── Runtime ──
 export { createReactiveIntelligenceLayer } from "./runtime.js";
