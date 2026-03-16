@@ -122,6 +122,10 @@ export { ToolBuilder } from "./tool-builder.js";
 export { defineTool } from "./define-tool.js";
 export type { DefineToolOptions, DefinedTool } from "./define-tool.js";
 
+// ─── Simple Tool Wrapper ───
+export { tool } from "./define-tool-simple.js";
+export type { SimpleTool } from "./define-tool-simple.js";
+
 // ─── RAG Pipeline ───
 export type { DocumentChunk, ChunkConfig } from "./rag/types.js";
 export {
