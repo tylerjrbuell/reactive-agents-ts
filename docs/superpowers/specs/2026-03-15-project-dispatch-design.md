@@ -74,13 +74,32 @@ North star: evolve toward Approach C (microkernel — agents all the way down) o
   |-- MCP Server Registry (available tool providers)
 ```
 
+### Supervisor and Gateway Relationship
+
+The Agent Supervisor is an **app-level orchestration layer** that uses `@reactive-agents/gateway` internally. Each runner subprocess runs its own `GatewayService` instance (heartbeats, crons, webhooks). The Supervisor is the parent-process manager that:
+
+- Spawns runner child processes, each with their own Gateway config
+- Monitors IPC heartbeats from child processes (distinct from Gateway's internal heartbeats which operate within the runner process)
+- Handles process-level lifecycle (spawn, kill, restart) — Gateway handles agent-level lifecycle (pause, resume, cron triggers)
+- Escalates to the DispatchAgent when a runner repeatedly fails beyond the Gateway's own retry/policy capabilities
+
+In short: Gateway manages an agent's internal lifecycle. Supervisor manages the process that hosts the agent.
+
 ### Why This Architecture
 
 - **One process, one language, one runtime**: Bun runs everything. No Redis, no PocketBase, no Python bridge.
 - **Agent isolation**: Each runner executes in a child process. Crashes don't take down the server. Supervisor restarts failed runners.
 - **Self-healing**: The Supervisor monitors heartbeats, restarts unresponsive runners, and can escalate to the DispatchAgent for reconfiguration.
 - **Cloud-ready**: The same Bun server deploys to a VPS/container. Child processes become containers. SQLite swaps to Turso for edge distribution.
-- **SaaS-ready from day one**: Multi-tenant data model (`tenant_id` on all tables). Single-user local mode is `tenant_id = "local"`.
+- **SaaS-ready data model**: Multi-tenant schema (`tenant_id` on all tables) from day one. Single-user local mode uses `tenant_id = "local"`. Note: MVP has no authentication or authorization enforcement — the schema supports multi-tenancy but the security layer ships in v2. API endpoints, WebSocket connections, and query scoping will all need auth wiring when tenant isolation is enforced.
+
+### Resource Limits
+
+Each runner process operates under configurable constraints:
+- **Max concurrent runners**: Configurable per-instance (default: 10 for local, higher for cloud)
+- **Per-runner token budget**: Daily token limit enforced via `@reactive-agents/cost` budget tracking
+- **Memory limit**: Process-level memory cap via Bun subprocess options
+- **Max restart attempts**: Supervisor stops restarting after N consecutive failures (default: 3) and transitions runner to `error` state
 
 ### Data Flow: Creating a Runner
 
@@ -158,6 +177,27 @@ The DispatchAgent can write new tools at runtime:
 - Assigns it to the runner being built
 - All without the user touching code
 
+#### Security Constraints
+
+Custom tool creation is the highest-risk feature and requires multiple safety layers:
+
+1. **Sandbox execution**: All generated tools execute inside the framework's subprocess sandbox (`@reactive-agents/tools`). No direct filesystem access, no network access beyond explicitly whitelisted domains, no access to other runners' data.
+2. **Validation gate**: Before registration, generated tool code is validated:
+   - TypeScript type-check against the tool interface schema
+   - Static analysis for dangerous patterns (eval, process.exit, fs.rm, network calls outside schema)
+   - Schema validation — input/output types must conform to the tool interface contract
+3. **Review gate**: The DispatchAgent presents the generated tool to the user with a plain-English summary of what it does before activating it. Users can inspect the source. This is NOT optional — no custom tool runs without user acknowledgment.
+4. **Tenant isolation**: In multi-tenant mode, custom tools are scoped to the tenant that created them. A tenant's tools cannot reference or affect other tenants' data or runners.
+5. **Crash containment**: If a custom tool crashes a runner repeatedly (detected by Supervisor via consecutive failure count), the tool is disabled and the runner transitions to `error` state. The DispatchAgent is notified and can suggest a fix or replacement.
+
+### DispatchAgent Model & Provider
+
+The DispatchAgent is a reactive agent and requires an LLM provider. Configuration:
+- **Default**: Uses the user's configured default provider/model
+- **Recommendation**: A capable model (Claude Sonnet 4.6+, GPT-4o+) is strongly recommended since the DispatchAgent writes code (tool definitions) and makes architectural decisions (single agent vs. team composition)
+- **Token tracking**: DispatchAgent token usage is tracked separately from runner token usage. The DispatchAgent's cost appears as "system overhead" in the dashboard, distinct from per-runner costs.
+- **User-configurable**: Users can override the DispatchAgent's model in settings (e.g., use a stronger model for scaffolding, cheaper model for runners)
+
 ---
 
 ## The Runner Model
@@ -200,15 +240,26 @@ The DispatchAgent can write new tools at runtime:
 
 ```
 drafting -> ready -> active -> paused -> stopped
-    ^                                      |
-    +---------- (edit/reconfigure) --------+
+    ^          ^        |                   |
+    |          |        +---> error ---------+
+    |          |                |
+    |          +--- (auto-fix) -+
+    +---------- (edit/reconfigure) ---------+
 ```
 
 - **Drafting**: DispatchAgent is building the config. UI shows live preview. User can intervene, ask questions, tweak. Co-editing experience.
 - **Ready**: Config complete, user has reviewed. Not yet running. The "publish" gate.
 - **Active**: Supervisor has spawned the process. Runner is executing or scheduled.
 - **Paused**: User paused the runner. Can be resumed.
+- **Error**: Runner has failed beyond automatic recovery (e.g., consecutive crash limit exceeded, custom tool disabled, missing required tool/resource). UI shows the error reason. The DispatchAgent can attempt auto-fix (reconfigure and move back to ready), or the user can manually edit (back to drafting).
 - **Stopped**: Runner is not executing. Editing puts it back to drafting.
+
+The `runners` table tracks error context:
+
+| Column | Type | Description |
+|--------|------|-------------|
+| last_error | TEXT | Most recent error message/reason |
+| consecutive_failures | INTEGER | Reset to 0 on successful run |
 
 ### Editing Modes
 
@@ -218,6 +269,87 @@ drafting -> ready -> active -> paused -> stopped
 ### Runner Composition
 
 A single runner may use sub-agents internally (e.g., one fetches data, another summarizes, another sends notifications). The user sees one runner with task progress. The DispatchAgent decides when to compose vs. use a single agent.
+
+---
+
+## IPC Protocol (Supervisor <-> Runner Process)
+
+Typed messages over Bun's built-in subprocess IPC (`Bun.spawn` with `ipc` handler). All messages are JSON with a `type` discriminator.
+
+### Supervisor -> Runner Messages
+
+| Type | Payload | Purpose |
+|------|---------|---------|
+| `spawn-config` | `{ runnerId, config, tools, schedule }` | Initial configuration on process start |
+| `pause` | `{}` | Pause execution (delegates to KillSwitch) |
+| `resume` | `{}` | Resume execution |
+| `stop` | `{}` | Graceful shutdown |
+| `ping` | `{ ts }` | Heartbeat probe |
+| `update-config` | `{ config }` | Hot-reload runner config without restart |
+
+### Runner -> Supervisor Messages
+
+| Type | Payload | Purpose |
+|------|---------|---------|
+| `ready` | `{ runnerId }` | Process initialized, agent built, ready to execute |
+| `pong` | `{ ts, uptimeMs }` | Heartbeat response |
+| `event` | `{ runnerId, event: AgentEvent }` | Any EventBus event (forwarded to WebSocket) |
+| `run-started` | `{ runnerId, runId }` | Execution began |
+| `run-completed` | `{ runnerId, runId, result, debrief, metrics }` | Execution finished |
+| `run-failed` | `{ runnerId, runId, error }` | Execution failed |
+| `fatal` | `{ runnerId, error }` | Unrecoverable process error (before crash) |
+
+### Heartbeat Protocol
+
+- Supervisor sends `ping` every 30s (configurable)
+- Runner must respond with `pong` within 5s
+- 3 missed pongs = process considered dead, Supervisor restarts
+- After `max_restart_attempts` consecutive failures, runner transitions to `error` state
+
+---
+
+## WebSocket Protocol (Server <-> Browser)
+
+### Connection
+
+Client connects to `ws://<host>/ws` with an optional `runner_id` query param to subscribe to a specific runner. Without it, receives events for all runners (dashboard mode).
+
+### Message Envelope
+
+All messages use this envelope:
+
+```json
+{
+  "type": "runner-event | dispatch-event | system-event",
+  "runnerId": "uuid | null",
+  "timestamp": "ISO-8601",
+  "payload": { ... }
+}
+```
+
+### Server -> Client Message Types
+
+| Type | Payload | When |
+|------|---------|------|
+| `runner-event` | `{ event: AgentEvent }` | Any runner EventBus event (TextDelta, IterationProgress, ToolCallCompleted, etc.) |
+| `runner-state-changed` | `{ state, previousState }` | Runner lifecycle transition |
+| `run-completed` | `{ runId, result, debrief, metrics }` | A run finished |
+| `dispatch-delta` | `{ text }` | DispatchAgent streaming response during chat |
+| `dispatch-config-update` | `{ runnerId, config }` | DispatchAgent updated a draft runner config |
+| `system-error` | `{ error, runnerId? }` | Error notification |
+
+### Client -> Server Message Types
+
+| Type | Payload | When |
+|------|---------|------|
+| `chat` | `{ message, sessionId? }` | User message to DispatchAgent |
+| `subscribe` | `{ runnerId }` | Subscribe to a specific runner's events |
+| `unsubscribe` | `{ runnerId }` | Unsubscribe from a runner |
+
+### Authentication (v2)
+
+MVP: No auth on WebSocket. Single-user local mode.
+v2: Token-based auth on connection. Messages scoped to `tenant_id`. Unauthorized connections rejected.
 
 ---
 
@@ -301,11 +433,13 @@ All tables include `tenant_id`. Local single-user mode uses `tenant_id = "local"
 | tenant_id | TEXT | Tenant identifier |
 | name | TEXT | Runner display name |
 | instructions | TEXT | Natural language description of what this runner does |
-| config | JSON | Full ReactiveAgentBuilder serialized config |
+| config | JSON | Serialized agent config (format defined by framework enhancement #1; interim: structured JSON with high-level fields) |
 | tools | JSON | Array of tool names/IDs assigned to this runner |
 | schedule | JSON | Cron expression, trigger config, or null for manual |
 | strategy | TEXT | Reasoning strategy (react, plan-execute, etc.) |
-| state | TEXT | drafting, ready, active, paused, stopped |
+| state | TEXT | drafting, ready, active, paused, stopped, error |
+| last_error | TEXT | Most recent error message/reason (null when healthy) |
+| consecutive_failures | INTEGER | Reset to 0 on successful run |
 | created_at | DATETIME | |
 | updated_at | DATETIME | |
 
@@ -349,43 +483,46 @@ All tables include `tenant_id`. Local single-user mode uses `tenant_id = "local"
 
 ## Reactive Agents Framework Enhancements
 
-Six enhancements needed in the framework that benefit it independently of this product:
+Six enhancements needed in the framework that benefit it independently of this product. Listed in priority order — enhancements 1, 2, and 5 are MVP blockers.
 
-### 1. Serializable AgentConfig (JSON <-> Builder Roundtrip)
+### 1. Serializable AgentConfig (JSON <-> Builder Roundtrip) — MVP BLOCKER
 
 **Current state**: Builder is fluent-only, no serialization.
-**Need**: Any tool that generates, stores, or shares agent configs needs a JSON-serializable format. This includes CLI scaffolding, the DispatchAgent, A2A agent cards, and runner persistence.
-**Deliverable**: `AgentConfig` schema that can be serialized to JSON and deserialized back into a configured builder.
+**Need**: Any tool that generates, stores, or shares agent configs needs a JSON-serializable format. This includes CLI scaffolding, the DispatchAgent, A2A agent cards, and runner persistence. Without this, the `config` column in the runners table has no defined format.
+**Deliverable**: `AgentConfig` schema that can be serialized to JSON and deserialized back into a configured builder. The schema should be human-readable (not a serialized AST) so it can be displayed and edited in the UI.
+**Interim approach**: If full roundtrip is complex, MVP can use a structured JSON format for the high-level fields (instructions, tools, schedule, strategy, guardrails) with builder reconstruction at load time. Full roundtrip follows.
 
-### 2. Dynamic Tool Registration
+### 2. Dynamic Tool Registration — MVP BLOCKER
 
 **Current state**: Tools must be defined at build time via `.withTools()`.
 **Need**: Agents that create tools for other agents at runtime. The DispatchAgent writes custom tools and assigns them to runners without rebuilding.
-**Deliverable**: `ToolService.registerTool()` method that accepts a tool definition post-build.
+**Deliverable**: `ToolService.registerTool()` method that accepts a tool definition post-build. Corresponding `ToolService.unregisterTool()` for cleanup.
 
-### 3. Task-Level Progress Events
+### 3. Task-Level Progress Events — POST-MVP
 
 **Current state**: `IterationProgress` is per-iteration (step N of M).
 **Need**: Multi-step task visibility: "step 1 of 4: fetching issues" -> "step 2 of 4: categorizing". Useful for any EventBus consumer, not just this app.
 **Deliverable**: `TaskProgress` event type with step label, step index, total steps, and optional metadata.
+**MVP workaround**: The app can derive task-level progress from `ToolCallCompleted` and `IterationProgress` events with client-side aggregation.
 
-### 4. Dry Run / Validation Mode
+### 4. Dry Run / Validation Mode — POST-MVP
 
 **Current state**: No equivalent.
 **Need**: "Plan but don't execute" mode for testing, CI, evaluation, and the DispatchAgent's pre-publish validation step.
 **Deliverable**: Builder option `.withDryRun()` or execution option `{ dryRun: true }` that runs reasoning but skips tool execution.
+**MVP workaround**: DispatchAgent validates configs structurally (schema check, tool availability check) without a full dry run.
 
-### 5. Subprocess Agent IPC
+### 5. Subprocess Agent IPC — MVP BLOCKER
 
 **Current state**: Subprocess sandbox exists in identity package. No structured IPC protocol.
-**Need**: Production-grade protocol for Supervisor <-> Agent process communication. Spawn, configure, monitor, stop, restart agents as child processes with typed message passing.
-**Deliverable**: `AgentProcess` abstraction with `spawn()`, `send()`, `on()`, `kill()` + typed IPC message protocol. Heartbeat monitoring built in.
+**Need**: Production-grade protocol for Supervisor <-> Agent process communication. Spawn, configure, monitor, stop, restart agents as child processes with typed message passing. See the IPC Protocol section above for the full message type specification.
+**Deliverable**: `AgentProcess` abstraction with `spawn()`, `send()`, `on()`, `kill()` + typed IPC message protocol matching the spec. Heartbeat monitoring built in. Uses Bun's native subprocess IPC.
 
-### 6. Cross-Runner Learning API
+### 6. Cross-Runner Learning API — V2/V3
 
-**Current state**: Learning Engine operates per-agent instance.
-**Need**: Share calibration data and skill patterns across agent instances. When one runner learns "Plan-Execute works best for GitHub monitoring tasks," all similar runners benefit.
-**Deliverable**: `LearningEngine.shareCalibration()` and `LearningEngine.loadCalibration()` methods. Skill synthesis output format that can be stored and loaded.
+**Current state**: Learning Engine operates per-agent instance. `ExperienceStore` in `@reactive-agents/memory` already supports cross-agent learning patterns (experience sharing, episodic memory). The Telemetry Client sends run reports to api.reactiveagents.dev.
+**Need**: Higher-level API to share calibration data and synthesized skill patterns across agent instances. Builds on ExperienceStore's existing cross-agent capabilities.
+**Deliverable**: `LearningEngine.shareCalibration()` and `LearningEngine.loadCalibration()` methods that read/write to ExperienceStore. Skill synthesis output format that can be stored, loaded, and promoted to runner templates.
 
 ---
 
