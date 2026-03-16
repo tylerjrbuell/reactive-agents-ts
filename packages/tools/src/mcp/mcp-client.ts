@@ -175,9 +175,11 @@ const startStdioReader = (
               const callback = notificationCallbacks.get(sName);
               if (callback) {
                 try {
+                  // MCP notifications have method/params fields not present in MCPResponse
+                  const notification = parsed as unknown as Record<string, unknown>;
                   callback(
-                    (parsed as any).method ?? "unknown",
-                    (parsed as any).params ?? {},
+                    (notification.method as string) ?? "unknown",
+                    (notification.params as Record<string, unknown>) ?? {},
                   );
                 } catch { /* don't let callback errors kill the reader */ }
               }

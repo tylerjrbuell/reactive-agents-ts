@@ -24,7 +24,9 @@
       "@reactive-agents/reactive-intelligence",
       "@reactive-agents/runtime",
       "reactive-agents",
-      "@reactive-agents/cli"
+      "@reactive-agents/cli",
+      "@reactive-agents/health",
+      "@reactive-agents/benchmarks"
     ]
   ],
   "linked": [],

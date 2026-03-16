@@ -38,7 +38,7 @@
     "boxen": "^8.0.1"
   },
   "devDependencies": {
-    "@reactive-agents/benchmarks": "0.7.9",
+    "@reactive-agents/benchmarks": "0.8.0",
     "typescript": "^5.7.0",
     "bun-types": "latest"
   },

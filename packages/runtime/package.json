@@ -27,7 +27,7 @@
     "@reactive-agents/orchestration": "0.8.0",
     "@reactive-agents/gateway": "0.8.0",
     "@reactive-agents/a2a": "0.8.0",
-    "@reactive-agents/health": "0.7.6",
+    "@reactive-agents/health": "0.8.0",
     "@reactive-agents/reactive-intelligence": "0.8.0"
   },
   "devDependencies": {

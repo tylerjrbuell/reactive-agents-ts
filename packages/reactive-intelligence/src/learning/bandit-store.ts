@@ -38,7 +38,7 @@ export class BanditStore {
   load(contextBucket: string, armId: string): ArmStats | null {
     const row = this.db.query(
       "SELECT context_bucket, arm_id, alpha, beta, pulls FROM bandit_arms WHERE context_bucket = ? AND arm_id = ?",
-    ).get(contextBucket, armId) as any;
+    ).get(contextBucket, armId) as { context_bucket: string; arm_id: string; alpha: number; beta: number; pulls: number } | null;
     if (!row) return null;
     return {
       contextBucket: row.context_bucket,
@@ -52,7 +52,7 @@ export class BanditStore {
   listArms(contextBucket: string): readonly ArmStats[] {
     return (this.db.query(
       "SELECT context_bucket, arm_id, alpha, beta, pulls FROM bandit_arms WHERE context_bucket = ?",
-    ).all(contextBucket) as any[]).map((r) => ({
+    ).all(contextBucket) as Array<{ context_bucket: string; arm_id: string; alpha: number; beta: number; pulls: number }>).map((r) => ({
       contextBucket: r.context_bucket,
       armId: r.arm_id,
       alpha: r.alpha,

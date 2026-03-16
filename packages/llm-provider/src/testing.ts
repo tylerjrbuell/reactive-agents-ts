@@ -43,8 +43,8 @@ function extractSearchText(
       ? lastMessage.content
       : "";
   const systemPrompt =
-    typeof (request as any).systemPrompt === "string"
-      ? (request as any).systemPrompt
+    typeof request.systemPrompt === "string"
+      ? request.systemPrompt
       : "";
   return `${content} ${systemPrompt}`.trim();
 }
@@ -104,7 +104,7 @@ export const TestLLMService = (
   return {
     complete: (request) =>
       Effect.gen(function* () {
-        const searchText = extractSearchText(request.messages, request as any);
+        const searchText = extractSearchText(request.messages, request);
         const { turn, matchedIndex } = resolveTurn(scenario, callIndex, searchText);
 
         if ("error" in turn) {
@@ -141,7 +141,7 @@ export const TestLLMService = (
       }),
 
     stream: (request) => {
-      const searchText = extractSearchText(request.messages, request as any);
+      const searchText = extractSearchText(request.messages, request);
       const { turn, matchedIndex } = resolveTurn(scenario, callIndex, searchText);
 
       if ("error" in turn) {
@@ -203,7 +203,7 @@ export const TestLLMService = (
 
     completeStructured: (request) =>
       Effect.gen(function* () {
-        const searchText = extractSearchText(request.messages, request as any);
+        const searchText = extractSearchText(request.messages, request);
         const { turn } = resolveTurn(scenario, callIndex, searchText);
 
         if ("error" in turn) {
@@ -211,7 +211,7 @@ export const TestLLMService = (
         }
 
         if ("json" in turn) {
-          // Return json value directly — bypass schema decoding for test control
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test provider bypasses schema; json is unknown, return type is generic A
           return turn.json as any;
         }
 

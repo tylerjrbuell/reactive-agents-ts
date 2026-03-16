@@ -250,12 +250,12 @@ describe("ToolService", () => {
       );
 
       const all = yield* tools.listTools();
-      // 7 built-in (5 original + scratchpad-write + scratchpad-read) + 2 registered = 9
-      expect(all).toHaveLength(9);
+      // 9 built-in (5 original + scratchpad-write + scratchpad-read + rag-ingest + rag-search) + 2 registered = 11
+      expect(all).toHaveLength(11);
 
       const searchOnly = yield* tools.listTools({ category: "search" });
-      // built-in web-search + tool-a
-      expect(searchOnly).toHaveLength(2);
+      // built-in web-search + rag-search + tool-a
+      expect(searchOnly).toHaveLength(3);
       expect(searchOnly.map((t) => t.name)).toContain("tool-a");
 
       const highRisk = yield* tools.listTools({ riskLevel: "high" });

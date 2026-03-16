@@ -131,8 +131,8 @@ export const checkFactDecompositionLLM = (
             item !== null &&
             "claim" in item &&
             "status" in item &&
-            typeof (item as any).claim === "string" &&
-            ["supported", "unsupported", "uncertain"].includes((item as any).status),
+            typeof (item as Record<string, unknown>).claim === "string" &&
+            ["supported", "unsupported", "uncertain"].includes((item as Record<string, unknown>).status as string),
         )
         .slice(0, 50); // guard against pathological responses
     } catch {

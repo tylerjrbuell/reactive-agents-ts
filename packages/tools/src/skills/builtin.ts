@@ -17,6 +17,17 @@ import {
 import { contextStatusTool, makeContextStatusHandler } from "./context-status.js";
 import { taskCompleteTool, makeTaskCompleteHandler } from "./task-complete.js";
 import { finalAnswerTool } from "./final-answer.js";
+import {
+  ragIngestTool,
+  makeRagIngestHandler,
+  makeInMemoryStoreCallback,
+} from "./rag-ingest.js";
+import type { RagMemoryStore } from "./rag-ingest.js";
+import {
+  ragSearchTool,
+  makeRagSearchHandler,
+  makeInMemorySearchCallback,
+} from "./rag-search.js";
 
 // Re-export meta-tool factories and types so callers can wire up dynamic state
 export {
@@ -39,9 +50,26 @@ export {
   type FinalAnswerVisibility,
   type FinalAnswerCapture,
 } from "./final-answer.js";
+export {
+  ragIngestTool,
+  makeRagIngestHandler,
+  makeInMemoryStoreCallback,
+  type RagStoreCallback,
+  type RagMemoryStore,
+} from "./rag-ingest.js";
+export {
+  ragSearchTool,
+  makeRagSearchHandler,
+  makeInMemorySearchCallback,
+  type RagSearchCallback,
+  type RagSearchResult,
+} from "./rag-search.js";
 
 // Shared scratchpad store — one per tool service instance (reset per agent run)
 const scratchpadStoreRef = Ref.unsafeMake(new Map<string, string>());
+
+// Shared RAG in-memory store — one per tool service instance (reset per agent run)
+const ragMemoryStore: RagMemoryStore = new Map();
 
 /**
  * All built-in tools paired with their handlers.
@@ -64,6 +92,8 @@ export const builtinTools: ReadonlyArray<{
   { definition: codeExecuteTool, handler: codeExecuteHandler },
   { definition: scratchpadWriteTool, handler: makeScratchpadWriteHandler(scratchpadStoreRef) },
   { definition: scratchpadReadTool, handler: makeScratchpadReadHandler(scratchpadStoreRef) },
+  { definition: ragIngestTool, handler: makeRagIngestHandler(makeInMemoryStoreCallback(ragMemoryStore)) },
+  { definition: ragSearchTool, handler: makeRagSearchHandler(makeInMemorySearchCallback(ragMemoryStore)) },
 ];
 
 /**

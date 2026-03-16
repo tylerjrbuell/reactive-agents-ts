@@ -45,7 +45,7 @@ export const A2AServiceLive = Layer.effect(
               });
             return new A2AError({
               code: "TASK_CANCELED",
-              message: (e as any).reason ?? "canceled",
+              message: "reason" in e ? (e.reason as string) ?? "canceled" : "canceled",
             });
           }),
         ),

@@ -9,6 +9,7 @@ import {
   createLLMProviderLayer,
   getProviderDefaultModel,
   LLMService,
+  makeRateLimitedProvider,
 } from "@reactive-agents/llm-provider";
 import type { TestTurn } from "@reactive-agents/llm-provider";
 import { createMemoryLayer, ExperienceStoreLive, MemoryConsolidatorServiceLive, SessionStoreLive } from "@reactive-agents/memory";
@@ -673,6 +674,14 @@ export interface RuntimeOptions {
    * Default: undefined (no fallback, single provider)
    */
   fallbackConfig?: { providers?: string[]; models?: string[]; errorThreshold?: number };
+
+  /**
+   * Rate limiter configuration. When provided, wraps LLM complete/stream/completeStructured
+   * with a sliding-window rate limiter to prevent 429 errors before they occur.
+   *
+   * Default: undefined (no rate limiting)
+   */
+  rateLimiterConfig?: import("@reactive-agents/llm-provider").RateLimiterConfig;
 }
 
 /**
@@ -883,6 +892,17 @@ export const createRuntime = (options: RuntimeOptions) => {
         )
       : effectiveLlmLayer;
 
+  // Apply rate limiting: wrap LLM calls with a sliding-window rate limiter
+  // so requests are throttled BEFORE hitting the API (prevents 429 errors).
+  // Rate limiting is applied after retry policy so retried requests also
+  // respect the rate limit.
+  const rateLimitedLlmLayer: Layer.Layer<LLMService> =
+    options.rateLimiterConfig
+      ? makeRateLimitedProvider(options.rateLimiterConfig).pipe(
+          Layer.provide(finalLlmLayer as Layer.Layer<LLMService, never, never>),
+        ) as Layer.Layer<LLMService>
+      : finalLlmLayer;
+
   const memoryOverrides: Record<string, unknown> = { agentId: options.agentId };
   if (options.memoryOptions) {
     const mo = options.memoryOptions;
@@ -942,7 +962,7 @@ export const createRuntime = (options: RuntimeOptions) => {
         bridgedLLM,
       );
     }),
-  ).pipe(Layer.provide(finalLlmLayer));
+  ).pipe(Layer.provide(rateLimitedLlmLayer));
   const hookLayer = LifecycleHookRegistryLive;
   const engineLayer = ExecutionEngineLive(config).pipe(
     Layer.provide(hookLayer),
@@ -952,7 +972,7 @@ export const createRuntime = (options: RuntimeOptions) => {
   let runtime = Layer.mergeAll(
     coreLayer,
     eventBusLayer,
-    finalLlmLayer,
+    rateLimitedLlmLayer,
     memoryLayer,
     hookLayer,
     engineLayer,
@@ -1148,9 +1168,9 @@ export const createRuntime = (options: RuntimeOptions) => {
       : defaultReasoningConfig;
 
     // ReasoningService requires LLMService, optionally ToolService + PromptService
-    let reasoningDeps = finalLlmLayer;
+    let reasoningDeps = rateLimitedLlmLayer;
     if (toolsLayer) {
-      reasoningDeps = Layer.merge(finalLlmLayer, toolsLayer) as any;
+      reasoningDeps = Layer.merge(rateLimitedLlmLayer, toolsLayer) as any;
     }
     if (promptLayer) {
       reasoningDeps = Layer.merge(reasoningDeps, promptLayer) as any;

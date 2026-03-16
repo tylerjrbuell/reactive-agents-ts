@@ -742,6 +742,7 @@ export class ReactiveAgentBuilder {
   private _guardrailsOptions?: GuardrailsOptions;
   private _verificationOptions?: VerificationOptions;
   private _circuitBreakerConfig?: Partial<import("@reactive-agents/llm-provider").CircuitBreakerConfig>;
+  private _rateLimiterConfig?: import("@reactive-agents/llm-provider").RateLimiterConfig;
   private _fallbackConfig?: { providers?: string[]; models?: string[]; errorThreshold?: number };
   private _enableExperienceLearning: boolean = false;
   private _enableMemoryConsolidation: boolean = false;
@@ -1118,6 +1119,22 @@ export class ReactiveAgentBuilder {
    */
   withCircuitBreaker(config?: Partial<import("@reactive-agents/llm-provider").CircuitBreakerConfig>): this {
     this._circuitBreakerConfig = config ?? {};
+    return this;
+  }
+
+  /**
+   * Enable rate limiting for LLM requests. Throttles outbound API calls using
+   * a sliding window algorithm to prevent 429 errors before they occur.
+   *
+   * Configurable per-minute request limits, per-minute token limits (estimated),
+   * and maximum concurrent in-flight requests.
+   *
+   * @param config - Optional rate limiter thresholds (defaults: 60 RPM, 100k TPM, 10 concurrent)
+   * @returns `this` for chaining
+   * @example .withRateLimiting({ requestsPerMinute: 30, tokensPerMinute: 50_000 })
+   */
+  withRateLimiting(config?: import("@reactive-agents/llm-provider").RateLimiterConfig): this {
+    this._rateLimiterConfig = config ?? {};
     return this;
   }
 
@@ -1867,6 +1884,7 @@ export class ReactiveAgentBuilder {
       verificationOptions: this._verificationOptions,
       costTrackingOptions: this._costTrackingOptions,
       circuitBreakerConfig: this._circuitBreakerConfig,
+      rateLimiterConfig: this._rateLimiterConfig,
       requiredTools: this._requiredToolsConfig,
       allowedTools: this._toolsOptions?.allowedTools,
       adaptiveToolFiltering: this._toolsOptions?.adaptive,

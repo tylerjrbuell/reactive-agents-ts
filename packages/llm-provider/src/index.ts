@@ -109,6 +109,11 @@ export type { CircuitBreaker } from "./circuit-breaker.js";
 export { defaultCircuitBreakerConfig } from "./retry.js";
 export type { CircuitBreakerConfig } from "./retry.js";
 
+// ─── Rate Limiter ───
+export { makeRateLimiter } from "./rate-limiter.js";
+export type { RateLimiterConfig, RateLimiter } from "./rate-limiter.js";
+export { makeRateLimitedProvider } from "./rate-limited-provider.js";
+
 // ─── Fallback Chain ───
 export { FallbackChain } from "./fallback-chain.js";
 export type { FallbackConfig } from "./fallback-chain.js";

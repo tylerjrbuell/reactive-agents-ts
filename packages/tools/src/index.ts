@@ -118,6 +118,34 @@ export type { RemoteAgentClient, TaskResult, SubAgentConfig, SubAgentResult, Par
 // ─── Builder ───
 export { ToolBuilder } from "./tool-builder.js";
 
+// ─── RAG Pipeline ───
+export type { DocumentChunk, ChunkConfig } from "./rag/types.js";
+export {
+  chunkDocument,
+  chunkBySentences,
+  chunkByMarkdownSections,
+} from "./rag/chunker.js";
+export {
+  loadText,
+  loadMarkdown,
+  loadJSON,
+  loadCSV,
+  loadHTML,
+  detectAndLoad,
+} from "./rag/loaders.js";
+export {
+  ragIngestTool,
+  makeRagIngestHandler,
+  makeInMemoryStoreCallback,
+} from "./skills/rag-ingest.js";
+export type { RagStoreCallback, RagMemoryStore } from "./skills/rag-ingest.js";
+export {
+  ragSearchTool,
+  makeRagSearchHandler,
+  makeInMemorySearchCallback,
+} from "./skills/rag-search.js";
+export type { RagSearchCallback, RagSearchResult } from "./skills/rag-search.js";
+
 // ─── Meta-Tools ───
 export {
   contextStatusTool,

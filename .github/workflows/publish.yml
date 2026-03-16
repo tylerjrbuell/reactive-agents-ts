@@ -64,13 +64,13 @@ jobs:
 
             // Try exact version match: ## [0.8.0] or ## 0.8.0
             const escaped = version.replace(/\./g, '\\\\.');
-            const exact = log.match(new RegExp('## \\\\[?' + escaped + '\\\\]?[^\\n]*\\n([\\s\\S]*?)(?=\\n---\\n|\\n## \\\\[?\\d+\\\\.\\d+\\\\.\\d+|$)'));
+            const exact = log.match(new RegExp('## \\\\[?' + escaped + '\\\\]?[^\\n]*\\n([\\s\\S]*?)(?=\\n## \\\\[?\\d+\\\\.\\d+\\\\.\\d+|$)'));
 
             if (exact) {
               fs.writeFileSync('/tmp/release-notes.md', exact[0].trim());
             } else {
               // Fall back to first non-Unreleased version section
-              const first = log.match(/## \[?\d+\.\d+\.\d+\]?[^\n]*\n([\s\S]*?)(?=\n---\n|\n## \[?\d+\.\d+\.\d+|$)/);
+              const first = log.match(/## \[?\d+\.\d+\.\d+\]?[^\n]*\n([\s\S]*?)(?=\n## \[?\d+\.\d+\.\d+|$)/);
               fs.writeFileSync('/tmp/release-notes.md', first ? first[0].trim() : 'See CHANGELOG.md for details.');
             }
           "
