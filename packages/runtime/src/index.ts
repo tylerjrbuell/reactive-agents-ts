@@ -89,6 +89,10 @@ export {
   type ToolCallStat,
 } from "./debrief.js";
 
+// ─── Context Ingestion ───
+export { ingestDocuments } from "./context-ingestion.js";
+export type { DocumentSpec } from "./context-ingestion.js";
+
 // ─── Chat / Session ───
 export {
   AgentSession,

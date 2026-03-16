@@ -36,6 +36,7 @@ import {
   type SessionOptions,
 } from "./chat.js";
 import type { AgentDebrief } from "./debrief.js";
+import type { DocumentSpec } from "./context-ingestion.js";
 import { Health } from "@reactive-agents/health";
 import { makeHealthService } from "@reactive-agents/health";
 
@@ -753,6 +754,7 @@ export class ReactiveAgentBuilder {
   private _reactiveIntelligenceOptions?: Partial<import("@reactive-agents/reactive-intelligence").ReactiveIntelligenceConfig>;
   private _sessionPersist: boolean = false;
   private _sessionMaxAgeDays?: number;
+  private _documents: DocumentSpec[] = [];
 
   // ─── Identity ───
 
@@ -1197,6 +1199,33 @@ export class ReactiveAgentBuilder {
     if (options?.resultCompression) {
       this._resultCompression = options.resultCompression;
     }
+    return this;
+  }
+
+  /**
+   * Pre-load documents into the agent's RAG memory store at build time.
+   *
+   * Documents are chunked and indexed so the agent can retrieve them via the
+   * built-in `rag-search` tool during execution. Call multiple times to
+   * accumulate documents. Automatically enables tools if not already enabled.
+   *
+   * @param docs - Array of document specifications to ingest
+   * @returns `this` for chaining
+   *
+   * @example
+   * ```typescript
+   * const agent = await ReactiveAgents.create()
+   *   .withProvider("anthropic")
+   *   .withDocuments([
+   *     { content: "Paris is the capital of France.", source: "facts.txt" },
+   *     { content: "# API\n\n## Endpoints\n...", source: "api.md", format: "markdown" },
+   *   ])
+   *   .build();
+   * ```
+   */
+  withDocuments(docs: DocumentSpec[]): this {
+    this._documents = [...this._documents, ...docs];
+    this._enableTools = true; // rag-search needs tools enabled
     return this;
   }
 
@@ -1920,6 +1949,7 @@ export class ReactiveAgentBuilder {
     const enableHealthCheck = this._enableHealthCheck;
     const sessionPersist = this._sessionPersist;
     const sessionMaxAgeDays = this._sessionMaxAgeDays;
+    const documents = [...this._documents];
     const agentIdCapture = agentId;
 
     // Capture parent config for sub-agent inheritance — sub-agents get
@@ -2513,6 +2543,25 @@ export class ReactiveAgentBuilder {
         );
       }
 
+      // Resolve the shared RAG store for runtime ingestion support.
+      // The ragMemoryStore is a module-level Map shared with the rag-search handler.
+      // We eagerly resolve it when tools are enabled so agent.ingest() works at runtime.
+      let ragStore: import("@reactive-agents/tools").RagMemoryStore | undefined;
+      if (documents.length > 0 || toolsOptions || agentTools.length > 0 || allowDynamicSubAgents || mcpServers.length > 0) {
+        const { ragMemoryStore: sharedStore } = yield* Effect.promise(
+          () => import("@reactive-agents/tools"),
+        );
+        ragStore = sharedStore;
+
+        // Pre-populate RAG store with documents provided via .withDocuments()
+        if (documents.length > 0) {
+          const { ingestDocuments } = yield* Effect.promise(
+            () => import("./context-ingestion.js"),
+          );
+          yield* ingestDocuments(documents, sharedStore);
+        }
+      }
+
       // Wire health layer when enabled
       if (enableHealthCheck) {
         const healthServiceLayer = Layer.effect(
@@ -2554,6 +2603,7 @@ export class ReactiveAgentBuilder {
         errorHandler,
         sessionPersist,
         sessionMaxAgeDays,
+        ragStore,
       );
     }) as Effect.Effect<ReactiveAgent, Error>;
   }
@@ -2620,6 +2670,8 @@ export class ReactiveAgent {
     private readonly _sessionPersist: boolean = false,
     /** @internal Max age of sessions in days at build time. */
     private readonly _sessionMaxAgeDays?: number,
+    /** @internal Reference to the shared RAG memory store for runtime ingestion via ingest(). */
+    private readonly _ragStore?: import("@reactive-agents/tools").RagMemoryStore,
   ) {}
 
   /** @internal Last debrief from a completed run — used as context in chat() calls. */
@@ -2702,6 +2754,50 @@ export class ReactiveAgent {
           })),
         };
       }).pipe(Effect.catchAll(() => Effect.succeed({ status: "healthy" as const, checks: [] }))),
+    );
+  }
+
+  /**
+   * Ingest a document into the agent's RAG memory store at runtime.
+   *
+   * The document is chunked and indexed so the agent can retrieve it via the
+   * `rag-search` tool on subsequent `run()` calls. This is the runtime counterpart
+   * of the builder's `.withDocuments()` method.
+   *
+   * @param content - The full document content to ingest
+   * @param options - Source identifier, optional format, chunk strategy, and max chunk size
+   * @throws Error if tools are not enabled (no RAG store available)
+   *
+   * @example
+   * ```typescript
+   * await agent.ingest("The population of Tokyo is 14 million.", {
+   *   source: "city-facts.txt",
+   * });
+   * await agent.ingest("# API Reference\n\n## GET /users\n...", {
+   *   source: "api-docs.md",
+   *   format: "markdown",
+   *   chunkStrategy: "markdown-sections",
+   * });
+   * const result = await agent.run("What is the population of Tokyo?");
+   * ```
+   */
+  async ingest(
+    content: string,
+    options: {
+      source: string;
+      format?: string;
+      chunkStrategy?: string;
+      maxChunkSize?: number;
+    },
+  ): Promise<void> {
+    if (!this._ragStore) {
+      throw new Error(
+        "ingest() requires tools to be enabled. Call .withTools() or .withDocuments() on the builder.",
+      );
+    }
+    const { ingestDocuments } = await import("./context-ingestion.js");
+    await Effect.runPromise(
+      ingestDocuments([{ content, ...options }], this._ragStore),
     );
   }
 

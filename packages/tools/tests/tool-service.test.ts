@@ -250,8 +250,8 @@ describe("ToolService", () => {
       );
 
       const all = yield* tools.listTools();
-      // 9 built-in (5 original + scratchpad-write + scratchpad-read + rag-ingest + rag-search) + 2 registered = 11
-      expect(all).toHaveLength(11);
+      // 8 built-in (5 original + scratchpad-write + scratchpad-read + rag-search) + 2 registered = 10
+      expect(all).toHaveLength(10);
 
       const searchOnly = yield* tools.listTools({ category: "search" });
       // built-in web-search + rag-search + tool-a
