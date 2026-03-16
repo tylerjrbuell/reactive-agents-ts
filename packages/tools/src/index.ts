@@ -118,6 +118,10 @@ export type { RemoteAgentClient, TaskResult, SubAgentConfig, SubAgentResult, Par
 // ─── Builder ───
 export { ToolBuilder } from "./tool-builder.js";
 
+// ─── Schema-Inferred Tool Factory ───
+export { defineTool } from "./define-tool.js";
+export type { DefineToolOptions, DefinedTool } from "./define-tool.js";
+
 // ─── RAG Pipeline ───
 export type { DocumentChunk, ChunkConfig } from "./rag/types.js";
 export {
