@@ -3333,6 +3333,33 @@ export class ReactiveAgent {
   }
 
   /**
+   * Subscribe to agent events with a plain callback (no Effect required).
+   *
+   * A convenience wrapper over `.subscribe()` that accepts a plain function instead of
+   * an Effect handler. Returns an unsubscribe function synchronously (after initial setup).
+   *
+   * @param tag - Event type to listen for (e.g., "TextDelta", "ToolCallCompleted")
+   * @param callback - Plain callback function receiving the typed event
+   * @returns Promise resolving to an unsubscribe function
+   *
+   * @example
+   * ```typescript
+   * const unsub = await agent.on("TextDelta", (event) => {
+   *   process.stdout.write(event.text);
+   * });
+   *
+   * await agent.run("Hello");
+   * unsub();
+   * ```
+   */
+  async on<T extends AgentEvent["_tag"]>(
+    tag: T,
+    callback: (event: Extract<AgentEvent, { _tag: T }>) => void,
+  ): Promise<() => void> {
+    return this.subscribe(tag, callback);
+  }
+
+  /**
    * Query the current gateway status (stats, uptime, state).
    *
    * Returns the `GatewayStatus` snapshot from GatewayService, or `null` if the gateway

@@ -59,7 +59,7 @@ export function ingestDocuments(
         ...(doc.format ? { format: doc.format } : {}),
         ...(doc.chunkStrategy ? { chunkStrategy: doc.chunkStrategy } : {}),
         ...(doc.maxChunkSize ? { maxChunkSize: doc.maxChunkSize } : {}),
-      }).pipe(Effect.asVoid),
+      }).pipe(Effect.asVoid, Effect.catchAll(() => Effect.void)),
     { discard: true },
   );
 }

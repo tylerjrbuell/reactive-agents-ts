@@ -107,6 +107,17 @@ export type {
   LLMMessage,
 } from "@reactive-agents/llm-provider";
 
+// ─── Tool Factories ───
+
+export { defineTool, tool } from "@reactive-agents/tools";
+export type { DefineToolOptions, DefinedTool } from "@reactive-agents/tools";
+export type { SimpleTool } from "@reactive-agents/tools";
+
+// ─── Context Ingestion ───
+
+export { ingestDocuments } from "@reactive-agents/runtime";
+export type { DocumentSpec } from "@reactive-agents/runtime";
+
 // ─── Layer Factories (for advanced composition) ───
 
 export { createMemoryLayer } from "@reactive-agents/memory";

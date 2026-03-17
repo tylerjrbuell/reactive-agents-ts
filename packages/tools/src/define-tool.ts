@@ -1,5 +1,4 @@
-import { Effect, Schema, ParseResult } from "effect";
-import { AST } from "effect";
+import { Effect, Schema, ParseResult, SchemaAST as AST } from "effect";
 import type { ToolDefinition, ToolParameter } from "./types.js";
 import { ToolExecutionError } from "./errors.js";
 
@@ -71,7 +70,7 @@ function inferParamType(ast: AST.AST): ToolParameter["type"] {
       return inferParamType(ast.from);
     case "Union": {
       // For optional fields: Union(T, UndefinedKeyword) — find the non-undefined branch
-      const nonUndefined = ast.types.find(t => t._tag !== "UndefinedKeyword");
+      const nonUndefined = ast.types.find((t: AST.AST) => t._tag !== "UndefinedKeyword");
       if (nonUndefined) {
         return inferParamType(nonUndefined);
       }
@@ -99,14 +98,14 @@ function inferEnumValues(ast: AST.AST): string[] | undefined {
   }
   // For optional fields: Union(T, UndefinedKeyword)
   if (ast._tag === "Union") {
-    const nonUndefined = ast.types.filter(t => t._tag !== "UndefinedKeyword");
+    const nonUndefined = ast.types.filter((t: AST.AST) => t._tag !== "UndefinedKeyword");
     // Only one non-undefined branch — recurse into it
     if (nonUndefined.length === 1) {
       return inferEnumValues(nonUndefined[0]!);
     }
     // Multiple non-undefined branches — could be a string-literal union (enum)
-    if (nonUndefined.length > 1 && nonUndefined.every(t => t._tag === "Literal" && typeof (t as AST.Literal).literal === "string")) {
-      return nonUndefined.map(t => String((t as AST.Literal).literal));
+    if (nonUndefined.length > 1 && nonUndefined.every((t: AST.AST) => t._tag === "Literal" && typeof (t as AST.Literal).literal === "string")) {
+      return nonUndefined.map((t: AST.AST) => String((t as AST.Literal).literal));
     }
     return undefined;
   }
