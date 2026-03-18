@@ -401,7 +401,7 @@ function buildGenerationPrompt(
 function extractToolParamHints(taskDescription: string): string | null {
   const hints: string[] = [];
 
-  // Match patterns like: owner: 'luduscom', repo: 'ludus-next'
+  // Match patterns like: owner: 'tylerjrbuell', repo: 'reactive-agents-ts'
   const paramMatches = taskDescription.matchAll(
     /(\w+):\s*['"]([^'"]+)['"]/g,
   );

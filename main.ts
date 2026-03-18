@@ -17,7 +17,7 @@ import { ReactiveAgents } from "reactive-agents";
 //   - RECIPIENT_PHONE: Target recipient for Signal messages (e.g., +1234567890)
 // ─────────────────────────────────────────────────────────────────────────
 
-const RECIPIENT = process.env.RECIPIENT_PHONE || "+12693310593";
+const RECIPIENT = process.env.RECIPIENT_PHONE
 
 const agent = await ReactiveAgents.create()
   .withName("production-gateway-agent")
@@ -81,7 +81,7 @@ const agent = await ReactiveAgents.create()
       // ─── Monday-Friday Morning Briefing ───
       {
         schedule: "* * * * *", // 9:39 AM Mon-Fri
-        instruction: `Your task is to send a Good morning briefing for ${RECIPIENT}. Use github/list_commits (owner: 'luduscom', repo: 'ludus-next', perPage: 10) to fetch recent commits since yesterday. Create a summary of the recent activity that includes:
+        instruction: `Your task is to send a Good morning briefing for ${RECIPIENT}. Use github/list_commits (owner: 'tylerjrbuell', repo: 'reactive-agents-ts', perPage: 10) to fetch recent commits since yesterday. Create a summary of the recent activity that includes:
 1. Total commits landed overnight
 2. Any major features or fixes
 3. A motivational note to start the day
@@ -91,7 +91,7 @@ Then lastly, Send the morning briefing to the user using the tool signal/send_me
       // ─── Weekday Mid-Morning PR Review Reminder ───
       {
         schedule: "30 11 * * 1-5", // 11:30 AM Mon-Fri
-        instruction: `Accountability nudge for PR reviews. Use github/list_pull_requests (owner: 'tylerjrbuell', repo: 'ludus-next', state: 'open') to fetch open PRs. Craft a message for ${RECIPIENT} that:
+        instruction: `Accountability nudge for PR reviews. Use github/list_pull_requests (owner: 'tylerjrbuell', repo: 'reactive-agents-ts', state: 'open') to fetch open PRs. Craft a message for ${RECIPIENT} that:
 1. States the number of open PRs awaiting review
 2. Highlights any PRs in draft status
 3. Suggests a review session cadence
@@ -102,7 +102,7 @@ Send via signal/send_message_to_user with recipient '${RECIPIENT}'. Example: "�
       // ─── Weekday Evening Wrap-up ───
       {
         schedule: "0 17 * * 1-5", // 5:00 PM Mon-Fri
-        instruction: `Daily wrap-up summary for ${RECIPIENT}. Use github/list_commits (owner: 'tylerjrbuell', repo: 'ludus-next', perPage: 20) to get today's work. Summarize:
+        instruction: `Daily wrap-up summary for ${RECIPIENT}. Use github/list_commits (owner: 'tylerjrbuell', repo: 'reactive-agents-ts', perPage: 20) to get today's work. Summarize:
 1. Total commits landed today
 2. Most active contributor/category
 3. Suggested next-day priority
@@ -113,7 +113,7 @@ Send via signal/send_message_to_user with recipient '${RECIPIENT}'. Keep it conc
       // ─── Saturday Weekend Review ───
       {
         schedule: "0 10 * * 6", // 10:00 AM Saturday
-        instruction: `Weekly code review snapshot for ${RECIPIENT}. Use github/list_commits (owner: 'tylerjrbuell', repo: 'ludus-next', perPage: 50) to analyze the week. Create a "coffee-time" reflection:
+        instruction: `Weekly code review snapshot for ${RECIPIENT}. Use github/list_commits (owner: 'tylerjrbuell', repo: 'reactive-agents-ts', perPage: 50) to analyze the week. Create a "coffee-time" reflection:
 1. How many commits this week vs. last week?
 2. Which layers saw the most activity?
 3. A celebratory note or challenge for the coming week
@@ -124,7 +124,7 @@ Send via signal/send_message_to_user with recipient '${RECIPIENT}'. Tone: encour
       // ─── Monday Weekly Metrics Dashboard ───
       {
         schedule: "30 9 * * 1", // 9:30 AM Monday
-        instruction: `Cumulative progress dashboard for ${RECIPIENT}. Use github/list_commits (owner: 'tylerjrbuell', repo: 'ludus-next', perPage: 200) to compute:
+        instruction: `Cumulative progress dashboard for ${RECIPIENT}. Use github/list_commits (owner: 'tylerjrbuell', repo: 'reactive-agents-ts', perPage: 200) to compute:
 1. Commits this month vs. last month
 2. Test count (estimate from recent commits mentioning "tests")
 3. Upcoming milestone forecast
@@ -140,7 +140,7 @@ Send via signal/send_message_to_user with recipient '${RECIPIENT}'. Make it insp
 
     channels: {
       accessPolicy: "allowlist",
-      allowedSenders: [RECIPIENT],
+      allowedSenders: [RECIPIENT || ""],
       unknownSenderAction: "skip",
     },
   })

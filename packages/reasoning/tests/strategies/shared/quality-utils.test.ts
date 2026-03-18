@@ -184,7 +184,7 @@ describe("sanitizeAgentOutput", () => {
       "<think>Let me think about this</think>",
       "[SYNTHESIS] Here is your briefing:",
       "",
-      "signal/send_message_to_user: {\"recipient\": \"+12693310593\", \"message\": \"test\"}",
+      "signal/send_message_to_user: {\"recipient\": \"+126973710543\", \"message\": \"test\"}",
       "",
       "- 3 commits merged yesterday",
       "- Build is green",
