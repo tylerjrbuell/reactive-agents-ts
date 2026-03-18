@@ -137,8 +137,8 @@ describe("parallel", () => {
     );
     const combined = parallel(a, b2);
     const result = await combined("go");
-    expect(result.metadata?.results).toBeDefined();
-    expect((result.metadata!.results as any[]).length).toBe(2);
+    expect((result.metadata as any)?.results).toBeDefined();
+    expect(((result.metadata as any).results as any[]).length).toBe(2);
     await combined.dispose();
   });
 

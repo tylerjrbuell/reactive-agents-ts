@@ -219,8 +219,9 @@ export function parallel(...fns: AgentFn[]): AgentFn {
  * Compose multiple AgentFns as a race — first to complete wins.
  *
  * All agents start concurrently. The result of whichever finishes first is
- * returned. The others continue running but their results are discarded.
- * Call `dispose()` to clean up all agents regardless of which won.
+ * returned. Losing agents continue running in the background — their results
+ * are discarded but they still consume tokens/compute. Call `dispose()` to
+ * clean up all agents. Future: AbortController support for canceling losers.
  *
  * @param fns - One or more AgentFns to race against each other.
  * @returns A new AgentFn that returns the first result to complete.
