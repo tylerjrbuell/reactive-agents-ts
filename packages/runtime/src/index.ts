@@ -104,6 +104,10 @@ export {
   type PersonaConfig,
 } from "./agent-config.js";
 
+// ─── Composition API ───
+export { agentFn, pipe, parallel, race } from "./compose.js";
+export type { AgentFn } from "./compose.js";
+
 // ─── Chat / Session ───
 export {
   AgentSession,
