@@ -1,6 +1,7 @@
 import { Effect, Layer, Schema, ManagedRuntime, Stream as EStream } from "effect";
 import { createRuntime } from "./runtime.js";
 import type { MCPServerConfig } from "./runtime.js";
+import { builderToConfig } from "./agent-config.js";
 import type { TestTurn } from "@reactive-agents/llm-provider";
 import { ExecutionEngine } from "./execution-engine.js";
 import type { LifecycleHook, ExecutionContext, ModelParams } from "./types.js";
@@ -662,6 +663,45 @@ export const ReactiveAgents = {
    * @returns A new `ReactiveAgentBuilder` instance
    */
   create: (): ReactiveAgentBuilder => new ReactiveAgentBuilder(),
+
+  /**
+   * Reconstruct a builder from an AgentConfig object.
+   *
+   * The returned builder is fully configured and can be further customized
+   * with additional builder methods before calling `.build()`.
+   *
+   * @param config - AgentConfig to reconstruct from
+   * @returns A configured ReactiveAgentBuilder
+   * @example
+   * ```typescript
+   * const builder = ReactiveAgents.fromConfig(savedConfig);
+   * const agent = await builder.build();
+   * ```
+   */
+  fromConfig: async (config: import("./agent-config.js").AgentConfig): Promise<ReactiveAgentBuilder> => {
+    const { agentConfigToBuilder } = await import("./agent-config.js");
+    return agentConfigToBuilder(config);
+  },
+
+  /**
+   * Reconstruct a builder from a JSON string containing an AgentConfig.
+   *
+   * Parses and validates the JSON before reconstructing the builder.
+   * Throws a ParseError if the JSON is invalid.
+   *
+   * @param json - JSON string containing a serialized AgentConfig
+   * @returns A configured ReactiveAgentBuilder
+   * @example
+   * ```typescript
+   * const builder = await ReactiveAgents.fromJSON(configJson);
+   * const agent = await builder.build();
+   * ```
+   */
+  fromJSON: async (json: string): Promise<ReactiveAgentBuilder> => {
+    const { agentConfigFromJSON, agentConfigToBuilder } = await import("./agent-config.js");
+    const config = agentConfigFromJSON(json);
+    return agentConfigToBuilder(config);
+  },
 };
 
 /**
@@ -1738,6 +1778,74 @@ export class ReactiveAgentBuilder {
   withLayers(layers: Layer.Layer<any, any>): this {
     this._extraLayers = layers;
     return this;
+  }
+
+  // ─── Serialization ───
+
+  /**
+   * Serialize the builder's current configuration to an `AgentConfig` object.
+   *
+   * The returned config is a plain JSON-serializable object that can be stored,
+   * transmitted, and later reconstructed via `ReactiveAgents.fromConfig()` or
+   * `ReactiveAgents.fromJSON()`.
+   *
+   * @returns AgentConfig representing the current builder state
+   * @example
+   * ```typescript
+   * const config = builder.toConfig();
+   * const json = JSON.stringify(config);
+   * // Later:
+   * const agent = await ReactiveAgents.fromConfig(config).build();
+   * ```
+   */
+  toConfig(): import("./agent-config.js").AgentConfig {
+    return builderToConfig({
+      _name: this._name,
+      _provider: this._provider,
+      _model: this._model,
+      _thinking: this._thinking,
+      _temperature: this._temperature,
+      _maxTokens: this._maxTokens,
+      _systemPrompt: this._systemPrompt,
+      _persona: this._persona as Record<string, unknown> | undefined,
+      _enableReasoning: this._enableReasoning,
+      _reasoningOptions: this._reasoningOptions as Record<string, unknown> | undefined,
+      _enableTools: this._enableTools,
+      _toolsOptions: this._toolsOptions as Record<string, unknown> | undefined,
+      _enableGuardrails: this._enableGuardrails,
+      _guardrailsOptions: this._guardrailsOptions as Record<string, unknown> | undefined,
+      _enableMemory: this._enableMemory,
+      _memoryTier: this._memoryTier,
+      _memoryOptions: this._memoryOptions as Record<string, unknown> | undefined,
+      _enableExperienceLearning: this._enableExperienceLearning,
+      _enableMemoryConsolidation: this._enableMemoryConsolidation,
+      _enableObservability: this._enableObservability,
+      _observabilityOptions: this._observabilityOptions as Record<string, unknown> | undefined,
+      _enableCostTracking: this._enableCostTracking,
+      _costTrackingOptions: this._costTrackingOptions as Record<string, unknown> | undefined,
+      _enableVerification: this._enableVerification,
+      _verificationOptions: this._verificationOptions as Record<string, unknown> | undefined,
+      _maxIterations: this._maxIterations,
+      _executionTimeoutMs: this._executionTimeoutMs,
+      _retryPolicy: this._retryPolicy,
+      _cacheTimeoutMs: this._cacheTimeoutMs,
+      _strictValidation: this._strictValidation,
+      _gatewayOptions: this._gatewayOptions as Record<string, unknown> | undefined,
+      _mcpServers: this._mcpServers,
+      _enableReactiveIntelligence: this._enableReactiveIntelligence,
+      _reactiveIntelligenceOptions: this._reactiveIntelligenceOptions as Record<string, unknown> | undefined,
+      _loggingConfig: this._loggingConfig as Record<string, unknown> | undefined,
+      _fallbackConfig: this._fallbackConfig as Record<string, unknown> | undefined,
+      _enableIdentity: this._enableIdentity,
+      _enableInteraction: this._enableInteraction,
+      _enablePrompts: this._enablePrompts,
+      _enableOrchestration: this._enableOrchestration,
+      _enableKillSwitch: this._enableKillSwitch,
+      _enableAudit: this._enableAudit,
+      _enableSelfImprovement: this._enableSelfImprovement,
+      _enableHealthCheck: this._enableHealthCheck,
+      _streamDensity: this._streamDensity,
+    });
   }
 
   // ─── Build ───

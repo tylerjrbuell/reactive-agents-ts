@@ -93,5 +93,14 @@ export const makeToolRegistry = Effect.gen(function* () {
       }));
     });
 
-  return { register, get, list, toFunctionCallingFormat };
+  const unregister = (name: string): Effect.Effect<void, never> =>
+    Ref.update(toolsRef, (tools) => {
+      const entry = tools.get(name);
+      if (!entry || entry.definition.source === "builtin") return tools;
+      const next = new Map(tools);
+      next.delete(name);
+      return next;
+    });
+
+  return { register, get, list, toFunctionCallingFormat, unregister };
 });

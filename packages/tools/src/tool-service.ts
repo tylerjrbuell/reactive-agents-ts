@@ -264,6 +264,22 @@ export class ToolService extends Context.Tag("ToolService")<
      * ```
      */
     readonly listMCPServers: () => Effect.Effect<readonly MCPServer[], never>;
+
+    /**
+     * Remove a previously registered custom tool from the registry.
+     *
+     * Built-in tools (source: "builtin") are protected and cannot be removed.
+     * Attempting to unregister an unknown tool name is a no-op (no error thrown).
+     *
+     * @param name - Exact tool name to remove
+     * @returns Effect that completes when unregistration is done
+     *
+     * @example
+     * ```typescript
+     * yield* toolService.unregisterTool("my-db-query");
+     * ```
+     */
+    readonly unregisterTool: (name: string) => Effect.Effect<void, never>;
   }
 >() {}
 
@@ -515,6 +531,9 @@ export const ToolServiceLive = Layer.effect(
     const listMCPServers = (): Effect.Effect<readonly MCPServer[], never> =>
       mcpClient.listServers();
 
+    const unregisterTool = (name: string): Effect.Effect<void, never> =>
+      registry.unregister(name);
+
     // Register built-in tools automatically
     for (const tool of builtinTools) {
       yield* registry.register(tool.definition, tool.handler);
@@ -529,6 +548,7 @@ export const ToolServiceLive = Layer.effect(
       getTool,
       toFunctionCallingFormat,
       listMCPServers,
+      unregisterTool,
     };
   }),
 );

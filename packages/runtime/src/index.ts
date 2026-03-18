@@ -93,6 +93,17 @@ export {
 export { ingestDocuments } from "./context-ingestion.js";
 export type { DocumentSpec } from "./context-ingestion.js";
 
+// ─── Agent Config ───
+export {
+  AgentConfigSchema,
+  ProviderNameSchema,
+  agentConfigToJSON,
+  agentConfigFromJSON,
+  agentConfigToBuilder,
+  type AgentConfig,
+  type PersonaConfig,
+} from "./agent-config.js";
+
 // ─── Chat / Session ───
 export {
   AgentSession,
