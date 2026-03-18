@@ -1093,6 +1093,7 @@ export const createRuntime = (options: RuntimeOptions) => {
                 Effect.map((tools) => tools.filter((t) => allowed.has(t.name))),
               ),
             listMCPServers: base.listMCPServers,
+            unregisterTool: base.unregisterTool,
           };
         }),
       ).pipe(Layer.provide(baseToolsLayer));
