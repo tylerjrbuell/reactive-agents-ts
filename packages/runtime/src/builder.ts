@@ -2910,6 +2910,68 @@ export class ReactiveAgent {
   }
 
   /**
+   * Register a custom tool at runtime, after the agent has been built.
+   *
+   * This is useful for dynamically extending the agent's tool set without
+   * rebuilding. The tool is immediately available on the next `run()` call.
+   *
+   * @param definition - Tool metadata (name, description, parameters, riskLevel, etc.)
+   * @param handler - Effect-returning function that receives validated arguments
+   *
+   * @example
+   * ```typescript
+   * await agent.registerTool(
+   *   {
+   *     name: "my-tool",
+   *     description: "Does something useful",
+   *     parameters: [{ name: "input", type: "string", description: "Input value", required: true }],
+   *     category: "custom",
+   *     riskLevel: "low",
+   *     source: "function",
+   *     timeoutMs: 5000,
+   *     requiresApproval: false,
+   *   },
+   *   (args) => Effect.succeed({ result: args.input }),
+   * );
+   * ```
+   */
+  async registerTool(
+    definition: ToolDefinition,
+    handler: (args: Record<string, unknown>) => Effect.Effect<unknown, any>,
+  ): Promise<void> {
+    return this.runtime.runPromise(
+      Effect.gen(function* () {
+        const toolsMod = yield* Effect.promise(() => import("@reactive-agents/tools"));
+        const ts = yield* toolsMod.ToolService as unknown as import("effect").Context.Tag<any, any>;
+        yield* (ts as any).register(definition, handler);
+      }),
+    );
+  }
+
+  /**
+   * Unregister a previously registered custom tool at runtime.
+   *
+   * Built-in tools are protected and cannot be removed. Attempting to unregister
+   * an unknown tool name is a no-op.
+   *
+   * @param name - Exact tool name to remove
+   *
+   * @example
+   * ```typescript
+   * await agent.unregisterTool("my-tool");
+   * ```
+   */
+  async unregisterTool(name: string): Promise<void> {
+    return this.runtime.runPromise(
+      Effect.gen(function* () {
+        const toolsMod = yield* Effect.promise(() => import("@reactive-agents/tools"));
+        const ts = yield* toolsMod.ToolService as unknown as import("effect").Context.Tag<any, any>;
+        yield* (ts as any).unregisterTool(name);
+      }),
+    );
+  }
+
+  /**
    * Automatic cleanup via the Explicit Resource Management protocol (TypeScript 5.2+).
    *
    * Enables `await using` syntax so the agent is disposed automatically when the
