@@ -16,7 +16,7 @@ The current plan-execute-reflect strategy is fundamentally broken:
 4. **No step type differentiation** — every step goes through the LLM kernel even when a direct tool call would suffice.
 5. **Replanning is nuclear** — on failure, the entire plan regenerates from scratch instead of patching the broken part.
 
-**Observed in test.ts:** Agent creates a good plan ("fetch luduscom/ludus-next commits, draft briefing, send via Signal") then immediately diverges to searching random GitHub repos (facebook/react, aws/aws-amplify, expressjs/express). Replans 3 times without executing the original plan. Model hallucinates conversations with imaginary users.
+**Observed in test.ts:** Agent creates a good plan ("fetch tylerjrbuell/reactive-agents-ts commits, draft briefing, send via Signal") then immediately diverges to searching random GitHub repos (facebook/react, aws/aws-amplify, expressjs/express). Replans 3 times without executing the original plan. Model hallucinates conversations with imaginary users.
 
 ---
 
