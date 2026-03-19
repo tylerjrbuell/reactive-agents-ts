@@ -153,6 +153,20 @@ export class LLMConfig extends Context.Tag("LLMConfig")<
      * ```
      */
     readonly observabilityVerbosity: ObservabilityVerbosity;
+
+    /**
+     * Custom pricing registry for calculating token costs.
+     * Maps model identifiers to input/output token costs per 1 million tokens.
+     * Overrides built-in framework pricing if an exact match is found.
+     *
+     * @example
+     * ```typescript
+     * pricingRegistry: {
+     *   "my-fine-tuned-model": { input: 0.5, output: 1.5 }
+     * }
+     * ```
+     */
+    readonly pricingRegistry?: Record<string, { readonly input: number; readonly output: number }>;
   }
 >() {}
 
@@ -212,6 +226,7 @@ export const llmConfigFromEnv = LLMConfig.of({
   defaultMaxTokens: 4096,
   defaultTemperature: Number(process.env.LLM_DEFAULT_TEMPERATURE ?? 0.7),
   observabilityVerbosity: (process.env.LLM_OBSERVABILITY_VERBOSITY as ObservabilityVerbosity | undefined) ?? "full",
+  pricingRegistry: {},
 });
 
 /**

@@ -161,7 +161,7 @@ export const AnthropicProviderLive = Layer.effect(
             catch: (error) => toEffectError(error, "anthropic"),
           });
 
-          return mapAnthropicResponse(response as AnthropicRawResponse, model);
+          return mapAnthropicResponse(response as AnthropicRawResponse, model, config.pricingRegistry);
         }).pipe(
           Effect.retry(retryPolicy),
           Effect.timeout("30 seconds"),
@@ -218,6 +218,11 @@ export const AnthropicProviderLive = Layer.effect(
                     msg.usage.input_tokens,
                     msg.usage.output_tokens,
                     model,
+                    {
+                      cache_creation_input_tokens: msg.usage.cache_creation_input_tokens,
+                      cache_read_input_tokens: msg.usage.cache_read_input_tokens,
+                    },
+                    config.pricingRegistry,
                   ),
                 },
               });
@@ -413,13 +418,19 @@ type AnthropicRawResponse = {
     | { type: "tool_use"; id: string; name: string; input: unknown }
   >;
   stop_reason: string;
-  usage: { input_tokens: number; output_tokens: number };
+  usage: {
+    input_tokens: number;
+    output_tokens: number;
+    cache_creation_input_tokens?: number;
+    cache_read_input_tokens?: number;
+  };
   model: string;
 };
 
 const mapAnthropicResponse = (
   response: AnthropicRawResponse,
   model: string,
+  registry?: Record<string, { readonly input: number; readonly output: number }>,
 ): CompletionResponse => {
   const textContent = response.content
     .filter(
@@ -468,6 +479,11 @@ const mapAnthropicResponse = (
         response.usage.input_tokens,
         response.usage.output_tokens,
         model,
+        {
+          cache_creation_input_tokens: response.usage.cache_creation_input_tokens,
+          cache_read_input_tokens: response.usage.cache_read_input_tokens,
+        },
+        registry,
       ),
     },
     model: response.model ?? model,

@@ -126,6 +126,7 @@ type GeminiUsage = {
   promptTokenCount?: number;
   candidatesTokenCount?: number;
   totalTokenCount?: number;
+  cachedContentTokenCount?: number;
 };
 
 type GeminiFunctionCall = { name: string; args: unknown };
@@ -141,6 +142,7 @@ type GeminiRawResponse = {
 const mapGeminiResponse = (
   response: GeminiRawResponse,
   model: string,
+  registry?: Record<string, { readonly input: number; readonly output: number }>,
 ): CompletionResponse => {
   const toolCalls = response.functionCalls?.map((fc, i) => ({
     id: `call_${i}`,
@@ -158,7 +160,15 @@ const mapGeminiResponse = (
       inputTokens,
       outputTokens,
       totalTokens: inputTokens + outputTokens,
-      estimatedCost: calculateCost(inputTokens, outputTokens, model),
+      estimatedCost: calculateCost(
+        inputTokens,
+        outputTokens,
+        model,
+        {
+          cached_content_token_count: response.usageMetadata?.cachedContentTokenCount,
+        },
+        registry,
+      ),
     },
     model,
     toolCalls: toolCalls?.length ? toolCalls : undefined,
@@ -260,7 +270,7 @@ export const GeminiProviderLive = Layer.effect(
             catch: toEffectError,
           });
 
-          return mapGeminiResponse(response, model);
+          return mapGeminiResponse(response, model, config.pricingRegistry);
         }).pipe(
           Effect.retry(retryPolicy),
           Effect.timeout("30 seconds"),
@@ -305,6 +315,7 @@ export const GeminiProviderLive = Layer.effect(
                 let fullContent = "";
                 let inputTokens = 0;
                 let outputTokens = 0;
+                let cachedContentTokens = 0;
 
                 for await (const chunk of stream) {
                   if (chunk.text) {
@@ -315,6 +326,7 @@ export const GeminiProviderLive = Layer.effect(
                     inputTokens = chunk.usageMetadata.promptTokenCount ?? 0;
                     outputTokens =
                       chunk.usageMetadata.candidatesTokenCount ?? 0;
+                    cachedContentTokens = (chunk.usageMetadata as { cachedContentTokenCount?: number }).cachedContentTokenCount ?? 0;
                   }
                 }
 
@@ -325,7 +337,15 @@ export const GeminiProviderLive = Layer.effect(
                     inputTokens,
                     outputTokens,
                     totalTokens: inputTokens + outputTokens,
-                    estimatedCost: calculateCost(inputTokens, outputTokens, model),
+                    estimatedCost: calculateCost(
+                      inputTokens,
+                      outputTokens,
+                      model,
+                      {
+                        cached_content_token_count: cachedContentTokens || undefined,
+                      },
+                      config.pricingRegistry,
+                    ),
                   },
                 });
                 emit.end();
@@ -400,7 +420,7 @@ export const GeminiProviderLive = Layer.effect(
               catch: toEffectError,
             });
 
-            const mapped = mapGeminiResponse(response, model);
+            const mapped = mapGeminiResponse(response, model, config.pricingRegistry);
 
             try {
               const parsed = JSON.parse(mapped.content);

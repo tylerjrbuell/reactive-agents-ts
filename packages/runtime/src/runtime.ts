@@ -682,6 +682,12 @@ export interface RuntimeOptions {
    * Default: undefined (no rate limiting)
    */
   rateLimiterConfig?: import("@reactive-agents/llm-provider").RateLimiterConfig;
+
+  /**
+   * Custom pricing registry for calculating token costs.
+   * Maps model identifiers to input/output token costs per 1 million tokens.
+   */
+  readonly pricingRegistry?: Record<string, { readonly input: number; readonly output: number }>;
 }
 
 /**
@@ -803,6 +809,7 @@ export const createRuntime = (options: RuntimeOptions) => {
       maxTokens: options.maxTokens,
     },
     options.circuitBreakerConfig,
+    options.pricingRegistry,
   );
 
   // Build effectiveLlmLayer: if fallbackConfig has additional providers, wrap

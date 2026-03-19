@@ -254,6 +254,13 @@ export const AgentConfigSchema = Schema.Struct({
       streaming: Schema.optional(Schema.Boolean),
     }),
   ),
+  /** Custom pricing registry. */
+  pricingRegistry: Schema.optional(
+    Schema.Record({
+      key: Schema.String,
+      value: Schema.Struct({ input: Schema.Number, output: Schema.Number }),
+    }),
+  ),
 });
 
 // ─── Derived Types ────────────────────────────────────────────────────────────
@@ -479,6 +486,11 @@ export async function agentConfigToBuilder(config: AgentConfig): Promise<Reactiv
   if (config.features?.healthCheck) builder = builder.withHealthCheck();
   if (config.features?.streaming) builder = builder.withStreaming();
 
+  // Pricing registry
+  if (config.pricingRegistry) {
+    builder = builder.withModelPricing(config.pricingRegistry);
+  }
+
   return builder;
 }
 
@@ -537,6 +549,7 @@ export function builderToConfig(state: {
   _enableSelfImprovement: boolean;
   _enableHealthCheck: boolean;
   _streamDensity?: string;
+  _pricingRegistry?: Record<string, { readonly input: number; readonly output: number }>;
 }): AgentConfig {
   const config: Record<string, unknown> = {
     name: state._name,
@@ -682,6 +695,10 @@ export function builderToConfig(state: {
   if (state._enableReactiveIntelligence) features["reactiveIntelligence"] = true;
   if (state._streamDensity) features["streaming"] = true;
   if (Object.keys(features).length > 0) config["features"] = features;
+
+  if (state._pricingRegistry && Object.keys(state._pricingRegistry).length > 0) {
+    config["pricingRegistry"] = state._pricingRegistry;
+  }
 
   return config as AgentConfig;
 }

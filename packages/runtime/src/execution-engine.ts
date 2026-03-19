@@ -1828,9 +1828,22 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                             }),
                           );
 
+                          // Aggregate sub-agent tokens/cost if present in tool results
+                          let subAgentTokens = 0;
+                          let subAgentCost = 0;
+                          for (const r of recentResults) {
+                            const res = (r as any).result;
+                            if (typeof res === "object" && res !== null) {
+                              subAgentTokens += (res as any).tokensUsed ?? 0;
+                              subAgentCost += (res as any).cost ?? (res as any).estimatedCost ?? 0;
+                            }
+                          }
+
                           return {
                             ...c,
                             messages: [...c.messages, ...toolResultMessages],
+                            tokensUsed: c.tokensUsed + subAgentTokens,
+                            cost: c.cost + subAgentCost,
                             iteration: c.iteration + 1,
                           };
                         }),

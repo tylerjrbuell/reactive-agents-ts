@@ -17,6 +17,7 @@ import type {
   TokenLogprob,
 } from "../types.js";
 import { calculateCost, estimateTokenCount } from "../token-counter.js";
+import type { CacheUsage } from "../token-counter.js";
 import { retryPolicy } from "../retry.js";
 
 // ─── OpenAI Message Conversion ───
@@ -140,7 +141,7 @@ export const OpenAIProviderLive = Layer.effect(
             catch: (error) => toEffectError(error, "openai"),
           });
 
-          return mapOpenAIResponse(response as OpenAIRawResponse, model);
+          return mapOpenAIResponse(response as OpenAIRawResponse, model, config.pricingRegistry);
         }).pipe(
           Effect.retry(retryPolicy),
           Effect.timeout("30 seconds"),
@@ -179,16 +180,26 @@ export const OpenAIProviderLive = Layer.effect(
                     return msgs;
                   })(),
                   stream: true,
+                  stream_options: { include_usage: true },
                 });
 
                 let fullContent = "";
+                let finalUsage: {
+                  prompt_tokens: number;
+                  completion_tokens: number;
+                  prompt_tokens_details?: { cached_tokens?: number };
+                } | undefined;
 
                 for await (const chunk of stream as AsyncIterable<{
                   choices: Array<{
                     delta: { content?: string };
                     finish_reason?: string;
                   }>;
-                  usage?: { prompt_tokens: number; completion_tokens: number };
+                  usage?: {
+                    prompt_tokens: number;
+                    completion_tokens: number;
+                    prompt_tokens_details?: { cached_tokens?: number };
+                  };
                 }>) {
                   const delta = chunk.choices[0]?.delta?.content;
                   if (delta) {
@@ -196,31 +207,41 @@ export const OpenAIProviderLive = Layer.effect(
                     emit.single({ type: "text_delta", text: delta });
                   }
 
+                  // Capture final usage (reported after all content chunks when stream_options.include_usage is true)
+                  if (chunk.usage) {
+                    finalUsage = chunk.usage;
+                  }
+
                   if (chunk.choices[0]?.finish_reason) {
                     emit.single({
                       type: "content_complete",
                       content: fullContent,
                     });
-
-                    const inputTokens = chunk.usage?.prompt_tokens ?? 0;
-                    const outputTokens =
-                      chunk.usage?.completion_tokens ?? 0;
-                    emit.single({
-                      type: "usage",
-                      usage: {
-                        inputTokens,
-                        outputTokens,
-                        totalTokens: inputTokens + outputTokens,
-                        estimatedCost: calculateCost(
-                          inputTokens,
-                          outputTokens,
-                          model,
-                        ),
-                      },
-                    });
-                    emit.end();
                   }
                 }
+
+                // Emit usage from the final chunk (or zeros if not available)
+                const inputTokens = finalUsage?.prompt_tokens ?? 0;
+                const outputTokens = finalUsage?.completion_tokens ?? 0;
+                const cacheUsage: CacheUsage = {
+                  cached_tokens: finalUsage?.prompt_tokens_details?.cached_tokens,
+                };
+                emit.single({
+                  type: "usage",
+                  usage: {
+                    inputTokens,
+                    outputTokens,
+                    totalTokens: inputTokens + outputTokens,
+                    estimatedCost: calculateCost(
+                      inputTokens,
+                      outputTokens,
+                      model,
+                      cacheUsage,
+                      config.pricingRegistry,
+                    ),
+                  },
+                });
+                emit.end();
               } catch (error) {
                 const err = error as { message?: string };
                 emit.fail(
@@ -301,6 +322,7 @@ export const OpenAIProviderLive = Layer.effect(
             const response = mapOpenAIResponse(
               completeResult as OpenAIRawResponse,
               model,
+              config.pricingRegistry,
             );
 
             try {
@@ -408,13 +430,21 @@ type OpenAIRawResponse = {
       content?: OpenAILogprobContent[];
     } | null;
   }>;
-  usage: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
+  usage: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+    prompt_tokens_details?: {
+      cached_tokens?: number;
+    };
+  };
   model: string;
 };
 
 const mapOpenAIResponse = (
   response: OpenAIRawResponse,
   model: string,
+  registry?: Record<string, { readonly input: number; readonly output: number }>,
 ): CompletionResponse => {
   const message = response.choices[0]?.message;
   const content = message?.content ?? "";
@@ -475,6 +505,10 @@ const mapOpenAIResponse = (
         response.usage?.prompt_tokens ?? 0,
         response.usage?.completion_tokens ?? 0,
         model,
+        {
+          cached_tokens: response.usage?.prompt_tokens_details?.cached_tokens,
+        },
+        registry,
       ),
     },
     model: response.model ?? model,

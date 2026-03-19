@@ -560,6 +560,10 @@ export type LLMMessage =
  * };
  * ```
  */
+/**
+ * Schema for token usage statistics from an LLM response.
+ * Used for cost tracking, budget enforcement, and observability.
+ */
 export const TokenUsageSchema = Schema.Struct({
   /** Tokens consumed by the input (messages + system prompt) */
   inputTokens: Schema.Number,

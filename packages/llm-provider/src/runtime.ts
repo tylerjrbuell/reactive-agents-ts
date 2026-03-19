@@ -53,6 +53,7 @@ export const createLLMProviderLayer = (
   model?: string,
   modelParams?: { thinking?: boolean; temperature?: number; maxTokens?: number },
   circuitBreaker?: Partial<CircuitBreakerConfig>,
+  pricingRegistry?: Record<string, { readonly input: number; readonly output: number }>,
 ) => {
   if (provider === "test") {
     return Layer.mergeAll(
@@ -66,6 +67,7 @@ export const createLLMProviderLayer = (
   if (modelParams?.thinking !== undefined) configOverrides.thinking = modelParams.thinking;
   if (modelParams?.temperature !== undefined) configOverrides.defaultTemperature = modelParams.temperature;
   if (modelParams?.maxTokens !== undefined) configOverrides.defaultMaxTokens = modelParams.maxTokens;
+  if (pricingRegistry) configOverrides.pricingRegistry = pricingRegistry;
 
   const configLayer = Object.keys(configOverrides).length > 0
     ? Layer.succeed(LLMConfig, LLMConfig.of({ ...llmConfigFromEnv, ...configOverrides }))

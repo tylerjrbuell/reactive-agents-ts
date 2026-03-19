@@ -795,6 +795,8 @@ export class ReactiveAgentBuilder {
   private _sessionPersist: boolean = false;
   private _sessionMaxAgeDays?: number;
   private _documents: DocumentSpec[] = [];
+  private _pricingRegistry: Record<string, { readonly input: number; readonly output: number }> = {};
+  private _pricingProvider?: import("@reactive-agents/llm-provider").PricingProvider;
 
   // ─── Identity ───
 
@@ -1146,6 +1148,34 @@ export class ReactiveAgentBuilder {
   withCostTracking(options?: CostTrackingOptions): this {
     this._enableCostTracking = true;
     if (options) this._costTrackingOptions = options;
+    return this;
+  }
+
+  /**
+   * Sets programmatic pricing for specific models.
+   * Useful for explicitly overriding costs for known or custom models.
+   *
+   * @param registry - Record mapping model IDs to input/output token cost per 1 million tokens
+   * @returns `this` for chaining
+   */
+  withModelPricing(registry: Record<string, { readonly input: number; readonly output: number }>): this {
+    this._pricingRegistry = { ...this._pricingRegistry, ...registry };
+    return this;
+  }
+
+  /**
+   * Register a remote/dynamic pricing provider.
+   * Fetches latest pricing data during `.buildEffect()` or `.build()`.
+   *
+   * @param provider - PricingProvider implementation (e.g., `openRouterPricingProvider`)
+   * @returns `this` for chaining
+   * @example
+   * ```typescript
+   * builder.withDynamicPricing(openRouterPricingProvider)
+   * ```
+   */
+  withDynamicPricing(provider: import("@reactive-agents/llm-provider").PricingProvider): this {
+    this._pricingProvider = provider;
     return this;
   }
 
@@ -1845,6 +1875,7 @@ export class ReactiveAgentBuilder {
       _enableSelfImprovement: this._enableSelfImprovement,
       _enableHealthCheck: this._enableHealthCheck,
       _streamDensity: this._streamDensity,
+      _pricingRegistry: this._pricingRegistry,
     });
   }
 
@@ -1946,130 +1977,146 @@ export class ReactiveAgentBuilder {
    * ```
    */
   buildEffect(): Effect.Effect<ReactiveAgent, Error> {
-    // Validate provider API key exists at build time (fast fail in strict mode, warn in non-strict)
-    // Non-strict warnings are already emitted by build() before calling buildEffect().
-    if (this._strictValidation) {
-      const keyMap: Record<string, string | undefined> = {
-        anthropic: "ANTHROPIC_API_KEY",
-        openai: "OPENAI_API_KEY",
-        gemini: "GOOGLE_API_KEY",
-      };
-      const requiredKey = keyMap[this._provider];
-      if (requiredKey && !process.env[requiredKey]) {
-        return Effect.fail(
-          new Error(
-            `Missing API key: ${requiredKey} is not set. Provider "${this._provider}" requires it.`,
-          ),
-        );
-      }
-    }
-
-    const agentId = `${this._name}-${Date.now()}`;
-
-    // Compose persona into system prompt if provided
-    let composedSystemPrompt = this._systemPrompt;
-    if (this._persona) {
-      const personaPrompt = composePersonaToSystemPrompt(
-        this._persona,
-        this._name,
-      );
-      composedSystemPrompt = composedSystemPrompt
-        ? `${personaPrompt}\n\n${composedSystemPrompt}`
-        : personaPrompt;
-    }
-
-    const baseRuntime = createRuntime({
-      agentId,
-      provider: this._provider,
-      model: this._model,
-      thinking: this._thinking,
-      temperature: this._temperature,
-      maxTokens: this._maxTokens,
-      memoryTier: this._memoryTier,
-      maxIterations: this._maxIterations,
-      enableGuardrails: this._enableGuardrails,
-      enableVerification: this._enableVerification,
-      enableCostTracking: this._enableCostTracking,
-      enableAudit: this._enableAudit,
-      enableReasoning: this._enableReasoning,
-      enableTools: this._enableTools,
-      enableIdentity: this._enableIdentity,
-      enableObservability: this._enableObservability,
-      observabilityOptions: this._observabilityOptions,
-      enableInteraction: this._enableInteraction,
-      enablePrompts: this._enablePrompts,
-      enableOrchestration: this._enableOrchestration,
-      enableKillSwitch: this._enableKillSwitch,
-      enableBehavioralContracts: this._enableBehavioralContracts,
-      behavioralContract: this._behavioralContract,
-      enableSelfImprovement: this._enableSelfImprovement,
-      testScenario: this._testScenario,
-      extraLayers: this._extraLayers,
-      systemPrompt: composedSystemPrompt,
-      mcpServers: this._mcpServers.length > 0 ? this._mcpServers : undefined,
-      reasoningOptions: this._reasoningOptions,
-      enableA2A: !!this._a2aOptions,
-      a2aPort: this._a2aOptions?.port,
-      a2aBasePath: this._a2aOptions?.basePath,
-      enableGateway: !!this._gatewayOptions,
-      gatewayOptions: this._gatewayOptions,
-      contextProfile: this._contextProfile,
-      resultCompression: this._resultCompression,
-      telemetryConfig: this._telemetryConfig,
-      memoryOptions: this._memoryOptions,
-      guardrailsOptions: this._guardrailsOptions,
-      verificationOptions: this._verificationOptions,
-      costTrackingOptions: this._costTrackingOptions,
-      circuitBreakerConfig: this._circuitBreakerConfig,
-      rateLimiterConfig: this._rateLimiterConfig,
-      requiredTools: this._requiredToolsConfig,
-      allowedTools: this._toolsOptions?.allowedTools,
-      adaptiveToolFiltering: this._toolsOptions?.adaptive,
-      enableMemory: this._enableMemory,
-      enableExperienceLearning: this._enableExperienceLearning,
-      enableMemoryConsolidation: this._enableMemoryConsolidation,
-      consolidationConfig: this._consolidationConfig,
-      executionTimeoutMs: this._executionTimeoutMs,
-      retryPolicy: this._retryPolicy,
-      cacheTimeoutMs: this._cacheTimeoutMs,
-      sessionPersist: this._sessionPersist,
-      sessionMaxAgeDays: this._sessionMaxAgeDays,
-      loggingConfig: this._loggingConfig as import("@reactive-agents/observability").LoggingConfig | undefined,
-      enableHealthCheck: this._enableHealthCheck,
-      enableReactiveIntelligence: this._enableReactiveIntelligence,
-      reactiveIntelligenceOptions: this._reactiveIntelligenceOptions,
-      fallbackConfig: this._fallbackConfig,
-    });
-
-    const hooks = [...this._hooks];
-    const mcpServers = [...this._mcpServers];
-    const toolsOptions = this._toolsOptions;
-    const promptsOptions = this._promptsOptions;
-    const a2aOptions = this._a2aOptions;
-    const gatewayOptions = this._gatewayOptions;
-    const agentTools = this._agentTools;
-    const allowDynamicSubAgents = this._allowDynamicSubAgents;
-    const dynamicSubAgentOptions = this._dynamicSubAgentOptions;
-    const parentProvider = this._provider;
-    const parentModel = this._model;
-    const streamDensity = this._streamDensity;
-    const errorHandler = this._errorHandler;
-    const enableHealthCheck = this._enableHealthCheck;
-    const sessionPersist = this._sessionPersist;
-    const sessionMaxAgeDays = this._sessionMaxAgeDays;
-    const documents = [...this._documents];
-    const agentIdCapture = agentId;
-
-    // Capture parent config for sub-agent inheritance — sub-agents get
-    // the same infrastructure as the parent without explicit configuration.
-    const parentReasoningOptions = this._reasoningOptions;
-    const parentEnableGuardrails = this._enableGuardrails;
-    const parentEnableObservability = this._enableObservability;
-    const parentObservabilityOptions = this._observabilityOptions;
-    const parentContextProfile = this._contextProfile;
-    const parentEnableCostTracking = this._enableCostTracking;
-
+    const self = this;
+    
     return Effect.gen(function* () {
+      // Validate provider API key exists at build time (fast fail in strict mode, warn in non-strict)
+      // Non-strict warnings are already emitted by build() before calling buildEffect().
+      if (self._strictValidation) {
+        const keyMap: Record<string, string | undefined> = {
+          anthropic: "ANTHROPIC_API_KEY",
+          openai: "OPENAI_API_KEY",
+          gemini: "GOOGLE_API_KEY",
+        };
+        const requiredKey = keyMap[self._provider];
+        if (requiredKey && !process.env[requiredKey]) {
+          return yield* Effect.fail(
+            new Error(
+              `Missing API key: ${requiredKey} is not set. Provider "${self._provider}" requires it.`,
+            ),
+          );
+        }
+      }
+
+      // Automatically fetch remote pricing if a provider was configured
+      if (self._pricingProvider) {
+        try {
+          const remotePricing = yield* self._pricingProvider.fetchPricing();
+          self._pricingRegistry = { ...self._pricingRegistry, ...remotePricing };
+        } catch (e) {
+          if (self._strictValidation) {
+            return yield* Effect.fail(e as Error);
+          }
+          console.warn(`[Pricing] Failed to fetch dynamic pricing — falling back to static map. ${e}`);
+        }
+      }
+
+      const agentId = `${self._name}-${Date.now()}`;
+
+      // Compose persona into system prompt if provided
+      let composedSystemPrompt = self._systemPrompt;
+      if (self._persona) {
+        const personaPrompt = composePersonaToSystemPrompt(
+          self._persona,
+          self._name,
+        );
+        composedSystemPrompt = composedSystemPrompt
+          ? `${personaPrompt}\n\n${composedSystemPrompt}`
+          : personaPrompt;
+      }
+
+      const baseRuntime = createRuntime({
+        agentId,
+        provider: self._provider,
+        model: self._model,
+        thinking: self._thinking,
+        temperature: self._temperature,
+        maxTokens: self._maxTokens,
+        memoryTier: self._memoryTier,
+        maxIterations: self._maxIterations,
+        enableGuardrails: self._enableGuardrails,
+        enableVerification: self._enableVerification,
+        enableCostTracking: self._enableCostTracking,
+        enableAudit: self._enableAudit,
+        enableReasoning: self._enableReasoning,
+        enableTools: self._enableTools,
+        enableIdentity: self._enableIdentity,
+        enableObservability: self._enableObservability,
+        observabilityOptions: self._observabilityOptions,
+        enableInteraction: self._enableInteraction,
+        enablePrompts: self._enablePrompts,
+        enableOrchestration: self._enableOrchestration,
+        enableKillSwitch: self._enableKillSwitch,
+        enableBehavioralContracts: self._enableBehavioralContracts,
+        behavioralContract: self._behavioralContract,
+        enableSelfImprovement: self._enableSelfImprovement,
+        testScenario: self._testScenario,
+        extraLayers: self._extraLayers,
+        systemPrompt: composedSystemPrompt,
+        mcpServers: self._mcpServers.length > 0 ? self._mcpServers : undefined,
+        reasoningOptions: self._reasoningOptions,
+        enableA2A: !!self._a2aOptions,
+        a2aPort: self._a2aOptions?.port,
+        a2aBasePath: self._a2aOptions?.basePath,
+        enableGateway: !!self._gatewayOptions,
+        gatewayOptions: self._gatewayOptions,
+        contextProfile: self._contextProfile,
+        resultCompression: self._resultCompression,
+        telemetryConfig: self._telemetryConfig,
+        memoryOptions: self._memoryOptions,
+        guardrailsOptions: self._guardrailsOptions,
+        verificationOptions: self._verificationOptions,
+        costTrackingOptions: self._costTrackingOptions,
+        circuitBreakerConfig: self._circuitBreakerConfig,
+        rateLimiterConfig: self._rateLimiterConfig,
+        requiredTools: self._requiredToolsConfig,
+        allowedTools: self._toolsOptions?.allowedTools,
+        adaptiveToolFiltering: self._toolsOptions?.adaptive,
+        enableMemory: self._enableMemory,
+        enableExperienceLearning: self._enableExperienceLearning,
+        enableMemoryConsolidation: self._enableMemoryConsolidation,
+        consolidationConfig: self._consolidationConfig,
+        executionTimeoutMs: self._executionTimeoutMs,
+        retryPolicy: self._retryPolicy,
+        cacheTimeoutMs: self._cacheTimeoutMs,
+        sessionPersist: self._sessionPersist,
+        sessionMaxAgeDays: self._sessionMaxAgeDays,
+        loggingConfig: self._loggingConfig as import("@reactive-agents/observability").LoggingConfig | undefined,
+        enableHealthCheck: self._enableHealthCheck,
+        enableReactiveIntelligence: self._enableReactiveIntelligence,
+        reactiveIntelligenceOptions: self._reactiveIntelligenceOptions,
+        fallbackConfig: self._fallbackConfig,
+        pricingRegistry: Object.keys(self._pricingRegistry).length > 0 ? self._pricingRegistry : undefined,
+      });
+
+      const hooks = [...self._hooks];
+      const mcpServers = [...self._mcpServers];
+      const toolsOptions = self._toolsOptions;
+      const promptsOptions = self._promptsOptions;
+      const a2aOptions = self._a2aOptions;
+      const gatewayOptions = self._gatewayOptions;
+      const agentTools = self._agentTools;
+      const allowDynamicSubAgents = self._allowDynamicSubAgents;
+      const dynamicSubAgentOptions = self._dynamicSubAgentOptions;
+      const parentProvider = self._provider;
+      const parentModel = self._model;
+      const streamDensity = self._streamDensity;
+      const errorHandler = self._errorHandler;
+      const enableHealthCheck = self._enableHealthCheck;
+      const sessionPersist = self._sessionPersist;
+      const sessionMaxAgeDays = self._sessionMaxAgeDays;
+      const documents = [...self._documents];
+      const agentIdCapture = agentId;
+
+      // Capture parent config for sub-agent inheritance — sub-agents get
+      // the same infrastructure as the parent without explicit configuration.
+      const parentReasoningOptions = self._reasoningOptions;
+      const parentEnableGuardrails = self._enableGuardrails;
+      const parentEnableObservability = self._enableObservability;
+      const parentObservabilityOptions = self._observabilityOptions;
+      const parentContextProfile = self._contextProfile;
+      const parentEnableCostTracking = self._enableCostTracking;
+
       const engine = yield* ExecutionEngine.pipe(Effect.provide(baseRuntime));
 
       for (const hook of hooks) {
@@ -2926,10 +2973,10 @@ export class ReactiveAgent {
    *     description: "Does something useful",
    *     parameters: [{ name: "input", type: "string", description: "Input value", required: true }],
    *     category: "custom",
-   *     riskLevel: "low",
-   *     source: "function",
-   *     timeoutMs: 5000,
-   *     requiresApproval: false,
+     *     riskLevel: "low",
+     *     source: "function",
+     *     timeoutMs: 5000,
+     *     requiresApproval: false,
    *   },
    *   (args) => Effect.succeed({ result: args.input }),
    * );

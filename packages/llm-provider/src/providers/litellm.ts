@@ -106,13 +106,21 @@ type LiteLLMRawResponse = {
     };
     finish_reason: string;
   }>;
-  usage: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
+  usage: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+    // Some LiteLLM proxies include cost directly
+    input_cost?: number;
+    output_cost?: number;
+  };
   model: string;
 };
 
 const mapLiteLLMResponse = (
   response: LiteLLMRawResponse,
   model: string,
+  registry?: Record<string, { readonly input: number; readonly output: number }>,
 ): CompletionResponse => {
   const message = response.choices[0]?.message;
   const content = message?.content ?? "";
@@ -151,6 +159,15 @@ const mapLiteLLMResponse = (
         response.usage?.prompt_tokens ?? 0,
         response.usage?.completion_tokens ?? 0,
         model,
+        undefined,
+        registry,
+        // Prioritize costs returned directly from the proxy if available
+        response.usage?.input_cost !== undefined && response.usage?.output_cost !== undefined
+          ? {
+              input: (response.usage.input_cost / (response.usage.prompt_tokens || 1)) * 1_000_000,
+              output: (response.usage.output_cost / (response.usage.completion_tokens || 1)) * 1_000_000,
+            }
+          : undefined,
       ),
     },
     model: response.model ?? model,
@@ -239,7 +256,11 @@ export const LiteLLMProviderLive = Layer.effect(
             catch: (error) => toEffectError(error),
           });
 
-          return mapLiteLLMResponse(response as LiteLLMRawResponse, model);
+          return mapLiteLLMResponse(
+            response as LiteLLMRawResponse,
+            model,
+            config.pricingRegistry,
+          );
         }).pipe(
           Effect.retry(retryPolicy),
           Effect.timeout("30 seconds"),
@@ -354,6 +375,8 @@ export const LiteLLMProviderLive = Layer.effect(
                               inputTokens,
                               outputTokens,
                               model,
+                              undefined,
+                              config.pricingRegistry,
                             ),
                           },
                         });
@@ -439,6 +462,7 @@ export const LiteLLMProviderLive = Layer.effect(
             const response = mapLiteLLMResponse(
               completeResult as LiteLLMRawResponse,
               model,
+              config.pricingRegistry,
             );
 
             try {

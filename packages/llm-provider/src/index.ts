@@ -70,7 +70,10 @@ export { TestLLMService, TestLLMServiceLayer, type TestTurn, type ToolCallSpec }
 
 // ─── Utilities ───
 export { estimateTokenCount, calculateCost } from "./token-counter.js";
+export type { CacheUsage } from "./token-counter.js";
 export { retryPolicy } from "./retry.js";
+export type { PricingProvider, ModelPricing } from "./pricing.js";
+export { openRouterPricingProvider, urlPricingProvider } from "./pricing.js";
 
 // ─── Structured Output Schemas ───
 export {
