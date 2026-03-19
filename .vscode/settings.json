@@ -1,13 +1,10 @@
 {
-  "cSpell.words": [
-    "cloudrun",
-    "litellm",
-    "ollama",
-    "tylerjrbuell"
-  ],
+  "cSpell.words": ["cloudrun", "litellm", "ollama", "tylerjrbuell"],
   "chat.tools.terminal.autoApprove": {
     "bun": true,
     "timeout": true,
     "tee": true
-  }
+  },
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode"
 }
