@@ -6,7 +6,7 @@
 
 **The open-source agent framework built for control, not magic.**
 
-Every decision controllable, observable, and auditable. 22 packages. composable layers. 5 reasoning strategies. 6 LLM providers. Model-adaptive context profiles. 10-phase execution engine with lifecycle hooks. 2,194 tests across 288 files. Built on Effect-TS for type safety from prompt to production.
+Every decision controllable, observable, and auditable. 22 packages. composable layers. 5 reasoning strategies. 6 LLM providers. Model-adaptive context profiles. 10-phase execution engine with lifecycle hooks. 2,482 tests across 308 files. Built on Effect-TS for type safety from prompt to production.
 
 [![CI](https://github.com/tylerjrbuell/reactive-agents-ts/actions/workflows/ci.yml/badge.svg)](https://github.com/tylerjrbuell/reactive-agents-ts/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/badge/npm-%40reactive--agents-CB3837?logo=npm)](https://www.npmjs.com/org/reactive-agents)
@@ -60,7 +60,10 @@ Most AI agent frameworks are dynamically typed, monolithic, and opaque. They ass
 - **Structured logging** -- `makeLoggerService()` with level filtering, JSON/text format, and file output with rotation via `withLogging()`
 - **Health checks** -- `withHealthCheck()` + `agent.health()` returns `{ status, checks[] }`
 - **Reactive intelligence** -- 5-source entropy sensor, reactive controller (early-stop, context compression, strategy switch), local learning engine (conformal calibration, Thompson Sampling bandit, skill synthesis), telemetry client (api.reactiveagents.dev), `.withReactiveIntelligence()` builder method
-- **2,194 tests** across 288 files
+- **Agent as Data** -- `AgentConfig` JSON-serializable schema, `builder.toConfig()` reverse mapping, `ReactiveAgents.fromConfig()` / `.fromJSON()` reconstruction, roundtrip serialization
+- **Lightweight composition** -- `agentFn()` lazy agent primitives, `pipe()` sequential chains, `parallel()` concurrent fan-out, `race()` first-to-complete — all composable
+- **Dynamic tool registration** -- `agent.registerTool()` / `agent.unregisterTool()` for runtime tool management on live agents
+- **2,482 tests** across 308 files
 
 ## Quick Start
 
@@ -150,6 +153,73 @@ await session.chat("Summarize yesterday's logs");
 await session.chat("Which errors were most frequent?");
 ```
 
+### Agent Config (Agent as Data)
+
+Define agents as JSON-serializable config objects. Save, share, and reconstruct agents without code:
+
+```typescript
+import { agentConfigToJSON, agentConfigFromJSON, ReactiveAgents } from "reactive-agents";
+
+// Builder → Config → JSON
+const builder = ReactiveAgents.create()
+  .withName("researcher")
+  .withProvider("anthropic")
+  .withReasoning({ defaultStrategy: "plan-execute-reflect" })
+  .withTools({ adaptive: true })
+  .withMemory("2");
+
+const config = builder.toConfig();
+const json = agentConfigToJSON(config);
+// Save to file, database, or send over the wire
+
+// JSON → Builder → Agent
+const restored = await ReactiveAgents.fromJSON(json);
+const agent = await restored.build();
+const result = await agent.run("Research quantum computing advances");
+```
+
+### Composition API
+
+Build agent pipelines with functional combinators:
+
+```typescript
+import { agentFn, pipe, parallel, race } from "reactive-agents";
+
+// Create lazy agent functions
+const researcher = agentFn(
+  { name: "researcher", provider: "anthropic" },
+  (b) => b.withReasoning().withTools(),
+);
+const summarizer = agentFn(
+  { name: "summarizer", provider: "anthropic" },
+);
+
+// Sequential pipeline: research → summarize
+const pipeline = pipe(researcher, summarizer);
+const result = await pipeline("What are the latest AI breakthroughs?");
+
+// Parallel fan-out: run multiple analyses concurrently
+const multiAnalysis = parallel(
+  agentFn({ name: "sentiment", provider: "anthropic" }),
+  agentFn({ name: "keywords", provider: "anthropic" }),
+  agentFn({ name: "summary", provider: "anthropic" }),
+);
+const combined = await multiAnalysis("Article text here...");
+// combined.output contains labeled results from all 3 agents
+
+// Race: fastest agent wins
+const fastest = race(
+  agentFn({ name: "claude", provider: "anthropic" }),
+  agentFn({ name: "gpt4", provider: "openai" }),
+);
+const winner = await fastest("Quick answer needed");
+
+// Clean up
+await pipeline.dispose();
+await multiAnalysis.dispose();
+await fastest.dispose();
+```
+
 ### Streaming
 
 Tokens arrive as they're generated via AsyncGenerator. Pass an `AbortSignal` to cancel mid-stream:
@@ -221,7 +291,10 @@ How Reactive Agents compares to other TypeScript agent frameworks on shipped, wo
 | Persistent gateway            | Yes             | --           | --            | --     |
 | Agent debrief + chat          | Yes             | --           | --            | --     |
 | Metrics dashboard             | Yes             | LangSmith    | --            | --     |
-| Test suite                    | 2,194 tests     | --           | --            | --     |
+| Agent-as-data config          | Yes             | --           | --            | --     |
+| Functional composition        | Yes             | Yes          | --            | --     |
+| Dynamic tool registration     | Yes             | Yes          | --            | --     |
+| Test suite                    | 2,482 tests     | --           | --            | --     |
 
 ## Use Cases
 
@@ -470,6 +543,36 @@ const agent = await ReactiveAgents.create()
   .build();
 ```
 
+### Dynamic Tool Registration
+
+Add or remove tools from a running agent at runtime:
+
+```typescript
+import { Effect } from "effect";
+
+const agent = await ReactiveAgents.create()
+  .withName("adaptive-agent")
+  .withProvider("anthropic")
+  .withReasoning()
+  .withTools()
+  .build();
+
+// Register a new tool at runtime
+await agent.registerTool(
+  {
+    name: "custom_api",
+    description: "Call the custom API",
+    parameters: [{ name: "endpoint", type: "string", description: "API endpoint", required: true }],
+    riskLevel: "low",
+    source: "function",
+  },
+  (args) => Effect.succeed(`Response from ${args.endpoint}`),
+);
+
+// Later, remove it when no longer needed
+await agent.unregisterTool("custom_api");
+```
+
 ### Dynamic Sub-Agent Spawning
 
 Use `.withDynamicSubAgents()` to let the model spawn ad-hoc sub-agents at runtime without pre-configuring named agent tools. This registers the built-in `spawn-agent` tool, which the model can invoke freely:
@@ -531,7 +634,7 @@ Reactive Agents supports 6 providers: Anthropic, OpenAI, Google Gemini, Ollama (
 
 ### Is this framework production-ready?
 
-Yes -- it includes guardrails, budget controls, auditability, observability, Ed25519 identity, and composable service layers for testable deployments. 2,194 tests across 288 files.
+Yes -- it includes guardrails, budget controls, auditability, observability, Ed25519 identity, and composable service layers for testable deployments. 2,482 tests across 308 files.
 
 ### Can I run fully local agents?
 
@@ -545,7 +648,7 @@ See the [comparison table](#comparison). The key differences are: full Effect-TS
 
 ```bash
 bun install              # Install dependencies
-bun test                 # Run full test suite (2,194 tests, 288 files)
+bun test                 # Run full test suite (2,482 tests, 308 files)
 bun run build            # Build all packages (22 packages, ESM + DTS)
 ```
 

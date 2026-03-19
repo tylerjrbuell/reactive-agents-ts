@@ -8,6 +8,28 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 
 ## [Unreleased]
 
+### Added
+
+#### Agent as Data (`AgentConfig`)
+- **`AgentConfigSchema`** — Effect-TS Schema for JSON-serializable agent configuration covering all builder options (reasoning, tools, guardrails, memory, observability, cost tracking, execution, gateway, logging, fallbacks, verification, features)
+- **`agentConfigToJSON()` / `agentConfigFromJSON()`** — Roundtrip serialization with schema validation
+- **`agentConfigToBuilder()`** — Reconstruct a fully-configured `ReactiveAgentBuilder` from an `AgentConfig` object (async, breaks circular deps via lazy import)
+- **`builder.toConfig()`** — Reverse mapping from builder state to `AgentConfig` for introspection and persistence
+- **`ReactiveAgents.fromConfig()` / `ReactiveAgents.fromJSON()`** — Static factory methods to create builders from config objects or JSON strings
+- **`PersonaConfig`** type export for typed persona configuration
+
+#### Lightweight Composition API
+- **`agentFn()`** — Create lazy-building callable agent primitives from `AgentConfig` with optional builder customization
+- **`pipe()`** — Sequential composition: chain agent functions where each receives the previous agent's output
+- **`parallel()`** — Concurrent composition: run multiple agents on the same input, merge labeled results
+- **`race()`** — First-to-complete wins: race multiple agents, return the fastest result
+- **`AgentFn`** type — Callable function with `.dispose()` cleanup and `.config` introspection
+
+#### Dynamic Tool Registration
+- **`agent.registerTool()`** — Register new tools on a running agent instance at runtime
+- **`agent.unregisterTool()`** — Remove non-builtin tools from a running agent
+- **`ToolService.unregisterTool()`** — Atomic tool removal in the tool registry (protects builtin tools)
+
 ---
 
 ## [0.8.0] — 2026-03-15
