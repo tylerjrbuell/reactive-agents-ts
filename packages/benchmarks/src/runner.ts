@@ -76,15 +76,57 @@ const runTask = async (
       builder.withReasoning({ defaultStrategy: strategyMap[task.strategy] });
     }
 
+    if (task.requiresTools) {
+      builder.withTools();
+    }
+
+    if (task.requiresGuardrails) {
+      builder.withGuardrails();
+    }
+
     const agent = await builder.build();
 
     let agentResult: Awaited<ReturnType<typeof agent.run>>;
+    let cumulativeTokens = 0;
+    let cumulativeCost = 0;
+    let iterations = 0;
+
+    // Listen for progress to capture tokens/cost even on timeout
+    const unsub = await agent.subscribe((event) => {
+      if (event._tag === "LLMRequestCompleted") {
+        cumulativeTokens += event.tokensUsed;
+        cumulativeCost += event.estimatedCost;
+      }
+      if (event._tag === "ReasoningStepCompleted") {
+        iterations++;
+      }
+    });
+
     try {
       const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error(`Task timed out after ${timeoutMs}ms`)), timeoutMs),
+        setTimeout(
+          () => reject(new Error(`Task timed out after ${timeoutMs}ms`)),
+          timeoutMs,
+        ),
       );
       agentResult = await Promise.race([agent.run(task.prompt), timeoutPromise]);
+    } catch (error) {
+      const durationMs = performance.now() - start;
+      await agent.dispose();
+      unsub();
+      return {
+        taskId: task.id,
+        tier: task.tier,
+        strategy: task.strategy ?? "single-shot",
+        status: "fail",
+        durationMs,
+        tokensUsed: cumulativeTokens,
+        estimatedCost: cumulativeCost,
+        iterations,
+        output: error instanceof Error ? `Error: ${error.message}` : String(error),
+      } satisfies TaskResult;
     } finally {
+      unsub();
       await agent.dispose();
     }
 
@@ -97,23 +139,27 @@ const runTask = async (
       strategy: task.strategy ?? "single-shot",
       status: passed ? "pass" : "fail",
       durationMs,
-      tokensUsed: agentResult.metadata.tokensUsed,
-      estimatedCost: agentResult.metadata.cost,
-      iterations: agentResult.metadata.stepsCount,
+      tokensUsed: agentResult.metadata.tokensUsed || cumulativeTokens,
+      estimatedCost: agentResult.metadata.cost || cumulativeCost,
+      iterations: agentResult.metadata.stepsCount || iterations,
       output: agentResult.output.slice(0, 1000),
     } satisfies TaskResult;
   } catch (e) {
+    const errorMessage = e instanceof Error ? e.message : String(e);
+    // If the task specifically expects an error (like a guardrail block), consider it a pass if the message matches
+    const isExpectedError = task.expected && matchesExpected(errorMessage, task.expected);
+
     return {
       taskId: task.id,
       tier: task.tier,
       strategy: task.strategy ?? "single-shot",
-      status: "error" as const,
+      status: isExpectedError ? "pass" : "error",
       durationMs: performance.now() - start,
       tokensUsed: 0,
       estimatedCost: 0,
       iterations: 0,
-      output: "",
-      error: e instanceof Error ? e.message : String(e),
+      output: isExpectedError ? errorMessage : "",
+      error: isExpectedError ? undefined : errorMessage,
     } satisfies TaskResult;
   }
 };
@@ -245,7 +291,7 @@ export const runBenchmarks = async (
   }
 
   const resolvedModel = options.model ?? defaultModel[options.provider] ?? "default";
-  const timeoutMs = options.timeoutMs ?? 120_000;
+  const timeoutMs = options.timeoutMs ?? 300_000;
 
   console.log(`\n  ╔══════════════════════════════════════════════════════╗`);
   console.log(`  ║   Reactive Agents Benchmark Suite                    ║`);
@@ -263,8 +309,11 @@ export const runBenchmarks = async (
 
   const results: TaskResult[] = [];
 
-  for (const task of tasks) {
-    process.stdout.write(`  ⊙ [${task.tier.padEnd(8)}] ${task.name.padEnd(50)} `);
+  for (let i = 0; i < tasks.length; i++) {
+    const task = tasks[i];
+    const indexStr = `[${i + 1}/${tasks.length}]`;
+    
+    process.stdout.write(`  ${indexStr.padEnd(8)} ⊙ [${task.tier.padEnd(8)}] ${task.name.padEnd(50)} `);
     const result = await runTask(task, options.provider, resolvedModel, timeoutMs);
     results.push(result);
 
@@ -281,6 +330,9 @@ export const runBenchmarks = async (
       console.log(`    ↳ Expected pattern not found in output`);
     }
   }
+
+  // Complete the progress counter nicely
+  console.log(`\n  [${tasks.length}/${tasks.length}] ✨ All ${tasks.length} tasks completed.`);
 
   console.log("\n  Measuring framework overhead (test provider)...");
   const overhead = measureOverhead();

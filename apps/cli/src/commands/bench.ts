@@ -22,11 +22,41 @@ export async function runBench(argv: string[]) {
   const tierArg = getArg("--tier");
   const tiers = tierArg ? (tierArg.split(",") as any[]) : undefined;
   const output = getArg("--output");
+  const timeoutArg = getArg("--timeout");
+  const timeoutMs = timeoutArg ? parseInt(timeoutArg, 10) * 1000 : undefined;
 
-  const report = await runBenchmarks({ provider, model, tiers });
+  const report = await runBenchmarks({ provider, model, tiers, timeoutMs });
 
   if (output) {
-    await Bun.write(output, JSON.stringify(report, null, 2));
-    console.log(info(`Report saved to ${output}`));
+    let finalData: any = { runs: [report] };
+    
+    try {
+      const file = Bun.file(output);
+      if (await file.exists()) {
+        const existingData = await file.json();
+        // Extract array of previous runs
+        const runs = Array.isArray(existingData.runs) 
+          ? existingData.runs 
+          : (existingData.timestamp ? [existingData] : []);
+          
+        // Overwrite if same model/provider, else append
+        const existingIdx = runs.findIndex(
+          (r: any) => r.provider === provider && r.model === model
+        );
+        
+        if (existingIdx >= 0) {
+          runs[existingIdx] = report;
+        } else {
+          runs.push(report);
+        }
+        
+        finalData = { runs };
+      }
+    } catch (err) {
+      // Ignore read/parse errors, just write as new
+    }
+
+    await Bun.write(output, JSON.stringify(finalData, null, 2));
+    console.log(info(`Report merged and saved to ${output} (Multi-run format)`));
   }
 }

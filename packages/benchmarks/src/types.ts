@@ -20,6 +20,8 @@ export interface BenchmarkTask {
   readonly benchmark?: string;
   /** Whether tools are required. */
   readonly requiresTools?: boolean;
+  /** Whether security guardrails are required. */
+  readonly requiresGuardrails?: boolean;
 }
 
 /** Result of running a single benchmark task. */
