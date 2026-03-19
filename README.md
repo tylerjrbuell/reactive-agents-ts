@@ -6,7 +6,7 @@
 
 **The open-source agent framework built for control, not magic.**
 
-Every decision controllable, observable, and auditable. 22 packages. composable layers. 5 reasoning strategies. 6 LLM providers. Model-adaptive context profiles. 10-phase execution engine with lifecycle hooks. 2,482 tests across 308 files. Built on Effect-TS for type safety from prompt to production.
+Every decision controllable, observable, and auditable. 22 packages. composable layers. 5 reasoning strategies. 6 LLM providers. Model-adaptive context profiles. 10-phase execution engine with lifecycle hooks. 2,491 tests across 309 files. Built on Effect-TS for type safety from prompt to production.
 
 [![CI](https://github.com/tylerjrbuell/reactive-agents-ts/actions/workflows/ci.yml/badge.svg)](https://github.com/tylerjrbuell/reactive-agents-ts/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/badge/npm-%40reactive--agents-CB3837?logo=npm)](https://www.npmjs.com/org/reactive-agents)
@@ -51,7 +51,7 @@ Most AI agent frameworks are dynamically typed, monolithic, and opaque. They ass
 - **Multi-agent orchestration** -- sequential, parallel, pipeline, and map-reduce workflows with dynamic sub-agent spawning
 - **Production guardrails** -- injection detection, PII filtering, toxicity blocking, kill switch, behavioral contracts
 - **Ed25519 identity** -- real cryptographic agent certificates, RBAC, delegation, and audit trails
-- **Cost tracking** -- complexity routing across 27 signals, semantic caching, budget enforcement with persistence across restarts
+- **Cost tracking** -- complexity routing across 27 signals, semantic caching, budget enforcement with persistence across restarts, dynamic pricing fetching via `.withDynamicPricing()` (e.g. OpenRouter), cache-aware token discounts
 - **Professional metrics dashboard** -- EventBus-driven execution timeline, tool call summary, smart alerts, and cost estimation (zero manual instrumentation)
 - **Required tools guard** -- ensure agents call critical tools before answering (static list or adaptive LLM inference)
 - **Builder hardening** -- `withStrictValidation()`, `withTimeout()`, `withRetryPolicy()`, `withCacheTimeout()`, consolidated `withGuardrails()` thresholds, `withErrorHandler()`, `withFallbacks()`, `withLogging()`, `withHealthCheck()`, automatic strategy switching
@@ -63,7 +63,7 @@ Most AI agent frameworks are dynamically typed, monolithic, and opaque. They ass
 - **Agent as Data** -- `AgentConfig` JSON-serializable schema, `builder.toConfig()` reverse mapping, `ReactiveAgents.fromConfig()` / `.fromJSON()` reconstruction, roundtrip serialization
 - **Lightweight composition** -- `agentFn()` lazy agent primitives, `pipe()` sequential chains, `parallel()` concurrent fan-out, `race()` first-to-complete — all composable
 - **Dynamic tool registration** -- `agent.registerTool()` / `agent.unregisterTool()` for runtime tool management on live agents
-- **2,482 tests** across 308 files
+- **2,491 tests** across 309 files
 
 ## Quick Start
 

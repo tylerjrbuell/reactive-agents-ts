@@ -10,9 +10,12 @@ The cost layer keeps your AI spending under control. It routes tasks to the chea
 ## Quick Start
 
 ```typescript
+import { openRouterPricingProvider } from "@reactive-agents/llm-provider";
+
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withCostTracking()   // Enable cost controls
+  .withDynamicPricing(openRouterPricingProvider) // Automatically fetch latest model prices
   .build();
 ```
 
@@ -55,6 +58,27 @@ When a budget limit is exceeded, the agent fails with a `BudgetExceededError` ra
 ### Budget Persistence
 
 Budget state is persisted to SQLite via `BudgetDB`, so cost tracking survives agent restarts. When an agent starts, the budget enforcer loads the most recent spend from the database and continues from where it left off — daily and monthly budgets are enforced across restarts without resetting.
+
+## Dynamic Pricing
+
+By default, the framework maintains an internal static map of provider token costs. To ensure absolute accuracy when using platforms with hundreds of models (like OpenRouter or LiteLLM) or when pricing changes, you can configure the agent to dynamically fetch pricing during initialization:
+
+```typescript
+import { openRouterPricingProvider, urlPricingProvider } from "@reactive-agents/llm-provider";
+
+// 1. Fetch live prices from OpenRouter's API
+builder.withDynamicPricing(openRouterPricingProvider)
+
+// 2. Fetch prices from an internal JSON file hosted anywhere
+builder.withDynamicPricing(urlPricingProvider("https://internal.corp/pricing.json"))
+
+// 3. Override specific model costs manually
+builder.withModelPricing({
+  "my-fine-tuned-model": { input: 0.5, output: 1.5 }
+})
+```
+
+If the dynamic fetch fails, the builder warns but gracefully falls back to the static map. When cost calculations run (e.g. for `metadata.cost`), the framework automatically correctly calculates cached-token discounts applied by OpenAI (50%), Anthropic, and Gemini (25%).
 
 ## Semantic Caching
 

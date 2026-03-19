@@ -51,12 +51,15 @@ To track token usage and estimate costs, use the `.withCostTracking()` builder m
 
 ```typescript
 import { ReactiveAgents } from "@reactive-agents/runtime";
+import { openRouterPricingProvider } from "@reactive-agents/llm-provider";
 
 const agent = await ReactiveAgents.create()
   .withName("cost-tracked-agent")
   .withProvider("anthropic")
   // Enable cost tracking
   .withCostTracking()
+  // Ensure prices are always accurate
+  .withDynamicPricing(openRouterPricingProvider)
   .build();
 
 const result = await agent.run("What is the capital of France?");

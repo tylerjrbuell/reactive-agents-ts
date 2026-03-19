@@ -108,6 +108,8 @@ See [Context Engineering](/guides/context-engineering/) for full tier defaults.
 | `withBehavioralContracts(contract)` | Enforce typed behavioral boundaries: `deniedTools`, `allowedTools`, `maxIterations`. Throws `BehavioralContractError` on violation |
 | `withVerification()` | Semantic entropy, fact decomposition, and multi-source (LLM + Tavily) on output |
 | `withCostTracking()` | Budget enforcement (persisted to SQLite), complexity routing (27 signals), semantic caching |
+| `withModelPricing(registry)` | Set programmatic pricing overrides for specific models manually. Example: `{ "gpt-4o": { input: 5.0, output: 15.0 } }` |
+| `withDynamicPricing(provider)` | Fetch remote pricing at instantiation. Supports `openRouterPricingProvider` or custom JSON endpoints |
 | `withReasoning(options?)` | Structured reasoning (ReAct, Reflexion, Plan-Execute, ToT, Adaptive). See [ReasoningOptions](#reasoningoptions) below |
 | `withTools(options?)` | Tool registry with sandboxed execution (subprocess isolation via `Bun.spawn`, Docker sandbox). Options: `{ tools?: [{ definition, handler }], resultCompression?: ResultCompressionConfig }`. See [Tool Result Compression](/guides/tools/#tool-result-compression) |
 | `withRequiredTools(config)` | Ensure agent calls critical tools before producing a final answer. Config: `{ tools?: string[], adaptive?: boolean, maxRetries?: number }` |

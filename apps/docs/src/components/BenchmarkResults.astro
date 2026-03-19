@@ -222,6 +222,7 @@ function modelLabel(run: Run): string {
                   <th>Task</th>
                   <th>Strategy</th>
                   <th>Status</th>
+                  <th>Iters</th>
                   <th>Latency</th>
                   <th>Tokens</th>
                   <th>Cost</th>
@@ -235,6 +236,7 @@ function modelLabel(run: Run): string {
                     <td class={task.status === "pass" ? "status-pass" : "status-fail"}>
                       {task.status === "pass" ? "Pass" : task.status === "fail" ? "Fail" : "Error"}
                     </td>
+                    <td>{task.iterations > 0 ? task.iterations : "--"}</td>
                     <td>{formatMs(task.durationMs)}</td>
                     <td>{task.tokensUsed > 0 ? task.tokensUsed.toLocaleString() : "--"}</td>
                     <td>{task.estimatedCost > 0 ? `$${task.estimatedCost.toFixed(5)}` : "--"}</td>
