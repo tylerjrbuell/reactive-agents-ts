@@ -122,6 +122,25 @@ Key references:
 7. **One concern per commit.** Don't mix unrelated changes.
 8. **Write JSDoc comments.** Every public API needs a JSDoc comment.
 
+## Terminal Execution Rules
+
+When interacting with the terminal via tools (like `run_command` or similar), agents MUST follow these constraints to avoid hung polling and unreadable outputs:
+
+1. **Never pipe commands (`| cat`, `| tail`, `| grep`) for long-running processes.**
+   Piping routes standard output and error through an OS buffer block. If a process spins (like `bun test`) or takes more than a couple of seconds, the buffer does not flush, causing the agent's status check to return `No output` indefinitely. **Read raw output instead.**
+
+2. **Always append strict timeouts to tests and scripts.**
+   Because Node/Bun and Effect-TS frequently leave dangling event loop handles (e.g., unclosed sockets, pending promises), test runners can hang successfully completed tests forever. Always use `--timeout` flags (e.g., `bun test --timeout 15000`) so the runner releases the process.
+
+3. **Avoid running the whole test suite dynamically.**
+   When verifying new work, run ONLY the exact file or directory modified (e.g., `bun test packages/llm-provider/tests/pricing.test.ts`). Running the global suite takes too long for background polling thresholds.
+
+4. **Synchronous commands for quick returns.**
+   If a command is quick (compilation, single file test, lint check), assign a sufficient `WaitMsBeforeAsync` limit (e.g., `5000ms` to `10000ms`) so it evaluates synchronously and provides immediate feedback.
+
+5. **Stop dangling servers in tests.**
+   If writing a test involving `Bun.serve()`, `Express`, or an HTTP stream, ALWAYS call `.stop(true)` (or equivalent force-close teardown). Leaving a port bound keeps the execution engine trapped in the `RUNNING` status permanently.
+
 ## Vision Alignment Checklist
 
 Before you add or modify code, confirm:
