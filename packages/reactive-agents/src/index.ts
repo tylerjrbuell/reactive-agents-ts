@@ -46,6 +46,18 @@ export {
 
   // Streaming
   AgentStream,
+
+  // Agent as Data
+  AgentConfigSchema,
+  agentConfigToJSON,
+  agentConfigFromJSON,
+  agentConfigToBuilder,
+
+  // Composition API
+  agentFn,
+  pipe,
+  parallel,
+  race,
 } from "@reactive-agents/runtime";
 
 export type {
@@ -60,6 +72,11 @@ export type {
   // Streaming types
   AgentStreamEvent,
   StreamDensity,
+  // Agent as Data types
+  AgentConfig as RuntimeAgentConfig,
+  PersonaConfig,
+  // Composition types
+  AgentFn,
 } from "@reactive-agents/runtime";
 
 // ─── Core Services ───
