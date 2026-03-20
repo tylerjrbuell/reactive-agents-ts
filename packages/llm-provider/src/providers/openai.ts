@@ -22,11 +22,19 @@ import { retryPolicy } from "../retry.js";
 
 // ─── OpenAI Message Conversion ───
 
+type OpenAIToolCallParam = {
+  id: string;
+  type: "function";
+  function: { name: string; arguments: string };
+};
+
 type OpenAIMessage =
-  | { role: "system" | "user" | "assistant"; content: string }
+  | { role: "system" | "user"; content: string }
+  | { role: "assistant"; content: string; tool_calls?: OpenAIToolCallParam[] }
   | { role: "tool"; tool_call_id: string; content: string };
 
-const toOpenAIMessages = (
+/** @internal Exported for testing only */
+export const toOpenAIMessages = (
   messages: readonly LLMMessage[],
 ): OpenAIMessage[] =>
   messages.map((m) => {
@@ -37,8 +45,38 @@ const toOpenAIMessages = (
         content: m.content,
       };
     }
+
+    if (m.role === "assistant" && typeof m.content !== "string") {
+      const blocks = m.content as readonly { type: string; text?: string; id?: string; name?: string; input?: unknown }[];
+      const textParts = blocks
+        .filter((b): b is { type: "text"; text: string } => b.type === "text")
+        .map((b) => b.text)
+        .join("");
+      const toolUseBlocks = blocks.filter(
+        (b): b is { type: "tool_use"; id: string; name: string; input: unknown } =>
+          b.type === "tool_use",
+      );
+
+      if (toolUseBlocks.length > 0) {
+        return {
+          role: "assistant" as const,
+          content: textParts || "",
+          tool_calls: toolUseBlocks.map((tc) => ({
+            id: tc.id,
+            type: "function" as const,
+            function: {
+              name: tc.name,
+              arguments: typeof tc.input === "string" ? tc.input : JSON.stringify(tc.input),
+            },
+          })),
+        };
+      }
+
+      return { role: "assistant" as const, content: textParts };
+    }
+
     return {
-      role: m.role as "system" | "user" | "assistant",
+      role: m.role as "system" | "user",
       content:
         typeof m.content === "string"
           ? m.content
@@ -69,12 +107,76 @@ const toEffectError = (error: unknown, provider: "openai"): LLMErrors => {
 
 // ─── OpenAI Tool Conversion ───
 
-const toOpenAITool = (tool: ToolDefinition) => ({
+/**
+ * Identify if a model supports Structured Tool Calling (Strict Mode).
+ * Supported by gpt-4o-2024-08-06+, gpt-4o-mini, o1, o3-mini, and later models.
+ */
+/** @internal Exported for testing only */
+export const isStrictToolCallingSupported = (model: string): boolean => {
+  const m = model.toLowerCase();
+  return (
+    (m.includes("gpt-4o") && (m.includes("2024-08-06") || m.includes("2024-11-20") || !m.includes("2024-05-13"))) ||
+    m.includes("gpt-4o-mini") ||
+    m.startsWith("o1") ||
+    m.startsWith("o3") ||
+    m.startsWith("o4")
+  );
+};
+
+/**
+ * Transform a JSON Schema into an OpenAI-compatible "Strict" schema.
+ * 1. Sets additionalProperties: false
+ * 2. Moves all properties into the required array
+ * 3. Removes 'default' values (not supported in strict mode)
+ */
+/** @internal Exported for testing only */
+export const toStrictToolSchema = (schema: any): any => {
+  if (!schema || typeof schema !== "object") return schema;
+  const newSchema = JSON.parse(JSON.stringify(schema));
+
+  if (newSchema.type === "object" && newSchema.properties) {
+    const originalRequired = new Set<string>(newSchema.required ?? []);
+    newSchema.additionalProperties = false;
+    // OpenAI Strict Mode requires ALL properties to be listed in 'required'
+    newSchema.required = Object.keys(newSchema.properties);
+
+    for (const key of Object.keys(newSchema.properties)) {
+      const prop = newSchema.properties[key];
+
+      // Remove 'default' as it's not supported in OpenAI Strict Mode
+      if (typeof prop === "object" && prop !== null) {
+        delete prop.default;
+      }
+
+      // Properties that were NOT originally required become nullable so the
+      // model can pass null instead of omitting them (strict mode forbids omission)
+      if (!originalRequired.has(key) && prop && typeof prop === "object") {
+        if (prop.type && prop.type !== "null" && !prop.anyOf) {
+          prop.anyOf = [{ type: prop.type }, { type: "null" }];
+          delete prop.type;
+        }
+      }
+
+      // Recursively apply to nested objects
+      if (prop.type === "object" || prop.anyOf?.some((s: any) => s.type === "object")) {
+        newSchema.properties[key] = toStrictToolSchema(prop);
+      } else if (prop.type === "array" && prop.items && prop.items.type === "object") {
+        newSchema.properties[key].items = toStrictToolSchema(prop.items);
+      }
+    }
+  }
+
+  return newSchema;
+};
+
+/** @internal Exported for testing only */
+export const toOpenAITool = (tool: ToolDefinition, strict: boolean) => ({
   type: "function" as const,
   function: {
     name: tool.name,
     description: tool.description,
-    parameters: tool.inputSchema,
+    parameters: strict ? toStrictToolSchema(tool.inputSchema) : tool.inputSchema,
+    strict: strict || undefined,
   },
 });
 
@@ -132,7 +234,8 @@ export const OpenAIProviderLive = Layer.effect(
           }
 
           if (request.tools && request.tools.length > 0) {
-            requestBody.tools = request.tools.map(toOpenAITool);
+            const strict = isStrictToolCallingSupported(model);
+            requestBody.tools = request.tools.map((t) => toOpenAITool(t, strict));
           }
 
           const response = yield* Effect.tryPromise({
@@ -179,11 +282,16 @@ export const OpenAIProviderLive = Layer.effect(
                     }
                     return msgs;
                   })(),
+                  tools: request.tools && request.tools.length > 0
+                    ? request.tools.map((t) => toOpenAITool(t, isStrictToolCallingSupported(model)))
+                    : undefined,
                   stream: true,
                   stream_options: { include_usage: true },
                 });
 
                 let fullContent = "";
+                // Accumulate streamed tool calls by index
+                const toolCallAccum: Map<number, { id: string; name: string; arguments: string }> = new Map();
                 let finalUsage: {
                   prompt_tokens: number;
                   completion_tokens: number;
@@ -192,7 +300,14 @@ export const OpenAIProviderLive = Layer.effect(
 
                 for await (const chunk of stream as AsyncIterable<{
                   choices: Array<{
-                    delta: { content?: string };
+                    delta: {
+                      content?: string;
+                      tool_calls?: Array<{
+                        index: number;
+                        id?: string;
+                        function?: { name?: string; arguments?: string };
+                      }>;
+                    };
                     finish_reason?: string;
                   }>;
                   usage?: {
@@ -205,6 +320,31 @@ export const OpenAIProviderLive = Layer.effect(
                   if (delta) {
                     fullContent += delta;
                     emit.single({ type: "text_delta", text: delta });
+                  }
+
+                  // Accumulate tool call deltas
+                  const toolDeltas = chunk.choices[0]?.delta?.tool_calls;
+                  if (toolDeltas) {
+                    for (const tc of toolDeltas) {
+                      const existing = toolCallAccum.get(tc.index);
+                      if (existing) {
+                        if (tc.function?.arguments) existing.arguments += tc.function.arguments;
+                      } else {
+                        toolCallAccum.set(tc.index, {
+                          id: tc.id ?? "",
+                          name: tc.function?.name ?? "",
+                          arguments: tc.function?.arguments ?? "",
+                        });
+                        // Emit tool_use_start on first chunk for this tool
+                        if (tc.id && tc.function?.name) {
+                          emit.single({ type: "tool_use_start", id: tc.id, name: tc.function.name });
+                        }
+                      }
+                      // Emit argument deltas for progressive parsing
+                      if (tc.function?.arguments) {
+                        emit.single({ type: "tool_use_delta", input: tc.function.arguments });
+                      }
+                    }
                   }
 
                   // Capture final usage (reported after all content chunks when stream_options.include_usage is true)
