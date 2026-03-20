@@ -65,13 +65,14 @@ const toAnthropicTool = (tool: {
   name: string;
   description: string;
   inputSchema: Record<string, unknown>;
-}) => ({
+}, cached: boolean = false) => ({
   name: tool.name,
   description: tool.description,
   input_schema: {
     type: "object" as const,
     ...tool.inputSchema,
   },
+  ...(cached ? { cache_control: { type: "ephemeral" as const } } : {}),
 });
 
 const toEffectError = (error: unknown, provider: "anthropic"): LLMErrors => {
@@ -156,7 +157,9 @@ export const AnthropicProviderLive = Layer.effect(
                 stop_sequences: request.stopSequences
                   ? [...request.stopSequences]
                   : undefined,
-                tools: request.tools?.map(toAnthropicTool),
+                tools: request.tools?.map((t, i) =>
+                  toAnthropicTool(t, i === (request.tools?.length ?? 0) - 1),
+                ),
               }),
             catch: (error) => toEffectError(error, "anthropic"),
           });
