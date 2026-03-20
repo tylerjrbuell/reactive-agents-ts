@@ -473,32 +473,27 @@ export interface MultiModelReport {
 }
 ```
 
-**Step 2: Add --append flag to runner**
+**Step 2: Upsert logic in runner**
 
-In `run.ts`, add append logic:
+In `run.ts`, `--output` always upserts: reads the existing report, replaces any
+previous run for the same provider+model, and keeps all other runs intact.
 
 ```typescript
-const append = args.includes("--append");
-
-const report = await runBenchmarks({ provider, model, tiers });
+const report = await runBenchmarks({ provider, model, tiers, timeoutMs });
 
 if (output) {
+  // Upsert: keep other provider/model runs, replace the matching one
   let multiReport: MultiModelReport;
-  if (append) {
-    try {
-      const existing = JSON.parse(await Bun.file(output).text()) as MultiModelReport;
-      // Replace existing run for same provider+model, or append new
-      const existingRuns = existing.runs.filter(
-        (r) => !(r.provider === report.provider && r.model === report.model),
-      );
-      multiReport = {
-        generatedAt: new Date().toISOString(),
-        runs: [...existingRuns, report],
-      };
-    } catch {
-      multiReport = { generatedAt: new Date().toISOString(), runs: [report] };
-    }
-  } else {
+  try {
+    const existing = JSON.parse(await Bun.file(output).text()) as MultiModelReport;
+    const otherRuns = existing.runs.filter(
+      (r) => !(r.provider === report.provider && r.model === report.model),
+    );
+    multiReport = {
+      generatedAt: new Date().toISOString(),
+      runs: [...otherRuns, report],
+    };
+  } catch {
     multiReport = { generatedAt: new Date().toISOString(), runs: [report] };
   }
   await Bun.write(output, JSON.stringify(multiReport, null, 2));
@@ -522,7 +517,7 @@ Expected: All pass
 
 ```bash
 git add packages/benchmarks/src/types.ts packages/benchmarks/src/runner.ts packages/benchmarks/src/run.ts packages/benchmarks/src/index.ts
-git commit -m "feat(benchmarks): multi-model report format with --append flag for incremental collection"
+git commit -m "feat(benchmarks): multi-model report format with upsert-on-write"
 ```
 
 ---

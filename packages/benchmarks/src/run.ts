@@ -17,26 +17,24 @@ const model = getArg("--model");
 const tierArg = getArg("--tier");
 const tiers = tierArg ? tierArg.split(",") as Tier[] : undefined;
 const output = getArg("--output");
+const timeoutArg = getArg("--timeout");
+const timeoutMs = timeoutArg ? parseInt(timeoutArg, 10) * 1000 : undefined;
 
-const report = await runBenchmarks({ provider, model, tiers });
+const report = await runBenchmarks({ provider, model, tiers, timeoutMs });
 
 if (output) {
-  const append = args.includes("--append");
+  // Upsert: keep other provider/model runs, replace the matching one
   let multiReport: MultiModelReport;
-  if (append) {
-    try {
-      const existing = JSON.parse(await Bun.file(output).text()) as MultiModelReport;
-      const existingRuns = existing.runs.filter(
-        (r) => !(r.provider === report.provider && r.model === report.model),
-      );
-      multiReport = {
-        generatedAt: new Date().toISOString(),
-        runs: [...existingRuns, report],
-      };
-    } catch {
-      multiReport = { generatedAt: new Date().toISOString(), runs: [report] };
-    }
-  } else {
+  try {
+    const existing = JSON.parse(await Bun.file(output).text()) as MultiModelReport;
+    const otherRuns = existing.runs.filter(
+      (r) => !(r.provider === report.provider && r.model === report.model),
+    );
+    multiReport = {
+      generatedAt: new Date().toISOString(),
+      runs: [...otherRuns, report],
+    };
+  } catch {
     multiReport = { generatedAt: new Date().toISOString(), runs: [report] };
   }
   await Bun.write(output, JSON.stringify(multiReport, null, 2));

@@ -65,7 +65,7 @@ const runTask = async (
       .withName(`bench-${task.id}`)
       .withProvider(provider)
       .withModel(model)
-      .withMaxIterations(task.strategy ? 5 : 2);
+      .withMaxIterations(task.strategy ? 30 : 5);
 
     if (task.strategy) {
       const strategyMap = {
@@ -293,64 +293,111 @@ export const runBenchmarks = async (
   const resolvedModel = options.model ?? defaultModel[options.provider] ?? "default";
   const timeoutMs = options.timeoutMs ?? 300_000;
 
-  console.log(`\n  ╔══════════════════════════════════════════════════════╗`);
-  console.log(`  ║   Reactive Agents Benchmark Suite                    ║`);
-  console.log(`  ╠══════════════════════════════════════════════════════╣`);
-  console.log(`  ║  Provider : ${options.provider.padEnd(40)}║`);
-  console.log(`  ║  Model    : ${resolvedModel.padEnd(40)}║`);
-  console.log(`  ║  Tasks    : ${String(tasks.length).padEnd(40)}║`);
-  console.log(`  ║  Timeout  : ${String(timeoutMs / 1000 + "s").padEnd(40)}║`);
-  console.log(`  ╚══════════════════════════════════════════════════════╝\n`);
+  // ── ANSI color codes (violet #8b5cf6, cyan #06b6d4, brand palette) ──
+  const V = "\x1b[38;2;139;92;246m";  // Violet
+  const C = "\x1b[38;2;6;182;212m";   // Cyan
+  const G = "\x1b[38;2;74;222;128m";  // Green (pass)
+  const R = "\x1b[38;2;248;113;113m"; // Red (fail)
+  const Y = "\x1b[38;2;250;204;21m";  // Yellow (warn)
+  const D = "\x1b[2m";                // Dim
+  const B = "\x1b[1m";                // Bold
+  const X = "\x1b[0m";                // Reset
+
+  console.log(`\n  ${V}╔══════════════════════════════════════════════════════╗${X}`);
+  console.log(`  ${V}║${X}   ${B}${C}Reactive Agents${X} ${D}Benchmark Suite${X}                    ${V}║${X}`);
+  console.log(`  ${V}╠══════════════════════════════════════════════════════╣${X}`);
+  console.log(`  ${V}║${X}  ${D}Provider${X} ${C}${options.provider.padEnd(42)}${X}${V}║${X}`);
+  console.log(`  ${V}║${X}  ${D}Model${X}    ${C}${resolvedModel.padEnd(42)}${X}${V}║${X}`);
+  console.log(`  ${V}║${X}  ${D}Tasks${X}    ${C}${String(tasks.length).padEnd(42)}${X}${V}║${X}`);
+  console.log(`  ${V}║${X}  ${D}Timeout${X}  ${C}${String(timeoutMs / 1000 + "s").padEnd(42)}${X}${V}║${X}`);
+  console.log(`  ${V}╚══════════════════════════════════════════════════════╝${X}\n`);
 
   if (options.provider === "test") {
-    console.log(`  ⚠  WARNING: Using 'test' provider — no real LLM calls will be made.`);
-    console.log(`  ⚠  For real-world results, use: --provider anthropic --model claude-haiku-4-5\n`);
+    console.log(`  ${Y}!${X}  ${D}Using 'test' provider — no real LLM calls will be made.${X}`);
+    console.log(`  ${Y}!${X}  ${D}For real-world results, use: --provider anthropic --model claude-haiku-4-5${X}\n`);
   }
 
   const results: TaskResult[] = [];
 
+  // Tier color mapping
+  const tierColor = (tier: string) => {
+    switch (tier) {
+      case "trivial": return D;
+      case "simple": return C;
+      case "moderate": return V;
+      case "complex": return Y;
+      case "expert": return R;
+      default: return X;
+    }
+  };
+
   for (let i = 0; i < tasks.length; i++) {
     const task = tasks[i];
-    const indexStr = `[${i + 1}/${tasks.length}]`;
-    
-    process.stdout.write(`  ${indexStr.padEnd(8)} ⊙ [${task.tier.padEnd(8)}] ${task.name.padEnd(50)} `);
+    const progress = `${D}[${i + 1}/${tasks.length}]${X}`;
+    const tier = `${tierColor(task.tier)}${task.tier.padEnd(8)}${X}`;
+
+    process.stdout.write(`  ${progress} ${V}●${X} ${tier} ${task.name.padEnd(50)} `);
     const result = await runTask(task, options.provider, resolvedModel, timeoutMs);
     results.push(result);
 
-    const icon = result.status === "pass" ? "✓" : result.status === "fail" ? "✗" : "⚠";
+    const statusIcon =
+      result.status === "pass" ? `${G}✓${X}` :
+      result.status === "fail" ? `${R}✗${X}` : `${Y}⚠${X}`;
     const latency = result.durationMs >= 1000
       ? `${(result.durationMs / 1000).toFixed(1)}s`
       : `${result.durationMs.toFixed(0)}ms`;
-    const tokenInfo = result.tokensUsed > 0 ? ` · ${result.tokensUsed} tok` : "";
-    console.log(`${icon} ${latency}${tokenInfo}`);
+    const tokenInfo = result.tokensUsed > 0 ? ` ${D}·${X} ${C}${result.tokensUsed}${X}${D} tok${X}` : "";
+    console.log(`${statusIcon} ${D}${latency}${X}${tokenInfo}`);
 
     if (result.status === "error") {
-      console.log(`    ↳ Error: ${result.error?.slice(0, 100)}`);
+      console.log(`      ${R}↳${X} ${D}${result.error?.slice(0, 100)}${X}`);
     } else if (result.status === "fail") {
-      console.log(`    ↳ Expected pattern not found in output`);
+      console.log(`      ${Y}↳${X} ${D}Expected pattern not found in output${X}`);
     }
   }
 
-  // Complete the progress counter nicely
-  console.log(`\n  [${tasks.length}/${tasks.length}] ✨ All ${tasks.length} tasks completed.`);
+  console.log(`\n  ${G}✨${X} ${B}All ${tasks.length} tasks completed.${X}`);
 
-  console.log("\n  Measuring framework overhead (test provider)...");
+  console.log(`\n  ${D}Measuring framework overhead...${X}`);
   const overhead = measureOverhead();
   for (const m of overhead) {
-    console.log(`  ⏱  ${m.label.padEnd(32)}: ${m.durationMs.toFixed(3)}ms avg (${m.samples} samples)`);
+    console.log(`  ${C}⏱${X}  ${m.label.padEnd(32)} ${D}${m.durationMs.toFixed(3)}ms avg (${m.samples} samples)${X}`);
   }
 
   const summary = buildSummary(results);
   const passRate = Math.round((summary.passed / summary.totalTasks) * 100);
+  const passColor = passRate >= 80 ? G : passRate >= 50 ? Y : R;
 
-  console.log(`\n  ┌─────────────────────────────────────────────────────┐`);
-  console.log(`  │  Results                                             │`);
-  console.log(`  ├─────────────────────────────────────────────────────┤`);
-  console.log(`  │  Pass rate : ${(String(summary.passed) + "/" + String(summary.totalTasks) + " (" + passRate + "%)").padEnd(39)}│`);
-  console.log(`  │  Duration  : ${(summary.totalDurationMs >= 1000 ? (summary.totalDurationMs / 1000).toFixed(1) + "s total, " + (summary.avgLatencyMs / 1000).toFixed(1) + "s avg" : summary.totalDurationMs.toFixed(0) + "ms total").padEnd(39)}│`);
-  console.log(`  │  Tokens    : ${String(summary.totalTokens.toLocaleString()).padEnd(39)}│`);
-  console.log(`  │  Cost      : $${String(summary.totalCost.toFixed(4)).padEnd(38)}│`);
-  console.log(`  └─────────────────────────────────────────────────────┘\n`);
+  // ── Progress bar ──
+  const barWidth = 30;
+  const filledWidth = Math.round((summary.passed / summary.totalTasks) * barWidth);
+  const bar = `${G}${"█".repeat(filledWidth)}${X}${D}${"░".repeat(barWidth - filledWidth)}${X}`;
+
+  console.log(`\n  ${V}┌─────────────────────────────────────────────────────┐${X}`);
+  console.log(`  ${V}│${X}  ${B}${C}Results${X}                                             ${V}│${X}`);
+  console.log(`  ${V}├─────────────────────────────────────────────────────┤${X}`);
+  console.log(`  ${V}│${X}  ${bar} ${passColor}${B}${summary.passed}/${summary.totalTasks}${X} ${D}(${passRate}%)${X}   ${V}│${X}`);
+  console.log(`  ${V}│${X}                                                     ${V}│${X}`);
+
+  const durationStr = summary.totalDurationMs >= 1000
+    ? `${(summary.totalDurationMs / 1000).toFixed(1)}s total, ${(summary.avgLatencyMs / 1000).toFixed(1)}s avg`
+    : `${summary.totalDurationMs.toFixed(0)}ms total`;
+  console.log(`  ${V}│${X}  ${D}Duration${X}  ${C}${durationStr.padEnd(40)}${X} ${V}│${X}`);
+  console.log(`  ${V}│${X}  ${D}Tokens${X}    ${C}${String(summary.totalTokens.toLocaleString()).padEnd(40)}${X} ${V}│${X}`);
+  console.log(`  ${V}│${X}  ${D}Cost${X}      ${C}${"$" + summary.totalCost.toFixed(4)}${X}${" ".repeat(Math.max(0, 39 - ("$" + summary.totalCost.toFixed(4)).length))} ${V}│${X}`);
+  console.log(`  ${V}└─────────────────────────────────────────────────────┘${X}\n`);
+
+  // ── Per-tier breakdown ──
+  const tiers: Tier[] = ["trivial", "simple", "moderate", "complex", "expert"];
+  console.log(`  ${D}Per-tier breakdown:${X}`);
+  for (const tier of tiers) {
+    const tierData = summary.byTier[tier];
+    if (tierData.total === 0) continue;
+    const pct = Math.round((tierData.passed / tierData.total) * 100);
+    const avgStr = tierData.avgMs >= 1000 ? `${(tierData.avgMs / 1000).toFixed(1)}s` : `${tierData.avgMs.toFixed(0)}ms`;
+    const pctColor = pct >= 80 ? G : pct >= 50 ? Y : R;
+    console.log(`  ${tierColor(tier)}  ${tier.padEnd(10)}${X} ${pctColor}${tierData.passed}/${tierData.total}${X} ${D}(${pct}%)${X}  ${D}avg ${avgStr}${X}`);
+  }
 
   return {
     timestamp: new Date().toISOString(),
