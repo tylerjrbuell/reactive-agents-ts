@@ -33,10 +33,16 @@ describe("Build-time validation", () => {
   });
 
   test("skips API key check for ollama provider", async () => {
-    // Ollama doesn't require an API key, but build will fail if service is unreachable
-    await expect(
-      ReactiveAgents.create().withProvider("ollama").build(),
-    ).rejects.toThrow(/Cannot connect to Ollama|Provider connection failed/);
+    // Ollama doesn't require an API key. Build succeeds if Ollama is running,
+    // or throws a connection error if it isn't — either outcome is correct.
+    try {
+      const agent = await ReactiveAgents.create().withProvider("ollama").build();
+      // Ollama is running — no API key error should have occurred
+      await agent.dispose();
+    } catch (e: any) {
+      // Ollama is not running — should be a connection error, NOT an API key error
+      expect(e.message).toMatch(/Cannot connect to Ollama|Provider connection failed/);
+    }
   });
 
   test("skips validation for test provider", async () => {
