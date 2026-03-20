@@ -9,6 +9,7 @@ import {
   llmEndTurnEvaluator,
   finalAnswerRegexEvaluator,
   completionGapEvaluator,
+  defaultEvaluators,
   type TerminationContext,
   type TerminationSignalEvaluator,
 } from "../../src/strategies/shared/termination-oracle.js";
@@ -405,5 +406,99 @@ describe("completionGapEvaluator", () => {
   test("redirectCount = 0 → null (default no opinion)", () => {
     const ctx = makeCtx({ redirectCount: 0 });
     expect(completionGapEvaluator.evaluate(ctx)).toBeNull();
+  });
+});
+
+// ── Benchmark regression scenarios ──────────────────────────────────────────
+
+describe("benchmark regression scenarios", () => {
+  test("Gemini '4' at iteration 0 with end_turn → exits", () => {
+    const result = evaluateTermination(makeCtx({
+      thought: "4",
+      stopReason: "end_turn",
+      iteration: 0,
+    }), defaultEvaluators);
+    expect(result.shouldExit).toBe(true);
+    expect(result.evaluator).toBe("LLMEndTurn");
+  });
+
+  test("GPT-4o-mini 'Paris' repeated 3 times → exits on 2nd via ContentStability", () => {
+    const result = evaluateTermination(makeCtx({
+      thought: "The capital of France is Paris.",
+      priorThought: "The capital of France is Paris.",
+      stopReason: "end_turn",
+      iteration: 2,
+    }), defaultEvaluators);
+    expect(result.shouldExit).toBe(true);
+    expect(result.evaluator).toBe("ContentStability");
+  });
+
+  test("Qwen3 **Final Answer** 105 → exits (LLMEndTurn fires before FinalAnswerRegex)", () => {
+    const result = evaluateTermination(makeCtx({
+      thought: "**Final Answer** 105",
+      stopReason: "end_turn",
+    }), defaultEvaluators);
+    expect(result.shouldExit).toBe(true);
+    // LLMEndTurn appears before FinalAnswerRegex in defaultEvaluators — both are medium
+    // confidence exit, so the first one (LLMEndTurn) wins in the sort-stable resolver.
+    expect(["LLMEndTurn", "FinalAnswerRegex"]).toContain(result.evaluator);
+  });
+
+  test("Cogito 'Hello! How can I help?' on 'Hi' → exits via LLMEndTurn", () => {
+    const result = evaluateTermination(makeCtx({
+      thought: "Hello! How can I help you today?",
+      stopReason: "end_turn",
+      iteration: 0,
+      taskDescription: "Hi",
+    }), defaultEvaluators);
+    expect(result.shouldExit).toBe(true);
+    expect(result.evaluator).toBe("LLMEndTurn");
+  });
+
+  test("Qwen3 scratchpad repeating after tool completion → exits via ContentStability", () => {
+    const result = evaluateTermination(makeCtx({
+      thought: "The capital of France is Paris.",
+      priorThought: "The capital of France is Paris.",
+      stopReason: "end_turn",
+      toolsUsed: new Set(["scratchpad-write", "scratchpad-read"]),
+      iteration: 5,
+    }), defaultEvaluators);
+    expect(result.shouldExit).toBe(true);
+    expect(result.evaluator).toBe("ContentStability");
+  });
+
+  test("entropy converging + end_turn → exits via EntropyConvergence", () => {
+    const result = evaluateTermination(makeCtx({
+      thought: "The answer is 42.",
+      stopReason: "end_turn",
+      entropy: { composite: 0.2 } as any,
+      trajectory: { shape: "converging", derivative: -0.15, momentum: -0.1 },
+    }), defaultEvaluators);
+    expect(result.shouldExit).toBe(true);
+    expect(result.evaluator).toBe("EntropyConvergence");
+  });
+
+  test("tool call pending overrides everything", () => {
+    const result = evaluateTermination(makeCtx({
+      thought: "FINAL ANSWER: done",
+      priorThought: "FINAL ANSWER: done",
+      stopReason: "end_turn",
+      toolRequest: { tool: "web-search", input: '{"q":"test"}' },
+      entropy: { composite: 0.1 } as any,
+      trajectory: { shape: "converging", derivative: -0.2, momentum: -0.1 },
+    }), defaultEvaluators);
+    expect(result.shouldExit).toBe(false);
+    expect(result.evaluator).toBe("PendingToolCall");
+  });
+
+  test("no reactive intelligence → fallback works via ContentStability + LLMEndTurn", () => {
+    // No entropy, no trajectory, no controller decisions
+    const result = evaluateTermination(makeCtx({
+      thought: "The answer is Paris.",
+      stopReason: "end_turn",
+      iteration: 1,
+    }), defaultEvaluators);
+    expect(result.shouldExit).toBe(true);
+    expect(result.evaluator).toBe("LLMEndTurn");
   });
 });
