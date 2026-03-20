@@ -9,7 +9,7 @@
 
 ## Thesis
 
-The framework has seven independent exit checks in a waterfall where the dumbest (50-character string length) runs before the smartest (entropy trajectory analysis with 5 calibrated signal sources). The reactive intelligence layer — which already knows when the model has converged — is opt-in and advisory. The result: a 97% pass rate on Anthropic Haiku degrades to 77% on Gemini Flash and 60% on Ollama models, not because those models are wrong, but because the framework rejects their correct answers.
+The framework has five distinct exit paths in a waterfall where the dumbest (50-character string length) runs before the smartest (entropy trajectory analysis with 5 calibrated signal sources). The reactive intelligence layer — which already knows when the model has converged — is opt-in and advisory. The result: a 97% pass rate on Anthropic Haiku degrades to 77% on Gemini Flash and 60% on Ollama models, not because those models are wrong, but because the framework rejects their correct answers.
 
 This design inverts the trust model. The entropy sensor and reactive controller become the primary decision-makers. Hardcoded gates become safety nets. The framework gets smarter with every run as conformal calibration learns per-model thresholds. Every agent benefits from day one because reactive intelligence is default-on.
 
@@ -59,7 +59,17 @@ Section 6: Metrics & Testing ──────── LLM call counter, time mul
 
 ### Problem
 
-Seven exit checks scattered across `react-kernel.ts` (lines 508-577) and `kernel-runner.ts` (lines 142-280). Checked in a waterfall where early checks veto later, smarter checks. The 50-character string length check runs before the entropy sensor scores the iteration.
+Five distinct exit paths scattered across two functions in `react-kernel.ts` and the loop in `kernel-runner.ts`:
+
+1. `hasFinalAnswer` regex in `handleThinking` (lines ~508-543)
+2. `end_turn` with `length >= 50` + `iteration >= 1` gate in `handleThinking` (lines ~546-577)
+3. `final-answer` tool accepted in `handleActing` (lines ~673-783)
+4. Post-action FINAL ANSWER check in `handleActing` (lines ~878-903)
+5. Max iterations exhausted in `kernel-runner.ts` loop condition
+
+The oracle replaces exit paths 1, 2, and 4 in `handleThinking`. Exit path 3 (`final-answer` tool in `handleActing`) is preserved but its accept/reject logic feeds into the `FinalAnswerTool` evaluator. Exit path 5 remains as the kernel-runner loop boundary.
+
+The 50-character string length check in path 2 runs before the entropy sensor scores the iteration.
 
 ### Architecture
 
@@ -83,7 +93,7 @@ interface TerminationContext {
   readonly steps: readonly ReasoningStep[];
   readonly priorThought?: string;           // previous iteration's output
   readonly entropy?: EntropyScore;
-  readonly trajectory?: TrajectoryAnalysis;
+  readonly trajectory?: EntropyTrajectory;  // from @reactive-agents/reactive-intelligence
   readonly toolsUsed: ReadonlySet<string>;
   readonly requiredTools: readonly string[];
   readonly allToolSchemas: readonly ToolSchema[];
@@ -115,6 +125,7 @@ interface TerminationDecision {
   readonly reason: string;
   readonly evaluator: string;     // which evaluator produced the winning verdict
   readonly output?: string;
+  readonly allVerdicts: ReadonlyArray<{ evaluator: string; verdict: SignalVerdict }>;  // observability
 }
 ```
 
@@ -133,25 +144,45 @@ function evaluateTermination(
 
     // Short-circuit: high-confidence exit — no need to check others
     if (verdict.action === "exit" && verdict.confidence === "high") {
-      return { shouldExit: true, ...verdict, evaluator: ev.name };
+      verdicts.push({ evaluator: ev.name, verdict });
+      return { shouldExit: true, ...verdict, evaluator: ev.name, allVerdicts: verdicts };
     }
+
+    // Short-circuit: high-confidence continue — stop evaluating, keep looping
+    if (verdict.action === "continue" && verdict.confidence === "high") {
+      verdicts.push({ evaluator: ev.name, verdict });
+      return { shouldExit: false, ...verdict, evaluator: ev.name, allVerdicts: verdicts };
+    }
+
     verdicts.push({ evaluator: ev.name, verdict });
   }
 
-  // Check for redirects (completion gap feedback)
-  const redirect = verdicts.find(v => v.verdict.action === "redirect");
-  if (redirect) {
-    return { shouldExit: false, ...redirect.verdict, evaluator: redirect.evaluator };
+  // Collect exits and redirects, resolve by confidence
+  const exits = verdicts.filter(v => v.verdict.action === "exit");
+  const redirects = verdicts.filter(v => v.verdict.action === "redirect");
+
+  // Compare best exit vs best redirect — highest confidence wins
+  const bestExit = exits.sort((a, b) =>
+    confidenceRank(b.verdict.confidence) - confidenceRank(a.verdict.confidence)
+  )[0];
+  const bestRedirect = redirects.sort((a, b) =>
+    confidenceRank(b.verdict.confidence) - confidenceRank(a.verdict.confidence)
+  )[0];
+
+  if (bestExit && bestRedirect) {
+    // If exit confidence >= redirect confidence, exit wins
+    if (confidenceRank(bestExit.verdict.confidence) >= confidenceRank(bestRedirect.verdict.confidence)) {
+      return { shouldExit: true, ...bestExit.verdict, evaluator: bestExit.evaluator, allVerdicts: verdicts };
+    }
+    return { shouldExit: false, ...bestRedirect.verdict, evaluator: bestRedirect.evaluator, allVerdicts: verdicts };
   }
 
-  // Check for medium/low-confidence exits — highest confidence wins
-  const exits = verdicts
-    .filter(v => v.verdict.action === "exit")
-    .sort((a, b) => confidenceRank(b.verdict.confidence) - confidenceRank(a.verdict.confidence));
+  if (bestExit) {
+    return { shouldExit: true, ...bestExit.verdict, evaluator: bestExit.evaluator, allVerdicts: verdicts };
+  }
 
-  if (exits.length > 0) {
-    const best = exits[0];
-    return { shouldExit: true, ...best.verdict, evaluator: best.evaluator };
+  if (bestRedirect) {
+    return { shouldExit: false, ...bestRedirect.verdict, evaluator: bestRedirect.evaluator, allVerdicts: verdicts };
   }
 
   return {
@@ -160,6 +191,7 @@ function evaluateTermination(
     confidence: "low",
     reason: "no_exit_signal",
     evaluator: "none",
+    allVerdicts: verdicts,
   };
 }
 
@@ -218,6 +250,33 @@ evaluate(ctx): SignalVerdict | null {
 }
 ```
 
+#### 3b. ReactiveControllerEarlyStop
+
+```typescript
+// Consumes the reactive controller's early-stop decision directly.
+// The controller's evaluate() runs before the oracle (see Entropy Scoring Reorder).
+// Its decision is passed into TerminationContext rather than setting a flag for next iteration.
+evaluate(ctx): SignalVerdict | null {
+  if (!ctx.controllerDecisions) return null;
+
+  const earlyStop = ctx.controllerDecisions.find(d => d.decision === "early-stop");
+  if (!earlyStop) return null;
+
+  return {
+    action: "exit",
+    confidence: "high",
+    reason: `controller_early_stop: ${earlyStop.reason}`,
+    output: ctx.thought.trim(),
+  };
+}
+```
+
+**Note:** This replaces the current `earlyStopSignaled` flag mechanism in `kernel-runner.ts` (line 237). Instead of setting a meta flag that nudges the LLM on the next iteration, the controller's decision feeds directly into the oracle for immediate evaluation. The `TerminationContext` gains an additional field:
+
+```typescript
+readonly controllerDecisions?: readonly ReactiveDecision[];  // from reactive controller evaluate()
+```
+
 #### 4. ContentStability
 
 ```typescript
@@ -230,7 +289,11 @@ evaluate(ctx): SignalVerdict | null {
 
   if (current.length === 0 || prior.length === 0) return null;
 
-  // Exact match or high normalized similarity
+  // Exact match or high normalized similarity.
+  // normalizedLevenshtein is a ~15-line utility implemented in termination-oracle.ts:
+  // Levenshtein edit distance / max(len(a), len(b)), result inverted to similarity (1 - distance/max).
+  // No external dependency needed. For the 90% case (benchmark data shows verbatim repeats),
+  // the exact match branch fires first and the Levenshtein path is a safety net.
   const isStable = current === prior ||
     normalizedLevenshtein(current, prior) > 0.85;
 
@@ -270,8 +333,10 @@ evaluate(ctx): SignalVerdict | null {
 #### 6. FinalAnswerRegex
 
 ```typescript
-// Text-based fallback — catches markdown variants
-const FINAL_ANSWER_RE = /(?:\*{0,2})final\s*answer(?:\*{0,2})\s*[:：]?\s*/i;
+// Text-based fallback — catches markdown variants.
+// Uses the expanded FINAL_ANSWER_RE defined in tool-utils.ts (Section 4E).
+// Single regex definition shared between hasFinalAnswer() and this evaluator.
+// import { FINAL_ANSWER_RE, extractFinalAnswer } from "./tool-utils";
 
 evaluate(ctx): SignalVerdict | null {
   if (!FINAL_ANSWER_RE.test(ctx.thought) && !FINAL_ANSWER_RE.test(ctx.thinking ?? "")) {
@@ -333,18 +398,41 @@ if (decision.action === "redirect") {
 
 ### Entropy Scoring Reorder
 
-In `kernel-runner.ts`, entropy scoring (currently lines 142-194) moves **before** the kernel step that checks exits. The flow becomes:
+**Clarification:** Entropy scoring stays in `kernel-runner.ts` (it needs the kernel's thought output to score). The reorder is within the kernel-runner's post-step processing: entropy scoring and reactive controller evaluation now happen BEFORE the kernel-runner checks exit status, not after. The oracle is called from within the kernel's `handleThinking` function, which now receives the entropy score and controller decisions as part of its context.
+
+The updated flow in `kernel-runner.ts`:
 
 ```
-1. Kernel produces thought (LLM call)
-2. Entropy sensor scores the response immediately
+1. Kernel's handleThinking produces thought (LLM call)
+2. Entropy sensor scores the response (in kernel-runner, post-thought)
 3. Reactive controller evaluates (early-stop, compression, strategy-switch)
-4. Termination oracle evaluates all signals (including entropy)
-5. If exit → assemble output → done
-6. If continue → tool parsing → action → observation → next iteration
+4. Controller decisions + entropy score passed back to kernel via TerminationContext
+5. Termination oracle evaluates all signals (inside handleThinking)
+6. If exit → assemble output → done
+7. If continue → tool parsing → action → observation → next iteration
 ```
 
-The reactive controller's `early-stop` decision feeds directly into the `EntropyConvergence` evaluator rather than setting a flag for the next iteration.
+The reactive controller's `early-stop` decision feeds into the `ReactiveControllerEarlyStop` evaluator for immediate evaluation, replacing the `earlyStopSignaled` flag-for-next-iteration mechanism.
+
+### priorThought Threading
+
+The `ContentStability` evaluator needs the previous iteration's thought. Currently `state.meta.lastThought` is set (react-kernel.ts line ~595) but cleared after acting (line ~914).
+
+**Fix:** Add a persistent `priorThought` field to `KernelState`:
+
+```typescript
+// In kernel-state.ts
+readonly priorThought?: string;  // previous iteration's thought, for stability detection
+```
+
+Updated at the end of each `handleThinking` call: `priorThought: thought.trim()`. Not cleared during acting — persists across the full iteration cycle.
+
+### handleActing Scope
+
+The oracle replaces exit logic in `handleThinking` only. The `handleActing` function's exit paths are preserved:
+
+- **`final-answer` tool** (lines ~673-783): The accept/reject logic stays in `handleActing`. When accepted, the `FinalAnswerTool` evaluator in the oracle is not involved — `handleActing` transitions directly to `status: "done"`. The evaluator exists for cases where the kernel needs to evaluate final-answer signals outside the acting phase.
+- **Post-action FINAL ANSWER check** (lines ~878-903): This path (checking if the original thought had FINAL ANSWER after tool execution) is moved into the oracle. After tool execution completes, the kernel calls the oracle again with updated context to check for deferred exit signals.
 
 ---
 
@@ -466,14 +554,20 @@ type TaskComplexity = "trivial" | "moderate" | "complex";
 function classifyComplexity(
   iteration: number,
   entropy: EntropyScore | undefined,
-  toolsUsed: boolean,
+  toolCallCount: number,
   terminatedBy: string,
 ): TaskComplexity {
-  if (iteration <= 1 && !toolsUsed && terminatedBy !== "max_iterations") return "trivial";
-  if (entropy && entropy.composite < 0.4 && iteration <= 3) return "moderate";
+  // No tools, 1 iteration, natural exit → trivial (e.g., "2+2", "capital of France")
+  if (iteration <= 1 && toolCallCount === 0 && terminatedBy !== "max_iterations") return "trivial";
+  // Light tool use (1-2 calls), low entropy, few iterations → moderate (e.g., "search for X")
+  if (toolCallCount <= 2 && iteration <= 3 &&
+      (entropy ? entropy.composite < 0.4 : true)) return "moderate";
+  // Everything else → complex
   return "complex";
 }
 ```
+
+Uses `toolCallCount` (number of actual tool executions) rather than boolean `toolsUsed`. A single tool call in 2 iterations (think → act → done) is "moderate" and gets async memory-flush rather than full blocking pipeline.
 
 Runs at end of reasoning phase. Stored on `AgentResult.metrics.complexity`.
 
@@ -690,16 +784,18 @@ Comprehensive tests derived from benchmark failures.
 | Multiple exit signals at different confidence | Highest confidence wins |
 | No reactive intelligence available | Fallback works via ContentStability + LLMEndTurn |
 
-**Regression tests — exact benchmark failures:**
+**Regression tests — exact benchmark failures (with expected evaluator):**
 
-| Scenario | Provider | Expected |
-|----------|----------|----------|
-| Gemini "4" at iteration 0, end_turn | Gemini | Exit (LLMEndTurn, no iteration gate) |
-| "Paris" repeated 3 times, no tools | GPT-4o-mini | Exit after 2nd (ContentStability) |
-| `**Final Answer** 105` | Qwen3 | Exit (FinalAnswerRegex, expanded) |
-| Fizzbuzz code in thought, "The code is complete" in final answer | GPT-4o-mini | Output contains code (OutputAssembly) |
-| "Hello! How can I help?" on "Hi" | Cogito | Exit (LLMEndTurn, no length gate) |
-| Scratchpad write+read then repeating answer | Qwen3 | Exit after repeat (ContentStability) |
+| Scenario | Provider | Expected Evaluator | Expected Decision |
+|----------|----------|--------------------|-------------------|
+| Gemini "4" at iteration 0, end_turn | Gemini | `LLMEndTurn` | Exit — no iteration gate, no length gate |
+| "Paris" repeated 3 times, no tools | GPT-4o-mini | `ContentStability` | Exit on iteration 2 — exact match detected |
+| `**Final Answer** 105` | Qwen3 | `FinalAnswerRegex` | Exit — expanded regex matches markdown bold |
+| Fizzbuzz code in thought, "The code is complete" in final answer | GPT-4o-mini | Any exit evaluator | Output assembly prepends code blocks |
+| "Hello! How can I help?" on "Hi" | Cogito | `LLMEndTurn` | Exit — no length gate for end_turn |
+| Scratchpad write+read then repeating answer | Qwen3 | `ContentStability` | Exit — verbatim repeat after tool sequence |
+| Entropy converging + end_turn on iteration 2 | Any with RI | `EntropyConvergence` | Exit — trajectory.shape converging |
+| Controller signals early-stop | Any with RI | `ReactiveControllerEarlyStop` | Exit — immediate, not flag for next iter |
 
 **Output assembly tests:**
 
@@ -716,15 +812,41 @@ Comprehensive tests derived from benchmark failures.
 
 | Section | Files Changed | New Files | ~Lines Changed | ~Lines of Tests |
 |---------|--------------|-----------|----------------|-----------------|
-| 1. Termination Oracle | `react-kernel.ts`, `kernel-runner.ts` | `termination-oracle.ts` | 250 | 400 |
+| 1. Termination Oracle | `react-kernel.ts`, `kernel-runner.ts`, `kernel-state.ts` | `termination-oracle.ts` | 300 | 450 |
 | 2. Output Assembly | `react-kernel.ts` (integration) | `output-assembly.ts` | 80 | 150 |
 | 3. Proportional Pipeline | `builder.ts`, `types.ts`, `execution-engine.ts` | None | 60 | 100 |
 | 4. Prompt Fixes | `final-answer.ts`, 3 prompt files, `tool-utils.ts` | None | 30 | 50 |
 | 5. Sub-Agent Fixes | `agent-tool-adapter.ts`, light runtime | None | 25 | 50 |
 | 6. Metrics & Testing | `react-kernel.ts`, `test.ts` | `termination-oracle.test.ts`, `output-assembly.test.ts` | 40 | 250 |
-| **Total** | | **3 new** | **~485** | **~1000** |
+| **Total** | | **3 new** | **~535** | **~1050** |
 
 **Net deleted:** ~150-200 lines of scattered if/else exit logic in `react-kernel.ts` replaced by oracle.
+
+---
+
+## Migration & Breaking Changes
+
+### Reactive Intelligence Default-On
+
+**Change:** `_enableReactiveIntelligence` defaults to `true` (was `false`).
+
+**Impact:** All agents built without explicitly calling `.withReactiveIntelligence(false)` will now load the entropy sensor and reactive controller services. This adds:
+
+- ~2-5ms overhead per iteration for entropy scoring (synchronous computation, no I/O)
+- CalibrationStore SQLite table created on first use (lazy, not at initialization)
+- No network calls unless telemetry is explicitly opted in
+
+**Test suite compatibility:** The entropy sensor service is already available as an optional dependency in the test fixtures. Making it default-on means some tests that assert on exact `state.meta` contents may see additional entropy fields. Tests that mock the full runtime layer are unaffected since they provide their own service implementations.
+
+**Mitigation:** Run full test suite after the change. Any test that breaks due to unexpected entropy fields is fixed by either: (a) asserting on specific fields rather than exact meta shape, or (b) explicitly disabling RI in that test's builder.
+
+### Telemetry Default Change
+
+**Change:** `telemetry` defaults to `false` (was `true` in `defaultReactiveIntelligenceConfig`).
+
+**Impact:** Users who previously relied on the default `telemetry: true` when calling `.withReactiveIntelligence()` without options will stop sending telemetry. This is intentional — telemetry should be a conscious choice.
+
+**Mitigation:** Document in CHANGELOG. Users who want telemetry explicitly set `.withReactiveIntelligence({ telemetry: true })`.
 
 ---
 
