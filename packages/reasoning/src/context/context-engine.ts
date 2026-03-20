@@ -11,7 +11,7 @@ import {
   formatToolSchemaCompact,
   filterToolsByRelevance,
 } from "../strategies/shared/tool-utils.js";
-import { formatStepForContext, summarizeStepForContext } from "../strategies/shared/context-utils.js";
+import { formatStepForContext, summarizeStepForContext, summarizeStepsTriplets } from "../strategies/shared/context-utils.js";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -295,9 +295,9 @@ export function buildContext(input: ContextBuildInput): string {
       const olderSteps = steps.slice(0, recentCutoff);
       const recentSteps = steps.slice(recentCutoff);
 
-      // Compacted older steps
+      // Compacted older steps — triplet grouping for decision preservation
       if (olderSteps.length > 0) {
-        const summaryLines = olderSteps.map(summarizeStepForContext);
+        const summaryLines = summarizeStepsTriplets(olderSteps);
         sections.push(
           `[Earlier steps — ${olderSteps.length} steps]:\n${summaryLines.join("\n")}`,
         );
@@ -399,7 +399,7 @@ export function buildDynamicContext(input: DynamicContextInput): string {
       const recentSteps = steps.slice(recentCutoff);
 
       if (olderSteps.length > 0) {
-        const summaryLines = olderSteps.map(summarizeStepForContext);
+        const summaryLines = summarizeStepsTriplets(olderSteps);
         sections.push(
           `[Earlier steps — ${olderSteps.length} steps]:\n${summaryLines.join("\n")}`,
         );

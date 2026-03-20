@@ -176,7 +176,7 @@ describe("progressiveSummarize", () => {
     );
     const result = progressiveSummarize("Context:", manySteps, profile);
     expect(result).toContain("[Recent steps]");
-    expect(result).toContain("[Earlier steps summary");
+    expect(result).toContain("[Earlier steps");
   });
 
   it("uses profile thresholds for compaction boundaries", () => {

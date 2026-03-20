@@ -17,7 +17,7 @@ describe("buildCompactedContext", () => {
     const result = buildCompactedContext("Task: find info", steps as any, undefined);
     expect(result).toContain("Task: find info");
     expect(result).toContain("Search returned 3 results");
-    expect(result).not.toContain("[Earlier steps summary");
+    expect(result).not.toContain("[Earlier steps");
   });
 
   it("compacts older steps when over compactAfterSteps threshold", () => {
@@ -28,7 +28,7 @@ describe("buildCompactedContext", () => {
       compactAfterSteps: 6,
       fullDetailSteps: 4,
     } as any);
-    expect(result).toContain("[Earlier steps summary");
+    expect(result).toContain("[Earlier steps");
     expect(result).toContain("[Recent steps]");
     // Recent 4 steps should be in full detail
     expect(result).toContain("Content for step 5");
@@ -46,7 +46,7 @@ describe("buildCompactedContext", () => {
       makeStep("thought", `Step ${i + 1}`),
     );
     const result = buildCompactedContext("Task", steps as any, undefined);
-    expect(result).toContain("[Earlier steps summary");
+    expect(result).toContain("[Earlier steps");
   });
 });
 

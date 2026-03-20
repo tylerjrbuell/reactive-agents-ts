@@ -8,6 +8,7 @@ import type { ReasoningStep } from "../types/step.js";
 import type { ObservationResult } from "../types/observation.js";
 import type { ContextProfile } from "./context-profile.js";
 import type { ContextBudget } from "./context-budget.js";
+import { summarizeStepsTriplets } from "../strategies/shared/context-utils.js";
 
 // ─── Compaction Levels ───
 //
@@ -164,11 +165,11 @@ export function progressiveSummarize(
     }
   }
 
-  // Level 2: Middle steps — one-line summaries
+  // Level 2: Middle steps — decision-preserving triplet summaries
   if (middleSteps.length > 0) {
-    const summaryLines = middleSteps.map(formatStepSummary);
+    const summaryLines = summarizeStepsTriplets(middleSteps);
     sections.push(
-      `[Earlier steps summary — ${middleSteps.length} steps]:\n${summaryLines.join("\n")}`,
+      `[Earlier steps — ${middleSteps.length} steps]:\n${summaryLines.join("\n")}`,
     );
   }
 
