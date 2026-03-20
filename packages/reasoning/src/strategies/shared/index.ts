@@ -11,3 +11,4 @@ export * from "./kernel-hooks.js";
 export * from "./kernel-runner.js";
 export * from "./thinking-utils.js";
 export * from "./termination-oracle.js";
+export * from "./output-assembly.js";
