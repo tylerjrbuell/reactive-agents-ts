@@ -100,6 +100,7 @@ interface TerminationContext {
   readonly redirectCount: number;
   readonly priorFinalAnswerAttempts: number;
   readonly taskDescription: string;
+  readonly controllerDecisions?: readonly ReactiveDecision[];  // from reactive controller evaluate()
 }
 
 /**
@@ -432,7 +433,23 @@ Updated at the end of each `handleThinking` call: `priorThought: thought.trim()`
 The oracle replaces exit logic in `handleThinking` only. The `handleActing` function's exit paths are preserved:
 
 - **`final-answer` tool** (lines ~673-783): The accept/reject logic stays in `handleActing`. When accepted, the `FinalAnswerTool` evaluator in the oracle is not involved — `handleActing` transitions directly to `status: "done"`. The evaluator exists for cases where the kernel needs to evaluate final-answer signals outside the acting phase.
-- **Post-action FINAL ANSWER check** (lines ~878-903): This path (checking if the original thought had FINAL ANSWER after tool execution) is moved into the oracle. After tool execution completes, the kernel calls the oracle again with updated context to check for deferred exit signals.
+- **Post-action FINAL ANSWER check** (lines ~878-903): This path (checking if the original thought had FINAL ANSWER after tool execution) is moved into the oracle. After tool execution completes in `handleActing` (after line ~877), the kernel calls the oracle a second time with updated context:
+
+```typescript
+// In handleActing, after tool execution completes (replaces lines ~878-903):
+const postActionCtx = buildTerminationContext(state, {
+  // Re-use the original thought from state.meta.lastThought
+  thought: state.meta.lastThought as string,
+  stopReason: "end_turn",  // synthetic — tool executed, check if thought had exit signal
+});
+const postActionDecision = evaluateTermination(postActionCtx, evaluators);
+if (postActionDecision.shouldExit) {
+  const assembled = assembleOutput({ ... });
+  return transitionState(state, { status: "done", output: assembled.text, ... });
+}
+```
+
+Only the text-matching evaluators fire meaningfully here (`FinalAnswerRegex`, `ContentStability`). `EntropyConvergence` and `ReactiveControllerEarlyStop` return null since no new entropy score exists for this synthetic check. `PendingToolCall` returns null since tool execution is complete.
 
 ---
 
