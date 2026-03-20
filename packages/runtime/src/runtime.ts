@@ -1399,6 +1399,285 @@ export const createRuntime = (options: RuntimeOptions) => {
   return runtime;
 };
 
+// ── Light Runtime Options ───
+
+/**
+ * Configuration for a lightweight sub-agent runtime.
+ *
+ * By default, only Core, EventBus, LLM, ExecutionEngine (minimal), and optionally
+ * Tools + Reasoning are included. The parent agent can toggle heavier layers
+ * (memory, guardrails, observability, cost tracking) for sub-agents that need them.
+ */
+export interface LightRuntimeOptions {
+  agentId: string;
+  provider?: "anthropic" | "openai" | "ollama" | "gemini" | "litellm" | "test";
+  model?: string;
+  thinking?: boolean;
+  temperature?: number;
+  maxTokens?: number;
+  maxIterations?: number;
+  systemPrompt?: string;
+  testScenario?: TestTurn[];
+
+  // Always-on for sub-agents
+  enableReasoning?: boolean;
+  enableTools?: boolean;
+  allowedTools?: readonly string[];
+  requiredTools?: { readonly tools?: readonly string[]; readonly adaptive?: boolean; readonly maxRetries?: number };
+  reasoningOptions?: ReasoningOptions;
+  contextProfile?: Partial<ContextProfile>;
+  resultCompression?: ResultCompressionConfig;
+
+  // Optional heavy layers — parent can toggle
+  enableMemory?: boolean;
+  enableGuardrails?: boolean;
+  enableObservability?: boolean;
+  enableCostTracking?: boolean;
+  observabilityOptions?: ObservabilityOptions;
+  guardrailsOptions?: import("./builder.js").GuardrailsOptions;
+}
+
+/**
+ * Create a lightweight runtime for sub-agents and simple use cases.
+ *
+ * Compared to `createRuntime()`, this skips:
+ * - MetricsCollector (auto-subscribed EventBus listener — overhead for short-lived agents)
+ * - LifecycleHookRegistry (sub-agents don't fire lifecycle hooks)
+ * - Memory system (unless parent explicitly enables it)
+ * - All optional layers: Identity, Interaction, Prompts, Orchestration, Gateway, A2A,
+ *   Health, ReactiveIntelligence, Telemetry, Logging, KillSwitch, BehavioralContracts
+ *
+ * The parent can toggle heavier layers (memory, guardrails, observability, cost tracking)
+ * for sub-agents that need more capabilities.
+ *
+ * @param options - Light runtime configuration
+ * @returns A composed Effect-TS Layer with minimal services
+ */
+export const createLightRuntime = (options: LightRuntimeOptions) => {
+  const resolvedModel =
+    options.model ||
+    process.env.LLM_DEFAULT_MODEL ||
+    (options.provider ? getProviderDefaultModel(options.provider) : undefined) ||
+    "claude-sonnet-4-20250514";
+
+  const config: ReactiveAgentsConfig = {
+    ...defaultReactiveAgentsConfig(options.agentId),
+    defaultModel: resolvedModel,
+    provider: options.provider,
+    thinking: options.thinking,
+    temperature: options.temperature,
+    maxTokens: options.maxTokens,
+    memoryTier: "1",
+    maxIterations: options.maxIterations ?? 4,
+    enableGuardrails: options.enableGuardrails ?? false,
+    enableVerification: false,
+    enableCostTracking: options.enableCostTracking ?? false,
+    enableAudit: false,
+    enableKillSwitch: false,
+    enableBehavioralContracts: false,
+    enableSelfImprovement: false,
+    systemPrompt: options.systemPrompt,
+    observabilityVerbosity: options.observabilityOptions?.verbosity,
+    logModelIO: options.observabilityOptions?.logModelIO,
+    logPrefix: options.observabilityOptions?.logPrefix,
+    contextProfile: options.contextProfile,
+    defaultStrategy: options.reasoningOptions?.defaultStrategy,
+    resultCompression: options.resultCompression,
+    requiredTools: options.requiredTools
+      ? {
+          tools: options.requiredTools.tools ? [...options.requiredTools.tools] : undefined,
+          adaptive: options.requiredTools.adaptive,
+          maxRetries: options.requiredTools.maxRetries,
+        }
+      : undefined,
+    adaptiveToolFiltering: false,
+    enableMemory: options.enableMemory ?? false,
+    enableExperienceLearning: false,
+    enableMemoryConsolidation: false,
+  };
+
+  // ── Minimal required layers ──
+  const eventBusLayer = EventBusLive;
+  const coreLayer = CoreServicesLive;
+  const llmLayer = createLLMProviderLayer(
+    options.provider ?? "test",
+    options.testScenario,
+    resolvedModel,
+    {
+      thinking: options.thinking,
+      temperature: options.temperature,
+      maxTokens: options.maxTokens,
+    },
+  ) as Layer.Layer<LLMService>;
+
+  // Lightweight memory — working memory only, no SQLite, no embeddings
+  const memoryLayer = options.enableMemory
+    ? Layer.unwrapEffect(
+        Effect.gen(function* () {
+          const llm = yield* LLMService;
+          const bridgedLLM: MemoryLLM = {
+            complete: (req) =>
+              llm.complete({
+                messages: req.messages.map((m) => ({
+                  role: m.role as "user" | "assistant" | "system",
+                  content: m.content,
+                })),
+                temperature: req.temperature,
+                maxTokens: req.maxTokens,
+              }).pipe(
+                Effect.map((r) => ({
+                  content: r.content,
+                  usage: r.usage ? { totalTokens: r.usage.totalTokens } : undefined,
+                })),
+              ),
+            embed: (texts, model) => llm.embed(texts, model),
+          };
+          return createMemoryLayer("1", { agentId: options.agentId }, bridgedLLM);
+        }),
+      ).pipe(Layer.provide(llmLayer))
+    : createMemoryLayer("1", { agentId: options.agentId });
+
+  // Minimal hooks layer (required by ExecutionEngine)
+  const hookLayer = LifecycleHookRegistryLive;
+
+  // MetricsCollector is still needed by ExecutionEngine but we skip the EventBus subscription
+  // by providing it with an isolated EventBus (no listeners accumulating in the parent's bus)
+  const metricsCollectorLayer = MetricsCollectorLive.pipe(
+    Layer.provide(eventBusLayer),
+  );
+
+  const engineLayer = ExecutionEngineLive(config).pipe(
+    Layer.provide(hookLayer),
+    Layer.provide(metricsCollectorLayer),
+  );
+
+  let runtime = Layer.mergeAll(
+    coreLayer,
+    eventBusLayer,
+    llmLayer,
+    memoryLayer,
+    hookLayer,
+    engineLayer,
+  );
+
+  // ── Optional tools layer ──
+  let toolsLayer: Layer.Layer<any, any> | null = null;
+  if (options.enableTools) {
+    const baseToolsLayer = createToolsLayer().pipe(Layer.provide(eventBusLayer));
+    if (options.allowedTools && options.allowedTools.length > 0) {
+      const allowed = new Set(options.allowedTools);
+      toolsLayer = Layer.effect(
+        ToolService,
+        Effect.gen(function* () {
+          const base = yield* ToolService.pipe(Effect.provide(baseToolsLayer));
+          return {
+            execute: (input: import("@reactive-agents/tools").ToolInput) => {
+              if (!allowed.has(input.toolName)) {
+                return Effect.fail(
+                  new ToolNotFoundError({
+                    message: `Tool "${input.toolName}" is not in the allowed tools list`,
+                    toolName: input.toolName,
+                  }),
+                );
+              }
+              return base.execute(input);
+            },
+            register: base.register,
+            connectMCPServer: base.connectMCPServer,
+            disconnectMCPServer: base.disconnectMCPServer,
+            listTools: (filter?: { category?: string; source?: string; riskLevel?: string }) =>
+              base.listTools(filter).pipe(
+                Effect.map((tools) => tools.filter((t) => allowed.has(t.name))),
+              ),
+            getTool: (name: string) => {
+              if (!allowed.has(name)) {
+                return Effect.fail(
+                  new ToolNotFoundError({
+                    message: `Tool "${name}" is not in the allowed tools list`,
+                    toolName: name,
+                  }),
+                );
+              }
+              return base.getTool(name);
+            },
+            toFunctionCallingFormat: () =>
+              base.toFunctionCallingFormat().pipe(
+                Effect.map((tools) => tools.filter((t) => allowed.has(t.name))),
+              ),
+            listMCPServers: base.listMCPServers,
+            unregisterTool: base.unregisterTool,
+          };
+        }),
+      ).pipe(Layer.provide(baseToolsLayer));
+    } else {
+      toolsLayer = baseToolsLayer;
+    }
+    const toolResultCacheLayer = ToolResultCacheLive();
+    runtime = Layer.merge(runtime, toolsLayer) as any;
+    runtime = Layer.merge(runtime, toolResultCacheLayer) as any;
+  }
+
+  // ── Optional reasoning layer ──
+  if (options.enableReasoning) {
+    const reasoningConfig: ReasoningConfig = options.reasoningOptions
+      ? {
+          ...defaultReasoningConfig,
+          ...(options.reasoningOptions.defaultStrategy
+            ? { defaultStrategy: options.reasoningOptions.defaultStrategy }
+            : {}),
+          adaptive: { ...defaultReasoningConfig.adaptive },
+          strategies: {
+            reactive: { ...defaultReasoningConfig.strategies.reactive },
+            planExecute: { ...defaultReasoningConfig.strategies.planExecute },
+            treeOfThought: { ...defaultReasoningConfig.strategies.treeOfThought },
+            reflexion: { ...defaultReasoningConfig.strategies.reflexion },
+          },
+        }
+      : defaultReasoningConfig;
+
+    let reasoningDeps = llmLayer as Layer.Layer<any>;
+    if (toolsLayer) {
+      reasoningDeps = Layer.merge(llmLayer, toolsLayer) as any;
+    }
+    const reasoningLayer = createReasoningLayer(reasoningConfig).pipe(
+      Layer.provide(reasoningDeps),
+    );
+    runtime = Layer.merge(runtime, reasoningLayer) as any;
+  }
+
+  // ── Optional heavy layers (parent-toggleable) ──
+
+  if (options.enableGuardrails) {
+    const gc = options.guardrailsOptions;
+    const guardrailConfig = gc
+      ? {
+          enableInjectionDetection: gc.injection ?? true,
+          enablePiiDetection: gc.pii ?? true,
+          enableToxicityDetection: gc.toxicity ?? true,
+        }
+      : undefined;
+    runtime = Layer.merge(runtime, createGuardrailsLayer(guardrailConfig)) as any;
+  }
+
+  if (options.enableCostTracking) {
+    runtime = Layer.merge(runtime, createCostLayer()) as any;
+  }
+
+  if (options.enableObservability) {
+    const obsExporterConfig = {
+      verbosity: options.observabilityOptions?.verbosity,
+      live: options.observabilityOptions?.live,
+    };
+    const obsLayer = createObservabilityLayer(
+      obsExporterConfig,
+      metricsCollectorLayer,
+    );
+    runtime = Layer.merge(runtime, obsLayer) as any;
+  }
+
+  return runtime;
+};
+
 /**
  * Create the A2A (Agent-to-Agent) protocol server layer.
  *

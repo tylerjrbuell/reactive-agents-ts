@@ -1,5 +1,5 @@
 import { Effect, Layer, Schema, ManagedRuntime, Stream as EStream } from "effect";
-import { createRuntime } from "./runtime.js";
+import { createRuntime, createLightRuntime } from "./runtime.js";
 import type { MCPServerConfig } from "./runtime.js";
 import { builderToConfig } from "./agent-config.js";
 import type { TestTurn } from "@reactive-agents/llm-provider";
@@ -2346,7 +2346,7 @@ export class ReactiveAgentBuilder {
                 const staticRequired = staticAllowed && staticAllowed.length > 0
                   ? { tools: [...staticAllowed], adaptive: false, maxRetries: 2 }
                   : undefined;
-                const subRuntime = createRuntime({
+                const subRuntime = createLightRuntime({
                   agentId: opts.agentId,
                   provider: (opts.provider ?? "test") as ProviderName,
                   model: opts.model,
@@ -2553,7 +2553,7 @@ export class ReactiveAgentBuilder {
                     const subRequiredTools = subAllowed && subAllowed.length > 0
                       ? { tools: [...subAllowed], adaptive: false, maxRetries: 2 }
                       : undefined;
-                    const subRuntime = createRuntime({
+                    const subRuntime = createLightRuntime({
                       agentId: opts.agentId,
                       provider: (opts.provider ?? "test") as ProviderName,
                       model: opts.model,

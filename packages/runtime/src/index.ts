@@ -44,8 +44,8 @@ export { LifecycleHookRegistry, LifecycleHookRegistryLive } from "./hooks.js";
 export { ExecutionEngine, ExecutionEngineLive } from "./execution-engine.js";
 
 // ─── Runtime ───
-export { createRuntime } from "./runtime.js";
-export type { RuntimeOptions, MCPServerConfig } from "./runtime.js";
+export { createRuntime, createLightRuntime } from "./runtime.js";
+export type { RuntimeOptions, MCPServerConfig, LightRuntimeOptions } from "./runtime.js";
 
 // ─── Builder (Primary Public DX) ───
 export {
