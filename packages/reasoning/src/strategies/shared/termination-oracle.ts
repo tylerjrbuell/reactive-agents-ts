@@ -9,6 +9,7 @@
 
 import type { ReasoningStep } from "../../types/index.js";
 import type { ToolSchema } from "./tool-utils.js";
+import { extractFinalAnswer } from "./tool-utils.js";
 
 // ── Local structural types ──────────────────────────────────────────────
 // These mirror shapes from @reactive-agents/reactive-intelligence without
@@ -147,3 +148,135 @@ export function evaluateTermination(
     allVerdicts: verdicts,
   };
 }
+
+// ── Levenshtein Utility ──────────────────────────────────────────────────────
+
+/** Normalized Levenshtein similarity (0-1, 1 = identical). No external dependencies. */
+export function normalizedLevenshtein(a: string, b: string): number {
+  if (a === b) return 1;
+  const maxLen = Math.max(a.length, b.length);
+  if (maxLen === 0) return 1;
+
+  const matrix: number[][] = [];
+  for (let i = 0; i <= a.length; i++) {
+    matrix[i] = [i];
+    for (let j = 1; j <= b.length; j++) {
+      if (i === 0) { matrix[i]![j] = j; continue; }
+      matrix[i]![j] = Math.min(
+        matrix[i - 1]![j]! + 1,
+        matrix[i]![j - 1]! + 1,
+        matrix[i - 1]![j - 1]! + (a[i - 1] === b[j - 1] ? 0 : 1),
+      );
+    }
+  }
+  return 1 - matrix[a.length]![b.length]! / maxLen;
+}
+
+// ── Built-in Signal Evaluators ──────────────────────────────────────────────
+
+export const pendingToolCallEvaluator: TerminationSignalEvaluator = {
+  name: "PendingToolCall",
+  evaluate: (ctx) => {
+    if (ctx.toolRequest) return { action: "continue", confidence: "high", reason: "tool_call_pending" };
+    return null;
+  },
+};
+
+export const finalAnswerToolEvaluator: TerminationSignalEvaluator = {
+  name: "FinalAnswerTool",
+  evaluate: (_ctx) => {
+    // Placeholder — final-answer tool accept/reject logic stays in handleActing.
+    // When handleActing accepts, it transitions to "done" directly.
+    return null;
+  },
+};
+
+export const entropyConvergenceEvaluator: TerminationSignalEvaluator = {
+  name: "EntropyConvergence",
+  evaluate: (ctx) => {
+    if (!ctx.entropy || !ctx.trajectory) return null;
+    if (ctx.stopReason !== "end_turn") return null;
+
+    const converging = ctx.trajectory.shape === "converging" && ctx.trajectory.derivative < -0.05;
+    if (converging && ctx.thought.trim().length > 0) {
+      return { action: "exit", confidence: "high", reason: "entropy_converged", output: ctx.thought.trim() };
+    }
+    return null;
+  },
+};
+
+export const reactiveControllerEarlyStopEvaluator: TerminationSignalEvaluator = {
+  name: "ReactiveControllerEarlyStop",
+  evaluate: (ctx) => {
+    if (!ctx.controllerDecisions) return null;
+    const earlyStop = ctx.controllerDecisions.find((d) => d.decision === "early-stop");
+    if (!earlyStop) return null;
+    return { action: "exit", confidence: "high", reason: `controller_early_stop: ${earlyStop.reason}`, output: ctx.thought.trim() };
+  },
+};
+
+export const contentStabilityEvaluator: TerminationSignalEvaluator = {
+  name: "ContentStability",
+  evaluate: (ctx) => {
+    if (!ctx.priorThought || ctx.toolRequest) return null;
+    const current = ctx.thought.trim();
+    const prior = ctx.priorThought.trim();
+    if (current.length === 0 || prior.length === 0) return null;
+
+    if (current === prior) {
+      return { action: "exit", confidence: "high", reason: "content_stable", output: current };
+    }
+    if (normalizedLevenshtein(current, prior) > 0.85) {
+      return { action: "exit", confidence: "medium", reason: "content_stable", output: current };
+    }
+    return null;
+  },
+};
+
+export const llmEndTurnEvaluator: TerminationSignalEvaluator = {
+  name: "LLMEndTurn",
+  evaluate: (ctx) => {
+    if (ctx.stopReason !== "end_turn") return null;
+    if (ctx.thought.trim().length === 0) return null;
+    const remainingRequired = ctx.requiredTools.filter((t) => !ctx.toolsUsed.has(t));
+    if (remainingRequired.length > 0) return null;
+    return { action: "exit", confidence: "medium", reason: "llm_end_turn", output: ctx.thought.trim() };
+  },
+};
+
+export const finalAnswerRegexEvaluator: TerminationSignalEvaluator = {
+  name: "FinalAnswerRegex",
+  evaluate: (ctx) => {
+    const thought = ctx.thought;
+    const thinking = ctx.thinking ?? "";
+    if (!FINAL_ANSWER_RE.test(thought) && !FINAL_ANSWER_RE.test(thinking)) return null;
+
+    const extracted = extractFinalAnswer(thought) || extractFinalAnswer(thinking);
+    if (!extracted || extracted.trim().length === 0) return null;
+    return { action: "exit", confidence: "medium", reason: "final_answer_regex", output: extracted.trim() };
+  },
+};
+
+export const completionGapEvaluator: TerminationSignalEvaluator = {
+  name: "CompletionGap",
+  evaluate: (ctx) => {
+    // Completion gap logic is injected at integration time since it depends
+    // on detectCompletionGaps from react-kernel.ts. This evaluator is
+    // a factory target — the kernel passes a configured instance.
+    // Default: no opinion.
+    if (ctx.redirectCount >= 1) return null;
+    return null;
+  },
+};
+
+/** Default evaluator chain — ordered for short-circuit performance. */
+export const defaultEvaluators: readonly TerminationSignalEvaluator[] = [
+  pendingToolCallEvaluator,
+  finalAnswerToolEvaluator,
+  entropyConvergenceEvaluator,
+  reactiveControllerEarlyStopEvaluator,
+  contentStabilityEvaluator,
+  llmEndTurnEvaluator,
+  finalAnswerRegexEvaluator,
+  completionGapEvaluator,
+];
