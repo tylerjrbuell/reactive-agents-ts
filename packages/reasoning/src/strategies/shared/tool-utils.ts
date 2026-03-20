@@ -7,12 +7,15 @@
 
 // ── Tool Parsing ──────────────────────────────────────────────────────────────
 
+/** Expanded regex matching FINAL ANSWER with optional markdown bold and various colon forms. */
+export const FINAL_ANSWER_RE = /(?:\*{0,2})final\s*answer(?:\*{0,2})\s*[:：]?\s*/i;
+
 export function hasFinalAnswer(thought: string): boolean {
-  return /final answer:/i.test(thought);
+  return FINAL_ANSWER_RE.test(thought);
 }
 
 export function extractFinalAnswer(thought: string): string {
-  const match = thought.match(/final answer:\s*([\s\S]*)/i);
+  const match = thought.match(new RegExp(FINAL_ANSWER_RE.source + "([\\s\\S]*)", "i"));
   return match ? match[1]!.trim() : thought;
 }
 
