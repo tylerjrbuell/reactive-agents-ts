@@ -790,7 +790,7 @@ export class ReactiveAgentBuilder {
   private _consolidationConfig?: { threshold?: number; decayFactor?: number; pruneThreshold?: number };
   private _errorHandler?: (error: RuntimeErrors | Error, context: { taskId: string; phase: string; iteration: number; lastStep?: string }) => void;
   private _enableHealthCheck: boolean = false;
-  private _enableReactiveIntelligence: boolean = false;
+  private _enableReactiveIntelligence: boolean = true;
   private _reactiveIntelligenceOptions?: Partial<import("@reactive-agents/reactive-intelligence").ReactiveIntelligenceConfig>;
   private _sessionPersist: boolean = false;
   private _sessionMaxAgeDays?: number;
@@ -1748,15 +1748,26 @@ export class ReactiveAgentBuilder {
   }
 
   /**
-   * Enable the Reactive Intelligence Layer — entropy-based metacognitive sensing.
+   * Configure the Reactive Intelligence Layer — entropy-based metacognitive sensing.
    *
    * The Entropy Sensor monitors reasoning quality per-iteration across 5 sources
    * (token, structural, semantic, behavioral, context pressure) and publishes
    * EntropyScored events to the EventBus for observability.
+   *
+   * Reactive Intelligence is enabled by default. Pass `false` to disable it.
+   *
+   * @example .withReactiveIntelligence(false) // disable RI
+   * @example .withReactiveIntelligence({ controller: { earlyStop: true } })
    */
-  withReactiveIntelligence(options?: Partial<import("@reactive-agents/reactive-intelligence").ReactiveIntelligenceConfig>): this {
+  withReactiveIntelligence(enabled: boolean): this;
+  withReactiveIntelligence(options?: Partial<import("@reactive-agents/reactive-intelligence").ReactiveIntelligenceConfig>): this;
+  withReactiveIntelligence(arg?: boolean | Partial<import("@reactive-agents/reactive-intelligence").ReactiveIntelligenceConfig>): this {
+    if (typeof arg === "boolean") {
+      this._enableReactiveIntelligence = arg;
+      return this;
+    }
     this._enableReactiveIntelligence = true;
-    if (options) this._reactiveIntelligenceOptions = options;
+    if (arg) this._reactiveIntelligenceOptions = arg;
     return this;
   }
 

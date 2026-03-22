@@ -203,15 +203,15 @@ export const defaultReactiveIntelligenceConfig: ReactiveIntelligenceConfig = {
     trajectoryTracking: true,
   },
   controller: {
-    earlyStop: false,
+    earlyStop: true,
     branching: false,
-    contextCompression: false,
-    strategySwitch: false,
+    contextCompression: true,
+    strategySwitch: true,
     causalAttribution: false,
   },
   learning: {
     banditSelection: false,
     skillSynthesis: false,
   },
-  telemetry: true,
+  telemetry: false,
 };

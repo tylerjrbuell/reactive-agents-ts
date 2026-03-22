@@ -692,7 +692,7 @@ export function builderToConfig(state: {
   if (state._enableAudit) features["audit"] = true;
   if (state._enableSelfImprovement) features["selfImprovement"] = true;
   if (state._enableHealthCheck) features["healthCheck"] = true;
-  if (state._enableReactiveIntelligence) features["reactiveIntelligence"] = true;
+  features["reactiveIntelligence"] = state._enableReactiveIntelligence;
   if (state._streamDensity) features["streaming"] = true;
   if (Object.keys(features).length > 0) config["features"] = features;
 
