@@ -36,10 +36,11 @@ describe("executeReActKernel", () => {
         maxIterations: 2,
       }).pipe(Effect.provide(layer)),
     );
-    // Oracle detects identical thoughts on consecutive iterations → content_stable exit
-    expect(result.terminatedBy).toBe("final_answer");
-    expect(result.iterations).toBe(2);
-    expect(result.steps.length).toBe(2);
+    // LLMEndTurn evaluator (no iteration/length guards) exits on the first
+    // non-empty end_turn response when there are no required tools remaining.
+    expect(result.terminatedBy).toBe("end_turn");
+    expect(result.iterations).toBe(1);
+    expect(result.steps.length).toBe(1);
   });
 
   it("injects priorContext into the thought prompt", async () => {
@@ -191,7 +192,7 @@ describe("reactKernel (ThoughtKernel direct)", () => {
     expect(pending.tool).toBe("web-search");
   });
 
-  it("acting transitions to thinking after tool execution (no ToolService)", async () => {
+  it("acting transitions to done after tool execution when LLMEndTurn fires (no ToolService)", async () => {
     const layer = TestLLMServiceLayer();
 
     // Start in acting state with a pending tool request
@@ -223,8 +224,9 @@ describe("reactKernel (ThoughtKernel direct)", () => {
       reactKernel(state, context).pipe(Effect.provide(layer)),
     );
 
-    // Should transition to thinking after tool execution
-    expect(nextState.status).toBe("thinking");
+    // Post-action LLMEndTurn evaluator fires (no iteration/length guards)
+    // because the stored lastThought is non-empty end_turn with no required tools.
+    expect(nextState.status).toBe("done");
     // Should have action + observation steps added
     const actionSteps = nextState.steps.filter((s) => s.type === "action");
     const obsSteps = nextState.steps.filter((s) => s.type === "observation");

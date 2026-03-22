@@ -51,11 +51,9 @@ function makeSequentialLLMLayer(responses: string[]): ReturnType<typeof Layer.su
 
 describe("final-answer hard gate", () => {
   it("terminates loop immediately when final-answer tool is called with accepted:true", async () => {
-    // LLM call 1: model calls a regular tool (file-write) → satisfies hasNonMetaToolCalled
-    // LLM call 2: model calls final-answer → should hard-exit
-    // LLM call 3 (if loop continues): would be an error — proves we exited after call 2
+    // Model directly calls final-answer on the first iteration.
+    // With no requiredTools, canComplete = true (requiredTools.length === 0).
     const llmLayer = makeSequentialLLMLayer([
-      'ACTION: file-write({"path": "./out.txt", "content": "hello"})',
       'ACTION: final-answer({"output": "Task complete. Wrote hello to out.txt.", "format": "text", "summary": "Wrote a file", "confidence": "high"})',
       "FINAL ANSWER: should not reach here — loop should have exited",
     ]);
@@ -79,7 +77,6 @@ describe("final-answer hard gate", () => {
 
   it("stores finalAnswerCapture in meta when final-answer tool exits the loop", async () => {
     const llmLayer = makeSequentialLLMLayer([
-      'ACTION: file-write({"path": "./result.txt", "content": "data"})',
       'ACTION: final-answer({"output": "Results saved.", "format": "text", "summary": "Saved data to file", "confidence": "high"})',
     ]);
 
@@ -116,7 +113,6 @@ describe("final-answer hard gate", () => {
 
   it("final-answer tool adds final-answer to toolsUsed", async () => {
     const llmLayer = makeSequentialLLMLayer([
-      'ACTION: file-write({"path": "./x.txt", "content": "y"})',
       'ACTION: final-answer({"output": "done", "format": "text", "summary": "completed", "confidence": "high"})',
     ]);
 

@@ -298,7 +298,7 @@ describe("llmEndTurnEvaluator", () => {
     expect(result!.reason).toBe("llm_end_turn");
   });
 
-  test("iteration 0 → null (requires at least one prior iteration)", () => {
+  test("iteration 0 with end_turn → exits (no iteration gate)", () => {
     const ctx = makeCtx({
       stopReason: "end_turn",
       thought: "The answer to this question about the capital of France is Paris, which is well known.",
@@ -307,10 +307,11 @@ describe("llmEndTurnEvaluator", () => {
       toolsUsed: new Set(),
     });
     const result = llmEndTurnEvaluator.evaluate(ctx);
-    expect(result).toBeNull();
+    expect(result).not.toBeNull();
+    expect(result!.action).toBe("exit");
   });
 
-  test("short thought (< 50 chars) → null", () => {
+  test("short thought → exits (no length gate)", () => {
     const ctx = makeCtx({
       stopReason: "end_turn",
       thought: "Done.",
@@ -319,7 +320,8 @@ describe("llmEndTurnEvaluator", () => {
       toolsUsed: new Set(),
     });
     const result = llmEndTurnEvaluator.evaluate(ctx);
-    expect(result).toBeNull();
+    expect(result).not.toBeNull();
+    expect(result!.action).toBe("exit");
   });
 
   test("empty thought → null", () => {
@@ -435,15 +437,15 @@ describe("completionGapEvaluator", () => {
 // ── Benchmark regression scenarios ──────────────────────────────────────────
 
 describe("benchmark regression scenarios", () => {
-  test("Gemini '4' at iteration 0 with end_turn → continues (too short, iteration 0)", () => {
+  test("Gemini '4' at iteration 0 with end_turn → exits via LLMEndTurn", () => {
     const result = evaluateTermination(makeCtx({
       thought: "4",
       stopReason: "end_turn",
       iteration: 0,
     }), defaultEvaluators);
-    // Short thought at iteration 0 — no evaluator fires
-    expect(result.shouldExit).toBe(false);
-    expect(result.evaluator).toBe("none");
+    // LLMEndTurn now exits on iteration 0 with any non-empty end_turn thought
+    expect(result.shouldExit).toBe(true);
+    expect(result.evaluator).toBe("LLMEndTurn");
   });
 
   test("Gemini '4' at iteration 1 with prior identical thought → exits via ContentStability", () => {
@@ -479,15 +481,16 @@ describe("benchmark regression scenarios", () => {
     expect(result.output).toBe("105");
   });
 
-  test("Cogito 'Hello! How can I help?' on 'Hi' at iteration 0 → continues (short, iteration 0)", () => {
+  test("Cogito 'Hello! How can I help?' on 'Hi' at iteration 0 → exits via LLMEndTurn", () => {
     const result = evaluateTermination(makeCtx({
       thought: "Hello! How can I help you today?",
       stopReason: "end_turn",
       iteration: 0,
       taskDescription: "Hi",
     }), defaultEvaluators);
-    // 31 chars < 50 and iteration 0 — LLMEndTurn does not fire
-    expect(result.shouldExit).toBe(false);
+    // LLMEndTurn fires on any non-empty end_turn thought regardless of length or iteration
+    expect(result.shouldExit).toBe(true);
+    expect(result.evaluator).toBe("LLMEndTurn");
   });
 
   test("Cogito 'Hello! How can I help?' on 'Hi' at iteration 1 with prior identical → exits via ContentStability", () => {
@@ -549,13 +552,14 @@ describe("benchmark regression scenarios", () => {
     expect(result.evaluator).toBe("LLMEndTurn");
   });
 
-  test("no reactive intelligence → short response at iteration 1 continues", () => {
+  test("no reactive intelligence → short response at iteration 1 exits via LLMEndTurn", () => {
     const result = evaluateTermination(makeCtx({
       thought: "The answer is Paris.",
       stopReason: "end_turn",
       iteration: 1,
     }), defaultEvaluators);
-    // 20 chars < 50 — LLMEndTurn does not fire
-    expect(result.shouldExit).toBe(false);
+    // LLMEndTurn fires on any non-empty end_turn — no length gate
+    expect(result.shouldExit).toBe(true);
+    expect(result.evaluator).toBe("LLMEndTurn");
   });
 });

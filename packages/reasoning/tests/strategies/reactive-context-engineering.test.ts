@@ -360,23 +360,15 @@ describe("Sprint 1B: Context compaction after N steps", () => {
 
 describe("Sprint 2D: Early termination on end_turn", () => {
   it("exits early when model gives substantive prose response without tool or FINAL ANSWER", async () => {
-    // LLM gives a long prose answer without "FINAL ANSWER:" marker on second call
+    // LLM gives a prose answer without "FINAL ANSWER:" marker.
+    // With LLMEndTurn evaluator (no iteration/length guards), ANY non-empty
+    // end_turn response with no required tools triggers immediate exit.
     let callCount = 0;
     const { LLMService: LLMSvc } = await import("@reactive-agents/llm-provider");
 
     const earlyTermLLMLayer = Layer.succeed(LLMSvc, {
       complete: (_req: any) => {
         callCount++;
-        if (callCount === 1) {
-          // First call: short non-committal response (won't trigger early termination)
-          return Effect.succeed({
-            content: "Let me think about this.",
-            stopReason: "end_turn" as const,
-            usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15, estimatedCost: 0 },
-            model: "test-model",
-          });
-        }
-        // Second call: substantive prose response with end_turn (>= 50 chars)
         return Effect.succeed({
           content: "Based on my analysis, the answer to your question is that this is a comprehensive response that provides all necessary information without needing further tool calls.",
           stopReason: "end_turn" as const,
@@ -386,10 +378,7 @@ describe("Sprint 2D: Early termination on end_turn", () => {
       },
       stream: (_req: any) => {
         callCount++;
-        const content = callCount === 1
-          ? "Let me think about this."
-          : "Based on my analysis, the answer to your question is that this is a comprehensive response that provides all necessary information without needing further tool calls.";
-        return Effect.succeed(makeStreamResponse(content));
+        return Effect.succeed(makeStreamResponse("Based on my analysis, the answer to your question is that this is a comprehensive response that provides all necessary information without needing further tool calls."));
       },
       completeStructured: () => Effect.succeed({} as any),
       embed: (texts: string[]) => Effect.succeed(texts.map(() => [])),
@@ -413,14 +402,13 @@ describe("Sprint 2D: Early termination on end_turn", () => {
       }).pipe(Effect.provide(earlyTermLLMLayer)),
     );
 
-    // Should exit early rather than exhausting all 10 iterations
+    // Should exit on the very first call via LLMEndTurn
     expect(result.status).toBe("completed");
-    // Only 2 thought steps (first short one + second long one that triggered early exit)
-    expect(result.steps.filter((s) => s.type === "thought").length).toBe(2);
+    expect(result.steps.filter((s) => s.type === "thought").length).toBe(1);
     // The output should be the substantive response
     expect(String(result.output)).toContain("comprehensive response");
-    // LLM called only twice (not all 10 iterations)
-    expect(callCount).toBe(2);
+    // LLM called only once (not all 10 iterations)
+    expect(callCount).toBe(1);
   });
 
   it("does NOT trigger early termination for short responses (< 50 chars)", async () => {
@@ -539,7 +527,10 @@ describe("Profile overrides for temperature and maxIterations", () => {
         taskDescription: "Test maxIterations override",
         taskType: "test",
         memoryContext: "",
-        availableTools: [],
+        availableTools: ["never-called-tool"],
+        // requiredTools prevents LLMEndTurn from firing (remaining required > 0),
+        // ensuring the loop reaches maxIterations instead of exiting early.
+        requiredTools: ["never-called-tool"],
         config: {
           ...defaultReasoningConfig,
           strategies: {
