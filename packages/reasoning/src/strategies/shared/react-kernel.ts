@@ -903,9 +903,18 @@ function handleActing(
       const postActionDecision = evaluateTermination(postActionCtx, defaultEvaluators);
 
       if (postActionDecision.shouldExit && postActionDecision.output) {
+        // Post-action exit: include the tool observation in the output
+        // so the result contains the actual computed value (e.g., "120"),
+        // not just the thought that triggered the tool call.
+        const lastObs = stepsWithObs.filter(s => s.type === "observation").pop();
+        const obsContent = lastObs?.content ?? "";
+        const postActionOutput = obsContent.length > 0 && obsContent.length < 500
+          ? obsContent  // Use tool observation as output (short, factual)
+          : postActionDecision.output;  // Fallback to thought
+
         const assembled = assembleOutput({
           steps: stepsWithObs,
-          finalAnswer: postActionDecision.output,
+          finalAnswer: postActionOutput,
           terminatedBy: postActionDecision.reason,
           entropyScores: (state.meta.entropy as any)?.entropyHistory,
         });
