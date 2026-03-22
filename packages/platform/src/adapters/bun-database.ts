@@ -7,7 +7,8 @@ function wrapStatement(stmt: ReturnType<Database["prepare"]>): StatementAdapter 
       stmt.run(...(params as Parameters<typeof stmt.run>));
     },
     get<T = unknown>(...params: unknown[]): T | undefined {
-      return stmt.get(...(params as Parameters<typeof stmt.get>)) as T | undefined;
+      const result = stmt.get(...(params as Parameters<typeof stmt.get>));
+      return (result == null ? undefined : result) as T | undefined;
     },
     all<T = unknown>(...params: unknown[]): T[] {
       return stmt.all(...(params as Parameters<typeof stmt.all>)) as T[];
@@ -46,7 +47,8 @@ export function createBunDatabase(
     },
 
     queryOne<T = unknown>(sql: string, ...params: unknown[]): T | undefined {
-      return db.prepare(sql).get(...(params as Parameters<ReturnType<Database["prepare"]>["get"]>)) as T | undefined;
+      const result = db.prepare(sql).get(...(params as Parameters<ReturnType<Database["prepare"]>["get"]>));
+      return (result == null ? undefined : result) as T | undefined;
     },
 
     close(): void {
