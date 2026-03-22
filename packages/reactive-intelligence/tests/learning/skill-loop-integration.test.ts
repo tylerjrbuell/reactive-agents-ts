@@ -1,5 +1,16 @@
 import { describe, test, expect } from "bun:test";
+import { Effect } from "effect";
 import { skillFragmentToProceduralEntry } from "../../src/learning/skill-synthesis.js";
+import { CalibrationStore } from "../../src/calibration/calibration-store.js";
+import { computeCalibration } from "../../src/calibration/conformal.js";
+import { BanditStore } from "../../src/learning/bandit-store.js";
+import {
+  LearningEngineService,
+  LearningEngineServiceLive,
+  type SkillStore,
+} from "../../src/learning/learning-engine.js";
+
+// --- skillFragmentToProceduralEntry tests (from Task 1) ---
 
 describe("skillFragmentToProceduralEntry", () => {
   test("converts fragment to procedural entry with correct fields", () => {
@@ -161,5 +172,141 @@ describe("skillFragmentToProceduralEntry", () => {
     });
 
     expect(entry.description).toContain("iter ?");
+  });
+});
+
+// --- Learning engine skill extraction + persistence tests ---
+
+const convergingData = {
+  modelId: "claude-3.5",
+  taskDescription: "write a function to sort an array",
+  strategy: "react",
+  outcome: "success" as const,
+  entropyHistory: [
+    { composite: 0.6, trajectory: { shape: "flat" } },
+    { composite: 0.4, trajectory: { shape: "converging" } },
+    { composite: 0.3, trajectory: { shape: "converging" } },
+  ],
+  totalTokens: 1500,
+  durationMs: 5000,
+  temperature: 0.7,
+  maxIterations: 10,
+};
+
+function makeCalibratedStore(): CalibrationStore {
+  const store = new CalibrationStore(":memory:");
+  // Pre-seed with 25 samples so calibration is active (requires 20+)
+  const scores = Array.from({ length: 25 }, (_, i) => 0.3 + (i % 5) * 0.05);
+  const cal = computeCalibration("claude-3.5", scores);
+  store.save(cal);
+  return store;
+}
+
+function runWithService(
+  calibrationStore: CalibrationStore,
+  banditStore: BanditStore,
+  data: typeof convergingData,
+  skillStore?: SkillStore,
+) {
+  const program = Effect.gen(function* () {
+    const svc = yield* LearningEngineService;
+    return yield* svc.onRunCompleted(data);
+  });
+  const layer = LearningEngineServiceLive(calibrationStore, banditStore, skillStore);
+  return Effect.runPromise(Effect.provide(program, layer));
+}
+
+describe("LearningEngine skill extraction + persistence", () => {
+  test("extracts and stores skill when synthesis qualifies", async () => {
+    const calibrationStore = makeCalibratedStore();
+    const banditStore = new BanditStore(":memory:");
+    const stored: unknown[] = [];
+    const skillStore: SkillStore = {
+      store: (entry) =>
+        Effect.sync(() => {
+          stored.push(entry);
+        }),
+    };
+
+    const result = await runWithService(
+      calibrationStore,
+      banditStore,
+      convergingData,
+      skillStore,
+    );
+
+    expect(result.skillSynthesized).toBe(true);
+    expect(result.skillFragment).toBeDefined();
+    expect(result.skillFragment!.reasoningConfig.strategy).toBe("react");
+    expect(result.skillFragment!.contextStrategy.temperature).toBe(0.7);
+    expect(result.skillFragment!.contextStrategy.maxIterations).toBe(10);
+
+    // Verify store was called
+    expect(stored).toHaveLength(1);
+    const entry = stored[0] as any;
+    expect(entry.name).toBe("code-generation:claude-3.5");
+    expect(entry.tags).toContain("code-generation");
+    expect(entry.tags).toContain("claude-3.5");
+  });
+
+  test("does not extract or store skill on failure outcome", async () => {
+    const calibrationStore = makeCalibratedStore();
+    const banditStore = new BanditStore(":memory:");
+    const stored: unknown[] = [];
+    const skillStore: SkillStore = {
+      store: (entry) =>
+        Effect.sync(() => {
+          stored.push(entry);
+        }),
+    };
+
+    const result = await runWithService(
+      calibrationStore,
+      banditStore,
+      { ...convergingData, outcome: "failure" as const },
+      skillStore,
+    );
+
+    expect(result.skillSynthesized).toBe(false);
+    expect(result.skillFragment).toBeUndefined();
+    expect(stored).toHaveLength(0);
+  });
+
+  test("extracts skill but does not error when no skillStore provided", async () => {
+    const calibrationStore = makeCalibratedStore();
+    const banditStore = new BanditStore(":memory:");
+
+    // No skillStore — should not throw
+    const result = await runWithService(
+      calibrationStore,
+      banditStore,
+      convergingData,
+    );
+
+    expect(result.skillSynthesized).toBe(true);
+    expect(result.skillFragment).toBeDefined();
+    expect(result.skillFragment!.reasoningConfig.strategy).toBe("react");
+  });
+
+  test("skill store failure does not break learning pipeline", async () => {
+    const calibrationStore = makeCalibratedStore();
+    const banditStore = new BanditStore(":memory:");
+    const skillStore: SkillStore = {
+      store: () => Effect.fail(new Error("DB write failed")),
+    };
+
+    // Should succeed despite store failure
+    const result = await runWithService(
+      calibrationStore,
+      banditStore,
+      convergingData,
+      skillStore,
+    );
+
+    expect(result.skillSynthesized).toBe(true);
+    expect(result.skillFragment).toBeDefined();
+    // calibration and bandit still updated
+    expect(result.calibrationUpdated).toBe(true);
+    expect(result.banditUpdated).toBe(true);
   });
 });
