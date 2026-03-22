@@ -34,6 +34,8 @@ import {
   extractFinalAnswer,
   parseBareToolCall,
 } from "./tool-utils.js";
+import { evaluateTermination, defaultEvaluators, type TerminationContext } from "./termination-oracle.js";
+import { assembleOutput } from "./output-assembly.js";
 import { buildContext, buildStaticContext, buildDynamicContext } from "../../context/context-engine.js";
 import type { MemoryItem } from "../../context/context-engine.js";
 import { extractThinking } from "./thinking-utils.js";
@@ -429,6 +431,9 @@ function handleThinking(
       model: "unknown",
     };
 
+    // Increment LLM call counter
+    state = transitionState(state, { llmCalls: (state.llmCalls ?? 0) + 1 });
+
     const rawThought = thoughtResponse.content;
     const newTokens = state.tokens + thoughtResponse.usage.totalTokens;
     const newCost = state.cost + thoughtResponse.usage.estimatedCost;
@@ -479,79 +484,79 @@ function handleThinking(
       allToolRequests[0] ??
       null;
 
-    // ── Shared completion guard helper ────────────────────────────────────────
-    // Checks if the agent's tool usage satisfies task requirements before allowing exit.
-    // Returns a redirect message if gaps exist and retries haven't been exhausted.
-    const checkCompletionGaps = (): string | null => {
-      // Count prior completion-guard redirects to prevent infinite loops
-      const priorRedirects = newSteps.filter(
-        (s) => s.type === "observation" && s.content.startsWith("⚠️ Not done yet"),
-      ).length;
-      // Allow exit after 1 redirect (to avoid infinite loop)
-      if (priorRedirects >= 1) return null;
-
-      const allSchemas = input.allToolSchemas ?? input.availableToolSchemas ?? [];
-      if (allSchemas.length === 0) return null;
-
-      const gaps = detectCompletionGaps(
-        input.task,
-        new Set([...state.toolsUsed]),
-        allSchemas,
-        [...state.steps, ...newSteps],
-      );
-      if (gaps.length === 0) return null;
-
-      return `⚠️ Not done yet — missing steps:\n${gaps.map((g) => `  • ${g}`).join("\n")}\nComplete these actions before finishing.`;
-    };
-
-    // ── FINAL ANSWER CHECK (no pending action) ──────────────────────────────
-    const hasFA = hasFinalAnswer(thought) || (!!thinking && hasFinalAnswer(thinking));
-    if (!toolRequest && hasFA) {
-      const finalAnswer = hasFinalAnswer(thought)
-        ? extractFinalAnswer(thought)
-        : extractFinalAnswer(thinking!);
-
-      // Guard: if the "final answer" looks like a bare tool call, treat as ACTION
-      const embeddedToolCall = parseBareToolCall(finalAnswer);
-      if (embeddedToolCall) {
-        toolRequest = embeddedToolCall;
-      } else {
-        // ── Completion guard: check for task gaps before allowing exit ──
-        const gapMsg = checkCompletionGaps();
-        if (gapMsg) {
-          const gapStep = makeStep("observation", gapMsg, {
-            observationResult: makeObservationResult("completion-guard", false, gapMsg),
-          });
-          yield* hooks.onObservation(state, gapMsg, false);
-          return transitionState(state, {
-            steps: [...newSteps, gapStep],
-            tokens: newTokens,
-            cost: newCost,
-            iteration: state.iteration + 1,
-            // Stay in thinking — redirect agent to address gaps
-          });
+    // ── BARE TOOL CALL GUARD ────────────────────────────────────────────────
+    // If the "final answer" text is actually a tool call, reclassify as ACTION.
+    if (!toolRequest) {
+      const hasFA = hasFinalAnswer(thought) || (!!thinking && hasFinalAnswer(thinking));
+      if (hasFA) {
+        const finalAnswer = hasFinalAnswer(thought)
+          ? extractFinalAnswer(thought)
+          : extractFinalAnswer(thinking!);
+        const embeddedToolCall = parseBareToolCall(finalAnswer);
+        if (embeddedToolCall) {
+          toolRequest = embeddedToolCall;
         }
+      }
+    }
+
+    // ── TERMINATION ORACLE ──────────────────────────────────────────────────
+    // Unified exit decision: replaces scattered hasFinalAnswer, end_turn, and
+    // completion-gap checks with a single scored signal pipeline.
+    if (!toolRequest) {
+      const priorRedirects = newSteps.filter(
+        (s) => s.type === "observation" && s.content.startsWith("\u26A0\uFE0F Not done yet"),
+      ).length;
+      const priorFAAttempts = state.steps.filter(
+        (s) => s.type === "observation" && s.content.startsWith("\u26A0\uFE0F") && s.content.includes("final-answer"),
+      ).length;
+
+      const oracleCtx: TerminationContext = {
+        thought: thought.trim(),
+        thinking: thinking?.trim(),
+        stopReason: thoughtResponse.stopReason ?? "end_turn",
+        toolRequest,
+        iteration: state.iteration,
+        steps: state.steps,
+        priorThought: state.priorThought,
+        entropy: (state.meta.entropy as any)?.latestScore,
+        trajectory: (state.meta.entropy as any)?.latestTrajectory,
+        controllerDecisions: (state.meta.controllerDecisions as any[]) ?? undefined,
+        toolsUsed: state.toolsUsed,
+        requiredTools: (state.meta.requiredTools as string[]) ?? (input.requiredTools as string[]) ?? [],
+        allToolSchemas: input.allToolSchemas ?? input.availableToolSchemas ?? [],
+        redirectCount: priorRedirects,
+        priorFinalAnswerAttempts: priorFAAttempts,
+        taskDescription: input.task,
+      };
+
+      const decision = evaluateTermination(oracleCtx, defaultEvaluators);
+
+      if (decision.shouldExit && decision.output) {
+        const assembled = assembleOutput({
+          steps: state.steps,
+          finalAnswer: decision.output,
+          terminatedBy: decision.reason,
+          entropyScores: (state.meta.entropy as any)?.entropyHistory,
+        });
         return transitionState(state, {
           steps: newSteps,
           tokens: newTokens,
           cost: newCost,
-          status: "done",
-          output: finalAnswer,
+          status: "done" as const,
+          output: assembled.text,
+          priorThought: thought.trim(),
           iteration: state.iteration + 1,
+          meta: {
+            ...state.meta,
+            terminatedBy: decision.reason,
+            evaluator: decision.evaluator,
+            allVerdicts: decision.allVerdicts,
+          },
         });
       }
-    }
 
-    // ── EARLY END_TURN TERMINATION ──────────────────────────────────────────
-    if (
-      !toolRequest &&
-      state.iteration >= 1 &&
-      thought.trim().length >= 50 &&
-      (thoughtResponse as { stopReason?: string }).stopReason === "end_turn"
-    ) {
-      // ── Completion guard: check for task gaps before allowing exit ──
-      const gapMsg = checkCompletionGaps();
-      if (gapMsg) {
+      if (decision.action === "redirect") {
+        const gapMsg = `\u26A0\uFE0F Not done yet — ${decision.reason}.\nComplete remaining actions before finishing.`;
         const gapStep = makeStep("observation", gapMsg, {
           observationResult: makeObservationResult("completion-guard", false, gapMsg),
         });
@@ -561,18 +566,13 @@ function handleThinking(
           tokens: newTokens,
           cost: newCost,
           iteration: state.iteration + 1,
-          // Stay in thinking — redirect agent to address gaps
+          priorThought: thought.trim(),
+          meta: { ...state.meta, redirectCount: (priorRedirects + 1) },
         });
       }
-      return transitionState(state, {
-        steps: newSteps,
-        tokens: newTokens,
-        cost: newCost,
-        status: "done",
-        output: thought.trim(),
-        iteration: state.iteration + 1,
-        meta: { ...state.meta, terminatedBy: "end_turn" },
-      });
+
+      // Continue — update priorThought for next iteration's stability check
+      state = transitionState(state, { priorThought: thought.trim() });
     }
 
     // ── TOOL REQUEST FOUND → transition to "acting" ─────────────────────────
@@ -597,7 +597,7 @@ function handleThinking(
       });
     }
 
-    // No tool, no FA, no end_turn — just a thought; increment iteration and loop
+    // No tool request and oracle said continue — increment iteration and loop
     return transitionState(state, {
       steps: newSteps,
       tokens: newTokens,
@@ -867,30 +867,64 @@ function handleActing(
     );
 
     // Check for post-action FINAL ANSWER (from the thought that triggered this action)
+    // Uses the termination oracle for consistent exit logic.
     const thought = state.meta.lastThought as string | undefined;
     const thinking = state.meta.lastThinking as string | null | undefined;
-    const postActionHasFA = (thought && hasFinalAnswer(thought)) ||
-      (!!thinking && hasFinalAnswer(thinking!));
+    if (thought) {
+      const priorRedirects = stepsWithObs.filter(
+        (s) => s.type === "observation" && s.content.startsWith("\u26A0\uFE0F Not done yet"),
+      ).length;
+      const priorFAAttempts = state.steps.filter(
+        (s) => s.type === "observation" && s.content.startsWith("\u26A0\uFE0F") && s.content.includes("final-answer"),
+      ).length;
 
-    if (postActionHasFA) {
-      const finalAnswer = (thought && hasFinalAnswer(thought))
-        ? extractFinalAnswer(thought)
-        : extractFinalAnswer(thinking!);
-
-      return transitionState(state, {
+      const postActionCtx: TerminationContext = {
+        thought: thought.trim(),
+        thinking: thinking?.trim(),
+        stopReason: "end_turn",
+        toolRequest: null,
+        iteration: state.iteration,
         steps: stepsWithObs,
+        priorThought: state.priorThought,
+        entropy: (state.meta.entropy as any)?.latestScore,
+        trajectory: (state.meta.entropy as any)?.latestTrajectory,
+        controllerDecisions: (state.meta.controllerDecisions as any[]) ?? undefined,
         toolsUsed: newToolsUsed,
-        status: "done",
-        output: finalAnswer,
-        iteration: state.iteration + 1,
-        meta: {
-          ...state.meta,
-          pendingToolRequest: undefined,
-          pendingToolGroup: undefined,
-          lastThought: undefined,
-          lastThinking: undefined,
-        },
-      });
+        requiredTools: (state.meta.requiredTools as string[]) ?? (input.requiredTools as string[]) ?? [],
+        allToolSchemas: input.allToolSchemas ?? input.availableToolSchemas ?? [],
+        redirectCount: priorRedirects,
+        priorFinalAnswerAttempts: priorFAAttempts,
+        taskDescription: input.task,
+      };
+
+      const postActionDecision = evaluateTermination(postActionCtx, defaultEvaluators);
+
+      if (postActionDecision.shouldExit && postActionDecision.output) {
+        const assembled = assembleOutput({
+          steps: stepsWithObs,
+          finalAnswer: postActionDecision.output,
+          terminatedBy: postActionDecision.reason,
+          entropyScores: (state.meta.entropy as any)?.entropyHistory,
+        });
+        return transitionState(state, {
+          steps: stepsWithObs,
+          toolsUsed: newToolsUsed,
+          status: "done",
+          output: assembled.text,
+          priorThought: thought.trim(),
+          iteration: state.iteration + 1,
+          meta: {
+            ...state.meta,
+            terminatedBy: postActionDecision.reason,
+            evaluator: postActionDecision.evaluator,
+            allVerdicts: postActionDecision.allVerdicts,
+            pendingToolRequest: undefined,
+            pendingToolGroup: undefined,
+            lastThought: undefined,
+            lastThinking: undefined,
+          },
+        });
+      }
     }
 
     // No FA — continue to next thinking iteration
@@ -950,15 +984,18 @@ export const executeReActKernel = (
       exitOnAllToolsCalled: input.exitOnAllToolsCalled,
     });
 
-    // Determine terminatedBy from state
+    // Determine terminatedBy from state — map oracle reasons to canonical types
+    const rawTerminatedBy = state.meta.terminatedBy as string | undefined;
     const terminatedBy: "final_answer" | "final_answer_tool" | "max_iterations" | "end_turn" =
-      state.meta.terminatedBy === "final_answer_tool"
+      rawTerminatedBy === "final_answer_tool"
         ? "final_answer_tool"
-        : state.meta.terminatedBy === "end_turn"
+        : rawTerminatedBy === "end_turn" || rawTerminatedBy === "llm_end_turn"
           ? "end_turn"
-          : state.status === "done"
+          : rawTerminatedBy === "final_answer_regex"
             ? "final_answer"
-            : "max_iterations";
+            : state.status === "done"
+              ? "final_answer"
+              : "max_iterations";
 
     // When max iterations reached (no explicit output), fall back to last thought content
     // to match the original executeReActKernel behavior.

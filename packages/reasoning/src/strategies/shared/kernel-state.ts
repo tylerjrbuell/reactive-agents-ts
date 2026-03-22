@@ -40,6 +40,10 @@ export interface KernelState {
   readonly output: string | null;
   readonly error: string | null;
 
+  // Termination oracle
+  readonly priorThought?: string;
+  readonly llmCalls: number;
+
   // Strategy-specific
   readonly meta: Readonly<Record<string, unknown>>;
 }
@@ -208,6 +212,7 @@ export function initialKernelState(opts: KernelRunOptions): KernelState {
     status: "thinking",
     output: null,
     error: null,
+    llmCalls: 0,
     meta: {
       ...(opts.meta ?? {}),
       maxIterations: opts.maxIterations,
@@ -263,6 +268,8 @@ export function serializeKernelState(state: KernelState): SerializedKernelState 
     status: state.status,
     output: state.output,
     error: state.error,
+    llmCalls: state.llmCalls,
+    priorThought: state.priorThought,
     meta: state.meta,
   };
 }
@@ -285,6 +292,8 @@ export function deserializeKernelState(raw: SerializedKernelState): KernelState 
     status: raw.status,
     output: raw.output,
     error: raw.error,
+    llmCalls: raw.llmCalls,
+    priorThought: raw.priorThought,
     meta: raw.meta,
   };
 }

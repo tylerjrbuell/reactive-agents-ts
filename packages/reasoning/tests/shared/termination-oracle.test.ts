@@ -231,16 +231,26 @@ describe("contentStabilityEvaluator", () => {
     expect(result!.reason).toBe("content_stable");
   });
 
-  test("very similar thoughts → exit medium", () => {
+  test("very similar substantive thoughts (>= 100 chars) → exit medium", () => {
     const ctx = makeCtx({
-      thought: "The capital of France is Paris, which is a beautiful city.",
-      priorThought: "The capital of France is Paris, which is a beautiful city!",
+      thought: "The capital of France is Paris, which is a beautiful city known for its art, culture, architecture, and historical landmarks such as the Eiffel Tower.",
+      priorThought: "The capital of France is Paris, which is a beautiful city known for its art, culture, architecture, and historical landmarks such as the Eiffel Tower!",
       toolRequest: null,
     });
     const result = contentStabilityEvaluator.evaluate(ctx);
     expect(result).not.toBeNull();
     expect(result!.action).toBe("exit");
     expect(result!.confidence).toBe("medium");
+  });
+
+  test("very similar short thoughts (< 100 chars) → null (fuzzy requires length)", () => {
+    const ctx = makeCtx({
+      thought: "The capital of France is Paris, which is a beautiful city.",
+      priorThought: "The capital of France is Paris, which is a beautiful city!",
+      toolRequest: null,
+    });
+    // Short strings skip fuzzy match to avoid false positives
+    expect(contentStabilityEvaluator.evaluate(ctx)).toBeNull();
   });
 
   test("different thoughts → null", () => {
@@ -273,10 +283,11 @@ describe("contentStabilityEvaluator", () => {
 // ── LLMEndTurn evaluator ─────────────────────────────────────────────────────
 
 describe("llmEndTurnEvaluator", () => {
-  test("end_turn + non-empty thought + no required tools → exit medium", () => {
+  test("end_turn + substantive thought + iteration >= 1 + no required tools → exit medium", () => {
     const ctx = makeCtx({
       stopReason: "end_turn",
-      thought: "The answer is 4.",
+      thought: "The answer to this question about the capital of France is Paris, which is well known.",
+      iteration: 1,
       requiredTools: [],
       toolsUsed: new Set(),
     });
@@ -287,17 +298,28 @@ describe("llmEndTurnEvaluator", () => {
     expect(result!.reason).toBe("llm_end_turn");
   });
 
-  test("iteration 0 → still exits (no iteration guard)", () => {
+  test("iteration 0 → null (requires at least one prior iteration)", () => {
     const ctx = makeCtx({
       stopReason: "end_turn",
-      thought: "Done.",
+      thought: "The answer to this question about the capital of France is Paris, which is well known.",
       iteration: 0,
       requiredTools: [],
       toolsUsed: new Set(),
     });
     const result = llmEndTurnEvaluator.evaluate(ctx);
-    expect(result).not.toBeNull();
-    expect(result!.action).toBe("exit");
+    expect(result).toBeNull();
+  });
+
+  test("short thought (< 50 chars) → null", () => {
+    const ctx = makeCtx({
+      stopReason: "end_turn",
+      thought: "Done.",
+      iteration: 1,
+      requiredTools: [],
+      toolsUsed: new Set(),
+    });
+    const result = llmEndTurnEvaluator.evaluate(ctx);
+    expect(result).toBeNull();
   });
 
   test("empty thought → null", () => {
@@ -326,10 +348,11 @@ describe("llmEndTurnEvaluator", () => {
     expect(llmEndTurnEvaluator.evaluate(ctx)).toBeNull();
   });
 
-  test("required tools all used → exits", () => {
+  test("required tools all used + iteration >= 1 + substantive thought → exits", () => {
     const ctx = makeCtx({
       stopReason: "end_turn",
-      thought: "Based on the search, the answer is 4.",
+      thought: "Based on the web search results, the answer to the question is definitely 4.",
+      iteration: 1,
       requiredTools: ["web-search"],
       toolsUsed: new Set(["web-search"]),
     });
@@ -412,14 +435,26 @@ describe("completionGapEvaluator", () => {
 // ── Benchmark regression scenarios ──────────────────────────────────────────
 
 describe("benchmark regression scenarios", () => {
-  test("Gemini '4' at iteration 0 with end_turn → exits", () => {
+  test("Gemini '4' at iteration 0 with end_turn → continues (too short, iteration 0)", () => {
     const result = evaluateTermination(makeCtx({
       thought: "4",
       stopReason: "end_turn",
       iteration: 0,
     }), defaultEvaluators);
+    // Short thought at iteration 0 — no evaluator fires
+    expect(result.shouldExit).toBe(false);
+    expect(result.evaluator).toBe("none");
+  });
+
+  test("Gemini '4' at iteration 1 with prior identical thought → exits via ContentStability", () => {
+    const result = evaluateTermination(makeCtx({
+      thought: "4",
+      priorThought: "4",
+      stopReason: "end_turn",
+      iteration: 1,
+    }), defaultEvaluators);
     expect(result.shouldExit).toBe(true);
-    expect(result.evaluator).toBe("LLMEndTurn");
+    expect(result.evaluator).toBe("ContentStability");
   });
 
   test("GPT-4o-mini 'Paris' repeated 3 times → exits on 2nd via ContentStability", () => {
@@ -433,26 +468,38 @@ describe("benchmark regression scenarios", () => {
     expect(result.evaluator).toBe("ContentStability");
   });
 
-  test("Qwen3 **Final Answer** 105 → exits (LLMEndTurn fires before FinalAnswerRegex)", () => {
+  test("Qwen3 **Final Answer** 105 → exits via FinalAnswerRegex", () => {
     const result = evaluateTermination(makeCtx({
       thought: "**Final Answer** 105",
       stopReason: "end_turn",
     }), defaultEvaluators);
     expect(result.shouldExit).toBe(true);
-    // LLMEndTurn appears before FinalAnswerRegex in defaultEvaluators — both are medium
-    // confidence exit, so the first one (LLMEndTurn) wins in the sort-stable resolver.
-    expect(["LLMEndTurn", "FinalAnswerRegex"]).toContain(result.evaluator);
+    // FinalAnswerRegex appears before LLMEndTurn in defaultEvaluators and extracts clean output
+    expect(result.evaluator).toBe("FinalAnswerRegex");
+    expect(result.output).toBe("105");
   });
 
-  test("Cogito 'Hello! How can I help?' on 'Hi' → exits via LLMEndTurn", () => {
+  test("Cogito 'Hello! How can I help?' on 'Hi' at iteration 0 → continues (short, iteration 0)", () => {
     const result = evaluateTermination(makeCtx({
       thought: "Hello! How can I help you today?",
       stopReason: "end_turn",
       iteration: 0,
       taskDescription: "Hi",
     }), defaultEvaluators);
+    // 31 chars < 50 and iteration 0 — LLMEndTurn does not fire
+    expect(result.shouldExit).toBe(false);
+  });
+
+  test("Cogito 'Hello! How can I help?' on 'Hi' at iteration 1 with prior identical → exits via ContentStability", () => {
+    const result = evaluateTermination(makeCtx({
+      thought: "Hello! How can I help you today?",
+      priorThought: "Hello! How can I help you today?",
+      stopReason: "end_turn",
+      iteration: 1,
+      taskDescription: "Hi",
+    }), defaultEvaluators);
     expect(result.shouldExit).toBe(true);
-    expect(result.evaluator).toBe("LLMEndTurn");
+    expect(result.evaluator).toBe("ContentStability");
   });
 
   test("Qwen3 scratchpad repeating after tool completion → exits via ContentStability", () => {
@@ -491,14 +538,24 @@ describe("benchmark regression scenarios", () => {
     expect(result.evaluator).toBe("PendingToolCall");
   });
 
-  test("no reactive intelligence → fallback works via ContentStability + LLMEndTurn", () => {
+  test("no reactive intelligence → fallback works via LLMEndTurn for substantive response", () => {
     // No entropy, no trajectory, no controller decisions
     const result = evaluateTermination(makeCtx({
-      thought: "The answer is Paris.",
+      thought: "The answer to the question about the capital of France is Paris.",
       stopReason: "end_turn",
       iteration: 1,
     }), defaultEvaluators);
     expect(result.shouldExit).toBe(true);
     expect(result.evaluator).toBe("LLMEndTurn");
+  });
+
+  test("no reactive intelligence → short response at iteration 1 continues", () => {
+    const result = evaluateTermination(makeCtx({
+      thought: "The answer is Paris.",
+      stopReason: "end_turn",
+      iteration: 1,
+    }), defaultEvaluators);
+    // 20 chars < 50 — LLMEndTurn does not fire
+    expect(result.shouldExit).toBe(false);
   });
 });

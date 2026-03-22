@@ -226,7 +226,9 @@ export const contentStabilityEvaluator: TerminationSignalEvaluator = {
     if (current === prior) {
       return { action: "exit", confidence: "high", reason: "content_stable", output: current };
     }
-    if (normalizedLevenshtein(current, prior) > 0.85) {
+    // Fuzzy match only for substantive content (>= 100 chars) to avoid
+    // false positives on short incrementing outputs like "Step 1..." / "Step 2..."
+    if (current.length >= 100 && normalizedLevenshtein(current, prior) > 0.85) {
       return { action: "exit", confidence: "medium", reason: "content_stable", output: current };
     }
     return null;
@@ -237,7 +239,9 @@ export const llmEndTurnEvaluator: TerminationSignalEvaluator = {
   name: "LLMEndTurn",
   evaluate: (ctx) => {
     if (ctx.stopReason !== "end_turn") return null;
-    if (ctx.thought.trim().length === 0) return null;
+    // Require at least one prior iteration and substantive content
+    if (ctx.iteration < 1) return null;
+    if (ctx.thought.trim().length < 50) return null;
     const remainingRequired = ctx.requiredTools.filter((t) => !ctx.toolsUsed.has(t));
     if (remainingRequired.length > 0) return null;
     return { action: "exit", confidence: "medium", reason: "llm_end_turn", output: ctx.thought.trim() };
@@ -269,14 +273,16 @@ export const completionGapEvaluator: TerminationSignalEvaluator = {
   },
 };
 
-/** Default evaluator chain — ordered for short-circuit performance. */
+/** Default evaluator chain — ordered for short-circuit performance.
+ *  finalAnswerRegex runs before llmEndTurn because it extracts a clean answer
+ *  (stripping the "FINAL ANSWER:" prefix), while end_turn returns raw thought. */
 export const defaultEvaluators: readonly TerminationSignalEvaluator[] = [
   pendingToolCallEvaluator,
   finalAnswerToolEvaluator,
   entropyConvergenceEvaluator,
   reactiveControllerEarlyStopEvaluator,
   contentStabilityEvaluator,
-  llmEndTurnEvaluator,
   finalAnswerRegexEvaluator,
+  llmEndTurnEvaluator,
   completionGapEvaluator,
 ];

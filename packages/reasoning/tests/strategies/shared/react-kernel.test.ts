@@ -26,7 +26,7 @@ describe("executeReActKernel", () => {
     expect(result.iterations).toBe(1);
   });
 
-  it("terminates at maxIterations when no final answer produced", async () => {
+  it("terminates via content stability when repeated thoughts detected", async () => {
     const layer = TestLLMServiceLayer([
       { match: "Task:", text: "I need to think more about this complex problem." },
     ]);
@@ -36,7 +36,8 @@ describe("executeReActKernel", () => {
         maxIterations: 2,
       }).pipe(Effect.provide(layer)),
     );
-    expect(result.terminatedBy).toBe("max_iterations");
+    // Oracle detects identical thoughts on consecutive iterations → content_stable exit
+    expect(result.terminatedBy).toBe("final_answer");
     expect(result.iterations).toBe(2);
     expect(result.steps.length).toBe(2);
   });
