@@ -9,7 +9,8 @@ export const reactThoughtTemplate: PromptTemplate = {
 Previous steps:
 {{history}}
 
-Think step-by-step. If you need a tool, respond with "ACTION: tool_name({"param": "value"})" using valid JSON for the arguments. For tools with multiple parameters, include all required fields in the JSON object. If you have a final answer, respond with "FINAL ANSWER: ...".`,
+Think step-by-step. If you need a tool, respond with "ACTION: tool_name({"param": "value"})" using valid JSON for the arguments. For tools with multiple parameters, include all required fields in the JSON object. If you have a final answer, respond with "FINAL ANSWER: ...".
+Do NOT ask follow-up questions like "Would you like me to continue?" or "Shall I proceed?". Complete the task fully in your response.`,
   variables: [
     {
       name: "context",

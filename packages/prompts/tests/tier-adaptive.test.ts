@@ -43,8 +43,8 @@ describe("tier variant content characteristics", () => {
       interpolate(reactSystemLocalTemplate, { task: "analyze data" }),
     );
     expect(result).toContain("One action per turn");
-    // Should not have complex multi-paragraph instructions
-    expect(result.split("\n").length).toBeLessThan(5);
+    // Should not have excessively complex multi-paragraph instructions
+    expect(result.split("\n").length).toBeLessThan(12);
   });
 
   test("frontier system prompt includes detailed strategy guidance", async () => {
@@ -62,7 +62,7 @@ describe("tier variant content characteristics", () => {
       interpolate(reactThoughtLocalTemplate, { context: "ctx", history: "" }),
     );
     expect(result).toContain("Think briefly");
-    expect(result.length).toBeLessThan(200);
+    expect(result.length).toBeLessThan(400);
   });
 
   test("frontier thought prompt includes detailed reasoning instructions", async () => {

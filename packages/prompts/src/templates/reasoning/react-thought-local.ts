@@ -6,7 +6,8 @@ export const reactThoughtLocalTemplate: PromptTemplate = {
   version: 1,
   template: `{{context}}
 
-Think briefly, then act. Use ACTION: tool_name({"param": "value"}) or FINAL ANSWER: <answer>.`,
+Think briefly, then act. Use ACTION: tool_name({"param": "value"}) or FINAL ANSWER: <answer>.
+Do NOT ask follow-up questions like "Would you like me to continue?" or "Shall I proceed?". Complete the task fully in your response.`,
   variables: [
     {
       name: "context",

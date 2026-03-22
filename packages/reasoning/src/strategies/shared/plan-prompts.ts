@@ -230,7 +230,8 @@ export function buildStepExecutionPrompt(input: StepExecutionInput): string {
     `RULES:\n` +
     `- Produce your answer directly — no labels, no "FINAL ANSWER:" prefix.\n` +
     `- Do NOT ask follow-up questions or offer to do something. Just produce the requested content.\n` +
-    `- Your output will be passed directly to the next step, so make it complete and ready to use.`,
+    `- Your output will be passed directly to the next step, so make it complete and ready to use.\n` +
+    `- Keep your analysis focused and concise. Aim for completeness, not exhaustiveness.`,
   );
 
   return sections.join("\n\n");

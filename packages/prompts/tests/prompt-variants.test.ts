@@ -82,7 +82,7 @@ describe("Prompt template tier variants", () => {
       ),
     );
     expect(result.content).toContain("Think briefly");
-    expect(result.content.length).toBeLessThan(200);
+    expect(result.content.length).toBeLessThan(400);
   });
 
   it("frontier thought variant includes detailed instructions", async () => {

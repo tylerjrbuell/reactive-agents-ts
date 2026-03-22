@@ -9,7 +9,8 @@ export const finalAnswerTool: ToolDefinition = {
     "Submit the final answer and terminate the task. Call this when ALL required steps " +
     "are complete. Provide the actual deliverable in 'output', its format in 'format', " +
     "and a brief summary of what was accomplished in 'summary'. " +
-    "This is the preferred way to end a task — do NOT write 'FINAL ANSWER:' in text when you can call this tool.",
+    "This is the preferred way to end a task — do NOT write 'FINAL ANSWER:' in text when you can call this tool. " +
+    "When your task involves code generation, your output field MUST contain the actual complete code — not a description of the code or a reference to code you wrote earlier.",
   parameters: [
     {
       name: "output",
