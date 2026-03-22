@@ -126,6 +126,9 @@ export const createSubAgentExecutor = (
     provider?: string;
     model?: string;
     maxIterations?: number;
+    enableMemory?: boolean;
+    enableDebrief?: boolean;
+    enableReactiveIntelligence?: boolean;
     systemPrompt?: string;
     persona?: {
       role?: string;
@@ -151,8 +154,17 @@ export const createSubAgentExecutor = (
   parentContextProvider?: () => ParentContext | undefined,
   /** Optional writer to forward sub-agent scratchpad entries to the parent */
   parentScratchpadWriter?: (key: string, value: string) => void,
-): ((task: string) => Promise<SubAgentResult>) => {
-  return async (task: string): Promise<SubAgentResult> => {
+): ((task: string | Record<string, unknown>) => Promise<SubAgentResult>) => {
+  return async (rawTask: string | Record<string, unknown>): Promise<SubAgentResult> => {
+    // Normalize input — accept both string and object (e.g. { query: "..." })
+    const task: string =
+      typeof rawTask === "string"
+        ? rawTask
+        : typeof (rawTask as Record<string, unknown>).query === "string"
+          ? ((rawTask as Record<string, unknown>).query as string)
+          : typeof (rawTask as Record<string, unknown>).task === "string"
+            ? ((rawTask as Record<string, unknown>).task as string)
+            : JSON.stringify(rawTask);
     if (depth >= MAX_RECURSION_DEPTH) {
       return {
         subAgentName: config.name,
@@ -182,20 +194,36 @@ export const createSubAgentExecutor = (
         ? [...new Set([...baseTools, ...ALWAYS_INCLUDE_TOOLS])]
         : undefined as unknown as readonly string[];
 
-      // Fix 2: Cap sub-agent maxIterations to 4 to prevent spin-out.
+      // Tighter sub-agent defaults — prevents spin-out and reduces overhead.
       // Sub-agents should complete focused tasks quickly (1-3 steps typical).
-      const effectiveMaxIter = Math.min(config.maxIterations ?? 4, 4);
+      const subAgentDefaults = {
+        maxIterations: 3,
+        enableMemory: false,
+        enableDebrief: false,
+        enableReactiveIntelligence: true,
+      };
+
+      // User-configured SubAgentConfig values override defaults.
+      const effectiveMaxIter = Math.min(
+        config.maxIterations ?? subAgentDefaults.maxIterations,
+        subAgentDefaults.maxIterations,
+      );
 
       const result = await executeFn({
         agentId: `sub-${config.name}-${Date.now()}`,
         provider: config.provider,
         model: config.model,
         maxIterations: effectiveMaxIter,
+        enableMemory: subAgentDefaults.enableMemory,
+        enableDebrief: subAgentDefaults.enableDebrief,
+        enableReactiveIntelligence: subAgentDefaults.enableReactiveIntelligence,
         systemPrompt: composedSystemPrompt,
         persona: config.persona,
         enableReasoning: true,
         enableTools: true,
         task,
+        // Step 2: Explicitly pass config.name so log prefix uses the configured name,
+        // matching the dynamic spawn-agent path which also forwards opts.name.
         name: config.name,
         allowedTools: effectiveTools,
       });
@@ -262,7 +290,7 @@ const deriveInputSchemaFromCapabilities = (
   params.push({
     name: "input",
     type: "object" as const,
-    description: "Input to pass to the agent",
+    description: "Input to pass to the agent. Accepts a string task description or an object with a 'query' field.",
     required: false,
   });
 
@@ -290,7 +318,7 @@ const deriveInputSchemaFromCapabilities = (
     params.push({
       name: "input",
       type: "object" as const,
-      description: "Agent input data",
+      description: "Agent input data. Accepts a string task description or an object with a 'query' field.",
       required: false,
     });
   }
