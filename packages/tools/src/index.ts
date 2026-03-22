@@ -67,7 +67,7 @@ export type {
 export { validateToolInput } from "./validation/input-validator.js";
 
 // ─── Skills ───
-export { builtinTools, ragMemoryStore } from "./skills/builtin.js";
+export { builtinTools, ragMemoryStore, scratchpadStoreRef } from "./skills/builtin.js";
 export { webSearchTool, webSearchHandler } from "./skills/web-search.js";
 export {
   fileReadTool,

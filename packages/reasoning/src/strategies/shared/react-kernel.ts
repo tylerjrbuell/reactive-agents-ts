@@ -12,7 +12,7 @@
  *   - `executeReActKernel(input)` — backwards-compatible wrapper using `runKernel(reactKernel, ...)`
  *   - `ReActKernelInput` / `ReActKernelResult` — preserved types for all consumers
  */
-import { Effect, Stream, FiberRef } from "effect";
+import { Effect, Stream, FiberRef, Ref } from "effect";
 import type { ReasoningStep } from "../../types/index.js";
 import { ExecutionError } from "../../errors/errors.js";
 import { LLMService } from "@reactive-agents/llm-provider";
@@ -24,6 +24,7 @@ import {
   finalAnswerTool,
   makeFinalAnswerHandler,
   shouldShowFinalAnswer,
+  scratchpadStoreRef,
   type FinalAnswerCapture,
 } from "@reactive-agents/tools";
 import type { ToolSchema } from "./tool-utils.js";
@@ -850,6 +851,14 @@ function handleActing(
       }
     }
 
+    // Sync scratchpad: merge ToolService's scratchpad Ref into KernelState.scratchpad
+    // so that writes from scratchpad-write tool are visible to the kernel and context-status
+    const toolScratchpad = yield* Ref.get(scratchpadStoreRef);
+    const mergedScratchpad = new Map(state.scratchpad);
+    for (const [k, v] of toolScratchpad) {
+      mergedScratchpad.set(k, v);
+    }
+
     const observationStep = makeStep("observation", observationContent, { observationResult: obsResult });
     const stepsWithObs = [...stepsWithAction, observationStep];
 
@@ -903,6 +912,7 @@ function handleActing(
         return transitionState(state, {
           steps: stepsWithObs,
           toolsUsed: newToolsUsed,
+          scratchpad: mergedScratchpad,
           status: "done",
           output: assembled.text,
           priorThought: thought.trim(),
@@ -925,6 +935,7 @@ function handleActing(
     return transitionState(state, {
       steps: stepsWithObs,
       toolsUsed: newToolsUsed,
+      scratchpad: mergedScratchpad,
       status: "thinking",
       iteration: state.iteration + 1,
       meta: {

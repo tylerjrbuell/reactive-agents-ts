@@ -60,8 +60,9 @@ export {
   type RagSearchResult,
 } from "./rag-search.js";
 
-// Shared scratchpad store — one per tool service instance (reset per agent run)
-const scratchpadStoreRef = Ref.unsafeMake(new Map<string, string>());
+// Shared scratchpad store — one per tool service instance (reset per agent run).
+// Exported so the reasoning kernel can sync scratchpad state after tool execution.
+export const scratchpadStoreRef = Ref.unsafeMake(new Map<string, string>());
 
 // Shared RAG in-memory store — one per tool service instance (reset per agent run).
 // Exported so that the runtime builder can pre-populate it via .withDocuments() / agent.ingest().
