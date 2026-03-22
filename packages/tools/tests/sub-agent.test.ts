@@ -182,7 +182,12 @@ describe("createSubAgentExecutor", () => {
       // No parentContextProvider
     );
     await executor("do something");
-    expect(capturedOpts.systemPrompt).toBe("Be concise.");
+    // Directive is prepended; config systemPrompt follows
+    expect(capturedOpts.systemPrompt).toContain("focused sub-agent");
+    expect(capturedOpts.systemPrompt).toContain("Be concise.");
+    expect(capturedOpts.systemPrompt.indexOf("focused sub-agent")).toBeLessThan(
+      capturedOpts.systemPrompt.indexOf("Be concise.")
+    );
   });
 
   it("works when parentContextProvider returns undefined", async () => {
@@ -194,7 +199,12 @@ describe("createSubAgentExecutor", () => {
       () => undefined,
     );
     await executor("do something");
-    expect(capturedOpts.systemPrompt).toBe("Help me.");
+    // Directive is prepended; config systemPrompt follows
+    expect(capturedOpts.systemPrompt).toContain("focused sub-agent");
+    expect(capturedOpts.systemPrompt).toContain("Help me.");
+    expect(capturedOpts.systemPrompt.indexOf("focused sub-agent")).toBeLessThan(
+      capturedOpts.systemPrompt.indexOf("Help me.")
+    );
   });
 });
 

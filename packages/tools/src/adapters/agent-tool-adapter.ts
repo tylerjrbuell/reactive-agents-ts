@@ -175,17 +175,22 @@ export const createSubAgentExecutor = (
     }
 
     try {
+      // Directive prefix — always prepended first to orient the sub-agent
+      const DIRECTIVE = `You are a focused sub-agent. Complete your assigned task efficiently:
+- Use tools when they help. Do not explain what you're about to do — just do it.
+- When you have the answer, respond with FINAL ANSWER: <your complete result>.
+- Include raw values (numbers, code, data) in your answer — not descriptions of them.
+- Do not ask follow-up questions. Do not offer alternatives.`;
+
       // Build parent context prefix if a provider was given
       const parentCtx = parentContextProvider?.();
       const parentPrefix = buildParentContextPrefix(parentCtx);
 
-      // Compose system prompt: parent context prefix + configured system prompt
-      let composedSystemPrompt = config.systemPrompt;
-      if (parentPrefix) {
-        composedSystemPrompt = composedSystemPrompt
-          ? `${parentPrefix}\n\n${composedSystemPrompt}`
-          : parentPrefix;
-      }
+      // Compose system prompt: directive + parent context prefix + configured system prompt
+      const parts: string[] = [DIRECTIVE];
+      if (parentPrefix) parts.push(parentPrefix);
+      if (config.systemPrompt) parts.push(config.systemPrompt);
+      const composedSystemPrompt = parts.join("\n\n");
 
       // Fix 1: Always include scratchpad tools in sub-agent tool scope so
       // sub-agents can store/retrieve intermediate results during reasoning.
