@@ -90,3 +90,49 @@ export function extractSkillFragment(
     meanComposite: mean,
   };
 }
+
+type ProceduralEntryShape = {
+  id: string;
+  agentId: string;
+  name: string;
+  description: string;
+  pattern: string;
+  successRate: number;
+  useCount: number;
+  tags: string[];
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+type SkillFragmentToProceduralEntryParams = {
+  readonly fragment: SkillFragment;
+  readonly agentId: string;
+  readonly taskCategory: string;
+  readonly modelId: string;
+};
+
+/**
+ * Convert a SkillFragment (learned configuration from a high-signal run)
+ * into a ProceduralEntry suitable for storage in procedural memory.
+ *
+ * The entry captures the full fragment as its `pattern` (JSON-serialized),
+ * and derives human-readable name/description/tags for retrieval.
+ */
+export function skillFragmentToProceduralEntry(
+  params: SkillFragmentToProceduralEntryParams,
+): ProceduralEntryShape {
+  const { fragment, agentId, taskCategory, modelId } = params;
+  const now = new Date();
+  return {
+    id: crypto.randomUUID(),
+    agentId,
+    name: `${taskCategory}:${modelId}`,
+    description: `Learned skill for ${taskCategory} tasks on ${modelId} (entropy: ${fragment.meanComposite.toFixed(2)}, convergence at iter ${fragment.convergenceIteration ?? "?"})`,
+    pattern: JSON.stringify(fragment),
+    successRate: 1.0,
+    useCount: 1,
+    tags: [taskCategory, modelId, fragment.reasoningConfig.strategy],
+    createdAt: now,
+    updatedAt: now,
+  };
+}

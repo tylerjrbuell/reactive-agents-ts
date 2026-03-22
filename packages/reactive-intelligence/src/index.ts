@@ -68,7 +68,7 @@ export { classifyTaskCategory } from "./learning/task-classifier.js";
 export { BanditStore } from "./learning/bandit-store.js";
 export type { ArmStats } from "./learning/bandit-store.js";
 export { selectArm, updateArm } from "./learning/bandit.js";
-export { shouldSynthesizeSkill, extractSkillFragment } from "./learning/skill-synthesis.js";
+export { shouldSynthesizeSkill, extractSkillFragment, skillFragmentToProceduralEntry } from "./learning/skill-synthesis.js";
 export { LearningEngineService, LearningEngineServiceLive } from "./learning/learning-engine.js";
 export type { RunCompletedData, LearningResult } from "./learning/learning-engine.js";
 
