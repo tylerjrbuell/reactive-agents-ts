@@ -239,9 +239,7 @@ export const llmEndTurnEvaluator: TerminationSignalEvaluator = {
   name: "LLMEndTurn",
   evaluate: (ctx) => {
     if (ctx.stopReason !== "end_turn") return null;
-    // Require at least one prior iteration and substantive content
-    if (ctx.iteration < 1) return null;
-    if (ctx.thought.trim().length < 50) return null;
+    if (ctx.thought.trim().length === 0) return null;
     const remainingRequired = ctx.requiredTools.filter((t) => !ctx.toolsUsed.has(t));
     if (remainingRequired.length > 0) return null;
     return { action: "exit", confidence: "medium", reason: "llm_end_turn", output: ctx.thought.trim() };
