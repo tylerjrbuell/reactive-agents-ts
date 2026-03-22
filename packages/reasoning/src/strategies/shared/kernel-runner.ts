@@ -231,13 +231,15 @@ export function runKernel(
                 entropyBefore: latestScore?.composite ?? 0,
               }).pipe(Effect.catchAll(() => Effect.void));
             }
+          }
 
-            // Execute decisions
-            if ((decision as any).decision === "early-stop") {
-              (state.meta as any).earlyStopSignaled = true;
-            }
-            // strategy-switch and compress decisions are informational —
-            // strategy-switch is handled by the existing loop detection + switching mechanism
+          // Store all controller decisions on state so the termination oracle can consume them.
+          // The oracle's reactiveControllerEarlyStopEvaluator reads state.meta.controllerDecisions
+          // and signals a high-confidence exit when an early-stop decision is present.
+          if (decisions.length > 0) {
+            state = transitionState(state, {
+              meta: { ...state.meta, controllerDecisions: decisions },
+            });
           }
         }
       }

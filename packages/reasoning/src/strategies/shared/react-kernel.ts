@@ -336,12 +336,6 @@ function handleThinking(
       priorContext: input.priorContext,
     }) + "\n\nThink step-by-step, then either take ONE action or give your FINAL ANSWER:";
 
-    // ── Early-stop signal from ReactiveController ──────────────────────────
-    // When entropy analysis indicates convergence, nudge the LLM to finalize.
-    if ((state.meta as any).earlyStopSignaled) {
-      thoughtPrompt += "\n\nIMPORTANT: You have enough information to answer. Produce your FINAL ANSWER now — do not take another action.";
-    }
-
     // ── STREAM (with text delta emission) ──────────────────────────────────
     // Token budget adapts to model tier: frontier models get more room for
     // sophisticated reasoning; local models are capped to avoid wasted tokens.
