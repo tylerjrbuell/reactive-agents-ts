@@ -1,10 +1,15 @@
 // File: src/embedding-cache.ts
 /**
  * Content-hash embedding cache — deduplicates embed() calls per text.
- * Cache is keyed by Bun.hash(text) and avoids re-embedding identical strings.
+ * Cache is keyed by content hash and avoids re-embedding identical strings.
  */
 import { Effect } from "effect";
+import { createHash } from "node:crypto";
 import type { LLMErrors } from "./errors.js";
+
+function contentHash(str: string): string {
+  return createHash("sha256").update(str).digest("hex").slice(0, 12);
+}
 
 const MAX_ENTRIES = 5_000;
 
@@ -66,7 +71,7 @@ export const makeEmbeddingCache = (
         const misses: { index: number; text: string }[] = [];
 
         for (let i = 0; i < texts.length; i++) {
-          const hash = Bun.hash(texts[i]!).toString(36);
+          const hash = contentHash(texts[i]!);
           const cached = cache.get(hash);
           if (cached) {
             results[i] = cached;
@@ -89,7 +94,7 @@ export const makeEmbeddingCache = (
         for (let j = 0; j < misses.length; j++) {
           const { index, text } = misses[j]!;
           const embedding = embeddings[j]!;
-          const hash = Bun.hash(text).toString(36);
+          const hash = contentHash(text);
           cache.set(hash, embedding);
           results[index] = embedding;
         }

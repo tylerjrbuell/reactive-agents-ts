@@ -3,6 +3,7 @@
  * CLI entry point for running benchmarks.
  * Usage: bun run src/run.ts [--provider anthropic] [--model claude-haiku-4-5] [--tier simple,moderate] [--output report.json]
  */
+import { readFileSync, writeFileSync } from "node:fs";
 import { runBenchmarks } from "./runner.js";
 import type { MultiModelReport, Tier } from "./types.js";
 
@@ -26,7 +27,7 @@ if (output) {
   // Upsert: keep other provider/model runs, replace the matching one
   let multiReport: MultiModelReport;
   try {
-    const existing = JSON.parse(await Bun.file(output).text()) as MultiModelReport;
+    const existing = JSON.parse(readFileSync(output, "utf-8")) as MultiModelReport;
     const otherRuns = existing.runs.filter(
       (r) => !(r.provider === report.provider && r.model === report.model),
     );
@@ -37,6 +38,6 @@ if (output) {
   } catch {
     multiReport = { generatedAt: new Date().toISOString(), runs: [report] };
   }
-  await Bun.write(output, JSON.stringify(multiReport, null, 2));
+  writeFileSync(output, JSON.stringify(multiReport, null, 2));
   console.log(`  Report saved to ${output}`);
 }

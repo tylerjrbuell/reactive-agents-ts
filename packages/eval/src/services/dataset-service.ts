@@ -1,4 +1,5 @@
 import { Context, Effect, Layer, Schema } from "effect";
+import { readFileSync, readdirSync } from "node:fs";
 import { EvalSuiteSchema, type EvalSuite } from "../types/eval-case.js";
 import { DatasetError } from "../errors/errors.js";
 
@@ -43,7 +44,7 @@ export const DatasetServiceLive = Layer.succeed(
     loadSuite: (path) =>
       Effect.tryPromise({
         try: async () => {
-          const content = await Bun.file(path).text();
+          const content = readFileSync(path, "utf-8");
           return JSON.parse(content) as unknown;
         },
         catch: (err) =>
@@ -57,11 +58,9 @@ export const DatasetServiceLive = Layer.succeed(
     loadSuitesFromDir: (dirPath) =>
       Effect.tryPromise({
         try: async () => {
-          const glob = new Bun.Glob("*.json");
-          const files: string[] = [];
-          for await (const file of glob.scan(dirPath)) {
-            files.push(`${dirPath}/${file}`);
-          }
+          const files = readdirSync(dirPath)
+            .filter(f => f.endsWith(".json"))
+            .map(f => `${dirPath}/${f}`);
           return files;
         },
         catch: (err) =>
@@ -75,7 +74,7 @@ export const DatasetServiceLive = Layer.succeed(
           Effect.all(
             files.map((f) =>
               Effect.tryPromise({
-                try: async () => JSON.parse(await Bun.file(f).text()) as unknown,
+                try: async () => JSON.parse(readFileSync(f, "utf-8")) as unknown,
                 catch: (err) =>
                   new DatasetError({ message: `Failed to read ${f}: ${String(err)}`, path: f, cause: err }),
               }).pipe(Effect.flatMap((json) => parseSuiteJson(json, f))),

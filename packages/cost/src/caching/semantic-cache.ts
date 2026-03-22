@@ -1,4 +1,5 @@
 import { Effect, Ref } from "effect";
+import { createHash } from "node:crypto";
 import type { CacheEntry } from "../types.js";
 import { CacheError } from "../errors.js";
 
@@ -13,7 +14,7 @@ type ExtendedCacheEntry = CacheEntry & { readonly embedding?: readonly number[] 
 export type EmbedFn = (texts: readonly string[]) => Effect.Effect<readonly (readonly number[])[], any>;
 
 function hashString(str: string): string {
-  return Bun.hash(str).toString(36);
+  return createHash("sha256").update(str).digest("hex").slice(0, 12);
 }
 
 function cosineSimilarity(a: readonly number[], b: readonly number[]): number {

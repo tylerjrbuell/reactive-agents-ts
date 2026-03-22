@@ -1,4 +1,5 @@
 // File: apps/cli/src/commands/bench.ts
+import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { info } from "../ui.js";
 
 export async function runBench(argv: string[]) {
@@ -31,9 +32,8 @@ export async function runBench(argv: string[]) {
     let finalData: any = { runs: [report] };
     
     try {
-      const file = Bun.file(output);
-      if (await file.exists()) {
-        const existingData = await file.json();
+      if (existsSync(output)) {
+        const existingData = JSON.parse(readFileSync(output, "utf-8"));
         // Extract array of previous runs
         const runs = Array.isArray(existingData.runs) 
           ? existingData.runs 
@@ -56,7 +56,7 @@ export async function runBench(argv: string[]) {
       // Ignore read/parse errors, just write as new
     }
 
-    await Bun.write(output, JSON.stringify(finalData, null, 2));
+    writeFileSync(output, JSON.stringify(finalData, null, 2));
     console.log(info(`Report merged and saved to ${output} (Multi-run format)`));
   }
 }
