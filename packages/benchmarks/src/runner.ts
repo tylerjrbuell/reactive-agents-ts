@@ -32,7 +32,7 @@ export interface RunnerOptions {
 const defaultModel: Partial<Record<ProviderName, string>> = {
   anthropic: "claude-haiku-4-5",
   openai: "gpt-4o-mini",
-  gemini: "gemini-2.0-flash",
+  gemini: "gemini-2.5-flash",
   ollama: "llama3.2",
 };
 
@@ -84,7 +84,11 @@ const runTask = async (
       builder.withGuardrails();
     }
 
+    // Suppress build-validation console.log (provider/model/key info)
+    const _log = console.log;
+    console.log = () => {};
     const agent = await builder.build();
+    console.log = _log;
 
     let agentResult: Awaited<ReturnType<typeof agent.run>>;
     let cumulativeTokens = 0;
@@ -318,6 +322,9 @@ export const runBenchmarks = async (
   }
 
   const results: TaskResult[] = [];
+  let passCount = 0;
+  let failCount = 0;
+  let errorCount = 0;
 
   // Tier color mapping
   const tierColor = (tier: string) => {
@@ -331,14 +338,52 @@ export const runBenchmarks = async (
     }
   };
 
+  // ── Progress bar helpers ──
+  const cols = process.stdout.columns || 80;
+  const barW = Math.min(30, cols - 50);  // leave room for stats
+  const suiteStart = performance.now();
+
+  const progressLine = (done: number, total: number, label?: string) => {
+    const pct = Math.round((done / total) * 100);
+    const filled = Math.round((done / total) * barW);
+    const bar = `${G}${"━".repeat(filled)}${X}${D}${"─".repeat(barW - filled)}${X}`;
+    const elapsed = ((performance.now() - suiteStart) / 1000).toFixed(0);
+    const counts = [
+      passCount > 0 ? `${G}${passCount}✓${X}` : null,
+      failCount > 0 ? `${R}${failCount}✗${X}` : null,
+      errorCount > 0 ? `${Y}${errorCount}⚠${X}` : null,
+    ].filter(Boolean).join(` `);
+    return `  ${bar} ${B}${pct}%${X} ${D}(${done}/${total} · ${elapsed}s)${X} ${counts}`;
+  };
+
+  // Strip ANSI codes to get visible character count
+  const visLen = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, "").length;
+
+  // Write a progress line that gets overwritten by the next write
+  const writeProgress = (done: number, total: number, label?: string) => {
+    const base = progressLine(done, total);
+    const baseLen = visLen(base);
+    // Truncate task label to prevent line wrapping
+    let line = base;
+    if (label && baseLen + 4 + label.length < cols) {
+      line += `  ${V}▸${X} ${D}${label}${X}`;
+    } else if (label) {
+      const maxLabel = cols - baseLen - 5;
+      if (maxLabel > 3) line += `  ${V}▸${X} ${D}${label.slice(0, maxLabel)}${X}`;
+    }
+    process.stdout.write(`\x1b[2K\r${line}`);
+  };
+
   for (let i = 0; i < tasks.length; i++) {
     const task = tasks[i];
-    const progress = `${D}[${i + 1}/${tasks.length}]${X}`;
-    const tier = `${tierColor(task.tier)}${task.tier.padEnd(8)}${X}`;
+    writeProgress(i, tasks.length, `${task.tier} · ${task.name}`);
 
-    process.stdout.write(`  ${progress} ${V}●${X} ${tier} ${task.name.padEnd(50)} `);
     const result = await runTask(task, options.provider, resolvedModel, timeoutMs);
     results.push(result);
+
+    if (result.status === "pass") passCount++;
+    else if (result.status === "fail") failCount++;
+    else errorCount++;
 
     const statusIcon =
       result.status === "pass" ? `${G}✓${X}` :
@@ -347,16 +392,21 @@ export const runBenchmarks = async (
       ? `${(result.durationMs / 1000).toFixed(1)}s`
       : `${result.durationMs.toFixed(0)}ms`;
     const tokenInfo = result.tokensUsed > 0 ? ` ${D}·${X} ${C}${result.tokensUsed}${X}${D} tok${X}` : "";
-    console.log(`${statusIcon} ${D}${latency}${X}${tokenInfo}`);
+    const tier = `${tierColor(task.tier)}${task.tier.padEnd(8)}${X}`;
 
+    // Clear progress line, print result
+    process.stdout.write(`\x1b[2K\r`);
+    console.log(`  ${statusIcon} ${tier} ${task.name.padEnd(48)} ${D}${latency}${X}${tokenInfo}`);
     if (result.status === "error") {
-      console.log(`      ${R}↳${X} ${D}${result.error?.slice(0, 100)}${X}`);
+      console.log(`    ${R}↳${X} ${D}${result.error?.slice(0, 100)}${X}`);
     } else if (result.status === "fail") {
-      console.log(`      ${Y}↳${X} ${D}Expected pattern not found in output${X}`);
+      console.log(`    ${Y}↳${X} ${D}Expected pattern not found in output${X}`);
     }
   }
 
-  console.log(`\n  ${G}✨${X} ${B}All ${tasks.length} tasks completed.${X}`);
+  // Final completed progress bar
+  console.log(`\n${progressLine(tasks.length, tasks.length)}`);
+  console.log(`  ${G}✨${X} ${B}All ${tasks.length} tasks completed in ${((performance.now() - suiteStart) / 1000).toFixed(1)}s${X}`);
 
   console.log(`\n  ${D}Measuring framework overhead...${X}`);
   const overhead = measureOverhead();
