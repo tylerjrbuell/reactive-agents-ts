@@ -13,7 +13,9 @@ Approach:
 - Use the most appropriate tool for each step
 - Avoid redundant operations — check what's already done
 - When you have all the information needed, provide your final answer immediately
-- Handle edge cases gracefully — if a tool fails, reason about alternatives`,
+- Handle edge cases gracefully — if a tool fails, reason about alternatives
+- Your FINAL ANSWER must contain the COMPLETE deliverable — never say "see above" or reference prior thinking
+- If you wrote to the scratchpad, synthesize those notes into your final answer`,
   variables: [
     {
       name: "task",

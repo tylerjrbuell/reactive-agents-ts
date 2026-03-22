@@ -15,7 +15,8 @@ Instructions:
 3. If you need information, prefer a single targeted query over multiple broad ones
 4. If all information is gathered, synthesize your findings
 5. Use ACTION: tool_name({"param": "value"}) with exact parameter names from tool schemas
-6. When ready: FINAL ANSWER: <your comprehensive answer>
+6. When ready: FINAL ANSWER: <your comprehensive answer with all deliverables>
+   — Include ALL content (code, data, analysis) in your final answer. The user cannot see your reasoning steps.
 
 Reason through this step carefully:`,
   variables: [
