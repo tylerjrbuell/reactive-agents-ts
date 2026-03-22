@@ -713,7 +713,14 @@ export const formatMetricsDashboard = (data: DashboardData): string => {
     const oscillating = last.trajectory.shape === "oscillating";
 
     // Overall grade: A/B/C/D/F based on convergence + mean entropy
-    const grade = converged && meanComposite < 0.35 ? "A"
+    // Single-iteration tasks get graded on efficiency, not trajectory
+    const singleIteration = trace.length <= 1;
+    const taskSucceeded = data.status === "success";
+
+    const grade = singleIteration && taskSucceeded && meanComposite < 0.5 ? "A"
+      : singleIteration && taskSucceeded && meanComposite < 0.7 ? "B"
+      : singleIteration && taskSucceeded ? "B"
+      : converged && meanComposite < 0.35 ? "A"
       : converged && meanComposite < 0.55 ? "B"
       : flat && meanComposite < 0.45 ? "B"
       : flat && meanComposite < 0.65 ? "C"
@@ -747,7 +754,9 @@ export const formatMetricsDashboard = (data: DashboardData): string => {
 
     // Actionable summary line
     const summaryParts: string[] = [];
-    if (converged) {
+    if (singleIteration && taskSucceeded) {
+      summaryParts.push("Solved in one pass — no trajectory to analyze");
+    } else if (converged) {
       if (meanComposite < 0.35) summaryParts.push("Model solved this efficiently");
       else summaryParts.push("Model converged but with moderate uncertainty");
     } else if (flat) {
