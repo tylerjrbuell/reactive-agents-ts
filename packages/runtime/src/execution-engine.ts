@@ -118,6 +118,21 @@ function extractTaskText(input: unknown): string {
   return JSON.stringify(input);
 }
 
+// ─── Task Complexity Classification ───
+
+type TaskComplexity = "trivial" | "moderate" | "complex";
+
+function classifyComplexity(
+  iteration: number,
+  entropy: { composite: number } | undefined,
+  toolCallCount: number,
+  terminatedBy: string,
+): TaskComplexity {
+  if (iteration <= 1 && toolCallCount === 0 && terminatedBy !== "max_iterations") return "trivial";
+  if (toolCallCount <= 2 && iteration <= 3 && (entropy ? entropy.composite < 0.4 : true)) return "moderate";
+  return "complex";
+}
+
 // ─── Live Implementation ───
 
 export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
@@ -2119,125 +2134,151 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 }
 
                 // ── Phase 7: MEMORY_FLUSH ── H5
-                ctx = yield* guardedPhase(ctx, "memory-flush", (c) =>
-                  Effect.gen(function* () {
-                    yield* Effect.serviceOption(
-                      Context.GenericTag<{
-                        snapshot: (s: unknown) => Effect.Effect<void>;
-                        flush?: (agentId: string) => Effect.Effect<void>;
-                      }>("MemoryService"),
-                    ).pipe(
-                      Effect.flatMap((opt) =>
-                        opt._tag === "Some"
-                          ? Effect.gen(function* () {
-                              yield* opt.value.snapshot({
-                                id: c.sessionId,
-                                agentId: c.agentId,
-                                messages: c.messages,
-                                summary: String(c.metadata.lastResponse ?? ""),
-                                keyDecisions: [],
-                                taskIds: [c.taskId],
-                                startedAt: c.startedAt,
-                                endedAt: new Date(),
-                                totalCost: c.cost,
-                                totalTokens: c.tokensUsed,
-                              });
-                              // H5: flush(agentId) writes the memory.md projection to disk
-                              if (opt.value.flush) {
-                                yield* opt.value
-                                  .flush(c.agentId)
-                                  .pipe(Effect.catchAll(() => Effect.void));
-                              }
-                            })
-                          : Effect.void,
-                      ),
-                      Effect.catchAll(() => Effect.void),
-                    );
+                // Compute task complexity to determine flush strategy
+                {
+                  const rrForComplexity = ctx.metadata.reasoningResult as { metadata?: { terminatedBy?: string; llmCalls?: number } } | undefined;
+                  const terminatedByForComplexity = (rrForComplexity?.metadata?.terminatedBy ?? "end_turn") as string;
+                  const latestEntropy = entropyLog.length > 0 ? entropyLog[entropyLog.length - 1] : undefined;
+                  const complexity = classifyComplexity(
+                    ctx.iteration,
+                    latestEntropy,
+                    toolCallLog.length,
+                    terminatedByForComplexity,
+                  );
+                  // Store complexity on ctx metadata for later use in result assembly
+                  ctx = { ...ctx, metadata: { ...ctx.metadata, taskComplexity: complexity } };
 
-                    // Lightweight consolidation: decay unused memory entries
-                    yield* Effect.serviceOption(
-                      Context.GenericTag<{
-                        decayUnused: (
-                          agentId: string,
-                          decayFactor: number,
-                        ) => Effect.Effect<number>;
-                      }>("MemoryConsolidator"),
-                    ).pipe(
-                      Effect.flatMap((opt) =>
-                        opt._tag === "Some"
-                          ? opt.value
-                              .decayUnused(c.agentId, 0.05)
-                              .pipe(Effect.catchAll(() => Effect.succeed(0)))
-                          : Effect.succeed(0),
-                      ),
-                      Effect.catchAll(() => Effect.succeed(0)),
-                    );
-
-                    // ── Auto-extract semantic memories ──
-                    // Only extract when there's meaningful content:
-                    // tool calls happened OR response is substantial (>200 chars)
-                    const lastResponse = String(c.metadata.lastResponse ?? "");
-                    const hadToolCalls = c.toolResults.length > 0;
-                    const substantialResponse = lastResponse.length > 200;
-
-                    if (hadToolCalls || substantialResponse) {
+                  const memoryFlushEffect = guardedPhase(ctx, "memory-flush", (c) =>
+                    Effect.gen(function* () {
                       yield* Effect.serviceOption(
                         Context.GenericTag<{
-                          extractFromConversation: (
-                            agentId: string,
-                            messages: readonly { role: string; content: string }[],
-                          ) => Effect.Effect<unknown[], unknown>;
-                        }>("MemoryExtractor"),
+                          snapshot: (s: unknown) => Effect.Effect<void>;
+                          flush?: (agentId: string) => Effect.Effect<void>;
+                        }>("MemoryService"),
                       ).pipe(
-                        Effect.flatMap((extractorOpt) => {
-                          if (extractorOpt._tag !== "Some") return Effect.void;
-                          const extractor = extractorOpt.value;
-
-                          // Build messages from the execution context
-                          const messages: { role: string; content: string }[] = [];
-                          // Add the task input as user message
-                          messages.push({ role: "user", content: String(task.input).slice(0, 1000) });
-                          // Add tool results as context
-                          for (const tr of c.toolResults) {
-                            const toolResult = tr as { toolName?: string; result?: unknown };
-                            messages.push({
-                              role: "assistant",
-                              content: `Tool ${toolResult.toolName ?? "unknown"}: ${String(toolResult.result ?? "").slice(0, 500)}`,
-                            });
-                          }
-                          // Add the final response
-                          if (lastResponse) {
-                            messages.push({ role: "assistant", content: lastResponse.slice(0, 2000) });
-                          }
-
-                          return Effect.gen(function* () {
-                            const entries = yield* extractor.extractFromConversation(c.agentId, messages);
-
-                            // Store extracted semantic entries via MemoryService
-                            if (entries.length > 0) {
-                              const memStoreOpt = yield* Effect.serviceOption(
-                                Context.GenericTag<{
-                                  storeSemantic: (entry: unknown) => Effect.Effect<unknown>;
-                                }>("MemoryService"),
-                              ).pipe(Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })));
-
-                              if (memStoreOpt._tag === "Some") {
-                                for (const entry of entries) {
-                                  yield* memStoreOpt.value
-                                    .storeSemantic(entry)
+                        Effect.flatMap((opt) =>
+                          opt._tag === "Some"
+                            ? Effect.gen(function* () {
+                                yield* opt.value.snapshot({
+                                  id: c.sessionId,
+                                  agentId: c.agentId,
+                                  messages: c.messages,
+                                  summary: String(c.metadata.lastResponse ?? ""),
+                                  keyDecisions: [],
+                                  taskIds: [c.taskId],
+                                  startedAt: c.startedAt,
+                                  endedAt: new Date(),
+                                  totalCost: c.cost,
+                                  totalTokens: c.tokensUsed,
+                                });
+                                // H5: flush(agentId) writes the memory.md projection to disk
+                                if (opt.value.flush) {
+                                  yield* opt.value
+                                    .flush(c.agentId)
                                     .pipe(Effect.catchAll(() => Effect.void));
                                 }
-                              }
-                            }
-                          });
-                        }),
+                              })
+                            : Effect.void,
+                        ),
                         Effect.catchAll(() => Effect.void),
                       );
-                    }
 
-                    return { ...c, agentState: "flushing" as const };
-                  }),
-                );
+                      // Lightweight consolidation: decay unused memory entries
+                      yield* Effect.serviceOption(
+                        Context.GenericTag<{
+                          decayUnused: (
+                            agentId: string,
+                            decayFactor: number,
+                          ) => Effect.Effect<number>;
+                        }>("MemoryConsolidator"),
+                      ).pipe(
+                        Effect.flatMap((opt) =>
+                          opt._tag === "Some"
+                            ? opt.value
+                                .decayUnused(c.agentId, 0.05)
+                                .pipe(Effect.catchAll(() => Effect.succeed(0)))
+                            : Effect.succeed(0),
+                        ),
+                        Effect.catchAll(() => Effect.succeed(0)),
+                      );
+
+                      // ── Auto-extract semantic memories ──
+                      // Only extract when there's meaningful content:
+                      // tool calls happened OR response is substantial (>200 chars)
+                      const lastResponse = String(c.metadata.lastResponse ?? "");
+                      const hadToolCalls = c.toolResults.length > 0;
+                      const substantialResponse = lastResponse.length > 200;
+
+                      if (hadToolCalls || substantialResponse) {
+                        yield* Effect.serviceOption(
+                          Context.GenericTag<{
+                            extractFromConversation: (
+                              agentId: string,
+                              messages: readonly { role: string; content: string }[],
+                            ) => Effect.Effect<unknown[], unknown>;
+                          }>("MemoryExtractor"),
+                        ).pipe(
+                          Effect.flatMap((extractorOpt) => {
+                            if (extractorOpt._tag !== "Some") return Effect.void;
+                            const extractor = extractorOpt.value;
+
+                            // Build messages from the execution context
+                            const messages: { role: string; content: string }[] = [];
+                            // Add the task input as user message
+                            messages.push({ role: "user", content: String(task.input).slice(0, 1000) });
+                            // Add tool results as context
+                            for (const tr of c.toolResults) {
+                              const toolResult = tr as { toolName?: string; result?: unknown };
+                              messages.push({
+                                role: "assistant",
+                                content: `Tool ${toolResult.toolName ?? "unknown"}: ${String(toolResult.result ?? "").slice(0, 500)}`,
+                              });
+                            }
+                            // Add the final response
+                            if (lastResponse) {
+                              messages.push({ role: "assistant", content: lastResponse.slice(0, 2000) });
+                            }
+
+                            return Effect.gen(function* () {
+                              const entries = yield* extractor.extractFromConversation(c.agentId, messages);
+
+                              // Store extracted semantic entries via MemoryService
+                              if (entries.length > 0) {
+                                const memStoreOpt = yield* Effect.serviceOption(
+                                  Context.GenericTag<{
+                                    storeSemantic: (entry: unknown) => Effect.Effect<unknown>;
+                                  }>("MemoryService"),
+                                ).pipe(Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })));
+
+                                if (memStoreOpt._tag === "Some") {
+                                  for (const entry of entries) {
+                                    yield* memStoreOpt.value
+                                      .storeSemantic(entry)
+                                      .pipe(Effect.catchAll(() => Effect.void));
+                                  }
+                                }
+                              }
+                            });
+                          }),
+                          Effect.catchAll(() => Effect.void),
+                        );
+                      }
+
+                      return { ...c, agentState: "flushing" as const };
+                    }),
+                  );
+
+                  if (complexity === "trivial") {
+                    // Skip memory-flush entirely for trivial tasks
+                    ctx = { ...ctx, agentState: "flushing" as const };
+                  } else if (complexity === "moderate") {
+                    // Fire-and-forget: fork the flush as a daemon fiber
+                    yield* Effect.forkDaemon(memoryFlushEffect);
+                  } else {
+                    // Full blocking pipeline for complex tasks
+                    ctx = yield* memoryFlushEffect;
+                  }
+                }
 
                 // ── Phase 8: COST_TRACK (optional) ── H2
                 if (config.enableCostTracking) {
@@ -2390,7 +2431,9 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 // (user opted in with .withMemory()). Skipped otherwise to avoid injecting extra
                 // LLM calls in direct-LLM path tests and non-memory configurations.
                 // Also requires LLMService to be available in context — use serviceOption to check.
-                const debrief: AgentDebrief | undefined = yield* (rr !== undefined && config.enableMemory
+                // Proportional: skip debrief for trivial and moderate tasks (only run for complex).
+                const taskComplexityForDebrief = (ctx.metadata.taskComplexity as TaskComplexity | undefined) ?? "complex";
+                const debrief: AgentDebrief | undefined = yield* (rr !== undefined && config.enableMemory && taskComplexityForDebrief === "complex"
                   ? Effect.serviceOption(
                       Context.GenericTag<{ complete: (req: unknown) => Effect.Effect<unknown> }>("LLMService"),
                     ).pipe(
@@ -2452,6 +2495,13 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     } : {}),
                     ...(rr?.metadata?.strategyFallback === true ? { strategyFallback: true } : {}),
                     ...(ctx.metadata.budgetExceeded ? { budgetExceeded: true } : {}),
+                    complexity: (ctx.metadata.taskComplexity as TaskComplexity | undefined) ?? classifyComplexity(
+                      ctx.iteration,
+                      entropyLog.length > 0 ? entropyLog[entropyLog.length - 1] : undefined,
+                      toolCallLog.length,
+                      terminatedByRaw,
+                    ),
+                    llmCalls: (rr as any)?.metadata?.llmCalls ?? 0,
                   },
                   completedAt: new Date(),
                   format: "text",
