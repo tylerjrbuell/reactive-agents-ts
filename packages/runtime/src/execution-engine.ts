@@ -2606,6 +2606,33 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   }
                 }
 
+                // ── Local Learning: update calibration, bandit, and skill store ──
+                if (config.enableReactiveIntelligence && entropyLog.length > 0) {
+                  yield* Effect.serviceOption(
+                    Context.GenericTag<{
+                      onRunCompleted: (data: any) => Effect.Effect<any, never>;
+                    }>("LearningEngineService"),
+                  ).pipe(
+                    Effect.flatMap((opt) => {
+                      if (opt._tag !== "Some") return Effect.void;
+                      return opt.value.onRunCompleted({
+                        modelId: String(ctx.selectedModel ?? config.defaultModel ?? "unknown"),
+                        taskDescription: extractTaskText(task.input),
+                        strategy: ctx.selectedStrategy ?? "reactive",
+                        outcome: terminatedByRaw === "max_iterations" ? "partial"
+                          : errorsFromLoop.length > 0 && terminatedByRaw !== "final_answer_tool" && terminatedByRaw !== "final_answer" ? "failure"
+                          : "success",
+                        entropyHistory: entropyLog,
+                        totalTokens: ctx.tokensUsed,
+                        durationMs: executionDurationMs,
+                        temperature: (config as any).temperature ?? 0.7,
+                        maxIterations: config.maxIterations ?? 10,
+                      });
+                    }),
+                    Effect.catchAll(() => Effect.void),
+                  );
+                }
+
                 // Phase 0.2: Publish TaskCompleted
                 if (eb) {
                   yield* eb.publish({

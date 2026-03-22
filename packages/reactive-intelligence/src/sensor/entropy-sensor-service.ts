@@ -84,6 +84,7 @@ export function uncalibratedDefault(modelId: string): ModelCalibrationLike {
 
 export const EntropySensorServiceLive = (
   config: ReactiveIntelligenceConfig,
+  externalCalStore?: CalibrationStore,
 ): Layer.Layer<EntropySensorService> =>
   Layer.effect(
     EntropySensorService,
@@ -97,8 +98,8 @@ export const EntropySensorServiceLive = (
       // Per-task trajectory tracking (taskId -> EntropyScore[])
       const trajectories = new Map<string, EntropyScoreLike[]>();
 
-      // Calibration store (in-memory for now)
-      const calStore = new CalibrationStore();
+      // Calibration store — use external if provided, else in-memory
+      const calStore = externalCalStore ?? new CalibrationStore();
 
       return {
         score: (params) =>
