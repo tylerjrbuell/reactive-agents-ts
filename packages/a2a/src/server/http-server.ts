@@ -12,6 +12,7 @@ import type {
 } from "../types.js";
 import { A2AError } from "../errors.js";
 import { Effect, Context, Layer, Ref } from "effect";
+import { getPlatformSync, type ServerHandle } from "@reactive-agents/platform";
 import { A2AServer } from "./a2a-server.js";
 import { createTaskHandler, type TaskExecutor } from "./task-handler.js";
 import { formatSSEEvent, type StreamEvent } from "./streaming.js";
@@ -43,8 +44,8 @@ export const createA2AHttpServer = (port: number = 3000, executor?: TaskExecutor
       const store = yield* Ref.make<{ tasks: Map<string, A2ATask> }>({ tasks: new Map() });
       const taskHandler = createTaskHandler(store, executor);
 
-      // Mutable reference to the Bun server instance
-      let bunServer: { stop: () => void } | null = null;
+      // Mutable reference to the server instance
+      let serverHandle: ServerHandle | null = null;
 
       const handleMessageSend = (params: unknown) =>
         Effect.gen(function* () {
@@ -166,94 +167,96 @@ export const createA2AHttpServer = (port: number = 3000, executor?: TaskExecutor
         start: () =>
           Effect.gen(function* () {
             const agentCard = yield* server.getAgentCard();
+            const platform = getPlatformSync();
+            serverHandle = yield* Effect.promise(() =>
+              platform.server.serve({
+                port,
+                fetch: async (req) => {
+                  const url = new URL(req.url);
 
-            bunServer = Bun.serve({
-              port,
-              fetch: async (req) => {
-                const url = new URL(req.url);
-
-                // GET /.well-known/agent.json — A2A standard discovery
-                if (req.method === "GET" && url.pathname === "/.well-known/agent.json") {
-                  return new Response(JSON.stringify(agentCard), {
-                    headers: { "Content-Type": "application/json" },
-                  });
-                }
-
-                // GET /agent/card — fallback discovery
-                if (req.method === "GET" && url.pathname === "/agent/card") {
-                  return new Response(JSON.stringify(agentCard), {
-                    headers: { "Content-Type": "application/json" },
-                  });
-                }
-
-                // POST / — JSON-RPC endpoint
-                if (req.method === "POST") {
-                  try {
-                    const body = (await req.json()) as JsonRpcRequest;
-
-                    // Handle message/stream — return SSE
-                    if (body.method === "message/stream") {
-                      const streamResult = await Effect.runPromise(
-                        handleMessageStream(body.params, agentCard),
-                      );
-                      const sseBody = streamResult.events
-                        .map((evt) => formatSSEEvent(evt))
-                        .join("");
-
-                      return new Response(sseBody, {
-                        headers: {
-                          "Content-Type": "text/event-stream",
-                          "Cache-Control": "no-cache",
-                          Connection: "keep-alive",
-                        },
-                      });
-                    }
-
-                    // Standard JSON-RPC
-                    const result = await Effect.runPromise(
-                      routeRequest(body).pipe(
-                        Effect.catchAll((error) =>
-                          Effect.succeed({
-                            jsonrpc: JSONRPC_VERSION,
-                            id: body.id,
-                            error: {
-                              code: -32000,
-                              message: error.message,
-                              data: { a2aCode: error.code },
-                            },
-                          }),
-                        ),
-                      ),
-                    );
-
-                    return new Response(JSON.stringify(result), {
+                  // GET /.well-known/agent.json — A2A standard discovery
+                  if (req.method === "GET" && url.pathname === "/.well-known/agent.json") {
+                    return new Response(JSON.stringify(agentCard), {
                       headers: { "Content-Type": "application/json" },
                     });
-                  } catch {
-                    return new Response(
-                      JSON.stringify({
-                        jsonrpc: JSONRPC_VERSION,
-                        id: null,
-                        error: { code: -32700, message: "Parse error" },
-                      }),
-                      {
-                        status: 400,
-                        headers: { "Content-Type": "application/json" },
-                      },
-                    );
                   }
-                }
 
-                return new Response("Not Found", { status: 404 });
-              },
-            });
+                  // GET /agent/card — fallback discovery
+                  if (req.method === "GET" && url.pathname === "/agent/card") {
+                    return new Response(JSON.stringify(agentCard), {
+                      headers: { "Content-Type": "application/json" },
+                    });
+                  }
+
+                  // POST / — JSON-RPC endpoint
+                  if (req.method === "POST") {
+                    try {
+                      const body = (await req.json()) as JsonRpcRequest;
+
+                      // Handle message/stream — return SSE
+                      if (body.method === "message/stream") {
+                        const streamResult = await Effect.runPromise(
+                          handleMessageStream(body.params, agentCard),
+                        );
+                        const sseBody = streamResult.events
+                          .map((evt) => formatSSEEvent(evt))
+                          .join("");
+
+                        return new Response(sseBody, {
+                          headers: {
+                            "Content-Type": "text/event-stream",
+                            "Cache-Control": "no-cache",
+                            Connection: "keep-alive",
+                          },
+                        });
+                      }
+
+                      // Standard JSON-RPC
+                      const result = await Effect.runPromise(
+                        routeRequest(body).pipe(
+                          Effect.catchAll((error) =>
+                            Effect.succeed({
+                              jsonrpc: JSONRPC_VERSION,
+                              id: body.id,
+                              error: {
+                                code: -32000,
+                                message: error.message,
+                                data: { a2aCode: error.code },
+                              },
+                            }),
+                          ),
+                        ),
+                      );
+
+                      return new Response(JSON.stringify(result), {
+                        headers: { "Content-Type": "application/json" },
+                      });
+                    } catch {
+                      return new Response(
+                        JSON.stringify({
+                          jsonrpc: JSONRPC_VERSION,
+                          id: null,
+                          error: { code: -32700, message: "Parse error" },
+                        }),
+                        {
+                          status: 400,
+                          headers: { "Content-Type": "application/json" },
+                        },
+                      );
+                    }
+                  }
+
+                  return new Response("Not Found", { status: 404 });
+                },
+              })
+            );
           }),
 
         stop: () =>
-          Effect.sync(() => {
-            if (bunServer) {
-              bunServer.stop();
-              bunServer = null;
+          Effect.promise(async () => {
+            if (serverHandle) {
+              await serverHandle.stop();
+              serverHandle = null;
             }
           }),
       };

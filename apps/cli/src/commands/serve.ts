@@ -1,4 +1,5 @@
 import { ReactiveAgents } from "@reactive-agents/runtime";
+import { getPlatformSync } from "@reactive-agents/platform";
 import { banner, kv, success, fail, info, muted, box } from "../ui.js";
 
 const VALID_PROVIDERS = ["anthropic", "openai", "ollama", "gemini", "litellm", "test"] as const;
@@ -129,7 +130,8 @@ async function startServer(
   // Task store for tracking in-flight tasks
   const tasks = new Map<string, { id: string; status: { state: string; message?: string; timestamp: string }; result?: unknown }>();
 
-  const server = Bun.serve({
+  const platform = getPlatformSync();
+  const server = await platform.server.serve({
     port,
     async fetch(req) {
       const url = new URL(req.url);
@@ -259,12 +261,10 @@ async function startServer(
   // Keep the process alive
   process.on("SIGINT", () => {
     console.log(info("Shutting down A2A server..."));
-    server.stop(true);
-    process.exit(0);
+    server.stop().then(() => process.exit(0));
   });
 
   process.on("SIGTERM", () => {
-    server.stop(true);
-    process.exit(0);
+    server.stop().then(() => process.exit(0));
   });
 }

@@ -11,7 +11,8 @@
         "test": "bun test"
     },
     "dependencies": {
-        "effect": "^3.10.0"
+        "effect": "^3.10.0",
+        "@reactive-agents/platform": "0.8.0"
     },
     "devDependencies": {
         "typescript": "^5.7.0",

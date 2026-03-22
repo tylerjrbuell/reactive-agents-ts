@@ -1,5 +1,6 @@
 // packages/health/src/service.ts
 import { Effect, Ref } from "effect";
+import { getPlatformSync, type ServerHandle } from "@reactive-agents/platform";
 import type {
   HealthConfig,
   HealthService,
@@ -22,7 +23,7 @@ export const makeHealthService = (
   Effect.gen(function* () {
     const checksRef = yield* Ref.make<HealthCheck[]>([]);
     const startedAt = Date.now();
-    let server: ReturnType<typeof Bun.serve> | null = null;
+    let server: ServerHandle | null = null;
     let boundPort = config.port;
 
     const runChecks = (): Effect.Effect<HealthCheckResult[], never> =>
@@ -104,18 +105,19 @@ export const makeHealthService = (
       },
 
       start: () =>
-        Effect.sync(() => {
-          server = Bun.serve({
+        Effect.promise(async () => {
+          const platform = getPlatformSync();
+          server = await platform.server.serve({
             port: config.port,
             fetch: handleRequest,
           });
-          boundPort = server.port ?? config.port;
+          boundPort = server.port;
         }),
 
       stop: () =>
-        Effect.sync(() => {
+        Effect.promise(async () => {
           if (server) {
-            server.stop(true);
+            await server.stop();
             server = null;
           }
         }),
