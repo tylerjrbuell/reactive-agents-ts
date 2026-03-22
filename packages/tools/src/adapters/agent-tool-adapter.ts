@@ -241,10 +241,18 @@ export const createSubAgentExecutor = (
 
       // Extract a concise summary — strip ReAct artifacts and trim
       let summary = result.output;
-      // Remove leading ReAct markers (FINAL ANSWER:, Thought:, etc.)
-      summary = summary.replace(/^(FINAL ANSWER:\s*|Thought:\s*|Answer:\s*)/i, "").trim();
-      if (summary.length > 1200) {
-        summary = summary.slice(0, 1200) + "…";
+      // Remove leading ReAct markers (bold or plain FINAL ANSWER:, Thought:, Answer:)
+      summary = summary
+        .replace(/^(?:\*{0,2})final\s*answer(?:\*{0,2})\s*[:：]?\s*/i, "")
+        .replace(/^(Thought:\s*|Answer:\s*)/i, "")
+        .trim();
+      // Short factual answers pass through as-is — no truncation, no wrapping
+      if (summary.length <= 500) {
+        // summary is already clean — no further processing needed
+      } else if (summary.length > 1200) {
+        const head = summary.slice(0, 600);
+        const tail = summary.slice(-400);
+        summary = `${head}\n...[${summary.length - 1000} chars omitted]...\n${tail}`;
       }
 
       // Append forwarded key list to summary for parent agent visibility

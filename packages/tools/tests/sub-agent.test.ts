@@ -58,8 +58,9 @@ describe("createSubAgentExecutor", () => {
     );
     const result = await executor("test");
     expect(result.success).toBe(true);
-    expect(result.summary.length).toBeLessThanOrEqual(1201); // 1200 + "…"
-    expect(result.summary).toContain("…");
+    // head (600) + omission marker + tail (400) — well under original 2000 chars
+    expect(result.summary.length).toBeLessThan(1200);
+    expect(result.summary).toContain("chars omitted");
   });
 
   it("config fields are optional except name", () => {
