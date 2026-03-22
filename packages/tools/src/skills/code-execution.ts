@@ -54,8 +54,20 @@ export const codeExecuteHandler = (
 ): Effect.Effect<unknown, ToolExecutionError> =>
   Effect.tryPromise({
     try: async () => {
-      const code = args.code as string;
+      const rawCode = args.code as string;
       const timeoutMs = 30_000;
+
+      // Wrap code to auto-capture the last expression's return value via eval().
+      // eval() returns the value of the last expression in the code string.
+      // If the code already uses console.log, stdout is captured normally;
+      // the eval result is only printed if nothing was logged and there's a value.
+      const code = `
+const __origLog = console.log;
+let __logged = false;
+console.log = (...a) => { __logged = true; __origLog(...a); };
+const __result = eval(${JSON.stringify(rawCode)});
+if (!__logged && __result !== undefined) __origLog(typeof __result === "object" ? JSON.stringify(__result) : __result);
+`;
 
       const proc = Bun.spawn(["bun", "--eval", code], {
         stdout: "pipe",
