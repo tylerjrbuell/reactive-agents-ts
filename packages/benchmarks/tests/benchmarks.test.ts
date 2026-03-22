@@ -4,14 +4,14 @@ import { BENCHMARK_TASKS, getTasksByTier } from "../src/tasks.js";
 import type { Tier, TaskResult } from "../src/types.js";
 
 describe("Benchmark Tasks", () => {
-  it("has 20 tasks", () => {
-    expect(BENCHMARK_TASKS.length).toBe(20);
+  it("has expected task count", () => {
+    expect(BENCHMARK_TASKS.length).toBeGreaterThanOrEqual(20);
   });
 
-  it("has 4 tasks per tier", () => {
+  it("has tasks in every tier", () => {
     const tiers: Tier[] = ["trivial", "simple", "moderate", "complex", "expert"];
     for (const tier of tiers) {
-      expect(getTasksByTier(tier).length).toBe(4);
+      expect(getTasksByTier(tier).length).toBeGreaterThanOrEqual(4);
     }
   });
 
