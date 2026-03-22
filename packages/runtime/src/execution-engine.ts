@@ -538,6 +538,37 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   }),
                 );
 
+                // ── Apply learned skills from procedural memory ──
+                {
+                  const mc = ctx.memoryContext as any;
+                  if (mc?.activeWorkflows?.length > 0) {
+                    const taskCat = classifyTaskCategoryFn(task.input);
+                    const modelIdForSkill = String(config.model ?? config.provider ?? "unknown");
+                    const matchingSkill = (mc.activeWorkflows as any[]).find(
+                      (w: any) => w.tags?.includes(taskCat) && w.tags?.includes(modelIdForSkill),
+                    );
+
+                    if (matchingSkill?.pattern) {
+                      try {
+                        const fragment = JSON.parse(matchingSkill.pattern);
+                        if (obs) {
+                          yield* obs.info(`Applying learned skill: ${matchingSkill.name}`, {
+                            convergenceIteration: fragment.convergenceIteration,
+                            meanEntropy: fragment.meanComposite,
+                            strategy: fragment.reasoningConfig?.strategy,
+                            successRate: matchingSkill.successRate,
+                            useCount: matchingSkill.useCount,
+                          }).pipe(Effect.catchAll(() => Effect.void));
+                        }
+                        // Store skill reference on context metadata for downstream use
+                        ctx = { ...ctx, metadata: { ...ctx.metadata, appliedSkill: matchingSkill.name } };
+                      } catch {
+                        // Invalid pattern — ignore
+                      }
+                    }
+                  }
+                }
+
                 // ── Log bootstrap summary ──
                 if (obs && isNormal) {
                   const bootstrapMs = Date.now() - now.getTime();
