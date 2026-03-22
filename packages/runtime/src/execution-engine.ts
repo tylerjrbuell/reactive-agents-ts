@@ -542,8 +542,8 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 {
                   const mc = ctx.memoryContext as any;
                   if (mc?.activeWorkflows?.length > 0) {
-                    const taskCat = classifyTaskCategoryFn(task.input);
-                    const modelIdForSkill = String(config.model ?? config.provider ?? "unknown");
+                    const taskCat = classifyTaskCategoryFn(String(task.input));
+                    const modelIdForSkill = String((config as any).model ?? config.provider ?? "unknown");
                     const matchingSkill = (mc.activeWorkflows as any[]).find(
                       (w: any) => w.tags?.includes(taskCat) && w.tags?.includes(modelIdForSkill),
                     );
