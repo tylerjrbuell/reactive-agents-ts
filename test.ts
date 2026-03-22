@@ -6,6 +6,35 @@ import { Effect } from "effect";
 // "delegate" — agent can spawn sub-agents for subtasks
 const MODE = "solo" as "solo" | "delegate";
 
+// ─── Provider-aware time budget multipliers ───
+// Cloud providers (anthropic/openai/gemini) run at 1×.
+// Local inference (ollama) gets 3× headroom; LiteLLM 1.5×.
+const TIME_MULTIPLIER: Record<string, number> = {
+  anthropic: 1.0,
+  openai: 1.0,
+  gemini: 1.0,
+  ollama: 3.0,
+  litellm: 1.5,
+};
+
+// ─── Timing helpers ───
+function timingResult(
+  label: string,
+  durationMs: number,
+  provider: string,
+  maxExpectedMs: number,
+): void {
+  const multiplier = TIME_MULTIPLIER[provider] ?? 1.0;
+  const adjustedMax = maxExpectedMs * multiplier;
+  const withinBudget = durationMs <= adjustedMax;
+  const status = withinBudget ? "PASS" : "FAIL";
+  console.log(
+    `  [timing] ${label}: ${durationMs}ms` +
+    ` | budget: ${maxExpectedMs}ms × ${multiplier} = ${adjustedMax}ms` +
+    ` | ${status}`,
+  );
+}
+
 const mcpServers = [{
   name: "signal",
   transport: "stdio" as const,
@@ -31,6 +60,9 @@ const mcpServers = [{
       process.env.GITHUB_PERSONAL_ACCESS_TOKEN ?? "",
   },
 }];
+
+// Active provider — update this when switching providers above.
+const ACTIVE_PROVIDER = "ollama";
 
 let builder = ReactiveAgents.create()
   .withName("test-agent")
@@ -70,12 +102,15 @@ const prompt = MODE === "delegate"
   : `Fetch the latest 5 commits from the GitHub repository tylerjrbuell/reactive-agents-ts, summarize them, then send me a Signal message with the summary to ${process.env.SIGNAL_PHONE_NUMBER}.`;
 
 console.log(`\n🧪 Running in ${MODE.toUpperCase()} mode\n`);
+const _t0 = Date.now();
 const result = await agent.run(prompt);
+const _mainDurationMs = Date.now() - _t0;
 
 console.log("\n═══════════════════════════════════════");
 console.log("📊 RESULT");
 console.log("═══════════════════════════════════════");
 console.log(result);
+timingResult("main agent.run()", _mainDurationMs, ACTIVE_PROVIDER, 60_000);
 
 // ─── Test v0.8.0 Features ───
 if (result.debrief) {
@@ -156,8 +191,11 @@ const restoredAgent = await restored
   .withProvider("ollama")
   .withModel("cogito")
   .build();
+const _tRestore0 = Date.now();
 const restoredResult = await restoredAgent.run("What can you do?");
+const _restoreDurationMs = Date.now() - _tRestore0;
 console.log(`\nRestored agent output: ${restoredResult.output}`);
+timingResult("restored agent.run()", _restoreDurationMs, ACTIVE_PROVIDER, 20_000);
 await restoredAgent.dispose();
 
 // ─── Dynamic Tool Registration ───
@@ -221,11 +259,14 @@ await toolAgent.registerTool(
 
 console.log("Registered 2 dynamic tools: project_status, team_oncall");
 
+const _tTool0 = Date.now();
 const toolResult = await toolAgent.run(
   "Check the status of the 'reactive-agents' project and tell me who is on-call for the platform team. Summarize both."
 );
+const _toolDurationMs = Date.now() - _tTool0;
 console.log(`\nDynamic tools result: ${toolResult.output}`);
 console.log(`Steps: ${toolResult.metadata?.stepsCount}, Tokens: ${toolResult.metadata?.tokensUsed}`);
+timingResult("dynamic-tools agent.run()", _toolDurationMs, ACTIVE_PROVIDER, 30_000);
 
 // Clean up — unregister the tools
 await toolAgent.unregisterTool("project_status");
@@ -252,11 +293,14 @@ const summarizer = agentFn(
 );
 
 const researchPipeline = pipe(researcher, summarizer);
+const _tPipe0 = Date.now();
 const pipeResult = await researchPipeline(
   "Find the 3 most recent commits on tylerjrbuell/reactive-agents-ts and list them with their messages."
 );
+const _pipeDurationMs = Date.now() - _tPipe0;
 console.log(`Pipeline output:\n${pipeResult.output}`);
 console.log(`Success: ${pipeResult.success}`);
+timingResult("pipe composition", _pipeDurationMs, ACTIVE_PROVIDER, 90_000);
 
 // parallel: multi-perspective analysis
 console.log("\n--- parallel: concurrent analysis ---");
@@ -274,11 +318,14 @@ const securityAudit = agentFn(
 );
 
 const multiPerspective = parallel(technicalReview, userImpact, securityAudit);
+const _tParallel0 = Date.now();
 const parallelResult = await multiPerspective(
   `New feature: AgentConfig serialization allows agents to be defined as JSON, stored in databases, and reconstructed at runtime. Includes roundtrip validation via Effect-TS Schema.`
 );
+const _parallelDurationMs = Date.now() - _tParallel0;
 console.log(`\nParallel output (3 perspectives):\n${parallelResult.output}`);
 console.log(`All succeeded: ${parallelResult.success}`);
+timingResult("parallel composition", _parallelDurationMs, ACTIVE_PROVIDER, 45_000);
 
 // race: fastest model wins
 console.log("\n--- race: first to finish wins ---");
@@ -292,8 +339,11 @@ const deepThinker = agentFn(
 );
 
 const fastest = race(quickThinker, deepThinker);
+const _tRace0 = Date.now();
 const raceResult = await fastest("What is the single most important principle in software architecture?");
+const _raceDurationMs = Date.now() - _tRace0;
 console.log(`Race winner: ${raceResult.output}`);
+timingResult("race composition", _raceDurationMs, ACTIVE_PROVIDER, 30_000);
 
 // Dispose all composition agents
 await researchPipeline.dispose();
