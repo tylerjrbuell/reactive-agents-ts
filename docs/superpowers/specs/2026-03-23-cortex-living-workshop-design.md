@@ -157,7 +157,8 @@ This is the decoupling layer. Cortex does not know about strategies. It knows ab
 | `StrategySwitched` | Brief reorganization animation, strategy label updates |
 | `AgentStarted` | Nucleus appears |
 | `AgentCompleted` | All pathways pulse green, heartbeat settles |
-| `TextDelta` (stream source) | Streaming text in trace panel |
+| `TextDelta` (stream source) | Streaming text in trace panel (per-token, preferred for live rendering) |
+| `TextDeltaReceived` (EventBus) | Ignored when stream source is active; used as LLM-call-complete signal in non-streaming replay |
 | `ContextWindowWarning` | Neural field boundary flashes warning |
 | `ReactiveDecision` | Small indicator icon appears on the pathway |
 | Any unknown event | Logged in Signal Inspector, not rendered on canvas |
@@ -413,7 +414,7 @@ Cortex connects to `ws://localhost:<port>/ws/runs/:runId` and receives a stream 
 
 The runtime produces two distinct event channels. The Cortex server merges them into the single `CortexEvent` WebSocket stream:
 
-**Source 1: EventBus** — Lifecycle, reasoning, tool, entropy, strategy events (~35 event types in `AgentEvent` union). The server subscribes to the EventBus with a filter on `taskId`/`agentId` to scope events to the active run. These arrive as `source: "eventbus"` events.
+**Source 1: EventBus** — Lifecycle, reasoning, tool, entropy, strategy events (~48 event types in `AgentEvent` union). The server subscribes to the EventBus with a filter on `taskId`/`agentId` to scope events to the active run. These arrive as `source: "eventbus"` events.
 
 **Source 2: AgentStreamEvent** — Per-token `TextDelta` events, `IterationProgress`, `StreamCompleted`, etc. from `agent.runStream()`. The server consumes the `AsyncGenerator<AgentStreamEvent>` and forwards each event as `source: "stream"` events.
 
@@ -446,7 +447,7 @@ Some Cortex features require new capabilities in the framework. These are separa
 
 | Feature | Runtime API Needed | V1 Scope |
 |---|---|---|
-| **Pause/Kill** | `agent.pause()`, `agent.stop()` | **EXISTS** — no work needed |
+| **Pause/Kill** | `agent.pause()`, `agent.stop()` | **EXISTS** — requires `.withKillSwitch()` on the agent builder. The executor must enable this automatically, or gracefully disable pause/kill buttons when kill switch is not configured. |
 | **Throttle** (adjust budget mid-run) | New: `agent.adjustBudget(amount)` on CostService | **V1 stretch** — degrade gracefully (display-only slider showing remaining budget, no mid-run adjustment) |
 | **Whisper** (inject context) | New: `agent.injectContext(text)` that appends to working memory before next iteration | **V1 stretch** — skip if not ready, show as disabled in command bar |
 | **Redirect** (force strategy eval) | New: `agent.requestStrategySwitch()` that triggers reactive controller evaluation | **V1 stretch** — skip if not ready, show as disabled |
@@ -457,7 +458,7 @@ Some Cortex features require new capabilities in the framework. These are separa
 
 | Component | Status |
 |---|---|
-| EventBus + ~35 event types | **EXISTS** — bridge to WebSocket |
+| EventBus + ~48 event types | **EXISTS** — bridge to WebSocket |
 | Stream AsyncGenerator (`runStream`) | **EXISTS** — consume and forward |
 | Agent execution (`run`/`runStream`) | **EXISTS** — wrap in executor |
 | Config serialization (`AgentConfig`) | **EXISTS** — expose via API |
