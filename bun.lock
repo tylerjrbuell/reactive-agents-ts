@@ -20,18 +20,19 @@
         "reactive-agents": "dist/index.js",
       },
       "dependencies": {
-        "@reactive-agents/a2a": "workspace:*",
-        "@reactive-agents/core": "workspace:*",
-        "@reactive-agents/eval": "workspace:*",
-        "@reactive-agents/llm-provider": "workspace:*",
-        "@reactive-agents/runtime": "workspace:*",
+        "@reactive-agents/a2a": "0.8.0",
+        "@reactive-agents/core": "0.8.0",
+        "@reactive-agents/eval": "0.8.0",
+        "@reactive-agents/llm-provider": "0.8.0",
+        "@reactive-agents/platform": "0.8.0",
+        "@reactive-agents/runtime": "0.8.0",
         "boxen": "^8.0.1",
         "chalk": "^5.4.0",
         "effect": "^3.10.0",
         "ora": "^8.2.0",
       },
       "devDependencies": {
-        "@reactive-agents/benchmarks": "workspace:*",
+        "@reactive-agents/benchmarks": "0.8.0",
         "bun-types": "latest",
         "typescript": "^5.7.0",
       },
@@ -94,6 +95,7 @@
       "version": "0.8.0",
       "dependencies": {
         "@reactive-agents/core": "0.8.0",
+        "@reactive-agents/platform": "0.8.0",
         "@reactive-agents/tools": "0.8.0",
         "effect": "^3.10.0",
       },
@@ -141,9 +143,10 @@
       "name": "@reactive-agents/cost",
       "version": "0.8.0",
       "dependencies": {
-        "@reactive-agents/core": "0.7.8",
-        "@reactive-agents/llm-provider": "0.7.8",
-        "@reactive-agents/memory": "0.7.8",
+        "@reactive-agents/core": "0.8.0",
+        "@reactive-agents/llm-provider": "0.8.0",
+        "@reactive-agents/memory": "0.8.0",
+        "@reactive-agents/platform": "0.8.0",
         "effect": "^3.10.0",
       },
       "devDependencies": {
@@ -155,8 +158,9 @@
       "name": "@reactive-agents/eval",
       "version": "0.8.0",
       "dependencies": {
-        "@reactive-agents/core": "workspace:*",
-        "@reactive-agents/llm-provider": "workspace:*",
+        "@reactive-agents/core": "0.8.0",
+        "@reactive-agents/llm-provider": "0.8.0",
+        "@reactive-agents/platform": "0.8.0",
         "effect": "^3.10.0",
       },
       "devDependencies": {
@@ -168,7 +172,7 @@
       "name": "@reactive-agents/gateway",
       "version": "0.8.0",
       "dependencies": {
-        "@reactive-agents/core": "0.7.8",
+        "@reactive-agents/core": "0.8.0",
         "effect": "^3.10.0",
       },
       "devDependencies": {
@@ -180,8 +184,8 @@
       "name": "@reactive-agents/guardrails",
       "version": "0.8.0",
       "dependencies": {
-        "@reactive-agents/core": "0.7.8",
-        "@reactive-agents/llm-provider": "0.7.8",
+        "@reactive-agents/core": "0.8.0",
+        "@reactive-agents/llm-provider": "0.8.0",
         "effect": "^3.10.0",
       },
       "devDependencies": {
@@ -193,6 +197,7 @@
       "name": "@reactive-agents/health",
       "version": "0.8.0",
       "dependencies": {
+        "@reactive-agents/platform": "0.8.0",
         "effect": "^3.10.0",
       },
       "devDependencies": {
@@ -217,9 +222,9 @@
       "name": "@reactive-agents/interaction",
       "version": "0.8.0",
       "dependencies": {
-        "@reactive-agents/core": "0.7.8",
-        "@reactive-agents/observability": "0.7.8",
-        "@reactive-agents/reasoning": "0.7.8",
+        "@reactive-agents/core": "0.8.0",
+        "@reactive-agents/observability": "0.8.0",
+        "@reactive-agents/reasoning": "0.8.0",
         "effect": "^3.10.0",
         "ulid": "^2.3.0",
       },
@@ -232,7 +237,7 @@
       "name": "@reactive-agents/llm-provider",
       "version": "0.8.0",
       "dependencies": {
-        "@reactive-agents/core": "0.7.8",
+        "@reactive-agents/core": "0.8.0",
         "effect": "^3.10.0",
       },
       "devDependencies": {
@@ -252,7 +257,8 @@
       "name": "@reactive-agents/memory",
       "version": "0.8.0",
       "dependencies": {
-        "@reactive-agents/core": "0.7.8",
+        "@reactive-agents/core": "0.8.0",
+        "@reactive-agents/platform": "0.8.0",
         "effect": "^3.10.0",
       },
       "devDependencies": {
@@ -271,7 +277,7 @@
         "@opentelemetry/sdk-metrics": "^2.6.0",
         "@opentelemetry/sdk-trace-base": "^2.6.0",
         "@opentelemetry/semantic-conventions": "^1.40.0",
-        "@reactive-agents/core": "0.7.8",
+        "@reactive-agents/core": "0.8.0",
         "boxen": "^8.0.1",
         "chalk": "^5.4.0",
         "effect": "^3.10.0",
@@ -285,11 +291,11 @@
       "name": "@reactive-agents/orchestration",
       "version": "0.8.0",
       "dependencies": {
-        "@reactive-agents/core": "0.7.8",
-        "@reactive-agents/cost": "0.7.8",
-        "@reactive-agents/identity": "0.7.8",
-        "@reactive-agents/llm-provider": "0.7.8",
-        "@reactive-agents/reasoning": "0.7.8",
+        "@reactive-agents/core": "0.8.0",
+        "@reactive-agents/cost": "0.8.0",
+        "@reactive-agents/identity": "0.8.0",
+        "@reactive-agents/llm-provider": "0.8.0",
+        "@reactive-agents/reasoning": "0.8.0",
         "effect": "^3.10.0",
       },
       "devDependencies": {
@@ -318,7 +324,7 @@
       "name": "@reactive-agents/prompts",
       "version": "0.8.0",
       "dependencies": {
-        "@reactive-agents/core": "0.7.8",
+        "@reactive-agents/core": "0.8.0",
         "effect": "^3.10.0",
       },
       "devDependencies": {
@@ -362,8 +368,9 @@
       "name": "@reactive-agents/reactive-intelligence",
       "version": "0.8.0",
       "dependencies": {
-        "@reactive-agents/core": "0.7.8",
-        "@reactive-agents/llm-provider": "0.7.8",
+        "@reactive-agents/core": "0.8.0",
+        "@reactive-agents/llm-provider": "0.8.0",
+        "@reactive-agents/platform": "0.8.0",
         "effect": "^3.10.0",
       },
       "devDependencies": {
@@ -375,11 +382,11 @@
       "name": "@reactive-agents/reasoning",
       "version": "0.8.0",
       "dependencies": {
-        "@reactive-agents/core": "0.7.8",
-        "@reactive-agents/llm-provider": "0.7.8",
-        "@reactive-agents/memory": "0.7.8",
-        "@reactive-agents/prompts": "0.7.8",
-        "@reactive-agents/tools": "0.7.8",
+        "@reactive-agents/core": "0.8.0",
+        "@reactive-agents/llm-provider": "0.8.0",
+        "@reactive-agents/memory": "0.8.0",
+        "@reactive-agents/prompts": "0.8.0",
+        "@reactive-agents/tools": "0.8.0",
         "effect": "^3.10.0",
         "ulid": "^2.3.0",
       },
@@ -392,23 +399,23 @@
       "name": "@reactive-agents/runtime",
       "version": "0.8.0",
       "dependencies": {
-        "@reactive-agents/a2a": "0.7.8",
-        "@reactive-agents/core": "0.7.8",
-        "@reactive-agents/cost": "0.7.8",
-        "@reactive-agents/gateway": "0.7.8",
-        "@reactive-agents/guardrails": "0.7.8",
-        "@reactive-agents/health": "0.7.6",
-        "@reactive-agents/identity": "0.7.8",
-        "@reactive-agents/interaction": "0.7.8",
-        "@reactive-agents/llm-provider": "0.7.8",
-        "@reactive-agents/memory": "0.7.8",
-        "@reactive-agents/observability": "0.7.8",
-        "@reactive-agents/orchestration": "0.7.8",
-        "@reactive-agents/prompts": "0.7.8",
-        "@reactive-agents/reactive-intelligence": "0.7.8",
-        "@reactive-agents/reasoning": "0.7.8",
-        "@reactive-agents/tools": "0.7.8",
-        "@reactive-agents/verification": "0.7.8",
+        "@reactive-agents/a2a": "0.8.0",
+        "@reactive-agents/core": "0.8.0",
+        "@reactive-agents/cost": "0.8.0",
+        "@reactive-agents/gateway": "0.8.0",
+        "@reactive-agents/guardrails": "0.8.0",
+        "@reactive-agents/health": "0.8.0",
+        "@reactive-agents/identity": "0.8.0",
+        "@reactive-agents/interaction": "0.8.0",
+        "@reactive-agents/llm-provider": "0.8.0",
+        "@reactive-agents/memory": "0.8.0",
+        "@reactive-agents/observability": "0.8.0",
+        "@reactive-agents/orchestration": "0.8.0",
+        "@reactive-agents/prompts": "0.8.0",
+        "@reactive-agents/reactive-intelligence": "0.8.0",
+        "@reactive-agents/reasoning": "0.8.0",
+        "@reactive-agents/tools": "0.8.0",
+        "@reactive-agents/verification": "0.8.0",
         "effect": "^3.10.0",
       },
       "devDependencies": {
@@ -436,6 +443,7 @@
       "dependencies": {
         "@reactive-agents/a2a": "0.8.0",
         "@reactive-agents/core": "0.8.0",
+        "@reactive-agents/platform": "0.8.0",
         "effect": "^3.10.0",
       },
       "devDependencies": {
@@ -447,9 +455,9 @@
       "name": "@reactive-agents/verification",
       "version": "0.8.0",
       "dependencies": {
-        "@reactive-agents/core": "0.7.8",
-        "@reactive-agents/llm-provider": "0.7.8",
-        "@reactive-agents/memory": "0.7.8",
+        "@reactive-agents/core": "0.8.0",
+        "@reactive-agents/llm-provider": "0.8.0",
+        "@reactive-agents/memory": "0.8.0",
         "effect": "^3.10.0",
       },
       "devDependencies": {
@@ -1883,13 +1891,47 @@
 
     "@reactive-agents/a2a/bun-types": ["bun-types@1.3.11", "", { "dependencies": { "@types/node": "*" } }, "sha512-1KGPpoxQWl9f6wcZh57LvrPIInQMn2TQ7jsgxqpRzg+l0QPOFvJVH7HmvHo/AiPgwXy+/Thf6Ov3EdVn1vOabg=="],
 
+    "@reactive-agents/benchmarks/bun-types": ["bun-types@1.3.11", "", { "dependencies": { "@types/node": "*" } }, "sha512-1KGPpoxQWl9f6wcZh57LvrPIInQMn2TQ7jsgxqpRzg+l0QPOFvJVH7HmvHo/AiPgwXy+/Thf6Ov3EdVn1vOabg=="],
+
+    "@reactive-agents/cli/bun-types": ["bun-types@1.3.11", "", { "dependencies": { "@types/node": "*" } }, "sha512-1KGPpoxQWl9f6wcZh57LvrPIInQMn2TQ7jsgxqpRzg+l0QPOFvJVH7HmvHo/AiPgwXy+/Thf6Ov3EdVn1vOabg=="],
+
     "@reactive-agents/core/bun-types": ["bun-types@1.3.11", "", { "dependencies": { "@types/node": "*" } }, "sha512-1KGPpoxQWl9f6wcZh57LvrPIInQMn2TQ7jsgxqpRzg+l0QPOFvJVH7HmvHo/AiPgwXy+/Thf6Ov3EdVn1vOabg=="],
+
+    "@reactive-agents/cost/bun-types": ["bun-types@1.3.11", "", { "dependencies": { "@types/node": "*" } }, "sha512-1KGPpoxQWl9f6wcZh57LvrPIInQMn2TQ7jsgxqpRzg+l0QPOFvJVH7HmvHo/AiPgwXy+/Thf6Ov3EdVn1vOabg=="],
+
+    "@reactive-agents/eval/bun-types": ["bun-types@1.3.11", "", { "dependencies": { "@types/node": "*" } }, "sha512-1KGPpoxQWl9f6wcZh57LvrPIInQMn2TQ7jsgxqpRzg+l0QPOFvJVH7HmvHo/AiPgwXy+/Thf6Ov3EdVn1vOabg=="],
+
+    "@reactive-agents/gateway/bun-types": ["bun-types@1.3.11", "", { "dependencies": { "@types/node": "*" } }, "sha512-1KGPpoxQWl9f6wcZh57LvrPIInQMn2TQ7jsgxqpRzg+l0QPOFvJVH7HmvHo/AiPgwXy+/Thf6Ov3EdVn1vOabg=="],
+
+    "@reactive-agents/guardrails/bun-types": ["bun-types@1.3.11", "", { "dependencies": { "@types/node": "*" } }, "sha512-1KGPpoxQWl9f6wcZh57LvrPIInQMn2TQ7jsgxqpRzg+l0QPOFvJVH7HmvHo/AiPgwXy+/Thf6Ov3EdVn1vOabg=="],
+
+    "@reactive-agents/health/bun-types": ["bun-types@1.3.11", "", { "dependencies": { "@types/node": "*" } }, "sha512-1KGPpoxQWl9f6wcZh57LvrPIInQMn2TQ7jsgxqpRzg+l0QPOFvJVH7HmvHo/AiPgwXy+/Thf6Ov3EdVn1vOabg=="],
 
     "@reactive-agents/identity/bun-types": ["bun-types@1.3.11", "", { "dependencies": { "@types/node": "*" } }, "sha512-1KGPpoxQWl9f6wcZh57LvrPIInQMn2TQ7jsgxqpRzg+l0QPOFvJVH7HmvHo/AiPgwXy+/Thf6Ov3EdVn1vOabg=="],
 
+    "@reactive-agents/interaction/bun-types": ["bun-types@1.3.11", "", { "dependencies": { "@types/node": "*" } }, "sha512-1KGPpoxQWl9f6wcZh57LvrPIInQMn2TQ7jsgxqpRzg+l0QPOFvJVH7HmvHo/AiPgwXy+/Thf6Ov3EdVn1vOabg=="],
+
+    "@reactive-agents/llm-provider/bun-types": ["bun-types@1.3.11", "", { "dependencies": { "@types/node": "*" } }, "sha512-1KGPpoxQWl9f6wcZh57LvrPIInQMn2TQ7jsgxqpRzg+l0QPOFvJVH7HmvHo/AiPgwXy+/Thf6Ov3EdVn1vOabg=="],
+
+    "@reactive-agents/memory/bun-types": ["bun-types@1.3.11", "", { "dependencies": { "@types/node": "*" } }, "sha512-1KGPpoxQWl9f6wcZh57LvrPIInQMn2TQ7jsgxqpRzg+l0QPOFvJVH7HmvHo/AiPgwXy+/Thf6Ov3EdVn1vOabg=="],
+
+    "@reactive-agents/observability/bun-types": ["bun-types@1.3.11", "", { "dependencies": { "@types/node": "*" } }, "sha512-1KGPpoxQWl9f6wcZh57LvrPIInQMn2TQ7jsgxqpRzg+l0QPOFvJVH7HmvHo/AiPgwXy+/Thf6Ov3EdVn1vOabg=="],
+
+    "@reactive-agents/orchestration/bun-types": ["bun-types@1.3.11", "", { "dependencies": { "@types/node": "*" } }, "sha512-1KGPpoxQWl9f6wcZh57LvrPIInQMn2TQ7jsgxqpRzg+l0QPOFvJVH7HmvHo/AiPgwXy+/Thf6Ov3EdVn1vOabg=="],
+
     "@reactive-agents/platform/bun-types": ["bun-types@1.3.11", "", { "dependencies": { "@types/node": "*" } }, "sha512-1KGPpoxQWl9f6wcZh57LvrPIInQMn2TQ7jsgxqpRzg+l0QPOFvJVH7HmvHo/AiPgwXy+/Thf6Ov3EdVn1vOabg=="],
 
+    "@reactive-agents/prompts/bun-types": ["bun-types@1.3.11", "", { "dependencies": { "@types/node": "*" } }, "sha512-1KGPpoxQWl9f6wcZh57LvrPIInQMn2TQ7jsgxqpRzg+l0QPOFvJVH7HmvHo/AiPgwXy+/Thf6Ov3EdVn1vOabg=="],
+
+    "@reactive-agents/reactive-intelligence/bun-types": ["bun-types@1.3.11", "", { "dependencies": { "@types/node": "*" } }, "sha512-1KGPpoxQWl9f6wcZh57LvrPIInQMn2TQ7jsgxqpRzg+l0QPOFvJVH7HmvHo/AiPgwXy+/Thf6Ov3EdVn1vOabg=="],
+
+    "@reactive-agents/reasoning/bun-types": ["bun-types@1.3.11", "", { "dependencies": { "@types/node": "*" } }, "sha512-1KGPpoxQWl9f6wcZh57LvrPIInQMn2TQ7jsgxqpRzg+l0QPOFvJVH7HmvHo/AiPgwXy+/Thf6Ov3EdVn1vOabg=="],
+
+    "@reactive-agents/runtime/bun-types": ["bun-types@1.3.11", "", { "dependencies": { "@types/node": "*" } }, "sha512-1KGPpoxQWl9f6wcZh57LvrPIInQMn2TQ7jsgxqpRzg+l0QPOFvJVH7HmvHo/AiPgwXy+/Thf6Ov3EdVn1vOabg=="],
+
     "@reactive-agents/tools/bun-types": ["bun-types@1.3.11", "", { "dependencies": { "@types/node": "*" } }, "sha512-1KGPpoxQWl9f6wcZh57LvrPIInQMn2TQ7jsgxqpRzg+l0QPOFvJVH7HmvHo/AiPgwXy+/Thf6Ov3EdVn1vOabg=="],
+
+    "@reactive-agents/verification/bun-types": ["bun-types@1.3.11", "", { "dependencies": { "@types/node": "*" } }, "sha512-1KGPpoxQWl9f6wcZh57LvrPIInQMn2TQ7jsgxqpRzg+l0QPOFvJVH7HmvHo/AiPgwXy+/Thf6Ov3EdVn1vOabg=="],
 
     "@rollup/pluginutils/estree-walker": ["estree-walker@2.0.2", "", {}, "sha512-Rfkk/Mp/DL7JVje3u18FxFujQlTNR2q6QfMSMB7AvCBx91NGj/ba3kCfza0f6dVDbw7YlRf/nDrn7pQrCCyQ/w=="],
 

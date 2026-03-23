@@ -1,9 +1,10 @@
 /**
  * SQLite-backed persistent eval history.
  *
- * Uses bun:sqlite for zero-dependency persistence (same pattern as memory package).
+ * Uses DatabaseAdapter for runtime-agnostic persistence.
  */
 import { Effect } from "effect";
+import { getPlatformSync } from "@reactive-agents/platform";
 import type { EvalRun, EvalResult, EvalRunSummary, DimensionScore } from "../types/eval-result.js";
 
 export interface EvalStore {
@@ -34,9 +35,7 @@ export const createEvalStore = (dbPath: string = "eval-history.db"): EvalStore =
 
   const getDb = () => {
     if (db) return db;
-    // Dynamic import to work in environments without bun:sqlite
-    const { Database } = require("bun:sqlite");
-    db = new Database(dbPath);
+    db = getPlatformSync().database(dbPath, { create: true });
     db.exec("PRAGMA journal_mode=WAL;");
     db.exec(`
       CREATE TABLE IF NOT EXISTS eval_runs (

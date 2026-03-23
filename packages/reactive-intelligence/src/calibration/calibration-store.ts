@@ -1,11 +1,13 @@
-import { Database } from "bun:sqlite";
+import { getPlatformSync, type DatabaseAdapter } from "@reactive-agents/platform";
 import type { ModelCalibration } from "../types.js";
 
 export class CalibrationStore {
-  private db: Database;
+  private db: DatabaseAdapter;
 
-  constructor(dbPath = ":memory:") {
-    this.db = new Database(dbPath, { create: true });
+  constructor(dbOrPath: DatabaseAdapter | string = ":memory:") {
+    this.db = typeof dbOrPath === "string"
+      ? getPlatformSync().database(dbOrPath, { create: true })
+      : dbOrPath;
     this.db.exec("PRAGMA journal_mode=WAL");
     this.db.exec(`CREATE TABLE IF NOT EXISTS calibrations (
       model_id TEXT PRIMARY KEY,

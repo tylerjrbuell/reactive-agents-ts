@@ -1,4 +1,4 @@
-import { Database } from "bun:sqlite";
+import { getPlatformSync, type DatabaseAdapter } from "@reactive-agents/platform";
 
 export type ArmStats = {
   readonly contextBucket: string;
@@ -9,10 +9,12 @@ export type ArmStats = {
 };
 
 export class BanditStore {
-  private db: Database;
+  private db: DatabaseAdapter;
 
-  constructor(dbPath: string = ":memory:") {
-    this.db = new Database(dbPath, { create: true });
+  constructor(dbOrPath: DatabaseAdapter | string = ":memory:") {
+    this.db = typeof dbOrPath === "string"
+      ? getPlatformSync().database(dbOrPath, { create: true })
+      : dbOrPath;
     this.db.exec("PRAGMA journal_mode = WAL");
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS bandit_arms (
@@ -31,12 +33,12 @@ export class BanditStore {
     this.db.run(
       `INSERT OR REPLACE INTO bandit_arms (context_bucket, arm_id, alpha, beta, pulls, updated_at)
        VALUES (?, ?, ?, ?, ?, datetime('now'))`,
-      [stats.contextBucket, stats.armId, stats.alpha, stats.beta, stats.pulls],
+      stats.contextBucket, stats.armId, stats.alpha, stats.beta, stats.pulls,
     );
   }
 
   load(contextBucket: string, armId: string): ArmStats | null {
-    const row = this.db.query(
+    const row = this.db.prepare(
       "SELECT context_bucket, arm_id, alpha, beta, pulls FROM bandit_arms WHERE context_bucket = ? AND arm_id = ?",
     ).get(contextBucket, armId) as { context_bucket: string; arm_id: string; alpha: number; beta: number; pulls: number } | null;
     if (!row) return null;
@@ -50,7 +52,7 @@ export class BanditStore {
   }
 
   listArms(contextBucket: string): readonly ArmStats[] {
-    return (this.db.query(
+    return (this.db.prepare(
       "SELECT context_bucket, arm_id, alpha, beta, pulls FROM bandit_arms WHERE context_bucket = ?",
     ).all(contextBucket) as Array<{ context_bucket: string; arm_id: string; alpha: number; beta: number; pulls: number }>).map((r) => ({
       contextBucket: r.context_bucket,

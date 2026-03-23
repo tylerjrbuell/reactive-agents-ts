@@ -1,5 +1,5 @@
 import { Effect, Context, Layer } from "effect";
-import { Database } from "bun:sqlite";
+import { getPlatformSync, type DatabaseAdapter } from "@reactive-agents/platform";
 import { DatabaseError } from "./errors.js";
 import type { MemoryConfig } from "./types.js";
 import * as fs from "node:fs";
@@ -221,7 +221,7 @@ export const MemoryDatabaseLive = (config: MemoryConfig) =>
 
       // Open SQLite connection
       const db = yield* Effect.try({
-        try: () => new Database(config.dbPath, { create: true }),
+        try: () => getPlatformSync().database(config.dbPath, { create: true }),
         catch: (e) =>
           new DatabaseError({
             message: `Failed to open database: ${e}`,
@@ -271,8 +271,9 @@ export const MemoryDatabaseLive = (config: MemoryConfig) =>
           Effect.try({
             try: () => {
               const stmt = db.prepare(sql);
-              const result = stmt.run(...(params as any[]));
-              return result.changes;
+              stmt.run(...(params as any[]));
+              const row = db.queryOne<{ "changes()": number }>("SELECT changes()");
+              return row?.["changes()"] ?? 0;
             },
             catch: (e) =>
               new DatabaseError({
@@ -284,23 +285,26 @@ export const MemoryDatabaseLive = (config: MemoryConfig) =>
 
         transaction: <T>(fn: (db: MemoryDatabaseService) => Effect.Effect<T, DatabaseError>) =>
           Effect.gen(function* () {
-            let result: unknown;
-            yield* Effect.try({
-              try: () => {
-                const txn = db.transaction(() => {
-                  result = Effect.runSync(fn(service));
-                });
-                txn();
-              },
-              catch: (e) =>
+            db.exec("BEGIN");
+            try {
+              const result = Effect.runSync(fn(service));
+              db.exec("COMMIT");
+              return result as T;
+            } catch (e) {
+              db.exec("ROLLBACK");
+              throw e;
+            }
+          }).pipe(
+            Effect.catchAllDefect((e) =>
+              Effect.fail(
                 new DatabaseError({
                   message: `Transaction failed: ${e}`,
                   operation: "write",
                   cause: e,
                 }),
-            });
-            return result as T;
-          }),
+              ),
+            ),
+          ),
 
         close: () =>
           Effect.sync(() => {
