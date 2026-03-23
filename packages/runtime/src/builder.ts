@@ -1,6 +1,8 @@
 import { Effect, Layer, Schema, ManagedRuntime, Stream as EStream } from "effect";
 import { createRuntime, createLightRuntime } from "./runtime.js";
 import type { MCPServerConfig } from "./runtime.js";
+import { getPlatformSync, setPlatform } from "@reactive-agents/platform";
+import type { DatabaseFactory, ProcessAdapter, ServerAdapter } from "@reactive-agents/platform";
 import { builderToConfig } from "./agent-config.js";
 import type { TestTurn } from "@reactive-agents/llm-provider";
 import { ExecutionEngine } from "./execution-engine.js";
@@ -797,6 +799,9 @@ export class ReactiveAgentBuilder {
   private _documents: DocumentSpec[] = [];
   private _pricingRegistry: Record<string, { readonly input: number; readonly output: number }> = {};
   private _pricingProvider?: import("@reactive-agents/llm-provider").PricingProvider;
+  private _databaseFactory?: DatabaseFactory;
+  private _processAdapter?: ProcessAdapter;
+  private _serverAdapter?: ServerAdapter;
 
   // ─── Identity ───
 
@@ -1748,6 +1753,51 @@ export class ReactiveAgentBuilder {
   }
 
   /**
+   * Override the database adapter factory.
+   *
+   * By default, the framework auto-detects the runtime (Bun/Node) and uses
+   * the appropriate SQLite implementation. Use this to provide a custom
+   * database adapter (e.g., Turso, PostgreSQL, sql.js).
+   *
+   * @param factory - A function that creates a DatabaseAdapter from a path
+   * @example
+   * ```typescript
+   * import { createCustomDb } from "./my-db-adapter";
+   * builder.withDatabase(createCustomDb)
+   * ```
+   */
+  withDatabase(factory: DatabaseFactory): this {
+    this._databaseFactory = factory;
+    return this;
+  }
+
+  /**
+   * Override the process execution adapter.
+   *
+   * By default, the framework uses Bun.spawn or child_process.spawn depending
+   * on the runtime. Use this to provide a custom process adapter.
+   *
+   * @param adapter - A ProcessAdapter implementation
+   */
+  withProcess(adapter: ProcessAdapter): this {
+    this._processAdapter = adapter;
+    return this;
+  }
+
+  /**
+   * Override the HTTP server adapter.
+   *
+   * By default, the framework uses Bun.serve or http.createServer depending
+   * on the runtime. Use this to provide a custom server adapter.
+   *
+   * @param adapter - A ServerAdapter implementation
+   */
+  withServer(adapter: ServerAdapter): this {
+    this._serverAdapter = adapter;
+    return this;
+  }
+
+  /**
    * Configure the Reactive Intelligence Layer — entropy-based metacognitive sensing.
    *
    * The Entropy Sensor monitors reasoning quality per-iteration across 5 sources
@@ -2034,6 +2084,17 @@ export class ReactiveAgentBuilder {
         composedSystemPrompt = composedSystemPrompt
           ? `${personaPrompt}\n\n${composedSystemPrompt}`
           : personaPrompt;
+      }
+
+      // Apply platform adapter overrides if any were specified
+      if (self._databaseFactory || self._processAdapter || self._serverAdapter) {
+        const base = getPlatformSync();
+        setPlatform({
+          runtime: base.runtime,
+          database: self._databaseFactory ?? base.database,
+          process: self._processAdapter ?? base.process,
+          server: self._serverAdapter ?? base.server,
+        });
       }
 
       const baseRuntime = createRuntime({

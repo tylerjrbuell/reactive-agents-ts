@@ -28,7 +28,8 @@
     "@reactive-agents/gateway": "0.8.0",
     "@reactive-agents/a2a": "0.8.0",
     "@reactive-agents/health": "0.8.0",
-    "@reactive-agents/reactive-intelligence": "0.8.0"
+    "@reactive-agents/reactive-intelligence": "0.8.0",
+    "@reactive-agents/platform": "0.8.0"
   },
   "devDependencies": {
     "typescript": "^5.7.0",
