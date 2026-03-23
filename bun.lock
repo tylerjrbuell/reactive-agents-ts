@@ -411,6 +411,7 @@
         "@reactive-agents/memory": "0.8.0",
         "@reactive-agents/observability": "0.8.0",
         "@reactive-agents/orchestration": "0.8.0",
+        "@reactive-agents/platform": "0.8.0",
         "@reactive-agents/prompts": "0.8.0",
         "@reactive-agents/reactive-intelligence": "0.8.0",
         "@reactive-agents/reasoning": "0.8.0",
