@@ -22,9 +22,9 @@ Cortex is a neural-themed cognitive interface for the Reactive Agents runtime �
 
 Cortex MUST NOT hardcode knowledge of specific reasoning strategies, tool names, event payloads, or framework internals. The framework is a living project — strategies may be added or removed, kernel algorithms may change, new event types will appear.
 
-**The contract between Cortex and the runtime is the EventBus.**
+**The contract between Cortex and the runtime is the event stream.**
 
-Cortex subscribes to EventBus events and renders them. It does not import framework internals. It does not switch on strategy names. If a new kernel algorithm emits `ExecutionPhaseEntered`, `ReasoningStepCompleted`, `ToolCallStarted`, and `EntropyScored` events, Cortex visualizes them automatically — no Cortex code changes required.
+The runtime produces two distinct event sources: the **EventBus** (lifecycle, reasoning, tool, entropy, and strategy events) and the **AgentStreamEvent** channel (per-token `TextDelta` events from `agent.runStream()`). Cortex subscribes to both and renders them through a unified WebSocket protocol. It does not import framework internals. It does not switch on strategy names. If a new kernel algorithm emits `ExecutionPhaseEntered`, `ReasoningStepCompleted`, `ToolCallStarted`, and `EntropyScored` events, Cortex visualizes them automatically — no Cortex code changes required.
 
 **Decoupling rules:**
 1. **Event-driven rendering** — Cortex consumes a stream of typed events over WebSocket. The event schema is the API contract. New event types are either rendered generically or ignored gracefully.
@@ -151,13 +151,13 @@ This is the decoupling layer. Cortex does not know about strategies. It knows ab
 | `ReasoningStepCompleted` | New pathway node appears with thought text |
 | `ToolCallStarted` | Synapse fires outward to tool node (amber pulse) |
 | `ToolCallCompleted` | Synapse returns (cyan=success, red=error) |
-| `LLMRequestStarted` | Nucleus glows brighter (thinking) |
-| `LLMRequestCompleted` | Nucleus dims, token/cost counters update |
+| `LLMRequestStarted` | Nucleus glows brighter (thinking). `contextSize` field drives nucleus size scaling. |
+| `LLMRequestCompleted` | Nucleus dims, token/cost counters update from `tokensUsed` and `estimatedCost` |
 | `EntropyScored` | Heartbeat updates, canvas color temperature shifts |
 | `StrategySwitched` | Brief reorganization animation, strategy label updates |
 | `AgentStarted` | Nucleus appears |
 | `AgentCompleted` | All pathways pulse green, heartbeat settles |
-| `TextDeltaReceived` | Streaming text in trace panel |
+| `TextDelta` (stream source) | Streaming text in trace panel |
 | `ContextWindowWarning` | Neural field boundary flashes warning |
 | `ReactiveDecision` | Small indicator icon appears on the pathway |
 | Any unknown event | Logged in Signal Inspector, not rendered on canvas |
@@ -280,7 +280,7 @@ For a specific agent config, see performance over time:
 
 ---
 
-## 7. The Nursery — Export & Deploy
+## 7. DEPLOY — Export & Deploy
 
 ### 7.1 Export Formats
 
@@ -330,8 +330,9 @@ apps/
     │   └─ runner/          # Agent execution wrapper
     │       └─ executor.ts  # Wraps agent.run/runStream
     │
-    └─ ui/                  # Svelte frontend (SvelteKit)
+    └─ ui/                  # Svelte SPA (plain Svelte, no SvelteKit)
         ├─ src/
+        │   ├─ App.svelte           # Root component with tab routing
         │   ├─ lib/
         │   │   ├─ canvas/          # Neural Path renderer
         │   │   │   ├─ engine.ts    # Canvas2D rendering loop
@@ -347,14 +348,14 @@ apps/
         │   │   ├─ command/         # Floating command bar
         │   │   ├─ workshop/        # Logic Flux components
         │   │   ├─ observatory/     # Entropy view components
-        │   │   └─ export/          # Nursery/deploy components
-        │   ├─ routes/
-        │   │   ├─ +page.svelte     # Neural Path (default)
-        │   │   ├─ flux/            # Logic Flux
-        │   │   └─ entropy/         # Entropy Observatory
+        │   │   └─ export/          # Deploy components
+        │   ├─ views/
+        │   │   ├─ NeuralPath.svelte  # Neural Path (default)
+        │   │   ├─ LogicFlux.svelte   # Logic Flux workshop
+        │   │   └─ Entropy.svelte     # Entropy Observatory
         │   └─ app.css              # Design system (dark neural theme)
-        └─ static/
-            └─ fonts/               # Monospace font assets
+        └─ public/
+            └─ fonts/               # JetBrains Mono font assets
 ```
 
 ### 8.2 The Event Mapper (Decoupling Layer)
@@ -384,8 +385,8 @@ function mapEvent(event: RuntimeEvent): VisualCommand[];
 | Component | Choice | Rationale |
 |---|---|---|
 | Server runtime | Bun + Elysia | Aligns with framework + Dispatch. Fast. Native WebSocket. |
-| Frontend framework | Svelte (SvelteKit) | Shared with Dispatch. Reactive by nature. Smallest bundle. |
-| Canvas rendering | Canvas2D + D3.js force layout | Lighter than WebGL. D3's force simulation creates organic node placement. Upgrade path to WebGL/Three.js for V2 if needed. |
+| Frontend framework | Svelte (plain SPA, not SvelteKit) | Shared with Dispatch. Reactive by nature. Smallest bundle. SvelteKit's SSR/routing is overkill for a local SPA — use client-side tab switching. |
+| Canvas rendering | Canvas2D + D3.js force layout | Lighter than WebGL. D3's force simulation creates organic node placement. V1 ceiling: ~200 nodes before performance degrades — sufficient for single-agent runs up to ~25 iterations with tools. Upgrade path to WebGL/Three.js for V2 if complex multi-agent scenarios exceed this. |
 | Charts | D3.js | Already used for canvas. Consistent. No extra dependency. |
 | WebSocket | Native Bun WS | Zero dependencies. |
 | Styling | Tailwind CSS | Utility-first, dark theme, fast iteration. |
@@ -400,31 +401,79 @@ interface CortexEvent {
   ts: number;                    // Timestamp (ms)
   runId: string;                 // Execution ID
   agentId: string;               // Agent ID
-  type: string;                  // EventBus event type name
+  source: "eventbus" | "stream"; // Which channel produced this event
+  type: string;                  // Event type name
   payload: Record<string, unknown>; // Event-specific data
 }
 ```
 
 Cortex connects to `ws://localhost:<port>/ws/runs/:runId` and receives a stream of `CortexEvent` objects. The mapper processes each one into visual commands.
 
-### 8.5 What We Build vs. What We Reuse
+### 8.5 Dual-Source Event Merging
+
+The runtime produces two distinct event channels. The Cortex server merges them into the single `CortexEvent` WebSocket stream:
+
+**Source 1: EventBus** — Lifecycle, reasoning, tool, entropy, strategy events (~35 event types in `AgentEvent` union). The server subscribes to the EventBus with a filter on `taskId`/`agentId` to scope events to the active run. These arrive as `source: "eventbus"` events.
+
+**Source 2: AgentStreamEvent** — Per-token `TextDelta` events, `IterationProgress`, `StreamCompleted`, etc. from `agent.runStream()`. The server consumes the `AsyncGenerator<AgentStreamEvent>` and forwards each event as `source: "stream"` events.
+
+**Merging strategy:** The executor (Section 8.6) uses `agent.runStream()` as the primary execution method. It forks a fiber that consumes the stream generator and forwards events to the WebSocket. Simultaneously, an EventBus subscriber captures lifecycle events and forwards those. Both write to the same WebSocket connection. Events are ordered by `ts` (server timestamp at forwarding time). The client-side event store handles minor reordering via a small buffer (50ms window).
+
+**Event persistence for replay:** All `CortexEvent` objects for a run are appended to an `execution_events` SQLite table (`runId, seq, ts, source, type, payload_json`). This powers replay mode. Retention: configurable, default 50 most recent runs per agent.
+
+### 8.6 Server Runtime Model
+
+**Agent executor pool:** The server maintains a `Map<runId, RunContext>` of active executions. Each `RunContext` holds:
+- The `ReactiveAgent` instance
+- The `AbortController` for cancellation
+- The set of connected WebSocket client IDs
+- A `Ref` to the merged event buffer
+
+**Concurrent execution:** Multiple agents can run simultaneously. Each run gets a unique `runId`. EventBus events are filtered by `taskId` (which maps 1:1 to `runId`) before forwarding. No cross-talk between runs.
+
+**Client disconnect behavior:** When a WebSocket client disconnects, the run continues. Events are still persisted to SQLite. If the client reconnects (same `runId`), it receives a replay of missed events from the persistence layer, then resumes live streaming.
+
+**Agent lifecycle:**
+1. `POST /api/runs` → creates `RunContext`, builds agent from config, calls `agent.runStream()`
+2. Events flow to connected clients + persist to SQLite
+3. Agent completes → `RunContext` cleaned up, debrief persisted
+4. `POST /api/runs/:id/pause` → calls `agent.pause()` (existing API)
+5. `POST /api/runs/:id/stop` → calls `agent.stop()` via `AbortController` (existing API)
+
+### 8.7 Required Runtime API Additions
+
+Some Cortex features require new capabilities in the framework. These are separated from Cortex UI work:
+
+| Feature | Runtime API Needed | V1 Scope |
+|---|---|---|
+| **Pause/Kill** | `agent.pause()`, `agent.stop()` | **EXISTS** — no work needed |
+| **Throttle** (adjust budget mid-run) | New: `agent.adjustBudget(amount)` on CostService | **V1 stretch** — degrade gracefully (display-only slider showing remaining budget, no mid-run adjustment) |
+| **Whisper** (inject context) | New: `agent.injectContext(text)` that appends to working memory before next iteration | **V1 stretch** — skip if not ready, show as disabled in command bar |
+| **Redirect** (force strategy eval) | New: `agent.requestStrategySwitch()` that triggers reactive controller evaluation | **V1 stretch** — skip if not ready, show as disabled |
+
+**V1 approach:** Ship pause and kill (which work today). Display throttle as read-only budget indicator. Gray out Whisper and Redirect with "coming soon" tooltip. This keeps the command bar visually complete while honestly scoping V1.
+
+### 8.8 What We Build vs. What We Reuse
 
 | Component | Status |
 |---|---|
-| EventBus + 60 event types | **EXISTS** — bridge to WebSocket |
-| Streaming infrastructure | **EXISTS** — adapt for Cortex protocol |
+| EventBus + ~35 event types | **EXISTS** — bridge to WebSocket |
+| Stream AsyncGenerator (`runStream`) | **EXISTS** — consume and forward |
 | Agent execution (`run`/`runStream`) | **EXISTS** — wrap in executor |
 | Config serialization (`AgentConfig`) | **EXISTS** — expose via API |
 | Debrief/session/plan SQLite stores | **EXISTS** — query via API |
 | Entropy sensor data | **EXISTS** — flows through EventBus |
 | Strategy switching events | **EXISTS** — already instrumented |
-| Elysia HTTP server + WS bridge | **NEW** — ~300 lines |
+| Dual-source WS bridge + event merging | **NEW** — ~400 lines |
+| REST API layer (runs, configs, history) | **NEW** — ~500 lines |
+| Agent executor pool + lifecycle mgmt | **NEW** — ~300 lines |
+| Event persistence (SQLite table + replay) | **NEW** — ~200 lines |
 | Svelte frontend (all views) | **NEW** — main effort |
 | Neural Path canvas renderer | **NEW** — Canvas2D + D3 force layout |
 | Event mapper (decoupling layer) | **NEW** — ~200 lines |
 | Export generators | **NEW** — template-based, ~100 lines each |
 
-**~70% of the backend infrastructure already exists.** The primary effort is the Svelte frontend and canvas visualization.
+**~50% of the data layer already exists.** The server integration layer and frontend are the primary new work.
 
 ---
 
@@ -450,7 +499,7 @@ Entropy gradient: violet (#8b5cf6) → amber (#eab308) → red (#ef4444)
 
 ### 9.2 Typography
 
-- **Data/labels:** Monospace (JetBrains Mono or similar), uppercase with underscores
+- **Data/labels:** JetBrains Mono (monospace), uppercase with underscores
 - **Headings:** Same monospace, slightly larger
 - **Body text (trace log, descriptions):** Same monospace, normal case
 - **Numbers/metrics:** Monospace, tabular figures
@@ -500,7 +549,7 @@ rax dev --cortex              # Dev mode with Cortex attached
 - [ ] Timeline rail with scrubbing
 - [ ] Click-to-inspect on all visual elements
 - [ ] Replay mode (rebuild past executions step by step)
-- [ ] Command bar: pause, kill, throttle
+- [ ] Command bar: pause, kill, throttle (read-only budget display for V1; see Section 8.7)
 - [ ] Logic Flux: config editor with inline editing
 - [ ] Logic Flux: run with modified config
 - [ ] Execution history (list past runs with metrics)
@@ -532,7 +581,67 @@ rax dev --cortex              # Dev mode with Cortex attached
 
 ---
 
-## 12. Success Criteria
+## 12. Error Handling & Degraded Modes
+
+### 12.1 Connection Loss
+
+When the WebSocket connection drops:
+- Canvas freezes at last known state with a "CONNECTION LOST" overlay (amber border pulse)
+- Automatic reconnection with exponential backoff (1s, 2s, 4s, max 30s)
+- On reconnect: replay missed events from SQLite persistence, then resume live stream
+- If the agent completed while disconnected, show the final state on reconnect
+
+### 12.2 Event Ordering
+
+Events from two sources (EventBus + stream) may arrive slightly out of order:
+- Client-side buffer window (50ms) sorts events by `ts` before processing
+- If a `ToolCallCompleted` arrives without a matching `ToolCallStarted`, render the tool node in a "late-arrival" state (dimmed synapse) and backfill when the start event arrives
+- If start never arrives within 5s, render as an orphaned completion (still functional, just no firing animation)
+
+### 12.3 Canvas Scaling
+
+For executions that exceed expected complexity:
+- Auto-zoom-out when node count exceeds 100 to maintain overview
+- Collapse completed sub-agent clusters into summary nodes (expandable on click)
+- If node count exceeds 200, switch to "compact mode" — simplified rendering with reduced effects, no glow/pulse, thinner lines
+
+### 12.4 Agent Errors
+
+When an agent execution fails:
+- The failing pathway flashes red and shows a break point
+- The error message appears in the trace log with full stack trace (expandable)
+- The nucleus shifts to red border, heartbeat flatlines
+- The run is still inspectable — all prior steps are preserved
+
+---
+
+## 13. Testing Strategy
+
+### 13.1 Server Tests (Bun test)
+
+- **WebSocket bridge:** Verify EventBus events and stream events are correctly merged and forwarded. Test filtering by runId/agentId.
+- **REST API:** Standard endpoint tests for runs, configs, history CRUD.
+- **Executor pool:** Concurrent run management, disconnect handling, cleanup on completion.
+- **Event persistence:** Write/read/replay round-trip. Retention policy enforcement.
+
+### 13.2 Frontend Tests (Vitest + Testing Library)
+
+- **Event mapper:** Unit tests for every known event type → visual command mapping. Test unknown event type fallback.
+- **Canvas engine:** Snapshot tests for node layout at various iteration counts.
+- **Vitals/timeline components:** Verify correct data display for known inputs.
+- **WebSocket client:** Mock WS server, test reconnection and replay behavior.
+
+### 13.3 Integration Tests
+
+- **End-to-end:** Launch `rax cortex`, execute a test agent (using `withTestScenario`), verify WebSocket delivers expected events, verify replay produces identical event sequence.
+
+### 13.4 Visual Regression (V2)
+
+- Screenshot comparison tests for Neural Path at key states (initial, mid-execution, completed, error).
+
+---
+
+## 14. Success Criteria
 
 1. **The screenshot test:** A screenshot of Neural Path during an active execution makes someone stop scrolling and click.
 2. **The debugging test:** A developer can identify why an agent failed faster using Cortex than reading raw logs.
@@ -542,7 +651,7 @@ rax dev --cortex              # Dev mode with Cortex attached
 
 ---
 
-## 13. Relationship to Dispatch
+## 15. Relationship to Dispatch
 
 Cortex is the local developer tool. Dispatch is the hosted automation platform. They share:
 - Svelte frontend components
@@ -556,7 +665,7 @@ Cortex proves the visualization and workshop concepts. Dispatch productizes them
 
 ---
 
-## 14. Stitch Design Prompt (Refined)
+## Appendix A: Stitch Design Prompt
 
 > **Design "Cortex" — a neural-themed cognitive interface for an AI agent runtime. This is a living window into a synthetic thinking organism.**
 >
