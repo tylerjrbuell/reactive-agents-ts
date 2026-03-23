@@ -1,5 +1,6 @@
 import { Effect } from "effect";
 
+import { getPlatformSync } from "@reactive-agents/platform";
 import type { ToolDefinition } from "../types.js";
 import { ToolExecutionError } from "../errors.js";
 
@@ -69,34 +70,19 @@ const __result = eval(${JSON.stringify(rawCode)});
 if (!__logged && __result !== undefined) __origLog(typeof __result === "object" ? JSON.stringify(__result) : __result);
 `;
 
-      const proc = Bun.spawn(["bun", "--eval", code], {
-        stdout: "pipe",
-        stderr: "pipe",
-        // Run in /tmp to prevent Bun from auto-loading .env files from the project.
+      const platform = getPlatformSync();
+      const runtime = platform.runtime === "bun" ? "bun" : "node";
+      const execResult = await platform.process.exec([runtime, "--eval", code], {
         cwd: "/tmp",
-        // Minimal env: only PATH for executable resolution, HOME for bun internals.
-        // No API keys, secrets, or application env vars are passed.
         env: {
           PATH: process.env.PATH ?? "/usr/bin:/bin",
           HOME: process.env.HOME ?? "/tmp",
         },
+        timeoutMs,
       });
-
-      // Set up timeout
-      const timeoutId = setTimeout(() => {
-        try {
-          proc.kill();
-        } catch {
-          // Process may already be gone
-        }
-      }, timeoutMs);
-
-      // Read stdout and stderr
-      const stdoutText = await new Response(proc.stdout).text();
-      const stderrText = await new Response(proc.stderr).text();
-      const exitCode = await proc.exited;
-
-      clearTimeout(timeoutId);
+      const stdoutText = execResult.stdout;
+      const stderrText = execResult.stderr;
+      const exitCode = execResult.exitCode;
 
       const output = stdoutText.trim();
       const errorOutput = stderrText.trim();

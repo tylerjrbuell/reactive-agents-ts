@@ -1,5 +1,7 @@
 import { Effect, Ref } from "effect";
 
+import { getPlatformSync } from "@reactive-agents/platform";
+import type { SpawnedProcess } from "@reactive-agents/platform";
 import type { MCPServer, MCPRequest, MCPResponse } from "../types.js";
 import { MCPConnectionError, ToolExecutionError } from "../errors.js";
 
@@ -7,7 +9,7 @@ import { MCPConnectionError, ToolExecutionError } from "../errors.js";
 
 interface StdioTransport {
   type: "stdio";
-  subprocess: ReturnType<typeof Bun.spawn>;
+  subprocess: SpawnedProcess;
   pendingRequests: Map<
     string | number,
     {
@@ -508,12 +510,13 @@ const createTransport = (
         ? { ...process.env, ...config.env }
         : undefined;
 
-      const subprocess = Bun.spawn([command, ...(config.args ?? [])], {
+      const platform = getPlatformSync();
+      const subprocess = platform.process.spawn([command, ...(config.args ?? [])], {
         stdin: "pipe",
         stdout: "pipe",
         stderr: "pipe",
-        ...(config.cwd ? { cwd: config.cwd } : {}),
-        ...(spawnEnv ? { env: spawnEnv } : {}),
+        cwd: config.cwd,
+        env: spawnEnv ? Object.fromEntries(Object.entries(spawnEnv).filter(([, v]) => v !== undefined)) as Record<string, string> : undefined,
       });
 
       const transport: StdioTransport = {
@@ -601,12 +604,9 @@ const sendNotification = (
     const transport = activeTransports.get(config.name);
     if (transport && isStdioTransport(transport) && transport.subprocess.stdin) {
       const encoded = new TextEncoder().encode(payload + "\n");
-      try {
-        (transport.subprocess.stdin as unknown as { write(b: Uint8Array): number }).write(encoded);
-        (transport.subprocess.stdin as unknown as { flush?(): void | Promise<void> }).flush?.();
-      } catch {
-        // notifications are fire-and-forget; ignore write errors
-      }
+      void transport.subprocess.writeStdin(encoded)
+        .then(() => transport.subprocess.flushStdin())
+        .catch(() => { /* notifications are fire-and-forget */ });
     }
     return;
   }
@@ -716,9 +716,8 @@ const sendRequest = (
 
           const line = JSON.stringify(request) + "\n";
           const encoded = new TextEncoder().encode(line);
-          const stdin = transport.subprocess.stdin;
 
-          if (!stdin) {
+          if (!transport.subprocess.stdin) {
             transport.pendingRequests.delete(request.id);
             reject(
               new Error(
@@ -728,37 +727,18 @@ const sendRequest = (
             return;
           }
 
-          // Bun.FileSink.write() is synchronous — returns bytes written, not a Promise
-          try {
-            (stdin as unknown as { write(b: Uint8Array): number }).write(
-              encoded,
-            );
-            // flush() may return void or Promise<void>
-            const flushed = (
-              stdin as unknown as { flush?(): void | Promise<void> }
-            ).flush?.();
-            if (flushed instanceof Promise) {
-              flushed.catch((err: unknown) => {
-                transport.pendingRequests.delete(request.id);
-                reject(
-                  err instanceof Error
-                    ? err
-                    : new Error(
-                        `Flush failed for MCP server "${config.name}": ${String(err)}`,
-                      ),
-                );
-              });
-            }
-          } catch (err) {
-            transport.pendingRequests.delete(request.id);
-            reject(
-              err instanceof Error
-                ? err
-                : new Error(
-                    `Failed to write to MCP server "${config.name}" stdin: ${String(err)}`,
-                  ),
-            );
-          }
+          transport.subprocess.writeStdin(encoded)
+            .then(() => transport.subprocess.flushStdin())
+            .catch((err: unknown) => {
+              transport.pendingRequests.delete(request.id);
+              reject(
+                err instanceof Error
+                  ? err
+                  : new Error(
+                      `Failed to write to MCP server "${config.name}" stdin: ${String(err)}`,
+                    ),
+              );
+            });
         });
       },
       catch: (e) =>

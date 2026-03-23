@@ -6,6 +6,7 @@
  * Requires Docker daemon access. Falls back to process sandbox if unavailable.
  */
 import { Effect } from "effect";
+import { getPlatformSync } from "@reactive-agents/platform";
 import { ToolExecutionError, ToolTimeoutError } from "../errors.js";
 
 // ─── Configuration ───
@@ -51,12 +52,8 @@ export type RunnerLanguage = keyof typeof RUNNER_IMAGES;
 
 const isDockerAvailable = async (): Promise<boolean> => {
   try {
-    const proc = Bun.spawn(["docker", "info"], {
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    await proc.exited;
-    return proc.exitCode === 0;
+    const result = await getPlatformSync().process.exec(["docker", "info"], { timeoutMs: 10_000 });
+    return result.exitCode === 0;
   } catch {
     return false;
   }
@@ -159,33 +156,18 @@ export const makeDockerSandbox = (
 
         const result = yield* Effect.tryPromise({
           try: async () => {
-            const proc = Bun.spawn(dockerArgs, {
-              stdout: "pipe",
-              stderr: "pipe",
+            const execResult = await getPlatformSync().process.exec(dockerArgs, {
               env: {
                 PATH: process.env.PATH ?? "/usr/bin:/bin",
                 HOME: "/tmp",
               },
+              timeoutMs: config.timeoutMs,
             });
 
-            const timeoutId = setTimeout(() => {
-              try {
-                proc.kill();
-              } catch {
-                /* noop */
-              }
-            }, config.timeoutMs);
-
-            const stdout = await new Response(proc.stdout).text();
-            const stderr = await new Response(proc.stderr).text();
-            const exitCode = await proc.exited;
-
-            clearTimeout(timeoutId);
-
             return {
-              output: stdout.trim(),
-              stderr: stderr.trim(),
-              exitCode: exitCode ?? 1,
+              output: execResult.stdout.trim(),
+              stderr: execResult.stderr.trim(),
+              exitCode: execResult.exitCode,
               durationMs: performance.now() - start,
             } satisfies DockerExecResult;
           },
