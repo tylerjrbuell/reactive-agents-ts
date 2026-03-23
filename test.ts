@@ -842,7 +842,8 @@ async function main() {
 
   // Save results as JSON for further analysis
   const reportPath = "./quality-test-results.json";
-  await Bun.write(reportPath, JSON.stringify({
+  const { writeFileSync } = await import("node:fs");
+  writeFileSync(reportPath, JSON.stringify({
     timestamp: new Date().toISOString(),
     provider: PROVIDER,
     model: MODEL ?? "default",
