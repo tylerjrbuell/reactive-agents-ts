@@ -414,6 +414,137 @@ When two skills have overlapping `taskCategories` and the Zettelkasten graph cre
 - For `evolutionMode: "auto"`: schedule LLM merge pass in next CONNECT cycle
 - For `evolutionMode: "suggest"` or `"locked"`: surface to creator via event only
 
+### 4.9 Context-Aware Skill Management
+
+Skill content injection must be budget-aware. Smaller and local models have limited context windows — loading even a few full SKILL.md bodies can crowd out working memory, episodic context, and tool results. The framework must respect the model tier's token budget and degrade gracefully rather than silently consuming context.
+
+#### Skill token budgets by model tier
+
+The existing model-adaptive context system (4 tiers in `@reactive-agents/context`) defines tier-aware limits. Skill content is allocated a reserved budget within those limits:
+
+| Model tier | Context limit (typical) | Skill budget | Max active skills |
+|---|---|---|---|
+| `local` | 2K–8K tokens | 512 tokens | 1–2 |
+| `mid` | 8K–32K tokens | 1,500 tokens | 3 |
+| `large` | 32K–128K tokens | 4,000 tokens | 5 |
+| `frontier` | 128K+ tokens | 8,000 tokens | 10 |
+
+Budgets are soft limits. If the agent has remaining context headroom after all other content is placed, the skill budget expands proportionally. If context pressure is high, skill budget shrinks first (before working memory or system prompt).
+
+#### Skill verbosity modes
+
+Each skill is injected at a verbosity level appropriate to the model tier. Verbosity levels are derived from the instruction body at load time and cached on the `SkillRecord`:
+
+| Mode | Token target | Content |
+|---|---|---|
+| `full` | Up to 5,000 tokens | Complete SKILL.md body |
+| `summary` | ~500 tokens | Key instructions only, strip examples and reference detail |
+| `condensed` | ~150 tokens | Essential directives only — the minimum useful instruction set |
+| `catalog-only` | ~75 tokens | Name + description in catalog; body never injected (skill too large for tier) |
+
+**Tier → mode mapping (defaults, overridable per skill):**
+- `frontier`: `full`
+- `large`: `full` if budget allows, else `summary`
+- `mid`: `summary`
+- `local`: `condensed`, or `catalog-only` if skill body > 300 tokens
+
+The `SkillEvolutionService` pre-generates `summary` and `condensed` variants when it refines a skill, so lower-tier injection never requires an on-demand LLM call. For newly-loaded SKILL.md files without pre-generated variants, the first run uses simple heuristic extraction (first N lines of each section heading block). Full LLM-quality variants are generated in the next CONNECT phase.
+
+**Variants stored on SkillRecord:**
+```typescript
+readonly contentVariants: {
+  readonly full: string           // complete instructions (= instructions field)
+  readonly summary: string | null // LLM-condensed, ~500 tokens; null until first refinement
+  readonly condensed: string | null // heuristic or LLM-condensed, ~150 tokens
+}
+```
+
+#### Skill injection guard
+
+Before injecting a skill (Tier 2 activation), the harness checks the remaining context budget:
+
+```
+remainingTokens = modelContextLimit - estimatedCurrentContextTokens
+skillTokens     = tokenCountForVerbosityMode(skill, tier)
+
+if skillTokens > remainingTokens - SKILL_INJECTION_SAFETY_MARGIN:
+  try next lower verbosity mode
+  if still too large:
+    skip injection, emit SkillSkippedContextFull event
+    add to catalog section with note: "[context full — activate manually if needed]"
+```
+
+`SKILL_INJECTION_SAFETY_MARGIN` defaults to 10% of the model's context limit, ensuring the agent retains headroom for its next reasoning step.
+
+#### Skill eviction priority
+
+When the context compression controller decision fires (`compress`), skills are evicted in this priority order (lowest priority evicted first):
+1. `tentative` confidence skills (newest, least proven)
+2. Skills not referenced by the agent in the last N iterations
+3. `summary` verbosity skills (already condensed; swap to `condensed` before full eviction)
+4. `trusted` confidence skills activated longest ago
+5. `expert` confidence skills — evicted last; immediately re-injected via `skill-reinject` decision once pressure drops
+
+After eviction, the skill remains in the catalog. The agent can re-activate via `activate_skill` tool at any time, or the harness auto-reinjjects when context pressure drops (`skill-reinject` controller decision).
+
+#### Compaction protection (Open Question 5 — Resolved)
+
+Skill content is protected from context compaction by tagging injected content with `<skill_content>` XML wrappers (Option A). The compaction service identifies these blocks and assigns them `importance = 1.0`, exempt from decay. When eviction is necessary (budget exceeded), the skill eviction priority order above governs which skill blocks are removed first — not the general compaction algorithm.
+
+This requires no inter-service coupling: the compaction service recognises the sentinel tag format without needing to know about `SkillRecord` or `SkillResolver`. New skill types (including future custom skill formats) are automatically protected as long as they use the `<skill_content>` wrapper.
+
+#### Skill compression pipeline (parallel to tool schema collapsing)
+
+The framework already collapses tool schemas for smaller models — stripping optional fields, shortening descriptions, and removing examples when context pressure is high. Skill content follows the same pattern.
+
+**Compression stages applied in order when budget is tight:**
+
+1. **Strip examples** — remove any `### Examples` or `## Examples` section from the skill body (~30–60% token reduction for example-heavy skills)
+2. **Strip references** — remove `### References`, `### See Also`, and similar appendix sections
+3. **Condense step descriptions** — replace multi-sentence step explanations with single-line summaries (heuristic: keep first sentence of each paragraph)
+4. **Collapse to directives** — keep only imperative sentences (starting with action verbs); discard all explanatory prose
+5. **Catalog-only** — drop body entirely; retain name + description + tags
+
+The `SkillEvolutionService` pre-generates the `summary` and `condensed` variants during each CONNECT cycle using LLM calls (strips examples → LLM quality condensation). For newly-installed skills without pre-generated variants, stage 1–2 are applied heuristically (regex section stripping) until the first CONNECT cycle generates LLM-quality variants.
+
+**Model tier → default compression stage:**
+| Model tier | Default stage | Expansion trigger |
+|---|---|---|
+| `local` | Stage 4 (directives) or Stage 5 | Context headroom > 200 tokens |
+| `mid` | Stage 2 (no references) | Context headroom > 500 tokens |
+| `large` | Stage 1 (no examples) | Context headroom > 1,000 tokens |
+| `frontier` | No compression | N/A |
+
+#### On-demand skill section inspection (meta-tools)
+
+When a skill is injected in `condensed` or `catalog-only` mode, the agent loses access to examples, reference material, and detailed explanations. Rather than force-injecting the full body (crowding context), the agent can query skill sections on demand using the `get_skill_section` meta-tool.
+
+This mirrors how the `activate_skill` tool allows model-driven full activation — but at section granularity, allowing the agent to fetch only the part it needs.
+
+**`get_skill_section` tool:**
+```typescript
+// Tool available when skills are enabled and model tier is local or mid
+{
+  name: "get_skill_section",
+  description: "Retrieve a specific section from a skill's full instructions",
+  parameters: {
+    skillName: string,         // skill to query
+    section: string,           // "examples" | "steps" | "references" | "full" | <custom heading>
+  },
+  returns: string              // requested section content, or "section not found"
+}
+```
+
+The tool resolves against the `SkillRecord.contentVariants.full` body (always stored), parses section headings, and returns the matching section. It does **not** inject the content into the persistent context — the return value appears in the tool result slot only, and is available for that iteration's reasoning without expanding the base context.
+
+**Auto-include rule:** `get_skill_section` is automatically added to the agent's tool list when:
+- `withSkills()` is enabled, AND
+- Model tier is `local` or `mid` (frontier/large have enough budget to load full content directly)
+
+This is the same auto-include pattern used for `context-status` and `final-answer` meta-tools.
+
+**Skill catalog note:** When a skill is in `catalog-only` mode, the catalog entry includes a hint: `[condensed — use get_skill_section("skill-name", "full") to access instructions]`. This surfaces the tool to the model without prompting it explicitly.
+
 ---
 
 ## 5. Intelligence Control Surface
@@ -872,6 +1003,8 @@ type SkillRefinementSuggested = { _tag: "SkillRefinementSuggested"; skillName: s
 type SkillRolledBack = { _tag: "SkillRolledBack"; skillName: string; fromVersion: number; toVersion: number; reason: "regression" | "manual" }
 type SkillConflictDetected = { _tag: "SkillConflictDetected"; skillA: string; skillB: string; conflictType: "instruction" | "config" | "task-overlap" }
 type SkillPromoted = { _tag: "SkillPromoted"; skillName: string; fromConfidence: string; toConfidence: string }
+type SkillSkippedContextFull = { _tag: "SkillSkippedContextFull"; skillName: string; requiredTokens: number; availableTokens: number; modelTier: string }
+type SkillEvicted = { _tag: "SkillEvicted"; skillName: string; reason: "budget" | "low-priority"; verbosityAtEviction: string }
 
 // Intelligence control surface
 type TemperatureAdjusted = { _tag: "TemperatureAdjusted"; delta: number; reason: string; iteration: number }
@@ -895,6 +1028,7 @@ type AgentNeedsHuman = { _tag: "AgentNeedsHuman"; agentId: string; taskId: strin
 | `reactive-intelligence` | `src/skills/skill-registry.ts` | Filesystem scanner for SKILL.md directories, agentskills.io parser, name collision handling |
 | `reactive-intelligence` | `src/skills/skill-distiller.ts` | `SkillDistillerService`: episodic evidence retrieval + per-skill threshold logic. Calls `SkillEvolutionService` (injected). Injected into `MemoryConsolidatorService` via optional interface (same pattern as `MemoryLLM`). Package dependency direction: `reactive-intelligence` depends on `memory` interfaces only — no reverse dependency. |
 | `tools` | `src/skills/activate-skill.ts` | `activate_skill` tool definition — returns `<skill_content>` XML for model-driven activation |
+| `tools` | `src/skills/get-skill-section.ts` | `get_skill_section` tool definition — on-demand section retrieval (examples, steps, references, full); auto-included for local/mid tiers; result injected in tool result slot only (does not expand base context) |
 | `core` | `src/events/skill-events.ts` | New EventBus event types (SkillActivated, SkillRefined, SkillConflictDetected, etc.) |
 | `core` | `src/events/intelligence-events.ts` | New EventBus event types (TemperatureAdjusted, ToolInjected, AgentNeedsHuman, etc.) |
 
@@ -915,7 +1049,7 @@ type AgentNeedsHuman = { _tag: "AgentNeedsHuman"; agentId: string; taskId: strin
 | `reactive-intelligence` | `src/runtime.ts` | Wire `SkillResolver` into layer; pass `SkillEvolutionService` to consolidator |
 | `runtime` | `src/execution-engine.ts` | Wire `LearningEngineService.onRunCompleted()` in complete phase; wire `SkillResolver` into bootstrap phase; collect local enrichment data; add test provider guard |
 | `runtime` | `src/builder.ts` | Add `.withSkills()` builder method; extend `.withReactiveIntelligence()` to accept creator hooks and constraints |
-| `tools` | `src/index.ts` | Export `activate_skill` tool; auto-include in agent tool list when skills are enabled |
+| `tools` | `src/index.ts` | Export `activate_skill` and `get_skill_section` tools; auto-include in agent tool list when skills are enabled (both tools) or tier is local/mid (`get_skill_section`) |
 
 ---
 
@@ -932,6 +1066,8 @@ type AgentNeedsHuman = { _tag: "AgentNeedsHuman"; agentId: string; taskId: strin
 - `SkillConflictDetected` events **must** be emitted before any merge attempt, giving hooks a chance to handle the conflict
 - If the distillation LLM call in the CONNECT phase fails for any reason: skill `instructions` and `version` are unchanged, no `SkillRefined` event is emitted, the failure is logged at `warn` level, the next consolidation cycle retries if the threshold is still met
 - A "candidate" skill version **must not** trigger harness-driven pre-activation (only "active" versions qualify); model-driven activation via `activate_skill` tool is still permitted for candidates
+- `get_skill_section` **must not** inject content into the persistent base context — the result appears only in the tool result slot for that iteration; the skill's `<skill_content>` block in base context is never mutated by this tool
+- `get_skill_section` **must** resolve against `SkillRecord.contentVariants.full`; if the skill is not found or the section heading does not exist, return the string `"section not found"` rather than an error
 
 ---
 
@@ -945,6 +1081,6 @@ type AgentNeedsHuman = { _tag: "AgentNeedsHuman"; agentId: string; taskId: strin
 
 4. **Telemetry server deployment** — **Resolved:** All new `run_reports` columns are `ALTER TABLE ... ADD COLUMN ... NULL` — backward-compatible with existing rows. No data migration required. A `migrations/` directory with numbered migration files is recommended for the server repo.
 
-5. **Skill content compaction protection** — How does the compaction algorithm identify skill content as protected? **Decision required before implementing compaction changes:** Option A (recommended): Skill content is injected inside `<skill_content>` XML tags; the compaction service scans for these tags and marks affected message segments as high-importance (importance = 1.0, exempt from decay). Option B: `SkillResolver` registers active skill names with the `ContextEngine` at activation time, and compaction checks against a protected-names list. Option A is preferred because it requires no inter-service coupling and works even if a skill is injected outside the normal activation path.
+5. **Skill content compaction protection** — **Resolved:** Option A selected. Skill content injected inside `<skill_content>` XML tags is marked `importance = 1.0` (exempt from compaction decay) by the compaction service on tag detection. When budget must be reduced, the skill eviction priority order in Section 4.9 governs which skill blocks are removed first. No inter-service coupling required. See Section 4.9 for full context-aware skill management design including model-tier budgets, verbosity modes, and the injection guard.
 
 6. **Skill dependency cycles** — If Skill A's `metadata.requires` contains Skill A itself (self-reference) or creates a two-skill mutual dependency, the harness logs a warning and ignores the dependency link. No transitive resolution is attempted. Resolution is one level only.
