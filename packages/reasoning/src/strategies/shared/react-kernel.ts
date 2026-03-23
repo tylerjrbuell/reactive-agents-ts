@@ -291,6 +291,10 @@ function handleThinking(
     const hasNonMetaToolCalledForThink = [...state.toolsUsed].some(
       (t) => t !== "final-answer" && t !== "task-complete" && t !== "context-status" && t !== "scratchpad-write" && t !== "scratchpad-read",
     );
+    // When no required tools are specified, scratchpad usage alone satisfies the
+    // "has done real work" condition — matches the hard gate logic at line ~680.
+    const hasAnyToolWork = hasNonMetaToolCalledForThink
+      || ((input.requiredTools ?? []).length === 0 && state.toolsUsed.size > 0);
     const hasErrorsForThink = state.steps.some(
       (s) => s.type === "observation" && s.metadata?.observationResult?.success === false,
     );
@@ -299,7 +303,7 @@ function handleThinking(
       requiredTools: [...(input.requiredTools ?? [])],
       iteration: state.iteration,
       hasErrors: hasErrorsForThink,
-      hasNonMetaToolCalled: hasNonMetaToolCalledForThink,
+      hasNonMetaToolCalled: hasAnyToolWork,
     });
 
     const augmentedToolSchemas: readonly import("./tool-utils.js").ToolSchema[] = finalAnswerVisible
