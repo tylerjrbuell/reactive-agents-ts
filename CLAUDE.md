@@ -2,7 +2,7 @@
 
 ## Project Status
 
-**v0.8.x — Adoption Readiness.** 22 packages + 2 apps built, 2,491 tests across 309 files. Cost optimization: `.withDynamicPricing()`, `openRouterPricingProvider`, cache-aware token discounts. Builder hardening: `withStrictValidation()`, `withTimeout()`, `withRetryPolicy()`, `withCacheTimeout()`, consolidated `withGuardrails()` thresholds, `withErrorHandler()`, `withFallbacks()`, `withLogging()`, `withHealthCheck()`. Strategy switching: `withReasoning({ enableStrategySwitching: true })`. Stream improvements: AbortSignal cancellation, `IterationProgress` event, `StreamCancelled` event, `StreamCompleted.toolSummary`. `ToolBuilder` fluent API. `SessionStoreService` SQLite-backed chat session persistence. `FallbackChain` in `@reactive-agents/llm-provider`. `makeLoggerService()` structured logging with rotation. `expectStream()` streaming test assertions + scenario fixtures. `agent.health()` health probes. `rax create agent --interactive`. Final Answer, Debrief & Chat: `final-answer` meta-tool hard-gates the ReAct loop exit (replaces fragile text regex). `DebriefSynthesizer` post-run service: collects execution signals + one LLM call → structured `AgentDebrief` (summary, key findings, lessons, errors, metrics). `DebriefStore` persists run artifacts to SQLite (`agent_debriefs` table). `AgentResult` enriched with `debrief?`, `format?`, `terminatedBy?`. `agent.chat()` + `agent.session()` for conversational Q&A with adaptive routing (direct LLM for questions, ReAct loop for tool-capable queries). `OutputFormat` + `TerminatedBy` canonical types. Unified `confidence` type (`"high"|"medium"|"low"`). Agent as Data: `AgentConfig` Effect-TS Schema for JSON-serializable agent definitions, `agentConfigToJSON()`/`agentConfigFromJSON()` roundtrip serialization, `agentConfigToBuilder()`/`builder.toConfig()`/`ReactiveAgents.fromConfig()`/`ReactiveAgents.fromJSON()`. Lightweight Composition: `agentFn()` lazy agent primitives, `pipe()`/`parallel()`/`race()` combinators. Dynamic Tool Registration: `agent.registerTool()`/`agent.unregisterTool()` at runtime.
+**v0.8.x — Adoption Readiness.** 23 packages + 2 apps built, 2,712 tests across 319 files. Cost optimization: `.withDynamicPricing()`, `openRouterPricingProvider`, cache-aware token discounts. Builder hardening: `withStrictValidation()`, `withTimeout()`, `withRetryPolicy()`, `withCacheTimeout()`, consolidated `withGuardrails()` thresholds, `withErrorHandler()`, `withFallbacks()`, `withLogging()`, `withHealthCheck()`. Strategy switching: `withReasoning({ enableStrategySwitching: true })`. Stream improvements: AbortSignal cancellation, `IterationProgress` event, `StreamCancelled` event, `StreamCompleted.toolSummary`. `ToolBuilder` fluent API. `SessionStoreService` SQLite-backed chat session persistence. `FallbackChain` in `@reactive-agents/llm-provider`. `makeLoggerService()` structured logging with rotation. `expectStream()` streaming test assertions + scenario fixtures. `agent.health()` health probes. `rax create agent --interactive`. Final Answer, Debrief & Chat: `final-answer` meta-tool hard-gates the ReAct loop exit (replaces fragile text regex). `DebriefSynthesizer` post-run service: collects execution signals + one LLM call → structured `AgentDebrief` (summary, key findings, lessons, errors, metrics). `DebriefStore` persists run artifacts to SQLite (`agent_debriefs` table). `AgentResult` enriched with `debrief?`, `format?`, `terminatedBy?`. `agent.chat()` + `agent.session()` for conversational Q&A with adaptive routing (direct LLM for questions, ReAct loop for tool-capable queries). `OutputFormat` + `TerminatedBy` canonical types. Unified `confidence` type (`"high"|"medium"|"low"`). Agent as Data: `AgentConfig` Effect-TS Schema for JSON-serializable agent definitions, `agentConfigToJSON()`/`agentConfigFromJSON()` roundtrip serialization, `agentConfigToBuilder()`/`builder.toConfig()`/`ReactiveAgents.fromConfig()`/`ReactiveAgents.fromJSON()`. Lightweight Composition: `agentFn()` lazy agent primitives, `pipe()`/`parallel()`/`race()` combinators. Dynamic Tool Registration: `agent.registerTool()`/`agent.unregisterTool()` at runtime.
 
 - Phase 1: Core, LLM Provider, Memory, Reasoning, Tools, Interaction, Runtime
 - Phase 2: Guardrails, Verification, Cost
@@ -30,6 +30,7 @@
 - Reactive Intelligence Layer (Phase 1): Entropy Sensor — 5 entropy sources (token, structural, semantic, behavioral, context pressure), composite scorer with adaptive weights, conformal calibration, trajectory analysis (converging/flat/diverging/v-recovery/oscillating), model registry, `EntropySensorService` Effect-TS service, KernelRunner integration (post-kernel scoring), `.withReactiveIntelligence()` builder API, 65-example validation dataset with accuracy gates (2,091 tests, 274 files)
 - Reactive Intelligence Pipeline (Phases 2–4): Reactive Controller (early-stop, context compression, strategy switch), Local Learning Engine (conformal calibration, Thompson Sampling bandit, skill synthesis), Telemetry Client (RunReport, HMAC signing, fire-and-forget POST to api.reactiveagents.dev), EventBus-driven entropy scoring (all strategies), dashboard entropy signals section, telemetry pipeline integration (2,194 tests, 288 files)
 - Framework Evolution: Cost Tracking 2.0 (`.withDynamicPricing`, caching multipliers), Agent as Data (`AgentConfig` schema, serialization, builder reconstruction, `toConfig()`/`fromConfig()`/`fromJSON()`), Lightweight Composition (`agentFn`, `pipe`, `parallel`, `race`), Dynamic Tool Registration (`registerTool`/`unregisterTool` on ReactiveAgent facade + ToolService) (2,491 tests, 309 files)
+- Platform Adapter Layer: Runtime-agnostic abstraction — `DatabaseAdapter`, `ProcessAdapter`, `ServerAdapter` interfaces in `@reactive-agents/platform`, Bun + Node.js implementations, auto-detection at startup, `.withDatabase()`/`.withProcess()`/`.withServer()` builder overrides, all `bun:sqlite`/`Bun.spawn`/`Bun.serve`/`Bun.file`/`Bun.hash`/`Bun.Glob` calls migrated to adapters or `node:fs`/`node:crypto` (2,712 tests, 319 files)
 - Pre-release: tsup compiled output, Google Gemini provider, Reflexion reasoning strategy
 - Final Integration: All layers compose via `createRuntime()` and `ReactiveAgentBuilder`
 - Docs: Starlight (Astro) site at `apps/docs/`
@@ -40,8 +41,8 @@
 
 ```bash
 bun install              # Install dependencies
-bun test                 # Run all tests (2491 tests, 309 files)
-bun run build            # Build all packages (22 packages, ESM + DTS)
+bun test                 # Run all tests (2712 tests, 319 files)
+bun run build            # Build all packages (23 packages, ESM + DTS)
 cd apps/docs && npx astro dev    # Start docs dev server
 cd apps/docs && npx astro build  # Build docs for production
 ```
@@ -159,6 +160,9 @@ TAVILY_API_KEY=tvly-...
 EMBEDDING_PROVIDER=openai
 EMBEDDING_MODEL=text-embedding-3-small
 LLM_DEFAULT_MODEL=claude-sonnet-4-20250514
+
+# Node.js support (optional peer dependency)
+# npm install better-sqlite3    # Required for SQLite on Node.js (auto-detected on Bun)
 ```
 
 ---
@@ -255,6 +259,7 @@ packages/
   benchmarks/    — Benchmark suite: 20 tasks × 5 tiers, overhead measurement, report generation
   health/        — Health checks and readiness probes
   reactive-intelligence/ — Entropy Sensor (5 sources), Reactive Controller (early-stop, compression, strategy switch), Learning Engine (calibration, bandit, skill synthesis), Telemetry Client, EventBus-driven entropy subscriber
+  platform/      — Platform adapter layer: DatabaseAdapter, ProcessAdapter, ServerAdapter (Bun + Node.js), auto-detection
   evolution/     — [PLANNED v1.1+] Group-Evolving Agents (GEA): strategy evolution, experience sharing
 apps/
   cli/           — `rax` CLI (init, create, run, dev, eval, playground, inspect)
