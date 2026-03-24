@@ -33,6 +33,30 @@ export type RunCompletedData = {
   readonly consolidationEnabled?: boolean;
   readonly strategySwitchingEnabled?: boolean;
   readonly adaptiveEnabled?: boolean;
+  // Local enrichment (Living Intelligence System)
+  readonly thoughtTokenCounts?: readonly number[];
+  readonly thoughtToActionRatio?: number;
+  readonly uncertaintyMarkerCount?: number;
+  readonly selfCorrectionCount?: number;
+  readonly toolCallSequence?: readonly string[];
+  readonly toolRetryCount?: number;
+  readonly toolResultCompressionRatios?: readonly number[];
+  readonly toolErrorCategories?: readonly ("schema" | "network" | "timeout" | "empty" | "permission")[];
+  readonly memoryHitCount?: number;
+  readonly memoryReferencedCount?: number;
+  readonly memoryUtilizationRate?: number;
+  readonly tokensBySection?: {
+    systemPrompt: number;
+    history: number;
+    toolResults: number;
+    currentTurn: number;
+    skillContent: number;
+  };
+  readonly peakContextUtilization?: number;
+  readonly skillsActivated?: readonly string[];
+  readonly skillActivationIterations?: readonly number[];
+  readonly postActivationEntropyDeltas?: readonly number[];
+  readonly convergenceIteration?: number | null;
 };
 
 export type LearningResult = {
