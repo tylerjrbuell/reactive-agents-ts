@@ -46,6 +46,10 @@ type SkillExtractionParams = {
   readonly strategySwitchingEnabled: boolean;
   readonly adaptiveEnabled: boolean;
   readonly entropyHistory: readonly EntropyEntry[];
+  // optional fields from kernel state
+  readonly promptVariantId?: string;      // from bandit selection
+  readonly systemPromptTokens?: number;   // from bootstrap token count
+  readonly compressionEnabled?: boolean;  // from controller config
 };
 
 /**
@@ -65,10 +69,10 @@ export function extractSkillFragment(
   );
 
   return {
-    promptTemplateId: "default", // TODO: wire when bandit selects variants
-    systemPromptTokens: 0, // TODO: wire from kernel state
+    promptTemplateId: params.promptVariantId ?? "default",
+    systemPromptTokens: params.systemPromptTokens ?? 0,
     contextStrategy: {
-      compressionEnabled: false, // TODO: wire from controller config
+      compressionEnabled: params.compressionEnabled ?? false,
       maxIterations: params.maxIterations,
       temperature: params.temperature,
       toolFilteringMode: params.toolFilteringMode,
