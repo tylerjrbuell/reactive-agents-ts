@@ -175,35 +175,35 @@ declare module 'astro:content' {
   slug: "concepts/agent-lifecycle";
   body: string;
   collection: "docs";
-  data: any
+  data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
 "concepts/architecture.md": {
 	id: "concepts/architecture.md";
   slug: "concepts/architecture";
   body: string;
   collection: "docs";
-  data: any
+  data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
 "concepts/composable-kernel.md": {
 	id: "concepts/composable-kernel.md";
   slug: "concepts/composable-kernel";
   body: string;
   collection: "docs";
-  data: any
+  data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
 "concepts/effect-ts.md": {
 	id: "concepts/effect-ts.md";
   slug: "concepts/effect-ts";
   body: string;
   collection: "docs";
-  data: any
+  data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
 "concepts/layer-system.md": {
 	id: "concepts/layer-system.md";
   slug: "concepts/layer-system";
   body: string;
   collection: "docs";
-  data: any
+  data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
 "cookbook/building-tools.md": {
 	id: "cookbook/building-tools.md";
@@ -224,7 +224,7 @@ declare module 'astro:content' {
   slug: "cookbook/custom-strategies";
   body: string;
   collection: "docs";
-  data: any
+  data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
 "cookbook/error-handling.md": {
 	id: "cookbook/error-handling.md";
@@ -238,7 +238,7 @@ declare module 'astro:content' {
   slug: "cookbook/multi-agent-patterns";
   body: string;
   collection: "docs";
-  data: any
+  data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
 "cookbook/observability-metrics.md": {
 	id: "cookbook/observability-metrics.md";
@@ -252,7 +252,7 @@ declare module 'astro:content' {
   slug: "cookbook/production-deployment";
   body: string;
   collection: "docs";
-  data: any
+  data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
 "cookbook/streaming-responses.md": {
 	id: "cookbook/streaming-responses.md";
@@ -266,28 +266,28 @@ declare module 'astro:content' {
   slug: "cookbook/testing-agents";
   body: string;
   collection: "docs";
-  data: any
+  data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
 "features/a2a-protocol.md": {
 	id: "features/a2a-protocol.md";
   slug: "features/a2a-protocol";
   body: string;
   collection: "docs";
-  data: any
+  data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
 "features/benchmarks.mdx": {
 	id: "features/benchmarks.mdx";
   slug: "features/benchmarks";
   body: string;
   collection: "docs";
-  data: any
+  data: InferEntrySchema<"docs">
 } & { render(): Render[".mdx"] };
 "features/cost-tracking.md": {
 	id: "features/cost-tracking.md";
   slug: "features/cost-tracking";
   body: string;
   collection: "docs";
-  data: any
+  data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
 "features/debrief-chat.md": {
 	id: "features/debrief-chat.md";
@@ -301,49 +301,49 @@ declare module 'astro:content' {
   slug: "features/eval";
   body: string;
   collection: "docs";
-  data: any
+  data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
 "features/gateway.md": {
 	id: "features/gateway.md";
   slug: "features/gateway";
   body: string;
   collection: "docs";
-  data: any
+  data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
 "features/identity.md": {
 	id: "features/identity.md";
   slug: "features/identity";
   body: string;
   collection: "docs";
-  data: any
+  data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
 "features/llm-providers.md": {
 	id: "features/llm-providers.md";
   slug: "features/llm-providers";
   body: string;
   collection: "docs";
-  data: any
+  data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
 "features/observability.md": {
 	id: "features/observability.md";
   slug: "features/observability";
   body: string;
   collection: "docs";
-  data: any
+  data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
 "features/orchestration.md": {
 	id: "features/orchestration.md";
   slug: "features/orchestration";
   body: string;
   collection: "docs";
-  data: any
+  data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
 "features/prompts.md": {
 	id: "features/prompts.md";
   slug: "features/prompts";
   body: string;
   collection: "docs";
-  data: any
+  data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
 "features/reactive-intelligence.md": {
 	id: "features/reactive-intelligence.md";
@@ -357,35 +357,35 @@ declare module 'astro:content' {
   slug: "features/resilience";
   body: string;
   collection: "docs";
-  data: any
+  data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
 "features/streaming.md": {
 	id: "features/streaming.md";
   slug: "features/streaming";
   body: string;
   collection: "docs";
-  data: any
+  data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
 "features/verification.md": {
 	id: "features/verification.md";
   slug: "features/verification";
   body: string;
   collection: "docs";
-  data: any
+  data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
 "guides/agent-skills.mdx": {
 	id: "guides/agent-skills.mdx";
   slug: "guides/agent-skills";
   body: string;
   collection: "docs";
-  data: any
+  data: InferEntrySchema<"docs">
 } & { render(): Render[".mdx"] };
 "guides/choosing-a-stack.md": {
 	id: "guides/choosing-a-stack.md";
   slug: "guides/choosing-a-stack";
   body: string;
   collection: "docs";
-  data: any
+  data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
 "guides/choosing-strategies.md": {
 	id: "guides/choosing-strategies.md";
@@ -399,14 +399,14 @@ declare module 'astro:content' {
   slug: "guides/cli-artisan";
   body: string;
   collection: "docs";
-  data: any
+  data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
 "guides/context-engineering.md": {
 	id: "guides/context-engineering.md";
   slug: "guides/context-engineering";
   body: string;
   collection: "docs";
-  data: any
+  data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
 "guides/contributing.md": {
 	id: "guides/contributing.md";
@@ -427,7 +427,7 @@ declare module 'astro:content' {
   slug: "guides/guardrails";
   body: string;
   collection: "docs";
-  data: any
+  data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
 "guides/hooks.md": {
 	id: "guides/hooks.md";
@@ -441,21 +441,21 @@ declare module 'astro:content' {
   slug: "guides/installation";
   body: string;
   collection: "docs";
-  data: any
+  data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
 "guides/interaction-modes.md": {
 	id: "guides/interaction-modes.md";
   slug: "guides/interaction-modes";
   body: string;
   collection: "docs";
-  data: any
+  data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
 "guides/introduction.md": {
 	id: "guides/introduction.md";
   slug: "guides/introduction";
   body: string;
   collection: "docs";
-  data: any
+  data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
 "guides/local-models.md": {
 	id: "guides/local-models.md";
@@ -469,14 +469,14 @@ declare module 'astro:content' {
   slug: "guides/memory";
   body: string;
   collection: "docs";
-  data: any
+  data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
 "guides/messaging-channels.md": {
 	id: "guides/messaging-channels.md";
   slug: "guides/messaging-channels";
   body: string;
   collection: "docs";
-  data: any
+  data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
 "guides/migrating-from-langchain.md": {
 	id: "guides/migrating-from-langchain.md";
@@ -497,21 +497,21 @@ declare module 'astro:content' {
   slug: "guides/quickstart";
   body: string;
   collection: "docs";
-  data: any
+  data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
 "guides/reasoning.md": {
 	id: "guides/reasoning.md";
   slug: "guides/reasoning";
   body: string;
   collection: "docs";
-  data: any
+  data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
 "guides/security-hardening.md": {
 	id: "guides/security-hardening.md";
   slug: "guides/security-hardening";
   body: string;
   collection: "docs";
-  data: any
+  data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
 "guides/sub-agents.md": {
 	id: "guides/sub-agents.md";
@@ -525,42 +525,42 @@ declare module 'astro:content' {
   slug: "guides/tools";
   body: string;
   collection: "docs";
-  data: any
+  data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
 "guides/troubleshooting.md": {
 	id: "guides/troubleshooting.md";
   slug: "guides/troubleshooting";
   body: string;
   collection: "docs";
-  data: any
+  data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
 "guides/your-first-agent.md": {
 	id: "guides/your-first-agent.md";
   slug: "guides/your-first-agent";
   body: string;
   collection: "docs";
-  data: any
+  data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
 "index.mdx": {
 	id: "index.mdx";
   slug: "index";
   body: string;
   collection: "docs";
-  data: any
+  data: InferEntrySchema<"docs">
 } & { render(): Render[".mdx"] };
 "reference/builder-api.md": {
 	id: "reference/builder-api.md";
   slug: "reference/builder-api";
   body: string;
   collection: "docs";
-  data: any
+  data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
 "reference/cli.md": {
 	id: "reference/cli.md";
   slug: "reference/cli";
   body: string;
   collection: "docs";
-  data: any
+  data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
 "reference/configuration.md": {
 	id: "reference/configuration.md";
@@ -578,7 +578,7 @@ declare module 'astro:content' {
   id: string;
   body?: string;
   collection: "skills";
-  data: any;
+  data: InferEntrySchema<"skills">;
   rendered?: RenderedContent;
   filePath?: string;
 }>;
@@ -614,6 +614,6 @@ declare module 'astro:content' {
 		LiveContentConfig['collections'][C]['loader']
 	>;
 
-	export type ContentConfig = never;
+	export type ContentConfig = typeof import("../src/content/config.js");
 	export type LiveContentConfig = never;
 }
