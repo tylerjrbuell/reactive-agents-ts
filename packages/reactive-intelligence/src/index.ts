@@ -81,5 +81,11 @@ export type { ResolvedSkills, SkillResolverConfig } from "./skills/skill-resolve
 export { SkillDistillerService, makeSkillDistillerService } from "./skills/skill-distiller.js";
 export type { DistillationResult, SkillDistillerConfig, SkillDistillerDeps } from "./skills/skill-distiller.js";
 
+// ── Skill utilities ──
+export { compressSkillContent, getDefaultCompressionStage, estimateTokens } from "./skills/skill-compression.js";
+export { parseSKILLmd, discoverSkills } from "./skills/skill-registry.js";
+export type { InstalledSkill, SkillDiscoveryResult } from "./skills/skill-registry.js";
+
 // ── Runtime ──
 export { createReactiveIntelligenceLayer } from "./runtime.js";
+export type { SkillLayerConfig } from "./runtime.js";
