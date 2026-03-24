@@ -78,6 +78,8 @@ export { subscribeEntropyScoring } from "./sensor/entropy-event-subscriber.js";
 // ── Skills ──
 export { SkillResolverService, makeSkillResolverService } from "./skills/skill-resolver.js";
 export type { ResolvedSkills, SkillResolverConfig } from "./skills/skill-resolver.js";
+export { SkillDistillerService, makeSkillDistillerService } from "./skills/skill-distiller.js";
+export type { DistillationResult, SkillDistillerConfig, SkillDistillerDeps } from "./skills/skill-distiller.js";
 
 // ── Runtime ──
 export { createReactiveIntelligenceLayer } from "./runtime.js";
