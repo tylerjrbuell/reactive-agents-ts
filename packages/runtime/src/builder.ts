@@ -1,4 +1,4 @@
-import { Effect, Layer, Schema, ManagedRuntime, Stream as EStream } from "effect";
+import { Effect, Layer, Schema, ManagedRuntime, Stream as EStream, Context } from "effect";
 import { createRuntime, createLightRuntime } from "./runtime.js";
 import type { MCPServerConfig } from "./runtime.js";
 import { builderToConfig } from "./agent-config.js";
@@ -797,6 +797,29 @@ export class ReactiveAgentBuilder {
   private _documents: DocumentSpec[] = [];
   private _pricingRegistry: Record<string, { readonly input: number; readonly output: number }> = {};
   private _pricingProvider?: import("@reactive-agents/llm-provider").PricingProvider;
+  private _skillsConfig?: {
+    paths?: string[];
+    packages?: string[];
+    evolution?: { mode?: string; refinementThreshold?: number; rollbackOnRegression?: boolean };
+    overrides?: Record<string, { evolutionMode?: string }>;
+  };
+  private _riHooks?: {
+    onEntropyScored?: (score: any, iteration: number) => void;
+    onControllerDecision?: (decision: any, context: any) => "accept" | "reject" | any;
+    onSkillActivated?: (skill: any, trigger: string) => void;
+    onSkillRefined?: (skill: any, previousVersion: any) => void;
+    onSkillConflict?: (a: any, b: any) => "merge" | "surface" | "ignore";
+    onMidRunAdjustment?: (type: string, before: unknown, after: unknown) => void;
+  };
+  private _riConstraints?: {
+    allowedStrategySwitch?: string[];
+    maxTemperatureAdjustment?: number;
+    neverEarlyStop?: boolean;
+    neverHumanEscalate?: boolean;
+    protectedSkills?: string[];
+    lockedSkills?: string[];
+  };
+  private _riAutonomy?: "full" | "suggest" | "observe";
 
   // ─── Identity ───
 
@@ -1760,14 +1783,63 @@ export class ReactiveAgentBuilder {
    * @example .withReactiveIntelligence({ controller: { earlyStop: true } })
    */
   withReactiveIntelligence(enabled: boolean): this;
-  withReactiveIntelligence(options?: Partial<import("@reactive-agents/reactive-intelligence").ReactiveIntelligenceConfig>): this;
-  withReactiveIntelligence(arg?: boolean | Partial<import("@reactive-agents/reactive-intelligence").ReactiveIntelligenceConfig>): this {
+  withReactiveIntelligence(options?: Partial<import("@reactive-agents/reactive-intelligence").ReactiveIntelligenceConfig> & {
+    onEntropyScored?: (score: any, iteration: number) => void;
+    onControllerDecision?: (decision: any, context: any) => "accept" | "reject" | any;
+    onSkillActivated?: (skill: any, trigger: string) => void;
+    onSkillRefined?: (skill: any, previousVersion: any) => void;
+    onSkillConflict?: (a: any, b: any) => "merge" | "surface" | "ignore";
+    onMidRunAdjustment?: (type: string, before: unknown, after: unknown) => void;
+    constraints?: {
+      allowedStrategySwitch?: string[];
+      maxTemperatureAdjustment?: number;
+      neverEarlyStop?: boolean;
+      neverHumanEscalate?: boolean;
+      protectedSkills?: string[];
+      lockedSkills?: string[];
+    };
+    autonomy?: "full" | "suggest" | "observe";
+  }): this;
+  withReactiveIntelligence(arg?: boolean | (Partial<import("@reactive-agents/reactive-intelligence").ReactiveIntelligenceConfig> & Record<string, any>)): this {
     if (typeof arg === "boolean") {
       this._enableReactiveIntelligence = arg;
       return this;
     }
     this._enableReactiveIntelligence = true;
-    if (arg) this._reactiveIntelligenceOptions = arg;
+    if (arg) {
+      const { onEntropyScored, onControllerDecision, onSkillActivated, onSkillRefined, onSkillConflict, onMidRunAdjustment, constraints, autonomy, ...riConfig } = arg as any;
+      this._reactiveIntelligenceOptions = riConfig;
+      if (onEntropyScored || onControllerDecision || onSkillActivated || onSkillRefined || onSkillConflict || onMidRunAdjustment) {
+        this._riHooks = { onEntropyScored, onControllerDecision, onSkillActivated, onSkillRefined, onSkillConflict, onMidRunAdjustment };
+      }
+      if (constraints) this._riConstraints = constraints;
+      if (autonomy) this._riAutonomy = autonomy;
+    }
+    return this;
+  }
+
+  /**
+   * Enable the Living Skills System.
+   * Skills are discovered from standard filesystem paths, loaded from packages,
+   * and evolved over time based on agent performance.
+   *
+   * @param config - Optional skills configuration
+   * @example
+   * ```typescript
+   * builder.withSkills({
+   *   paths: ["./my-skills/"],
+   *   evolution: { mode: "suggest", refinementThreshold: 10 },
+   *   overrides: { "my-critical-skill": { evolutionMode: "locked" } },
+   * })
+   * ```
+   */
+  withSkills(config?: {
+    paths?: string[];
+    packages?: string[];
+    evolution?: { mode?: string; refinementThreshold?: number; rollbackOnRegression?: boolean };
+    overrides?: Record<string, { evolutionMode?: string }>;
+  }): this {
+    this._skillsConfig = config ?? {};
     return this;
   }
 
@@ -3027,6 +3099,129 @@ export class ReactiveAgent {
         yield* (ts as any).unregisterTool(name);
       }),
     );
+  }
+
+  /**
+   * List all loaded skills for this agent.
+   */
+  async skills(): Promise<import("@reactive-agents/core").SkillRecord[]> {
+    try {
+      const agentId = this.agentId;
+      return await this.runtime.runPromise(
+        Effect.gen(function* () {
+          const store = yield* Effect.serviceOption(
+            Context.GenericTag<{ listAll: (agentId: string) => Effect.Effect<any[], unknown> }>("SkillStoreService"),
+          );
+          if (store._tag !== "Some") return [];
+          return yield* store.value.listAll(agentId);
+        }),
+      );
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Export a skill to SKILL.md format.
+   */
+  async exportSkill(name: string, outputPath?: string): Promise<string> {
+    const allSkills = await this.skills();
+    const skill = allSkills.find((s: any) => s.name === name);
+    if (!skill) throw new Error(`Skill "${name}" not found`);
+
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const dir = outputPath ?? path.join(".", ".agents", "skills", name);
+    fs.mkdirSync(dir, { recursive: true });
+
+    const frontmatter = [
+      "---",
+      `name: ${skill.name}`,
+      `description: ${skill.description}`,
+      `# source: ${skill.source}`,
+      `# confidence: ${skill.confidence}`,
+      `# version: ${skill.version}`,
+      "---",
+    ].join("\n");
+
+    const content = `${frontmatter}\n\n${skill.instructions}\n`;
+    const filePath = path.join(dir, "SKILL.md");
+    fs.writeFileSync(filePath, content);
+    return filePath;
+  }
+
+  /**
+   * Load a SKILL.md skill at runtime.
+   */
+  async loadSkill(skillPath: string): Promise<void> {
+    const { parseSKILLmd } = await import("@reactive-agents/reactive-intelligence");
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+
+    const skillMdPath = fs.statSync(skillPath).isDirectory()
+      ? path.join(skillPath, "SKILL.md")
+      : skillPath;
+
+    const parsed = (parseSKILLmd as any)(skillMdPath);
+    if (!parsed) throw new Error(`Failed to parse SKILL.md at ${skillMdPath}`);
+
+    const agentId = this.agentId;
+    await this.runtime.runPromise(
+      Effect.gen(function* () {
+        const store = yield* Effect.serviceOption(
+          Context.GenericTag<{ store: (record: any) => Effect.Effect<string, unknown> }>("SkillStoreService"),
+        );
+        if (store._tag !== "Some") return;
+        yield* store.value.store({
+          id: `installed-${parsed.name}`,
+          name: parsed.name,
+          description: parsed.description,
+          agentId,
+          source: "installed",
+          instructions: parsed.instructions,
+          version: 1,
+          versionHistory: [],
+          config: { strategy: "reactive", temperature: 0.7, maxIterations: 5, promptTemplateId: "default", systemPromptTokens: 0, compressionEnabled: false },
+          evolutionMode: "locked",
+          confidence: "trusted",
+          successRate: 0,
+          useCount: 0,
+          refinementCount: 0,
+          taskCategories: [],
+          modelAffinities: [],
+          base: parsed.instructions,
+          avgPostActivationEntropyDelta: 0,
+          avgConvergenceIteration: 0,
+          convergenceSpeedTrend: [],
+          conflictsWith: [],
+          lastActivatedAt: null,
+          lastRefinedAt: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          contentVariants: { full: parsed.instructions, summary: null, condensed: null },
+        });
+      }),
+    );
+  }
+
+  /**
+   * Manually trigger a skill refinement pass.
+   */
+  async refineSkills(): Promise<{ refined: number }> {
+    try {
+      const agentId = this.agentId;
+      return await this.runtime.runPromise(
+        Effect.gen(function* () {
+          const distiller = yield* Effect.serviceOption(
+            Context.GenericTag<{ distill: (agentId: string) => Effect.Effect<{ refined: number }, unknown> }>("SkillDistillerService"),
+          );
+          if (distiller._tag !== "Some") return { refined: 0 };
+          return yield* distiller.value.distill(agentId);
+        }),
+      );
+    } catch {
+      return { refined: 0 };
+    }
   }
 
   /**
