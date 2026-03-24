@@ -1,5 +1,19 @@
 import { Effect, Context, Layer, Ref } from "effect";
 import type { Message } from "../types/message.js";
+import type {
+  SkillActivated,
+  SkillRefined,
+  SkillRefinementSuggested,
+  SkillRolledBack,
+  SkillConflictDetected,
+  SkillPromoted,
+  SkillSkippedContextFull,
+  SkillEvicted,
+  TemperatureAdjusted,
+  ToolInjected,
+  MemoryBoostTriggered,
+  AgentNeedsHuman,
+} from "../types/intelligence-events.js";
 
 // ─── Event Types ───
 
@@ -746,7 +760,21 @@ export type AgentEvent =
       readonly agentId: string;
       readonly success: boolean;
       readonly durationMs: number;
-    };
+    }
+  // ─── Skill lifecycle events ───
+  | SkillActivated
+  | SkillRefined
+  | SkillRefinementSuggested
+  | SkillRolledBack
+  | SkillConflictDetected
+  | SkillPromoted
+  | SkillSkippedContextFull
+  | SkillEvicted
+  // ─── Intelligence control events ───
+  | TemperatureAdjusted
+  | ToolInjected
+  | MemoryBoostTriggered
+  | AgentNeedsHuman;
 
 /**
  * Discriminant tag union of all agent event types.

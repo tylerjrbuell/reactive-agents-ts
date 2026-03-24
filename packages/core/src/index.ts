@@ -103,3 +103,34 @@ export type {
   ContextSectionLike,
   ContextPressureLike,
 } from "./services/entropy-sensor-tag.js";
+
+// ─── Skill types ───
+export type {
+  SkillRecord,
+  SkillVersion,
+  SkillFragmentConfig,
+  SkillSource,
+  SkillConfidence,
+  SkillEvolutionMode,
+  SkillVerbosityMode,
+  SkillTierBudget,
+} from "./types/skill.js";
+
+// ─── Intelligence events ───
+export type {
+  SkillActivated,
+  SkillRefined,
+  SkillRefinementSuggested,
+  SkillRolledBack,
+  SkillConflictDetected,
+  SkillPromoted,
+  SkillSkippedContextFull,
+  SkillEvicted,
+  TemperatureAdjusted,
+  ToolInjected,
+  MemoryBoostTriggered,
+  AgentNeedsHuman,
+  SkillEvent,
+  IntelligenceControlEvent,
+  IntelligenceEvent,
+} from "./types/intelligence-events.js";
