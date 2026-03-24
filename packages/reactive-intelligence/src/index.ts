@@ -85,6 +85,8 @@ export type { DistillationResult, SkillDistillerConfig, SkillDistillerDeps } fro
 export { compressSkillContent, getDefaultCompressionStage, estimateTokens } from "./skills/skill-compression.js";
 export { parseSKILLmd, discoverSkills } from "./skills/skill-registry.js";
 export type { InstalledSkill, SkillDiscoveryResult } from "./skills/skill-registry.js";
+export { injectSkill, sortByEvictionPriority, isSkillContent, extractSkillNames, SKILL_TIER_BUDGETS } from "./skills/skill-injection.js";
+export type { InjectionResult } from "./skills/skill-injection.js";
 
 // ── Runtime ──
 export { createReactiveIntelligenceLayer } from "./runtime.js";
