@@ -146,8 +146,8 @@ export function discoverSkills(
 
   const scanPaths = [
     ...customPaths,
-    path.join(root, ".agents", "skills"),
     path.join(root, `.${agentId}`, "skills"),
+    path.join(root, ".agents", "skills"),
     path.join(os.homedir(), ".agents", "skills"),
     path.join(os.homedir(), ".reactive-agents", "skills"),
   ];

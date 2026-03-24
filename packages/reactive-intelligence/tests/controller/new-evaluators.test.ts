@@ -17,6 +17,7 @@ const baseParams: ControllerEvalParams = {
   ],
   iteration: 4,
   maxIterations: 10,
+  strategy: "reactive",
   calibration: { convergenceThreshold: 0.3, highEntropyThreshold: 0.7, calibrated: true, sampleCount: 50 },
   config: { earlyStop: true, contextCompression: true, strategySwitch: true },
   contextPressure: 0.6,

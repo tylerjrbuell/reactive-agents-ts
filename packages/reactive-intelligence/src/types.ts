@@ -122,6 +122,8 @@ export type EntropyMeta = {
   lastLogprobs?: readonly TokenLogprob[];
   entropyHistory?: EntropyScore[];
   thoughtEmbeddings?: { embeddings: number[][]; centroid: number[] };
+  promptVariantId?: string;
+  systemPromptTokens?: number;
 };
 
 // ─── Model Registry Entry ───
