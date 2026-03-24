@@ -30,6 +30,7 @@ import type { AgentEvent, KernelStateLike } from "@reactive-agents/core";
 import { synthesizeDebrief, type DebriefInput, type AgentDebrief } from "./debrief.js";
 import { DebriefStoreService } from "@reactive-agents/memory";
 import { TelemetryClient as TelemetryClientImpl, classifyTaskCategory as classifyTaskCategoryFn, lookupModel as lookupModelFn } from "@reactive-agents/reactive-intelligence";
+import { buildTrajectoryFingerprint, abstractifyToolName, firstConvergenceIteration, peakContextPressure, deriveTaskComplexity, deriveFailurePattern, deriveThoughtToActionRatio } from "./telemetry-enrichment.js";
 
 // ─── Narrow service types for optional deps ───
 
@@ -2642,6 +2643,25 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         : errorsFromLoop.length > 0 && terminatedByRaw !== "final_answer_tool" && terminatedByRaw !== "final_answer" ? "failure"
                         : "success";
 
+                      // ── Enrichment fields (see telemetry-enrichment.ts for logic + tests) ──
+                      const trajectoryFingerprint = buildTrajectoryFingerprint(entropyLog);
+                      const abstractToolPattern = toolsUsed.map(abstractifyToolName);
+                      const iterationsToFirstConvergence = firstConvergenceIteration(entropyLog);
+                      const contextPressurePeak = peakContextPressure(entropyLog);
+
+                      // Skills: use autoActivateSkills (actually injected at bootstrap), not resolvedSkills (full catalog)
+                      const activeSkills = ((ctx.metadata as any)?.autoActivateSkills ?? []) as Array<{ source: string }>;
+                      const skillsActiveCount = activeSkills.length;
+                      const learnedSkillsContribution = activeSkills.some(s => s.source === "learned");
+
+                      // ctx.iteration starts at 1 and increments AFTER each loop, so N real iterations = ctx.iteration - 1
+                      const realIterations = ctx.iteration - 1;
+                      const taskComplexity = deriveTaskComplexity(realIterations, toolCallLog.length, strategySwitched, contextPressurePeak);
+                      const failurePattern = deriveFailurePattern(outcome, terminatedByRaw, errorsFromLoop, contextPressurePeak);
+
+                      const reasoningStepsForTelemetry = ((ctx.metadata as any)?.reasoningSteps ?? []) as Array<{ type: string }>;
+                      const thoughtToActionRatio = deriveThoughtToActionRatio(reasoningStepsForTelemetry, toolCallLog.length);
+
                       client.send({
                         id: ctx.taskId,
                         installId: client.getInstallId(),
@@ -2660,6 +2680,15 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         totalTokens: ctx.tokensUsed,
                         durationMs: executionDurationMs,
                         clientVersion: "0.8.0",
+                        trajectoryFingerprint,
+                        abstractToolPattern,
+                        iterationsToFirstConvergence,
+                        contextPressurePeak,
+                        skillsActiveCount,
+                        learnedSkillsContribution,
+                        taskComplexity,
+                        failurePattern,
+                        thoughtToActionRatio,
                       });
                     }
                   } catch {

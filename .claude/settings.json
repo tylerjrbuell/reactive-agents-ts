@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.file_path // \"\"' | { read -r f; if echo \"$f\" | grep -qE \"\\.claude/projects.*memory/\"; then echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PostToolUse\",\"additionalContext\":\"Memory file written. Sync .agents/MEMORY.md with any new or changed content before completing.\"}}'; fi; } 2>/dev/null || true",
+            "statusMessage": "Checking memory sync..."
+          }
+        ]
+      }
+    ]
+  }
+}

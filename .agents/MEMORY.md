@@ -105,6 +105,19 @@ Runtime-agnostic layer for Node.js compatibility: `DatabaseAdapter`, `ProcessAda
 - Codebase cleanup: execution engine phase extraction (see `docs/superpowers/plans/2026-03-22-codebase-cleanup.md`)
 - Spec: `spec/docs/09-ROADMAP.md`
 
+## Telemetry Enrichment Status (Mar 24, 2026)
+
+Computation logic in `packages/runtime/src/telemetry-enrichment.ts` (46 unit tests). All fields now populated per run.
+
+**Currently sent:** `trajectoryFingerprint`, `abstractToolPattern`, `iterationsToFirstConvergence`, `contextPressurePeak`, `skillsActiveCount`, `learnedSkillsContribution`, `taskComplexity`, `failurePattern`, `thoughtToActionRatio`
+
+**Known gaps requiring future infrastructure work:**
+
+- `tokenEfficiencyRatio` — needs input/output token split in KernelState (only total tracked today)
+- `skillEffectivenessScores` — needs per-iteration skill activation events; skills are resolved at bootstrap with no per-iteration "fired" signal
+- `failurePattern` loop disambiguation — `max_iterations` always maps to `"loop-detected"` but complex tasks that hit the limit are not true loops; needs oscillating entropy trajectory check to disambiguate
+- `abstractToolPattern` precision — regex substring matching; custom tool names fall to `"unknown"`; fix: explicit `.withCategory()` on ToolBuilder
+
 ## Remaining Known Issues
 
 - Memory-flush still 1-2s on some trivial tasks (proportional pipeline may not receive correct metadata)
