@@ -36,3 +36,4 @@ export type {
 } from "./session-store.js";
 
 export { SkillStoreService, SkillStoreServiceLive } from "./skill-store.js";
+export { SkillEvolutionService, makeSkillEvolutionService } from "./skill-evolution.js";
