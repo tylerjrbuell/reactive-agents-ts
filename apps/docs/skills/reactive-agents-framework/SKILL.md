@@ -57,6 +57,7 @@ const scheduledOpsAgent = await ReactiveAgents.create()
 - Integration-heavy agents: tools + MCP + guardrails.
 - Multi-agent systems: A2A + agent-tool delegation + orchestration.
 - Conversational Q&A: `agent.chat()` for direct questions, `agent.session()` for multi-turn.
+- Self-improving agents: `.withSkills()` + `.withReactiveIntelligence()` for skill discovery, activation, and evolution.
 - Production hardening: `withFallbacks()`, `withLogging()`, `withErrorHandler()`, `withHealthCheck()`.
 
 ## Conversational patterns
@@ -92,6 +93,33 @@ const agent = await ReactiveAgents.create()
 
 const health = await agent.health();
 console.log(health.status); // "healthy" | "degraded" | "unhealthy"
+```
+
+## Living Skills
+
+```ts
+// Self-improving agent with skill discovery and evolution
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withReasoning()
+  .withTools()
+  .withSkills({
+    paths: ["./project-skills/"],
+    evolution: { mode: "auto", refinementThreshold: 5 },
+    overrides: { "critical-workflow": { evolutionMode: "locked" } },
+  })
+  .withReactiveIntelligence({
+    onSkillActivated: (skill, trigger) => console.log(`Skill ${skill.name} activated via ${trigger}`),
+    constraints: { protectedSkills: ["critical-workflow"] },
+    autonomy: "full",
+  })
+  .build();
+
+// Runtime skill management
+const skills = await agent.skills();
+await agent.exportSkill("data-analysis", "./exported/");
+await agent.loadSkill("./new-skill/");
+await agent.refineSkills();
 ```
 
 ## Expected implementation output

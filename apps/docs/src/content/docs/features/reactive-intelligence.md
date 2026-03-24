@@ -77,7 +77,7 @@ The sensor tracks entropy over time and classifies the trajectory shape:
 
 ## Reactive Controller
 
-When enabled, the controller evaluates entropy data after each reasoning step and can trigger three types of interventions:
+When enabled, the controller evaluates entropy data after each reasoning step and can trigger **10 types of interventions** — 3 core decisions plus 7 intelligence decisions added by the Living Intelligence System:
 
 ### Early Stop
 
@@ -99,6 +99,53 @@ When context pressure exceeds 80%, the controller recommends compressing tool re
 
 When entropy is flat for 3+ iterations with high behavioral loop scores, the controller recommends switching from the current reasoning strategy to an alternative (e.g., ReAct to plan-execute-reflect).
 
+### Temperature Adjust
+
+When semantic entropy diverges over 3+ iterations, the controller lowers the temperature by 0.1 to reduce hallucination risk.
+
+### Skill Activate
+
+When entropy patterns match a high-confidence skill's task categories, the controller pre-activates the skill by injecting its instructions into context.
+
+### Prompt Switch
+
+When entropy has been flat for 4+ iterations, the controller switches to a different prompt variant (selected by the Thompson Sampling bandit).
+
+### Tool Inject
+
+When high structural entropy signals a knowledge gap and tools are available, the controller injects a tool (preferring `web-search`) into the active tool set.
+
+### Memory Boost
+
+When the agent is stuck with keyword/recent retrieval, the controller switches to semantic RAG to provide better context.
+
+### Skill Reinject
+
+When context compaction removes skill content (detected via `<skill_content>` XML tags), the controller re-injects the skill.
+
+### Human Escalate
+
+When 3+ different decision types have been tried and entropy remains high, the controller emits an `AgentNeedsHuman` event and pauses.
+
+### Creator Control
+
+All controller decisions can be intercepted and overridden:
+
+```typescript
+.withReactiveIntelligence({
+  onControllerDecision: (decision, ctx) => {
+    if (decision.decision === "human-escalate") return "reject";
+    return "accept";
+  },
+  constraints: {
+    maxTemperatureAdjustment: 0.15,
+    neverEarlyStop: false,
+    protectedSkills: ["my-critical-skill"],
+  },
+  autonomy: "suggest",  // "full" | "suggest" | "observe"
+})
+```
+
 ## Local Learning Engine
 
 The learning engine runs after each agent execution and improves future runs through three mechanisms:
@@ -117,7 +164,7 @@ Task categories are classified automatically: `code-generation`, `research`, `da
 
 ### Skill Synthesis
 
-When a run succeeds with converging entropy, the learning engine extracts a reusable skill fragment — a snapshot of the configuration that worked (strategy, temperature, tool filtering mode, memory tier) for that task category. These fragments can be used to optimize future similar tasks.
+When a run succeeds with converging entropy, the learning engine extracts a reusable skill fragment — a snapshot of the configuration that worked (strategy, temperature, tool filtering mode, memory tier) for that task category. These fragments feed into the **Living Skills System**: they are stored as `SkillRecord` entities in SQLite, evolve through LLM-based refinement in the memory consolidation background cycle, and are applied to future runs automatically. See the [Living Skills guide](/guides/agent-skills) for the full skill lifecycle.
 
 ## Telemetry
 

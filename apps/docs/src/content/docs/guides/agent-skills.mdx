@@ -1,11 +1,25 @@
 ---
 title: Agent Skills
-description: Publish reusable Reactive Agents implementation skills from this docs site via well-known discovery endpoints.
+description: Two skill systems — Developer Skills for coding agents building with the framework, and Living Skills for agents running inside the framework.
 ---
 
 import SkillsMarkdownLinks from "../../../components/SkillsMarkdownLinks.astro";
 
-This docs site now publishes Agent Skills so coding agents can discover reusable implementation playbooks directly from your docs URL.
+Reactive Agents has **two distinct skill systems** that serve different audiences:
+
+| | Developer Skills | Living Skills |
+|---|---|---|
+| **Audience** | Coding agents (Cursor, Copilot, Claude Code) building _with_ the framework | Agents running _inside_ the framework |
+| **Purpose** | Implementation playbooks for developers | Runtime behavior guidance for agents |
+| **Format** | SKILL.md published at `/.well-known/skills/` | SKILL.md loaded from filesystem or SQLite |
+| **Consumed by** | External coding tools via HTTP discovery | The framework's `SkillResolverService` at bootstrap |
+| **Evolves?** | No — static reference docs | Yes — LLM-refined over time based on agent performance |
+
+---
+
+## Part 1: Developer Skills (for coding agents)
+
+This docs site publishes Developer Skills so coding agents can discover reusable implementation playbooks directly from your docs URL.
 
 - Open the live skills index: [/.well-known/skills/index.json](/.well-known/skills/index.json)
 
@@ -95,4 +109,116 @@ You should see entries like:
 
 ## Why this matters
 
-This lets external agents consume implementation guidance that matches Reactive Agents architecture and conventions, directly from the public docs.
+This lets external coding agents consume implementation guidance that matches Reactive Agents architecture and conventions, directly from the public docs. These skills help developers build _with_ the framework — they are **not** consumed by agents running inside it.
+
+---
+
+## Part 2: Living Skills (for agents running inside the framework)
+
+The **Living Skills System** is a runtime capability that discovers, loads, evolves, and manages skills for agents built with Reactive Agents. Unlike Developer Skills above, Living Skills are consumed by the agent itself during execution — they guide the agent's behavior, not the developer's.
+
+Skills are the actionable distillation of agent memory — what an agent has learned to do well, refined over time.
+
+### Enabling Skills
+
+```typescript
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withReasoning()
+  .withSkills({
+    paths: ["./my-skills/"],                    // Additional scan paths
+    evolution: { mode: "suggest" },             // "auto" | "suggest" | "locked"
+    overrides: { "critical-skill": { evolutionMode: "locked" } },
+  })
+  .withReactiveIntelligence()                   // Enables entropy-driven skill activation
+  .build();
+```
+
+### Skill Sources
+
+Skills are discovered from three sources, merged with precedence:
+
+| Source | Path | Default Mode |
+|--------|------|-------------|
+| **Learned** | SQLite (`skills` table) | `auto` |
+| **Project-level** | `./<agentId>/skills/`, `./.agents/skills/` | `locked` |
+| **User-level** | `~/.agents/skills/`, `~/.reactive-agents/skills/` | `locked` |
+
+On name collision, learned skills always win over installed.
+
+### SKILL.md Format
+
+Skills follow the [agentskills.io](https://agentskills.io) open standard:
+
+```markdown
+---
+name: github-review
+description: Review GitHub PRs for correctness, style, and security.
+metadata:
+  requires: web-search citation-formatter
+  allowed-tools: gh-api file-read
+---
+
+## Steps
+1. Fetch the PR diff
+2. Review each changed file...
+
+## Examples
+...
+```
+
+### Skill Lifecycle
+
+```
+Bootstrap → Catalog → Activation → Post-Run Learning → Background Refinement
+```
+
+1. **Bootstrap**: `SkillResolver` combines SQLite + filesystem skills, ranks by confidence
+2. **Catalog**: Skills appear in `<available_skills>` XML in the system prompt
+3. **Activation**: Model calls `activate_skill` or controller pre-activates on entropy match
+4. **Post-Run**: `LearningEngine` updates skill config (strategy, temperature, success rate)
+5. **Refinement**: `MemoryConsolidator` CONNECT phase triggers LLM refinement of instructions
+
+### Confidence Tiers
+
+| Tier | Threshold | Behavior |
+|------|-----------|----------|
+| `tentative` | < 5 uses or < 80% success | Catalog only — model decides when to activate |
+| `trusted` | 5-20 uses, >= 80% success | Controller may pre-activate on entropy match |
+| `expert` | > 20 uses, >= 90% success | Auto-injected at bootstrap |
+
+### Context-Aware Injection
+
+Skill content is budget-aware — smaller models get compressed skill bodies:
+
+| Tier | Budget | Default Verbosity |
+|------|--------|-------------------|
+| `local` | 512 tokens | `condensed` |
+| `mid` | 1,500 tokens | `summary` |
+| `large` | 4,000 tokens | `full` |
+| `frontier` | 8,000 tokens | `full` |
+
+When a skill is too large, the injection guard degrades through modes: `full` → `summary` → `condensed` → `catalog-only`. The `get_skill_section` meta-tool (auto-included for local/mid tiers) lets agents fetch specific sections on demand without expanding base context.
+
+### Runtime API
+
+```typescript
+// List all loaded skills
+const skills = await agent.skills();
+
+// Export a skill to SKILL.md format
+await agent.exportSkill("data-analysis", "./exported-skills/");
+
+// Load a skill at runtime
+await agent.loadSkill("./new-skill/");
+
+// Trigger manual refinement pass
+await agent.refineSkills();
+```
+
+### Meta-Tools
+
+| Tool | When Available | Purpose |
+|------|---------------|---------|
+| `activate_skill` | Always (when skills enabled) | Inject skill instructions into context |
+| `get_skill_section` | Local/mid tiers only | Fetch a specific section without expanding base context |
