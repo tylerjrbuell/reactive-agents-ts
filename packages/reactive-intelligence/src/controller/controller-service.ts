@@ -3,6 +3,13 @@ import type { ControllerDecision, ReactiveControllerConfig, ControllerEvalParams
 import { evaluateEarlyStop } from "./early-stop.js";
 import { evaluateStrategySwitch } from "./strategy-switch.js";
 import { evaluateCompression } from "./context-compressor.js";
+import { evaluateTempAdjust } from "./evaluators/temp-adjust.js";
+import { evaluateSkillActivate } from "./evaluators/skill-activate.js";
+import { evaluatePromptSwitch } from "./evaluators/prompt-switch.js";
+import { evaluateToolInject } from "./evaluators/tool-inject.js";
+import { evaluateMemoryBoost } from "./evaluators/memory-boost.js";
+import { evaluateSkillReinject } from "./evaluators/skill-reinject.js";
+import { evaluateHumanEscalate } from "./evaluators/human-escalate.js";
 
 export class ReactiveControllerService extends Context.Tag("ReactiveControllerService")<
   ReactiveControllerService,
@@ -33,6 +40,28 @@ export const ReactiveControllerServiceLive = (
           const compression = evaluateCompression(params);
           if (compression) decisions.push(compression);
         }
+        // ─── Living Intelligence evaluators ───
+        const tempAdj = evaluateTempAdjust(params);
+        if (tempAdj) decisions.push(tempAdj);
+
+        const skillAct = evaluateSkillActivate(params);
+        if (skillAct) decisions.push(skillAct);
+
+        const promptSw = evaluatePromptSwitch(params);
+        if (promptSw) decisions.push(promptSw);
+
+        const toolInj = evaluateToolInject(params);
+        if (toolInj) decisions.push(toolInj);
+
+        const memBoost = evaluateMemoryBoost(params);
+        if (memBoost) decisions.push(memBoost);
+
+        const skillReinj = evaluateSkillReinject(params);
+        if (skillReinj) decisions.push(skillReinj);
+
+        const humanEsc = evaluateHumanEscalate(params);
+        if (humanEsc) decisions.push(humanEsc);
+
         return decisions;
       }),
   });
