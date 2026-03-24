@@ -13,6 +13,7 @@ import { classifyTaskCategory } from "./task-classifier.js";
 
 export type RunCompletedData = {
   readonly modelId: string;
+  readonly provider?: string;  // used by test guard
   readonly taskDescription: string;
   readonly strategy: string;
   readonly outcome: "success" | "partial" | "failure";
@@ -32,6 +33,30 @@ export type RunCompletedData = {
   readonly consolidationEnabled?: boolean;
   readonly strategySwitchingEnabled?: boolean;
   readonly adaptiveEnabled?: boolean;
+  // Local enrichment (Living Intelligence System)
+  readonly thoughtTokenCounts?: readonly number[];
+  readonly thoughtToActionRatio?: number;
+  readonly uncertaintyMarkerCount?: number;
+  readonly selfCorrectionCount?: number;
+  readonly toolCallSequence?: readonly string[];
+  readonly toolRetryCount?: number;
+  readonly toolResultCompressionRatios?: readonly number[];
+  readonly toolErrorCategories?: readonly ("schema" | "network" | "timeout" | "empty" | "permission")[];
+  readonly memoryHitCount?: number;
+  readonly memoryReferencedCount?: number;
+  readonly memoryUtilizationRate?: number;
+  readonly tokensBySection?: {
+    systemPrompt: number;
+    history: number;
+    toolResults: number;
+    currentTurn: number;
+    skillContent: number;
+  };
+  readonly peakContextUtilization?: number;
+  readonly skillsActivated?: readonly string[];
+  readonly skillActivationIterations?: readonly number[];
+  readonly postActivationEntropyDeltas?: readonly number[];
+  readonly convergenceIteration?: number | null;
 };
 
 export type LearningResult = {
@@ -65,6 +90,17 @@ export const LearningEngineServiceLive = (
   Layer.succeed(LearningEngineService, {
     onRunCompleted: (data) =>
       Effect.gen(function* () {
+        // Guard: skip all learning for test provider runs
+        const isTestProvider = data.modelId === "test" || data.modelId.startsWith("test-") || (data as any).provider === "test";
+        if (isTestProvider) {
+          return {
+            calibrationUpdated: false,
+            banditUpdated: false,
+            skillSynthesized: false,
+            taskCategory: "test",
+          };
+        }
+
         const taskCategory = classifyTaskCategory(data.taskDescription);
         const composites = data.entropyHistory.map((e) => e.composite);
         const meanEntropy =

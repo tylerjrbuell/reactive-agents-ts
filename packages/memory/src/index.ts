@@ -149,3 +149,5 @@ export {
   type SaveSessionInput,
   type ChatMessageShape,
 } from "./services/session-store.js";
+
+export { SkillStoreService, SkillStoreServiceLive } from "./services/skill-store.js";

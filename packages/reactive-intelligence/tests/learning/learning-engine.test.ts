@@ -27,7 +27,7 @@ const baseData = {
 function runWithService(
   calibrationStore: CalibrationStore,
   banditStore: BanditStore,
-  data: typeof baseData,
+  data: any,
 ) {
   const program = Effect.gen(function* () {
     const svc = yield* LearningEngineService;

@@ -205,7 +205,7 @@ function makeCalibratedStore(): CalibrationStore {
 function runWithService(
   calibrationStore: CalibrationStore,
   banditStore: BanditStore,
-  data: typeof convergingData,
+  data: any,
   skillStore?: SkillStore,
 ) {
   const program = Effect.gen(function* () {

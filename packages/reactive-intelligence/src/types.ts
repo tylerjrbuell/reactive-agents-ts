@@ -122,6 +122,8 @@ export type EntropyMeta = {
   lastLogprobs?: readonly TokenLogprob[];
   entropyHistory?: EntropyScore[];
   thoughtEmbeddings?: { embeddings: number[][]; centroid: number[] };
+  promptVariantId?: string;
+  systemPromptTokens?: number;
 };
 
 // ─── Model Registry Entry ───
@@ -165,7 +167,14 @@ export type ReactiveIntelligenceConfig = {
 export type ControllerDecision =
   | { readonly decision: "early-stop"; readonly reason: string; readonly iterationsSaved: number }
   | { readonly decision: "compress"; readonly sections: readonly string[]; readonly estimatedSavings: number }
-  | { readonly decision: "switch-strategy"; readonly from: string; readonly to: string; readonly reason: string };
+  | { readonly decision: "switch-strategy"; readonly from: string; readonly to: string; readonly reason: string }
+  | { readonly decision: "temp-adjust"; readonly delta: number; readonly reason: string }
+  | { readonly decision: "skill-activate"; readonly skillName: string; readonly trigger: "entropy-match" | "task-match"; readonly confidence: string }
+  | { readonly decision: "prompt-switch"; readonly fromVariant: string; readonly toVariant: string; readonly reason: string }
+  | { readonly decision: "tool-inject"; readonly toolName: string; readonly reason: string }
+  | { readonly decision: "memory-boost"; readonly from: "recent" | "keyword"; readonly to: "semantic"; readonly reason: string }
+  | { readonly decision: "skill-reinject"; readonly skillName: string; readonly reason: string }
+  | { readonly decision: "human-escalate"; readonly reason: string; readonly decisionsExhausted: readonly string[] };
 
 export type ReactiveControllerConfig = {
   readonly earlyStop: boolean;
@@ -193,6 +202,15 @@ export type ControllerEvalParams = {
   readonly config: ReactiveControllerConfig;
   readonly contextPressure: number;
   readonly behavioralLoopScore: number;
+  // NEW fields for 7 new evaluators:
+  readonly currentTemperature?: number;
+  readonly availableSkills?: readonly { name: string; confidence: "tentative" | "trusted" | "expert"; taskCategories: readonly string[] }[];
+  readonly activeSkillNames?: readonly string[];
+  readonly availableToolNames?: readonly string[];
+  readonly activePromptVariantId?: string;
+  readonly activeRetrievalMode?: "recent" | "keyword" | "semantic";
+  readonly priorDecisionsThisRun?: readonly string[];
+  readonly contextHasSkillContent?: boolean;
 };
 
 export const defaultReactiveIntelligenceConfig: ReactiveIntelligenceConfig = {
@@ -210,8 +228,8 @@ export const defaultReactiveIntelligenceConfig: ReactiveIntelligenceConfig = {
     causalAttribution: false,
   },
   learning: {
-    banditSelection: false,
-    skillSynthesis: false,
+    banditSelection: true,
+    skillSynthesis: true,
   },
   telemetry: false,
 };

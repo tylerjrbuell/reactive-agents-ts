@@ -6,7 +6,7 @@
 
 **The open-source agent framework built for control, not magic.**
 
-Every decision controllable, observable, and auditable. 22 packages. composable layers. 5 reasoning strategies. 6 LLM providers. Model-adaptive context profiles. 10-phase execution engine with lifecycle hooks. 2,491 tests across 309 files. Built on Effect-TS for type safety from prompt to production.
+Every decision controllable, observable, and auditable. 22 packages. composable layers. 5 reasoning strategies. 6 LLM providers. Model-adaptive context profiles. 10-phase execution engine with lifecycle hooks. 2,851 tests across 336 files. Built on Effect-TS for type safety from prompt to production.
 
 [![CI](https://github.com/tylerjrbuell/reactive-agents-ts/actions/workflows/ci.yml/badge.svg)](https://github.com/tylerjrbuell/reactive-agents-ts/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/badge/npm-%40reactive--agents-CB3837?logo=npm)](https://www.npmjs.com/org/reactive-agents)
@@ -59,11 +59,12 @@ Most AI agent frameworks are dynamically typed, monolithic, and opaque. They ass
 - **Provider fallback chains** -- `FallbackChain` + `withFallbacks()` for graceful degradation across providers/models
 - **Structured logging** -- `makeLoggerService()` with level filtering, JSON/text format, and file output with rotation via `withLogging()`
 - **Health checks** -- `withHealthCheck()` + `agent.health()` returns `{ status, checks[] }`
-- **Reactive intelligence** -- 5-source entropy sensor, reactive controller (early-stop, context compression, strategy switch), local learning engine (conformal calibration, Thompson Sampling bandit, skill synthesis), telemetry client (api.reactiveagents.dev), `.withReactiveIntelligence()` builder method
+- **Reactive intelligence** -- 5-source entropy sensor, reactive controller (10 mid-run decisions including early-stop, context compression, strategy switch, temp-adjust, skill-activate, prompt-switch, tool-inject, memory-boost, skill-reinject, human-escalate), local learning engine (conformal calibration, Thompson Sampling bandit, skill synthesis), telemetry client (api.reactiveagents.dev), `.withReactiveIntelligence()` builder method with hooks, constraints, and autonomy control
+- **Living Skills System** -- agentskills.io SKILL.md compatibility, `SkillStoreService` (SQLite-backed), `SkillEvolutionService` (LLM refinement + version management), unified `SkillResolverService` (SQLite + filesystem), 5-stage compression pipeline, context-aware injection guard with model-tier budgets, `activate_skill` + `get_skill_section` meta-tools, `.withSkills()` builder, `agent.skills()` / `exportSkill()` / `loadSkill()` / `refineSkills()` runtime API
 - **Agent as Data** -- `AgentConfig` JSON-serializable schema, `builder.toConfig()` reverse mapping, `ReactiveAgents.fromConfig()` / `.fromJSON()` reconstruction, roundtrip serialization
 - **Lightweight composition** -- `agentFn()` lazy agent primitives, `pipe()` sequential chains, `parallel()` concurrent fan-out, `race()` first-to-complete — all composable
 - **Dynamic tool registration** -- `agent.registerTool()` / `agent.unregisterTool()` for runtime tool management on live agents
-- **2,491 tests** across 309 files
+- **2,851 tests** across 336 files
 
 ## Quick Start
 
@@ -131,6 +132,10 @@ const agent = await ReactiveAgents.create()
   })
   .withLogging({ level: "info", format: "json", filePath: "./agent.log" }) // Structured logging
   .withHealthCheck()                                     // Enable agent.health() probe
+  .withSkills({                                          // Living Skills System
+    paths: ["./my-skills/"],
+    evolution: { mode: "suggest" },
+  })
   .withGateway({                                         // Persistent autonomous harness
     heartbeat: { intervalMs: 1_800_000, policy: "adaptive" },
     crons: [{ schedule: "0 9 * * MON", instruction: "Weekly review" }],
@@ -648,7 +653,7 @@ See the [comparison table](#comparison). The key differences are: full Effect-TS
 
 ```bash
 bun install              # Install dependencies
-bun test                 # Run full test suite (2,482 tests, 308 files)
+bun test                 # Run full test suite (2,851 tests, 336 files)
 bun run build            # Build all packages (22 packages, ESM + DTS)
 ```
 

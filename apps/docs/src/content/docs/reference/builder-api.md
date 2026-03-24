@@ -128,7 +128,8 @@ See [Context Engineering](/guides/context-engineering/) for full tier defaults.
 | `withFallbacks(config)` | Provider/model fallback chain via `FallbackChain`. Config: `{ providers?: string[], models?: string[], errorThreshold?: number }`. On consecutive failures ≥ `errorThreshold`, the agent transparently retries with the next provider/model |
 | `withLogging(config)` | Structured logging via `makeLoggerService()`. Config: `{ level?: "debug" \| "info" \| "warn" \| "error", format?: "json" \| "text", output?: "console" \| "file", filePath?: string, maxFileSizeMb?: number, maxFiles?: number }` |
 | `withHealthCheck()` | Enable `agent.health()` which returns `{ status: "healthy" \| "degraded" \| "unhealthy", checks: HealthCheck[] }`. Each check reports on a specific subsystem (LLM, memory, tools, etc.) |
-| `withReactiveIntelligence(config?)` | Entropy sensing, reactive controller, local learning, and telemetry. Config: `{ entropy?: { enabled?, tokenEntropy?, semanticEntropy? }, controller?: { earlyStop?, contextCompression?, strategySwitch? }, telemetry?: boolean }`. See [Reactive Intelligence](/features/reactive-intelligence/) |
+| `withReactiveIntelligence(config?)` | Entropy sensing, reactive controller (10 decisions), local learning, telemetry, and creator hooks. Config: `{ entropy?, controller?, telemetry?, onEntropyScored?, onControllerDecision?, onSkillActivated?, constraints?: { maxTemperatureAdjustment?, neverEarlyStop?, protectedSkills? }, autonomy?: "full" \| "suggest" \| "observe" }`. See [Reactive Intelligence](/features/reactive-intelligence/) |
+| `withSkills(config?)` | Living Skills System — discover, load, and evolve skills. Config: `{ paths?: string[], evolution?: { mode?: "auto" \| "suggest" \| "locked", refinementThreshold?: number }, overrides?: Record<string, { evolutionMode? }> }`. Enables `activate_skill` + `get_skill_section` meta-tools. See [Agent Skills](/guides/agent-skills/) |
 
 #### ReasoningOptions
 

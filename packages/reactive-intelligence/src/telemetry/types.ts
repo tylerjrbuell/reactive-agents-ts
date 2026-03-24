@@ -59,4 +59,16 @@ export type RunReport = {
   readonly durationMs: number;
   readonly skillFragment?: SkillFragment | null;
   readonly clientVersion: string;
+  // Telemetry-safe enrichment (Living Intelligence System)
+  readonly trajectoryFingerprint?: string;
+  readonly abstractToolPattern?: readonly ("search" | "write" | "read" | "compute" | "communicate" | "unknown")[];
+  readonly iterationsToFirstConvergence?: number | null;
+  readonly tokenEfficiencyRatio?: number;
+  readonly thoughtToActionRatio?: number;
+  readonly contextPressurePeak?: number;
+  readonly skillsActiveCount?: number;
+  readonly skillEffectivenessScores?: readonly number[];
+  readonly learnedSkillsContribution?: boolean;
+  readonly taskComplexity?: "trivial" | "moderate" | "complex" | "expert";
+  readonly failurePattern?: "loop-detected" | "context-overflow" | "tool-cascade-failure" | "strategy-exhausted" | "guardrail-halt" | "timeout" | "unknown";
 };

@@ -49,7 +49,10 @@ export class MemoryConsolidatorService extends Context.Tag(
 
 // ─── Live Implementation ───
 
-export const MemoryConsolidatorServiceLive = (config?: ConsolidatorConfig) =>
+export const MemoryConsolidatorServiceLive = (
+  config?: ConsolidatorConfig,
+  onConnect?: (agentId: string) => Effect.Effect<number, unknown>,
+) =>
   Layer.effect(
     MemoryConsolidatorService,
     Effect.gen(function* () {
@@ -91,11 +94,12 @@ export const MemoryConsolidatorServiceLive = (config?: ConsolidatorConfig) =>
         });
 
       // ─── CONNECT phase ────────────────────────────────────────────────────
-      // Phase 1 simplified: no LLM merging. Returns 0 (placeholder for future
-      // semantic deduplication).
-      const connect = (
-        _agentId: string,
-      ): Effect.Effect<number, DatabaseError> => Effect.succeed(0);
+      // Calls the optional onConnect callback (e.g. SkillDistillerService.distill)
+      // if provided; otherwise falls back to a no-op returning 0.
+      const connect = (agentId: string): Effect.Effect<number, DatabaseError> =>
+        onConnect
+          ? Effect.catchAll(onConnect(agentId), () => Effect.succeed(0))
+          : Effect.succeed(0);
 
       // ─── COMPRESS phase ───────────────────────────────────────────────────
       // Decay importance on all semantic entries for this agent that are still

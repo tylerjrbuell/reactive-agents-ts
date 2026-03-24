@@ -155,6 +155,8 @@ export const DailyLogEntrySchema = Schema.Struct({
   metadata: Schema.optional(
     Schema.Record({ key: Schema.String, value: Schema.Unknown }),
   ),
+  /** LLM provider used for this event (used by test guard to filter out test-provider data) */
+  provider: Schema.optional(Schema.String),
   /** When this entry was created */
   createdAt: Schema.DateFromSelf,
 });
@@ -372,6 +374,8 @@ export const MemoryBootstrapResultSchema = Schema.Struct({
   activeWorkflows: Schema.Array(ProceduralEntrySchema),
   /** Current working memory items */
   workingMemory: Schema.Array(WorkingMemoryItemSchema),
+  /** Active skills loaded during bootstrap (from SkillResolver). Typed as unknown[] at schema level; services narrow to SkillRecord[]. */
+  activeSkills: Schema.optionalWith(Schema.Array(Schema.Unknown), { default: () => [] as unknown[] }),
   /** When the bootstrap completed */
   bootstrappedAt: Schema.DateFromSelf,
   /** Memory tier that was bootstrapped */

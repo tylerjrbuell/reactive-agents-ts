@@ -154,6 +154,17 @@ export {
 } from "./skills/rag-search.js";
 export type { RagSearchCallback, RagSearchResult } from "./skills/rag-search.js";
 
+// ─── Skill Meta-Tools ───
+export {
+  activateSkillTool,
+  buildSkillContentXml,
+} from "./skills/activate-skill.js";
+export {
+  getSkillSectionTool,
+  parseSections,
+  getSkillSection,
+} from "./skills/get-skill-section.js";
+
 // ─── Meta-Tools ───
 export {
   contextStatusTool,
