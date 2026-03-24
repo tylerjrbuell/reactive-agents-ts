@@ -387,14 +387,18 @@ All 20 publishable packages move together (fixed group) — bumping any one pack
 
 | Category  | Path                                       |
 | --------- | ------------------------------------------ |
-| Specs     | `spec/docs/`                               |
-| Skills    | `.claude/skills/`                          |
+| **Memory** | `.agents/MEMORY.md` — **read first** for project context, status, patterns, and roadmap |
+| Specs     | `spec/docs/`, `docs/superpowers/specs/`    |
+| Plans     | `docs/superpowers/plans/`                  |
+| Skills    | `.claude/skills/`, `.agents/skills/`       |
 | Packages  | `packages/{core,llm-provider,memory,...}/` |
 | CLI       | `apps/cli/`                                |
 | Docs      | `apps/docs/src/content/docs/`              |
 | Examples  | `apps/examples/`                           |
 | CI        | `.github/workflows/`                       |
 | v0.5 Plan | `spec/docs/14-v0.5-comprehensive-plan.md`  |
+
+> **Note:** `.agents/MEMORY.md` contains cross-agent project memory — current status, build patterns, architecture decisions, known issues, and roadmap. All agents should read it before starting work and update it after completing significant features.
 
 ---
 
