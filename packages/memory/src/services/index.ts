@@ -34,3 +34,5 @@ export type {
   SaveSessionInput,
   ChatMessageShape,
 } from "./session-store.js";
+
+export { SkillStoreService, SkillStoreServiceLive } from "./skill-store.js";

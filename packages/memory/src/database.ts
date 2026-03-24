@@ -203,6 +203,52 @@ const SCHEMA_SQL = `
   );
 
   CREATE INDEX IF NOT EXISTS idx_plan_steps_plan ON plan_steps(plan_id, seq);
+
+  -- Skills (Living Intelligence System)
+  CREATE TABLE IF NOT EXISTS skills (
+    id          TEXT PRIMARY KEY,
+    name        TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    agent_id    TEXT NOT NULL,
+    source      TEXT NOT NULL DEFAULT 'learned',
+    instructions TEXT NOT NULL DEFAULT '',
+    version     INTEGER NOT NULL DEFAULT 1,
+    config      TEXT NOT NULL DEFAULT '{}',
+    evolution_mode TEXT NOT NULL DEFAULT 'auto',
+    confidence  TEXT NOT NULL DEFAULT 'tentative',
+    success_rate REAL NOT NULL DEFAULT 0,
+    use_count   INTEGER NOT NULL DEFAULT 0,
+    refinement_count INTEGER NOT NULL DEFAULT 0,
+    task_categories TEXT NOT NULL DEFAULT '[]',
+    model_affinities TEXT NOT NULL DEFAULT '[]',
+    base        TEXT,
+    avg_post_activation_entropy_delta REAL NOT NULL DEFAULT 0,
+    avg_convergence_iteration REAL NOT NULL DEFAULT 0,
+    convergence_speed_trend TEXT NOT NULL DEFAULT '[]',
+    conflicts_with TEXT NOT NULL DEFAULT '[]',
+    content_variants TEXT NOT NULL DEFAULT '{}',
+    last_activated_at TEXT,
+    last_refined_at TEXT,
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_skills_agent ON skills(agent_id);
+  CREATE INDEX IF NOT EXISTS idx_skills_name ON skills(agent_id, name);
+
+  CREATE TABLE IF NOT EXISTS skill_versions (
+    id          TEXT PRIMARY KEY,
+    skill_id    TEXT NOT NULL,
+    version     INTEGER NOT NULL,
+    instructions TEXT NOT NULL DEFAULT '',
+    config      TEXT NOT NULL DEFAULT '{}',
+    refined_at  TEXT NOT NULL,
+    success_rate_at_refinement REAL NOT NULL DEFAULT 0,
+    status      TEXT NOT NULL DEFAULT 'active',
+    FOREIGN KEY (skill_id) REFERENCES skills(id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_skill_versions_skill ON skill_versions(skill_id);
 `;
 
 // ─── Live Implementation ───
