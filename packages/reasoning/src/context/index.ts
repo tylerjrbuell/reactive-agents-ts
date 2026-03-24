@@ -34,6 +34,7 @@ export {
   buildContext,
   buildStaticContext,
   buildDynamicContext,
+  buildEnvironmentContext,
 } from "./context-engine.js";
 export type {
   ContextItem,

@@ -62,6 +62,8 @@ export class ReasoningService extends Context.Tag("ReasoningService")<
       readonly modelId?: string;
       /** LLM sampling temperature — forwarded to entropy sensor for weight adjustment */
       readonly temperature?: number;
+      /** Custom environment context key-value pairs injected into system prompt */
+      readonly environmentContext?: Readonly<Record<string, string>>;
     }) => Effect.Effect<ReasoningResult, ReasoningErrors>;
 
     /** Register a custom strategy function. */

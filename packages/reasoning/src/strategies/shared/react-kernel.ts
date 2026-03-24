@@ -39,7 +39,7 @@ import { evaluateTermination, defaultEvaluators, type TerminationContext } from 
 import { assembleOutput } from "./output-assembly.js";
 import { buildContext, buildStaticContext, buildDynamicContext } from "../../context/context-engine.js";
 import type { MemoryItem } from "../../context/context-engine.js";
-import { extractThinking } from "./thinking-utils.js";
+import { extractThinking, rescueFromThinking } from "./thinking-utils.js";
 import { makeStep } from "./step-utils.js";
 import { executeToolCall, executeToolGroup, makeObservationResult } from "./tool-execution.js";
 import { runKernel } from "./kernel-runner.js";
@@ -325,6 +325,7 @@ function handleThinking(
       profile,
       availableToolSchemas: augmentedToolSchemas,
       requiredTools: input.requiredTools,
+      environmentContext: input.environmentContext,
     });
     const baseSystemPrompt = buildSystemPrompt(input.task, input.systemPrompt, profile.tier);
     const systemPromptText = `${baseSystemPrompt}\n\n${staticContext}`;
@@ -442,6 +443,13 @@ function handleThinking(
     const providerThinking = (thoughtResponse as any).thinking as string | undefined;
     const thinking = extractedThinking || providerThinking || null;
     let thought = cleanContent || providerThinking || rawThought;
+    // Thinking models (e.g. cogito) may put the full answer in the thinking field
+    // with only a tiny fragment in content. When content is deficient, extract
+    // structured value (final answer, code, tool calls) from thinking.
+    if (thought.trim().length < 50 && thinking && thinking.length > 100) {
+      const rescued = rescueFromThinking(thinking, thought.trim());
+      if (rescued) thought = rescued;
+    }
 
     const thoughtStep = makeStep("thought", thought, thinking ? { thinking } : undefined);
     const newSteps = [...state.steps, thoughtStep];
@@ -652,6 +660,28 @@ function handleActing(
       const nextStep = state.steps[idx + 1];
       return nextStep?.type === "observation" && nextStep.metadata?.observationResult?.success === true;
     });
+
+    // Repetition guard — when the same tool is called 3+ times with different
+    // args, the model is likely stuck in a search loop. Nudge it to synthesize.
+    const META_TOOL_NAMES = new Set(["final-answer", "task-complete", "context-status", "scratchpad-write", "scratchpad-read"]);
+    if (!META_TOOL_NAMES.has(toolRequest.tool)) {
+      const priorCallsOfSameTool = state.steps.filter((s) => {
+        if (s.type !== "action") return false;
+        try { return JSON.parse(s.content).tool === toolRequest.tool; } catch { return false; }
+      }).length;
+      if (priorCallsOfSameTool >= 2) {
+        const nudge = `⚠️ You have already called ${toolRequest.tool} ${priorCallsOfSameTool} times. Stop searching and synthesize an answer from the results you already have. Use final-answer to respond now.`;
+        const nudgeStep = makeStep("observation", nudge, {
+          observationResult: makeObservationResult(toolRequest.tool, false, nudge),
+        });
+        yield* hooks.onObservation(state, nudge, false);
+        return transitionState(state, {
+          steps: [...state.steps, nudgeStep],
+          iteration: state.iteration + 1,
+          meta: { ...state.meta, pendingToolRequest: undefined, pendingToolGroup: undefined },
+        });
+      }
+    }
 
     const actionStep = makeStep("action", currentActionJson, { toolUsed: toolRequest.tool });
     const stepsWithAction = [...state.steps, actionStep];
@@ -888,7 +918,7 @@ function handleActing(
       const postActionCtx: TerminationContext = {
         thought: thought.trim(),
         thinking: thinking?.trim(),
-        stopReason: "end_turn",
+        stopReason: "tool_result",
         toolRequest: null,
         iteration: state.iteration,
         steps: stepsWithObs,
@@ -912,35 +942,42 @@ function handleActing(
         // not just the thought that triggered the tool call.
         const lastObs = stepsWithObs.filter(s => s.type === "observation").pop();
         const obsContent = lastObs?.content ?? "";
-        const postActionOutput = obsContent.length > 0 && obsContent.length < 500
-          ? obsContent  // Use tool observation as output (short, factual)
-          : postActionDecision.output;  // Fallback to thought
+        // Only allow post-action exit when the observation itself can serve as
+        // the answer. If the observation is too long (>= 500 chars), it's raw
+        // data that needs synthesis — continue the loop so the LLM can produce
+        // a proper answer. Never exit with the thought text (reasoning/action
+        // text is not a valid user-facing answer).
+        if (obsContent.length > 0 && obsContent.length < 500) {
+          // Short, factual observation — use it directly as the final answer
+          const postActionOutput = obsContent;
 
-        const assembled = assembleOutput({
-          steps: stepsWithObs,
-          finalAnswer: postActionOutput,
-          terminatedBy: postActionDecision.reason,
-          entropyScores: (state.meta.entropy as any)?.entropyHistory,
-        });
-        return transitionState(state, {
-          steps: stepsWithObs,
-          toolsUsed: newToolsUsed,
-          scratchpad: mergedScratchpad,
-          status: "done",
-          output: assembled.text,
-          priorThought: thought.trim(),
-          iteration: state.iteration + 1,
-          meta: {
-            ...state.meta,
+          const assembled = assembleOutput({
+            steps: stepsWithObs,
+            finalAnswer: postActionOutput,
             terminatedBy: postActionDecision.reason,
-            evaluator: postActionDecision.evaluator,
-            allVerdicts: postActionDecision.allVerdicts,
-            pendingToolRequest: undefined,
-            pendingToolGroup: undefined,
-            lastThought: undefined,
-            lastThinking: undefined,
-          },
-        });
+            entropyScores: (state.meta.entropy as any)?.entropyHistory,
+          });
+          return transitionState(state, {
+            steps: stepsWithObs,
+            toolsUsed: newToolsUsed,
+            scratchpad: mergedScratchpad,
+            status: "done",
+            output: assembled.text,
+            priorThought: thought.trim(),
+            iteration: state.iteration + 1,
+            meta: {
+              ...state.meta,
+              terminatedBy: postActionDecision.reason,
+              evaluator: postActionDecision.evaluator,
+              allVerdicts: postActionDecision.allVerdicts,
+              pendingToolRequest: undefined,
+              pendingToolGroup: undefined,
+              lastThought: undefined,
+              lastThinking: undefined,
+            },
+          });
+        }
+        // Observation is empty or too long — needs LLM synthesis, continue the loop
       }
     }
 
@@ -1030,6 +1067,7 @@ export const executeReActKernel = (
       iterations: state.iteration,
       terminatedBy,
       finalAnswerCapture: state.meta.finalAnswerCapture as FinalAnswerCapture | undefined,
+      llmCalls: state.llmCalls ?? 0,
     };
   });
 

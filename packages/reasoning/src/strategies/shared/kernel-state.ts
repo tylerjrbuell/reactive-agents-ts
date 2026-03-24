@@ -77,6 +77,8 @@ export interface KernelInput {
    * the tools that were never called.
    */
   readonly maxRequiredToolRetries?: number;
+  /** Custom environment context key-value pairs injected into the system prompt */
+  readonly environmentContext?: Readonly<Record<string, string>>;
 }
 
 // ── Narrow service types ─────────────────────────────────────────────────────

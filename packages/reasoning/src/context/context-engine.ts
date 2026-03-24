@@ -65,6 +65,8 @@ export interface StaticContextInput {
   profile: ContextProfile;
   availableToolSchemas?: readonly ToolSchema[];
   requiredTools?: readonly string[];
+  /** Custom environment context key-value pairs (merged with auto-detected defaults) */
+  environmentContext?: Readonly<Record<string, string>>;
 }
 
 /** Input for the dynamic per-iteration context builder. */
@@ -342,9 +344,35 @@ export function buildContext(input: ContextBuildInput): string {
  * This content is identical across all iterations and belongs in the system prompt
  * to avoid token waste from repetition.
  */
+/**
+ * Build environment context — date, time, timezone, platform, and custom fields.
+ * Always included so the agent knows the current temporal context without tool calls.
+ */
+export function buildEnvironmentContext(
+  custom?: Readonly<Record<string, string>>,
+): string {
+  const now = new Date();
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const lines: string[] = [
+    `Date: ${now.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}`,
+    `Time: ${now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true })}`,
+    `Timezone: ${tz}`,
+    `Platform: ${typeof process !== "undefined" ? `${process.platform} (${process.arch})` : "unknown"}`,
+  ];
+  if (custom) {
+    for (const [k, v] of Object.entries(custom)) {
+      lines.push(`${k}: ${v}`);
+    }
+  }
+  return `Environment:\n${lines.join("\n")}`;
+}
+
 export function buildStaticContext(input: StaticContextInput): string {
   const { task, profile, availableToolSchemas, requiredTools } = input;
   const sections: string[] = [];
+
+  // Environment context (date, time, timezone, platform, custom)
+  sections.push(buildEnvironmentContext(input.environmentContext));
 
   // Tool reference (full schemas — no pinned duplicate needed since both
   // tool ref and RULES are together in the system prompt now)

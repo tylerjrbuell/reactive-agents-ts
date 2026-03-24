@@ -59,7 +59,7 @@ export interface FinalAnswerVisibility {
  *
  * Conditions:
  * 1. Every required tool has been called.
- * 2. At least 2 iterations have elapsed (prevents instant completion).
+ * 2. At least 1 iteration has elapsed (prevents instant completion on first thought).
  * 3. At least one non-meta tool has been invoked.
  * 4. No pending errors exist — BUT after iteration 4, errors are forgiven
  *    (the agent has had enough time to recover; blocking it causes spinning).
@@ -67,8 +67,8 @@ export interface FinalAnswerVisibility {
 export function shouldShowFinalAnswer(input: FinalAnswerVisibility): boolean {
   // All required tools must be called
   if (!input.requiredTools.every((t) => input.requiredToolsCalled.has(t))) return false;
-  // Must be at least iteration 2
-  if (input.iteration < 2) return false;
+  // Must be at least iteration 1 (agent has done at least one tool call cycle)
+  if (input.iteration < 1) return false;
   // At least one non-meta tool must have been called
   if (!input.hasNonMetaToolCalled) return false;
   // Errors block early completion but are forgiven after iteration 4

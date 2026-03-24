@@ -61,6 +61,8 @@ interface ReactiveInput {
   readonly modelId?: string;
   /** LLM sampling temperature — forwarded to entropy sensor */
   readonly temperature?: number;
+  /** Custom environment context key-value pairs injected into system prompt */
+  readonly environmentContext?: Readonly<Record<string, string>>;
 }
 
 // ── executeReactive ───────────────────────────────────────────────────────────
@@ -119,6 +121,7 @@ export const executeReactive = (
       sessionId: input.sessionId,
       requiredTools: input.requiredTools,
       maxRequiredToolRetries: input.maxRequiredToolRetries,
+      environmentContext: input.environmentContext,
     };
 
     const state = yield* runKernel(reactKernel, kernelInput, {
@@ -146,15 +149,18 @@ export const executeReactive = (
       [...state.steps].filter((s) => s.type === "thought").pop()?.content ??
       null;
 
-    // Derive terminatedBy from kernel state
+    // Derive terminatedBy from kernel state — map oracle reasons to canonical types
+    const rawTerminatedBy = state.meta.terminatedBy as string | undefined;
     const terminatedBy: "final_answer" | "final_answer_tool" | "max_iterations" | "end_turn" =
-      state.meta.terminatedBy === "final_answer_tool"
+      rawTerminatedBy === "final_answer_tool"
         ? "final_answer_tool"
-        : state.meta.terminatedBy === "end_turn"
+        : rawTerminatedBy === "end_turn" || rawTerminatedBy === "llm_end_turn"
           ? "end_turn"
-          : state.status === "done"
+          : rawTerminatedBy === "final_answer_regex"
             ? "final_answer"
-            : "max_iterations";
+            : state.status === "done"
+              ? "final_answer"
+              : "max_iterations";
 
     return buildStrategyResult({
       strategy: "reactive",
@@ -166,6 +172,7 @@ export const executeReactive = (
       totalCost: state.cost,
       extraMetadata: {
         terminatedBy,
+        llmCalls: state.llmCalls ?? 0,
         ...(state.meta.finalAnswerCapture !== undefined
           ? { finalAnswerCapture: state.meta.finalAnswerCapture }
           : {}),

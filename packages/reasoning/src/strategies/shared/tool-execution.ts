@@ -203,9 +203,13 @@ function normalizeObservation(toolName: string, result: string): string {
     }
 
     if (toolName === "web-search" && Array.isArray(parsed.results)) {
-      const lines = (parsed.results as Array<{ title?: string; url?: string }>)
+      const lines = (parsed.results as Array<{ title?: string; url?: string; content?: string }>)
         .slice(0, 5)
-        .map((r, i) => `${i + 1}. ${r.title ?? "result"}: ${r.url ?? ""}`)
+        .map((r, i) => {
+          const header = `${i + 1}. ${r.title ?? "result"}: ${r.url ?? ""}`;
+          const snippet = r.content?.trim();
+          return snippet ? `${header}\n   ${snippet.slice(0, 300)}` : header;
+        })
         .join("\n");
       return lines || result;
     }

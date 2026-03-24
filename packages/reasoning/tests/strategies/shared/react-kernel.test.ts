@@ -192,7 +192,7 @@ describe("reactKernel (ThoughtKernel direct)", () => {
     expect(pending.tool).toBe("web-search");
   });
 
-  it("acting transitions to done after tool execution when LLMEndTurn fires (no ToolService)", async () => {
+  it("acting transitions back to thinking after tool execution (post-action requires short observation for exit)", async () => {
     const layer = TestLLMServiceLayer();
 
     // Start in acting state with a pending tool request
@@ -224,9 +224,9 @@ describe("reactKernel (ThoughtKernel direct)", () => {
       reactKernel(state, context).pipe(Effect.provide(layer)),
     );
 
-    // Post-action LLMEndTurn evaluator fires (no iteration/length guards)
-    // because the stored lastThought is non-empty end_turn with no required tools.
-    expect(nextState.status).toBe("done");
+    // Post-action oracle no longer fires LLMEndTurn (stopReason is "tool_result",
+    // not "end_turn"). Agent continues to thinking to synthesize tool results.
+    expect(nextState.status).toBe("thinking");
     // Should have action + observation steps added
     const actionSteps = nextState.steps.filter((s) => s.type === "action");
     const obsSteps = nextState.steps.filter((s) => s.type === "observation");

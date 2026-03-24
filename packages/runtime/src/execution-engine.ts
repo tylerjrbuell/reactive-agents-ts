@@ -875,6 +875,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       strategySwitching?: { enabled: boolean; maxSwitches?: number; fallbackStrategy?: string };
                       modelId?: string;
                       temperature?: number;
+                      environmentContext?: Readonly<Record<string, string>>;
                     }) => Effect.Effect<{
                       output: unknown;
                       status: string;
@@ -1047,6 +1048,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         strategySwitching: config.strategySwitching,
                         modelId: String(config.defaultModel ?? ""),
                         temperature: config.contextProfile?.temperature as number | undefined,
+                        environmentContext: config.environmentContext as Record<string, string> | undefined,
                       });
                       const strategyOutcome = yield* Effect.exit(strategyEffect);
                       if (strategyOutcome._tag === "Success") {

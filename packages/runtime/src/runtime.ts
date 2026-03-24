@@ -351,6 +351,13 @@ export interface RuntimeOptions {
    */
   systemPrompt?: string;
 
+  /**
+   * Custom environment context key-value pairs injected into the system prompt.
+   * Date, time, timezone, and platform are always injected automatically.
+   * Use this for additional context like user location, locale, or project name.
+   */
+  environmentContext?: Record<string, string>;
+
   // ─── Tool Configuration ───
 
   /**
@@ -751,6 +758,7 @@ export const createRuntime = (options: RuntimeOptions) => {
     enableBehavioralContracts: options.enableBehavioralContracts ?? false,
     enableSelfImprovement: options.enableSelfImprovement ?? false,
     systemPrompt: options.systemPrompt,
+    environmentContext: options.environmentContext,
     observabilityVerbosity: options.observabilityOptions?.verbosity,
     logModelIO: options.observabilityOptions?.logModelIO,
     logPrefix: options.observabilityOptions?.logPrefix,
@@ -1417,6 +1425,7 @@ export interface LightRuntimeOptions {
   maxTokens?: number;
   maxIterations?: number;
   systemPrompt?: string;
+  environmentContext?: Record<string, string>;
   testScenario?: TestTurn[];
 
   // Always-on for sub-agents
@@ -1477,6 +1486,7 @@ export const createLightRuntime = (options: LightRuntimeOptions) => {
     enableBehavioralContracts: false,
     enableSelfImprovement: false,
     systemPrompt: options.systemPrompt,
+    environmentContext: options.environmentContext,
     observabilityVerbosity: options.observabilityOptions?.verbosity,
     logModelIO: options.observabilityOptions?.logModelIO,
     logPrefix: options.observabilityOptions?.logPrefix,

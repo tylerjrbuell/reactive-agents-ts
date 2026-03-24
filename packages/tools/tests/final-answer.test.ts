@@ -78,8 +78,12 @@ describe("finalAnswerTool", () => {
       expect(shouldShowFinalAnswer(base)).toBe(true);
     });
 
-    it("hides before iteration 2", () => {
-      expect(shouldShowFinalAnswer({ ...base, iteration: 1 })).toBe(false);
+    it("hides before iteration 1", () => {
+      expect(shouldShowFinalAnswer({ ...base, iteration: 0 })).toBe(false);
+    });
+
+    it("shows at iteration 1", () => {
+      expect(shouldShowFinalAnswer({ ...base, iteration: 1 })).toBe(true);
     });
 
     it("hides when required tool not called", () => {

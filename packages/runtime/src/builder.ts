@@ -759,6 +759,7 @@ export class ReactiveAgentBuilder {
   private _extraLayers?: Layer.Layer<any, any>;
   private _mcpServers: MCPServerConfig[] = [];
   private _systemPrompt?: string;
+  private _environmentContext?: Record<string, string>;
   private _a2aOptions?: A2AOptions;
   private _gatewayOptions?: GatewayOptions;
   private _agentTools: AgentToolOptions[] = [];
@@ -856,6 +857,30 @@ export class ReactiveAgentBuilder {
    */
   withSystemPrompt(prompt: string): this {
     this._systemPrompt = prompt;
+    return this;
+  }
+
+  // ─── Environment Context ──────────────────────────────────────────────────
+
+  /**
+   * Add custom environment context injected into the system prompt.
+   *
+   * The framework always injects date, time, timezone, and platform automatically.
+   * Use this to add custom context the agent should know without tool calls.
+   *
+   * @param context - Key-value pairs (e.g., `{ "User Location": "San Francisco, CA" }`)
+   * @returns `this` for chaining
+   * @example
+   * ```typescript
+   * builder.withEnvironment({
+   *   "User Location": "San Francisco, CA",
+   *   "Locale": "en-US",
+   *   "Project": "reactive-agents",
+   * })
+   * ```
+   */
+  withEnvironment(context: Record<string, string>): this {
+    this._environmentContext = { ...this._environmentContext, ...context };
     return this;
   }
 
@@ -2064,6 +2089,7 @@ export class ReactiveAgentBuilder {
         testScenario: self._testScenario,
         extraLayers: self._extraLayers,
         systemPrompt: composedSystemPrompt,
+        environmentContext: self._environmentContext,
         mcpServers: self._mcpServers.length > 0 ? self._mcpServers : undefined,
         reasoningOptions: self._reasoningOptions,
         enableA2A: !!self._a2aOptions,
