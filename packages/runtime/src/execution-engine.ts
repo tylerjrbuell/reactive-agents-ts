@@ -569,6 +569,34 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   }
                 }
 
+                // ── Apply skills from SkillResolver (Living Intelligence System) ──
+                {
+                  const skillResolverOpt = yield* Effect.serviceOption(
+                    Context.GenericTag<{
+                      resolve: (params: { taskDescription: string; modelId: string; agentId: string }) => Effect.Effect<{ all: readonly any[]; autoActivate: readonly any[]; catalog: readonly any[] }, unknown>;
+                      generateCatalogXml: (skills: readonly any[], options?: { catalogOnlyHint?: boolean }) => string;
+                    }>("SkillResolverService"),
+                  ).pipe(Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })));
+
+                  if (skillResolverOpt._tag === "Some") {
+                    const resolver = skillResolverOpt.value;
+                    const resolved = yield* resolver.resolve({
+                      taskDescription: extractTaskText(task.input),
+                      modelId: String(ctx.selectedModel ?? config.defaultModel ?? "unknown"),
+                      agentId: config.agentId,
+                    }).pipe(Effect.catchAll(() => Effect.succeed({ all: [], autoActivate: [], catalog: [] })));
+
+                    if (resolved.all.length > 0) {
+                      // Store resolved skills on context metadata
+                      ctx = { ...ctx, metadata: { ...ctx.metadata, resolvedSkills: resolved.all, autoActivateSkills: resolved.autoActivate } };
+
+                      if (obs) {
+                        yield* obs.info(`Skills resolved: ${resolved.all.length} total, ${resolved.autoActivate.length} auto-activate`).pipe(Effect.catchAll(() => Effect.void));
+                      }
+                    }
+                  }
+                }
+
                 // ── Log bootstrap summary ──
                 if (obs && isNormal) {
                   const bootstrapMs = Date.now() - now.getTime();
@@ -2658,6 +2686,12 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         durationMs: executionDurationMs,
                         temperature: (config as any).temperature ?? 0.7,
                         maxIterations: config.maxIterations ?? 10,
+                        provider: String(ctx.provider ?? config.provider ?? "unknown"),
+                        skillsActivated: (ctx.metadata as any)?.resolvedSkills?.filter((s: any) => s.confidence === "expert").map((s: any) => s.name) ?? [],
+                        convergenceIteration: entropyLog.length > 0
+                          ? entropyLog.findIndex((e: any) => e.trajectory?.shape === "converging")
+                          : null,
+                        toolCallSequence: (ctx.metadata as any)?.toolCallSequence ?? [],
                       });
                     }),
                     Effect.catchAll(() => Effect.void),
