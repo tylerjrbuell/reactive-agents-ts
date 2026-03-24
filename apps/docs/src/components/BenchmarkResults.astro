@@ -35,10 +35,19 @@ type Run = {
 type MultiModelReport = { generatedAt: string; runs: Run[] };
 
 const isMultiModel = "runs" in rawData && Array.isArray((rawData as any).runs);
+
+// Compute generatedAt: use explicit field if present, otherwise derive from the latest run timestamp
+function deriveGeneratedAt(data: any): string {
+  if (data.generatedAt) return data.generatedAt;
+  const runs: Run[] = data.runs ?? [data];
+  const timestamps = runs.map((r) => r.timestamp).filter(Boolean).sort();
+  return timestamps.length > 0 ? timestamps[timestamps.length - 1]! : new Date().toISOString();
+}
+
 const report: MultiModelReport = isMultiModel
-  ? (rawData as unknown as MultiModelReport)
+  ? { ...(rawData as unknown as MultiModelReport), generatedAt: deriveGeneratedAt(rawData) }
   : {
-      generatedAt: (rawData as any).timestamp ?? new Date().toISOString(),
+      generatedAt: deriveGeneratedAt(rawData),
       runs: [rawData as unknown as Run],
     };
 
