@@ -130,6 +130,7 @@ export const MemoryServiceLive = (config: MemoryConfig, memoryLLM?: MemoryLLM) =
               recentEpisodes,
               activeWorkflows,
               workingMemory: [...workingMemory],
+              activeSkills: [] as unknown[],
               bootstrappedAt: new Date(),
               tier: config.tier,
             } satisfies MemoryBootstrapResult;
