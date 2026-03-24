@@ -75,5 +75,9 @@ export type { RunCompletedData, LearningResult } from "./learning/learning-engin
 // ── Event Subscriber ──
 export { subscribeEntropyScoring } from "./sensor/entropy-event-subscriber.js";
 
+// ── Skills ──
+export { SkillResolverService, makeSkillResolverService } from "./skills/skill-resolver.js";
+export type { ResolvedSkills, SkillResolverConfig } from "./skills/skill-resolver.js";
+
 // ── Runtime ──
 export { createReactiveIntelligenceLayer } from "./runtime.js";
