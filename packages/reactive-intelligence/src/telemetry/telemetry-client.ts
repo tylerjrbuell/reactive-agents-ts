@@ -18,8 +18,21 @@ export class TelemetryClient {
     return this.installId;
   }
 
+  /** Check if this is a test run — never send telemetry for test runs. */
+  private isTestRun(report: RunReport): boolean {
+    return (
+      report.provider === "test" ||
+      report.modelId === "test" ||
+      report.modelId.startsWith("test-") ||
+      (report as any).modelTier === "test"
+    );
+  }
+
   /** Send a run report. Fire-and-forget — never blocks, never throws. */
   send(report: RunReport): void {
+    // Guard: never send telemetry for test runs
+    if (this.isTestRun(report)) return;
+
     if (!this.noticePrinted) {
       console.log(
         "ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }"

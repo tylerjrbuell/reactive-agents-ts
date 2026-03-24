@@ -13,6 +13,7 @@ import { classifyTaskCategory } from "./task-classifier.js";
 
 export type RunCompletedData = {
   readonly modelId: string;
+  readonly provider?: string;  // used by test guard
   readonly taskDescription: string;
   readonly strategy: string;
   readonly outcome: "success" | "partial" | "failure";
@@ -65,6 +66,17 @@ export const LearningEngineServiceLive = (
   Layer.succeed(LearningEngineService, {
     onRunCompleted: (data) =>
       Effect.gen(function* () {
+        // Guard: skip all learning for test provider runs
+        const isTestProvider = data.modelId === "test" || data.modelId.startsWith("test-") || (data as any).provider === "test";
+        if (isTestProvider) {
+          return {
+            calibrationUpdated: false,
+            banditUpdated: false,
+            skillSynthesized: false,
+            taskCategory: "test",
+          };
+        }
+
         const taskCategory = classifyTaskCategory(data.taskDescription);
         const composites = data.entropyHistory.map((e) => e.composite);
         const meanEntropy =
