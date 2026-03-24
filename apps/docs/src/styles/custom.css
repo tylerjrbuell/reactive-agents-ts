@@ -57,6 +57,12 @@
   --sl-color-black: #ffffff; /* white      — page bg        */
 }
 
+/* ── Layout — widen content, narrow right TOC panel ────────── */
+:root {
+  --sl-content-width: 55rem;        /* default ~40rem — gives tables room */
+  --sl-sidebar-width: 16rem;        /* default 18.75rem — reclaim space for content */
+}
+
 /* ── Typography ─────────────────────────────────────────────── */
 html {
   font-family: var(--sl-font-system);
