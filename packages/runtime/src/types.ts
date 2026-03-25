@@ -407,3 +407,41 @@ export const defaultReactiveAgentsConfig = (
   agentId,
   ...overrides,
 });
+
+// ─── Meta-Tools Types ───
+
+export type HarnessSkillConfig =
+  | boolean
+  | string
+  | { frontier?: boolean | string; local?: boolean | string };
+
+export interface RecallConfig {
+  previewLength?: number;
+  autoFullThreshold?: number;
+  maxEntries?: number;
+  maxTotalBytes?: number;
+}
+
+export interface FindConfig {
+  autoStoreThreshold?: number;
+  minRagScore?: number;
+  webFallback?: boolean;
+  preferredScope?: "documents" | "web";
+}
+
+export interface PulseConfig {
+  useLLMRecommendation?: boolean;
+  includeControllerDecisions?: boolean;
+  includeBehavior?: boolean;
+}
+
+export interface MetaToolsConfig {
+  brief?: boolean;
+  find?: boolean;
+  pulse?: boolean;
+  recall?: boolean;
+  harnessSkill?: HarnessSkillConfig;
+  findConfig?: FindConfig;
+  pulseConfig?: PulseConfig;
+  recallConfig?: RecallConfig;
+}

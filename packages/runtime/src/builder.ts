@@ -609,6 +609,9 @@ export interface AgentResult {
  * @param agentName - Name of the agent (for logging/reference, not included in output)
  * @returns A formatted system prompt string with persona sections
  */
+/** Printed once per process when the first non-test agent with RI telemetry is built. */
+let _riTelemetryNoticePrinted = false;
+
 function composePersonaToSystemPrompt(
   persona: AgentPersona,
   agentName: string,
@@ -821,6 +824,7 @@ export class ReactiveAgentBuilder {
     lockedSkills?: string[];
   };
   private _riAutonomy?: "full" | "suggest" | "observe";
+  private _metaTools?: import("./types.js").MetaToolsConfig;
 
   // ─── Identity ───
 
@@ -1869,6 +1873,28 @@ export class ReactiveAgentBuilder {
   }
 
   /**
+   * Enable the Conductor's Suite meta-tools: brief, find, pulse, recall.
+   * Also injects the harness skill into the agent's operating context.
+   *
+   * @example
+   * ```typescript
+   * builder.withMetaTools()  // Enable all with defaults
+   * builder.withMetaTools({ harnessSkill: "./my-harness.md" })
+   * builder.withMetaTools({ brief: true, pulse: true })
+   * ```
+   */
+  withMetaTools(config?: import("./types.js").MetaToolsConfig): this {
+    this._metaTools = config ?? {
+      brief: true,
+      find: true,
+      pulse: true,
+      recall: true,
+      harnessSkill: true,
+    };
+    return this;
+  }
+
+  /**
    * Set the TTL for semantic cache entries. Cached LLM responses older than
    * this duration will be evicted.
    * @param ms - Cache TTL in milliseconds (default: 3,600,000 = 1 hour)
@@ -2038,6 +2064,20 @@ export class ReactiveAgentBuilder {
 
     logBuildInfo(this._provider, validation.resolvedModel);
 
+    // Print the RI telemetry notice once per process at build time (not mid-run)
+    if (this._enableReactiveIntelligence && this._provider !== "test" && !_riTelemetryNoticePrinted) {
+      const riOpts = this._reactiveIntelligenceOptions as Record<string, unknown> | undefined;
+      const telemetryCfg = riOpts?.telemetry;
+      const telemetryEnabled = telemetryCfg === undefined || telemetryCfg === true ||
+        (typeof telemetryCfg === "object" && telemetryCfg !== null && (telemetryCfg as any).enabled !== false);
+      if (telemetryEnabled) {
+        console.log(
+          "ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with .withReactiveIntelligence({ telemetry: false })"
+        );
+        _riTelemetryNoticePrinted = true;
+      }
+    }
+
     return Effect.runPromise(this.buildEffect()).catch((e) => {
       throw unwrapError(e);
     });
@@ -2133,6 +2173,41 @@ export class ReactiveAgentBuilder {
           : personaPrompt;
       }
 
+      // Resolve meta-tools configuration before building the runtime
+      let kernelMetaTools: any;
+      if (self._metaTools) {
+        const mt = self._metaTools;
+
+        // Determine model tier for harness skill selection
+        const tier: "frontier" | "local" =
+          (self._provider === "ollama" || self._provider === "litellm") ? "local" : "frontier";
+
+        // Resolve harness content (filesystem or inline string)
+        let harnessContent: string | undefined;
+        if (mt.harnessSkill !== false) {
+          const { resolveHarnessSkill } = yield* Effect.promise(
+            () => import("./harness-resolver.js"),
+          );
+          const resolved = yield* Effect.promise(
+            () => resolveHarnessSkill(mt.harnessSkill ?? true, tier),
+          );
+          if (resolved) harnessContent = resolved;
+        }
+
+        kernelMetaTools = {
+          brief: mt.brief,
+          find: mt.find,
+          pulse: mt.pulse,
+          recall: mt.recall,
+          staticBriefInfo: {
+            indexedDocuments: [],
+            availableSkills: [],
+            memoryBootstrap: { semanticLines: 0, episodicEntries: 0 },
+          },
+          harnessContent,
+        };
+      }
+
       const baseRuntime = createRuntime({
         agentId,
         provider: self._provider,
@@ -2196,6 +2271,7 @@ export class ReactiveAgentBuilder {
         reactiveIntelligenceOptions: self._reactiveIntelligenceOptions,
         fallbackConfig: self._fallbackConfig,
         pricingRegistry: Object.keys(self._pricingRegistry).length > 0 ? self._pricingRegistry : undefined,
+        metaTools: kernelMetaTools,
       });
 
       const hooks = [...self._hooks];
@@ -2823,6 +2899,18 @@ export class ReactiveAgentBuilder {
             () => import("./context-ingestion.js"),
           );
           yield* ingestDocuments(documents, sharedStore);
+        }
+
+        // Back-fill meta-tools staticBriefInfo with actual document index
+        if (kernelMetaTools?.staticBriefInfo && ragStore) {
+          const indexedDocuments = [...(ragStore as Map<string, unknown[]>).entries()].map(
+            ([source, chunks]) => ({
+              source,
+              chunkCount: chunks.length,
+              format: (chunks[0] as any)?.metadata?.format ?? "text",
+            }),
+          );
+          kernelMetaTools.staticBriefInfo.indexedDocuments = indexedDocuments;
         }
       }
 

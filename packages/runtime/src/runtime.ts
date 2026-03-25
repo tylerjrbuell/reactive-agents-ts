@@ -695,6 +695,23 @@ export interface RuntimeOptions {
    * Maps model identifiers to input/output token costs per 1 million tokens.
    */
   readonly pricingRegistry?: Record<string, { readonly input: number; readonly output: number }>;
+
+  /**
+   * Meta-tools configuration for the Conductor's Suite (brief, find, pulse, recall).
+   * When provided, these tools are injected into the agent's tool registry for the execution.
+   */
+  metaTools?: {
+    brief?: boolean;
+    find?: boolean;
+    pulse?: boolean;
+    recall?: boolean;
+    staticBriefInfo?: {
+      indexedDocuments: readonly { source: string; chunkCount: number; format: string }[];
+      availableSkills: readonly { name: string; purpose: string }[];
+      memoryBootstrap: { semanticLines: number; episodicEntries: number };
+    };
+    harnessContent?: string;
+  };
 }
 
 /**
@@ -796,6 +813,11 @@ export const createRuntime = (options: RuntimeOptions) => {
     enableReactiveIntelligence: options.enableReactiveIntelligence,
     reactiveIntelligenceOptions: options.reactiveIntelligenceOptions,
   };
+
+  // Thread meta-tools config through as a dynamic property (not in Schema)
+  if (options.metaTools) {
+    (config as any).metaTools = options.metaTools;
+  }
 
   // ── Required layers ──
   // EventBusLive and MetricsCollectorLive are exposed separately so optional layers that need them can be provided

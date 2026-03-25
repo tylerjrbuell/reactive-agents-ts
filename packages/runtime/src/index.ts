@@ -8,6 +8,11 @@ export type {
   LifecycleHook,
   ReactiveAgentsConfig,
   ModelParams,
+  MetaToolsConfig,
+  HarnessSkillConfig,
+  RecallConfig,
+  FindConfig,
+  PulseConfig,
 } from "./types.js";
 
 // ─── Schemas ───
