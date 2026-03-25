@@ -1,4 +1,5 @@
 import { Effect } from "effect";
+import { readFileSync } from "fs";
 import type { RagMemoryStore } from "@reactive-agents/tools";
 import {
   makeRagIngestHandler,
@@ -8,21 +9,30 @@ import {
 /**
  * Specification for a document to ingest into the RAG memory store.
  *
+ * When `content` is omitted, the file at `source` is read from disk automatically.
+ *
  * @example
  * ```typescript
+ * // Inline content
  * const doc: DocumentSpec = {
  *   content: "The capital of France is Paris.",
  *   source: "facts.txt",
- *   format: "text",
- *   chunkStrategy: "paragraph",
- *   maxChunkSize: 1000,
+ * };
+ *
+ * // Read from file path (content omitted)
+ * const fileDoc: DocumentSpec = {
+ *   source: "./docs/README.md",
+ *   format: "markdown",
  * };
  * ```
  */
 export interface DocumentSpec {
-  /** The full document content to ingest. */
-  readonly content: string;
-  /** Source identifier (file path, URL, or label) — used to tag chunks for retrieval. */
+  /**
+   * The full document content to ingest.
+   * When omitted, the file at `source` is read from disk.
+   */
+  readonly content?: string;
+  /** Source identifier (file path or label) — used to tag chunks for retrieval. */
   readonly source: string;
   /** Document format: text, markdown, json, csv, html. Auto-detected if omitted. */
   readonly format?: string;
@@ -52,14 +62,25 @@ export function ingestDocuments(
 
   return Effect.forEach(
     docs,
-    (doc) =>
-      handler({
-        content: doc.content,
+    (doc) => {
+      let content: string;
+      if (doc.content !== undefined) {
+        content = doc.content;
+      } else {
+        try {
+          content = readFileSync(doc.source, "utf8");
+        } catch {
+          return Effect.void;
+        }
+      }
+      return handler({
+        content,
         source: doc.source,
         ...(doc.format ? { format: doc.format } : {}),
         ...(doc.chunkStrategy ? { chunkStrategy: doc.chunkStrategy } : {}),
         ...(doc.maxChunkSize ? { maxChunkSize: doc.maxChunkSize } : {}),
-      }).pipe(Effect.asVoid, Effect.catchAll(() => Effect.void)),
+      }).pipe(Effect.asVoid, Effect.catchAll(() => Effect.void));
+    },
     { discard: true },
   );
 }

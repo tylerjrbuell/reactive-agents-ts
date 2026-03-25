@@ -1,7 +1,10 @@
-import { describe, it, expect } from "bun:test";
+import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { Effect } from "effect";
 import { ingestDocuments } from "../src/context-ingestion.js";
 import type { DocumentSpec } from "../src/context-ingestion.js";
+import { writeFileSync, unlinkSync, mkdtempSync } from "fs";
+import { join } from "path";
+import { tmpdir } from "os";
 
 describe("Context Ingestion", () => {
   it("should ingest a text document into the store", async () => {
@@ -64,6 +67,28 @@ describe("Context Ingestion", () => {
     ];
     await Effect.runPromise(ingestDocuments(docs, store));
     expect(store.has("readme.md")).toBe(true);
+  });
+
+  it("should read file content when content field is omitted and source is a file path", async () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), "rai-test-"));
+    const filePath = join(tmpDir, "test-doc.md");
+    writeFileSync(filePath, "# Test\n\nThis is file content from disk.", "utf8");
+    try {
+      const store = new Map();
+      const docs: DocumentSpec[] = [
+        { source: filePath, format: "markdown" },
+      ];
+      await Effect.runPromise(ingestDocuments(docs, store));
+      expect(store.size).toBe(1);
+      expect(store.has(filePath)).toBe(true);
+      const chunks = store.get(filePath)!;
+      expect(chunks.length).toBeGreaterThan(0);
+      expect(chunks.map((c) => c.content).join(" ")).toContain(
+        "file content from disk",
+      );
+    } finally {
+      unlinkSync(filePath);
+    }
   });
 
   it("should accumulate chunks for the same source", async () => {

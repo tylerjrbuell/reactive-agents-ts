@@ -28,7 +28,7 @@ export const ragSearchTool: ToolDefinition = {
       name: "source",
       type: "string",
       description:
-        "Filter results to chunks from a specific source document (the source identifier used during ingest).",
+        "Filter results to chunks from a specific source document. Accepts a partial, case-insensitive substring of the source identifier (e.g. 'memory' matches './.agents/MEMORY.md'). Omit to search all ingested documents.",
       required: false,
     },
   ],
@@ -103,10 +103,13 @@ export function makeInMemorySearchCallback(
 
       if (queryTerms.length === 0) return [];
 
-      // Collect all chunks, optionally filtered by source
+      // Collect all chunks, optionally filtered by source.
+      // Source filter uses case-insensitive substring match so that short
+      // names like "memory" match full paths like "./.agents/MEMORY.md".
+      const sourceLower = source?.toLowerCase();
       const allChunks: DocumentChunk[] = [];
       for (const [key, chunks] of store) {
-        if (source && key !== source) continue;
+        if (sourceLower && !key.toLowerCase().includes(sourceLower)) continue;
         allChunks.push(...chunks);
       }
 

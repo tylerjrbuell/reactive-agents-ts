@@ -275,6 +275,29 @@ describe("rag-search handler", () => {
     }
   });
 
+  it("should match source filter by case-insensitive substring", async () => {
+    await Effect.runPromise(
+      ingestHandler({
+        content: "v0.8.x — 22 packages + 2 apps, 2851 tests. Living Intelligence System merged.",
+        source: "./.agents/MEMORY.md",
+        format: "markdown",
+      }),
+    );
+    await Effect.runPromise(
+      ingestHandler({ content: "Unrelated document content.", source: "other.txt" }),
+    );
+
+    // Agent passes a short substring like "memory" or "MEMORY" — should still match
+    const result = await Effect.runPromise(
+      searchHandler({ query: "packages apps", source: "memory" }),
+    );
+    const typed = result as { results: Array<{ source: string; content: string }> };
+    expect(typed.results.length).toBeGreaterThanOrEqual(1);
+    for (const r of typed.results) {
+      expect(r.source).toBe("./.agents/MEMORY.md");
+    }
+  });
+
   it("should fail without query parameter", async () => {
     const error = await Effect.runPromise(
       searchHandler({}).pipe(Effect.flip),
