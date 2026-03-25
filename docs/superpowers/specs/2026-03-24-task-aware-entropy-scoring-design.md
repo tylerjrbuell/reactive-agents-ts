@@ -2,7 +2,7 @@
 
 **Date:** 2026-03-24
 **Status:** Draft
-**Scope:** `@reactive-agents/reactive-intelligence`, `packages/benchmarks/`, `.agents/skills/calibrate-scoring`
+**Scope:** `@reactive-agents/core`, `@reactive-agents/reactive-intelligence`, `packages/benchmarks/`, `.agents/skills/calibrate-scoring`
 
 ---
 
@@ -58,6 +58,11 @@ const actionDiversity = Math.min(1, uniqueTools / expected);
 
 The denominator is capped to the expected range for the task type, so quick-converging agents on simple tasks aren't penalized for "low diversity."
 
+**Type threading:** `taskCategory` must flow from the execution engine through `EntropySensorService.score()` to `computeBehavioralEntropy()`. This requires:
+- Adding `taskCategory?: string` to the `EntropySensorService` score params in `@reactive-agents/core` (the Tag interface)
+- Passing it through `entropy-sensor-service.ts` into `computeBehavioralEntropy()`
+- The execution engine already classifies the task via `classifyTaskCategoryFn()` — this value is forwarded
+
 #### 1b. Structural entropy — formatCompliance
 
 **File:** `packages/reactive-intelligence/src/sensor/structural-entropy.ts`
@@ -101,6 +106,11 @@ Expand from 6 categories to 9, with finer-grained keyword heuristics:
 Priority order: `multi-step` > `communication` > `file-operation` > `code-debug` > `code-write` > `data-analysis` > `deep-research` > `quick-lookup` > `general`.
 
 The classifier remains pure keyword heuristic — no LLM call, no Effect wrapper, sub-millisecond.
+
+**Migration:** The category renames (`multi-tool` → `multi-step`, `research` → `quick-lookup`/`deep-research`, `code-generation` → `code-write`/`code-debug`) are breaking changes for:
+- **Bandit store:** existing arms keyed by `${modelId}:${oldCategory}` become orphaned. Since bandit data is local learning that re-accumulates quickly, the simplest path is to discard existing arm data on upgrade. Add a version check in `BanditStore` that clears arms when the category schema changes.
+- **Telemetry `RunReport`:** the `taskCategory` field will emit new values. The telemetry server should accept unknown categories gracefully (it already does — unrecognized values are bucketed as-is).
+- **Calibration store:** not category-keyed (keyed by `modelId`), so no migration needed.
 
 ### 3. Exemplar Store
 
@@ -154,6 +164,8 @@ Variable-length trajectories are resampled to 20 points using linear interpolati
 
 ```typescript
 function normalizeTrajectory(trajectory: readonly number[], targetLen = 20): number[] {
+  if (trajectory.length === 0) return new Array(targetLen).fill(0.5); // neutral fallback
+  if (trajectory.length === 1) return new Array(targetLen).fill(trajectory[0]!);
   if (trajectory.length === targetLen) return [...trajectory];
   const result = new Array(targetLen);
   for (let i = 0; i < targetLen; i++) {
@@ -181,7 +193,25 @@ function positionWeights(len = 20): number[] {
 
 This produces weights ~0.02 at position 0, ~0.50 at position 10, ~0.98 at position 19.
 
-#### 4c. Composite Similarity
+#### 4c. RunTrajectory Type
+
+The input to all scoring functions. Built from a completed run's entropy trace:
+
+```typescript
+type RunTrajectory = {
+  taskCategory: string;
+  modelId: string;
+  iterations: number;
+  normalized: number[];          // float[20] via normalizeTrajectory()
+  finalEntropy: number;          // composite entropy at last iteration
+  meanEntropy: number;           // mean of all composite values
+  entropyTrace: EntropyScore[];  // full per-iteration data (for gap analysis)
+};
+```
+
+`entropyTrace` carries the per-iteration source breakdown so gap analysis can attribute divergences to specific entropy sources.
+
+#### 4d. Composite Similarity
 
 Three dimensions, each capturing a distinct aspect of "how ideal was this run":
 
@@ -204,8 +234,14 @@ function trajectoryDistance(
 function compositeScore(run: RunTrajectory, exemplar: ExemplarRecord): number {
   const weights = positionWeights();
 
+  // Trajectory similarity: weighted Euclidean on full 20-point curves
   const trajSim = 1 - trajectoryDistance(run.normalized, exemplar.normalizedTrajectory, weights);
-  const convergeSim = 1 - Math.abs(run.finalEntropy - exemplar.meanComposite);
+
+  // Convergence similarity: compare final entropy values (last point of each normalized trajectory)
+  const exemplarFinal = exemplar.normalizedTrajectory[19]!;
+  const convergeSim = 1 - Math.abs(run.finalEntropy - exemplarFinal);
+
+  // Efficiency similarity: did the agent use proportional iterations?
   const efficiencySim = 1 - Math.abs(run.iterations - exemplar.iterationCount)
     / Math.max(run.iterations, exemplar.iterationCount);
 
@@ -215,63 +251,73 @@ function compositeScore(run: RunTrajectory, exemplar: ExemplarRecord): number {
 }
 ```
 
-#### 4d. Run Scoring
+#### 4e. Run Scoring
 
 ```typescript
 function scoreRun(
   run: RunTrajectory,
   store: ExemplarStore,
-): Effect<TrajectoryScoreResult> {
-  const candidates = store.query(run.taskCategory, {
-    modelId: run.modelId, // soft preference — model-matched ranked higher
-    limit: 20,
+): Effect.Effect<TrajectoryScoreResult> {
+  return Effect.gen(function* () {
+    const candidates = yield* store.query(run.taskCategory, {
+      modelId: run.modelId, // soft preference — model-matched ranked higher
+      limit: 20,
+    });
+
+    if (candidates.length < 3) {
+      return { score: null, provisional: true, grade: fallbackGrade(run) };
+    }
+
+    const scores = candidates.map(e => compositeScore(run, e));
+    const top3 = scores.sort((a, b) => b - a).slice(0, 3);
+    const trajectoryScore = (top3[0]! + top3[1]! + top3[2]!) / 3;
+
+    return {
+      score: trajectoryScore,
+      provisional: false,
+      grade: trajectoryScore > 0.85 ? "A"
+           : trajectoryScore > 0.70 ? "B"
+           : trajectoryScore > 0.50 ? "C"
+           : trajectoryScore > 0.35 ? "D"
+           : "F",
+    };
   });
-
-  if (candidates.length < 3) {
-    return { score: null, provisional: true, grade: fallbackGrade(run) };
-  }
-
-  const scores = candidates.map(e => compositeScore(run, e));
-  const top3 = scores.sort((a, b) => b - a).slice(0, 3);
-  const trajectoryScore = (top3[0] + top3[1] + top3[2]) / 3;
-
-  return {
-    score: trajectoryScore,
-    provisional: false,
-    grade: trajectoryScore > 0.85 ? "A"
-         : trajectoryScore > 0.70 ? "B"
-         : trajectoryScore > 0.50 ? "C"
-         : trajectoryScore > 0.35 ? "D"
-         : "F",
-  };
 }
 ```
+
+`fallbackGrade` delegates to the existing shape-based grading logic (with source-level bug fixes applied) — `converged && mean < 0.55 → B`, etc. This is the cold-start path.
 
 ### 5. Exemplar Extraction
 
 **File:** `packages/reactive-intelligence/src/calibration/exemplar-extractor.ts`
 
-Applied automatically after each benchmark task completes:
+Applied after each benchmark task completes (per-task inline extraction during bench run, batch extraction when using `--seed-exemplars` post-suite):
 
 ```typescript
-function shouldExtractExemplar(run: CompletedRun, store: ExemplarStore): boolean {
-  // Hard gates
-  if (run.outcome !== "success") return false;
-  if (run.entropyTrace.length < 3) return false;
+function shouldExtractExemplar(
+  run: CompletedRun,
+  store: ExemplarStore,
+): Effect.Effect<boolean> {
+  return Effect.gen(function* () {
+    // Hard gates
+    if (run.outcome !== "success") return false;
+    if (run.entropyTrace.length < 3) return false;
 
-  const lastShape = run.entropyTrace.at(-1)!.trajectory.shape;
-  const earlyFinish = run.convergenceIter !== null
-    && run.convergenceIter < run.maxIterations * 0.4;
-  if (lastShape !== "converging" && !earlyFinish) return false;
+    const lastShape = run.entropyTrace.at(-1)!.trajectory.shape;
+    const earlyFinish = run.convergenceIter !== null
+      && run.convergenceIter < run.maxIterations * 0.4;
+    if (lastShape !== "converging" && !earlyFinish) return false;
 
-  // Top quartile check
-  const existingExemplars = store.query(run.taskCategory, { modelId: run.modelId });
-  if (existingExemplars.length < 4) return true; // too few to rank — accept
+    // Median check against existing exemplars (not p25 — avoids threshold stalling
+    // as the exemplar pool improves, which would make it nearly impossible to
+    // contribute new exemplars after a few cycles)
+    const existing = yield* store.query(run.taskCategory, { modelId: run.modelId });
+    if (existing.length < 4) return true; // too few to rank — accept
 
-  const existingMeans = existingExemplars.map(e => e.meanComposite);
-  existingMeans.sort((a, b) => a - b);
-  const p25 = existingMeans[Math.floor(existingMeans.length * 0.25)]!;
-  return run.meanEntropy <= p25; // lower entropy = better = top quartile
+    const existingMeans = existing.map(e => e.meanComposite).sort((a, b) => a - b);
+    const median = existingMeans[Math.floor(existingMeans.length / 2)]!;
+    return run.meanEntropy <= median; // at or below median = qualifies
+  });
 }
 ```
 
@@ -361,20 +407,43 @@ Relative threshold, self-adjusting as exemplar quality improves.
 ```
 
 #### Composite scorer (composite.ts)
-Accept optional `taskCategory` parameter to adjust source weights:
-- `quick-lookup` / `file-operation` / `communication`: behavioral weight ↑, structural weight ↓
-- `code-write` / `code-debug`: semantic weight ↑ (reasoning on-topic matters more)
-- `deep-research`: even weighting (all sources informative)
-- `multi-step`: behavioral weight ↑ (tool orchestration quality is key signal)
+Accept optional `taskCategory` parameter to adjust source weights. Defaults (without logprobs) are `structural: 0.40, semantic: 0.25, behavioral: 0.25, contextPressure: 0.10`. Per-category overrides:
+
+| Category | structural | semantic | behavioral | contextPressure | Rationale |
+|---|---|---|---|---|---|
+| `quick-lookup` | 0.30 | 0.20 | 0.35 | 0.15 | Behavioral dominates — did it converge fast with the right tools? |
+| `deep-research` | 0.35 | 0.30 | 0.20 | 0.15 | Semantic matters — staying on-topic across many iterations |
+| `code-write` | 0.30 | 0.35 | 0.20 | 0.15 | Semantic dominant — reasoning coherence for code generation |
+| `code-debug` | 0.30 | 0.35 | 0.25 | 0.10 | Semantic + behavioral — on-topic reasoning and targeted tool use |
+| `data-analysis` | 0.35 | 0.25 | 0.25 | 0.15 | Balanced — structure and behavior both matter |
+| `file-operation` | 0.30 | 0.15 | 0.40 | 0.15 | Behavioral dominant — fast convergence with file tools |
+| `communication` | 0.25 | 0.20 | 0.40 | 0.15 | Behavioral dominant — send and finish |
+| `multi-step` | 0.30 | 0.20 | 0.35 | 0.15 | Behavioral dominant — orchestration quality |
+| `general` | 0.40 | 0.25 | 0.25 | 0.10 | Default weights (no assumption) |
 
 ### 8. Dog-Fooding Feedback Loop
+
+#### Benchmark TaskResult extension
+
+The current `TaskResult` in `packages/benchmarks/src/types.ts` lacks entropy data. Extend it:
+
+```typescript
+// Added fields:
+entropyTrace?: EntropyScore[];   // full per-iteration entropy data
+meanEntropy?: number;
+convergenceIter?: number | null;
+toolsUsed?: string[];
+taskCategory?: string;           // from classifier
+```
+
+The benchmark runner captures this data from `AgentResult.metadata` (which already carries `reasoningSteps`) and from EventBus `EntropyScored` events emitted during execution. The runner subscribes to EventBus before each task and collects the trace.
 
 #### Seed run
 ```bash
 bun run bench --provider ollama --model cogito:14b --seed-exemplars
 ```
 
-The `--seed-exemplars` flag triggers exemplar extraction after all benchmark tasks complete. Initial population step — covers all 9 categories across target models.
+The `--seed-exemplars` flag triggers batch exemplar extraction after all benchmark tasks complete. During normal benchmark runs (without the flag), per-task inline extraction evaluates each completed task against the exemplar store and inserts qualifying runs immediately.
 
 #### Refinement cycle
 Every subsequent benchmark run:
@@ -445,15 +514,18 @@ Exemplar data is verifiable through:
 - `.agents/skills/calibrate-scoring/SKILL.md`
 
 ### Modified files
+- `packages/core/src/services.ts` — add `taskCategory?: string` to `EntropySensorService` score params interface
 - `packages/reactive-intelligence/src/sensor/behavioral-entropy.ts` — task-category-aware actionDiversity
 - `packages/reactive-intelligence/src/sensor/structural-entropy.ts` — prose-then-action formatCompliance
 - `packages/reactive-intelligence/src/learning/task-classifier.ts` — 9 categories
 - `packages/reactive-intelligence/src/sensor/composite.ts` — per-category source weights
 - `packages/reactive-intelligence/src/learning/learning-engine.ts` — trajectoryScore bandit reward
 - `packages/reactive-intelligence/src/learning/skill-synthesis.ts` — relative qualification gate
+- `packages/reactive-intelligence/src/learning/bandit-store.ts` — version check to clear arms on category schema change
 - `packages/observability/src/exporters/console-exporter.ts` — trajectoryScore grade + gap analysis
 - `packages/reactive-intelligence/src/sensor/entropy-sensor-service.ts` — taskCategory passthrough
-- Benchmark runner in `packages/benchmarks/` — --seed-exemplars flag, exemplar extraction, gap report
+- `packages/benchmarks/src/types.ts` — extend TaskResult with entropy fields
+- `packages/benchmarks/src/runner.ts` — EventBus subscription for entropy trace capture, --seed-exemplars flag, exemplar extraction, gap report
 
 ### Test files (new)
 - `packages/reactive-intelligence/tests/calibration/exemplar-store.test.ts`
@@ -463,6 +535,16 @@ Exemplar data is verifiable through:
 - `packages/reactive-intelligence/tests/learning/task-classifier-expanded.test.ts`
 - `packages/reactive-intelligence/tests/sensor/behavioral-entropy-category.test.ts`
 - `packages/reactive-intelligence/tests/sensor/structural-entropy-prose.test.ts`
+
+### Required test scenarios
+
+- **Normalization edge cases:** empty trajectory, single-element, length > 20, exact length 20
+- **Composite score boundaries:** identical run/exemplar → score ≈ 1.0; maximally different → score near 0.0; 1-iter run vs 15-iter exemplar
+- **Category migration:** old category names (`multi-tool`, `research`, `code-generation`) are remapped or rejected
+- **Bandit provisional reward:** confirm `0.5` neutral reward doesn't distort Thompson Sampling posteriors over time
+- **Exemplar supersession ordering:** two qualifying runs in same benchmark sweep — only the better one becomes active
+- **Dashboard provisional rendering:** `(provisional)` marker renders correctly in console exporter
+- **ExemplarStore round-trip:** insert → query → supersede → re-query → verify superseded not in default results but still retrievable
 
 ## Cold-Start Behavior
 
