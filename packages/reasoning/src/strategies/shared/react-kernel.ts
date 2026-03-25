@@ -646,8 +646,8 @@ function handleActing(
     // Publish action event
     yield* hooks.onAction(state, toolRequest.tool, toolRequest.input);
 
-    let observationContent: string;
-    let obsResult: import("../../types/observation.js").ObservationResult;
+    let observationContent: string = "";
+    let obsResult: import("../../types/observation.js").ObservationResult = makeObservationResult("unknown", true, "");
 
     // Hard side-effect guard — refuse to execute blocked tools from prior passes
     const isBlocked = input.blockedTools?.includes(toolRequest.tool) ?? false;
@@ -769,7 +769,7 @@ function handleActing(
       let parsedArgs: Record<string, unknown> = {};
       try { parsedArgs = JSON.parse(toolRequest.input) as Record<string, unknown>; } catch { /* ok */ }
 
-      const liveStore = Ref.unsafeGet(scratchpadStoreRef);
+      const liveStore = yield* Ref.get(scratchpadStoreRef);
       const recallKeys = [...liveStore.keys()];
       const briefInput: BriefInput = {
         section: parsedArgs.section as string | undefined,
@@ -779,7 +779,7 @@ function handleActing(
         memoryBootstrap: input.metaTools.staticBriefInfo?.memoryBootstrap ?? { semanticLines: 0, episodicEntries: 0 },
         recallKeys,
         tokens: state.tokens,
-        tokenBudget: input.contextProfile?.hardBudget ?? 8000,
+        tokenBudget: (input.contextProfile as any)?.maxTokens ?? 8000,
         entropy: ((state.meta as any).entropy?.latest) as { composite: number; shape: string; momentum: number } | undefined,
         controllerDecisionLog: state.controllerDecisionLog,
       };
@@ -798,9 +798,9 @@ function handleActing(
         controllerDecisionLog: state.controllerDecisionLog,
         steps: state.steps,
         iteration: state.iteration,
-        maxIterations: input.maxIterations ?? 10,
+        maxIterations: (state.meta.maxIterations as number | undefined) ?? 10,
         tokens: state.tokens,
-        tokenBudget: input.contextProfile?.hardBudget ?? 8000,
+        tokenBudget: (input.contextProfile as any)?.maxTokens ?? 8000,
         task: input.task,
         allToolSchemas: input.allToolSchemas ?? input.availableToolSchemas ?? [],
         toolsUsed: state.toolsUsed,
