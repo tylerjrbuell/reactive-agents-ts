@@ -186,3 +186,27 @@ export type { FinalAnswerVisibility, FinalAnswerState, FinalAnswerCapture } from
 
 // ─── Completion Gaps Utility ───
 export { detectCompletionGaps } from "./skills/completion-gaps.js";
+
+// ─── Conductor's Suite Tools ───
+export {
+  recallTool,
+  makeRecallHandler,
+  type RecallConfig,
+} from "./skills/recall.js";
+export {
+  findTool,
+  makeFindHandler,
+  type FindConfig,
+  type FindState,
+} from "./skills/find.js";
+export {
+  briefTool,
+  buildBriefResponse,
+  computeEntropyGrade,
+  type BriefInput,
+} from "./skills/brief.js";
+export {
+  pulseTool,
+  buildPulseResponse,
+  type PulseInput,
+} from "./skills/pulse.js";

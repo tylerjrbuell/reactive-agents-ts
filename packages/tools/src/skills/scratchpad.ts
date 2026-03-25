@@ -8,8 +8,7 @@ import { ToolExecutionError } from "../errors.js";
 export const scratchpadWriteTool: ToolDefinition = {
   name: "scratchpad-write",
   description:
-    "Save a note to the scratchpad. Notes persist across reasoning steps and survive context compaction. " +
-    "Use for plans, intermediate results, or key facts. IMPORTANT: use 'key' and 'content' params.",
+    "Write a note to working memory. Alias for recall(key, content). Prefer recall() for new code.",
   parameters: [
     {
       name: "key",
@@ -34,7 +33,7 @@ export const scratchpadWriteTool: ToolDefinition = {
 export const scratchpadReadTool: ToolDefinition = {
   name: "scratchpad-read",
   description:
-    "Read notes from the scratchpad. Call with a key to read one note, or without a key to list all notes.",
+    "Read a note from working memory. Alias for recall(key, full: true). Prefer recall() for new code.",
   parameters: [
     {
       name: "key",

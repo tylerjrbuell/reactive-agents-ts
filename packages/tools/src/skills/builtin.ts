@@ -23,6 +23,10 @@ import {
   makeRagSearchHandler,
   makeInMemorySearchCallback,
 } from "./rag-search.js";
+import { recallTool, makeRecallHandler, type RecallConfig } from "./recall.js";
+import { findTool, makeFindHandler, type FindConfig, type FindState } from "./find.js";
+import { briefTool, buildBriefResponse, computeEntropyGrade, type BriefInput } from "./brief.js";
+import { pulseTool, buildPulseResponse, type PulseInput } from "./pulse.js";
 
 // Re-export meta-tool factories and types so callers can wire up dynamic state
 export {
@@ -59,6 +63,28 @@ export {
   type RagSearchCallback,
   type RagSearchResult,
 } from "./rag-search.js";
+export {
+  recallTool,
+  makeRecallHandler,
+  type RecallConfig,
+} from "./recall.js";
+export {
+  findTool,
+  makeFindHandler,
+  type FindConfig,
+  type FindState,
+} from "./find.js";
+export {
+  briefTool,
+  buildBriefResponse,
+  computeEntropyGrade,
+  type BriefInput,
+} from "./brief.js";
+export {
+  pulseTool,
+  buildPulseResponse,
+  type PulseInput,
+} from "./pulse.js";
 
 // Shared scratchpad store — one per tool service instance (reset per agent run).
 // Exported so the reasoning kernel can sync scratchpad state after tool execution.
@@ -100,4 +126,8 @@ export const metaToolDefinitions: ReadonlyArray<ToolDefinition> = [
   contextStatusTool,
   taskCompleteTool,
   finalAnswerTool,
+  briefTool,
+  findTool,
+  pulseTool,
+  recallTool,
 ];
