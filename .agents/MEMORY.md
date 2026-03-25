@@ -7,7 +7,18 @@
 
 ## Current Status (Mar 24, 2026)
 
-- **v0.8.x** — 22 packages + 2 apps, 2,852 tests across 336 files
+- **v0.8.x** — 22 packages + 2 apps, 2,993 tests across 342 files
+- **Conductor's Suite** — merged to main
+  - `brief`, `find`, `pulse`, `recall` meta-tools in `@reactive-agents/tools`
+  - `brief`: situational overview (tools, docs, skills, memory, recall, entropy signal)
+  - `find`: unified search auto-routing RAG→memory→web, auto-stores to recall
+  - `pulse`: reactive intelligence introspection — entropy grade, loop detection, readyToAnswer
+  - `recall`: selective working memory, replaces scratchpad (droplet retrieval, keyword search)
+  - `controllerDecisionLog` on KernelState accumulates across run
+  - `detectCompletionGaps` extracted to `@reactive-agents/tools` (was react-kernel.ts)
+  - `.withMetaTools()` builder API with `HarnessSkillConfig` for override/evolution
+  - Harness skill assets in `packages/runtime/assets/` (frontier + condensed tiers)
+  - RAG fixes: `DocumentSpec.content` optional (reads from `source` path), `rag-search` source uses case-insensitive substring
 - **Living Intelligence System** — merged to main (23 commits)
   - Living Skills: SkillRecord, SkillStoreService, SkillEvolutionService, SkillRegistry, SkillResolver, SkillDistiller
   - Intelligence Control Surface: 10 controller decisions (7 new evaluators: temp-adjust, skill-activate, prompt-switch, tool-inject, memory-boost, skill-reinject, human-escalate)
@@ -24,6 +35,8 @@
 
 | Document | Purpose |
 |----------|---------|
+| `docs/superpowers/specs/2026-03-24-conductors-suite-design.md` | Conductor's Suite design spec (brief, find, pulse, recall, harness skill) |
+| `docs/superpowers/plans/2026-03-24-conductors-suite.md` | Conductor's Suite implementation plan (9 tasks, all complete) |
 | `docs/superpowers/specs/2026-03-23-living-intelligence-system-design.md` | Living Intelligence System full design spec |
 | `docs/superpowers/plans/2026-03-23-living-intelligence-system.md` | Implementation plan (21 tasks, all complete) |
 | `docs/superpowers/plans/2026-03-24-telemetry-server-intelligence-enrichment.md` | Telemetry API server changes needed (not yet implemented) |

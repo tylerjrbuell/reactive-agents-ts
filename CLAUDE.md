@@ -2,7 +2,7 @@
 
 ## Project Status
 
-**v0.8.x — Adoption Readiness.** 22 packages + 2 apps built, 2,851 tests across 336 files. Cost optimization: `.withDynamicPricing()`, `openRouterPricingProvider`, cache-aware token discounts. Builder hardening: `withStrictValidation()`, `withTimeout()`, `withRetryPolicy()`, `withCacheTimeout()`, consolidated `withGuardrails()` thresholds, `withErrorHandler()`, `withFallbacks()`, `withLogging()`, `withHealthCheck()`. Strategy switching: `withReasoning({ enableStrategySwitching: true })`. Stream improvements: AbortSignal cancellation, `IterationProgress` event, `StreamCancelled` event, `StreamCompleted.toolSummary`. `ToolBuilder` fluent API. `SessionStoreService` SQLite-backed chat session persistence. `FallbackChain` in `@reactive-agents/llm-provider`. `makeLoggerService()` structured logging with rotation. `expectStream()` streaming test assertions + scenario fixtures. `agent.health()` health probes. `rax create agent --interactive`. Final Answer, Debrief & Chat: `final-answer` meta-tool hard-gates the ReAct loop exit (replaces fragile text regex). `DebriefSynthesizer` post-run service: collects execution signals + one LLM call → structured `AgentDebrief` (summary, key findings, lessons, errors, metrics). `DebriefStore` persists run artifacts to SQLite (`agent_debriefs` table). `AgentResult` enriched with `debrief?`, `format?`, `terminatedBy?`. `agent.chat()` + `agent.session()` for conversational Q&A with adaptive routing (direct LLM for questions, ReAct loop for tool-capable queries). `OutputFormat` + `TerminatedBy` canonical types. Unified `confidence` type (`"high"|"medium"|"low"`). Agent as Data: `AgentConfig` Effect-TS Schema for JSON-serializable agent definitions, `agentConfigToJSON()`/`agentConfigFromJSON()` roundtrip serialization, `agentConfigToBuilder()`/`builder.toConfig()`/`ReactiveAgents.fromConfig()`/`ReactiveAgents.fromJSON()`. Lightweight Composition: `agentFn()` lazy agent primitives, `pipe()`/`parallel()`/`race()` combinators. Dynamic Tool Registration: `agent.registerTool()`/`agent.unregisterTool()` at runtime. Living Intelligence System: Living Skills with agentskills.io SKILL.md compatibility, `SkillStoreService` SQLite-backed skill persistence, `SkillEvolutionService` LLM-based skill refinement with version management, `SkillResolverService` unified skill resolution (SQLite + filesystem), 5-stage skill compression pipeline, context-aware injection guard with tier budgets, `activate_skill` + `get_skill_section` meta-tools, Intelligence Control Surface expanded to 10 mid-run decisions (temp-adjust, skill-activate, prompt-switch, tool-inject, memory-boost, skill-reinject, human-escalate), test model exclusion guards, `.withSkills()` builder API, `agent.skills()`/`exportSkill()`/`loadSkill()`/`refineSkills()` runtime API.
+**v0.8.x — Adoption Readiness.** 22 packages + 2 apps built, 2,993 tests across 342 files. Cost optimization: `.withDynamicPricing()`, `openRouterPricingProvider`, cache-aware token discounts. Builder hardening: `withStrictValidation()`, `withTimeout()`, `withRetryPolicy()`, `withCacheTimeout()`, consolidated `withGuardrails()` thresholds, `withErrorHandler()`, `withFallbacks()`, `withLogging()`, `withHealthCheck()`. Strategy switching: `withReasoning({ enableStrategySwitching: true })`. Stream improvements: AbortSignal cancellation, `IterationProgress` event, `StreamCancelled` event, `StreamCompleted.toolSummary`. `ToolBuilder` fluent API. `SessionStoreService` SQLite-backed chat session persistence. `FallbackChain` in `@reactive-agents/llm-provider`. `makeLoggerService()` structured logging with rotation. `expectStream()` streaming test assertions + scenario fixtures. `agent.health()` health probes. `rax create agent --interactive`. Final Answer, Debrief & Chat: `final-answer` meta-tool hard-gates the ReAct loop exit (replaces fragile text regex). `DebriefSynthesizer` post-run service: collects execution signals + one LLM call → structured `AgentDebrief` (summary, key findings, lessons, errors, metrics). `DebriefStore` persists run artifacts to SQLite (`agent_debriefs` table). `AgentResult` enriched with `debrief?`, `format?`, `terminatedBy?`. `agent.chat()` + `agent.session()` for conversational Q&A with adaptive routing (direct LLM for questions, ReAct loop for tool-capable queries). `OutputFormat` + `TerminatedBy` canonical types. Unified `confidence` type (`"high"|"medium"|"low"`). Agent as Data: `AgentConfig` Effect-TS Schema for JSON-serializable agent definitions, `agentConfigToJSON()`/`agentConfigFromJSON()` roundtrip serialization, `agentConfigToBuilder()`/`builder.toConfig()`/`ReactiveAgents.fromConfig()`/`ReactiveAgents.fromJSON()`. Lightweight Composition: `agentFn()` lazy agent primitives, `pipe()`/`parallel()`/`race()` combinators. Dynamic Tool Registration: `agent.registerTool()`/`agent.unregisterTool()` at runtime. Living Intelligence System: Living Skills with agentskills.io SKILL.md compatibility, `SkillStoreService` SQLite-backed skill persistence, `SkillEvolutionService` LLM-based skill refinement with version management, `SkillResolverService` unified skill resolution (SQLite + filesystem), 5-stage skill compression pipeline, context-aware injection guard with tier budgets, `activate_skill` + `get_skill_section` meta-tools, Intelligence Control Surface expanded to 10 mid-run decisions (temp-adjust, skill-activate, prompt-switch, tool-inject, memory-boost, skill-reinject, human-escalate), test model exclusion guards, `.withSkills()` builder API, `agent.skills()`/`exportSkill()`/`loadSkill()`/`refineSkills()` runtime API.
 
 - Phase 1: Core, LLM Provider, Memory, Reasoning, Tools, Interaction, Runtime
 - Phase 2: Guardrails, Verification, Cost
@@ -31,6 +31,7 @@
 - Reactive Intelligence Pipeline (Phases 2–4): Reactive Controller (early-stop, context compression, strategy switch), Local Learning Engine (conformal calibration, Thompson Sampling bandit, skill synthesis), Telemetry Client (RunReport, HMAC signing, fire-and-forget POST to api.reactiveagents.dev), EventBus-driven entropy scoring (all strategies), dashboard entropy signals section, telemetry pipeline integration (2,194 tests, 288 files)
 - Framework Evolution: Cost Tracking 2.0 (`.withDynamicPricing`, caching multipliers), Agent as Data (`AgentConfig` schema, serialization, builder reconstruction, `toConfig()`/`fromConfig()`/`fromJSON()`), Lightweight Composition (`agentFn`, `pipe`, `parallel`, `race`), Dynamic Tool Registration (`registerTool`/`unregisterTool` on ReactiveAgent facade + ToolService) (2,851 tests, 336 files)
 - Living Intelligence System: Living Skills (`SkillRecord`, `SkillStoreService`, `SkillEvolutionService`, `SkillRegistry`, `SkillResolver`, `SkillDistiller`), agentskills.io SKILL.md compatibility, 5-stage skill compression pipeline, context-aware injection guard with tier budgets, `activate_skill` + `get_skill_section` meta-tools, Intelligence Control Surface expanded to 10 decisions (7 new evaluators), test model exclusion guards, RunReport telemetry enrichment, `.withSkills()` builder API, `agent.skills()`/`exportSkill()`/`loadSkill()`/`refineSkills()` runtime API, MemoryConsolidator CONNECT phase wired to skill distillation (2,851 tests, 336 files)
+- Conductor's Suite: Agent self-awareness via four meta-tools — `brief` (situational overview), `find` (unified search: RAG→memory→web auto-routing), `pulse` (reactive intelligence introspection: entropy, loops, context pressure, readiness), `recall` (selective working memory with droplet retrieval, replaces scratchpad). Built-in harness skill teaches the conductor's workflow. `controllerDecisionLog` on KernelState. `DocumentSpec.content` now optional (reads from `source` file path). `rag-search` source filter uses case-insensitive substring. `detectCompletionGaps` extracted to `@reactive-agents/tools`. `.withMetaTools()` builder API, `HarnessSkillConfig` for override/evolution (2,993 tests, 342 files)
 - Pre-release: tsup compiled output, Google Gemini provider, Reflexion reasoning strategy
 - Final Integration: All layers compose via `createRuntime()` and `ReactiveAgentBuilder`
 - Docs: Starlight (Astro) site at `apps/docs/`
@@ -41,7 +42,7 @@
 
 ```bash
 bun install              # Install dependencies
-bun test                 # Run all tests (2851 tests, 336 files)
+bun test                 # Run all tests (2993 tests, 342 files)
 bun run build            # Build all packages (22 packages, ESM + DTS)
 cd apps/docs && npx astro dev    # Start docs dev server
 cd apps/docs && npx astro build  # Build docs for production
@@ -103,6 +104,13 @@ const agent = await ReactiveAgents.create()
     console.error("Agent error:", err);
   })
   .withHealthCheck()                     // Enable agent.health() probe
+  .withMetaTools({                       // Conductor's Suite: brief, find, pulse, recall
+    brief: true,                         // Situational awareness tool
+    find: true,                          // Unified search (RAG→memory→web auto-routing)
+    pulse: true,                         // Reactive intelligence introspection
+    recall: true,                        // Selective working memory (replaces scratchpad)
+    harnessSkill: true,                  // Inject built-in conductor's workflow skill
+  })
   .withSkills({                          // Living Skills System
     paths: ["./my-skills/"],
     evolution: { mode: "suggest" },
@@ -215,6 +223,7 @@ Skills in `.claude/skills/` are loaded automatically.
 | `docs/superpowers/specs/2026-03-14-reactive-intelligence-full-pipeline.md` | `@reactive-agents/reactive-intelligence` (Phases 2–4: controller, learning, telemetry) |
 | `docs/superpowers/specs/2026-03-14-reactive-telemetry-server.md` | Reactive Telemetry Server (api.reactiveagents.dev) |
 | `docs/superpowers/specs/2026-03-23-living-intelligence-system-design.md` | Living Intelligence System (skills, controller expansion, telemetry enrichment) |
+| `docs/superpowers/specs/2026-03-24-conductors-suite-design.md` | Conductor's Suite (`brief`, `find`, `pulse`, `recall` meta-tools, harness skill, `.withMetaTools()`) |
 
 ---
 
@@ -244,7 +253,7 @@ packages/
   llm-provider/  — LLM adapters (Anthropic, OpenAI, Gemini, Ollama, LiteLLM, Test)
   memory/        — Working, Semantic, Episodic, Procedural (bun:sqlite); SessionStoreService for SQLite-backed chat session persistence; SkillStoreService for living skill CRUD; SkillEvolutionService for LLM-based skill refinement + version management
   reasoning/     — ReAct, Plan-Execute, ToT strategies
-  tools/         — Tool registry, sandbox, MCP client
+  tools/         — Tool registry, sandbox, MCP client; Conductor's Suite: `recall`, `find`, `brief`, `pulse` meta-tools, `completion-gaps.ts` shared utility
   guardrails/    — Injection, PII, toxicity detection
   verification/  — Semantic entropy, fact decomposition, hallucination detection
   cost/          — Complexity routing, budget enforcement
