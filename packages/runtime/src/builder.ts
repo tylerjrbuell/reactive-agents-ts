@@ -824,7 +824,7 @@ export class ReactiveAgentBuilder {
     lockedSkills?: string[];
   };
   private _riAutonomy?: "full" | "suggest" | "observe";
-  private _metaTools?: import("./types.js").MetaToolsConfig;
+  private _metaTools?: import("./types.js").MetaToolsConfig | false;
 
   // ─── Identity ───
 
@@ -1885,7 +1885,7 @@ export class ReactiveAgentBuilder {
    */
   withMetaTools(config?: import("./types.js").MetaToolsConfig | false): this {
     if (config === false) {
-      this._metaTools = false as any; // explicit disable marker
+      this._metaTools = false;
     } else {
       this._metaTools = config ?? {
         brief: true,
@@ -2188,8 +2188,8 @@ export class ReactiveAgentBuilder {
 
       // Resolve meta-tools configuration before building the runtime
       let kernelMetaTools: any;
-      if (effectiveMetaTools && effectiveMetaTools !== false) {
-        const mt = effectiveMetaTools as import("./types.js").MetaToolsConfig;
+      if (effectiveMetaTools) {
+        const mt = effectiveMetaTools;
 
         // Determine model tier for harness skill selection
         const tier: "frontier" | "local" =
