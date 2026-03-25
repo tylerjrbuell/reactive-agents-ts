@@ -64,6 +64,19 @@ export class ReasoningService extends Context.Tag("ReasoningService")<
       readonly temperature?: number;
       /** Custom environment context key-value pairs injected into system prompt */
       readonly environmentContext?: Readonly<Record<string, string>>;
+      /** Meta-tool configuration and pre-computed static data for brief/pulse/recall/find. */
+      readonly metaTools?: {
+        readonly brief?: boolean;
+        readonly find?: boolean;
+        readonly pulse?: boolean;
+        readonly recall?: boolean;
+        readonly staticBriefInfo?: {
+          readonly indexedDocuments: readonly { source: string; chunkCount: number; format: string }[];
+          readonly availableSkills: readonly { name: string; purpose: string }[];
+          readonly memoryBootstrap: { semanticLines: number; episodicEntries: number };
+        };
+        readonly harnessContent?: string;
+      };
     }) => Effect.Effect<ReasoningResult, ReasoningErrors>;
 
     /** Register a custom strategy function. */

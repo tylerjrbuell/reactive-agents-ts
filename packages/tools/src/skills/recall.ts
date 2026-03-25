@@ -48,7 +48,7 @@ export const recallTool: ToolDefinition = {
   timeoutMs: 5_000,
   requiresApproval: false,
   source: "builtin",
-  category: "memory",
+  category: "data",
 };
 
 export const makeRecallHandler =

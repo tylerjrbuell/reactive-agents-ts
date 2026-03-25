@@ -37,7 +37,7 @@ export const pulseTool: ToolDefinition = {
   timeoutMs: 5_000,
   requiresApproval: false,
   source: "function",
-  category: "meta",
+  category: "data",
 };
 
 const META_TOOLS = new Set([

@@ -33,7 +33,7 @@ export const briefTool: ToolDefinition = {
   timeoutMs: 5_000,
   requiresApproval: false,
   source: "function",
-  category: "meta",
+  category: "data",
 };
 
 export function computeEntropyGrade(composite: number | undefined): string {

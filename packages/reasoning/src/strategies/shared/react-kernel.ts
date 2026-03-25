@@ -27,6 +27,19 @@ import {
   scratchpadStoreRef,
   detectCompletionGaps,
   type FinalAnswerCapture,
+  briefTool,
+  buildBriefResponse,
+  type BriefInput,
+  pulseTool,
+  buildPulseResponse,
+  type PulseInput,
+  makeRecallHandler,
+  recallTool,
+  makeFindHandler,
+  findTool,
+  ragMemoryStore,
+  webSearchHandler,
+  ToolService,
 } from "@reactive-agents/tools";
 
 // Re-export for test and consumer backward compatibility
@@ -112,6 +125,19 @@ export interface ReActKernelInput {
   modelId?: string;
   /** Exit kernel loop when all scoped tools have been called successfully */
   exitOnAllToolsCalled?: boolean;
+  /** Meta-tool configuration and pre-computed static data for brief/pulse/recall/find. */
+  metaTools?: {
+    brief?: boolean;
+    find?: boolean;
+    pulse?: boolean;
+    recall?: boolean;
+    staticBriefInfo?: {
+      indexedDocuments: readonly { source: string; chunkCount: number; format: string }[];
+      availableSkills: readonly { name: string; purpose: string }[];
+      memoryBootstrap: { semanticLines: number; episodicEntries: number };
+    };
+    harnessContent?: string;
+  };
 }
 
 export interface ReActKernelResult {
@@ -210,7 +236,7 @@ function handleThinking(
     // inject the final-answer tool into the available tool schemas so the LLM
     // can discover and use it as the preferred termination mechanism.
     const hasNonMetaToolCalledForThink = [...state.toolsUsed].some(
-      (t) => t !== "final-answer" && t !== "task-complete" && t !== "context-status" && t !== "scratchpad-write" && t !== "scratchpad-read",
+      (t) => t !== "final-answer" && t !== "task-complete" && t !== "context-status" && t !== "scratchpad-write" && t !== "scratchpad-read" && t !== "brief" && t !== "pulse" && t !== "find" && t !== "recall",
     );
     // When no required tools are specified, scratchpad usage alone satisfies the
     // "has done real work" condition — matches the hard gate logic at line ~680.
@@ -227,16 +253,23 @@ function handleThinking(
       hasNonMetaToolCalled: hasAnyToolWork,
     });
 
-    const augmentedToolSchemas: readonly import("./tool-utils.js").ToolSchema[] = finalAnswerVisible
-      ? [
-          ...(input.availableToolSchemas ?? []),
-          {
-            name: finalAnswerTool.name,
-            description: finalAnswerTool.description,
-            parameters: finalAnswerTool.parameters,
-          },
-        ]
-      : (input.availableToolSchemas ?? []);
+    const augmentedToolSchemas: readonly import("./tool-utils.js").ToolSchema[] = [
+      ...(input.availableToolSchemas ?? []),
+      ...(finalAnswerVisible ? [{ name: finalAnswerTool.name, description: finalAnswerTool.description, parameters: finalAnswerTool.parameters }] : []),
+      ...(input.metaTools?.brief ? [{ name: briefTool.name, description: briefTool.description, parameters: briefTool.parameters }] : []),
+      ...(input.metaTools?.pulse ? [{ name: pulseTool.name, description: pulseTool.description, parameters: pulseTool.parameters }] : []),
+    ] as readonly import("./tool-utils.js").ToolSchema[];
+
+    // ── Harness skill injection ──────────────────────────────────────────────
+    const harnessContent = input.metaTools?.harnessContent;
+    const isNonTrivial =
+      input.task.length >= 80 ||
+      (input.requiredTools?.length ?? 0) > 0 ||
+      (input.metaTools?.staticBriefInfo?.indexedDocuments.length ?? 0) > 0;
+    const effectiveSystemPrompt =
+      harnessContent && isNonTrivial && (input.metaTools?.brief || input.metaTools?.pulse)
+        ? `${harnessContent}\n\n${input.systemPrompt ?? ""}`
+        : input.systemPrompt;
 
     // ── Split context: static in system prompt, dynamic in user message ─────
     // Static content (tool schemas, RULES, task) is sent once in the system prompt
@@ -248,7 +281,7 @@ function handleThinking(
       requiredTools: input.requiredTools,
       environmentContext: input.environmentContext,
     });
-    const baseSystemPrompt = buildSystemPrompt(input.task, input.systemPrompt, profile.tier);
+    const baseSystemPrompt = buildSystemPrompt(input.task, effectiveSystemPrompt, profile.tier);
     const systemPromptText = `${baseSystemPrompt}\n\n${staticContext}`;
 
     let thoughtPrompt = buildDynamicContext({
@@ -584,7 +617,7 @@ function handleActing(
 
     // Repetition guard — when the same tool is called 3+ times with different
     // args, the model is likely stuck in a search loop. Nudge it to synthesize.
-    const META_TOOL_NAMES = new Set(["final-answer", "task-complete", "context-status", "scratchpad-write", "scratchpad-read"]);
+    const META_TOOL_NAMES = new Set(["final-answer", "task-complete", "context-status", "scratchpad-write", "scratchpad-read", "brief", "pulse", "find", "recall"]);
     if (!META_TOOL_NAMES.has(toolRequest.tool)) {
       const priorCallsOfSameTool = state.steps.filter((s) => {
         if (s.type !== "action") return false;
@@ -623,7 +656,7 @@ function handleActing(
     // When the model calls the `final-answer` meta-tool, run the handler directly
     // (bypassing ToolService) and, if accepted:true, hard-exit the kernel loop.
     if (toolRequest.tool === "final-answer" && !isBlocked) {
-      const META_TOOLS = new Set(["final-answer", "task-complete", "context-status", "scratchpad-write", "scratchpad-read"]);
+      const META_TOOLS = new Set(["final-answer", "task-complete", "context-status", "scratchpad-write", "scratchpad-read", "brief", "pulse", "find", "recall"]);
       const hasNonMetaToolCalled = [...state.toolsUsed].some((t) => !META_TOOLS.has(t));
       const requiredTools = input.requiredTools ?? [];
       // For the hard-gate we relax the visibility guard:
@@ -731,10 +764,56 @@ function handleActing(
       });
     }
 
-    if (isBlocked) {
+    // ── BRIEF INLINE HANDLER ─────────────────────────────────────────────────
+    if (toolRequest.tool === "brief" && input.metaTools?.brief && !isBlocked) {
+      let parsedArgs: Record<string, unknown> = {};
+      try { parsedArgs = JSON.parse(toolRequest.input) as Record<string, unknown>; } catch { /* ok */ }
+
+      const liveStore = Ref.unsafeGet(scratchpadStoreRef);
+      const recallKeys = [...liveStore.keys()];
+      const briefInput: BriefInput = {
+        section: parsedArgs.section as string | undefined,
+        availableTools: input.availableToolSchemas ?? [],
+        indexedDocuments: input.metaTools.staticBriefInfo?.indexedDocuments ?? [],
+        availableSkills: input.metaTools.staticBriefInfo?.availableSkills ?? [],
+        memoryBootstrap: input.metaTools.staticBriefInfo?.memoryBootstrap ?? { semanticLines: 0, episodicEntries: 0 },
+        recallKeys,
+        tokens: state.tokens,
+        tokenBudget: input.contextProfile?.hardBudget ?? 8000,
+        entropy: ((state.meta as any).entropy?.latest) as { composite: number; shape: string; momentum: number } | undefined,
+        controllerDecisionLog: state.controllerDecisionLog,
+      };
+      observationContent = buildBriefResponse(briefInput);
+      obsResult = makeObservationResult("brief", true, observationContent);
+    }
+
+    // ── PULSE INLINE HANDLER ─────────────────────────────────────────────────
+    if (toolRequest.tool === "pulse" && input.metaTools?.pulse && !isBlocked) {
+      let parsedArgs: Record<string, unknown> = {};
+      try { parsedArgs = JSON.parse(toolRequest.input) as Record<string, unknown>; } catch { /* ok */ }
+
+      const pulseInput: PulseInput = {
+        question: parsedArgs.question as string | undefined,
+        entropy: ((state.meta as any).entropy?.latest) as { composite: number; shape: string; momentum: number; history?: readonly number[] } | undefined,
+        controllerDecisionLog: state.controllerDecisionLog,
+        steps: state.steps,
+        iteration: state.iteration,
+        maxIterations: input.maxIterations ?? 10,
+        tokens: state.tokens,
+        tokenBudget: input.contextProfile?.hardBudget ?? 8000,
+        task: input.task,
+        allToolSchemas: input.allToolSchemas ?? input.availableToolSchemas ?? [],
+        toolsUsed: state.toolsUsed,
+        requiredTools: input.requiredTools ?? [],
+      };
+      observationContent = JSON.stringify(buildPulseResponse(pulseInput), null, 2);
+      obsResult = makeObservationResult("pulse", true, observationContent);
+    }
+
+    if (!observationContent && isBlocked) {
       observationContent = `\u26A0\uFE0F BLOCKED: ${toolRequest.tool} already executed successfully in a prior pass. This tool has side effects and MUST NOT be called again. Move on to the next step or give FINAL ANSWER.`;
       obsResult = makeObservationResult(toolRequest.tool, true, observationContent);
-    } else if (isDuplicate) {
+    } else if (!observationContent && isDuplicate) {
       // Surface prior result with advisory — don't re-execute
       const priorSuccessObs = state.steps.find((step, idx) => {
         if (step.type !== "action" || step.content !== currentActionJson) return false;
@@ -751,10 +830,10 @@ function handleActing(
       observationContent = `${priorObsContent} [Already done — do NOT repeat. Continue with next task step or give FINAL ANSWER if all steps are complete.]`;
       obsResult = priorObsStep?.metadata?.observationResult ??
         makeObservationResult(toolRequest.tool, true, observationContent);
-    } else if (sideEffectAlreadyDone) {
+    } else if (!observationContent && sideEffectAlreadyDone) {
       observationContent = `⚠️ ${toolRequest.tool} already executed successfully with different parameters. Side-effect tools must NOT be called twice. Move on to the next step or give FINAL ANSWER.`;
       obsResult = makeObservationResult(toolRequest.tool, true, observationContent);
-    } else {
+    } else if (!observationContent) {
       const toolStartMs = Date.now();
       const pendingGroup = state.meta.pendingToolGroup as import("./tool-utils.js").ToolRequestGroup | undefined;
       const toolConfig = {
@@ -935,6 +1014,23 @@ export const executeReActKernel = (
   input: ReActKernelInput,
 ): Effect.Effect<ReActKernelResult, ExecutionError, LLMService> =>
   Effect.gen(function* () {
+    // ── Register meta-tools into ToolService when enabled ────────────────────
+    const toolServiceOpt = yield* Effect.serviceOption(ToolService);
+    if (toolServiceOpt._tag === "Some") {
+      const ts = toolServiceOpt.value;
+      if (input.metaTools?.recall) {
+        yield* ts.register(recallTool, makeRecallHandler(scratchpadStoreRef)).pipe(Effect.catchAll(() => Effect.void));
+      }
+      if (input.metaTools?.find) {
+        yield* ts.register(findTool, makeFindHandler({
+          ragStore: ragMemoryStore,
+          webSearchHandler,
+          recallStoreRef: scratchpadStoreRef,
+          config: {},
+        })).pipe(Effect.catchAll(() => Effect.void));
+      }
+    }
+
     const state = yield* runKernel(reactKernel, {
       task: input.task,
       systemPrompt: input.systemPrompt,
@@ -948,6 +1044,7 @@ export const executeReActKernel = (
       blockedTools: input.blockedTools,
       requiredTools: input.requiredTools,
       maxRequiredToolRetries: input.maxRequiredToolRetries,
+      metaTools: input.metaTools,
     }, {
       maxIterations: input.maxIterations ?? 10,
       strategy: input.parentStrategy ?? "react-kernel",

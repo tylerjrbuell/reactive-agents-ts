@@ -89,8 +89,13 @@ export class ExecutionEngine extends Context.Tag("ExecutionEngine")<
 function sanitizeOutput(text: string): string {
   if (!text || text.length === 0) return text;
   let result = text;
-  // Strip <think>...</think> tags
-  result = result.replace(/<think>[\s\S]*?<\/think>/gi, "");
+  // Strip <think>...</think> tags, but capture the last block as a fallback
+  // in case the model (e.g. cogito) puts the entire answer inside <think>.
+  const thinkBlocks: string[] = [];
+  result = result.replace(/<think>([\s\S]*?)<\/think>/gi, (_m, inner: string) => {
+    thinkBlocks.push(inner.trim());
+    return "";
+  });
   // Strip "FINAL ANSWER:" prefix
   result = result.replace(/^FINAL ANSWER:\s*/i, "");
   // Strip internal step markers
@@ -103,7 +108,15 @@ function sanitizeOutput(text: string): string {
   result = result.replace(/^\s*\{\s*"(?:recipient|toolName|callId|stepId|_tag)"[^}]*\}\s*$/gm, "");
   // Collapse multiple blank lines
   result = result.replace(/\n{3,}/g, "\n\n");
-  return result.trim();
+  result = result.trim();
+  // Fallback: if stripping <think> blocks left nothing, use the last paragraph
+  // of the last <think> block (models like cogito embed the answer inside thinking).
+  if (!result && thinkBlocks.length > 0) {
+    const lastBlock = thinkBlocks[thinkBlocks.length - 1] ?? "";
+    const paragraphs = lastBlock.split(/\n{2,}/).map((p) => p.trim()).filter((p) => p.length > 0);
+    result = paragraphs[paragraphs.length - 1] ?? lastBlock;
+  }
+  return result;
 }
 
 /**
@@ -905,6 +918,18 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       modelId?: string;
                       temperature?: number;
                       environmentContext?: Readonly<Record<string, string>>;
+                      metaTools?: {
+                        brief?: boolean;
+                        find?: boolean;
+                        pulse?: boolean;
+                        recall?: boolean;
+                        staticBriefInfo?: {
+                          indexedDocuments: readonly { source: string; chunkCount: number; format: string }[];
+                          availableSkills: readonly { name: string; purpose: string }[];
+                          memoryBootstrap: { semanticLines: number; episodicEntries: number };
+                        };
+                        harnessContent?: string;
+                      };
                     }) => Effect.Effect<{
                       output: unknown;
                       status: string;
@@ -1078,6 +1103,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         modelId: String(config.defaultModel ?? ""),
                         temperature: config.contextProfile?.temperature as number | undefined,
                         environmentContext: config.environmentContext as Record<string, string> | undefined,
+                        metaTools: (config as any).metaTools,
                       });
                       const strategyOutcome = yield* Effect.exit(strategyEffect);
                       if (strategyOutcome._tag === "Success") {
