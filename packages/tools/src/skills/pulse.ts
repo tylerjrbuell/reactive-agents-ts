@@ -19,10 +19,16 @@ export interface PulseInput {
 export const pulseTool: ToolDefinition = {
   name: "pulse",
   description:
-    "Take the pulse of your current execution. Returns entropy signal, behavioral analysis, " +
-    "context pressure, and an actionable recommendation. " +
-    "Optional question: 'am I ready to answer?', 'should I change approach?', 'how much context do I have left?'. " +
-    "Call when stuck, unsure, or before calling final-answer.",
+    "Self-diagnostics for your current execution. Returns: " +
+    "signal (entropy grade A-F, trajectory shape — converging/flat/diverging/oscillating), " +
+    "behavior (loop detection score, tool success rate, repeated actions), " +
+    "context (iterations remaining, token pressure level), " +
+    "and a concrete recommendation based on all signals. " +
+    "Ask a focused question for targeted insight: " +
+    "pulse('am I ready to answer?') checks all final-answer requirements and lists exact blockers; " +
+    "pulse('should I change approach?') diagnoses stalls and loops; " +
+    "pulse('how much context do I have left?') checks token pressure. " +
+    "Call whenever you feel stuck, are about to repeat yourself, or before calling final-answer.",
   parameters: [
     {
       name: "question",

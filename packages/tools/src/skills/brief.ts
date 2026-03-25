@@ -16,9 +16,17 @@ export interface BriefInput {
 export const briefTool: ToolDefinition = {
   name: "brief",
   description:
-    "Full situational briefing. Zero args for compact overview. " +
-    "Drill with section: 'tools', 'documents', 'skills', 'memory', 'recall', 'signal', 'all'. " +
-    "Call this at the start of complex tasks to understand your full environment.",
+    "Your environment at a glance. Call with no args for a compact overview: available tools, " +
+    "indexed documents, loaded skills, memory stats, recall index, context pressure, and entropy signal grade. " +
+    "Drill deeper with section — " +
+    "'tools': full tool schemas and usage hints; " +
+    "'documents': indexed sources with chunk counts; " +
+    "'skills': loaded skills with one-line purposes; " +
+    "'memory': semantic and episodic memory details; " +
+    "'recall': all stored entries with previews; " +
+    "'signal': entropy grade (A-F), trajectory, controller decisions; " +
+    "'all': everything expanded. " +
+    "Start any complex or unfamiliar task with brief() to understand what you have available.",
   parameters: [
     {
       name: "section",

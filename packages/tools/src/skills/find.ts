@@ -22,11 +22,14 @@ export interface FindState {
 export const findTool: ToolDefinition = {
   name: "find",
   description:
-    "Unified intelligent search. Finds information from any available source. " +
-    "scope defaults to 'auto': tries indexed documents first, falls back to web if no results. " +
-    "scope options: 'auto' | 'documents' | 'web' | 'memory' | 'all'. " +
-    "'memory' searches the bootstrapped semantic memory lines (already in your context). " +
-    "Use this instead of choosing between rag-search and web-search.",
+    "Unified search — use this whenever you need to find information. " +
+    "Automatically routes to the right source so you don't have to choose. " +
+    "scope 'auto' (default): tries indexed documents first, falls back to web if nothing found. " +
+    "scope 'documents': search only files/documents loaded with .withDocuments(). " +
+    "scope 'web': search the internet directly. " +
+    "scope 'memory': search your bootstrapped semantic memory. " +
+    "scope 'all': search every source and merge results. " +
+    "Large result sets are automatically stored in recall — check recall() to retrieve them.",
   parameters: [
     {
       name: "query",

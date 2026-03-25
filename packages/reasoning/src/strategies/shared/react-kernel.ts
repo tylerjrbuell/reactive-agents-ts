@@ -236,7 +236,7 @@ function handleThinking(
     // inject the final-answer tool into the available tool schemas so the LLM
     // can discover and use it as the preferred termination mechanism.
     const hasNonMetaToolCalledForThink = [...state.toolsUsed].some(
-      (t) => t !== "final-answer" && t !== "task-complete" && t !== "context-status" && t !== "scratchpad-write" && t !== "scratchpad-read" && t !== "brief" && t !== "pulse" && t !== "find" && t !== "recall",
+      (t) => t !== "final-answer" && t !== "task-complete" && t !== "context-status" && t !== "brief" && t !== "pulse" && t !== "find" && t !== "recall",
     );
     // When no required tools are specified, scratchpad usage alone satisfies the
     // "has done real work" condition — matches the hard gate logic at line ~680.
@@ -617,7 +617,7 @@ function handleActing(
 
     // Repetition guard — when the same tool is called 3+ times with different
     // args, the model is likely stuck in a search loop. Nudge it to synthesize.
-    const META_TOOL_NAMES = new Set(["final-answer", "task-complete", "context-status", "scratchpad-write", "scratchpad-read", "brief", "pulse", "find", "recall"]);
+    const META_TOOL_NAMES = new Set(["final-answer", "task-complete", "context-status", "brief", "pulse", "find", "recall"]);
     if (!META_TOOL_NAMES.has(toolRequest.tool)) {
       const priorCallsOfSameTool = state.steps.filter((s) => {
         if (s.type !== "action") return false;
@@ -656,7 +656,7 @@ function handleActing(
     // When the model calls the `final-answer` meta-tool, run the handler directly
     // (bypassing ToolService) and, if accepted:true, hard-exit the kernel loop.
     if (toolRequest.tool === "final-answer" && !isBlocked) {
-      const META_TOOLS = new Set(["final-answer", "task-complete", "context-status", "scratchpad-write", "scratchpad-read", "brief", "pulse", "find", "recall"]);
+      const META_TOOLS = new Set(["final-answer", "task-complete", "context-status", "brief", "pulse", "find", "recall"]);
       const hasNonMetaToolCalled = [...state.toolsUsed].some((t) => !META_TOOLS.has(t));
       const requiredTools = input.requiredTools ?? [];
       // For the hard-gate we relax the visibility guard:
@@ -885,8 +885,8 @@ function handleActing(
       }
     }
 
-    // Sync scratchpad: merge ToolService's scratchpad Ref into KernelState.scratchpad
-    // so that writes from scratchpad-write tool are visible to the kernel and context-status
+    // Sync scratchpad: merge the live scratchpadStoreRef into KernelState.scratchpad
+    // so that writes from recall (and tool result compression) are visible to context compaction
     const toolScratchpad = yield* Ref.get(scratchpadStoreRef);
     const mergedScratchpad = new Map(state.scratchpad);
     for (const [k, v] of toolScratchpad) {

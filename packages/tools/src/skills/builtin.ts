@@ -95,14 +95,15 @@ export const scratchpadStoreRef = Ref.unsafeMake(new Map<string, string>());
 export const ragMemoryStore: RagMemoryStore = new Map();
 
 /**
- * All built-in tools paired with their handlers.
- * Registered automatically when ToolServiceLive is created.
+ * Capability tools auto-registered when ToolServiceLive is created.
  *
- * Note: context-status and task-complete are meta-tools that require
- * dynamic runtime state. They are exported separately via their factory
- * functions (makeContextStatusHandler / makeTaskCompleteHandler) so the
- * execution engine can wire in live state. They are NOT included here by
- * default — the kernel registers them on demand.
+ * These are the agent's task tools — what it uses to accomplish work.
+ * Framework infrastructure tools (recall, find, brief, pulse, scratchpad-*,
+ * rag-search, final-answer, etc.) are registered separately by the kernel
+ * with live state, or are conductor tools injected via .withMetaTools().
+ *
+ * scratchpad-write/read removed: superseded by recall (richer API).
+ * rag-search removed: superseded by find (unified routing).
  */
 export const builtinTools: ReadonlyArray<{
   definition: ToolDefinition;
@@ -113,9 +114,6 @@ export const builtinTools: ReadonlyArray<{
   { definition: fileReadTool, handler: fileReadHandler },
   { definition: fileWriteTool, handler: fileWriteHandler },
   { definition: codeExecuteTool, handler: codeExecuteHandler },
-  { definition: scratchpadWriteTool, handler: makeScratchpadWriteHandler(scratchpadStoreRef) },
-  { definition: scratchpadReadTool, handler: makeScratchpadReadHandler(scratchpadStoreRef) },
-  { definition: ragSearchTool, handler: makeRagSearchHandler(makeInMemorySearchCallback(ragMemoryStore)) },
 ];
 
 /**

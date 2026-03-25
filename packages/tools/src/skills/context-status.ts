@@ -7,8 +7,8 @@ import type { ToolDefinition } from "../types.js";
 export const contextStatusTool: ToolDefinition = {
   name: "context-status",
   description:
-    "Check your current execution state: iteration count, tools already called, pending required tools, " +
-    "scratchpad keys stored, and tokens used so far. Call this when you feel lost or need to verify your progress.",
+    "Quick execution state snapshot: iteration count, tokens used, tools called, and pending required tools. " +
+    "For a full environment overview — tools, documents, skills, memory, entropy signal — use brief() instead.",
   parameters: [],
   returnType: "object",
   riskLevel: "low",

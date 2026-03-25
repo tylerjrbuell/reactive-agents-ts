@@ -812,8 +812,20 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 );
 
                 // ── Log strategy-select summary ──
+                // Only show capability tools — hide framework infrastructure (conductor tools,
+                // final-answer, context-status, etc.) so the list reflects what the agent does,
+                // not how the framework works internally.
                 if (obs && isNormal) {
-                  const toolNames = cachedToolDefs.map((t: any) => t.name as string).join(", ");
+                  const FRAMEWORK_TOOLS = new Set([
+                    "final-answer", "task-complete", "context-status",
+                    "scratchpad-write", "scratchpad-read",
+                    "brief", "pulse", "find", "recall",
+                    "activate-skill", "get-skill-section", "context-task",
+                  ]);
+                  const toolNames = cachedToolDefs
+                    .map((t: any) => t.name as string)
+                    .filter((n) => !FRAMEWORK_TOOLS.has(n))
+                    .join(", ");
                   const toolsInfo = toolNames ? ` | tools: ${toolNames}` : "";
                   yield* obs.info(`◉ [strategy]   ${ctx.selectedStrategy ?? "reactive"}${toolsInfo}`)
                     .pipe(Effect.catchAll(() => Effect.void));
@@ -973,9 +985,9 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   // All tools remain callable by name — filtering only affects what's
                   // shown in the prompt to reduce context noise.
                   if (config.adaptiveToolFiltering && availableToolSchemas.length > 10) {
-                    // Always include essential tools the agent needs for internal operations
+                    // Always include conductor tools and spawn-agent regardless of relevance filtering
                     const ALWAYS_INCLUDE = new Set([
-                      "scratchpad-read", "scratchpad-write",
+                      "recall", "find", "brief", "pulse",
                       "spawn-agent",
                     ]);
 

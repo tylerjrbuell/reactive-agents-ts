@@ -8,6 +8,33 @@ import { fileReadHandler, fileWriteHandler } from "../src/skills/file-operations
 import { webSearchHandler } from "../src/skills/web-search.js";
 import { codeExecuteHandler } from "../src/skills/code-execution.js";
 import { ToolExecutionError } from "../src/errors.js";
+import { builtinTools } from "../src/skills/builtin.js";
+
+describe("builtinTools registration", () => {
+  it("does not include scratchpad-write (superseded by recall)", () => {
+    const names = builtinTools.map(t => t.definition.name);
+    expect(names).not.toContain("scratchpad-write");
+  });
+
+  it("does not include scratchpad-read (superseded by recall)", () => {
+    const names = builtinTools.map(t => t.definition.name);
+    expect(names).not.toContain("scratchpad-read");
+  });
+
+  it("does not include rag-search (superseded by find)", () => {
+    const names = builtinTools.map(t => t.definition.name);
+    expect(names).not.toContain("rag-search");
+  });
+
+  it("includes the core capability tools", () => {
+    const names = builtinTools.map(t => t.definition.name);
+    expect(names).toContain("web-search");
+    expect(names).toContain("http-get");
+    expect(names).toContain("file-read");
+    expect(names).toContain("file-write");
+    expect(names).toContain("code-execute");
+  });
+});
 
 // ─── Temp directory for file tests (under cwd to pass path traversal check) ───
 

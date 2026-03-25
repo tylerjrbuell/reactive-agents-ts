@@ -12,10 +12,13 @@ export interface RecallConfig {
 export const recallTool: ToolDefinition = {
   name: "recall",
   description:
-    "Selective working memory. Write: recall(key, content). Read: recall(key). " +
-    "Search: recall(query=...). List: recall() with no args. " +
-    "Large reads return a preview by default — use full: true for complete content. " +
-    "Aliases: scratchpad-write and scratchpad-read delegate to this tool.",
+    "Your working memory for this run. Four modes: " +
+    "WRITE — recall(key, content) stores anything worth keeping across steps; " +
+    "READ — recall(key) retrieves a stored entry (compact preview by default, full: true for complete content); " +
+    "SEARCH — recall(query=...) finds entries by keyword when you don't remember the key name; " +
+    "LIST — recall() with no args shows all stored entries with sizes and previews. " +
+    "Large tool results are auto-stored as _tool_result_N keys — use recall() to list or search them. " +
+    "Store key findings, plans, and intermediate results here to avoid losing them to context compression.",
   parameters: [
     {
       name: "key",

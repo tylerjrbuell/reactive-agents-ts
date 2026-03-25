@@ -250,12 +250,12 @@ describe("ToolService", () => {
       );
 
       const all = yield* tools.listTools();
-      // 8 built-in (5 original + scratchpad-write + scratchpad-read + rag-search) + 2 registered = 10
-      expect(all).toHaveLength(10);
+      // 5 capability built-ins (web-search, http-get, file-read, file-write, code-execute) + 2 registered = 7
+      expect(all).toHaveLength(7);
 
       const searchOnly = yield* tools.listTools({ category: "search" });
-      // built-in web-search + rag-search + tool-a
-      expect(searchOnly).toHaveLength(3);
+      // built-in web-search + tool-a
+      expect(searchOnly).toHaveLength(2);
       expect(searchOnly.map((t) => t.name)).toContain("tool-a");
 
       const highRisk = yield* tools.listTools({ riskLevel: "high" });
@@ -264,8 +264,8 @@ describe("ToolService", () => {
       expect(highRisk.map((t) => t.name)).toContain("tool-b");
 
       const functions = yield* tools.listTools({ source: "function" });
-      // tool-b + scratchpad-write + scratchpad-read = 3
-      expect(functions).toHaveLength(3);
+      // tool-b only (scratchpad-write/read removed from builtinTools)
+      expect(functions).toHaveLength(1);
       expect(functions.map((t) => t.name)).toContain("tool-b");
     });
 
