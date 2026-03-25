@@ -242,9 +242,15 @@ export function runKernel(
             });
 
             // NEW: accumulate into controllerDecisionLog for pulse tool access
-            const formatted = decisions.map(
-              (d: { decision: string; reason: string }) => `${d.decision}: ${d.reason}`,
-            );
+            const formatted = decisions.map((d: Record<string, unknown>) => {
+              const decision = String(d.decision ?? "");
+              const context =
+                typeof d.reason === "string" ? d.reason
+                : "sections" in d && Array.isArray(d.sections) ? `sections=[${(d.sections as string[]).join(",")}]`
+                : typeof d.skillName === "string" ? d.skillName
+                : "";
+              return context ? `${decision}: ${context}` : decision;
+            });
             state = transitionState(state, {
               controllerDecisionLog: [...state.controllerDecisionLog, ...formatted],
             });

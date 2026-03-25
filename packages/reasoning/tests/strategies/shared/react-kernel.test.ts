@@ -260,6 +260,22 @@ describe("KernelState.controllerDecisionLog", () => {
     expect(state.controllerDecisionLog[0]).toBe("early-stop: entropy converged");
     expect(state.controllerDecisionLog[1]).toBe("compress: context at 0.92");
   });
+
+  it("formats decisions without reason field gracefully (no 'undefined' in output)", () => {
+    // Simulate a compress decision which has no 'reason' field
+    const compressDecision = { decision: "compress", sections: ["history", "memory"], estimatedSavings: 500 };
+    const formatted = [compressDecision].map((d: Record<string, unknown>) => {
+      const decision = String(d.decision ?? "");
+      const context =
+        typeof d.reason === "string" ? d.reason
+        : "sections" in d && Array.isArray(d.sections) ? `sections=[${(d.sections as string[]).join(",")}]`
+        : typeof d.skillName === "string" ? d.skillName
+        : "";
+      return context ? `${decision}: ${context}` : decision;
+    });
+    expect(formatted[0]).not.toContain("undefined");
+    expect(formatted[0]).toContain("compress");
+  });
 });
 
 describe("detectCompletionGaps", () => {
