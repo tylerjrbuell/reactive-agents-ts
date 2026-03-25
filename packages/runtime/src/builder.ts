@@ -1883,14 +1883,18 @@ export class ReactiveAgentBuilder {
    * builder.withMetaTools({ brief: true, pulse: true })
    * ```
    */
-  withMetaTools(config?: import("./types.js").MetaToolsConfig): this {
-    this._metaTools = config ?? {
-      brief: true,
-      find: true,
-      pulse: true,
-      recall: true,
-      harnessSkill: true,
-    };
+  withMetaTools(config?: import("./types.js").MetaToolsConfig | false): this {
+    if (config === false) {
+      this._metaTools = false as any; // explicit disable marker
+    } else {
+      this._metaTools = config ?? {
+        brief: true,
+        find: true,
+        pulse: true,
+        recall: true,
+        harnessSkill: true,
+      };
+    }
     return this;
   }
 
@@ -2173,10 +2177,19 @@ export class ReactiveAgentBuilder {
           : personaPrompt;
       }
 
+      // Meta-tools are on by default when tools are enabled.
+      // Only skip if explicitly disabled via .withMetaTools(false) (which sets _metaTools to false).
+      const effectiveMetaTools: import("./types.js").MetaToolsConfig | false | undefined =
+        self._metaTools !== undefined
+          ? self._metaTools   // explicit config or false
+          : self._enableTools
+            ? { brief: true, find: true, pulse: true, recall: true, harnessSkill: true }
+            : undefined;     // no tools enabled — no meta-tools either
+
       // Resolve meta-tools configuration before building the runtime
       let kernelMetaTools: any;
-      if (self._metaTools) {
-        const mt = self._metaTools;
+      if (effectiveMetaTools && effectiveMetaTools !== false) {
+        const mt = effectiveMetaTools as import("./types.js").MetaToolsConfig;
 
         // Determine model tier for harness skill selection
         const tier: "frontier" | "local" =
