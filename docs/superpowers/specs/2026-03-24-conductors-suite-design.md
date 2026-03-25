@@ -36,6 +36,12 @@ This spec defines:
 
 ## 3. Design Principles
 
+**Glass box, not black box.** Every default in this suite is visible, overrideable, and moldable. The harness skill is a seed — developers can replace it, extend it, or evolve it. The `pulse` signals are the same signals the reactive controller already uses — they are exposed, not invented. The routing logic inside `find` is configurable. Nothing is hardcoded for the developer's convenience at the cost of their control.
+
+**Sensible defaults that slay problems out of the box.** A developer who calls `.withMetaTools()` with no arguments should get an agent that orients itself, searches intelligently, self-monitors, and manages context without any configuration. The defaults are not placeholders — they are production-ready choices that solve the most common failure modes (orientation blindness, source confusion, reasoning loops, context floods).
+
+**Every default is a starting point, not a constraint.** The harness skill can be replaced by a custom skill or evolved by the living skills system. The `find` routing order can be overridden. The `pulse` recommendation rules can be extended. The `recall` preview length is configurable. Developers building specialized agents should be able to mold every behavior to their will.
+
 **Minimal surface, rich output.** Each tool takes 0–2 arguments. Every response is structured and drillable. The agent expresses intent; the tool figures out how.
 
 **Droplet not waterfall.** Default responses are compact. Depth is available on demand via drill parameters. The agent always knows depth exists without having to consume it.
@@ -367,22 +373,70 @@ interface RecallConfig {
 
 ## 5. The Harness Skill
 
-**File:** `packages/runtime/assets/harness.skill.md`
+**The harness skill is a default, not a constraint.** It ships with the framework as a seed — a production-ready starting point. Developers can replace it entirely, extend it, disable it, or let the living skills system evolve it into something tuned to their specific agent and use patterns. The framework owns the seed; the developer owns the outcome.
 
-This is a framework-internal asset bundled with `@reactive-agents/runtime` and loaded at boot time. It is not user-space (not in `.claude/skills/`) so it is always available regardless of user skill configuration. Two tier files exist in the same asset directory:
+### 5.1 Built-in Seed
+
+**Files:**
 - `packages/runtime/assets/harness.skill.md` — frontier tier (Claude, GPT-4, Gemini)
 - `packages/runtime/assets/harness.skill.condensed.md` — local tier (cogito, llama, mistral etc.)
 
-Tier selection uses the same model-tier detection already used by the context engine.
+Bundled with `@reactive-agents/runtime`. Always available regardless of user skill configuration. Tier selection uses the same model-tier detection already used by the context engine.
 
 **Purpose:** A built-in living skill that every agent receives. It teaches the conductor's workflow — how to use `brief`, `find`, `pulse`, and `recall` effectively for different task types. It is the agent's operating manual written in its own language.
 
-**Activation:** The harness skill is injected as a system-prompt prefix for non-trivial tasks. Triviality is detected by: task description length < 80 chars AND no tool requirements AND no documents indexed. For trivial tasks the skill is omitted entirely to save tokens.
+**Activation:** Injected as a system-prompt prefix for non-trivial tasks. Triviality is detected by: task description length < 80 chars AND no tool requirements AND no documents indexed. Trivial tasks skip it to save tokens.
 
 **Tier-adaptive content:**
 - **Frontier:** Full conductor's workflow — all four tools explained with decision trees and key patterns
 - **Local/small:** Condensed — 2–3 bullet points per tool, no decision trees
-- **Minimal mode (`harnessSkill: false`):** Disabled; tools remain available but no guidance injected
+- **Disabled (`harnessSkill: false`):** Tools remain available; no guidance injected
+
+### 5.2 Override Mechanism
+
+Developers can supersede the built-in harness at any level of granularity:
+
+```typescript
+// Use the built-in default (recommended starting point)
+.withMetaTools({ harnessSkill: true })
+
+// Replace with a custom harness skill file
+.withMetaTools({ harnessSkill: "./my-agent-harness.md" })
+
+// Replace with inline content
+.withMetaTools({ harnessSkill: "# My Agent's Workflow\n..." })
+
+// Disable entirely — tools available, no guidance injected
+.withMetaTools({ harnessSkill: false })
+
+// Provide tier-specific overrides while keeping the other tier as the built-in default
+.withMetaTools({
+  harnessSkill: {
+    frontier: "./harness-frontier.md",  // custom for large models
+    local: true,                         // built-in condensed for small models
+  }
+})
+```
+
+Custom harness files follow the same SKILL.md format used by the living skills system — they are immediately compatible with `SkillEvolutionService` for future refinement.
+
+### 5.3 Precedence Order
+
+When the harness skill is resolved at runtime (highest to lowest):
+
+1. **Developer override** — explicit path, inline content, or `false` from `.withMetaTools()`
+2. **Evolved version** — a `SkillRecord` with `id: "harness"` stored by `SkillEvolutionService`, if one exists and evolution is not disabled
+3. **Built-in seed** — the framework asset files, tier-selected by model
+
+This means the developer always wins. If `true` is passed (the default), the living skills system can evolve the harness over time. If a custom file is provided, the living skills system can still evolve it (unless `evolution.mode: "off"` is set in `.withSkills()`).
+
+Developers can inspect, export, or reset the current harness via the standard skills runtime API:
+```typescript
+agent.skills()                           // see current harness version and metadata
+agent.exportSkill("harness")             // export the current evolved version
+agent.loadSkill("harness", seedContent)  // reset to a specific version
+agent.refineSkills()                     // trigger an evolution cycle
+```
 
 **Frontier skill content:**
 
@@ -456,6 +510,25 @@ const agent = await ReactiveAgents.create()
     },
   })
   .build();
+```
+
+**`MetaToolsConfig` type:**
+```typescript
+type HarnessSkillConfig =
+  | boolean                          // true = built-in default, false = disabled
+  | string                           // file path or inline SKILL.md content
+  | { frontier?: boolean | string; local?: boolean | string };  // per-tier override
+
+interface MetaToolsConfig {
+  brief?: boolean;
+  find?: boolean;
+  pulse?: boolean;
+  recall?: boolean;
+  harnessSkill?: HarnessSkillConfig; // default: true when .withMetaTools() called
+  findConfig?: FindConfig;
+  pulseConfig?: PulseConfig;
+  recallConfig?: RecallConfig;
+}
 ```
 
 **Shorthand:** `.withMetaTools()` with no args enables all four tools + harness skill with defaults.
@@ -602,9 +675,10 @@ if (metaToolsConfig.recall) {
 | `packages/reasoning/src/strategies/shared/react-kernel.ts` | Wire `BriefState`, `PulseState`, `RecallState`, `FindState`; register tools; append to `controllerDecisionLog` after each controller evaluation |
 | `packages/reasoning/src/strategies/shared/kernel-runner.ts` | Append formatted decision strings to `controllerDecisionLog` after `ReactiveControllerService` evaluation |
 | `packages/runtime/src/builder.ts` | Add `.withMetaTools(config)` builder method |
-| `packages/runtime/src/types.ts` | Add `MetaToolsConfig`, `FindConfig`, `PulseConfig`, `RecallConfig` |
-| `packages/runtime/assets/harness.skill.md` | New — frontier tier harness skill |
-| `packages/runtime/assets/harness.skill.condensed.md` | New — local/small model tier harness skill |
+| `packages/runtime/src/types.ts` | Add `MetaToolsConfig`, `HarnessSkillConfig`, `FindConfig`, `PulseConfig`, `RecallConfig` |
+| `packages/runtime/assets/harness.skill.md` | New — frontier tier harness skill (seed version) |
+| `packages/runtime/assets/harness.skill.condensed.md` | New — local/small model tier harness skill (seed version) |
+| `packages/runtime/src/harness-resolver.ts` | New — resolves `HarnessSkillConfig` to final skill content: reads file/inline/tier, falls back to seed asset |
 | `packages/tools/tests/brief.test.ts` | New unit tests (flat, consistent with existing test layout) |
 | `packages/tools/tests/find.test.ts` | New unit tests |
 | `packages/tools/tests/pulse.test.ts` | New unit tests |
