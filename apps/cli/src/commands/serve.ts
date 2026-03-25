@@ -20,7 +20,7 @@ const HELP = `
     --model <string>    Model name
     --with-tools        Enable tools
     --with-reasoning    Enable reasoning strategies
-    --with-memory [n]   Enable memory (tier 1 or 2; default: 2)
+    --with-memory [enhanced]   Enable memory (basic by default; pass "enhanced" for tier 2)
     --help              Show this help
 `.trimEnd();
 
@@ -38,7 +38,8 @@ export function runServe(argv: string[]) {
   let model: string | undefined;
   let withTools = false;
   let withReasoning = false;
-  let memoryTier: "1" | "2" | undefined;
+  let enableMemory = false;
+  let memoryEnhanced = false;
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -73,10 +74,12 @@ export function runServe(argv: string[]) {
         withReasoning = true;
         break;
       case "--with-memory":
-        if (args[i + 1] === "1" || args[i + 1] === "2") {
-          memoryTier = args[++i] as "1" | "2";
-        } else {
-          memoryTier = "2";
+        enableMemory = true;
+        if (args[i + 1] === "enhanced" || args[i + 1] === "2") {
+          memoryEnhanced = true;
+          i++;
+        } else if (args[i + 1] === "1" || args[i + 1] === "basic") {
+          i++;
         }
         break;
     }
@@ -87,7 +90,7 @@ export function runServe(argv: string[]) {
   console.log(kv("Provider", `${provider}${model ? ` (${model})` : ""}`));
   console.log(kv("Tools", withTools ? "enabled" : "disabled"));
   console.log(kv("Reasoning", withReasoning ? "enabled" : "disabled"));
-  console.log(kv("Memory", memoryTier ? `tier ${memoryTier}` : "disabled"));
+  console.log(kv("Memory", enableMemory ? (memoryEnhanced ? "enhanced" : "basic") : "disabled"));
 
   let builder = ReactiveAgents.create()
     .withName(name)
@@ -97,7 +100,7 @@ export function runServe(argv: string[]) {
 
   if (withTools) builder = builder.withTools();
   if (withReasoning) builder = builder.withReasoning();
-  if (memoryTier) builder = builder.withMemory(memoryTier);
+  if (enableMemory) builder = memoryEnhanced ? builder.withMemory({ tier: "enhanced" }) : builder.withMemory();
 
   // Build the agent and start HTTP server
   startServer(builder.build(), name, port);

@@ -145,7 +145,7 @@ export const createMyAgent = () =>
   ReactiveAgents.create()
     .withProvider("anthropic")
     .withName("my-agent")
-    .withMemory("1")
+    .withMemory()
     .withReasoning()
     .build();
 `;
@@ -156,7 +156,7 @@ export const createMyAgent = () =>
   ReactiveAgents.create()
     .withProvider("anthropic")
     .withName("my-agent")
-    .withMemory("1")
+    .withMemory()
     .withReasoning()
     .withVerification()
     .withGuardrails()

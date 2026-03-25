@@ -26,7 +26,7 @@ export const ${toCamelCase(name)} = () =>
     .withProvider("anthropic")
     .withName("${name}")
     .withSystemPrompt("You are a research assistant. Gather information, synthesize findings, and provide well-sourced answers.")
-    .withMemory("1")
+    .withMemory()
     .withReasoning()
     .withTools()
     .build();
@@ -51,7 +51,7 @@ export const ${toCamelCase(name)} = () =>
     .withProvider("anthropic")
     .withName("${name}")
     .withSystemPrompt("You are an orchestrator agent. Decompose complex tasks and coordinate sub-agents.")
-    .withMemory("1")
+    .withMemory()
     .withReasoning()
     .withTools()
     .build();

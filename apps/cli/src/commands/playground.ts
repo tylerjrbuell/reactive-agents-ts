@@ -26,7 +26,7 @@ import {
 const VALID_PROVIDERS = ["anthropic", "openai", "ollama", "gemini", "litellm", "test"] as const;
 type Provider = (typeof VALID_PROVIDERS)[number];
 
-const VALID_MEMORY_TIERS = ["1", "2"] as const;
+const VALID_MEMORY_TIERS = ["basic", "enhanced"] as const;
 type MemoryTier = (typeof VALID_MEMORY_TIERS)[number];
 
 const HELP_TEXT = `
@@ -40,8 +40,9 @@ const HELP_TEXT = `
     --name <name>       Agent name (default: playground-agent)
     --tools             Enable tools
     --reasoning         Enable reasoning
-    --memory            Enable conversational memory (defaults to tier 1)
-    --memory-tier <n>   Memory tier: 1|2 (default: 1 when --memory is set)
+    --memory            Enable conversational memory (basic by default)
+    --memory-tier <t>   Memory tier: basic|enhanced (default: basic when --memory is set)
+    --documents <path>  Ingest a file into RAG memory (repeatable)
     --stream            Stream token output
     --help              Show this help
 
@@ -54,6 +55,7 @@ const HELP_TEXT = `
     /strategy           Show current reasoning strategy
     /provider [name]    Switch provider: anthropic|openai|ollama|gemini|litellm|test
     /model [name]       Switch model (e.g. llama3.2, gpt-4o, claude-sonnet-4-20250514)
+    /documents          Show ingested documents
     /clear              Clear conversation history
     /save [path]        Save transcript to markdown file
     /exit               Quit the playground
@@ -68,6 +70,7 @@ const SLASH_HELP = [
   `  ${chalk.bold("/strategy")}          Show current reasoning strategy`,
   `  ${chalk.bold("/provider [name]")}   Switch provider (anthropic, openai, ollama, ...)`,
   `  ${chalk.bold("/model [name]")}      Switch model (llama3.2, gpt-4o, ...)`,
+  `  ${chalk.bold("/documents")}         Show ingested documents`,
   `  ${chalk.bold("/clear")}             Clear conversation history`,
   `  ${chalk.bold("/save [path]")}       Save transcript to markdown file`,
   `  ${chalk.bold("/exit")}              Quit the playground`,
@@ -91,6 +94,7 @@ interface PlaygroundConfig {
   enableReasoning: boolean;
   enableMemory: boolean;
   memoryTier: MemoryTier;
+  documents: string[];
   stream: boolean;
 }
 
@@ -112,7 +116,8 @@ function parseArgs(args: string[]): PlaygroundConfig | null {
     enableTools: false,
     enableReasoning: false,
     enableMemory: false,
-    memoryTier: "1",
+    memoryTier: "basic",
+    documents: [],
     stream: false,
   };
 
@@ -139,12 +144,16 @@ function parseArgs(args: string[]): PlaygroundConfig | null {
       config.enableMemory = true;
     } else if (arg === "--memory-tier" && args[i + 1]) {
       const rawTier = args[++i];
-      if (!isValidMemoryTier(rawTier)) {
-        console.error(fail(`Invalid memory tier: "${rawTier}". Valid: ${VALID_MEMORY_TIERS.join(", ")}`));
+      // Accept legacy numeric values and new named values
+      const normalized = rawTier === "1" ? "basic" : rawTier === "2" ? "enhanced" : rawTier;
+      if (!isValidMemoryTier(normalized)) {
+        console.error(fail(`Invalid memory tier: "${rawTier}". Valid: basic, enhanced`));
         process.exit(1);
       }
       config.enableMemory = true;
-      config.memoryTier = rawTier;
+      config.memoryTier = normalized;
+    } else if (arg === "--documents" && args[i + 1]) {
+      config.documents.push(args[++i]);
     } else if (arg === "--stream") {
       config.stream = true;
     }
@@ -161,7 +170,14 @@ async function buildAgent(config: PlaygroundConfig) {
   if (config.model) builder = builder.withModel(config.model);
   if (config.enableTools) builder = builder.withTools();
   if (config.enableReasoning) builder = builder.withReasoning();
-  if (config.enableMemory) builder = builder.withMemory(config.memoryTier);
+  if (config.enableMemory) {
+    builder = config.memoryTier === "enhanced"
+      ? builder.withMemory({ tier: "enhanced" })
+      : builder.withMemory();
+  }
+  if (config.documents.length > 0) {
+    builder = builder.withDocuments(config.documents.map((source) => ({ source })));
+  }
 
   return builder.build();
 }
@@ -171,7 +187,8 @@ function showConfig(config: PlaygroundConfig): void {
   if (config.model) console.log(kv("Model", config.model));
   console.log(kv("Tools", config.enableTools ? "enabled" : "disabled"));
   console.log(kv("Reasoning", config.enableReasoning ? "enabled" : "disabled"));
-  console.log(kv("Memory", config.enableMemory ? `enabled (tier ${config.memoryTier})` : "disabled"));
+  console.log(kv("Memory", config.enableMemory ? `enabled (${config.memoryTier})` : "disabled"));
+  if (config.documents.length > 0) console.log(kv("Documents", config.documents.join(", ")));
   console.log(kv("Streaming", config.stream ? "enabled" : "disabled"));
   console.log();
 }
@@ -339,6 +356,17 @@ export async function runPlayground(args: string[]): Promise<void> {
                   : "Tools are disabled. Use --tools flag to enable.",
               ),
             );
+            console.log();
+            continue;
+          }
+
+          case "/documents": {
+            if (config.documents.length === 0) {
+              console.log(info("No documents ingested. Use --documents <path> at startup."));
+            } else {
+              console.log(chalk.bold(`Ingested Documents (${config.documents.length}):`));
+              for (const doc of config.documents) console.log(`  ${muted("•")} ${doc}`);
+            }
             console.log();
             continue;
           }
