@@ -46,6 +46,9 @@ export interface KernelState {
 
   // Strategy-specific
   readonly meta: Readonly<Record<string, unknown>>;
+
+  /** Accumulated controller decisions this run, formatted as "decision: reason" strings. */
+  readonly controllerDecisionLog: readonly string[];
 }
 
 // ── KernelInput — Frozen execution input ─────────────────────────────────────
@@ -220,6 +223,7 @@ export function initialKernelState(opts: KernelRunOptions): KernelState {
       maxIterations: opts.maxIterations,
       ...(entropyMeta ? { entropy: entropyMeta } : {}),
     },
+    controllerDecisionLog: [],
   };
 }
 
@@ -250,6 +254,7 @@ export interface SerializedKernelState
   readonly toolsUsed: readonly string[];
   readonly scratchpad: Readonly<Record<string, string>>;
   readonly steps: readonly ReasoningStep[];
+  readonly controllerDecisionLog: readonly string[];
 }
 
 /**
@@ -273,6 +278,7 @@ export function serializeKernelState(state: KernelState): SerializedKernelState 
     llmCalls: state.llmCalls,
     priorThought: state.priorThought,
     meta: state.meta,
+    controllerDecisionLog: state.controllerDecisionLog,
   };
 }
 
@@ -297,6 +303,7 @@ export function deserializeKernelState(raw: SerializedKernelState): KernelState 
     llmCalls: raw.llmCalls,
     priorThought: raw.priorThought,
     meta: raw.meta,
+    controllerDecisionLog: (raw.controllerDecisionLog as string[]) ?? [],
   };
 }
 

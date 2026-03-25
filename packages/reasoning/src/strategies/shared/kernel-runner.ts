@@ -240,6 +240,14 @@ export function runKernel(
             state = transitionState(state, {
               meta: { ...state.meta, controllerDecisions: decisions },
             });
+
+            // NEW: accumulate into controllerDecisionLog for pulse tool access
+            const formatted = decisions.map(
+              (d: { decision: string; reason: string }) => `${d.decision}: ${d.reason}`,
+            );
+            state = transitionState(state, {
+              controllerDecisionLog: [...state.controllerDecisionLog, ...formatted],
+            });
           }
         }
       }

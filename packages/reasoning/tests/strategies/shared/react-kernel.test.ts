@@ -1,9 +1,10 @@
 import { describe, it, expect } from "bun:test";
 import { Effect } from "effect";
-import { executeReActKernel, reactKernel } from "../../../src/strategies/shared/react-kernel.js";
+import { executeReActKernel, reactKernel, detectCompletionGaps } from "../../../src/strategies/shared/react-kernel.js";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 import {
   initialKernelState,
+  transitionState,
   noopHooks,
   type KernelContext,
   type KernelState,
@@ -238,5 +239,61 @@ describe("reactKernel (ThoughtKernel direct)", () => {
     expect(nextState.iteration).toBe(1);
     // web-search should be in toolsUsed
     expect(nextState.toolsUsed.has("web-search")).toBe(true);
+  });
+});
+
+describe("KernelState.controllerDecisionLog", () => {
+  it("controllerDecisionLog starts empty and is a KernelState field", () => {
+    const state = initialKernelState({ taskId: "t1", strategy: "reactive", kernelType: "react", maxIterations: 5 });
+    expect(state.controllerDecisionLog).toEqual([]);
+  });
+
+  it("controllerDecisionLog accumulates across transitionState calls", () => {
+    let state = initialKernelState({ taskId: "t1", strategy: "reactive", kernelType: "react", maxIterations: 5 });
+    state = transitionState(state, {
+      controllerDecisionLog: [...state.controllerDecisionLog, "early-stop: entropy converged"],
+    });
+    state = transitionState(state, {
+      controllerDecisionLog: [...state.controllerDecisionLog, "compress: context at 0.92"],
+    });
+    expect(state.controllerDecisionLog).toHaveLength(2);
+    expect(state.controllerDecisionLog[0]).toBe("early-stop: entropy converged");
+    expect(state.controllerDecisionLog[1]).toBe("compress: context at 0.92");
+  });
+});
+
+describe("detectCompletionGaps", () => {
+  it("does not require web-search when task says 'rag search'", () => {
+    const toolsUsed = new Set(["rag-search"]);
+    const gaps = detectCompletionGaps("try searching with rag search for memory", toolsUsed, []);
+    expect(gaps.filter((g) => g.includes("web-search"))).toHaveLength(0);
+  });
+
+  it("does not require web-search when task says 'search' without an online/web qualifier", () => {
+    const toolsUsed = new Set<string>();
+    const gaps = detectCompletionGaps("search the agent memory", toolsUsed, []);
+    expect(gaps.filter((g) => g.includes("web-search"))).toHaveLength(0);
+  });
+
+  it("requires web-search when task says 'search online'", () => {
+    const toolsUsed = new Set<string>();
+    const gaps = detectCompletionGaps("search online for the latest news", toolsUsed, []);
+    expect(gaps.filter((g) => g.includes("web-search"))).toHaveLength(1);
+  });
+
+  it("requires web-search when task says 'look up'", () => {
+    const toolsUsed = new Set<string>();
+    const gaps = detectCompletionGaps("look up the weather today", toolsUsed, []);
+    expect(gaps.filter((g) => g.includes("web-search"))).toHaveLength(1);
+  });
+
+  it("gap message includes the matched keyword, not an empty string", () => {
+    const toolsUsed = new Set<string>();
+    const gaps = detectCompletionGaps("look up the weather today", toolsUsed, []);
+    const webSearchGap = gaps.find((g) => g.includes("web-search"))!;
+    expect(webSearchGap).toBeDefined();
+    // The gap message must NOT have an empty quoted string like `""`
+    expect(webSearchGap).not.toMatch(/asks to ""\s/);
+    expect(webSearchGap).toMatch(/look up/i);
   });
 });
