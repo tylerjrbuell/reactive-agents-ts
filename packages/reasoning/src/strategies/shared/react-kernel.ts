@@ -28,6 +28,10 @@ import {
   detectCompletionGaps,
   type FinalAnswerCapture,
 } from "@reactive-agents/tools";
+
+// Re-export for test and consumer backward compatibility
+export { detectCompletionGaps } from "@reactive-agents/tools";
+
 import type { ToolSchema } from "./tool-utils.js";
 import {
   parseAllToolRequests,
