@@ -183,3 +183,6 @@ export {
   shouldShowFinalAnswer,
 } from "./skills/final-answer.js";
 export type { FinalAnswerVisibility, FinalAnswerState, FinalAnswerCapture } from "./skills/final-answer.js";
+
+// ─── Completion Gaps Utility ───
+export { detectCompletionGaps } from "./skills/completion-gaps.js";
