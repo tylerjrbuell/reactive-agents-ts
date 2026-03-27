@@ -232,6 +232,14 @@ export function createTestLLMServiceLayer(
         supportsJsonMode: false,
         supportsToolForcing: false,
       }),
+
+    capabilities: () =>
+      Effect.succeed({
+        supportsToolCalling: true,
+        supportsStreaming: true,
+        supportsStructuredOutput: false,
+        supportsLogprobs: false,
+      }),
   };
 
   return Layer.succeed(LLMService, service as any);

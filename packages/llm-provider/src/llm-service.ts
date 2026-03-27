@@ -9,6 +9,7 @@ import type {
   StructuredOutputCapabilities,
 } from "./types.js";
 import type { LLMErrors } from "./errors.js";
+import type { ProviderCapabilities } from "./capabilities.js";
 
 /**
  * Core LLM service — all LLM interactions go through this.
@@ -70,7 +71,21 @@ export class LLMService extends Context.Tag("LLMService")<
     /**
      * Report structured output capabilities for this provider.
      * Used by the structured output pipeline to select optimal JSON extraction strategy.
+     *
+     * @deprecated Superseded by `capabilities()`. This method is retained for backward
+     * compatibility. New code should use `capabilities()` and read
+     * `supportsStructuredOutput` from `ProviderCapabilities`.
      */
     readonly getStructuredOutputCapabilities: () => Effect.Effect<StructuredOutputCapabilities, never>;
+
+    /**
+     * Declare the provider's runtime capabilities.
+     * Returns a static, pure value — no API calls are made.
+     *
+     * Subsumes `getStructuredOutputCapabilities()`. Use this method for all
+     * new provider-capability checks (tool calling, streaming, structured output,
+     * logprobs).
+     */
+    readonly capabilities: () => Effect.Effect<ProviderCapabilities, never>;
   }
 >() {}

@@ -1,6 +1,7 @@
 import { Effect, Layer, Stream, Schema } from "effect";
 import { LLMService } from "../llm-service.js";
 import { LLMConfig } from "../llm-config.js";
+import type { ProviderCapabilities } from "../capabilities.js";
 import { LLMError, LLMTimeoutError, LLMParseError } from "../errors.js";
 import type { LLMErrors } from "../errors.js";
 import type {
@@ -587,6 +588,14 @@ export const LocalProviderLive = Layer.effect(
           prefillSupport: false,
           grammarConstraints: true,
         }),
+
+      capabilities: () =>
+        Effect.succeed({
+          supportsToolCalling: true,
+          supportsStreaming: true,
+          supportsStructuredOutput: true,
+          supportsLogprobs: false,
+        } satisfies ProviderCapabilities),
     });
   }),
 );

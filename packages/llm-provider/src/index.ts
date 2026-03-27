@@ -1,3 +1,7 @@
+// ─── Provider Capabilities ───
+export type { ProviderCapabilities } from "./capabilities.js";
+export { DEFAULT_CAPABILITIES } from "./capabilities.js";
+
 // ─── Types ───
 export type {
   LLMProvider,

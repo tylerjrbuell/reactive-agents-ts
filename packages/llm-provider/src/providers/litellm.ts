@@ -1,6 +1,7 @@
 import { Effect, Layer, Stream, Schema } from "effect";
 import { LLMService } from "../llm-service.js";
 import { LLMConfig } from "../llm-config.js";
+import type { ProviderCapabilities } from "../capabilities.js";
 import {
   LLMError,
   LLMTimeoutError,
@@ -543,6 +544,14 @@ export const LiteLLMProviderLive = Layer.effect(
           prefillSupport: false,
           grammarConstraints: false,
         }),
+
+      capabilities: () =>
+        Effect.succeed({
+          supportsToolCalling: true,
+          supportsStreaming: true,
+          supportsStructuredOutput: true,
+          supportsLogprobs: false,
+        } satisfies ProviderCapabilities),
     });
   }),
 );
