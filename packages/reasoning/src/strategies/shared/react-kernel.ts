@@ -1095,7 +1095,13 @@ function handleActing(
             return (stepTc?.name ?? "") === tc.name;
           }).length;
           if (priorCallsOfSameTool >= 2) {
-            const nudge = `⚠️ You have already called ${tc.name} ${priorCallsOfSameTool} times. Stop searching and synthesize an answer from the results you already have. Use final-answer to respond now.`;
+            // Include missing required tools in the nudge so the model knows what to do next
+            const reqTools = input.requiredTools ?? [];
+            const missingRequired = reqTools.filter((t) => !newToolsUsed.has(t));
+            const missingHint = missingRequired.length > 0
+              ? ` You still need to call: ${missingRequired.join(", ")}. Do that now instead of repeating ${tc.name}.`
+              : " Use final-answer to respond now.";
+            const nudge = `⚠️ You have already called ${tc.name} ${priorCallsOfSameTool} times. Stop repeating this tool.${missingHint}`;
             const nudgeStep = makeStep("observation", nudge, {
               observationResult: makeObservationResult(tc.name, false, nudge),
             });
