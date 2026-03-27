@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { Effect, Layer, Stream } from "effect";
-import { LLMService } from "@reactive-agents/llm-provider";
+import { LLMService, DEFAULT_CAPABILITIES } from "@reactive-agents/llm-provider";
 import type { CompletionResponse, StreamEvent } from "@reactive-agents/llm-provider";
 import { executeReActKernel } from "../../../src/strategies/shared/react-kernel.js";
 
@@ -40,8 +40,32 @@ function makeSequentialLLMLayer(responses: string[]): ReturnType<typeof Layer.su
       );
     },
 
+    completeStructured: (_request) => Effect.succeed({} as any),
+
     embed: (_request) =>
-      Effect.succeed({ embeddings: [[0.1, 0.2, 0.3]], model: "test", usage: { inputTokens: 0 } }),
+      Effect.succeed(
+        [[0.1, 0.2, 0.3]] as readonly (readonly number[])[],
+      ),
+
+    countTokens: (_messages) => Effect.succeed(100),
+
+    getModelConfig: () =>
+      Effect.succeed({ provider: "anthropic" as const, model: "test-model" }),
+
+    getStructuredOutputCapabilities: () =>
+      Effect.succeed({
+        nativeJsonMode: true,
+        jsonSchemaEnforcement: false,
+        prefillSupport: false,
+        grammarConstraints: false,
+      }),
+
+    capabilities: () =>
+      Effect.succeed({
+        ...DEFAULT_CAPABILITIES,
+        supportsToolCalling: true,
+        supportsStreaming: true,
+      }),
   };
 
   return Layer.succeed(LLMService, LLMService.of(service));

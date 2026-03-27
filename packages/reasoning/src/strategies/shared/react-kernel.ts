@@ -543,6 +543,8 @@ function handleThinking(
     // When native FC is active, the LLM returns structured tool_use blocks
     // instead of text-based ACTION: directives. We resolve them through the
     // ToolCallResolver and skip the regex-based parsing entirely.
+    // If the FC resolver sees a text-only response that contains ACTION:
+    // directives, we skip the FC path and let the text-based parser handle it.
     if (useNativeFC && (input as ReActKernelInput).toolCallResolver) {
       const resolver = (input as ReActKernelInput).toolCallResolver!;
 
@@ -586,35 +588,52 @@ function handleThinking(
       }
 
       if (resolverResult._tag === "final_answer") {
-        const assembled = assembleOutput({
-          steps: newSteps,
-          finalAnswer: resolverResult.content,
-          terminatedBy: "llm_end_turn",
-          entropyScores: (state.meta.entropy as any)?.entropyHistory,
-        });
+        // FC received a text-only response (no tool_use blocks). Check for
+        // text-based ACTION: directives that the model emitted instead of using
+        // native tool calling — fall through to the text-based parser so
+        // blockedTools checks, tool execution, etc. still apply.
+        const textToolRequests = parseAllToolRequests(resolverResult.content);
+        if (textToolRequests.length > 0) {
+          // Skip FC — let the text-based ACTION parsing path below handle it
+        } else {
+          // Genuine final answer. Strip legacy FINAL ANSWER: prefix if present
+          // so output is clean regardless of whether the model used the prefix.
+          const hasFA = hasFinalAnswer(resolverResult.content);
+          const cleanContent = hasFA
+            ? extractFinalAnswer(resolverResult.content)
+            : resolverResult.content;
+          const terminatedBy = hasFA ? "final_answer" : "end_turn";
+
+          const assembled = assembleOutput({
+            steps: newSteps,
+            finalAnswer: cleanContent,
+            terminatedBy: "llm_end_turn",
+            entropyScores: (state.meta.entropy as any)?.entropyHistory,
+          });
+          return transitionState(state, {
+            steps: newSteps,
+            tokens: newTokens,
+            cost: newCost,
+            status: "done" as const,
+            output: assembled.text,
+            priorThought: thought.trim(),
+            iteration: state.iteration + 1,
+            meta: {
+              ...state.meta,
+              terminatedBy,
+            },
+          });
+        }
+      } else if (resolverResult._tag === "thinking") {
+        // Continue the loop
         return transitionState(state, {
           steps: newSteps,
           tokens: newTokens,
           cost: newCost,
-          status: "done" as const,
-          output: assembled.text,
-          priorThought: thought.trim(),
           iteration: state.iteration + 1,
-          meta: {
-            ...state.meta,
-            terminatedBy: "end_turn",
-          },
+          priorThought: thought.trim(),
         });
       }
-
-      // resolverResult._tag === "thinking" — continue the loop
-      return transitionState(state, {
-        steps: newSteps,
-        tokens: newTokens,
-        cost: newCost,
-        iteration: state.iteration + 1,
-        priorThought: thought.trim(),
-      });
     }
 
     // ── ACTION SELECTION (text-based path) ──────────────────────────────────
@@ -1419,16 +1438,16 @@ export const executeReActKernel = (
     }
 
     // ── Determine native FC mode ────────────────────────────────────────────
-    // Default: false. The caller must explicitly opt in via useNativeFunctionCalling: true.
-    // Task 13 will flip the default to auto-detect from provider capabilities.
+    // Auto-detect from provider capabilities unless explicitly overridden.
+    // When the provider supports tool calling, native FC is used automatically.
     const llm = yield* LLMService;
-    let useNativeFC = input.useNativeFunctionCalling ?? false;
+    const caps = yield* llm.capabilities().pipe(
+      Effect.catchAll(() => Effect.succeed(DEFAULT_CAPABILITIES)),
+    );
+    let useNativeFC = input.useNativeFunctionCalling ?? caps.supportsToolCalling;
     let toolCallResolver: ToolCallResolver | undefined = input.toolCallResolver;
 
     if (useNativeFC && !toolCallResolver) {
-      const caps = yield* llm.capabilities().pipe(
-        Effect.catchAll(() => Effect.succeed(DEFAULT_CAPABILITIES)),
-      );
       try {
         toolCallResolver = createToolCallResolver(caps);
       } catch {
