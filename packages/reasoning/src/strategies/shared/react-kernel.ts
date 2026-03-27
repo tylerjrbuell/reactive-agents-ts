@@ -284,6 +284,27 @@ function handleThinking(
     const baseSystemPrompt = buildSystemPrompt(input.task, effectiveSystemPrompt, profile.tier);
     const systemPromptText = `${baseSystemPrompt}\n\n${staticContext}`;
 
+    // ── Auto-forward: inject full stored result from last observation ──────────
+    // When the previous tool result was compressed and auto-stored in the scratchpad
+    // (storedKey on the observation step metadata), inject the full content into this
+    // iteration's context so the model can use it directly without calling recall.
+    // Budget: 2,000 chars. Only the LAST stored result is forwarded.
+    const AUTO_FORWARD_BUDGET = 2_000;
+    let autoForwardSection = "";
+    if (state.iteration > 0) {
+      const lastObsStep = state.steps.filter((s) => s.type === "observation").pop();
+      const storedKey = lastObsStep?.metadata?.storedKey as string | undefined;
+      if (storedKey && state.scratchpad.has(storedKey)) {
+        const fullResult = state.scratchpad.get(storedKey)!;
+        const injected =
+          fullResult.length <= AUTO_FORWARD_BUDGET
+            ? fullResult
+            : fullResult.slice(0, AUTO_FORWARD_BUDGET) +
+              `\n[...${fullResult.length - AUTO_FORWARD_BUDGET} chars truncated — use recall("${storedKey}") for full content]`;
+        autoForwardSection = `[Auto-forwarded full result for ${storedKey}]:\n${injected}`;
+      }
+    }
+
     let thoughtPrompt = buildDynamicContext({
       task: input.task,
       steps: state.steps,
@@ -294,7 +315,13 @@ function handleThinking(
       profile,
       memories: (state.meta.memories as MemoryItem[] | undefined),
       priorContext: input.priorContext,
-    }) + "\n\nThink step-by-step, then either take ONE action or give your FINAL ANSWER:";
+    });
+
+    if (autoForwardSection) {
+      thoughtPrompt += `\n\n${autoForwardSection}`;
+    }
+
+    thoughtPrompt += "\n\nThink step-by-step, then either take ONE action or give your FINAL ANSWER:";
 
     // ── STREAM (with text delta emission) ──────────────────────────────────
     // Token budget adapts to model tier: frontier models get more room for
@@ -811,6 +838,7 @@ function handleActing(
         tokenBudget: (input.contextProfile as any)?.maxTokens ?? 8000,
         entropy: ((state.meta as any).entropy?.latest) as { composite: number; shape: string; momentum: number } | undefined,
         controllerDecisionLog: state.controllerDecisionLog,
+        iterationCount: state.iteration,
       };
       observationContent = buildBriefResponse(briefInput);
       obsResult = makeObservationResult("brief", true, observationContent);
@@ -903,6 +931,11 @@ function handleActing(
         observationContent = toolObs.content;
         obsResult = toolObs.observationResult;
 
+        // Carry stored key forward for auto-forwarding in the next iteration
+        if (toolObs.storedKey) {
+          (obsResult as any)._storedKey = toolObs.storedKey;
+        }
+
         // Store actual duration in action step metadata
         const lastActionStep = stepsWithAction[stepsWithAction.length - 1];
         if (lastActionStep?.type === "action") {
@@ -922,7 +955,13 @@ function handleActing(
       mergedScratchpad.set(k, v);
     }
 
-    const observationStep = makeStep("observation", observationContent, { observationResult: obsResult });
+    // Extract storedKey from obsResult (set above for single-tool path)
+    const obsStoredKey = (obsResult as any)._storedKey as string | undefined;
+
+    const observationStep = makeStep("observation", observationContent, {
+      observationResult: obsResult,
+      ...(obsStoredKey ? { storedKey: obsStoredKey } : {}),
+    });
     const stepsWithObs = [...stepsWithAction, observationStep];
 
     // Publish observation event
