@@ -172,17 +172,35 @@ export const executePlanExecute = (
 
       if (missingTools.length > 0) {
         const lastStep = plan.steps[plan.steps.length - 1];
+        const taskText = input.taskDescription ?? "";
+
         for (const tool of missingTools) {
           const stepNum = plan.steps.length + 1;
           const stepId = `s${stepNum}`;
+
+          // Build smart default args based on tool type and task context
+          let toolArgs: Record<string, unknown> = {};
+          let instruction = `Call ${tool} to complete the task. Use the results from previous steps as needed.`;
+
+          if (tool === "file-write" || tool === "file-operations/write") {
+            // Extract file path from task description (e.g., "write to ./agent-news.md")
+            const pathMatch = taskText.match(/(?:write\s+(?:it\s+)?to|save\s+(?:it\s+)?to|output\s+to)\s+([.\w\-\/]+\.\w+)/i);
+            const filePath = pathMatch?.[1] ?? "./output.md";
+            toolArgs = {
+              path: filePath,
+              content: lastStep ? `{{from_step:${lastStep.id}}}` : "",
+            };
+            instruction = `Write the report/results from the previous step to ${filePath}.`;
+          }
+
           plan.steps.push({
             id: stepId,
             seq: stepNum,
             title: `Execute ${tool}`,
-            instruction: `Call ${tool} to complete the task. Use the results from previous steps as needed.`,
+            instruction,
             type: "tool_call",
             toolName: tool,
-            toolArgs: {},
+            toolArgs,
             dependsOn: lastStep ? [lastStep.id] : [],
             status: "pending",
             retries: 0,
