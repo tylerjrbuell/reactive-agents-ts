@@ -566,8 +566,12 @@ function handleThinking(
     // substantive, exit immediately without running the termination oracle or
     // tool-parsing pipeline. Avoids 4-6 extra loop iterations that meta-tool
     // injection + entropy scoring would otherwise add to simple Q&A.
+    // SKIP fast-path when required tools are specified — the agent must use
+    // them before it can exit, even if the model already knows the answer.
+    const hasRequiredTools = (input.requiredTools?.length ?? 0) > 0;
     if (
       state.iteration === 0 &&
+      !hasRequiredTools &&
       !thought.match(/ACTION:/i) &&
       !thought.match(/FINAL\s+ANSWER\s*[:：]/i) &&
       thought.trim().length > 20 &&

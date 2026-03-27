@@ -638,15 +638,14 @@ function executeStep(
       const rawArgs = step.toolArgs ?? {};
       const resolvedArgs = resolveStepReferences(rawArgs, completedSteps);
 
-      // Warn if any {{from_step:sN}} references remain unresolved (self-ref or missing step)
+      // Strip any remaining unresolved {{from_step:sN}} references (self-ref or
+      // missing step). Rather than hard-failing the step, replace with empty string
+      // and let the tool handle missing/default args. This prevents infinite retry
+      // loops when the LLM generates circular step references (e.g. spawn-agent
+      // with agentId={{from_step:s2}} where s2 is the current step).
       for (const [key, value] of Object.entries(resolvedArgs)) {
         if (typeof value === "string" && /\{\{from_step:s\d+\}\}/.test(value)) {
-          return {
-            output: `[Unresolved reference in toolArgs.${key}: ${value} — step may reference itself or a step that hasn't completed]`,
-            tokens: 0,
-            cost: 0,
-            success: false,
-          };
+          resolvedArgs[key] = value.replace(/\{\{from_step:s\d+(?::summary)?\}\}/g, "");
         }
       }
 

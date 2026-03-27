@@ -234,7 +234,7 @@ export const BENCHMARK_TASKS: readonly BenchmarkTask[] = [
     id: "e5-file-execute",
     tier: "expert",
     name: "Code writing and execution",
-    prompt: "Write a short javascript module that exports a function returning 'Hello Tool World'. Save it using file-write to 'test-tool-exec.js'. Then execute it using code-execute by running 'node -e \"console.log(require('./test-tool-exec.js')())\"'. Let me know what it printed.",
+    prompt: "Use code-execute to run JavaScript code that defines a function returning 'Hello Tool World' and then calls it, logging the result with console.log. Then save the same code to 'test-tool-exec.js' using file-write. Tell me what the code-execute output was.",
     expected: "Hello Tool World",
     strategy: "tree-of-thought",
     requiresTools: true,
