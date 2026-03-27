@@ -100,8 +100,12 @@ export function recommendStrategyForTier(
   configuredStrategy: string,
   requiredTools?: readonly string[],
 ): string | undefined {
-  if (tier !== "local") return undefined;
+  // Only override reactive strategy (plan-execute is already structured)
   if (configuredStrategy !== "reactive") return undefined;
+  // Only override when task has multiple required tools (multi-step)
   if (!requiredTools || requiredTools.length < 2) return undefined;
-  return "plan-execute-reflect";
+  // Local AND mid tier models benefit from plan-execute scaffolding
+  // for multi-step tool tasks. Frontier/large models chain naturally.
+  if (tier === "local" || tier === "mid") return "plan-execute-reflect";
+  return undefined;
 }
