@@ -424,6 +424,35 @@ function handleThinking(
     // Publish thought event
     yield* hooks.onThought(state, thought);
 
+    // ── FAST-PATH: trivial task exit ─────────────────────────────────────────
+    // If this is the first iteration, the model produced no tool call, no
+    // FINAL ANSWER prefix (handled by the oracle), and the response is
+    // substantive, exit immediately without running the termination oracle or
+    // tool-parsing pipeline. Avoids 4-6 extra loop iterations that meta-tool
+    // injection + entropy scoring would otherwise add to simple Q&A.
+    if (
+      state.iteration === 0 &&
+      !thought.match(/ACTION:/i) &&
+      !thought.match(/FINAL\s+ANSWER\s*[:：]/i) &&
+      thought.trim().length > 20 &&
+      thoughtResponse.stopReason === "end_turn"
+    ) {
+      const output = thought.trim();
+      return transitionState(state, {
+        steps: newSteps,
+        tokens: newTokens,
+        cost: newCost,
+        status: "done" as const,
+        output,
+        priorThought: output,
+        iteration: state.iteration + 1,
+        meta: {
+          ...state.meta,
+          terminatedBy: "end_turn",
+        },
+      });
+    }
+
     // ── ACTION SELECTION ────────────────────────────────────────────────────
     let allToolRequests = parseAllToolRequests(thought);
     if (allToolRequests.length === 0 && thinking) {
