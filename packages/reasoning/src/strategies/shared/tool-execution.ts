@@ -481,6 +481,15 @@ export function executeNativeToolCall(
             storedKey = compressed.stored.key;
             config.scratchpad?.set(compressed.stored.key, compressed.stored.value);
           }
+
+          // In FC mode, clean up the compressed content for native message format:
+          // - Replace [STORED: _tool_result_N | tool] with a clean header
+          // - Replace recall("_tool_result_N") hints with plain language
+          // Local models get confused by _tool_result_N keys (try to file-read them)
+          content = content
+            .replace(/^\[STORED: [^\]]+\]\n?/m, `[${toolCall.name} result — compressed preview]\n`)
+            .replace(/— use recall\("[^"]+"\)[^\n]*/g, "— call recall if you need the full uncompressed data")
+            .trim();
         }
 
         return { content, success, storedKey };
