@@ -127,3 +127,12 @@ export type { FallbackConfig } from "./fallback-chain.js";
 
 // ─── Validation ───
 export { validateAndRepairMessages } from "./validation.js";
+
+// ─── Provider Behavior Adapters ───
+export {
+  type ProviderAdapter,
+  defaultAdapter,
+  localModelAdapter,
+  selectAdapter,
+  recommendStrategyForTier,
+} from "./adapter.js";

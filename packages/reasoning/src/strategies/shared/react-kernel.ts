@@ -15,7 +15,7 @@
 import { Effect, Stream, FiberRef, Ref } from "effect";
 import type { ReasoningStep } from "../../types/index.js";
 import { ExecutionError } from "../../errors/errors.js";
-import { LLMService } from "@reactive-agents/llm-provider";
+import { LLMService, selectAdapter } from "@reactive-agents/llm-provider";
 import type { StreamEvent, LLMMessage } from "@reactive-agents/llm-provider";
 import { StreamingTextCallback } from "@reactive-agents/core";
 import type { ContextProfile } from "../../context/context-profile.js";
@@ -323,7 +323,9 @@ function handleThinking(
       useNativeFunctionCalling: useNativeFC,
     });
     const baseSystemPrompt = buildSystemPrompt(input.task, effectiveSystemPrompt, profile.tier);
-    const systemPromptText = `${baseSystemPrompt}\n\n${staticContext}`;
+    const adapter = selectAdapter({ supportsToolCalling: true }, profile.tier);
+    const patchedBase = adapter.systemPromptPatch?.(baseSystemPrompt, profile.tier ?? "mid") ?? baseSystemPrompt;
+    const systemPromptText = `${patchedBase}\n\n${staticContext}`;
 
     // ── Auto-forward: inject full stored result from last observation ──────────
     // When the previous tool result was compressed and auto-stored in the scratchpad
@@ -650,12 +652,32 @@ function handleThinking(
           const allRequiredMet = requiredTools.every((t) => state.toolsUsed.has(t));
           if (!allRequiredMet && state.iteration < (state.meta.maxIterations as number ?? 10) - 1) {
             const missing = requiredTools.filter((t) => !state.toolsUsed.has(t));
-            const redirectMsg = `Not done yet — you still need to call: ${missing.join(", ")}. Do not give a final answer until all required tools have been used.`;
+
+            // Use adapter hint for targeted guidance, fall back to generic redirect
+            const lastActStep = state.steps.filter(s => s.type === "action").pop();
+            const lastTool = (lastActStep?.metadata?.toolCall as { name?: string } | undefined)?.name;
+            const adapterRedirect = adapter.continuationHint?.({
+              toolsUsed: state.toolsUsed,
+              requiredTools: requiredTools as string[],
+              missingTools: missing,
+              iteration: state.iteration,
+              maxIterations: (state.meta.maxIterations as number) ?? 10,
+              lastToolName: lastTool,
+            });
+            const redirectMsg = adapterRedirect
+              ?? `Not done yet — you still need to call: ${missing.join(", ")}. Do not give a final answer until all required tools have been used.`;
+
             const redirectStep = makeStep("observation", redirectMsg, {
               observationResult: makeObservationResult("system", false, redirectMsg),
             });
+
+            // Append redirect to BOTH steps (observability) AND messages (what LLM sees)
+            const redirectMessages = [...(state.messages as readonly KernelMessage[]),
+              { role: "user" as const, content: redirectMsg }];
+
             return transitionState(state, {
               steps: [...newSteps, redirectStep],
+              messages: redirectMessages,
               tokens: newTokens,
               cost: newCost,
               iteration: state.iteration + 1,
@@ -674,8 +696,11 @@ function handleThinking(
             const gapStep = makeStep("observation", gapMsg, {
               observationResult: makeObservationResult("system", false, gapMsg),
             });
+            const gapMessages = [...(state.messages as readonly KernelMessage[]),
+              { role: "user" as const, content: gapMsg }];
             return transitionState(state, {
               steps: [...newSteps, gapStep],
+              messages: gapMessages,
               tokens: newTokens,
               cost: newCost,
               iteration: state.iteration + 1,
@@ -731,16 +756,40 @@ function handleThinking(
           thinkingSteps = [...thinkingSteps, makeStep("thought", thinkingContent)];
         }
 
+        // Build nudge message — prefer adapter hint for local models, fall back to default
+        let nudgeMessage: string | undefined;
         if (missingReq.length > 0 && !thinkingContent) {
           // After 2 consecutive empty responses, escalate to a stronger directive
           const isStuck = consecutiveEmpty >= 2;
-          const nudge = isStuck
+          const defaultNudge = isStuck
             ? `⚠️ ACTION REQUIRED: You have not made progress. You MUST call: ${missingReq.join(", ")} RIGHT NOW. Stop waiting and use the tool immediately.`
             : `Continue working on the task. You still need to call: ${missingReq.join(", ")}. Use the available tools to complete the task.`;
-          thinkingSteps = [...thinkingSteps, makeStep("observation", nudge, {
-            observationResult: makeObservationResult("system", true, nudge),
+
+          // Try adapter hint first (returns undefined for non-local tiers)
+          const lastObsForHint = state.steps.filter((s) => s.type === "observation").pop();
+          const lastActionForHint = state.steps.filter((s) => s.type === "action").pop();
+          const lastToolNameForHint = (lastActionForHint?.metadata?.toolCall as { name?: string } | undefined)?.name;
+          const adapterNudge = adapter.continuationHint?.({
+            toolsUsed: state.toolsUsed,
+            requiredTools: reqTools,
+            missingTools: missingReq,
+            iteration: state.iteration,
+            maxIterations: (state.meta.maxIterations as number) ?? 10,
+            lastToolName: lastToolNameForHint,
+            lastToolResultPreview: lastObsForHint?.content?.slice(0, 200),
+          });
+
+          nudgeMessage = adapterNudge ?? defaultNudge;
+          thinkingSteps = [...thinkingSteps, makeStep("observation", nudgeMessage, {
+            observationResult: makeObservationResult("system", true, nudgeMessage),
           })];
         }
+
+        // For native FC: append the nudge as a user message in conversation history
+        // so the model sees it in the next iteration's context (not just as a step).
+        const updatedMessages = nudgeMessage && useNativeFC
+          ? [...(state.messages as readonly KernelMessage[]), { role: "user" as const, content: nudgeMessage }]
+          : state.messages;
 
         return transitionState(state, {
           steps: thinkingSteps,
@@ -748,6 +797,7 @@ function handleThinking(
           cost: newCost,
           iteration: state.iteration + 1,
           priorThought: thinkingContent || state.priorThought,
+          messages: updatedMessages,
         });
       }
     }
