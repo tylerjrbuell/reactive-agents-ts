@@ -205,20 +205,23 @@ export const AnthropicProviderLive = Layer.effect(
               ),
             });
 
-            stream.on("text", (text: unknown) => {
-              emit.single({ type: "text_delta", text: text as string });
-            });
-
-            // Handle tool_use content blocks emitted during streaming
-            stream.on("contentBlock", (block: unknown) => {
-              const b = block as { type: string; id?: string; name?: string };
-              if (b.type === "tool_use" && b.id && b.name) {
-                emit.single({ type: "tool_use_start", id: b.id, name: b.name });
+            // Use raw streamEvent for correct ordering of tool_use events.
+            // The helper events (contentBlock, inputJson) fire out of order —
+            // inputJson (delta) can arrive before contentBlock (start), causing
+            // the kernel to miss accumulating tool call arguments.
+            stream.on("streamEvent", (event: unknown) => {
+              const e = event as { type: string; delta?: { type: string; text?: string; partial_json?: string }; content_block?: { type: string; id?: string; name?: string }; index?: number };
+              if (e.type === "content_block_delta") {
+                if (e.delta?.type === "text_delta" && e.delta.text) {
+                  emit.single({ type: "text_delta", text: e.delta.text });
+                } else if (e.delta?.type === "input_json_delta" && e.delta.partial_json) {
+                  emit.single({ type: "tool_use_delta", input: e.delta.partial_json });
+                }
+              } else if (e.type === "content_block_start") {
+                if (e.content_block?.type === "tool_use" && e.content_block.id && e.content_block.name) {
+                  emit.single({ type: "tool_use_start", id: e.content_block.id, name: e.content_block.name });
+                }
               }
-            });
-
-            stream.on("inputJson", (partialJson: unknown) => {
-              emit.single({ type: "tool_use_delta", input: partialJson as string });
             });
 
             stream.on("finalMessage", (message: unknown) => {
