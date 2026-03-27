@@ -1371,6 +1371,24 @@ function handleActing(
           toolCalls: toolCallsForHistory,
         };
 
+        // Append progress summary for reactive strategy: tells the model what it did
+        // and what's left. This is critical for local/mid models that don't infer
+        // next steps from conversation structure alone.
+        const reqTools = input.requiredTools ?? [];
+        const usedSoFar = [...newToolsUsed];
+        const missing = reqTools.filter((t) => !newToolsUsed.has(t));
+
+        if (missing.length > 0) {
+          const toolsSummary = usedSoFar.length > 0
+            ? `Tools called so far: ${usedSoFar.join(", ")}.`
+            : "";
+          const progressMsg: KernelMessage = {
+            role: "user",
+            content: `${toolsSummary} Remaining required tools: ${missing.join(", ")}. Call ${missing[0]} next.`,
+          };
+          return [...prior, assistantMsg, ...toolResultMessages, progressMsg];
+        }
+
         return [...prior, assistantMsg, ...toolResultMessages];
       })();
 

@@ -96,16 +96,14 @@ export function selectAdapter(
  * Returns undefined if no override is recommended (use configured strategy).
  */
 export function recommendStrategyForTier(
-  tier: string | undefined,
-  configuredStrategy: string,
-  requiredTools?: readonly string[],
+  _tier: string | undefined,
+  _configuredStrategy: string,
+  _requiredTools?: readonly string[],
 ): string | undefined {
-  // Only override reactive strategy (plan-execute is already structured)
-  if (configuredStrategy !== "reactive") return undefined;
-  // Only override when task has multiple required tools (multi-step)
-  if (!requiredTools || requiredTools.length < 2) return undefined;
-  // Local AND mid tier models benefit from plan-execute scaffolding
-  // for multi-step tool tasks. Frontier/large models chain naturally.
-  if (tier === "local" || tier === "mid") return "plan-execute-reflect";
+  // Strategy routing disabled — reactive strategy now handles multi-step
+  // tool tasks via progress summary messages in the FC conversation thread.
+  // The adapter's continuationHint + progress messages give reactive enough
+  // scaffolding for local/mid models without routing to plan-execute.
+  // Keep this function for future use if needed.
   return undefined;
 }
