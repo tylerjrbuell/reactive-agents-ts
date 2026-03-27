@@ -11,16 +11,37 @@ export function detectCompletionGaps(
   task: string,
   toolsUsed: ReadonlySet<string>,
   allToolSchemas: readonly { name: string }[],
-  steps?: readonly { type: string; content: string }[],
+  steps?: readonly { type: string; content: string; metadata?: Record<string, unknown> }[],
 ): string[] {
   const taskLower = task.toLowerCase();
   const gaps: string[] = [];
+
+  // ── FC metadata supplement ────────────────────────────────────────────────
+  // When native function calling is active, action steps carry metadata.toolCall
+  // with structured { name, arguments } data. Supplement the caller-provided
+  // toolsUsed set with any tool names found in step metadata so gap detection
+  // works correctly for both the text-based and FC code paths.
+  let effectiveToolsUsed = toolsUsed;
+  if (steps) {
+    const extraTools: string[] = [];
+    for (const s of steps) {
+      if (s.type === "action" && s.metadata?.toolCall) {
+        const tc = s.metadata.toolCall as { name: string } | undefined;
+        if (tc?.name && !toolsUsed.has(tc.name)) {
+          extraTools.push(tc.name);
+        }
+      }
+    }
+    if (extraTools.length > 0) {
+      effectiveToolsUsed = new Set([...toolsUsed, ...extraTools]);
+    }
+  }
 
   // ── Sub-agent delegation awareness ───────────────────────────────────────
   // If spawn-agent was used and its observation shows success for a namespace,
   // treat that namespace as satisfied — the sub-agent handled it.
   const delegatedNamespaces = new Set<string>();
-  if (toolsUsed.has("spawn-agent") && steps) {
+  if (effectiveToolsUsed.has("spawn-agent") && steps) {
     for (const s of steps) {
       if (s.type !== "observation") continue;
       const content = s.content.toLowerCase();
@@ -59,7 +80,7 @@ export function detectCompletionGaps(
     // Skip if a sub-agent already handled this namespace
     if (delegatedNamespaces.has(ns)) continue;
 
-    const usedFromNs = [...toolsUsed].some((t) => t.toLowerCase().startsWith(ns + "/"));
+    const usedFromNs = [...effectiveToolsUsed].some((t) => t.toLowerCase().startsWith(ns + "/"));
     if (!usedFromNs) {
       gaps.push(`Task mentions "${ns}" but no ${ns}/* tool was called — use the appropriate ${ns}/* tool`);
     }
@@ -76,7 +97,7 @@ export function detectCompletionGaps(
   ];
   for (const [pattern, toolName, check] of ACTION_TOOL_MAP) {
     const match = taskLower.match(pattern);
-    if (match && !check(toolsUsed)) {
+    if (match && !check(effectiveToolsUsed)) {
       gaps.push(`Task asks to "${match[0]}" but ${toolName} was not called`);
     }
   }
