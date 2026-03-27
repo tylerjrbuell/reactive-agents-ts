@@ -17,7 +17,6 @@ import type { ReasoningStep } from "../../types/index.js";
 import { ExecutionError } from "../../errors/errors.js";
 import { LLMService } from "@reactive-agents/llm-provider";
 import type { StreamEvent } from "@reactive-agents/llm-provider";
-import { DEFAULT_CAPABILITIES } from "@reactive-agents/llm-provider";
 import { StreamingTextCallback } from "@reactive-agents/core";
 import type { ContextProfile } from "../../context/context-profile.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
@@ -41,8 +40,6 @@ import {
   ragMemoryStore,
   webSearchHandler,
   ToolService,
-  createToolCallResolver,
-  type ToolCallResolver,
   type ToolCallSpec,
   type ResolverInput,
 } from "@reactive-agents/tools";
@@ -798,17 +795,106 @@ function handleActing(
       let allSteps = [...state.steps];
 
       for (const tc of pendingNativeCalls) {
-        // ── Meta-tool inline handling (final-answer, brief, pulse) ────────
-        // These are handled inline like the text-based path — they bypass ToolService.
+        const META_TOOL_NAMES = new Set(["final-answer", "task-complete", "context-status", "brief", "pulse", "find", "recall"]);
+
+        // ── BRIEF INLINE HANDLER (FC) ─────────────────────────────────────────
+        if (tc.name === "brief" && input.metaTools?.brief) {
+          const liveStore = yield* Ref.get(scratchpadStoreRef);
+          const recallKeys = [...liveStore.keys()];
+          const briefInput: BriefInput = {
+            section: tc.arguments?.section as string | undefined,
+            availableTools: input.availableToolSchemas ?? [],
+            indexedDocuments: input.metaTools.staticBriefInfo?.indexedDocuments ?? [],
+            availableSkills: input.metaTools.staticBriefInfo?.availableSkills ?? [],
+            memoryBootstrap: input.metaTools.staticBriefInfo?.memoryBootstrap ?? { semanticLines: 0, episodicEntries: 0 },
+            recallKeys,
+            tokens: state.tokens,
+            tokenBudget: (input.contextProfile as any)?.maxTokens ?? 8000,
+            entropy: ((state.meta as any).entropy?.latest) as { composite: number; shape: string; momentum: number } | undefined,
+            controllerDecisionLog: state.controllerDecisionLog,
+            iterationCount: state.iteration,
+          };
+          const briefContent = buildBriefResponse(briefInput);
+          const actionStep = makeStep("action", `${tc.name}(${JSON.stringify(tc.arguments)})`, {
+            toolCall: { id: tc.id, name: tc.name, arguments: tc.arguments },
+          });
+          const obsStep = makeStep("observation", briefContent, {
+            observationResult: makeObservationResult("brief", true, briefContent),
+          });
+          yield* hooks.onAction(state, tc.name, JSON.stringify(tc.arguments));
+          yield* hooks.onObservation(
+            transitionState(state, { steps: [...allSteps, actionStep] }),
+            briefContent,
+            true,
+          );
+          newToolsUsed.add(tc.name);
+          allSteps = [...allSteps, actionStep, obsStep];
+          continue;
+        }
+
+        // ── PULSE INLINE HANDLER (FC) ─────────────────────────────────────────
+        if (tc.name === "pulse" && input.metaTools?.pulse) {
+          const pulseInput: PulseInput = {
+            question: tc.arguments?.question as string | undefined,
+            entropy: ((state.meta as any).entropy?.latest) as { composite: number; shape: string; momentum: number; history?: readonly number[] } | undefined,
+            controllerDecisionLog: state.controllerDecisionLog,
+            steps: allSteps,
+            iteration: state.iteration,
+            maxIterations: (state.meta.maxIterations as number | undefined) ?? 10,
+            tokens: state.tokens,
+            tokenBudget: (input.contextProfile as any)?.maxTokens ?? 8000,
+            task: input.task,
+            allToolSchemas: input.allToolSchemas ?? input.availableToolSchemas ?? [],
+            toolsUsed: newToolsUsed,
+            requiredTools: input.requiredTools ?? [],
+          };
+          const pulseContent = JSON.stringify(buildPulseResponse(pulseInput), null, 2);
+          const actionStep = makeStep("action", `${tc.name}(${JSON.stringify(tc.arguments)})`, {
+            toolCall: { id: tc.id, name: tc.name, arguments: tc.arguments },
+          });
+          const obsStep = makeStep("observation", pulseContent, {
+            observationResult: makeObservationResult("pulse", true, pulseContent),
+          });
+          yield* hooks.onAction(state, tc.name, JSON.stringify(tc.arguments));
+          yield* hooks.onObservation(
+            transitionState(state, { steps: [...allSteps, actionStep] }),
+            pulseContent,
+            true,
+          );
+          newToolsUsed.add(tc.name);
+          allSteps = [...allSteps, actionStep, obsStep];
+          continue;
+        }
+
+        // ── FINAL-ANSWER HARD GATE (FC) ───────────────────────────────────────
         if (tc.name === "final-answer") {
           const META_TOOLS = new Set(["final-answer", "task-complete", "context-status", "brief", "pulse", "find", "recall"]);
           const hasNonMetaToolCalled = [...newToolsUsed].some((t) => !META_TOOLS.has(t));
           const requiredTools = input.requiredTools ?? [];
           const allRequiredMet = requiredTools.every((t) => newToolsUsed.has(t));
-          const canComplete = allRequiredMet && (hasNonMetaToolCalled || requiredTools.length === 0);
+          let canComplete = allRequiredMet && (hasNonMetaToolCalled || requiredTools.length === 0);
+
+          // ── Dynamic task completion guard (FC) ──────────────────────────────
+          let completionGapMessage: string | undefined;
+          const priorFinalAnswerAttempts = allSteps.filter(
+            (s) => s.type === "observation" && s.content.startsWith("⚠️") && s.content.includes("final-answer"),
+          ).length;
+          if (canComplete && priorFinalAnswerAttempts < 1) {
+            const gaps = detectCompletionGaps(
+              input.task,
+              newToolsUsed,
+              input.allToolSchemas ?? input.availableToolSchemas ?? [],
+              allSteps,
+            );
+            if (gaps.length > 0) {
+              canComplete = false;
+              completionGapMessage = `Not done yet — missing steps:\n${gaps.map((g) => `  • ${g}`).join("\n")}\nComplete these actions before calling final-answer.`;
+            }
+          }
 
           const handlerResult = yield* makeFinalAnswerHandler({
             canComplete,
+            pendingTools: completionGapMessage ? [completionGapMessage] : undefined,
           })({ ...tc.arguments });
           const resultObj = handlerResult as Record<string, unknown>;
 
@@ -889,6 +975,101 @@ function handleActing(
           );
           allSteps = [...allSteps, actionStep, blockObsStep];
           continue;
+        }
+
+        // ── Duplicate action detection (FC) ───────────────────────────────────
+        // Has this exact tool call (same name + same args) already succeeded?
+        const currentActionJson = JSON.stringify({ tool: tc.name, args: tc.arguments });
+        const isDuplicate = allSteps.some((step, idx) => {
+          if (step.type !== "action") return false;
+          const stepTc = step.metadata?.toolCall as { name: string; arguments: unknown } | undefined;
+          if (!stepTc) return false;
+          if (JSON.stringify({ tool: stepTc.name, args: stepTc.arguments }) !== currentActionJson) return false;
+          const next = allSteps[idx + 1];
+          return next?.type === "observation" && next.metadata?.observationResult?.success === true;
+        });
+        if (isDuplicate) {
+          // Surface prior result with advisory — don't re-execute
+          const priorSuccessIdx = allSteps.findIndex((step, idx) => {
+            if (step.type !== "action") return false;
+            const stepTc = step.metadata?.toolCall as { name: string; arguments: unknown } | undefined;
+            if (!stepTc) return false;
+            if (JSON.stringify({ tool: stepTc.name, args: stepTc.arguments }) !== currentActionJson) return false;
+            const next = allSteps[idx + 1];
+            return next?.type === "observation" && next.metadata?.observationResult?.success === true;
+          });
+          const priorObsContent = priorSuccessIdx >= 0 ? allSteps[priorSuccessIdx + 1]?.content ?? "" : "";
+          const dupContent = `${priorObsContent} [Already done — do NOT repeat. Continue with next task step or give FINAL ANSWER if all steps are complete.]`;
+          const actionStep = makeStep("action", `${tc.name}(${JSON.stringify(tc.arguments)})`, {
+            toolCall: { id: tc.id, name: tc.name, arguments: tc.arguments },
+          });
+          const dupObsStep = makeStep("observation", dupContent, {
+            observationResult: makeObservationResult(tc.name, true, dupContent),
+          });
+          yield* hooks.onAction(state, tc.name, JSON.stringify(tc.arguments));
+          yield* hooks.onObservation(
+            transitionState(state, { steps: [...allSteps, actionStep] }),
+            dupContent,
+            true,
+          );
+          allSteps = [...allSteps, actionStep, dupObsStep];
+          continue;
+        }
+
+        // ── Side-effect guard (FC) ────────────────────────────────────────────
+        // Tools that mutate external state must not run twice even with different parameters
+        const SIDE_EFFECT_PREFIXES = ["send", "create", "delete", "push", "merge", "fork", "update", "assign", "remove"];
+        const isSideEffectTool = SIDE_EFFECT_PREFIXES.some(
+          (p) => tc.name.toLowerCase().includes(p),
+        );
+        if (isSideEffectTool) {
+          const sideEffectAlreadyDone = allSteps.some((step, idx) => {
+            if (step.type !== "action") return false;
+            const stepTc = step.metadata?.toolCall as { name: string } | undefined;
+            if (stepTc?.name !== tc.name) return false;
+            const next = allSteps[idx + 1];
+            return next?.type === "observation" && next.metadata?.observationResult?.success === true;
+          });
+          if (sideEffectAlreadyDone) {
+            const sideEffectMsg = `⚠️ ${tc.name} already executed successfully with different parameters. Side-effect tools must NOT be called twice. Move on to the next step or give FINAL ANSWER.`;
+            const actionStep = makeStep("action", `${tc.name}(${JSON.stringify(tc.arguments)})`, {
+              toolCall: { id: tc.id, name: tc.name, arguments: tc.arguments },
+            });
+            const sideObsStep = makeStep("observation", sideEffectMsg, {
+              observationResult: makeObservationResult(tc.name, true, sideEffectMsg),
+            });
+            yield* hooks.onAction(state, tc.name, JSON.stringify(tc.arguments));
+            yield* hooks.onObservation(
+              transitionState(state, { steps: [...allSteps, actionStep] }),
+              sideEffectMsg,
+              true,
+            );
+            allSteps = [...allSteps, actionStep, sideObsStep];
+            continue;
+          }
+        }
+
+        // ── Repetition guard (FC) ─────────────────────────────────────────────
+        // When the same tool is called 2+ times, nudge to synthesize
+        if (!META_TOOL_NAMES.has(tc.name)) {
+          const priorCallsOfSameTool = allSteps.filter((s) => {
+            if (s.type !== "action") return false;
+            const stepTc = s.metadata?.toolCall as { name: string } | undefined;
+            return (stepTc?.name ?? "") === tc.name;
+          }).length;
+          if (priorCallsOfSameTool >= 2) {
+            const nudge = `⚠️ You have already called ${tc.name} ${priorCallsOfSameTool} times. Stop searching and synthesize an answer from the results you already have. Use final-answer to respond now.`;
+            const nudgeStep = makeStep("observation", nudge, {
+              observationResult: makeObservationResult(tc.name, false, nudge),
+            });
+            yield* hooks.onObservation(
+              transitionState(state, { steps: allSteps }),
+              nudge,
+              false,
+            );
+            allSteps = [...allSteps, nudgeStep];
+            continue;
+          }
         }
 
         // ── Execute the tool via ToolService ──────────────────────────────────
@@ -1437,23 +1618,9 @@ export const executeReActKernel = (
       }
     }
 
-    // ── Determine native FC mode ────────────────────────────────────────────
-    // Auto-detect from provider capabilities unless explicitly overridden.
-    // When the provider supports tool calling, native FC is used automatically.
-    const llm = yield* LLMService;
-    const caps = yield* llm.capabilities().pipe(
-      Effect.catchAll(() => Effect.succeed(DEFAULT_CAPABILITIES)),
-    );
-    let useNativeFC = input.useNativeFunctionCalling ?? caps.supportsToolCalling;
-    let toolCallResolver: ToolCallResolver | undefined = input.toolCallResolver;
-
-    if (useNativeFC && !toolCallResolver) {
-      try {
-        toolCallResolver = createToolCallResolver(caps);
-      } catch {
-        useNativeFC = false;
-      }
-    }
+    // Native FC detection is handled by runKernel (kernel-runner.ts) —
+    // it auto-detects provider capabilities and injects the FC flag + resolver.
+    // No need to duplicate that logic here.
 
     const state = yield* runKernel(reactKernel, {
       task: input.task,
@@ -1469,8 +1636,9 @@ export const executeReActKernel = (
       requiredTools: input.requiredTools,
       maxRequiredToolRetries: input.maxRequiredToolRetries,
       metaTools: input.metaTools,
-      // Pass native FC fields through — they're read via (input as ReActKernelInput) in the kernel
-      ...(useNativeFC ? { useNativeFunctionCalling: true, toolCallResolver } : {}),
+      // Explicit FC overrides are passed through for tests/manual config
+      ...(input.useNativeFunctionCalling != null ? { useNativeFunctionCalling: input.useNativeFunctionCalling } : {}),
+      ...(input.toolCallResolver ? { toolCallResolver: input.toolCallResolver } : {}),
     } as KernelInput, {
       maxIterations: input.maxIterations ?? 10,
       strategy: input.parentStrategy ?? "react-kernel",

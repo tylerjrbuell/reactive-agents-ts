@@ -433,7 +433,7 @@ describe("Sprint 2D: Early termination on end_turn", () => {
     );
 
     // With no tools available, even short responses complete via end_turn
-    expect(["partial", "completed"]).toContain(result.status);
+    expect(result.status).toBe("completed");
   });
 });
 
