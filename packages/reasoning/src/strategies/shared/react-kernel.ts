@@ -386,9 +386,10 @@ function handleThinking(
         // First iteration — just the initial user task (context in system prompt)
         conversationMessages = [{ role: "user", content: thoughtPrompt }];
       } else {
-        // Subsequent iterations — replay the full history, then append the
-        // current dynamic context as a new user turn so the model sees the
-        // latest iteration/loop status.
+        // Subsequent iterations — replay the full history, then append a
+        // minimal continuation message. Do NOT re-send thoughtPrompt here;
+        // it duplicates all prior context already present in the history
+        // messages, wasting 2-3x tokens per iteration.
         const historyMessages: LLMMessage[] = history.map((msg): LLMMessage => {
           if (msg.role === "assistant") {
             if (msg.toolCalls && msg.toolCalls.length > 0) {
@@ -419,9 +420,16 @@ function handleThinking(
             return { role: "user", content: msg.content };
           }
         });
+        // Build a minimal continuation nudge instead of repeating the full context blob
+        const reqTools = input.requiredTools ?? [];
+        const missingReq = reqTools.filter((t) => !state.toolsUsed.has(t));
+        const continuationContent =
+          missingReq.length > 0
+            ? `Continue. You still need to call: ${missingReq.join(", ")}.`
+            : "Continue with the task.";
         conversationMessages = [
           ...historyMessages,
-          { role: "user", content: thoughtPrompt },
+          { role: "user", content: continuationContent },
         ];
       }
     } else {
