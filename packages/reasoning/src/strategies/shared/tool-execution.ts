@@ -23,6 +23,7 @@ import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import { evaluateTransform, compressToolResult, nextToolResultKey } from "./tool-utils.js";
 import type { ToolRequestGroup } from "./tool-utils.js";
 import type { MaybeService, ToolServiceInstance } from "./kernel-state.js";
+import type { ToolCallSpec } from "@reactive-agents/tools";
 
 // ── Result type ──────────────────────────────────────────────────────────────
 
@@ -432,6 +433,46 @@ export function executeToolCall(
       } satisfies ToolExecutionResult);
     }),
   );
+}
+
+// ── Native function calling execution ─────────────────────────────────────────
+
+/**
+ * Execute a single native function call (structured tool_use from the LLM).
+ *
+ * Unlike `executeToolCall` which handles text-based ACTION parsing, argument
+ * repair, and malformed JSON recovery, this function receives pre-parsed
+ * arguments directly from the provider's tool_use response. It runs the tool
+ * through ToolService and normalizes the result.
+ *
+ * Returns `{ content, success }` — never fails (errors are caught and surfaced
+ * as content strings so the LLM can reason about them).
+ */
+export function executeNativeToolCall(
+  toolService: ToolServiceInstance,
+  toolCall: ToolCallSpec,
+  agentId: string,
+  sessionId: string,
+): Effect.Effect<{ content: string; success: boolean }, never> {
+  return toolService
+    .execute({
+      toolName: toolCall.name,
+      arguments: toolCall.arguments,
+      agentId,
+      sessionId,
+    })
+    .pipe(
+      Effect.map((r) => ({
+        content: typeof r.result === "string" ? r.result : JSON.stringify(r.result),
+        success: r.success !== false,
+      })),
+      Effect.catchAll((e) =>
+        Effect.succeed({
+          content: `[Tool error: ${e instanceof Error ? e.message : String(e)}]`,
+          success: false,
+        }),
+      ),
+    );
 }
 
 // ── Group execution ───────────────────────────────────────────────────────────
