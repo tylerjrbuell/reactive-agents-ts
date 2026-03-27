@@ -19,7 +19,7 @@ import type { KernelInput } from "./shared/kernel-state.js";
 
 export type { CompressResult } from "./shared/tool-utils.js";
 export { evaluateTransform, compressToolResult } from "./shared/tool-utils.js";
-export { parseToolRequest as parseToolRequestWithTransform } from "./shared/tool-utils.js";
+// parseToolRequestWithTransform re-export removed — use parseToolRequest from shared/tool-utils directly
 export { truncateForDisplay } from "./shared/tool-execution.js";
 
 // ── ReactiveInput ─────────────────────────────────────────────────────────────
