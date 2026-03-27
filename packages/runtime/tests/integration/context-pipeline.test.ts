@@ -123,9 +123,8 @@ describe("ContextEngine buildContext", () => {
 // ─── Test 3: ALWAYS_INCLUDE_TOOLS constant ────────────────────────────────────
 
 describe("ALWAYS_INCLUDE_TOOLS", () => {
-  it("includes scratchpad-read and scratchpad-write", () => {
-    expect(ALWAYS_INCLUDE_TOOLS).toContain("scratchpad-read");
-    expect(ALWAYS_INCLUDE_TOOLS).toContain("scratchpad-write");
+  it("includes recall", () => {
+    expect(ALWAYS_INCLUDE_TOOLS).toContain("recall");
   });
 });
 
