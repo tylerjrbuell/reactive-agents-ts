@@ -1036,7 +1036,12 @@ function handleActing(
             return next?.type === "observation" && next.metadata?.observationResult?.success === true;
           });
           const priorObsContent = priorSuccessIdx >= 0 ? allSteps[priorSuccessIdx + 1]?.content ?? "" : "";
-          const dupContent = `${priorObsContent} [Already done — do NOT repeat. Continue with next task step or give FINAL ANSWER if all steps are complete.]`;
+          const reqTools = input.requiredTools ?? [];
+          const missingReq = reqTools.filter((t) => !newToolsUsed.has(t));
+          const nextHint = missingReq.length > 0
+            ? `You still need to call: ${missingReq.join(", ")}. Do that now.`
+            : "Give FINAL ANSWER if all steps are complete.";
+          const dupContent = `${priorObsContent} [Already done — do NOT repeat. ${nextHint}]`;
           const actionStep = makeStep("action", `${tc.name}(${JSON.stringify(tc.arguments)})`, {
             toolCall: { id: tc.id, name: tc.name, arguments: tc.arguments },
           });
@@ -1448,7 +1453,12 @@ function handleActing(
         ? state.steps[state.steps.indexOf(priorSuccessObs) + 1]
         : undefined;
       const priorObsContent = priorObsStep?.content ?? "";
-      observationContent = `${priorObsContent} [Already done — do NOT repeat. Continue with next task step or give FINAL ANSWER if all steps are complete.]`;
+      const reqToolsTxt = input.requiredTools ?? [];
+      const missingReqTxt = reqToolsTxt.filter((t) => !state.toolsUsed.has(t));
+      const nextHintTxt = missingReqTxt.length > 0
+        ? `You still need to call: ${missingReqTxt.join(", ")}. Do that now.`
+        : "Give FINAL ANSWER if all steps are complete.";
+      observationContent = `${priorObsContent} [Already done — do NOT repeat. ${nextHintTxt}]`;
       obsResult = priorObsStep?.metadata?.observationResult ??
         makeObservationResult(toolRequest.tool, true, observationContent);
     } else if (!observationContent && sideEffectAlreadyDone) {
