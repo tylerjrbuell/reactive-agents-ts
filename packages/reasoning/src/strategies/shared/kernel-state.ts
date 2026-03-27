@@ -59,13 +59,12 @@ export interface KernelState {
   readonly controllerDecisionLog: readonly string[];
 
   /**
-   * Native FC conversation history — provider-agnostic multi-turn message log.
-   * Only populated and used in the FC path (useNativeFC === true).
-   * Each iteration appends an assistant message (with toolCalls) + tool_result messages.
-   * On the next thinking phase, this history is replayed as a proper multi-turn conversation
-   * instead of a single packed user message blob.
+   * The LLM conversation thread — what gets sent to the model.
+   * Grows with each tool call (assistant turn + tool results appended).
+   * Compacted via sliding window when approaching token budget.
+   * Separate from steps[] which is the observability record.
    */
-  readonly conversationHistory?: readonly KernelMessage[];
+  readonly messages: readonly KernelMessage[];
 }
 
 // ── KernelInput — Frozen execution input ─────────────────────────────────────
@@ -99,6 +98,12 @@ export interface KernelInput {
   readonly maxRequiredToolRetries?: number;
   /** Custom environment context key-value pairs injected into the system prompt */
   readonly environmentContext?: Readonly<Record<string, string>>;
+  /**
+   * Optional seed messages for the LLM conversation thread.
+   * When provided, `state.messages` is initialized from these instead of starting empty.
+   * Allows the execution engine to inject prior conversation context (e.g. chat history).
+   */
+  readonly initialMessages?: readonly KernelMessage[];
   /** Meta-tool configuration and pre-computed static data for brief/pulse/recall/find. */
   readonly metaTools?: {
     readonly brief?: boolean;
@@ -257,7 +262,7 @@ export function initialKernelState(opts: KernelRunOptions): KernelState {
       ...(entropyMeta ? { entropy: entropyMeta } : {}),
     },
     controllerDecisionLog: [],
-    conversationHistory: [],
+    messages: [],
   };
 }
 

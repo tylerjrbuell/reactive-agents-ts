@@ -381,7 +381,7 @@ function handleThinking(
     // Text path: single user message with the packed context blob.
     let conversationMessages: LLMMessage[];
     if (useNativeFC) {
-      const history = (state.conversationHistory ?? []) as readonly KernelMessage[];
+      const history = state.messages as readonly KernelMessage[];
       if (history.length === 0) {
         // First iteration — just the initial user task (context in system prompt)
         conversationMessages = [{ role: "user", content: thoughtPrompt }];
@@ -1284,7 +1284,7 @@ function handleActing(
       // This gives the next iteration a proper multi-turn conversation history
       // instead of a packed text blob when useNativeFC is active.
       const newConversationHistory: readonly KernelMessage[] = (() => {
-        const prior = (state.conversationHistory ?? []) as readonly KernelMessage[];
+        const prior = state.messages as readonly KernelMessage[];
 
         // Collect action/observation pairs added by this acting phase.
         // Only include steps added after the current state.steps (i.e. this turn).
@@ -1338,7 +1338,7 @@ function handleActing(
         steps: allSteps,
         toolsUsed: newToolsUsed,
         scratchpad: mergedScratchpad,
-        conversationHistory: newConversationHistory,
+        messages: newConversationHistory,
         status: "thinking",
         iteration: state.iteration + 1,
         meta: {
