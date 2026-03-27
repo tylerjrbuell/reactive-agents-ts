@@ -607,7 +607,7 @@ function buildRules(
 ): string {
   const t = tier ?? "mid";
   const hasSpawnAgent = availableToolSchemas?.some((s) => s.name === "spawn-agent");
-  const hasStoredResults = availableToolSchemas?.some((s) => s.name === "scratchpad-read");
+  const hasStoredResults = availableToolSchemas?.some((s) => s.name === "recall");
 
   // Core rules — always included, small-model-safe count
   const rules: string[] = [
@@ -630,7 +630,7 @@ function buildRules(
   if (t === "large" || t === "frontier") {
     if (hasStoredResults) {
       rules.push(
-        `${ruleNum++}. When results show [STORED: _key], use ACTION: scratchpad-read({"key": "_key"}) to read full data.`,
+        `${ruleNum++}. When results show [STORED: _key], use ACTION: recall({"key": "_key"}) to read full data.`,
       );
     }
     if (hasSpawnAgent) {
@@ -639,10 +639,10 @@ function buildRules(
       );
     }
   } else {
-    // For local/mid: only add scratchpad rule if scratchpad-read is available (concise version)
+    // For local/mid: only add recall rule if recall is available (concise version)
     if (hasStoredResults) {
       rules.push(
-        `${ruleNum++}. [STORED: _key] means data was saved. Use scratchpad-read to get it.`,
+        `${ruleNum++}. [STORED: _key] means data was saved. Use recall to get it.`,
       );
     }
     if (hasSpawnAgent) {

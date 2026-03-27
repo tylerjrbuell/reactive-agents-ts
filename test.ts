@@ -205,9 +205,9 @@ const tests: TestCase[] = [
   // Category 4: TOOLS — Tool calling effectiveness
   // ═══════════════════════════════════════════════════════════════════════════
   {
-    name: "Scratchpad tool usage",
+    name: "Recall tool usage",
     category: "tools",
-    input: "Use the scratchpad tool to write a note with key 'answer' containing 'The capital of France is Paris', then read it back and include it in your final answer.",
+    input: "Use the recall tool to store a note with key 'answer' containing 'The capital of France is Paris', then retrieve it and include it in your final answer.",
     maxExpectedIterations: 10,
     maxExpectedMs: 30_000,
     expectedPatterns: [/paris/i, /capital/i],

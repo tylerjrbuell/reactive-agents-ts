@@ -325,29 +325,6 @@ export function executeToolCall(
 ): Effect.Effect<ToolExecutionResult, never> {
   const { profile, compression: compressionConfig, scratchpad: scratchpadStore, agentId, sessionId } = config;
 
-  // Short-circuit scratchpad-read for auto-stored tool results
-  if (
-    toolRequest.tool === "scratchpad-read" &&
-    scratchpadStore &&
-    scratchpadStore.size > 0
-  ) {
-    try {
-      const args = JSON.parse(toolRequest.input) as { key?: string } | string;
-      const key = typeof args === "string" ? args : (args.key ?? "");
-      if (scratchpadStore.has(key)) {
-        const value = scratchpadStore.get(key)!;
-        const budget = compressionConfig?.budget ?? profile?.toolResultMaxChars ?? 800;
-        const content = truncateForDisplay(value, budget);
-        return Effect.succeed({
-          content,
-          observationResult: makeObservationResult("scratchpad-read", true, content),
-        });
-      }
-    } catch {
-      // fall through to normal scratchpad-read tool execution
-    }
-  }
-
   if (toolServiceOpt._tag === "None") {
     const content = `[Tool "${toolRequest.tool}" requested but ToolService is not available — add .withTools() to agent builder]`;
     return Effect.succeed({

@@ -818,7 +818,6 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 if (obs && isNormal) {
                   const FRAMEWORK_TOOLS = new Set([
                     "final-answer", "task-complete", "context-status",
-                    "scratchpad-write", "scratchpad-read",
                     "brief", "pulse", "find", "recall",
                     "activate-skill", "get-skill-section", "context-task",
                   ]);

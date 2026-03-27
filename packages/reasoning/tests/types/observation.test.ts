@@ -44,8 +44,7 @@ describe("categorizeToolName", () => {
     expect(categorizeToolName("web-search")).toBe("web-search");
     expect(categorizeToolName("http-get")).toBe("http-get");
     expect(categorizeToolName("code-execute")).toBe("code-execute");
-    expect(categorizeToolName("scratchpad-write")).toBe("scratchpad");
-    expect(categorizeToolName("scratchpad-read")).toBe("scratchpad");
+    expect(categorizeToolName("recall")).toBe("scratchpad");
   });
 
   it("maps agent-* prefix to agent-delegate", () => {

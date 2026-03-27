@@ -72,7 +72,7 @@ function parseToolRequestBase(
   // Normalize underscores to hyphens for built-in tools — small models often
   // write final_answer instead of final-answer, scratchpad_read instead of scratchpad-read, etc.
   const rawTool = prefixMatch[1];
-  const HYPHENATED_BUILTINS = new Set(["final-answer", "scratchpad-read", "scratchpad-write", "file-read", "file-write", "web-search", "http-get", "code-execute", "context-status", "task-complete", "spawn-agent"]);
+  const HYPHENATED_BUILTINS = new Set(["final-answer", "recall", "file-read", "file-write", "web-search", "http-get", "code-execute", "context-status", "task-complete", "spawn-agent"]);
   const normalized = rawTool.replace(/_/g, "-");
   const tool = HYPHENATED_BUILTINS.has(normalized) ? normalized : rawTool;
   const argsStart = (prefixMatch.index ?? 0) + prefixMatch[0].length;
@@ -651,10 +651,10 @@ export function compressToolResult(
       const remaining = parsed.length - shownCount;
       const moreStr = remaining > 0 ? `\n  ...${remaining} more` : "";
       // When the preview covers most/all items, tell the agent it can proceed
-      // without a scratchpad-read — avoids wasting an iteration.
+      // without a recall — avoids wasting an iteration.
       const coverageHint = remaining <= 2
         ? `\n  ✓ Preview covers ${remaining === 0 ? "all" : "nearly all"} items — you can use this data directly.`
-        : `\n  — use scratchpad-read("${key}") ONLY if you need items beyond the preview.`;
+        : `\n  — use recall("${key}") ONLY if you need items beyond the preview.`;
       const content =
         `[STORED: ${key} | ${toolName}]\n` +
         `Type: Array(${parsed.length}) | Schema: ${schema}\n` +
@@ -688,7 +688,7 @@ export function compressToolResult(
         `[STORED: ${key} | ${toolName}]\n` +
         `Type: Object(${totalKeys} keys)\n` +
         entries +
-        `\n  — use scratchpad-read("${key}") or | transform: to access full data`;
+        `\n  — use recall("${key}") or | transform: to access full data`;
 
       return { content, stored: { key, value: result } };
     }
@@ -708,7 +708,7 @@ export function compressToolResult(
     `[STORED: ${key} | ${toolName}]\n` +
     preview +
     moreStr +
-    `\n  — use scratchpad-read("${key}") to access full text`;
+    `\n  — use recall("${key}") to access full text`;
 
   return { content, stored: { key, value: result } };
 }

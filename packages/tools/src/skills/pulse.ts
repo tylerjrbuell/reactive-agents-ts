@@ -48,7 +48,7 @@ export const pulseTool: ToolDefinition = {
 
 const META_TOOLS = new Set([
   "final-answer", "task-complete", "context-status",
-  "scratchpad-write", "scratchpad-read", "brief", "pulse", "find", "recall",
+  "brief", "pulse", "find", "recall",
 ]);
 
 export function buildPulseResponse(input: PulseInput): unknown {

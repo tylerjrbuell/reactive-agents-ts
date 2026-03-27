@@ -41,8 +41,7 @@ const TOOL_CATEGORY_MAP: Record<string, ObservationCategory> = {
   "web-search": "web-search",
   "http-get": "http-get",
   "code-execute": "code-execute",
-  "scratchpad-write": "scratchpad",
-  "scratchpad-read": "scratchpad",
+  "recall": "scratchpad",
   "spawn-agent": "agent-delegate",
 };
 
