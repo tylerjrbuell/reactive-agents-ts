@@ -760,9 +760,12 @@ function handleThinking(
           thinkingSteps = [...thinkingSteps, makeStep("thought", thinkingContent)];
         }
 
-        // Build nudge message — prefer adapter hint for local models, fall back to default
+        // Build nudge message — ALWAYS when required tools are missing, not just on empty
+        // responses. This ensures an observation step is injected between thoughts,
+        // preventing the consecutive-thoughts loop detector from killing productive
+        // iterations where the model thinks but hasn't called the next tool yet.
         let nudgeMessage: string | undefined;
-        if (missingReq.length > 0 && !thinkingContent) {
+        if (missingReq.length > 0) {
           // After 2 consecutive empty responses, escalate to a stronger directive
           const isStuck = consecutiveEmpty >= 2;
           const defaultNudge = isStuck
