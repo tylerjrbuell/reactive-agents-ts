@@ -44,9 +44,9 @@ describe("Project Generator", () => {
     expect(pkg.dependencies["@reactive-agents/tools"]).toBe("latest");
 
     const agentCode = readFileSync(join(TEST_DIR, "src", "agents", "my-agent.ts"), "utf-8");
-    expect(agentCode).toContain('.withMemory("1")');
+    expect(agentCode).toContain(".withMemory()");
     expect(agentCode).toContain(".withReasoning()");
-    expect(agentCode).not.toContain("withMemory(true)");
+    expect(agentCode).not.toContain('withMemory("1")');
     expect(agentCode).not.toContain('withReasoning("reactive")');
   });
 
