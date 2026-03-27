@@ -9,13 +9,21 @@
 import { Effect } from "effect";
 import type { ReasoningStep } from "../../types/index.js";
 import type { ContextProfile } from "../../context/context-profile.js";
-import type { ResultCompressionConfig } from "@reactive-agents/tools";
+import type { ResultCompressionConfig, ToolCallSpec } from "@reactive-agents/tools";
 import type { LLMService } from "@reactive-agents/llm-provider";
 import type { ToolSchema } from "./tool-utils.js";
 
 // ── Kernel Status ────────────────────────────────────────────────────────────
 
 export type KernelStatus = "thinking" | "acting" | "observing" | "done" | "failed" | "evaluating";
+
+// ── KernelMessage — Provider-agnostic conversation message ───────────────────
+
+/** Provider-agnostic conversation message for the kernel's native FC conversation history. */
+export type KernelMessage =
+  | { readonly role: "assistant"; readonly content: string; readonly toolCalls?: readonly ToolCallSpec[] }
+  | { readonly role: "tool_result"; readonly toolCallId: string; readonly content: string; readonly isError?: boolean }
+  | { readonly role: "user"; readonly content: string };
 
 // ── KernelState — Immutable, serializable reasoning state ────────────────────
 

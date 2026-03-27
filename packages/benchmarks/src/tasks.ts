@@ -175,7 +175,7 @@ export const BENCHMARK_TASKS: readonly BenchmarkTask[] = [
     id: "c5-multi-tool",
     tier: "complex",
     name: "Multi-tool data pipeline",
-    prompt: "First, use the scratchpad-write tool to save the string 'Project A' under the key 'project'. Next, read it back with scratchpad-read. Finally, combine it with the string ' is completed' and output the final result.",
+    prompt: "First, use the recall tool to store the string 'Project A' under the key 'project'. Next, retrieve it back with recall. Finally, combine it with the string ' is completed' and output the final result.",
     expected: "Project A is completed",
     strategy: "plan-execute",
     requiresTools: true,

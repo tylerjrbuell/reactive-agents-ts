@@ -10,10 +10,10 @@ export const MAX_PARENT_CONTEXT_CHARS = 2000;
 
 /**
  * Tools that are always included in every sub-agent's tool scope regardless of
- * what the parent configured. Sub-agents need scratchpad access to store/read
+ * what the parent configured. Sub-agents need recall access to store/read
  * intermediate results during reasoning.
  */
-export const ALWAYS_INCLUDE_TOOLS = ["scratchpad-read", "scratchpad-write"] as const;
+export const ALWAYS_INCLUDE_TOOLS = ["recall"] as const;
 
 /** Maximum characters per individual tool result summary. */
 const MAX_TOOL_RESULT_CHARS = 200;
@@ -192,7 +192,7 @@ export const createSubAgentExecutor = (
       if (config.systemPrompt) parts.push(config.systemPrompt);
       const composedSystemPrompt = parts.join("\n\n");
 
-      // Fix 1: Always include scratchpad tools in sub-agent tool scope so
+      // Fix 1: Always include recall tool in sub-agent tool scope so
       // sub-agents can store/retrieve intermediate results during reasoning.
       const baseTools = config.tools;
       const effectiveTools: readonly string[] = baseTools !== undefined
@@ -233,7 +233,7 @@ export const createSubAgentExecutor = (
         allowedTools: effectiveTools,
       });
 
-      // Fix 3: Forward sub-agent scratchpad entries to parent with a
+      // Fix 3: Forward sub-agent recall entries to parent with a
       // `sub:<agentName>:` prefix so parent agents can access sub-results.
       const forwardedKeys: string[] = [];
       if (result.scratchpadEntries && parentScratchpadWriter) {

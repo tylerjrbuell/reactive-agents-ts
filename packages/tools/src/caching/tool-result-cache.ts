@@ -2,7 +2,7 @@
  * Tool result cache — in-memory LRU-like cache for deterministic tool outputs.
  *
  * Caches results keyed by `toolName + args hash`. Side-effecting tools
- * (file-write, code-execute, scratchpad-write, etc.) are excluded by default.
+ * (file-write, code-execute, recall, etc.) are excluded by default.
  * TTL-based expiration with configurable defaults.
  */
 import { Effect, Ref, Context, Layer } from "effect";
@@ -41,7 +41,7 @@ export interface ToolCacheStats {
 const DEFAULT_UNCACHEABLE = new Set([
   "file-write",
   "code-execute",
-  "scratchpad-write",
+  "recall",
   "send-email",
   "send-message",
 ]);

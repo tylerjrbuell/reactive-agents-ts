@@ -276,7 +276,7 @@ export function runKernel(
         currentInput.availableToolSchemas.length > 0 &&
         state.toolsUsed.size > 0
       ) {
-        const UTILITY_TOOLS = new Set(["scratchpad-write", "scratchpad-read"]);
+        const UTILITY_TOOLS = new Set(["recall"]);
         const primaryTools = currentInput.availableToolSchemas
           .map((t) => t.name)
           .filter((name) => !UTILITY_TOOLS.has(name));

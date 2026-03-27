@@ -191,7 +191,7 @@ Respond with JSON:
 
 Rules:
 - "required" = tools that MUST be called. The task explicitly asks for an action that only this tool can perform (e.g. "send a Signal message" → signal/send_message_to_user). Be strict — typically 1-3 tools.
-- "relevant" = tools that could assist the agent (e.g. tools from the same service namespace as required tools, or tools whose capabilities match the task context). Always include scratchpad-read, scratchpad-write.
+- "relevant" = tools that could assist the agent (e.g. tools from the same service namespace as required tools, or tools whose capabilities match the task context). Always include recall.
 - If the task mentions a service name (e.g. "Signal", "GitHub"), include the SPECIFIC action tools needed, not all tools from that namespace.
 - An empty required list is valid for simple questions that need no tools.
 - Use EXACT tool names from the list above.`;

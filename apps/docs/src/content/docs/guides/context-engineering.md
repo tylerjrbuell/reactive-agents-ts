@@ -136,16 +136,16 @@ const budget = allocateBudget(
 // budget.remaining              → tokens still available
 ```
 
-## Scratchpad Tool
+## Working Memory (recall)
 
-The `scratchpad-write` / `scratchpad-read` built-in tools let agents persist notes **outside the context window**. Notes survive compaction and are available across tool calls.
+The `recall` meta-tool (part of the Conductor's Suite) lets agents persist and retrieve notes **outside the context window** via native function calling. Notes survive compaction and are available across tool calls.
 
-```
-ACTION: scratchpad-write({"key": "plan", "content": "Step 1: search, Step 2: write report"})
-Observation: {"saved": true, "key": "plan"}
+The model writes a note by calling `recall` with a `store` action, and reads it back with a `retrieve` action. Enable it via `.withMetaTools({ recall: true })`:
 
-ACTION: scratchpad-read({"key": "plan"})
-Observation: {"key": "plan", "content": "Step 1: search, Step 2: write report"}
+```typescript
+// Write: model emits tool_use { name: "recall", input: { action: "store", key: "plan", content: "Step 1: search, Step 2: write report" } }
+// Read:  model emits tool_use { name: "recall", input: { action: "retrieve", key: "plan" } }
+// Result returned as tool_result message: { key: "plan", content: "Step 1: search, Step 2: write report" }
 ```
 
 This implements Anthropic's recommended **structured note-taking** pattern for long-horizon tasks.

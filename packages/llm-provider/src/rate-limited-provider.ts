@@ -65,11 +65,12 @@ export const makeRateLimitedProvider = (
             }
           }),
 
-        // Passthrough — embedding, token counting, and config are not rate-limited
+        // Passthrough — embedding, token counting, config, and capabilities are not rate-limited
         embed: svc.embed,
         countTokens: svc.countTokens,
         getModelConfig: svc.getModelConfig,
         getStructuredOutputCapabilities: svc.getStructuredOutputCapabilities,
+        capabilities: svc.capabilities,
       } as Context.Tag.Service<LLMService>;
     }),
   );

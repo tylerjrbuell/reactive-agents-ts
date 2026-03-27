@@ -154,11 +154,10 @@ describe("createSubAgentExecutor — allowedTools passthrough", () => {
     await executor("Do something");
 
     expect(capturedOpts).not.toBeNull();
-    // ALWAYS_INCLUDE_TOOLS (scratchpad-read, scratchpad-write) are auto-merged
+    // ALWAYS_INCLUDE_TOOLS (recall) are auto-merged
     expect(capturedOpts.allowedTools).toContain("web-search");
     expect(capturedOpts.allowedTools).toContain("file-read");
-    expect(capturedOpts.allowedTools).toContain("scratchpad-read");
-    expect(capturedOpts.allowedTools).toContain("scratchpad-write");
+    expect(capturedOpts.allowedTools).toContain("recall");
   });
 
   it("does not pass allowedTools when config.tools is undefined", async () => {

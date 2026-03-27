@@ -6,6 +6,7 @@ import type {
   LLMMessage,
 } from "./types.js";
 import type { LLMErrors } from "./errors.js";
+import { DEFAULT_CAPABILITIES } from "./capabilities.js";
 
 // ─── Public Types ─────────────────────────────────────────────────────────────
 
@@ -250,6 +251,13 @@ export const TestLLMService = (
         jsonSchemaEnforcement: false,
         prefillSupport: false,
         grammarConstraints: false,
+      }),
+
+    capabilities: () =>
+      Effect.succeed({
+        ...DEFAULT_CAPABILITIES,
+        supportsToolCalling: true,
+        supportsStreaming: true,
       }),
   };
 };

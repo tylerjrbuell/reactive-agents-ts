@@ -84,35 +84,17 @@ describe("executeToolCall", () => {
     expect(result.observationResult.success).toBe(false);
   });
 
-  it("short-circuits scratchpad-read when key exists in scratchpad", async () => {
-    const scratchpad = new Map<string, string>();
-    scratchpad.set("_tool_result_1", "cached value from previous tool call");
-
+  it("returns 'not available' for recall when ToolService is None", async () => {
     const result = await Effect.runPromise(
       executeToolCall(
-        noneToolService, // doesn't matter — should short-circuit before checking
-        { tool: "scratchpad-read", input: '{"key": "_tool_result_1"}' },
-        { scratchpad },
+        noneToolService,
+        { tool: "recall", input: '{"key": "_tool_result_1"}' },
+        {},
       ),
     );
-    expect(result.content).toContain("cached value from previous tool call");
-    expect(result.observationResult.success).toBe(true);
-    expect(result.observationResult.toolName).toBe("scratchpad-read");
-  });
-
-  it("falls through to ToolService when scratchpad key not found", async () => {
-    const scratchpad = new Map<string, string>();
-    scratchpad.set("_tool_result_1", "some value");
-
-    const result = await Effect.runPromise(
-      executeToolCall(
-        noneToolService, // No tool service → "not available"
-        { tool: "scratchpad-read", input: '{"key": "_tool_result_99"}' },
-        { scratchpad },
-      ),
-    );
-    // Should fall through to the "None" branch since key doesn't exist
+    // recall is now a real tool — without ToolService it shows the not-available message
     expect(result.content).toContain("ToolService is not available");
+    expect(result.observationResult.success).toBe(false);
   });
 
   it("executes tool call successfully with mock ToolService", async () => {

@@ -67,6 +67,8 @@ export interface StaticContextInput {
   requiredTools?: readonly string[];
   /** Custom environment context key-value pairs (merged with auto-detected defaults) */
   environmentContext?: Readonly<Record<string, string>>;
+  /** When true, omit ACTION: format instructions — the LLM uses native function calling instead */
+  useNativeFunctionCalling?: boolean;
 }
 
 /** Input for the dynamic per-iteration context builder. */
@@ -80,6 +82,8 @@ export interface DynamicContextInput {
   requiredTools?: readonly string[];
   priorContext?: string;
   memories?: MemoryItem[];
+  /** When true, omit ACTION: format instructions — the LLM uses native function calling instead */
+  useNativeFunctionCalling?: boolean;
 }
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -369,6 +373,7 @@ export function buildEnvironmentContext(
 
 export function buildStaticContext(input: StaticContextInput): string {
   const { task, profile, availableToolSchemas, requiredTools } = input;
+  const useFC = input.useNativeFunctionCalling ?? false;
   const sections: string[] = [];
 
   // Environment context (date, time, timezone, platform, custom)
@@ -377,14 +382,14 @@ export function buildStaticContext(input: StaticContextInput): string {
   // Tool reference (full schemas — no pinned duplicate needed since both
   // tool ref and RULES are together in the system prompt now)
   sections.push(
-    buildToolReference(task, availableToolSchemas, requiredTools, profile.toolSchemaDetail),
+    buildToolReference(task, availableToolSchemas, requiredTools, profile.toolSchemaDetail, useFC),
   );
 
   // Task description
   sections.push(`Task: ${task}`);
 
   // RULES block
-  sections.push(buildRules(availableToolSchemas, requiredTools, profile.tier));
+  sections.push(buildRules(availableToolSchemas, requiredTools, profile.tier, useFC));
 
   return sections.join("\n\n");
 }
@@ -398,6 +403,7 @@ export function buildDynamicContext(input: DynamicContextInput): string {
     steps, iteration, maxIterations, profile,
     priorContext, memories, availableToolSchemas, requiredTools,
   } = input;
+  const useFC = input.useNativeFunctionCalling ?? false;
 
   const sections: string[] = [];
 
@@ -447,9 +453,10 @@ export function buildDynamicContext(input: DynamicContextInput): string {
   // Reminder of final-answer tool when visible (nudge toward structured exit)
   const finalAnswerSchema = (availableToolSchemas ?? []).find((t) => t.name === "final-answer");
   if (finalAnswerSchema) {
-    sections.push(
-      `💡 The final-answer tool is available. When ALL steps are complete, call ACTION: final-answer({"output": "...", "format": "text", "summary": "..."}) instead of writing FINAL ANSWER in text.`,
-    );
+    const reminder = useFC
+      ? `💡 The final-answer tool is available. When ALL steps are complete, call it directly to deliver your answer.`
+      : `💡 The final-answer tool is available. When ALL steps are complete, call ACTION: final-answer({"output": "...", "format": "text", "summary": "..."}) instead of writing FINAL ANSWER in text.`;
+    sections.push(reminder);
   }
 
   return sections.join("\n\n");
@@ -459,18 +466,35 @@ export function buildDynamicContext(input: DynamicContextInput): string {
 
 /**
  * Build the initial tool section from schemas.
+ * When useNativeFC is true, omits ACTION: format instructions since the LLM
+ * uses native function calling via the API tool_use mechanism instead.
  */
 function buildToolReference(
   task: string,
   availableToolSchemas?: readonly ToolSchema[],
   requiredTools?: readonly string[],
   toolSchemaDetail?: "names-only" | "names-and-types" | "full",
+  useNativeFC = false,
 ): string {
   if (!availableToolSchemas || availableToolSchemas.length === 0) {
     return "No tools available for this task.";
   }
 
   const detail = toolSchemaDetail ?? "full";
+
+  // When native FC is active, the API carries full schemas — just list names/purposes
+  if (useNativeFC) {
+    if (detail === "names-only") {
+      const names = availableToolSchemas.map((t) => t.name).join(", ");
+      return `Available Tools: ${names}`;
+    }
+    if (detail === "names-and-types" || availableToolSchemas.length > 20) {
+      const toolLines = availableToolSchemas.map(formatToolSchemaCompact).join("\n");
+      return `Available Tools:\n${toolLines}`;
+    }
+    const toolLines = formatToolSchemas(availableToolSchemas);
+    return `Available Tools:\n${toolLines}`;
+  }
 
   // Check for name-only stubs
   const allNameOnly = availableToolSchemas.every(
@@ -599,15 +623,17 @@ function buildIterationAwareness(iteration: number, maxIterations: number): stri
 /**
  * Build the RULES block with dynamic entries for required tools and delegation.
  * Tier-adaptive: local/mid models get 5 core rules; large/frontier get full set.
+ * When useNativeFC is true, omits text-format instructions (ACTION:, [STORED:]).
  */
 function buildRules(
   availableToolSchemas?: readonly ToolSchema[],
   requiredTools?: readonly string[],
   tier?: "local" | "mid" | "large" | "frontier",
+  useNativeFC = false,
 ): string {
   const t = tier ?? "mid";
   const hasSpawnAgent = availableToolSchemas?.some((s) => s.name === "spawn-agent");
-  const hasStoredResults = availableToolSchemas?.some((s) => s.name === "scratchpad-read");
+  const hasStoredResults = availableToolSchemas?.some((s) => s.name === "recall");
 
   // Core rules — always included, small-model-safe count
   const rules: string[] = [
@@ -628,9 +654,13 @@ function buildRules(
 
   // Conditional rules — only for larger models or when the feature is active
   if (t === "large" || t === "frontier") {
-    if (hasStoredResults) {
+    if (hasStoredResults && !useNativeFC) {
       rules.push(
-        `${ruleNum++}. When results show [STORED: _key], use ACTION: scratchpad-read({"key": "_key"}) to read full data.`,
+        `${ruleNum++}. When results show [STORED: _key], use ACTION: recall({"key": "_key"}) to read full data.`,
+      );
+    } else if (hasStoredResults && useNativeFC) {
+      rules.push(
+        `${ruleNum++}. Large tool results are stored automatically. Use recall(key) to retrieve full content when needed.`,
       );
     }
     if (hasSpawnAgent) {
@@ -639,10 +669,14 @@ function buildRules(
       );
     }
   } else {
-    // For local/mid: only add scratchpad rule if scratchpad-read is available (concise version)
-    if (hasStoredResults) {
+    // For local/mid: only add recall rule if recall is available (concise version)
+    if (hasStoredResults && !useNativeFC) {
       rules.push(
-        `${ruleNum++}. [STORED: _key] means data was saved. Use scratchpad-read to get it.`,
+        `${ruleNum++}. [STORED: _key] means data was saved. Use recall to get it.`,
+      );
+    } else if (hasStoredResults && useNativeFC) {
+      rules.push(
+        `${ruleNum++}. Large results are stored automatically. Use recall(key) to retrieve them.`,
       );
     }
     if (hasSpawnAgent) {

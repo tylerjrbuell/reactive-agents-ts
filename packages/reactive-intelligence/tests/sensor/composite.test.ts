@@ -62,4 +62,46 @@ describe("composite entropy scorer", () => {
     // Same raw scores but late iteration has higher weight → higher effective composite
     expect(late.iterationWeight).toBeGreaterThan(early.iterationWeight);
   });
+
+  describe("short-run bypass (≤2 iterations)", () => {
+    test("returns low composite 0.15 for iteration 1", () => {
+      const result = computeCompositeEntropy({
+        token: null, structural: 0.9, semantic: null, behavioral: 0.9,
+        contextPressure: 0.5, logprobsAvailable: false,
+        iteration: 1, maxIterations: 10,
+      });
+      expect(result.composite).toBe(0.15);
+      expect(result.confidence).toBe("high");
+    });
+
+    test("returns low composite 0.15 for iteration 2", () => {
+      const result = computeCompositeEntropy({
+        token: null, structural: 0.9, semantic: null, behavioral: 0.9,
+        contextPressure: 0.5, logprobsAvailable: false,
+        iteration: 2, maxIterations: 10,
+      });
+      expect(result.composite).toBe(0.15);
+      expect(result.confidence).toBe("high");
+    });
+
+    test("does NOT bypass at iteration 3 — normal scoring applies", () => {
+      const result = computeCompositeEntropy({
+        token: null, structural: 0.9, semantic: null, behavioral: 0.9,
+        contextPressure: 0.5, logprobsAvailable: false,
+        iteration: 3, maxIterations: 10,
+      });
+      expect(result.composite).toBeGreaterThan(0.15);
+    });
+
+    test("preserves source values in bypass path", () => {
+      const result = computeCompositeEntropy({
+        token: 0.5, structural: 0.8, semantic: 0.7, behavioral: 0.6,
+        contextPressure: 0.4, logprobsAvailable: true,
+        iteration: 1, maxIterations: 10,
+      });
+      expect(result.sources.structural).toBe(0.8);
+      expect(result.sources.semantic).toBe(0.7);
+      expect(result.sources.token).toBe(0.5);
+    });
+  });
 });

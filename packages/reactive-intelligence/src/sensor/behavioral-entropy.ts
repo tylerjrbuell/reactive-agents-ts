@@ -42,10 +42,10 @@ export function computeBehavioralEntropy(params: {
   const toolSuccessRate = totalToolCalls > 0 ? successes / totalToolCalls : 1.0;
 
   // ── Action diversity: min(1, unique_tools / iteration) ──
-  const toolNames = new Set(
-    actionSteps
-      .map((s) => (s.metadata?.toolUsed as string) ?? "unknown")
-  );
+  const toolNames = new Set(actionSteps.map((s) => {
+    const tc = s.metadata?.toolCall as { name: string } | undefined;
+    return tc?.name ?? (s.metadata?.toolUsed as string) ?? "unknown";
+  }));
   const actionDiversity = iteration > 0
     ? Math.min(1, toolNames.size / iteration)
     : 0;
@@ -58,8 +58,11 @@ export function computeBehavioralEntropy(params: {
     const last2 = actionSteps.slice(-2);
     const isSameAction = (a: StepLike, b: StepLike): boolean => {
       // Check tool name match first (most reliable)
-      const toolA = a.metadata?.toolUsed as string | undefined;
-      const toolB = b.metadata?.toolUsed as string | undefined;
+      // FC path: toolCall.name takes priority over legacy toolUsed
+      const tcA = a.metadata?.toolCall as { name: string } | undefined;
+      const tcB = b.metadata?.toolCall as { name: string } | undefined;
+      const toolA = tcA?.name ?? (a.metadata?.toolUsed as string | undefined);
+      const toolB = tcB?.name ?? (b.metadata?.toolUsed as string | undefined);
       if (toolA && toolB && toolA === toolB) {
         // Same tool — check if args are equivalent
         const contentA = normalizeActionJson(a.content ?? "");
@@ -94,10 +97,12 @@ export function computeBehavioralEntropy(params: {
       completionApproach = Math.min(1, markerCount * 0.3 * (0.5 + positionWeight));
     }
   }
-  // Also check for final-answer tool usage
-  const hasFinalAnswerTool = actionSteps.some(
-    (s) => (s.metadata?.toolUsed as string) === "final-answer",
-  );
+  // Also check for final-answer tool usage (FC path: toolCall.name; legacy: toolUsed)
+  const hasFinalAnswerTool = actionSteps.some((s) => {
+    const tc = s.metadata?.toolCall as { name: string } | undefined;
+    const name = tc?.name ?? (s.metadata?.toolUsed as string);
+    return name === "final-answer";
+  });
   if (hasFinalAnswerTool) completionApproach = 1.0;
 
   return {

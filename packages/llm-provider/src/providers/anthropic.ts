@@ -1,6 +1,7 @@
 import { Effect, Layer, Stream, Schema } from "effect";
 import { LLMService } from "../llm-service.js";
 import { LLMConfig } from "../llm-config.js";
+import type { ProviderCapabilities } from "../capabilities.js";
 import {
   LLMError,
   LLMTimeoutError,
@@ -187,16 +188,37 @@ export const AnthropicProviderLive = Layer.effect(
             : request.model?.model ?? config.defaultModel;
 
           return Stream.async<StreamEvent, LLMErrors>((emit) => {
-            const stream = (client as { messages: { stream: (opts: unknown) => { on: (event: string, cb: (...args: unknown[]) => void) => void } } }).messages.stream({
+            const stream = (client as {
+              messages: {
+                stream: (opts: unknown) => {
+                  on: (event: string, cb: (...args: unknown[]) => void) => void;
+                };
+              };
+            }).messages.stream({
               model,
               max_tokens: request.maxTokens ?? config.defaultMaxTokens,
               temperature: request.temperature ?? config.defaultTemperature,
               system: buildSystemParam(request.systemPrompt),
               messages: toAnthropicMessages(request.messages),
+              tools: request.tools?.map((t, i) =>
+                toAnthropicTool(t, i === (request.tools?.length ?? 0) - 1),
+              ),
             });
 
             stream.on("text", (text: unknown) => {
               emit.single({ type: "text_delta", text: text as string });
+            });
+
+            // Handle tool_use content blocks emitted during streaming
+            stream.on("contentBlock", (block: unknown) => {
+              const b = block as { type: string; id?: string; name?: string };
+              if (b.type === "tool_use" && b.id && b.name) {
+                emit.single({ type: "tool_use_start", id: b.id, name: b.name });
+              }
+            });
+
+            stream.on("inputJson", (partialJson: unknown) => {
+              emit.single({ type: "tool_use_delta", input: partialJson as string });
             });
 
             stream.on("finalMessage", (message: unknown) => {
@@ -409,6 +431,14 @@ export const AnthropicProviderLive = Layer.effect(
           prefillSupport: true,
           grammarConstraints: false,
         }),
+
+      capabilities: () =>
+        Effect.succeed({
+          supportsToolCalling: true,
+          supportsStreaming: true,
+          supportsStructuredOutput: true,
+          supportsLogprobs: false,
+        } satisfies ProviderCapabilities),
     });
   }),
 );

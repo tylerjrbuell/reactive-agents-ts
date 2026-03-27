@@ -39,6 +39,31 @@ export function computeCompositeEntropy(input: CompositeInput): EntropyScore {
     trajectory, modelTier = "unknown", temperature,
   } = input;
 
+  // Short-run bypass: ≤2 iterations doesn't have enough data points for meaningful
+  // trajectory analysis — treat the run as clean completion to avoid false "stalled" grades.
+  if (iteration <= 2) {
+    const iWeight = iterationWeight(iteration, maxIterations);
+    const defaultTrajectory: EntropyTrajectory = {
+      history: [], derivative: 0, momentum: 0.15, shape: "flat",
+    };
+    return {
+      composite: 0.15,
+      sources: {
+        token: token,
+        structural,
+        semantic: semantic,
+        behavioral,
+        contextPressure,
+      },
+      trajectory: trajectory ?? defaultTrajectory,
+      confidence: "high" as const,
+      modelTier,
+      iteration,
+      iterationWeight: iWeight,
+      timestamp: Date.now(),
+    };
+  }
+
   const weights = logprobsAvailable ? { ...WEIGHTS_WITH_LOGPROBS } : { ...WEIGHTS_WITHOUT_LOGPROBS };
 
   // Temperature 0 discount for token entropy

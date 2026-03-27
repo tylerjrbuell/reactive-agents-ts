@@ -11,6 +11,10 @@ export interface BriefInput {
   tokenBudget: number;
   entropy: { composite: number; shape: string; momentum: number } | undefined;
   controllerDecisionLog: readonly string[];
+  /** Current iteration count — used for short-run grade calibration. */
+  iterationCount?: number;
+  /** Whether the run completed successfully — used for short-run grade calibration. */
+  success?: boolean;
 }
 
 export const briefTool: ToolDefinition = {
@@ -44,8 +48,15 @@ export const briefTool: ToolDefinition = {
   category: "data",
 };
 
-export function computeEntropyGrade(composite: number | undefined): string {
+export function computeEntropyGrade(
+  composite: number | undefined,
+  context?: { iterationCount?: number; success?: boolean },
+): string {
   if (composite === undefined) return "unknown";
+  // Short successful runs get A — no trajectory to analyze, task was completed cleanly
+  if (context?.iterationCount !== undefined && context.iterationCount <= 2 && context.success !== false) {
+    return "A";
+  }
   if (composite <= 0.3) return "A";
   if (composite <= 0.45) return "B";
   if (composite <= 0.65) return "C";
@@ -69,7 +80,7 @@ export function buildBriefResponse(input: BriefInput): string {
 }
 
 function formatCompact(input: BriefInput): string {
-  const { availableTools, indexedDocuments, availableSkills, memoryBootstrap, recallKeys, tokens, tokenBudget, entropy } = input;
+  const { availableTools, indexedDocuments, availableSkills, memoryBootstrap, recallKeys, tokens, tokenBudget, entropy, iterationCount, success } = input;
   const used = Math.round((tokens / tokenBudget) * 100);
   const bar = "█".repeat(Math.round(used / 10)) + "░".repeat(10 - Math.round(used / 10));
   const pressure = used >= 90 ? "critical" : used >= 75 ? "high" : used >= 50 ? "moderate" : "low";
@@ -89,7 +100,7 @@ function formatCompact(input: BriefInput): string {
     `context: ${bar} ${used}% · ${pressure} pressure · ${remaining} tokens remaining`,
   ];
   if (entropy) {
-    const grade = computeEntropyGrade(entropy.composite);
+    const grade = computeEntropyGrade(entropy.composite, { iterationCount, success });
     const icon = grade === "A" || grade === "B" ? "✅" : grade === "C" ? "⚠" : "🔴";
     lines.push(`signal: ${icon} ${entropy.shape} trajectory · Grade ${grade} · entropy ${entropy.composite.toFixed(2)}`);
   }
@@ -131,8 +142,8 @@ function formatRecall(input: BriefInput): string {
 
 function formatSignal(input: BriefInput): string {
   if (!input.entropy) return "=== Signal ===\nReactive intelligence not available — enable .withReactiveIntelligence().";
-  const { entropy, controllerDecisionLog } = input;
-  const grade = computeEntropyGrade(entropy.composite);
+  const { entropy, controllerDecisionLog, iterationCount, success } = input;
+  const grade = computeEntropyGrade(entropy.composite, { iterationCount, success });
   const lines = ["=== Signal ===",
     `Grade: ${grade}  Composite: ${entropy.composite.toFixed(3)}  Shape: ${entropy.shape}  Momentum: ${entropy.momentum.toFixed(3)}`];
   if (controllerDecisionLog.length > 0) {

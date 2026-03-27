@@ -29,6 +29,14 @@ export const StepMetadataSchema = Schema.Struct({
   observationResult: Schema.optional(ObservationResultSchema),
   /** Internal reasoning from thinking models (e.g. <think> blocks) */
   thinking: Schema.optional(Schema.String),
+  /** Structured tool call data from native function calling */
+  toolCall: Schema.optional(Schema.Struct({
+    id: Schema.String,
+    name: Schema.String,
+    arguments: Schema.Record({ key: Schema.String, value: Schema.Unknown }),
+  })),
+  /** Scratchpad key for auto-stored compressed tool results */
+  storedKey: Schema.optional(Schema.String),
 });
 export type StepMetadata = typeof StepMetadataSchema.Type;
 

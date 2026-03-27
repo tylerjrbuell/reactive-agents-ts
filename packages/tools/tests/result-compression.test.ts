@@ -108,8 +108,8 @@ describe("compressToolResult", () => {
     expect(compressed.stored).toBeDefined();
     const key = compressed.stored!.key;
     expect(compressed.content).toContain(key);
-    // Should contain a scratchpad-read hint
-    expect(compressed.content).toContain("scratchpad-read");
+    // Should contain a recall hint
+    expect(compressed.content).toContain("recall(");
     // The first few lines should appear in the preview
     expect(compressed.content).toContain("Line 1:");
   });

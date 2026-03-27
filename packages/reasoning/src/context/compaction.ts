@@ -23,6 +23,12 @@ import { summarizeStepsTriplets } from "../strategies/shared/context-utils.js";
 export function formatStepFull(step: ReasoningStep): string {
   if (step.type === "observation") return `Observation: ${step.content}`;
   if (step.type === "action") {
+    // FC path: structured toolCall metadata takes priority
+    if (step.metadata?.toolCall) {
+      const tc = step.metadata.toolCall as { name: string; arguments: unknown };
+      return `Action: ${tc.name}(${JSON.stringify(tc.arguments)})`;
+    }
+    // Legacy text-based path: try to parse JSON action content
     try {
       const parsed = JSON.parse(step.content);
       return `Action: ${parsed.tool}(${parsed.input ?? ""})`;
@@ -90,7 +96,8 @@ export function groupToolSequences(
     if (step.type === "action") {
       if (firstIdx === -1) firstIdx = i;
       lastIdx = i;
-      const toolName = step.metadata?.toolUsed ?? "unknown";
+      const tc = step.metadata?.toolCall as { name: string } | undefined;
+      const toolName = tc?.name ?? (step.metadata?.toolUsed as string | undefined) ?? "unknown";
       toolCounts.set(toolName, (toolCounts.get(toolName) ?? 0) + 1);
     }
   }

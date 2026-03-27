@@ -14,9 +14,9 @@ The reasoning layer provides structured thinking strategies that go beyond simpl
 A **Thought → Action → Observation** loop that continues until the agent reaches a final answer. This is the most versatile strategy and the default when reasoning is enabled.
 
 1. **Think** — The agent reasons about the current state
-2. **Act** — If needed, emits `ACTION: tool_name({"param": "value"})` in JSON format
-3. **Observe** — The tool is executed via ToolService and the real result is fed back
-4. **Repeat** until `FINAL ANSWER:` is reached or max iterations hit
+2. **Act** — If needed, invokes a tool via native function calling (tools are passed via API parameter; the model returns structured `tool_use` blocks)
+3. **Observe** — The tool is executed via ToolService and the real result is fed back as a `tool_result` message
+4. **Repeat** until the `final-answer` meta-tool is called or max iterations hit
 
 **Best for:** Tasks requiring tool use, multi-step reasoning, and iterative refinement.
 
@@ -30,10 +30,10 @@ const agent = await ReactiveAgents.create()
   .build();
 
 const result = await agent.run("What happened in AI this week?");
-// ReAct loop: Think → ACTION: web_search({"query":"..."}) → Observe: [real results] → FINAL ANSWER
+// ReAct loop: Think → tool_use: web_search({query: "..."}) → tool_result: [real results] → final-answer
 ```
 
-When `.withTools()` is added, the ReAct strategy executes real registered tools and uses their actual results as observations. Tool names are injected into the prompt context so the LLM knows what it can call. Without ToolService, the agent degrades gracefully — returning descriptive messages instead of tool results.
+When `.withTools()` is added, the ReAct strategy passes tool definitions to the LLM via the API's native function calling parameter. The model returns structured `tool_use` blocks — no text parsing required. Tool results are fed back as `tool_result` messages. Without ToolService, the agent degrades gracefully — returning descriptive messages instead of tool results.
 
 ### Reflexion
 
@@ -264,9 +264,9 @@ This is faster and cheaper — suitable for simple Q&A, chat, or tasks where str
 When both `.withReasoning()` and `.withTools()` are enabled, tools are wired directly into the reasoning loop:
 
 1. ToolService is provided to the ReasoningService layer at construction time
-2. During ReAct, when the LLM emits `ACTION: tool_name(...)`, the strategy calls `ToolService.execute()` with the parsed arguments
-3. The real tool result becomes the `Observation` fed back into the LLM
-4. Available tool names are injected into the reasoning prompt so the LLM knows what's available
+2. During ReAct, the LLM returns structured `tool_use` blocks via native function calling — no text regex parsing. The strategy calls `ToolService.execute()` with the structured arguments
+3. The real tool result is fed back as a `tool_result` message in the conversation history
+4. Tool definitions (name, description, input schema) are passed via the API parameter so the LLM knows what's available
 
 This means agents can genuinely interact with the world during reasoning — search the web, query databases, run calculations — and incorporate real results into their thinking.
 

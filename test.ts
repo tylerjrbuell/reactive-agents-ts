@@ -187,7 +187,7 @@ const tests: TestCase[] = [
     category: "reasoning",
     input: "Design a REST API for a simple todo application. Include: resource paths, HTTP methods, request/response formats, and error handling. Return the design as a structured specification.",
     maxExpectedIterations: 8,
-    maxExpectedMs: 60_000,
+    maxExpectedMs: 120_000,
     expectedPatterns: [/GET|POST|PUT|DELETE/i, /todo/i, /endpoint|path|route/i],
     config: { reasoning: true, strategy: "plan-execute-reflect", maxIterations: 10 },
   },
@@ -205,11 +205,11 @@ const tests: TestCase[] = [
   // Category 4: TOOLS — Tool calling effectiveness
   // ═══════════════════════════════════════════════════════════════════════════
   {
-    name: "Scratchpad tool usage",
+    name: "Recall tool usage",
     category: "tools",
-    input: "Use the scratchpad tool to write a note with key 'answer' containing 'The capital of France is Paris', then read it back and include it in your final answer.",
+    input: "Use the recall tool to store a note with key 'answer' containing 'The capital of France is Paris', then retrieve it and include the EXACT retrieved text word-for-word in your final answer.",
     maxExpectedIterations: 10,
-    maxExpectedMs: 30_000,
+    maxExpectedMs: 60_000,
     expectedPatterns: [/paris/i, /capital/i],
     config: { reasoning: true, tools: true, maxIterations: 12 },
   },

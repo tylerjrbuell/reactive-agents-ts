@@ -23,6 +23,7 @@ import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import { evaluateTransform, compressToolResult, nextToolResultKey } from "./tool-utils.js";
 import type { ToolRequestGroup } from "./tool-utils.js";
 import type { MaybeService, ToolServiceInstance } from "./kernel-state.js";
+import type { ToolCallSpec } from "@reactive-agents/tools";
 
 // ── Result type ──────────────────────────────────────────────────────────────
 
@@ -30,6 +31,13 @@ import type { MaybeService, ToolServiceInstance } from "./kernel-state.js";
 export interface ToolExecutionResult {
   readonly content: string;
   readonly observationResult: ObservationResult;
+  /**
+   * When the tool result was compressed and auto-stored in the scratchpad,
+   * this is the key under which the full result was saved (e.g. "_tool_result_1").
+   * The kernel uses this to auto-forward the full content to the next iteration
+   * so the model doesn't need to call recall to access the data.
+   */
+  readonly storedKey?: string;
 }
 
 // ── Configuration for executeToolCall ────────────────────────────────────────
@@ -325,29 +333,6 @@ export function executeToolCall(
 ): Effect.Effect<ToolExecutionResult, never> {
   const { profile, compression: compressionConfig, scratchpad: scratchpadStore, agentId, sessionId } = config;
 
-  // Short-circuit scratchpad-read for auto-stored tool results
-  if (
-    toolRequest.tool === "scratchpad-read" &&
-    scratchpadStore &&
-    scratchpadStore.size > 0
-  ) {
-    try {
-      const args = JSON.parse(toolRequest.input) as { key?: string } | string;
-      const key = typeof args === "string" ? args : (args.key ?? "");
-      if (scratchpadStore.has(key)) {
-        const value = scratchpadStore.get(key)!;
-        const budget = compressionConfig?.budget ?? profile?.toolResultMaxChars ?? 800;
-        const content = truncateForDisplay(value, budget);
-        return Effect.succeed({
-          content,
-          observationResult: makeObservationResult("scratchpad-read", true, content),
-        });
-      }
-    } catch {
-      // fall through to normal scratchpad-read tool execution
-    }
-  }
-
   if (toolServiceOpt._tag === "None") {
     const content = `[Tool "${toolRequest.tool}" requested but ToolService is not available — add .withTools() to agent builder]`;
     return Effect.succeed({
@@ -405,6 +390,7 @@ export function executeToolCall(
           return {
             content,
             observationResult: makeObservationResult(toolRequest.tool, r.success !== false, content),
+            storedKey: compressed.stored?.key,
           } satisfies ToolExecutionResult;
         }),
         Effect.catchAll((e) => {
@@ -447,6 +433,46 @@ export function executeToolCall(
       } satisfies ToolExecutionResult);
     }),
   );
+}
+
+// ── Native function calling execution ─────────────────────────────────────────
+
+/**
+ * Execute a single native function call (structured tool_use from the LLM).
+ *
+ * Unlike `executeToolCall` which handles text-based ACTION parsing, argument
+ * repair, and malformed JSON recovery, this function receives pre-parsed
+ * arguments directly from the provider's tool_use response. It runs the tool
+ * through ToolService and normalizes the result.
+ *
+ * Returns `{ content, success }` — never fails (errors are caught and surfaced
+ * as content strings so the LLM can reason about them).
+ */
+export function executeNativeToolCall(
+  toolService: ToolServiceInstance,
+  toolCall: ToolCallSpec,
+  agentId: string,
+  sessionId: string,
+): Effect.Effect<{ content: string; success: boolean }, never> {
+  return toolService
+    .execute({
+      toolName: toolCall.name,
+      arguments: toolCall.arguments,
+      agentId,
+      sessionId,
+    })
+    .pipe(
+      Effect.map((r) => ({
+        content: typeof r.result === "string" ? r.result : JSON.stringify(r.result),
+        success: r.success !== false,
+      })),
+      Effect.catchAll((e) =>
+        Effect.succeed({
+          content: `[Tool error: ${e instanceof Error ? e.message : String(e)}]`,
+          success: false,
+        }),
+      ),
+    );
 }
 
 // ── Group execution ───────────────────────────────────────────────────────────

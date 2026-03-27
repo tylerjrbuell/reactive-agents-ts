@@ -1,6 +1,7 @@
 import { Effect, Layer, Stream, Schema } from "effect";
 import { LLMService } from "../llm-service.js";
 import { LLMConfig } from "../llm-config.js";
+import type { ProviderCapabilities } from "../capabilities.js";
 import { LLMError, LLMTimeoutError, LLMParseError } from "../errors.js";
 import type { LLMErrors } from "../errors.js";
 import type {
@@ -390,6 +391,7 @@ export const LocalProviderLive = Layer.effect(
 
                 let fullContent = "";
                 const accumulatedLogprobs: TokenLogprob[] = [];
+                const accumulatedToolCalls: ToolCall[] = [];
 
                 for await (const chunk of stream) {
                   if (chunk.message?.content) {
@@ -398,6 +400,27 @@ export const LocalProviderLive = Layer.effect(
                       type: "text_delta",
                       text: chunk.message.content,
                     });
+                  }
+
+                  // Handle tool calls in stream chunks (native function calling)
+                  if (chunk.message?.tool_calls && Array.isArray(chunk.message.tool_calls)) {
+                    for (const tc of chunk.message.tool_calls as Array<{ function: { name: string; arguments: unknown } }>) {
+                      const toolCall: ToolCall = {
+                        id: `ollama-tc-${Date.now()}-${accumulatedToolCalls.length}`,
+                        name: tc.function.name,
+                        input: tc.function.arguments,
+                      };
+                      accumulatedToolCalls.push(toolCall);
+                      emit.single({
+                        type: "tool_use_start",
+                        id: toolCall.id,
+                        name: toolCall.name,
+                      });
+                      emit.single({
+                        type: "tool_use_delta",
+                        input: JSON.stringify(tc.function.arguments),
+                      });
+                    }
                   }
 
                   // Accumulate per-chunk logprobs when available
@@ -417,10 +440,19 @@ export const LocalProviderLive = Layer.effect(
                   }
 
                   if (chunk.done) {
+                    const hasToolCalls = accumulatedToolCalls.length > 0;
+                    const doneReason = (chunk as any).done_reason as string | undefined;
                     emit.single({
                       type: "content_complete",
                       content: fullContent,
-                    });
+                      ...(hasToolCalls ? { stopReason: "tool_use" } : {
+                        stopReason: doneReason === "stop"
+                          ? "end_turn"
+                          : doneReason === "length"
+                            ? "max_tokens"
+                            : "end_turn",
+                      }),
+                    } as any);
                     if (accumulatedLogprobs.length > 0) {
                       emit.single({
                         type: "logprobs",
@@ -587,6 +619,14 @@ export const LocalProviderLive = Layer.effect(
           prefillSupport: false,
           grammarConstraints: true,
         }),
+
+      capabilities: () =>
+        Effect.succeed({
+          supportsToolCalling: true,
+          supportsStreaming: true,
+          supportsStructuredOutput: true,
+          supportsLogprobs: false,
+        } satisfies ProviderCapabilities),
     });
   }),
 );

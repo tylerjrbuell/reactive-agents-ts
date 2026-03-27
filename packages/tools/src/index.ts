@@ -187,6 +187,9 @@ export type { FinalAnswerVisibility, FinalAnswerState, FinalAnswerCapture } from
 // ─── Completion Gaps Utility ───
 export { detectCompletionGaps } from "./skills/completion-gaps.js";
 
+// ─── Tool Call Resolver ───
+export * from "./tool-calling/index.js";
+
 // ─── Conductor's Suite Tools ───
 export {
   recallTool,

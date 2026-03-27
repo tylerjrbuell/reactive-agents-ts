@@ -13,12 +13,11 @@ export const recallTool: ToolDefinition = {
   name: "recall",
   description:
     "Your working memory for this run. Four modes: " +
-    "WRITE — recall(key, content) stores anything worth keeping across steps; " +
+    "WRITE — recall(key, content) stores notes, plans, and findings you want to keep across steps; " +
     "READ — recall(key) retrieves a stored entry (compact preview by default, full: true for complete content); " +
     "SEARCH — recall(query=...) finds entries by keyword when you don't remember the key name; " +
     "LIST — recall() with no args shows all stored entries with sizes and previews. " +
-    "Large tool results are auto-stored as _tool_result_N keys — use recall() to list or search them. " +
-    "Store key findings, plans, and intermediate results here to avoid losing them to context compression.",
+    "Use this to preserve intermediate results, working notes, and key findings.",
   parameters: [
     {
       name: "key",

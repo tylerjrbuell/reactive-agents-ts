@@ -35,6 +35,25 @@ describe("computeEntropyGrade", () => {
   it("returns D for 0.70", () => expect(computeEntropyGrade(0.70)).toBe("D"));
   it("returns F for 0.80", () => expect(computeEntropyGrade(0.80)).toBe("F"));
   it("returns unknown for undefined", () => expect(computeEntropyGrade(undefined)).toBe("unknown"));
+
+  describe("short-run bypass", () => {
+    it("returns A for high-entropy run with 1 iteration (success)", () =>
+      expect(computeEntropyGrade(0.6, { iterationCount: 1, success: true })).toBe("A"));
+    it("returns A for high-entropy run with 2 iterations (success)", () =>
+      expect(computeEntropyGrade(0.5, { iterationCount: 2, success: true })).toBe("A"));
+    it("returns A for short run when success is undefined (default safe)", () =>
+      expect(computeEntropyGrade(0.6, { iterationCount: 1 })).toBe("A"));
+    it("does NOT bypass for short run when success is explicitly false", () =>
+      expect(computeEntropyGrade(0.6, { iterationCount: 1, success: false })).toBe("C"));
+    it("does NOT bypass for longer runs — normal grading applies", () =>
+      expect(computeEntropyGrade(0.6, { iterationCount: 5 })).toBe("C"));
+    it("normal grading still works for low-entropy longer runs", () =>
+      expect(computeEntropyGrade(0.3, { iterationCount: 5 })).toBe("A"));
+    it("threshold exactly 2 iterations triggers bypass", () =>
+      expect(computeEntropyGrade(0.75, { iterationCount: 2, success: true })).toBe("A"));
+    it("threshold 3 iterations does NOT trigger bypass", () =>
+      expect(computeEntropyGrade(0.75, { iterationCount: 3, success: true })).toBe("D"));
+  });
 });
 
 describe("buildBriefResponse — compact (no section)", () => {

@@ -17,6 +17,7 @@ import type { ReasoningStep } from "../../types/index.js";
 import { ExecutionError } from "../../errors/errors.js";
 import { LLMService } from "@reactive-agents/llm-provider";
 import type { StreamEvent } from "@reactive-agents/llm-provider";
+import { DEFAULT_CAPABILITIES } from "@reactive-agents/llm-provider";
 import { StreamingTextCallback } from "@reactive-agents/core";
 import type { ContextProfile } from "../../context/context-profile.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
@@ -40,6 +41,10 @@ import {
   ragMemoryStore,
   webSearchHandler,
   ToolService,
+  createToolCallResolver,
+  type ToolCallResolver,
+  type ToolCallSpec,
+  type ResolverInput,
 } from "@reactive-agents/tools";
 
 // Re-export for test and consumer backward compatibility
@@ -59,12 +64,13 @@ import { buildContext, buildStaticContext, buildDynamicContext } from "../../con
 import type { MemoryItem } from "../../context/context-engine.js";
 import { extractThinking, rescueFromThinking } from "./thinking-utils.js";
 import { makeStep } from "./step-utils.js";
-import { executeToolCall, executeToolGroup, makeObservationResult } from "./tool-execution.js";
+import { executeToolCall, executeToolGroup, executeNativeToolCall, makeObservationResult } from "./tool-execution.js";
 import { runKernel } from "./kernel-runner.js";
 import {
   transitionState,
   type KernelState,
   type KernelContext,
+  type KernelInput,
   type ThoughtKernel,
 } from "./kernel-state.js";
 
@@ -138,6 +144,11 @@ export interface ReActKernelInput {
     };
     harnessContent?: string;
   };
+  /** Feature flag: use native function calling instead of text-based ACTION: parsing.
+   *  Default: determined by provider capabilities at runtime. */
+  useNativeFunctionCalling?: boolean;
+  /** Pre-built ToolCallResolver instance — injected by the kernel runner when FC is active */
+  toolCallResolver?: import("@reactive-agents/tools").ToolCallResolver;
 }
 
 export interface ReActKernelResult {
@@ -271,6 +282,9 @@ function handleThinking(
         ? `${harnessContent}\n\n${input.systemPrompt ?? ""}`
         : input.systemPrompt;
 
+    // Native FC path skips ACTION: format instructions — the LLM uses tool_use blocks instead
+    const useNativeFC = !!(input as ReActKernelInput).useNativeFunctionCalling && !!(input as ReActKernelInput).toolCallResolver;
+
     // ── Split context: static in system prompt, dynamic in user message ─────
     // Static content (tool schemas, RULES, task) is sent once in the system prompt
     // to avoid repeating ~500-700 tokens of identical content every iteration.
@@ -280,9 +294,31 @@ function handleThinking(
       availableToolSchemas: augmentedToolSchemas,
       requiredTools: input.requiredTools,
       environmentContext: input.environmentContext,
+      useNativeFunctionCalling: useNativeFC,
     });
     const baseSystemPrompt = buildSystemPrompt(input.task, effectiveSystemPrompt, profile.tier);
     const systemPromptText = `${baseSystemPrompt}\n\n${staticContext}`;
+
+    // ── Auto-forward: inject full stored result from last observation ──────────
+    // When the previous tool result was compressed and auto-stored in the scratchpad
+    // (storedKey on the observation step metadata), inject the full content into this
+    // iteration's context so the model can use it directly without calling recall.
+    // Budget: 2,000 chars. Only the LAST stored result is forwarded.
+    const AUTO_FORWARD_BUDGET = 2_000;
+    let autoForwardSection = "";
+    if (state.iteration > 0) {
+      const lastObsStep = state.steps.filter((s) => s.type === "observation").pop();
+      const storedKey = lastObsStep?.metadata?.storedKey as string | undefined;
+      if (storedKey && state.scratchpad.has(storedKey)) {
+        const fullResult = state.scratchpad.get(storedKey)!;
+        const injected =
+          fullResult.length <= AUTO_FORWARD_BUDGET
+            ? fullResult
+            : fullResult.slice(0, AUTO_FORWARD_BUDGET) +
+              `\n[...${fullResult.length - AUTO_FORWARD_BUDGET} chars truncated — use recall("${storedKey}") for full content]`;
+        autoForwardSection = `[Auto-forwarded full result for ${storedKey}]:\n${injected}`;
+      }
+    }
 
     let thoughtPrompt = buildDynamicContext({
       task: input.task,
@@ -294,7 +330,18 @@ function handleThinking(
       profile,
       memories: (state.meta.memories as MemoryItem[] | undefined),
       priorContext: input.priorContext,
-    }) + "\n\nThink step-by-step, then either take ONE action or give your FINAL ANSWER:";
+      useNativeFunctionCalling: useNativeFC,
+    });
+
+    if (autoForwardSection) {
+      thoughtPrompt += `\n\n${autoForwardSection}`;
+    }
+
+    if (!useNativeFC) {
+      thoughtPrompt += "\n\nThink step-by-step, then either take ONE action or give your FINAL ANSWER:";
+    } else {
+      thoughtPrompt += "\n\nThink step-by-step. Use available tools when needed, or provide your final answer directly.";
+    }
 
     // ── STREAM (with text delta emission) ──────────────────────────────────
     // Token budget adapts to model tier: frontier models get more room for
@@ -307,6 +354,26 @@ function handleThinking(
     };
     const outputMaxTokens = tierMaxTokens[profile.tier] ?? 1500;
 
+    // ── Native FC: convert tool schemas to LLM ToolDefinition format ──────
+    const llmTools = useNativeFC
+      ? augmentedToolSchemas.map((ts) => ({
+          name: ts.name,
+          description: ts.description,
+          inputSchema: {
+            type: "object" as const,
+            properties: Object.fromEntries(
+              (ts.parameters ?? []).map((p) => [
+                p.name,
+                { type: p.type ?? "string", description: p.description },
+              ]),
+            ),
+            required: (ts.parameters ?? [])
+              .filter((p) => p.required)
+              .map((p) => p.name),
+          } as Record<string, unknown>,
+        }))
+      : undefined;
+
     // Request logprobs when entropy sensor may be active (modelId present in meta)
     const wantLogprobs = (state.meta.entropy as any)?.modelId !== undefined;
     const llmStreamEffect = llm.stream({
@@ -314,7 +381,9 @@ function handleThinking(
       systemPrompt: systemPromptText,
       maxTokens: outputMaxTokens,
       temperature: temp,
-      stopSequences: ["\nObservation:", "\nObservation: "],
+      // Text-based path uses stop sequences; native FC lets the model end with tool_use
+      ...(useNativeFC ? {} : { stopSequences: ["\nObservation:", "\nObservation: "] }),
+      ...(llmTools ? { tools: llmTools } : {}),
       ...(wantLogprobs ? { logprobs: true, topLogprobs: 5 } : {}),
     });
 
@@ -351,6 +420,9 @@ function handleThinking(
       estimatedCost: 0,
     };
     let accumulatedLogprobs: { token: string; logprob: number; topLogprobs?: readonly { token: string; logprob: number }[] }[] = [];
+    // Native FC: accumulate tool_use blocks from stream events
+    let accumulatedToolCalls: { id: string; name: string; input: string }[] = [];
+    let accumulatedStopReason: string = "end_turn";
 
     const textDeltaCb = yield* FiberRef.get(StreamingTextCallback);
 
@@ -363,10 +435,24 @@ function handleThinking(
           }
         } else if (event.type === "content_complete") {
           accumulatedContent = event.content;
+          // Extract stop reason from content_complete event if present
+          if ("stopReason" in event && typeof (event as any).stopReason === "string") {
+            accumulatedStopReason = (event as any).stopReason;
+          }
         } else if (event.type === "usage") {
           accumulatedUsage = event.usage;
         } else if (event.type === "logprobs") {
           accumulatedLogprobs = [...accumulatedLogprobs, ...event.logprobs];
+        } else if (event.type === "tool_use_start") {
+          // Native FC: start accumulating a new tool call
+          accumulatedToolCalls.push({ id: event.id, name: event.name, input: "" });
+          accumulatedStopReason = "tool_use";
+        } else if (event.type === "tool_use_delta") {
+          // Native FC: accumulate JSON input for the current tool call
+          const currentTC = accumulatedToolCalls[accumulatedToolCalls.length - 1];
+          if (currentTC) {
+            currentTC.input += event.input;
+          }
         }
       }),
     ).pipe(Effect.catchAll(() => Effect.void));
@@ -380,7 +466,7 @@ function handleThinking(
     // Build response shape matching original llm.complete() return
     const thoughtResponse = {
       content: accumulatedContent,
-      stopReason: "end_turn" as const,
+      stopReason: accumulatedStopReason as "end_turn",
       usage: accumulatedUsage,
       model: "unknown",
     };
@@ -424,7 +510,133 @@ function handleThinking(
     // Publish thought event
     yield* hooks.onThought(state, thought);
 
-    // ── ACTION SELECTION ────────────────────────────────────────────────────
+    // ── FAST-PATH: trivial task exit ─────────────────────────────────────────
+    // If this is the first iteration, the model produced no tool call, no
+    // FINAL ANSWER prefix (handled by the oracle), and the response is
+    // substantive, exit immediately without running the termination oracle or
+    // tool-parsing pipeline. Avoids 4-6 extra loop iterations that meta-tool
+    // injection + entropy scoring would otherwise add to simple Q&A.
+    if (
+      state.iteration === 0 &&
+      !thought.match(/ACTION:/i) &&
+      !thought.match(/FINAL\s+ANSWER\s*[:：]/i) &&
+      thought.trim().length > 20 &&
+      thoughtResponse.stopReason === "end_turn"
+    ) {
+      const output = thought.trim();
+      return transitionState(state, {
+        steps: newSteps,
+        tokens: newTokens,
+        cost: newCost,
+        status: "done" as const,
+        output,
+        priorThought: output,
+        iteration: state.iteration + 1,
+        meta: {
+          ...state.meta,
+          terminatedBy: "end_turn",
+        },
+      });
+    }
+
+    // ── NATIVE FUNCTION CALLING BRANCH ─────────────────────────────────────
+    // When native FC is active, the LLM returns structured tool_use blocks
+    // instead of text-based ACTION: directives. We resolve them through the
+    // ToolCallResolver and skip the regex-based parsing entirely.
+    // If the FC resolver sees a text-only response that contains ACTION:
+    // directives, we skip the FC path and let the text-based parser handle it.
+    if (useNativeFC && (input as ReActKernelInput).toolCallResolver) {
+      const resolver = (input as ReActKernelInput).toolCallResolver!;
+
+      // Parse accumulated tool call inputs from JSON strings
+      const parsedToolCalls = accumulatedToolCalls.map((tc) => {
+        let parsedInput: unknown = {};
+        try {
+          parsedInput = tc.input ? JSON.parse(tc.input) : {};
+        } catch {
+          parsedInput = {};
+        }
+        return { id: tc.id, name: tc.name, input: parsedInput };
+      });
+
+      const resolverInput: ResolverInput = {
+        content: accumulatedContent || undefined,
+        toolCalls: parsedToolCalls.length > 0 ? parsedToolCalls : undefined,
+        stopReason: accumulatedStopReason,
+      };
+
+      const resolverResult = yield* resolver.resolve(
+        resolverInput,
+        augmentedToolSchemas.map((ts) => ({ name: ts.name })),
+      );
+
+      if (resolverResult._tag === "tool_calls") {
+        // Store pending native tool calls in meta for handleActing
+        return transitionState(state, {
+          steps: newSteps,
+          tokens: newTokens,
+          cost: newCost,
+          status: "acting",
+          meta: {
+            ...state.meta,
+            pendingNativeToolCalls: resolverResult.calls as readonly ToolCallSpec[],
+            // Store thought + thinking for post-action FA check
+            lastThought: thought,
+            lastThinking: thinking,
+          },
+        });
+      }
+
+      if (resolverResult._tag === "final_answer") {
+        // FC received a text-only response (no tool_use blocks). Check for
+        // text-based ACTION: directives that the model emitted instead of using
+        // native tool calling — fall through to the text-based parser so
+        // blockedTools checks, tool execution, etc. still apply.
+        const textToolRequests = parseAllToolRequests(resolverResult.content);
+        if (textToolRequests.length > 0) {
+          // Skip FC — let the text-based ACTION parsing path below handle it
+        } else {
+          // Genuine final answer. Strip legacy FINAL ANSWER: prefix if present
+          // so output is clean regardless of whether the model used the prefix.
+          const hasFA = hasFinalAnswer(resolverResult.content);
+          const cleanContent = hasFA
+            ? extractFinalAnswer(resolverResult.content)
+            : resolverResult.content;
+          const terminatedBy = hasFA ? "final_answer" : "end_turn";
+
+          const assembled = assembleOutput({
+            steps: newSteps,
+            finalAnswer: cleanContent,
+            terminatedBy: "llm_end_turn",
+            entropyScores: (state.meta.entropy as any)?.entropyHistory,
+          });
+          return transitionState(state, {
+            steps: newSteps,
+            tokens: newTokens,
+            cost: newCost,
+            status: "done" as const,
+            output: assembled.text,
+            priorThought: thought.trim(),
+            iteration: state.iteration + 1,
+            meta: {
+              ...state.meta,
+              terminatedBy,
+            },
+          });
+        }
+      } else if (resolverResult._tag === "thinking") {
+        // Continue the loop
+        return transitionState(state, {
+          steps: newSteps,
+          tokens: newTokens,
+          cost: newCost,
+          iteration: state.iteration + 1,
+          priorThought: thought.trim(),
+        });
+      }
+    }
+
+    // ── ACTION SELECTION (text-based path) ──────────────────────────────────
     let allToolRequests = parseAllToolRequests(thought);
     if (allToolRequests.length === 0 && thinking) {
       allToolRequests = parseAllToolRequests(thinking);
@@ -576,6 +788,188 @@ function handleActing(
 ): Effect.Effect<KernelState, never, LLMService> {
   return Effect.gen(function* () {
     const { input, profile, compression, toolService, hooks } = context;
+
+    // ── NATIVE FC ACTING BRANCH ─────────────────────────────────────────────
+    // When the thinking phase stored pendingNativeToolCalls, execute them here
+    // using the structured ToolCallSpec (pre-parsed arguments, no regex repair).
+    const pendingNativeCalls = state.meta.pendingNativeToolCalls as readonly ToolCallSpec[] | undefined;
+    if (pendingNativeCalls && pendingNativeCalls.length > 0) {
+      const newToolsUsed = new Set(state.toolsUsed);
+      let allSteps = [...state.steps];
+
+      for (const tc of pendingNativeCalls) {
+        // ── Meta-tool inline handling (final-answer, brief, pulse) ────────
+        // These are handled inline like the text-based path — they bypass ToolService.
+        if (tc.name === "final-answer") {
+          const META_TOOLS = new Set(["final-answer", "task-complete", "context-status", "brief", "pulse", "find", "recall"]);
+          const hasNonMetaToolCalled = [...newToolsUsed].some((t) => !META_TOOLS.has(t));
+          const requiredTools = input.requiredTools ?? [];
+          const allRequiredMet = requiredTools.every((t) => newToolsUsed.has(t));
+          const canComplete = allRequiredMet && (hasNonMetaToolCalled || requiredTools.length === 0);
+
+          const handlerResult = yield* makeFinalAnswerHandler({
+            canComplete,
+          })({ ...tc.arguments });
+          const resultObj = handlerResult as Record<string, unknown>;
+
+          if (resultObj.accepted === true) {
+            const capture = resultObj._capture as FinalAnswerCapture;
+            const finalObsContent = `✓ final-answer accepted: ${capture.output}`;
+            const actionStep = makeStep("action", `${tc.name}(${JSON.stringify(tc.arguments)})`, {
+              toolCall: { id: tc.id, name: tc.name, arguments: tc.arguments },
+            });
+            const finalObsStep = makeStep("observation", finalObsContent, {
+              observationResult: makeObservationResult("final-answer", true, finalObsContent),
+            });
+
+            yield* hooks.onAction(state, tc.name, JSON.stringify(tc.arguments));
+            yield* hooks.onObservation(
+              transitionState(state, { steps: [...allSteps, actionStep] }),
+              finalObsContent,
+              true,
+            );
+
+            newToolsUsed.add(tc.name);
+            return transitionState(state, {
+              steps: [...allSteps, actionStep, finalObsStep],
+              toolsUsed: newToolsUsed,
+              status: "done",
+              output: capture.output,
+              iteration: state.iteration + 1,
+              meta: {
+                ...state.meta,
+                terminatedBy: "final_answer_tool" as const,
+                finalAnswerCapture: capture,
+                pendingNativeToolCalls: undefined,
+                lastThought: undefined,
+                lastThinking: undefined,
+              },
+            });
+          }
+
+          // Rejected — produce error observation and continue
+          const rejectionMsg = typeof resultObj.error === "string"
+            ? resultObj.error
+            : "final-answer rejected: conditions not yet met.";
+          const actionStep = makeStep("action", `${tc.name}(${JSON.stringify(tc.arguments)})`, {
+            toolCall: { id: tc.id, name: tc.name, arguments: tc.arguments },
+          });
+          const rejectObs = `⚠️ ${rejectionMsg}`;
+          const rejectObsStep = makeStep("observation", rejectObs, {
+            observationResult: makeObservationResult("final-answer", false, rejectObs),
+          });
+
+          yield* hooks.onAction(state, tc.name, JSON.stringify(tc.arguments));
+          yield* hooks.onObservation(
+            transitionState(state, { steps: [...allSteps, actionStep] }),
+            rejectObs,
+            false,
+          );
+
+          newToolsUsed.add(tc.name);
+          allSteps = [...allSteps, actionStep, rejectObsStep];
+          continue;
+        }
+
+        // ── Check blocked tools ───────────────────────────────────────────────
+        const isBlocked = input.blockedTools?.includes(tc.name) ?? false;
+        if (isBlocked) {
+          const blockMsg = `⚠️ BLOCKED: ${tc.name} already executed successfully in a prior pass.`;
+          const actionStep = makeStep("action", `${tc.name}(${JSON.stringify(tc.arguments)})`, {
+            toolCall: { id: tc.id, name: tc.name, arguments: tc.arguments },
+          });
+          const blockObsStep = makeStep("observation", blockMsg, {
+            observationResult: makeObservationResult(tc.name, true, blockMsg),
+          });
+          yield* hooks.onAction(state, tc.name, JSON.stringify(tc.arguments));
+          yield* hooks.onObservation(
+            transitionState(state, { steps: [...allSteps, actionStep] }),
+            blockMsg,
+            true,
+          );
+          allSteps = [...allSteps, actionStep, blockObsStep];
+          continue;
+        }
+
+        // ── Execute the tool via ToolService ──────────────────────────────────
+        const actionStep = makeStep("action", `${tc.name}(${JSON.stringify(tc.arguments)})`, {
+          toolCall: { id: tc.id, name: tc.name, arguments: tc.arguments },
+        });
+        allSteps = [...allSteps, actionStep];
+        newToolsUsed.add(tc.name);
+
+        yield* hooks.onAction(state, tc.name, JSON.stringify(tc.arguments));
+
+        if (toolService._tag === "None") {
+          const errContent = `[Tool "${tc.name}" requested but ToolService is not available]`;
+          const errObsStep = makeStep("observation", errContent, {
+            observationResult: makeObservationResult(tc.name, false, errContent),
+          });
+          yield* hooks.onObservation(
+            transitionState(state, { steps: allSteps }),
+            errContent,
+            false,
+          );
+          allSteps = [...allSteps, errObsStep];
+          continue;
+        }
+
+        const toolStartMs = Date.now();
+        const execResult = yield* executeNativeToolCall(
+          toolService.value,
+          tc,
+          input.agentId ?? "reasoning-agent",
+          input.sessionId ?? "reasoning-session",
+        );
+        const toolDurationMs = Date.now() - toolStartMs;
+
+        // Update action step with duration
+        const lastActionIdx = allSteps.length - 1;
+        const lastAction = allSteps[lastActionIdx];
+        if (lastAction) {
+          allSteps[lastActionIdx] = {
+            ...lastAction,
+            metadata: { ...(lastAction.metadata ?? {}), duration: toolDurationMs },
+          };
+        }
+
+        const obsStep = makeStep("observation", execResult.content, {
+          observationResult: makeObservationResult(tc.name, execResult.success, execResult.content),
+        });
+
+        yield* hooks.onObservation(
+          transitionState(state, { steps: allSteps }),
+          execResult.content,
+          execResult.success,
+        );
+
+        allSteps = [...allSteps, obsStep];
+      }
+
+      // Sync scratchpad
+      const toolScratchpad = yield* Ref.get(scratchpadStoreRef);
+      const mergedScratchpad = new Map(state.scratchpad);
+      for (const [k, v] of toolScratchpad) {
+        mergedScratchpad.set(k, v);
+      }
+
+      // All native tool calls executed — transition back to thinking
+      return transitionState(state, {
+        steps: allSteps,
+        toolsUsed: newToolsUsed,
+        scratchpad: mergedScratchpad,
+        status: "thinking",
+        iteration: state.iteration + 1,
+        meta: {
+          ...state.meta,
+          pendingNativeToolCalls: undefined,
+          lastThought: undefined,
+          lastThinking: undefined,
+        },
+      });
+    }
+
+    // ── TEXT-BASED ACTING PATH (existing) ────────────────────────────────────
     const toolRequest = state.meta.pendingToolRequest as { tool: string; input: string; transform?: string } | undefined;
 
     if (!toolRequest) {
@@ -782,6 +1176,7 @@ function handleActing(
         tokenBudget: (input.contextProfile as any)?.maxTokens ?? 8000,
         entropy: ((state.meta as any).entropy?.latest) as { composite: number; shape: string; momentum: number } | undefined,
         controllerDecisionLog: state.controllerDecisionLog,
+        iterationCount: state.iteration,
       };
       observationContent = buildBriefResponse(briefInput);
       obsResult = makeObservationResult("brief", true, observationContent);
@@ -874,6 +1269,11 @@ function handleActing(
         observationContent = toolObs.content;
         obsResult = toolObs.observationResult;
 
+        // Carry stored key forward for auto-forwarding in the next iteration
+        if (toolObs.storedKey) {
+          (obsResult as any)._storedKey = toolObs.storedKey;
+        }
+
         // Store actual duration in action step metadata
         const lastActionStep = stepsWithAction[stepsWithAction.length - 1];
         if (lastActionStep?.type === "action") {
@@ -893,7 +1293,13 @@ function handleActing(
       mergedScratchpad.set(k, v);
     }
 
-    const observationStep = makeStep("observation", observationContent, { observationResult: obsResult });
+    // Extract storedKey from obsResult (set above for single-tool path)
+    const obsStoredKey = (obsResult as any)._storedKey as string | undefined;
+
+    const observationStep = makeStep("observation", observationContent, {
+      observationResult: obsResult,
+      ...(obsStoredKey ? { storedKey: obsStoredKey } : {}),
+    });
     const stepsWithObs = [...stepsWithAction, observationStep];
 
     // Publish observation event
@@ -1031,6 +1437,24 @@ export const executeReActKernel = (
       }
     }
 
+    // ── Determine native FC mode ────────────────────────────────────────────
+    // Auto-detect from provider capabilities unless explicitly overridden.
+    // When the provider supports tool calling, native FC is used automatically.
+    const llm = yield* LLMService;
+    const caps = yield* llm.capabilities().pipe(
+      Effect.catchAll(() => Effect.succeed(DEFAULT_CAPABILITIES)),
+    );
+    let useNativeFC = input.useNativeFunctionCalling ?? caps.supportsToolCalling;
+    let toolCallResolver: ToolCallResolver | undefined = input.toolCallResolver;
+
+    if (useNativeFC && !toolCallResolver) {
+      try {
+        toolCallResolver = createToolCallResolver(caps);
+      } catch {
+        useNativeFC = false;
+      }
+    }
+
     const state = yield* runKernel(reactKernel, {
       task: input.task,
       systemPrompt: input.systemPrompt,
@@ -1045,7 +1469,9 @@ export const executeReActKernel = (
       requiredTools: input.requiredTools,
       maxRequiredToolRetries: input.maxRequiredToolRetries,
       metaTools: input.metaTools,
-    }, {
+      // Pass native FC fields through — they're read via (input as ReActKernelInput) in the kernel
+      ...(useNativeFC ? { useNativeFunctionCalling: true, toolCallResolver } : {}),
+    } as KernelInput, {
       maxIterations: input.maxIterations ?? 10,
       strategy: input.parentStrategy ?? "react-kernel",
       kernelType: "react",
