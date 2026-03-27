@@ -310,6 +310,7 @@ export const GeminiProviderLive = Layer.effect(
                     maxTokens: request.maxTokens,
                     temperature: request.temperature,
                     systemPrompt,
+                    tools: request.tools,
                   }),
                 });
 
@@ -317,11 +318,22 @@ export const GeminiProviderLive = Layer.effect(
                 let inputTokens = 0;
                 let outputTokens = 0;
                 let cachedContentTokens = 0;
+                const accumulatedToolCalls: { id: string; name: string; input: unknown }[] = [];
 
                 for await (const chunk of stream) {
                   if (chunk.text) {
                     emit.single({ type: "text_delta", text: chunk.text });
                     fullContent += chunk.text;
+                  }
+                  // Handle Gemini function calls in stream chunks
+                  const fcs = (chunk as any).functionCalls as GeminiFunctionCall[] | undefined;
+                  if (fcs && fcs.length > 0) {
+                    for (const fc of fcs) {
+                      const tcId = `gemini-tc-${Date.now()}-${accumulatedToolCalls.length}`;
+                      accumulatedToolCalls.push({ id: tcId, name: fc.name, input: fc.args });
+                      emit.single({ type: "tool_use_start" as const, id: tcId, name: fc.name });
+                      emit.single({ type: "tool_use_delta" as const, id: tcId, delta: JSON.stringify(fc.args) });
+                    }
                   }
                   if (chunk.usageMetadata) {
                     inputTokens = chunk.usageMetadata.promptTokenCount ?? 0;
@@ -331,7 +343,12 @@ export const GeminiProviderLive = Layer.effect(
                   }
                 }
 
-                emit.single({ type: "content_complete", content: fullContent });
+                const hasToolCalls = accumulatedToolCalls.length > 0;
+                emit.single({
+                  type: "content_complete",
+                  content: fullContent,
+                  ...(hasToolCalls ? { stopReason: "tool_use", toolCalls: accumulatedToolCalls } : {}),
+                } as StreamEvent);
                 emit.single({
                   type: "usage",
                   usage: {
