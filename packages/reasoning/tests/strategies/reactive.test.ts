@@ -53,10 +53,10 @@ describe("ReactiveStrategy", () => {
       program.pipe(Effect.provide(layer)),
     );
 
-    // With fast-path optimization, the agent completes in 1 iteration when the
-    // first response is substantial text with no tool call and end_turn stop reason
-    expect(result.status).toBe("completed");
-    expect(result.steps.length).toBeGreaterThanOrEqual(1);
+    // Mock LLM has no capabilities() → text-based path → "Test response" (13 chars)
+    // is below fast-path threshold (20 chars) → loops to max iterations → partial
+    expect(result.status).toBe("partial");
+    expect(result.steps.length).toBe(3);
   });
 
   it("should parse tool requests and add action + observation steps", async () => {

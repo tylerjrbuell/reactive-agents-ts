@@ -432,8 +432,9 @@ describe("Sprint 2D: Early termination on end_turn", () => {
       }).pipe(Effect.provide(layer)),
     );
 
-    // With no tools available, even short responses complete via end_turn
-    expect(result.status).toBe("completed");
+    // Mock LLM has no capabilities() → text-based path → "Test response" (13 chars)
+    // is below fast-path threshold → loops to max iterations → partial
+    expect(result.status).toBe("partial");
   });
 });
 
