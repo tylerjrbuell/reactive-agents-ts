@@ -453,7 +453,8 @@ export function executeNativeToolCall(
   toolCall: ToolCallSpec,
   agentId: string,
   sessionId: string,
-): Effect.Effect<{ content: string; success: boolean }, never> {
+  config?: { compression?: ResultCompressionConfig; scratchpad?: Map<string, string> },
+): Effect.Effect<{ content: string; success: boolean; storedKey?: string }, never> {
   return toolService
     .execute({
       toolName: toolCall.name,
@@ -462,10 +463,28 @@ export function executeNativeToolCall(
       sessionId,
     })
     .pipe(
-      Effect.map((r) => ({
-        content: typeof r.result === "string" ? r.result : JSON.stringify(r.result),
-        success: r.success !== false,
-      })),
+      Effect.map((r) => {
+        let content = typeof r.result === "string" ? r.result : JSON.stringify(r.result);
+        const success = r.success !== false;
+
+        // Apply tool-specific normalization (HTML stripping for http-get, etc.)
+        content = normalizeObservation(toolCall.name, content);
+
+        // Apply result compression for large outputs
+        let storedKey: string | undefined;
+        if (config?.compression) {
+          const budget = config.compression.budget ?? 800;
+          const previewItems = config.compression.previewItems ?? 5;
+          const compressed = compressToolResult(content, toolCall.name, budget, previewItems);
+          content = compressed.content;
+          if (compressed.stored) {
+            storedKey = compressed.stored.key;
+            config.scratchpad?.set(compressed.stored.key, compressed.stored.value);
+          }
+        }
+
+        return { content, success, storedKey };
+      }),
       Effect.catchAll((e) =>
         Effect.succeed({
           content: `[Tool error: ${e instanceof Error ? e.message : String(e)}]`,

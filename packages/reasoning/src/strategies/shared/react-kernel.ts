@@ -1112,6 +1112,7 @@ function handleActing(
         // ── Execute the tool via ToolService ──────────────────────────────────
         const actionStep = makeStep("action", `${tc.name}(${JSON.stringify(tc.arguments)})`, {
           toolCall: { id: tc.id, name: tc.name, arguments: tc.arguments },
+          toolUsed: tc.name,
         });
         allSteps = [...allSteps, actionStep];
         newToolsUsed.add(tc.name);
@@ -1138,6 +1139,7 @@ function handleActing(
           tc,
           input.agentId ?? "reasoning-agent",
           input.sessionId ?? "reasoning-session",
+          { compression, scratchpad: state.scratchpad as Map<string, string> },
         );
         const toolDurationMs = Date.now() - toolStartMs;
 
