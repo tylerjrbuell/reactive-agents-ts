@@ -138,6 +138,11 @@ export interface ReActKernelInput {
     };
     harnessContent?: string;
   };
+  /** Feature flag: use native function calling instead of text-based ACTION: parsing.
+   *  Default: determined by provider capabilities at runtime. */
+  useNativeFunctionCalling?: boolean;
+  /** Pre-built ToolCallResolver instance — injected by the kernel runner when FC is active */
+  toolCallResolver?: import("@reactive-agents/tools").ToolCallResolver;
 }
 
 export interface ReActKernelResult {

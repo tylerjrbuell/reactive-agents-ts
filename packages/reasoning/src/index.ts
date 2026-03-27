@@ -119,6 +119,7 @@ export type {
 // ─── Shared Utilities ───
 export { filterToolsByRelevance } from "./strategies/shared/tool-utils.js";
 export type { ToolSchema, ToolParamSchema } from "./strategies/shared/tool-utils.js";
+export type { KernelMessage } from "./strategies/shared/kernel-state.js";
 
 // ─── Structured Output ───
 export { inferRequiredTools, classifyToolRelevance } from "./structured-output/infer-required-tools.js";
