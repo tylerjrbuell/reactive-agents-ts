@@ -58,6 +58,7 @@ import {
 import { evaluateTermination, defaultEvaluators, type TerminationContext } from "./termination-oracle.js";
 import { assembleOutput } from "./output-assembly.js";
 import { buildContext, buildStaticContext, buildDynamicContext } from "../../context/context-engine.js";
+import { applyMessageWindow } from "../../context/message-window.js";
 import type { MemoryItem } from "../../context/context-engine.js";
 import { extractThinking, rescueFromThinking } from "./thinking-utils.js";
 import { makeStep } from "./step-utils.js";
@@ -226,6 +227,40 @@ export const reactKernel: ThoughtKernel = (
   return Effect.succeed(state);
 };
 
+// ── KernelMessage → LLMMessage conversion ────────────────────────────────────
+
+/** Convert a KernelMessage to provider-native LLMMessage format. */
+function toProviderMessage(msg: KernelMessage): LLMMessage {
+  if (msg.role === "assistant") {
+    if (msg.toolCalls && msg.toolCalls.length > 0) {
+      // Assistant message with tool calls — provider maps to their format
+      return {
+        role: "assistant",
+        content: [
+          ...(msg.content ? [{ type: "text" as const, text: msg.content }] : []),
+          ...msg.toolCalls.map((tc) => ({
+            type: "tool_use" as const,
+            id: tc.id,
+            name: tc.name,
+            input: tc.arguments,
+          })),
+        ],
+      } as LLMMessage;
+    }
+    return { role: "assistant", content: msg.content };
+  }
+  if (msg.role === "tool_result") {
+    return {
+      role: "tool" as const,
+      toolCallId: msg.toolCallId,
+      toolName: msg.toolName,
+      content: msg.content,
+    } as LLMMessage;
+  }
+  // user role (or fallback)
+  return { role: "user", content: msg.content };
+}
+
 // ── Thinking phase ───────────────────────────────────────────────────────────
 
 function handleThinking(
@@ -376,63 +411,22 @@ function handleThinking(
     const wantLogprobs = (state.meta.entropy as any)?.modelId !== undefined;
 
     // ── Build conversation messages ──────────────────────────────────────────
-    // FC path: replay the multi-turn conversation history so the model sees
-    // prior tool calls and results as structured messages (not a text blob).
+    // FC path: send state.messages directly through sliding window compaction,
+    // then convert to provider-native format. The messages array IS the
+    // conversation thread — no need to rebuild from steps.
     // Text path: single user message with the packed context blob.
     let conversationMessages: LLMMessage[];
     if (useNativeFC) {
-      const history = state.messages as readonly KernelMessage[];
-      if (history.length === 0) {
-        // First iteration — just the initial user task (context in system prompt)
-        conversationMessages = [{ role: "user", content: thoughtPrompt }];
-      } else {
-        // Subsequent iterations — replay the full history, then append a
-        // minimal continuation message. Do NOT re-send thoughtPrompt here;
-        // it duplicates all prior context already present in the history
-        // messages, wasting 2-3x tokens per iteration.
-        const historyMessages: LLMMessage[] = history.map((msg): LLMMessage => {
-          if (msg.role === "assistant") {
-            if (msg.toolCalls && msg.toolCalls.length > 0) {
-              // Assistant message with tool calls — use content blocks
-              return {
-                role: "assistant",
-                content: [
-                  ...(msg.content ? [{ type: "text" as const, text: msg.content }] : []),
-                  ...msg.toolCalls.map((tc) => ({
-                    type: "tool_use" as const,
-                    id: tc.id,
-                    name: tc.name,
-                    input: tc.arguments,
-                  })),
-                ],
-              };
-            }
-            return { role: "assistant", content: msg.content };
-          } else if (msg.role === "tool_result") {
-            // Tool result — provider handles role:"tool" → Anthropic tool_result / Ollama tool
-            return {
-              role: "tool" as const,
-              toolCallId: msg.toolCallId,
-              toolName: msg.toolName,
-              content: msg.content,
-            };
-          } else {
-            // user role
-            return { role: "user", content: msg.content };
-          }
-        });
-        // Build a minimal continuation nudge instead of repeating the full context blob
-        const reqTools = input.requiredTools ?? [];
-        const missingReq = reqTools.filter((t) => !state.toolsUsed.has(t));
-        const continuationContent =
-          missingReq.length > 0
-            ? `Continue. You still need to call: ${missingReq.join(", ")}.`
-            : "Continue with the task.";
-        conversationMessages = [
-          ...historyMessages,
-          { role: "user", content: continuationContent },
-        ];
+      // Apply sliding window compaction for token budget management
+      let compactedMessages = applyMessageWindow(state.messages, profile as import("../../context/context-profile.js").ContextProfile);
+
+      // Defensive: if messages are empty (shouldn't happen after Task 9 seeding), fall back
+      if (compactedMessages.length === 0) {
+        compactedMessages = [{ role: "user" as const, content: thoughtPrompt }];
       }
+
+      // Convert KernelMessage[] → LLMMessage[] for the provider
+      conversationMessages = (compactedMessages as readonly KernelMessage[]).map(toProviderMessage);
     } else {
       conversationMessages = [{ role: "user", content: thoughtPrompt }];
     }
