@@ -116,6 +116,9 @@ export type {
   ContextBuildInput,
 } from "./context/index.js";
 
+// ─── Message Window Compaction ───
+export { applyMessageWindow } from "./context/message-window.js";
+
 // ─── Shared Utilities ───
 export { filterToolsByRelevance } from "./strategies/shared/tool-utils.js";
 export type { ToolSchema, ToolParamSchema } from "./strategies/shared/tool-utils.js";

@@ -22,7 +22,7 @@ export type KernelStatus = "thinking" | "acting" | "observing" | "done" | "faile
 /** Provider-agnostic conversation message for the kernel's native FC conversation history. */
 export type KernelMessage =
   | { readonly role: "assistant"; readonly content: string; readonly toolCalls?: readonly ToolCallSpec[] }
-  | { readonly role: "tool_result"; readonly toolCallId: string; readonly content: string; readonly isError?: boolean }
+  | { readonly role: "tool_result"; readonly toolCallId: string; readonly toolName: string; readonly content: string; readonly isError?: boolean }
   | { readonly role: "user"; readonly content: string };
 
 // ── KernelState — Immutable, serializable reasoning state ────────────────────
@@ -59,13 +59,12 @@ export interface KernelState {
   readonly controllerDecisionLog: readonly string[];
 
   /**
-   * Native FC conversation history — provider-agnostic multi-turn message log.
-   * Only populated and used in the FC path (useNativeFC === true).
-   * Each iteration appends an assistant message (with toolCalls) + tool_result messages.
-   * On the next thinking phase, this history is replayed as a proper multi-turn conversation
-   * instead of a single packed user message blob.
+   * The LLM conversation thread — what gets sent to the model.
+   * Grows with each tool call (assistant turn + tool results appended).
+   * Compacted via sliding window when approaching token budget.
+   * Separate from steps[] which is the observability record.
    */
-  readonly conversationHistory?: readonly KernelMessage[];
+  readonly messages: readonly KernelMessage[];
 }
 
 // ── KernelInput — Frozen execution input ─────────────────────────────────────
@@ -99,6 +98,12 @@ export interface KernelInput {
   readonly maxRequiredToolRetries?: number;
   /** Custom environment context key-value pairs injected into the system prompt */
   readonly environmentContext?: Readonly<Record<string, string>>;
+  /**
+   * Optional seed messages for the LLM conversation thread.
+   * When provided, `state.messages` is initialized from these instead of starting empty.
+   * Allows the execution engine to inject prior conversation context (e.g. chat history).
+   */
+  readonly initialMessages?: readonly KernelMessage[];
   /** Meta-tool configuration and pre-computed static data for brief/pulse/recall/find. */
   readonly metaTools?: {
     readonly brief?: boolean;
@@ -257,7 +262,7 @@ export function initialKernelState(opts: KernelRunOptions): KernelState {
       ...(entropyMeta ? { entropy: entropyMeta } : {}),
     },
     controllerDecisionLog: [],
-    conversationHistory: [],
+    messages: [],
   };
 }
 
@@ -284,10 +289,11 @@ export function transitionState(
 
 /** JSON-safe representation of KernelState (Set → array, Map → object) */
 export interface SerializedKernelState
-  extends Omit<KernelState, "toolsUsed" | "scratchpad" | "steps"> {
+  extends Omit<KernelState, "toolsUsed" | "scratchpad" | "steps" | "messages"> {
   readonly toolsUsed: readonly string[];
   readonly scratchpad: Readonly<Record<string, string>>;
   readonly steps: readonly ReasoningStep[];
+  readonly messages: readonly KernelMessage[];
   readonly controllerDecisionLog: readonly string[];
 }
 
@@ -301,6 +307,7 @@ export function serializeKernelState(state: KernelState): SerializedKernelState 
     strategy: state.strategy,
     kernelType: state.kernelType,
     steps: state.steps,
+    messages: state.messages,
     toolsUsed: [...state.toolsUsed].sort(),
     scratchpad: Object.fromEntries(state.scratchpad),
     iteration: state.iteration,
@@ -326,6 +333,7 @@ export function deserializeKernelState(raw: SerializedKernelState): KernelState 
     strategy: raw.strategy,
     kernelType: raw.kernelType,
     steps: raw.steps,
+    messages: raw.messages,
     toolsUsed: new Set(raw.toolsUsed),
     scratchpad: new Map(Object.entries(raw.scratchpad)),
     iteration: raw.iteration,

@@ -117,7 +117,11 @@ export function runKernel(
     };
 
     // ── 5. Create initial state ──────────────────────────────────────────────
-    let state = initialKernelState(options);
+    const baseState = initialKernelState(options);
+    // Seed messages from input.initialMessages if provided (e.g. chat history injection)
+    let state = effectiveInput.initialMessages?.length
+      ? transitionState(baseState, { messages: effectiveInput.initialMessages })
+      : baseState;
 
     // Mutable scratchpad mirror — needed by the post-loop embedded tool call guard
     // (step 7) which may execute a tool that auto-stores to scratchpad.

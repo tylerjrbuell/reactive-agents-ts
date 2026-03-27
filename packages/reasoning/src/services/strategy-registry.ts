@@ -66,6 +66,8 @@ export type StrategyFn = (input: {
     };
     readonly harnessContent?: string;
   };
+  /** Initial messages to seed the kernel conversation thread (e.g. task as user message). */
+  readonly initialMessages?: readonly { readonly role: "user" | "assistant"; readonly content: string }[];
 }) => Effect.Effect<
   ReasoningResult,
   ExecutionError | IterationLimitError,

@@ -57,7 +57,8 @@ import {
 } from "./tool-utils.js";
 import { evaluateTermination, defaultEvaluators, type TerminationContext } from "./termination-oracle.js";
 import { assembleOutput } from "./output-assembly.js";
-import { buildContext, buildStaticContext, buildDynamicContext } from "../../context/context-engine.js";
+import { buildStaticContext, buildDynamicContext } from "../../context/context-engine.js";
+import { applyMessageWindow } from "../../context/message-window.js";
 import type { MemoryItem } from "../../context/context-engine.js";
 import { extractThinking, rescueFromThinking } from "./thinking-utils.js";
 import { makeStep } from "./step-utils.js";
@@ -174,31 +175,24 @@ export interface ReActKernelResult {
  * mid models get standard guidance; local models get minimal prompt.
  */
 function buildSystemPrompt(
-  task: string,
+  _task: string,
   systemPrompt?: string,
   tier?: "local" | "mid" | "large" | "frontier",
 ): string {
-  if (systemPrompt) {
-    return `${systemPrompt}\n\nTask: ${task}`;
-  }
+  // Use custom system prompt if provided (no task appended — task is in messages[0])
+  if (systemPrompt) return systemPrompt;
+
+  // Lean tier-adaptive instruction — NO task, NO tool schemas, NO format rules
+  // The task is seeded as state.messages[0] by the execution engine.
   const t = tier ?? "mid";
   if (t === "local") {
-    return `You are a helpful assistant that uses tools when needed.\n\nTask: ${task}`;
+    return "You are a helpful assistant. Use the provided tools when needed to complete tasks.";
   }
   if (t === "frontier" || t === "large") {
-    return `You are an expert reasoning agent. You think step by step, use tools precisely, and produce accurate, well-structured answers.
-
-When solving a task:
-- Break complex problems into sub-steps before acting.
-- Verify assumptions before drawing conclusions.
-- Use the most specific tool available rather than general-purpose ones.
-- If a tool result is unexpected, reason about why before retrying.
-- Prefer concise, direct answers once you have sufficient evidence.
-
-Task: ${task}`;
+    return "You are an expert reasoning agent. Think step by step. Use tools precisely and efficiently. Prefer concise, direct answers once you have sufficient information.";
   }
   // mid tier
-  return `You are a reasoning agent. Think step by step and use available tools when needed.\n\nTask: ${task}`;
+  return "You are a reasoning agent. Think step by step and use available tools when needed.";
 }
 
 // ── reactKernel: ThoughtKernel ───────────────────────────────────────────────
@@ -225,6 +219,40 @@ export const reactKernel: ThoughtKernel = (
   // For any other status, return state as-is (done/failed/observing are terminal or handled)
   return Effect.succeed(state);
 };
+
+// ── KernelMessage → LLMMessage conversion ────────────────────────────────────
+
+/** Convert a KernelMessage to provider-native LLMMessage format. */
+function toProviderMessage(msg: KernelMessage): LLMMessage {
+  if (msg.role === "assistant") {
+    if (msg.toolCalls && msg.toolCalls.length > 0) {
+      // Assistant message with tool calls — provider maps to their format
+      return {
+        role: "assistant",
+        content: [
+          ...(msg.content ? [{ type: "text" as const, text: msg.content }] : []),
+          ...msg.toolCalls.map((tc) => ({
+            type: "tool_use" as const,
+            id: tc.id,
+            name: tc.name,
+            input: tc.arguments,
+          })),
+        ],
+      } as LLMMessage;
+    }
+    return { role: "assistant", content: msg.content };
+  }
+  if (msg.role === "tool_result") {
+    return {
+      role: "tool" as const,
+      toolCallId: msg.toolCallId,
+      toolName: msg.toolName,
+      content: msg.content,
+    } as LLMMessage;
+  }
+  // user role (or fallback)
+  return { role: "user", content: msg.content };
+}
 
 // ── Thinking phase ───────────────────────────────────────────────────────────
 
@@ -376,54 +404,22 @@ function handleThinking(
     const wantLogprobs = (state.meta.entropy as any)?.modelId !== undefined;
 
     // ── Build conversation messages ──────────────────────────────────────────
-    // FC path: replay the multi-turn conversation history so the model sees
-    // prior tool calls and results as structured messages (not a text blob).
+    // FC path: send state.messages directly through sliding window compaction,
+    // then convert to provider-native format. The messages array IS the
+    // conversation thread — no need to rebuild from steps.
     // Text path: single user message with the packed context blob.
     let conversationMessages: LLMMessage[];
     if (useNativeFC) {
-      const history = (state.conversationHistory ?? []) as readonly KernelMessage[];
-      if (history.length === 0) {
-        // First iteration — just the initial user task (context in system prompt)
-        conversationMessages = [{ role: "user", content: thoughtPrompt }];
-      } else {
-        // Subsequent iterations — replay the full history, then append the
-        // current dynamic context as a new user turn so the model sees the
-        // latest iteration/loop status.
-        const historyMessages: LLMMessage[] = history.map((msg): LLMMessage => {
-          if (msg.role === "assistant") {
-            if (msg.toolCalls && msg.toolCalls.length > 0) {
-              // Assistant message with tool calls — use content blocks
-              return {
-                role: "assistant",
-                content: [
-                  ...(msg.content ? [{ type: "text" as const, text: msg.content }] : []),
-                  ...msg.toolCalls.map((tc) => ({
-                    type: "tool_use" as const,
-                    id: tc.id,
-                    name: tc.name,
-                    input: tc.arguments,
-                  })),
-                ],
-              };
-            }
-            return { role: "assistant", content: msg.content };
-          } else if (msg.role === "tool_result") {
-            // Tool result — provider handles role:"tool" → Anthropic tool_result / Ollama tool
-            return {
-              role: "tool" as const,
-              toolCallId: msg.toolCallId,
-              content: msg.content,
-            };
-          } else {
-            // user role
-            return { role: "user", content: msg.content };
-          }
-        });
-        conversationMessages = [
-          ...historyMessages,
-          { role: "user", content: thoughtPrompt },
-        ];
+      // Apply sliding window compaction for token budget management
+      let compactedMessages = applyMessageWindow(state.messages, profile as import("../../context/context-profile.js").ContextProfile);
+
+      // Defensive: if messages are empty (shouldn't happen after Task 9 seeding), fall back
+      if (compactedMessages.length === 0) {
+        compactedMessages = [{ role: "user" as const, content: thoughtPrompt }];
       }
+
+      // Convert KernelMessage[] → LLMMessage[] for the provider
+      conversationMessages = (compactedMessages as readonly KernelMessage[]).map(toProviderMessage);
     } else {
       conversationMessages = [{ role: "user", content: thoughtPrompt }];
     }
@@ -1275,7 +1271,7 @@ function handleActing(
       // This gives the next iteration a proper multi-turn conversation history
       // instead of a packed text blob when useNativeFC is active.
       const newConversationHistory: readonly KernelMessage[] = (() => {
-        const prior = (state.conversationHistory ?? []) as readonly KernelMessage[];
+        const prior = state.messages as readonly KernelMessage[];
 
         // Collect action/observation pairs added by this acting phase.
         // Only include steps added after the current state.steps (i.e. this turn).
@@ -1305,6 +1301,7 @@ function handleActing(
           return [{
             role: "tool_result" as const,
             toolCallId: tc.id,
+            toolName: tc.name,
             content: obsStep.content,
           }];
         });
@@ -1328,7 +1325,7 @@ function handleActing(
         steps: allSteps,
         toolsUsed: newToolsUsed,
         scratchpad: mergedScratchpad,
-        conversationHistory: newConversationHistory,
+        messages: newConversationHistory,
         status: "thinking",
         iteration: state.iteration + 1,
         meta: {
