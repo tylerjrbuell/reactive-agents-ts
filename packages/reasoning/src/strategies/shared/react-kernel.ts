@@ -57,7 +57,7 @@ import {
 } from "./tool-utils.js";
 import { evaluateTermination, defaultEvaluators, type TerminationContext } from "./termination-oracle.js";
 import { assembleOutput } from "./output-assembly.js";
-import { buildContext, buildStaticContext, buildDynamicContext } from "../../context/context-engine.js";
+import { buildStaticContext, buildDynamicContext } from "../../context/context-engine.js";
 import { applyMessageWindow } from "../../context/message-window.js";
 import type { MemoryItem } from "../../context/context-engine.js";
 import { extractThinking, rescueFromThinking } from "./thinking-utils.js";

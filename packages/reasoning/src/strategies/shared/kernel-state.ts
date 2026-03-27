@@ -289,10 +289,11 @@ export function transitionState(
 
 /** JSON-safe representation of KernelState (Set → array, Map → object) */
 export interface SerializedKernelState
-  extends Omit<KernelState, "toolsUsed" | "scratchpad" | "steps"> {
+  extends Omit<KernelState, "toolsUsed" | "scratchpad" | "steps" | "messages"> {
   readonly toolsUsed: readonly string[];
   readonly scratchpad: Readonly<Record<string, string>>;
   readonly steps: readonly ReasoningStep[];
+  readonly messages: readonly KernelMessage[];
   readonly controllerDecisionLog: readonly string[];
 }
 
@@ -306,6 +307,7 @@ export function serializeKernelState(state: KernelState): SerializedKernelState 
     strategy: state.strategy,
     kernelType: state.kernelType,
     steps: state.steps,
+    messages: state.messages,
     toolsUsed: [...state.toolsUsed].sort(),
     scratchpad: Object.fromEntries(state.scratchpad),
     iteration: state.iteration,
@@ -331,6 +333,7 @@ export function deserializeKernelState(raw: SerializedKernelState): KernelState 
     strategy: raw.strategy,
     kernelType: raw.kernelType,
     steps: raw.steps,
+    messages: raw.messages,
     toolsUsed: new Set(raw.toolsUsed),
     scratchpad: new Map(Object.entries(raw.scratchpad)),
     iteration: raw.iteration,

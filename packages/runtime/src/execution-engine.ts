@@ -946,6 +946,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         };
                         harnessContent?: string;
                       };
+                      initialMessages?: readonly { readonly role: "user" | "assistant"; readonly content: string }[];
                     }) => Effect.Effect<{
                       output: unknown;
                       status: string;
