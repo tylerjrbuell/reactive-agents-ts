@@ -540,6 +540,8 @@ export type LLMMessage =
       readonly role: "tool";
       /** Tool call ID this result corresponds to */
       readonly toolCallId: string;
+      /** Name of the tool that produced this result */
+      readonly toolName?: string;
       /** Plain text result/output */
       readonly content: string;
     };

@@ -42,7 +42,7 @@ const toGeminiContents = (messages: readonly LLMMessage[]): GeminiContent[] => {
         role: "user",
         parts: [{
           functionResponse: {
-            name: "tool",
+            name: msg.toolName ?? "unknown_tool",
             response: { content: msg.content },
           },
         }],
@@ -66,7 +66,7 @@ const toGeminiContents = (messages: readonly LLMMessage[]): GeminiContent[] => {
         } else if (block.type === "tool_result") {
           parts.push({
             functionResponse: {
-              name: "tool",
+              name: (block as { name?: string }).name ?? "unknown_tool",
               response: { content: block.content },
             },
           });

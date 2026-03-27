@@ -413,6 +413,7 @@ function handleThinking(
             return {
               role: "tool" as const,
               toolCallId: msg.toolCallId,
+              toolName: msg.toolName,
               content: msg.content,
             };
           } else {
@@ -1313,6 +1314,7 @@ function handleActing(
           return [{
             role: "tool_result" as const,
             toolCallId: tc.id,
+            toolName: tc.name,
             content: obsStep.content,
           }];
         });
