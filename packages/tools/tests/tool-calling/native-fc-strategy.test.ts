@@ -108,13 +108,15 @@ describe("NativeFCStrategy", () => {
     }
   });
 
-  it("handles undefined content", () => {
+  it("handles undefined content — empty end_turn returns thinking to reprompt", () => {
+    // Empty content with end_turn means the model didn't know what to do.
+    // Return "thinking" so the kernel reprompts rather than accepting empty output.
     const input: ResolverInput = {
       stopReason: "end_turn",
     };
     const result = run(strategy.resolve(input, noTools));
-    expect(result._tag).toBe("final_answer");
-    if (result._tag === "final_answer") {
+    expect(result._tag).toBe("thinking");
+    if (result._tag === "thinking") {
       expect(result.content).toBe("");
     }
   });

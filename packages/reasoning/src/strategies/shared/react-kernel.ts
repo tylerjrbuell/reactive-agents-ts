@@ -659,13 +659,44 @@ function handleThinking(
           });
         }
       } else if (resolverResult._tag === "thinking") {
-        // Continue the loop
+        // Model returned no tool calls and no substantial content — it's uncertain
+        // what to do next. Add a step with any content and inject guidance.
+        const thinkingContent = resolverResult.content.trim();
+        const reqTools = input.requiredTools ?? [];
+        const missingReq = reqTools.filter((t) => !state.toolsUsed.has(t));
+
+        // Count consecutive empty responses (thinking with no content)
+        const consecutiveEmpty = !thinkingContent
+          ? newSteps.reduceRight((count, s) => {
+              if (count === -1) return -1; // stopped counting
+              if (s.type === "observation" && s.content.startsWith("Continue working")) return count + 1;
+              if (s.type === "thought" || s.type === "action") return -1; // reset
+              return count;
+            }, 0)
+          : 0;
+
+        let thinkingSteps = [...newSteps];
+        if (thinkingContent) {
+          thinkingSteps = [...thinkingSteps, makeStep("thought", thinkingContent)];
+        }
+
+        if (missingReq.length > 0 && !thinkingContent) {
+          // After 2 consecutive empty responses, escalate to a stronger directive
+          const isStuck = consecutiveEmpty >= 2;
+          const nudge = isStuck
+            ? `⚠️ ACTION REQUIRED: You have not made progress. You MUST call: ${missingReq.join(", ")} RIGHT NOW. Stop waiting and use the tool immediately.`
+            : `Continue working on the task. You still need to call: ${missingReq.join(", ")}. Use the available tools to complete the task.`;
+          thinkingSteps = [...thinkingSteps, makeStep("observation", nudge, {
+            observationResult: makeObservationResult("system", true, nudge),
+          })];
+        }
+
         return transitionState(state, {
-          steps: newSteps,
+          steps: thinkingSteps,
           tokens: newTokens,
           cost: newCost,
           iteration: state.iteration + 1,
-          priorThought: thought.trim(),
+          priorThought: thinkingContent || state.priorThought,
         });
       }
     }

@@ -16,9 +16,17 @@ export class NativeFCStrategy implements ToolCallResolver {
       }));
       return { _tag: "tool_calls", calls: specs, thinking: response.content || undefined };
     }
-    if (response.stopReason === "end_turn" || response.stopReason === "stop") {
-      return { _tag: "final_answer", content: response.content ?? "" };
+
+    const content = response.content ?? "";
+    const hasContent = content.trim().length > 0;
+
+    // Only classify as final_answer when the model produced actual content.
+    // An empty end_turn response means the model didn't know what to do —
+    // treat it as thinking so the kernel reprompts with context.
+    if ((response.stopReason === "end_turn" || response.stopReason === "stop") && hasContent) {
+      return { _tag: "final_answer", content };
     }
-    return { _tag: "thinking", content: response.content ?? "" };
+
+    return { _tag: "thinking", content };
   }
 }
