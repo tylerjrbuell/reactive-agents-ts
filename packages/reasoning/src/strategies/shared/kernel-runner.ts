@@ -165,6 +165,7 @@ export function runKernel(
               priorThought,
               logprobs: (state.meta.entropy as any)?.lastLogprobs,
               kernelState: state,
+              taskCategory: (state.meta.entropy as any)?.taskCategory,
             })
             .pipe(
               Effect.tap((score: any) => {

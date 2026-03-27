@@ -2266,7 +2266,11 @@ export class ReactiveAgentBuilder {
         costTrackingOptions: self._costTrackingOptions,
         circuitBreakerConfig: self._circuitBreakerConfig,
         rateLimiterConfig: self._rateLimiterConfig,
-        requiredTools: self._requiredToolsConfig,
+        // Auto-enable adaptive required tools when reasoning + tools are both active
+        // and the user hasn't explicitly configured required tools. This ensures the
+        // kernel's completion guard can enforce that task-critical tools are called.
+        requiredTools: self._requiredToolsConfig
+          ?? (self._enableReasoning && self._enableTools ? { adaptive: true } : undefined),
         allowedTools: self._toolsOptions?.allowedTools,
         adaptiveToolFiltering: self._toolsOptions?.adaptive,
         enableMemory: self._enableMemory,

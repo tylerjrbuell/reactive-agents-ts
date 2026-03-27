@@ -59,6 +59,8 @@ interface ReactiveInput {
   };
   /** Model ID for entropy sensor scoring */
   readonly modelId?: string;
+  /** Task category for per-category entropy scoring adjustments */
+  readonly taskCategory?: string;
   /** LLM sampling temperature — forwarded to entropy sensor */
   readonly temperature?: number;
   /** Custom environment context key-value pairs injected into system prompt */
@@ -146,6 +148,7 @@ export const executeReactive = (
       kernelPass: "reactive:main",
       taskDescription: input.taskDescription,
       modelId: input.modelId,
+      taskCategory: input.taskCategory,
       temperature: kernelInput.temperature,
       strategySwitching: input.strategySwitching
         ? {

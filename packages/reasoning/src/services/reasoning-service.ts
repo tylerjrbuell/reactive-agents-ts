@@ -60,6 +60,8 @@ export class ReasoningService extends Context.Tag("ReasoningService")<
       };
       /** Model ID for entropy sensor scoring (e.g. "cogito:14b", "claude-sonnet-4") */
       readonly modelId?: string;
+      /** Task category for per-category entropy scoring adjustments */
+      readonly taskCategory?: string;
       /** LLM sampling temperature — forwarded to entropy sensor for weight adjustment */
       readonly temperature?: number;
       /** Custom environment context key-value pairs injected into system prompt */

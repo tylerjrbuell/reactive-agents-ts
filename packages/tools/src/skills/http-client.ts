@@ -7,9 +7,12 @@ export const httpGetTool: ToolDefinition = {
   name: "http-get",
   description:
     "Fetch content from a specific URL via HTTP GET. " +
-    "Use when you have an exact URL to retrieve (API endpoint, direct link, raw file). " +
-    "JSON responses are automatically parsed into objects; other responses are returned as text. " +
-    "Returns { status, statusText, body } — check status === 200 for success.",
+    "Use when you have an exact URL to retrieve (API endpoint, direct link, web page). " +
+    "HTML pages are automatically stripped to plain text so you can read them directly. " +
+    "JSON responses are parsed into objects. " +
+    "Returns the page text content (status prefix on error). " +
+    "For large results, the text is stored automatically — use recall(key, full: true) to retrieve everything. " +
+    "Tip: use | transform: to extract a specific field, e.g. http-get(url) | transform: result.slice(0, 2000)",
   parameters: [
     {
       name: "url",

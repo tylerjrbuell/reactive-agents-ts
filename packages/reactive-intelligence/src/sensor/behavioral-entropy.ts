@@ -20,12 +20,26 @@ const COMPLETION_MARKERS = [
   "to summarize", "in summary",
 ];
 
+/** Expected tool count range per task category — used to normalize actionDiversity. */
+const EXPECTED_TOOL_RANGE: Record<string, [min: number, max: number]> = {
+  "quick-lookup": [1, 2],
+  "deep-research": [2, 4],
+  "code-write": [2, 4],
+  "code-debug": [2, 5],
+  "data-analysis": [2, 4],
+  "file-operation": [1, 2],
+  "communication": [1, 2],
+  "multi-step": [3, 6],
+  "general": [1, 4],
+};
+
 export function computeBehavioralEntropy(params: {
   steps: readonly StepLike[];
   iteration: number;
   maxIterations?: number;
+  taskCategory?: string;
 }): BehavioralEntropy {
-  const { steps, iteration, maxIterations = 10 } = params;
+  const { steps, iteration, maxIterations = 10, taskCategory } = params;
   const actionSteps = steps.filter((s) => s.type === "action");
 
   // ── Tool success rate ──
@@ -41,13 +55,14 @@ export function computeBehavioralEntropy(params: {
   }
   const toolSuccessRate = totalToolCalls > 0 ? successes / totalToolCalls : 1.0;
 
-  // ── Action diversity: min(1, unique_tools / iteration) ──
+  // ── Action diversity: normalized against expected tool count per task category ──
   const toolNames = new Set(actionSteps.map((s) => {
     const tc = s.metadata?.toolCall as { name: string } | undefined;
     return tc?.name ?? (s.metadata?.toolUsed as string) ?? "unknown";
   }));
+  const [minExpected, maxExpected] = EXPECTED_TOOL_RANGE[taskCategory ?? "general"] ?? EXPECTED_TOOL_RANGE["general"]!;
   const actionDiversity = iteration > 0
-    ? Math.min(1, toolNames.size / iteration)
+    ? Math.min(1, toolNames.size / Math.max(minExpected, Math.min(maxExpected, iteration)))
     : 0;
 
   // ── Loop detection: identical consecutive actions ──

@@ -188,7 +188,7 @@ describe("Reactive Intelligence Pipeline Integration", () => {
         expect(result.calibrationUpdated).toBe(true);
         expect(result.banditUpdated).toBe(true);
         expect(result.skillSynthesized).toBe(true);
-        expect(result.taskCategory).toBe("code-generation");
+        expect(result.taskCategory).toBe("code-write");
       });
       await Effect.runPromise(program.pipe(Effect.provide(layer)));
     });
@@ -217,7 +217,7 @@ describe("Reactive Intelligence Pipeline Integration", () => {
         expect(result.calibrationUpdated).toBe(true);
         expect(result.banditUpdated).toBe(true);
         expect(result.skillSynthesized).toBe(false);
-        expect(result.taskCategory).toBe("research");
+        expect(result.taskCategory).toBe("quick-lookup");
       });
       await Effect.runPromise(program.pipe(Effect.provide(layer)));
     });
@@ -243,12 +243,12 @@ describe("Reactive Intelligence Pipeline Integration", () => {
         const engine = yield* LearningEngineService;
         const result = yield* engine.onRunCompleted(data);
 
-        // Task has "send" + "summarize" = multi-tool
-        expect(result.taskCategory).toBe("multi-tool");
+        // Task has "send" + "summarize" = multi-step
+        expect(result.taskCategory).toBe("multi-step");
         expect(result.banditUpdated).toBe(true);
 
         // Verify bandit store was actually persisted
-        const contextBucket = `gpt-4o:multi-tool`;
+        const contextBucket = `gpt-4o:multi-step`;
         const arm = banditStore.load(contextBucket, "plan-execute-reflect");
         expect(arm).not.toBeNull();
         expect(arm!.pulls).toBe(1);

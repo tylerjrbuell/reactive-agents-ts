@@ -81,10 +81,11 @@ export function buildBriefResponse(input: BriefInput): string {
 
 function formatCompact(input: BriefInput): string {
   const { availableTools, indexedDocuments, availableSkills, memoryBootstrap, recallKeys, tokens, tokenBudget, entropy, iterationCount, success } = input;
-  const used = Math.round((tokens / tokenBudget) * 100);
-  const bar = "█".repeat(Math.round(used / 10)) + "░".repeat(10 - Math.round(used / 10));
+  const used = tokenBudget > 0 ? Math.min(100, Math.round((tokens / tokenBudget) * 100)) : 0;
+  const filled = Math.max(0, Math.min(10, Math.round(used / 10)));
+  const bar = "█".repeat(filled) + "░".repeat(10 - filled);
   const pressure = used >= 90 ? "critical" : used >= 75 ? "high" : used >= 50 ? "moderate" : "low";
-  const remaining = tokenBudget - tokens;
+  const remaining = Math.max(0, tokenBudget - tokens);
   const lines: string[] = [
     `tools: ${availableTools.length} available [${[...new Set(availableTools.map(t => t.name.split("-")[0]))].join(", ")}]`,
     indexedDocuments.length > 0

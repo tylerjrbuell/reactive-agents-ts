@@ -6,9 +6,15 @@ import { ToolExecutionError } from "../errors.js";
 export const codeExecuteTool: ToolDefinition = {
   name: "code-execute",
   description:
-    "Execute JavaScript code in an isolated subprocess and return the result. " +
-    "Best for: math calculations, string transformations, sorting, parsing, and data processing. " +
-    "The code runs in a separate process with no access to the agent's memory or state. " +
+    "Execute JavaScript code in an isolated Bun subprocess and return the result. " +
+    "Best for: math, string transforms, JSON parsing, sorting, regex extraction, data processing. " +
+    "IMPORTANT: The code runs in a separate process with NO access to stored results, tool outputs, " +
+    "or agent state — variables like _tool_result_N do NOT exist in the code environment. " +
+    "To process stored data, first retrieve it with recall(key, full: true), then inline the text in code. " +
+    "ENVIRONMENT LIMITS: No DOMParser, no fetch, no require() for npm packages, no browser APIs. " +
+    "Available: Bun globals, built-in Node.js modules (Buffer, URL, crypto), String/Array/JSON methods. " +
+    "For HTML text already retrieved: use regex or string methods — NOT DOMParser. " +
+    "Example: const text = htmlString.replace(/<[^>]+>/g, ' ').replace(/\\s+/g, ' ').trim(); " +
     "Use console.log() to produce output. The last expression is NOT auto-returned. " +
     "Returns { executed: true, result, output, exitCode } on success.",
   parameters: [
@@ -56,6 +62,16 @@ export const codeExecuteHandler = (
     try: async () => {
       const rawCode = args.code as string;
       const timeoutMs = 30_000;
+
+      // Guard: model passed a stored-result key as the code to execute.
+      if (/^_tool_result_\d+$/.test(rawCode?.trim?.())) {
+        return {
+          executed: false,
+          error:
+            `"${rawCode}" is a storage key, not code. ` +
+            `Use recall("${rawCode}") first, then write code that processes the returned text.`,
+        };
+      }
 
       // Wrap code to auto-capture the last expression's return value via eval().
       // eval() returns the value of the last expression in the code string.

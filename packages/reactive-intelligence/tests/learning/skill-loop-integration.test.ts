@@ -244,8 +244,8 @@ describe("LearningEngine skill extraction + persistence", () => {
     // Verify store was called
     expect(stored).toHaveLength(1);
     const entry = stored[0] as any;
-    expect(entry.name).toBe("code-generation:claude-3.5");
-    expect(entry.tags).toContain("code-generation");
+    expect(entry.name).toBe("code-write:claude-3.5");
+    expect(entry.tags).toContain("code-write");
     expect(entry.tags).toContain("claude-3.5");
   });
 

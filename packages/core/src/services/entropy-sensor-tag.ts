@@ -83,6 +83,8 @@ export class EntropySensorService extends Context.Tag("EntropySensorService")<
       priorThought?: string;
       logprobs?: readonly TokenLogprobLike[];
       kernelState: KernelStateLike;
+      /** Task category for per-category scoring adjustments. */
+      taskCategory?: string;
     }) => Effect.Effect<EntropyScoreLike, never>;
 
     readonly scoreContext: (params: {

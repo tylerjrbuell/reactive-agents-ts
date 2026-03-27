@@ -58,13 +58,13 @@ describe("LearningEngineService", () => {
     const banditStore = new BanditStore(":memory:");
 
     const result = await runWithService(calibrationStore, banditStore, baseData);
-    expect(result.taskCategory).toBe("code-generation");
+    expect(result.taskCategory).toBe("code-write");
 
     const result2 = await runWithService(calibrationStore, banditStore, {
       ...baseData,
       taskDescription: "search for the latest AI research papers",
     });
-    expect(result2.taskCategory).toBe("research");
+    expect(result2.taskCategory).toBe("deep-research");
   });
 
   test("onRunCompleted detects skill synthesis opportunity for high-signal runs", async () => {

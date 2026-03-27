@@ -107,6 +107,7 @@ export const EntropySensorServiceLive = (
             const {
               thought, strategy, iteration, maxIterations,
               modelId, temperature, priorThought, logprobs, kernelState,
+              taskCategory,
             } = params;
 
             const model = lookupModel(modelId, config.models);
@@ -155,6 +156,7 @@ export const EntropySensorServiceLive = (
               steps: kernelState.steps as any[],
               iteration,
               maxIterations,
+              taskCategory,
             });
 
             // 5. Trajectory from prior scores
@@ -178,6 +180,7 @@ export const EntropySensorServiceLive = (
               modelTier: model.tier,
               temperature,
               trajectory,
+              taskCategory,
             });
 
             // Store in per-task trajectory

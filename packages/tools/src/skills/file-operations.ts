@@ -140,6 +140,14 @@ export const fileWriteHandler = (
       const content = args.content as string;
       const encoding = (args.encoding as BufferEncoding) ?? "utf-8";
 
+      // Guard: model passed a stored-result key instead of the actual content.
+      if (/^_tool_result_\d+$/.test(content?.trim?.())) {
+        throw new Error(
+          `"${content}" is a storage key, not a value. ` +
+          `Use recall("${content}") first, then pass the returned text as the content argument.`,
+        );
+      }
+
       const resolved = path.resolve(filePath);
       const allowedBase = process.cwd();
       if (!resolved.startsWith(allowedBase)) {

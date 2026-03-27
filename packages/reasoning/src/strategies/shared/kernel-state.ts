@@ -202,6 +202,8 @@ export interface KernelRunOptions {
   readonly modelId?: string;
   /** LLM temperature for entropy-based intelligence routing */
   readonly temperature?: number;
+  /** Task category for per-category entropy scoring adjustments */
+  readonly taskCategory?: string;
   /** When true, exit the kernel loop as soon as all scoped tools have been called successfully.
    *  Used by plan-execute composite steps to avoid looping after all tool hints are satisfied. */
   readonly exitOnAllToolsCalled?: boolean;
@@ -216,12 +218,13 @@ export interface KernelRunOptions {
  */
 export function initialKernelState(opts: KernelRunOptions): KernelState {
   // Build entropy meta only when at least one entropy field is provided
-  const hasEntropy = opts.taskDescription !== undefined || opts.modelId !== undefined || opts.temperature !== undefined;
+  const hasEntropy = opts.taskDescription !== undefined || opts.modelId !== undefined || opts.temperature !== undefined || opts.taskCategory !== undefined;
   const entropyMeta = hasEntropy
     ? {
         ...(opts.taskDescription !== undefined ? { taskDescription: opts.taskDescription } : {}),
         ...(opts.modelId !== undefined ? { modelId: opts.modelId } : {}),
         ...(opts.temperature !== undefined ? { temperature: opts.temperature } : {}),
+        ...(opts.taskCategory !== undefined ? { taskCategory: opts.taskCategory } : {}),
       }
     : undefined;
 

@@ -26,6 +26,15 @@ export function computeStructuralEntropy(
     if (hasThought && (hasAction || hasFinalAnswer)) formatCompliance = 1.0;
     else if (hasThought || hasAction) formatCompliance = 0.7;
     else formatCompliance = 0.3;
+
+    // Detect cogito-style: substantial prose followed by ACTION: (no Thought: prefix)
+    // The reasoning text IS the thought — it just lacks the keyword.
+    if (!hasThought && hasAction) {
+      const actionIdx = thought.search(/\baction:/i);
+      if (actionIdx > 40) { // 40+ chars of prose before action = valid thought content
+        formatCompliance = 0.95;
+      }
+    }
   } else if (strategy === "plan-execute") {
     const hasStep = /step\s*\d/i.test(thought);
     formatCompliance = hasStep ? 0.9 : 0.4;

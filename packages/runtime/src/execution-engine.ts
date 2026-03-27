@@ -411,9 +411,10 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     };
 
                     const score = yield* sensor.score({
-                      thought: event.thought, taskDescription: "", strategy: event.strategy,
+                      thought: event.thought, taskDescription: extractTaskText(task.input), strategy: event.strategy,
                       iteration: event.step, maxIterations: config.maxIterations ?? 10,
-                      modelId: "unknown", temperature: 0, priorThought, kernelState,
+                      modelId: String(config.defaultModel ?? "unknown"), temperature: 0, priorThought, kernelState,
+                      taskCategory: classifyTaskCategoryFn(extractTaskText(task.input)),
                     });
 
                     scoredPairs.add(dedupKey);
@@ -464,6 +465,9 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   provider: config.provider,
                   metadata: {},
                 };
+
+                // Classify task category once — used for entropy scoring and telemetry
+                const taskCategory = classifyTaskCategoryFn(extractTaskText(task.input));
 
                 // Register context as running
                 yield* Ref.update(runningContexts, (m) =>
@@ -927,6 +931,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       maxRequiredToolRetries?: number;
                       strategySwitching?: { enabled: boolean; maxSwitches?: number; fallbackStrategy?: string };
                       modelId?: string;
+                      taskCategory?: string;
                       temperature?: number;
                       environmentContext?: Readonly<Record<string, string>>;
                       metaTools?: {
@@ -1112,6 +1117,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         maxRequiredToolRetries: config.requiredTools?.maxRetries,
                         strategySwitching: config.strategySwitching,
                         modelId: String(config.defaultModel ?? ""),
+                        taskCategory,
                         temperature: config.contextProfile?.temperature as number | undefined,
                         environmentContext: config.environmentContext as Record<string, string> | undefined,
                         metaTools: (config as any).metaTools,

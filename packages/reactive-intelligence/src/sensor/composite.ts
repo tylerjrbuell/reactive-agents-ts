@@ -18,6 +18,19 @@ const WEIGHTS_WITHOUT_LOGPROBS = {
   contextPressure: 0.10,
 };
 
+// Per-category weight overrides (without logprobs — the common case for local models).
+// These tune which entropy sources matter most for each task shape.
+const CATEGORY_WEIGHTS: Record<string, { structural: number; semantic: number; behavioral: number; contextPressure: number }> = {
+  "quick-lookup":   { structural: 0.30, semantic: 0.20, behavioral: 0.35, contextPressure: 0.15 },
+  "deep-research":  { structural: 0.35, semantic: 0.30, behavioral: 0.20, contextPressure: 0.15 },
+  "code-write":     { structural: 0.30, semantic: 0.35, behavioral: 0.20, contextPressure: 0.15 },
+  "code-debug":     { structural: 0.30, semantic: 0.35, behavioral: 0.25, contextPressure: 0.10 },
+  "data-analysis":  { structural: 0.35, semantic: 0.25, behavioral: 0.25, contextPressure: 0.15 },
+  "file-operation": { structural: 0.30, semantic: 0.15, behavioral: 0.40, contextPressure: 0.15 },
+  "communication":  { structural: 0.25, semantic: 0.20, behavioral: 0.40, contextPressure: 0.15 },
+  "multi-step":     { structural: 0.30, semantic: 0.20, behavioral: 0.35, contextPressure: 0.15 },
+};
+
 type CompositeInput = {
   token: number | null;
   structural: number;
@@ -30,13 +43,14 @@ type CompositeInput = {
   trajectory?: EntropyTrajectory;
   modelTier?: "frontier" | "local" | "unknown";
   temperature?: number;
+  taskCategory?: string;
 };
 
 export function computeCompositeEntropy(input: CompositeInput): EntropyScore {
   const {
     token, structural, semantic, behavioral, contextPressure,
     logprobsAvailable, iteration, maxIterations,
-    trajectory, modelTier = "unknown", temperature,
+    trajectory, modelTier = "unknown", temperature, taskCategory,
   } = input;
 
   // Short-run bypass: ≤2 iterations doesn't have enough data points for meaningful
@@ -64,7 +78,13 @@ export function computeCompositeEntropy(input: CompositeInput): EntropyScore {
     };
   }
 
-  const weights = logprobsAvailable ? { ...WEIGHTS_WITH_LOGPROBS } : { ...WEIGHTS_WITHOUT_LOGPROBS };
+  // Start from per-category overrides when available, otherwise use defaults
+  const categoryOverride = taskCategory ? CATEGORY_WEIGHTS[taskCategory] : undefined;
+  const weights = logprobsAvailable
+    ? { ...WEIGHTS_WITH_LOGPROBS }
+    : categoryOverride
+      ? { token: 0, ...categoryOverride }
+      : { ...WEIGHTS_WITHOUT_LOGPROBS };
 
   // Temperature 0 discount for token entropy
   if (logprobsAvailable && temperature === 0) {
