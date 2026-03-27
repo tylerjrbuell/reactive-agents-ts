@@ -282,6 +282,9 @@ function handleThinking(
         ? `${harnessContent}\n\n${input.systemPrompt ?? ""}`
         : input.systemPrompt;
 
+    // Native FC path skips ACTION: format instructions — the LLM uses tool_use blocks instead
+    const useNativeFC = !!(input as ReActKernelInput).useNativeFunctionCalling && !!(input as ReActKernelInput).toolCallResolver;
+
     // ── Split context: static in system prompt, dynamic in user message ─────
     // Static content (tool schemas, RULES, task) is sent once in the system prompt
     // to avoid repeating ~500-700 tokens of identical content every iteration.
@@ -291,6 +294,7 @@ function handleThinking(
       availableToolSchemas: augmentedToolSchemas,
       requiredTools: input.requiredTools,
       environmentContext: input.environmentContext,
+      useNativeFunctionCalling: useNativeFC,
     });
     const baseSystemPrompt = buildSystemPrompt(input.task, effectiveSystemPrompt, profile.tier);
     const systemPromptText = `${baseSystemPrompt}\n\n${staticContext}`;
@@ -326,14 +330,12 @@ function handleThinking(
       profile,
       memories: (state.meta.memories as MemoryItem[] | undefined),
       priorContext: input.priorContext,
+      useNativeFunctionCalling: useNativeFC,
     });
 
     if (autoForwardSection) {
       thoughtPrompt += `\n\n${autoForwardSection}`;
     }
-
-    // Native FC path skips the ACTION: instruction — the LLM uses tool_use blocks instead
-    const useNativeFC = !!(input as ReActKernelInput).useNativeFunctionCalling && !!(input as ReActKernelInput).toolCallResolver;
 
     if (!useNativeFC) {
       thoughtPrompt += "\n\nThink step-by-step, then either take ONE action or give your FINAL ANSWER:";
