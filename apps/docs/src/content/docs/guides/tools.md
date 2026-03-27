@@ -57,12 +57,12 @@ You can also register tools programmatically after build using `ToolService.regi
 
 ### With Reasoning (ReAct)
 
-When reasoning is enabled, the agent uses a Think → Act → Observe loop. The LLM can request tool calls by emitting `ACTION: tool_name({"param": "value"})` in its response. The framework:
+When reasoning is enabled, the agent uses a Think → Act → Observe loop. Tools are passed to the LLM via the provider's native function calling API parameter. The model returns structured `tool_use` blocks — no text parsing. The framework:
 
-1. Parses the action from the LLM output
+1. Receives the structured `tool_use` block from the LLM response
 2. Validates input against the tool's schema
 3. Executes the tool in a sandbox
-4. Returns the real result as an Observation
+4. Returns the real result as a `tool_result` message
 5. The LLM continues reasoning with the new information
 
 ### Without Reasoning (Direct LLM Loop)
@@ -102,46 +102,26 @@ Meta-tools provide agent self-awareness and guarded completion. They require liv
 
 The agent can call `context-status` any time it feels lost or needs to check progress. Once visible, `task-complete` signals definitive completion and ends the loop cleanly — avoiding false early-exits.
 
-```
-ACTION: context-status({})
-Observation: {"iteration":3,"maxIterations":10,"remaining":7,"toolsUsed":["file-read"],"toolsPending":["file-write"],"storedKeys":[],"tokensUsed":850}
-
-ACTION: task-complete({"summary": "Read config.json and updated the output path. File written successfully."})
-Observation: {"completed":true,"summary":"Read config.json and updated the output path. File written successfully."}
-```
+Both tools are invoked via native function calling — the model returns a `tool_use` block with the tool name and arguments, and the framework executes it, returning the result as a `tool_result` message.
 
 ## Parallel and Chain Tool Execution
 
-Agents can issue multiple tool calls from a single thought step.
+Agents can issue multiple tool calls from a single thought step via native function calling.
 
 ### Parallel
 
-List multiple `ACTION:` lines in one thought and the framework executes them concurrently:
+The model can return multiple `tool_use` blocks in a single response. The framework executes them concurrently:
 
-```
-ACTION: web-search({"query": "TypeScript 5.7 release notes"})
-ACTION: http-get({"url": "https://api.example.com/status"})
-Observation (1/2): {"results": [...]}
-Observation (2/2): {"status": "ok"}
-```
-
-- Results are numbered and combined into a single observation block.
-- Capped at 3 simultaneous actions to prevent runaway fan-out.
-- Side-effect actions (`create_*`, `delete_*`, `send_*`, `push_*`, etc.) are automatically forced to single mode.
+- Results are numbered and returned as separate `tool_result` messages.
+- Capped at 3 simultaneous tool calls to prevent runaway fan-out.
+- Side-effect tools (`create_*`, `delete_*`, `send_*`, `push_*`, etc.) are automatically forced to single mode.
 
 ### Chain
 
-Follow an `ACTION:` with `THEN:` and use `$RESULT` as a placeholder. The output of the first call is substituted into the second:
+For sequential tool calls where the output of one feeds into the next, the model issues a single `tool_use` block per turn. The framework returns the `tool_result`, and the model issues the next call in a subsequent turn with the prior result available in its context.
 
-```
-ACTION: file-read({"path": "package.json"})
-THEN: file-write({"path": "output.txt", "content": "Version: $RESULT"})
-Observation (chain): {"written": true, "path": "output.txt"}
-```
-
-- Execution is sequential; fails fast if any step errors.
-- `$RESULT` is replaced with the raw observation text from the prior step.
-- Capped at 3 chained steps.
+- Execution is sequential; the model sees each result before deciding the next call.
+- Capped at 3 chained steps per tool execution phase.
 
 ### Web Search Configuration
 
@@ -494,7 +474,7 @@ When a tool result exceeds the configured `budget` (default: 800 chars), the fra
 
 1. Detects the result type (JSON array, JSON object, or plain text)
 2. Generates a **structured preview** — compact, accurate, fits within budget
-3. Stores the **full result** in an in-memory scratchpad under `_tool_result_N`
+3. Stores the **full result** in working memory under `_tool_result_N`
 4. Injects the preview + storage key into context
 
 **Example — JSON array (github/list_commits, 30 items, 31K chars):**
@@ -506,23 +486,25 @@ Preview (first 3):
   [0] sha=e255a5d  msg="chore: update bun.lock"        date=2026-02-27
   [1] sha=59bae87  msg="feat(examples): unified runner" date=2026-02-27
   [2] sha=efc816e  msg="fix(examples): maxIterations"   date=2026-02-27
-  ...27 more — use scratchpad-read("_tool_result_1") or | transform: to access full data
+  ...27 more — use recall("_tool_result_1") or | transform: to access full data
 ```
 
 ### Accessing Full Results
 
-The agent can retrieve the stored result using the built-in `scratchpad-read` tool:
+The agent can retrieve the stored result using the `recall` meta-tool (via native function calling):
 
-```
-ACTION: scratchpad-read("_tool_result_1")
+```typescript
+// The model calls recall via its tool_use block:
+// { name: "recall", input: { key: "_tool_result_1" } }
 ```
 
 ### Pipe Transforms
 
-For agents that anticipate the response shape, a code-transform pipe lets them extract exactly what they need — **before the result enters context**:
+For agents that anticipate the response shape, a code-transform pipe lets them extract exactly what they need — **before the result enters context**. The pipe syntax is appended to the tool call args as a `_transform` field:
 
-```
-ACTION: github/list_commits({"owner":"tylerjrbuell","repo":"reactive-agents-ts"}) | transform: result.slice(0,5).map(c => ({sha: c.sha.slice(0,7), msg: c.commit.message.split('\n')[0]}))
+```typescript
+// The model calls github/list_commits with a transform expression
+// { name: "github/list_commits", input: { owner: "...", repo: "...", _transform: "result.slice(0,5).map(c => ({sha: c.sha.slice(0,7), msg: c.commit.message.split('\\n')[0]}))" } }
 ```
 
 The expression is evaluated in-process with `result` bound to the parsed tool output. Only the transform output enters context. On error, the framework falls back to the standard preview and includes the error message.

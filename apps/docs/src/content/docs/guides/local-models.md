@@ -34,16 +34,16 @@ const agent = await ReactiveAgents.create()
 | Task | Recommended Model | Tier | Why |
 |------|-------------------|------|-----|
 | Simple Q&A (no tools) | `qwen3:4b` | local | Fast, low memory, good for chat |
-| Tool-calling tasks | `qwen3:14b` | local | Best tool-call accuracy at this size |
-| Research with web search | `qwen3:14b` or `llama3.1:8b` | local | Reliable ReAct format adherence |
+| Tool-calling tasks | `qwen3:14b` | local | Best native FC accuracy at this size |
+| Research with web search | `qwen3:14b` or `llama3.1:8b` | local | Reliable native function calling |
 | Code generation | `qwen2.5-coder:14b` | local | Specialized for code tasks |
 | Complex reasoning | `cogito:14b` | local | Extended thinking mode support |
 | Multi-step planning | `qwen3:14b` with Plan-Execute | local | Structured plan generation |
 
 ### Model Comparison
 
-| Model | Params | Context | Tool Calling | ReAct Format | Speed | Memory |
-|-------|--------|---------|:------------:|:------------:|-------|--------|
+| Model | Params | Context | Native FC | Instruction Following | Speed | Memory |
+|-------|--------|---------|:---------:|:--------------------:|-------|--------|
 | `qwen3:4b` | 4B | 32K | Fair | Fair | Fast | ~3GB |
 | `llama3.1:8b` | 8B | 128K | Good | Good | Medium | ~5GB |
 | `qwen3:8b` | 8B | 32K | Good | Good | Medium | ~5GB |
@@ -53,8 +53,8 @@ const agent = await ReactiveAgents.create()
 | `llama3.1:70b` | 70B | 128K | Excellent | Excellent | Slow | ~40GB |
 
 **Legend:**
-- **Tool Calling**: How reliably the model generates valid tool call JSON
-- **ReAct Format**: How well the model follows Think/Action/Observation format
+- **Native FC**: How reliably the model generates valid native function call (tool_use) responses
+- **Instruction Following**: How well the model follows system prompt instructions and multi-step tasks
 - **Speed**: Tokens per second on typical hardware (relative)
 - **Memory**: Approximate VRAM/RAM required
 
@@ -106,9 +106,9 @@ Not all reasoning strategies work well on small models:
 **Symptom:** Agent repeats the same action or thought.
 **Fix:** The circuit breaker will catch this, but you can reduce iterations with `.withMaxIterations(5)`. Consider simpler prompts.
 
-### 3. ReAct format not followed
-**Symptom:** Agent outputs free-form text instead of `Thought:` / `ACTION:` format.
-**Fix:** Switch to a model with better instruction following (`qwen3:14b` > `llama3.1:8b` for this). The `local` context profile uses more explicit format instructions.
+### 3. Native function calling not supported or unreliable
+**Symptom:** Agent fails to invoke tools or returns malformed tool call responses.
+**Fix:** Switch to a model with better native FC support (`qwen3:14b` > `llama3.1:8b` for this). The framework uses native function calling (tool_use blocks) for all providers — the model must support the Ollama tool calling API. The `local` context profile uses simplified tool schemas to reduce parsing burden on smaller models.
 
 ### 4. Out of memory
 **Symptom:** Ollama crashes or becomes unresponsive.

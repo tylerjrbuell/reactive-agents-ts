@@ -220,15 +220,16 @@ For lower-level testing, the dedicated testing package provides mock services an
 import { createMockLLM, createMockLLMFromMap } from "@reactive-agents/testing";
 
 // Rule-based — match patterns, return responses
+// Responses are plain text completions; tool calls use withTestScenario() for structured toolCall turns
 const llm = createMockLLM([
-  { match: /search/, response: "ACTION: web-search\nACTION INPUT: {\"query\": \"test\"}" },
-  { match: /.*/, response: "FINAL ANSWER: done" },
+  { match: /search/, response: "I will search for that information." },
+  { match: /.*/, response: "Here is the answer." },
 ]);
 
 // Simple key-value mapping
 const llm = createMockLLMFromMap({
-  "hello": "FINAL ANSWER: world",
-  "default": "FINAL ANSWER: fallback",
+  "hello": "Hello! How can I help?",
+  "default": "Here is my response.",
 });
 
 // Check what was called
