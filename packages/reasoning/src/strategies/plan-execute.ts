@@ -156,6 +156,42 @@ export const executePlanExecute = (
       planMode,
     });
 
+    // ── Required tools validation ─────────────────────────────────────────────
+    // After plan generation, verify every required tool appears in at least one
+    // tool_call step. Inject synthetic steps for any missing tools so they are
+    // guaranteed to be called during execution.
+    const requiredTools = input.requiredTools ?? [];
+    if (requiredTools.length > 0) {
+      const plannedTools = new Set(
+        plan.steps
+          .filter((s) => s.type === "tool_call" && s.toolName)
+          .map((s) => s.toolName!),
+      );
+
+      const missingTools = requiredTools.filter((t) => !plannedTools.has(t));
+
+      if (missingTools.length > 0) {
+        const lastStep = plan.steps[plan.steps.length - 1];
+        for (const tool of missingTools) {
+          const stepNum = plan.steps.length + 1;
+          const stepId = `s${stepNum}`;
+          plan.steps.push({
+            id: stepId,
+            seq: stepNum,
+            title: `Execute ${tool}`,
+            instruction: `Call ${tool} to complete the task. Use the results from previous steps as needed.`,
+            type: "tool_call",
+            toolName: tool,
+            toolArgs: {},
+            dependsOn: lastStep ? [lastStep.id] : [],
+            status: "pending",
+            retries: 0,
+            tokensUsed: 0,
+          });
+        }
+      }
+    }
+
     // Persist plan to store (if available)
     if (Option.isSome(planStoreOpt)) {
       yield* planStoreOpt.value
