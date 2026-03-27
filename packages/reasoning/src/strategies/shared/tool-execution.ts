@@ -30,6 +30,13 @@ import type { MaybeService, ToolServiceInstance } from "./kernel-state.js";
 export interface ToolExecutionResult {
   readonly content: string;
   readonly observationResult: ObservationResult;
+  /**
+   * When the tool result was compressed and auto-stored in the scratchpad,
+   * this is the key under which the full result was saved (e.g. "_tool_result_1").
+   * The kernel uses this to auto-forward the full content to the next iteration
+   * so the model doesn't need to call recall to access the data.
+   */
+  readonly storedKey?: string;
 }
 
 // ── Configuration for executeToolCall ────────────────────────────────────────
@@ -382,6 +389,7 @@ export function executeToolCall(
           return {
             content,
             observationResult: makeObservationResult(toolRequest.tool, r.success !== false, content),
+            storedKey: compressed.stored?.key,
           } satisfies ToolExecutionResult;
         }),
         Effect.catchAll((e) => {
