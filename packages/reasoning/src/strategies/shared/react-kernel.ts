@@ -1382,14 +1382,23 @@ function handleActing(
         const missing = reqTools.filter((t) => !newToolsUsed.has(t));
 
         if (missing.length > 0) {
-          const toolsSummary = usedSoFar.length > 0
-            ? `Tools called so far: ${usedSoFar.join(", ")}.`
-            : "";
+          // Structured decision framework: tell the model exactly what to do next.
+          // This mirrors what the text-based ReAct path did with "take ONE action
+          // or give your FINAL ANSWER" — a clear binary choice the model can follow.
           const progressMsg: KernelMessage = {
             role: "user",
-            content: `${toolsSummary} Remaining required tools: ${missing.join(", ")}. Call ${missing[0]} next.`,
+            content: `You must still call: ${missing.join(", ")}. Call ${missing[0]} now with the appropriate arguments.`,
           };
           return [...prior, assistantMsg, ...toolResultMessages, progressMsg];
+        }
+
+        // All required tools called — tell model to finish
+        if (reqTools.length > 0) {
+          const finishMsg: KernelMessage = {
+            role: "user",
+            content: "All required tools have been called. Synthesize the results and provide your final answer.",
+          };
+          return [...prior, assistantMsg, ...toolResultMessages, finishMsg];
         }
 
         return [...prior, assistantMsg, ...toolResultMessages];

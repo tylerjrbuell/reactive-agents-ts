@@ -31,8 +31,25 @@ export interface ProviderAdapter {
   systemPromptPatch?(basePrompt: string, tier: string): string | undefined;
 }
 
-/** Default adapter — no intervention. Used by frontier models. */
-export const defaultAdapter: ProviderAdapter = {};
+/** Default adapter — provides structured decision framework for all models.
+ *  Even frontier models benefit from clear "do X or give final answer" instructions
+ *  after tool execution — it's the same ReAct pattern that worked in text-based mode. */
+export const defaultAdapter: ProviderAdapter = {
+  continuationHint({ missingTools, toolsUsed, iteration, maxIterations }) {
+    if (missingTools.length === 0) {
+      // All required tools called — tell model to synthesize and finish
+      return toolsUsed.size > 0
+        ? "You have completed all required tool calls. Now synthesize the results and provide your FINAL ANSWER."
+        : undefined;
+    }
+    // Required tools still missing — structured binary choice
+    const toolList = missingTools.join(", ");
+    const urgency = iteration >= maxIterations - 3
+      ? ` You have ${maxIterations - iteration} iterations left.`
+      : "";
+    return `You must still call: ${toolList}. Call the next required tool now.${urgency}`;
+  },
+};
 
 /** Adapter for local/small models that need explicit step-by-step guidance */
 export const localModelAdapter: ProviderAdapter = {

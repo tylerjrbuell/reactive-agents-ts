@@ -125,8 +125,16 @@ describe("ProviderAdapter", () => {
   });
 
   describe("defaultAdapter", () => {
-    it("has no continuationHint", () => {
-      expect(defaultAdapter.continuationHint).toBeUndefined();
+    it("provides structured decision framework via continuationHint", () => {
+      const hint = defaultAdapter.continuationHint!({
+        toolsUsed: new Set(["web-search"]),
+        requiredTools: ["web-search", "file-write"],
+        missingTools: ["file-write"],
+        iteration: 3,
+        maxIterations: 10,
+      });
+      expect(hint).toContain("file-write");
+      expect(hint).toContain("Call");
     });
 
     it("has no systemPromptPatch", () => {
