@@ -2250,12 +2250,42 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
 
                   const memoryFlushEffect = guardedPhase(ctx, "memory-flush", (c) =>
                     Effect.gen(function* () {
-                      yield* Effect.serviceOption(
+                      // ── Guard: skip entirely when no memory services are configured ──
+                      const memoryServiceOpt = yield* Effect.serviceOption(
                         Context.GenericTag<{
                           snapshot: (s: unknown) => Effect.Effect<void>;
                           flush?: (agentId: string) => Effect.Effect<void>;
                         }>("MemoryService"),
-                      ).pipe(
+                      );
+                      const memoryConsolidatorOpt = yield* Effect.serviceOption(
+                        Context.GenericTag<{
+                          decayUnused: (agentId: string, decayFactor: number) => Effect.Effect<number>;
+                        }>("MemoryConsolidator"),
+                      );
+                      const memoryExtractorOpt = yield* Effect.serviceOption(
+                        Context.GenericTag<{
+                          extractFromConversation: (
+                            agentId: string,
+                            messages: readonly { role: string; content: string }[],
+                          ) => Effect.Effect<unknown[], unknown>;
+                        }>("MemoryExtractor"),
+                      );
+                      if (
+                        memoryServiceOpt._tag === "None" &&
+                        memoryConsolidatorOpt._tag === "None" &&
+                        memoryExtractorOpt._tag === "None"
+                      ) {
+                        return { ...c, agentState: "flushing" as const };
+                      }
+
+                      // ── Guard: skip on trivial runs (≤1 iteration, no tool calls) ──
+                      const hadToolCalls = c.toolResults.length > 0;
+                      if (c.iteration <= 1 && !hadToolCalls) {
+                        return { ...c, agentState: "flushing" as const };
+                      }
+
+                      // ── MemoryService: snapshot + flush ──
+                      yield* Effect.succeed(memoryServiceOpt).pipe(
                         Effect.flatMap((opt) =>
                           opt._tag === "Some"
                             ? Effect.gen(function* () {
@@ -2284,14 +2314,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       );
 
                       // Lightweight consolidation: decay unused memory entries
-                      yield* Effect.serviceOption(
-                        Context.GenericTag<{
-                          decayUnused: (
-                            agentId: string,
-                            decayFactor: number,
-                          ) => Effect.Effect<number>;
-                        }>("MemoryConsolidator"),
-                      ).pipe(
+                      yield* Effect.succeed(memoryConsolidatorOpt).pipe(
                         Effect.flatMap((opt) =>
                           opt._tag === "Some"
                             ? opt.value
@@ -2306,18 +2329,10 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       // Only extract when there's meaningful content:
                       // tool calls happened OR response is substantial (>200 chars)
                       const lastResponse = String(c.metadata.lastResponse ?? "");
-                      const hadToolCalls = c.toolResults.length > 0;
                       const substantialResponse = lastResponse.length > 200;
 
                       if (hadToolCalls || substantialResponse) {
-                        yield* Effect.serviceOption(
-                          Context.GenericTag<{
-                            extractFromConversation: (
-                              agentId: string,
-                              messages: readonly { role: string; content: string }[],
-                            ) => Effect.Effect<unknown[], unknown>;
-                          }>("MemoryExtractor"),
-                        ).pipe(
+                        yield* Effect.succeed(memoryExtractorOpt).pipe(
                           Effect.flatMap((extractorOpt) => {
                             if (extractorOpt._tag !== "Some") return Effect.void;
                             const extractor = extractorOpt.value;
