@@ -14,7 +14,9 @@
  *   7. Terminal hooks: onDone / onError
  */
 import { Effect } from "effect";
-import type { LLMService } from "@reactive-agents/llm-provider";
+import { LLMService, DEFAULT_CAPABILITIES } from "@reactive-agents/llm-provider";
+import type { ProviderCapabilities } from "@reactive-agents/llm-provider";
+import { createToolCallResolver } from "@reactive-agents/tools";
 import { CONTEXT_PROFILES } from "../../context/context-profile.js";
 import type { ContextProfile } from "../../context/context-profile.js";
 import { resolveStrategyServices } from "./service-utils.js";
@@ -73,9 +75,28 @@ export function runKernel(
     const services = yield* resolveStrategyServices;
     const { toolService, eventBus } = services;
 
+    // ── 1b. Auto-detect native function calling ────────────────────────────
+    // When the provider supports tool calling, inject the FC flag and resolver
+    // into the kernel input so handleThinking/handleActing use native FC.
+    let effectiveInput = input;
+    if (!(input as any).useNativeFunctionCalling && !(input as any).toolCallResolver) {
+      const llmOpt = yield* Effect.serviceOption(LLMService);
+      if (llmOpt._tag === "Some" && typeof llmOpt.value.capabilities === "function") {
+        const caps = yield* llmOpt.value.capabilities().pipe(
+          Effect.catchAll(() => Effect.succeed(DEFAULT_CAPABILITIES)),
+        );
+        if (caps.supportsToolCalling) {
+          try {
+            const resolver = createToolCallResolver(caps);
+            effectiveInput = { ...input, useNativeFunctionCalling: true, toolCallResolver: resolver } as KernelInput;
+          } catch { /* fall back to text-based */ }
+        }
+      }
+    }
+
     // ── 2. Build profile ─────────────────────────────────────────────────────
-    const profile: ContextProfile = input.contextProfile
-      ? ({ ...CONTEXT_PROFILES["mid"], ...input.contextProfile } as ContextProfile)
+    const profile: ContextProfile = effectiveInput.contextProfile
+      ? ({ ...CONTEXT_PROFILES["mid"], ...effectiveInput.contextProfile } as ContextProfile)
       : CONTEXT_PROFILES["mid"];
 
     // ── 3. Build hooks ───────────────────────────────────────────────────────
@@ -83,9 +104,9 @@ export function runKernel(
 
     // ── 4. Build KernelContext ────────────────────────────────────────────────
     const context: KernelContext = {
-      input,
+      input: effectiveInput,
       profile,
-      compression: input.resultCompression ?? {
+      compression: effectiveInput.resultCompression ?? {
         budget: profile.toolResultMaxChars ?? 800,
         previewItems: 5,
         autoStore: true,
@@ -113,8 +134,8 @@ export function runKernel(
     const maxConsecutiveThoughts = loopCfg?.maxConsecutiveThoughts ?? 3;
 
     // Required tools guard — tracks redirect attempts to prevent infinite loops
-    const requiredTools = input.requiredTools ?? [];
-    const maxRequiredToolRetries = input.maxRequiredToolRetries ?? 2;
+    const requiredTools = effectiveInput.requiredTools ?? [];
+    const maxRequiredToolRetries = effectiveInput.maxRequiredToolRetries ?? 2;
     let requiredToolRedirects = 0;
 
     // Strategy switching state
@@ -123,7 +144,7 @@ export function runKernel(
     // currentOptions tracks the active strategy name for the current pass
     let currentOptions = options;
     // currentInput tracks per-pass input (may carry handoff priorContext)
-    let currentInput: KernelInput = input;
+    let currentInput: KernelInput = effectiveInput;
     // currentContext tracks the KernelContext (rebuilt when input changes on switch)
     let currentContext: KernelContext = context;
 
@@ -486,8 +507,8 @@ export function runKernel(
           profile,
           compression: context.compression,
           scratchpad: mutableScratchpad,
-          agentId: input.agentId,
-          sessionId: input.sessionId,
+          agentId: effectiveInput.agentId,
+          sessionId: effectiveInput.sessionId,
         });
 
         // Fire action + observation hooks
