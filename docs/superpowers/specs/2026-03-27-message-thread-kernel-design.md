@@ -329,36 +329,88 @@ The compaction.ts functions (`formatStepFull`, `formatStepSummary`, `groupToolSe
 
 ---
 
-## Phase 3: Provider Unification
+## Phase 3: Provider Unification + Prompt Caching
 
-Every provider's message conversion maps `KernelMessage[]` to their native format. This is the only place provider-specific logic lives.
+Every provider's message conversion maps `KernelMessage[]` to their native format. This is the only place provider-specific logic lives. Each provider also activates prompt caching per their SDK's mechanism.
 
-### Anthropic
-```
-KernelMessage.role = "assistant" + toolCalls → { role: "assistant", content: [text_block, tool_use_block] }
-KernelMessage.role = "tool_result" → { role: "user", content: [{ type: "tool_result", tool_use_id, content }] }
-```
+### Anthropic — Explicit `cache_control` markers
 
-### OpenAI
-```
-KernelMessage.role = "assistant" + toolCalls → { role: "assistant", tool_calls: [...] }
-KernelMessage.role = "tool_result" → { role: "tool", tool_call_id, content }
-```
+```typescript
+// System prompt: mark with cache_control for explicit caching
+// Minimum 1024 tokens for caching eligibility (5 min TTL, 90% read discount)
+{
+  system: [{ type: "text", text: systemPromptText, cache_control: { type: "ephemeral" } }],
+  messages: toAnthropicMessages(state.messages),
+  tools: toolDefs.map(t => ({ ...t, cache_control: { type: "ephemeral" } })),  // cache tool schemas too
+}
 
-### Gemini
-```
-KernelMessage.role = "assistant" + toolCalls → { role: "model", parts: [text, functionCall(name, args)] }
-KernelMessage.role = "tool_result" → { role: "user", parts: [functionResponse(toolName, response)] }
-                                                                        ↑ uses toolName field (Phase 1.2 fix)
-```
+// Message mapping:
+// KernelMessage assistant + toolCalls → { role: "assistant", content: [text_block, tool_use_block] }
+// KernelMessage tool_result → { role: "user", content: [{ type: "tool_result", tool_use_id, content }] }
 
-### Ollama
-```
-KernelMessage.role = "assistant" + toolCalls → { role: "assistant", tool_calls: [{ function: { name, arguments } }] }
-KernelMessage.role = "tool_result" → { role: "tool", content }
+// Read cache metrics from response:
+// response.usage.cache_creation_input_tokens
+// response.usage.cache_read_input_tokens
 ```
 
-Each provider's conversion function is ~20 lines. One canonical format in, four native formats out.
+### OpenAI — Automatic caching (no API changes required)
+
+```typescript
+// gpt-4o, gpt-4o-mini, o1, o1-mini: automatically cache prompts >1024 tokens
+// No extra parameters needed — caching fires automatically
+// 50% discount on cached tokens for eligible models
+{
+  model,
+  messages: toOpenAIMessages(state.messages),  // standard format
+  tools: toolDefs,
+}
+
+// Read cache metrics from response:
+// response.usage.prompt_tokens_details?.cached_tokens
+
+// Message mapping:
+// KernelMessage assistant + toolCalls → { role: "assistant", tool_calls: [{ id, type, function: { name, arguments } }] }
+// KernelMessage tool_result → { role: "tool", tool_call_id, content }
+```
+
+### Gemini — Automatic caching on eligible models
+
+```typescript
+// Gemini Flash 1.5+: automatic context caching (no extra params needed)
+// Gemini Pro: explicit Caching API for large stable contexts (not needed for system prompt <2048 tokens)
+{
+  model,
+  contents: toGeminiContents(state.messages),
+  config: { systemInstruction: systemPromptText, tools: toGeminiTools(toolDefs) }
+}
+
+// Message mapping (with Phase 1.2 toolName fix):
+// KernelMessage assistant + toolCalls → { role: "model", parts: [text_part, functionCall(name, args)] }
+// KernelMessage tool_result → { role: "user", parts: [functionResponse(toolName, response)] }
+//                                                              ↑ uses toolName field — fixes Gemini bug
+```
+
+### Ollama — No caching (local models, free)
+
+```typescript
+// Ollama: context window managed via num_ctx option
+// No caching needed — local inference, no token cost
+{
+  model,
+  messages: toOllamaMessages(state.messages),
+  tools: toOllamaTools(toolDefs),
+}
+
+// Message mapping:
+// KernelMessage assistant + toolCalls → { role: "assistant", tool_calls: [{ function: { name, arguments } }] }
+// KernelMessage tool_result → { role: "tool", content }
+```
+
+### LiteLLM — Provider-passthrough
+
+LiteLLM proxies to the underlying provider. No caching headers added at our layer — the upstream provider handles it. Use OpenAI format (LiteLLM translates).
+
+Each provider's conversion function is ~20-30 lines. One canonical `KernelMessage[]` in, five native formats out. Caching is the only provider-specific behavior beyond message format.
 
 ---
 
