@@ -16,7 +16,7 @@ import { Effect, Stream, FiberRef, Ref } from "effect";
 import type { ReasoningStep } from "../../types/index.js";
 import { ExecutionError } from "../../errors/errors.js";
 import { LLMService } from "@reactive-agents/llm-provider";
-import type { StreamEvent } from "@reactive-agents/llm-provider";
+import type { StreamEvent, LLMMessage } from "@reactive-agents/llm-provider";
 import { StreamingTextCallback } from "@reactive-agents/core";
 import type { ContextProfile } from "../../context/context-profile.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
@@ -68,6 +68,7 @@ import {
   type KernelState,
   type KernelContext,
   type KernelInput,
+  type KernelMessage,
   type ThoughtKernel,
 } from "./kernel-state.js";
 
@@ -373,8 +374,62 @@ function handleThinking(
 
     // Request logprobs when entropy sensor may be active (modelId present in meta)
     const wantLogprobs = (state.meta.entropy as any)?.modelId !== undefined;
+
+    // ── Build conversation messages ──────────────────────────────────────────
+    // FC path: replay the multi-turn conversation history so the model sees
+    // prior tool calls and results as structured messages (not a text blob).
+    // Text path: single user message with the packed context blob.
+    let conversationMessages: LLMMessage[];
+    if (useNativeFC) {
+      const history = (state.conversationHistory ?? []) as readonly KernelMessage[];
+      if (history.length === 0) {
+        // First iteration — just the initial user task (context in system prompt)
+        conversationMessages = [{ role: "user", content: thoughtPrompt }];
+      } else {
+        // Subsequent iterations — replay the full history, then append the
+        // current dynamic context as a new user turn so the model sees the
+        // latest iteration/loop status.
+        const historyMessages: LLMMessage[] = history.map((msg): LLMMessage => {
+          if (msg.role === "assistant") {
+            if (msg.toolCalls && msg.toolCalls.length > 0) {
+              // Assistant message with tool calls — use content blocks
+              return {
+                role: "assistant",
+                content: [
+                  ...(msg.content ? [{ type: "text" as const, text: msg.content }] : []),
+                  ...msg.toolCalls.map((tc) => ({
+                    type: "tool_use" as const,
+                    id: tc.id,
+                    name: tc.name,
+                    input: tc.arguments,
+                  })),
+                ],
+              };
+            }
+            return { role: "assistant", content: msg.content };
+          } else if (msg.role === "tool_result") {
+            // Tool result — provider handles role:"tool" → Anthropic tool_result / Ollama tool
+            return {
+              role: "tool" as const,
+              toolCallId: msg.toolCallId,
+              content: msg.content,
+            };
+          } else {
+            // user role
+            return { role: "user", content: msg.content };
+          }
+        });
+        conversationMessages = [
+          ...historyMessages,
+          { role: "user", content: thoughtPrompt },
+        ];
+      }
+    } else {
+      conversationMessages = [{ role: "user", content: thoughtPrompt }];
+    }
+
     const llmStreamEffect = llm.stream({
-      messages: [{ role: "user", content: thoughtPrompt }],
+      messages: conversationMessages,
       systemPrompt: systemPromptText,
       maxTokens: outputMaxTokens,
       temperature: temp,
@@ -1215,11 +1270,65 @@ function handleActing(
         mergedScratchpad.set(k, v);
       }
 
+      // ── Build conversation history entry for this round of tool calls ──────
+      // Append: assistant message (thought + tool_use blocks) + tool_result messages.
+      // This gives the next iteration a proper multi-turn conversation history
+      // instead of a packed text blob when useNativeFC is active.
+      const newConversationHistory: readonly KernelMessage[] = (() => {
+        const prior = (state.conversationHistory ?? []) as readonly KernelMessage[];
+
+        // Collect action/observation pairs added by this acting phase.
+        // Only include steps added after the current state.steps (i.e. this turn).
+        const stepsBefore = state.steps.length;
+        const newStepsThisTurn = allSteps.slice(stepsBefore);
+
+        // Build the assistant message with tool call specs
+        const assistantThought = (state.meta.lastThought as string) ?? "";
+        const toolCallsForHistory = pendingNativeCalls
+          .filter((tc) => {
+            // Only include tool calls that were actually attempted (their action step exists)
+            return newStepsThisTurn.some(
+              (s) => s.type === "action" && (s.metadata?.toolCall as { id?: string } | undefined)?.id === tc.id,
+            );
+          })
+          .map((tc) => ({ id: tc.id, name: tc.name, arguments: tc.arguments }));
+
+        // Build tool result messages — one per tool call that has an observation
+        const toolResultMessages: KernelMessage[] = pendingNativeCalls.flatMap((tc) => {
+          // Find the observation step that follows the action step for this tool call
+          const actionIdx = newStepsThisTurn.findIndex(
+            (s) => s.type === "action" && (s.metadata?.toolCall as { id?: string } | undefined)?.id === tc.id,
+          );
+          if (actionIdx < 0) return [];
+          const obsStep = newStepsThisTurn[actionIdx + 1];
+          if (!obsStep || obsStep.type !== "observation") return [];
+          return [{
+            role: "tool_result" as const,
+            toolCallId: tc.id,
+            content: obsStep.content,
+          }];
+        });
+
+        if (toolCallsForHistory.length === 0) {
+          // No tool calls actually appended (all skipped/blocked) — don't add to history
+          return prior;
+        }
+
+        const assistantMsg: KernelMessage = {
+          role: "assistant",
+          content: assistantThought,
+          toolCalls: toolCallsForHistory,
+        };
+
+        return [...prior, assistantMsg, ...toolResultMessages];
+      })();
+
       // All native tool calls executed — transition back to thinking
       return transitionState(state, {
         steps: allSteps,
         toolsUsed: newToolsUsed,
         scratchpad: mergedScratchpad,
+        conversationHistory: newConversationHistory,
         status: "thinking",
         iteration: state.iteration + 1,
         meta: {

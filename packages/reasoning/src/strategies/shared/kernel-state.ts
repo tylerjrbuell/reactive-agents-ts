@@ -57,6 +57,15 @@ export interface KernelState {
 
   /** Accumulated controller decisions this run, formatted as "decision: reason" strings. */
   readonly controllerDecisionLog: readonly string[];
+
+  /**
+   * Native FC conversation history — provider-agnostic multi-turn message log.
+   * Only populated and used in the FC path (useNativeFC === true).
+   * Each iteration appends an assistant message (with toolCalls) + tool_result messages.
+   * On the next thinking phase, this history is replayed as a proper multi-turn conversation
+   * instead of a single packed user message blob.
+   */
+  readonly conversationHistory?: readonly KernelMessage[];
 }
 
 // ── KernelInput — Frozen execution input ─────────────────────────────────────
@@ -248,6 +257,7 @@ export function initialKernelState(opts: KernelRunOptions): KernelState {
       ...(entropyMeta ? { entropy: entropyMeta } : {}),
     },
     controllerDecisionLog: [],
+    conversationHistory: [],
   };
 }
 
