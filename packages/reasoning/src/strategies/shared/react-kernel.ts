@@ -593,8 +593,45 @@ function handleThinking(
         if (textToolRequests.length > 0) {
           // Skip FC — let the text-based ACTION parsing path below handle it
         } else {
-          // Genuine final answer. Strip legacy FINAL ANSWER: prefix if present
-          // so output is clean regardless of whether the model used the prefix.
+          // Genuine final answer (no tool calls). Check completion gaps first —
+          // if required tools haven't been called, redirect instead of accepting.
+          const requiredTools = input.requiredTools ?? [];
+          const allRequiredMet = requiredTools.every((t) => state.toolsUsed.has(t));
+          if (!allRequiredMet && state.iteration < (state.meta.maxIterations as number ?? 10) - 1) {
+            const missing = requiredTools.filter((t) => !state.toolsUsed.has(t));
+            const redirectMsg = `Not done yet — you still need to call: ${missing.join(", ")}. Do not give a final answer until all required tools have been used.`;
+            const redirectStep = makeStep("observation", redirectMsg, {
+              observationResult: makeObservationResult("system", false, redirectMsg),
+            });
+            return transitionState(state, {
+              steps: [...newSteps, redirectStep],
+              tokens: newTokens,
+              cost: newCost,
+              iteration: state.iteration + 1,
+            });
+          }
+
+          // Also check dynamic completion gaps
+          const gaps = detectCompletionGaps(
+            input.task,
+            state.toolsUsed,
+            (input as ReActKernelInput).allToolSchemas ?? input.availableToolSchemas ?? [],
+            newSteps,
+          );
+          if (gaps.length > 0 && state.iteration < (state.meta.maxIterations as number ?? 10) - 1) {
+            const gapMsg = `Not done yet — missing steps:\n${gaps.map((g) => `• ${g}`).join("\n")}`;
+            const gapStep = makeStep("observation", gapMsg, {
+              observationResult: makeObservationResult("system", false, gapMsg),
+            });
+            return transitionState(state, {
+              steps: [...newSteps, gapStep],
+              tokens: newTokens,
+              cost: newCost,
+              iteration: state.iteration + 1,
+            });
+          }
+
+          // All checks pass — assemble final output
           const hasFA = hasFinalAnswer(resolverResult.content);
           const cleanContent = hasFA
             ? extractFinalAnswer(resolverResult.content)

@@ -332,7 +332,7 @@ export const GeminiProviderLive = Layer.effect(
                       const tcId = `gemini-tc-${Date.now()}-${accumulatedToolCalls.length}`;
                       accumulatedToolCalls.push({ id: tcId, name: fc.name, input: fc.args });
                       emit.single({ type: "tool_use_start" as const, id: tcId, name: fc.name });
-                      emit.single({ type: "tool_use_delta" as const, id: tcId, delta: JSON.stringify(fc.args) });
+                      emit.single({ type: "tool_use_delta", input: JSON.stringify(fc.args) } as StreamEvent);
                     }
                   }
                   if (chunk.usageMetadata) {
