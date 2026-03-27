@@ -175,31 +175,24 @@ export interface ReActKernelResult {
  * mid models get standard guidance; local models get minimal prompt.
  */
 function buildSystemPrompt(
-  task: string,
+  _task: string,
   systemPrompt?: string,
   tier?: "local" | "mid" | "large" | "frontier",
 ): string {
-  if (systemPrompt) {
-    return `${systemPrompt}\n\nTask: ${task}`;
-  }
+  // Use custom system prompt if provided (no task appended — task is in messages[0])
+  if (systemPrompt) return systemPrompt;
+
+  // Lean tier-adaptive instruction — NO task, NO tool schemas, NO format rules
+  // The task is seeded as state.messages[0] by the execution engine.
   const t = tier ?? "mid";
   if (t === "local") {
-    return `You are a helpful assistant that uses tools when needed.\n\nTask: ${task}`;
+    return "You are a helpful assistant. Use the provided tools when needed to complete tasks.";
   }
   if (t === "frontier" || t === "large") {
-    return `You are an expert reasoning agent. You think step by step, use tools precisely, and produce accurate, well-structured answers.
-
-When solving a task:
-- Break complex problems into sub-steps before acting.
-- Verify assumptions before drawing conclusions.
-- Use the most specific tool available rather than general-purpose ones.
-- If a tool result is unexpected, reason about why before retrying.
-- Prefer concise, direct answers once you have sufficient evidence.
-
-Task: ${task}`;
+    return "You are an expert reasoning agent. Think step by step. Use tools precisely and efficiently. Prefer concise, direct answers once you have sufficient information.";
   }
   // mid tier
-  return `You are a reasoning agent. Think step by step and use available tools when needed.\n\nTask: ${task}`;
+  return "You are a reasoning agent. Think step by step and use available tools when needed.";
 }
 
 // ── reactKernel: ThoughtKernel ───────────────────────────────────────────────

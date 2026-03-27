@@ -1099,6 +1099,10 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         metadata: { cost: number; tokensUsed: number; stepsCount: number; strategyFallback?: boolean; confidence?: number };
                       };
                       let result: ReasoningResult;
+                      // Build initial messages — seed the conversation thread with the task
+                      const initialMessages: readonly { readonly role: "user" | "assistant"; readonly content: string }[] = [
+                        { role: "user", content: extractTaskText(task.input) },
+                      ];
                       const strategyEffect = reasoningOpt.value.execute({
                         taskDescription: extractTaskText(task.input),
                         taskType: task.type,
@@ -1121,6 +1125,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         temperature: config.contextProfile?.temperature as number | undefined,
                         environmentContext: config.environmentContext as Record<string, string> | undefined,
                         metaTools: (config as any).metaTools,
+                        initialMessages,
                       });
                       const strategyOutcome = yield* Effect.exit(strategyEffect);
                       if (strategyOutcome._tag === "Success") {

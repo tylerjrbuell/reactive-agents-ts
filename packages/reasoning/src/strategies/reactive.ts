@@ -13,7 +13,7 @@ import type { ToolSchema } from "./shared/tool-utils.js";
 import { runKernel } from "./shared/kernel-runner.js";
 import { reactKernel } from "./shared/react-kernel.js";
 import { buildStrategyResult } from "./shared/step-utils.js";
-import type { KernelInput } from "./shared/kernel-state.js";
+import type { KernelInput, KernelMessage } from "./shared/kernel-state.js";
 
 // ── Re-exports for backwards compatibility ────────────────────────────────────
 
@@ -78,6 +78,8 @@ interface ReactiveInput {
     };
     readonly harnessContent?: string;
   };
+  /** Initial messages to seed the kernel conversation thread (e.g. task as user message). */
+  readonly initialMessages?: readonly KernelMessage[];
 }
 
 // ── executeReactive ───────────────────────────────────────────────────────────
@@ -138,6 +140,7 @@ export const executeReactive = (
       maxRequiredToolRetries: input.maxRequiredToolRetries,
       environmentContext: input.environmentContext,
       metaTools: input.metaTools,
+      initialMessages: input.initialMessages,
     };
 
     const state = yield* runKernel(reactKernel, kernelInput, {
