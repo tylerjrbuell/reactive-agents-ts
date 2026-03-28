@@ -10,8 +10,8 @@
 - [Composable Strategy Architecture](project_composable_strategies.md) — V1.1: strategies as composable capabilities, not exclusive modes
 - [Composable Provider Adapters](project_composable_adapters.md) — V1.1: expand adapter from 2 to 7 lifecycle guidance hooks, entropy-driven
 
-## Current Status (Mar 27, 2026)
-- **v0.8.x → pre-V1.0** — 22 packages + 2 apps, ~2,995 tests across 345 files
+## Current Status (Mar 28, 2026)
+- **v0.8.x → pre-V1.0** — 22 packages + 2 apps, 2994 tests across 345 files (2964 pass, 30 skip, 0 fail)
 - **186 commits unreleased since v0.8.0** — major architectural transformation complete but needs consolidation
 - **5 GitHub stars** — underground, opportunity to clean architecture before adoption scales
 - **Decision: NO rush release** — spend time on deep analysis and architectural cleanup first
@@ -59,6 +59,15 @@
   - File-write injection extracts path from task description via regex
 - Prompt caching: Anthropic cache_control, OpenAI automatic, Gemini automatic
 
+### V1.0 FC Unification (Mar 28, 2026) — COMPLETE
+Text-based ACTION: parsing path fully removed. Single FC-only execution path throughout.
+- Tasks 1-6 completed across react-kernel.ts, tool-utils.ts, context-engine.ts, kernel-runner.ts, testing.ts, all interfaces
+- Dead code also removed from tool-execution.ts: `executeToolGroup` + `ToolRequestGroup` import
+- LOC reduction: react-kernel 1961→1430, tool-utils 714→537, context-engine 690→462, kernel-runner 564→515
+- Build: zero TS errors across all 22 packages
+- Tests: 2994 total, 2964 pass, 30 skip, 0 fail
+- All tests exercise real native FC path — no legacy text-based test mocks remain
+
 ## Architecture (Post Mar 27 Refactor) — CRITICAL PATTERNS
 
 ### Two Independent Records
@@ -71,7 +80,7 @@ state.steps[]     ← What systems observe (entropy, metrics, debrief) — uncha
 1. Execution engine seeds `state.messages` with `[{role:"user", content: task}]`
 2. `handleThinking` reads messages → `applyMessageWindow` → provider LLM call
 3. `handleActing` appends: `assistant(thought+toolCalls)` + `tool_result(s)` + progress/completion message
-4. Text-based path still exists behind `useNativeFunctionCalling` flag (test mocks)
+4. Text-based path fully removed — single FC-only path throughout (V1.0 FC Unification complete)
 
 ### Provider Adapter Hook Points
 - V1.0: `continuationHint` (post-tool guidance), `systemPromptPatch` (system prompt)
@@ -91,12 +100,12 @@ state.steps[]     ← What systems observe (entropy, metrics, debrief) — uncha
 - **Compressed results in FC**: Strip `[STORED: key]` header → `[toolName result — compressed preview]`
 - See [build-patterns.md](build-patterns.md) for tsconfig, package.json, Effect-TS patterns
 
-## Architecture Debt (FOR DEEP ANALYSIS NEXT SESSION)
-1. `react-kernel.ts` grew to ~1,961 LOC — needs splitting (FC + text + guards = 3 separate concerns)
-2. Two code paths coexist (FC + text-based) — text only needed for test mocks
-3. `buildDynamicContext`/`buildStaticContext` still in codebase behind flag (~560 LOC dead)
-4. `context-engine.ts` has ~690 LOC mostly dead text-assembly functions
-5. Test mocks use `supportsToolCalling: false` — testing legacy path not real FC path
+## Architecture Debt
+1. `react-kernel.ts` at ~1,430 LOC — may benefit from further splitting (FC-only path, guards, observations)
+2. ✅ Two code paths coexist (FC + text-based) — text only needed for test mocks — RESOLVED (V1.0 FC Unification)
+3. ✅ `buildDynamicContext`/`buildStaticContext` still in codebase behind flag (~560 LOC dead) — RESOLVED
+4. ✅ `context-engine.ts` has ~690 LOC mostly dead text-assembly functions — RESOLVED (now 462 LOC)
+5. ✅ Test mocks use `supportsToolCalling: false` — testing legacy path not real FC path — RESOLVED
 6. Provider adapter only has 2/7 planned hooks — composable system half-built
 7. cogito:14b still inconsistent on reactive strategy (8B works fine, 14B doesn't)
 8. Strategy routing disabled — no clean solution for local model multi-step tasks

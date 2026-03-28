@@ -21,7 +21,6 @@ import { categorizeToolName, deriveResultKind } from "../../types/observation.js
 import type { ContextProfile } from "../../context/context-profile.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import { evaluateTransform, compressToolResult, nextToolResultKey } from "./tool-utils.js";
-import type { ToolRequestGroup } from "./tool-utils.js";
 import type { MaybeService, ToolServiceInstance } from "./kernel-state.js";
 import type { ToolCallSpec } from "@reactive-agents/tools";
 
@@ -488,7 +487,10 @@ export function executeNativeToolCall(
           // Local models get confused by _tool_result_N keys (try to file-read them)
           content = content
             .replace(/^\[STORED: [^\]]+\]\n?/m, `[${toolCall.name} result — compressed preview]\n`)
-            .replace(/— use recall\("[^"]+"\)[^\n]*/g, "— call recall if you need the full uncompressed data")
+            .replace(/— use recall\("[^"]+",? ?(?:full: ?true)?\)[^\n]*/g, "")
+            .replace(/— call recall[^\n]*/g, "")
+            .replace(/✓ Preview covers[^\n]*/g, "")
+            .replace(/\n{3,}/g, "\n\n")
             .trim();
         }
 
@@ -501,62 +503,4 @@ export function executeNativeToolCall(
         }),
       ),
     );
-}
-
-// ── Group execution ───────────────────────────────────────────────────────────
-
-/**
- * Execute a ToolRequestGroup — dispatches to single, parallel, or chain mode.
- *
- * - single: identical to executeToolCall (backwards compatible)
- * - parallel: Effect.all with concurrency: "unbounded" — all tools run concurrently
- * - chain: sequential with $RESULT substitution; fails fast on first error
- */
-export function executeToolGroup(
-  toolService: MaybeService<ToolServiceInstance>,
-  group: ToolRequestGroup,
-  config: ToolExecutionConfig,
-): Effect.Effect<{ results: ToolExecutionResult[]; combinedObservation: string }, never> {
-  if (group.requests.length === 0) {
-    return Effect.succeed({ results: [], combinedObservation: "No tool request." });
-  }
-
-  if (group.mode === "single") {
-    const req = group.requests[0]!;
-    return executeToolCall(toolService, req, config).pipe(
-      Effect.map((r) => ({ results: [r], combinedObservation: r.content })),
-    );
-  }
-
-  if (group.mode === "parallel") {
-    return Effect.all(
-      group.requests.map((req) => executeToolCall(toolService, req, config)),
-      { concurrency: "unbounded" },
-    ).pipe(
-      Effect.map((results) => ({
-        results,
-        combinedObservation: results
-          .map((r, i) => `[${i + 1}] ${group.requests[i]!.tool}: ${r.content}`)
-          .join("\n"),
-      })),
-    );
-  }
-
-  // Chain mode: sequential with $RESULT forwarding
-  return Effect.gen(function* () {
-    const results: ToolExecutionResult[] = [];
-    let lastResult = "";
-    for (const req of group.requests) {
-      const resolvedInput = req.input.replace(/\$RESULT/g, lastResult);
-      const resolved = { ...req, input: resolvedInput };
-      const result = yield* executeToolCall(toolService, resolved, config);
-      results.push(result);
-      if (!result.observationResult.success) break; // chain fails fast
-      lastResult = result.content;
-    }
-    const combinedObservation = results
-      .map((r, i) => `[chain ${i + 1}] ${group.requests[i]!.tool}: ${r.content}`)
-      .join("\n");
-    return { results, combinedObservation };
-  });
 }
