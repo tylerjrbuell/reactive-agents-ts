@@ -308,9 +308,6 @@ function handleThinking(
         ? `${harnessContent}\n\n${input.systemPrompt ?? ""}`
         : input.systemPrompt;
 
-    // Native FC path skips ACTION: format instructions — the LLM uses tool_use blocks instead
-    const useNativeFC = !!(input as ReActKernelInput).useNativeFunctionCalling && !!(input as ReActKernelInput).toolCallResolver;
-
     // ── Split context: static in system prompt, dynamic in user message ─────
     // Static content (tool schemas, RULES, task) is sent once in the system prompt
     // to avoid repeating ~500-700 tokens of identical content every iteration.
@@ -320,7 +317,6 @@ function handleThinking(
       availableToolSchemas: augmentedToolSchemas,
       requiredTools: input.requiredTools,
       environmentContext: input.environmentContext,
-      useNativeFunctionCalling: useNativeFC,
     });
     const baseSystemPrompt = buildSystemPrompt(input.task, effectiveSystemPrompt, profile.tier);
     const adapter = selectAdapter({ supportsToolCalling: true }, profile.tier);
@@ -358,18 +354,13 @@ function handleThinking(
       profile,
       memories: (state.meta.memories as MemoryItem[] | undefined),
       priorContext: input.priorContext,
-      useNativeFunctionCalling: useNativeFC,
     });
 
     if (autoForwardSection) {
       thoughtPrompt += `\n\n${autoForwardSection}`;
     }
 
-    if (!useNativeFC) {
-      thoughtPrompt += "\n\nThink step-by-step, then either take ONE action or give your FINAL ANSWER:";
-    } else {
-      thoughtPrompt += "\n\nThink step-by-step. Use available tools when needed, or provide your final answer directly.";
-    }
+    thoughtPrompt += "\n\nThink step-by-step. Use available tools when needed, or provide your final answer directly.";
 
     // ── STREAM (with text delta emission) ──────────────────────────────────
     // Token budget adapts to model tier: frontier models get more room for
@@ -383,57 +374,46 @@ function handleThinking(
     const outputMaxTokens = tierMaxTokens[profile.tier] ?? 1500;
 
     // ── Native FC: convert tool schemas to LLM ToolDefinition format ──────
-    const llmTools = useNativeFC
-      ? augmentedToolSchemas.map((ts) => ({
-          name: ts.name,
-          description: ts.description,
-          inputSchema: {
-            type: "object" as const,
-            properties: Object.fromEntries(
-              (ts.parameters ?? []).map((p) => [
-                p.name,
-                { type: p.type ?? "string", description: p.description },
-              ]),
-            ),
-            required: (ts.parameters ?? [])
-              .filter((p) => p.required)
-              .map((p) => p.name),
-          } as Record<string, unknown>,
-        }))
-      : undefined;
+    const llmTools = augmentedToolSchemas.map((ts) => ({
+      name: ts.name,
+      description: ts.description,
+      inputSchema: {
+        type: "object" as const,
+        properties: Object.fromEntries(
+          (ts.parameters ?? []).map((p) => [
+            p.name,
+            { type: p.type ?? "string", description: p.description },
+          ]),
+        ),
+        required: (ts.parameters ?? [])
+          .filter((p) => p.required)
+          .map((p) => p.name),
+      } as Record<string, unknown>,
+    }));
 
     // Request logprobs when entropy sensor may be active (modelId present in meta)
     const wantLogprobs = (state.meta.entropy as any)?.modelId !== undefined;
 
     // ── Build conversation messages ──────────────────────────────────────────
-    // FC path: send state.messages directly through sliding window compaction,
+    // Send state.messages directly through sliding window compaction,
     // then convert to provider-native format. The messages array IS the
     // conversation thread — no need to rebuild from steps.
-    // Text path: single user message with the packed context blob.
-    let conversationMessages: LLMMessage[];
-    if (useNativeFC) {
-      // Apply sliding window compaction for token budget management
-      let compactedMessages = applyMessageWindow(state.messages, profile as import("../../context/context-profile.js").ContextProfile);
+    let compactedMessages = applyMessageWindow(state.messages, profile as import("../../context/context-profile.js").ContextProfile);
 
-      // Defensive: if messages are empty (shouldn't happen after Task 9 seeding), fall back
-      if (compactedMessages.length === 0) {
-        compactedMessages = [{ role: "user" as const, content: thoughtPrompt }];
-      }
-
-      // Convert KernelMessage[] → LLMMessage[] for the provider
-      conversationMessages = (compactedMessages as readonly KernelMessage[]).map(toProviderMessage);
-    } else {
-      conversationMessages = [{ role: "user", content: thoughtPrompt }];
+    // Defensive: if messages are empty (shouldn't happen after Task 9 seeding), fall back
+    if (compactedMessages.length === 0) {
+      compactedMessages = [{ role: "user" as const, content: thoughtPrompt }];
     }
+
+    // Convert KernelMessage[] → LLMMessage[] for the provider
+    const conversationMessages: LLMMessage[] = (compactedMessages as readonly KernelMessage[]).map(toProviderMessage);
 
     const llmStreamEffect = llm.stream({
       messages: conversationMessages,
       systemPrompt: systemPromptText,
       maxTokens: outputMaxTokens,
       temperature: temp,
-      // Text-based path uses stop sequences; native FC lets the model end with tool_use
-      ...(useNativeFC ? {} : { stopSequences: ["\nObservation:", "\nObservation: "] }),
-      ...(llmTools ? { tools: llmTools } : {}),
+      ...(llmTools.length > 0 ? { tools: llmTools } : {}),
       ...(wantLogprobs ? { logprobs: true, topLogprobs: 5 } : {}),
     });
 
@@ -594,12 +574,9 @@ function handleThinking(
     }
 
     // ── NATIVE FUNCTION CALLING BRANCH ─────────────────────────────────────
-    // When native FC is active, the LLM returns structured tool_use blocks
-    // instead of text-based ACTION: directives. We resolve them through the
-    // ToolCallResolver and skip the regex-based parsing entirely.
-    // If the FC resolver sees a text-only response that contains ACTION:
-    // directives, we skip the FC path and let the text-based parser handle it.
-    if (useNativeFC && (input as ReActKernelInput).toolCallResolver) {
+    // The LLM returns structured tool_use blocks instead of text-based ACTION:
+    // directives. We resolve them through the ToolCallResolver.
+    if ((input as ReActKernelInput).toolCallResolver) {
       const resolver = (input as ReActKernelInput).toolCallResolver!;
 
       // Parse accumulated tool call inputs from JSON strings
@@ -642,102 +619,112 @@ function handleThinking(
       }
 
       if (resolverResult._tag === "final_answer") {
-        // FC received a text-only response (no tool_use blocks). Check for
-        // text-based ACTION: directives that the model emitted instead of using
-        // native tool calling — fall through to the text-based parser so
-        // blockedTools checks, tool execution, etc. still apply.
+        // If the text-only response contains ACTION: directives (e.g. test scenarios
+        // or models that emit text tool calls), route to the text-based acting path.
         const textToolRequests = parseAllToolRequests(resolverResult.content);
         if (textToolRequests.length > 0) {
-          // Skip FC — let the text-based ACTION parsing path below handle it
-        } else {
-          // Genuine final answer (no tool calls). Check completion gaps first —
-          // if required tools haven't been called, redirect instead of accepting.
-          const requiredTools = input.requiredTools ?? [];
-          const allRequiredMet = requiredTools.every((t) => state.toolsUsed.has(t));
-          if (!allRequiredMet && state.iteration < (state.meta.maxIterations as number ?? 10) - 1) {
-            const missing = requiredTools.filter((t) => !state.toolsUsed.has(t));
-
-            // Use adapter hint for targeted guidance, fall back to generic redirect
-            const lastActStep = state.steps.filter(s => s.type === "action").pop();
-            const lastTool = (lastActStep?.metadata?.toolCall as { name?: string } | undefined)?.name;
-            const adapterRedirect = adapter.continuationHint?.({
-              toolsUsed: state.toolsUsed,
-              requiredTools: requiredTools as string[],
-              missingTools: missing,
-              iteration: state.iteration,
-              maxIterations: (state.meta.maxIterations as number) ?? 10,
-              lastToolName: lastTool,
-            });
-            const redirectMsg = adapterRedirect
-              ?? `Not done yet — you still need to call: ${missing.join(", ")}. Do not give a final answer until all required tools have been used.`;
-
-            const redirectStep = makeStep("observation", redirectMsg, {
-              observationResult: makeObservationResult("system", false, redirectMsg),
-            });
-
-            // Append redirect to BOTH steps (observability) AND messages (what LLM sees)
-            const redirectMessages = [...(state.messages as readonly KernelMessage[]),
-              { role: "user" as const, content: redirectMsg }];
-
-            return transitionState(state, {
-              steps: [...newSteps, redirectStep],
-              messages: redirectMessages,
-              tokens: newTokens,
-              cost: newCost,
-              iteration: state.iteration + 1,
-            });
-          }
-
-          // Also check dynamic completion gaps
-          const gaps = detectCompletionGaps(
-            input.task,
-            state.toolsUsed,
-            (input as ReActKernelInput).allToolSchemas ?? input.availableToolSchemas ?? [],
-            newSteps,
-          );
-          if (gaps.length > 0 && state.iteration < (state.meta.maxIterations as number ?? 10) - 1) {
-            const gapMsg = `Not done yet — missing steps:\n${gaps.map((g) => `• ${g}`).join("\n")}`;
-            const gapStep = makeStep("observation", gapMsg, {
-              observationResult: makeObservationResult("system", false, gapMsg),
-            });
-            const gapMessages = [...(state.messages as readonly KernelMessage[]),
-              { role: "user" as const, content: gapMsg }];
-            return transitionState(state, {
-              steps: [...newSteps, gapStep],
-              messages: gapMessages,
-              tokens: newTokens,
-              cost: newCost,
-              iteration: state.iteration + 1,
-            });
-          }
-
-          // All checks pass — assemble final output
-          const hasFA = hasFinalAnswer(resolverResult.content);
-          const cleanContent = hasFA
-            ? extractFinalAnswer(resolverResult.content)
-            : resolverResult.content;
-          const terminatedBy = hasFA ? "final_answer" : "end_turn";
-
-          const assembled = assembleOutput({
-            steps: newSteps,
-            finalAnswer: cleanContent,
-            terminatedBy: "llm_end_turn",
-            entropyScores: (state.meta.entropy as any)?.entropyHistory,
-          });
+          const textToolRequest = textToolRequests[0]!;
           return transitionState(state, {
             steps: newSteps,
             tokens: newTokens,
             cost: newCost,
-            status: "done" as const,
-            output: assembled.text,
-            priorThought: thought.trim(),
-            iteration: state.iteration + 1,
+            status: "acting",
             meta: {
               ...state.meta,
-              terminatedBy,
+              pendingToolRequest: textToolRequest,
+              lastThought: thought,
+              lastThinking: thinking,
             },
           });
         }
+
+        // Genuine final answer (no tool calls). Check completion gaps first —
+        // if required tools haven't been called, redirect instead of accepting.
+        const requiredTools = input.requiredTools ?? [];
+        const allRequiredMet = requiredTools.every((t) => state.toolsUsed.has(t));
+        if (!allRequiredMet && state.iteration < (state.meta.maxIterations as number ?? 10) - 1) {
+          const missing = requiredTools.filter((t) => !state.toolsUsed.has(t));
+
+          // Use adapter hint for targeted guidance, fall back to generic redirect
+          const lastActStep = state.steps.filter(s => s.type === "action").pop();
+          const lastTool = (lastActStep?.metadata?.toolCall as { name?: string } | undefined)?.name;
+          const adapterRedirect = adapter.continuationHint?.({
+            toolsUsed: state.toolsUsed,
+            requiredTools: requiredTools as string[],
+            missingTools: missing,
+            iteration: state.iteration,
+            maxIterations: (state.meta.maxIterations as number) ?? 10,
+            lastToolName: lastTool,
+          });
+          const redirectMsg = adapterRedirect
+            ?? `Not done yet — you still need to call: ${missing.join(", ")}. Do not give a final answer until all required tools have been used.`;
+
+          const redirectStep = makeStep("observation", redirectMsg, {
+            observationResult: makeObservationResult("system", false, redirectMsg),
+          });
+
+          // Append redirect to BOTH steps (observability) AND messages (what LLM sees)
+          const redirectMessages = [...(state.messages as readonly KernelMessage[]),
+            { role: "user" as const, content: redirectMsg }];
+
+          return transitionState(state, {
+            steps: [...newSteps, redirectStep],
+            messages: redirectMessages,
+            tokens: newTokens,
+            cost: newCost,
+            iteration: state.iteration + 1,
+          });
+        }
+
+        // Also check dynamic completion gaps
+        const gaps = detectCompletionGaps(
+          input.task,
+          state.toolsUsed,
+          (input as ReActKernelInput).allToolSchemas ?? input.availableToolSchemas ?? [],
+          newSteps,
+        );
+        if (gaps.length > 0 && state.iteration < (state.meta.maxIterations as number ?? 10) - 1) {
+          const gapMsg = `Not done yet — missing steps:\n${gaps.map((g) => `• ${g}`).join("\n")}`;
+          const gapStep = makeStep("observation", gapMsg, {
+            observationResult: makeObservationResult("system", false, gapMsg),
+          });
+          const gapMessages = [...(state.messages as readonly KernelMessage[]),
+            { role: "user" as const, content: gapMsg }];
+          return transitionState(state, {
+            steps: [...newSteps, gapStep],
+            messages: gapMessages,
+            tokens: newTokens,
+            cost: newCost,
+            iteration: state.iteration + 1,
+          });
+        }
+
+        // All checks pass — assemble final output
+        const hasFA = hasFinalAnswer(resolverResult.content);
+        const cleanContent = hasFA
+          ? extractFinalAnswer(resolverResult.content)
+          : resolverResult.content;
+        const terminatedBy = hasFA ? "final_answer" : "end_turn";
+
+        const assembled = assembleOutput({
+          steps: newSteps,
+          finalAnswer: cleanContent,
+          terminatedBy: "llm_end_turn",
+          entropyScores: (state.meta.entropy as any)?.entropyHistory,
+        });
+        return transitionState(state, {
+          steps: newSteps,
+          tokens: newTokens,
+          cost: newCost,
+          status: "done" as const,
+          output: assembled.text,
+          priorThought: thought.trim(),
+          iteration: state.iteration + 1,
+          meta: {
+            ...state.meta,
+            terminatedBy,
+          },
+        });
       } else if (resolverResult._tag === "thinking") {
         // Model returned no tool calls and no substantial content — it's uncertain
         // what to do next. Add a step with any content and inject guidance.
@@ -792,9 +779,9 @@ function handleThinking(
           })];
         }
 
-        // For native FC: append the nudge as a user message in conversation history
+        // Append the nudge as a user message in conversation history
         // so the model sees it in the next iteration's context (not just as a step).
-        const updatedMessages = nudgeMessage && useNativeFC
+        const updatedMessages = nudgeMessage
           ? [...(state.messages as readonly KernelMessage[]), { role: "user" as const, content: nudgeMessage }]
           : state.messages;
 
