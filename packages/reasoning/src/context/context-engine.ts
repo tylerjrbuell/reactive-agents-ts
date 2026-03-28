@@ -67,8 +67,6 @@ export interface StaticContextInput {
   requiredTools?: readonly string[];
   /** Custom environment context key-value pairs (merged with auto-detected defaults) */
   environmentContext?: Readonly<Record<string, string>>;
-  /** When true, omit ACTION: format instructions — the LLM uses native function calling instead */
-  useNativeFunctionCalling?: boolean;
 }
 
 /** Input for the dynamic per-iteration context builder. */
@@ -82,8 +80,6 @@ export interface DynamicContextInput {
   requiredTools?: readonly string[];
   priorContext?: string;
   memories?: MemoryItem[];
-  /** When true, omit ACTION: format instructions — the LLM uses native function calling instead */
-  useNativeFunctionCalling?: boolean;
 }
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -373,7 +369,7 @@ export function buildEnvironmentContext(
 
 export function buildStaticContext(input: StaticContextInput): string {
   const { task, profile, availableToolSchemas, requiredTools } = input;
-  const useFC = input.useNativeFunctionCalling ?? false;
+  const useFC = false; // Native FC is always active; dead branches cleaned up in Task 6
   const sections: string[] = [];
 
   // Environment context (date, time, timezone, platform, custom)
@@ -403,7 +399,7 @@ export function buildDynamicContext(input: DynamicContextInput): string {
     steps, iteration, maxIterations, profile,
     priorContext, memories, availableToolSchemas, requiredTools,
   } = input;
-  const useFC = input.useNativeFunctionCalling ?? false;
+  const useFC = false; // Native FC is always active; dead branches cleaned up in Task 6
 
   const sections: string[] = [];
 

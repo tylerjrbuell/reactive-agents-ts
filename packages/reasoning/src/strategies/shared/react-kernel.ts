@@ -140,9 +140,6 @@ export interface ReActKernelInput {
     };
     harnessContent?: string;
   };
-  /** Feature flag: use native function calling instead of text-based ACTION: parsing.
-   *  Default: determined by provider capabilities at runtime. */
-  useNativeFunctionCalling?: boolean;
   /** Pre-built ToolCallResolver instance — injected by the kernel runner when FC is active */
   toolCallResolver?: import("@reactive-agents/tools").ToolCallResolver;
 }
@@ -1386,8 +1383,6 @@ export const executeReActKernel = (
       requiredTools: input.requiredTools,
       maxRequiredToolRetries: input.maxRequiredToolRetries,
       metaTools: input.metaTools,
-      // Explicit FC overrides are passed through for tests/manual config
-      ...(input.useNativeFunctionCalling != null ? { useNativeFunctionCalling: input.useNativeFunctionCalling } : {}),
       ...(input.toolCallResolver ? { toolCallResolver: input.toolCallResolver } : {}),
     } as KernelInput, {
       maxIterations: input.maxIterations ?? 10,

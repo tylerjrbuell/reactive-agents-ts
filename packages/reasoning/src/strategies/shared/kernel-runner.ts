@@ -67,21 +67,19 @@ export function runKernel(
     const services = yield* resolveStrategyServices;
     const { toolService, eventBus } = services;
 
-    // ── 1b. Auto-detect native function calling ────────────────────────────
-    // When the provider supports tool calling, inject the FC flag and resolver
-    // into the kernel input so handleThinking/handleActing use native FC.
+    // ── Auto-inject ToolCallResolver ─────────────────────────────────────────
+    // When the provider supports native FC, create a resolver and inject it
+    // into the kernel input so handleThinking uses native function calling.
     let effectiveInput = input;
-    if (!(input as any).useNativeFunctionCalling && !(input as any).toolCallResolver) {
+    if (!(input as any).toolCallResolver) {
       const llmOpt = yield* Effect.serviceOption(LLMService);
       if (llmOpt._tag === "Some" && typeof llmOpt.value.capabilities === "function") {
         const caps = yield* llmOpt.value.capabilities().pipe(
           Effect.catchAll(() => Effect.succeed(DEFAULT_CAPABILITIES)),
         );
         if (caps.supportsToolCalling) {
-          try {
-            const resolver = createToolCallResolver(caps);
-            effectiveInput = { ...input, useNativeFunctionCalling: true, toolCallResolver: resolver } as KernelInput;
-          } catch { /* fall back to text-based */ }
+          const resolver = createToolCallResolver(caps);
+          effectiveInput = { ...input, toolCallResolver: resolver } as KernelInput;
         }
       }
     }
