@@ -140,7 +140,8 @@ describe("reactive strategy ReasoningStepCompleted events", () => {
   test("action events contain tool info", async () => {
     const captured: ReasoningStepEvent[] = [];
     const llmLayer = TestLLMServiceLayer([
-      { match: "use a tool", text: 'ACTION: my-tool({"query": "test"})\nFINAL ANSWER: done.' },
+      { match: "use a tool", toolCall: { name: "my-tool", args: { query: "test" } } },
+      { text: "FINAL ANSWER: done." },
     ]);
 
     await Effect.runPromise(

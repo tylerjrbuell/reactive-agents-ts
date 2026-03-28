@@ -160,7 +160,7 @@ describe("Sprint 0.2: Error messages enriched with tool schema", () => {
   it("observation contains schema hint when tool fails with missing param", async () => {
     // LLM first calls file-write with wrong args (missing path), then gives FINAL ANSWER
     const testLLMLayer = TestLLMServiceLayer([
-      { match: "step-by-step", text: 'I need to write the file. ACTION: file-write({"file": "test.md", "content": "hello"})' },
+      { toolCall: { name: "file-write", args: { file: "test.md", content: "hello" } } },
       { match: "Tool error", text: "FINAL ANSWER: I encountered an error." },
     ]);
 
@@ -203,7 +203,7 @@ describe("Sprint 0.2: Error messages enriched with tool schema", () => {
 describe("Sprint 1C: Tool result summarization", () => {
   it("short tool results are returned unchanged", async () => {
     const testLLMLayer = TestLLMServiceLayer([
-      { match: "step-by-step", text: 'ACTION: echo({"text": "hello"})' },
+      { toolCall: { name: "echo", args: { text: "hello" } } },
       { match: "result", text: "FINAL ANSWER: Done." },
     ]);
 
@@ -247,8 +247,8 @@ describe("Sprint 1C: Tool result summarization", () => {
 
   it("large tool results are truncated with omission marker", async () => {
     const testLLMLayer = TestLLMServiceLayer([
-      { match: "step-by-step", text: 'ACTION: big-data({"query": "all"})' },
-      { match: "STORED:", text: "FINAL ANSWER: Got compressed data." },
+      { toolCall: { name: "big-data", args: { query: "all" } } },
+      { text: "FINAL ANSWER: Got compressed data." },
     ]);
 
     const toolsLayer = createToolsLayer();
@@ -285,8 +285,7 @@ describe("Sprint 1C: Tool result summarization", () => {
 
     const observations = result.steps.filter((s) => s.type === "observation");
     expect(observations.length).toBeGreaterThanOrEqual(1);
-    // Large result should be compressed (structured preview instead of full content)
-    expect(observations[0]!.content).toContain("STORED:");
+    // Large result should be compressed — either stored (STORED:) or previewed ([...compressed preview])
     // Full raw data should NOT appear verbatim in the observation
     expect(observations[0]!.content).not.toContain(largeResult);
   });

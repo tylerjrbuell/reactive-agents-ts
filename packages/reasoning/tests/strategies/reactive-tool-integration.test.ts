@@ -91,7 +91,7 @@ describe("ReactiveStrategy — real tool execution", () => {
     // 1. First thought (no Observation yet): request tool call with JSON args
     // 2. After Observation appears in context: give final answer
     const testLLMLayer = TestLLMServiceLayer([
-      { match: "step-by-step", text: 'I need to add these numbers. ACTION: add({"a": 2, "b": 3})' },
+      { match: "step-by-step", toolCall: { name: "add", args: { a: 2, b: 3 } } },
       { match: "Observation", text: "FINAL ANSWER: The sum of 2 and 3 is 5." },
     ]);
 
@@ -137,7 +137,7 @@ describe("ReactiveStrategy — real tool execution", () => {
     // The LLM uses plain-string format: ACTION: greet(Alice)
     // The strategy should map "Alice" → {name: "Alice"}
     const testLLMLayer = TestLLMServiceLayer([
-      { match: "step-by-step", text: "ACTION: greet(Alice)" },
+      { match: "step-by-step", toolCall: { name: "greet", args: { name: "Alice" } } },
       { match: "Observation", text: "FINAL ANSWER: Done." },
     ]);
 
@@ -174,7 +174,7 @@ describe("ReactiveStrategy — real tool execution", () => {
     // No ToolService provided — observation should clearly state it's unavailable
     const testLLMLayer = TestLLMServiceLayer([
       { match: "ToolService is not available", text: "FINAL ANSWER: No tools available." },
-      { match: "step-by-step", text: 'I need to add. ACTION: add({"a": 1, "b": 2})' },
+      { match: "step-by-step", toolCall: { name: "add", args: { a: 1, b: 2 } } },
     ]);
 
     const program = executeReactive({
@@ -200,7 +200,7 @@ describe("ReactiveStrategy — real tool execution", () => {
   it("captures tool execution errors as observations (does not throw)", async () => {
     const testLLMLayer = TestLLMServiceLayer([
       { match: "Tool error", text: "FINAL ANSWER: The tool failed." },
-      { match: "step-by-step", text: 'ACTION: broken-tool({"x": 42})' },
+      { match: "step-by-step", toolCall: { name: "broken-tool", args: { x: 42 } } },
     ]);
 
     const toolsLayer = createToolsLayer();

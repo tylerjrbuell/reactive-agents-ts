@@ -10,6 +10,7 @@ import {
   type KernelState,
 } from "../../../src/strategies/shared/kernel-state.js";
 import { CONTEXT_PROFILES } from "../../../src/context/context-profile.js";
+import { createToolCallResolver } from "@reactive-agents/tools";
 
 describe("executeReActKernel", () => {
   it("produces a final answer for a simple task (no tools)", async () => {
@@ -102,7 +103,7 @@ describe("executeReActKernel", () => {
     // The model tries to call signal/send_message_to_user, which is blocked.
     // The kernel should return a synthetic BLOCKED observation instead of executing.
     const layer = TestLLMServiceLayer([
-      { match: "Task:", text: 'ACTION: signal/send_message_to_user({"recipient": "+123", "message": "hi"})' },
+      { match: "Task:", toolCall: { name: "signal/send_message_to_user", args: { recipient: "+123", message: "hi" } } },
     ]);
 
     const result = await Effect.runPromise(
@@ -168,9 +169,9 @@ describe("reactKernel (ThoughtKernel direct)", () => {
     expect(nextState.iteration).toBe(1);
   });
 
-  it("thinking + ACTION transitions to acting with pendingToolRequest", async () => {
+  it("thinking + tool call transitions to acting with pendingNativeToolCalls", async () => {
     const layer = TestLLMServiceLayer([
-      { match: "Task:", text: 'ACTION: web-search({"query": "hello world"})' },
+      { match: "Task:", toolCall: { name: "web-search", args: { query: "hello world" } } },
     ]);
 
     const state = initialKernelState({
@@ -179,7 +180,11 @@ describe("reactKernel (ThoughtKernel direct)", () => {
       kernelType: "react",
     });
 
-    const context = makeContext();
+    // Inject a toolCallResolver so the native FC branch is activated
+    const resolver = createToolCallResolver({ supportsToolCalling: true, supportsStreaming: true, supportsStructuredOutput: false, supportsLogprobs: false });
+    const context = makeContext({
+      input: { task: "Test task", toolCallResolver: resolver } as any,
+    });
 
     const nextState = await Effect.runPromise(
       reactKernel(state, context).pipe(Effect.provide(layer)),
@@ -188,9 +193,9 @@ describe("reactKernel (ThoughtKernel direct)", () => {
     expect(nextState.status).toBe("acting");
     expect(nextState.steps.length).toBe(1);
     expect(nextState.steps[0]!.type).toBe("thought");
-    // pendingToolRequest stored in meta
-    const pending = nextState.meta.pendingToolRequest as { tool: string; input: string };
-    expect(pending.tool).toBe("web-search");
+    // native FC: pendingNativeToolCalls stored in meta
+    const pending = nextState.meta.pendingNativeToolCalls as Array<{ name: string; arguments: unknown }>;
+    expect(pending[0]!.name).toBe("web-search");
   });
 
   it("acting transitions back to thinking after tool execution (post-action requires short observation for exit)", async () => {

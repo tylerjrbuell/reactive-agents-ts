@@ -62,7 +62,7 @@ describe("ReactiveStrategy", () => {
   it("should parse tool requests and add action + observation steps", async () => {
     let callCount = 0;
     const layer = TestLLMServiceLayer([
-      { match: "Think step-by-step", text: "I need to search for this. ACTION: search(capital of France)" },
+      { match: "Think step-by-step", toolCall: { name: "search", args: { query: "capital of France" } } },
       { match: "search", text: "FINAL ANSWER: Paris is the capital of France." },
     ]);
 

@@ -619,25 +619,6 @@ function handleThinking(
       }
 
       if (resolverResult._tag === "final_answer") {
-        // If the text-only response contains ACTION: directives (e.g. test scenarios
-        // or models that emit text tool calls), route to the text-based acting path.
-        const textToolRequests = parseAllToolRequests(resolverResult.content);
-        if (textToolRequests.length > 0) {
-          const textToolRequest = textToolRequests[0]!;
-          return transitionState(state, {
-            steps: newSteps,
-            tokens: newTokens,
-            cost: newCost,
-            status: "acting",
-            meta: {
-              ...state.meta,
-              pendingToolRequest: textToolRequest,
-              lastThought: thought,
-              lastThinking: thinking,
-            },
-          });
-        }
-
         // Genuine final answer (no tool calls). Check completion gaps first —
         // if required tools haven't been called, redirect instead of accepting.
         const requiredTools = input.requiredTools ?? [];
