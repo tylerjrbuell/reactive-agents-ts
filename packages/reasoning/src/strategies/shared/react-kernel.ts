@@ -201,7 +201,7 @@ function buildSystemPrompt(
  * Reads `state.status` to decide what to do:
  *
  * - "thinking": Build context, call LLM, parse response, transition to "acting" or "done"
- * - "acting": Execute tool from meta.pendingToolRequest, observe, transition to "thinking" or "done"
+ * - "acting": Execute tool from meta.pendingNativeToolCalls (native FC), observe, transition to "thinking" or "done"
  */
 export const reactKernel: ThoughtKernel = (
   state: KernelState,

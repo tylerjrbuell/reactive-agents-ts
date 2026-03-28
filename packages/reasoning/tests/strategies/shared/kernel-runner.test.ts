@@ -150,37 +150,6 @@ describe("runKernel", () => {
     // No onDone hook should fire since status is not "done"
   });
 
-  it("embedded tool call guard executes bare tool call in output", async () => {
-    // Kernel that returns done with a bare tool call as the output
-    const embeddedToolKernel: ThoughtKernel = (state, _ctx) =>
-      Effect.succeed(
-        transitionState(state, {
-          status: "done",
-          output: 'web-search({"query": "test"})',
-          iteration: state.iteration + 1,
-        }),
-      );
-
-    const result = await Effect.runPromise(
-      runKernel(embeddedToolKernel, { task: "embedded" }, {
-        maxIterations: 10,
-        strategy: "embed",
-        kernelType: "test",
-      }).pipe(Effect.provide(testLayer)),
-    );
-
-    expect(result.status).toBe("done");
-    // The output should be replaced with the tool observation content.
-    // Since no ToolService is provided, the observation will be the
-    // "not available" message from executeToolCall.
-    expect(result.output).toContain("ToolService is not available");
-    // Action + observation steps should be appended
-    expect(result.steps.some((s) => s.type === "action")).toBe(true);
-    expect(result.steps.some((s) => s.type === "observation")).toBe(true);
-    // Tool should be tracked
-    expect(result.toolsUsed.has("web-search")).toBe(true);
-  });
-
   it("done hook fires when kernel completes successfully", async () => {
     // We cannot directly inject a mock EventBus into the runner since it resolves
     // via Effect.serviceOption. However, we can verify the done hook fires by

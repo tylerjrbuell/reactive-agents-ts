@@ -10,8 +10,7 @@
  *   3. KernelHooks construction from EventBus
  *   4. Immutable KernelContext assembly (frozen for entire execution)
  *   5. Main loop: call kernel repeatedly until done/failed/maxIterations
- *   6. Embedded tool call guard: catch bare tool calls in final output
- *   7. Terminal hooks: onDone / onError
+ *   6. Terminal hooks: onDone / onError
  */
 import { Effect } from "effect";
 import { LLMService, DEFAULT_CAPABILITIES } from "@reactive-agents/llm-provider";
@@ -21,8 +20,6 @@ import { CONTEXT_PROFILES } from "../../context/context-profile.js";
 import type { ContextProfile } from "../../context/context-profile.js";
 import { resolveStrategyServices } from "./service-utils.js";
 import { buildKernelHooks } from "./kernel-hooks.js";
-import { parseBareToolCall } from "./tool-utils.js";
-import { executeToolCall } from "./tool-execution.js";
 import { makeStep } from "./step-utils.js";
 import {
   initialKernelState,
@@ -59,11 +56,6 @@ function normalizeActionContent(content: string): string {
  *
  * This is the **universal execution loop** — every reasoning strategy delegates
  * to this function instead of implementing its own while-loop.
- *
- * Post-loop: if the kernel produced a "done" state whose output contains a bare
- * tool call (e.g. `web-search({"query":"test"})`), the runner executes that tool
- * and replaces the output with the tool observation. This guards against models
- * that embed tool calls inside FINAL ANSWER text.
  */
 export function runKernel(
   kernel: ThoughtKernel,
@@ -123,9 +115,7 @@ export function runKernel(
       ? transitionState(baseState, { messages: effectiveInput.initialMessages })
       : baseState;
 
-    // Mutable scratchpad mirror — needed by the post-loop embedded tool call guard
-    // (step 7) which may execute a tool that auto-stores to scratchpad.
-    // Synced from state.scratchpad (ReadonlyMap) after each kernel step.
+    // Mutable scratchpad mirror — synced from state.scratchpad (ReadonlyMap) after each kernel step.
     const mutableScratchpad = new Map<string, string>(state.scratchpad);
 
     // ── 6. Main loop ─────────────────────────────────────────────────────────
@@ -501,44 +491,7 @@ export function runKernel(
       }
     }
 
-    // ── 7. Embedded tool call guard ──────────────────────────────────────────
-    // After the loop ends with status "done", check if the output contains a
-    // bare tool call. If so, execute it and update state.
-    if (state.status === "done" && state.output) {
-      const bareCall = parseBareToolCall(state.output.trim());
-      if (bareCall) {
-        const toolResult = yield* executeToolCall(toolService, bareCall, {
-          profile,
-          compression: context.compression,
-          scratchpad: mutableScratchpad,
-          agentId: effectiveInput.agentId,
-          sessionId: effectiveInput.sessionId,
-        });
-
-        // Fire action + observation hooks
-        yield* hooks.onAction(state, bareCall.tool, bareCall.input);
-        yield* hooks.onObservation(state, toolResult.content, toolResult.observationResult.success);
-
-        // Update state with new steps and cleaned output
-        const actionStep = makeStep("action", JSON.stringify({
-          tool: bareCall.tool,
-          input: bareCall.input,
-        }));
-        const observationStep = makeStep("observation", toolResult.content);
-
-        const newToolsUsed = new Set(state.toolsUsed);
-        newToolsUsed.add(bareCall.tool);
-
-        state = transitionState(state, {
-          steps: [...state.steps, actionStep, observationStep],
-          toolsUsed: newToolsUsed,
-          scratchpad: mutableScratchpad,
-          output: toolResult.content,
-        });
-      }
-    }
-
-    // ── 7b. Post-loop required tools check ───────────────────────────────────
+    // ── 7. Post-loop required tools check ───────────────────────────────────
     // Final safety net: if the loop exited with "done" (e.g. via bare tool call
     // guard or max iterations) but required tools still haven't been called, fail.
     if (state.status === "done" && requiredTools.length > 0) {
