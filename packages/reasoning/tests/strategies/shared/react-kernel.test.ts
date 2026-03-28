@@ -198,10 +198,10 @@ describe("reactKernel (ThoughtKernel direct)", () => {
     expect(pending[0]!.name).toBe("web-search");
   });
 
-  it("acting transitions back to thinking after tool execution (post-action requires short observation for exit)", async () => {
+  it("acting transitions back to thinking after tool execution (native FC path)", async () => {
     const layer = TestLLMServiceLayer();
 
-    // Start in acting state with a pending tool request
+    // Start in acting state with pending native tool calls (FC path)
     const state: KernelState = {
       ...initialKernelState({
         maxIterations: 3,
@@ -213,13 +213,13 @@ describe("reactKernel (ThoughtKernel direct)", () => {
         {
           id: "test-step" as any,
           type: "thought",
-          content: 'ACTION: web-search({"query": "hello"})',
+          content: "I need to search for something.",
           timestamp: new Date(),
         },
       ],
       meta: {
-        pendingToolRequest: { tool: "web-search", input: '{"query": "hello"}' },
-        lastThought: 'ACTION: web-search({"query": "hello"})',
+        pendingNativeToolCalls: [{ id: "tc-1", name: "web-search", arguments: { query: "hello" } }],
+        lastThought: "I need to search for something.",
         lastThinking: null,
       },
     };
@@ -230,8 +230,7 @@ describe("reactKernel (ThoughtKernel direct)", () => {
       reactKernel(state, context).pipe(Effect.provide(layer)),
     );
 
-    // Post-action oracle no longer fires LLMEndTurn (stopReason is "tool_result",
-    // not "end_turn"). Agent continues to thinking to synthesize tool results.
+    // After native FC acting, agent returns to thinking
     expect(nextState.status).toBe("thinking");
     // Should have action + observation steps added
     const actionSteps = nextState.steps.filter((s) => s.type === "action");
