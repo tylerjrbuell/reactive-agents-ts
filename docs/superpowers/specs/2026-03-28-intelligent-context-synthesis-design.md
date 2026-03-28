@@ -244,6 +244,17 @@ Max tokens: 150. The output feeds into the situation status message. The model e
 
 **Package:** `packages/reasoning/src/context/context-synthesizer.ts`
 
+`ContextSynthesizerLive` is the default implementation. Users can substitute their own implementation via Effect-TS service substitution — the service tag is the extension point, not the configuration.
+
+Built-in synthesis functions are exported for composition:
+
+```typescript
+// Exported for user composition
+export { fastSynthesis } from "./synthesis-templates.js";
+export { deepSynthesis } from "./context-synthesizer.js";
+export type { SynthesisInput, SynthesizedContext, SynthesisStrategy, TaskPhase } from "./context-synthesizer.js";
+```
+
 ```typescript
 export class ContextSynthesizerService extends Context.Tag("ContextSynthesizer")<
   ContextSynthesizerService,
@@ -284,7 +295,29 @@ export interface SynthesizedContext {
 
 ## Synthesis Configuration
 
-Configuration lives within `.withReasoning()`:
+### Extension-First Design
+
+The synthesis layer is built for composability and customization. The framework ships built-in implementations as exported functions so users can compose, replace, or extend them. This aligns with the control-first philosophy: the defaults work well for most cases, but specialized agents get a clean path to full control without forking the framework.
+
+**Built-in synthesis functions are exported:**
+
+```typescript
+import { fastSynthesis, deepSynthesis } from "@reactive-agents/reasoning";
+
+// Use framework defaults directly, or compose with your own logic
+```
+
+**`SynthesisStrategy` — the primary extension point:**
+
+A synthesis strategy is a function that takes all framework signals and returns the exact messages the model will receive. When provided, it completely replaces the built-in fast/deep logic.
+
+```typescript
+type SynthesisStrategy = (
+  input: SynthesisInput
+) => Effect.Effect<readonly LLMMessage[], never, LLMService>;
+```
+
+**Configuration lives within `.withReasoning()`:**
 
 ```typescript
 // Default — synthesis auto, best results out of the box
@@ -303,12 +336,31 @@ Configuration lives within `.withReasoning()`:
 .withReasoning({ synthesis: "auto", synthesisModel: "gpt-4o-mini" })
 .withReasoning({ synthesis: "auto", synthesisModel: "cogito:3b", synthesisProvider: "ollama" })
 
+// Custom synthesis strategy — full control for specialized agents
+.withReasoning({
+  synthesis: "custom",
+  synthesisStrategy: (input) => myDomainSynthesizer.synthesize(input),
+})
+
+// Compose with built-ins — override specific phases, delegate the rest
+.withReasoning({
+  synthesis: "custom",
+  synthesisStrategy: (input) =>
+    input.taskPhase === "gather" && input.tier === "local"
+      ? myCustomGatherBrief(input)   // domain-specific gather brief
+      : fastSynthesis(input),        // framework default for everything else
+})
+
 // Per-strategy override — inherits builder default, can override per strategy
 .withReasoning({
   synthesis: "auto",
   strategies: {
     reactive: { synthesis: "deep" },
     planExecute: { synthesis: "fast" },
+    reactive: {
+      synthesis: "custom",
+      synthesisStrategy: (input) => myReactiveStrategy(input),
+    },
   }
 })
 ```
@@ -319,14 +371,17 @@ Configuration lives within `.withReasoning()`:
 
 ```typescript
 interface SynthesisConfig {
-  mode: "auto" | "fast" | "deep" | "off";
-  model?: string;
-  provider?: string;
-  temperature?: number;  // default: 0.0 for deterministic synthesis
+  mode: "auto" | "fast" | "deep" | "custom" | "off";
+  model?: string;           // synthesis model (deep path, defaults to executing model)
+  provider?: string;        // synthesis provider (deep path)
+  temperature?: number;     // default: 0.0 for deterministic synthesis
+  synthesisStrategy?: SynthesisStrategy;  // custom strategy, required when mode: "custom"
 }
 ```
 
-**Default behavior:** `mode: "auto"` — synthesis is on, fast path by default, deep path when signals justify it (entropy > 0.6, stalled/oscillating trajectory, errors present, late iteration with missing required tools).
+**Local tier deep path behavior:** When `mode: "auto"` and deep synthesis is triggered, but the executing model is `local` tier and no `synthesisModel` is configured, the system automatically falls back to `fast` path. A stuck local model should not synthesize its own confused state — this is a framework-managed default, not left to user configuration.
+
+**Default behavior:** `mode: "auto"` — synthesis is on, fast path by default, deep path when signals justify it (entropy > 0.6, stalled/oscillating trajectory, errors present, late iteration with missing required tools). Local tier automatically uses fast path unless a separate synthesis model is configured.
 
 ---
 
@@ -440,14 +495,16 @@ All strategies dispatch to `executeReActKernel` or `runKernel` unchanged. `Synth
 
 ```
 packages/reasoning/src/context/
-├── context-synthesizer.ts      ← ContextSynthesizerService + Live implementation
+├── context-synthesizer.ts      ← ContextSynthesizerService + Live + deepSynthesis()
 ├── task-phase.ts               ← classifyTaskPhase() pure function
-├── synthesis-templates.ts      ← fast-path templates keyed by phase × tier
+├── synthesis-templates.ts      ← fastSynthesis() + phase × tier templates (exported)
 ├── message-window.ts           ← existing (retained as synthesis input utility)
 └── context-profile.ts          ← existing (unchanged)
 
 packages/reasoning/src/
-├── index.ts                    ← export new types + service
+├── index.ts                    ← export: ContextSynthesizerService, fastSynthesis,
+│                                  deepSynthesis, SynthesisInput, SynthesisStrategy,
+│                                  SynthesizedContext, TaskPhase
 └── strategies/shared/
     ├── kernel-runner.ts        ← synthesis injection in loop
     ├── kernel-state.ts         ← synthesizedContext field added
