@@ -256,7 +256,7 @@ export const TestLLMService = (
     capabilities: () =>
       Effect.succeed({
         ...DEFAULT_CAPABILITIES,
-        supportsToolCalling: false, // Test provider uses its own tool dispatch, not native FC
+        supportsToolCalling: true, // Test provider emits native FC stream events (tool_use_start/tool_use_delta)
         supportsStreaming: true,
       }),
   };
