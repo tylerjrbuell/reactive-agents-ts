@@ -2,10 +2,9 @@
 //
 // Integration tests for the Context Engine pipeline:
 //   1. ExperienceStore record/query cycle
-//   2. ContextEngine buildContext produces tool reference in output
-//   3. ALWAYS_INCLUDE_TOOLS constant includes scratchpad tools
-//   4. context-status handler returns accurate snapshot
-//   5. shouldShowTaskComplete visibility gating
+//   2. ALWAYS_INCLUDE_TOOLS constant includes scratchpad tools
+//   3. context-status handler returns accurate snapshot
+//   4. shouldShowTaskComplete visibility gating
 
 import { describe, it, expect } from "bun:test";
 import { Effect, Layer } from "effect";
@@ -15,11 +14,6 @@ import {
   MemoryDatabaseLive,
   defaultMemoryConfig,
 } from "@reactive-agents/memory";
-import {
-  buildContext,
-  CONTEXT_PROFILES,
-} from "@reactive-agents/reasoning";
-import type { ContextBuildInput } from "@reactive-agents/reasoning";
 import {
   ALWAYS_INCLUDE_TOOLS,
   makeContextStatusHandler,
@@ -87,40 +81,7 @@ describe("ExperienceStore record/query cycle", () => {
   });
 });
 
-// ─── Test 2: ContextEngine produces tool reference in output ─────────────────
-
-describe("ContextEngine buildContext", () => {
-  it("includes tool name in output when availableToolSchemas is provided", () => {
-    const input: ContextBuildInput = {
-      task: "Write content to a file",
-      steps: [],
-      iteration: 1,
-      maxIterations: 10,
-      profile: CONTEXT_PROFILES.mid,
-      availableToolSchemas: [
-        {
-          name: "file-write",
-          description: "Write content to a file on disk",
-          parameters: [
-            {
-              name: "path",
-              type: "string",
-              required: true,
-              description: "File path to write to",
-            },
-          ],
-        },
-      ],
-    };
-
-    const output = buildContext(input);
-
-    // The rendered context must contain the tool name
-    expect(output).toContain("file-write");
-  });
-});
-
-// ─── Test 3: ALWAYS_INCLUDE_TOOLS constant ────────────────────────────────────
+// ─── Test 2: ALWAYS_INCLUDE_TOOLS constant ────────────────────────────────────
 
 describe("ALWAYS_INCLUDE_TOOLS", () => {
   it("includes recall", () => {
@@ -128,7 +89,7 @@ describe("ALWAYS_INCLUDE_TOOLS", () => {
   });
 });
 
-// ─── Test 4: context-status returns accurate snapshot ────────────────────────
+// ─── Test 3: context-status returns accurate snapshot ────────────────────────
 
 describe("makeContextStatusHandler", () => {
   it("returns correct remaining count and pending tools", async () => {
@@ -156,7 +117,7 @@ describe("makeContextStatusHandler", () => {
   });
 });
 
-// ─── Test 5: shouldShowTaskComplete visibility gating ────────────────────────
+// ─── Test 4: shouldShowTaskComplete visibility gating ────────────────────────
 
 describe("shouldShowTaskComplete", () => {
   const base: TaskCompleteVisibility = {

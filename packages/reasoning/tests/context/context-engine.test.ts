@@ -3,14 +3,10 @@ import { describe, test, expect } from "bun:test";
 import {
   scoreContextItem,
   allocateContextBudget,
-  buildContext,
   type ContextItem,
   type ScoringContext,
-  type ContextBuildInput,
-  type MemoryItem,
 } from "../../src/context/context-engine.js";
 import { CONTEXT_PROFILES } from "../../src/context/context-profile.js";
-import type { ToolSchema } from "../../src/strategies/shared/tool-utils.js";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -32,22 +28,6 @@ function makeScoringCtx(overrides: Partial<ScoringContext> = {}): ScoringContext
     ...overrides,
   };
 }
-
-const sampleTools: readonly ToolSchema[] = [
-  {
-    name: "web-search",
-    description: "Search the web",
-    parameters: [{ name: "query", type: "string", required: true }],
-  },
-  {
-    name: "file-write",
-    description: "Write to a file",
-    parameters: [
-      { name: "path", type: "string", required: true },
-      { name: "content", type: "string", required: true },
-    ],
-  },
-];
 
 // ── scoreContextItem ──────────────────────────────────────────────────────────
 
@@ -176,136 +156,3 @@ describe("allocateContextBudget", () => {
   });
 });
 
-// ── buildContext ───────────────────────────────────────────────────────────────
-
-describe("buildContext", () => {
-  function makeInput(overrides: Partial<ContextBuildInput> = {}): ContextBuildInput {
-    return {
-      task: "Search the web and write results to a file",
-      steps: [],
-      iteration: 0,
-      maxIterations: 10,
-      profile: CONTEXT_PROFILES.mid,
-      availableToolSchemas: sampleTools,
-      ...overrides,
-    };
-  }
-
-  test("produces tool reference section", () => {
-    const input = makeInput();
-    const ctx = buildContext(input);
-    expect(ctx).toContain("web-search");
-    expect(ctx).toContain("file-write");
-  });
-
-  test("produces RULES block", () => {
-    const input = makeInput();
-    const ctx = buildContext(input);
-    expect(ctx).toContain("RULES:");
-  });
-
-  test("produces iteration awareness", () => {
-    const input = makeInput({ iteration: 3 });
-    const ctx = buildContext(input);
-    expect(ctx).toContain("Iteration");
-    expect(ctx).toContain("4/10"); // 1-indexed display
-  });
-
-  test("produces task description", () => {
-    const input = makeInput({ task: "Find all commits from last week" });
-    const ctx = buildContext(input);
-    expect(ctx).toContain("Find all commits from last week");
-  });
-
-  test("context compacts as steps accumulate (not linear growth)", () => {
-    const fewSteps = Array.from({ length: 3 }, (_, i) => ({
-      id: `s${i}` as any,
-      type: "observation" as const,
-      content: `Observation result number ${i} with some detail about what happened in the tool execution step`,
-      timestamp: new Date(),
-    }));
-    const manySteps = Array.from({ length: 12 }, (_, i) => ({
-      id: `s${i}` as any,
-      type: "observation" as const,
-      content: `Observation result number ${i} with some detail about what happened in the tool execution step`,
-      timestamp: new Date(),
-    }));
-
-    const ctxFew = buildContext(makeInput({ steps: fewSteps, iteration: 3 }));
-    const ctxMany = buildContext(makeInput({ steps: manySteps, iteration: 12 }));
-
-    // With 4x the steps, context should NOT be 4x larger (compaction kicks in)
-    const ratio = ctxMany.length / ctxFew.length;
-    expect(ratio).toBeLessThan(3.5);
-  });
-
-  test("includes required tool markers when requiredTools provided", () => {
-    const input = makeInput({ requiredTools: ["file-write"] });
-    const ctx = buildContext(input);
-    expect(ctx).toContain("REQUIRED");
-  });
-
-  test("includes delegation rule when spawn-agent available", () => {
-    const tools: readonly ToolSchema[] = [
-      ...sampleTools,
-      { name: "spawn-agent", description: "Spawn a sub-agent", parameters: [] },
-    ];
-    const input = makeInput({ availableToolSchemas: tools });
-    const ctx = buildContext(input);
-    expect(ctx).toContain("spawn-agent");
-  });
-
-  test("includes completed summary when steps have successful actions", () => {
-    const steps = [
-      {
-        id: "s1" as any,
-        type: "action" as const,
-        content: JSON.stringify({ tool: "web-search", input: '{"query":"test"}' }),
-        timestamp: new Date(),
-        metadata: { toolUsed: "web-search" },
-      },
-      {
-        id: "s2" as any,
-        type: "observation" as const,
-        content: "Search results found",
-        timestamp: new Date(),
-        metadata: { observationResult: { success: true, toolName: "web-search", displayText: "ok", category: "web-search" as const, resultKind: "data" as const, preserveOnCompaction: false } },
-      },
-    ];
-    const input = makeInput({ steps, iteration: 1 });
-    const ctx = buildContext(input);
-    expect(ctx).toContain("ALREADY DONE");
-  });
-
-  test("irrelevant memories excluded (relevance < 0.3)", () => {
-    const memories: MemoryItem[] = [
-      { content: "Relevant memory about web search", relevance: 0.8 },
-      { content: "Irrelevant memory about cooking", relevance: 0.1 },
-    ];
-    const input = makeInput({ memories });
-    const ctx = buildContext(input);
-    expect(ctx).toContain("Relevant memory about web search");
-    expect(ctx).not.toContain("Irrelevant memory about cooking");
-  });
-
-  test("relevant memories included when relevance >= 0.3", () => {
-    const memories: MemoryItem[] = [
-      { content: "Memory about prior search results", relevance: 0.5 },
-    ];
-    const input = makeInput({ memories });
-    const ctx = buildContext(input);
-    expect(ctx).toContain("Memory about prior search results");
-  });
-
-  test("progressive urgency at high iterations", () => {
-    const input = makeInput({ iteration: 8, maxIterations: 10 });
-    const ctx = buildContext(input);
-    expect(ctx).toContain("LAST CHANCE");
-  });
-
-  test("no tools produces 'No tools available' message", () => {
-    const input = makeInput({ availableToolSchemas: undefined });
-    const ctx = buildContext(input);
-    expect(ctx).toContain("No tools available");
-  });
-});

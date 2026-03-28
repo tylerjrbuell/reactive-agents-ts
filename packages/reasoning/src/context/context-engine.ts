@@ -1,7 +1,6 @@
 // File: src/context/context-engine.ts
 //
 // ContextEngine — unified scoring, budgeting, and rendering of context.
-// Replaces 6 static builders in react-kernel.ts with a single `buildContext()`.
 
 import type { ReasoningStep } from "../types/step.js";
 import type { ContextProfile } from "./context-profile.js";
@@ -9,9 +8,8 @@ import type { ToolSchema } from "../strategies/shared/tool-utils.js";
 import {
   formatToolSchemas,
   formatToolSchemaCompact,
-  filterToolsByRelevance,
 } from "../strategies/shared/tool-utils.js";
-import { formatStepForContext, summarizeStepForContext, summarizeStepsTriplets } from "../strategies/shared/context-utils.js";
+import { formatStepForContext, summarizeStepsTriplets } from "../strategies/shared/context-utils.js";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -44,19 +42,6 @@ export interface BudgetResult {
   recent: ContextItem[];
   scored: ContextItem[];
   memories: MemoryItem[];
-}
-
-/** Input for the unified buildContext function. */
-export interface ContextBuildInput {
-  task: string;
-  steps: readonly ReasoningStep[];
-  iteration: number;
-  maxIterations: number;
-  profile: ContextProfile;
-  availableToolSchemas?: readonly ToolSchema[];
-  requiredTools?: readonly string[];
-  priorContext?: string;
-  memories?: MemoryItem[];
 }
 
 /** Input for the static system prompt builder. */
@@ -230,113 +215,6 @@ export function allocateContextBudget(
   };
 }
 
-// ── Unified Context Builder ──────────────────────────────────────────────────
-
-/**
- * Build the full context string for an LLM prompt.
- * Replaces 6 separate builders with a single scored, budgeted render.
- *
- * Section order (task last for recency bias):
- * 1. Prior context (if provided)
- * 2. Memory section (if relevant)
- * 3. Scored history (compacted older steps)
- * 4. Recent steps (full detail)
- * 5. Completed summary (tool usage tally)
- * 6. Pinned tool reference (compact, survives compaction)
- * 7. Iteration awareness (progressive urgency)
- * 8. Task description
- * 9. RULES block (with dynamic required tool + delegation rules)
- */
-export function buildContext(input: ContextBuildInput): string {
-  const {
-    task,
-    steps,
-    iteration,
-    maxIterations,
-    profile,
-    availableToolSchemas,
-    requiredTools,
-    priorContext,
-    memories,
-  } = input;
-
-  const sections: string[] = [];
-
-  // 1. Full tool schemas — shown first so the model knows its capabilities
-  // before seeing any history. Critical for MCP tools with many parameters.
-  sections.push(
-    buildToolReference(task, availableToolSchemas, requiredTools, profile.toolSchemaDetail),
-  );
-
-  // 2. Prior context (if provided)
-  if (priorContext) {
-    sections.push(priorContext);
-  }
-
-  // 3. Memory section
-  if (memories && memories.length > 0) {
-    const relevant = memories.filter((m) => m.relevance >= MEMORY_RELEVANCE_THRESHOLD);
-    if (relevant.length > 0) {
-      const memLines = relevant.map((m) => `- ${m.content}`).join("\n");
-      sections.push(`[Relevant memories]:\n${memLines}`);
-    }
-  }
-
-  // 4-5. Step history (scored older + recent)
-  if (steps.length > 0) {
-    const compactAfter = profile.compactAfterSteps ?? 6;
-    const fullDetailN = profile.fullDetailSteps ?? 4;
-
-    if (steps.length <= compactAfter) {
-      // All steps in full detail
-      const stepLines = steps.map(formatStepForContext).join("\n");
-      sections.push(stepLines);
-    } else {
-      // Split into compacted older + full recent
-      const recentCutoff = steps.length - fullDetailN;
-      const olderSteps = steps.slice(0, recentCutoff);
-      const recentSteps = steps.slice(recentCutoff);
-
-      // Compacted older steps — triplet grouping for decision preservation
-      if (olderSteps.length > 0) {
-        const summaryLines = summarizeStepsTriplets(olderSteps);
-        sections.push(
-          `[Earlier steps — ${olderSteps.length} steps]:\n${summaryLines.join("\n")}`,
-        );
-      }
-
-      // Recent steps in full detail
-      const recentLines = recentSteps.map(formatStepForContext).join("\n");
-      sections.push(`[Recent steps]:\n${recentLines}`);
-    }
-  }
-
-  // 6. Completed summary
-  const completedSummary = buildCompletedSummary(steps);
-  if (completedSummary) {
-    sections.push(completedSummary);
-  }
-
-  // 7. Compact pinned tool reference (parameter names only — quick lookup near RULES)
-  if (availableToolSchemas && availableToolSchemas.length > 0) {
-    const pinnedRef = buildPinnedToolReference(availableToolSchemas, requiredTools, profile.toolSchemaDetail);
-    if (pinnedRef) {
-      sections.push(pinnedRef);
-    }
-  }
-
-  // 8. Iteration awareness
-  sections.push(buildIterationAwareness(iteration, maxIterations));
-
-  // 9. Task description (last for recency bias)
-  sections.push(`Task: ${task}`);
-
-  // 10. RULES block
-  sections.push(buildRules(availableToolSchemas, requiredTools, profile.tier));
-
-  return sections.join("\n\n");
-}
-
 // ── Split Context Builders (system prompt + per-iteration) ──────────────────
 
 /**
@@ -369,7 +247,6 @@ export function buildEnvironmentContext(
 
 export function buildStaticContext(input: StaticContextInput): string {
   const { task, profile, availableToolSchemas, requiredTools } = input;
-  const useFC = false; // Native FC is always active; dead branches cleaned up in Task 6
   const sections: string[] = [];
 
   // Environment context (date, time, timezone, platform, custom)
@@ -378,14 +255,14 @@ export function buildStaticContext(input: StaticContextInput): string {
   // Tool reference (full schemas — no pinned duplicate needed since both
   // tool ref and RULES are together in the system prompt now)
   sections.push(
-    buildToolReference(task, availableToolSchemas, requiredTools, profile.toolSchemaDetail, useFC),
+    buildToolReference(task, availableToolSchemas, requiredTools, profile.toolSchemaDetail),
   );
 
   // Task description
   sections.push(`Task: ${task}`);
 
   // RULES block
-  sections.push(buildRules(availableToolSchemas, requiredTools, profile.tier, useFC));
+  sections.push(buildRules(availableToolSchemas, requiredTools, profile.tier));
 
   return sections.join("\n\n");
 }
@@ -397,9 +274,8 @@ export function buildStaticContext(input: StaticContextInput): string {
 export function buildDynamicContext(input: DynamicContextInput): string {
   const {
     steps, iteration, maxIterations, profile,
-    priorContext, memories, availableToolSchemas, requiredTools,
+    priorContext, memories, availableToolSchemas,
   } = input;
-  const useFC = false; // Native FC is always active; dead branches cleaned up in Task 6
 
   const sections: string[] = [];
 
@@ -449,10 +325,7 @@ export function buildDynamicContext(input: DynamicContextInput): string {
   // Reminder of final-answer tool when visible (nudge toward structured exit)
   const finalAnswerSchema = (availableToolSchemas ?? []).find((t) => t.name === "final-answer");
   if (finalAnswerSchema) {
-    const reminder = useFC
-      ? `💡 The final-answer tool is available. When ALL steps are complete, call it directly to deliver your answer.`
-      : `💡 The final-answer tool is available. When ALL steps are complete, call ACTION: final-answer({"output": "...", "format": "text", "summary": "..."}) instead of writing FINAL ANSWER in text.`;
-    sections.push(reminder);
+    sections.push(`💡 The final-answer tool is available. When ALL steps are complete, call it directly to deliver your answer.`);
   }
 
   return sections.join("\n\n");
@@ -462,15 +335,13 @@ export function buildDynamicContext(input: DynamicContextInput): string {
 
 /**
  * Build the initial tool section from schemas.
- * When useNativeFC is true, omits ACTION: format instructions since the LLM
- * uses native function calling via the API tool_use mechanism instead.
+ * Native FC is always active — lists tool names/purposes without ACTION: instructions.
  */
 function buildToolReference(
-  task: string,
+  _task: string,
   availableToolSchemas?: readonly ToolSchema[],
-  requiredTools?: readonly string[],
+  _requiredTools?: readonly string[],
   toolSchemaDetail?: "names-only" | "names-and-types" | "full",
-  useNativeFC = false,
 ): string {
   if (!availableToolSchemas || availableToolSchemas.length === 0) {
     return "No tools available for this task.";
@@ -478,70 +349,17 @@ function buildToolReference(
 
   const detail = toolSchemaDetail ?? "full";
 
-  // When native FC is active, the API carries full schemas — just list names/purposes
-  if (useNativeFC) {
-    if (detail === "names-only") {
-      const names = availableToolSchemas.map((t) => t.name).join(", ");
-      return `Available Tools: ${names}`;
-    }
-    if (detail === "names-and-types" || availableToolSchemas.length > 20) {
-      const toolLines = availableToolSchemas.map(formatToolSchemaCompact).join("\n");
-      return `Available Tools:\n${toolLines}`;
-    }
-    const toolLines = formatToolSchemas(availableToolSchemas);
+  // Native FC: the API carries full schemas — just list names/purposes
+  if (detail === "names-only") {
+    const names = availableToolSchemas.map((t) => t.name).join(", ");
+    return `Available Tools: ${names}`;
+  }
+  if (detail === "names-and-types" || availableToolSchemas.length > 20) {
+    const toolLines = availableToolSchemas.map(formatToolSchemaCompact).join("\n");
     return `Available Tools:\n${toolLines}`;
   }
-
-  // Check for name-only stubs
-  const allNameOnly = availableToolSchemas.every(
-    (t) => !t.description && t.parameters.length === 0,
-  );
-  if (allNameOnly) {
-    const names = availableToolSchemas.map((t) => t.name).join(", ");
-    return `Available Tools: ${names}\nTo use a tool: ACTION: tool_name({"param": "value"}) — use JSON for tool arguments.`;
-  }
-
-  const { primary, secondary } = filterToolsByRelevance(task, availableToolSchemas);
-
-  if (primary.length === 0) {
-    // No tools matched task — format all based on detail level
-    if (detail === "names-only") {
-      return `Tools: ${availableToolSchemas.map((t) => t.name).join(", ")}\nTo use: ACTION: tool_name({"param": "value"})`;
-    }
-    if (detail === "names-and-types" || availableToolSchemas.length > 20) {
-      const toolLines = availableToolSchemas.map(formatToolSchemaCompact).join("\n");
-      return `Available Tools:\n${toolLines}\n\nTo use a tool: ACTION: tool_name({"param": "value"}) — use EXACT parameter names.`;
-    }
-    const toolLines = formatToolSchemas(availableToolSchemas);
-    return `Available Tools:\n${toolLines}\n\nTo use a tool: ACTION: tool_name({"param": "value"}) — use EXACT parameter names shown above, valid JSON only.`;
-  }
-
-  // Format primary + secondary
-  const primaryLines =
-    detail === "names-only"
-      ? primary.map((t) => t.name).join(", ")
-      : detail === "names-and-types"
-        ? primary.map(formatToolSchemaCompact).join("\n")
-        : formatToolSchemas(primary);
-
-  let secondarySection = "";
-  if (secondary.length > 0) {
-    if (detail === "names-only" || secondary.length > 15) {
-      secondarySection = `\nAlso available (use by name): ${secondary.map((t) => t.name).join(", ")}`;
-    } else {
-      secondarySection = `\nOther tools:\n${secondary.map(formatToolSchemaCompact).join("\n")}`;
-    }
-  }
-
-  if (detail === "names-only") {
-    const allNames =
-      secondary.length > 0
-        ? `${primaryLines}, ${secondary.map((t) => t.name).join(", ")}`
-        : primaryLines;
-    return `Tools: ${allNames}\nTo use: ACTION: tool_name({"param": "value"})`;
-  }
-
-  return `Available Tools:\n${primaryLines}${secondarySection}\n\nTo use a tool: ACTION: tool_name({"param": "value"}) — use EXACT parameter names shown above, valid JSON only.`;
+  const toolLines = formatToolSchemas(availableToolSchemas);
+  return `Available Tools:\n${toolLines}`;
 }
 
 /**
@@ -571,38 +389,6 @@ function buildCompletedSummary(steps: readonly ReasoningStep[]): string {
 }
 
 /**
- * Build a compact pinned tool reference that survives compaction.
- * Marks required tools with a star.
- */
-function buildPinnedToolReference(
-  availableToolSchemas?: readonly ToolSchema[],
-  requiredTools?: readonly string[],
-  toolSchemaDetail?: "names-only" | "names-and-types" | "full",
-): string {
-  if (!availableToolSchemas || availableToolSchemas.length === 0) return "";
-  const detail = toolSchemaDetail ?? "full";
-  const requiredSet = new Set(requiredTools ?? []);
-
-  if (detail === "names-only") {
-    if (requiredSet.size === 0) return "";
-    const reqNames = availableToolSchemas
-      .filter((t) => requiredSet.has(t.name))
-      .map((t) => t.name);
-    if (reqNames.length === 0) return "";
-    return `\u2B50 REQUIRED tools: ${reqNames.join(", ")}`;
-  }
-
-  const lines = availableToolSchemas.map((t) => {
-    const params = t.parameters
-      .map((p) => `${p.name}: ${p.type}${p.required ? " \u2605" : "?"}`)
-      .join(", ");
-    const req = requiredSet.has(t.name) ? " \u2B50 REQUIRED" : "";
-    return `  ${t.name}(${params})${req}`;
-  });
-  return `[Tool reference \u2014 EXACT parameter names]:\n${lines.join("\n")}`;
-}
-
-/**
  * Build iteration awareness string with progressive urgency.
  */
 function buildIterationAwareness(iteration: number, maxIterations: number): string {
@@ -619,13 +405,11 @@ function buildIterationAwareness(iteration: number, maxIterations: number): stri
 /**
  * Build the RULES block with dynamic entries for required tools and delegation.
  * Tier-adaptive: local/mid models get 5 core rules; large/frontier get full set.
- * When useNativeFC is true, omits text-format instructions (ACTION:, [STORED:]).
  */
 function buildRules(
   availableToolSchemas?: readonly ToolSchema[],
   requiredTools?: readonly string[],
   tier?: "local" | "mid" | "large" | "frontier",
-  useNativeFC = false,
 ): string {
   const t = tier ?? "mid";
   const hasSpawnAgent = availableToolSchemas?.some((s) => s.name === "spawn-agent");
@@ -650,11 +434,7 @@ function buildRules(
 
   // Conditional rules — only for larger models or when the feature is active
   if (t === "large" || t === "frontier") {
-    if (hasStoredResults && !useNativeFC) {
-      rules.push(
-        `${ruleNum++}. When results show [STORED: _key], use ACTION: recall({"key": "_key"}) to read full data.`,
-      );
-    } else if (hasStoredResults && useNativeFC) {
+    if (hasStoredResults) {
       rules.push(
         `${ruleNum++}. Large tool results are stored automatically. Use recall(key) to retrieve full content when needed.`,
       );
@@ -666,11 +446,7 @@ function buildRules(
     }
   } else {
     // For local/mid: only add recall rule if recall is available (concise version)
-    if (hasStoredResults && !useNativeFC) {
-      rules.push(
-        `${ruleNum++}. [STORED: _key] means data was saved. Use recall to get it.`,
-      );
-    } else if (hasStoredResults && useNativeFC) {
+    if (hasStoredResults) {
       rules.push(
         `${ruleNum++}. Large results are stored automatically. Use recall(key) to retrieve them.`,
       );
