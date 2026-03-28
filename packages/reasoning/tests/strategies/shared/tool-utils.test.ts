@@ -6,6 +6,7 @@ import {
   formatToolSchemas,
   formatToolSchemaCompact,
   filterToolsByRelevance,
+  gateNativeToolCallsForRequiredTools,
 } from "../../../src/strategies/shared/tool-utils.js";
 
 describe("hasFinalAnswer", () => {
@@ -133,5 +134,48 @@ describe("filterToolsByRelevance", () => {
     const result = filterToolsByRelevance("Do something unrelated", allTools);
     expect(result.primary.length).toBe(0);
     expect(result.secondary.length).toBe(allTools.length);
+  });
+});
+
+describe("gateNativeToolCallsForRequiredTools", () => {
+  const calls = [
+    { name: "web-search", id: "a", arguments: {} },
+    { name: "http-get", id: "b", arguments: {} },
+  ] as const;
+
+  it("passes through when no required tools", () => {
+    const r = gateNativeToolCallsForRequiredTools(calls, [], new Set());
+    expect(r.effective).toEqual(calls);
+    expect(r.blockedOptionalBatch).toBe(false);
+  });
+
+  it("returns first call toward a missing required tool only", () => {
+    const r = gateNativeToolCallsForRequiredTools(
+      calls,
+      ["web-search", "file-write"],
+      new Set(),
+    );
+    expect(r.effective.map((c) => c.name)).toEqual(["web-search"]);
+    expect(r.blockedOptionalBatch).toBe(false);
+  });
+
+  it("blocks when batch omits every missing required tool", () => {
+    const r = gateNativeToolCallsForRequiredTools(
+      [{ name: "http-get", id: "x", arguments: {} }],
+      ["web-search", "file-write"],
+      new Set(["web-search"]),
+    );
+    expect(r.effective.length).toBe(0);
+    expect(r.blockedOptionalBatch).toBe(true);
+  });
+
+  it("passes through when all required tools are satisfied", () => {
+    const r = gateNativeToolCallsForRequiredTools(
+      calls,
+      ["web-search"],
+      new Set(["web-search"]),
+    );
+    expect(r.effective).toEqual(calls);
+    expect(r.blockedOptionalBatch).toBe(false);
   });
 });

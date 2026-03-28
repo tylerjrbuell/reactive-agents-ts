@@ -57,9 +57,8 @@ describe("Full Layer Integration", () => {
       enablePrompts: true,
       enableOrchestration: true,
       enableAudit: true,
-      testResponses: {
-        "What is": "The answer is 42.",
-      },
+      // `testResponses` is not a RuntimeOption — use `testScenario` so the test provider returns text.
+      testScenario: [{ text: "The answer is 42." }],
     });
 
     const task = {

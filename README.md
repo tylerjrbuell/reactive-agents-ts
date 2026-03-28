@@ -6,7 +6,7 @@
 
 **The open-source agent framework built for control, not magic.**
 
-Every decision controllable, observable, and auditable. 22 packages. composable layers. 5 reasoning strategies. 6 LLM providers. Model-adaptive context profiles. 10-phase execution engine with lifecycle hooks. 2,851 tests across 336 files. Built on Effect-TS for type safety from prompt to production.
+Every decision controllable, observable, and auditable. 22 packages. composable layers. 5 reasoning strategies. 6 LLM providers. Model-adaptive context profiles. Intelligent Context Synthesis (ICS) between kernel iterations. 10-phase execution engine with lifecycle hooks. 3,026 tests across 349 files. Built on Effect-TS for type safety from prompt to production.
 
 [![CI](https://github.com/tylerjrbuell/reactive-agents-ts/actions/workflows/ci.yml/badge.svg)](https://github.com/tylerjrbuell/reactive-agents-ts/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/badge/npm-%40reactive--agents-CB3837?logo=npm)](https://www.npmjs.com/org/reactive-agents)
@@ -40,7 +40,7 @@ Most AI agent frameworks are dynamically typed, monolithic, and opaque. They ass
 
 ## Features
 
-- **5 reasoning strategies** + adaptive meta-strategy (ReAct, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive)
+- **5 reasoning strategies** + adaptive meta-strategy (ReAct, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive) + **Intelligent Context Synthesis** — optional fast-template or deep-LLM transcript shaping each iteration (`withReasoning({ synthesis, strategies: { … } })`, `ContextSynthesized` on EventBus)
 - **6 LLM providers** -- Anthropic, OpenAI, Google Gemini, Ollama (local), LiteLLM (40+ models), Test (deterministic)
 - **Model-adaptive context profiles** -- 4 tiers (local, mid, large, frontier) with tier-aware prompts, compaction, and truncation
 - **4-layer memory** -- working, episodic, semantic (vector + FTS5), procedural (bun:sqlite); ExperienceStore for cross-agent learning; background consolidation + decay
@@ -64,7 +64,7 @@ Most AI agent frameworks are dynamically typed, monolithic, and opaque. They ass
 - **Agent as Data** -- `AgentConfig` JSON-serializable schema, `builder.toConfig()` reverse mapping, `ReactiveAgents.fromConfig()` / `.fromJSON()` reconstruction, roundtrip serialization
 - **Lightweight composition** -- `agentFn()` lazy agent primitives, `pipe()` sequential chains, `parallel()` concurrent fan-out, `race()` first-to-complete — all composable
 - **Dynamic tool registration** -- `agent.registerTool()` / `agent.unregisterTool()` for runtime tool management on live agents
-- **2,851 tests** across 336 files
+- **3,026 tests** across 349 files
 
 ## Quick Start
 
@@ -299,7 +299,7 @@ How Reactive Agents compares to other TypeScript agent frameworks on shipped, wo
 | Agent-as-data config          | Yes             | --           | --            | --     |
 | Functional composition        | Yes             | Yes          | --            | --     |
 | Dynamic tool registration     | Yes             | Yes          | --            | --     |
-| Test suite                    | 2,482 tests     | --           | --            | --     |
+| Test suite                    | 3,026 tests     | --           | --            | --     |
 
 ## Use Cases
 
@@ -639,7 +639,7 @@ Reactive Agents supports 6 providers: Anthropic, OpenAI, Google Gemini, Ollama (
 
 ### Is this framework production-ready?
 
-Yes -- it includes guardrails, budget controls, auditability, observability, Ed25519 identity, and composable service layers for testable deployments. 2,482 tests across 308 files.
+Yes -- it includes guardrails, budget controls, auditability, observability, Ed25519 identity, and composable service layers for testable deployments. 3,026 tests across 349 files.
 
 ### Can I run fully local agents?
 
@@ -653,7 +653,7 @@ See the [comparison table](#comparison). The key differences are: full Effect-TS
 
 ```bash
 bun install              # Install dependencies
-bun test                 # Run full test suite (2,851 tests, 336 files)
+bun test                 # Run full test suite (3,026 tests, 349 files)
 bun run build            # Build all packages (22 packages, ESM + DTS)
 ```
 

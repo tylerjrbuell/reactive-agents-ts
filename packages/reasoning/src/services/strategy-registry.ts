@@ -18,6 +18,7 @@ import { executeReflexion } from "../strategies/reflexion.js";
 import { executePlanExecute } from "../strategies/plan-execute.js";
 import { executeTreeOfThought } from "../strategies/tree-of-thought.js";
 import { executeAdaptive } from "../strategies/adaptive.js";
+import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
 
 // ─── Strategy function type ───
 
@@ -54,20 +55,10 @@ export type StrategyFn = (input: {
   /** Custom environment context key-value pairs injected into system prompt */
   readonly environmentContext?: Readonly<Record<string, string>>;
   /** Meta-tool configuration and pre-computed static data for brief/pulse/recall/find. */
-  readonly metaTools?: {
-    readonly brief?: boolean;
-    readonly find?: boolean;
-    readonly pulse?: boolean;
-    readonly recall?: boolean;
-    readonly staticBriefInfo?: {
-      readonly indexedDocuments: readonly { source: string; chunkCount: number; format: string }[];
-      readonly availableSkills: readonly { name: string; purpose: string }[];
-      readonly memoryBootstrap: { semanticLines: number; episodicEntries: number };
-    };
-    readonly harnessContent?: string;
-  };
+  readonly metaTools?: KernelMetaToolsConfig;
   /** Initial messages to seed the kernel conversation thread (e.g. task as user message). */
   readonly initialMessages?: readonly { readonly role: "user" | "assistant"; readonly content: string }[];
+  readonly synthesisConfig?: import("../context/synthesis-types.js").SynthesisConfig;
 }) => Effect.Effect<
   ReasoningResult,
   ExecutionError | IterationLimitError,

@@ -535,3 +535,33 @@ export function compressToolResult(
 
   return { content, stored: { key, value: result } };
 }
+
+/**
+ * Gate native parallel tool batches against {@link requiredTools} so optional tools
+ * (e.g. http-get) cannot run while a required tool (e.g. file-write) is still missing.
+ *
+ * - If any call targets a missing required tool → return only the first such call.
+ * - If calls omit every missing required tool but the batch is non-empty → empty effective
+ *   list with `blockedOptionalBatch: true` (caller injects redirect).
+ */
+export function gateNativeToolCallsForRequiredTools<T extends { readonly name: string }>(
+  calls: readonly T[],
+  requiredTools: readonly string[],
+  toolsUsed: ReadonlySet<string>,
+): { readonly effective: readonly T[]; readonly blockedOptionalBatch: boolean } {
+  if (requiredTools.length === 0) {
+    return { effective: calls, blockedOptionalBatch: false };
+  }
+  const missing = requiredTools.filter((t) => !toolsUsed.has(t));
+  if (missing.length === 0) {
+    return { effective: calls, blockedOptionalBatch: false };
+  }
+  const towardMissing = calls.filter((c) => missing.includes(c.name));
+  if (towardMissing.length > 0) {
+    return { effective: [towardMissing[0]!], blockedOptionalBatch: false };
+  }
+  if (calls.length > 0) {
+    return { effective: [], blockedOptionalBatch: true };
+  }
+  return { effective: calls, blockedOptionalBatch: false };
+}

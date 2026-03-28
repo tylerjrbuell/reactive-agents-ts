@@ -1,5 +1,14 @@
 import { Schema } from "effect";
-import { ContextProfileSchema } from "@reactive-agents/reasoning";
+import {
+  ContextProfileSchema,
+  SynthesisConfigJsonSchema,
+  KernelMetaToolsSchema,
+} from "@reactive-agents/reasoning";
+import type { SynthesisConfigJson, SynthesisStrategy } from "@reactive-agents/reasoning";
+import {
+  ReasoningOptionsJsonSchema,
+  type ReasoningOptionsEncoded,
+} from "./reasoning-options-schema.js";
 
 /**
  * Lifecycle phases — execution stages an agent goes through to process a task.
@@ -373,8 +382,30 @@ export const ReactiveAgentsConfigSchema = Schema.Struct({
   enableReactiveIntelligence: Schema.optional(Schema.Boolean),
   /** Reactive Intelligence configuration (telemetry, controller, learning). */
   reactiveIntelligenceOptions: Schema.optional(Schema.Unknown),
+  /** `.withReasoning()` options — JSON-serializable fields validated here; `synthesisStrategy` is runtime-only. */
+  reasoningOptions: Schema.optional(ReasoningOptionsJsonSchema),
+  /** Legacy flattened ICS config when no `reasoningOptions` (e.g. tests). Prefer `.withReasoning()`. */
+  synthesisConfig: Schema.optional(SynthesisConfigJsonSchema),
+  /** Resolved Conductor's Suite payload for the reasoning kernel (after harness resolution). */
+  metaTools: Schema.optional(KernelMetaToolsSchema),
 });
-export type ReactiveAgentsConfig = typeof ReactiveAgentsConfigSchema.Type;
+
+/**
+ * Options for `.withReasoning()` — all fields optional, merged with framework defaults.
+ * JSON encode/decode uses {@link ReasoningOptionsJsonSchema} (excludes `synthesisStrategy`).
+ */
+export type ReasoningOptions = ReasoningOptionsEncoded & {
+  /** Custom synthesis pipeline — runtime-only; not persisted in AgentConfig JSON. */
+  readonly synthesisStrategy?: SynthesisStrategy;
+};
+
+/**
+ * Runtime config: schema-decodable fields plus optional non-serializable ICS strategy on `synthesisConfig`.
+ */
+export type ReactiveAgentsConfig = Schema.Schema.Type<typeof ReactiveAgentsConfigSchema> & {
+  readonly reasoningOptions?: ReasoningOptions;
+  readonly synthesisConfig?: SynthesisConfigJson & { readonly synthesisStrategy?: SynthesisStrategy };
+};
 
 /**
  * Create a default ReactiveAgentsConfig with standard settings.

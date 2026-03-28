@@ -53,9 +53,10 @@ describe("ReactiveStrategy", () => {
       program.pipe(Effect.provide(layer)),
     );
 
-    // Mock LLM has no capabilities() → text-based path → "Test response" (13 chars)
-    // is below fast-path threshold (20 chars) → loops to max iterations → partial
-    expect(result.status).toBe("partial");
+    // Mock returns empty text each turn → no FINAL ANSWER, no tools → after 3 iterations
+    // kernel-runner loop detection (consecutive empty thoughts) sets kernel status "failed".
+    // That maps to reasoning status "failed" (not "partial"); execution layer reports success: false.
+    expect(result.status).toBe("failed");
     expect(result.steps.length).toBe(3);
   });
 

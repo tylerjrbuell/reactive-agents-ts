@@ -57,6 +57,7 @@ interface ReflexionInput {
   readonly modelId?: string;
   /** LLM temperature override */
   readonly temperature?: number;
+  readonly synthesisConfig?: import("../context/synthesis-types.js").SynthesisConfig;
 }
 
 /**
@@ -116,6 +117,7 @@ export const executeReflexion = (
       sessionId: input.sessionId,
       requiredTools: input.requiredTools,
       maxRequiredToolRetries: input.maxRequiredToolRetries,
+      synthesisConfig: input.synthesisConfig,
     }, {
       maxIterations: input.config.strategies.reflexion?.kernelMaxIterations ?? 3,
       strategy: "reflexion",
@@ -294,6 +296,7 @@ export const executeReflexion = (
         blockedTools,
         requiredTools: input.requiredTools,
         maxRequiredToolRetries: input.maxRequiredToolRetries,
+        synthesisConfig: input.synthesisConfig,
       }, {
         maxIterations: input.config.strategies.reflexion?.kernelMaxIterations ?? 3,
         strategy: "reflexion",

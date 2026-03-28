@@ -7,6 +7,7 @@ export type {
   ToolResult,
   LifecycleHook,
   ReactiveAgentsConfig,
+  ReasoningOptions,
   ModelParams,
   MetaToolsConfig,
   HarnessSkillConfig,
@@ -52,6 +53,11 @@ export { ExecutionEngine, ExecutionEngineLive } from "./execution-engine.js";
 export { createRuntime, createLightRuntime } from "./runtime.js";
 export type { RuntimeOptions, MCPServerConfig, LightRuntimeOptions } from "./runtime.js";
 
+export { resolveSynthesisConfigForStrategy, withoutStrategyIcsOverrides } from "./synthesis-resolve.js";
+export type { ReasoningSynthesisResolutionInput } from "./reasoning-synthesis-fields.js";
+export { ReasoningOptionsJsonSchema } from "./reasoning-options-schema.js";
+export type { ReasoningOptionsEncoded } from "./reasoning-options-schema.js";
+
 // ─── Builder (Primary Public DX) ───
 export {
   ReactiveAgents,
@@ -67,7 +73,7 @@ export type {
   GuardrailsOptions,
   VerificationOptions,
   ProviderName,
-  ReasoningOptions,
+  StrategySynthesisFields,
   ToolsOptions,
   PromptsOptions,
   ObservabilityOptions,

@@ -71,6 +71,7 @@ interface PlanExecuteInput {
   readonly modelId?: string;
   /** LLM temperature override */
   readonly temperature?: number;
+  readonly synthesisConfig?: import("../context/synthesis-types.js").SynthesisConfig;
 }
 
 export const executePlanExecute = (
@@ -801,6 +802,7 @@ function executeStep(
     maxRequiredToolRetries: input.maxRequiredToolRetries,
     modelId: input.modelId,
     exitOnAllToolsCalled: true,
+    synthesisConfig: input.synthesisConfig,
   }).pipe(
     Effect.map((kernelResult) => ({
       output: stripFinalAnswerPrefix(kernelResult.output || `[Step ${stepIndex + 1} completed]`),

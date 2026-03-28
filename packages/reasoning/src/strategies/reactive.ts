@@ -14,6 +14,8 @@ import { runKernel } from "./shared/kernel-runner.js";
 import { reactKernel } from "./shared/react-kernel.js";
 import { buildStrategyResult } from "./shared/step-utils.js";
 import type { KernelInput, KernelMessage } from "./shared/kernel-state.js";
+import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
+import type { TerminatedBy } from "@reactive-agents/core";
 
 // ── Re-exports for backwards compatibility ────────────────────────────────────
 
@@ -66,20 +68,11 @@ interface ReactiveInput {
   /** Custom environment context key-value pairs injected into system prompt */
   readonly environmentContext?: Readonly<Record<string, string>>;
   /** Meta-tool configuration and pre-computed static data for brief/pulse/recall/find. */
-  readonly metaTools?: {
-    readonly brief?: boolean;
-    readonly find?: boolean;
-    readonly pulse?: boolean;
-    readonly recall?: boolean;
-    readonly staticBriefInfo?: {
-      readonly indexedDocuments: readonly { source: string; chunkCount: number; format: string }[];
-      readonly availableSkills: readonly { name: string; purpose: string }[];
-      readonly memoryBootstrap: { semanticLines: number; episodicEntries: number };
-    };
-    readonly harnessContent?: string;
-  };
+  readonly metaTools?: KernelMetaToolsConfig;
   /** Initial messages to seed the kernel conversation thread (e.g. task as user message). */
   readonly initialMessages?: readonly KernelMessage[];
+  /** Intelligent Context Synthesis — from .withReasoning({ synthesis: ... }) */
+  readonly synthesisConfig?: import("../context/synthesis-types.js").SynthesisConfig;
 }
 
 // ── executeReactive ───────────────────────────────────────────────────────────
@@ -141,6 +134,7 @@ export const executeReactive = (
       environmentContext: input.environmentContext,
       metaTools: input.metaTools,
       initialMessages: input.initialMessages,
+      synthesisConfig: input.synthesisConfig,
     };
 
     const state = yield* runKernel(reactKernel, kernelInput, {
@@ -163,30 +157,39 @@ export const executeReactive = (
         : undefined,
     });
 
-    // When max iterations reached (no explicit output), fall back to last thought
+    // When failed, surface kernel error; else output / last thought
     const output =
-      state.output ??
-      [...state.steps].filter((s) => s.type === "thought").pop()?.content ??
-      null;
+      state.status === "failed" && state.error
+        ? state.error
+        : state.output ??
+          [...state.steps].filter((s) => s.type === "thought").pop()?.content ??
+          null;
 
     // Derive terminatedBy from kernel state — map oracle reasons to canonical types
     const rawTerminatedBy = state.meta.terminatedBy as string | undefined;
-    const terminatedBy: "final_answer" | "final_answer_tool" | "max_iterations" | "end_turn" =
-      rawTerminatedBy === "final_answer_tool"
-        ? "final_answer_tool"
-        : rawTerminatedBy === "end_turn" || rawTerminatedBy === "llm_end_turn"
-          ? "end_turn"
-          : rawTerminatedBy === "final_answer_regex"
-            ? "final_answer"
-            : state.status === "done"
+    const terminatedBy: TerminatedBy =
+      rawTerminatedBy === "llm_error"
+        ? "llm_error"
+        : rawTerminatedBy === "final_answer_tool"
+          ? "final_answer_tool"
+          : rawTerminatedBy === "end_turn" || rawTerminatedBy === "llm_end_turn"
+            ? "end_turn"
+            : rawTerminatedBy === "final_answer_regex"
               ? "final_answer"
-              : "max_iterations";
+              : state.status === "done"
+                ? "final_answer"
+                : "max_iterations";
 
     return buildStrategyResult({
       strategy: "reactive",
       steps: [...state.steps],
       output,
-      status: state.status === "done" ? "completed" : "partial",
+      status:
+        state.status === "done"
+          ? "completed"
+          : state.status === "failed"
+            ? "failed"
+            : "partial",
       start,
       totalTokens: state.tokens,
       totalCost: state.cost,

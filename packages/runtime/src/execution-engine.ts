@@ -32,6 +32,7 @@ import { DebriefStoreService } from "@reactive-agents/memory";
 import { TelemetryClient as TelemetryClientImpl, classifyTaskCategory as classifyTaskCategoryFn, lookupModel as lookupModelFn } from "@reactive-agents/reactive-intelligence";
 import { recommendStrategyForTier } from "@reactive-agents/llm-provider";
 import { buildTrajectoryFingerprint, abstractifyToolName, firstConvergenceIteration, peakContextPressure, deriveTaskComplexity, deriveFailurePattern, deriveThoughtToActionRatio } from "./telemetry-enrichment.js";
+import { resolveSynthesisConfigForStrategy } from "./synthesis-resolve.js";
 
 // ─── Narrow service types for optional deps ───
 
@@ -948,6 +949,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         harnessContent?: string;
                       };
                       initialMessages?: readonly { readonly role: "user" | "assistant"; readonly content: string }[];
+                      synthesisConfig?: import("@reactive-agents/reasoning").SynthesisConfig;
                     }) => Effect.Effect<{
                       output: unknown;
                       status: string;
@@ -1135,8 +1137,13 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         taskCategory,
                         temperature: config.contextProfile?.temperature as number | undefined,
                         environmentContext: config.environmentContext as Record<string, string> | undefined,
-                        metaTools: (config as any).metaTools,
+                        metaTools: config.metaTools,
                         initialMessages,
+                        synthesisConfig: resolveSynthesisConfigForStrategy(
+                          config.reasoningOptions,
+                          effectiveStrategy,
+                          config.synthesisConfig,
+                        ),
                       });
                       const strategyOutcome = yield* Effect.exit(strategyEffect);
                       if (strategyOutcome._tag === "Success") {
@@ -2176,6 +2183,10 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
 
                         const response = yield* llm.complete(llmRequest);
 
+                        const retryDone =
+                          response.stopReason === "end_turn" &&
+                          !response.toolCalls?.length;
+
                         return {
                           ...c,
                           messages: [
@@ -2189,6 +2200,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                           metadata: {
                             ...c.metadata,
                             lastResponse: response.content,
+                            isComplete: retryDone,
                           },
                         };
                       }) as unknown as Effect.Effect<ExecutionContext, never>,
@@ -2472,30 +2484,52 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 // ── Phase 10: COMPLETE ──
                 ctx = yield* guardedPhase(ctx, "complete", (c) =>
                   Effect.gen(function* () {
-                    if (eb) {
-                      yield* eb.publish({
-                        _tag: "AgentCompleted",
-                        taskId: c.taskId,
-                        agentId: config.agentId,
-                        success: true,
-                        totalIterations: c.iteration,
-                        totalTokens: c.tokensUsed,
-                        durationMs: Date.now() - executionStartMs,
-                      }).pipe(Effect.catchAll(() => Effect.void));
-                    }
                     return { ...c, agentState: "completed" as const };
                   }),
                 );
 
                 // Build TaskResult — sanitize output to strip internal metadata
-                const rawOutput = ctx.metadata.lastResponse ?? null;
-                const rr = ctx.metadata.reasoningResult as { metadata?: { confidence?: number; strategyFallback?: boolean; terminatedBy?: string; finalAnswerCapture?: unknown } } | undefined;
+                const rr = ctx.metadata.reasoningResult as {
+                  output?: unknown;
+                  status?: string;
+                  steps?: ReadonlyArray<{ type?: string; content?: string }>;
+                  metadata?: { confidence?: number; strategyFallback?: boolean; terminatedBy?: string; finalAnswerCapture?: unknown };
+                } | undefined;
+                let rawOutput: unknown = ctx.metadata.lastResponse ?? null;
+                if (
+                  (rawOutput === null || rawOutput === "") &&
+                  rr?.steps &&
+                  rr.steps.length > 0
+                ) {
+                  const lastObs = [...rr.steps].reverse().find((s) => s.type === "observation");
+                  if (lastObs?.content) rawOutput = lastObs.content;
+                }
                 const sanitizedOutput = typeof rawOutput === "string" ? sanitizeOutput(rawOutput) : rawOutput;
 
-                // ── Debrief Synthesis (best-effort, never blocks the result) ──
+                const outputForSuccess =
+                  typeof sanitizedOutput === "string"
+                    ? sanitizedOutput.trim()
+                    : sanitizedOutput != null
+                      ? String(sanitizedOutput).trim()
+                      : "";
+                const hasSubstantiveOutput = outputForSuccess.length > 0;
+
                 // Extract terminatedBy from reasoning metadata, with fallback inference
                 const terminatedByRaw = (rr?.metadata?.terminatedBy ?? "end_turn") as
-                  "final_answer_tool" | "final_answer" | "max_iterations" | "end_turn";
+                  "final_answer_tool" | "final_answer" | "max_iterations" | "end_turn" | "llm_error";
+
+                // Reactive strategy often reports partial + max_iterations whenever the kernel did not
+                // reach state "done", even if the last LLM turn produced a usable string. Treat
+                // completed, or partial with non-empty output, as success; empty partial as failure.
+                const executionSucceeded =
+                  rr !== undefined && typeof rr.status === "string"
+                    ? rr.status === "failed" || rr.status === "error"
+                      ? false
+                      : rr.status === "completed" ||
+                        (rr.status === "partial" && hasSubstantiveOutput)
+                    : Boolean(ctx.metadata.isComplete);
+
+                // ── Debrief Synthesis (best-effort, never blocks the result) ──
 
                 // Publish FinalAnswerProduced event when final-answer tool is called
                 if (terminatedByRaw === "final_answer_tool" && eb) {
@@ -2611,7 +2645,17 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   taskId: task.id as any,
                   agentId: task.agentId,
                   output: sanitizedOutput,
-                  success: true,
+                  success: executionSucceeded,
+                  ...(!executionSucceeded
+                    ? {
+                        error:
+                          outputForSuccess.length > 0
+                            ? outputForSuccess
+                            : rr?.status === "failed"
+                              ? "Reasoning failed"
+                              : "Execution did not complete successfully",
+                      }
+                    : {}),
                   metadata: {
                     duration: executionDurationMs,
                     cost: ctx.cost,
@@ -2648,7 +2692,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 if (obs) {
                   yield* obs.info("Execution completed", {
                     taskId: task.id,
-                    success: true,
+                    success: executionSucceeded,
                     tokensUsed: ctx.tokensUsed,
                     cost: ctx.cost,
                     duration: result.metadata.duration,
@@ -2803,12 +2847,21 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   );
                 }
 
-                // Phase 0.2: Publish TaskCompleted
+                // Phase 0.2: Lifecycle completion events (aligned with TaskResult.success)
                 if (eb) {
+                  yield* eb.publish({
+                    _tag: "AgentCompleted",
+                    taskId: ctx.taskId,
+                    agentId: config.agentId,
+                    success: executionSucceeded,
+                    totalIterations: ctx.iteration,
+                    totalTokens: ctx.tokensUsed,
+                    durationMs: Date.now() - executionStartMs,
+                  }).pipe(Effect.catchAll(() => Effect.void));
                   yield* eb.publish({
                     _tag: "TaskCompleted",
                     taskId: task.id,
-                    success: true,
+                    success: executionSucceeded,
                   }).pipe(Effect.catchAll(() => Effect.void));
                 }
 

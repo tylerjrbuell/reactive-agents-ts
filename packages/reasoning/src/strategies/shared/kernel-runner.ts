@@ -31,8 +31,22 @@ import {
   type ThoughtKernel,
 } from "./kernel-state.js";
 import { evaluateStrategySwitch, buildHandoff } from "./strategy-evaluator.js";
+import { ContextSynthesizerService } from "../../context/context-synthesizer.js";
+import { classifyTaskPhase } from "../../context/task-phase.js";
+import type { SynthesisConfig, SynthesisInput, SynthesisEntropySignals } from "../../context/synthesis-types.js";
+import type { ReasoningStep } from "../../types/index.js";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+/** Error strings from recent failed tool observations — feeds ICS escalation. */
+function getLastErrors(steps: readonly ReasoningStep[]): readonly string[] {
+  return steps
+    .filter(
+      (s) => s.type === "observation" && s.metadata?.observationResult?.success === false,
+    )
+    .slice(-3)
+    .map((s) => s.metadata?.observationResult?.displayText ?? s.content.slice(0, 100));
+}
 
 /**
  * Normalize action content for comparison — parses JSON and re-serializes with
@@ -278,6 +292,62 @@ export function runKernel(
       yield* hooks.onIterationProgress(state, toolsThisStep);
       prevToolsUsed = new Set(state.toolsUsed);
 
+      // ── Intelligent Context Synthesis (before thinking step) ──
+      // Fires on ALL iterations including iteration 0 so the orient phase
+      // receives synthesized context with tool hints (GAP 1 fix).
+      const synthesisCfg: SynthesisConfig = currentInput.synthesisConfig ?? { mode: "auto" };
+      if (synthesisCfg.mode !== "off" && state.status === "thinking") {
+        const synthesizerOpt = yield* Effect.serviceOption(ContextSynthesizerService);
+        if (synthesizerOpt._tag === "Some") {
+          const entropyMeta = (state.meta as Record<string, unknown>).entropy as
+            | { entropyHistory?: readonly SynthesisEntropySignals[] }
+            | undefined;
+          const hist = entropyMeta?.entropyHistory;
+          const latestEntropy =
+            hist && hist.length > 0 ? (hist[hist.length - 1] as SynthesisEntropySignals) : undefined;
+
+          const taskPhase = classifyTaskPhase({
+            iteration: state.iteration,
+            toolsUsed: state.toolsUsed,
+            requiredTools: currentInput.requiredTools ?? [],
+            steps: state.steps,
+          });
+
+          const profile = currentContext.profile;
+          const synthesisInput: SynthesisInput = {
+            transcript: state.messages,
+            task: currentInput.task,
+            taskPhase,
+            requiredTools: currentInput.requiredTools ?? [],
+            toolsUsed: state.toolsUsed,
+            availableTools: currentInput.availableToolSchemas ?? [],
+            entropy: latestEntropy,
+            iteration: state.iteration,
+            maxIterations: currentOptions.maxIterations,
+            lastErrors: getLastErrors(state.steps),
+            tier: profile.tier ?? "mid",
+            tokenBudget: Math.floor(8192 * ((profile.contextBudgetPercent ?? 80) / 100)),
+            synthesisConfig: synthesisCfg,
+          };
+
+          const synthesized = yield* synthesizerOpt.value
+            .synthesize(synthesisInput)
+            .pipe(Effect.catchAll(() => Effect.succeed(null)));
+
+          if (synthesized !== null) {
+            yield* hooks
+              .onContextSynthesized(
+                synthesized,
+                state.taskId,
+                currentInput.agentId ?? "unknown",
+              )
+              .pipe(Effect.catchAll(() => Effect.void));
+
+            state = transitionState(state, { synthesizedContext: synthesized });
+          }
+        }
+      }
+
       // ── Early exit: primary scoped tools called ─────────────────────────
       // For composite steps in plan-execute, exit as soon as all primary
       // (non-utility) tools have been called. Utility tools like scratchpad
@@ -330,6 +400,10 @@ export function runKernel(
         }
 
         // (b) Repeated thoughts: identical thought content N times in recent history
+        //     Only flag when NO action steps are interleaved — if the model is
+        //     making tool calls between identical thoughts, it is progressing
+        //     (FC models often produce brief/identical reasoning text before each
+        //     tool call; the real work is in the tool calls themselves).
         if (loopMsg === null) {
           const allThoughts = steps.filter((s) => s.type === "thought");
           if (allThoughts.length >= maxRepeatedThought) {
@@ -337,7 +411,16 @@ export function runKernel(
             const lastThought = recentThoughts[recentThoughts.length - 1]!.content;
             const allSameThought = recentThoughts.every((s) => s.content === lastThought);
             if (allSameThought) {
-              loopMsg = `Loop detected: identical thought repeated ${maxRepeatedThought} times`;
+              const recentActions = steps.filter((s) => s.type === "action");
+              const hasRecentProgress = recentActions.length > 0
+                && recentActions.some((a) => {
+                  const idx = steps.indexOf(a);
+                  const firstThoughtIdx = steps.indexOf(recentThoughts[0]!);
+                  return idx >= firstThoughtIdx;
+                });
+              if (!hasRecentProgress) {
+                loopMsg = `Loop detected: identical thought repeated ${maxRepeatedThought} times`;
+              }
             }
           }
         }

@@ -53,6 +53,8 @@ export const TerminatedBy = Schema.Literal(
   "final_answer",
   "max_iterations",
   "end_turn",
+  /** LLM request/stream failed (provider error, invalid tool schema, network, etc.) */
+  "llm_error",
 );
 export type TerminatedBy = typeof TerminatedBy.Type;
 

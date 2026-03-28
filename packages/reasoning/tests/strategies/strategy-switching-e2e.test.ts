@@ -257,7 +257,7 @@ describe("enableStrategySwitching affects outcomes on looping kernel", () => {
     // The test succeeds if executeReactive completes without throwing —
     // this proves the strategySwitching param is accepted and forwarded.
     expect(result.strategy).toBe("reactive");
-    // With default "Test response" from TestLLM, no FINAL ANSWER → partial
-    expect(["partial", "completed"]).toContain(result.status);
+    // With default "Test response" from TestLLM, no FINAL ANSWER → partial or failed (loop detection)
+    expect(["partial", "completed", "failed"]).toContain(result.status);
   });
 });

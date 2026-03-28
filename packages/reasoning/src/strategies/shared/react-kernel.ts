@@ -12,7 +12,7 @@
  *   - `executeReActKernel(input)` — backwards-compatible wrapper using `runKernel(reactKernel, ...)`
  *   - `ReActKernelInput` / `ReActKernelResult` — preserved types for all consumers
  */
-import { Effect, Stream, FiberRef, Ref } from "effect";
+import { Effect, Stream, FiberRef, Ref, Either } from "effect";
 import type { ReasoningStep } from "../../types/index.js";
 import { ExecutionError } from "../../errors/errors.js";
 import { LLMService, selectAdapter } from "@reactive-agents/llm-provider";
@@ -51,10 +51,11 @@ import type { ToolSchema } from "./tool-utils.js";
 import {
   hasFinalAnswer,
   extractFinalAnswer,
+  gateNativeToolCallsForRequiredTools,
 } from "./tool-utils.js";
 import { evaluateTermination, defaultEvaluators, type TerminationContext } from "./termination-oracle.js";
 import { assembleOutput } from "./output-assembly.js";
-import { buildStaticContext, buildDynamicContext } from "../../context/context-engine.js";
+import { buildStaticContext, buildDynamicContext, buildRules } from "../../context/context-engine.js";
 import { applyMessageWindow } from "../../context/message-window.js";
 import type { MemoryItem } from "../../context/context-engine.js";
 import { extractThinking, rescueFromThinking } from "./thinking-utils.js";
@@ -69,6 +70,10 @@ import {
   type KernelMessage,
   type ThoughtKernel,
 } from "./kernel-state.js";
+import type { KernelMetaToolsConfig } from "../../types/kernel-meta-tools.js";
+
+/** Meta-tool names — not counted as "real work" for completion detection. */
+const META_TOOL_SET = new Set(["final-answer", "task-complete", "context-status", "brief", "pulse", "find", "recall"]);
 
 // ── Public input / output types ──────────────────────────────────────────────
 
@@ -128,20 +133,11 @@ export interface ReActKernelInput {
   /** Exit kernel loop when all scoped tools have been called successfully */
   exitOnAllToolsCalled?: boolean;
   /** Meta-tool configuration and pre-computed static data for brief/pulse/recall/find. */
-  metaTools?: {
-    brief?: boolean;
-    find?: boolean;
-    pulse?: boolean;
-    recall?: boolean;
-    staticBriefInfo?: {
-      indexedDocuments: readonly { source: string; chunkCount: number; format: string }[];
-      availableSkills: readonly { name: string; purpose: string }[];
-      memoryBootstrap: { semanticLines: number; episodicEntries: number };
-    };
-    harnessContent?: string;
-  };
+  metaTools?: KernelMetaToolsConfig;
   /** Pre-built ToolCallResolver instance — injected by the kernel runner when FC is active */
   toolCallResolver?: import("@reactive-agents/tools").ToolCallResolver;
+  /** Intelligent Context Synthesis config — threaded from .withReasoning() */
+  synthesisConfig?: import("../../context/synthesis-types.js").SynthesisConfig;
 }
 
 export interface ReActKernelResult {
@@ -158,7 +154,7 @@ export interface ReActKernelResult {
   /** Number of iterations completed */
   iterations: number;
   /** How the loop terminated */
-  terminatedBy: "final_answer" | "final_answer_tool" | "max_iterations" | "end_turn";
+  terminatedBy: "final_answer" | "final_answer_tool" | "max_iterations" | "end_turn" | "llm_error";
   /** Captured final-answer tool payload — present when terminatedBy === "final_answer_tool" */
   finalAnswerCapture?: FinalAnswerCapture;
 }
@@ -305,17 +301,28 @@ function handleThinking(
     // ── Split context: static in system prompt, dynamic in user message ─────
     // Static content (tool schemas, RULES, task) is sent once in the system prompt
     // to avoid repeating ~500-700 tokens of identical content every iteration.
-    const staticContext = buildStaticContext({
-      task: input.task,
-      profile,
-      availableToolSchemas: augmentedToolSchemas,
-      requiredTools: input.requiredTools,
-      environmentContext: input.environmentContext,
-    });
+    // When ICS (synthesizedContext) is active, the synthesized messages already
+    // contain the task, tool hints, and phase guidance — use a lean system prompt
+    // to avoid double-context that overwhelms the model (GAP 2).
     const baseSystemPrompt = buildSystemPrompt(input.task, effectiveSystemPrompt, profile.tier);
     const adapter = selectAdapter({ supportsToolCalling: true }, profile.tier);
     const patchedBase = adapter.systemPromptPatch?.(baseSystemPrompt, profile.tier ?? "mid") ?? baseSystemPrompt;
-    const systemPromptText = `${patchedBase}\n\n${staticContext}`;
+
+    const hasICS = state.synthesizedContext != null;
+    let systemPromptText: string;
+    if (hasICS) {
+      const rules = buildRules(augmentedToolSchemas, input.requiredTools, profile.tier);
+      systemPromptText = `${patchedBase}\n\n${rules}`;
+    } else {
+      const staticContext = buildStaticContext({
+        task: input.task,
+        profile,
+        availableToolSchemas: augmentedToolSchemas,
+        requiredTools: input.requiredTools,
+        environmentContext: input.environmentContext,
+      });
+      systemPromptText = `${patchedBase}\n\n${staticContext}`;
+    }
 
     // ── Auto-forward: inject full stored result from last observation ──────────
     // When the previous tool result was compressed and auto-stored in the scratchpad
@@ -368,7 +375,18 @@ function handleThinking(
     const outputMaxTokens = tierMaxTokens[profile.tier] ?? 1500;
 
     // ── Native FC: convert tool schemas to LLM ToolDefinition format ──────
-    const llmTools = augmentedToolSchemas.map((ts) => ({
+    // When the required-tools gate has blocked a tool, narrow the FC tools
+    // parameter to only required (unsatisfied) + meta tools. This forces models
+    // like cogito:14b (which lack tool_choice support) to select the right tool
+    // instead of stubbornly re-selecting a previously successful one.
+    const META_TOOL_NAMES = new Set(["final-answer", "task-complete", "context-status", "brief", "pulse", "find", "recall"]);
+    const gateBlockedTools = (state.meta.gateBlockedTools as readonly string[] | undefined) ?? [];
+    const missingRequired = (input.requiredTools ?? []).filter((t) => !state.toolsUsed.has(t));
+    const filteredToolSchemas = gateBlockedTools.length > 0 && missingRequired.length > 0
+      ? augmentedToolSchemas.filter((ts) =>
+          missingRequired.includes(ts.name) || META_TOOL_NAMES.has(ts.name))
+      : augmentedToolSchemas;
+    const llmTools = filteredToolSchemas.map((ts) => ({
       name: ts.name,
       description: ts.description,
       inputSchema: {
@@ -389,18 +407,28 @@ function handleThinking(
     const wantLogprobs = (state.meta.entropy as any)?.modelId !== undefined;
 
     // ── Build conversation messages ──────────────────────────────────────────
-    // Send state.messages directly through sliding window compaction,
-    // then convert to provider-native format. The messages array IS the
-    // conversation thread — no need to rebuild from steps.
-    let compactedMessages = applyMessageWindow(state.messages, profile as import("../../context/context-profile.js").ContextProfile);
+    // Prefer ICS briefs (set by kernel-runner after tool rounds); otherwise sliding window.
+    let conversationMessages: LLMMessage[];
 
-    // Defensive: if messages are empty (shouldn't happen after Task 9 seeding), fall back
-    if (compactedMessages.length === 0) {
-      compactedMessages = [{ role: "user" as const, content: thoughtPrompt }];
+    if (state.synthesizedContext) {
+      conversationMessages = [...state.synthesizedContext.messages];
+      state = transitionState(state, { synthesizedContext: null });
+      if (autoForwardSection) {
+        conversationMessages = [
+          ...conversationMessages,
+          { role: "user", content: autoForwardSection },
+        ];
+      }
+    } else {
+      let compactedMessages = applyMessageWindow(
+        state.messages,
+        profile as import("../../context/context-profile.js").ContextProfile,
+      );
+      if (compactedMessages.length === 0) {
+        compactedMessages = [{ role: "user" as const, content: thoughtPrompt }];
+      }
+      conversationMessages = (compactedMessages as readonly KernelMessage[]).map(toProviderMessage);
     }
-
-    // Convert KernelMessage[] → LLMMessage[] for the provider
-    const conversationMessages: LLMMessage[] = (compactedMessages as readonly KernelMessage[]).map(toProviderMessage);
 
     const llmStreamEffect = llm.stream({
       messages: conversationMessages,
@@ -411,29 +439,37 @@ function handleThinking(
       ...(wantLogprobs ? { logprobs: true, topLogprobs: 5 } : {}),
     });
 
-    const llmStream = yield* llmStreamEffect.pipe(
-      Effect.mapError(
-        (err) =>
-          new ExecutionError({
-            strategy,
-            message: `LLM stream failed at iteration ${state.iteration}: ${
-              err && typeof err === "object" && "message" in err
-                ? (err as { message: string }).message
-                : String(err)
-            }`,
-            step: state.iteration,
-            cause: err,
-          }),
-      ),
-      Effect.catchAll((execErr) =>
-        Effect.succeed(
-          Stream.make({
-            type: "content_complete" as const,
-            content: `[LLM Error: ${execErr.message}]`,
-          }) as Stream.Stream<StreamEvent, never>,
+    const streamInit = yield* Effect.either(
+      llmStreamEffect.pipe(
+        Effect.mapError(
+          (err) =>
+            new ExecutionError({
+              strategy,
+              message: `LLM stream failed at iteration ${state.iteration}: ${
+                err && typeof err === "object" && "message" in err
+                  ? (err as { message: string }).message
+                  : String(err)
+              }`,
+              step: state.iteration,
+              cause: err,
+            }),
         ),
       ),
     );
+
+    if (Either.isLeft(streamInit)) {
+      return transitionState(state, {
+        status: "failed" as const,
+        error: streamInit.left.message,
+        output: null,
+        meta: {
+          ...state.meta,
+          terminatedBy: "llm_error",
+        },
+      });
+    }
+
+    const llmStream = streamInit.right;
 
     // Accumulate content + emit text deltas via FiberRef callback
     let accumulatedContent = "";
@@ -450,6 +486,7 @@ function handleThinking(
 
     const textDeltaCb = yield* FiberRef.get(StreamingTextCallback);
 
+    let streamConsumeError: string | undefined;
     yield* Stream.runForEach(llmStream, (event) =>
       Effect.gen(function* () {
         if (event.type === "text_delta") {
@@ -479,7 +516,27 @@ function handleThinking(
           }
         }
       }),
-    ).pipe(Effect.catchAll(() => Effect.void));
+    ).pipe(
+      Effect.catchAll((streamErr) => {
+        streamConsumeError =
+          streamErr && typeof streamErr === "object" && "message" in streamErr
+            ? (streamErr as { message: string }).message
+            : String(streamErr);
+        return Effect.void;
+      }),
+    );
+
+    if (streamConsumeError !== undefined) {
+      return transitionState(state, {
+        status: "failed" as const,
+        error: `LLM stream failed at iteration ${state.iteration}: ${streamConsumeError}`,
+        output: null,
+        meta: {
+          ...state.meta,
+          terminatedBy: "llm_error",
+        },
+      });
+    }
 
     // Store logprobs in entropy meta for the entropy sensor
     if (accumulatedLogprobs.length > 0) {
@@ -531,8 +588,14 @@ function handleThinking(
       }
     }
 
-    // Publish thought event
-    yield* hooks.onThought(state, thought);
+    // Publish thought event with prompt trace for logModelIO
+    const userContent = conversationMessages
+      .map((m) => {
+        const c = m.content;
+        return typeof c === "string" ? c : Array.isArray(c) ? c.map((b: Record<string, unknown>) => (b as { text?: string }).text ?? "").join("") : "";
+      })
+      .join("\n---\n");
+    yield* hooks.onThought(state, thought, { system: systemPromptText, user: userContent });
 
     // ── FAST-PATH: trivial task exit ─────────────────────────────────────────
     // If this is the first iteration, the model produced no tool call, no
@@ -596,20 +659,70 @@ function handleThinking(
       );
 
       if (resolverResult._tag === "tool_calls") {
-        // Store pending native tool calls in meta for handleActing
-        return transitionState(state, {
-          steps: newSteps,
-          tokens: newTokens,
-          cost: newCost,
-          status: "acting",
-          meta: {
-            ...state.meta,
-            pendingNativeToolCalls: resolverResult.calls as readonly ToolCallSpec[],
-            // Store thought + thinking for post-action FA check
-            lastThought: thought,
-            lastThinking: thinking,
-          },
-        });
+        const rawCalls = resolverResult.calls as readonly ToolCallSpec[];
+        const { effective, blockedOptionalBatch } = gateNativeToolCallsForRequiredTools(
+          rawCalls,
+          input.requiredTools ?? [],
+          state.toolsUsed,
+        );
+
+        if (blockedOptionalBatch) {
+          const missing = (input.requiredTools ?? []).filter((t) => !state.toolsUsed.has(t));
+          const nextRequired = missing[0] ?? "the missing required tool";
+          const attemptedTools = rawCalls.map((tc) => tc.name);
+          const writeHint =
+            nextRequired.includes("write") || nextRequired.includes("file")
+              ? ` Use the ${nextRequired} tool with a path from the task and the full report body as content (markdown).`
+              : "";
+          const blockMsg =
+            `Required tools not yet satisfied: ${missing.join(", ")}. Your tool batch did not include any of them — do not use optional tools until these are done. Call ${nextRequired} now with concrete arguments.${writeHint}`;
+
+          yield* hooks.onThought(state, `[GATE] Model tried: ${attemptedTools.join(", ")} — blocked, need: ${missing.join(", ")}`);
+
+          const blockStep = makeStep("observation", blockMsg, {
+            observationResult: makeObservationResult("system", false, blockMsg),
+          });
+          const blockMessages: readonly KernelMessage[] = [
+            ...(state.messages as readonly KernelMessage[]),
+            { role: "user", content: blockMsg },
+          ];
+
+          const prevBlocked = (state.meta.gateBlockedTools as readonly string[] | undefined) ?? [];
+          const newBlocked = [...new Set([...prevBlocked, ...attemptedTools])];
+
+          return transitionState(state, {
+            steps: [...newSteps, blockStep],
+            messages: blockMessages,
+            tokens: newTokens,
+            cost: newCost,
+            status: "thinking",
+            iteration: state.iteration + 1,
+            meta: {
+              ...state.meta,
+              lastThought: thought,
+              lastThinking: thinking,
+              gateBlockedTools: newBlocked,
+            },
+          });
+        }
+
+        if (effective.length > 0) {
+          // Store pending native tool calls in meta for handleActing
+          return transitionState(state, {
+            steps: newSteps,
+            tokens: newTokens,
+            cost: newCost,
+            status: "acting",
+            meta: {
+              ...state.meta,
+              pendingNativeToolCalls: effective,
+              // Store thought + thinking for post-action FA check
+              lastThought: thought,
+              lastThinking: thinking,
+            },
+          });
+        }
+        // Resolver returned tool_calls but gated to zero (empty batch) — fall through
       }
 
       if (resolverResult._tag === "final_answer") {
@@ -701,18 +814,55 @@ function handleThinking(
           },
         });
       } else if (resolverResult._tag === "thinking") {
-        // Model returned no tool calls and no substantial content — it's uncertain
-        // what to do next. Add a step with any content and inject guidance.
         const thinkingContent = resolverResult.content.trim();
         const reqTools = input.requiredTools ?? [];
         const missingReq = reqTools.filter((t) => !state.toolsUsed.has(t));
+        const allRequiredMet = reqTools.length > 0 && missingReq.length === 0;
 
-        // Count consecutive empty responses (thinking with no content)
+        // ── Promote to done when all required tools are satisfied ─────────
+        // The model has completed its tool work. If it returned thinking
+        // (empty or non-empty), don't loop — assemble output from what we
+        // have: the tool results are the deliverable, not the model's prose.
+        if (allRequiredMet) {
+          const hasRealToolWork = [...state.toolsUsed].some(
+            (t) => !META_TOOL_SET.has(t),
+          );
+          if (hasRealToolWork) {
+            // Use thinking content as output if available, otherwise
+            // assemble a summary from tool results.
+            const output = thinkingContent
+              || state.priorThought
+              || "Task completed — all required tools have been executed.";
+
+            yield* hooks.onThought(state, `[ICS] All required tools met, promoting to done`);
+            const assembled = assembleOutput({
+              steps: newSteps,
+              finalAnswer: output,
+              terminatedBy: "llm_end_turn",
+              entropyScores: (state.meta.entropy as any)?.entropyHistory,
+            });
+            return transitionState(state, {
+              steps: newSteps,
+              tokens: newTokens,
+              cost: newCost,
+              status: "done" as const,
+              output: assembled.text,
+              priorThought: output,
+              iteration: state.iteration + 1,
+              meta: {
+                ...state.meta,
+                terminatedBy: "end_turn",
+              },
+            });
+          }
+        }
+
+        // ── Standard thinking handler (required tools still missing) ──────
         const consecutiveEmpty = !thinkingContent
           ? newSteps.reduceRight((count, s) => {
-              if (count === -1) return -1; // stopped counting
+              if (count === -1) return -1;
               if (s.type === "observation" && s.content.startsWith("Continue working")) return count + 1;
-              if (s.type === "thought" || s.type === "action") return -1; // reset
+              if (s.type === "thought" || s.type === "action") return -1;
               return count;
             }, 0)
           : 0;
@@ -722,19 +872,13 @@ function handleThinking(
           thinkingSteps = [...thinkingSteps, makeStep("thought", thinkingContent)];
         }
 
-        // Build nudge message — ALWAYS when required tools are missing, not just on empty
-        // responses. This ensures an observation step is injected between thoughts,
-        // preventing the consecutive-thoughts loop detector from killing productive
-        // iterations where the model thinks but hasn't called the next tool yet.
         let nudgeMessage: string | undefined;
         if (missingReq.length > 0) {
-          // After 2 consecutive empty responses, escalate to a stronger directive
           const isStuck = consecutiveEmpty >= 2;
           const defaultNudge = isStuck
             ? `⚠️ ACTION REQUIRED: You have not made progress. You MUST call: ${missingReq.join(", ")} RIGHT NOW. Stop waiting and use the tool immediately.`
             : `Continue working on the task. You still need to call: ${missingReq.join(", ")}. Use the available tools to complete the task.`;
 
-          // Try adapter hint first (returns undefined for non-local tiers)
           const lastObsForHint = state.steps.filter((s) => s.type === "observation").pop();
           const lastActionForHint = state.steps.filter((s) => s.type === "action").pop();
           const lastToolNameForHint = (lastActionForHint?.metadata?.toolCall as { name?: string } | undefined)?.name;
@@ -754,8 +898,6 @@ function handleThinking(
           })];
         }
 
-        // Append the nudge as a user message in conversation history
-        // so the model sees it in the next iteration's context (not just as a step).
         const updatedMessages = nudgeMessage
           ? [...(state.messages as readonly KernelMessage[]), { role: "user" as const, content: nudgeMessage }]
           : state.messages;
@@ -1383,6 +1525,7 @@ export const executeReActKernel = (
       requiredTools: input.requiredTools,
       maxRequiredToolRetries: input.maxRequiredToolRetries,
       metaTools: input.metaTools,
+      synthesisConfig: input.synthesisConfig,
       ...(input.toolCallResolver ? { toolCallResolver: input.toolCallResolver } : {}),
     } as KernelInput, {
       maxIterations: input.maxIterations ?? 10,
@@ -1398,22 +1541,31 @@ export const executeReActKernel = (
 
     // Determine terminatedBy from state — map oracle reasons to canonical types
     const rawTerminatedBy = state.meta.terminatedBy as string | undefined;
-    const terminatedBy: "final_answer" | "final_answer_tool" | "max_iterations" | "end_turn" =
-      rawTerminatedBy === "final_answer_tool"
-        ? "final_answer_tool"
-        : rawTerminatedBy === "end_turn" || rawTerminatedBy === "llm_end_turn"
-          ? "end_turn"
-          : rawTerminatedBy === "final_answer_regex"
-            ? "final_answer"
-            : state.status === "done"
+    const terminatedBy:
+      | "final_answer"
+      | "final_answer_tool"
+      | "max_iterations"
+      | "end_turn"
+      | "llm_error" =
+      rawTerminatedBy === "llm_error"
+        ? "llm_error"
+        : rawTerminatedBy === "final_answer_tool"
+          ? "final_answer_tool"
+          : rawTerminatedBy === "end_turn" || rawTerminatedBy === "llm_end_turn"
+            ? "end_turn"
+            : rawTerminatedBy === "final_answer_regex"
               ? "final_answer"
-              : "max_iterations";
+              : state.status === "done"
+                ? "final_answer"
+                : "max_iterations";
 
-    // When max iterations reached (no explicit output), fall back to last thought content
-    // to match the original executeReActKernel behavior.
-    const output = state.output
-      ?? [...state.steps].filter((s) => s.type === "thought").pop()?.content
-      ?? "";
+    // When failed, surface kernel error; else output / last thought
+    const output =
+      state.status === "failed" && state.error
+        ? state.error
+        : state.output
+          ?? [...state.steps].filter((s) => s.type === "thought").pop()?.content
+          ?? "";
 
     return {
       output,

@@ -63,6 +63,7 @@ interface AdaptiveInput {
   readonly modelId?: string;
   /** LLM temperature override */
   readonly temperature?: number;
+  readonly synthesisConfig?: import("../context/synthesis-types.js").SynthesisConfig;
 }
 
 type SubStrategy =

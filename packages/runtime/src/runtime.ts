@@ -23,10 +23,12 @@ import {
   createReasoningLayer,
   defaultReasoningConfig,
 } from "@reactive-agents/reasoning";
-import type { ReasoningConfig } from "@reactive-agents/reasoning";
+import type { ReasoningConfig, KernelMetaToolsConfig } from "@reactive-agents/reasoning";
 import { createToolsLayer, ToolResultCacheLive, ToolService, ToolNotFoundError } from "@reactive-agents/tools";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
-import type { ReasoningOptions, ObservabilityOptions } from "./builder.js";
+import type { ObservabilityOptions } from "./builder.js";
+import type { ReasoningOptions } from "./types.js";
+import { withoutStrategyIcsOverrides } from "./synthesis-resolve.js";
 import type { TelemetryConfig } from "@reactive-agents/observability";
 import type { ContextProfile } from "@reactive-agents/reasoning";
 import { createIdentityLayer } from "@reactive-agents/identity";
@@ -700,18 +702,7 @@ export interface RuntimeOptions {
    * Meta-tools configuration for the Conductor's Suite (brief, find, pulse, recall).
    * When provided, these tools are injected into the agent's tool registry for the execution.
    */
-  metaTools?: {
-    brief?: boolean;
-    find?: boolean;
-    pulse?: boolean;
-    recall?: boolean;
-    staticBriefInfo?: {
-      indexedDocuments: readonly { source: string; chunkCount: number; format: string }[];
-      availableSkills: readonly { name: string; purpose: string }[];
-      memoryBootstrap: { semanticLines: number; episodicEntries: number };
-    };
-    harnessContent?: string;
-  };
+  metaTools?: KernelMetaToolsConfig;
 }
 
 /**
@@ -812,12 +803,9 @@ export const createRuntime = (options: RuntimeOptions) => {
       : undefined,
     enableReactiveIntelligence: options.enableReactiveIntelligence,
     reactiveIntelligenceOptions: options.reactiveIntelligenceOptions,
+    reasoningOptions: options.reasoningOptions,
+    metaTools: options.metaTools,
   };
-
-  // Thread meta-tools config through as a dynamic property (not in Schema)
-  if (options.metaTools) {
-    (config as any).metaTools = options.metaTools;
-  }
 
   // ── Required layers ──
   // EventBusLive and MetricsCollectorLive are exposed separately so optional layers that need them can be provided
@@ -1187,19 +1175,19 @@ export const createRuntime = (options: RuntimeOptions) => {
           strategies: {
             reactive: {
               ...defaultReasoningConfig.strategies.reactive,
-              ...(options.reasoningOptions.strategies?.reactive ?? {}),
+              ...withoutStrategyIcsOverrides(options.reasoningOptions.strategies?.reactive),
             },
             planExecute: {
               ...defaultReasoningConfig.strategies.planExecute,
-              ...(options.reasoningOptions.strategies?.planExecute ?? {}),
+              ...withoutStrategyIcsOverrides(options.reasoningOptions.strategies?.planExecute),
             },
             treeOfThought: {
               ...defaultReasoningConfig.strategies.treeOfThought,
-              ...(options.reasoningOptions.strategies?.treeOfThought ?? {}),
+              ...withoutStrategyIcsOverrides(options.reasoningOptions.strategies?.treeOfThought),
             },
             reflexion: {
               ...defaultReasoningConfig.strategies.reflexion,
-              ...(options.reasoningOptions.strategies?.reflexion ?? {}),
+              ...withoutStrategyIcsOverrides(options.reasoningOptions.strategies?.reflexion),
             },
           },
         }
@@ -1526,6 +1514,7 @@ export const createLightRuntime = (options: LightRuntimeOptions) => {
     enableMemory: options.enableMemory ?? false,
     enableExperienceLearning: false,
     enableMemoryConsolidation: false,
+    reasoningOptions: options.reasoningOptions,
   };
 
   // ── Minimal required layers ──
@@ -1657,12 +1646,27 @@ export const createLightRuntime = (options: LightRuntimeOptions) => {
           ...(options.reasoningOptions.defaultStrategy
             ? { defaultStrategy: options.reasoningOptions.defaultStrategy }
             : {}),
-          adaptive: { ...defaultReasoningConfig.adaptive },
+          adaptive: {
+            ...defaultReasoningConfig.adaptive,
+            ...(options.reasoningOptions.adaptive ?? {}),
+          },
           strategies: {
-            reactive: { ...defaultReasoningConfig.strategies.reactive },
-            planExecute: { ...defaultReasoningConfig.strategies.planExecute },
-            treeOfThought: { ...defaultReasoningConfig.strategies.treeOfThought },
-            reflexion: { ...defaultReasoningConfig.strategies.reflexion },
+            reactive: {
+              ...defaultReasoningConfig.strategies.reactive,
+              ...withoutStrategyIcsOverrides(options.reasoningOptions.strategies?.reactive),
+            },
+            planExecute: {
+              ...defaultReasoningConfig.strategies.planExecute,
+              ...withoutStrategyIcsOverrides(options.reasoningOptions.strategies?.planExecute),
+            },
+            treeOfThought: {
+              ...defaultReasoningConfig.strategies.treeOfThought,
+              ...withoutStrategyIcsOverrides(options.reasoningOptions.strategies?.treeOfThought),
+            },
+            reflexion: {
+              ...defaultReasoningConfig.strategies.reflexion,
+              ...withoutStrategyIcsOverrides(options.reasoningOptions.strategies?.reflexion),
+            },
           },
         }
       : defaultReasoningConfig;

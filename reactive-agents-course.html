@@ -1,0 +1,1360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Reactive Agents — How This Codebase Works</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --color-bg: #FAF7F2;
+      --color-bg-warm: #F5F0E8;
+      --color-bg-code: #1E1E2E;
+      --color-text: #2C2A28;
+      --color-text-secondary: #6B6560;
+      --color-text-muted: #9E9790;
+      --color-border: #E5DFD6;
+      --color-border-light: #EEEBE5;
+      --color-surface: #FFFFFF;
+      --color-surface-warm: #FDF9F3;
+      --color-accent: #D94F30;
+      --color-accent-hover: #C4432A;
+      --color-accent-light: #FDEEE9;
+      --color-accent-muted: #E8836C;
+      --color-success: #2D8B55;
+      --color-success-light: #E8F5EE;
+      --color-error: #C93B3B;
+      --color-error-light: #FDE8E8;
+      --color-info: #2A7B9B;
+      --color-info-light: #E4F2F7;
+      --color-actor-1: #D94F30;
+      --color-actor-2: #2A7B9B;
+      --color-actor-3: #7B6DAA;
+      --color-actor-4: #D4A843;
+      --color-actor-5: #2D8B55;
+      --font-display: 'Bricolage Grotesque', Georgia, serif;
+      --font-body: 'DM Sans', -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+      --text-xs: 0.75rem;
+      --text-sm: 0.875rem;
+      --text-base: 1rem;
+      --text-lg: 1.125rem;
+      --text-xl: 1.25rem;
+      --text-2xl: 1.5rem;
+      --text-3xl: 1.875rem;
+      --text-4xl: 2.25rem;
+      --text-5xl: 3rem;
+      --text-6xl: 3.75rem;
+      --leading-tight: 1.15;
+      --leading-snug: 1.3;
+      --leading-normal: 1.6;
+      --space-1: 0.25rem;
+      --space-2: 0.5rem;
+      --space-3: 0.75rem;
+      --space-4: 1rem;
+      --space-5: 1.25rem;
+      --space-6: 1.5rem;
+      --space-8: 2rem;
+      --space-10: 2.5rem;
+      --space-12: 3rem;
+      --space-16: 4rem;
+      --content-width: 800px;
+      --content-width-wide: 1000px;
+      --nav-height: 50px;
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+      --radius-full: 9999px;
+      --shadow-sm: 0 1px 2px rgba(44, 42, 40, 0.05);
+      --shadow-md: 0 4px 12px rgba(44, 42, 40, 0.08);
+      --shadow-lg: 0 8px 24px rgba(44, 42, 40, 0.1);
+      --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+      --duration-fast: 150ms;
+      --duration-normal: 300ms;
+      --duration-slow: 500ms;
+      --stagger-delay: 120ms;
+    }
+    * { box-sizing: border-box; }
+    html {
+      scroll-snap-type: y proximity;
+      scroll-behavior: smooth;
+    }
+    body {
+      margin: 0;
+      font-family: var(--font-body);
+      font-size: var(--text-base);
+      line-height: var(--leading-normal);
+      color: var(--color-text);
+      background: var(--color-bg);
+      background-image: radial-gradient(ellipse at 20% 50%, rgba(217, 79, 48, 0.03) 0%, transparent 50%);
+    }
+    pre, code { white-space: pre-wrap; word-break: break-word; overflow-x: hidden; }
+    .nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 9000;
+      background: rgba(250, 247, 242, 0.92);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--color-border-light);
+    }
+    .progress-bar {
+      height: 3px;
+      background: var(--color-accent);
+      width: 0%;
+      transition: width 0.1s linear;
+    }
+    .nav-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: var(--space-2) var(--space-4);
+      max-width: 1200px;
+      margin: 0 auto;
+      height: calc(var(--nav-height) - 3px);
+    }
+    .nav-title {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: var(--text-sm);
+    }
+    .nav-dots { display: flex; gap: var(--space-2); flex-wrap: wrap; justify-content: flex-end; }
+    .nav-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      border: 2px solid var(--color-text-muted);
+      background: transparent;
+      padding: 0;
+      cursor: pointer;
+      transition: all var(--duration-fast);
+    }
+    .nav-dot:hover { border-color: var(--color-accent-muted); }
+    .nav-dot.current { border-color: var(--color-accent); background: var(--color-accent); box-shadow: 0 0 8px rgba(217, 79, 48, 0.35); }
+    .module {
+      min-height: 100vh;
+      min-height: 100dvh;
+      scroll-snap-align: start;
+      padding: var(--space-16) var(--space-6);
+      padding-top: calc(var(--nav-height) + var(--space-12));
+    }
+    .module-content { max-width: var(--content-width); margin: 0 auto; }
+    .module-header { margin-bottom: var(--space-10); }
+    .module-number {
+      display: block;
+      font-family: var(--font-display);
+      font-size: var(--text-6xl);
+      font-weight: 800;
+      color: rgba(217, 79, 48, 0.15);
+      line-height: 1;
+    }
+    .module-title {
+      font-family: var(--font-display);
+      font-size: var(--text-4xl);
+      font-weight: 700;
+      margin: var(--space-2) 0;
+      line-height: var(--leading-tight);
+    }
+    .module-subtitle { color: var(--color-text-secondary); font-size: var(--text-lg); margin: 0; }
+    .screen {
+      margin-bottom: var(--space-12);
+    }
+    .screen-heading {
+      font-family: var(--font-display);
+      font-size: var(--text-xl);
+      font-weight: 600;
+      margin: 0 0 var(--space-4);
+    }
+    .lead { font-size: var(--text-lg); color: var(--color-text-secondary); max-width: 38em; }
+    .animate-in {
+      opacity: 0;
+      transform: translateY(20px);
+      transition: opacity var(--duration-slow) var(--ease-out), transform var(--duration-slow) var(--ease-out);
+    }
+    .animate-in.visible { opacity: 1; transform: translateY(0); }
+    .translation-block {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0;
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      box-shadow: var(--shadow-md);
+      margin: var(--space-8) 0;
+    }
+    .translation-code {
+      background: var(--color-bg-code);
+      color: #CDD6F4;
+      padding: var(--space-6);
+      font-family: var(--font-mono);
+      font-size: var(--text-sm);
+      line-height: 1.7;
+      position: relative;
+      overflow-x: hidden;
+    }
+    .translation-code pre, .translation-code code { margin: 0; }
+    .translation-english {
+      background: var(--color-surface-warm);
+      padding: var(--space-6);
+      font-size: var(--text-sm);
+      line-height: 1.7;
+      border-left: 3px solid var(--color-accent);
+      position: relative;
+    }
+    .translation-label {
+      position: absolute;
+      top: var(--space-2);
+      right: var(--space-3);
+      font-size: var(--text-xs);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      opacity: 0.5;
+    }
+    .translation-english .translation-label { color: var(--color-text-muted); }
+    .tl { margin: 0 0 var(--space-3); }
+    .code-keyword { color: #CBA6F7; }
+    .code-string { color: #A6E3A1; }
+    .code-function { color: #89B4FA; }
+    .code-comment { color: #6C7086; }
+    .code-property { color: #F9E2AF; }
+    .callout {
+      display: flex;
+      gap: var(--space-4);
+      padding: var(--space-5);
+      border-radius: var(--radius-md);
+      margin: var(--space-8) 0;
+      align-items: flex-start;
+    }
+    .callout-accent { background: var(--color-accent-light); border-left: 4px solid var(--color-accent); }
+    .callout-info { background: var(--color-info-light); border-left: 4px solid var(--color-info); }
+    .callout-title { display: block; margin-bottom: var(--space-1); }
+    .pattern-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: var(--space-4);
+      margin: var(--space-8) 0;
+    }
+    .pattern-card {
+      background: var(--color-surface);
+      border-radius: var(--radius-md);
+      padding: var(--space-5);
+      box-shadow: var(--shadow-sm);
+      transition: transform var(--duration-normal) var(--ease-out), box-shadow var(--duration-normal);
+    }
+    .pattern-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-md); }
+    .pattern-icon {
+      width: 40px; height: 40px; border-radius: var(--radius-sm);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.25rem; margin-bottom: var(--space-3);
+    }
+    .pattern-title { font-family: var(--font-display); font-size: var(--text-base); margin: 0 0 var(--space-2); }
+    .pattern-desc { margin: 0; font-size: var(--text-sm); color: var(--color-text-secondary); }
+    .file-tree { font-family: var(--font-mono); font-size: var(--text-sm); background: var(--color-surface); padding: var(--space-5); border-radius: var(--radius-md); box-shadow: var(--shadow-sm); }
+    .ft-row { padding: var(--space-2) 0; border-left: 2px solid var(--color-border-light); padding-left: var(--space-4); margin-left: var(--space-2); }
+    .ft-name { color: var(--color-accent); font-weight: 600; }
+    .ft-name.file::before { content: '📄 '; }
+    .ft-name.fold::before { content: '📁 '; }
+    .ft-desc { color: var(--color-text-secondary); font-family: var(--font-body); font-size: var(--text-xs); margin-left: var(--space-2); }
+    .flow-steps { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); margin: var(--space-8) 0; }
+    .flow-step {
+      background: var(--color-surface);
+      padding: var(--space-4);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-sm);
+      flex: 1;
+      min-width: 120px;
+      text-align: center;
+    }
+    .flow-step-num {
+      width: 28px; height: 28px; border-radius: 50%;
+      background: var(--color-accent);
+      color: white;
+      font-weight: 700;
+      display: inline-flex; align-items: center; justify-content: center;
+      margin-bottom: var(--space-2);
+      font-family: var(--font-display);
+    }
+    .flow-arrow { font-size: var(--text-xl); color: var(--color-text-muted); }
+    .chat-window {
+      background: var(--color-surface);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-lg);
+      overflow: hidden;
+      margin: var(--space-8) 0;
+      max-width: var(--content-width-wide);
+    }
+    .chat-messages { padding: var(--space-5); min-height: 200px; display: flex; flex-direction: column; gap: var(--space-4); }
+    .chat-message { display: none; align-items: flex-start; gap: var(--space-3); animation: fadeSlideUp 0.35s var(--ease-out); }
+    .chat-message.show { display: flex; }
+    @keyframes fadeSlideUp {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .chat-avatar {
+      width: 36px; height: 36px; border-radius: 50%;
+      color: white; font-weight: 700; font-size: var(--text-xs);
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .chat-bubble { background: var(--color-surface-warm); padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); flex: 1; }
+    .chat-sender { font-size: var(--text-xs); font-weight: 600; display: block; margin-bottom: var(--space-1); }
+    .chat-bubble p { margin: 0; font-size: var(--text-sm); }
+    .chat-controls, .flow-controls {
+      display: flex; flex-wrap: wrap; gap: var(--space-3);
+      padding: var(--space-4);
+      border-top: 1px solid var(--color-border-light);
+      align-items: center;
+    }
+    .chat-controls button, .flow-controls button, .quiz-check-btn, .quiz-reset-btn {
+      font-family: var(--font-body);
+      font-size: var(--text-sm);
+      padding: var(--space-2) var(--space-4);
+      border-radius: var(--radius-sm);
+      border: 2px solid var(--color-border);
+      background: var(--color-surface);
+      cursor: pointer;
+      transition: border-color var(--duration-fast), background var(--duration-fast);
+    }
+    .chat-controls button:hover, .flow-controls button:hover { border-color: var(--color-accent); }
+    .flow-animation {
+      background: var(--color-surface);
+      padding: var(--space-8);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-md);
+      margin: var(--space-8) 0;
+    }
+    .flow-actors { display: flex; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap; margin-bottom: var(--space-8); }
+    .flow-actor {
+      flex: 1;
+      min-width: 100px;
+      text-align: center;
+      padding: var(--space-4);
+      border-radius: var(--radius-md);
+      border: 2px solid var(--color-border);
+      transition: transform var(--duration-normal) var(--ease-out), box-shadow var(--duration-normal);
+    }
+    .flow-actor.active {
+      box-shadow: 0 0 0 3px var(--color-accent), 0 0 20px rgba(217, 79, 48, 0.2);
+      transform: scale(1.04);
+      border-color: var(--color-accent);
+    }
+    .flow-actor-icon {
+      width: 48px; height: 48px; margin: 0 auto var(--space-2);
+      border-radius: var(--radius-md);
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 800; color: white;
+    }
+    .flow-packet {
+      height: 8px;
+      width: 0;
+      max-width: 100%;
+      background: linear-gradient(90deg, var(--color-actor-1), var(--color-actor-2));
+      border-radius: var(--radius-full);
+      margin: var(--space-4) auto;
+      transition: width 0.5s var(--ease-out);
+    }
+    .flow-step-label { text-align: center; font-size: var(--text-sm); color: var(--color-text-secondary); min-height: 3em; padding: 0 var(--space-4); }
+    .term {
+      border-bottom: 1.5px dashed var(--color-accent-muted);
+      cursor: pointer;
+    }
+    .term:hover { border-bottom-color: var(--color-accent); color: var(--color-accent); }
+    .term-tooltip {
+      position: fixed;
+      background: var(--color-bg-code);
+      color: #CDD6F4;
+      padding: var(--space-3) var(--space-4);
+      border-radius: var(--radius-sm);
+      font-size: var(--text-sm);
+      line-height: var(--leading-normal);
+      width: max(200px, min(320px, 80vw));
+      box-shadow: var(--shadow-lg);
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity var(--duration-fast);
+      z-index: 10000;
+    }
+    .term-tooltip.visible { opacity: 1; }
+    .term-tooltip::after {
+      content: '';
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      border: 6px solid transparent;
+      border-top-color: var(--color-bg-code);
+    }
+    .quiz-container { margin: var(--space-8) 0; }
+    .quiz-question { font-size: var(--text-base); margin: 0 0 var(--space-4); }
+    .quiz-options { display: flex; flex-direction: column; gap: var(--space-2); }
+    .quiz-option {
+      display: flex; align-items: center; gap: var(--space-3);
+      padding: var(--space-3) var(--space-4);
+      border: 2px solid var(--color-border);
+      border-radius: var(--radius-sm);
+      background: var(--color-surface);
+      cursor: pointer;
+      width: 100%;
+      text-align: left;
+      font-family: var(--font-body);
+      font-size: var(--text-sm);
+    }
+    .quiz-option:hover { border-color: var(--color-accent-muted); }
+    .quiz-option.selected { border-color: var(--color-accent); background: var(--color-accent-light); }
+    .quiz-option.correct { border-color: var(--color-success); background: var(--color-success-light); }
+    .quiz-option.incorrect { border-color: var(--color-error); background: var(--color-error-light); }
+    .quiz-option-radio {
+      width: 18px; height: 18px; border-radius: 50%;
+      border: 2px solid var(--color-border);
+      flex-shrink: 0;
+    }
+    .quiz-option.selected .quiz-option-radio {
+      border-color: var(--color-accent);
+      background: var(--color-accent);
+      box-shadow: inset 0 0 0 3px white;
+    }
+    .quiz-feedback {
+      margin-top: var(--space-3);
+      padding: var(--space-3);
+      border-radius: var(--radius-sm);
+      font-size: var(--text-sm);
+      display: none;
+    }
+    .quiz-feedback.show { display: block; }
+    .quiz-feedback.success { background: var(--color-success-light); color: var(--color-success); }
+    .quiz-feedback.error { background: var(--color-error-light); color: var(--color-error); }
+    .dnd-container { margin: var(--space-8) 0; }
+    .dnd-chips { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-bottom: var(--space-6); }
+    .dnd-chip {
+      padding: var(--space-2) var(--space-4);
+      background: var(--color-accent-light);
+      border: 2px dashed var(--color-accent-muted);
+      border-radius: var(--radius-sm);
+      cursor: grab;
+      font-size: var(--text-sm);
+    }
+    .dnd-chip.placed { opacity: 0.4; cursor: default; }
+    .dnd-zone {
+      padding: var(--space-4);
+      border: 2px solid var(--color-border);
+      border-radius: var(--radius-md);
+      margin-bottom: var(--space-3);
+      min-height: 72px;
+    }
+    .dnd-zone-target {
+      min-height: 40px;
+      border: 2px dashed var(--color-border-light);
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--color-text-muted);
+      font-size: var(--text-sm);
+    }
+    .dnd-zone-target.drag-over { border-color: var(--color-accent); background: var(--color-accent-light); }
+    .hero-badge {
+      display: inline-block;
+      font-size: var(--text-xs);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--color-accent);
+      font-weight: 600;
+      margin-bottom: var(--space-2);
+    }
+    @media (max-width: 768px) {
+      :root {
+        --text-4xl: 1.875rem;
+        --text-5xl: 2.25rem;
+        --text-6xl: 3rem;
+      }
+      .translation-block { grid-template-columns: 1fr; }
+      .translation-english { border-left: none; border-top: 3px solid var(--color-accent); }
+      .flow-steps { flex-direction: column; }
+      .flow-arrow { transform: rotate(90deg); }
+    }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: var(--radius-full); }
+  </style>
+</head>
+<body>
+  <nav class="nav" aria-label="Course navigation">
+    <div class="progress-bar" id="progress-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+    <div class="nav-inner">
+      <span class="nav-title">Reactive Agents — Inside the Code</span>
+      <div class="nav-dots" role="tablist">
+        <button class="nav-dot current" type="button" data-target="module-1" aria-label="Module 1"></button>
+        <button class="nav-dot" type="button" data-target="module-2" aria-label="Module 2"></button>
+        <button class="nav-dot" type="button" data-target="module-3" aria-label="Module 3"></button>
+        <button class="nav-dot" type="button" data-target="module-4" aria-label="Module 4"></button>
+        <button class="nav-dot" type="button" data-target="module-5" aria-label="Module 5"></button>
+        <button class="nav-dot" type="button" data-target="module-6" aria-label="Module 6"></button>
+        <button class="nav-dot" type="button" data-target="module-7" aria-label="Module 7"></button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- MODULE 1 -->
+  <section class="module" id="module-1" style="background: var(--color-bg)">
+    <div class="module-content">
+      <header class="module-header animate-in">
+        <span class="module-number">01</span>
+        <h1 class="module-title">What you’re using — and what happens when you run it</h1>
+        <p class="module-subtitle">A TypeScript framework for AI agents: control, layers, and one clear path from <code>agent.run()</code> to an answer.</p>
+      </header>
+
+      <div class="screen animate-in">
+        <span class="hero-badge">Start here</span>
+        <h2 class="screen-heading">The concert hall metaphor</h2>
+        <p class="lead">Picture an orchestra. You only hear the music, but dozens of musicians, a score, and a conductor had to agree first. <strong>Reactive Agents</strong> is like that: your code is the audience request (“play this piece”), and many internal parts coordinate so the <span class="term" data-definition="A large language model (LLM) is software trained on text that predicts the next words — it powers chat-style AI.">LLM</span> and tools produce a finished answer.</p>
+      </div>
+
+      <div class="screen animate-in">
+        <h2 class="screen-heading">The journey in six beats</h2>
+        <div class="flow-steps stagger-children">
+          <div class="flow-step animate-in"><div class="flow-step-num">1</div><p>You call <code>agent.run("…")</code></p></div>
+          <span class="flow-arrow">→</span>
+          <div class="flow-step animate-in"><div class="flow-step-num">2</div><p>The <span class="term" data-definition="The runtime is the bundled environment where services exist and your agent actually executes — like the stage where the concert happens.">runtime</span> wires services</p></div>
+          <span class="flow-arrow">→</span>
+          <div class="flow-step animate-in"><div class="flow-step-num">3</div><p><span class="term" data-definition="The execution engine is the loop that walks through phases: guardrails, reasoning, tools, memory, completion.">ExecutionEngine</span> runs phases</p></div>
+          <span class="flow-arrow">→</span>
+          <div class="flow-step animate-in"><div class="flow-step-num">4</div><p>Optional reasoning + tools loop</p></div>
+          <span class="flow-arrow">→</span>
+          <div class="flow-step animate-in"><div class="flow-step-num">5</div><p>Events broadcast on the bus</p></div>
+          <span class="flow-arrow">→</span>
+          <div class="flow-step animate-in"><div class="flow-step-num">6</div><p>You get <code>output</code> + metadata</p></div>
+        </div>
+      </div>
+
+      <div class="screen animate-in">
+        <h2 class="screen-heading">Real code: the public entry you type</h2>
+        <div class="translation-block">
+          <div class="translation-code">
+            <span class="translation-label">CODE</span>
+            <pre><code><span class="code-keyword">const</span> agent = <span class="code-keyword">await</span> <span class="code-function">ReactiveAgents</span>.<span class="code-function">create</span>()
+  .<span class="code-function">withName</span>(<span class="code-string">"assistant"</span>)
+  .<span class="code-function">withProvider</span>(<span class="code-string">"anthropic"</span>)
+  .<span class="code-function">withModel</span>(<span class="code-string">"claude-sonnet-4-20250514"</span>)
+  .<span class="code-function">build</span>();
+
+<span class="code-keyword">const</span> result = <span class="code-keyword">await</span> agent.<span class="code-function">run</span>(<span class="code-string">"Explain quantum entanglement"</span>);
+console.<span class="code-function">log</span>(result.output);</code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <p class="tl">Ask the framework factory to start configuring a new agent.</p>
+            <p class="tl">Give it a name, pick which AI company/API to call, and pick the exact model name string.</p>
+            <p class="tl"><code>build()</code> freezes the recipe and gives you a runnable agent object.</p>
+            <p class="tl"><code>run</code> sends your prompt through the whole pipeline and waits for the final structured result.</p>
+            <p class="tl">Print the human-facing answer string.</p>
+          </div>
+        </div>
+        <p class="lead" style="margin-top:var(--space-4)">This snippet is from the project’s <span class="term" data-definition="README is the front-page document in a repo that explains what the project is and how to try it.">README</span> — it’s the same shape real apps use.</p>
+      </div>
+
+      <div class="callout callout-accent animate-in">
+        <div class="callout-icon">💡</div>
+        <div class="callout-content">
+          <strong class="callout-title">Why “reactive” matters for vibe coders</strong>
+          <p style="margin:0">The framework tries to make decisions <em>visible</em> — phases, events, hooks — so when AI assistants suggest changes, you can say “that belongs in the guardrail phase” instead of “somewhere in the magic box.”</p>
+        </div>
+      </div>
+
+      <div class="screen animate-in" id="quiz-m1">
+        <h2 class="screen-heading">Check-in: trace the request</h2>
+        <div class="quiz-container">
+          <div class="quiz-question-block" data-correct="b">
+            <h3 class="quiz-question">A teammate says “the agent answered wrong.” Where do you look <em>first</em> to see whether the model, the tools, or the prompt pipeline is involved?</h3>
+            <div class="quiz-options">
+              <button type="button" class="quiz-option" data-value="a"><span class="quiz-option-radio"></span><span>Only the LLM provider’s website status page</span></button>
+              <button type="button" class="quiz-option" data-value="b"><span class="quiz-option-radio"></span><span>Execution flow: reasoning config, tools actually called, and guardrails — before blaming “the model”</span></button>
+              <button type="button" class="quiz-option" data-value="c"><span class="quiz-option-radio"></span><span>Delete <code>node_modules</code> and reinstall</span></button>
+            </div>
+            <div class="quiz-feedback" data-explain-ok="Right — this codebase separates phases so you can narrow causes. Wrong tool args and skipped guardrails show up in traces and events, not just in the raw answer text."></div>
+            <div class="quiz-feedback" data-explain-bad="The dashboard and EventBus events in this project are designed exactly so you don’t jump to external outages first."></div>
+          </div>
+          <button type="button" class="quiz-check-btn" data-quiz="quiz-m1">Check answer</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- MODULE 2 -->
+  <section class="module" id="module-2" style="background: var(--color-bg-warm)">
+    <div class="module-content">
+      <header class="module-header animate-in">
+        <span class="module-number">02</span>
+        <h1 class="module-title">Meet the cast — packages and the builder</h1>
+        <p class="module-subtitle">Who does what so you can tell an AI assistant where to put new behavior.</p>
+      </header>
+
+      <div class="screen animate-in">
+        <h2 class="screen-heading">Modular furniture, not one giant closet</h2>
+        <p class="lead">Instead of one file that does everything, the repo splits capabilities into <span class="term" data-definition="A package is a folder of code published or imported as one unit, often under packages/ in a monorepo.">packages</span> under <code>packages/</code>. You enable only what you need at build time — like buying shelves instead of a pre-filled armoire.</p>
+      </div>
+
+      <div class="file-tree animate-in">
+        <div class="ft-row"><span class="ft-name fold">packages/core</span><span class="ft-desc">Events, task IDs, shared types</span></div>
+        <div class="ft-row"><span class="ft-name fold">packages/llm-provider</span><span class="ft-desc">Talks to Anthropic, OpenAI, Ollama, etc.</span></div>
+        <div class="ft-row"><span class="ft-name fold">packages/reasoning</span><span class="ft-desc">Strategies (ReAct, plans, trees…)</span></div>
+        <div class="ft-row"><span class="ft-name fold">packages/tools</span><span class="ft-desc">Tool registry, MCP, sandbox</span></div>
+        <div class="ft-row"><span class="ft-name fold">packages/memory</span><span class="ft-desc">SQLite memory layers + stores</span></div>
+        <div class="ft-row"><span class="ft-name fold">packages/runtime</span><span class="ft-desc">Builder + ExecutionEngine + createRuntime</span></div>
+      </div>
+
+      <div class="screen animate-in">
+        <h2 class="screen-heading">Drag: match the package to its job</h2>
+        <p class="lead" style="margin-bottom:var(--space-4)">Drag a chip into the box that fits best (mouse). On touch, tap chip then tap a drop zone.</p>
+        <div class="dnd-container" id="dnd-mod2">
+          <div class="dnd-chips">
+            <div class="dnd-chip" draggable="true" data-answer="reasoning">packages/reasoning</div>
+            <div class="dnd-chip" draggable="true" data-answer="runtime">packages/runtime</div>
+            <div class="dnd-chip" draggable="true" data-answer="core">packages/core</div>
+          </div>
+          <div class="dnd-zone" data-correct="core">
+            <p style="margin:0 0 var(--space-2); font-size:var(--text-sm)"><strong>Home of <code>EventBus</code> and task correlation IDs</strong></p>
+            <div class="dnd-zone-target" data-drop="core">Drop here</div>
+          </div>
+          <div class="dnd-zone" data-correct="reasoning">
+            <p style="margin:0 0 var(--space-2); font-size:var(--text-sm)"><strong>Home of reasoning strategies and kernels</strong></p>
+            <div class="dnd-zone-target" data-drop="reasoning">Drop here</div>
+          </div>
+          <div class="dnd-zone" data-correct="runtime">
+            <p style="margin:0 0 var(--space-2); font-size:var(--text-sm)"><strong>Home of <code>ReactiveAgents.create()</code> and <code>createRuntime</code></strong></p>
+            <div class="dnd-zone-target" data-drop="runtime">Drop here</div>
+          </div>
+          <button type="button" class="quiz-check-btn" id="dnd-check">Check matches</button>
+          <p id="dnd-feedback" style="font-size:var(--text-sm); margin-top:var(--space-3)"></p>
+        </div>
+      </div>
+
+      <div class="screen animate-in">
+        <h2 class="screen-heading">What the runtime package exports (real file)</h2>
+        <div class="translation-block">
+          <div class="translation-code">
+            <span class="translation-label">CODE · packages/runtime/src/index.ts</span>
+            <pre><code><span class="code-comment">// ─── Runtime ───</span>
+<span class="code-keyword">export</span> { createRuntime, createLightRuntime } <span class="code-keyword">from</span> <span class="code-string">"./runtime.js"</span>;
+<span class="code-keyword">export</span> <span class="code-keyword">type</span> { RuntimeOptions, MCPServerConfig, LightRuntimeOptions } <span class="code-keyword">from</span> <span class="code-string">"./runtime.js"</span>;</code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <p class="tl">This file is the “front desk” of the runtime package.</p>
+            <p class="tl">It re-exports <code>createRuntime</code> so other code can import one function and get the full composed stack.</p>
+            <p class="tl">Types travel with it so <span class="term" data-definition="TypeScript adds types to JavaScript so editors catch mistakes before runtime.">TypeScript</span> knows which options are legal.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="screen animate-in" id="quiz-m2">
+        <h2 class="screen-heading">Check-in: placement</h2>
+        <div class="quiz-container">
+          <div class="quiz-question-block" data-correct="c">
+            <h3 class="quiz-question">You want to add a new “phase” that runs after tools return but before the next LLM call. Which layer is the most natural first place to read?</h3>
+            <div class="quiz-options">
+              <button type="button" class="quiz-option" data-value="a"><span class="quiz-option-radio"></span><span><code>packages/llm-provider</code> only</span></button>
+              <button type="button" class="quiz-option" data-value="b"><span class="quiz-option-radio"></span><span><code>apps/docs</code> only</span></button>
+              <button type="button" class="quiz-option" data-value="c"><span class="quiz-option-radio"></span><span><code>packages/runtime</code> execution engine + hooks, then the reasoning kernel that schedules LLM/tool turns</span></button>
+            </div>
+            <div class="quiz-feedback" data-explain-ok="Exactly — orchestration of phases lives in runtime; provider code should stay dumb about your agent loop."></div>
+            <div class="quiz-feedback" data-explain-bad="Docs explain behavior; the loop lives in runtime/reasoning."></div>
+          </div>
+          <button type="button" class="quiz-check-btn" data-quiz="quiz-m2">Check answer</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- MODULE 3 -->
+  <section class="module" id="module-3" style="background: var(--color-bg)">
+    <div class="module-content">
+      <header class="module-header animate-in">
+        <span class="module-number">03</span>
+        <h1 class="module-title">How pieces talk — layers and the event bus</h1>
+        <p class="module-subtitle">Effect-TS layers compose services; the EventBus is the town square for news.</p>
+      </header>
+
+      <div class="screen animate-in">
+        <h2 class="screen-heading">Town square + bulletin board</h2>
+        <p class="lead">Imagine a town square with a bulletin board. When something important happens — “task started,” “tool finished” — a note goes up. Any subsystem that cares can read the note without every module importing every other module. That’s the <span class="term" data-definition="Publish–subscribe: components emit events and listeners react without tight coupling.">pub/sub</span> idea behind <code>EventBus</code>.</p>
+      </div>
+
+      <div class="screen animate-in">
+        <h2 class="screen-heading">Group chat: inside one run</h2>
+        <div class="chat-window" id="chat-mod3">
+          <div class="chat-messages" id="chat-messages-3">
+            <div class="chat-message" data-sender="E">
+              <div class="chat-avatar" style="background:var(--color-actor-1)">E</div>
+              <div class="chat-bubble"><span class="chat-sender" style="color:var(--color-actor-1)">ExecutionEngine</span><p>New task — running bootstrap and guardrail phases.</p></div>
+            </div>
+            <div class="chat-message" data-sender="R">
+              <div class="chat-avatar" style="background:var(--color-actor-2)">R</div>
+              <div class="chat-bubble"><span class="chat-sender" style="color:var(--color-actor-2)">ReasoningService</span><p>Invoking the active strategy kernel for this iteration.</p></div>
+            </div>
+            <div class="chat-message" data-sender="L">
+              <div class="chat-avatar" style="background:var(--color-actor-3)">L</div>
+              <div class="chat-bubble"><span class="chat-sender" style="color:var(--color-actor-3)">LLMService</span><p>Completing with tools in native function-calling mode when the provider supports it.</p></div>
+            </div>
+            <div class="chat-message" data-sender="B">
+              <div class="chat-avatar" style="background:var(--color-actor-5)">B</div>
+              <div class="chat-bubble"><span class="chat-sender" style="color:var(--color-actor-5)">EventBus</span><p>Publishing structured events so metrics and traces stay honest.</p></div>
+            </div>
+          </div>
+          <div class="chat-controls">
+            <button type="button" id="chat-next-3">Next message</button>
+            <button type="button" id="chat-all-3">Play all</button>
+            <button type="button" id="chat-reset-3">Replay</button>
+            <span id="chat-prog-3" style="font-size:var(--text-xs); color:var(--color-text-muted)">0 / 4</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="screen animate-in">
+        <h2 class="screen-heading">Real code: composing the runtime stack</h2>
+        <div class="translation-block">
+          <div class="translation-code">
+            <span class="translation-label">CODE · packages/runtime/src/runtime.ts</span>
+            <pre><code><span class="code-keyword">export const</span> createRuntime = (options: RuntimeOptions) => {
+  <span class="code-comment">// Resolve default model: explicit &gt; env var &gt; provider registry fallback</span>
+  <span class="code-comment">// Note: empty strings are treated as unset (env vars can be "" after unsetting)</span>
+  <span class="code-keyword">const</span> resolvedModel =
+    options.model ||
+    process.env.LLM_DEFAULT_MODEL ||
+    (options.provider
+      ? <span class="code-function">getProviderDefaultModel</span>(options.provider)
+      : <span class="code-keyword">undefined</span>) ||
+    <span class="code-string">"claude-sonnet-4-20250514"</span>;</code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <p class="tl"><code>createRuntime</code> is the factory that builds the whole service bundle from options.</p>
+            <p class="tl">First job: decide which model string to use if you didn’t pass one explicitly.</p>
+            <p class="tl">It checks your config, then an environment variable, then the provider’s default, then a hardcoded fallback.</p>
+            <p class="tl">That priority order is why setting <code>LLM_DEFAULT_MODEL</code> in your shell changes behavior without code edits.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="screen animate-in">
+        <h2 class="screen-heading">Real code: publishing on the bus</h2>
+        <div class="translation-block">
+          <div class="translation-code">
+            <span class="translation-label">CODE · packages/core/src/services/event-bus.ts</span>
+            <pre><code>    <span class="code-keyword">readonly</span> publish: (event: AgentEvent) =&gt; Effect.Effect&lt;<span class="code-keyword">void</span>, <span class="code-keyword">never</span>&gt;;
+
+    <span class="code-comment">/**</span>
+    <span class="code-comment">     * Subscribe a catch-all handler for all events.</span>
+    <span class="code-comment">     */</span>
+    <span class="code-keyword">readonly</span> subscribe: (
+      handler: EventHandler,
+    ) =&gt; Effect.Effect&lt;() =&gt; <span class="code-keyword">void</span>, <span class="code-keyword">never</span>&gt;;</code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <p class="tl"><code>publish</code> means “announce this event to everyone listening.”</p>
+            <p class="tl">The type says it can’t fail in the type system’s eyes — bus delivery is treated as reliable infrastructure.</p>
+            <p class="tl"><code>subscribe</code> registers a listener and returns a function to unsubscribe — like tearing a note off the board when you’re done.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="callout callout-info animate-in">
+        <div class="callout-icon">📌</div>
+        <div class="callout-content">
+          <strong class="callout-title">Effect-TS in one sentence</strong>
+          <p style="margin:0"><span class="term" data-definition="Effect-TS is a library for typed, composable async and error handling in TypeScript — like Promises with explicit error channels.">Effect-TS</span> lets the codebase chain “do A, then B, and if B fails, handle it” without losing type information. You don’t need to master it to steer AI work — you need to know services are composed as <em>layers</em>.</p>
+        </div>
+      </div>
+
+      <div class="screen animate-in" id="quiz-m3">
+        <h2 class="screen-heading">Check-in: observability</h2>
+        <div class="quiz-container">
+          <div class="quiz-question-block" data-correct="a">
+            <h3 class="quiz-question">You want a live dashboard of tool timings without adding <code>console.log</code> everywhere. What design does this repo lean on?</h3>
+            <div class="quiz-options">
+              <button type="button" class="quiz-option" data-value="a"><span class="quiz-option-radio"></span><span>Subscribe to <code>EventBus</code> / metrics collector driven by the same events the engine already publishes</span></button>
+              <button type="button" class="quiz-option" data-value="b"><span class="quiz-option-radio"></span><span>Fork the LLM provider and patch their servers</span></button>
+              <button type="button" class="quiz-option" data-value="c"><span class="quiz-option-radio"></span><span>Parse the final answer text for hidden JSON</span></button>
+            </div>
+            <div class="quiz-feedback" data-explain-ok="Yes — events are first-class so observability can stay decoupled from business logic."></div>
+            <div class="quiz-feedback" data-explain-bad="The framework explicitly avoids hiding decisions; events are the supported integration point."></div>
+          </div>
+          <button type="button" class="quiz-check-btn" data-quiz="quiz-m3">Check answer</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- MODULE 4 -->
+  <section class="module" id="module-4" style="background: var(--color-bg-warm)">
+    <div class="module-content">
+      <header class="module-header animate-in">
+        <span class="module-number">04</span>
+        <h1 class="module-title">The outside world — models, tools, memory</h1>
+        <p class="module-subtitle">What leaves your machine, what stays local, and where persistence lives.</p>
+      </header>
+
+      <div class="screen animate-in">
+        <h2 class="screen-heading">Switchboard operator</h2>
+        <p class="lead">Old telephone switchboards connected your line to someone else’s wire. Here, <code>LLMService</code> is the switchboard to cloud or local models; <code>ToolService</code> routes “call this capability” to either built-ins, your functions, or <span class="term" data-definition="Model Context Protocol — a standard way for AI apps to attach external tools and data sources.">MCP</span> servers.</p>
+      </div>
+
+      <div class="pattern-cards animate-in">
+        <div class="pattern-card" style="border-top:3px solid var(--color-actor-2)">
+          <div class="pattern-icon" style="background:var(--color-actor-2)">☁️</div>
+          <h4 class="pattern-title">LLM providers</h4>
+          <p class="pattern-desc">Anthropic, OpenAI, Gemini, Ollama, LiteLLM proxy — same interface, different endpoints and credentials.</p>
+        </div>
+        <div class="pattern-card" style="border-top:3px solid var(--color-actor-1)">
+          <div class="pattern-icon" style="background:var(--color-actor-1)">🔧</div>
+          <h4 class="pattern-title">Tools</h4>
+          <p class="pattern-desc">Function calling, registry, optional sandbox — the agent can “reach out” to search, files, APIs you define.</p>
+        </div>
+        <div class="pattern-card" style="border-top:3px solid var(--color-actor-4)">
+          <div class="pattern-icon" style="background:var(--color-actor-4)">🗃️</div>
+          <h4 class="pattern-title">Memory</h4>
+          <p class="pattern-desc">SQLite-backed layers: working, episodic, semantic, procedural — optional but powerful for long-running agents.</p>
+        </div>
+      </div>
+
+      <div class="screen animate-in">
+        <h2 class="screen-heading">Animated flow: one user prompt</h2>
+        <div class="flow-animation" id="flow-mod4">
+          <div class="flow-actors">
+            <div class="flow-actor" id="flow-m4-a">
+              <div class="flow-actor-icon" style="background:var(--color-actor-1)">U</div>
+              <span>Your app</span>
+            </div>
+            <div class="flow-actor" id="flow-m4-b">
+              <div class="flow-actor-icon" style="background:var(--color-actor-2)">B</div>
+              <span>Builder / Runtime</span>
+            </div>
+            <div class="flow-actor" id="flow-m4-c">
+              <div class="flow-actor-icon" style="background:var(--color-actor-3)">M</div>
+              <span>LLM API</span>
+            </div>
+            <div class="flow-actor" id="flow-m4-d">
+              <div class="flow-actor-icon" style="background:var(--color-actor-5)">T</div>
+              <span>Tools</span>
+            </div>
+          </div>
+          <div class="flow-packet" id="flow-packet-m4"></div>
+          <div class="flow-step-label" id="flow-label-m4">Click “Next step” to trace the prompt.</div>
+          <div class="flow-controls">
+            <button type="button" id="flow-next-m4">Next step</button>
+            <button type="button" id="flow-reset-m4">Restart</button>
+            <span id="flow-prog-m4" style="font-size:var(--text-xs); color:var(--color-text-muted)">0 / 5</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="screen animate-in">
+        <h2 class="screen-heading">Real code: the engine’s public surface</h2>
+        <div class="translation-block">
+          <div class="translation-code">
+            <span class="translation-label">CODE · packages/runtime/src/execution-engine.ts</span>
+            <pre><code><span class="code-keyword">export class</span> <span class="code-function">ExecutionEngine</span> <span class="code-keyword">extends</span> Context.Tag(<span class="code-string">"ExecutionEngine"</span>)&lt;
+  ExecutionEngine,
+  {
+    <span class="code-keyword">readonly</span> execute: (
+      task: Task,
+    ) =&gt; Effect.Effect&lt;TaskResult, RuntimeErrors | TaskError&gt;;
+
+    <span class="code-keyword">readonly</span> registerHook: (hook: LifecycleHook) =&gt; Effect.Effect&lt;<span class="code-keyword">void</span>, <span class="code-keyword">never</span>&gt;;
+</code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <p class="tl"><code>ExecutionEngine</code> is registered as a typed service tag — other code asks the runtime for “the engine” and gets these methods.</p>
+            <p class="tl"><code>execute</code> takes a <code>Task</code> (your prompt + metadata) and returns either a result or typed errors.</p>
+            <p class="tl"><code>registerHook</code> is how you inject lifecycle callbacks without editing the engine’s core loop.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="screen animate-in" id="quiz-m4">
+        <h2 class="screen-heading">Check-in: cost and safety</h2>
+        <div class="quiz-container">
+          <div class="quiz-question-block" data-correct="b">
+            <h3 class="quiz-question">You’re calling a cloud model with web search tools. What should you verify before blaming “bad answers”?</h3>
+            <div class="quiz-options">
+              <button type="button" class="quiz-option" data-value="a"><span class="quiz-option-radio"></span><span>Only the font size in the docs site</span></button>
+              <button type="button" class="quiz-option" data-value="b"><span class="quiz-option-radio"></span><span>API keys, rate limits, tool allowlists, guardrails, and which model tier you configured — external calls fail or distort in predictable ways</span></button>
+              <button type="button" class="quiz-option" data-value="c"><span class="quiz-option-radio"></span><span>That your keyboard layout is QWERTY</span></button>
+            </div>
+            <div class="quiz-feedback" data-explain-ok="Good — this stack exposes budgets, guardrails, and provider config so those are first-class debugging levers."></div>
+            <div class="quiz-feedback" data-explain-bad="Think supply chain: credentials, limits, and policy layers all sit between you and the model."></div>
+          </div>
+          <button type="button" class="quiz-check-btn" data-quiz="quiz-m4">Check answer</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- MODULE 5 -->
+  <section class="module" id="module-5" style="background: var(--color-bg)">
+    <div class="module-content">
+      <header class="module-header animate-in">
+        <span class="module-number">05</span>
+        <h1 class="module-title">Clever tricks — strategies and context</h1>
+        <p class="module-subtitle">Not every task needs the same thinking style; the framework makes that explicit.</p>
+      </header>
+
+      <div class="screen animate-in">
+        <h2 class="screen-heading">Chess openings vs. casual play</h2>
+        <p class="lead">Some games need deep branching (tree-of-thought style planning); others are fine with quick back-and-forth (ReAct). This repo ships multiple <span class="term" data-definition="A reasoning strategy is a pattern for how the agent plans, calls tools, and stops — e.g. ReAct vs plan-then-execute.">reasoning strategies</span> you opt into from the builder instead of hard-coding one loop.</p>
+      </div>
+
+      <div class="pattern-cards animate-in">
+        <div class="pattern-card" style="border-top:3px solid var(--color-actor-1)"><h4 class="pattern-title">ReAct-style kernel</h4><p class="pattern-desc">Think → act with tools → observe → repeat until a final answer gate.</p></div>
+        <div class="pattern-card" style="border-top:3px solid var(--color-actor-2)"><h4 class="pattern-title">Plan–execute</h4><p class="pattern-desc">Structured JSON plans with step dispatch and repair paths.</p></div>
+        <div class="pattern-card" style="border-top:3px solid var(--color-actor-3)"><h4 class="pattern-title">Adaptive</h4><p class="pattern-desc">Meta-strategy that can switch when loops or entropy signals say so.</p></div>
+        <div class="pattern-card" style="border-top:3px solid var(--color-actor-4)"><h4 class="pattern-title">ICS</h4><p class="pattern-desc">Intelligent Context Synthesis shapes transcripts between iterations when enabled.</p></div>
+      </div>
+
+      <div class="screen animate-in">
+        <h2 class="screen-heading">Real code: wiring synthesis resolution</h2>
+        <div class="translation-block">
+          <div class="translation-code">
+            <span class="translation-label">CODE · packages/runtime/src/execution-engine.ts</span>
+            <pre><code><span class="code-keyword">import</span> { resolveSynthesisConfigForStrategy } <span class="code-keyword">from</span> <span class="code-string">"./synthesis-resolve.js"</span>;</code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <p class="tl">The execution engine imports a helper that picks the right “context synthesis” settings for the active strategy.</p>
+            <p class="tl">That keeps per-strategy overrides and global defaults consistent at run time — one place resolves the final config.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="screen animate-in" id="quiz-m5">
+        <h2 class="screen-heading">Check-in: choosing a strategy</h2>
+        <div class="quiz-container">
+          <div class="quiz-question-block" data-correct="a">
+            <h3 class="quiz-question">You have a multi-step research task with known sub-goals. Which direction fits the framework’s strengths <em>before</em> you add custom code?</h3>
+            <div class="quiz-options">
+              <button type="button" class="quiz-option" data-value="a"><span class="quiz-option-radio"></span><span>Try plan-execute or structured planning paths — they’re first-class, not bolt-on prompts</span></button>
+              <button type="button" class="quiz-option" data-value="b"><span class="quiz-option-radio"></span><span>Disable all reasoning and hope the model memorizes the internet</span></button>
+              <button type="button" class="quiz-option" data-value="c"><span class="quiz-option-radio"></span><span>Only use the test provider in production</span></button>
+            </div>
+            <div class="quiz-feedback" data-explain-ok="Nice — the repo invests heavily in structured plans and kernels for exactly this shape of work."></div>
+            <div class="quiz-feedback" data-explain-bad="The framework’s differentiation is multi-strategy reasoning and observability — use the right tool for structured work."></div>
+          </div>
+          <button type="button" class="quiz-check-btn" data-quiz="quiz-m5">Check answer</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- MODULE 6 -->
+  <section class="module" id="module-6" style="background: var(--color-bg-warm)">
+    <div class="module-content">
+      <header class="module-header animate-in">
+        <span class="module-number">06</span>
+        <h1 class="module-title">When things break — where to look first</h1>
+        <p class="module-subtitle">Escape AI bug loops with a mental map of symptoms → layers.</p>
+      </header>
+
+      <div class="screen animate-in">
+        <h2 class="screen-heading">Flight recorder mindset</h2>
+        <p class="lead">Planes log what happened before an incident. Here, <span class="term" data-definition="Structured events are records with a type tag and fields, not just unstructured text logs.">structured events</span>, typed errors, and phase hooks are your recorder — use them before randomly rewriting prompts.</p>
+      </div>
+
+      <div class="pattern-cards animate-in">
+        <div class="pattern-card"><h4 class="pattern-title">Silent tool failures</h4><p class="pattern-desc">Check tool registry, MCP transport, and whether native function calling matched the provider.</p></div>
+        <div class="pattern-card"><h4 class="pattern-title">Budget / kill switch</h4><p class="pattern-desc">Cost layer and guardrails can halt runs — look for budget exceeded or behavioral contract events.</p></div>
+        <div class="pattern-card"><h4 class="pattern-title">Looping forever</h4><p class="pattern-desc">Reasoning kernels and max iteration settings — adaptive strategy switching may need tuning.</p></div>
+      </div>
+
+      <div class="screen animate-in">
+        <h2 class="screen-heading">Real code: typed engine contract (errors are explicit)</h2>
+        <div class="translation-block">
+          <div class="translation-code">
+            <span class="translation-label">CODE · packages/runtime/src/execution-engine.ts</span>
+            <pre><code>    <span class="code-keyword">readonly</span> executeStream: (
+      task: Task,
+      options?: { density?: StreamDensity },
+    ) =&gt; Effect.Effect&lt;EStream.Stream&lt;AgentStreamEvent, Error&gt;&gt;;</code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <p class="tl">Streaming execution returns a <span class="term" data-definition="A stream is a sequence of values that arrive over time — like live captions instead of one blob at the end.">stream</span> of events (tokens, progress, completion).</p>
+            <p class="tl">The type mentions <code>Error</code> on the stream channel — consumers should handle failures while reading live output.</p>
+            <p class="tl">When debugging “streaming stopped,” follow both the stream path and the non-streaming <code>execute</code> path for differences.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="screen animate-in" id="quiz-m6">
+        <h2 class="screen-heading">Check-in: debugging scenario</h2>
+        <div class="quiz-container">
+          <div class="quiz-question-block" data-correct="c">
+            <h3 class="quiz-question">Metrics show the “think” phase dominates time, but tools never run. What’s a sensible next step?</h3>
+            <div class="quiz-options">
+              <button type="button" class="quiz-option" data-value="a"><span class="quiz-option-radio"></span><span>Immediately swap the database schema</span></button>
+              <button type="button" class="quiz-option" data-value="b"><span class="quiz-option-radio"></span><span>Delete all tests</span></button>
+              <button type="button" class="quiz-option" data-value="c"><span class="quiz-option-radio"></span><span>Confirm tools are enabled, the model supports function calling for that provider, and the prompt actually invites tool use — then inspect LLM request/response logs</span></button>
+            </div>
+            <div class="quiz-feedback" data-explain-ok="That’s the engineering order: capability flags, provider behavior, then evidence from captured I/O."></div>
+            <div class="quiz-feedback" data-explain-bad="Symptoms in the think phase usually trace to LLM config and tool wiring, not unrelated storage."></div>
+          </div>
+          <button type="button" class="quiz-check-btn" data-quiz="quiz-m6">Check answer</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- MODULE 7 -->
+  <section class="module" id="module-7" style="background: var(--color-bg)">
+    <div class="module-content">
+      <header class="module-header animate-in">
+        <span class="module-number">07</span>
+        <h1 class="module-title">The subway map — big picture</h1>
+        <p class="module-subtitle">How the monorepo lines connect so you can plan features with confidence.</p>
+      </header>
+
+      <div class="screen animate-in">
+        <h2 class="screen-heading">Lines and transfers</h2>
+        <p class="lead">A subway map shows lines that meet at hubs. <code>core</code> is a hub (types + EventBus). <code>runtime</code> is the hub where everything boards before a run. Packages upstream must not depend on packages downstream — that’s how builds stay predictable.</p>
+      </div>
+
+      <div class="flow-steps animate-in" style="max-width:var(--content-width-wide); margin-left:auto; margin-right:auto;">
+        <div class="flow-step"><div class="flow-step-num">A</div><p>Foundation: core, llm-provider</p></div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step"><div class="flow-step-num">B</div><p>memory, tools, reasoning</p></div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step"><div class="flow-step-num">C</div><p>guardrails, cost, observability…</p></div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step"><div class="flow-step-num">D</div><p>runtime + <code>reactive-agents</code> facade</p></div>
+      </div>
+
+      <div class="screen animate-in">
+        <h2 class="screen-heading">Real code: façade re-exports</h2>
+        <div class="translation-block">
+          <div class="translation-code">
+            <span class="translation-label">CODE · packages/runtime/src/index.ts</span>
+            <pre><code><span class="code-keyword">export</span> { createRuntime, createLightRuntime } <span class="code-keyword">from</span> <span class="code-string">"./runtime.js"</span>;
+<span class="code-keyword">export</span> { ExecutionEngine, ExecutionEngineLive } <span class="code-keyword">from</span> <span class="code-string">"./execution-engine.js"</span>;</code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <p class="tl">Consumers import from a small surface area.</p>
+            <p class="tl"><code>createRuntime</code> builds layers; <code>ExecutionEngine</code> is the service interface for running tasks.</p>
+            <p class="tl"><code>ExecutionEngineLive</code> is the wiring that connects the real implementation to Effect’s dependency injection.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="callout callout-accent animate-in">
+        <div class="callout-icon">🎯</div>
+        <div class="callout-content">
+          <strong class="callout-title">What to tell an AI coding agent</strong>
+          <p style="margin:0">Name the <em>layer</em> (runtime vs reasoning vs tools), the <em>event</em> you care about, and whether behavior is <em>config</em> (builder) or <em>implementation</em> (service). That vocabulary cuts vague prompts in half.</p>
+        </div>
+      </div>
+
+      <div class="screen animate-in" id="quiz-m7">
+        <h2 class="screen-heading">Check-in: planning a change</h2>
+        <div class="quiz-container">
+          <div class="quiz-question-block" data-correct="b">
+            <h3 class="quiz-question">You want a new builder option <code>.withMyFeature()</code> that affects every run. What’s the responsible order of work?</h3>
+            <div class="quiz-options">
+              <button type="button" class="quiz-option" data-value="a"><span class="quiz-option-radio"></span><span>Only edit the logo PNG</span></button>
+              <button type="button" class="quiz-option" data-value="b"><span class="quiz-option-radio"></span><span>Thread config through types → <code>createRuntime</code> / layers → services that need it → tests + docs snippets</span></button>
+              <button type="button" class="quiz-option" data-value="c"><span class="quiz-option-radio"></span><span>Hardcode a global variable in one strategy file and ship</span></button>
+            </div>
+            <div class="quiz-feedback" data-explain-ok="That’s how this codebase stays composable — configuration flows through explicit types and layers."></div>
+            <div class="quiz-feedback" data-explain-bad="Globals fight the Effect layer model; follow the existing builder → runtime → service path."></div>
+          </div>
+          <button type="button" class="quiz-check-btn" data-quiz="quiz-m7">Check answer</button>
+        </div>
+      </div>
+
+      <p class="lead animate-in" style="text-align:center; margin-top:var(--space-16)">You’re at the end. Open this file anytime in a browser — no build step. Repo: <strong>reactive-agents-ts</strong></p>
+    </div>
+  </section>
+
+  <script>
+    (function () {
+      'use strict';
+
+      var activeTooltip = null;
+
+      function positionTooltip(term, tip) {
+        var rect = term.getBoundingClientRect();
+        var tipWidth = Math.min(320, window.innerWidth * 0.8);
+        var left = rect.left + rect.width / 2 - tipWidth / 2;
+        left = Math.max(8, Math.min(left, window.innerWidth - tipWidth - 8));
+        tip.style.left = left + 'px';
+        tip.style.width = tipWidth + 'px';
+        document.body.appendChild(tip);
+        var tipHeight = tip.offsetHeight;
+        var top = rect.top - tipHeight - 10;
+        if (top < 8) top = rect.bottom + 10;
+        tip.style.top = top + 'px';
+      }
+
+      function initTooltips() {
+        document.querySelectorAll('.term').forEach(function (term) {
+          term.addEventListener('mouseenter', function () {
+            if (activeTooltip && activeTooltip.parentNode) {
+              activeTooltip.classList.remove('visible');
+              activeTooltip.remove();
+            }
+            var tip = document.createElement('div');
+            tip.className = 'term-tooltip';
+            tip.textContent = term.getAttribute('data-definition') || '';
+            positionTooltip(term, tip);
+            requestAnimationFrame(function () { tip.classList.add('visible'); });
+            activeTooltip = tip;
+          });
+          term.addEventListener('mouseleave', function () {
+            if (activeTooltip) {
+              activeTooltip.classList.remove('visible');
+              setTimeout(function () {
+                if (activeTooltip && !activeTooltip.classList.contains('visible')) activeTooltip.remove();
+              }, 150);
+              activeTooltip = null;
+            }
+          });
+          term.addEventListener('click', function (e) {
+            e.stopPropagation();
+            if (activeTooltip && activeTooltip.parentNode) {
+              activeTooltip.classList.remove('visible');
+              activeTooltip.remove();
+              activeTooltip = null;
+              return;
+            }
+            var tip = document.createElement('div');
+            tip.className = 'term-tooltip';
+            tip.textContent = term.getAttribute('data-definition') || '';
+            positionTooltip(term, tip);
+            requestAnimationFrame(function () { tip.classList.add('visible'); });
+            activeTooltip = tip;
+          });
+        });
+        document.addEventListener('click', function () {
+          if (activeTooltip) {
+            activeTooltip.classList.remove('visible');
+            activeTooltip.remove();
+            activeTooltip = null;
+          }
+        });
+      }
+
+      function initReveal() {
+        var observer = new IntersectionObserver(function (entries) {
+          entries.forEach(function (entry) {
+            if (entry.isIntersecting) {
+              entry.target.classList.add('visible');
+              observer.unobserve(entry.target);
+            }
+          });
+        }, { rootMargin: '0px 0px -10% 0px', threshold: 0.08 });
+        document.querySelectorAll('.animate-in').forEach(function (el) { observer.observe(el); });
+        document.querySelectorAll('.stagger-children').forEach(function (parent) {
+          Array.from(parent.children).forEach(function (child, i) {
+            child.style.setProperty('--stagger-index', String(i));
+            child.style.transitionDelay = 'calc(' + i + ' * 120ms)';
+          });
+        });
+      }
+
+      function initProgress() {
+        var bar = document.getElementById('progress-bar');
+        function update() {
+          var st = window.scrollY;
+          var sh = document.documentElement.scrollHeight - window.innerHeight;
+          var p = sh > 0 ? (st / sh) * 100 : 0;
+          bar.style.width = p + '%';
+          bar.setAttribute('aria-valuenow', String(Math.round(p)));
+        }
+        window.addEventListener('scroll', function () { requestAnimationFrame(update); }, { passive: true });
+        update();
+      }
+
+      function initNavDots() {
+        var dots = document.querySelectorAll('.nav-dot');
+        var modules = document.querySelectorAll('.module');
+        dots.forEach(function (dot) {
+          dot.addEventListener('click', function () {
+            var id = dot.getAttribute('data-target');
+            var el = document.getElementById(id);
+            if (el) el.scrollIntoView({ behavior: 'smooth' });
+          });
+        });
+        function onScroll() {
+          var y = window.scrollY + window.innerHeight / 3;
+          modules.forEach(function (mod, i) {
+            var top = mod.offsetTop;
+            var bot = top + mod.offsetHeight;
+            if (y >= top && y < bot) {
+              dots.forEach(function (d, j) { d.classList.toggle('current', j === i); });
+            }
+          });
+        }
+        window.addEventListener('scroll', function () { requestAnimationFrame(onScroll); }, { passive: true });
+      }
+
+      document.addEventListener('keydown', function (e) {
+        if (['INPUT', 'TEXTAREA', 'SELECT'].indexOf(e.target.tagName) >= 0) return;
+        var mods = Array.from(document.querySelectorAll('.module'));
+        var idx = mods.findIndex(function (m) {
+          var r = m.getBoundingClientRect();
+          return r.top <= 120 && r.bottom > 120;
+        });
+        if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+          if (idx < mods.length - 1) mods[idx + 1].scrollIntoView({ behavior: 'smooth' });
+          e.preventDefault();
+        }
+        if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+          if (idx > 0) mods[idx - 1].scrollIntoView({ behavior: 'smooth' });
+          e.preventDefault();
+        }
+      });
+
+      function bindQuiz(containerId) {
+        var root = document.getElementById(containerId);
+        if (!root) return;
+        root.querySelectorAll('.quiz-check-btn[data-quiz]').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            var id = btn.getAttribute('data-quiz');
+            var c = document.getElementById(id);
+            if (!c) return;
+            var q = c.querySelector('.quiz-question-block');
+            var sel = q.querySelector('.quiz-option.selected');
+            var correct = q.getAttribute('data-correct');
+            var feeds = q.querySelectorAll('.quiz-feedback');
+            var okText = feeds[0] && feeds[0].getAttribute('data-explain-ok');
+            var badText = feeds[1] && feeds[1].getAttribute('data-explain-bad');
+            if (!sel) return;
+            q.querySelectorAll('.quiz-option').forEach(function (o) { o.disabled = true; });
+            var fb = feeds[0];
+            if (sel.getAttribute('data-value') === correct) {
+              sel.classList.add('correct');
+              fb.textContent = okText || 'Nice!';
+              fb.className = 'quiz-feedback show success';
+            } else {
+              sel.classList.add('incorrect');
+              var right = q.querySelector('.quiz-option[data-value="' + correct + '"]');
+              if (right) right.classList.add('correct');
+              fb.textContent = badText || 'Not quite.';
+              fb.className = 'quiz-feedback show error';
+            }
+          });
+        });
+        root.querySelectorAll('.quiz-option').forEach(function (opt) {
+          opt.addEventListener('click', function () {
+            var block = opt.closest('.quiz-question-block');
+            if (!block || opt.disabled) return;
+            block.querySelectorAll('.quiz-option').forEach(function (o) { o.classList.remove('selected'); });
+            opt.classList.add('selected');
+          });
+        });
+      }
+
+      ['quiz-m1', 'quiz-m2', 'quiz-m3', 'quiz-m4', 'quiz-m5', 'quiz-m6', 'quiz-m7'].forEach(bindQuiz);
+
+      /* Module 3 chat */
+      var chatIdx3 = 0;
+      var msgs3 = document.querySelectorAll('#chat-messages-3 .chat-message');
+      function showNext3() {
+        if (chatIdx3 >= msgs3.length) return;
+        msgs3[chatIdx3].classList.add('show');
+        chatIdx3++;
+        document.getElementById('chat-prog-3').textContent = chatIdx3 + ' / ' + msgs3.length;
+      }
+      function reset3() {
+        chatIdx3 = 0;
+        msgs3.forEach(function (m) { m.classList.remove('show'); });
+        document.getElementById('chat-prog-3').textContent = '0 / ' + msgs3.length;
+      }
+      document.getElementById('chat-next-3').addEventListener('click', showNext3);
+      document.getElementById('chat-reset-3').addEventListener('click', reset3);
+      document.getElementById('chat-all-3').addEventListener('click', function () {
+        var t = setInterval(function () {
+          if (chatIdx3 >= msgs3.length) { clearInterval(t); return; }
+          showNext3();
+        }, 900);
+      });
+
+      /* Module 4 flow */
+      var flowStep4 = 0;
+      var flowSteps4 = [
+        { id: 'flow-m4-a', label: 'Your code calls agent.run with a prompt and options.', w: '15%' },
+        { id: 'flow-m4-b', label: 'Runtime merges layers; ExecutionEngine starts the phase loop.', w: '38%' },
+        { id: 'flow-m4-c', label: 'LLMService sends the request to the provider API (network).', w: '62%' },
+        { id: 'flow-m4-d', label: 'If the model requests tools, ToolService runs them and results return.', w: '85%' },
+        { id: 'flow-m4-b', label: 'Engine finalizes: debrief, memory flush, TaskCompleted on the bus.', w: '100%' }
+      ];
+      function setActive4(id) {
+        document.querySelectorAll('#flow-mod4 .flow-actor').forEach(function (a) { a.classList.remove('active'); });
+        var el = document.getElementById(id);
+        if (el) el.classList.add('active');
+      }
+      document.getElementById('flow-next-m4').addEventListener('click', function () {
+        if (flowStep4 >= flowSteps4.length) return;
+        var s = flowSteps4[flowStep4];
+        setActive4(s.id);
+        document.getElementById('flow-label-m4').textContent = s.label;
+        document.getElementById('flow-packet-m4').style.width = s.w;
+        flowStep4++;
+        document.getElementById('flow-prog-m4').textContent = flowStep4 + ' / ' + flowSteps4.length;
+      });
+      document.getElementById('flow-reset-m4').addEventListener('click', function () {
+        flowStep4 = 0;
+        document.getElementById('flow-packet-m4').style.width = '0';
+        document.getElementById('flow-label-m4').textContent = 'Click “Next step” to trace the prompt.';
+        document.getElementById('flow-prog-m4').textContent = '0 / ' + flowSteps4.length;
+        document.querySelectorAll('#flow-mod4 .flow-actor').forEach(function (a) { a.classList.remove('active'); });
+      });
+
+      /* DnD module 2 */
+      var dragged = null;
+      document.querySelectorAll('#dnd-mod2 .dnd-chip').forEach(function (chip) {
+        chip.addEventListener('dragstart', function (e) {
+          dragged = chip;
+          chip.classList.add('dragging');
+          e.dataTransfer.setData('text/plain', chip.getAttribute('data-answer'));
+        });
+        chip.addEventListener('dragend', function () { chip.classList.remove('dragging'); });
+      });
+      document.querySelectorAll('#dnd-mod2 .dnd-zone-target').forEach(function (target) {
+        target.addEventListener('dragover', function (e) { e.preventDefault(); target.classList.add('drag-over'); });
+        target.addEventListener('dragleave', function () { target.classList.remove('drag-over'); });
+        target.addEventListener('drop', function (e) {
+          e.preventDefault();
+          target.classList.remove('drag-over');
+          var ans = e.dataTransfer.getData('text/plain');
+          var zone = target.closest('.dnd-zone');
+          var correct = zone.getAttribute('data-correct');
+          var chip = document.querySelector('#dnd-mod2 .dnd-chip[data-answer="' + ans + '"]');
+          if (chip && ans === correct) {
+            target.textContent = chip.textContent;
+            target.dataset.placed = ans;
+            chip.classList.add('placed');
+          }
+        });
+      });
+      document.getElementById('dnd-check').addEventListener('click', function () {
+        var zones = document.querySelectorAll('#dnd-mod2 .dnd-zone');
+        var ok = true;
+        zones.forEach(function (z) {
+          var t = z.querySelector('.dnd-zone-target');
+          var c = z.getAttribute('data-correct');
+          ok = ok && (t.dataset.placed === c);
+        });
+        document.getElementById('dnd-feedback').textContent = ok
+          ? 'All matched — core owns the bus, reasoning owns strategies, runtime owns the builder and createRuntime.'
+          : 'Some zones are empty or wrong — try again. Each chip belongs to one row only.';
+        document.getElementById('dnd-feedback').style.color = ok ? 'var(--color-success)' : 'var(--color-error)';
+      });
+
+      initTooltips();
+      initReveal();
+      initProgress();
+      initNavDots();
+    })();
+  </script>
+</body>
+</html>

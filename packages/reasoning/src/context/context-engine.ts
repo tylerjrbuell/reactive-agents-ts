@@ -406,7 +406,7 @@ function buildIterationAwareness(iteration: number, maxIterations: number): stri
  * Build the RULES block with dynamic entries for required tools and delegation.
  * Tier-adaptive: local/mid models get 5 core rules; large/frontier get full set.
  */
-function buildRules(
+export function buildRules(
   availableToolSchemas?: readonly ToolSchema[],
   requiredTools?: readonly string[],
   tier?: "local" | "mid" | "large" | "frontier",

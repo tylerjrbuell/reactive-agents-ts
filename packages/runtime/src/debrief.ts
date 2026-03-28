@@ -32,7 +32,7 @@ export interface DebriefInput {
   /** Task identifier */
   taskId: string;
   /** How the agent loop terminated */
-  terminatedBy: "final_answer_tool" | "final_answer" | "max_iterations" | "end_turn";
+  terminatedBy: "final_answer_tool" | "final_answer" | "max_iterations" | "end_turn" | "llm_error";
   /** Structured capture from the `final-answer` tool (if used) */
   finalAnswerCapture?: FinalAnswerCapture;
   /** Per-tool aggregated call statistics */
@@ -90,7 +90,10 @@ function deriveOutcome(
   terminatedBy: DebriefInput["terminatedBy"],
   errorsFromLoop: string[],
 ): AgentDebrief["outcome"] {
-  // max_iterations is the only termination that signals incomplete work
+  if (terminatedBy === "llm_error") {
+    return "failed";
+  }
+  // max_iterations — incomplete work without provider failure
   if (terminatedBy === "max_iterations") {
     return "partial";
   }

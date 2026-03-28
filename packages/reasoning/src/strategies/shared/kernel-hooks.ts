@@ -10,8 +10,26 @@
  * in MetricsCollector and ensures consistent event shapes across all strategies.
  */
 import { Effect } from "effect";
+import type { AgentEvent } from "@reactive-agents/core";
+import type { LLMMessage } from "@reactive-agents/llm-provider";
 import type { KernelHooks, KernelState, EventBusInstance, MaybeService } from "./kernel-state.js";
+import type { SynthesizedContext } from "../../context/synthesis-types.js";
 import { publishReasoningStep } from "./service-utils.js";
+
+function llmMessageToSynthesisPayload(m: LLMMessage): { readonly role: string; readonly content: string | null } {
+  const role = m.role;
+  const c = m.content;
+  if (typeof c === "string") return { role, content: c };
+  if (c == null) return { role, content: null };
+  if (Array.isArray(c)) {
+    const text = c
+      .map((block) => ("text" in block ? String((block as { text?: string }).text ?? "") : ""))
+      .join("")
+      .trim();
+    return { role, content: text.length > 0 ? text : null };
+  }
+  return { role, content: null };
+}
 
 /** Extract kernelPass from state meta with fallback to strategy:main. */
 function getKernelPass(state: KernelState): string {
@@ -26,7 +44,7 @@ function getKernelPass(state: KernelState): string {
  */
 export function buildKernelHooks(eventBus: MaybeService<EventBusInstance>): KernelHooks {
   return {
-    onThought: (state: KernelState, thought: string): Effect.Effect<void, never> =>
+    onThought: (state: KernelState, thought: string, prompt?: { system: string; user: string }): Effect.Effect<void, never> =>
       publishReasoningStep(eventBus, {
         _tag: "ReasoningStepCompleted",
         taskId: state.taskId,
@@ -35,6 +53,7 @@ export function buildKernelHooks(eventBus: MaybeService<EventBusInstance>): Kern
         totalSteps: 0,
         thought,
         kernelPass: getKernelPass(state),
+        ...(prompt ? { prompt } : {}),
       }),
 
     onAction: (state: KernelState, tool: string, input: string): Effect.Effect<void, never> =>
@@ -121,5 +140,35 @@ export function buildKernelHooks(eventBus: MaybeService<EventBusInstance>): Kern
         reasoning: evaluation.reasoning,
         timestamp: Date.now(),
       }),
+
+    onContextSynthesized: (
+      synthesized: SynthesizedContext,
+      taskId: string,
+      agentId: string,
+    ): Effect.Effect<void, never> =>
+      eventBus._tag === "Some"
+        ? eventBus.value
+            .publish({
+              _tag: "ContextSynthesized",
+              taskId,
+              agentId,
+              iteration: synthesized.signalsSnapshot.iteration,
+              synthesisPath: synthesized.synthesisPath,
+              synthesisReason: synthesized.synthesisReason,
+              taskPhase: synthesized.taskPhase,
+              estimatedTokens: synthesized.estimatedTokens,
+              messages: synthesized.messages.map(llmMessageToSynthesisPayload),
+              signalsSnapshot: {
+                entropy: synthesized.signalsSnapshot.entropy,
+                trajectoryShape: synthesized.signalsSnapshot.trajectoryShape,
+                tier: synthesized.signalsSnapshot.tier,
+                requiredTools: synthesized.signalsSnapshot.requiredTools,
+                toolsUsed: synthesized.signalsSnapshot.toolsUsed,
+                iteration: synthesized.signalsSnapshot.iteration,
+                lastErrors: synthesized.signalsSnapshot.lastErrors,
+              },
+            } as AgentEvent)
+            .pipe(Effect.catchAll(() => Effect.void))
+        : Effect.void,
   };
 }

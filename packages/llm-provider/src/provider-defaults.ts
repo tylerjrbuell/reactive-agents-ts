@@ -5,18 +5,18 @@
  */
 
 export const PROVIDER_DEFAULT_MODELS: Record<string, string> = {
-  anthropic: "claude-sonnet-4-20250514",
-  openai: "gpt-4o",
-  ollama: "cogito:14b",
-  gemini: "gemini-2.0-flash",
-  litellm: "gpt-4o",
-  test: "test-model",
-};
+    anthropic: 'claude-sonnet-4-20250514',
+    openai: 'gpt-4o',
+    ollama: 'cogito:14b',
+    gemini: 'gemini-2.5-flash',
+    litellm: 'gpt-4o',
+    test: 'test-model',
+}
 
 /**
  * Get the default model for a given provider.
  * Returns undefined if the provider is not recognized.
  */
 export function getProviderDefaultModel(provider: string): string | undefined {
-  return PROVIDER_DEFAULT_MODELS[provider];
+    return PROVIDER_DEFAULT_MODELS[provider]
 }

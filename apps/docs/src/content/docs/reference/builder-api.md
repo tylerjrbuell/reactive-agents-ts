@@ -136,13 +136,23 @@ See [Context Engineering](/guides/context-engineering/) for full tier defaults.
 ```typescript
 interface ReasoningOptions {
   /**
-   * Which strategy to use. Defaults to "react".
+   * Which strategy to use. Defaults to "reactive".
    * "adaptive" requires adaptive.enabled: true.
    */
-  defaultStrategy?: "react" | "reflexion" | "plan-execute-reflect" | "tree-of-thought" | "adaptive";
+  defaultStrategy?: "reactive" | "reflexion" | "plan-execute-reflect" | "tree-of-thought" | "adaptive";
 
-  /** Per-strategy overrides (e.g., custom prompts or tuning). Rarely needed. */
-  strategies?: Partial<ReasoningConfig["strategies"]>;
+  /**
+   * Per-strategy overrides (iterations, temperatures, plan knobs, etc.).
+   * Each bundle may also set ICS fields (`synthesis`, `synthesisModel`, `synthesisProvider`,
+   * `synthesisStrategy`, `synthesisTemperature`) — they override the top-level synthesis
+   * options for that strategy only (see Intelligent Context Synthesis).
+   */
+  strategies?: Partial<{
+    reactive: ReasoningConfig["strategies"]["reactive"] & StrategySynthesisFields;
+    planExecute: ReasoningConfig["strategies"]["planExecute"] & StrategySynthesisFields;
+    treeOfThought: ReasoningConfig["strategies"]["treeOfThought"] & StrategySynthesisFields;
+    reflexion: ReasoningConfig["strategies"]["reflexion"] & StrategySynthesisFields;
+  }>;
 
   /** Adaptive strategy config. Must set enabled: true when defaultStrategy is "adaptive". */
   adaptive?: {
@@ -172,6 +182,26 @@ interface ReasoningOptions {
    * Example: "plan-execute-reflect"
    */
   fallbackStrategy?: string;
+
+  /** ICS default mode: auto (heuristic), fast (templates), deep (LLM), custom, or off. */
+  synthesis?: "auto" | "fast" | "deep" | "custom" | "off";
+  /** Model for deep synthesis when different from the executing model. */
+  synthesisModel?: string;
+  /** Provider for the synthesis model when different from the executing provider. */
+  synthesisProvider?: string;
+  /** Custom synthesis pipeline when `synthesis: "custom"`. */
+  synthesisStrategy?: SynthesisStrategy;
+  /** Temperature for deep synthesis LLM calls. */
+  synthesisTemperature?: number;
+}
+
+/** ICS-only fields allowed on each `strategies.*` bundle (merged with top-level synthesis). */
+interface StrategySynthesisFields {
+  synthesis?: "auto" | "fast" | "deep" | "custom" | "off";
+  synthesisModel?: string;
+  synthesisProvider?: string;
+  synthesisStrategy?: SynthesisStrategy;
+  synthesisTemperature?: number;
 }
 ```
 
@@ -192,6 +222,12 @@ interface ReasoningOptions {
 
 // Auto-switch deterministically (no extra LLM call) to plan-execute-reflect
 .withReasoning({ enableStrategySwitching: true, fallbackStrategy: "plan-execute-reflect" })
+
+// ICS: fast templates globally, but deep LLM synthesis when running ReAct
+.withReasoning({
+  synthesis: "fast",
+  strategies: { reactive: { synthesis: "deep", synthesisModel: "claude-3-5-haiku-20241022" } },
+})
 ```
 
 When `enableStrategySwitching` is active, two EventBus events are emitted around each switch:

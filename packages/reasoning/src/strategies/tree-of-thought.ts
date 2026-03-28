@@ -48,6 +48,7 @@ interface TreeOfThoughtInput {
   readonly modelId?: string;
   /** LLM temperature override */
   readonly temperature?: number;
+  readonly synthesisConfig?: import("../context/synthesis-types.js").SynthesisConfig;
 }
 
 interface ThoughtNode {
@@ -289,6 +290,7 @@ export const executeTreeOfThought = (
       sessionId: input.sessionId,
       requiredTools: input.requiredTools,
       maxRequiredToolRetries: input.maxRequiredToolRetries,
+      synthesisConfig: input.synthesisConfig,
     }, {
       maxIterations: input.config.strategies.treeOfThought?.depth ?? 3,
       strategy: "tree-of-thought",

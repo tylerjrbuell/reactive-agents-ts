@@ -727,6 +727,33 @@ export type AgentEvent =
       /** Unix timestamp in milliseconds */
       readonly timestamp: number;
     }
+  | {
+      /**
+       * Published before an LLM call when Intelligent Context Synthesis produced
+       * the messages for this iteration (full observability of model input).
+       */
+      readonly _tag: "ContextSynthesized";
+      readonly taskId: string;
+      readonly agentId: string;
+      readonly iteration: number;
+      readonly synthesisPath: "fast" | "deep" | "custom";
+      readonly synthesisReason: string;
+      readonly taskPhase: string;
+      readonly estimatedTokens: number;
+      readonly messages: readonly {
+        readonly role: string;
+        readonly content: string | null;
+      }[];
+      readonly signalsSnapshot: {
+        readonly entropy: number | undefined;
+        readonly trajectoryShape: string | undefined;
+        readonly tier: string;
+        readonly requiredTools: readonly string[];
+        readonly toolsUsed: readonly string[];
+        readonly iteration: number;
+        readonly lastErrors: readonly string[];
+      };
+    }
   // ─── Streaming events ───
   | {
       /**

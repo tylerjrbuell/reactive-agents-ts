@@ -12,6 +12,7 @@ import type { ContextProfile } from "../../context/context-profile.js";
 import type { ResultCompressionConfig, ToolCallSpec } from "@reactive-agents/tools";
 import type { LLMService } from "@reactive-agents/llm-provider";
 import type { ToolSchema } from "./tool-utils.js";
+import type { KernelMetaToolsConfig } from "../../types/kernel-meta-tools.js";
 
 // ── Kernel Status ────────────────────────────────────────────────────────────
 
@@ -65,6 +66,13 @@ export interface KernelState {
    * Separate from steps[] which is the observability record.
    */
   readonly messages: readonly KernelMessage[];
+
+  /**
+   * Synthesized context for the next handleThinking call.
+   * Set by kernel-runner after handleActing completes.
+   * Consumed and cleared (null) by handleThinking — never accumulated.
+   */
+  readonly synthesizedContext?: import("../../context/synthesis-types.js").SynthesizedContext | null;
 }
 
 // ── KernelInput — Frozen execution input ─────────────────────────────────────
@@ -104,19 +112,13 @@ export interface KernelInput {
    * Allows the execution engine to inject prior conversation context (e.g. chat history).
    */
   readonly initialMessages?: readonly KernelMessage[];
+  /**
+   * Context synthesis (ICS) — from .withReasoning({ synthesis: ... }).
+   * Omitted defaults to `{ mode: "auto" }` in kernel-runner.
+   */
+  readonly synthesisConfig?: import("../../context/synthesis-types.js").SynthesisConfig;
   /** Meta-tool configuration and pre-computed static data for brief/pulse/recall/find. */
-  readonly metaTools?: {
-    readonly brief?: boolean;
-    readonly find?: boolean;
-    readonly pulse?: boolean;
-    readonly recall?: boolean;
-    readonly staticBriefInfo?: {
-      readonly indexedDocuments: readonly { source: string; chunkCount: number; format: string }[];
-      readonly availableSkills: readonly { name: string; purpose: string }[];
-      readonly memoryBootstrap: { semanticLines: number; episodicEntries: number };
-    };
-    readonly harnessContent?: string;
-  };
+  readonly metaTools?: KernelMetaToolsConfig;
 }
 
 // ── Narrow service types ─────────────────────────────────────────────────────
@@ -144,7 +146,7 @@ export type EventBusInstance = {
 // ── KernelHooks — Lifecycle hooks for observability wiring ───────────────────
 
 export interface KernelHooks {
-  readonly onThought: (state: KernelState, thought: string) => Effect.Effect<void, never>;
+  readonly onThought: (state: KernelState, thought: string, prompt?: { system: string; user: string }) => Effect.Effect<void, never>;
   readonly onAction: (state: KernelState, tool: string, input: string) => Effect.Effect<void, never>;
   readonly onObservation: (state: KernelState, result: string, success: boolean) => Effect.Effect<void, never>;
   readonly onDone: (state: KernelState) => Effect.Effect<void, never>;
@@ -154,6 +156,14 @@ export interface KernelHooks {
   readonly onStrategySwitchEvaluated: (
     state: KernelState,
     evaluation: { shouldSwitch: boolean; recommendedStrategy: string; reasoning: string }
+  ) => Effect.Effect<void, never>;
+  /**
+   * After ICS completes — publish observability before the next LLM call.
+   */
+  readonly onContextSynthesized: (
+    synthesized: import("../../context/synthesis-types.js").SynthesizedContext,
+    taskId: string,
+    agentId: string,
   ) => Effect.Effect<void, never>;
 }
 
@@ -263,6 +273,7 @@ export function initialKernelState(opts: KernelRunOptions): KernelState {
     },
     controllerDecisionLog: [],
     messages: [],
+    synthesizedContext: undefined,
   };
 }
 
@@ -320,6 +331,7 @@ export function serializeKernelState(state: KernelState): SerializedKernelState 
     priorThought: state.priorThought,
     meta: state.meta,
     controllerDecisionLog: state.controllerDecisionLog,
+    synthesizedContext: state.synthesizedContext,
   };
 }
 
@@ -346,6 +358,7 @@ export function deserializeKernelState(raw: SerializedKernelState): KernelState 
     priorThought: raw.priorThought,
     meta: raw.meta,
     controllerDecisionLog: (raw.controllerDecisionLog as string[]) ?? [],
+    synthesizedContext: raw.synthesizedContext,
   };
 }
 
@@ -361,4 +374,5 @@ export const noopHooks: KernelHooks = {
   onIterationProgress: () => Effect.void,
   onStrategySwitched: () => Effect.void,
   onStrategySwitchEvaluated: () => Effect.void,
+  onContextSynthesized: () => Effect.void,
 };

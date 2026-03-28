@@ -158,10 +158,17 @@ export const toStrictToolSchema = (schema: any): any => {
         }
       }
 
-      // Recursively apply to nested objects
-      if (prop.type === "object" || prop.anyOf?.some((s: any) => s.type === "object")) {
+      // Recursively apply to nested objects and anyOf branches
+      if (prop.type === "object" && prop.properties) {
         newSchema.properties[key] = toStrictToolSchema(prop);
-      } else if (prop.type === "array" && prop.items && prop.items.type === "object") {
+      } else if (prop.anyOf) {
+        prop.anyOf = prop.anyOf.map((variant: any) =>
+          variant && variant.type === "object"
+            ? { ...variant, additionalProperties: false }
+            : variant,
+        );
+      }
+      if (prop.type === "array" && prop.items && prop.items.type === "object") {
         newSchema.properties[key].items = toStrictToolSchema(prop.items);
       }
     }

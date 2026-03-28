@@ -4,13 +4,15 @@ import type { MCPServerConfig } from "./runtime.js";
 import { builderToConfig } from "./agent-config.js";
 import type { TestTurn } from "@reactive-agents/llm-provider";
 import { ExecutionEngine } from "./execution-engine.js";
-import type { LifecycleHook, ExecutionContext, ModelParams } from "./types.js";
+import type { LifecycleHook, ExecutionContext, ModelParams, ReasoningOptions } from "./types.js";
 import type { RuntimeErrors } from "./errors.js";
 import { unwrapError } from "./errors.js";
 import type {
   ReasoningConfig,
   ContextProfile,
+  KernelMetaToolsConfig,
 } from "@reactive-agents/reasoning";
+import type { StrategySynthesisFields } from "./reasoning-synthesis-fields.js";
 import type {
   ToolDefinition,
   ResultCompressionConfig,
@@ -95,44 +97,8 @@ export interface AgentPersona {
   readonly tone?: string;
 }
 
-/**
- * Options for `.withReasoning()` — all fields optional, merged with framework defaults.
- *
- * Allows fine-tuning of the reasoning layer, including strategy selection and per-strategy parameters.
- *
- * @example
- * ```typescript
- * agent
- *   .withReasoning({
- *     defaultStrategy: "tree-of-thought",
- *     adaptive: { confidenceThreshold: 0.75 }
- *   })
- * ```
- */
-export interface ReasoningOptions {
-  /** Default reasoning strategy — one of: `"reactive"`, `"plan-execute-reflect"`, `"tree-of-thought"`, `"reflexion"`, `"adaptive"`. Default: "reactive" */
-  readonly defaultStrategy?: ReasoningConfig["defaultStrategy"];
-  /** Per-strategy configuration overrides (partial, merged with defaults). Default: {} */
-  readonly strategies?: Partial<ReasoningConfig["strategies"]>;
-  /** Adaptive reasoning settings (e.g., confidence thresholds, backoff strategies). Default: {} */
-  readonly adaptive?: Partial<ReasoningConfig["adaptive"]>;
-  /**
-   * Enable automatic strategy switching when the agent gets stuck in a loop.
-   * When enabled, the kernel will evaluate an alternative strategy instead of failing immediately.
-   * Default: false
-   */
-  readonly enableStrategySwitching?: boolean;
-  /**
-   * Maximum number of strategy switches allowed per run. Default: 1.
-   * Only used when `enableStrategySwitching` is true.
-   */
-  readonly maxStrategySwitches?: number;
-  /**
-   * Skip the LLM evaluator and switch directly to this fallback strategy.
-   * Only used when `enableStrategySwitching` is true.
-   */
-  readonly fallbackStrategy?: string;
-}
+export type { StrategySynthesisFields } from "./reasoning-synthesis-fields.js";
+export type { ReasoningOptions } from "./types.js";
 
 /**
  * Options for `.withTools()` — register custom tools with the agent.
@@ -2187,7 +2153,7 @@ export class ReactiveAgentBuilder {
             : undefined;     // no tools enabled — no meta-tools either
 
       // Resolve meta-tools configuration before building the runtime
-      let kernelMetaTools: any;
+      let kernelMetaTools: KernelMetaToolsConfig | undefined;
       if (effectiveMetaTools) {
         const mt = effectiveMetaTools;
 
@@ -2924,10 +2890,15 @@ export class ReactiveAgentBuilder {
             ([source, chunks]) => ({
               source,
               chunkCount: chunks.length,
-              format: (chunks[0] as any)?.metadata?.format ?? "text",
+              format: (chunks[0] as { metadata?: { format?: string } })?.metadata?.format ?? "text",
             }),
           );
-          kernelMetaTools.staticBriefInfo.indexedDocuments = indexedDocuments;
+          type StaticBriefBackfill = {
+            indexedDocuments: Array<{ source: string; chunkCount: number; format: string }>;
+            readonly availableSkills: readonly { readonly name: string; readonly purpose: string }[];
+            readonly memoryBootstrap: { readonly semanticLines: number; readonly episodicEntries: number };
+          };
+          (kernelMetaTools.staticBriefInfo as StaticBriefBackfill).indexedDocuments = indexedDocuments;
         }
       }
 

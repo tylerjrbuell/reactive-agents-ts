@@ -181,6 +181,10 @@ const agent = await ReactiveAgents.create()
 // Every task is classified and routed to the best strategy automatically
 ```
 
+## Intelligent Context Synthesis
+
+Between kernel iterations, **Intelligent Context Synthesis (ICS)** can rewrite the transcript into a tighter set of messages for the next LLM call — either via fast deterministic templates or an extra LLM pass (“deep” mode). Configure it on `.withReasoning()` with `synthesis`, `synthesisModel`, `synthesisProvider`, `synthesisStrategy`, and `synthesisTemperature`. You can override ICS **per named strategy** under `strategies.reactive`, `strategies.planExecute`, `strategies.treeOfThought`, or `strategies.reflexion` (e.g. fast globally but deep for ReAct only). The **adaptive** meta-strategy uses only the top-level synthesis fields until a concrete strategy runs. See [Intelligent Context Synthesis](/features/intelligent-context-synthesis/) for the full table, EventBus (`ContextSynthesized`), and resolution order.
+
 ## Strategy Comparison
 
 | Strategy | LLM Calls | Best For | Trade-off |

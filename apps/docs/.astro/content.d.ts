@@ -317,6 +317,13 @@ declare module 'astro:content' {
   collection: "docs";
   data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
+"features/intelligent-context-synthesis.md": {
+	id: "features/intelligent-context-synthesis.md";
+  slug: "features/intelligent-context-synthesis";
+  body: string;
+  collection: "docs";
+  data: InferEntrySchema<"docs">
+} & { render(): Render[".md"] };
 "features/llm-providers.md": {
 	id: "features/llm-providers.md";
   slug: "features/llm-providers";

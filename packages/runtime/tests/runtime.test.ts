@@ -44,9 +44,7 @@ describe("createRuntime", () => {
     const runtime = createRuntime({
       agentId: "test-agent",
       provider: "test",
-      testResponses: {
-        "hello": "Hello! How can I help you?",
-      },
+      testScenario: [{ match: "hello", text: "Hello! How can I help you?" }],
     });
 
     const mockTask = {

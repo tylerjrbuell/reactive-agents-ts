@@ -11,6 +11,9 @@ import type { ReasoningErrors } from "../errors/errors.js";
 import type { ContextProfile } from "../context/context-profile.js";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { ToolService } from "@reactive-agents/tools";
+import type { SynthesisConfig } from "../context/synthesis-types.js";
+import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
+import { ContextSynthesizerLive } from "../context/context-synthesizer.js";
 
 // ─── Service Tag ───
 
@@ -67,20 +70,10 @@ export class ReasoningService extends Context.Tag("ReasoningService")<
       /** Custom environment context key-value pairs injected into system prompt */
       readonly environmentContext?: Readonly<Record<string, string>>;
       /** Meta-tool configuration and pre-computed static data for brief/pulse/recall/find. */
-      readonly metaTools?: {
-        readonly brief?: boolean;
-        readonly find?: boolean;
-        readonly pulse?: boolean;
-        readonly recall?: boolean;
-        readonly staticBriefInfo?: {
-          readonly indexedDocuments: readonly { source: string; chunkCount: number; format: string }[];
-          readonly availableSkills: readonly { name: string; purpose: string }[];
-          readonly memoryBootstrap: { semanticLines: number; episodicEntries: number };
-        };
-        readonly harnessContent?: string;
-      };
+      readonly metaTools?: KernelMetaToolsConfig;
       /** Initial messages to seed the kernel conversation thread (e.g. task as user message). */
       readonly initialMessages?: readonly { readonly role: "user" | "assistant"; readonly content: string }[];
+      readonly synthesisConfig?: SynthesisConfig;
     }) => Effect.Effect<ReasoningResult, ReasoningErrors>;
 
     /** Register a custom strategy function. */
@@ -109,10 +102,13 @@ export const ReasoningServiceLive = (
       // Capture ToolService optionally — strategies like ReAct need it
       // for tool execution. When not available, strategies degrade gracefully.
       const toolServiceOpt = yield* Effect.serviceOption(ToolService);
-      let strategyLayer: Layer.Layer<any, never> = llmLayer;
+      let strategyLayer: Layer.Layer<any, never> = Layer.mergeAll(
+        llmLayer,
+        ContextSynthesizerLive,
+      );
       if (toolServiceOpt._tag === "Some") {
         strategyLayer = Layer.merge(
-          llmLayer,
+          strategyLayer,
           Layer.succeed(ToolService, toolServiceOpt.value),
         );
       }

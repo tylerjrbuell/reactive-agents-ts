@@ -103,7 +103,6 @@ export {
   trackUsage,
   scoreContextItem,
   allocateContextBudget,
-  buildContext,
 } from "./context/index.js";
 export type {
   ContextProfile,
@@ -113,11 +112,32 @@ export type {
   MemoryItem,
   ScoringContext,
   BudgetResult,
-  ContextBuildInput,
 } from "./context/index.js";
 
 // ─── Message Window Compaction ───
 export { applyMessageWindow } from "./context/message-window.js";
+
+// ─── Intelligent Context Synthesis (ICS) ───
+export { classifyTaskPhase } from "./context/task-phase.js";
+export type { TaskPhase } from "./context/task-phase.js";
+export { fastSynthesis } from "./context/synthesis-templates.js";
+export {
+  deepSynthesis,
+  ContextSynthesizerService,
+  ContextSynthesizerLive,
+} from "./context/context-synthesizer.js";
+export type {
+  SynthesisInput,
+  SynthesizedContext,
+  SynthesisConfig,
+  SynthesisStrategy,
+  SynthesisSignalsSnapshot,
+  SynthesisEntropySignals,
+} from "./context/synthesis-types.js";
+export { SynthesisConfigJsonSchema } from "./context/synthesis-schema.js";
+export type { SynthesisConfigJson } from "./context/synthesis-schema.js";
+export { KernelMetaToolsSchema, StaticBriefInfoSchema } from "./types/kernel-meta-tools.js";
+export type { KernelMetaToolsConfig } from "./types/kernel-meta-tools.js";
 
 // ─── Shared Utilities ───
 export { filterToolsByRelevance } from "./strategies/shared/tool-utils.js";
