@@ -96,7 +96,7 @@ const agent = await ReactiveAgents.create()
 
 ## What's Next?
 
-- [Common builder stacks](../cookbook/builder-stacks/) — Copy-paste chains (tools, memory, streaming, Agent as Data) with links to the full API reference
+- [Common builder stacks](/cookbook/builder-stacks/) — Copy-paste chains (tools, memory, streaming, Agent as Data) with links to the full API reference
 - [Your First Agent](../your-first-agent/) — A deeper walkthrough
 - [Choosing a Stack](../choosing-a-stack/) — Pick provider/model/memory defaults quickly
 - [Agent Skills](../agent-skills/) — Publish reusable implementation skills for coding agents
