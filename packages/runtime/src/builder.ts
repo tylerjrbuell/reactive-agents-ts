@@ -760,6 +760,13 @@ export class ReactiveAgentBuilder {
   private _consolidationConfig?: { threshold?: number; decayFactor?: number; pruneThreshold?: number };
   private _errorHandler?: (error: RuntimeErrors | Error, context: { taskId: string; phase: string; iteration: number; lastStep?: string }) => void;
   private _enableHealthCheck: boolean = false;
+  private _minIterations?: number;
+  private _taskContext?: Record<string, string>;
+  private _progressCheckpoint?: { every: number; autoResume?: boolean };
+  private _verificationStep?: { mode: "reflect" | "loop"; prompt?: string };
+  private _outputValidator?: (output: string) => { valid: boolean; feedback?: string };
+  private _outputValidatorOptions?: { maxRetries?: number };
+  private _customTermination?: (state: { output: string }) => boolean;
   private _enableReactiveIntelligence: boolean = true;
   private _reactiveIntelligenceOptions?: Partial<import("@reactive-agents/reactive-intelligence").ReactiveIntelligenceConfig>;
   private _sessionPersist: boolean = false;
@@ -1766,6 +1773,84 @@ export class ReactiveAgentBuilder {
   }
 
   /**
+   * Require at least N iterations before the agent can declare success.
+   * Blocks the fast-path and hides the final-answer tool until the minimum
+   * is reached. Only iterations that include at least one tool call count.
+   * @example .withMinIterations(3)
+   */
+  withMinIterations(n: number): this {
+    this._minIterations = n;
+    return this;
+  }
+
+  /**
+   * Provide background data injected into the reasoning memory context.
+   * Unlike systemPrompt (instructions), taskContext is treated as grounding
+   * data — facts about the current task, project, or environment.
+   * @example .withTaskContext({ projectName: "acme", environment: "production" })
+   */
+  withTaskContext(context: Record<string, string>): this {
+    this._taskContext = context;
+    return this;
+  }
+
+  /**
+   * Save a progress checkpoint to PlanStore every N iterations.
+   * Enables resumable long-running agents — on restart, session resumption
+   * detects the incomplete plan and injects it as prior context.
+   * @param every - Checkpoint interval in iterations
+   * @param options.autoResume - Automatically resume from last checkpoint (default: false)
+   * @example .withProgressCheckpoint(5, { autoResume: true })
+   */
+  withProgressCheckpoint(every: number, options?: { autoResume?: boolean }): this {
+    this._progressCheckpoint = { every, ...options };
+    return this;
+  }
+
+  /**
+   * Run a verification pass after the initial reasoning result before accepting it.
+   * In "reflect" mode (default), one LLM call reviews the output and confirms
+   * completeness. In "loop" mode, the agent re-enters the ReAct loop with tools.
+   * @example .withVerificationStep({ mode: "reflect" })
+   * @example .withVerificationStep({ mode: "reflect", prompt: "Does this answer all parts of the task?" })
+   */
+  withVerificationStep(config: { mode?: "reflect" | "loop"; prompt?: string } = {}): this {
+    this._verificationStep = { mode: config.mode ?? "reflect", prompt: config.prompt };
+    return this;
+  }
+
+  /**
+   * Validate the final output before accepting it. If validation fails, the
+   * feedback is injected as context and the agent retries (up to maxRetries times).
+   * @param validator - Returns { valid, feedback? }; feedback is shown to the agent on retry
+   * @param options.maxRetries - Max retry attempts on validation failure (default: 2)
+   * @example
+   * .withOutputValidator(
+   *   (output) => ({ valid: output.includes("COMPLETE"), feedback: "Must include COMPLETE marker" }),
+   *   { maxRetries: 3 }
+   * )
+   */
+  withOutputValidator(
+    validator: (output: string) => { valid: boolean; feedback?: string },
+    options?: { maxRetries?: number },
+  ): this {
+    this._outputValidator = validator;
+    this._outputValidatorOptions = options;
+    return this;
+  }
+
+  /**
+   * Provide a custom termination predicate. After each reasoning result, this
+   * function is called with the output. If it returns false, the agent re-runs
+   * with the prior output as context. Runs until true or up to 3 re-runs maximum.
+   * @example .withCustomTermination(({ output }) => output.includes("DONE"))
+   */
+  withCustomTermination(fn: (state: { output: string }) => boolean): this {
+    this._customTermination = fn;
+    return this;
+  }
+
+  /**
    * Configure the Reactive Intelligence Layer — entropy-based metacognitive sensing.
    *
    * The Entropy Sensor monitors reasoning quality per-iteration across 5 sources
@@ -2250,6 +2335,13 @@ export class ReactiveAgentBuilder {
         sessionMaxAgeDays: self._sessionMaxAgeDays,
         loggingConfig: self._loggingConfig as import("@reactive-agents/observability").LoggingConfig | undefined,
         enableHealthCheck: self._enableHealthCheck,
+        minIterations: self._minIterations,
+        taskContext: self._taskContext,
+        progressCheckpoint: self._progressCheckpoint,
+        verificationStep: self._verificationStep,
+        outputValidator: self._outputValidator,
+        outputValidatorOptions: self._outputValidatorOptions,
+        customTermination: self._customTermination,
         enableReactiveIntelligence: self._enableReactiveIntelligence,
         reactiveIntelligenceOptions: self._reactiveIntelligenceOptions,
         fallbackConfig: self._fallbackConfig,
@@ -2944,6 +3036,15 @@ export class ReactiveAgentBuilder {
         sessionPersist,
         sessionMaxAgeDays,
         ragStore,
+        {
+          minIterations: self._minIterations,
+          taskContext: self._taskContext,
+          progressCheckpoint: self._progressCheckpoint,
+          verificationStep: self._verificationStep,
+          outputValidator: self._outputValidator,
+          outputValidatorOptions: self._outputValidatorOptions,
+          customTermination: self._customTermination,
+        },
       );
     }) as Effect.Effect<ReactiveAgent, Error>;
   }
@@ -3012,6 +3113,16 @@ export class ReactiveAgent {
     private readonly _sessionMaxAgeDays?: number,
     /** @internal Reference to the shared RAG memory store for runtime ingestion via ingest(). */
     private readonly _ragStore?: import("@reactive-agents/tools").RagMemoryStore,
+    /** @internal Harness improvement config fields exposed for testing. */
+    readonly _config?: {
+      minIterations?: number;
+      taskContext?: Record<string, string>;
+      progressCheckpoint?: { every: number; autoResume?: boolean };
+      verificationStep?: { mode: "reflect" | "loop"; prompt?: string };
+      outputValidator?: (output: string) => { valid: boolean; feedback?: string };
+      outputValidatorOptions?: { maxRetries?: number };
+      customTermination?: (state: { output: string }) => boolean;
+    },
   ) {}
 
   /** @internal Last debrief from a completed run — used as context in chat() calls. */
