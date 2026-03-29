@@ -1,4 +1,4 @@
-import { ReactiveAgents } from "@reactive-agents/runtime";
+import { ReactiveAgents } from "reactive-agents";
 import { banner, kv, success, fail, info, muted, box } from "../ui.js";
 
 const VALID_PROVIDERS = ["anthropic", "openai", "ollama", "gemini", "litellm", "test"] as const;

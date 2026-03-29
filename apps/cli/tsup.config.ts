@@ -10,9 +10,11 @@ export default defineConfig({
   banner: { js: "#!/usr/bin/env bun" },
   external: [
     "effect",
+    "reactive-agents",
     "@reactive-agents/core",
     "@reactive-agents/runtime",
     "@reactive-agents/benchmarks",
+    "bun:sqlite",
     "chalk",
     "ora",
     "boxen",

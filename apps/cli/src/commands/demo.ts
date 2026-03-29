@@ -1,5 +1,5 @@
 import chalk from "chalk";
-import { ReactiveAgents } from "@reactive-agents/runtime";
+import { ReactiveAgents } from "reactive-agents";
 import {
   banner,
   spinner,

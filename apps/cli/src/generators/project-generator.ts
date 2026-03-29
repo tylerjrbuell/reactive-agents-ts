@@ -9,71 +9,33 @@ interface ProjectConfig {
   targetDir: string;
 }
 
-const TEMPLATE_DEPS: Record<ProjectTemplate, string[]> = {
-  minimal: ["@reactive-agents/core", "@reactive-agents/llm-provider", "@reactive-agents/runtime"],
-  standard: [
-    "@reactive-agents/core",
-    "@reactive-agents/llm-provider",
-    "@reactive-agents/memory",
-    "@reactive-agents/reasoning",
-    "@reactive-agents/tools",
-    "@reactive-agents/runtime",
-  ],
-  full: [
-    "@reactive-agents/core",
-    "@reactive-agents/llm-provider",
-    "@reactive-agents/memory",
-    "@reactive-agents/reasoning",
-    "@reactive-agents/tools",
-    "@reactive-agents/verification",
-    "@reactive-agents/cost",
-    "@reactive-agents/identity",
-    "@reactive-agents/orchestration",
-    "@reactive-agents/observability",
-    "@reactive-agents/interaction",
-    "@reactive-agents/guardrails",
-    "@reactive-agents/prompts",
-    "@reactive-agents/runtime",
-  ],
-};
-
 export function generateProject(config: ProjectConfig): { files: string[] } {
   const { name, template, targetDir } = config;
   const files: string[] = [];
 
-  // Create directory structure
-  const dirs = [targetDir, join(targetDir, "src"), join(targetDir, "src", "agents")];
+  const dirs = [targetDir, join(targetDir, "src")];
   for (const dir of dirs) {
-    if (!existsSync(dir)) {
-      mkdirSync(dir, { recursive: true });
-    }
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   }
 
-  // package.json
-  const deps = Object.fromEntries(TEMPLATE_DEPS[template].map((d) => [d, "latest"]));
+  // package.json — single unified dependency, not 14 granular packages
   const packageJson = {
     name,
-    version: "0.1.3",
+    version: "0.1.0",
     type: "module",
     scripts: {
       dev: "bun --watch run src/index.ts",
+      start: "bun run src/index.ts",
       build: "tsc --noEmit",
       test: "bun test",
     },
-    dependencies: {
-      effect: "^3.10.0",
-      ...deps,
-    },
-    devDependencies: {
-      typescript: "^5.7.0",
-      "bun-types": "latest",
-    },
+    dependencies: { "reactive-agents": "latest" },
+    devDependencies: { typescript: "^5.7.0", "bun-types": "latest" },
   };
   const pkgPath = join(targetDir, "package.json");
   writeFileSync(pkgPath, JSON.stringify(packageJson, null, 2) + "\n");
   files.push(pkgPath);
 
-  // tsconfig.json
   const tsconfig = {
     compilerOptions: {
       target: "ES2022",
@@ -91,76 +53,99 @@ export function generateProject(config: ProjectConfig): { files: string[] } {
   writeFileSync(tscPath, JSON.stringify(tsconfig, null, 2) + "\n");
   files.push(tscPath);
 
-  // Example agent
-  const agentCode = generateAgentExample(template);
-  const agentPath = join(targetDir, "src", "agents", "my-agent.ts");
-  writeFileSync(agentPath, agentCode);
-  files.push(agentPath);
-
-  // Entry point
-  const entryCode = `import { ReactiveAgents } from "@reactive-agents/runtime";
-
-const agent = await ReactiveAgents.create()
-  .withProvider("anthropic")
-  .withName("my-agent")
-  .build();
-
-const result = await agent.run("Hello, what can you help me with?");
-console.log(result);
-`;
   const entryPath = join(targetDir, "src", "index.ts");
-  writeFileSync(entryPath, entryCode);
+  writeFileSync(entryPath, generateEntryPoint(template));
   files.push(entryPath);
 
-  // .env.example
-  const envExample = `# LLM Provider
-ANTHROPIC_API_KEY=sk-ant-...
-# OPENAI_API_KEY=sk-...
-
-# Optional
-LLM_DEFAULT_MODEL=claude-sonnet-4-20250514
-`;
   const envPath = join(targetDir, ".env.example");
-  writeFileSync(envPath, envExample);
+  writeFileSync(envPath, [
+    "# Add your LLM provider API key:",
+    "ANTHROPIC_API_KEY=sk-ant-...",
+    "# OPENAI_API_KEY=sk-...",
+    "# GOOGLE_API_KEY=...",
+    "",
+    "# Optional — override default model",
+    "# LLM_DEFAULT_MODEL=claude-sonnet-4-20250514",
+    "",
+  ].join("\n"));
   files.push(envPath);
+
+  const gitignorePath = join(targetDir, ".gitignore");
+  writeFileSync(gitignorePath, ".env\nnode_modules/\ndist/\n*.log\n");
+  files.push(gitignorePath);
 
   return { files };
 }
 
-function generateAgentExample(template: ProjectTemplate): string {
-  switch (template) {
-    case "minimal":
-      return `import { ReactiveAgents } from "@reactive-agents/runtime";
-
-export const createMyAgent = () =>
-  ReactiveAgents.create()
-    .withProvider("anthropic")
-    .withName("my-agent")
-    .build();
-`;
-    case "standard":
-      return `import { ReactiveAgents } from "@reactive-agents/runtime";
-
-export const createMyAgent = () =>
-  ReactiveAgents.create()
-    .withProvider("anthropic")
-    .withName("my-agent")
-    .withMemory()
-    .withReasoning()
-    .build();
-`;
-    case "full":
-      return `import { ReactiveAgents } from "@reactive-agents/runtime";
-
-export const createMyAgent = () =>
-  ReactiveAgents.create()
-    .withProvider("anthropic")
-    .withName("my-agent")
-    .withMemory()
-    .withReasoning()
-    .withVerification()
-    .withGuardrails()
-    .build();
-`;
+function generateEntryPoint(template: ProjectTemplate): string {
+  if (template === "minimal") {
+    return [
+      'import { ReactiveAgents } from "reactive-agents";',
+      "",
+      "const agent = await ReactiveAgents.create()",
+      '  .withProvider("anthropic") // or "openai", "ollama", "gemini"',
+      "  .build();",
+      "",
+      'const result = await agent.run("Explain the difference between TCP and UDP in one paragraph.");',
+      "console.log(result.output);",
+      "",
+    ].join("\n");
   }
+
+  if (template === "standard") {
+    return [
+      'import { ReactiveAgents } from "reactive-agents";',
+      "",
+      "const agent = await ReactiveAgents.create()",
+      '  .withProvider("anthropic") // or "openai", "ollama", "gemini"',
+      '  .withReasoning({ defaultStrategy: "adaptive" })',
+      "  .withTools()",
+      '  .withObservability({ verbosity: "normal", live: true })',
+      "  .build();",
+      "",
+      "const result = await agent.run(",
+      '  "Search for the latest TypeScript 5.x release notes and summarize the key new features.",',
+      ");",
+      "",
+      'console.log("\\n=== Result ===");',
+      "console.log(result.output);",
+      "console.log(`\\nCompleted in ${(result.metadata.duration / 1000).toFixed(1)}s | ${result.metadata.tokensUsed} tokens`);",
+      "",
+    ].join("\n");
+  }
+
+  // full
+  return [
+    'import { ReactiveAgents } from "reactive-agents";',
+    "",
+    "const agent = await ReactiveAgents.create()",
+    '  .withProvider("anthropic") // or "openai", "ollama", "gemini"',
+    '  .withName("production-agent")',
+    "  .withReasoning({",
+    '    defaultStrategy: "adaptive",',
+    "    enableStrategySwitching: true,",
+    "    maxStrategySwitches: 1,",
+    '    fallbackStrategy: "plan-execute-reflect",',
+    "  })",
+    "  .withTools()",
+    '  .withMemory("production-agent")',
+    "  .withGuardrails()",
+    "  .withCostTracking({ budget: { maxTokens: 50_000 } })",
+    '  .withObservability({ verbosity: "normal", live: true })',
+    "  .withRetryPolicy({ maxRetries: 2, backoffMs: 1_000 })",
+    "  .withHealthCheck()",
+    "  .build();",
+    "",
+    "const health = await agent.health();",
+    "console.log(`Agent health: ${health.status}`);",
+    "",
+    "const result = await agent.run(",
+    '  "Research the top 3 open-source AI agent frameworks in 2026 and compare their key features.",',
+    ");",
+    "",
+    'console.log("\\n=== Result ===");',
+    "console.log(result.output);",
+    "console.log(`\\nStrategy: ${result.metadata.strategyUsed} | Steps: ${result.metadata.stepsCount} | ${result.metadata.tokensUsed} tokens`);",
+    "",
+  ].join("\n");
 }

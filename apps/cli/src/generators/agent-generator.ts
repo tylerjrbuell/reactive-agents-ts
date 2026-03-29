@@ -10,7 +10,7 @@ interface AgentConfig {
 }
 
 const RECIPE_TEMPLATES: Record<AgentRecipe, (name: string) => string> = {
-  basic: (name) => `import { ReactiveAgents } from "@reactive-agents/runtime";
+  basic: (name) => `import { ReactiveAgents } from "reactive-agents";
 
 export const ${toCamelCase(name)} = () =>
   ReactiveAgents.create()
@@ -19,7 +19,7 @@ export const ${toCamelCase(name)} = () =>
     .build();
 `,
 
-  researcher: (name) => `import { ReactiveAgents } from "@reactive-agents/runtime";
+  researcher: (name) => `import { ReactiveAgents } from "reactive-agents";
 
 export const ${toCamelCase(name)} = () =>
   ReactiveAgents.create()
@@ -32,7 +32,7 @@ export const ${toCamelCase(name)} = () =>
     .build();
 `,
 
-  coder: (name) => `import { ReactiveAgents } from "@reactive-agents/runtime";
+  coder: (name) => `import { ReactiveAgents } from "reactive-agents";
 
 export const ${toCamelCase(name)} = () =>
   ReactiveAgents.create()
@@ -44,7 +44,7 @@ export const ${toCamelCase(name)} = () =>
     .build();
 `,
 
-  orchestrator: (name) => `import { ReactiveAgents } from "@reactive-agents/runtime";
+  orchestrator: (name) => `import { ReactiveAgents } from "reactive-agents";
 
 export const ${toCamelCase(name)} = () =>
   ReactiveAgents.create()
