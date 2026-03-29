@@ -218,9 +218,13 @@ export const llmConfigFromEnv = LLMConfig.of({
       (process.env.EMBEDDING_PROVIDER as "openai" | "ollama") ?? "openai",
     batchSize: 100,
   },
-  supportsPromptCaching: (
-    process.env.LLM_DEFAULT_MODEL || "claude-sonnet-4-20250514"
-  ).startsWith("claude"),
+  supportsPromptCaching: (() => {
+    const m = process.env.LLM_DEFAULT_MODEL || "claude-sonnet-4-20250514";
+    // Anthropic: explicit cache_control on system prompts + tools (manual)
+    // Gemini: automatic implicit caching (server-side, 75% discount on cached tokens)
+    // OpenAI: automatic caching (server-side, 50% discount on cached tokens)
+    return m.startsWith("claude") || m.startsWith("gemini") || m.startsWith("gpt");
+  })(),
   maxRetries: Number(process.env.LLM_MAX_RETRIES ?? 3),
   timeoutMs: Number(process.env.LLM_TIMEOUT_MS ?? 30_000),
   defaultMaxTokens: 4096,

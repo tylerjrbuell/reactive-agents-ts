@@ -24,11 +24,15 @@ rax init <name> [--template minimal|standard|full]
 
 **Templates:**
 
-| Template | Packages Included |
-|----------|------------------|
-| `minimal` | core, runtime, llm-provider |
-| `standard` | + memory, reasoning, tools |
-| `full` | + guardrails, verification, cost, orchestration, prompts |
+All templates install the single unified `reactive-agents` package — no need to install individual `@reactive-agents/*` packages separately.
+
+| Template   | What's scaffolded                                                          |
+|------------|----------------------------------------------------------------------------|
+| `minimal`  | `reactive-agents` + bare agent that answers questions                      |
+| `standard` | `reactive-agents` + adaptive reasoning, tools, observability dashboard     |
+| `full`     | `reactive-agents` + reasoning, tools, memory, guardrails, cost, health check |
+
+Generated `src/index.ts` imports from `"reactive-agents"` and is runnable immediately after `bun install && cp .env.example .env`.
 
 ### `rax create agent`
 
@@ -50,27 +54,23 @@ rax create agent <name> --interactive
 
 **Interactive mode:**
 
-The `--interactive` flag launches a readline-based wizard that prompts you for:
-- Agent name and description
-- Provider and model selection
-- Which capabilities to enable (reasoning, memory, guardrails, tools, etc.)
-- Reasoning strategy preference
-- Output format (TypeScript file, project directory, or stdout)
+The `--interactive` flag launches a readline-based wizard (TTY only) that prompts for:
+
+1. **Agent name** — defaults to the first positional argument if you pass one (e.g. `rax create agent my-agent --interactive`).
+2. **Provider** — one of `anthropic`, `openai`, `ollama`, or `gemini` (same set the wizard validates today).
+3. **Recipe** — `basic`, `researcher`, `coder`, or `orchestrator`.
+4. **Features** — comma-separated list; default `reasoning,tools`. This is collected for the session; the **generated file is determined only by the recipe** (templates live in `apps/cli/src/generators/agent-generator.ts`). Adjust `.withProvider()`, `.withModel()`, and builder flags in the generated source after scaffolding if you need a different stack.
 
 ```bash
 $ rax create agent my-agent --interactive
 
+Create Agent (Interactive)
 ? Agent name: my-research-agent
-? Description: Searches the web and summarizes findings
-? Provider: anthropic
-? Model: claude-sonnet-4-20250514
-? Enable reasoning? Yes
-? Reasoning strategy: adaptive
-? Enable tools? Yes
-? Enable memory? Yes
-? Enable guardrails? No
+? Provider [anthropic/openai/ollama/gemini]: anthropic
+? Recipe [basic/researcher/coder/orchestrator]: researcher
+? Features (comma-separated) (reasoning,tools): reasoning,tools
 
-✔ Generated: src/agents/my-research-agent.ts
+✔ Created: src/agents/my-research-agent.ts
 ```
 
 ### `rax run`
@@ -107,7 +107,7 @@ rax serve [--port <number>] [--name <name>] [--provider <provider>] [--model <mo
 | `--model` | — | Model name |
 | `--with-tools` | off | Enable built-in tools on the A2A server agent (file-write, web-search, etc.) |
 | `--with-reasoning` | off | Enable reasoning strategies |
-| `--with-memory` | off | Enable memory (tier 2) |
+| `--with-memory` | off | Enable memory. With no extra token: default tier (`.withMemory()`). Pass `enhanced` or `2` immediately after the flag for full four-layer memory with embeddings (`.withMemory({ tier: "enhanced" })`). Optional `basic` or `1` after the flag keeps the default tier and consumes that token (same behavior as omitting it). |
 
 **Endpoints served:**
 

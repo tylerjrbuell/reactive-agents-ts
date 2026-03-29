@@ -5,9 +5,17 @@ description: Complete API reference for the ReactiveAgentBuilder.
 
 The `ReactiveAgentBuilder` is the primary entry point for creating agents. It provides a fluent API for composing capabilities.
 
-## `ReactiveAgents.create()`
+:::tip[Guided stacks]
+For copy-paste **recipe chains** (minimal LLM, ReAct + tools, memory, streaming, serialization), see [Common builder stacks](/cookbook/builder-stacks/). For defaults and env vars in one table, see [Configuration](/reference/configuration/).
+:::
 
-Creates a new builder instance.
+## `ReactiveAgents` factory
+
+| API | Description |
+| --- | ----------- |
+| `ReactiveAgents.create()` | New empty builder (defaults: `name: "agent"`, `provider: "test"`). |
+| `ReactiveAgents.fromConfig(config)` | Async — rebuild a builder from an `AgentConfig` object (`agentConfigToBuilder`). |
+| `ReactiveAgents.fromJSON(json)` | Async — parse JSON → validate → same as `fromConfig`. |
 
 ```typescript
 import { ReactiveAgents } from "reactive-agents";
@@ -16,17 +24,25 @@ import { ReactiveAgents } from "reactive-agents";
 const builder = ReactiveAgents.create();
 ```
 
-## Builder Methods
+### Agent as Data (`toConfig` / serialization)
 
-All methods return `this` for chaining.
+On a configured builder:
 
-### Identity
+- **`toConfig()`** → `AgentConfig` (plain object, JSON-serializable except documented exceptions).
+- Use **`agentConfigToJSON`** / **`agentConfigFromJSON`** from **`reactive-agents`** or **`@reactive-agents/runtime`** for string round-trips.
+
+## Builder methods
+
+All chain methods return `this` unless noted.
+
+### Identity & prompts
 
 | Method | Signature | Description |
 | ------ | --------- | ----------- |
-| `withName` | `(name: string) => this` | Set the agent's name (used as `agentId`) |
-| `withPersona` | `(persona: AgentPersona) => this` | Set a structured persona for behavior steering. Fields: `{ name?, role?, background?, instructions?, tone? }` |
-| `withSystemPrompt` | `(prompt: string) => this` | Set a custom system prompt. When combined with persona, the persona is prepended |
+| `withName` | `(name: string) => this` | Display name / `agentId` basis |
+| `withPersona` | `(persona: AgentPersona) => this` | Structured steering: `{ name?, role?, background?, instructions?, tone? }` |
+| `withSystemPrompt` | `(prompt: string) => this` | Custom system prompt; if persona is set, persona text is prepended |
+| `withEnvironment` | `(context: Record<string, string>) => this` | Extra key/value context merged into the system prompt (framework already injects date/time/tz/platform) |
 
 ### Model & Provider
 
@@ -62,7 +78,19 @@ interface ModelParams {
 
 | Method | Signature | Description |
 | ------ | --------- | ----------- |
-| `withMemory` | `(tier: "1" \| "2") => this` | Enable memory. Tier 1: FTS5. Tier 2: FTS5 + KNN vectors |
+| `withMemory` | `(options?: MemoryOptions \| "1" \| "2") => this` | Enable memory. Prefer `.withMemory()` or `.withMemory({ tier: "enhanced", ... })`. Strings `"1"` / `"2"` still work with a deprecation warning (`"1"` → standard, `"2"` → enhanced) |
+
+#### MemoryOptions
+
+| Field | Type | Default / notes |
+| ----- | ---- | ---------------- |
+| `tier` | `"standard" \| "enhanced"` | `"standard"` — enhanced = 4-layer memory + embeddings |
+| `dbPath` | `string` | SQLite path (default under `.reactive-agents/memory/{agentId}/`) |
+| `maxEntries` | `number` | Compaction cap |
+| `capacity` | `number` | Working memory slots (default `7`) |
+| `evictionPolicy` | `"fifo" \| "lru" \| "importance"` | Working set eviction |
+| `retainDays` | `number` | Episodic retention |
+| `importanceThreshold` | `number` | Semantic inclusion threshold |
 
 ### Execution
 
@@ -99,37 +127,61 @@ interface ModelParams {
 
 See [Context Engineering](/guides/context-engineering/) for full tier defaults.
 
-### Optional Features
+### Optional features
 
 | Method | Description |
 | ------ | ----------- |
-| `withGuardrails(thresholds?)` | Injection, PII, toxicity detection on input. Pass consolidated `{ injectionThreshold?, piiThreshold?, toxicityThreshold? }` to customize detection sensitivity. Old separate-param form is deprecated |
-| `withKillSwitch()` | Per-agent and global emergency halt capability via `KillSwitchService` |
-| `withBehavioralContracts(contract)` | Enforce typed behavioral boundaries: `deniedTools`, `allowedTools`, `maxIterations`. Throws `BehavioralContractError` on violation |
-| `withVerification()` | Semantic entropy, fact decomposition, and multi-source (LLM + Tavily) on output |
-| `withCostTracking()` | Budget enforcement (persisted to SQLite), complexity routing (27 signals), semantic caching |
-| `withModelPricing(registry)` | Set programmatic pricing overrides for specific models manually. Example: `{ "gpt-4o": { input: 5.0, output: 15.0 } }` |
-| `withDynamicPricing(provider)` | Fetch remote pricing at instantiation. Supports `openRouterPricingProvider` or custom JSON endpoints |
-| `withReasoning(options?)` | Structured reasoning (ReAct, Reflexion, Plan-Execute, ToT, Adaptive). See [ReasoningOptions](#reasoningoptions) below |
-| `withTools(options?)` | Tool registry with sandboxed execution (subprocess isolation via `Bun.spawn`, Docker sandbox). Options: `{ tools?: [{ definition, handler }], resultCompression?: ResultCompressionConfig }`. See [Tool Result Compression](/guides/tools/#tool-result-compression) |
-| `withRequiredTools(config)` | Ensure agent calls critical tools before producing a final answer. Config: `{ tools?: string[], adaptive?: boolean, maxRetries?: number }` |
-| `withIdentity()` | Agent certificates (real Ed25519 keys) and RBAC |
-| `withObservability(options?)` | Distributed tracing, metrics, OTLP export, structured logging. Options: `{ verbosity?: "minimal" \| "normal" \| "verbose" \| "debug", live?: boolean, file?: string }` |
-| `withInteraction()` | 5 interaction modes with adaptive transitions |
-| `withPrompts(options?)` | Version-controlled prompt template engine. Options: `{ templates?: PromptTemplate[] }` |
-| `withOrchestration()` | Multi-agent workflow coordination |
-| `withExperienceLearning()` | Enable cross-agent experience learning via `ExperienceStore`. Records tool patterns and error recoveries per task type; injects relevant tips at bootstrap. |
-| `withMemoryConsolidation(config?)` | Enable background memory consolidation via `MemoryConsolidatorService`. Decays unused episodic entries, replays recent history. Config: `{ threshold?: number, decayFactor?: number, pruneThreshold?: number }` |
-| `withSelfImprovement()` | Cross-task self-improvement: logs `StrategyOutcome` per task and retrieves relevant past outcomes at bootstrap to guide strategy selection |
-| `withAudit()` | Compliance audit trail logging |
-| `withEvents()` | Enable typed EventBus subscriptions via `agent.subscribe()` |
-| `withGateway(options?)` | Persistent autonomous gateway: adaptive heartbeats, cron scheduling, webhook ingestion, policy engine. Options: `{ heartbeat?: HeartbeatConfig, crons?: CronEntry[], webhooks?: WebhookConfig[], policies?: PolicyConfig }` |
-| `withErrorHandler(handler)` | Register a global error callback for logging/monitoring. `(err: AgentError, ctx: ErrorContext) => void`. For observation only — does not swallow or transform errors |
-| `withFallbacks(config)` | Provider/model fallback chain via `FallbackChain`. Config: `{ providers?: string[], models?: string[], errorThreshold?: number }`. On consecutive failures ≥ `errorThreshold`, the agent transparently retries with the next provider/model |
-| `withLogging(config)` | Structured logging via `makeLoggerService()`. Config: `{ level?: "debug" \| "info" \| "warn" \| "error", format?: "json" \| "text", output?: "console" \| "file", filePath?: string, maxFileSizeMb?: number, maxFiles?: number }` |
-| `withHealthCheck()` | Enable `agent.health()` which returns `{ status: "healthy" \| "degraded" \| "unhealthy", checks: HealthCheck[] }`. Each check reports on a specific subsystem (LLM, memory, tools, etc.) |
-| `withReactiveIntelligence(config?)` | Entropy sensing, reactive controller (10 decisions), local learning, telemetry, and creator hooks. Config: `{ entropy?, controller?, telemetry?, onEntropyScored?, onControllerDecision?, onSkillActivated?, constraints?: { maxTemperatureAdjustment?, neverEarlyStop?, protectedSkills? }, autonomy?: "full" \| "suggest" \| "observe" }`. See [Reactive Intelligence](/features/reactive-intelligence/) |
-| `withSkills(config?)` | Living Skills System — discover, load, and evolve skills. Config: `{ paths?: string[], evolution?: { mode?: "auto" \| "suggest" \| "locked", refinementThreshold?: number }, overrides?: Record<string, { evolutionMode? }> }`. Enables `activate_skill` + `get_skill_section` meta-tools. See [Agent Skills](/guides/agent-skills/) |
+| `withGuardrails(options?)` | Toggle detectors: `{ injection?, pii?, toxicity?, customBlocklist? }`. All default **on** when guardrails are enabled. |
+| `withKillSwitch()` | Pause / resume / stop / terminate via `KillSwitchService` |
+| `withBehavioralContracts(contract)` | Rules such as `deniedTools`, `allowedTools`, `maxIterations`, etc. |
+| `withVerification(options?)` | Post-output checks — toggles and thresholds: `semanticEntropy`, `factDecomposition`, `multiSource`, `hallucinationDetection`, `passThreshold`, … |
+| `withCostTracking(options?)` | Budgets in USD: `{ perRequest?, perSession?, daily?, monthly? }` plus cost estimation / routing |
+| `withModelPricing(registry)` | Per-model $/1M tokens: `{ "model-id": { input, output } }` |
+| `withDynamicPricing(provider)` | Remote pricing (`openRouterPricingProvider`, etc.) fetched at build time |
+| `withCircuitBreaker(config?)` | LLM call circuit breaker (`@reactive-agents/llm-provider` `CircuitBreakerConfig`) |
+| `withRateLimiting(config?)` | Throttle LLM requests (`requestsPerMinute`, `tokensPerMinute`, concurrency, …) |
+| `withReasoning(options?)` | Strategies + ICS — see [ReasoningOptions](#reasoningoptions) |
+| `withTools(options?)` | Tool layer — see [ToolsOptions](#toolsoptions) below |
+| `withDocuments(docs)` | Chunk + index `DocumentSpec[]` for RAG (`rag-search`). Enables tools if needed |
+| `withRequiredTools(config)` | Tools that must run before success — `{ tools?, adaptive?, maxRetries? }`. When `adaptive: true`, the framework also auto-sets a per-tool call budget of 3 for search-type tools to prevent infinite research loops. |
+| `withIdentity()` | Ed25519 identity + RBAC |
+| `withObservability(options?)` | Metrics dashboard, tracing, verbosity. Options: `verbosity` (`"minimal"\|"normal"\|"verbose"\|"debug"`), `live` (stream phase events), `file` (JSONL path), `logPrefix`, `logModelIO` (when `true` or when `verbosity: "debug"`, logs the complete FC conversation thread with role labels `[USER]`/`[ASSISTANT]`/`[TOOL]` and raw LLM response for every iteration — essential for debugging prompt issues) |
+| `withStreaming(options?)` | Default density for `agent.runStream()`: `{ density?: "tokens" \| "full" }` |
+| `withTelemetry(config?)` | Opt-in run telemetry / privacy modes (`@reactive-agents/observability` `TelemetryConfig`; default mode `isolated` if omitted) |
+| `withInteraction()` | Collaboration / approval flows |
+| `withPrompts(options?)` | `{ templates?: PromptTemplate[] }` |
+| `withOrchestration()` | Multi-agent workflows |
+| `withExperienceLearning()` | `ExperienceStore` cross-agent tips |
+| `withMemoryConsolidation(config?)` | Background consolidation: `{ threshold?, decayFactor?, pruneThreshold? }` |
+| `withSelfImprovement()` | Strategy outcome logging for later bootstrap hints |
+| `withAudit()` | Audit trail |
+| `withEvents()` | Ensures EventBus wiring for `agent.subscribe()` |
+| `withGateway(options?)` | Heartbeats, crons, webhooks, policies, `port`, `channels`, … |
+| `withErrorHandler(handler)` | Observe-only callback on `agent.run()` failures — does not swallow errors |
+| `withFallbacks(config)` | `{ providers?, models?, errorThreshold? }` fallback chain |
+| `withLogging(config)` | `makeLoggerService` — `{ level?, format?, output?: "console" \| "file" \| WritableStream, filePath?, maxFileSizeBytes?, maxFiles? }` |
+| `withHealthCheck()` | Enables `agent.health()` |
+| `withReactiveIntelligence(false)` | Disable the Reactive Intelligence layer (enabled by default). |
+| `withReactiveIntelligence(options?)` | Entropy, controller, telemetry, hooks (`onEntropyScored`, `onControllerDecision`, …), `constraints`, `autonomy`. See [Reactive Intelligence](/features/reactive-intelligence/) |
+| `withSkills(config?)` | `{ paths?, packages?, evolution?: { mode?, refinementThreshold?, rollbackOnRegression? }, overrides? }` |
+| `withMetaTools(config?)` | Conductor meta-tools; pass **`false`** to turn off defaults when using `.withTools()`. See [MetaToolsConfig](#metatoolsconfig) |
+
+#### ToolsOptions
+
+| Field | Description |
+| ----- | ----------- |
+| `tools` | `{ definition: ToolDefinition, handler: (args) => Effect.Effect<unknown> }[]` — custom tools (handlers return **Effect**) |
+| `resultCompression` | `ResultCompressionConfig` — previews, overflow keys, transforms |
+| `allowedTools` | If set, only these tool names are exposed to the model (others filtered) |
+| `adaptive` | Adaptive tool listing from task text (heuristic), reduces noise for small models |
+
+#### MetaToolsConfig
+
+| Field | Description |
+| ----- | ----------- |
+| `brief`, `find`, `pulse`, `recall` | Enable each Conductor meta-tool |
+| `harnessSkill` | `boolean`, path string, or `{ frontier?, local? }` for harness skill source |
+| `findConfig`, `pulseConfig`, `recallConfig` | Fine-tuning (scopes, previews, LLM pulse behavior, …) |
 
 #### ReasoningOptions
 
@@ -205,6 +257,10 @@ interface StrategySynthesisFields {
 }
 ```
 
+Per-strategy objects under `strategies` also accept strategy-specific fields from `@reactive-agents/reasoning` (for example `kernelMaxIterations` on the `reflexion` bundle).
+
+At runtime, `ReasoningOptions` may also include a non-JSON `synthesisStrategy` function when using `synthesis: "custom"` (omitted from `toConfig()` / JSON).
+
 **Examples:**
 
 ```typescript
@@ -264,14 +320,14 @@ interface RequiredToolsConfig {
 
 When `adaptive: true`, the framework calls the LLM with the task description and available tool schemas to infer which tools are required. The inferred list is merged with any static `tools` list. A hallucination guard ensures only actual tool names are included.
 
-### A2A Protocol
+### A2A protocol
 
 | Method | Signature | Description |
 | ------ | --------- | ----------- |
-| `withA2A` | `(config: { port?: number }) => this` | Enable A2A server capability |
-| `withAgentTool` | `(name: string, agent: { name: string; description?: string; persona?: AgentPersona; systemPrompt?: string; ... }) => this` | Register a local agent as a callable tool. Subagent personas are supported for specialized behavior |
-| `withDynamicSubAgents` | `(options?: { maxIterations?: number }) => this` | Enable `spawn-agent` tool to dynamically create subagents at runtime with optional persona parameters |
-| `withRemoteAgent` | `(name: string, remoteUrl: string) => this` | Register a remote A2A agent as a callable tool |
+| `withA2A` | `(options?: A2AOptions) => this` | A2A JSON-RPC server — `port` (default `3000`), `basePath` (default `/`) |
+| `withAgentTool` | `(name: string, agent: { name: string; description?: string; provider?: string; model?: string; tools?: string[]; maxIterations?: number; systemPrompt?: string; persona?: AgentPersona }) => this` | Static sub-agent as a tool |
+| `withDynamicSubAgents` | `(options?: { maxIterations?: number }) => this` | `spawn-agent` for runtime sub-agents |
+| `withRemoteAgent` | `(name: string, remoteUrl: string) => this` | Remote A2A agent as a tool |
 
 ### MCP
 
@@ -327,24 +383,17 @@ When `adaptive: true`, the framework calls the LLM with the task description and
 
 #### LifecycleHook
 
-```typescript
-interface LifecycleHook {
-  phase: ExecutionPhase;
-  timing: "before" | "after" | "on-error";
-  handler: (ctx: ExecutionContext) => Effect.Effect<ExecutionContext>;
-}
+Use the exported `LifecycleHook` type from `@reactive-agents/runtime`. Handlers return **`Effect.Effect<ExecutionContext, ExecutionError>`** (import `Effect` from `"effect"`).
 
-type ExecutionPhase =
-  | "bootstrap" | "guardrail" | "cost-route" | "strategy-select"
-  | "think" | "act" | "observe"
-  | "verify" | "memory-flush" | "cost-track" | "audit" | "complete";
-```
+`LifecyclePhase` values include: `bootstrap`, `guardrail`, `cost-route`, `strategy-select`, `think`, `act`, `observe`, `verify`, `memory-flush`, `cost-track`, `audit`, `complete`.
 
 ### Testing
 
 | Method | Signature | Description |
 | ------ | --------- | ----------- |
-| `withTestScenario` | `(steps: TestScenarioStep[]) => this` | Set a deterministic test scenario (auto-sets `"test"` provider). Each step: `{ match?: string, text: string }` |
+| `withTestScenario` | `(turns: TestTurn[]) => this` | Deterministic **test** provider. Forces `provider: "test"`. Turns are `TestTurn` values from `@reactive-agents/llm-provider`: `{ text? }`, `{ toolCall? }`, `{ toolCalls? }`, `{ json? }`, `{ error? }`, optional `match?` (regex) per turn |
+
+See [Testing agents](/cookbook/testing-agents/) and [Configuration](/reference/configuration/) for examples.
 
 ### Advanced
 
@@ -454,9 +503,21 @@ try {
 
 Run a task with the given input. Returns the result with output and metadata.
 
+### `runStream(input, options?): AsyncGenerator<AgentStreamEvent>`
+
+Token and phase streaming. Options: `{ density?: "tokens" | "full", signal?: AbortSignal }`. Default density comes from `.withStreaming()` or `"tokens"`. Ends with `StreamCompleted`, `StreamError`, or `StreamCancelled`.
+
 ### `runEffect(input: string): Effect.Effect<AgentResult, Error>`
 
-Run a task as an Effect for composition.
+Run a task as an Effect for composition (see [Effect-TS primer](/concepts/effect-ts/)).
+
+### Dynamic tools & RAG (runtime)
+
+| Method | Description |
+| ------ | ----------- |
+| `registerTool(definition, handler)` | Register a tool after build; `handler` returns `Effect` |
+| `unregisterTool(name)` | Remove a previously registered custom tool |
+| `ingest(content, { source, format?, ... })` | Ingest text into RAG when tools / `withDocuments` enabled |
 
 ### `chat(message: string, options?: ChatOptions): Promise<ChatReply>`
 
@@ -612,6 +673,7 @@ subscribe(handler: (event: AgentEvent) => void): Promise<() => void>;
 The `AgentEventTag` and `TypedEventHandler<T>` helpers are exported from `@reactive-agents/core` for use in your own service code:
 
 ```typescript
+import { Effect } from "effect";
 import type { AgentEventTag, TypedEventHandler } from "@reactive-agents/core";
 
 // Build a typed handler outside of an inline callback
@@ -731,8 +793,8 @@ await using agent = await ReactiveAgents.create()
     instructions: "Provide detailed technical analysis with citations",
     tone: "professional",
   })
-  .withMemory("1")
-  .withReasoning({ defaultStrategy: "adaptive" })
+  .withMemory()
+  .withReasoning({ defaultStrategy: "adaptive", adaptive: { enabled: true } })
   .withTools()              // Built-in tools (web search, file I/O, etc.)
   .withGuardrails()
   .withVerification()

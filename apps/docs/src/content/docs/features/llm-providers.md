@@ -9,14 +9,16 @@ Reactive Agents supports multiple LLM providers through a unified `LLMService` i
 
 ## Supported Providers
 
-| Provider          | Models                                           | Tool Calling | Streaming |   Embeddings    | Prompt Caching |
-| ----------------- | ------------------------------------------------ | :----------: | :-------: | :-------------: | :------------: |
-| **Anthropic**     | Claude 3.5 Haiku, Claude Sonnet 4, Claude Opus 4 |     Yes      |    Yes    | No (use OpenAI) |      Yes       |
-| **OpenAI**        | GPT-4o, GPT-4o-mini                              |     Yes      |    Yes    |       Yes       |       No       |
-| **Google Gemini** | Gemini 2.0 Flash, Gemini 2.5 Pro                 |     Yes      |    Yes    |       No        |       No       |
-| **Ollama**        | Any locally hosted model                         |     Yes      |    Yes    |       Yes       |       No       |
-| **LiteLLM**       | 100+ models via LiteLLM proxy                    |     Yes      |    Yes    |       No        |       No       |
-| **Test**          | Mock provider for testing                        |      No      |    No     |       No        |       No       |
+| Provider          | Models                                            | Tool Calling | Streaming | Embeddings      | Prompt Caching  |
+| ----------------- | ------------------------------------------------- | :----------: | :-------: | :-------------: | :-------------: |
+| **Anthropic**     | Claude 3.5 Haiku, Claude Sonnet 4, Claude Opus 4  |     Yes      |    Yes    | No (use OpenAI) | Yes (explicit)  |
+| **OpenAI**        | GPT-4o, GPT-4o-mini                               |     Yes      |    Yes    |       Yes       | Yes (automatic) |
+| **Google Gemini** | Gemini 2.0 Flash, Gemini 2.5 Flash, Gemini 2.5 Pro|     Yes      |    Yes    |       No        | Yes (automatic) |
+| **Ollama**        | Any locally hosted model                          |     Yes      |    Yes    |       Yes       | No              |
+| **LiteLLM**       | 100+ models via LiteLLM proxy                     |     Yes      |    Yes    |       No        | Depends         |
+| **Test**          | Mock provider for testing (`withTestScenario`)    |     Yes\*    |    Yes\*  |       No        | No              |
+
+\*The test provider advertises native tool calling so kernels exercise the same FC path as real providers; responses are still fully deterministic from your scenario.
 
 ## Configuration
 
@@ -40,7 +42,7 @@ const agent = await ReactiveAgents.create()
 // Google Gemini
 const agent = await ReactiveAgents.create()
   .withProvider("gemini")
-  .withModel("gemini-2.0-flash")
+  .withModel("gemini-2.5-flash")
   .build();
 
 // Ollama (local)
@@ -52,24 +54,21 @@ const agent = await ReactiveAgents.create()
 // LiteLLM proxy (100+ models)
 const agent = await ReactiveAgents.create()
   .withProvider("litellm")
-  .withModel("gpt-4o") // any model supported by your LiteLLM proxy
+  .withModel("gpt-4o")
   .build();
 ```
 
 ### Environment Variables
 
 ```bash
-# Set the key for your provider
 ANTHROPIC_API_KEY=sk-ant-...
 OPENAI_API_KEY=sk-...
 GOOGLE_API_KEY=...
 OLLAMA_ENDPOINT=http://localhost:11434   # defaults to this
 LITELLM_BASE_URL=http://localhost:4000   # LiteLLM proxy endpoint
 
-# Tools (optional)
 TAVILY_API_KEY=tvly-...                  # enables built-in web search
 
-# Optional tuning
 LLM_DEFAULT_MODEL=claude-sonnet-4-20250514
 LLM_DEFAULT_TEMPERATURE=0.7
 LLM_MAX_RETRIES=3
@@ -78,77 +77,97 @@ LLM_TIMEOUT_MS=30000
 
 ## Model Presets
 
-Pre-configured model presets with cost and capability data:
-
-| Preset             | Provider  | Cost/1M Input | Context Window | Quality |
-| ------------------ | --------- | ------------- | -------------- | ------- |
-| `claude-haiku`     | Anthropic | $1.00         | 200K           | 0.60    |
-| `claude-sonnet`    | Anthropic | $3.00         | 200K           | 0.85    |
-| `claude-opus`      | Anthropic | $15.00        | 1M             | 1.00    |
-| `gpt-4o-mini`      | OpenAI    | $0.15         | 128K           | 0.55    |
-| `gpt-4o`           | OpenAI    | $2.50         | 128K           | 0.80    |
-| `gemini-2.0-flash` | Gemini    | $0.10         | 1M             | 0.75    |
-| `gemini-2.5-pro`   | Gemini    | $1.25         | 1M             | 0.95    |
-
-```typescript
-import { ModelPresets } from "@reactive-agents/llm-provider";
-
-const config = ModelPresets["claude-sonnet"];
-// { provider: "anthropic", model: "claude-sonnet-4-20250514", costPer1MInput: 3.0, ... }
-```
+| Preset              | Provider  | Cost/1M Input | Context Window | Quality |
+| ------------------- | --------- | ------------- | -------------- | ------- |
+| `claude-haiku`      | Anthropic | $1.00         | 200K           | 0.60    |
+| `claude-sonnet`     | Anthropic | $3.00         | 200K           | 0.85    |
+| `claude-opus`       | Anthropic | $15.00        | 1M             | 1.00    |
+| `gpt-4o-mini`       | OpenAI    | $0.15         | 128K           | 0.55    |
+| `gpt-4o`            | OpenAI    | $2.50         | 128K           | 0.80    |
+| `gemini-2.0-flash`  | Gemini    | $0.10         | 1M             | 0.75    |
+| `gemini-2.5-flash`  | Gemini    | $0.15         | 1M             | 0.80    |
+| `gemini-2.5-pro`    | Gemini    | $1.25         | 1M             | 0.95    |
 
 ## Tool Calling
 
-When tools are enabled, the LLM can request tool calls. Each provider translates tool definitions to its native format automatically:
+When tools are enabled, each provider translates tool definitions to its native format automatically:
 
-- **Anthropic**: Uses the `tools` parameter with Anthropic's tool use format
-- **OpenAI**: Uses `function_calling` with `tools` array
-- **Gemini**: Uses `functionDeclarations` in `tools` array
-- **Ollama**: Uses the `ollama` npm SDK with OpenAI-compatible tool format
-- **LiteLLM**: OpenAI-compatible `tools` array forwarded to the proxy, which handles provider-specific translation
+- **Anthropic** — `tools` parameter with Anthropic's `tool_use` format; last tool marked with `cache_control` to cache the full schema block
+- **OpenAI** — `tools` array with `function_calling`; automatic prompt caching applies to tool schemas
+- **Gemini** — `functionDeclarations` in `tools` array; function calling supported natively
+- **Ollama** — OpenAI-compatible `tools` array via the Ollama SDK
+- **LiteLLM** — OpenAI-compatible `tools` array forwarded to proxy
+
+## Prompt Caching
+
+Each provider implements caching differently. The framework handles cost discounting automatically when the provider reports cached token usage.
+
+### Anthropic — Explicit `cache_control`
+
+Anthropic uses **manual cache hints** via `cache_control: { type: "ephemeral" }` blocks. The framework automatically applies these to system prompts ≥ 1,024 tokens and to the full tool schema block on every request:
+
+- **System prompt**: Cached when `>= ~4,096 chars` — 90% discount on cache hits, 25% surcharge on writes
+- **Tool schemas**: Last tool in the array is marked, caching the full schema block
+
+Cache TTL is 5 minutes. The framework handles this transparently — no configuration required.
+
+### Gemini — Automatic Implicit Caching
+
+Gemini 2.0 Flash and 2.5 models support **automatic context caching** — Google's servers cache repeated prefixes server-side with no client code required. When a cache hit occurs, `cachedContentTokenCount` is returned in the usage metadata and the framework applies a **75% cost discount** automatically.
+
+There is no minimum token requirement for implicit caching — Google manages it transparently for eligible models.
 
 ```typescript
-const response = await llm.complete({
-  messages: [{ role: "user", content: "What's the weather in Tokyo?" }],
-  tools: [
-    {
-      name: "get_weather",
-      description: "Get current weather for a city",
-      inputSchema: {
-        type: "object",
-        properties: { city: { type: "string" } },
-        required: ["city"],
-      },
-    },
-  ],
-});
-
-if (response.toolCalls) {
-  for (const call of response.toolCalls) {
-    console.log(`Tool: ${call.name}, Input: ${JSON.stringify(call.input)}`);
-  }
-}
+// No special config needed — Gemini caches automatically
+const agent = await ReactiveAgents.create()
+  .withProvider("gemini")
+  .withModel("gemini-2.5-flash")
+  .withTools()
+  .build();
+// Repeated system prompts and tool schemas are cached by Gemini automatically
 ```
 
-## Prompt Caching (Anthropic)
+### OpenAI — Automatic Caching
 
-Anthropic supports prompt caching for static content, reducing costs on repeated calls:
+OpenAI applies automatic prompt caching server-side for inputs longer than 1,024 tokens. Cached tokens are returned as `cached_tokens` in the usage object and the framework applies a **50% cost discount** automatically.
+
+## Provider Adapters
+
+Provider adapters are lightweight hook objects the kernel calls at specific points to compensate for model-specific behavior differences — especially useful for local and mid-tier models that need more explicit guidance.
+
+The framework ships three built-in adapters selected automatically by model tier:
+
+| Tier       | Adapter           | Behavior                                                              |
+| ---------- | ----------------- | --------------------------------------------------------------------- |
+| `local`    | `localModelAdapter` | Explicit task framing, tool guidance, error recovery, quality check |
+| `mid`      | `midModelAdapter`   | Lighter continuation hint + synthesis prompt                        |
+| `large` / `frontier` | `defaultAdapter` | Structured decision framework only                        |
+
+### Adapter Hooks (7 total)
+
+| Hook              | When it fires                                              | What it does                                           |
+| ----------------- | ---------------------------------------------------------- | ------------------------------------------------------ |
+| `systemPromptPatch` | Once at system prompt build time                         | Append multi-step completion instructions (local tier) |
+| `toolGuidance`    | Once after the tool schema block in the system prompt      | Append inline required-tool reminder                   |
+| `taskFraming`     | First iteration only (iteration 0)                         | Wrap task message with explicit numbered steps         |
+| `continuationHint` | Each iteration when required tools are still pending      | Inject guidance as user message after tool results     |
+| `errorRecovery`   | When a tool call returns a failed result                   | Append context-aware recovery hint to the observation  |
+| `synthesisPrompt` | Research→produce transition (all search tools satisfied)   | Replace generic progress message with "write it now"   |
+| `qualityCheck`    | Once before final answer (gated by `qualityCheckDone` flag)| Self-eval prompt; fires only once to prevent loops     |
+
+You can register a fully custom adapter:
 
 ```typescript
-import { makeCacheable } from "@reactive-agents/llm-provider";
+import { selectAdapter } from "@reactive-agents/llm-provider";
 
-const message = {
-  role: "user" as const,
-  content: [
-    makeCacheable(largeSystemContext), // Cached across requests
-    { type: "text" as const, text: dynamicUserInput },
-  ],
-};
+// The built-in adapters are selected automatically by tier.
+// Access them directly for inspection or extension:
+import { localModelAdapter, midModelAdapter, defaultAdapter } from "@reactive-agents/llm-provider";
 ```
 
 ## Embeddings
 
-Embeddings are routed through the configured embedding provider (OpenAI or Ollama), regardless of which chat provider you use:
+Embeddings are routed through the configured embedding provider regardless of which chat provider you use:
 
 ```bash
 EMBEDDING_PROVIDER=openai
@@ -160,8 +179,6 @@ EMBEDDING_DIMENSIONS=1536
 const vectors = await llm.embed(["text to embed", "another text"]);
 // Returns: number[][] (one vector per input text)
 ```
-
-Embeddings are used by Memory Tier 2 for KNN vector search.
 
 ## Structured Output
 
@@ -179,18 +196,17 @@ const WeatherSchema = Schema.Struct({
 const weather = await llm.completeStructured({
   messages: [{ role: "user", content: "Weather in Tokyo" }],
   outputSchema: WeatherSchema,
-  maxParseRetries: 2, // Retries with error feedback on parse failure
+  maxParseRetries: 2,
 });
-// weather is fully typed: { city: string, temperature: number, conditions: string }
 ```
 
 ## Automatic Retry and Timeout
 
-All providers include built-in retry logic with exponential backoff for transient errors and rate limits:
+All providers include built-in retry logic with exponential backoff:
 
-- **Rate limit (429)**: Retried with backoff, tracked as `LLMRateLimitError`
-- **Timeout**: Configurable per-request, defaults to 30 seconds
-- **Retries**: Configurable, defaults to 3 attempts
+- **Rate limit (429)** — Retried with backoff, tracked as `LLMRateLimitError`
+- **Timeout** — Configurable per-request, defaults to 30 seconds
+- **Retries** — Configurable, defaults to 3 attempts
 
 ## Testing
 
@@ -200,10 +216,6 @@ Use `withTestScenario()` for deterministic, offline testing:
 const agent = await ReactiveAgents.create()
   .withTestScenario([
     { match: "capital of France", text: "Paris is the capital of France." },
-    { match: "quantum", text: "Quantum mechanics describes nature at the atomic scale." },
   ])
   .build();
-
-const result = await agent.run("What is the capital of France?");
-// Always returns: "Paris is the capital of France."
 ```

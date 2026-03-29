@@ -72,7 +72,7 @@ const result = await agent.run("Write a concise explanation of quantum entanglem
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withReasoning({ defaultStrategy: "reflexion" })
-  .withMemory("1")  // Episodic memory stores/retrieves critiques
+  .withMemory()  // Episodic memory stores/retrieves critiques
   .build();
 ```
 
@@ -282,7 +282,7 @@ All strategies receive the full execution context from the engine, including:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `resultCompression` | `ResultCompressionConfig` | Controls tool result preview size and scratchpad overflow |
+| `resultCompression` | `ResultCompressionConfig` | Controls tool result preview size, overflow key storage, and optional code-transform pipe |
 | `contextProfile` | `ContextProfile` | Model-adaptive context thresholds (local/mid/large/frontier) |
 | `agentId` | `string` | Real agent ID for tool execution attribution |
 | `sessionId` | `string` | Session/task ID for tool execution attribution |
@@ -478,3 +478,51 @@ When `.withMemory()` is enabled, the `PlanStoreService` (backed by `bun:sqlite`)
 - Step status transitions (`pending` → `in_progress` → `completed` / `failed`) in real time
 
 This means plan state survives agent restarts and can be inspected for debugging or auditing. The persistence layer is optional — when memory is not configured, planning proceeds in-memory with no behavioral change.
+
+## Adaptive Strategy — Sub-Strategy Reporting
+
+When using `defaultStrategy: "adaptive"`, the framework selects a concrete sub-strategy at runtime (ReAct, Plan-Execute, or Reflexion). `agentResult.metadata.strategyUsed` now reports the **actual sub-strategy that produced the output**, not `"adaptive"`:
+
+```typescript
+const result = await agent.run("Research and write a report");
+
+console.log(result.metadata.strategyUsed);
+// "reactive" — not "adaptive"
+```
+
+The `[think]` observability log also shows the selection inline:
+
+```
+◉ [think]   12 steps | 8,432 tok | 18.4s (adaptive→reactive)
+```
+
+The EventBus `ReasoningStepCompleted` event still carries `strategy: "adaptive"` for subscribers that need to know the entry point. `result.metadata.selectedStrategy` carries the sub-strategy for downstream use.
+
+## Required Tools and Per-Tool Budget
+
+When tools must be called before the agent can declare success, use `.withRequiredTools()`. The framework also auto-enforces a **per-tool call budget** for research tools — preventing infinite search loops.
+
+### Per-Tool Call Budget (`maxCallsPerTool`)
+
+When tool classification runs (`.withRequiredTools({ adaptive: true })`), the framework automatically caps search-type tools at **3 calls per run** using the `maxCallsPerTool` mechanism:
+
+```
+web-search: 3 calls max → budget enforced automatically
+http-get:   3 calls max → budget enforced automatically
+file-write: no cap      → output tools are never capped
+```
+
+Once a tool reaches its budget, the gate blocks further calls to it and the agent is nudged toward the remaining required tools. This prevents the common pattern of an agent repeatedly searching instead of producing output.
+
+You can also set explicit per-tool budgets via the kernel input directly for custom use cases — contact the reasoning layer API if you need lower-level control.
+
+### Dynamic Stopping — Novelty Signal
+
+The framework includes a **novelty-based synthesis nudge**: if the last observation adds less than 20% new information compared to the accumulated research context (measured by word-token Jaccard overlap), the continuation hint is replaced with:
+
+```
+Research context is sufficient (last search: 8% new information — diminishing returns).
+Do NOT search again. Call file-write now to produce the output.
+```
+
+This fires automatically — no configuration required. It's one of three dynamic stopping layers alongside the per-tool budget and the task phase transition (when all research tools are satisfied and only output tools remain, the synthesis prompt fires instead of a generic progress message).
