@@ -225,6 +225,7 @@ function modelLabel(run: Run): string {
               <span class="tier-desc-inline">{tierDescriptions[tier] || ""}</span>
               <span class="tier-badge">{tierPassed}/{tierTasks.length} passed</span>
             </summary>
+            <div class="table-inner table-scroll">
             <table>
               <thead>
                 <tr>
@@ -253,6 +254,7 @@ function modelLabel(run: Run): string {
                 ))}
               </tbody>
             </table>
+            </div>
           </details>
         ) : null;
       })}
@@ -383,11 +385,11 @@ function modelLabel(run: Run): string {
     margin-bottom: 1.5rem;
   }
   .comparison-matrix {
-    min-width: 400px;
+    min-width: 480px;
   }
   .comparison-matrix .model-col {
     text-align: center;
-    min-width: 140px;
+    min-width: 160px;
   }
   .comparison-matrix td:not(:first-child) {
     text-align: center;
@@ -401,10 +403,10 @@ function modelLabel(run: Run): string {
     width: 100%;
     border-collapse: collapse;
     margin-bottom: 1rem;
-    font-size: 0.875rem;
+    font-size: 0.9rem;
   }
   th, td {
-    padding: 0.5rem 0.75rem;
+    padding: 0.6rem 1.1rem;
     border-bottom: 1px solid var(--sl-color-gray-5);
     text-align: left;
     vertical-align: middle;
@@ -412,7 +414,7 @@ function modelLabel(run: Run): string {
   th {
     background: var(--sl-color-gray-6);
     font-weight: 600;
-    font-size: 0.8rem;
+    font-size: 0.78rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
     white-space: nowrap;
@@ -483,11 +485,16 @@ function modelLabel(run: Run): string {
     flex-shrink: 0;
   }
 
+  /* ── Task drilldown table — scrollable on narrow viewports ── */
+  .table-inner table {
+    min-width: 680px;
+  }
+
   /* ── Task drilldown column widths & alignment ── */
-  .col-task    { width: 28%; min-width: 120px; }
-  .col-strategy{ width: 22%; min-width: 100px; }
-  .col-status  { width: 8%;  min-width: 48px; text-align: center; font-weight: 600; font-size: 1rem; }
-  .col-num     { width: 10%; min-width: 64px; text-align: right; font-variant-numeric: tabular-nums; }
+  .col-task    { width: 26%; min-width: 150px; }
+  .col-strategy{ width: 22%; min-width: 170px; } /* plan-execute-reflect needs room */
+  .col-status  { width: 7%;  min-width: 52px;  text-align: center; font-weight: 600; font-size: 1.05rem; }
+  .col-num     { width: 9%;  min-width: 76px;  text-align: right; font-variant-numeric: tabular-nums; }
 
   /* ── Overhead note ── */
   .overhead-note {
