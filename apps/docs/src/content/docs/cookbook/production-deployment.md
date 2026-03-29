@@ -22,7 +22,7 @@ const agent = await ReactiveAgents.create()
   // Core capabilities
   .withReasoning({ defaultStrategy: "adaptive" })
   .withTools()                // Built-in tools + any MCP servers
-  .withMemory("2")              // Vector + FTS5 for rich memory
+  .withMemory({ tier: "enhanced" }) // Vector + FTS5 for rich memory
 
   // Safety
   .withGuardrails()             // Block injection, PII, toxicity
@@ -93,6 +93,9 @@ Set spending limits to prevent runaway costs:
 Track costs through lifecycle hooks:
 
 ```typescript
+import { Effect } from "effect";
+import { ReactiveAgents } from "reactive-agents";
+
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withCostTracking()
@@ -145,6 +148,9 @@ With `.withObservability()` enabled:
 Add custom monitoring at any phase:
 
 ```typescript
+import { Effect } from "effect";
+import { ReactiveAgents } from "reactive-agents";
+
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withObservability()
@@ -273,7 +279,7 @@ const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withReasoning({ defaultStrategy: "adaptive" })
   .withTools()
-  .withMemory("1")
+  .withMemory()
   .withGuardrails()
   .withCostTracking()
   .withObservability({ verbosity: "normal" })
@@ -324,6 +330,9 @@ Key production practices for autonomous agents:
 Multi-agent workflows with checkpoints:
 
 ```typescript
+import { Effect } from "effect";
+import { OrchestrationService } from "@reactive-agents/orchestration";
+
 const program = Effect.gen(function* () {
   const orch = yield* OrchestrationService;
 

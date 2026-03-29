@@ -25,13 +25,13 @@ Register a sub-agent as a named tool when its purpose is known at build time:
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
-  .withAgentTool({
-    name: "data-analyst",
+  .withAgentTool("data-analyst", {
+    name: "Data Analyst",
     description: "Analyzes data and produces summaries",
     provider: "anthropic",
     maxIterations: 5,
-    tools: ["file-read", "calculator"],
-    persona: { role: "Data Analyst", instructions: "Focus on statistical patterns" }
+    tools: ["file-read", "web-search"],
+    persona: { role: "Data Analyst", instructions: "Focus on statistical patterns" },
   })
   .build();
 ```
@@ -77,7 +77,7 @@ Use dynamic sub-agents when:
 
 When a parent delegates to a sub-agent, the framework automatically forwards context to help the child agent understand the broader task:
 
-- **Parent tool results** — extracted from the parent's current execution scratchpad
+- **Parent tool results** — extracted from the parent's recent tool results / working context (agents persist notes via the **`recall`** meta-tool)
 - **Parent working memory** — recent entries from the parent's working memory store
 - **Combined prefix** — the above is composed into a `systemPrompt` prefix injected into the sub-agent, capped at 2000 characters (truncated oldest-first when over limit)
 
@@ -94,8 +94,8 @@ Implementation reference: `buildParentContextPrefix()`, `MAX_PARENT_CONTEXT_CHAR
 
 The current context forwarding mechanism has constraints to be aware of when designing sub-agent workflows:
 
-- **2000 character cap** — context exceeding 2000 characters is truncated. Oldest entries are dropped first. Long parent scratchpads will be partially forwarded.
-- **No full scratchpad forwarding** — sub-agents receive extracted tool results, not the parent's complete scratchpad history.
+- **2000 character cap** — forwarded context exceeding 2000 characters is truncated. Oldest entries are dropped first.
+- **No full parent thread** — sub-agents receive extracted tool results and a short forwarded slice, not the parent's full message history or everything stored through **`recall`**.
 - **No memory inheritance** — sub-agents start with fresh memory. They do not inherit the parent's episodic or semantic memory stores.
 - **Sub-agents re-fetch data** — if the parent fetched a URL or file, the sub-agent will re-fetch that resource unless the data is explicitly included in the forwarded context.
 
@@ -123,8 +123,8 @@ Configure a persona at build time with `.withAgentTool()`:
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
-  .withAgentTool({
-    name: "security-auditor",
+  .withAgentTool("security-auditor", {
+    name: "Security Auditor",
     description: "Reviews code for security vulnerabilities",
     provider: "anthropic",
     maxIterations: 6,
@@ -133,8 +133,8 @@ const agent = await ReactiveAgents.create()
       role: "Security Auditor",
       background: "Expert in OWASP top 10 and common injection vulnerabilities",
       instructions: "Flag any potential injection vulnerabilities. Be thorough and cite specific lines.",
-      tone: "formal"
-    }
+      tone: "formal",
+    },
   })
   .build();
 ```

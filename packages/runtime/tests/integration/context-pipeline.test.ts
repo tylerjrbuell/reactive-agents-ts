@@ -2,7 +2,7 @@
 //
 // Integration tests for the Context Engine pipeline:
 //   1. ExperienceStore record/query cycle
-//   2. ALWAYS_INCLUDE_TOOLS constant includes scratchpad tools
+//   2. ALWAYS_INCLUDE_TOOLS constant includes recall for sub-agents
 //   3. context-status handler returns accurate snapshot
 //   4. shouldShowTaskComplete visibility gating
 

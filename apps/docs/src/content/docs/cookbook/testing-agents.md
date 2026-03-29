@@ -84,9 +84,7 @@ test("execution engine accumulates tokens", async () => {
   const runtime = createRuntime({
     agentId: "test-agent",
     provider: "test",
-    testResponses: {
-      default: "Test response",
-    },
+    testScenario: [{ text: "Test response" }],
   });
 
   const program = Effect.gen(function* () {
@@ -108,6 +106,9 @@ test("execution engine accumulates tokens", async () => {
 Verify that hooks fire at the right times:
 
 ```typescript
+import { Effect } from "effect";
+import { ReactiveAgents } from "reactive-agents";
+
 test("hooks fire in order", async () => {
   const phases: string[] = [];
 

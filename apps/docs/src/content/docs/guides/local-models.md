@@ -96,6 +96,10 @@ Not all reasoning strategies work well on small models:
 
 **Recommendation:** Use `"reactive"` (ReAct) as default strategy for all local models. Only use `"adaptive"` if you're running 14B+ and want automatic strategy selection.
 
+## Intelligent Context Synthesis (ICS)
+
+For multi-step local runs, ICS classifies task phase and injects a short synthesized thread instead of dumping raw history. Enable and tune it via `.withReasoning({ synthesis: …, strategies: { … } })` — see [Intelligent Context Synthesis](/features/intelligent-context-synthesis/).
+
 ## Common Pitfalls
 
 ### 1. Model hallucinates tool calls

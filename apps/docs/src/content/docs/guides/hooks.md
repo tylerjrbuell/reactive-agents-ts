@@ -7,9 +7,23 @@ description: Intercept and extend the 10-phase execution engine with custom hook
 
 Every agent execution flows through a deterministic 10-phase lifecycle. Hooks let you intercept any phase to add logging, metrics, validation, or custom behavior.
 
+:::tip[Effect imports for hooks]
+Hook handlers must return an **`Effect`** (not a raw value). At the top of your module:
+
+```typescript
+import { Effect } from "effect";
+import { ReactiveAgents } from "reactive-agents";
+```
+
+You will most often use **`Effect.succeed(ctx)`** to mean “continue with this context.” For failures, use **`Effect.fail(...)`** with a tagged error, or **`Effect.try`** / **`Effect.tryPromise`** to wrap code that throws. See the [Effect-TS primer](/concepts/effect-ts/) for a full helper table.
+:::
+
 ## Quick Example
 
 ```typescript
+import { Effect } from "effect";
+import { ReactiveAgents } from "reactive-agents";
+
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withReasoning()
@@ -53,10 +67,13 @@ Each phase supports three timing points:
 handler: (ctx: ExecutionContext) => Effect.Effect<ExecutionContext, HookError>
 ```
 
-The handler receives the current `ExecutionContext` and must return it (possibly modified). The context includes:
-- `metadata` — step count, strategy, tokens used
-- `scratchpad` — key/value store shared across phases
-- `taskId` — current task identifier
+The handler receives the current `ExecutionContext` and must return it (possibly modified). Useful fields include:
+- `metadata` — step count, strategy, last response, reasoning results (engine-populated)
+- `toolResults` — tool execution results accumulated this run
+- `messages` — conversation messages for the task
+- `taskId` / `agentId` / `sessionId` — correlation identifiers
+
+Agent-visible working memory is the **`recall`** meta-tool (Conductor's Suite), not a field on this context.
 
 ## Ordering
 
@@ -70,6 +87,9 @@ Hooks registered for the same phase and timing run **sequentially in registratio
 ### Progress Logging
 
 ```typescript
+import { Effect } from "effect";
+
+// …then chain on your builder:
 .withHook({
   phase: "think",
   timing: "before",
@@ -85,6 +105,8 @@ Hooks registered for the same phase and timing run **sequentially in registratio
 ### Cost Alert
 
 ```typescript
+import { Effect } from "effect";
+
 .withHook({
   phase: "complete",
   timing: "after",
@@ -100,11 +122,14 @@ Hooks registered for the same phase and timing run **sequentially in registratio
 ### Audit Trail
 
 ```typescript
+import { Effect } from "effect";
+
 .withHook({
   phase: "act",
   timing: "after",
   handler: (ctx) => {
-    const toolName = ctx.scratchpad.get("_last_tool_name");
+    const last = ctx.toolResults.at(-1) as { toolName?: string } | undefined;
+    const toolName = last?.toolName ?? "unknown";
     auditLog.append({ event: "tool_call", tool: toolName, taskId: ctx.taskId, timestamp: Date.now() });
     return Effect.succeed(ctx);
   },
@@ -114,6 +139,8 @@ Hooks registered for the same phase and timing run **sequentially in registratio
 ### Error Handling
 
 ```typescript
+import { Effect } from "effect";
+
 .withHook({
   phase: "think",
   timing: "on-error",

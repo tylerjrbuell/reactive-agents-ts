@@ -46,7 +46,10 @@ interface KernelState {
   // Accumulation
   readonly steps: readonly ReasoningStep[];
   readonly toolsUsed: ReadonlySet<string>;
-  readonly scratchpad: ReadonlyMap<string, string>;
+  /** LLM thread (assistant turns + tool_result messages), compacted with a sliding window */
+  readonly messages: readonly KernelMessage[];
+  /** Reactive Intelligence / `pulse` — human-readable controller decisions this run */
+  readonly controllerDecisionLog: readonly string[];
 
   // Metrics
   readonly iteration: number;
@@ -54,7 +57,7 @@ interface KernelState {
   readonly cost: number;
 
   // Control
-  readonly status: KernelStatus;   // "thinking" | "acting" | "observing" | "done" | "failed"
+  readonly status: KernelStatus;   // "thinking" | "acting" | "observing" | "done" | "failed" | ...
   readonly output: string | null;
   readonly error: string | null;
 
@@ -62,6 +65,8 @@ interface KernelState {
   readonly meta: Readonly<Record<string, unknown>>;
 }
 ```
+
+The concrete TypeScript type also carries an internal `ReadonlyMap` used to sync compressed tool-result storage with the **`recall`** meta-tool. Application docs treat **`recall`** as the user-facing working-memory API — not that map.
 
 ### State Transitions
 

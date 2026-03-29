@@ -114,7 +114,7 @@ const agent = await ReactiveAgents.create()
   .withModel("claude-sonnet-4-20250514")
   .withCostTracking({ budget: { daily: 20.0 } })
   .withReasoning({ defaultStrategy: "adaptive", maxIterations: 20 })
-  .withMemory("2")
+  .withMemory({ tier: "enhanced" })
   .withVerification()
   .withObservability({ verbosity: "verbose" })
   .build();

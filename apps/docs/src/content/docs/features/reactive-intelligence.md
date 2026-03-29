@@ -35,7 +35,7 @@ With controller features enabled:
     contextCompression: true,  // Compact context under pressure
     strategySwitch: true,      // Switch strategy on flat entropy
   },
-  telemetry: true,             // Anonymous usage data (on by default)
+  telemetry: true,             // Opt in to anonymous usage data (default in config is off)
 })
 ```
 
@@ -231,23 +231,26 @@ agent.subscribe("ReactiveDecision", (event) => {
 ```typescript
 interface ReactiveIntelligenceConfig {
   entropy: {
-    enabled: boolean;           // Master switch (default: true)
-    tokenEntropy?: boolean;     // Use logprob data when available (default: true)
-    semanticEntropy?: boolean;  // Use embedding similarity (default: true)
-    trajectoryTracking?: boolean; // Track entropy over time (default: true)
+    enabled: boolean;            // Master switch (default: true)
+    tokenEntropy?: boolean;      // default: true
+    semanticEntropy?: boolean;   // default: true
+    trajectoryTracking?: boolean; // default: true
   };
   controller: {
-    earlyStop?: boolean;           // Stop on convergence (default: false)
-    contextCompression?: boolean;  // Compress on pressure (default: false)
-    strategySwitch?: boolean;      // Switch on flat entropy (default: false)
+    earlyStop?: boolean;           // default: true
+    branching?: boolean;           // default: false
+    contextCompression?: boolean;  // default: true
+    strategySwitch?: boolean;      // default: true
+    causalAttribution?: boolean;   // default: false
   };
   learning: {
-    banditSelection?: boolean;   // Thompson Sampling strategy selection
-    skillSynthesis?: boolean;    // Extract reusable skill fragments
+    banditSelection?: boolean;   // default: true
+    skillSynthesis?: boolean;    // default: true
+    skillDir?: string;
   };
   telemetry?: boolean | {
     enabled: boolean;
-    endpoint?: string;           // Override telemetry endpoint
-  };
+    endpoint?: string;
+  }; // default: false — set true or { enabled: true } to send reports
 }
 ```

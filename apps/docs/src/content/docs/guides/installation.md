@@ -19,7 +19,7 @@ pnpm add reactive-agents
 ```
 
 :::note[Effect dependency]
-`effect` ships as a dependency of `reactive-agents` and is installed automatically. Only add it explicitly (`bun add effect`) if your own code imports from `effect` directly.
+`effect` ships as a dependency of `reactive-agents` and is installed automatically. When you write hooks, tools, or tests, import helpers explicitly — e.g. `import { Effect } from "effect"` — then use **`Effect.succeed`**, **`Effect.fail`**, **`Effect.gen`**, **`Effect.runPromise`**, etc. See the [Effect-TS primer](/concepts/effect-ts/) for a cheat sheet. Add `effect` to your app’s `package.json` only if you import from it outside `reactive-agents`’ bundled usage.
 :::
 
 Then import from a single entry point:
@@ -50,7 +50,9 @@ The framework is modular — install only the packages you need:
 | `@reactive-agents/a2a`           | Agent-to-Agent protocol, Agent Cards, JSON-RPC, SSE streaming             | Optional  |
 | `@reactive-agents/prompts`       | Template engine, built-in prompt library                                  | Optional  |
 | `@reactive-agents/gateway`       | Persistent autonomous harness: heartbeats, crons, webhooks, policy engine | Optional  |
-| `@reactive-agents/reactive-intelligence` | Metacognitive entropy sensor: 5 entropy sources, conformal calibration | Optional  |
+| `@reactive-agents/reactive-intelligence` | Entropy sensor, reactive controller, learning engine, living-skills wiring, telemetry client | Optional  |
+| `@reactive-agents/eval`          | Evaluation suites, LLM-as-judge scoring, `EvalStore` (SQLite)            | Optional  |
+| `@reactive-agents/testing`       | Mock `LLMService` / `ToolService` / `EventBus`, assertion helpers (dev/test) | Dev-only  |
 
 ```bash
 bun add @reactive-agents/core @reactive-agents/runtime @reactive-agents/llm-provider
@@ -65,11 +67,12 @@ Create a `.env` file:
 ANTHROPIC_API_KEY=sk-ant-...        # Anthropic Claude
 OPENAI_API_KEY=sk-...               # OpenAI GPT-4o
 GOOGLE_API_KEY=...                  # Google Gemini
+LITELLM_API_KEY=...                 # Optional — LiteLLM proxy auth when required
 
 # Tools (optional)
 TAVILY_API_KEY=tvly-...             # Enables built-in web search tool
 
-# Embeddings (for Tier 2 semantic memory)
+# Embeddings (for enhanced / `"2"` memory tier — vector semantic search)
 EMBEDDING_PROVIDER=openai           # "openai" | "ollama"
 EMBEDDING_MODEL=text-embedding-3-small
 

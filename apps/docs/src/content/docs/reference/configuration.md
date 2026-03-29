@@ -5,7 +5,7 @@ description: Complete reference of all builder methods, defaults, and environmen
 
 # Configuration Reference
 
-Every aspect of Reactive Agents is configurable through the builder API. This page documents all available options, their defaults, and how they affect agent behavior.
+Every aspect of Reactive Agents is configurable through the builder API. This page documents all available options, their defaults, and how they affect agent behavior. For ready-made chains, see [Common builder stacks](/cookbook/builder-stacks/).
 
 ## Builder Methods
 
@@ -15,26 +15,42 @@ Every aspect of Reactive Agents is configurable through the builder API. This pa
 |--------|---------|-------------|
 | `.withName(name)` | `"agent"` | Agent identifier used in logs and metrics |
 | `.withProvider(provider)` | `"test"` | LLM provider: `"anthropic"` \| `"openai"` \| `"gemini"` \| `"ollama"` \| `"litellm"` \| `"test"` |
-| `.withModel(model)` | Provider default | Model name or preset (e.g., `"claude-sonnet-4-20250514"`, `"gpt-4o"`) |
+| `.withModel(model)` | Provider default | Model string or `ModelParams` (`model`, `thinking?`, `temperature?`, `maxTokens?`) |
 | `.withSystemPrompt(prompt)` | none | Custom system prompt prepended to all LLM calls |
 | `.withPersona(persona)` | none | Structured persona: `{ name?, role?, background?, instructions?, tone? }` |
+| `.withEnvironment(context)` | none | Extra `Record<string, string>` merged into system prompt (beyond built-in date/tz/platform) |
 | `.withMaxIterations(n)` | `10` | Maximum reasoning loop iterations before stopping |
 | `.withTimeout(ms)` | none | Per-execution timeout in milliseconds |
+| `.withStrictValidation()` | off | Missing API keys / mismatches become build errors |
+| `.withRetryPolicy({ maxRetries, backoffMs })` | `maxRetries: 0` | Transient LLM retries |
+| `.withErrorHandler(fn)` | none | Observe-only callback when `run()` fails |
 
 ### Reasoning
 
 | Method | Default | Description |
 |--------|---------|-------------|
-| `.withReasoning(options?)` | disabled | Enable reasoning loop. Options: `{ defaultStrategy?: string }` |
-| `.withCircuitBreaker(config?)` | auto | Loop detection: `{ maxSameToolCalls?, maxConsecutiveThoughts? }` |
+| `.withReasoning(options?)` | disabled | Strategies, ICS (`synthesis`, `synthesisModel`, …), strategy switching, `adaptive`, per-strategy bundles (may include e.g. `kernelMaxIterations` on `reflexion`). See [Reasoning](/guides/reasoning/) and [Builder API](/reference/builder-api/) |
 
-### Tools
+### Tools & context
 
 | Method | Default | Description |
 |--------|---------|-------------|
-| `.withTools(options?)` | disabled | Enable tool registry. Options: `{ include?, exclude?, custom?, allowedTools?, adaptiveToolFiltering?, resultCompression? }` |
-| `.withRequiredTools(config)` | none | Tools that must be called: `{ tools?, adaptive?, maxRetries? }` |
-| `.withMCP(config)` | none | MCP server connections: `{ name, transport, command?, args?, url? }` |
+| `.withTools(options?)` | disabled | `{ tools?` (custom defs + **Effect** handlers), `resultCompression?`, `allowedTools?`, `adaptive?` } |
+| `.withDocuments(docs)` | none | `DocumentSpec[]` ingested at build for `rag-search` |
+| `.withRequiredTools(config)` | none | `{ tools?, adaptive?, maxRetries? }` |
+| `.withMCP(config)` | none | MCP: `{ name, transport, command?, args?, endpoint?, headers?, env?, cwd? }` (see [Builder API](/reference/builder-api/) transport table) |
+| `.withMetaTools(config?)` | on with tools | Conductor suite; pass `false` to disable defaults |
+
+### LLM resilience & pricing
+
+| Method | Default | Description |
+|--------|---------|-------------|
+| `.withCircuitBreaker(config?)` | off until set | Provider circuit breaker (`failureThreshold`, `cooldownMs`, …) |
+| `.withRateLimiting(config?)` | off until set | RPM / TPM / concurrency limits |
+| `.withModelPricing(registry)` | none | Static $/1M token overrides |
+| `.withDynamicPricing(provider)` | none | Fetch pricing at build |
+| `.withFallbacks(config)` | none | Provider/model chain + `errorThreshold` |
+| `.withCacheTimeout(ms)` | `3_600_000` | Semantic cache TTL (1h) |
 
 ### Memory
 
@@ -44,32 +60,32 @@ Every aspect of Reactive Agents is configurable through the builder API. This pa
 | `.withMemoryConsolidation(config?)` | disabled | Background memory intelligence: `{ threshold?, decayFactor?, pruneThreshold? }` |
 | `.withExperienceLearning()` | disabled | Cross-agent tool-use pattern learning |
 
-### Safety & Control
+### Safety & control
 
 | Method | Default | Description |
 |--------|---------|-------------|
-| `.withGuardrails(options?)` | disabled | Enable injection/PII/toxicity detection. Options include `thresholds: { injection?, pii?, toxicity? }` (0.0–1.0) |
-| `.withVerification(options?)` | disabled | Post-LLM fact-checking (semantic entropy, NLI) |
-| `.withKillSwitch()` | disabled | Enable pause/resume/stop/terminate controls |
-| `.withBehavioralContracts(config?)` | none | Rule enforcement: `{ deniedTools?, maxIterations?, allowedActions? }` |
+| `.withGuardrails(options?)` | disabled | Toggles: `{ injection?, pii?, toxicity? }` (default **true** each when enabled), plus `customBlocklist?` |
+| `.withVerification(options?)` | disabled | Strategy toggles + thresholds (`passThreshold`, `hallucinationDetection`, …) |
+| `.withKillSwitch()` | disabled | Pause / resume / stop / terminate |
+| `.withBehavioralContracts(contract)` | none | Behavioral contract passed to guardrails layer |
 
-### Cost & Efficiency
-
-| Method | Default | Description |
-|--------|---------|-------------|
-| `.withCostTracking(options?)` | disabled | Budget enforcement. Options: `{ budget?: { perRequest?, perSession?, daily?, monthly? } }` |
-| `.withCacheTimeout(ms)` | `3,600,000` (1hr) | Semantic cache TTL in milliseconds |
-| `.withRetryPolicy(policy)` | `{ maxRetries: 0 }` | LLM call retry: `{ maxRetries, backoffMs }` |
-| `.withContextProfile(profile)` | auto-detected | Model-adaptive context: `{ tier: "local" \| "mid" \| "large" \| "frontier" }` |
-
-### Observability
+### Cost & context
 
 | Method | Default | Description |
 |--------|---------|-------------|
-| `.withObservability(options?)` | disabled | Metrics dashboard + tracing. Options: `{ verbosity?, live? }` |
-| `.withStreaming(options?)` | disabled | Token streaming. Options: `{ density?: "tokens" \| "full" }` |
-| `.withTelemetry(config?)` | disabled | OpenTelemetry export configuration |
+| `.withCostTracking(options?)` | disabled | Budget enforcement (USD): `{ perRequest?, perSession?, daily?, monthly? }` |
+| `.withContextProfile(profile)` | auto-detected | Model-adaptive context budgets / compaction — see [Context engineering](/guides/context-engineering/) |
+
+### Observability & streaming
+
+| Method | Default | Description |
+|--------|---------|-------------|
+| `.withObservability(options?)` | disabled | `{ verbosity?, live?, file?` (JSONL), `logPrefix?, logModelIO? }` |
+| `.withStreaming(options?)` | `"tokens"` | Default `agent.runStream()` density: `{ density?: "tokens" \| "full" }` |
+| `.withTelemetry(config?)` | `{ mode: "isolated" }` if enabled | Telemetry privacy / contribute modes |
+| `.withLogging(config)` | none | Structured logs: level, format, `output` (console / file / stream), rotation |
 | `.withAudit()` | disabled | Compliance audit logging |
+| `.withEvents()` | — | Wire EventBus for `agent.subscribe()` |
 
 ### Identity & Orchestration
 
@@ -79,11 +95,15 @@ Every aspect of Reactive Agents is configurable through the builder API. This pa
 | `.withOrchestration()` | disabled | Multi-agent workflow engine |
 | `.withInteraction()` | disabled | 5 autonomy modes + checkpoints |
 | `.withSelfImprovement()` | disabled | Cross-task strategy outcome learning |
+| `.withReactiveIntelligence(false)` | on | Pass `false` to disable entropy/controller/telemetry stack |
+| `.withReactiveIntelligence(options?)` | defaults | Entropy, controller, hooks, `autonomy`, `constraints` — see [Reactive Intelligence](/features/reactive-intelligence/) |
+| `.withHealthCheck()` | disabled | Exposes `agent.health()` |
 
-### Sub-Agents
+### Sub-agents & A2A
 
 | Method | Default | Description |
 |--------|---------|-------------|
+| `.withA2A(options?)` | `{ port: 3000 }` | Local A2A JSON-RPC server (`port`, `basePath`) |
 | `.withAgentTool(name, config)` | none | Register a static sub-agent as a tool |
 | `.withDynamicSubAgents(options?)` | disabled | Allow LLM to spawn sub-agents at runtime |
 | `.withRemoteAgent(name, url)` | none | Connect to a remote agent via A2A protocol |
@@ -94,13 +114,16 @@ Every aspect of Reactive Agents is configurable through the builder API. This pa
 |--------|---------|-------------|
 | `.withGateway(options?)` | disabled | Persistent autonomous harness: `{ heartbeat?, crons?, webhooks?, policies?, channels? }` |
 
-### Build Options
+### Build, test & serialization
 
 | Method | Default | Description |
 |--------|---------|-------------|
-| `.withStrictValidation()` | `false` | Make build-time warnings (missing API keys, model mismatches) into hard errors |
-| `.withTestScenario(steps)` | none | Deterministic test scenario: `TestScenarioStep[]` where each step is `{ match?: string, text: string }` |
-| `.withLayers(layers)` | none | Inject custom Effect-TS layers |
+| `.withTestScenario(turns)` | none | Deterministic **test** provider. `TestTurn[]` from `@reactive-agents/llm-provider`; forces `provider: "test"`. |
+| `.withLayers(layers)` | none | Merge custom Effect `Layer`s into the runtime |
+| `.withSkills(config?)` | disabled | Living skills: `paths`, `packages`, `evolution`, `overrides` |
+| `.toConfig()` / `ReactiveAgents.fromConfig()` / `fromJSON()` | — | **Agent as Data** — round-trip via `agentConfigToJSON` / `agentConfigFromJSON` (`reactive-agents` or `@reactive-agents/runtime`) |
+| `agentFn` / `pipe` / `parallel` / `race` | — | Promise-based multi-agent composition (see [Builder API](/reference/builder-api/)) |
+| `agent.registerTool()` / `unregisterTool()` / `ingest()` | — | Runtime tool + RAG ingestion on built agents |
 
 ## Environment Variables
 

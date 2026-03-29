@@ -205,6 +205,13 @@ declare module 'astro:content' {
   collection: "docs";
   data: InferEntrySchema<"docs">
 } & { render(): Render[".md"] };
+"cookbook/builder-stacks.md": {
+	id: "cookbook/builder-stacks.md";
+  slug: "cookbook/builder-stacks";
+  body: string;
+  collection: "docs";
+  data: InferEntrySchema<"docs">
+} & { render(): Render[".md"] };
 "cookbook/building-tools.md": {
 	id: "cookbook/building-tools.md";
   slug: "cookbook/building-tools";
@@ -537,6 +544,13 @@ declare module 'astro:content' {
 "guides/troubleshooting.md": {
 	id: "guides/troubleshooting.md";
   slug: "guides/troubleshooting";
+  body: string;
+  collection: "docs";
+  data: InferEntrySchema<"docs">
+} & { render(): Render[".md"] };
+"guides/web-integration.md": {
+	id: "guides/web-integration.md";
+  slug: "guides/web-integration";
   body: string;
   collection: "docs";
   data: InferEntrySchema<"docs">

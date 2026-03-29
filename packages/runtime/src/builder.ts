@@ -125,7 +125,7 @@ export interface ToolsOptions {
     readonly definition: ToolDefinition;
     readonly handler: (args: Record<string, unknown>) => Effect.Effect<unknown>;
   }>;
-  /** Tool result compression config — controls preview size, scratchpad overflow, and pipe transforms. */
+  /** Tool result compression config — controls preview size, overflow key storage (recall/compression), and pipe transforms. */
   readonly resultCompression?: ResultCompressionConfig;
   /**
    * Whitelist of tool names to expose. When set, only these tools are available —
@@ -144,7 +144,7 @@ export interface ToolsOptions {
    * to the agent — reducing context noise and improving small-model accuracy.
    *
    * Uses heuristic keyword + description matching to identify relevant tools,
-   * then presents only those plus essential built-ins (scratchpad, spawn-agent).
+   * then presents only those plus essential built-ins (e.g. spawn-agent; working memory via recall when meta-tools are on).
    * All tools remain callable by exact name even if not shown.
    *
    * @example

@@ -141,6 +141,7 @@ const executor = new AgentExecutor({
 
 ```typescript
 import { Effect } from "effect";
+import { ReactiveAgents } from "reactive-agents";
 
 const agent = await ReactiveAgents.create()
   .withProvider("openai")

@@ -157,6 +157,9 @@ const verificationLayer = createVerificationLayer({
 Verification runs during **Phase 6 (Verify)** of the 10-phase execution lifecycle. When the verification score and risk level are computed, they're stored in the execution context metadata — accessible via lifecycle hooks:
 
 ```typescript
+import { Effect } from "effect";
+import { ReactiveAgents } from "reactive-agents";
+
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withVerification()

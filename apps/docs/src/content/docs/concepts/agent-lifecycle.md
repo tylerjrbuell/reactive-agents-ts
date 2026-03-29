@@ -190,6 +190,7 @@ All events carry the correct `taskId` for cross-event correlation. The `LLMReque
 For direct EventBus access in Effect programs, the `TypedEventHandler<T>` helper lets you define handlers outside of inline callbacks:
 
 ```typescript
+import { Effect } from "effect";
 import type { TypedEventHandler } from "@reactive-agents/core";
 import { EventBus } from "@reactive-agents/core";
 
@@ -223,6 +224,8 @@ Every phase supports three hook timings:
 | `on-error` | When phase fails | Custom error handling, alerting |
 
 ```typescript
+import { Effect } from "effect";
+
 agent.withHook({
   phase: "think",
   timing: "before",

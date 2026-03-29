@@ -53,7 +53,7 @@ const agent = await ReactiveAgents.create()
   .build();
 ```
 
-You can also register tools programmatically after build using `ToolService.register()` via the Effect API.
+You can also register tools **after** `build()` on the agent facade: `await agent.registerTool({ definition, handler })` and `await agent.unregisterTool("name")` (non-builtin tools only).
 
 ### With Reasoning (ReAct)
 
@@ -88,21 +88,24 @@ When you enable `.withTools()`, these tools are automatically registered and ava
 | `file-read` | file | Read file contents (path-traversal protected) | — |
 | `file-write` | file | Write file contents (requires approval) | — |
 | `code-execute` | code | Execute code in a subprocess (`Bun.spawn`, `cwd: "/tmp"`, minimal env) | — |
-| `scratchpad-write` | memory | Persist notes outside the context window for later retrieval | — |
-| `scratchpad-read` | memory | Read a previously stored scratchpad note by key | — |
 
-### Meta-Tools
+Ad-hoc note builtins were removed from the default tool list. Use the **`recall`** meta-tool (Conductor's Suite) for working-memory writes, reads, search, and listing. If you use **`.withDocuments()`**, ingestion uses **`rag-ingest`** and retrieval is typically routed through **`find`** rather than a standalone `rag-search` builtin.
 
-Meta-tools provide agent self-awareness and guarded completion. They require live execution state and are registered by the kernel automatically — you cannot call them yourself from custom tool configs.
+### Kernel meta-tools (reasoning loop)
+
+These are registered by the kernel with live state — not part of the static `builtinTools` list:
 
 | Tool | Description |
 |------|-------------|
-| `context-status` | Zero-parameter introspection: reports `iteration`, `maxIterations`, `remaining`, `toolsUsed`, `toolsPending`, `storedKeys`, `tokensUsed`. Always visible. |
-| `task-complete` | Explicit task completion with a `summary` parameter. **Visibility-gated**: only appears in the schema when all four conditions hold: all required tools called, iteration ≥ 2, no pending errors, at least one non-meta tool invoked. |
+| `context-status` | Zero-parameter introspection: iteration budget, tools used/pending, stored keys, tokens, etc. |
+| `task-complete` | Explicit completion with a `summary`. Visibility-gated when guardrails on early exit are needed. |
+| `final-answer` | Hard-gate meta-tool: structured deliverable + format + confidence — primary path for exiting the ReAct loop cleanly under native function calling. |
 
-The agent can call `context-status` any time it feels lost or needs to check progress. Once visible, `task-complete` signals definitive completion and ends the loop cleanly — avoiding false early-exits.
+### Conductor's Suite (default with tools)
 
-Both tools are invoked via native function calling — the model returns a `tool_use` block with the tool name and arguments, and the framework executes it, returning the result as a `tool_result` message.
+When **`.withTools()`** is enabled, **`.withMetaTools()`** defaults to **on** (pass **`false`** to disable). That injects **`brief`**, **`find`**, **`pulse`**, and **`recall`** plus the built-in harness skill (tier-aware). Configure or narrow tools with **`.withMetaTools({ brief: true, find: false, … })`**.
+
+All of the above are invoked via the provider’s **native function calling** path (`tool_use` / `tool_calls` → executed → `tool_result` in the thread).
 
 ## Parallel and Chain Tool Execution
 
@@ -518,7 +521,7 @@ Tune compression behavior via `.withTools()`:
   resultCompression: {
     budget: 1200,        // chars before overflow triggers (default: 800)
     previewItems: 5,     // array items shown in preview (default: 3)
-    autoStore: true,     // auto-store overflow in scratchpad (default: true)
+    autoStore: true,     // store oversized tool previews under stable keys (surfaced to the model via human-readable labels; `recall` can read them)
     codeTransform: true, // enable | transform: pipe syntax (default: true)
   }
 })

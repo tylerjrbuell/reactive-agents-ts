@@ -33,7 +33,7 @@ const agent = await ReactiveAgents.create()
   .withName("research-assistant")
   .withProvider("anthropic")
   .withModel("claude-sonnet-4-20250514")
-  .withMemory("1")  // Tier 1: FTS5 full-text search
+  .withMemory()  // Default memory tier (FTS5-backed semantic search; no embedding API required)
   .build();
 ```
 
@@ -50,7 +50,7 @@ const agent = await ReactiveAgents.create()
   .withName("research-assistant")
   .withProvider("anthropic")
   .withModel("claude-sonnet-4-20250514")
-  .withMemory("1")
+  .withMemory()
   .withReasoning()  // ReAct loop: Think -> Act -> Observe
   .build();
 ```
@@ -69,7 +69,7 @@ const agent = await ReactiveAgents.create()
   .withName("research-assistant")
   .withProvider("anthropic")
   .withModel("claude-sonnet-4-20250514")
-  .withMemory("1")
+  .withMemory()
   .withReasoning()
   .withGuardrails()       // Input/output safety
   .withCostTracking()     // Budget controls

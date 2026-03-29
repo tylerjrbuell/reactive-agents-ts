@@ -38,7 +38,7 @@ An LRU + TTL cache sits in front of all embedding API calls, avoiding redundant 
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
-  .withMemory("2") // Tier 2 enables semantic memory with embeddings
+  .withMemory({ tier: "enhanced" }) // Enhanced tier enables semantic memory with embeddings
   .build();
 // Embedding cache is automatically active when memory tier 2 is enabled
 ```

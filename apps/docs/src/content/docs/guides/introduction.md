@@ -33,7 +33,7 @@ Every capability is an independent Effect Layer. Compose them like building bloc
 
 ```typescript
 const agent = await ReactiveAgents.create()
-  .withMemory("1")       // Working + Semantic + Episodic memory
+  .withMemory()          // Default memory tier (see Memory guide for enhanced + embeddings)
   .withReasoning()       // ReAct reasoning loop
   .withGuardrails()      // Injection & PII detection
   .withCostTracking()    // Budget enforcement

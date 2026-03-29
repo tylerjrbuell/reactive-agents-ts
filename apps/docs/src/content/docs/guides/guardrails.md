@@ -220,6 +220,9 @@ Each check returns a `GuardrailResult`:
 Monitor guardrail decisions with hooks:
 
 ```typescript
+import { Effect } from "effect";
+import { ReactiveAgents } from "reactive-agents";
+
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withGuardrails()

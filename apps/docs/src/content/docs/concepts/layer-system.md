@@ -65,6 +65,9 @@ Each layer declares what it provides and what it requires:
 | Prompts | PromptService | Nothing |
 | Orchestration | OrchestrationService | Nothing |
 | Gateway | GatewayService, SchedulerService, WebhookService, PolicyEngine | EventBus |
+| A2A | A2A server/client helpers | Core (+ tools when serving) |
+| Reactive Intelligence | EntropySensor, ReactiveController, learning hooks | EventBus, reasoning kernel integration |
+| Eval | EvalService, EvalStore | LLMService (for judges) |
 
 The runtime automatically satisfies dependencies when composing layers.
 

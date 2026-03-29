@@ -36,20 +36,24 @@ Stored workflows and learned procedures with success rate tracking. Agents impro
 
 ## Memory Tiers
 
-| Tier | Storage | Search | Use Case |
-|------|---------|--------|----------|
-| **1** | bun:sqlite WAL | FTS5 full-text | Most applications |
-| **2** | bun:sqlite WAL + sqlite-vec | FTS5 + KNN vector | Semantic similarity |
+The runtime still labels tiers internally as `"1"` and `"2"`, but the builder API prefers:
 
-### Tier 1 (Default)
+| User-facing | Builder call | Storage / search | Use case |
+|-------------|--------------|------------------|----------|
+| **Default** | `.withMemory()` or `{ tier: "standard" }` | bun:sqlite WAL, FTS5 full-text | Most applications (no embedding API required) |
+| **Enhanced** | `{ tier: "enhanced" }` | WAL + sqlite-vec | FTS5 + KNN vector similarity |
+
+Passing `.withMemory("1")` or `.withMemory("2")` still works but logs a deprecation warning; use the forms above.
+
+### Default tier
 
 ```typescript
 const agent = await ReactiveAgents.create()
-  .withMemory("1")  // FTS5 search, no embeddings needed
+  .withMemory()  // Same internal tier as legacy "1" — FTS5 search, no embeddings required
   .build();
 ```
 
-### Tier 2 (Vector Search)
+### Enhanced tier (vector search)
 
 Requires an embedding provider:
 
@@ -60,7 +64,7 @@ EMBEDDING_MODEL=text-embedding-3-small
 
 ```typescript
 const agent = await ReactiveAgents.create()
-  .withMemory("2")  // FTS5 + KNN vector search
+  .withMemory({ tier: "enhanced" })  // FTS5 + KNN vector search (legacy: "2")
   .build();
 ```
 

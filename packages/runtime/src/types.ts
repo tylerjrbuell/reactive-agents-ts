@@ -303,7 +303,7 @@ export const ReactiveAgentsConfigSchema = Schema.Struct({
   temperature: Schema.optional(Schema.Number),
   /** Override default maxTokens for LLM requests */
   maxTokens: Schema.optional(Schema.Number),
-  /** Tool result compression config — controls preview size, scratchpad overflow, and pipe transforms */
+  /** Tool result compression config — controls preview size, overflow storage keys, and pipe transforms */
   resultCompression: Schema.optional(
     Schema.Struct({
       budget: Schema.optional(Schema.Number),

@@ -89,7 +89,7 @@ const agent = await ReactiveAgents.create()
     resultCompression: {
       budget: 2000,         // Max chars for compressed tool result
       previewItems: 5,      // Items shown for JSON arrays/objects
-      autoStore: true,      // Overflow stored in scratchpad automatically
+      autoStore: true,      // Large tool results get stable keys + previews (use `recall` to read full stored blobs)
       codeTransform: true,  // Apply pipe transforms (| transform: <expr>)
     }
   })

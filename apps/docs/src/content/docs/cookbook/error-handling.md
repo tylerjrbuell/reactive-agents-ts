@@ -12,7 +12,7 @@ Reactive Agents uses typed errors throughout so you can distinguish transient fa
 Every error from `agent.run()` is one of these tagged types:
 
 ```typescript
-import type { RuntimeErrors } from "reactive-agents";
+import type { RuntimeErrors } from "@reactive-agents/runtime";
 // RuntimeErrors is a union of:
 // | ExecutionError          — unexpected error in a lifecycle phase
 // | HookError               — a registered hook threw
@@ -25,21 +25,9 @@ import type { RuntimeErrors } from "reactive-agents";
 
 ## Handling Errors from agent.run()
 
-`agent.run()` returns an `AgentResult` with a `success` flag:
+`agent.run()` is `async` and **rejects on failure** (typed errors from the runtime). On success it resolves to an `AgentResult` with `success: true`.
 
-```typescript
-const result = await agent.run(prompt);
-
-if (!result.success) {
-  // result.error is a string description
-  console.error("Failed:", result.error);
-  process.exit(1);
-}
-
-console.log(result.output);
-```
-
-For the full typed error (useful for programmatic handling), catch the thrown exception:
+Use **`try/catch`** (or `runEffect()` + `Effect` operators) for failures:
 
 ```typescript
 import {
@@ -47,10 +35,11 @@ import {
   GuardrailViolationError,
   ExecutionError,
   unwrapErrorWithSuggestion,
-} from "reactive-agents";
+} from "@reactive-agents/runtime";
 
 try {
   const result = await agent.run(prompt);
+  console.log(result.output);
 } catch (err) {
   if (err instanceof MaxIterationsError) {
     console.log(`Gave up after ${err.iterations} iterations.`);

@@ -188,7 +188,7 @@ const researcher = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withReasoning()
   .withTools()
-  .withMemory("1")
+  .withMemory()
   .build();
 
 // Full production agent for critical tasks
@@ -198,7 +198,7 @@ const seniorAgent = await ReactiveAgents.create()
   .withModel("claude-sonnet-4-20250514")
   .withReasoning({ defaultStrategy: "adaptive" })
   .withTools()
-  .withMemory("2")
+  .withMemory({ tier: "enhanced" })
   .withGuardrails()
   .withVerification()
   .withCostTracking()
@@ -234,6 +234,9 @@ const program = Effect.gen(function* () {
 Use observability to track the full system:
 
 ```typescript
+import { Effect } from "effect";
+import { ReactiveAgents } from "reactive-agents";
+
 const agent = await ReactiveAgents.create()
   .withName("orchestrator")
   .withProvider("anthropic")

@@ -57,7 +57,7 @@ import { ReactiveAgents } from "@reactive-agents/runtime";
 const agent = await ReactiveAgents.create()
   .withName("conversational")
   .withProvider("anthropic")
-  .withMemory("1") // Use a unique ID for the memory session
+  .withMemory() // Default memory tier; session id is separate (see session API)
   .withMaxIterations(3)
   .build();
 
@@ -86,7 +86,7 @@ For multi-turn conversations that need to survive process restarts, enable sessi
 ```ts
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
-  .withMemory("1")
+  .withMemory()
   .withReasoning()
   .build();
 
@@ -106,7 +106,7 @@ Session persistence requires `.withMemory()` to be enabled (memory layer provide
 // Enable background decay + consolidation
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
-  .withMemory("2")
+  .withMemory({ tier: "enhanced" })
   .withMemoryConsolidation({
     threshold: 50,       // Trigger consolidation after 50 episodic entries
     decayFactor: 0.05,   // 5% importance decay per consolidation cycle

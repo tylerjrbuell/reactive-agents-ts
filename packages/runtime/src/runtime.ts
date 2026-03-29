@@ -575,7 +575,7 @@ export interface RuntimeOptions {
    * All tools remain callable by exact name even if not shown.
    *
    * Uses heuristic keyword + description matching to identify relevant tools.
-   * Essential built-in tools (scratchpad-read/write) are always included.
+   * Tools in `ALWAYS_INCLUDE_TOOLS` (from `@reactive-agents/tools`, currently `recall` for sub-agent delegation) are always merged into the filtered set.
    *
    * @example
    * ```typescript

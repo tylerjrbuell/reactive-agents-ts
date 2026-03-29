@@ -138,8 +138,14 @@ Internal packages that should never be published must have `"private": true` in 
 
 This project uses **Effect-TS** throughout. Load the `effect-ts-patterns` skill before writing any service code.
 
-- No `throw` — use `Effect.fail` with tagged errors
-- No raw `await` — use `Effect.promise` or `Effect.tryPromise`
+```typescript
+import { Effect } from "effect";
+// Often also: Layer, Context, Schema, Data, Ref — import only what you use
+```
+
+- No `throw` — use **`Effect.fail`** with tagged errors (or `Effect.die` for defects)
+- No raw `await` inside Effect programs — use **`Effect.promise`**, **`Effect.tryPromise`**, or **`yield*`** inside **`Effect.gen`**
+- Prefer **`Effect.succeed`** / **`Effect.sync`** for pure or trivial sync work
 - No `any` — use precise types, generics, and tagged unions
 - All public APIs need JSDoc comments
 - New services need tests in `tests/`

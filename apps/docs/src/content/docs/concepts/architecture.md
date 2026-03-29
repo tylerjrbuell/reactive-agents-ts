@@ -49,6 +49,7 @@ These can be enabled independently:
 | Prompts | `@reactive-agents/prompts` | Template engine |
 | A2A | `@reactive-agents/a2a` | Agent-to-Agent protocol (JSON-RPC, Agent Cards, SSE) |
 | Gateway | `@reactive-agents/gateway` | Persistent autonomous harness: heartbeats, crons, webhooks, policy engine |
+| Reactive Intelligence | `@reactive-agents/reactive-intelligence` | Entropy sensor, reactive controller, local learning, optional telemetry; integrates with kernel + EventBus |
 
 ## Dependency Graph
 

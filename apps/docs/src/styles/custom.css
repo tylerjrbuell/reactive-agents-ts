@@ -57,10 +57,18 @@
   --sl-color-black: #ffffff; /* white      — page bg        */
 }
 
-/* ── Layout — widen content, narrow right TOC panel ────────── */
+/* ── Layout — widen content, narrow sidebars (more room for tables & API tables) ─ */
 :root {
-  --sl-content-width: 55rem;        /* default ~40rem — gives tables room */
-  --sl-sidebar-width: 16rem;        /* default 18.75rem — reclaim space for content */
+  /* Prose + markdown max width (was 55rem; Starlight default 45rem) */
+  --sl-content-width: 72rem;
+  --sl-sidebar-width: 15rem; /* default 18.75rem — a bit more for main column */
+}
+
+/* Extra-wide viewports: use available space without absurd line length */
+@media (min-width: 100rem) {
+  :root {
+    --sl-content-width: 78rem;
+  }
 }
 
 /* ── Typography ─────────────────────────────────────────────── */
@@ -450,26 +458,47 @@ html {
   color: #5b21b6 !important;
 }
 
-/* ── Tables ─────────────────────────────────────────────────── */
-.sl-markdown-content table {
+/* ── Tables — readable columns (Starlight sets display:block + overflow:auto) ─ */
+.sl-markdown-content table:not(:where(.not-content *)) {
   border-collapse: collapse;
-  width: 100%;
+  /* Prefer content-driven column widths; scroll horizontally if the grid is wider than the panel */
+  width: max-content;
+  max-width: 100%;
+  table-layout: auto;
 }
-.sl-markdown-content th {
+
+.sl-markdown-content :is(th, td):not(:where(.not-content *)) {
+  vertical-align: top;
+  padding: 0.65rem 1rem;
+  hyphens: auto;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* Inline code / links in cells: wrap instead of forcing ultra-narrow columns */
+.sl-markdown-content td:not(:where(.not-content *)) code,
+.sl-markdown-content th:not(:where(.not-content *)) code {
+  white-space: normal;
+  word-break: break-word;
+}
+
+.sl-markdown-content th:not(:where(.not-content *)) {
   background: rgba(139, 92, 246, 0.08);
   border: 1px solid rgba(139, 92, 246, 0.15);
   padding: 0.75rem 1rem;
   font-weight: 600;
 }
-.sl-markdown-content td {
+
+.sl-markdown-content td:not(:where(.not-content *)) {
   border: 1px solid rgba(139, 92, 246, 0.08);
-  padding: 0.65rem 1rem;
 }
-[data-theme="light"] .sl-markdown-content th {
+
+[data-theme="light"] .sl-markdown-content th:not(:where(.not-content *)) {
   background: rgba(109, 40, 217, 0.05);
   border-color: rgba(109, 40, 217, 0.1);
 }
-[data-theme="light"] .sl-markdown-content td {
+
+[data-theme="light"] .sl-markdown-content td:not(:where(.not-content *)) {
   border-color: rgba(109, 40, 217, 0.07);
 }
 

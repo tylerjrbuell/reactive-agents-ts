@@ -29,7 +29,7 @@ bun add reactive-agents
 ```
 
 :::note[Effect dependency]
-`effect` ships as a dependency of `reactive-agents` and is installed automatically. Only add it explicitly (`bun add effect`) if your own code imports from `effect` directly.
+`effect` ships as a dependency of `reactive-agents` and is installed automatically. For hooks and custom tools, import helpers explicitly (`import { Effect } from "effect"`) and use **`Effect.succeed`**, **`Effect.fail`**, etc. — see the [Effect-TS primer](/concepts/effect-ts/). Add `effect` to your app only if you rely on it outside the framework’s re-exports.
 :::
 
 ## 2. Set Up Environment
@@ -87,7 +87,7 @@ const agent = await ReactiveAgents.create()
   .withName("research-agent")
   .withProvider("anthropic")
   .withModel("claude-sonnet-4-20250514")
-  .withMemory("1") // Tier 1: FTS5 search
+  .withMemory() // Default memory tier (see [Memory](../memory/); use `{ tier: "enhanced" }` for embeddings)
   .withReasoning() // ReAct reasoning loop
   .withGuardrails() // Input safety checks
   .withCostTracking() // Budget enforcement
@@ -96,6 +96,7 @@ const agent = await ReactiveAgents.create()
 
 ## What's Next?
 
+- [Common builder stacks](../cookbook/builder-stacks/) — Copy-paste chains (tools, memory, streaming, Agent as Data) with links to the full API reference
 - [Your First Agent](../your-first-agent/) — A deeper walkthrough
 - [Choosing a Stack](../choosing-a-stack/) — Pick provider/model/memory defaults quickly
 - [Agent Skills](../agent-skills/) — Publish reusable implementation skills for coding agents
