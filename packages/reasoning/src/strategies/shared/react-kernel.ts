@@ -309,11 +309,18 @@ function handleThinking(
     const adapter = selectAdapter({ supportsToolCalling: true }, profile.tier);
     const patchedBase = adapter.systemPromptPatch?.(baseSystemPrompt, profile.tier ?? "mid") ?? baseSystemPrompt;
 
+    // toolGuidance hook — append inline required-tool reminder after schema block
+    const toolGuidancePatch = adapter.toolGuidance?.({
+      toolNames: augmentedToolSchemas.map((t) => t.name),
+      requiredTools: input.requiredTools ?? [],
+      tier: profile.tier ?? "mid",
+    });
+
     const hasICS = state.synthesizedContext != null;
     let systemPromptText: string;
     if (hasICS) {
       const rules = buildRules(augmentedToolSchemas, input.requiredTools, profile.tier);
-      systemPromptText = `${patchedBase}\n\n${rules}`;
+      systemPromptText = `${patchedBase}\n\n${rules}${toolGuidancePatch ? `\n${toolGuidancePatch}` : ""}`;
     } else {
       const staticContext = buildStaticContext({
         task: input.task,
@@ -322,7 +329,7 @@ function handleThinking(
         requiredTools: input.requiredTools,
         environmentContext: input.environmentContext,
       });
-      systemPromptText = `${patchedBase}\n\n${staticContext}`;
+      systemPromptText = `${patchedBase}\n\n${staticContext}${toolGuidancePatch ? `\n${toolGuidancePatch}` : ""}`;
     }
 
     // ── Auto-forward: inject full stored result from last observation ──────────
@@ -427,6 +434,18 @@ function handleThinking(
       );
       if (compactedMessages.length === 0) {
         compactedMessages = [{ role: "user" as const, content: thoughtPrompt }];
+      }
+      // taskFraming hook — on first iteration, let adapter annotate the task message
+      // to help local models understand the full sequence of steps required.
+      if (state.iteration === 0 && compactedMessages.length === 1 && compactedMessages[0]?.role === "user") {
+        const framedTask = adapter.taskFraming?.({
+          task: compactedMessages[0].content as string,
+          requiredTools: input.requiredTools ?? [],
+          tier: profile.tier ?? "mid",
+        });
+        if (framedTask) {
+          compactedMessages = [{ role: "user" as const, content: framedTask }];
+        }
       }
       conversationMessages = (compactedMessages as readonly KernelMessage[]).map(toProviderMessage);
     }
@@ -810,6 +829,33 @@ function handleThinking(
           });
         }
 
+        // qualityCheck hook — for local models, do a lightweight self-eval
+        // before accepting the final answer. Only fires once (iteration > 0 prevents loops).
+        if (state.iteration > 0 && !state.meta.qualityCheckDone) {
+          const qcMsg = adapter.qualityCheck?.({
+            task: input.task,
+            requiredTools: input.requiredTools ?? [],
+            toolsUsed: state.toolsUsed,
+            tier: profile.tier ?? "mid",
+          });
+          if (qcMsg) {
+            const qcStep = makeStep("observation", qcMsg, {
+              observationResult: makeObservationResult("system", true, qcMsg),
+            });
+            const qcMessages = [...(state.messages as readonly KernelMessage[]),
+              { role: "user" as const, content: qcMsg }];
+            return transitionState(state, {
+              steps: [...newSteps, qcStep],
+              messages: qcMessages,
+              tokens: newTokens,
+              cost: newCost,
+              iteration: state.iteration + 1,
+              // Prevent quality check from firing again next iteration
+              meta: { ...state.meta, qualityCheckDone: true },
+            });
+          }
+        }
+
         // All checks pass — assemble final output
         const hasFA = hasFinalAnswer(resolverResult.content);
         const cleanContent = hasFA
@@ -1050,6 +1096,7 @@ function handleActing(
 ): Effect.Effect<KernelState, never, LLMService> {
   return Effect.gen(function* () {
     const { input, profile, compression, toolService, hooks } = context;
+    const adapter = selectAdapter({ supportsToolCalling: true }, profile.tier);
 
     // ── NATIVE FC ACTING BRANCH ─────────────────────────────────────────────
     // When the thinking phase stored pendingNativeToolCalls, execute them here
@@ -1392,13 +1439,27 @@ function handleActing(
           };
         }
 
-        const obsStep = makeStep("observation", execResult.content, {
-          observationResult: makeObservationResult(tc.name, execResult.success, execResult.content),
+        // errorRecovery hook — inject guidance when a tool fails (404, timeout, etc.)
+        let obsContent = execResult.content;
+        if (!execResult.success) {
+          const recovery = adapter.errorRecovery?.({
+            toolName: tc.name,
+            errorContent: execResult.content,
+            missingTools: (input.requiredTools ?? []).filter((t) => !newToolsUsed.has(t)),
+            tier: profile.tier ?? "mid",
+          });
+          if (recovery) {
+            obsContent = `${execResult.content}\n\n[Recovery guidance: ${recovery}]`;
+          }
+        }
+
+        const obsStep = makeStep("observation", obsContent, {
+          observationResult: makeObservationResult(tc.name, execResult.success, obsContent),
         });
 
         yield* hooks.onObservation(
           transitionState(state, { steps: allSteps }),
-          execResult.content,
+          obsContent,
           execResult.success,
         );
 
@@ -1471,13 +1532,27 @@ function handleActing(
         const missing = reqTools.filter((t) => !newToolsUsed.has(t));
 
         if (missing.length > 0) {
-          // Structured decision framework: tell the model exactly what to do next.
-          // This mirrors what the text-based ReAct path did with "take ONE action
-          // or give your FINAL ANSWER" — a clear binary choice the model can follow.
-          const progressMsg: KernelMessage = {
-            role: "user",
-            content: `You must still call: ${missing.join(", ")}. Call ${missing[0]} now with the appropriate arguments.`,
-          };
+          // Check if this is a research→produce transition: all search-type tools
+          // satisfied, only output tools (write/file/save) remain.
+          const RESEARCH_KEYWORDS = ["search", "http", "browse", "fetch", "scrape", "crawl"];
+          const researchDone = usedSoFar.some((t) => RESEARCH_KEYWORDS.some((k) => t.includes(k)));
+          const outputOnly = missing.every((t) => t.includes("write") || t.includes("file") || t.includes("save"));
+          const observationCount = allSteps.filter((s) => s.type === "observation" &&
+            (s.metadata?.observationResult as { toolName?: string } | undefined)?.toolName !== "system").length;
+
+          const synthesisMsg = researchDone && outputOnly
+            ? adapter.synthesisPrompt?.({
+                toolsUsed: newToolsUsed,
+                missingOutputTools: missing,
+                observationCount,
+                tier: profile.tier ?? "mid",
+              })
+            : undefined;
+
+          const progressContent = synthesisMsg
+            ?? `You must still call: ${missing.join(", ")}. Call ${missing[0]} now with the appropriate arguments.`;
+
+          const progressMsg: KernelMessage = { role: "user", content: progressContent };
           return [...prior, assistantMsg, ...toolResultMessages, progressMsg];
         }
 

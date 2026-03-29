@@ -4,14 +4,50 @@
  *
  * The kernel calls adapter methods at well-defined hook points.
  * Frontier models return undefined (no intervention needed).
- * Local models return explicit guidance to help them chain multi-step tasks.
+ * Local/mid models return explicit guidance to improve task completion rates.
+ *
+ * Hook call sites in react-kernel.ts:
+ *   systemPromptPatch  — once, when building the static system prompt
+ *   taskFraming        — once, wrapping the initial user task message
+ *   toolGuidance       — once, appended to system prompt after tool schema block
+ *   continuationHint   — each iteration, injected as user message after tool results
+ *   errorRecovery      — when a tool returns a failed result
+ *   synthesisPrompt    — when transitioning from research → produce phase
+ *   qualityCheck       — optional self-eval prompt injected before final answer
  */
 
 export interface ProviderAdapter {
   /**
-   * Generate a continuation hint for the next iteration.
-   * Called when the kernel builds the "Continue" user message for iterations 2+.
-   * Return undefined to use the default "Continue with the task."
+   * Patch the system prompt for model-specific needs.
+   * Called once when building the system prompt.
+   */
+  systemPromptPatch?(basePrompt: string, tier: string): string | undefined;
+
+  /**
+   * Wrap or annotate the initial task message.
+   * Called once when the first user message is constructed.
+   * Return undefined to use the task as-is.
+   */
+  taskFraming?(context: {
+    task: string;
+    requiredTools: readonly string[];
+    tier: string;
+  }): string | undefined;
+
+  /**
+   * Append inline tool usage guidance after the tool schema block in the system prompt.
+   * Helps local models that ignore JSON schema descriptions.
+   * Return undefined to add nothing.
+   */
+  toolGuidance?(context: {
+    toolNames: readonly string[];
+    requiredTools: readonly string[];
+    tier: string;
+  }): string | undefined;
+
+  /**
+   * Generate a continuation hint injected as a user message after tool results.
+   * Called each iteration when required tools are still pending.
    */
   continuationHint?(context: {
     toolsUsed: ReadonlySet<string>;
@@ -24,25 +60,50 @@ export interface ProviderAdapter {
   }): string | undefined;
 
   /**
-   * Patch the system prompt for model-specific needs.
-   * Called once when building the system prompt.
-   * Return the modified prompt, or undefined to use as-is.
+   * Generate recovery guidance when a tool call fails or returns an error.
+   * Called after a failed tool execution. Return undefined to skip.
    */
-  systemPromptPatch?(basePrompt: string, tier: string): string | undefined;
+  errorRecovery?(context: {
+    toolName: string;
+    errorContent: string;
+    missingTools: readonly string[];
+    tier: string;
+  }): string | undefined;
+
+  /**
+   * Generate a synthesis prompt injected when the model has gathered enough data
+   * and needs to transition to producing the output.
+   * Called when all research tools are satisfied and only output tools remain.
+   * Return undefined to skip.
+   */
+  synthesisPrompt?(context: {
+    toolsUsed: ReadonlySet<string>;
+    missingOutputTools: readonly string[];
+    observationCount: number;
+    tier: string;
+  }): string | undefined;
+
+  /**
+   * Generate a self-evaluation prompt injected just before the model declares
+   * a final answer. Return undefined to skip the quality check.
+   */
+  qualityCheck?(context: {
+    task: string;
+    requiredTools: readonly string[];
+    toolsUsed: ReadonlySet<string>;
+    tier: string;
+  }): string | undefined;
 }
 
-/** Default adapter — provides structured decision framework for all models.
- *  Even frontier models benefit from clear "do X or give final answer" instructions
- *  after tool execution — it's the same ReAct pattern that worked in text-based mode. */
+// ─── Default adapter (all tiers) ─────────────────────────────────────────────
+
 export const defaultAdapter: ProviderAdapter = {
   continuationHint({ missingTools, toolsUsed, iteration, maxIterations }) {
     if (missingTools.length === 0) {
-      // All required tools called — tell model to synthesize and finish
       return toolsUsed.size > 0
         ? "You have completed all required tool calls. Now synthesize the results and provide your FINAL ANSWER."
         : undefined;
     }
-    // Required tools still missing — structured binary choice
     const toolList = missingTools.join(", ");
     const urgency = iteration >= maxIterations - 3
       ? ` You have ${maxIterations - iteration} iterations left.`
@@ -51,76 +112,125 @@ export const defaultAdapter: ProviderAdapter = {
   },
 };
 
-/** Adapter for local/small models that need explicit step-by-step guidance */
+// ─── Local model adapter ──────────────────────────────────────────────────────
+
 export const localModelAdapter: ProviderAdapter = {
+  systemPromptPatch(basePrompt, tier) {
+    if (tier !== "local") return undefined;
+    return (
+      basePrompt +
+      "\n\nIMPORTANT: When given a multi-step task, complete ALL steps in sequence. " +
+      "After gathering information, immediately proceed to the next step. " +
+      "Never stop after only searching — always produce the deliverable."
+    );
+  },
+
+  taskFraming({ task, requiredTools, tier }) {
+    if (tier !== "local" || requiredTools.length === 0) return undefined;
+    const steps = requiredTools.map((t, i) => `${i + 1}. Call ${t}`).join("\n");
+    return `${task}\n\nComplete these steps in order:\n${steps}\nDo not stop until all steps are done.`;
+  },
+
+  toolGuidance({ requiredTools, tier }) {
+    if (tier !== "local" || requiredTools.length === 0) return undefined;
+    return (
+      `\nRequired tools for this task: ${requiredTools.join(", ")}. ` +
+      `You MUST call all of them before giving a final answer.`
+    );
+  },
+
   continuationHint({ toolsUsed, missingTools, iteration, maxIterations, lastToolName }) {
     if (missingTools.length === 0) return undefined;
 
-    const urgency =
-      iteration >= maxIterations - 2
-        ? " This is urgent — you are running low on iterations."
-        : "";
+    const urgency = iteration >= maxIterations - 2
+      ? " This is urgent — you are running low on iterations."
+      : "";
 
-    // If model just searched, tell it to synthesize and write
-    if (
-      lastToolName &&
-      (lastToolName.includes("search") || lastToolName.includes("http"))
-    ) {
-      const writeTools = missingTools.filter(
-        (t) => t.includes("write") || t.includes("file"),
-      );
+    // After a search, tell the model to write
+    if (lastToolName && (lastToolName.includes("search") || lastToolName.includes("http"))) {
+      const writeTools = missingTools.filter((t) => t.includes("write") || t.includes("file"));
       if (writeTools.length > 0) {
-        return `You have gathered research data. Now synthesize the findings and call ${writeTools[0]} to save the output.${urgency} Do NOT search again.`;
+        return `You have gathered research data. Synthesize the findings and call ${writeTools[0]} to save the output.${urgency} Do NOT search again.`;
       }
     }
 
-    // If model has one missing tool, give explicit next step
     if (missingTools.length === 1) {
-      return `Your next step: call ${missingTools[0]}. You have all the information you need from previous tool calls.${urgency}`;
+      return `Your next step: call ${missingTools[0]}. You have all the information you need.${urgency}`;
     }
 
-    // Multiple missing tools — list them in order
-    return `You still need to complete these steps in order: ${missingTools.join(", ")}.${urgency} Proceed with the first one now.`;
+    return `Complete these steps in order: ${missingTools.join(" → ")}.${urgency} Proceed with the first one now.`;
   },
 
-  systemPromptPatch(basePrompt, tier) {
+  errorRecovery({ toolName, errorContent, missingTools, tier }) {
     if (tier !== "local") return undefined;
-    // Local models benefit from explicit instruction about multi-step task completion
+    const isNotFound = errorContent.includes("404") || errorContent.includes("Not Found");
+    const isTimeout = errorContent.toLowerCase().includes("timeout");
+
+    if (isNotFound) {
+      return `${toolName} returned 404 — that URL doesn't exist. Try a different URL or use web-search to find the correct one.${missingTools.length > 0 ? ` You still need to call: ${missingTools.join(", ")}.` : ""}`;
+    }
+    if (isTimeout) {
+      return `${toolName} timed out. Try again with a simpler request, or skip this step and proceed with what you have.`;
+    }
+    return `${toolName} failed. Try an alternative approach or use a different tool to get the information you need.`;
+  },
+
+  synthesisPrompt({ missingOutputTools, observationCount, tier }) {
+    if (tier !== "local" || missingOutputTools.length === 0) return undefined;
     return (
-      basePrompt +
-      "\n\nIMPORTANT: When given a multi-step task, complete ALL steps. After gathering information, always proceed to the next step (such as writing results to a file). Never stop after only searching."
+      `You have gathered ${observationCount} piece${observationCount !== 1 ? "s" : ""} of information. ` +
+      `That is enough. Do NOT search again. ` +
+      `Now call ${missingOutputTools[0]} to produce the final output. ` +
+      `Synthesize everything you have learned into a complete, well-structured response.`
     );
+  },
+
+  qualityCheck({ task, requiredTools, toolsUsed, tier }) {
+    if (tier !== "local") return undefined;
+    const unmet = requiredTools.filter((t) => !toolsUsed.has(t));
+    if (unmet.length > 0) {
+      return `Before finishing: you have not yet called ${unmet.join(", ")}. Call ${unmet[0]} now.`;
+    }
+    // Quick coherence check for local models that sometimes give empty/truncated answers
+    return `Review your answer: does it fully address the task "${task.slice(0, 120)}"? If yes, give it. If not, complete the missing parts first.`;
   },
 };
 
-/**
- * Select the appropriate adapter based on provider capabilities and model tier.
- */
+// ─── Mid-tier adapter ─────────────────────────────────────────────────────────
+// Mid models (7-30B) need lighter guidance than local but more than frontier.
+
+export const midModelAdapter: ProviderAdapter = {
+  continuationHint({ missingTools, toolsUsed, iteration, maxIterations }) {
+    if (missingTools.length === 0) {
+      return toolsUsed.size > 0
+        ? "All required tools called. Synthesize and give your final answer."
+        : undefined;
+    }
+    const urgency = iteration >= maxIterations - 2 ? ` (${maxIterations - iteration} steps left)` : "";
+    return `Still needed: ${missingTools.join(", ")}. Call the next one now.${urgency}`;
+  },
+
+  synthesisPrompt({ missingOutputTools, tier }) {
+    if (tier !== "mid" || missingOutputTools.length === 0) return undefined;
+    return `Research complete. Now call ${missingOutputTools[0]} to produce the output.`;
+  },
+};
+
+// ─── Adapter selection ────────────────────────────────────────────────────────
+
 export function selectAdapter(
   _capabilities: { supportsToolCalling: boolean },
   tier?: string,
 ): ProviderAdapter {
-  // Local tier always gets the local adapter for guidance
   if (tier === "local") return localModelAdapter;
-  // All other tiers use the default (no intervention)
+  if (tier === "mid") return midModelAdapter;
   return defaultAdapter;
 }
 
-/**
- * Recommend a strategy override based on model tier and task characteristics.
- * Local models perform significantly better with plan-execute-reflect on
- * multi-step tasks because it provides explicit step structure.
- * Returns undefined if no override is recommended (use configured strategy).
- */
 export function recommendStrategyForTier(
   _tier: string | undefined,
   _configuredStrategy: string,
   _requiredTools?: readonly string[],
 ): string | undefined {
-  // Strategy routing disabled — reactive strategy now handles multi-step
-  // tool tasks via progress summary messages in the FC conversation thread.
-  // The adapter's continuationHint + progress messages give reactive enough
-  // scaffolding for local/mid models without routing to plan-execute.
-  // Keep this function for future use if needed.
   return undefined;
 }
