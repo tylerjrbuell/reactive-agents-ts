@@ -1,4 +1,4 @@
-# @reactive-agents/tools
+# @reactive-agents/vue
 
 ## 0.9.0
 
@@ -172,32 +172,3 @@
     -   Global default iterations: 30 → 15 for strategy tasks
     -   Fixed 3 Sonnet failures: `c1`/`c4` plan-execute → react to fix 300s timeouts; `c6` regex handles comma-formatted numbers
     -   Provider-aware time multipliers; Gemini model updated to `gemini-2.5-flash`
-
-### Patch Changes
-
--   Updated dependencies
-    -   @reactive-agents/core@0.9.0
-    -   @reactive-agents/a2a@0.9.0
-
-## 0.8.0
-
-### Patch Changes
-
--   Updated dependencies [93eac55]
-    -   @reactive-agents/core@0.8.0
-    -   @reactive-agents/a2a@0.8.0
-
-## 0.7.8
-
-### Patch Changes
-
--   Updated dependencies
-    -   @reactive-agents/core@0.7.8
-    -   @reactive-agents/a2a@0.7.8
-
-## 0.7.7
-
-### Patch Changes
-
--   @reactive-agents/core@0.7.7
--   @reactive-agents/a2a@0.7.7
