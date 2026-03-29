@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { localModelAdapter, defaultAdapter, selectAdapter } from "../src/adapter.js";
+import { localModelAdapter, midModelAdapter, defaultAdapter, selectAdapter } from "../src/adapter.js";
 
 describe("ProviderAdapter", () => {
   describe("selectAdapter", () => {
@@ -13,9 +13,9 @@ describe("ProviderAdapter", () => {
       expect(adapter).toBe(defaultAdapter);
     });
 
-    it("returns defaultAdapter for mid tier", () => {
+    it("returns midModelAdapter for mid tier", () => {
       const adapter = selectAdapter({ supportsToolCalling: true }, "mid");
-      expect(adapter).toBe(defaultAdapter);
+      expect(adapter).toBe(midModelAdapter);
     });
 
     it("returns defaultAdapter when tier is undefined", () => {
@@ -36,7 +36,7 @@ describe("ProviderAdapter", () => {
         lastToolResultPreview: "Search results...",
       });
       expect(hint).toContain("file-write");
-      expect(hint).toContain("synthesize");
+      expect(hint?.toLowerCase()).toContain("synthesize");
       expect(hint).toContain("Do NOT search again");
     });
 
@@ -51,7 +51,7 @@ describe("ProviderAdapter", () => {
         lastToolResultPreview: "HTTP response...",
       });
       expect(hint).toContain("file-write");
-      expect(hint).toContain("synthesize");
+      expect(hint?.toLowerCase()).toContain("synthesize");
     });
 
     it("returns undefined when no missing tools", () => {

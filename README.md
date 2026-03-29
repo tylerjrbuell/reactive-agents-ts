@@ -6,7 +6,7 @@
 
 **The open-source agent framework built for control, not magic.**
 
-Every decision controllable, observable, and auditable. 22 packages. composable layers. 5 reasoning strategies. 6 LLM providers. Model-adaptive context profiles. Intelligent Context Synthesis (ICS) between kernel iterations. 10-phase execution engine with lifecycle hooks. 3,026 tests across 349 files. Built on Effect-TS for type safety from prompt to production.
+Every decision controllable, observable, and auditable. 25 packages. Composable layers. 5 reasoning strategies. 6 LLM providers. Model-adaptive context profiles. Intelligent Context Synthesis (ICS) between kernel iterations. 10-phase execution engine with lifecycle hooks. React, Vue & Svelte hooks included. 3,032 tests across 349 files. Built on Effect-TS for type safety from prompt to production.
 
 [![CI](https://github.com/tylerjrbuell/reactive-agents-ts/actions/workflows/ci.yml/badge.svg)](https://github.com/tylerjrbuell/reactive-agents-ts/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/badge/npm-%40reactive--agents-CB3837?logo=npm)](https://www.npmjs.com/org/reactive-agents)
@@ -64,7 +64,8 @@ Most AI agent frameworks are dynamically typed, monolithic, and opaque. They ass
 - **Agent as Data** -- `AgentConfig` JSON-serializable schema, `builder.toConfig()` reverse mapping, `ReactiveAgents.fromConfig()` / `.fromJSON()` reconstruction, roundtrip serialization
 - **Lightweight composition** -- `agentFn()` lazy agent primitives, `pipe()` sequential chains, `parallel()` concurrent fan-out, `race()` first-to-complete — all composable
 - **Dynamic tool registration** -- `agent.registerTool()` / `agent.unregisterTool()` for runtime tool management on live agents
-- **3,026 tests** across 349 files
+- **Web framework integration** — `@reactive-agents/react` (`useAgentStream`, `useAgent`), `@reactive-agents/vue` composables, `@reactive-agents/svelte` stores — consume `AgentStream.toSSE()` from Next.js, SvelteKit, Nuxt, or any SSE-capable server
+- **3,032 tests** across 349 files
 
 ## Quick Start
 
@@ -251,6 +252,9 @@ controller.abort();
 Intercept any of the 10 execution phases with before, after, or error hooks:
 
 ```typescript
+import { Effect } from "effect";
+import { ReactiveAgents } from "reactive-agents";
+
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withReasoning()
@@ -267,8 +271,8 @@ const agent = await ReactiveAgents.create()
     phase: "act",
     timing: "after",
     handler: (ctx) => {
-      const lastTool = ctx.scratchpad.get("_last_tool_name");
-      if (lastTool) console.log(`Tool called: ${lastTool}`);
+      const last = ctx.toolResults.at(-1) as { toolName?: string } | undefined;
+      if (last?.toolName) console.log(`Tool called: ${last.toolName}`);
       return Effect.succeed(ctx);
     },
   })
@@ -450,6 +454,9 @@ const agent = await ReactiveAgents.create()
 | [`@reactive-agents/benchmarks`](packages/benchmarks)       | Benchmark suite: 20 tasks x 5 tiers, overhead measurement, report generation    |
 | [`@reactive-agents/health`](packages/health)               | Health checks and readiness probes for production deployments                    |
 | [`@reactive-agents/reactive-intelligence`](packages/reactive-intelligence) | Metacognitive layer: entropy sensor (5 sources), reactive controller (early-stop, compression, strategy switch), learning engine (calibration, bandit, skill synthesis), telemetry client |
+| [`@reactive-agents/react`](packages/react)                                 | React 18+ hooks: `useAgentStream` (token streaming), `useAgent` (one-shot) — consume `AgentStream.toSSE()` endpoints |
+| [`@reactive-agents/vue`](packages/vue)                                     | Vue 3 composables: `useAgentStream`, `useAgent` with reactive refs |
+| [`@reactive-agents/svelte`](packages/svelte)                               | Svelte 4/5 stores: `createAgentStream`, `createAgent` writable stores |
 
 ## Observability & Metrics Dashboard
 
@@ -497,7 +504,7 @@ rax run "Explain quantum computing" --provider anthropic  # Run an agent
 
 ## Register Custom Tools
 
-Tools are registered at build time or via `ToolService.register()`. Built-in tools (web search, file I/O, HTTP, code execution, scratchpad, spawn-agent) are available automatically when the relevant builder methods are enabled.
+Tools are registered at build time, via `agent.registerTool()` after `build()`, or through MCP. Built-in task tools include web search, file I/O, HTTP, and code execution; dynamic sub-agents add `spawn-agent`. With `.withTools()`, the Conductor's Suite also injects **`recall`**, **`find`**, **`brief`**, and **`pulse`** (override with `.withMetaTools(false)`).
 
 Use the `ToolBuilder` fluent API to define tools without raw schema objects:
 
@@ -639,7 +646,7 @@ Reactive Agents supports 6 providers: Anthropic, OpenAI, Google Gemini, Ollama (
 
 ### Is this framework production-ready?
 
-Yes -- it includes guardrails, budget controls, auditability, observability, Ed25519 identity, and composable service layers for testable deployments. 3,026 tests across 349 files.
+Yes -- it includes guardrails, budget controls, auditability, observability, Ed25519 identity, and composable service layers for testable deployments. 3,032 tests across 349 files.
 
 ### Can I run fully local agents?
 
@@ -653,8 +660,8 @@ See the [comparison table](#comparison). The key differences are: full Effect-TS
 
 ```bash
 bun install              # Install dependencies
-bun test                 # Run full test suite (3,026 tests, 349 files)
-bun run build            # Build all packages (22 packages, ESM + DTS)
+bun test                 # Run full test suite (3,032 tests, 349 files)
+bun run build            # Build all packages (25 packages, ESM + DTS)
 ```
 
 ## Environment Variables

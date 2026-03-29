@@ -27,8 +27,9 @@ describe("Project Generator", () => {
 
     const pkg = JSON.parse(readFileSync(join(TEST_DIR, "package.json"), "utf-8"));
     expect(pkg.name).toBe("test-project");
-    expect(pkg.dependencies["@reactive-agents/core"]).toBe("latest");
-    expect(pkg.dependencies["@reactive-agents/memory"]).toBeUndefined();
+    // All templates now use the unified "reactive-agents" package
+    expect(pkg.dependencies["reactive-agents"]).toBe("latest");
+    expect(pkg.dependencies["@reactive-agents/core"]).toBeUndefined();
   });
 
   it("should generate a standard project with more deps", () => {
@@ -39,15 +40,14 @@ describe("Project Generator", () => {
     });
 
     const pkg = JSON.parse(readFileSync(join(TEST_DIR, "package.json"), "utf-8"));
-    expect(pkg.dependencies["@reactive-agents/memory"]).toBe("latest");
-    expect(pkg.dependencies["@reactive-agents/reasoning"]).toBe("latest");
-    expect(pkg.dependencies["@reactive-agents/tools"]).toBe("latest");
+    // Unified package — no granular deps
+    expect(pkg.dependencies["reactive-agents"]).toBe("latest");
+    expect(pkg.dependencies["@reactive-agents/memory"]).toBeUndefined();
 
-    const agentCode = readFileSync(join(TEST_DIR, "src", "agents", "my-agent.ts"), "utf-8");
-    expect(agentCode).toContain(".withMemory()");
-    expect(agentCode).toContain(".withReasoning()");
-    expect(agentCode).not.toContain('withMemory("1")');
-    expect(agentCode).not.toContain('withReasoning("reactive")');
+    const entryCode = readFileSync(join(TEST_DIR, "src", "index.ts"), "utf-8");
+    expect(entryCode).toContain(".withReasoning(");
+    expect(entryCode).toContain(".withTools(");
+    expect(entryCode).toContain("reactive-agents");
   });
 
   it("should generate a full project with all deps", () => {
@@ -58,15 +58,12 @@ describe("Project Generator", () => {
     });
 
     const pkg = JSON.parse(readFileSync(join(TEST_DIR, "package.json"), "utf-8"));
-    expect(pkg.dependencies["@reactive-agents/orchestration"]).toBe("latest");
-    expect(pkg.dependencies["@reactive-agents/guardrails"]).toBe("latest");
-    expect(pkg.dependencies["@reactive-agents/prompts"]).toBe("latest");
+    expect(pkg.dependencies["reactive-agents"]).toBe("latest");
+    expect(pkg.dependencies["@reactive-agents/orchestration"]).toBeUndefined();
 
-    const agentCode = readFileSync(join(TEST_DIR, "src", "agents", "my-agent.ts"), "utf-8");
-    expect(agentCode).toContain(".withVerification()");
-    expect(agentCode).toContain(".withGuardrails()");
-    expect(agentCode).not.toContain("withVerification(true)");
-    expect(agentCode).not.toContain("withGuardrails(true)");
+    const entryCode = readFileSync(join(TEST_DIR, "src", "index.ts"), "utf-8");
+    expect(entryCode).toContain(".withGuardrails()");
+    expect(entryCode).toContain(".withHealthCheck()");
   });
 });
 

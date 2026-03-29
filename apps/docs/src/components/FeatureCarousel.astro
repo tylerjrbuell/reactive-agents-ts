@@ -109,7 +109,7 @@ const codes: Record<string, string> = {
           <button class="fc-tab" data-tab="2" role="tab" aria-selected="false">Observability</button>
           <button class="fc-tab" data-tab="3" role="tab" aria-selected="false">Safety</button>
           <button class="fc-tab" data-tab="4" role="tab" aria-selected="false">Production</button>
-          <button class="fc-tab" data-tab="5" role="tab" aria-selected="false">Dev Experience</button>
+          <button class="fc-tab" data-tab="5" role="tab" aria-selected="false">Web & DX</button>
         </nav>
       </div>
 
@@ -144,6 +144,10 @@ const codes: Record<string, string> = {
               <div class="fc-item">
                 <span class="fc-icon">💾</span>
                 <div><p class="fc-name">4-Tier Memory</p><p class="fc-desc">Working, Semantic, Episodic, Procedural — all composable layers</p></div>
+              </div>
+              <div class="fc-item">
+                <span class="fc-icon">🌐</span>
+                <div><p class="fc-name">Web Framework Hooks</p><p class="fc-desc">React, Vue &amp; Svelte — useAgentStream, useAgent, createAgentStream out of the box</p></div>
               </div>
               <div class="fc-item">
                 <span class="fc-icon">🔒</span>
@@ -301,33 +305,33 @@ const codes: Record<string, string> = {
           </div>
         </div>
 
-        <!-- Panel 5: Dev Experience -->
+        <!-- Panel 5: Web & DX -->
         <div class="fc-panel" data-panel="5" role="tabpanel">
           <div class="fc-body">
             <div class="fc-grid">
               <div class="fc-item">
+                <span class="fc-icon">⚛️</span>
+                <div><p class="fc-name">React Hooks</p><p class="fc-desc"><code>useAgentStream</code> + <code>useAgent</code> — token streaming and one-shot calls from any React component</p></div>
+              </div>
+              <div class="fc-item">
+                <span class="fc-icon">💚</span>
+                <div><p class="fc-name">Vue Composables</p><p class="fc-desc"><code>useAgentStream</code> + <code>useAgent</code> with reactive refs — drop into any Vue 3 component</p></div>
+              </div>
+              <div class="fc-item">
+                <span class="fc-icon">🧡</span>
+                <div><p class="fc-name">Svelte Stores</p><p class="fc-desc"><code>createAgentStream</code> writable store — reactive <code>$agent.text</code>, <code>$agent.status</code> out of the box</p></div>
+              </div>
+              <div class="fc-item">
+                <span class="fc-icon">🌊</span>
+                <div><p class="fc-name">One-Line SSE Endpoint</p><p class="fc-desc"><code>AgentStream.toSSE()</code> returns a standard Response — works with Next.js App Router, SvelteKit, Nuxt, Bun</p></div>
+              </div>
+              <div class="fc-item">
                 <span class="fc-icon">⚡</span>
-                <div><p class="fc-name">60 Seconds to First Agent</p><p class="fc-desc">One install, three lines — then layer in capabilities as you need them</p></div>
+                <div><p class="fc-name">60s to First Agent</p><p class="fc-desc">One install, three lines, full observability dashboard — then layer in capabilities as you need them</p></div>
               </div>
               <div class="fc-item">
                 <span class="fc-icon">🛠️</span>
-                <div><p class="fc-name">rax CLI</p><p class="fc-desc">Scaffold, run, inspect, eval, benchmark — full workflow from terminal</p></div>
-              </div>
-              <div class="fc-item">
-                <span class="fc-icon">📦</span>
-                <div><p class="fc-name">22 Modular Packages</p><p class="fc-desc">Install only what you need — no bloat, no hidden coupling between layers</p></div>
-              </div>
-              <div class="fc-item">
-                <span class="fc-icon">🧪</span>
-                <div><p class="fc-name">2,190+ Tests</p><p class="fc-desc">288 test files across all packages — battle-tested, production-ready</p></div>
-              </div>
-              <div class="fc-item">
-                <span class="fc-icon">🤖</span>
-                <div><p class="fc-name">Local Model Support</p><p class="fc-desc">Ollama, LM Studio, any OpenAI-compatible endpoint — zero cloud required</p></div>
-              </div>
-              <div class="fc-item">
-                <span class="fc-icon">🔌</span>
-                <div><p class="fc-name">MCP Client Built-in</p><p class="fc-desc">Use any Model Context Protocol server as a native tool source</p></div>
+                <div><p class="fc-name">rax CLI + 3,032 Tests</p><p class="fc-desc">Scaffold, run, inspect — 25 modular packages, battle-tested across 349 test files</p></div>
               </div>
             </div>
             <div class="fc-code-box fc-code-box--mono">
@@ -781,10 +785,17 @@ const codes: Record<string, string> = {
       });
     });
 
-    win.addEventListener('mouseenter', function () { paused = true; });
-    win.addEventListener('mouseleave', function () { paused = false; });
-    win.addEventListener('focusin',    function () { paused = true; });
-    win.addEventListener('focusout',   function () { paused = false; });
+    function setPaused(val) {
+      paused = val;
+      if (pfill) {
+        pfill.style.animationPlayState = val ? 'paused' : 'running';
+      }
+    }
+
+    win.addEventListener('mouseenter', function () { setPaused(true); });
+    win.addEventListener('mouseleave', function () { setPaused(false); });
+    win.addEventListener('focusin',    function () { setPaused(true); });
+    win.addEventListener('focusout',   function () { setPaused(false); });
 
     restartProgress();
     startAutoAdvance();

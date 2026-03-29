@@ -6,6 +6,83 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 
 ---
 
+## [0.8.5] — 2026-03-28
+
+### Added
+
+#### Native FC Gate Hardening
+- **Relevant-tools pass-through** — tools classified as relevant by the LLM classifier are now allowed through the required-tools gate while output tools are still pending; prevents blocking supplementary research
+- **Satisfied-required re-calls** — required tools that have been called once (satisfying minimum obligation) can be re-called for additional research
+- **Per-tool call budget** — `maxCallsPerTool` in `KernelInput` caps how many times each tool may be called per run; execution engine auto-sets budget of 3 for search-type tools from classification results
+- **`relevantTools`** threaded from execution engine → `StrategyFn` → `KernelInput` → gate
+
+#### Dynamic Stopping (3-layer)
+- **Layer 1 — Novelty signal** — Jaccard word-token overlap scores each new observation vs accumulated context; if last observation is <20% novel, inject "research is sufficient, call file-write now" nudge replacing generic continuation message
+- **Layer 2 — Task phase implicit** — budget exhaustion naturally enforces gather→produce phase transition without an extra LLM call
+- **Layer 3 — Per-tool budget** — search tools auto-capped at 3 calls when classification ran; configurable via `KernelInput.maxCallsPerTool`
+- **`computeNoveltyRatio()`** exported from `tool-utils` — pure word-token Jaccard similarity, no LLM required
+
+#### Text Tool Call Fallback (`NativeFCStrategy`)
+- Parse JSON tool calls embedded in model text output (fenced ` ```json ``` ` blocks or bare JSON)
+- Validates tool name against available tools; normalizes underscore→hyphen
+- Supports `name/arguments`, `tool/parameters`, `tool_name/args`, and `name/input` schemas
+- Native `toolCalls` always take priority; text fallback fires only when no native calls present
+
+#### Provider Adapter Hooks — Complete (7/7)
+- **`taskFraming`** — wrap initial task message with explicit step sequence (local tier); fires once on iteration 0
+- **`toolGuidance`** — append inline required-tool reminder after schema block in system prompt (local tier)
+- **`errorRecovery`** — inject targeted recovery guidance after 404/timeout/failed tool calls with content-aware messaging
+- **`synthesisPrompt`** — fires on research→produce transition when all search tools are satisfied and only output tools remain; replaces generic progress message
+- **`qualityCheck`** — lightweight self-evaluation injected once before final answer on local models; gated by `qualityCheckDone` meta flag
+- **`midModelAdapter`** — new mid-tier adapter with lighter `continuationHint` + `synthesisPrompt` (no taskFraming/qualityCheck overhead)
+- `selectAdapter()` now returns `midModelAdapter` for `tier: "mid"`
+
+#### Full Prompt Observability
+- `logModelIO: true` now logs the **complete FC conversation thread** with role labels (`[USER]`, `[ASSISTANT]`, `[TOOL]`) growing across iterations
+- Raw LLM response logged before any parsing (`rawResponse` field on `ReasoningStepCompleted` event)
+- `messages[]` field added to `ReasoningStepCompleted` event in EventBus
+- Log label changed from `[prompt:pass]` → `[model-io:pass]` for clarity
+- No more 500/2000 char truncation — full content shown in debug mode
+
+#### Adaptive Strategy Sub-Strategy Reporting
+- `agentResult.metadata.strategyUsed` now shows the actual sub-strategy selected (e.g. `"reactive"`) instead of `"adaptive"`
+- `[think]` summary log now shows `(adaptive→reactive)` suffix at INFO level when adaptive selected a sub-strategy
+- `result.strategy` remains `"adaptive"` for API compatibility; `result.metadata.selectedStrategy` carries the actual sub-strategy
+
+#### Actionable Failure Messages
+- Loop detection: explains cause + `Fix:` suggestions with specific builder options (strategy, persona, tool descriptions)
+- Required tools: explains which tools were never called + `Fix:` persona instruction examples + retry config option
+- Stall detection (consecutive thinking): explains no-tool-action pattern + tier context profile suggestion
+
+#### Web Framework Integration
+- **`@reactive-agents/react`** — `useAgentStream(endpoint)` (token streaming, status, cancel) + `useAgent(endpoint)` (one-shot); React 18+ compatible
+- **`@reactive-agents/vue`** — `useAgentStream` composable + `useAgent` composable with Vue 3 reactive refs (`readonly` wrapped)
+- **`@reactive-agents/svelte`** — `createAgentStream(endpoint)` Svelte writable store + `createAgent` store; Svelte 4/5 compatible
+- All three consume `AgentStream.toSSE()` server-side endpoints via fetch streaming; compatible with Next.js App Router, SvelteKit, Nuxt, Bun.serve
+
+#### CLI (`rax`) Fixes
+- `rax init` now scaffolds projects using the unified `reactive-agents` package (not 14 granular `@reactive-agents/*` packages)
+- Generated `src/index.ts` imports from `"reactive-agents"` matching README quick start
+- Generated entry point shows `result.output` with timing/token metadata in console
+- All CLI command imports updated from `@reactive-agents/runtime` → `reactive-agents`
+- `.gitignore` now included in generated projects
+- `bun:sqlite` and `reactive-agents` added to CLI tsup externals
+
+### Fixed
+- Gate no longer blocks `http-get` (relevant) after `web-search` (required, satisfied) — relevant tools pass through regardless of pending required tools
+- `adapter` was undefined in `handleActing` — now computed from `selectAdapter` at the top of the function
+- `qualityCheck` hook properly gated by `qualityCheckDone` meta flag to prevent infinite self-eval loops
+- `ReasoningStepCompleted.messages` type correctly typed on EventBus event union
+
+### Changed
+- `ProviderAdapter` interface expanded from 2 to 7 hooks
+- `gateNativeToolCallsForRequiredTools` signature adds `toolCallCounts` and `maxCallsPerTool` optional params
+- `KernelInput` adds `relevantTools`, `maxCallsPerTool` fields
+- `ReactiveInput`, `AdaptiveInput`, `StrategyFn` all carry `relevantTools` and `maxCallsPerTool`
+- Packages: 22 → 25 (added `@reactive-agents/react`, `@reactive-agents/vue`, `@reactive-agents/svelte`)
+
+---
+
 ## [Unreleased]
 
 ### Added
@@ -29,6 +106,42 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 - **`agent.registerTool()`** — Register new tools on a running agent instance at runtime
 - **`agent.unregisterTool()`** — Remove non-builtin tools from a running agent
 - **`ToolService.unregisterTool()`** — Atomic tool removal in the tool registry (protects builtin tools)
+
+#### Living Intelligence System (skills)
+- **`SkillRecord` types**, **`SkillStoreService`** (SQLite CRUD), **`SkillEvolutionService`** (LLM refinement + versions), **`SkillRegistry`** / **`SkillResolverService`**, **`SkillDistillerService`** and CONNECT-phase wiring in **`MemoryConsolidator`**
+- **`.withSkills()`** on the builder; runtime **`agent.skills()`**, **`exportSkill()`**, **`loadSkill()`**, **`refineSkills()`**
+- **`activate_skill`** and **`get_skill_section`** meta-tools; 5-stage skill compression, injection guard + controller evaluators expanded to 10 decision types; telemetry **`RunReport`** enrichment
+
+#### Conductor's Suite (meta-tools)
+- **`brief`**, **`find`**, **`pulse`**, **`recall`** meta-tools; **`.withMetaTools()`** (pass `false` to disable); harness skill resolution by model tier; meta-tools default **on** when **`.withTools()`** is enabled unless explicitly turned off
+
+#### V1.0 harness — native function calling
+- **`ProviderCapabilities`** per LLM adapter; **`ToolCallResolver`** + **`NativeFCStrategy`**; **`KernelMessage`** provider-agnostic thread; kernel FC path with **`ToolCallResolver`** integration; removal of legacy **`ACTION:`** text tool-call parsing from the kernel and strategies
+- **Streaming fixes** (Anthropic tool ordering, Gemini `stream()` tools / `functionCalls` chunks, Ollama tool events)
+- **Multi-turn FC**: conversation **`messages[]`**, sliding-window compaction, **`toProviderMessage`** / validation-repair layer; lean system prompt + task seeding in **`ExecutionEngine`**
+
+#### Intelligent Context Synthesis (ICS)
+- **`ContextSynthesizerService`**, task-phase classification, template vs deep LLM synthesis, **`ContextSynthesized`** EventBus event; per-strategy **`.withReasoning({ strategies: { … } })`** synthesis overrides
+
+#### Reasoning, execution & benchmarks
+- **Termination oracle** + signal evaluators; **entropy** grading and **Reactive Intelligence** default-on with telemetry opt-in; **provider-aware** benchmark time multipliers; **plan-execute** plan validation + smart tool-step injection; **local / mid-tier** strategy routing and **provider adapter** plumbing
+- **`createLightRuntime`** for sub-agents; **decision-preserving** context compaction; **`final-answer`** / completion-gap behavior aligned with FC metadata
+
+#### Cost & LLM provider
+- **`.withDynamicPricing()`** + remote pricing providers (e.g. OpenRouter); **OpenAI** `tool_calls` message conversion; **Anthropic** cache hints on tool definitions
+
+#### Tools & runtime quality
+- **`defineTool()`** / **`tool()`** helpers; **`.withDocuments()`** + **`agent.ingest()`**; **`agent.on()`** EventBus wiring from facade; sub-agent directive prompt + result passthrough fixes; **RAG** `DocumentSpec.content` optional (load from **`source`** path); case-insensitive **`rag-search`** source filter
+
+### Changed
+- **Memory builder API**: prefer **`.withMemory()`** and **`.withMemory({ tier: "enhanced" })`**; string **`"1"` / `"2"`** still accepted but deprecated with console warning
+- **`rax create agent --interactive`**: actual prompts are name, provider, recipe, and comma-separated features (recipe selects the template; edit generated file for provider/model overrides)
+- **`rax serve --with-memory`**: default tier is basic **`.withMemory()`**; pass **`enhanced`** or **`2`** for enhanced tier (not “tier 2 only” as the only mode)
+
+### Fixed (high level)
+- Gemini / Anthropic / Ollama FC and streaming edge cases; duplicate FC detection and **required-tools** guidance; compressed tool-result labeling for FC threads; entropy false “stalled” signals on short successful runs; memory-flush skipped when memory disabled; trivial-task fast paths where appropriate
+
+**Stats (development main vs tag `v0.8.0`):** on the order of **3,032 tests** across **349 files** (~200 commits). *Release tagging: confirm full suite green on the release revision.*
 
 ---
 

@@ -8,67 +8,48 @@
 ## Projects
 - [Project Dispatch](project_dispatch.md) — NL automation builder product, separate repo, Elysia + Svelte + SQLite
 - [Composable Strategy Architecture](project_composable_strategies.md) — V1.1: strategies as composable capabilities, not exclusive modes
-- [Composable Provider Adapters](project_composable_adapters.md) — V1.1: expand adapter from 2 to 7 lifecycle guidance hooks, entropy-driven
+- [Composable Provider Adapters](project_composable_adapters.md) — V1.1 DONE in v0.8.5: all 7 hooks implemented
 
 ## Current Status (Mar 28, 2026)
-- **v0.8.x → pre-V1.0** — 22 packages + 2 apps, 2994 tests across 345 files (2964 pass, 30 skip, 0 fail)
-- **186 commits unreleased since v0.8.0** — major architectural transformation complete but needs consolidation
-- **5 GitHub stars** — underground, opportunity to clean architecture before adoption scales
-- **Decision: NO rush release** — spend time on deep analysis and architectural cleanup first
+- **v0.8.5 releasing** — 25 packages + 2 apps, 3,032 tests across 349 files (3002 pass, 30 skip, 0 fail)
+- **Preparing for Show HN** — architecture solid, DX polished, local model reliability improved
+- **Decision: release 0.8.5 then Show HN** — benchmark suite + docs refresh are parallel tracks
 
-## What Shipped This Session (Mar 27, 2026)
+## What Shipped v0.8.5 (Mar 28, 2026)
 
-### V1.0 Harness Optimization (native FC migration)
-- Native function calling replaces text-based ACTION: parsing across all providers
-- ToolCallResolver + NativeFCStrategy in `@reactive-agents/tools`
-- ProviderCapabilities on all 6 providers + `supportsPromptCaching`
-- Anthropic stream() raw `streamEvent` fix (correct tool_use ordering)
-- Ollama stream() tool_use events + Gemini toolName bug fixed
-- Specs: `docs/superpowers/specs/2026-03-26-v1-harness-optimization-design.md`
+### Gate Hardening & Dynamic Stopping
+- Relevant tools pass through gate even when required tools pending
+- Satisfied required tools can be re-called for supplementary research  
+- Per-tool call budget auto-set to 3 for search tools from classification results
+- Novelty signal (Jaccard word-token overlap): <20% novel → inject synthesis nudge
+- `computeNoveltyRatio()` in tool-utils — pure math, no LLM call
 
-### Message-Thread Kernel
-- `state.messages[]` = primary LLM conversation interface (proper multi-turn FC)
-- `state.steps[]` = observability record (entropy, metrics, debrief) — UNCHANGED
-- Sliding window compaction in `packages/reasoning/src/context/message-window.ts`
-- Tier-adaptive windows: local=2, mid=3, large=5, frontier=8 turns
-- Lean static system prompt (200-400 tokens, down from 800-1,400)
-- Fixed double-context bug (history + thoughtPrompt = 2-3x waste)
-- Spec: `docs/superpowers/specs/2026-03-27-message-thread-kernel-design.md`
+### Text Tool Call Fallback (NativeFCStrategy)
+- Parse JSON tool calls from model text output (fenced or bare JSON)
+- Validates against available tools, normalizes underscore→hyphen
+- Supports 4+ JSON schemas; native toolCalls always take priority
 
-### Provider Adapter System (`packages/llm-provider/src/adapter.ts`)
-- `ProviderAdapter` interface with `continuationHint` + `systemPromptPatch` hooks
-- Default adapter: structured decision framework for ALL models ("You must still call: X. Call X now.")
-- Local adapter: stronger guidance + multi-step completion instructions + system prompt patch
-- `selectAdapter(capabilities, tier)` — picks adapter by tier
-- `recommendStrategyForTier()` — DISABLED (reactive handles all tiers natively now)
+### Provider Adapter Hooks — ALL 7 COMPLETE
+- taskFraming, toolGuidance, continuationHint, errorRecovery, synthesisPrompt, qualityCheck, systemPromptPatch
+- midModelAdapter: lighter guidance for 7-30B models
+- selectAdapter() returns midModelAdapter for tier="mid"
+- All hooks wired in react-kernel.ts at correct call sites
 
-### Reactive Strategy Fixed for All Models
-- Structured decision framework in FC conversation thread (mirrors text-based ReAct binary choice)
-- Progress summary after each tool execution: "You must still call: X"
-- Completion message when all required tools called: "All required tools called. Synthesize and give final answer."
-- Nudge observation injected on EVERY thinking iteration (not just empty responses)
-- Fast-path gated by `hasRequiredTools` — won't exit before tools are used
-- Loop detection fix: nudge observations reset consecutive-thought counter
-- FC compressed format: `[toolName result — compressed preview]` not `[STORED: _tool_result_N]`
+### Observability & DX
+- logModelIO: full FC conversation thread with role labels [USER]/[ASSISTANT]/[TOOL]
+- Raw response logged before parsing; messages[] on ReasoningStepCompleted event
+- strategyUsed shows actual sub-strategy (e.g. "reactive" not "adaptive")
+- [think] log shows "(adaptive→reactive)" suffix at INFO level
+- Actionable failure messages: loop detection + required tools + stall detection all include Fix: suggestions
 
-### Benchmark Fixes
-- `e5-file-execute`: task prompt rewritten (code-execute/tmp + file-write/cwd was impossible)
-- `m5-tool-search`: fast-path gated by required tools, now fires web-search first
-- `c6-multi-agent`: unresolved `{{from_step:sN}}` degrades gracefully not hard-fail
-- `plan-execute`: validates plan covers all required tools, injects missing steps with smart args
-  - File-write injection extracts path from task description via regex
-- Prompt caching: Anthropic cache_control, OpenAI automatic, Gemini automatic
+### CLI & Web Framework
+- rax init: uses unified "reactive-agents" package (not 14 granular packages)
+- @reactive-agents/react: useAgentStream + useAgent hooks
+- @reactive-agents/vue: useAgentStream + useAgent composables  
+- @reactive-agents/svelte: createAgentStream + createAgent stores
+- All consume AgentStream.toSSE() endpoints; compatible with Next.js, SvelteKit, Nuxt
 
-### V1.0 FC Unification (Mar 28, 2026) — COMPLETE
-Text-based ACTION: parsing path fully removed. Single FC-only execution path throughout.
-- Tasks 1-6 completed across react-kernel.ts, tool-utils.ts, context-engine.ts, kernel-runner.ts, testing.ts, all interfaces
-- Dead code also removed from tool-execution.ts: `executeToolGroup` + `ToolRequestGroup` import
-- LOC reduction: react-kernel 1961→1430, tool-utils 714→537, context-engine 690→462, kernel-runner 564→515
-- Build: zero TS errors across all 22 packages
-- Tests: 2994 total, 2964 pass, 30 skip, 0 fail
-- All tests exercise real native FC path — no legacy text-based test mocks remain
-
-## Architecture (Post Mar 27 Refactor) — CRITICAL PATTERNS
+## Architecture (v0.8.5) — CRITICAL PATTERNS
 
 ### Two Independent Records
 ```
@@ -76,55 +57,56 @@ state.messages[]  ← What LLM sees (proper multi-turn FC conversation thread)
 state.steps[]     ← What systems observe (entropy, metrics, debrief) — unchanged
 ```
 
-### FC Conversation Thread Flow
-1. Execution engine seeds `state.messages` with `[{role:"user", content: task}]`
-2. `handleThinking` reads messages → `applyMessageWindow` → provider LLM call
-3. `handleActing` appends: `assistant(thought+toolCalls)` + `tool_result(s)` + progress/completion message
-4. Text-based path fully removed — single FC-only path throughout (V1.0 FC Unification complete)
+### Gate Logic (in priority order)
+1. Pre-filter calls exceeding maxCallsPerTool budget
+2. Required tools missing → allow only first missing required tool
+3. Relevant tools OR satisfied required tools → allow through
+4. Otherwise → blockedOptionalBatch: true (redirect message injected)
 
-### Provider Adapter Hook Points
-- V1.0: `continuationHint` (post-tool guidance), `systemPromptPatch` (system prompt)
-- V1.1: taskFraming, toolGuidance, errorRecovery, synthesisPrompt, qualityCheck
+### Provider Adapter Hook Points (all 7)
+- systemPromptPatch: at system prompt build time
+- toolGuidance: appended after schema block in system prompt
+- taskFraming: first iteration user message (iteration === 0)
+- continuationHint: after each tool round in nudge message
+- errorRecovery: appended to failed tool observation content
+- synthesisPrompt: replaces progress message on research→produce transition
+- qualityCheck: injected before final answer (gated by qualityCheckDone meta flag)
 
 ### Benchmark Results (Anthropic Sonnet 4)
-- **35/35 (100%)** consistently
+- 35/35 (100%) consistently
 - 897 avg tok/task (-15%), 42% fewer tokens on simple tasks
 - Zero iteration explosions
 
 ## Critical Build Patterns
 - **Native FC**: All providers pass `tools` to both `complete()` AND `stream()` methods
-- **Anthropic streaming**: Use raw `streamEvent` not helper events (`inputJson` fires before `contentBlock`)
-- **Gemini tool results**: `functionResponse.name` must use `msg.toolName` not hard-coded "tool"
-- **Ollama streaming**: `chunk.message.tool_calls` on `chunk.done`, emit `tool_use_start` + `tool_use_delta`
 - **Loop detection**: `maxConsecutiveThoughts: 3` — nudge observations reset the counter
 - **Compressed results in FC**: Strip `[STORED: key]` header → `[toolName result — compressed preview]`
+- **adapter in handleActing**: must be re-computed via selectAdapter() — NOT inherited from handleThinking scope
 - See [build-patterns.md](build-patterns.md) for tsconfig, package.json, Effect-TS patterns
 
-## Architecture Debt
-1. `react-kernel.ts` at ~1,430 LOC — may benefit from further splitting (FC-only path, guards, observations)
-2. ✅ Two code paths coexist (FC + text-based) — text only needed for test mocks — RESOLVED (V1.0 FC Unification)
-3. ✅ `buildDynamicContext`/`buildStaticContext` still in codebase behind flag (~560 LOC dead) — RESOLVED
-4. ✅ `context-engine.ts` has ~690 LOC mostly dead text-assembly functions — RESOLVED (now 462 LOC)
-5. ✅ Test mocks use `supportsToolCalling: false` — testing legacy path not real FC path — RESOLVED
-6. Provider adapter only has 2/7 planned hooks — composable system half-built
-7. cogito:14b still inconsistent on reactive strategy (8B works fine, 14B doesn't)
-8. Strategy routing disabled — no clean solution for local model multi-step tasks
-9. Benchmark: e5-file-execute, c6-multi-agent still fragile across providers
+## Architecture Debt (Remaining)
+1. `react-kernel.ts` at ~1,650 LOC — benefits from splitting (FC path, guards, observations as separate modules)
+2. cogito:14b still inconsistent on reactive strategy (8B works fine, 14B doesn't)
+3. Benchmark: c6-multi-agent still fragile across providers
+4. Provider adapter: 2 of 5 V1.1 composable hooks planned (full composable system deferred)
 
-## V1.0 Priorities (Next Steps)
-- **START WITH**: Deep architectural analysis session (not implementation)
-- Map what's dead weight, what's duplicated, what needs splitting
-- Design clean V1.0 architecture → focused implementation plan
-- [V1.0 Release Priorities](project_v1_priorities.md) — cleanup targets identified
-- [V1.0 Roadmap](project_v1_roadmap.md) — P0: skill learning loop, messaging gateway, hero experience
+## Show HN Readiness
+- ✅ Text tool call fallback for models that output JSON in text
+- ✅ Gate hardening: relevant + satisfied-required tools pass through
+- ✅ Dynamic stopping: novelty signal + per-tool budget
+- ✅ Full prompt observability (logModelIO)
+- ✅ Actionable failure messages with Fix: suggestions
+- ✅ Adaptive strategy sub-strategy reporting
+- ✅ rax init uses unified package
+- ✅ React/Vue/Svelte web hooks
+- ✅ Provider adapter 7/7 hooks
+- 🔲 react-kernel.ts split (code quality for contributors)
+- 🔲 Benchmark suite published results
+- 🔲 Docs refresh (in progress)
 
-## Post-V1.0 Roadmap
+## Post-v0.8.5 Roadmap
 - [Composable Strategy Architecture](project_composable_strategies.md) — V1.1
-- [Composable Provider Adapters](project_composable_adapters.md) — V1.1
 - Phase 5: Evolutionary Intelligence (`@reactive-agents/evolution`, v1.1+)
-
-## Telemetry
-- [Telemetry enrichment gaps](project_telemetry_gaps.md) — 4 known gaps
 
 ## Archive
 Historical memories (completed work, patterns): [MEMORY-ARCHIVE.md](MEMORY-ARCHIVE.md)
