@@ -228,27 +228,27 @@ function modelLabel(run: Run): string {
             <table>
               <thead>
                 <tr>
-                  <th>Task</th>
-                  <th>Strategy</th>
-                  <th>Status</th>
-                  <th>Iters</th>
-                  <th>Latency</th>
-                  <th>Tokens</th>
-                  <th>Cost</th>
+                  <th class="col-task">Task</th>
+                  <th class="col-strategy">Strategy</th>
+                  <th class="col-status">Status</th>
+                  <th class="col-num">Steps</th>
+                  <th class="col-num">Latency</th>
+                  <th class="col-num">Tokens</th>
+                  <th class="col-num">Cost</th>
                 </tr>
               </thead>
               <tbody>
                 {tierTasks.map((task) => (
                   <tr>
-                    <td><code>{task.taskId}</code></td>
-                    <td><code>{task.strategy}</code></td>
-                    <td class={task.status === "pass" ? "status-pass" : "status-fail"}>
-                      {task.status === "pass" ? "Pass" : task.status === "fail" ? "Fail" : "Error"}
+                    <td class="col-task"><code>{task.taskId}</code></td>
+                    <td class="col-strategy"><code>{task.strategy}</code></td>
+                    <td class={`col-status ${task.status === "pass" ? "status-pass" : "status-fail"}`}>
+                      {task.status === "pass" ? "✓" : task.status === "fail" ? "✗" : "⚠"}
                     </td>
-                    <td>{task.iterations > 0 ? task.iterations : "--"}</td>
-                    <td>{formatMs(task.durationMs)}</td>
-                    <td>{task.tokensUsed > 0 ? task.tokensUsed.toLocaleString() : "--"}</td>
-                    <td>{task.estimatedCost > 0 ? `$${task.estimatedCost.toFixed(5)}` : "--"}</td>
+                    <td class="col-num">{task.iterations > 0 ? task.iterations : "—"}</td>
+                    <td class="col-num">{formatMs(task.durationMs)}</td>
+                    <td class="col-num">{task.tokensUsed > 0 ? task.tokensUsed.toLocaleString() : "—"}</td>
+                    <td class="col-num">{task.estimatedCost > 0 ? `$${task.estimatedCost.toFixed(4)}` : "—"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -407,7 +407,7 @@ function modelLabel(run: Run): string {
     padding: 0.5rem 0.75rem;
     border-bottom: 1px solid var(--sl-color-gray-5);
     text-align: left;
-    vertical-align: top;
+    vertical-align: middle;
   }
   th {
     background: var(--sl-color-gray-6);
@@ -417,6 +417,8 @@ function modelLabel(run: Run): string {
     letter-spacing: 0.04em;
     white-space: nowrap;
   }
+  th.col-num    { text-align: right; }
+  th.col-status { text-align: center; }
   .total-row td {
     border-top: 2px solid var(--sl-color-gray-4);
     background: var(--sl-color-gray-6);
@@ -480,6 +482,12 @@ function modelLabel(run: Run): string {
     margin-left: auto;
     flex-shrink: 0;
   }
+
+  /* ── Task drilldown column widths & alignment ── */
+  .col-task    { width: 28%; min-width: 120px; }
+  .col-strategy{ width: 22%; min-width: 100px; }
+  .col-status  { width: 8%;  min-width: 48px; text-align: center; font-weight: 600; font-size: 1rem; }
+  .col-num     { width: 10%; min-width: 64px; text-align: right; font-variant-numeric: tabular-nums; }
 
   /* ── Overhead note ── */
   .overhead-note {
