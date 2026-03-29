@@ -386,13 +386,21 @@ function modelLabel(run: Run): string {
   }
   .comparison-matrix {
     min-width: 480px;
+    table-layout: fixed;
+  }
+  .comparison-matrix th:first-child,
+  .comparison-matrix td:first-child {
+    width: 130px;
+    min-width: 130px;
   }
   .comparison-matrix .model-col {
     text-align: center;
-    min-width: 160px;
+    min-width: 180px;
   }
   .comparison-matrix td:not(:first-child) {
     text-align: center;
+    font-variant-numeric: tabular-nums;
+    font-size: 0.95rem;
   }
   .no-data {
     color: var(--sl-color-gray-3);
