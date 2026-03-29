@@ -634,16 +634,16 @@ export interface RuntimeOptions {
   /** Save a progress checkpoint every N iterations. */
   progressCheckpoint?: { every: number; autoResume?: boolean };
 
-  /** Verification pass after initial reasoning result. */
+  /** Verification pass after initial reasoning result. "reflect" = one extra LLM call (cheap); "loop" = re-enters ReAct with tools (thorough). */
   verificationStep?: { mode: "reflect" | "loop"; prompt?: string };
 
   /** Validate output before accepting — retry with feedback on failure. */
   outputValidator?: (output: string) => { valid: boolean; feedback?: string };
 
-  /** Options for outputValidator. */
+  /** Controls retry behavior for outputValidator. maxRetries defaults to 2 when omitted. */
   outputValidatorOptions?: { maxRetries?: number };
 
-  /** Custom termination predicate — re-run until it returns true. */
+  /** Custom termination predicate. Agent re-runs until it returns true, up to 3 times maximum. */
   customTermination?: (state: { output: string }) => boolean;
 
   /**
