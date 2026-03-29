@@ -324,12 +324,16 @@ export const ReactiveAgentsConfigSchema = Schema.Struct({
   taskContext: Schema.optional(Schema.Record({ key: Schema.String, value: Schema.String })),
   /** Persist partial run state every N iterations for resumable long-running agents. */
   progressCheckpoint: Schema.optional(Schema.Struct({
+    /** Checkpoint interval — save state every N iterations. */
     every: Schema.Number,
+    /** Automatically resume from the latest checkpoint on next run (default: false). */
     autoResume: Schema.optional(Schema.Boolean),
   })),
   /** Run a verification pass after the initial answer before accepting the result. */
   verificationStep: Schema.optional(Schema.Struct({
+    /** "reflect" = single LLM review call (default); "loop" = re-enter ReAct loop with tools. */
     mode: Schema.Union(Schema.Literal("reflect"), Schema.Literal("loop")),
+    /** Custom verification prompt. Defaults to a standard completeness-check question. */
     prompt: Schema.optional(Schema.String),
   })),
   /** When true, only task-relevant tools are shown to the agent — reducing context noise for small models. All tools remain callable by name. */
