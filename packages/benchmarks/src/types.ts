@@ -22,6 +22,10 @@ export interface BenchmarkTask {
   readonly requiresTools?: boolean;
   /** Whether security guardrails are required. */
   readonly requiresGuardrails?: boolean;
+  /** Whether dynamic sub-agent spawning is required (spawn-agent tool). */
+  readonly requiresDynamicSubAgents?: boolean;
+  /** Override max iterations for this task (default: 30 for strategy tasks, 5 for single-shot). */
+  readonly maxIterations?: number;
 }
 
 /** Result of running a single benchmark task. */

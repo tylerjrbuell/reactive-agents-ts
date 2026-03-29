@@ -141,7 +141,8 @@ export const BENCHMARK_TASKS: readonly BenchmarkTask[] = [
     name: "Distributed task queue design (AgentBench)",
     prompt: "Design the data model for a distributed task queue that prevents duplicate execution and guarantees at-least-once delivery. Include: key entities with fields, the deduplication strategy, failure handling, and how you'd handle a worker crash mid-task.",
     expected: "idempoten|dedup|lock|lease|atomic|worker|visibility.?timeout|claim",
-    strategy: "plan-execute",
+    strategy: "react",
+    maxIterations: 8,
     benchmark: "AgentBench",
   },
   {
@@ -168,7 +169,8 @@ export const BENCHMARK_TASKS: readonly BenchmarkTask[] = [
     name: "Monolith-to-microservices DB decomposition (AgentBench)",
     prompt: "Create a step-by-step migration plan to decompose a PostgreSQL monolith database into per-service databases for a system with users, orders, products, and inventory tables (all with foreign keys). Include: decomposition order, cross-service data consistency strategy, the migration approach for live traffic, and rollback at each step.",
     expected: "strangler|event.?sourc|saga|outbox|dual.?write|rollback|step|foreign.?key",
-    strategy: "plan-execute",
+    strategy: "react",
+    maxIterations: 8,
     benchmark: "AgentBench",
   },
   {
@@ -186,9 +188,13 @@ export const BENCHMARK_TASKS: readonly BenchmarkTask[] = [
     tier: "complex",
     name: "Multi-agent task delegation",
     prompt: "Use the spawn-agent tool to create an agent named 'Researcher'. Have the Researcher agent find out the boiling point of Gold. Then summarize the result.",
-    expected: "2856|2970|2700|5173|5378",
+    // Gold boils at 2856°C / 5173°F. Pattern handles comma-formatted numbers (2,856) and
+    // alternate sources (2970°C / 5378°F). The \D? allows for comma or nothing between digits.
+    expected: "2.?856|2.?970|2.?700|5.?173|5.?378",
     strategy: "plan-execute",
+    maxIterations: 12,
     requiresTools: true,
+    requiresDynamicSubAgents: true,
     benchmark: "AgentEval",
   },
 

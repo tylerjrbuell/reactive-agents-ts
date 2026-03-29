@@ -61,11 +61,12 @@ const runTask = async (
   const start = performance.now();
 
   try {
+    const maxIter = task.maxIterations ?? (task.strategy ? 15 : 5);
     const builder = ReactiveAgents.create()
       .withName(`bench-${task.id}`)
       .withProvider(provider)
       .withModel(model)
-      .withMaxIterations(task.strategy ? 30 : 5);
+      .withMaxIterations(maxIter);
 
     if (task.strategy) {
       const strategyMap = {
@@ -78,6 +79,10 @@ const runTask = async (
 
     if (task.requiresTools) {
       builder.withTools();
+    }
+
+    if (task.requiresDynamicSubAgents) {
+      builder.withDynamicSubAgents({ maxIterations: 8 });
     }
 
     if (task.requiresGuardrails) {
