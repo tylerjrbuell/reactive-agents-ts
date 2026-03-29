@@ -625,6 +625,27 @@ export interface RuntimeOptions {
   /** Semantic cache TTL in milliseconds. Cached responses older than this are evicted. */
   cacheTimeoutMs?: number;
 
+  /** Minimum iterations before final-answer is permitted. */
+  minIterations?: number;
+
+  /** Background data injected into reasoning memory context (not system prompt). */
+  taskContext?: Record<string, string>;
+
+  /** Save a progress checkpoint every N iterations. */
+  progressCheckpoint?: { every: number; autoResume?: boolean };
+
+  /** Verification pass after initial reasoning result. */
+  verificationStep?: { mode: "reflect" | "loop"; prompt?: string };
+
+  /** Validate output before accepting — retry with feedback on failure. */
+  outputValidator?: (output: string) => { valid: boolean; feedback?: string };
+
+  /** Options for outputValidator. */
+  outputValidatorOptions?: { maxRetries?: number };
+
+  /** Custom termination predicate — re-run until it returns true. */
+  customTermination?: (state: { output: string }) => boolean;
+
   /**
    * Enable SQLite-backed session persistence via SessionStoreLive.
    * Requires the memory layer to be active (`enableMemory: true` or `memoryTier` set).
@@ -788,6 +809,13 @@ export const createRuntime = (options: RuntimeOptions) => {
     executionTimeoutMs: options.executionTimeoutMs,
     retryPolicy: options.retryPolicy,
     cacheTimeoutMs: options.cacheTimeoutMs,
+    minIterations: options.minIterations,
+    taskContext: options.taskContext,
+    progressCheckpoint: options.progressCheckpoint,
+    verificationStep: options.verificationStep,
+    outputValidator: options.outputValidator,
+    outputValidatorOptions: options.outputValidatorOptions,
+    customTermination: options.customTermination,
     session: options.sessionPersist
       ? {
           persist: options.sessionPersist,
