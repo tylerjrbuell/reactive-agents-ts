@@ -1,0 +1,28 @@
+{
+  "name": "@reactive-agents/vue",
+  "version": "0.8.0",
+  "description": "Vue composables for Reactive Agents — useAgentStream, useAgent",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist"],
+  "peerDependencies": {
+    "vue": ">=3.0.0"
+  },
+  "devDependencies": {
+    "vue": "^3.4.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.7.0"
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --out-dir dist",
+    "typecheck": "tsc --noEmit"
+  }
+}
