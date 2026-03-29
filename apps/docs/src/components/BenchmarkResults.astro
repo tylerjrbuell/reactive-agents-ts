@@ -289,6 +289,17 @@ function modelLabel(run: Run): string {
     margin-top: 1rem;
   }
 
+  /* ── Override Starlight's low-contrast purple code color in dark mode ── */
+  /* Starlight uses --sl-color-accent for inline code text, which is low-contrast
+     on gray-5/6 backgrounds in dark mode. Use the main text color instead. */
+  .benchmark-results code {
+    color: var(--sl-color-text);
+    background: var(--sl-color-gray-5);
+    padding: 0.1rem 0.35rem;
+    border-radius: 0.25rem;
+    font-size: 0.85em;
+  }
+
   /* ── Meta bar ── */
   .benchmark-meta {
     display: flex;
@@ -305,9 +316,6 @@ function modelLabel(run: Run): string {
     color: var(--sl-color-gray-3);
   }
   .benchmark-meta code {
-    background: var(--sl-color-gray-5);
-    padding: 0.1rem 0.3rem;
-    border-radius: 0.25rem;
     font-size: 0.82em;
   }
   .meta-note {
