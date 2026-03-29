@@ -318,6 +318,20 @@ export const ReactiveAgentsConfigSchema = Schema.Struct({
   logPrefix: Schema.optional(Schema.String),
   /** Maximum retries when verification rejects the response (default: 1). Only used when enableVerification is true. */
   maxVerificationRetries: Schema.optional(Schema.Number),
+  /** Minimum iterations with at least one tool call before final-answer is allowed. */
+  minIterations: Schema.optional(Schema.Number),
+  /** Inject background data into reasoning context (separate from system prompt instructions). */
+  taskContext: Schema.optional(Schema.Record({ key: Schema.String, value: Schema.String })),
+  /** Persist partial run state every N iterations for resumable long-running agents. */
+  progressCheckpoint: Schema.optional(Schema.Struct({
+    every: Schema.Number,
+    autoResume: Schema.optional(Schema.Boolean),
+  })),
+  /** Run a verification pass after the initial answer before accepting the result. */
+  verificationStep: Schema.optional(Schema.Struct({
+    mode: Schema.Union(Schema.Literal("reflect"), Schema.Literal("loop")),
+    prompt: Schema.optional(Schema.String),
+  })),
   /** When true, only task-relevant tools are shown to the agent — reducing context noise for small models. All tools remain callable by name. */
   adaptiveToolFiltering: Schema.optional(Schema.Boolean),
   /** Required tools configuration — tools that MUST be called before the agent can declare success. */
@@ -405,6 +419,12 @@ export type ReasoningOptions = ReasoningOptionsEncoded & {
 export type ReactiveAgentsConfig = Schema.Schema.Type<typeof ReactiveAgentsConfigSchema> & {
   readonly reasoningOptions?: ReasoningOptions;
   readonly synthesisConfig?: SynthesisConfigJson & { readonly synthesisStrategy?: SynthesisStrategy };
+  /** User-defined predicate called after each reasoning result. If it returns false, the agent re-runs. */
+  readonly customTermination?: (state: { output: string }) => boolean;
+  /** Validate the final output before accepting. On failure, feedback is injected and the agent retries. */
+  readonly outputValidator?: (output: string) => { valid: boolean; feedback?: string };
+  /** Options for `outputValidator` — controls retry count. */
+  readonly outputValidatorOptions?: { maxRetries?: number };
 };
 
 /**
