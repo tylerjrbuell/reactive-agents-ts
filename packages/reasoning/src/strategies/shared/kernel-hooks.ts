@@ -44,7 +44,7 @@ function getKernelPass(state: KernelState): string {
  */
 export function buildKernelHooks(eventBus: MaybeService<EventBusInstance>): KernelHooks {
   return {
-    onThought: (state: KernelState, thought: string, prompt?: { system: string; user: string }): Effect.Effect<void, never> =>
+    onThought: (state: KernelState, thought: string, prompt?: { system: string; user: string; messages?: readonly { readonly role: string; readonly content: string }[]; rawResponse?: string }): Effect.Effect<void, never> =>
       publishReasoningStep(eventBus, {
         _tag: "ReasoningStepCompleted",
         taskId: state.taskId,
@@ -53,7 +53,11 @@ export function buildKernelHooks(eventBus: MaybeService<EventBusInstance>): Kern
         totalSteps: 0,
         thought,
         kernelPass: getKernelPass(state),
-        ...(prompt ? { prompt } : {}),
+        ...(prompt ? {
+          prompt: { system: prompt.system, user: prompt.user },
+          ...(prompt.messages ? { messages: prompt.messages } : {}),
+          ...(prompt.rawResponse !== undefined ? { rawResponse: prompt.rawResponse } : {}),
+        } : {}),
       }),
 
     onAction: (state: KernelState, tool: string, input: string): Effect.Effect<void, never> =>

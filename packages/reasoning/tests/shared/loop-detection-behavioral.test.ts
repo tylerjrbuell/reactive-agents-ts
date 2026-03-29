@@ -195,7 +195,7 @@ describe("Stall detection — consecutive thoughts without action", () => {
     expect(result.status).toBe("failed");
     expect(result.error).toContain("Loop detected");
     // Error message should mention consecutive thoughts
-    expect(result.error).toContain("consecutive thoughts");
+    expect(result.error).toContain("consecutive thinking steps");
   });
 
   it("stall does NOT fire when actions interrupt thought streaks", async () => {

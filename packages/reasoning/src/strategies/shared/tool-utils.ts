@@ -537,31 +537,66 @@ export function compressToolResult(
 }
 
 /**
+ * Computes the novelty ratio of new text vs accumulated prior content.
+ * Returns 0.0 (entirely duplicate) to 1.0 (entirely new).
+ * Uses word-token overlap on words ≥4 chars — cheap, no LLM call needed.
+ */
+export function computeNoveltyRatio(newText: string, priorText: string): number {
+  const tokenize = (t: string): Set<string> =>
+    new Set((t.toLowerCase().match(/\b[a-z]{4,}\b/g) ?? []));
+  const newTokens = tokenize(newText);
+  const priorTokens = tokenize(priorText);
+  if (newTokens.size === 0) return 0;
+  const novelCount = [...newTokens].filter((t) => !priorTokens.has(t)).length;
+  return novelCount / newTokens.size;
+}
+
+/**
  * Gate native parallel tool batches against {@link requiredTools} so optional tools
  * (e.g. http-get) cannot run while a required tool (e.g. file-write) is still missing.
  *
+ * - Pre-filters calls that have exceeded their per-tool budget (`maxCallsPerTool`).
  * - If any call targets a missing required tool → return only the first such call.
- * - If calls omit every missing required tool but the batch is non-empty → empty effective
- *   list with `blockedOptionalBatch: true` (caller injects redirect).
+ * - If calls are all from {@link relevantTools} or satisfied required → allow through.
+ * - If calls omit every missing required tool and aren't relevant → `blockedOptionalBatch: true`.
  */
 export function gateNativeToolCallsForRequiredTools<T extends { readonly name: string }>(
   calls: readonly T[],
   requiredTools: readonly string[],
   toolsUsed: ReadonlySet<string>,
+  relevantTools?: readonly string[],
+  toolCallCounts?: Readonly<Record<string, number>>,
+  maxCallsPerTool?: Readonly<Record<string, number>>,
 ): { readonly effective: readonly T[]; readonly blockedOptionalBatch: boolean } {
+  // Layer 3: pre-filter calls that have exhausted their per-tool budget.
+  const budgeted =
+    maxCallsPerTool && toolCallCounts
+      ? calls.filter((c) => {
+          const max = maxCallsPerTool[c.name];
+          return max === undefined || (toolCallCounts[c.name] ?? 0) < max;
+        })
+      : calls;
+
   if (requiredTools.length === 0) {
-    return { effective: calls, blockedOptionalBatch: false };
+    return { effective: budgeted, blockedOptionalBatch: false };
   }
   const missing = requiredTools.filter((t) => !toolsUsed.has(t));
   if (missing.length === 0) {
-    return { effective: calls, blockedOptionalBatch: false };
+    return { effective: budgeted, blockedOptionalBatch: false };
   }
-  const towardMissing = calls.filter((c) => missing.includes(c.name));
+  const towardMissing = budgeted.filter((c) => missing.includes(c.name));
   if (towardMissing.length > 0) {
     return { effective: [towardMissing[0]!], blockedOptionalBatch: false };
   }
-  if (calls.length > 0) {
-    return { effective: [], blockedOptionalBatch: true };
+  // Allow relevant tools and re-calls of already-satisfied required tools.
+  const satisfiedRequired = new Set(requiredTools.filter((t) => toolsUsed.has(t)));
+  const allowedSet = new Set([...(relevantTools ?? []), ...satisfiedRequired]);
+  if (allowedSet.size > 0) {
+    const allowedCalls = budgeted.filter((c) => allowedSet.has(c.name));
+    if (allowedCalls.length > 0) {
+      return { effective: allowedCalls, blockedOptionalBatch: false };
+    }
   }
-  return { effective: calls, blockedOptionalBatch: false };
+  // Either all calls were over-budget or none were relevant — redirect to required.
+  return { effective: [], blockedOptionalBatch: budgeted.length > 0 || calls.length > 0 };
 }

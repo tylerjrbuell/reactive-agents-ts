@@ -257,6 +257,10 @@ export type AgentEvent =
       readonly kernelPass?: string;
       /** Full LLM prompt trace for debug observability (system + user message) */
       readonly prompt?: { readonly system: string; readonly user: string };
+      /** Full FC conversation thread sent to the LLM — logged when logModelIO is enabled */
+      readonly messages?: readonly { readonly role: string; readonly content: string }[];
+      /** Raw LLM response content before any parsing — logged when logModelIO is enabled */
+      readonly rawResponse?: string;
     }
   // ─── Iteration progress (from @reactive-agents/reasoning) ───
   | {

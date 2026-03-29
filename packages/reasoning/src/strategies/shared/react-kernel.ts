@@ -52,6 +52,7 @@ import {
   hasFinalAnswer,
   extractFinalAnswer,
   gateNativeToolCallsForRequiredTools,
+  computeNoveltyRatio,
 } from "./tool-utils.js";
 import { evaluateTermination, defaultEvaluators, type TerminationContext } from "./termination-oracle.js";
 import { assembleOutput } from "./output-assembly.js";
@@ -588,14 +589,24 @@ function handleThinking(
       }
     }
 
-    // Publish thought event with prompt trace for logModelIO
-    const userContent = conversationMessages
-      .map((m) => {
-        const c = m.content;
-        return typeof c === "string" ? c : Array.isArray(c) ? c.map((b: Record<string, unknown>) => (b as { text?: string }).text ?? "").join("") : "";
-      })
-      .join("\n---\n");
-    yield* hooks.onThought(state, thought, { system: systemPromptText, user: userContent });
+    // Publish thought event with full prompt trace for logModelIO.
+    // messages[] carries the complete FC conversation thread with role labels.
+    // rawResponse is the unmodified LLM output before thought-stripping.
+    const messagesForTrace = conversationMessages.map((m) => ({
+      role: m.role as string,
+      content: typeof m.content === "string"
+        ? m.content
+        : Array.isArray(m.content)
+          ? (m.content as Record<string, unknown>[]).map((b) => (b as { text?: string }).text ?? "").join("")
+          : String(m.content ?? ""),
+    }));
+    const userContent = messagesForTrace.map((m) => m.content).join("\n---\n");
+    yield* hooks.onThought(state, thought, {
+      system: systemPromptText,
+      user: userContent,
+      messages: messagesForTrace,
+      rawResponse: rawThought,
+    });
 
     // ── FAST-PATH: trivial task exit ─────────────────────────────────────────
     // If this is the first iteration, the model produced no tool call, no
@@ -660,10 +671,22 @@ function handleThinking(
 
       if (resolverResult._tag === "tool_calls") {
         const rawCalls = resolverResult.calls as readonly ToolCallSpec[];
+        // Compute per-tool call counts from step history for budget enforcement.
+        const toolCallCounts = state.steps.reduce<Record<string, number>>((acc, s) => {
+          if (s.type === "action") {
+            const name = (s.metadata?.toolCall as { name?: string } | undefined)?.name;
+            if (name) acc[name] = (acc[name] ?? 0) + 1;
+          }
+          return acc;
+        }, {});
+
         const { effective, blockedOptionalBatch } = gateNativeToolCallsForRequiredTools(
           rawCalls,
           input.requiredTools ?? [],
           state.toolsUsed,
+          input.relevantTools,
+          toolCallCounts,
+          input.maxCallsPerTool,
         );
 
         if (blockedOptionalBatch) {
@@ -893,6 +916,26 @@ function handleThinking(
           });
 
           nudgeMessage = adapterNudge ?? defaultNudge;
+
+          // Layer 1: Novelty signal — strengthen nudge when recent observations add little new info.
+          // If the model has gathered ≥3 real tool observations and the last one is <20% novel,
+          // it has enough context. Override the nudge to be explicit about stopping research.
+          const realObs = state.steps.filter(
+            (s) => s.type === "observation" &&
+              (s.metadata?.observationResult as { toolName?: string } | undefined)?.toolName !== "system",
+          );
+          if (realObs.length >= 3) {
+            const lastObsText = realObs[realObs.length - 1].content;
+            const priorObsText = realObs.slice(0, -1).map((s) => s.content).join(" ");
+            const novelty = computeNoveltyRatio(lastObsText, priorObsText);
+            if (novelty < 0.20) {
+              const pct = Math.round(novelty * 100);
+              nudgeMessage =
+                `Research context is sufficient (last search: ${pct}% new information — diminishing returns). ` +
+                `Do NOT search again. Call ${missingReq[0]} now to produce the output.`;
+            }
+          }
+
           thinkingSteps = [...thinkingSteps, makeStep("observation", nudgeMessage, {
             observationResult: makeObservationResult("system", true, nudgeMessage),
           })];

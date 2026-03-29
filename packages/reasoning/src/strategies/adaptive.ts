@@ -57,6 +57,10 @@ interface AdaptiveInput {
   readonly sessionId?: string;
   /** Tools that MUST be called before the agent can declare success */
   readonly requiredTools?: readonly string[];
+  /** Tools identified as relevant/supplementary (LLM-classified) — allowed through the required-tools gate */
+  readonly relevantTools?: readonly string[];
+  /** Per-tool call budget — gate blocks calls that exceed their limit */
+  readonly maxCallsPerTool?: Readonly<Record<string, number>>;
   /** Max redirects when required tools are missing (default: 2) */
   readonly maxRequiredToolRetries?: number;
   /** Model identifier for routing/entropy scoring */
@@ -205,6 +209,11 @@ export const executeAdaptive = (
     // ── Combine results ──
     const allSteps = [...steps, ...finalSubResult.steps];
 
+    // strategy: "adaptive" preserved for API consumers.
+    // selectedStrategy in metadata surfaces what actually ran (e.g. "reactive")
+    // so strategyUsed in AgentResult shows the effective sub-strategy.
+    const activeStrategy = fallbackOccurred ? "reactive" : selectedStrategy;
+
     return buildStrategyResult({
       strategy: "adaptive",
       steps: allSteps,
@@ -214,9 +223,7 @@ export const executeAdaptive = (
       totalTokens: finalSubResult.metadata.tokensUsed + analysisTokens,
       totalCost: finalSubResult.metadata.cost + analysisCost,
       extraMetadata: {
-        // selectedStrategy = what the classifier chose; fallbackOccurred = true means
-        // reactive actually produced the output (not selectedStrategy)
-        selectedStrategy,
+        selectedStrategy: activeStrategy,
         fallbackOccurred,
       },
     });

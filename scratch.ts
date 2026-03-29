@@ -1,7 +1,7 @@
 import { ReactiveAgents } from 'reactive-agents'
 
 const agent = await ReactiveAgents.create()
-    .withProvider('openai')
+    .withProvider('ollama')
     .withPersona({
         name: 'research assistant',
         role: 'An assistant that researches topics and summarizes findings.',
@@ -9,12 +9,10 @@ const agent = await ReactiveAgents.create()
             'Use web-search once or twice if needed, then you MUST call file-write to save the report to the exact path the user names. Do not finish with only search results — the deliverable is the markdown file on disk.',
         tone: 'Professional and concise',
     })
-    // .withModel({ model: 'cogito', temperature: 0.2 })
+    .withModel({ model: 'qwen3.5', temperature: 0.2 })
     .withTools()
-    // synthesis: "auto" — ICS escalates to a short LLM progress brief on mid+ tiers when
-    // required tools are still missing (e.g. after web-search) so the next tool (file-write) is explicit.
-    .withReasoning({ defaultStrategy: 'reactive', synthesis: 'auto' })
-    .withObservability({ verbosity: 'debug', live: true, logModelIO: true })
+    .withReasoning({ defaultStrategy: 'adaptive', synthesis: 'auto' })
+    .withObservability({ verbosity: 'debug', live: true, logModelIO: false })
     .build()
 
 const result = await agent.run(

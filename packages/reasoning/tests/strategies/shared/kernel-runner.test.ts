@@ -350,7 +350,7 @@ describe("runKernel", () => {
 
     expect(result.status).toBe("failed");
     expect(result.error).toContain("Loop detected");
-    expect(result.error).toContain("identical thought repeated");
+    expect(result.error).toContain("repeated the same thought");
     expect(callCount).toBe(3);
   });
 
@@ -545,9 +545,9 @@ describe("runKernel — required tools guard", () => {
     );
 
     expect(result.status).toBe("failed");
-    expect(result.error).toContain("Required tools never called");
+    expect(result.error).toContain("Task incomplete");
     expect(result.error).toContain("send_message");
-    expect(result.error).toContain("2 redirect(s)");
+    expect(result.error).toContain("2 redirect");
   });
 
   it("respects custom maxRequiredToolRetries", async () => {
@@ -579,7 +579,7 @@ describe("runKernel — required tools guard", () => {
     );
 
     expect(result.status).toBe("failed");
-    expect(result.error).toContain("1 redirect(s)");
+    expect(result.error).toContain("1 redirect");
   });
 
   it("tracks multiple required tools independently", async () => {
@@ -698,7 +698,7 @@ describe("runKernel — required tools guard", () => {
     );
 
     expect(result.status).toBe("failed");
-    expect(result.error).toContain("Required tools never called");
+    expect(result.error).toContain("Task incomplete");
     expect(result.error).toContain("send_message");
   });
 });

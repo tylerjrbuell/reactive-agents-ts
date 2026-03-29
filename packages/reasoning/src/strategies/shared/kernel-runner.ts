@@ -419,7 +419,10 @@ export function runKernel(
                   return idx >= firstThoughtIdx;
                 });
               if (!hasRecentProgress) {
-                loopMsg = `Loop detected: identical thought repeated ${maxRepeatedThought} times`;
+                loopMsg = `Loop detected: the model repeated the same thought ${maxRepeatedThought} times without making progress.\n` +
+                  `Fix: (1) Add a persona instruction like "Think step-by-step then call tools immediately", ` +
+                  `(2) Use .withReasoning({ defaultStrategy: 'plan-execute-reflect' }) for multi-step tasks, ` +
+                  `(3) Check that tool descriptions are clear and unambiguous.`;
               }
             }
           }
@@ -434,7 +437,10 @@ export function runKernel(
             else break; // any non-thought (action/observation) resets the streak
           }
           if (consecutiveThoughts >= maxConsecutiveThoughts) {
-            loopMsg = `Loop detected: ${consecutiveThoughts} consecutive thoughts without any tool action`;
+            loopMsg = `Loop detected: ${consecutiveThoughts} consecutive thinking steps with no tool calls.\n` +
+              `Fix: (1) Verify the model supports function calling for your provider, ` +
+              `(2) Simplify the task description — the model may not know which tool to use, ` +
+              `(3) For local models, try .withContextProfile({ tier: 'local' }) for stronger tool guidance.`;
           }
         }
 
@@ -551,7 +557,12 @@ export function runKernel(
           if (requiredToolRedirects > maxRequiredToolRetries) {
             state = transitionState(state, {
               status: "failed",
-              error: `Required tools never called after ${maxRequiredToolRetries} redirect(s): ${missingTools.join(", ")}`,
+              error: `Task incomplete — the model never called required tool(s): ${missingTools.join(", ")} ` +
+                `(after ${maxRequiredToolRetries} redirect attempts).\n` +
+                `Fix: (1) Make the task description explicitly name the expected output ` +
+                `(e.g. "write the result to ./report.md"), ` +
+                `(2) Add a persona instruction: "You MUST call ${missingTools[0]} as the final step", ` +
+                `(3) Increase retries: .withReasoning({ maxRequiredToolRetries: 4 }).`,
             });
             break;
           }
@@ -580,7 +591,10 @@ export function runKernel(
       if (missingTools.length > 0) {
         state = transitionState(state, {
           status: "failed",
-          error: `Required tools never called: ${missingTools.join(", ")}`,
+          error: `Task incomplete — required tool(s) never called: ${missingTools.join(", ")}.\n` +
+            `Fix: Make the task description clearly specify the deliverable ` +
+            `(e.g. "write results to ./output.md"), or add a persona instruction ` +
+            `explicitly requiring the tool call.`,
         });
       }
     }

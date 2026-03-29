@@ -38,6 +38,10 @@ export type StrategyFn = (input: {
   readonly sessionId?: string;
   /** Tools that MUST be called before the agent can declare success */
   readonly requiredTools?: readonly string[];
+  /** Tools identified as relevant/supplementary (LLM-classified) — allowed through the required-tools gate */
+  readonly relevantTools?: readonly string[];
+  /** Per-tool call budget enforced by the gate */
+  readonly maxCallsPerTool?: Readonly<Record<string, number>>;
   /** Max redirects when required tools are missing (default: 2) */
   readonly maxRequiredToolRetries?: number;
   /** Dynamic strategy switching configuration */

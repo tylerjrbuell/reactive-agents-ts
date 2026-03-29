@@ -98,6 +98,18 @@ export interface KernelInput {
    */
   readonly requiredTools?: readonly string[];
   /**
+   * Tools identified as relevant/supplementary for the task (LLM-classified).
+   * These are allowed through the required-tools gate even when required tools
+   * are still pending — they provide supplementary research without blocking progress.
+   */
+  readonly relevantTools?: readonly string[];
+  /**
+   * Maximum number of times each tool may be called in a single run.
+   * Enforced by the gate before any other logic.
+   * Example: `{ "web-search": 3, "http-get": 4 }` bounds research loops.
+   */
+  readonly maxCallsPerTool?: Readonly<Record<string, number>>;
+  /**
    * Maximum number of times the kernel will redirect the agent back to
    * "thinking" when required tools haven't been used. Default: 2.
    * After this many redirects, the kernel fails with an error listing
@@ -146,7 +158,18 @@ export type EventBusInstance = {
 // ── KernelHooks — Lifecycle hooks for observability wiring ───────────────────
 
 export interface KernelHooks {
-  readonly onThought: (state: KernelState, thought: string, prompt?: { system: string; user: string }) => Effect.Effect<void, never>;
+  readonly onThought: (
+    state: KernelState,
+    thought: string,
+    prompt?: {
+      system: string;
+      user: string;
+      /** Full FC conversation thread with role labels — present when logModelIO is enabled */
+      messages?: readonly { readonly role: string; readonly content: string }[];
+      /** Raw LLM response before parsing */
+      rawResponse?: string;
+    },
+  ) => Effect.Effect<void, never>;
   readonly onAction: (state: KernelState, tool: string, input: string) => Effect.Effect<void, never>;
   readonly onObservation: (state: KernelState, result: string, success: boolean) => Effect.Effect<void, never>;
   readonly onDone: (state: KernelState) => Effect.Effect<void, never>;

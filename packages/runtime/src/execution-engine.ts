@@ -881,6 +881,21 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   }
                 }
 
+                // ── Auto per-tool call budget for research tools ──
+                // When classification ran, automatically cap research-type tools so agents
+                // don't loop indefinitely gathering context. Budget is applied by the gate.
+                // Users can override via explicit requiredTools.maxCallsPerTool config.
+                const RESEARCH_KEYWORDS = ["search", "http", "browse", "scrape", "fetch", "crawl"];
+                const autoMaxCallsPerTool: Record<string, number> = {};
+                for (const toolName of [
+                  ...(effectiveRequiredTools ?? []),
+                  ...(classifiedRelevantTools ?? []),
+                ]) {
+                  if (RESEARCH_KEYWORDS.some((k) => toolName.toLowerCase().includes(k))) {
+                    autoMaxCallsPerTool[toolName] = 3;
+                  }
+                }
+
                 // ── Semantic cache check (before reasoning) ──
                 let cacheHit = false;
                 if (config.enableCostTracking) {
@@ -930,6 +945,8 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       agentId?: string;
                       sessionId?: string;
                       requiredTools?: readonly string[];
+                      relevantTools?: readonly string[];
+                      maxCallsPerTool?: Readonly<Record<string, number>>;
                       maxRequiredToolRetries?: number;
                       strategySwitching?: { enabled: boolean; maxSwitches?: number; fallbackStrategy?: string };
                       modelId?: string;
@@ -1038,17 +1055,30 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     unsubscribeReasoningSteps = yield* eb.on(
                       "ReasoningStepCompleted",
                       (event) => {
-                        // Prompt trace: log full system + user message when logModelIO is enabled
+                        // Prompt trace: log full conversation thread when logModelIO is enabled.
                         if (event.prompt && capturedLogModelIO) {
                           const pass = event.kernelPass ?? event.strategy;
-                          const sysPreview = event.prompt.system.length <= 500
-                            ? event.prompt.system
-                            : event.prompt.system.slice(0, 500) + `... [${event.prompt.system.length} chars]`;
-                          const userPreview = event.prompt.user.length <= 2000
-                            ? event.prompt.user
-                            : event.prompt.user.slice(0, 2000) + `... [${event.prompt.user.length} chars]`;
+                          const indent = (s: string) => s.replace(/\n/g, "\n    ");
+
+                          // Prefer full FC messages array (role-labelled) over flat text
+                          if (event.messages && event.messages.length > 0) {
+                            const threadLines = event.messages.map((m) =>
+                              `[${m.role.toUpperCase()}] ${m.content}`,
+                            ).join("\n    ────\n    ");
+                            const sysLine = `── system ──\n    ${indent(event.prompt.system)}`;
+                            const rawLine = event.rawResponse
+                              ? `\n    ── raw response ──\n    ${indent(event.rawResponse)}`
+                              : "";
+                            return capturedObs
+                              .debug(`  ┄ [model-io:${pass}]\n    ${sysLine}\n    ── thread (${event.messages.length} msg) ──\n    ${indent(threadLines)}${rawLine}`)
+                              .pipe(Effect.catchAll(() => Effect.void));
+                          }
+
+                          // Fallback: legacy system+user flat format
+                          const sysPreview = event.prompt.system;
+                          const userPreview = event.prompt.user;
                           return capturedObs
-                            .debug(`  ┄ [prompt:${pass}]\n    ── system ──\n    ${sysPreview.replace(/\n/g, "\n    ")}\n    ── user ──\n    ${userPreview.replace(/\n/g, "\n    ")}`)
+                            .debug(`  ┄ [model-io:${pass}]\n    ── system ──\n    ${indent(sysPreview)}\n    ── user ──\n    ${indent(userPreview)}`)
                             .pipe(Effect.catchAll(() => Effect.void));
                         }
                         const rawContent = event.thought ?? event.action ?? event.observation ?? "";
@@ -1099,6 +1129,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       type ReasoningResult = {
                         output: unknown;
                         status: string;
+                        strategy?: string;
                         steps?: readonly { id: string; type: string; content: string; metadata?: { toolUsed?: string; duration?: number } }[];
                         metadata: { cost: number; tokensUsed: number; stepsCount: number; strategyFallback?: boolean; confidence?: number };
                       };
@@ -1131,6 +1162,8 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         agentId: config.agentId,
                         sessionId: c.taskId,
                         requiredTools: effectiveRequiredTools,
+                        relevantTools: classifiedRelevantTools,
+                        maxCallsPerTool: Object.keys(autoMaxCallsPerTool).length > 0 ? autoMaxCallsPerTool : undefined,
                         maxRequiredToolRetries: config.requiredTools?.maxRetries,
                         strategySwitching: config.strategySwitching,
                         modelId: String(config.defaultModel ?? ""),
@@ -1160,8 +1193,16 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                           metadata: { cost: 0, tokensUsed: 0, stepsCount: 0, strategyFallback: true },
                         };
                       }
+                      // Prefer result.metadata.selectedStrategy (set by adaptive to show actual sub-strategy)
+                      // over result.strategy (which stays "adaptive" for API compatibility).
+                      const activeStrategy =
+                        (result as any).metadata?.selectedStrategy ??
+                        result.strategy ??
+                        c.selectedStrategy;
+
                       return {
                         ...c,
+                        selectedStrategy: activeStrategy,
                         cost: c.cost + (result.metadata.cost ?? 0),
                         tokensUsed:
                           c.tokensUsed + (result.metadata.tokensUsed ?? 0),
@@ -1189,7 +1230,14 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     const stepsCount = ctx.metadata.stepsCount as number ?? 0;
                     const tokTot = ctx.tokensUsed;
                     const thinkMs = thinkResult?.metadata?.duration ?? 0;
-                    yield* obs.info(`◉ [think]      ${stepsCount} steps | ${tokTot.toLocaleString()} tok | ${(thinkMs / 1000).toFixed(1)}s`)
+                    // Show adaptive sub-strategy: thinkResult.strategy stays "adaptive",
+                    // ctx.selectedStrategy is what actually ran (e.g. "reactive").
+                    const entryStrat = (thinkResult as any)?.strategy as string | undefined;
+                    const activeStrat = ctx.selectedStrategy ?? entryStrat ?? "";
+                    const stratSuffix = (entryStrat === "adaptive" && activeStrat !== "adaptive")
+                      ? ` (adaptive→${activeStrat})`
+                      : "";
+                    yield* obs.info(`◉ [think]      ${stepsCount} steps | ${tokTot.toLocaleString()} tok | ${(thinkMs / 1000).toFixed(1)}s${stratSuffix}`)
                       .pipe(Effect.catchAll(() => Effect.void));
                   }
 
