@@ -28,7 +28,7 @@ import { CostService } from "@reactive-agents/cost";
 import { EventBus, EntropySensorService } from "@reactive-agents/core";
 import type { AgentEvent, KernelStateLike } from "@reactive-agents/core";
 import { synthesizeDebrief, type DebriefInput, type AgentDebrief } from "./debrief.js";
-import { DebriefStoreService } from "@reactive-agents/memory";
+import { DebriefStoreService, PlanStoreService } from "@reactive-agents/memory";
 import { TelemetryClient as TelemetryClientImpl, classifyTaskCategory as classifyTaskCategoryFn, lookupModel as lookupModelFn } from "@reactive-agents/reactive-intelligence";
 import { recommendStrategyForTier } from "@reactive-agents/llm-provider";
 import { buildTrajectoryFingerprint, abstractifyToolName, firstConvergenceIteration, peakContextPressure, deriveTaskComplexity, deriveFailurePattern, deriveThoughtToActionRatio } from "./telemetry-enrichment.js";
@@ -1122,6 +1122,62 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                               })
                               .join("\n");
                             memCtx = `${memCtx}\n\n--- Prior Strategy Outcomes ---\n${formatted}`;
+                          }
+                        }
+                      }
+
+                      // ── Task context injection ──
+                      if (config.taskContext && Object.keys(config.taskContext).length > 0) {
+                        const lines = Object.entries(config.taskContext)
+                          .map(([k, v]) => `${k}: ${v}`)
+                          .join("\n");
+                        memCtx = `--- Task Context ---\n${lines}\n\n${memCtx}`;
+                      }
+
+                      // ── Session resumption: surface prior debrief + active plan ──
+                      {
+                        const debriefOpt = yield* Effect.serviceOption(DebriefStoreService)
+                          .pipe(Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })));
+                        if (debriefOpt._tag === "Some") {
+                          const recentDebriefs = yield* debriefOpt.value.listByAgent(config.agentId, 1)
+                            .pipe(Effect.catchAll(() => Effect.succeed([])));
+                          if (recentDebriefs.length > 0) {
+                            const last = recentDebriefs[0];
+                            const ageHours = (Date.now() - last.createdAt) / 3_600_000;
+                            if (ageHours < 72) {
+                              const lines: string[] = [
+                                `Last run (${Math.round(ageHours)}h ago): ${last.debrief.outcome}`,
+                                last.debrief.summary,
+                              ];
+                              if (last.debrief.lessonsLearned?.length > 0) {
+                                lines.push(`Lessons: ${last.debrief.lessonsLearned.join("; ")}`);
+                              }
+                              if (last.debrief.errorsEncountered?.length > 0) {
+                                lines.push(`Prior errors: ${last.debrief.errorsEncountered.join("; ")}`);
+                              }
+                              memCtx = `${memCtx}\n\n--- Prior Session ---\n${lines.join("\n")}`;
+                            }
+                          }
+                        }
+
+                        const planOpt = yield* Effect.serviceOption(PlanStoreService)
+                          .pipe(Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })));
+                        if (planOpt._tag === "Some") {
+                          const recentPlans = yield* planOpt.value.getRecentPlans(config.agentId, 1)
+                            .pipe(Effect.catchAll(() => Effect.succeed([])));
+                          if (recentPlans.length > 0) {
+                            const last = recentPlans[0];
+                            if (last.status === "active") {
+                              const pending = last.steps.filter(
+                                (s) => s.status === "pending" || s.status === "in_progress",
+                              );
+                              if (pending.length > 0) {
+                                const stepsText = pending
+                                  .map((s) => `  - [${s.status}] ${s.title}`)
+                                  .join("\n");
+                                memCtx = `${memCtx}\n\n--- Incomplete Plan (resume if relevant) ---\nGoal: ${last.goal}\n${stepsText}`;
+                              }
+                            }
                           }
                         }
                       }
