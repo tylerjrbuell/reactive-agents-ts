@@ -1343,7 +1343,6 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
 
                   // withMinIterations: re-run if fewer iterations than required
                   if (config.minIterations && !cacheHit && reasoningOpt._tag === "Some") {
-                    const reasoningResultMeta = ctx.metadata.reasoningResult as any;
                     const iterationsDone = ctx.iteration - 1;
                     if (iterationsDone < config.minIterations) {
                       const continuationOutcome = yield* Effect.exit(
@@ -1393,6 +1392,11 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   }
 
                   // withVerificationStep (reflect mode): one extra LLM call to confirm completeness
+                  // Note: "loop" mode is not yet implemented — configured but silently ignored with a warning.
+                  if (config.verificationStep && config.verificationStep.mode !== "reflect" && obs) {
+                    yield* obs.info(`⚠ withVerificationStep: mode "${config.verificationStep.mode}" is not yet implemented — only "reflect" is supported. Skipping verification.`)
+                      .pipe(Effect.catchAll(() => Effect.void));
+                  }
                   if (config.verificationStep?.mode === "reflect" && !cacheHit && reasoningOpt._tag === "Some") {
                     const outputToVerify = String(ctx.metadata.lastResponse ?? "");
                     if (outputToVerify) {
@@ -2425,6 +2429,11 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     }
 
                     // withVerificationStep reflect mode (direct-LLM)
+                    // "loop" mode is not yet implemented — warn and skip.
+                    if (config.verificationStep && config.verificationStep.mode !== "reflect" && obs) {
+                      yield* obs.info(`⚠ withVerificationStep: mode "${config.verificationStep.mode}" is not yet implemented — only "reflect" is supported. Skipping verification.`)
+                        .pipe(Effect.catchAll(() => Effect.void));
+                    }
                     if (config.verificationStep?.mode === "reflect" && !cacheHit && llmHookOpt._tag === "Some") {
                       const outputToVerify = String(ctx.metadata.lastResponse ?? "");
                       if (outputToVerify) {
