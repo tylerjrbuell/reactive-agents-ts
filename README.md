@@ -6,7 +6,7 @@
 
 **The open-source agent framework built for control, not magic.**
 
-Every decision controllable, observable, and auditable. 25 packages. Composable layers. 5 reasoning strategies. 6 LLM providers. Model-adaptive context profiles. Intelligent Context Synthesis (ICS) between kernel iterations. 10-phase execution engine with lifecycle hooks. React, Vue & Svelte hooks included. 3,032 tests across 349 files. Built on Effect-TS for type safety from prompt to production.
+Every decision controllable, observable, and auditable. 25 packages. Composable layers. 5 reasoning strategies. 6 LLM providers. Model-adaptive context profiles. Intelligent Context Synthesis (ICS) between kernel iterations. 10-phase execution engine with lifecycle hooks. React, Vue & Svelte hooks included. 3,036 tests across 350 files. Built on Effect-TS for type safety from prompt to production.
 
 [![CI](https://github.com/tylerjrbuell/reactive-agents-ts/actions/workflows/ci.yml/badge.svg)](https://github.com/tylerjrbuell/reactive-agents-ts/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/badge/npm-%40reactive--agents-CB3837?logo=npm)](https://www.npmjs.com/org/reactive-agents)
@@ -55,6 +55,7 @@ Most AI agent frameworks are dynamically typed, monolithic, and opaque. They ass
 - **Professional metrics dashboard** -- EventBus-driven execution timeline, tool call summary, smart alerts, and cost estimation (zero manual instrumentation)
 - **Required tools guard** -- ensure agents call critical tools before answering (static list or adaptive LLM inference)
 - **Builder hardening** -- `withStrictValidation()`, `withTimeout()`, `withRetryPolicy()`, `withCacheTimeout()`, consolidated `withGuardrails()` thresholds, `withErrorHandler()`, `withFallbacks()`, `withLogging()`, `withHealthCheck()`, automatic strategy switching
+- **Harness quality controls** -- `withMinIterations(n)` blocks early exit, `withVerificationStep()` adds LLM self-review, `withOutputValidator(fn)` retries on invalid output, `withCustomTermination(fn)` user-defined done predicate, `withProgressCheckpoint(n)` resumable agents, `withTaskContext(record)` background data injection
 - **ToolBuilder fluent API** -- define tools without raw schema objects
 - **Provider fallback chains** -- `FallbackChain` + `withFallbacks()` for graceful degradation across providers/models
 - **Structured logging** -- `makeLoggerService()` with level filtering, JSON/text format, and file output with rotation via `withLogging()`
@@ -65,7 +66,7 @@ Most AI agent frameworks are dynamically typed, monolithic, and opaque. They ass
 - **Lightweight composition** -- `agentFn()` lazy agent primitives, `pipe()` sequential chains, `parallel()` concurrent fan-out, `race()` first-to-complete — all composable
 - **Dynamic tool registration** -- `agent.registerTool()` / `agent.unregisterTool()` for runtime tool management on live agents
 - **Web framework integration** — `@reactive-agents/react` (`useAgentStream`, `useAgent`), `@reactive-agents/vue` composables, `@reactive-agents/svelte` stores — consume `AgentStream.toSSE()` from Next.js, SvelteKit, Nuxt, or any SSE-capable server
-- **3,032 tests** across 349 files
+- **3,036 tests** across 350 files
 
 ## Quick Start
 
@@ -133,6 +134,13 @@ const agent = await ReactiveAgents.create()
   })
   .withLogging({ level: "info", format: "json", filePath: "./agent.log" }) // Structured logging
   .withHealthCheck()                                     // Enable agent.health() probe
+  .withMinIterations(3)                                  // Require at least 3 iterations before exit
+  .withVerificationStep({ mode: "reflect" })             // LLM self-review pass after initial answer
+  .withOutputValidator((output) => ({                    // Structural validation with retry
+    valid: output.includes("COMPLETE"),
+    feedback: "Response must include COMPLETE marker",
+  }))
+  .withTaskContext({ project: "acme", env: "prod" })     // Background data → reasoning context
   .withSkills({                                          // Living Skills System
     paths: ["./my-skills/"],
     evolution: { mode: "suggest" },
@@ -303,7 +311,7 @@ How Reactive Agents compares to other TypeScript agent frameworks on shipped, wo
 | Agent-as-data config          | Yes             | --           | --            | --     |
 | Functional composition        | Yes             | Yes          | --            | --     |
 | Dynamic tool registration     | Yes             | Yes          | --            | --     |
-| Test suite                    | 3,026 tests     | --           | --            | --     |
+| Test suite                    | 3,036 tests     | --           | --            | --     |
 
 ## Use Cases
 
@@ -646,7 +654,7 @@ Reactive Agents supports 6 providers: Anthropic, OpenAI, Google Gemini, Ollama (
 
 ### Is this framework production-ready?
 
-Yes -- it includes guardrails, budget controls, auditability, observability, Ed25519 identity, and composable service layers for testable deployments. 3,032 tests across 349 files.
+Yes -- it includes guardrails, budget controls, auditability, observability, Ed25519 identity, and composable service layers for testable deployments. 3,036 tests across 350 files.
 
 ### Can I run fully local agents?
 
@@ -660,7 +668,7 @@ See the [comparison table](#comparison). The key differences are: full Effect-TS
 
 ```bash
 bun install              # Install dependencies
-bun test                 # Run full test suite (3,032 tests, 349 files)
+bun test                 # Run full test suite (3,036 tests, 350 files)
 bun run build            # Build all packages (25 packages, ESM + DTS)
 ```
 
