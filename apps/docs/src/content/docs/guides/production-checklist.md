@@ -324,6 +324,9 @@ const agent = await ReactiveAgents.create()
 | Prompt injection | `.withGuardrails()` | off | Enable |
 | Cost limits | `.withCostTracking({ budget })` | off | Set per-request budget |
 | Iteration limit | `.withMaxIterations(N)` | 10 | 20–50 for complex tasks |
+| Min iterations | `.withMinIterations(N)` | none | 2–3 for research tasks |
+| Output quality | `.withOutputValidator(fn)` | none | Validate structure for critical outputs |
+| Answer verification | `.withVerificationStep()` | none | Enable for high-stakes decisions |
 | Timeout | `.withTimeout(ms)` | none | 60\_000–300\_000 |
 | Retry | `.withRetryPolicy()` | none | `{ maxAttempts: 3 }` |
 | Observability | `.withObservability()` | off | Enable with `verbosity: "normal"` |
