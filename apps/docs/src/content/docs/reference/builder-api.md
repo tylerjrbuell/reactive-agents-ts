@@ -162,11 +162,11 @@ See [Context Engineering](/guides/context-engineering/) for full tier defaults.
 | `withFallbacks(config)` | `{ providers?, models?, errorThreshold? }` fallback chain |
 | `withLogging(config)` | `makeLoggerService` — `{ level?, format?, output?: "console" \| "file" \| WritableStream, filePath?, maxFileSizeBytes?, maxFiles? }` |
 | `withHealthCheck()` | Enables `agent.health()` |
-| `withVerificationStep(config?)` | After the initial answer, run a mandatory LLM self-review pass. `{ mode: "reflect" }` (default) makes one extra LLM call; `"loop"` re-enters the ReAct loop (planned V1.1). Optional `prompt` override |
-| `withOutputValidator(fn, options?)` | Validate the final output before accepting it. `fn(output) => { valid, feedback? }`. On failure the feedback is injected and the agent retries up to `options.maxRetries` (default 2) |
-| `withCustomTermination(fn)` | Re-run reasoning until `fn({ output }) === true`, up to 3 additional times. Useful for domain-specific completion criteria |
-| `withTaskContext(record)` | Inject background key-value data into the reasoning memory context (facts, project state — distinct from `systemPrompt` instructions) |
-| `withProgressCheckpoint(every, options?)` | Store resumption config every N iterations. `{ autoResume? }`. PlanStore write integration is V1.1; session resumption already surfaces incomplete plans |
+| `withVerificationStep(config?)` | Post-answer LLM self-review. `{ mode: "reflect" \| "loop", prompt? }`. `"reflect"` makes one extra LLM call; `"loop"` re-enters the ReAct loop (V1.1) |
+| `withOutputValidator(fn, options?)` | Validate output before accepting. `fn(output) => { valid, feedback? }`. Failed validation injects feedback and retries up to `maxRetries` (default 2) |
+| `withCustomTermination(fn)` | Re-run until `fn({ output }) === true`, up to 3 times. For domain-specific completion criteria |
+| `withTaskContext(record)` | `Record<string, string>` injected as background data into reasoning context — distinct from `systemPrompt` instructions |
+| `withProgressCheckpoint(every, options?)` | Store resumption checkpoint config every N iterations. `{ autoResume? }`. PlanStore execution integration is V1.1 |
 | `withReactiveIntelligence(false)` | Disable the Reactive Intelligence layer (enabled by default). |
 | `withReactiveIntelligence(options?)` | Entropy, controller, telemetry, hooks (`onEntropyScored`, `onControllerDecision`, …), `constraints`, `autonomy`. See [Reactive Intelligence](/features/reactive-intelligence/) |
 | `withSkills(config?)` | `{ paths?, packages?, evolution?: { mode?, refinementThreshold?, rollbackOnRegression? }, overrides? }` |
