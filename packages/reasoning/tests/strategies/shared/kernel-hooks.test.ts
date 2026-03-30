@@ -205,17 +205,18 @@ describe("buildKernelHooks", () => {
       expect(toolEvent.success).toBe(false); // ✅ Now correctly reflects failure
     });
 
-    it("onObservation handles empty steps gracefully", async () => {
+    it("onObservation handles empty steps gracefully — no ToolCallCompleted for system observations", async () => {
       const { events, eb } = makeMockEventBus();
       const hooks = buildKernelHooks(eb);
 
-      // No steps — edge case
+      // No steps — system observation: only ReasoningStepCompleted fires,
+      // no ToolCallCompleted (avoids "unknown" tool name in metrics).
       await Effect.runPromise(hooks.onObservation(baseState(), "orphan observation", false));
 
-      expect(events).toHaveLength(2);
-      const toolEvent = events[1] as Record<string, unknown>;
-      expect(toolEvent.toolName).toBe("unknown");
-      expect(toolEvent.callId).toBe("unknown");
+      expect(events).toHaveLength(1);
+      const stepEvent = events[0] as Record<string, unknown>;
+      expect(stepEvent._tag).toBe("ReasoningStepCompleted");
+      expect(stepEvent.observation).toBe("orphan observation");
     });
 
     it("onDone publishes FinalAnswerProduced", async () => {
