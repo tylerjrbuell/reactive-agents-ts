@@ -101,10 +101,10 @@ async function runTask(
     ExecutionEngine.pipe(
       Effect.flatMap((engine) =>
         engine.execute({
-          id: `task-${Date.now()}`,
-          agentId: config.agentId,
+          id: `task-${Date.now()}` as any,
+          agentId: config.agentId as any,
           input: task,
-          type: "general",
+          type: "query" as const,
         }),
       ),
       Effect.provide(runLayer),
@@ -121,7 +121,6 @@ describe("withMinIterations", () => {
     const builder = ReactiveAgents.create()
       .withName("min-iter-test")
       .withTestScenario([{ text: "result" }])
-      // @ts-expect-error — method does not exist yet (RED)
       .withMinIterations(3);
 
     expect(builder).toBeDefined();
@@ -131,27 +130,17 @@ describe("withMinIterations", () => {
     const agent = await ReactiveAgents.create()
       .withName("min-iter-config")
       .withTestScenario([{ text: "result" }])
-      // @ts-expect-error — method does not exist yet (RED)
       .withMinIterations(3)
       .build();
 
-    // After implementation: (agent as any)._config.minIterations === 3
     expect((agent as any)._config?.minIterations ?? (agent as any).config?.minIterations).toBe(3);
   });
 
   it("does not terminate before N iterations when using fast-path", async () => {
     const config = defaultReactiveAgentsConfig("min-iter-agent", {
       maxIterations: 10,
-      // @ts-expect-error — field does not exist yet (RED)
       minIterations: 3,
     });
-
-    // LLM returns an immediate text completion — would normally trigger fast-path exit
-    // With minIterations:3, the agent should complete at least 3 iterations
-    const { events, bus } = (() => {
-      const events: unknown[] = [];
-      return { events, bus: events };
-    })();
 
     // Basic smoke: run completes without error when minIterations is set
     const result = await runTask(
@@ -171,7 +160,6 @@ describe("withCustomTermination", () => {
     const builder = ReactiveAgents.create()
       .withName("custom-term-test")
       .withTestScenario([{ text: "SUCCESS: task complete" }])
-      // @ts-expect-error — method does not exist yet (RED)
       .withCustomTermination((state: unknown) => String((state as any).output ?? "").includes("SUCCESS"));
 
     expect(builder).toBeDefined();
@@ -182,7 +170,6 @@ describe("withCustomTermination", () => {
     const agent = await ReactiveAgents.create()
       .withName("custom-term-config")
       .withTestScenario([{ text: "done" }])
-      // @ts-expect-error — method does not exist yet (RED)
       .withCustomTermination(fn)
       .build();
 
@@ -193,7 +180,6 @@ describe("withCustomTermination", () => {
   it("terminates when predicate returns true based on output content", async () => {
     const config = defaultReactiveAgentsConfig("custom-term-agent", {
       maxIterations: 10,
-      // @ts-expect-error — field does not exist yet (RED)
       customTermination: (state: unknown) =>
         String((state as any).output ?? "").includes("DONE"),
     });
@@ -215,7 +201,6 @@ describe("withVerificationStep", () => {
     const builder = ReactiveAgents.create()
       .withName("verify-test")
       .withTestScenario([{ text: "answer" }, { text: "PASS" }])
-      // @ts-expect-error — method does not exist yet (RED)
       .withVerificationStep({ mode: "reflect" });
 
     expect(builder).toBeDefined();
@@ -225,7 +210,6 @@ describe("withVerificationStep", () => {
     const agent = await ReactiveAgents.create()
       .withName("verify-config")
       .withTestScenario([{ text: "answer" }, { text: "PASS" }])
-      // @ts-expect-error — method does not exist yet (RED)
       .withVerificationStep({ mode: "reflect" })
       .build();
 
@@ -240,7 +224,6 @@ describe("withVerificationStep", () => {
 
     const config = defaultReactiveAgentsConfig("verify-agent", {
       maxIterations: 5,
-      // @ts-expect-error — field does not exist yet (RED)
       verificationStep: { mode: "reflect" },
     });
 
@@ -255,7 +238,6 @@ describe("withVerificationStep", () => {
     const builder = ReactiveAgents.create()
       .withName("verify-prompt-test")
       .withTestScenario([{ text: "answer" }, { text: "PASS" }])
-      // @ts-expect-error — method does not exist yet (RED)
       .withVerificationStep({
         mode: "reflect",
         prompt: "Review this output: does it fully answer the task?",
@@ -274,7 +256,6 @@ describe("withOutputValidator", () => {
     const builder = ReactiveAgents.create()
       .withName("validator-test")
       .withTestScenario([{ text: "COMPLETE: result" }])
-      // @ts-expect-error — method does not exist yet (RED)
       .withOutputValidator((output: string) => ({
         valid: output.includes("COMPLETE"),
         feedback: "Response must include COMPLETE marker",
@@ -288,7 +269,6 @@ describe("withOutputValidator", () => {
     const agent = await ReactiveAgents.create()
       .withName("validator-config")
       .withTestScenario([{ text: "COMPLETE: a sufficiently long answer here" }])
-      // @ts-expect-error — method does not exist yet (RED)
       .withOutputValidator(validator)
       .build();
 
@@ -300,7 +280,6 @@ describe("withOutputValidator", () => {
   it("accepts output that passes validation without retry", async () => {
     const config = defaultReactiveAgentsConfig("validator-agent", {
       maxIterations: 5,
-      // @ts-expect-error — field does not exist yet (RED)
       outputValidator: (output: string) => ({ valid: output.includes("COMPLETE") }),
     });
 
@@ -309,7 +288,6 @@ describe("withOutputValidator", () => {
   });
 
   it("retries with injected feedback when validator rejects output", async () => {
-    const { layer, callCount } = makeCountingLLM("COMPLETE: corrected answer");
     // First response lacks the required marker — would be rejected and retried
     let callIdx = 0;
     const retryLayer = Layer.succeed(LLMTag, {
@@ -327,7 +305,6 @@ describe("withOutputValidator", () => {
 
     const config = defaultReactiveAgentsConfig("validator-retry-agent", {
       maxIterations: 5,
-      // @ts-expect-error — field does not exist yet (RED)
       outputValidator: (output: string) => ({
         valid: output.includes("COMPLETE"),
         feedback: "Response must include COMPLETE marker",
@@ -351,7 +328,6 @@ describe("withProgressCheckpoint", () => {
     const builder = ReactiveAgents.create()
       .withName("checkpoint-test")
       .withTestScenario([{ text: "done" }])
-      // @ts-expect-error — method does not exist yet (RED)
       .withProgressCheckpoint(2);
 
     expect(builder).toBeDefined();
@@ -361,7 +337,6 @@ describe("withProgressCheckpoint", () => {
     const agent = await ReactiveAgents.create()
       .withName("checkpoint-config")
       .withTestScenario([{ text: "done" }])
-      // @ts-expect-error — method does not exist yet (RED)
       .withProgressCheckpoint(2)
       .build();
 
@@ -375,7 +350,6 @@ describe("withProgressCheckpoint", () => {
     const builder = ReactiveAgents.create()
       .withName("checkpoint-resume-test")
       .withTestScenario([{ text: "done" }])
-      // @ts-expect-error — method does not exist yet (RED)
       .withProgressCheckpoint(3, { autoResume: true });
 
     expect(builder).toBeDefined();
@@ -391,7 +365,6 @@ describe("withTaskContext", () => {
     const builder = ReactiveAgents.create()
       .withName("context-test")
       .withTestScenario([{ text: "done" }])
-      // @ts-expect-error — method does not exist yet (RED)
       .withTaskContext({ projectName: "reactive-agents", environment: "production" });
 
     expect(builder).toBeDefined();
@@ -402,7 +375,6 @@ describe("withTaskContext", () => {
     const agent = await ReactiveAgents.create()
       .withName("context-config")
       .withTestScenario([{ text: "done" }])
-      // @ts-expect-error — method does not exist yet (RED)
       .withTaskContext(ctx)
       .build();
 
@@ -416,7 +388,6 @@ describe("withTaskContext", () => {
   it("run completes successfully when taskContext is configured", async () => {
     const config = defaultReactiveAgentsConfig("context-agent", {
       maxIterations: 5,
-      // @ts-expect-error — field does not exist yet (RED)
       taskContext: { projectName: "reactive-agents", environment: "test" },
     });
 
@@ -428,7 +399,6 @@ describe("withTaskContext", () => {
     const builder = ReactiveAgents.create()
       .withName("empty-context-test")
       .withTestScenario([{ text: "done" }])
-      // @ts-expect-error — method does not exist yet (RED)
       .withTaskContext({});
 
     expect(builder).toBeDefined();
