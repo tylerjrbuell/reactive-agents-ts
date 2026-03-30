@@ -1879,8 +1879,7 @@ export class ReactiveAgentBuilder {
   /**
    * Provide a custom termination predicate. After each reasoning result, this
    * function is called with the output. If it returns false, the agent re-runs
-   * with the prior output as context until the predicate is satisfied or
-   * maxIterations is reached.
+   * with the prior output as context, up to 3 additional times.
    * @param fn - Predicate receiving { output: string }; return true to accept the result
    * @returns `this` for chaining
    * @example

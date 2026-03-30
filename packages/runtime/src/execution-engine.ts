@@ -1344,7 +1344,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   // withMinIterations: re-run if fewer iterations than required
                   if (config.minIterations && !cacheHit && reasoningOpt._tag === "Some") {
                     const reasoningResultMeta = ctx.metadata.reasoningResult as any;
-                    const iterationsDone = reasoningResultMeta?.metadata?.stepsCount ?? 0;
+                    const iterationsDone = ctx.iteration - 1;
                     if (iterationsDone < config.minIterations) {
                       const continuationOutcome = yield* Effect.exit(
                         reasoningOpt.value.execute({
@@ -1417,14 +1417,15 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         }),
                       );
                       if (verifyOutcome._tag === "Success") {
+                        const verifyContent = String(verifyOutcome.value.output ?? "");
+                        const metaUpdate = verifyContent.startsWith("REVISE")
+                          ? { verificationFeedback: verifyContent }
+                          : {};
                         ctx = {
                           ...ctx,
                           cost: ctx.cost + (verifyOutcome.value.metadata.cost ?? 0),
                           tokensUsed: ctx.tokensUsed + (verifyOutcome.value.metadata.tokensUsed ?? 0),
-                          metadata: {
-                            ...ctx.metadata,
-                            verificationFeedback: String(verifyOutcome.value.output ?? ""),
-                          },
+                          metadata: { ...ctx.metadata, ...metaUpdate },
                         };
                       }
                     }
@@ -2433,7 +2434,10 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                           { role: "user", content: verifyPrompt },
                         ]);
                         if (verifyContent !== null) {
-                          ctx = { ...ctx, metadata: { ...ctx.metadata, verificationFeedback: verifyContent } };
+                          const metaUpdate = verifyContent.startsWith("REVISE")
+                            ? { verificationFeedback: verifyContent }
+                            : {};
+                          ctx = { ...ctx, metadata: { ...ctx.metadata, ...metaUpdate } };
                         }
                       }
                     }
