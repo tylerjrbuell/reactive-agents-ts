@@ -9,11 +9,32 @@
 - [Project Dispatch](project_dispatch.md) — NL automation builder product, separate repo, Elysia + Svelte + SQLite
 - [Composable Strategy Architecture](project_composable_strategies.md) — V1.1: strategies as composable capabilities, not exclusive modes
 - [Composable Provider Adapters](project_composable_adapters.md) — V1.1 DONE in v0.8.5: all 7 hooks implemented
+- [Composable Reasoning Phases](project_composable_phases.md) — V1.1: explicit phase pipeline (plan/execute/verify/reflect/terminate), strategies become presets
 
-## Current Status (Mar 28, 2026)
-- **v0.8.5 releasing** — 25 packages + 2 apps, 3,032 tests across 349 files (3002 pass, 30 skip, 0 fail)
+## Current Status (Mar 29, 2026)
+- **v0.8.5+ in progress** — 22 packages + 2 apps, 3,036 tests across 350 files (3036 pass, 30 skip, 0 fail)
+- **Harness quality controls shipped** — 6 new builder methods for execution quality and reliability
 - **Preparing for Show HN** — architecture solid, DX polished, local model reliability improved
-- **Decision: release 0.8.5 then Show HN** — benchmark suite + docs refresh are parallel tracks
+
+## What Shipped Mar 29, 2026
+
+### Harness Quality Controls (6 new builder methods)
+- `withMinIterations(n)` — blocks fast-path exit before N iterations
+- `withVerificationStep({ mode: "reflect" })` — LLM self-review pass after initial answer
+- `withOutputValidator(fn)` — structural validation with retry on failure (up to 2x by default)
+- `withCustomTermination(fn)` — user-defined done predicate, re-runs until true (max 3x)
+- `withProgressCheckpoint(n)` — checkpoint config stored; execution integration deferred to V1.1
+- `withTaskContext(record)` — background data injected into reasoning memory context
+
+### Memory Consolidation Improvements
+- Date normalization in MemoryExtractor (Tier 1 + Tier 2 + heuristic fallback) — "yesterday" → ISO date
+- Near-duplicate decay in MemoryConsolidatorLive Step 4 — SQL substr(content,1,40) matching
+- Session resumption in bootstrap — prior debrief + active plan surfaced into memCtx
+
+### Kernel Hooks Fix
+- `ToolCallCompleted` no longer emitted for system observations (completion-guard redirects)
+- Eliminates "unknown" tool name from metrics dashboard
+- Debug-level `Effect.logDebug` still fires for troubleshooting visibility
 
 ## What Shipped v0.8.5 (Mar 28, 2026)
 
