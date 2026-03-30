@@ -1776,7 +1776,15 @@ export class ReactiveAgentBuilder {
    * Require at least N iterations before the agent can declare success.
    * Blocks the fast-path and hides the final-answer tool until the minimum
    * is reached. Only iterations that include at least one tool call count.
-   * @example .withMinIterations(3)
+   * @param n - Minimum number of iterations required
+   * @returns `this` for chaining
+   * @example
+   * ```typescript
+   * const agent = await ReactiveAgents.create()
+   *   .withProvider("anthropic")
+   *   .withMinIterations(3)
+   *   .build();
+   * ```
    */
   withMinIterations(n: number): this {
     this._minIterations = n;
@@ -1787,7 +1795,15 @@ export class ReactiveAgentBuilder {
    * Provide background data injected into the reasoning memory context.
    * Unlike systemPrompt (instructions), taskContext is treated as grounding
    * data — facts about the current task, project, or environment.
-   * @example .withTaskContext({ projectName: "acme", environment: "production" })
+   * @param context - Key-value pairs injected as a "Task Context" section
+   * @returns `this` for chaining
+   * @example
+   * ```typescript
+   * const agent = await ReactiveAgents.create()
+   *   .withProvider("anthropic")
+   *   .withTaskContext({ projectName: "acme", environment: "production" })
+   *   .build();
+   * ```
    */
   withTaskContext(context: Record<string, string>): this {
     this._taskContext = context;
@@ -1800,7 +1816,14 @@ export class ReactiveAgentBuilder {
    * detects the incomplete plan and injects it as prior context.
    * @param every - Checkpoint interval in iterations
    * @param options.autoResume - Automatically resume from last checkpoint (default: false)
-   * @example .withProgressCheckpoint(5, { autoResume: true })
+   * @returns `this` for chaining
+   * @example
+   * ```typescript
+   * const agent = await ReactiveAgents.create()
+   *   .withProvider("anthropic")
+   *   .withProgressCheckpoint(5, { autoResume: true })
+   *   .build();
+   * ```
    */
   withProgressCheckpoint(every: number, options?: { autoResume?: boolean }): this {
     this._progressCheckpoint = { every, ...options };
@@ -1811,8 +1834,16 @@ export class ReactiveAgentBuilder {
    * Run a verification pass after the initial reasoning result before accepting it.
    * In "reflect" mode (default), one LLM call reviews the output and confirms
    * completeness. In "loop" mode, the agent re-enters the ReAct loop with tools.
-   * @example .withVerificationStep({ mode: "reflect" })
-   * @example .withVerificationStep({ mode: "reflect", prompt: "Does this answer all parts of the task?" })
+   * @param config.mode - "reflect" (default) or "loop"
+   * @param config.prompt - Custom verification prompt (optional)
+   * @returns `this` for chaining
+   * @example
+   * ```typescript
+   * const agent = await ReactiveAgents.create()
+   *   .withProvider("anthropic")
+   *   .withVerificationStep({ mode: "reflect" })
+   *   .build();
+   * ```
    */
   withVerificationStep(config: { mode?: "reflect" | "loop"; prompt?: string } = {}): this {
     this._verificationStep = { mode: config.mode ?? "reflect", prompt: config.prompt };
@@ -1824,11 +1855,17 @@ export class ReactiveAgentBuilder {
    * feedback is injected as context and the agent retries (up to maxRetries times).
    * @param validator - Returns { valid, feedback? }; feedback is shown to the agent on retry
    * @param options.maxRetries - Max retry attempts on validation failure (default: 2)
+   * @returns `this` for chaining
    * @example
-   * .withOutputValidator(
-   *   (output) => ({ valid: output.includes("COMPLETE"), feedback: "Must include COMPLETE marker" }),
-   *   { maxRetries: 3 }
-   * )
+   * ```typescript
+   * const agent = await ReactiveAgents.create()
+   *   .withProvider("anthropic")
+   *   .withOutputValidator(
+   *     (output) => ({ valid: output.includes("COMPLETE"), feedback: "Must include COMPLETE marker" }),
+   *     { maxRetries: 3 }
+   *   )
+   *   .build();
+   * ```
    */
   withOutputValidator(
     validator: (output: string) => { valid: boolean; feedback?: string },
@@ -1842,8 +1879,17 @@ export class ReactiveAgentBuilder {
   /**
    * Provide a custom termination predicate. After each reasoning result, this
    * function is called with the output. If it returns false, the agent re-runs
-   * with the prior output as context. Runs until true or up to 3 re-runs maximum.
-   * @example .withCustomTermination(({ output }) => output.includes("DONE"))
+   * with the prior output as context until the predicate is satisfied or
+   * maxIterations is reached.
+   * @param fn - Predicate receiving { output: string }; return true to accept the result
+   * @returns `this` for chaining
+   * @example
+   * ```typescript
+   * const agent = await ReactiveAgents.create()
+   *   .withProvider("anthropic")
+   *   .withCustomTermination(({ output }) => output.includes("DONE"))
+   *   .build();
+   * ```
    */
   withCustomTermination(fn: (state: { output: string }) => boolean): this {
     this._customTermination = fn;
@@ -3114,7 +3160,7 @@ export class ReactiveAgent {
     /** @internal Reference to the shared RAG memory store for runtime ingestion via ingest(). */
     private readonly _ragStore?: import("@reactive-agents/tools").RagMemoryStore,
     /** @internal Harness improvement config fields exposed for testing. */
-    readonly _config?: {
+    private readonly _config?: {
       minIterations?: number;
       taskContext?: Record<string, string>;
       progressCheckpoint?: { every: number; autoResume?: boolean };
