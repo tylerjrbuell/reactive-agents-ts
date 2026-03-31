@@ -166,9 +166,50 @@ Emitted on `agent.health()` calls and on periodic gateway heartbeats.
 }
 ```
 
-### 3.8 `CortexEvent` Union — `@reactive-agents/core` (EXTEND)
+### 3.8 `ProviderFallbackActivated` Event — `@reactive-agents/llm-provider` (NEW)
 
-Add all new event types above to the `AgentEvent` discriminated union. `CortexReporter` forwards all `AgentEvent` types — no Cortex-specific event format needed.
+`FallbackChain` is fully implemented but emits no `AgentEvent`. When a provider fails and the chain advances, Cortex has no visibility. This event closes that gap.
+
+```typescript
+{
+  _tag: "ProviderFallbackActivated";
+  taskId: string;
+  fromProvider: string;
+  toProvider: string;
+  reason: string;        // "rate_limit" | "timeout" | "error" + message
+  attemptNumber: number;
+}
+```
+
+Emitted by `FallbackChain` before the retry attempt on the next provider.
+
+### 3.9 `DebriefCompleted` Event — `@reactive-agents/runtime` (NEW)
+
+`DebriefSynthesizer` produces a full `AgentDebrief` post-run but emits no event. Cortex needs to know when a debrief is ready to display the post-run card.
+
+```typescript
+{
+  _tag: "DebriefCompleted";
+  taskId: string;
+  agentId: string;
+  debrief: AgentDebrief;  // full debrief: summary, keyFindings, lessons, errors, metrics, markdown
+}
+```
+
+Emitted by `ExecutionEngine` immediately after `synthesizeDebrief()` resolves.
+
+### 3.10 `AgentConnected` / `AgentDisconnected` Events — `@reactive-agents/core` (NEW)
+
+Emitted by `CortexReporterLive` when the WebSocket connection to Cortex is established or lost. Allows Cortex to animate node appearance and show connection state on Stage.
+
+```typescript
+{ _tag: "AgentConnected"; agentId: string; runId: string; cortexUrl: string }
+{ _tag: "AgentDisconnected"; agentId: string; runId: string; reason: string }
+```
+
+### 3.11 `AgentEvent` Union — `@reactive-agents/core` (EXTEND)
+
+Add all new event types (§3.1–§3.10) to the `AgentEvent` discriminated union. `CortexReporter` forwards all `AgentEvent` types — no Cortex-specific event format needed.
 
 ---
 
@@ -257,6 +298,12 @@ The home. Where you live. Shows all agents — running, scheduled, completed, id
 
 Clicking any node navigates to the Run view for that agent.
 
+**The connection moment** — this is the product's most important UX event. When `AgentConnected` is received:
+1. A new node materializes on Stage with a brief expand animation (scales up from 0, violet burst)
+2. A non-blocking toast appears bottom-right: `◈ research-task-42 connected` with a dim violet border
+3. If Cortex was launched via `rax run --cortex` (i.e., no other agents are connected and this is the first), automatically navigate to the Run view for that run — don't stay on Stage
+4. If other agents are already on Stage, stay on Stage and let the user choose
+
 **Empty state (first launch):**
 Center-canvas message in muted monospace:
 ```
@@ -312,12 +359,41 @@ Click any point across any track → selects that iteration, highlights it in al
 
 **Replay** — past runs rebuild from persisted events at 0.5×/1×/2×/instant speed.
 
+**Debrief card** — when `DebriefCompleted` is received (or on load for past runs), the Run view appends a post-run card below the signal monitor. This is the "what just happened" summary using the fully-built `AgentDebrief` from `DebriefStore`:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  ◈ RUN DEBRIEF                              ✓ SUCCESS  42.1s   │
+├─────────────────────────────────────────────────────────────────┤
+│  SUMMARY                                                        │
+│  "The agent successfully researched 3 TypeScript agent          │
+│   frameworks, comparing benchmarks and community sentiment."    │
+│                                                                 │
+│  KEY FINDINGS                    LESSONS LEARNED               │
+│  • LangGraph leads Python        • web-search before analysis  │
+│  • Mastra leads TypeScript       • 3 searches sufficient        │
+│  • CLI tools gaining traction    • Plan-execute more efficient  │
+│                                                                 │
+│  METRICS: 7 iter · 8,240 tok · $0.011 · 42.1s · 4 tool calls  │
+│                                                [Copy Markdown]  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+The "Copy Markdown" button copies `debrief.markdown` — the pre-rendered full report. High value for sharing run results.
+
+For runs that error, the debrief card shows `outcome: "failure"` with the error log and any partial findings.
+
+**Provider fallback indicator** — if `ProviderFallbackActivated` events are present in the run, a small badge appears in the vitals strip: `⚡ anthropic → openai` in amber. Clicking it opens a popover showing the full fallback log.
+
 ### 5.3 Workshop View
 
 Where you create, configure, and explore. Accessed from the top nav or from Stage's empty state. Three tabs within Workshop:
 
-**Builder tab** — progressive disclosure agent configuration:
+**Builder tab** — progressive disclosure agent configuration with three entry points:
+
 ```
+[ New Agent ]  [ Load Config ▾ ]  [ Import JSON ]
+
 Provider + Model    [anthropic ▾]  [claude-sonnet-4-6 ▾]
 Prompt              [ textarea ]
 + Add capability ▾
@@ -326,6 +402,13 @@ Prompt              [ textarea ]
 
 [▶ Run]    [Save as Gateway Agent]    [Export Config ›]
 ```
+
+**Load Config** entry points:
+- `From Gateway Agent` — dropdown of saved Gateway agents, loads their `AgentConfig` into the builder for editing
+- `From Run` — dropdown/search of past runs, loads the config that produced that run
+- `Import JSON` — paste or drag-drop an `AgentConfig` JSON file
+
+When a config is loaded the builder populates all sections from the schema. The loaded source is shown as a chip at the top: `Loaded from: github-monitor` with an `×` to clear. Saving creates a new agent — never silently overwrites the source.
 
 Capability list driven by `AgentConfig` schema — new builder methods appear automatically.
 
@@ -342,12 +425,14 @@ Present on all views. A global search + action interface. Required from day one 
 Registered commands include:
 - `Run agent...` → focuses Stage input bar
 - `View last run` → navigates to most recent Run view
-- `New gateway agent` → opens Workshop > Builder
-- `Connect agent` → shows CORTEX_URL snippet to copy
+- `New agent` → opens Workshop > Builder (blank)
+- `Load config from run...` → opens Workshop > Builder pre-loaded from a run
+- `Connect agent` → shows `.withCortex()` + `CORTEX_URL` snippet to copy
 - `Open run <id>` → deep link to any run
+- `Copy debrief` → copies `debrief.markdown` for the currently viewed run
 - `Browse skills` → Workshop > Skills
 - `Test tool <name>` → Workshop > Tools
-- `Export config` → exports current agent's AgentConfig JSON
+- `Export config` → exports current agent's `AgentConfig` JSON
 
 Each view registers its own contextual commands. The palette aggregates all registered commands and filters by typed text.
 
@@ -602,18 +687,51 @@ The `--cortex` flag on `rax run` is equivalent to setting `CORTEX_URL=http://loc
 
 ### Must Ship
 
-- [ ] `CortexReporterLayer` + `.withCortex()` in framework (prerequisite)
-- [ ] All 6 new/enhanced framework events (§3)
-- [ ] Stage view: agent nodes with cognitive state, persistent input bar, empty state onboarding
-- [ ] Run view: signal monitor (4 tracks), trace panel, reactive decisions log, memory panel, context gauge
-- [ ] Workshop view: Builder tab (core capabilities), Skills tab (browse), Tools tab (browse + test)
-- [ ] Chat mode in Run view for `agent.chat()` sessions
-- [ ] Command palette (Cmd+K) with core commands
-- [ ] Deep links: `/run/:runId`, `/workshop`
+**Framework prerequisites (build first):**
+- [ ] `CortexReporterLayer` + `.withCortex()` — `@reactive-agents/observability` + `@reactive-agents/runtime`
+- [ ] `DebriefCompleted` event — `@reactive-agents/runtime`
+- [ ] `ProviderFallbackActivated` event — `@reactive-agents/llm-provider`
+- [ ] `AgentConnected` / `AgentDisconnected` events — `@reactive-agents/core`
+- [ ] `ReactiveDecisionRecorded` enhancement — `@reactive-agents/core`
+- [ ] `MemorySnapshot` event — `@reactive-agents/core`
+- [ ] `ContextPressure` event — `@reactive-agents/core`
+- [ ] `ChatTurn` event — `@reactive-agents/core`
+- [ ] `AgentHealthReport` event — `@reactive-agents/health`
+
+**Stage view:**
+- [ ] Agent nodes with cognitive state (idle/running/entropy/completed/error)
+- [ ] Connection moment: node appear animation + toast + auto-navigate on first connect
+- [ ] Persistent input bar (always visible, focused on empty state)
+- [ ] Empty state onboarding with connection snippet
+
+**Run view:**
+- [ ] Signal monitor (4 D3 tracks: entropy, tokens, tools, latency)
+- [ ] Trace panel (thought/action/observation per iteration)
+- [ ] Vitals strip with EKG entropy heartbeat
+- [ ] Reactive decisions log (bottom bar)
+- [ ] Memory panel (bottom bar)
+- [ ] Context pressure gauge (bottom bar)
+- [ ] Debrief card (post-run, from `DebriefCompleted` event)
+- [ ] Provider fallback badge in vitals strip
+- [ ] Chat mode for `agent.chat()` sessions
+- [ ] Replay mode (past runs, adjustable speed)
+- [ ] Deep link `/run/:runId`
+
+**Workshop view:**
+- [ ] Builder tab: progressive disclosure, core capabilities
+- [ ] Builder tab: Load Config (from Gateway agent, from run, from JSON import)
+- [ ] Builder tab: Export Config
+- [ ] Skills tab: browse + view + version history
+- [ ] Tools tab: browse + isolation test
+
+**Infrastructure:**
+- [ ] Command palette (Cmd+K) with all registered commands
 - [ ] `rax cortex` CLI command + static asset bundling
 - [ ] `rax run --cortex` flag
-- [ ] Svelte store composables exported for Dispatch reuse
 - [ ] WebSocket reconnection with event replay from SQLite
+- [ ] Desktop notifications (tab badge + browser notification API)
+- [ ] Svelte store composables exported for Dispatch reuse
+- [ ] Deep links: `/run/:runId`, `/workshop`
 
 ### V1 Stretch
 
