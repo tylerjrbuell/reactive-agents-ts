@@ -2,6 +2,38 @@ import { Effect, Context, Layer } from "effect";
 import type { SemanticEntry, MemoryId, DailyLogEntry, MemoryLLM } from "../types.js";
 import { ExtractionError } from "../errors.js";
 
+// ─── Utilities ───
+
+/**
+ * Replace common relative date expressions with absolute ISO dates so that
+ * extracted memories remain interpretable across sessions.
+ */
+function normalizeRelativeDates(content: string, now: Date): string {
+  const ms = now.getTime();
+  const d = (offsetDays: number) =>
+    new Date(ms + offsetDays * 86_400_000).toISOString().slice(0, 10);
+  const today     = d(0);
+  const yesterday = d(-1);
+  const tomorrow  = d(1);
+  const lastWeek  = d(-7);
+  const nextWeek  = d(7);
+  const lastMonth = d(-30);
+
+  return content
+    .replace(/\beach\s+morning\b/gi, `each morning (around ${today})`)
+    .replace(/\bearlier\s+today\b/gi, today)
+    .replace(/\bthis\s+morning\b/gi, today)
+    .replace(/\blast\s+night\b/gi, yesterday)
+    .replace(/\byesterday\b/gi, yesterday)
+    .replace(/\btoday\b/gi, today)
+    .replace(/\btomorrow\b/gi, tomorrow)
+    .replace(/\bthis\s+week\b/gi, `week of ${today}`)
+    .replace(/\blast\s+week\b/gi, `week of ${lastWeek}`)
+    .replace(/\bnext\s+week\b/gi, `week of ${nextWeek}`)
+    .replace(/\blast\s+month\b/gi, `month of ${lastMonth}`)
+    .replace(/\bthis\s+month\b/gi, `month of ${today}`);
+}
+
 // ─── Service Tag ───
 
 export class MemoryExtractor extends Context.Tag("MemoryExtractor")<
@@ -48,11 +80,12 @@ export const MemoryExtractorLive = Layer.succeed(MemoryExtractor, {
             .filter((s) => s.length > 30);
 
           for (const sentence of sentences.slice(0, 3)) {
+            const normalized = normalizeRelativeDates(sentence.trim(), now);
             entries.push({
               id: nextId(),
               agentId,
-              content: sentence.trim(),
-              summary: sentence.trim().slice(0, 100),
+              content: normalized,
+              summary: normalized.slice(0, 100),
               importance: 0.5,
               verified: false,
               tags: [],
@@ -199,11 +232,12 @@ export const MemoryExtractorTier2Live = (llm: MemoryLLM) =>
             ? obj.tags.filter((t): t is string => typeof t === "string")
             : [];
 
+          const normalized = normalizeRelativeDates(content, now);
           entries.push({
             id: nextId(),
             agentId,
-            content,
-            summary: content.slice(0, 100),
+            content: normalized,
+            summary: normalized.slice(0, 100),
             importance,
             verified: false,
             tags,
@@ -266,11 +300,12 @@ const heuristicExtract = (
           .filter((s) => s.length > 30);
 
         for (const sentence of sentences.slice(0, 3)) {
+          const normalized = normalizeRelativeDates(sentence.trim(), now);
           entries.push({
             id: nextId(),
             agentId,
-            content: sentence.trim(),
-            summary: sentence.trim().slice(0, 100),
+            content: normalized,
+            summary: normalized.slice(0, 100),
             importance: 0.5,
             verified: false,
             tags: [],

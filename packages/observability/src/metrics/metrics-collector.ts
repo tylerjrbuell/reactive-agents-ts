@@ -135,13 +135,16 @@ export const MetricsCollectorLive: Layer.Layer<MetricsCollectorTag, never> = Lay
 
       // ── Tool execution tracking ──
       yield* eb.on("ToolCallCompleted", (event) =>
-        collector
-          .recordToolExecution(
-            event.toolName,
-            event.durationMs,
-            event.success ? "success" : "error",
-          )
-          .pipe(Effect.catchAll(() => Effect.void)),
+        // Guard: skip system-injected observations that carry no real tool name
+        event.toolName && event.toolName !== "unknown"
+          ? collector
+              .recordToolExecution(
+                event.toolName,
+                event.durationMs,
+                event.success ? "success" : "error",
+              )
+              .pipe(Effect.catchAll(() => Effect.void))
+          : Effect.void,
       );
 
       // ── LLM call tracking: latency, tokens, cost ──

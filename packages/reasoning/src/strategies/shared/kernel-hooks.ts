@@ -73,7 +73,11 @@ export function buildKernelHooks(eventBus: MaybeService<EventBusInstance>): Kern
 
     onObservation: (state: KernelState, result: string, success: boolean): Effect.Effect<void, never> => {
       const lastStep = state.steps[state.steps.length - 1];
-      return Effect.all([
+      // Only the action step carries toolUsed — system-injected observations
+      // (completion-guard redirects, nudges) have no preceding action step and
+      // must not emit a ToolCallCompleted event or they show as "unknown" in metrics.
+      const resolvedToolName = lastStep?.metadata?.toolUsed as string | undefined;
+      const effects: Effect.Effect<void, never>[] = [
         publishReasoningStep(eventBus, {
           _tag: "ReasoningStepCompleted",
           taskId: state.taskId,
@@ -83,16 +87,34 @@ export function buildKernelHooks(eventBus: MaybeService<EventBusInstance>): Kern
           observation: result,
           kernelPass: getKernelPass(state),
         }),
-        publishReasoningStep(eventBus, {
-          _tag: "ToolCallCompleted",
-          taskId: state.taskId,
-          toolName: (lastStep?.metadata?.toolUsed as string) ?? "unknown",
-          callId: lastStep?.id ?? "unknown",
-          durationMs: (lastStep?.metadata?.duration as number | undefined) ?? 0,
-          success,
-          kernelPass: getKernelPass(state),
-        }),
-      ]).pipe(Effect.asVoid);
+      ];
+      if (resolvedToolName) {
+        effects.push(
+          publishReasoningStep(eventBus, {
+            _tag: "ToolCallCompleted",
+            taskId: state.taskId,
+            toolName: resolvedToolName,
+            callId: lastStep?.id ?? "",
+            durationMs: (lastStep?.metadata?.duration as number | undefined) ?? 0,
+            success,
+            kernelPass: getKernelPass(state),
+          }),
+        );
+      } else {
+        // System-injected observation (e.g. completion-guard redirect, gate block).
+        // No ToolCallCompleted emitted — kept out of metrics — but logged at debug
+        // so it remains visible during troubleshooting.
+        effects.push(
+          Effect.logDebug("[kernel-hooks] system observation — no ToolCallCompleted emitted", {
+            taskId: state.taskId,
+            lastStepType: lastStep?.type ?? "none",
+            lastStepId: lastStep?.id ?? "none",
+            kernelPass: getKernelPass(state),
+            observationSnippet: result.slice(0, 120),
+          }),
+        );
+      }
+      return Effect.all(effects).pipe(Effect.asVoid);
     },
 
     onDone: (state: KernelState): Effect.Effect<void, never> =>

@@ -237,6 +237,140 @@ describe("MemoryExtractor — Tier 2 (LLM-Enhanced)", () => {
   });
 });
 
+// ─── Date normalization regression tests ─────────────────────────────────────
+
+describe("MemoryExtractor — date normalization", () => {
+  it("replaces 'yesterday' with an absolute ISO date in extracted content", async () => {
+    const messages = [
+      { role: "user", content: "What happened?" },
+      {
+        role: "assistant",
+        content:
+          "Yesterday the team decided to migrate the entire database to PostgreSQL for performance reasons.",
+      },
+    ];
+
+    const entries = await Effect.runPromise(
+      MemoryExtractor.pipe(
+        Effect.flatMap((svc) => svc.extractFromConversation("test-agent", messages)),
+        Effect.provide(MemoryExtractorLive),
+      ),
+    );
+
+    const allContent = entries.map((e) => e.content).join(" ");
+    expect(allContent).not.toMatch(/\byesterday\b/i);
+    expect(allContent).toMatch(/\d{4}-\d{2}-\d{2}/);
+  });
+
+  it("replaces 'last week' with an absolute date expression in extracted content", async () => {
+    const messages = [
+      { role: "user", content: "What did we agree on?" },
+      {
+        role: "assistant",
+        content:
+          "Last week we agreed to use TypeScript strict mode for all new services going forward.",
+      },
+    ];
+
+    const entries = await Effect.runPromise(
+      MemoryExtractor.pipe(
+        Effect.flatMap((svc) => svc.extractFromConversation("test-agent", messages)),
+        Effect.provide(MemoryExtractorLive),
+      ),
+    );
+
+    const allContent = entries.map((e) => e.content).join(" ");
+    expect(allContent).not.toMatch(/\blast week\b/i);
+    expect(allContent).toMatch(/week of \d{4}-\d{2}-\d{2}/);
+  });
+
+  it("replaces 'today' with an absolute ISO date in extracted content", async () => {
+    const messages = [
+      { role: "user", content: "What was decided today?" },
+      {
+        role: "assistant",
+        content:
+          "Today the architecture review concluded that the monolith should be split into services.",
+      },
+    ];
+
+    const entries = await Effect.runPromise(
+      MemoryExtractor.pipe(
+        Effect.flatMap((svc) => svc.extractFromConversation("test-agent", messages)),
+        Effect.provide(MemoryExtractorLive),
+      ),
+    );
+
+    const allContent = entries.map((e) => e.content).join(" ");
+    expect(allContent).not.toMatch(/\btoday\b/i);
+    expect(allContent).toMatch(/\d{4}-\d{2}-\d{2}/);
+  });
+
+  it("leaves content without relative date references unchanged", async () => {
+    const messages = [
+      { role: "user", content: "What is the rule?" },
+      {
+        role: "assistant",
+        content:
+          "All pull requests must be reviewed by at least two engineers before merging to main branch.",
+      },
+    ];
+
+    const entries = await Effect.runPromise(
+      MemoryExtractor.pipe(
+        Effect.flatMap((svc) => svc.extractFromConversation("test-agent", messages)),
+        Effect.provide(MemoryExtractorLive),
+      ),
+    );
+
+    expect(entries.length).toBeGreaterThan(0);
+    // Content preserved as-is (no spurious date injection)
+    const allContent = entries.map((e) => e.content).join(" ");
+    expect(allContent).toContain("pull requests");
+  });
+
+  it("normalizes dates in Tier 2 LLM extractor output", async () => {
+    const mockLLM: MemoryLLM = {
+      complete: () =>
+        Effect.succeed({
+          content: JSON.stringify([
+            {
+              content:
+                "Yesterday the user set the deployment target to AWS us-east-1 for all services.",
+              importance: 0.8,
+              tags: ["deployment"],
+            },
+          ]),
+          stopReason: "end_turn" as const,
+          model: "test",
+          usage: { inputTokens: 10, outputTokens: 10, totalTokens: 20, estimatedCost: 0 },
+        }),
+      stream: () => Effect.succeed((async function* () {})()),
+      embed: () => Effect.succeed([]),
+      countTokens: () => Effect.succeed(0),
+      getModelConfig: () => Effect.succeed({ model: "test", maxTokens: 1000 } as any),
+      getStructuredOutputCapabilities: () =>
+        Effect.succeed({ supportsStructuredOutput: false, supportsJsonMode: false } as any),
+      capabilities: { supportsToolCalling: false } as any,
+    };
+
+    const entries = await Effect.runPromise(
+      MemoryExtractor.pipe(
+        Effect.flatMap((svc) =>
+          svc.extractFromConversation("test-agent", [
+            { role: "assistant", content: "Yesterday the user set the deployment target." },
+          ]),
+        ),
+        Effect.provide(MemoryExtractorTier2Live(mockLLM)),
+      ),
+    );
+
+    const allContent = entries.map((e) => e.content).join(" ");
+    expect(allContent).not.toMatch(/\byesterday\b/i);
+    expect(allContent).toMatch(/\d{4}-\d{2}-\d{2}/);
+  });
+});
+
 describe("MemoryExtractor — Layer Integration", () => {
   it("createMemoryLayer includes MemoryExtractor (Tier 1)", async () => {
     const memoryLayer = createMemoryLayer("1", { agentId: "layer-test" });

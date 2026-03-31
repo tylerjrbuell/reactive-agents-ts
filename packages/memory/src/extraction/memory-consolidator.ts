@@ -62,6 +62,27 @@ export const MemoryConsolidatorLive = (config: MemoryConfig) =>
             );
             affected += removed;
 
+            // Step 4: Near-duplicate decay — find entries sharing the same first
+            // 40 characters of content (repeated extraction across sessions) and
+            // decay the newer, lower-importance copy so it naturally ages out.
+            const deduped = yield* db.exec(
+              `UPDATE semantic_memory
+               SET importance = MAX(0, importance - 0.15)
+               WHERE agent_id = ?
+                 AND id IN (
+                   SELECT b.id
+                   FROM semantic_memory a
+                   JOIN semantic_memory b
+                     ON a.agent_id = b.agent_id
+                    AND a.id != b.id
+                    AND substr(a.content, 1, 40) = substr(b.content, 1, 40)
+                    AND a.importance >= b.importance
+                    AND a.created_at <= b.created_at
+                 )`,
+              [agentId],
+            );
+            affected += deduped;
+
             return affected;
           }),
 

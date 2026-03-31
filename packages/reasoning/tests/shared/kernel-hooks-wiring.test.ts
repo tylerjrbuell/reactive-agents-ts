@@ -34,10 +34,13 @@ import { Effect, Layer } from "effect";
 import { EventBus } from "@reactive-agents/core";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 import { runKernel } from "../../src/strategies/shared/kernel-runner.js";
+import { buildKernelHooks } from "../../src/strategies/shared/kernel-hooks.js";
 import {
   transitionState,
+  initialKernelState,
   type KernelState,
   type ThoughtKernel,
+  type EventBusInstance,
 } from "../../src/strategies/shared/kernel-state.js";
 import { makeStep } from "../../src/strategies/shared/step-utils.js";
 
@@ -368,5 +371,113 @@ describe("onStrategySwitched hook fires on strategy switch", () => {
     const switchEvent = switchEvents[0] as Record<string, unknown>;
     expect(switchEvent.from).toBe("reactive");
     expect(switchEvent.to).toBe("plan-execute-reflect");
+  });
+});
+
+// ─── System observation filtering ─────────────────────────────────────────────
+
+describe("kernel-hooks — system observations do not emit ToolCallCompleted", () => {
+  function makeMockBus(): { events: unknown[]; bus: EventBusInstance } {
+    const events: unknown[] = [];
+    const bus: EventBusInstance = {
+      publish: (event: unknown) => { events.push(event); return Effect.void; },
+      subscribe: () => Effect.succeed(() => {}),
+      on: () => Effect.succeed(() => {}),
+    } as unknown as EventBusInstance;
+    return { events, bus };
+  }
+
+  it("skips ToolCallCompleted when lastStep has no toolUsed (system observation)", async () => {
+    const { events, bus } = makeMockBus();
+    const hooks = buildKernelHooks({ _tag: "Some", value: bus });
+
+    // State where lastStep is a thought step — no toolUsed metadata
+    const state = initialKernelState({
+      taskId: "test-task",
+      taskDescription: "test",
+      strategy: "reactive",
+      maxIterations: 10,
+    });
+    const stateWithThought = transitionState(state, {
+      steps: [
+        {
+          id: "step-1",
+          type: "thought" as const,
+          content: "I need to do something.",
+          metadata: {}, // no toolUsed
+        },
+      ],
+    });
+
+    await Effect.runPromise(
+      hooks.onObservation(
+        stateWithThought,
+        "⚠️ Not done yet — complete required actions before finishing.",
+        false,
+      ),
+    );
+
+    const toolCallEvents = events.filter(
+      (e) => (e as Record<string, unknown>)._tag === "ToolCallCompleted",
+    );
+    expect(toolCallEvents).toHaveLength(0);
+  });
+
+  it("emits ToolCallCompleted with correct toolName when lastStep has toolUsed", async () => {
+    const { events, bus } = makeMockBus();
+    const hooks = buildKernelHooks({ _tag: "Some", value: bus });
+
+    const state = initialKernelState({
+      taskId: "test-task",
+      taskDescription: "test",
+      strategy: "reactive",
+      maxIterations: 10,
+    });
+    const stateWithAction = transitionState(state, {
+      steps: [
+        {
+          id: "action-1",
+          type: "action" as const,
+          content: "web-search({query: 'test'})",
+          metadata: { toolUsed: "web-search", duration: 312 },
+        },
+      ],
+    });
+
+    await Effect.runPromise(
+      hooks.onObservation(stateWithAction, "Search returned 10 results.", true),
+    );
+
+    const toolCallEvents = events.filter(
+      (e) => (e as Record<string, unknown>)._tag === "ToolCallCompleted",
+    );
+    expect(toolCallEvents).toHaveLength(1);
+
+    const ev = toolCallEvents[0] as Record<string, unknown>;
+    expect(ev.toolName).toBe("web-search");
+    expect(ev.durationMs).toBe(312);
+    expect(ev.success).toBe(true);
+  });
+
+  it("emits ReasoningStepCompleted for system observations even when ToolCallCompleted is skipped", async () => {
+    const { events, bus } = makeMockBus();
+    const hooks = buildKernelHooks({ _tag: "Some", value: bus });
+
+    const state = initialKernelState({
+      taskId: "test-task",
+      taskDescription: "test",
+      strategy: "reactive",
+      maxIterations: 10,
+    });
+
+    await Effect.runPromise(
+      hooks.onObservation(state, "System redirect message.", false),
+    );
+
+    const reasoningEvents = events.filter(
+      (e) => (e as Record<string, unknown>)._tag === "ReasoningStepCompleted",
+    );
+    // ReasoningStepCompleted still fires — observability not lost
+    expect(reasoningEvents.length).toBeGreaterThanOrEqual(1);
   });
 });

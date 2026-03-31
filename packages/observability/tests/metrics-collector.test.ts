@@ -3,6 +3,39 @@ import { Effect, Context, Layer } from "effect";
 import { makeMetricsCollector, type MetricsCollector, MetricsCollectorLive, MetricsCollectorTag } from "../src/metrics/metrics-collector.js";
 import { EventBus, EventBusLive } from "@reactive-agents/core";
 
+// ─── EventBus-wired tests helper ──────────────────────────────────────────────
+// Uses a synchronous mock EventBus so handlers fire inline during publish,
+// avoiding any scheduling/timing issues with Effect fibers.
+
+type AnyEvent = { _tag: string; [k: string]: unknown };
+type HandlerFn = (event: AnyEvent) => Effect.Effect<void, never>;
+
+function makeSyncMockBusLayer(): {
+  layer: Layer.Layer<EventBus>;
+  publish: (event: AnyEvent) => Effect.Effect<void, never>;
+} {
+  const handlers = new Map<string, HandlerFn[]>();
+
+  const busImpl = {
+    publish: (event: AnyEvent) => {
+      const tag = event._tag;
+      const fns = handlers.get(tag) ?? [];
+      return Effect.all(fns.map((h) => h(event))).pipe(Effect.asVoid);
+    },
+    subscribe: () => Effect.succeed(() => {}),
+    on: (_tag: string, handler: HandlerFn) => {
+      const existing = handlers.get(_tag) ?? [];
+      handlers.set(_tag, [...existing, handler]);
+      return Effect.succeed(() => {});
+    },
+  } as unknown as EventBus["Type"];
+
+  return {
+    layer: Layer.succeed(EventBus, busImpl),
+    publish: (event) => busImpl.publish(event),
+  };
+}
+
 const MetricsContext = Context.GenericTag<MetricsCollector>("MetricsContext");
 const TestLayer = Layer.effect(MetricsContext, makeMetricsCollector);
 
@@ -141,5 +174,87 @@ describe("MetricsCollector - EventBus Integration", () => {
     expect(toolMetrics[1].labels?.tool).toBe("code-execute");
     expect(toolMetrics[1].labels?.status).toBe("error");
     expect(toolMetrics[1].value).toBe(500);
+  });
+});
+
+// ─── ToolCallCompleted EventBus filtering ─────────────────────────────────────
+
+describe("MetricsCollector — unknown tool name filtering via EventBus", () => {
+  function makeTestLayer() {
+    const { layer: busLayer, publish } = makeSyncMockBusLayer();
+    const metricsLayer = MetricsCollectorLive.pipe(Layer.provide(busLayer));
+    return { metricsLayer, publish };
+  }
+
+  it("does not record a ToolCallCompleted event with toolName 'unknown'", async () => {
+    const { metricsLayer, publish } = makeTestLayer();
+
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const mc = yield* MetricsCollectorTag;
+
+        yield* publish({
+          _tag: "ToolCallCompleted",
+          taskId: "test-task",
+          toolName: "unknown",
+          callId: "call-1",
+          durationMs: 0,
+          success: true,
+          kernelPass: "reactive:main",
+        });
+
+        const toolMetrics = yield* mc.getToolMetrics();
+        expect(toolMetrics.filter((m) => m.toolName === "unknown")).toHaveLength(0);
+      }).pipe(Effect.provide(metricsLayer)),
+    );
+  });
+
+  it("does not record a ToolCallCompleted event with empty toolName", async () => {
+    const { metricsLayer, publish } = makeTestLayer();
+
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const mc = yield* MetricsCollectorTag;
+
+        yield* publish({
+          _tag: "ToolCallCompleted",
+          taskId: "test-task",
+          toolName: "",
+          callId: "call-2",
+          durationMs: 0,
+          success: true,
+          kernelPass: "reactive:main",
+        });
+
+        const toolMetrics = yield* mc.getToolMetrics();
+        expect(toolMetrics.filter((m) => m.toolName === "")).toHaveLength(0);
+      }).pipe(Effect.provide(metricsLayer)),
+    );
+  });
+
+  it("records a ToolCallCompleted event with a valid tool name", async () => {
+    const { metricsLayer, publish } = makeTestLayer();
+
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const mc = yield* MetricsCollectorTag;
+
+        yield* publish({
+          _tag: "ToolCallCompleted",
+          taskId: "test-task",
+          toolName: "web-search",
+          callId: "call-3",
+          durationMs: 250,
+          success: true,
+          kernelPass: "reactive:main",
+        });
+
+        const toolMetrics = yield* mc.getToolMetrics();
+        const webSearchEntries = toolMetrics.filter((m) => m.toolName === "web-search");
+        expect(webSearchEntries).toHaveLength(1);
+        expect(webSearchEntries[0].duration).toBe(250);
+        expect(webSearchEntries[0].status).toBe("success");
+      }).pipe(Effect.provide(metricsLayer)),
+    );
   });
 });

@@ -195,6 +195,65 @@ describe("MemoryConsolidator", () => {
     );
   });
 
+  it("consolidate() decays near-duplicate entries sharing the same content prefix", async () => {
+    // Two entries whose first 40 characters match — classic repeated extraction
+    const base = "The team agreed on PostgreSQL as the primary database for all new services";
+    const dup = base.slice(0, 40) + " and will migrate existing ones by Q3.";
+
+    await run(
+      Effect.gen(function* () {
+        const semantic = yield* SemanticMemoryService;
+        const consolidator = yield* MemoryConsolidator;
+
+        // Original: older, higher importance
+        yield* semantic.store({
+          ...makeEntry("orig-dedup", base, { importance: 0.8 }),
+          createdAt: new Date(Date.now() - 3_600_000),
+          updatedAt: new Date(Date.now() - 3_600_000),
+        } as any);
+
+        // Near-duplicate: newer, lower importance — should be decayed
+        yield* semantic.store(makeEntry("dup-dedup", dup, { importance: 0.6 }));
+
+        const affected = yield* consolidator.consolidate("test-agent");
+        expect(affected).toBeGreaterThanOrEqual(1);
+
+        const entries = yield* semantic.listByAgent("test-agent", 10);
+        const orig = entries.find((e) => e.id === "orig-dedup");
+        const dupEntry = entries.find((e) => e.id === "dup-dedup");
+
+        expect(orig).toBeDefined();
+        expect(orig!.importance).toBe(0.8); // original untouched
+
+        expect(dupEntry).toBeDefined();
+        expect(dupEntry!.importance).toBeLessThan(0.6); // duplicate decayed
+      }),
+    );
+  });
+
+  it("consolidate() does not decay entries with different content prefixes", async () => {
+    await run(
+      Effect.gen(function* () {
+        const semantic = yield* SemanticMemoryService;
+        const consolidator = yield* MemoryConsolidator;
+
+        yield* semantic.store(makeEntry("entry-a", "Redis is used for caching all session data in production", { importance: 0.7 }));
+        yield* semantic.store(makeEntry("entry-b", "PostgreSQL handles all persistent relational data in the system", { importance: 0.7 }));
+
+        yield* consolidator.consolidate("test-agent");
+
+        const entries = yield* semantic.listByAgent("test-agent", 10);
+        const a = entries.find((e) => e.id === "entry-a");
+        const b = entries.find((e) => e.id === "entry-b");
+
+        // Neither should have been decayed by the dedup step (different prefixes)
+        // They may be decayed by the normal decay step only if old — but these are fresh
+        expect(a?.importance).toBeGreaterThanOrEqual(0.6);
+        expect(b?.importance).toBeGreaterThanOrEqual(0.6);
+      }),
+    );
+  });
+
   it("consolidate runs full cycle (decay + promote + cleanup)", async () => {
     const oldDate = new Date(Date.now() - 14 * 86_400_000);
 
