@@ -16,5 +16,5 @@
     "sourceMap": true,
     "types": ["bun-types"]
   },
-  "exclude": ["node_modules", "dist"]
+  "exclude": ["node_modules", "dist", "**/dist/**"]
 }
