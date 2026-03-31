@@ -1,4 +1,4 @@
-// File: src/strategies/shared/context-utils.ts
+// File: src/strategies/kernel/context-utils.ts
 import type { ReasoningStep } from "../../types/index.js";
 import type { ContextProfile } from "../../context/context-profile.js";
 import { stripThinking } from "./thinking-utils.js";

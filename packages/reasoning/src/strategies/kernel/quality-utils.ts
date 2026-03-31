@@ -1,4 +1,4 @@
-// File: src/strategies/shared/quality-utils.ts
+// File: src/strategies/kernel/quality-utils.ts
 /**
  * Shared quality assessment utilities.
  * Used by: Reflexion (isSatisfied, isCritiqueStagnant),

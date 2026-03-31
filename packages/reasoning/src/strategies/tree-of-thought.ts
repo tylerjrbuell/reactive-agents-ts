@@ -14,14 +14,14 @@ import type { ReasoningResult, ReasoningStep } from "../types/index.js";
 import { ExecutionError } from "../errors/errors.js";
 import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
-import { runKernel } from "./shared/kernel-runner.js";
-import { reactKernel } from "./shared/react-kernel.js";
-import { resolveStrategyServices, compilePromptOrFallback, publishReasoningStep } from "./shared/service-utils.js";
-import { parseScore } from "./shared/quality-utils.js";
-import { stripThinking } from "./shared/thinking-utils.js";
-import type { ToolSchema } from "./shared/tool-utils.js";
+import { runKernel } from "./kernel/kernel-runner.js";
+import { reactKernel } from "./kernel/react-kernel.js";
+import { resolveStrategyServices, compilePromptOrFallback, publishReasoningStep } from "./kernel/service-utils.js";
+import { parseScore } from "./kernel/quality-utils.js";
+import { stripThinking } from "./kernel/thinking-utils.js";
+import type { ToolSchema } from "./kernel/tool-utils.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
-import { makeStep, buildStrategyResult } from "./shared/step-utils.js";
+import { makeStep, buildStrategyResult } from "./kernel/step-utils.js";
 
 interface TreeOfThoughtInput {
   readonly taskDescription: string;

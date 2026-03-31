@@ -1,7 +1,7 @@
 import { describe, it, expect } from "bun:test";
 import { Effect } from "effect";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
-import { runKernel } from "../../src/strategies/shared/kernel-runner.js";
+import { runKernel } from "../../src/strategies/kernel/kernel-runner.js";
 import {
   transitionState,
   noopHooks,
@@ -9,7 +9,7 @@ import {
   type KernelContext,
   type KernelHooks,
   type ThoughtKernel,
-} from "../../src/strategies/shared/kernel-state.js";
+} from "../../src/strategies/kernel/kernel-state.js";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

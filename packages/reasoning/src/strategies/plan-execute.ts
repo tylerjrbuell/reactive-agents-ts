@@ -31,18 +31,18 @@ import {
   buildPatchPrompt,
   buildStepExecutionPrompt,
   buildReflectionPrompt,
-} from "./shared/plan-prompts.js";
-import type { ToolSummary, StepResult } from "./shared/plan-prompts.js";
-import { executeReActKernel } from "./shared/react-kernel.js";
+} from "./kernel/plan-prompts.js";
+import type { ToolSummary, StepResult } from "./kernel/plan-prompts.js";
+import { executeReActKernel } from "./kernel/react-kernel.js";
 import {
   resolveStrategyServices,
   publishReasoningStep,
-} from "./shared/service-utils.js";
-import type { StrategyServices } from "./shared/service-utils.js";
-import { makeStep, buildStrategyResult } from "./shared/step-utils.js";
-import { isSatisfied } from "./shared/quality-utils.js";
-import { stripThinking } from "./shared/thinking-utils.js";
-import type { ToolSchema } from "./shared/tool-utils.js";
+} from "./kernel/service-utils.js";
+import type { StrategyServices } from "./kernel/service-utils.js";
+import { makeStep, buildStrategyResult } from "./kernel/step-utils.js";
+import { isSatisfied } from "./kernel/quality-utils.js";
+import { stripThinking } from "./kernel/thinking-utils.js";
+import type { ToolSchema } from "./kernel/tool-utils.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 
 interface PlanExecuteInput {

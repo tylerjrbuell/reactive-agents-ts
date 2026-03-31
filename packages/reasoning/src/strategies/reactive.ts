@@ -9,20 +9,20 @@ import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { ContextProfile } from "../context/context-profile.js";
-import type { ToolSchema } from "./shared/tool-utils.js";
-import { runKernel } from "./shared/kernel-runner.js";
-import { reactKernel } from "./shared/react-kernel.js";
-import { buildStrategyResult } from "./shared/step-utils.js";
-import type { KernelInput, KernelMessage } from "./shared/kernel-state.js";
+import type { ToolSchema } from "./kernel/tool-utils.js";
+import { runKernel } from "./kernel/kernel-runner.js";
+import { reactKernel } from "./kernel/react-kernel.js";
+import { buildStrategyResult } from "./kernel/step-utils.js";
+import type { KernelInput, KernelMessage } from "./kernel/kernel-state.js";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
 import type { TerminatedBy } from "@reactive-agents/core";
 
 // ── Re-exports for backwards compatibility ────────────────────────────────────
 
-export type { CompressResult } from "./shared/tool-utils.js";
-export { evaluateTransform, compressToolResult } from "./shared/tool-utils.js";
+export type { CompressResult } from "./kernel/tool-utils.js";
+export { evaluateTransform, compressToolResult } from "./kernel/tool-utils.js";
 // parseToolRequestWithTransform re-export removed — use parseToolRequest from shared/tool-utils directly
-export { truncateForDisplay } from "./shared/tool-execution.js";
+export { truncateForDisplay } from "./kernel/tool-execution.js";
 
 // ── ReactiveInput ─────────────────────────────────────────────────────────────
 

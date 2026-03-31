@@ -1,9 +1,9 @@
-// File: tests/strategies/shared/thinking-utils.test.ts
+// File: tests/strategies/kernel/thinking-utils.test.ts
 import { describe, it, expect } from "bun:test";
 import {
   extractThinking,
   stripThinking,
-} from "../../../src/strategies/shared/thinking-utils.js";
+} from "../../../src/strategies/kernel/thinking-utils.js";
 
 describe("thinking-utils", () => {
   describe("extractThinking", () => {

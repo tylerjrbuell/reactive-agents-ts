@@ -12,7 +12,7 @@ import {
   defaultEvaluators,
   type TerminationContext,
   type TerminationSignalEvaluator,
-} from "../../src/strategies/shared/termination-oracle.js";
+} from "../../src/strategies/kernel/termination-oracle.js";
 
 // Helper to build minimal context with overrides
 function makeCtx(overrides: Partial<TerminationContext> = {}): TerminationContext {

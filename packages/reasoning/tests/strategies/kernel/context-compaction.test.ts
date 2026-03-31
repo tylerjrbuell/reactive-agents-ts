@@ -6,7 +6,7 @@ import {
   summarizeTriplet,
   summarizeStepsTriplets,
   summarizeStepForContext,
-} from "../../../src/strategies/shared/context-utils.js";
+} from "../../../src/strategies/kernel/context-utils.js";
 
 const makeStep = (type: string, content: string, metadata?: Record<string, unknown>) => ({
   id: "01JTEST",

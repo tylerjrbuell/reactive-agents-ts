@@ -8,7 +8,7 @@ import type { ReasoningStep } from "../types/step.js";
 import type { ObservationResult } from "../types/observation.js";
 import type { ContextProfile } from "./context-profile.js";
 import type { ContextBudget } from "./context-budget.js";
-import { summarizeStepsTriplets } from "../strategies/shared/context-utils.js";
+import { summarizeStepsTriplets } from "../strategies/kernel/context-utils.js";
 
 // ─── Compaction Levels ───
 //

@@ -4,7 +4,7 @@ import {
   buildPatchPrompt,
   buildStepExecutionPrompt,
   buildReflectionPrompt,
-} from "../../../src/strategies/shared/plan-prompts.js";
+} from "../../../src/strategies/kernel/plan-prompts.js";
 import type { PlanStep } from "../../../src/types/plan.js";
 
 describe("Plan prompts", () => {

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import { Effect } from "effect";
-import { executeReActKernel, reactKernel, detectCompletionGaps } from "../../../src/strategies/shared/react-kernel.js";
+import { executeReActKernel, reactKernel, detectCompletionGaps } from "../../../src/strategies/kernel/react-kernel.js";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 import {
   initialKernelState,
@@ -8,7 +8,7 @@ import {
   noopHooks,
   type KernelContext,
   type KernelState,
-} from "../../../src/strategies/shared/kernel-state.js";
+} from "../../../src/strategies/kernel/kernel-state.js";
 import { CONTEXT_PROFILES } from "../../../src/context/context-profile.js";
 import { createToolCallResolver } from "@reactive-agents/tools";
 

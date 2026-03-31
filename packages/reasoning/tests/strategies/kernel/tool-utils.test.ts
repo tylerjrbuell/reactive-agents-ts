@@ -7,7 +7,7 @@ import {
   formatToolSchemaCompact,
   filterToolsByRelevance,
   gateNativeToolCallsForRequiredTools,
-} from "../../../src/strategies/shared/tool-utils.js";
+} from "../../../src/strategies/kernel/tool-utils.js";
 
 describe("hasFinalAnswer", () => {
   it("returns true for FINAL ANSWER: prefix", () => {

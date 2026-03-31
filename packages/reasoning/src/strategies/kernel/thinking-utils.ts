@@ -1,4 +1,4 @@
-// File: src/strategies/shared/thinking-utils.ts
+// File: src/strategies/kernel/thinking-utils.ts
 /**
  * Thinking model support — extract and strip <think>...</think> blocks.
  *

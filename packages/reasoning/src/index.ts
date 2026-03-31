@@ -140,17 +140,17 @@ export { KernelMetaToolsSchema, StaticBriefInfoSchema } from "./types/kernel-met
 export type { KernelMetaToolsConfig } from "./types/kernel-meta-tools.js";
 
 // ─── Shared Utilities ───
-export { filterToolsByRelevance } from "./strategies/shared/tool-utils.js";
-export type { ToolSchema, ToolParamSchema } from "./strategies/shared/tool-utils.js";
-export type { KernelMessage } from "./strategies/shared/kernel-state.js";
+export { filterToolsByRelevance } from "./strategies/kernel/tool-utils.js";
+export type { ToolSchema, ToolParamSchema } from "./strategies/kernel/tool-utils.js";
+export type { KernelMessage } from "./strategies/kernel/kernel-state.js";
 
 // ─── Structured Output ───
 export { inferRequiredTools, classifyToolRelevance } from "./structured-output/infer-required-tools.js";
 export type { ToolSummary, InferRequiredToolsConfig, ToolClassificationResult } from "./structured-output/infer-required-tools.js";
 
 // ─── Strategy Switching ───
-export type { StrategyHandoff, StrategyEvaluation } from "./strategies/shared/strategy-evaluator.js";
-export { buildHandoff, evaluateStrategySwitch } from "./strategies/shared/strategy-evaluator.js";
+export type { StrategyHandoff, StrategyEvaluation } from "./strategies/kernel/strategy-evaluator.js";
+export { buildHandoff, evaluateStrategySwitch } from "./strategies/kernel/strategy-evaluator.js";
 
 // ─── Runtime ───
 export { createReasoningLayer } from "./runtime.js";

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "bun:test";
 import { Effect, Layer } from "effect";
 import { LLMService, TestLLMServiceLayer } from "@reactive-agents/llm-provider";
-import { runKernel } from "../../../src/strategies/shared/kernel-runner.js";
+import { runKernel } from "../../../src/strategies/kernel/kernel-runner.js";
 import {
   initialKernelState,
   transitionState,
@@ -10,8 +10,8 @@ import {
   type ThoughtKernel,
   type MaybeService,
   type EventBusInstance,
-} from "../../../src/strategies/shared/kernel-state.js";
-import { makeStep } from "../../../src/strategies/shared/step-utils.js";
+} from "../../../src/strategies/kernel/kernel-state.js";
+import { makeStep } from "../../../src/strategies/kernel/step-utils.js";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 

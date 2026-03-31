@@ -1,7 +1,7 @@
 import { describe, it, expect } from "bun:test";
 import { Effect, FiberRef } from "effect";
 import { StreamingTextCallback } from "@reactive-agents/core";
-import { executeReActKernel } from "../../src/strategies/shared/react-kernel.js";
+import { executeReActKernel } from "../../src/strategies/kernel/react-kernel.js";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 
 describe("react-kernel streaming", () => {

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import { applyMessageWindow } from "../../src/context/message-window.js";
-import type { KernelMessage } from "../../src/strategies/shared/kernel-state.js";
+import type { KernelMessage } from "../../src/strategies/kernel/kernel-state.js";
 import type { ContextProfile } from "../../src/context/context-profile.js";
 
 const makeProfile = (tier: string, contextBudgetPercent: number): ContextProfile => ({
