@@ -1,252 +1,381 @@
-# Cortex v1 — Reactive Agents Control Center
+# Cortex v1 — Reactive Agents Companion Studio
 
-**Date:** 2026-03-30
+**Date:** 2026-03-31 (revised)
 **Status:** Approved
-**Supersedes:** `2026-03-23-cortex-living-workshop-design.md` (v1 scope only — that spec remains the v2+ roadmap)
+**Supersedes:** previous `2026-03-30-cortex-v1-design.md` and `2026-03-23-cortex-living-workshop-design.md`
 
 ---
 
 ## 1. Vision
 
-`rax cortex` opens a local web app at `localhost:4321` that is simultaneously:
+Cortex is the companion studio for the Reactive Agents framework. It is the cherry on top of the DX story — an open-source local web app that makes every framework capability tangible without writing a line of code, while giving developers who are writing code a live window into what their agents are actually doing.
 
-- **A no-code experience layer** — create, run, schedule, and observe agents without writing a line of TypeScript
-- **A debugging and inspection tool** — developers working with Reactive Agents code get structured visibility into what their agent is actually doing
+**The one-sentence description:** Cortex is where you come to understand what your agents are doing — and where you go when they surprise you.
 
-It is not a demo. It is not decorative. Every visual element encodes real framework data. It proves the framework by making its differentiators — entropy sensing, reactive intelligence, living skills, Gateway persistence — tangible and interactive.
+**Two audiences, one tool:**
+- **Explorers** — discovering the framework, want to play without code
+- **Builders** — writing agents, want live visibility and debugging
 
-**Design rule:** If a UI element does not help someone understand or control an agent, it does not ship.
+**The foundational design rule:** If a UI element does not make an agent's cognitive state more understandable or give the user more control, it does not ship.
+
+**The catalyst principle:** Cortex exists to flesh out the framework further. Every capability Cortex needs that the framework doesn't yet have gets built into the framework first, not compensated for in Cortex. The app drives framework completeness.
 
 ---
 
-## 2. Architecture Overview
+## 2. The Always-On Reporter Model
+
+The single most important architectural decision: **Cortex is not a launcher, it is a listener.**
+
+Agents connect to Cortex — Cortex does not launch agents. This means:
+
+```bash
+# Terminal 1: Cortex sits and waits
+rax cortex
+
+# Terminal 2: any agent, anywhere, reports to Cortex
+CORTEX_URL=http://localhost:4321 rax run "research this topic"
+
+# Or in code — one builder line
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withCortex()          ← that's it
+  .build();
+```
+
+Any agent with `CORTEX_URL` set or `.withCortex()` called automatically streams its EventBus events and AgentStreamEvents to Cortex. No migration, no refactor of existing agents. Just point them at it.
+
+This is the OpenTelemetry exporter model applied to agents. Cortex is the collector. Agents are the instruments.
+
+---
+
+## 3. Framework Improvements Required
+
+These must be built into the framework before or alongside Cortex. Cortex must not compensate for missing framework capabilities.
+
+### 3.1 CortexReporterLayer — `@reactive-agents/observability` (NEW)
+
+A new Effect-TS Layer that subscribes to the EventBus and WebSockets all events to a configured Cortex instance.
+
+```typescript
+export class CortexReporter extends Context.Tag("CortexReporter")<
+  CortexReporter,
+  {
+    readonly connect: (url: string) => Effect.Effect<void, CortexReporterError>;
+    readonly disconnect: () => Effect.Effect<void, never>;
+    readonly isConnected: () => Effect.Effect<boolean, never>;
+  }
+>() {}
+
+export const CortexReporterLive = (url: string) =>
+  Layer.effect(CortexReporter, Effect.gen(function* () {
+    const eventBus = yield* EventBus;
+    // Subscribe to all AgentEvents, forward to Cortex WS endpoint
+    // Reconnect with exponential backoff on disconnect
+  }));
+```
+
+Resolution priority:
+1. `.withCortex(url)` explicit URL on builder
+2. `CORTEX_URL` environment variable
+3. Default: `http://localhost:4321` if either is set
+
+### 3.2 `.withCortex()` Builder Method — `@reactive-agents/runtime` (NEW)
+
+```typescript
+.withCortex(url?: string)  // defaults to CORTEX_URL env var or localhost:4321
+```
+
+Adds `CortexReporterLive` to the runtime Layer. No other effect on agent behavior.
+
+### 3.3 `ReactiveDecisionRecorded` Event Enhancement — `@reactive-agents/core` (ENHANCE)
+
+The existing `ReactiveDecision` event needs richer payload for Cortex to surface the "why":
+
+```typescript
+{
+  _tag: "ReactiveDecisionRecorded";
+  taskId: string;
+  iteration: number;
+  decision: "early-stop" | "compression" | "strategy-switch" | "temp-adjust" |
+            "skill-activate" | "tool-inject" | "memory-boost" | "human-escalate";
+  reason: string;          // human-readable explanation
+  entropyBefore: number;
+  entropyAfter?: number;   // if measurable
+  triggered: boolean;      // was the decision acted on
+}
+```
+
+### 3.4 `MemorySnapshot` Event — `@reactive-agents/core` (NEW)
+
+Emitted periodically (every N iterations, configurable) and on memory flush. Lets Cortex show what's in the agent's memory right now.
+
+```typescript
+{
+  _tag: "MemorySnapshot";
+  taskId: string;
+  iteration: number;
+  working: ReadonlyArray<{ key: string; preview: string }>;
+  episodicCount: number;
+  semanticCount: number;
+  skillsActive: ReadonlyArray<string>;
+}
+```
+
+### 3.5 `ContextPressure` Event — `@reactive-agents/core` (NEW)
+
+Emitted when context window utilization crosses thresholds (50%, 75%, 90%).
+
+```typescript
+{
+  _tag: "ContextPressure";
+  taskId: string;
+  utilizationPct: number;   // 0–100
+  tokensUsed: number;
+  tokensAvailable: number;
+  level: "low" | "medium" | "high" | "critical";
+}
+```
+
+### 3.6 `ChatTurn` Event — `@reactive-agents/core` (NEW)
+
+Emitted by `agent.chat()` for each user/assistant exchange. Lets Cortex display conversational sessions with full event context.
+
+```typescript
+{
+  _tag: "ChatTurn";
+  taskId: string;
+  sessionId: string;
+  role: "user" | "assistant";
+  content: string;
+  routedVia: "direct-llm" | "react-loop";  // chat routing decision
+  tokensUsed?: number;
+}
+```
+
+### 3.7 `AgentHealthReport` Event — `@reactive-agents/health` (NEW)
+
+Emitted on `agent.health()` calls and on periodic gateway heartbeats.
+
+```typescript
+{
+  _tag: "AgentHealthReport";
+  agentId: string;
+  status: "healthy" | "degraded" | "unhealthy";
+  checks: ReadonlyArray<{ name: string; status: string; message?: string }>;
+  uptimeMs: number;
+}
+```
+
+### 3.8 `CortexEvent` Union — `@reactive-agents/core` (EXTEND)
+
+Add all new event types above to the `AgentEvent` discriminated union. `CortexReporter` forwards all `AgentEvent` types — no Cortex-specific event format needed.
+
+---
+
+## 4. Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  rax CLI  (apps/cli)                                            │
-│  rax cortex → spawns CortexServer, opens browser               │
-└──────────────────────────┬──────────────────────────────────────┘
-                           │ localhost:4321
-┌──────────────────────────▼──────────────────────────────────────┐
+│  Any ReactiveAgent with .withCortex() or CORTEX_URL set         │
+│                                                                 │
+│  CortexReporterLayer  ──── WS ────▶  CortexServer              │
+│  (in framework)                      (localhost:4321)           │
+└─────────────────────────────────────────────────────────────────┘
+                                            │
+┌──────────────────────────────────────────▼──────────────────────┐
 │  CortexServer  (apps/cortex/server/)                            │
 │  Bun + Elysia · Effect-TS services · CODING_STANDARDS.md        │
 │                                                                 │
-│  CortexRunnerService    — agent execution pool (runStream)      │
-│  CortexGatewayService   — persistent agent CRUD + IPC bridge    │
-│  CortexEventBridge      — EventBus + stream → WebSocket fan-out │
-│  CortexStoreService     — reads framework SQLite stores         │
-│  CortexConfigService    — AgentConfig CRUD                      │
+│  CortexIngestService   — receives agent events via WS           │
+│  CortexRunnerService   — launches agents from UI (Playground)   │
+│  CortexGatewayService  — persistent agent CRUD                  │
+│  CortexStoreService    — reads framework SQLite stores          │
+│  CortexEventBridge     — fan-out inbound events to UI clients   │
 │                                                                 │
-│  REST  /api/runs  /api/agents  /api/tools  /api/skills          │
-│  WS    /ws/runs/:runId                                          │
+│  WS  /ws/ingest          ← agents report here                  │
+│  WS  /ws/live/:agentId   → UI clients subscribe here           │
+│  REST  /api/*            → CRUD for runs, agents, config        │
 └──────────────────────────┬──────────────────────────────────────┘
                            │ WebSocket + REST
 ┌──────────────────────────▼──────────────────────────────────────┐
 │  Cortex SPA  (apps/cortex/ui/)                                  │
-│  Svelte · Tailwind · D3.js · framework design tokens            │
+│  SvelteKit · Tailwind · D3 · Svelte Flow · design tokens        │
 │                                                                 │
-│  Svelte stores as composables (see §6)                          │
-│  Five sections: Runs · Agents · Playground · Tools · Skills     │
+│  Three views: Stage · Run · Workshop                            │
+│  Global command palette (Cmd+K)                                 │
+│  Svelte store composables (reused by Dispatch)                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 ### Boundary Rule
 
-The server speaks Effect-TS. The client speaks Svelte stores. The WebSocket protocol is the only interface between them. The client has zero knowledge of Effect, Layers, or framework internals.
+The server speaks Effect-TS (CODING_STANDARDS.md). The client speaks Svelte stores. The WebSocket protocol is the only interface. The client has zero knowledge of Effect, Layers, or framework internals.
+
+### Two WebSocket Channels
+
+| Channel | Direction | Purpose |
+|---------|-----------|---------|
+| `/ws/ingest` | Agent → Server | Agents push `AgentEvent` objects here |
+| `/ws/live/:agentId` | Server → UI | UI clients subscribe to a specific agent's event stream |
+
+The `CortexIngestService` receives on `/ws/ingest`, persists events to SQLite, and fans out to all UI clients subscribed to that `agentId` via `/ws/live/:agentId`.
 
 ### Static Asset Bundling
 
-The Svelte SPA is compiled to static assets at build time. The `rax` CLI bundles these assets and serves them from the CortexServer. `rax cortex` works immediately after `npm install reactive-agents` — no separate install, no external dependencies, works offline.
+Svelte SPA compiled to static assets by `bun run build` in `apps/cortex`. Bundled into the `rax` npm package (not committed to git). `rax cortex` works immediately after install — no separate setup, works offline.
 
 ---
 
-## 3. Layout
+## 5. Three Views
 
-Top navigation bar with five sections. Content area fills the remaining viewport. Optional detail panel slides in from the right when an item is selected.
+### 5.1 Stage (Default View)
 
+The home. Where you live. Shows all agents — running, scheduled, completed, idle — as a living canvas. Cognitive state is the primary signal. The Stage is never empty: the empty state is onboarding.
+
+**Layout:**
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  ◈ CORTEX        RUNS  AGENTS  PLAYGROUND  TOOLS  SKILLS    ⚙  │
-├────────────────────────────────────────────┬────────────────────┤
-│                                            │                    │
-│            MAIN CONTENT                    │   DETAIL PANEL     │
-│         (section-dependent)                │   (slide-in)       │
-│                                            │                    │
-└────────────────────────────────────────────┴────────────────────┘
+│  ◈ CORTEX          Stage   Run   Workshop         ⌘K    ⚙      │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│   [Agent nodes — see below]                                     │
+│                                                                 │
+│                                                                 │
+├─────────────────────────────────────────────────────────────────┤
+│  ▸  What should your agent do?                          [Run]  │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-**Design tokens** — inherited directly from `apps/docs/src/styles/custom.css`:
+**The persistent input bar** at the bottom is always present on Stage. Type a prompt, hit Run — Cortex builds a default agent, runs it, and transitions to the Run view. This is the fastest path from zero to running agent.
 
-| Token | Value | Use |
-|-------|-------|-----|
-| `--ra-violet` | `#8b5cf6` | Reasoning, agent activity, primary accent |
-| `--ra-cyan` | `#06b6d4` | Observations, tool returns, success |
-| amber | `#eab308` | Tool calls, action, external reach |
-| red | `#ef4444` | Errors, high entropy, failure |
-| green | `#22c55e` | Completion, health |
-| background | `#12131a` | Panel inner (matches `.ra-panel-inner`) |
-| font | Geist Variable | All UI labels |
-| data/trace | JetBrains Mono | Trace log, thought text, raw values |
+**Agent nodes** — each connected agent appears as a node. Visual state:
+- **Idle / scheduled**: dim, small, grey-violet
+- **Running**: pulsing violet glow, size grows with iteration count
+- **High entropy**: color shifts amber → red based on `EntropyScored` events
+- **Completed (success)**: settles to cyan
+- **Error**: red, static, no pulse
 
-Panel borders use the `ra-panel` animated gradient-border treatment (violet → cyan glow). Cards lift on hover. Scrollbar gradient violet → cyan. Dark mode default, light mode available.
+Clicking any node navigates to the Run view for that agent.
 
----
-
-## 4. Five Sections
-
-### 4.1 Runs
-
-Default view. Shows live and past executions.
-
-**Live run card** (while executing):
+**Empty state (first launch):**
+Center-canvas message in muted monospace:
 ```
-┌──────────────────────────────────────────────────────────────┐
-│ ● LIVE  research-task                          iter 3/10     │
-│ η 0.62 EXPLORING  ·  1,240 tokens  ·  $0.004  ·  8.2s      │
-│ ──────────────────────────────────────────────────────────── │
-│  [Signal Monitor — see §5]                                   │
-│ ──────────────────────────────────────────────────────────── │
-│                                           [Pause] [Stop]     │
-└──────────────────────────────────────────────────────────────┘
+No agents connected yet.
+
+Start one: rax run "your prompt" --cortex
+Or type below ↓
 ```
+The input bar at the bottom is already focused and ready.
 
-**Past run card** (collapsed):
+### 5.2 Run View
+
+The execution window. Shows everything happening inside one agent run. Accessed by clicking an agent node on Stage or navigating directly to `/run/:runId`.
+
+**Layout:**
 ```
-┌──────────────────────────────────────────────────────────────┐
-│ ✓  research-task          3h ago  · 7 iter · $0.011 · 42.1s │
-│ ~~entropy sparkline (mini signal track)~~        [Inspect ›] │
-└──────────────────────────────────────────────────────────────┘
-```
-
-Clicking "Inspect" opens the detail panel with the full signal monitor replay + debrief card + expandable trace.
-
-### 4.2 Agents
-
-Persistent agents backed by `GatewayService`. Create, schedule, monitor, pause, stop.
-
-**Agent card:**
-```
-┌──────────────────────────────────────────────────────────────┐
-│ ◈  GitHub Monitor                           ● ACTIVE         │
-│ Daily at 09:00  ·  14 runs  ·  $0.18 total                  │
-│ Last: 2h ago · 3 iter · ✓ completed                         │
-│ ~~entropy sparkline across last 14 runs~~                    │
-│                              [Pause]  [Runs ›]  [Edit ›]    │
-└──────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│  ← Stage   research-task-42   ● LIVE   iter 04/10   η 0.71    │
+├──────────────────────────────────────┬──────────────────────────┤
+│                                      │                          │
+│   SIGNAL MONITOR                     │   TRACE PANEL            │
+│   (entropy / tokens / tools /        │   (selected iteration)   │
+│    latency tracks — D3)              │                          │
+│                                      │   THOUGHT                │
+│                                      │   ACTION                 │
+│                                      │   OBSERVATION            │
+│                                      │                          │
+├──────────────────────────────────────┴──────────────────────────┤
+│   [Reactive Decisions]  [Memory]  [Context]    [Pause] [Stop]  │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-The entropy sparkline across all past runs is the visual health indicator — flat = reliable, spiky = investigate.
+**Signal Monitor** — four D3 tracks sharing a time axis:
+1. `ENTROPY` — continuous line, color shifts violet→amber→red with score
+2. `TOKENS` — bar per iteration, height = tokens consumed
+3. `TOOLS` — spans: amber while executing, cyan on return, width = latency
+4. `LATENCY` — area chart, LLM round-trip time per iteration
 
-Create flow: name → provider/model → tools → schedule (cron picker or webhook) → harness controls → Save. No code required. Saved agent is immediately managed by GatewayService.
+Click any point across any track → selects that iteration, highlights it in all tracks simultaneously, loads it in the Trace Panel.
 
-### 4.3 Playground
+**Trace Panel** — selected iteration detail:
+- THOUGHT: full reasoning text
+- ACTION: tool name + args (or "direct response" for non-tool iterations)
+- OBSERVATION: tool result preview + expand
+- Raw LLM exchange (collapsed disclosure)
 
-Two modes toggled at the top of the section.
+**Bottom info bar** — three toggleable panels:
+- **Reactive Decisions**: log of `ReactiveDecisionRecorded` events — when the controller adapted and why
+- **Memory**: latest `MemorySnapshot` — what's in working/episodic/semantic memory right now
+- **Context**: `ContextPressure` gauge — utilization %, tokens remaining
 
-**Quick Run** — prompt textarea, provider/model dropdowns, tool multi-select. Hit Run. Signal monitor renders inline as the agent executes.
+**Chat mode** — if the run is a `agent.chat()` session, the Signal Monitor is replaced by a split view: chat transcript on the left (with `ChatTurn` events), signal monitor on the right. EventBus events stream alongside the conversation in real time.
 
-**Builder** — progressive disclosure form backed by `AgentConfig` schema:
+**Replay** — past runs rebuild from persisted events at 0.5×/1×/2×/instant speed.
 
+### 5.3 Workshop View
+
+Where you create, configure, and explore. Accessed from the top nav or from Stage's empty state. Three tabs within Workshop:
+
+**Builder tab** — progressive disclosure agent configuration:
 ```
-PROVIDER          [anthropic ▾]  [claude-sonnet-4-6 ▾]
-
-PROMPT            ┌────────────────────────────────────┐
-                  │ Your task here...                  │
-                  └────────────────────────────────────┘
-
+Provider + Model    [anthropic ▾]  [claude-sonnet-4-6 ▾]
+Prompt              [ textarea ]
 + Add capability ▾
-  ├─ Reasoning         → strategy picker + options
-  ├─ Tools             → tool multi-select with search
-  ├─ Guardrails        → threshold sliders
-  ├─ Memory            → enable working/episodic/semantic
-  ├─ Harness Controls  → minIterations, verificationStep,
-  │                       outputValidator, taskContext
-  ├─ Streaming         → enable runStream
-  └─ Health Check      → enable agent.health()
+  Reasoning · Tools · Guardrails · Memory · Harness Controls
+  Streaming · Health Check · Skills · Gateway Schedule
 
-[▶ Run]   [Save as Agent]
+[▶ Run]    [Save as Gateway Agent]    [Export Config ›]
 ```
 
-"Save as Agent" promotes the config into the Agents section with a schedule picker.
+Capability list driven by `AgentConfig` schema — new builder methods appear automatically.
 
-The capability list is driven by `AgentConfig` schema fields. New builder methods added to the framework appear automatically when they are added to the schema — no Cortex code changes.
+**Skills tab** — browse `SkillStoreService` contents. View skill content, version history, activation count. Trigger evolution with a reason.
 
-### 4.4 Tools
-
-Browse all registered tools. Shows name, description, schema, and source (built-in / MCP / custom).
-
-Detail panel for a selected tool:
-- Full input/output schema
-- "Test" form — enter args as JSON, hit Run, see raw response
-- Usage stats from run history (call count, avg duration, error rate)
-
-Read-only in v1. Tool creation is Playground territory.
-
-### 4.5 Skills
-
-Browse all living skills from `SkillStoreService`. Shows name, description, tier, version, last evolved.
-
-Detail panel:
-- Full skill content (rendered markdown)
-- Version history (list of past versions with diff)
-- "Trigger Evolution" button → fires `SkillEvolutionService.refine()` with a reason input (v1 stretch)
-
-Read-only browsing ships in v1. Evolution trigger is v1 stretch.
+**Tools tab** — browse tool registry. View schema, test in isolation with sample args, see usage stats from run history.
 
 ---
 
-## 5. Signal Monitor — The Run Visualization
+## 6. Command Palette (Cmd+K)
 
-Four tracks rendered with D3.js, scrolling right-to-left as the agent runs. Each track is a horizontal lane sharing the same time axis.
+Present on all views. A global search + action interface. Required from day one — not a V2 feature.
 
-```
-  ENTROPY    ∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿
-             violet ────── amber ────── red
-             (continuous line, color = entropy magnitude)
+Registered commands include:
+- `Run agent...` → focuses Stage input bar
+- `View last run` → navigates to most recent Run view
+- `New gateway agent` → opens Workshop > Builder
+- `Connect agent` → shows CORTEX_URL snippet to copy
+- `Open run <id>` → deep link to any run
+- `Browse skills` → Workshop > Skills
+- `Test tool <name>` → Workshop > Tools
+- `Export config` → exports current agent's AgentConfig JSON
 
-  TOKENS     ▁▁▂▂▁▁▃▃▃▃▁▁▂▂▂▂▁▁▄▄▄▄▁▁▂▂▁▁▂▂▂▂▁▁
-             (bar per iteration, height = tokens consumed)
-
-  TOOLS      ·  · ┃web-search 240ms┃  · ┃file-write 80ms┃
-             (amber rect on call → cyan on return, width = latency)
-
-  LATENCY    ▔▔▔▔▂▂▂▂▃▃▃▃▃▂▂▂▁▁▁▁▁▁▂▂▁▁▁▃▃▃▂▂▁
-             (filled area, height = LLM round-trip ms)
-```
-
-**Track data sources:**
-
-| Track | EventBus Event | Field |
-|-------|---------------|-------|
-| Entropy | `EntropyScored` | `score`, `trajectory` |
-| Tokens | `LLMRequestCompleted` | `tokensUsed.total` |
-| Tools | `ToolCallStarted` + `ToolCallCompleted` | `toolName`, `durationMs` |
-| Latency | `LLMRequestStarted` + `LLMRequestCompleted` | wall-clock delta |
-
-**Interaction:**
-- Click any point on any track → selects that iteration, highlights it across all tracks simultaneously
-- Hover a tool rect → tooltip with tool name, args preview, result preview, duration
-- Selected iteration → Trace panel on the right shows full thought, action, observation, entropy value, token count, raw LLM exchange (expandable)
-
-**Replay:** Past runs rebuild from persisted `CortexEvent` rows at adjustable speed (0.5×, 1×, 2×, instant). Same interaction model as live.
-
-**Vitals strip** above the monitor:
-```
-η 0.62 [EXPLORING ▾]    TOKENS 12,420    COST $0.018    ITER 04 / 10
-~~EKG entropy heartbeat line (last 20 samples)~~
-```
-
-The EKG line is a live sparkline using the entropy track's last N values. The trajectory badge (CONVERGING / EXPLORING / STRESSED / DIVERGING) updates from `EntropyScored.trajectory`.
+Each view registers its own contextual commands. The palette aggregates all registered commands and filters by typed text.
 
 ---
 
-## 6. Server-Side Effect-TS Services
+## 7. Server-Side Effect-TS Services
 
 All server code follows `CODING_STANDARDS.md` exactly.
 
-### 6.1 CortexRunnerService
+### 7.1 CortexIngestService
 
-Manages a pool of active agent executions.
+Receives `AgentEvent` objects from connected agents via `/ws/ingest`. Persists to SQLite. Fans out to UI subscribers.
+
+```typescript
+export class CortexIngestService extends Context.Tag("CortexIngestService")<
+  CortexIngestService,
+  {
+    readonly handleEvent: (agentId: string, event: AgentEvent) =>
+      Effect.Effect<void, CortexError>;
+    readonly getSubscriberCount: (agentId: string) =>
+      Effect.Effect<number, never>;
+  }
+>() {}
+```
+
+### 7.2 CortexRunnerService
+
+Launches agents from the Playground (Stage input bar + Workshop Builder). Wraps `ReactiveAgents.create()` with `CortexReporterLayer` pre-wired so all Playground runs appear on Stage automatically.
 
 ```typescript
 export class CortexRunnerService extends Context.Tag("CortexRunnerService")<
@@ -264,75 +393,19 @@ export class CortexRunnerService extends Context.Tag("CortexRunnerService")<
 >() {}
 ```
 
-Each `RunContext` holds the `ReactiveAgent` instance, an `AbortController`, and the set of connected WebSocket client IDs. Stored in a `Ref<Map<RunId, RunContext>>`.
+### 7.3 CortexGatewayService
 
-### 6.2 CortexGatewayService
+Wraps `@reactive-agents/gateway` for persistent agent CRUD. Gateway agents auto-wire `CortexReporterLayer`.
 
-Thin wrapper over `@reactive-agents/gateway` for persistent agent CRUD.
+### 7.4 CortexStoreService
 
-```typescript
-export class CortexGatewayService extends Context.Tag("CortexGatewayService")<
-  CortexGatewayService,
-  {
-    readonly create: (config: PersistentAgentConfig) =>
-      Effect.Effect<AgentId, CortexError>;
-    readonly pause: (agentId: AgentId) =>
-      Effect.Effect<void, CortexError>;
-    readonly resume: (agentId: AgentId) =>
-      Effect.Effect<void, CortexError>;
-    readonly stop: (agentId: AgentId) =>
-      Effect.Effect<void, CortexError>;
-    readonly list: () =>
-      Effect.Effect<ReadonlyArray<PersistentAgentSummary>, CortexError>;
-    readonly getRuns: (agentId: AgentId) =>
-      Effect.Effect<ReadonlyArray<RunSummary>, CortexError>;
-  }
->() {}
-```
+Read-only access to framework SQLite stores (debriefs, sessions, plans, skills). All reads via `Effect.sync(() => db.query(...).all())`.
 
-### 6.3 CortexEventBridge
+### 7.5 CortexEventBridge
 
-Merges EventBus events and `AgentStreamEvent` into a single `CortexEvent` stream, persists to SQLite, and fans out to connected WebSocket clients.
+Fans inbound events from `CortexIngestService` out to WebSocket clients subscribed to `/ws/live/:agentId`. Persists all events to `cortex_events` table for replay.
 
-```typescript
-export class CortexEventBridge extends Context.Tag("CortexEventBridge")<
-  CortexEventBridge,
-  {
-    readonly attach: (runId: RunId, ws: ServerWebSocket) =>
-      Effect.Effect<void, never>;
-    readonly detach: (runId: RunId, ws: ServerWebSocket) =>
-      Effect.Effect<void, never>;
-    readonly replay: (runId: RunId, ws: ServerWebSocket) =>
-      Effect.Effect<void, CortexError>;
-  }
->() {}
-```
-
-Events are persisted to `cortex_events (runId, seq, ts, source, type, payload_json)`. Default retention: 50 most recent runs per agent. On client reconnect, `replay()` delivers missed events from SQLite before resuming live stream.
-
-### 6.4 CortexStoreService
-
-Read-only access to existing framework SQLite stores.
-
-```typescript
-export class CortexStoreService extends Context.Tag("CortexStoreService")<
-  CortexStoreService,
-  {
-    readonly getRuns: (limit: number) =>
-      Effect.Effect<ReadonlyArray<RunSummary>, CortexError>;
-    readonly getDebrief: (runId: RunId) =>
-      Effect.Effect<Option.Option<AgentDebrief>, CortexError>;
-    readonly getSkills: () =>
-      Effect.Effect<ReadonlyArray<SkillRecord>, CortexError>;
-    readonly getTools: () =>
-      Effect.Effect<ReadonlyArray<ToolRecord>, CortexError>;
-  }
->() {}
-```
-
-All reads use `Effect.sync(() => db.query(...).all())` — bun:sqlite is synchronous.
-
-### 6.5 Error Types
+### 7.6 Error Types
 
 ```typescript
 export class CortexError extends Data.TaggedError("CortexError")<{
@@ -348,7 +421,7 @@ export class CortexNotFoundError extends Data.TaggedError("CortexNotFoundError")
 export type CortexErrors = CortexError | CortexNotFoundError;
 ```
 
-### 6.6 Layer Factory
+### 7.7 Layer Factory
 
 ```typescript
 export const createCortexLayer = (config: CortexConfig) =>
@@ -356,6 +429,7 @@ export const createCortexLayer = (config: CortexConfig) =>
     CortexStoreServiceLive(config.dbPath),
     CortexEventBridgeLive,
   ).pipe(
+    Layer.provideMerge(CortexIngestServiceLive),
     Layer.provideMerge(CortexRunnerServiceLive),
     Layer.provideMerge(CortexGatewayServiceLive),
   );
@@ -363,299 +437,221 @@ export const createCortexLayer = (config: CortexConfig) =>
 
 ---
 
-## 7. WebSocket Protocol
+## 8. WebSocket Protocol
 
-Versioned envelope for forward compatibility:
+### Ingest (Agent → Server): `/ws/ingest`
 
 ```typescript
-// Server → Client
-interface CortexEvent {
+interface CortexIngestMessage {
   readonly v: 1;
-  readonly ts: number;
-  readonly runId: string;
   readonly agentId: string;
-  readonly source: "eventbus" | "stream";
-  readonly type: string;                       // AgentEvent _tag
-  readonly payload: Record<string, unknown>;   // Event-specific fields
+  readonly runId: string;
+  readonly sessionId?: string;
+  readonly event: AgentEvent;   // any member of the AgentEvent union
 }
-
-// Client → Server
-type CortexCommand =
-  | { readonly type: "subscribe"; readonly runId: string }
-  | { readonly type: "unsubscribe"; readonly runId: string }
-  | { readonly type: "pause"; readonly runId: string }
-  | { readonly type: "stop"; readonly runId: string };
 ```
 
-Unknown `type` values are logged and ignored on both sides — forward compatible by design.
+### Live (Server → UI): `/ws/live/:agentId`
 
-**Dual-source merge:** `CortexEventBridge` subscribes to the EventBus (filtered by `taskId`) and consumes the `AsyncGenerator<AgentStreamEvent>` from `agent.runStream()` concurrently. Both write to the same WebSocket connection. Client-side event store buffers with a 50ms window and sorts by `ts` before rendering.
+```typescript
+interface CortexLiveMessage {
+  readonly v: 1;
+  readonly ts: number;
+  readonly agentId: string;
+  readonly runId: string;
+  readonly source: "eventbus" | "stream";
+  readonly type: string;                      // AgentEvent _tag
+  readonly payload: Record<string, unknown>;
+}
+```
+
+Unknown `type` values are logged and ignored on both sides. Forward compatible by design.
+
+**Event persistence:** All `CortexLiveMessage` objects persisted to `cortex_events (agentId, runId, seq, ts, source, type, payload_json)`. Default retention: 50 most recent runs per agent. Powers replay on reconnect and Run view scrubbing.
 
 ---
 
-## 8. Svelte Store Composables
+## 9. Svelte Store Composables
 
-The client-side architecture is composable Svelte stores. Each store is a factory function returning a typed store object — the pattern that assists future builders extending Cortex or Dispatch.
+SvelteKit (not plain Svelte) — enables deep-linking to specific runs and agents. Client-side routing only; no SSR needed.
 
-### 8.1 Core Pattern
+### Pattern
 
 ```typescript
-// Every composable follows this shape
 export function createXxxStore(deps: XxxDeps): XxxStore {
   const state = writable<XxxState>(initialState);
-  // ... setup subscriptions, derived stores
   return {
     subscribe: state.subscribe,
-    // ... actions
-    destroy: () => { /* cleanup */ },
+    // actions...
+    destroy: () => { /* cleanup subscriptions */ },
   };
 }
 ```
 
-### 8.2 Store Inventory
+### Store Inventory
 
-**`createRunStore(runId: string)`**
-Primary store for a single run. Subscribes to the WebSocket, processes `CortexEvent` objects, maintains:
-- `events: CortexEvent[]` — full event log
-- `iterations: IterationFrame[]` — structured per-iteration data
-- `vitals: VitalsState` — current entropy, tokens, cost, iteration count
-- `status: RunStatus` — live / paused / completed / failed
+| Store | Purpose |
+|-------|---------|
+| `createAgentStore()` | All connected agents, their current cognitive state, live updates |
+| `createRunStore(runId)` | Full event log for one run, structured per-iteration frames |
+| `createSignalStore(runId)` | Transforms run events into D3-ready track data |
+| `createTraceStore(runId)` | Structured iteration objects for Trace Panel |
+| `createGatewayStore()` | Persistent Gateway agents: CRUD, health, sparkline history |
+| `createWorkshopStore()` | Builder form state, capability config, runs from Workshop |
+| `createChatStore(sessionId)` | Chat turn history + routing events for chat-mode runs |
+| `createMemoryStore(runId)` | Latest MemorySnapshot, history of snapshots |
+| `createCommandPalette()` | Global command registry, fuzzy search, keyboard binding |
+| `createWebSocketClient(url)` | Shared WS with reconnection, exponential backoff, replay |
 
-Exposes: `pause()`, `stop()`, `selectIteration(n)`.
-
-**`createSignalStore(runId: string)`**
-Derived from `createRunStore`. Transforms raw events into D3-renderable track data:
-- `entropyTrack: TrackPoint[]` — `{ t, value, color }`
-- `tokenTrack: BarPoint[]` — `{ iteration, tokens }`
-- `toolTrack: ToolSpan[]` — `{ t_start, t_end, name, status }`
-- `latencyTrack: TrackPoint[]` — `{ t, ms }`
-
-Consumers pass this directly to D3 — zero transformation needed in components.
-
-**`createAgentStore()`**
-Manages the Agents section. Fetches from `GET /api/agents`, holds `PersistentAgentSummary[]`. Exposes: `create(config)`, `pause(id)`, `resume(id)`, `stop(id)`, `refresh()`.
-
-**`createPlaygroundStore()`**
-Holds current builder state: selected provider, model, prompt, enabled capabilities, capability configs. Exposes: `run()` → returns a `RunStore`, `saveAsAgent()` → delegates to `AgentStore`.
-
-**`createToolStore()`**
-Fetches tool registry from `GET /api/tools`. Holds `ToolRecord[]`. Exposes: `test(toolName, args)` → returns raw response.
-
-**`createSkillStore()`**
-Fetches from `GET /api/skills`. Holds `SkillRecord[]`. Exposes: `triggerEvolution(skillId, reason)` (v1 stretch).
-
-**`createWebSocketClient(url: string)`**
-Low-level shared WebSocket wrapper. Handles reconnection with exponential backoff (1s → 2s → 4s → 30s max), replays missed events from server on reconnect. All stores consume this — never create raw WebSocket connections in components.
-
-### 8.3 Component Consumption Pattern
-
-```svelte
-<script lang="ts">
-  import { createRunStore, createSignalStore } from "$lib/stores";
-  import SignalMonitor from "$lib/components/SignalMonitor.svelte";
-
-  export let runId: string;
-
-  const run = createRunStore(runId);
-  const signal = createSignalStore(runId);
-
-  onDestroy(() => {
-    run.destroy();
-    signal.destroy();
-  });
-</script>
-
-<SignalMonitor tracks={$signal} vitals={$run.vitals} on:select={handleSelect} />
-```
-
-Stores are created in components, not in a global singleton. This means two `RunStore` instances for the same `runId` share the WebSocket connection (via `createWebSocketClient` which deduplicates by URL) but maintain independent reactive state trees. Safe for A/B views in v2.
+All stores exported from `apps/cortex/ui/src/lib/stores/index.ts`. Dispatch imports these directly — no duplicated state logic.
 
 ---
 
-## 9. Package Structure
+## 10. Tech Stack
+
+| Layer | Choice | Rationale |
+|-------|--------|-----------|
+| Server runtime | Bun + Elysia | Matches framework runtime. Native WebSocket. Fast. |
+| Server logic | Effect-TS | CODING_STANDARDS.md required. |
+| Frontend framework | SvelteKit | Deep links, client-side routing, reactive by design. |
+| Styling | Tailwind | Utility-first, fast iteration, consistent with docs. |
+| Charts / signal monitor | D3.js | Correct tool for data-driven SVG visualization. |
+| Node graph (Stage view) | Svelte Flow | Interactive pan/zoom/click nodes. Better than D3 force for this. |
+| Command palette | Custom Svelte | ~200 lines, no mature Svelte equivalent of cmdk. |
+| Design tokens | Inherited from `apps/docs` | `--ra-violet`, `--ra-cyan`, Geist Variable font, `ra-panel` glow. |
+
+**Future IDE direction (not MVP):** If prompt-to-build-agent or code editing surfaces become real, Monaco Editor integration is the path. React would be considered at that point. For now, SvelteKit handles everything in scope.
+
+---
+
+## 11. Package Structure
 
 ```
 apps/cortex/
   server/
-    index.ts                # Entry point — Elysia app + Effect runtime
+    index.ts                    # Elysia app entry point
     api/
-      runs.ts               # GET /api/runs, POST /api/runs
-      agents.ts             # GET/POST/PATCH/DELETE /api/agents
-      tools.ts              # GET /api/tools, POST /api/tools/:name/test
-      skills.ts             # GET /api/skills
+      runs.ts                   # /api/runs CRUD
+      agents.ts                 # /api/agents CRUD
+      tools.ts                  # /api/tools + test endpoint
+      skills.ts                 # /api/skills
     ws/
-      bridge.ts             # WS /ws/runs/:runId — CortexEventBridge glue
+      ingest.ts                 # /ws/ingest — agent event receiver
+      live.ts                   # /ws/live/:agentId — UI subscriber
     services/
-      runner-service.ts     # CortexRunnerService
-      gateway-service.ts    # CortexGatewayService
-      event-bridge.ts       # CortexEventBridge
-      store-service.ts      # CortexStoreService
-    types.ts                # CortexEvent, CortexCommand, shared server types
-    errors.ts               # CortexError, CortexNotFoundError
-    runtime.ts              # createCortexLayer()
+      ingest-service.ts         # CortexIngestService
+      runner-service.ts         # CortexRunnerService
+      gateway-service.ts        # CortexGatewayService
+      store-service.ts          # CortexStoreService
+      event-bridge.ts           # CortexEventBridge
+    types.ts
+    errors.ts
+    runtime.ts                  # createCortexLayer()
 
   ui/
     src/
-      App.svelte            # Root — top nav, section routing
+      routes/
+        +layout.svelte           # Top nav, command palette mount
+        +page.svelte             # Stage view (default)
+        run/[runId]/+page.svelte # Run view
+        workshop/+page.svelte    # Workshop view
       lib/
         stores/
+          agent-store.ts
           run-store.ts
           signal-store.ts
-          agent-store.ts
-          playground-store.ts
-          tool-store.ts
-          skill-store.ts
-          ws-client.ts      # Shared WebSocket client with reconnection
-          index.ts          # Re-exports all composables
+          trace-store.ts
+          gateway-store.ts
+          workshop-store.ts
+          chat-store.ts
+          memory-store.ts
+          command-palette.ts
+          ws-client.ts
+          index.ts
         components/
-          SignalMonitor.svelte   # D3 four-track visualization
-          TracePanel.svelte     # Expandable iteration cards
-          RunCard.svelte        # Live + past run cards
-          AgentCard.svelte      # Gateway agent card with sparkline
-          VitalsStrip.svelte    # Entropy EKG + metrics header
-          BuilderForm.svelte    # Progressive disclosure agent builder
-          ToolTester.svelte     # Tool isolation test form
-        views/
-          Runs.svelte
-          Agents.svelte
-          Playground.svelte
-          Tools.svelte
-          Skills.svelte
-      app.css               # Imports design tokens, extends ra-panel treatment
-    public/
-      fonts/                # Geist Variable + JetBrains Mono
+          AgentNode.svelte        # Stage node (Svelte Flow node type)
+          SignalMonitor.svelte    # D3 four-track visualization
+          TracePanel.svelte       # Iteration detail
+          VitalsStrip.svelte      # Entropy EKG + metrics
+          DecisionLog.svelte      # ReactiveDecision events
+          MemoryPanel.svelte      # MemorySnapshot display
+          ContextGauge.svelte     # ContextPressure indicator
+          BuilderForm.svelte      # Progressive capability builder
+          CommandPalette.svelte   # Cmd+K interface
+          ChatView.svelte         # Chat session transcript
+      app.css                    # Design token imports + ra-panel extension
 ```
-
-File size target: 100–300 lines per file. `SignalMonitor.svelte` owns the D3 rendering loop and may approach 300 lines — split at `engine.ts` (D3 setup) and `tracks.ts` (per-track draw functions) if it exceeds this.
 
 ---
 
-## 10. How It Ships with `rax`
+## 12. How It Ships with `rax`
 
-```
-apps/cli/
-  src/
-    commands/
-      cortex.ts    # `rax cortex` command — new
-  assets/
-    cortex/        # Compiled Svelte SPA static assets (generated by `bun run build` in apps/cortex, bundled into rax npm package — not committed to git)
-```
-
-`rax cortex` command:
-1. Resolves `assets/cortex/` relative to CLI package
-2. Starts CortexServer (Bun + Elysia) serving static assets + API + WS
-3. Opens `http://localhost:4321` in the default browser
-4. Prints: `Cortex running at http://localhost:4321 — Press Ctrl+C to stop`
-
-Options: `--port <n>`, `--no-open`, `--attach <agentId>` (opens directly to that agent's Runs view).
-
-Integration with other commands:
 ```bash
-rax run "prompt" --cortex    # Run agent and auto-open Cortex for this execution
+rax cortex                      # Start on :4321, open browser
+rax cortex --port 5000
+rax cortex --no-open
+rax cortex --attach <agentId>   # Open directly to that agent's Run view
+rax run "prompt" --cortex       # Run with CortexReporterLayer auto-wired
 ```
+
+The `--cortex` flag on `rax run` is equivalent to setting `CORTEX_URL=http://localhost:4321`. If Cortex isn't running, the flag is silently ignored (reporter fails to connect, agent runs normally).
 
 ---
 
-## 11. V1 Scope
+## 13. V1 Scope
 
-### Ships in V1
+### Must Ship
 
-- [ ] All five sections (Runs, Agents, Playground, Tools, Skills)
-- [ ] Signal monitor: all four tracks (entropy, tokens, tools, latency)
-- [ ] Vitals strip with EKG entropy heartbeat
-- [ ] Trace panel: expandable iteration cards, click-to-inspect
-- [ ] Live run streaming via WebSocket
-- [ ] Replay mode for past runs (from persisted `CortexEvent` rows)
-- [ ] Run history with debrief cards
-- [ ] Agents section: full Gateway CRUD (create, pause, resume, stop)
-- [ ] Agent card entropy sparkline
-- [ ] Playground: Quick Run + Builder (provider, model, tools, core harness controls)
-- [ ] "Save as Agent" flow from Playground to Agents
-- [ ] Tools: browse + isolation test
-- [ ] Skills: browse + view (read-only)
+- [ ] `CortexReporterLayer` + `.withCortex()` in framework (prerequisite)
+- [ ] All 6 new/enhanced framework events (§3)
+- [ ] Stage view: agent nodes with cognitive state, persistent input bar, empty state onboarding
+- [ ] Run view: signal monitor (4 tracks), trace panel, reactive decisions log, memory panel, context gauge
+- [ ] Workshop view: Builder tab (core capabilities), Skills tab (browse), Tools tab (browse + test)
+- [ ] Chat mode in Run view for `agent.chat()` sessions
+- [ ] Command palette (Cmd+K) with core commands
+- [ ] Deep links: `/run/:runId`, `/workshop`
 - [ ] `rax cortex` CLI command + static asset bundling
 - [ ] `rax run --cortex` flag
-- [ ] All Svelte store composables exported for reuse by Dispatch
-- [ ] WebSocket reconnection with event replay
+- [ ] Svelte store composables exported for Dispatch reuse
+- [ ] WebSocket reconnection with event replay from SQLite
 
-### V1 Stretch (ship if time allows)
+### V1 Stretch
 
-- [ ] Skills: trigger evolution in UI
-- [ ] Pause/resume live run from command bar
-- [ ] Agent config inline edit in Agents detail panel
+- [ ] Gateway agent management in Workshop (create, pause, resume, stop)
+- [ ] Export AgentConfig JSON from Run view
+- [ ] Skills: trigger evolution from Workshop UI
+- [ ] Replay speed controls (0.5×/1×/2×/instant)
+- [ ] Desktop notifications for gateway agent events
 
-### V2 (natural roadmap — Cortex spec §11)
+### V2
 
-- [ ] Full 2D force-directed neural canvas (upgrade from signal monitor)
-- [ ] A/B split run comparison
+- [ ] Svelte Flow node graph upgrade for Stage (interactive pan/zoom)
+- [ ] A/B run comparison
 - [ ] Fork from any iteration
-- [ ] Full dynamic capability dropdown driven by AgentConfig schema introspection
-- [ ] Export: AgentConfig JSON + TypeScript builder code
-- [ ] Batch run / eval suite
-- [ ] Whisper (inject context into running agent)
-- [ ] Cortex Cloud (hosted, multi-user)
+- [ ] Full dynamic capability dropdown from AgentConfig schema introspection
+- [ ] ExperienceStore cross-agent learning visualization
+- [ ] `rax cortex --attach` live attachment to running gateway agents
+- [ ] Prompt-to-build-agent (DispatchAgent embedded)
 
 ---
 
-## 12. Testing Strategy
+## 14. Notifications and Interrupts
 
-### Server Tests (bun:test, Effect-TS pattern)
+Browsers support the Notification API for desktop notifications. When a gateway agent completes, errors, or has an entropy spike while Cortex is in a background tab:
 
-```typescript
-describe("CortexRunnerService", () => {
-  const mockAgent = Layer.succeed(AgentService, { /* mock */ });
+- Tab badge: unread event count in the page title
+- Desktop notification (with user permission): agent name + event summary
+- Notification click: deep links to the relevant Run view
 
-  it("should emit RunStarted event when execution begins", async () => {
-    const program = Effect.gen(function* () {
-      const runner = yield* CortexRunnerService;
-      const runId = yield* runner.start(testConfig, "test prompt");
-      expect(runId).toBeDefined();
-    });
-    await Effect.runPromise(program.pipe(Effect.provide(testLayer)));
-  });
-});
-```
-
-- `CortexRunnerService`: start/pause/stop lifecycle, concurrent run isolation
-- `CortexEventBridge`: EventBus → WS fan-out, dual-source merge, reconnect replay
-- `CortexStoreService`: read round-trips, retention enforcement
-- REST API: standard endpoint tests via Elysia's test client
-
-### Client Tests (bun:test + @testing-library/svelte)
-
-- `createSignalStore`: event sequence → correct track data transformation
-- `createWebSocketClient`: reconnection logic, backoff timing, replay on reconnect
-- `SignalMonitor`: snapshot at known track states
-- `BuilderForm`: capability add/remove, AgentConfig assembly
-
-### Integration Test
-
-Launch `rax cortex` in test mode, execute a `withTestScenario` agent, assert WebSocket delivers expected `CortexEvent` sequence, assert replay from SQLite produces identical sequence.
+Permission requested once on first Cortex launch.
 
 ---
 
-## 13. Relationship to Dispatch and Full Cortex
+## 15. Success Criteria
 
-**Cortex v1 proves the patterns. Dispatch and full Cortex build on them.**
-
-| Component | Cortex V1 | Dispatch | Full Cortex V2 |
-|-----------|-----------|---------|----------------|
-| Svelte store composables | ✓ defined | reuses | reuses |
-| Elysia server patterns | ✓ defined | reuses + extends | reuses |
-| Signal monitor | ✓ ships | embeds as runner view | upgrades to 2D canvas |
-| Agent builder form | basic | full NL DispatchAgent | full dynamic dropdown |
-| Design system | ✓ inherits docs tokens | ✓ same | ✓ same |
-| WebSocket protocol | ✓ defined | extends | extends |
-| SQLite patterns | ✓ reads existing | adds runners/runs tables | ✓ same |
-
-The Svelte stores in `apps/cortex/ui/src/lib/stores/` are the shared component library. Dispatch imports them. Full Cortex upgrades the visualization without touching the store contracts.
-
----
-
-## 14. Success Criteria
-
-1. **The screenshot test** — a screenshot of the signal monitor during a live run makes a developer stop scrolling.
-2. **The debugging test** — a developer can identify why an agent used 3× more tokens than expected in under 60 seconds, without reading raw logs.
-3. **The no-code test** — a non-developer can create a scheduled Gateway agent and see it run unattended, without writing any TypeScript.
-4. **The zero-overhead test** — Cortex adds less than 5% to agent execution time (event bridge cost only).
-5. **The framework-proof test** — every feature visible in Cortex is powered by a real framework capability: entropy sensor, Gateway, SkillStore, MetricsCollector, EventBus. Nothing is mocked or faked.
+1. **The connection test** — a developer running an existing agent adds `.withCortex()`, runs it, and sees it appear in Cortex with zero other changes.
+2. **The screenshot test** — a screenshot of Stage with two running agents makes a developer stop scrolling on HN.
+3. **The debugging test** — a developer identifies why their agent used 3× more tokens than expected in under 60 seconds without reading raw logs.
+4. **The no-code test** — someone with no TypeScript experience creates and runs a research agent from the Stage input bar in under 2 minutes.
+5. **The framework-proof test** — every feature visible in Cortex is powered by a real framework capability. Nothing is mocked.
+6. **The catalyst test** — at least 3 framework improvements (§3) are built as direct prerequisites of Cortex, making the framework more capable for all users.

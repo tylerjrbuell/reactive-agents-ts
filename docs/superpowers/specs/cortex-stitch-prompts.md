@@ -1,593 +1,324 @@
 # Cortex — Stitch Design Prompts
 
-One prompt per screen. Each is self-contained — paste directly into Stitch.
+Prompts follow the Stitch best practice: establish the foundation first, then one focused
+screen per prompt. Start with Prompt 0 to seed the design system, then use each numbered
+prompt independently to generate or refine that specific screen.
+
+**How to use:** Paste Prompt 0 first. Then paste any numbered prompt to generate that screen.
+To refine, use short follow-up prompts targeting one element at a time.
 
 ---
 
-## Shared Design Language (reference only — embedded in each prompt below)
+## Prompt 0 — Foundation Seed
 
-- **Background:** `#0f1115` page, `#12131a` panels
-- **Violet:** `#8b5cf6` — reasoning, primary accent
-- **Cyan:** `#06b6d4` — observations, returns, success data
-- **Amber:** `#eab308` — tool calls, action, external reach
-- **Green:** `#22c55e` — success, completion, health
-- **Red:** `#ef4444` — error, high entropy, failure
-- **Text:** `#e2e8f0` primary, `#64748b` muted
-- **Borders:** `#2a3040` subtle, gradient violet→cyan for panels
-- **UI font:** Geist (clean sans-serif)
-- **Data font:** JetBrains Mono (all numbers, trace, code)
-
----
-
-## Screen 1 — Runs: Live Execution
+> Paste this first to establish the design system before generating any screen.
 
 ```
-Design a single screen of "Cortex" — a dark-mode developer control center for an AI agent
-framework. This is the RUNS section showing a live agent execution in progress.
+A dark, clinical developer tool called Cortex — a companion studio for an AI agent framework.
 
-DESIGN LANGUAGE
-Dark, clinical, mission control aesthetic. Every visual element encodes real data.
-- Page background: #0f1115
-- Panel background: #12131a with a 1px gradient border (violet #8b5cf6 → cyan #06b6d4)
-  and soft outer glow that breathes between violet and cyan on an 8-second cycle
-- Violet #8b5cf6: reasoning, primary accent
-- Cyan #06b6d4: observations, returns
-- Amber #eab308: tool calls, active execution
-- Green #22c55e: success, live indicator
-- Red #ef4444: errors, high entropy
-- UI labels: Geist sans-serif, medium weight
-- All data/numbers/trace: JetBrains Mono, uppercase for labels
-- Cards lift 2px on hover with violet glow. Scrollbar: violet-to-cyan gradient thumb.
+The aesthetic is alive and precise: mission control meets neural interface. Every element
+encodes real data. Nothing decorative.
 
-LAYOUT
-Full-width top nav bar (dark, subtle bottom border):
-- Left: ◈ CORTEX in violet-to-cyan gradient text
-- Center: RUNS · AGENTS · PLAYGROUND · TOOLS · SKILLS tabs. RUNS is active (violet underline).
-- Right: settings gear icon
+Color palette:
+- Background: near-black #0f1115
+- Panels: deep navy #12131a with a 1px animated gradient border fading between
+  violet #8b5cf6 and cyan #06b6d4, with a soft outer glow
+- Primary accent: violet #8b5cf6 (reasoning, active state)
+- Secondary accent: cyan #06b6d4 (success, data returns)
+- Amber #eab308 for tool calls and warnings
+- Green #22c55e for healthy, live, completed states
+- Red #ef4444 for errors and high entropy
 
-Below nav: main content area, no detail panel open yet.
+Typography:
+- UI labels and navigation: Geist, clean sans-serif, medium weight
+- All data, metrics, and trace content: JetBrains Mono, tabular, uppercase labels
 
-MAIN CONTENT: THE LIVE RUN CARD
-A full-width panel with the gradient border treatment and a left border that pulses green.
+Navigation: a slim top bar with the ◈ CORTEX wordmark in violet-to-cyan gradient text,
+three nav tabs (Stage / Run / Workshop), a Cmd+K command palette icon, and a settings gear.
+Active tab has a violet underline.
 
-Top row of the card:
-- Left: ● LIVE badge (green animated dot + "LIVE" in small monospace caps, green pill)
-- Center: run name "research-task-42" in JetBrains Mono, medium weight
-- Right: iteration counter "ITER 04 / 10" in small monospace, muted
-
-VITALS STRIP (dark inner row, subtle separator below header):
-Five items in a row with thin violet separator lines between them:
-- η 0.71  label: ENTROPY
-- [EXPLORING]  amber pill badge
-- 4,820  label: TOKENS  (JetBrains Mono)
-- $0.006  label: COST  (JetBrains Mono)
-- 18.4s  label: DURATION  (JetBrains Mono)
-
-Below the vitals strip: a narrow EKG heartbeat line spanning the full card width.
-A continuous waveform with gentle oscillations in amber (#eab308), suggesting active
-exploration. The line has a very subtle amber glow beneath it.
-
-THE SIGNAL MONITOR (the visual centrepiece, takes up ~55% of the card height):
-A multi-track oscilloscope-style visualization. Dark background (#0d0f14).
-Subtle horizontal grid lines in #1a1d24. Newest data at the right edge.
-Each track has a small label on the far left in muted small caps.
-
-Track 1 — ENTROPY:
-A continuous line chart. The line transitions color based on value:
-starts violet (#8b5cf6) on the left (low entropy, calm),
-rises to amber (#eab308) in the middle (exploring),
-slight downward curve at the right edge (converging back).
-Semi-transparent fill below the line matches the line color at 15% opacity.
-
-Track 2 — TOKENS:
-Vertical bars, one per iteration. Violet (#8b5cf6) at 80% opacity.
-Heights vary — iteration 3 has a noticeably taller bar (heavy reasoning step).
-The rightmost bar (current iteration) pulses with a subtle opacity animation.
-
-Track 3 — TOOLS:
-Sparse horizontal spans showing tool execution periods.
-Two completed spans: "web-search" (wider, amber→cyan after completion) and
-"file-read" (narrow, cyan). One active span on the right edge: "web-search" in
-solid amber (#eab308) with a subtle right-edge pulse showing it's in progress.
-Each span has a tiny tool name label inside if wide enough.
-
-Track 4 — LATENCY:
-Area chart showing LLM round-trip milliseconds per iteration.
-Cyan (#06b6d4) at 20% fill opacity, line at 70%. Gentle variation, one spike visible.
-
-BELOW THE SIGNAL MONITOR:
-Right-aligned control row:
-[Pause]  ghost button, violet border, violet text
-[Stop]   ghost button, red border, red text
-
-BELOW THE LIVE CARD: TWO COMPLETED RUN CARDS (compact)
-Each completed run card is a shorter panel with the gradient border but dimmer glow:
-Row: ✓ (green icon) · "data-pipeline-run-39" (monospace) · "5h ago" (muted) ·
-     "7 iter · $0.011 · 42.1s" (small monospace) ·
-     mini entropy sparkline (~100px, flat violet line) ·
-     [Inspect ›] link in violet
-
-The overall impression: a live monitoring dashboard, data-dense but readable,
-the signal monitor feeling like a hardware instrument showing a mind in motion.
+Cards lift 2px on hover with a violet shadow. Scrollbar uses a violet-to-cyan gradient thumb.
 ```
 
 ---
 
-## Screen 2 — Runs: Past Run Inspection (Detail Panel Open)
+## Prompt 1 — Stage View (Default Home)
 
 ```
-Design a single screen of "Cortex" — a dark-mode developer control center for an AI agent
-framework. This is the RUNS section with a past run selected and the detail panel open.
+Design the Stage view for Cortex. This is the default home screen.
 
-DESIGN LANGUAGE
-- Page background: #0f1115, Panel background: #12131a
-- Panel borders: 1px gradient (violet #8b5cf6 → cyan #06b6d4) with soft breathing glow
-- Violet #8b5cf6: primary accent, reasoning  |  Cyan #06b6d4: observations
-- Amber #eab308: tool calls  |  Green #22c55e: success  |  Red #ef4444: error
-- UI labels: Geist sans-serif  |  All data/trace/numbers: JetBrains Mono
+The Stage shows all connected AI agents as glowing nodes on a dark canvas.
+Each node is a soft circle with a name label below it in JetBrains Mono.
 
-LAYOUT
-Standard top nav bar with RUNS tab active.
-Main area split: 68% left (signal monitor + replay), 32% right (detail panel, slide-in).
+Node states:
+- Idle: small, dim violet circle, low opacity
+- Running: larger, bright pulsing violet glow that breathes in and out
+- High entropy (confused): color shifts from violet to amber to red as stress increases
+- Completed: settles to a calm cyan
+- Error: small, static red circle, no pulse
 
-LEFT PANEL: PAST RUN IN REPLAY MODE
-Panel header:
-- "research-task-38" in monospace  ·  "✓ COMPLETED" green badge  ·  "3h ago" muted
-- Vitals: η 0.58 CONVERGING (violet badge) · TOKENS 8,240 · COST $0.011 · DURATION 42.1s
+Show four nodes arranged organically on the canvas:
+one running (violet, pulsing, labeled "research-task-42"),
+one completed (cyan, settled, labeled "data-pipeline-31"),
+one error (red, static, labeled "pr-review-bot"),
+one idle (dim, labeled "scheduled-digest").
 
-THE SIGNAL MONITOR (replay state, identical 4-track layout to Screen 1 but fully rendered):
-All four tracks show complete data across all 7 iterations.
-The entropy track shows a classic converging arc: starts amber (exploring),
-peaks slightly, then descends to violet (converged) by iteration 6–7.
-The tokens track shows 7 bars of varying heights.
-The tools track shows 4 completed cyan spans across the timeline.
-The latency track shows a complete area chart.
+At the very bottom of the screen, a persistent full-width input bar:
+a dark rounded input field with placeholder text "What should your agent do?"
+and a violet [Run] button on the right.
 
-One iteration (iteration 5) is highlighted across ALL tracks simultaneously:
-- A thin vertical line in white at 20% opacity spans all 4 tracks at that iteration's position
-- The tokens bar for that iteration is brighter/fully opaque
-- The tool span for that iteration has a white outline
-
-REPLAY CONTROLS BAR (below the signal monitor, centered):
-[⏮ Start]  [⏪ Back]  [⏸ Pause]  [⏩ Forward]  [⏭ End]
-Speed selector: [1× ▾]
-Progress indicator: "Step 5 of 7"
-A thin scrubber bar below the controls showing position at ~70%
-
-RIGHT DETAIL PANEL (slide in from right, same dark bg, violet left border 2px solid):
-Top row: "ITERATION 05" in JetBrains Mono small caps + [×] close icon top-right
-
-Metrics row (4 inline pills):
-[η 0.84] [1,240 tok] [8.2s] [tool: web-search]
-Each pill has a dark fill, violet border, monospace text
-
-Section: THOUGHT
-Small caps label "THOUGHT" with a violet left accent bar.
-2–3 lines of agent reasoning text in JetBrains Mono, small size, #c0c2c7 color.
-"The user wants recent TypeScript agent framework comparisons. I should search for
-current benchmarks and community sentiment before synthesizing an answer."
-[Show more ›] in violet, small
-
-Section: ACTION
-Small caps label "ACTION"
-Tool badge: [◈ web-search] amber pill
-Code block (dark #0d0f14 background, cyan syntax):
-{
-  "query": "TypeScript AI agent framework benchmark 2026",
-  "maxResults": 10
-}
-
-Section: OBSERVATION
-Small caps label "OBSERVATION"
-Code block with cyan tint, showing truncated JSON result.
-First 3 lines visible, then "···" and [Expand ▾] link
-
-Section: RAW EXCHANGE
-[▶ Show raw LLM exchange] — collapsed disclosure row, muted, with chevron
-
-Overall feel: a precise debugging instrument. The detail panel feels like reading the
-agent's mind for that exact moment in time.
+The canvas background is #0f1115 with a very subtle radial gradient — slightly lighter
+at center, fading to pure dark at edges, giving depth to the node field.
 ```
 
 ---
 
-## Screen 3 — Agents: Persistent Gateway Agents
+## Prompt 2 — Stage View (Empty State / Onboarding)
 
 ```
-Design a single screen of "Cortex" — a dark-mode developer control center for an AI agent
-framework. This is the AGENTS section showing persistent agents managed by a Gateway service.
+Refine the Stage view to show the empty state — no agents connected yet.
 
-DESIGN LANGUAGE
-- Page background: #0f1115, Panel background: #12131a
-- Panel borders: 1px gradient (violet #8b5cf6 → cyan #06b6d4) with soft breathing glow
-- Violet #8b5cf6: primary accent  |  Cyan #06b6d4: secondary accent
-- Amber #eab308: paused/warning  |  Green #22c55e: active/healthy  |  Red #ef4444: error
-- UI labels: Geist sans-serif  |  All data/metrics: JetBrains Mono
+Remove all agent nodes from the canvas. Center the canvas on a minimal onboarding message
+in muted JetBrains Mono:
 
-LAYOUT
-Standard top nav, AGENTS tab active.
-Main content: full-width list of agent cards with [+ New Agent] button in top-right of content area.
+  No agents connected yet.
 
-AGENT CARD 1 — ACTIVE (healthy)
-Full-width panel with gradient border treatment, soft green tint to the glow:
+  Start one:  rax run "your prompt" --cortex
+  Or type below ↓
 
-Top row:
-- Left: ◈ icon (violet) + "GitHub Issue Monitor" in Geist medium weight
-- Right: ● ACTIVE badge — green dot (animated pulse) + "ACTIVE" in green pill with dark fill
+The code snippet "rax run..." should use a subtle inline code style:
+dark background chip, violet text, monospace.
 
-Second row (muted, Geist small):
-"Daily at 09:00  ·  14 successful runs  ·  $0.18 total  ·  Last run: 2h ago  ·  avg 3 iter"
-
-SPARKLINE ROW — the visual health indicator:
-A compact chart (~70% card width, ~40px height) showing the entropy score across all 14 runs.
-Runs 1–10: a flat, stable line in violet (#8b5cf6) — reliable execution.
-Run 11: a sharp spike upward into amber (#eab308) — one problematic run.
-Runs 12–14: back to flat violet — recovered and stable.
-The chart has no axes, just the line on a transparent background.
-Small label on left: "ENTROPY / 14 RUNS" in tiny muted monospace.
-
-Bottom row, right-aligned ghost buttons:
-[Pause]  [Runs ›]  [Edit ›]
-Each button: dark fill, violet border at 40% opacity, Geist small, slight hover lift
-
-AGENT CARD 2 — PAUSED
-Same structure but with amber glow on the gradient border:
-- ⏸ PAUSED badge (amber pill)
-- Name: "Daily Standup Digest"
-- "Paused manually  ·  23 runs  ·  $0.31 total  ·  Last run: 1d ago"
-- Sparkline: flat violet line, ends abruptly (paused state, no recent data, line fades to muted)
-- Bottom buttons: [Resume]  [Runs ›]  [Edit ›]
-
-AGENT CARD 3 — ERROR
-Same structure but with red glow on the gradient border:
-- ✗ ERROR badge (red pill)
-- Name: "PR Review Bot"
-- "Failed 3 consecutive runs  ·  Last error: tool timeout after 30s  ·  2d ago"
-- Error message bar: a muted red background strip with the error text in small JetBrains Mono
-  "LLMError: Request timeout after 30000ms on iteration 4 — web-search tool"
-- Sparkline: last 3 points spike dramatically into red, previous runs flat violet
-- Bottom buttons: [Retry]  [Runs ›]  [Edit ›]
-
-NEW AGENT BUTTON
-Top-right of the content area: [+ New Agent] primary button with violet-to-deep-violet
-gradient, white text, slight glow. Clicking this would open a creation flow.
-
-Overall feel: a reliable fleet management view. At a glance, you know which agents are
-healthy, which need attention, and which have failed — without opening a single run.
+The persistent input bar at the bottom remains, with the cursor blinking inside it —
+ready for immediate use. Add a soft violet glow on the input bar to draw the eye down.
 ```
 
 ---
 
-## Screen 4 — Playground: Quick Run
+## Prompt 3 — Run View (Live Execution)
 
 ```
-Design a single screen of "Cortex" — a dark-mode developer control center for an AI agent
-framework. This is the PLAYGROUND section in Quick Run mode — the fastest path from
-idea to running agent.
+Design the Run view for Cortex. This screen shows a single agent run in progress.
 
-DESIGN LANGUAGE
-- Page background: #0f1115, Panel background: #12131a
-- Panel borders: 1px gradient (violet #8b5cf6 → cyan #06b6d4) with soft breathing glow
-- Violet #8b5cf6: primary accent, active elements
-- Cyan #06b6d4: success, results  |  Amber #eab308: tool calls
-- UI labels: Geist sans-serif  |  Data/output: JetBrains Mono
+Top breadcrumb bar: "← Stage" link, then run name "research-task-42" in monospace,
+then ● LIVE badge in green, then "iter 04 / 10" and "η 0.71 EXPLORING" in amber.
 
-LAYOUT
-Standard top nav, PLAYGROUND tab active.
-Mode toggle at top of content: [Quick Run]  [Builder]  — Quick Run is active (violet underline,
-slightly brighter), Builder is muted.
+Below the breadcrumb: a vitals strip spanning the full width.
+Five metrics separated by thin violet dividers:
+η 0.71 · EXPLORING (amber pill) · 4,820 TOKENS · $0.006 COST · 18.4s DURATION
+Below the metrics, a full-width EKG heartbeat line in amber, gently oscillating.
 
-QUICK RUN FORM PANEL (upper portion, ~45% of page height):
-A centered panel (max-width ~720px) with the gradient border treatment.
+Below the vitals: the main content split into two panels side by side.
 
-Row 1 — Provider and Model (side by side):
-[anthropic ▾]  custom dropdown styled with dark fill, violet border, Geist text,
-               chevron in violet
-[claude-sonnet-4-6 ▾]  same style
+Left panel (65% width) — the Signal Monitor:
+Four horizontal data tracks stacked vertically, sharing a time axis.
+Each track has a small muted label on the far left in monospace caps.
 
-Row 2 — Prompt textarea:
-A multiline textarea (~5 lines visible) with dark fill (#0d0f14), violet focus ring (glowing),
-rounded corners. Contains typed text:
-"Research the latest TypeScript AI agent frameworks released in 2026 and summarize
-the top 3 by GitHub activity and developer sentiment."
-Placeholder ghost text shows "Describe what you want the agent to do..." when empty.
+Track 1 ENTROPY: a continuous line chart. The line starts violet on the left,
+rises to amber in the center, curves slightly downward at the right edge.
+Semi-transparent color fill beneath the line.
 
-Row 3 — Tools multi-select:
-Label: "TOOLS" in small muted monospace caps.
-Active tool pills (violet background, white text, × to remove):
-  [× web-search]  [× file-write]
-Inactive add pill: [+ add tool ▾] in ghost style (dark fill, violet border at 40%)
-The dropdown (if shown open below the pills) shows a short list of available tools with
-checkboxes and small description text.
+Track 2 TOKENS: vertical bars per iteration in violet at 80% opacity.
+One bar noticeably taller than the others. Rightmost bar pulses.
 
-Row 4 — Action row:
-Right-aligned: [▶ Run Agent] primary button — violet-to-deep-violet gradient background,
-white text, Geist medium, subtle outer violet glow. Slight upward lift and glow on hover.
-Left side of row: optional small text "No API key set" warning in amber if applicable.
+Track 3 TOOLS: sparse horizontal spans. Completed spans are cyan.
+One active amber span on the right edge, pulsing — tool call in progress.
+Tiny tool name labels inside wide spans.
 
-PREVIOUS RUN RESULT (lower portion, ~45% page height):
-A results panel below the form showing the most recent Quick Run.
+Track 4 LATENCY: filled area chart in cyan at 20% opacity, line at 70%.
 
-Panel header row:
-"✓ COMPLETED" green badge · "research-task-prev" · "8 iter · $0.014 · 38.2s" · [Full Inspect ›]
+Right panel (35% width) — the Trace Panel:
+Showing the currently selected iteration (3).
+Sections stacked vertically with small violet left-accent bars:
+THOUGHT — 2 lines of agent reasoning text in JetBrains Mono, muted
+ACTION — amber pill [web-search] + code block showing query args
+OBSERVATION — cyan-tinted code block, truncated, [Expand ▾] link
+Raw exchange — collapsed [▶ Show raw LLM exchange] row
 
-COMPACT SIGNAL MONITOR (same 4-track layout, half height of the main runs view):
-All tracks show a completed run — the entropy track showing a converging arc (violet at the end),
-the token bars all rendered, tool spans all cyan (completed), latency area chart settled.
-The rightmost edge of all tracks has a subtle green pulse — completion indicator.
-
-RESULT PREVIEW below the compact monitor:
-"FINAL ANSWER" label in small violet monospace caps.
-2–3 lines of the agent's synthesized answer text in JetBrains Mono at normal size.
-A "Copy" icon top-right of the result block.
-[Show full debrief ›] link in violet.
-
-Overall feel: fast and direct. Form → run → result. The signal monitor in the results
-area shows that something real and measurable happened, not just a chatbot response.
+Bottom bar: three toggle tabs [Reactive Decisions] [Memory] [Context Pressure]
+plus [Pause] and [Stop] ghost buttons right-aligned.
 ```
 
 ---
 
-## Screen 5 — Playground: Builder Mode
+## Prompt 4 — Run View (Reactive Decisions Panel)
 
 ```
-Design a single screen of "Cortex" — a dark-mode developer control center for an AI agent
-framework. This is the PLAYGROUND section in Builder mode — a progressive disclosure form
-for composing an agent capability by capability.
+Refine the Run view. Show the bottom panel expanded to the Reactive Decisions tab.
 
-DESIGN LANGUAGE
-- Page background: #0f1115, Panel background: #12131a
-- Panel borders: 1px gradient (violet #8b5cf6 → cyan #06b6d4) with soft breathing glow
-- Violet #8b5cf6: active sections, primary accent  |  Cyan #06b6d4: secondary
-- Amber #eab308: warnings  |  Green #22c55e: valid/saved state
-- UI labels: Geist sans-serif  |  Data values: JetBrains Mono
+The Reactive Decisions panel slides up from the bottom, taking the lower 30% of the screen.
+It shows a chronological log of controller decisions the agent made mid-run.
 
-LAYOUT
-Standard top nav, PLAYGROUND tab active.
-Mode toggle: [Quick Run]  [Builder]  — Builder is active.
+Each decision is a row with:
+- A small icon indicating type (lightning bolt for strategy-switch, compress for compression,
+  stop for early-stop)
+- Iteration number in violet monospace: "iter 03"
+- Decision type in small caps: "STRATEGY SWITCH"
+- Reason text in muted Geist: "Entropy diverging after 3 consecutive thoughts — switching
+  to plan-execute-reflect"
+- Entropy before and after: "η 0.84 → 0.61" in amber → violet
 
-BUILDER PANEL (centered, max-width ~760px, full gradient border treatment):
+Show three decision rows. The most recent row is slightly highlighted.
 
-SECTION: BASE CONFIG (always visible, expanded)
-Subtle section label "BASE CONFIG" in tiny violet monospace caps with a thin violet left bar.
-Two dropdowns side by side: [anthropic ▾]  [claude-sonnet-4-6 ▾]
-Below: Agent name input field, dark fill, violet focus ring. Shows "my-research-agent".
-
-SECTION: PROMPT (always visible)
-Label "PROMPT" with violet left bar.
-Multiline textarea, 4 lines visible, dark fill (#0d0f14):
-"Research recent benchmarks comparing TypeScript AI agent frameworks and
-produce a structured comparison with pros/cons for each."
-
-CAPABILITY SECTIONS (each added capability appears as an expandable section below):
-
-CAPABILITY: REASONING (expanded, showing its contents)
-Section header row: [▼] "REASONING" in small caps · violet left bar ·
-                    [×] remove icon far right (muted red on hover)
-Inside (indented, with subtle dark inner background):
-- Strategy: [react ▾] dropdown
-- Max Iterations: [10] number input, dark fill
-- Strategy Switching: [✓] toggle enabled (violet fill)
-- Fallback Strategy: [plan-execute-reflect ▾]
-
-CAPABILITY: TOOLS (expanded)
-Section header: [▼] "TOOLS" · violet left bar · [×]
-Inside: Tool toggle list:
-  [✓] web-search    — small description text in muted
-  [✓] file-write    — small description text
-  [ ] code-execute  — small description text, unchecked
-  [ ] recall        — small description text
-
-CAPABILITY: HARNESS CONTROLS (expanded)
-Section header: [▼] "HARNESS CONTROLS" · violet left bar · [×]
-Inside (two columns):
-- Min Iterations: [3] number input
-- Verification Step: [reflect ▾] dropdown
-- Output Validator: [none ▾] dropdown
-- Task Context: small key-value editor showing one entry "project: cortex"
-
-ADD CAPABILITY ROW (below all added sections):
-A dashed-border row (violet dashed line at 30% opacity):
-[+ Add capability ▾] ghost button centered in the row
-The open dropdown shows (in a dark floating panel):
-  Guardrails  ·  Memory  ·  Cost / Pricing  ·  Streaming  ·  Health Check  ·  Skills
-Each item has an icon and one-line description.
-
-ACTION ROW (bottom of builder panel, right-aligned):
-[▶ Run Agent]   primary button, violet gradient, white text, glow
-[Save as Agent →] secondary ghost button, violet border —
-                  "save as persistent Gateway agent" tooltip below in tiny muted text
-
-Overall feel: a thoughtful form that grows as you add capabilities.
-Not intimidating at first glance, but reveals full framework depth as you explore.
-The "+ Add capability" section should feel like unlocking superpowers one at a time.
+The Signal Monitor and Trace Panel above remain visible but slightly compressed.
 ```
 
 ---
 
-## Screen 6 — Tools: Browse and Test
+## Prompt 5 — Run View (Chat Mode)
 
 ```
-Design a single screen of "Cortex" — a dark-mode developer control center for an AI agent
-framework. This is the TOOLS section — browse registered tools and test them in isolation.
+Refine the Run view to show a chat session — when the agent is used conversationally.
 
-DESIGN LANGUAGE
-- Page background: #0f1115, Panel background: #12131a
-- Panel borders: 1px gradient (violet #8b5cf6 → cyan #06b6d4) with soft breathing glow
-- Violet #8b5cf6: primary accent  |  Cyan #06b6d4: success/results
-- Amber #eab308: built-in tools  |  Muted #64748b: secondary text
-- UI labels: Geist sans-serif  |  Schemas/values: JetBrains Mono
+Replace the Signal Monitor with a vertical split:
+Left side (55%): a chat transcript panel. Messages alternate between
+user bubbles (right-aligned, dark violet fill, white text) and
+assistant responses (left-aligned, dark panel fill, #e2e8f0 text).
+The transcript uses Geist for chat text but JetBrains Mono for any code or tool outputs.
+A chat input bar sits at the bottom of this panel.
 
-LAYOUT
-Standard top nav, TOOLS tab active.
-Split: 40% left (tool list), 60% right (selected tool detail + test panel).
+Right side (45%): a live event stream panel labeled "LIVE EVENTS" in small muted caps.
+Events stream in as the agent responds — each line is a timestamped `AgentEvent` type
+in JetBrains Mono, color-coded by type:
+violet for reasoning events, amber for tool calls, cyan for observations, green for completion.
 
-LEFT PANEL: TOOL LIST
-Search input at top: dark fill, violet border, magnifying glass icon. Placeholder: "Search tools..."
-
-Tool rows (each is a clickable row with hover lift):
-
-Row (selected, highlighted with violet left border and slightly lighter bg):
-◈ web-search        [built-in]  tag in amber pill, tiny
-"Search the web using Tavily API"  muted description, Geist small
-
-Row:
-◈ file-write        [built-in]  amber pill
-"Write content to a file on the filesystem"
-
-Row:
-◈ recall            [meta-tool]  violet pill
-"Selective working memory retrieval"
-
-Row:
-◈ github-search     [mcp]  cyan pill
-"Search GitHub repos, issues, PRs"
-
-Row:
-◈ code-execute      [built-in]  amber pill
-"Execute TypeScript/JavaScript in sandbox"
-
-Row:
-◈ custom-validator  [custom]  muted pill
-"Custom validation tool (user-defined)"
-
-Tag legend below the list (tiny):
-● built-in  ● meta-tool  ● mcp  ● custom
-
-RIGHT PANEL: SELECTED TOOL — "web-search"
-Panel header:
-"◈ WEB-SEARCH" in JetBrains Mono medium, violet  ·  [built-in] amber pill
-
-Description:
-"Search the web for real-time information using the Tavily API. Returns ranked results
-with titles, URLs, and content snippets."
-
-Section: INPUT SCHEMA
-Label "INPUT SCHEMA" in small violet monospace caps.
-Schema rendered as a clean property list:
-  query        string  required   "The search query"
-  maxResults   number  optional   default: 5
-  searchDepth  enum    optional   "basic" | "advanced"  default: "basic"
-Each property row: name in violet monospace, type in cyan, required/optional badge, description muted.
-
-Section: OUTPUT SCHEMA
-Label "OUTPUT SCHEMA" in small violet monospace caps.
-  results[]  array of:
-    title    string   "Page title"
-    url      string   "Source URL"
-    content  string   "Relevant excerpt"
-
-Section: USAGE STATS (from run history)
-Four inline stat pills: [142 calls] [94% success] [avg 380ms] [last used 1h ago]
-Each pill: dark fill, muted border, JetBrains Mono value, Geist tiny label below.
-
-Section: TEST THIS TOOL
-Label "TEST" in small violet monospace caps.
-A dark inner panel (#0d0f14):
-JSON input editor with syntax highlighting showing:
-{
-  "query": "TypeScript agent framework benchmarks 2026",
-  "maxResults": 3
-}
-[▶ Run Test] button — violet gradient, white text, small
-
-Below the button: the last test result shown in a result block:
-"✓ 340ms" green badge + response preview in JetBrains Mono, cyan-tinted code block,
-first 5 lines of JSON visible with [Expand ▾] at bottom.
-
-Overall feel: a focused API explorer. Developers can understand exactly what each tool
-does and verify it works before building an agent that depends on it.
+The vitals strip at the top remains. The Trace Panel on the right is replaced by this
+event stream — they serve the same purpose in chat mode.
 ```
 
 ---
 
-## Screen 7 — Skills: Browse Living Skills
+## Prompt 6 — Workshop View (Builder Tab)
 
 ```
-Design a single screen of "Cortex" — a dark-mode developer control center for an AI agent
-framework. This is the SKILLS section — browse and inspect the framework's Living Skills system,
-where agents develop and refine their own reusable knowledge over time.
+Design the Workshop view for Cortex, showing the Builder tab.
 
-DESIGN LANGUAGE
-- Page background: #0f1115, Panel background: #12131a
-- Panel borders: 1px gradient (violet #8b5cf6 → cyan #06b6d4) with soft breathing glow
-- Violet #8b5cf6: primary, skill identity  |  Cyan #06b6d4: recently evolved / fresh
-- Amber #eab308: high usage, active skills  |  Muted #64748b: inactive/older
-- UI labels: Geist sans-serif  |  Skill content: JetBrains Mono
+Three tabs at the top of the content area: [Builder] [Skills] [Tools]
+Builder tab is active with a violet underline.
 
-LAYOUT
-Standard top nav, SKILLS tab active.
-Split: 38% left (skills list with search/filter), 62% right (selected skill detail).
+The builder is a centered form panel (max width 720px) with the gradient border treatment.
 
-LEFT PANEL: SKILL LIST
-Search input at top: "Search skills..." with magnifying glass icon.
-Filter row below: [All ▾] tier filter · [Sort: Usage ▾]
+Section: BASE CONFIG (always visible)
+Two dropdowns side by side: [anthropic ▾] and [claude-sonnet-4-6 ▾]
+Both use dark fill, violet border, Geist text.
 
-Skill rows (each clickable, hover lift):
+Section: PROMPT
+A multiline textarea in dark fill (#0d0f14) with violet focus ring.
+Contains sample text: "Research TypeScript agent frameworks and summarize the top 3."
 
-Row (selected, violet left border):
-⚡ harness-workflow      tier: CONDUCTOR  ·  v3
-"Built-in workflow for orchestrating multi-step agent runs"
-Usage: ████████  42 activations   — amber bar proportional to usage
+Section: ACTIVE CAPABILITIES
+Three capability sections already added, each with a small collapse toggle and a remove ×:
 
-Row:
-◈ react-kernel           tier: STRATEGY  ·  v1
-"ReAct reasoning loop patterns and tool selection heuristics"
-Usage: ██████  31 activations
+REASONING (expanded): strategy dropdown [react ▾], max iterations [10],
+strategy switching toggle (enabled, violet), fallback [plan-execute-reflect ▾]
 
-Row:
-✦ github-patterns        tier: DOMAIN  ·  v2  ·  [evolved ↑] cyan badge
-"GitHub API usage patterns learned from 14 agent runs"
-Usage: ████  18 activations
+TOOLS (expanded): a compact checklist — [✓] web-search, [✓] file-write, [ ] code-execute
 
-Row:
-◈ typescript-debugging   tier: DOMAIN  ·  v1
-"TypeScript error patterns and resolution strategies"
-Usage: ██  8 activations
+HARNESS CONTROLS (collapsed): just the header row visible
 
-Row:
-◈ search-refinement      tier: TASK  ·  v4  ·  [evolved ↑] cyan badge
-"Query refinement heuristics for web search tasks"
-Usage: ███  12 activations
+Below the capability sections: a dashed-border row with [+ Add capability ▾] centered.
+The dropdown is open, showing: Guardrails · Memory · Cost / Pricing · Streaming · Health Check · Skills
+Each item has a small icon and a one-line description in muted text.
 
-Stats footer below list: "5 skills  ·  3 tiers  ·  2 evolved this week"
+Bottom action row, right-aligned:
+[▶ Run Agent] violet gradient button
+[Save as Gateway Agent →] secondary ghost button with violet border
+```
 
-RIGHT PANEL: SELECTED SKILL — "harness-workflow"
-Panel header row:
-"⚡ HARNESS-WORKFLOW" in JetBrains Mono medium, violet
-[CONDUCTOR] tier pill in violet  ·  [v3] version badge  ·  [42 activations] amber pill
+---
 
-Meta row:
-"Last evolved: 2 days ago  ·  Created: 14 days ago  ·  Source: built-in"
-All in muted Geist small.
+## Prompt 7 — Workshop View (Skills Tab)
 
-Section: SKILL CONTENT
-Label "CONTENT" in small violet monospace caps.
-Rendered markdown content in a scrollable dark panel (#0d0f14):
-A structured skill document with headers (violet), bullet points, code examples
-(JetBrains Mono, syntax highlighted). Shows 8–10 lines before scrolling.
-The content looks like expert guidance: "## When to use this skill / ## Core workflow / ## Tool sequencing"
+```
+Switch to the Skills tab in the Workshop view.
 
-Section: VERSION HISTORY
-Label "VERSION HISTORY" in small violet monospace caps.
-A compact timeline:
-  v3  ·  2 days ago     [current]  green badge
-  v2  ·  8 days ago     [view diff ›] violet link
-  v1  ·  14 days ago    [view diff ›] violet link
+Left column (38%): a scrollable skill list with a search input at the top.
+Each skill row shows: icon · skill name in Geist medium · version badge · tier pill.
+Tier pills: CONDUCTOR in violet, STRATEGY in indigo, DOMAIN in cyan, TASK in slate.
+A small horizontal usage bar under each name shows relative activation count.
+One row is selected (violet left border, slightly lighter background): "harness-workflow".
 
-Section: EVOLUTION
-Label "EVOLUTION" in small violet monospace caps.
-A muted row showing the last evolution trigger:
-"LLM refinement after 30 activations — improved tool sequencing guidance"
-[Trigger Evolution ▾] ghost button with cyan border — "Provide a reason to guide refinement"
-A small input appears on click: "Reason for evolution..." — currently collapsed.
+Right column (62%): the selected skill detail panel.
 
-Section: ACTIVATION CONTEXTS (small)
-Where this skill has been activated recently, shown as tiny pill tags:
-[research-task-42]  [data-pipeline-run-39]  [github-monitor-run-12]  [+39 more]
-Each in dark fill, muted border, JetBrains Mono tiny.
+Header: ⚡ HARNESS-WORKFLOW in JetBrains Mono violet · [CONDUCTOR] pill · [v3] badge · [42 activations] amber pill
 
-Overall feel: a living knowledge base that grows with agent usage. The evolution feature
-makes clear that these aren't static docs — they improve. The version history shows
-genuine progression. The usage bars make hot vs. cold skills immediately legible.
+Below the header: a scrollable content panel in dark fill showing rendered markdown.
+Headers in violet, bullet points and code blocks in JetBrains Mono.
+The content looks like expert guidance with sections: When to use · Core workflow · Tool sequencing
+
+Version history section (below content):
+Three compact rows: v3 current (green badge) · v2 [view diff ›] · v1 [view diff ›]
+
+Evolution section:
+Muted description text + [Trigger Evolution ▾] ghost button in cyan border.
+```
+
+---
+
+## Prompt 8 — Workshop View (Tools Tab)
+
+```
+Switch to the Tools tab in the Workshop view.
+
+Left column (38%): scrollable tool list with a search input.
+Tool rows: ◈ icon · tool name in Geist · source tag (built-in amber / mcp cyan / custom muted).
+One tool is selected: "web-search".
+
+Right column (62%): selected tool detail.
+
+Header: ◈ WEB-SEARCH in violet monospace · [built-in] amber pill
+
+Description text in muted Geist.
+
+INPUT SCHEMA section: a clean property table.
+Each row: property name in violet monospace · type in cyan · required/optional badge · description muted.
+Properties: query (string, required) · maxResults (number, optional, default 5) · searchDepth (enum, optional)
+
+USAGE STATS: four inline stat chips in a row.
+[142 calls] [94% success] [avg 380ms] [last used 1h ago]
+Dark fill, muted borders, JetBrains Mono values, tiny Geist labels.
+
+TEST section: a dark inner panel with a JSON code editor showing sample args,
+and a [▶ Run Test] violet button.
+Below the button: last test result — ✓ 340ms green badge + cyan-tinted code block
+showing truncated JSON response with [Expand ▾] link.
+```
+
+---
+
+## Refinement Prompts (Use After Generating Any Screen)
+
+Short focused follow-ups — paste one at a time after generating a screen.
+
+**To add depth to the glow effects:**
+```
+Make the panel border glow more prominent — increase the violet-to-cyan gradient
+border glow intensity and add a subtle inner shadow on panels.
+```
+
+**To adjust the signal monitor tracks:**
+```
+Make the four signal monitor tracks taller with more breathing room between them.
+Add a subtle horizontal grid line every 25% height on each track.
+```
+
+**To refine the node pulse animation description:**
+```
+The running agent node should have three concentric rings expanding outward
+like a sonar pulse, fading from violet to transparent. The rings repeat every 2 seconds.
+```
+
+**To add the command palette:**
+```
+Add a command palette overlay: a centered dark modal with a violet border,
+a search input at the top reading "Search commands...", and a list of
+command results below. First result highlighted in violet. Each result shows
+an icon, command name in Geist, and keyboard shortcut in muted monospace.
+```
+
+**To show a notification:**
+```
+Add a desktop notification-style toast in the bottom-right corner:
+dark panel, thin violet left border, agent name in violet monospace bold,
+event description in muted Geist, timestamp in tiny monospace.
 ```
