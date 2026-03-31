@@ -7,6 +7,9 @@ import {
   type AgentDebrief,
 } from "../src/debrief.js";
 import { createTestLLMServiceLayer } from "@reactive-agents/testing";
+import { ReactiveAgents } from "../src/index.js";
+import type { AgentEvent } from "@reactive-agents/core";
+import { FallbackChain } from "../../llm-provider/src/fallback-chain.js";
 
 const baseInput: DebriefInput = {
   taskPrompt: "Fetch commits and send Signal message",
@@ -186,5 +189,50 @@ describe("formatDebriefMarkdown", () => {
     const md = formatDebriefMarkdown({ ...sampleDebrief, caveats: "Some uncertainty here" });
     expect(md).toContain("## Caveats");
     expect(md).toContain("Some uncertainty here");
+  });
+});
+
+describe("DebriefCompleted event emission", () => {
+  it("publishes DebriefCompleted after successful run debrief synthesis", async () => {
+    const agent = await ReactiveAgents.create()
+      .withName("debrief-event-test")
+      .withTestScenario([{ text: "FINAL ANSWER: done" }])
+      .withReasoning({ defaultStrategy: "reactive" })
+      .withMemory()
+      .build();
+
+    const published: AgentEvent[] = [];
+    const unsubscribe = await agent.subscribe((event) => {
+      published.push(event);
+    });
+
+    await agent.run("Say done");
+
+    unsubscribe();
+    await agent.dispose();
+
+    expect(published.some((event) => event._tag === "DebriefCompleted")).toBe(true);
+  });
+});
+
+describe("ProviderFallbackActivated event shape", () => {
+  it("can be published when a fallback callback triggers", () => {
+    const published: AgentEvent[] = [];
+    const chain = new FallbackChain(
+      { providers: ["anthropic", "openai"], errorThreshold: 1 },
+      (from: string, to: string, reason: string, attempt: number) => {
+        published.push({
+          _tag: "ProviderFallbackActivated",
+          taskId: "test-task",
+          fromProvider: from,
+          toProvider: to,
+          reason,
+          attemptNumber: attempt,
+        });
+      },
+    );
+
+    chain.recordError("anthropic");
+    expect(published.some((event) => event._tag === "ProviderFallbackActivated")).toBe(true);
   });
 });

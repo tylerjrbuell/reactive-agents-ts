@@ -14,6 +14,16 @@ import type {
   MemoryBoostTriggered,
   AgentNeedsHuman,
 } from "../types/intelligence-events.js";
+import type {
+  MemorySnapshot,
+  ContextPressure,
+  ChatTurnEvent,
+  AgentHealthReport,
+  ProviderFallbackActivated,
+  DebriefCompleted,
+  AgentConnected,
+  AgentDisconnected,
+} from "../types/cortex-events.js";
 
 // ─── Event Types ───
 
@@ -805,7 +815,16 @@ export type AgentEvent =
   | TemperatureAdjusted
   | ToolInjected
   | MemoryBoostTriggered
-  | AgentNeedsHuman;
+  | AgentNeedsHuman
+  // ─── Cortex events ───
+  | MemorySnapshot
+  | ContextPressure
+  | ChatTurnEvent
+  | AgentHealthReport
+  | ProviderFallbackActivated
+  | DebriefCompleted
+  | AgentConnected
+  | AgentDisconnected;
 
 /**
  * Discriminant tag union of all agent event types.

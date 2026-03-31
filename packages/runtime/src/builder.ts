@@ -33,6 +33,7 @@ import {
   directChat,
   requiresTools,
   buildContextSummary,
+  publishChatTurnEvents,
   type ChatMessage,
   type ChatOptions,
   type ChatReply,
@@ -720,12 +721,13 @@ export class ReactiveAgentBuilder {
   private _enableIdentity: boolean = false;
   private _enableObservability: boolean = false;
   private _observabilityOptions?: ObservabilityOptions;
+  private _cortexUrl: string | null = null;
   private _enableInteraction: boolean = false;
   private _enablePrompts: boolean = false;
   private _promptsOptions?: PromptsOptions;
   private _enableOrchestration: boolean = false;
   private _testScenario?: TestTurn[];
-  private _extraLayers?: Layer.Layer<any, any>;
+  private _extraLayers?: Layer.Layer<any, any, any>;
   private _mcpServers: MCPServerConfig[] = [];
   private _systemPrompt?: string;
   private _environmentContext?: Record<string, string>;
@@ -1390,6 +1392,19 @@ export class ReactiveAgentBuilder {
   withObservability(options?: ObservabilityOptions): this {
     this._enableObservability = true;
     if (options) this._observabilityOptions = options;
+    return this;
+  }
+
+  /**
+   * Enable Cortex event reporting.
+   *
+   * URL resolution order:
+   * 1) explicit `url` argument
+   * 2) `CORTEX_URL` environment variable
+   * 3) `http://localhost:4321`
+   */
+  withCortex(url?: string): this {
+    this._cortexUrl = url ?? process.env.CORTEX_URL ?? "http://localhost:4321";
     return this;
   }
 
@@ -2321,6 +2336,16 @@ export class ReactiveAgentBuilder {
         };
       }
 
+      let composedExtraLayers = self._extraLayers;
+      if (self._cortexUrl !== null) {
+        const { CortexReporterLive } = yield* Effect.promise(
+          () => import("@reactive-agents/observability"),
+        );
+        composedExtraLayers = composedExtraLayers
+          ? Layer.mergeAll(composedExtraLayers, CortexReporterLive(self._cortexUrl))
+          : CortexReporterLive(self._cortexUrl);
+      }
+
       const baseRuntime = createRuntime({
         agentId,
         provider: self._provider,
@@ -2347,7 +2372,7 @@ export class ReactiveAgentBuilder {
         behavioralContract: self._behavioralContract,
         enableSelfImprovement: self._enableSelfImprovement,
         testScenario: self._testScenario,
-        extraLayers: self._extraLayers,
+        extraLayers: composedExtraLayers,
         systemPrompt: composedSystemPrompt,
         environmentContext: self._environmentContext,
         mcpServers: self._mcpServers.length > 0 ? self._mcpServers : undefined,
@@ -3737,9 +3762,34 @@ export class ReactiveAgent {
     message: string,
     options?: ChatOptions,
     _history?: ChatMessage[],
+    _sessionId?: string,
   ): Promise<ChatReply> {
     const useTools = options?.useTools ?? requiresTools(message);
     const contextSummary = buildContextSummary(this._lastDebrief, this._lastRunObservations);
+    const sessionId = _sessionId ?? `chat_${Date.now()}`;
+    const publishChatTurns = async (
+      routedVia: "direct-llm" | "react-loop",
+      assistantMessage: string,
+      tokensUsed?: number,
+      taskId: string = "chat",
+    ): Promise<void> => {
+      await publishChatTurnEvents({
+        taskId,
+        sessionId,
+        routedVia,
+        userMessage: message,
+        assistantMessage,
+        tokensUsed,
+        publish: async (event) => {
+          await this.runtime.runPromise(
+            EventBus.pipe(
+              Effect.flatMap((bus) => bus.publish(event)),
+              Effect.catchAll(() => Effect.void),
+            ),
+          );
+        },
+      });
+    };
 
     if (!useTools) {
       // Direct LLM path — fast, no tool overhead
@@ -3752,6 +3802,7 @@ export class ReactiveAgent {
         this._chatHistory.push({ role: "user", content: message, timestamp: Date.now() });
         this._chatHistory.push({ role: "assistant", content: reply.message, timestamp: Date.now() });
       }
+      await publishChatTurns("direct-llm", reply.message, reply.tokens, "chat");
       return reply;
     }
 
@@ -3761,6 +3812,7 @@ export class ReactiveAgent {
       ? `Context from prior run:\n${contextSummary}\n\nNew request: ${message}`
       : message;
     const result = await this.run(enrichedMessage);
+    await publishChatTurns("react-loop", result.output, result.metadata.tokensUsed, result.taskId);
     return {
       message: result.output,
       toolsUsed: result.debrief?.toolsUsed.map((t) => t.name),
@@ -3811,7 +3863,7 @@ export class ReactiveAgent {
       : undefined;
 
     return new AgentSession(
-      (msg, history, opts) => this.chat(msg, opts, history),
+      (msg, history, opts) => this.chat(msg, opts, history, sessionId),
       undefined,
       onSave,
     );

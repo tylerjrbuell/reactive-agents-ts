@@ -1,5 +1,6 @@
 import { Effect } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
+import type { AgentEvent } from "@reactive-agents/core";
 import type { AgentDebrief } from "./debrief.js";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -179,6 +180,59 @@ export function directChat(
       cost: response.usage?.estimatedCost,
     } satisfies ChatReply;
   });
+}
+
+export function buildChatTurnEvents(params: {
+  taskId: string;
+  sessionId: string;
+  routedVia: "direct-llm" | "react-loop";
+  userMessage: string;
+  assistantMessage: string;
+  tokensUsed?: number;
+}): [Extract<AgentEvent, { _tag: "ChatTurn" }>, Extract<AgentEvent, { _tag: "ChatTurn" }>] {
+  const base = {
+    _tag: "ChatTurn" as const,
+    taskId: params.taskId,
+    sessionId: params.sessionId,
+    routedVia: params.routedVia,
+  };
+
+  return [
+    {
+      ...base,
+      role: "user",
+      content: params.userMessage,
+    },
+    {
+      ...base,
+      role: "assistant",
+      content: params.assistantMessage,
+      ...(params.tokensUsed !== undefined ? { tokensUsed: params.tokensUsed } : {}),
+    },
+  ];
+}
+
+export async function publishChatTurnEvents(params: {
+  taskId: string;
+  sessionId: string;
+  routedVia: "direct-llm" | "react-loop";
+  userMessage: string;
+  assistantMessage: string;
+  tokensUsed?: number;
+  publish: (event: Extract<AgentEvent, { _tag: "ChatTurn" }>) => Promise<void>;
+}): Promise<void> {
+  const events = buildChatTurnEvents({
+    taskId: params.taskId,
+    sessionId: params.sessionId,
+    routedVia: params.routedVia,
+    userMessage: params.userMessage,
+    assistantMessage: params.assistantMessage,
+    tokensUsed: params.tokensUsed,
+  });
+
+  for (const event of events) {
+    await params.publish(event);
+  }
 }
 
 // ─── AgentSession ──────────────────────────────────────────────────────────

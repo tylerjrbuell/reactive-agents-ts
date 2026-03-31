@@ -53,3 +53,35 @@ describe("FallbackChain", () => {
     expect(chain.currentProvider()).toBe("anthropic");
   });
 });
+
+describe("FallbackChain onFallback callback", () => {
+  test("calls onFallback when threshold is exceeded and provider switches", () => {
+    const calls: Array<{ from: string; to: string; reason: string; attempt: number }> = [];
+
+    const chain = new FallbackChain(
+      { providers: ["anthropic", "openai"], errorThreshold: 2 },
+      (from, to, reason, attempt) => {
+        calls.push({ from, to, reason, attempt });
+      },
+    );
+
+    chain.recordError("anthropic");
+    expect(calls).toHaveLength(0);
+
+    chain.recordError("anthropic");
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.from).toBe("anthropic");
+    expect(calls[0]?.to).toBe("openai");
+    expect(calls[0]?.reason).toContain("error");
+    expect(calls[0]?.attempt).toBeGreaterThan(0);
+  });
+
+  test("does not throw when callback is not provided", () => {
+    const chain = new FallbackChain({
+      providers: ["anthropic", "openai"],
+      errorThreshold: 1,
+    });
+
+    expect(() => chain.recordError("anthropic")).not.toThrow();
+  });
+});

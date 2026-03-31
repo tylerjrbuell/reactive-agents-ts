@@ -123,7 +123,7 @@ export { makeRateLimitedProvider } from "./rate-limited-provider.js";
 
 // ─── Fallback Chain ───
 export { FallbackChain } from "./fallback-chain.js";
-export type { FallbackConfig } from "./fallback-chain.js";
+export type { FallbackConfig, FallbackCallback } from "./fallback-chain.js";
 
 // ─── Validation ───
 export { validateAndRepairMessages } from "./validation.js";

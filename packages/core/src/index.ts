@@ -134,3 +134,14 @@ export type {
   IntelligenceControlEvent,
   IntelligenceEvent,
 } from "./types/intelligence-events.js";
+
+export type {
+  MemorySnapshot,
+  ContextPressure,
+  ChatTurnEvent,
+  AgentHealthReport,
+  ProviderFallbackActivated,
+  DebriefCompleted,
+  AgentConnected,
+  AgentDisconnected,
+} from "./types/cortex-events.js";

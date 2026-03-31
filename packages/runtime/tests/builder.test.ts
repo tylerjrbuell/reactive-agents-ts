@@ -214,4 +214,25 @@ describe("ReactiveAgentBuilder", () => {
       expect(agent).toBeInstanceOf(ReactiveAgent);
     });
   });
+
+  describe("withCortex()", () => {
+    it("returns this for chaining", () => {
+      const builder = ReactiveAgents.create();
+      const result = builder.withCortex();
+      expect(result).toBe(builder);
+    });
+
+    it("accepts an explicit URL", () => {
+      const builder = ReactiveAgents.create();
+      expect(() => builder.withCortex("http://localhost:9999")).not.toThrow();
+    });
+
+    it("uses CORTEX_URL when no URL is provided", () => {
+      const original = process.env.CORTEX_URL;
+      process.env.CORTEX_URL = "http://localhost:4321";
+      const builder = ReactiveAgents.create();
+      expect(() => builder.withCortex()).not.toThrow();
+      process.env.CORTEX_URL = original;
+    });
+  });
 });

@@ -50,4 +50,22 @@ describe("Builder fallback integration", () => {
     });
     expect(result).toBe(builder);
   });
+
+  test("ProviderFallbackActivated payload shape remains stable", () => {
+    const event = {
+      _tag: "ProviderFallbackActivated" as const,
+      taskId: "task-runtime-fallback-1",
+      fromProvider: "anthropic",
+      toProvider: "openai",
+      reason: "error_threshold:1",
+      attemptNumber: 1,
+    };
+
+    expect(event._tag).toBe("ProviderFallbackActivated");
+    expect(event.taskId).toBe("task-runtime-fallback-1");
+    expect(event.fromProvider).toBe("anthropic");
+    expect(event.toProvider).toBe("openai");
+    expect(event.reason).toContain("error_threshold");
+    expect(event.attemptNumber).toBe(1);
+  });
 });

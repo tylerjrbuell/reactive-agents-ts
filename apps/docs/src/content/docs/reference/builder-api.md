@@ -131,7 +131,7 @@ See [Context Engineering](/guides/context-engineering/) for full tier defaults.
 ### Optional features
 
 | Method | Description |
-| ------ | ----------- |
+| ------------------------------------ | ----------- |
 | `withGuardrails(options?)` | Toggle detectors: `{ injection?, pii?, toxicity?, customBlocklist? }`. All default **on** when guardrails are enabled. |
 | `withKillSwitch()` | Pause / resume / stop / terminate via `KillSwitchService` |
 | `withBehavioralContracts(contract)` | Rules such as `deniedTools`, `allowedTools`, `maxIterations`, etc. |
@@ -147,6 +147,7 @@ See [Context Engineering](/guides/context-engineering/) for full tier defaults.
 | `withRequiredTools(config)` | Tools that must run before success — `{ tools?, adaptive?, maxRetries? }`. When `adaptive: true`, the framework also auto-sets a per-tool call budget of 3 for search-type tools to prevent infinite research loops. |
 | `withIdentity()` | Ed25519 identity + RBAC |
 | `withObservability(options?)` | Metrics dashboard, tracing, verbosity. Options: `verbosity` (`"minimal"\|"normal"\|"verbose"\|"debug"`), `live` (stream phase events), `file` (JSONL path), `logPrefix`, `logModelIO` (when `true` or when `verbosity: "debug"`, logs the complete FC conversation thread with role labels `[USER]`/`[ASSISTANT]`/`[TOOL]` and raw LLM response for every iteration — essential for debugging prompt issues) |
+| `withCortex(url?)` | Enable best-effort Cortex reporting. Streams EventBus events to Cortex WS ingest (`/ws/ingest`) using URL priority: explicit `url` → `CORTEX_URL` env → `http://localhost:4321` |
 | `withStreaming(options?)` | Default density for `agent.runStream()`: `{ density?: "tokens" \| "full" }` |
 | `withTelemetry(config?)` | Opt-in run telemetry / privacy modes (`@reactive-agents/observability` `TelemetryConfig`; default mode `isolated` if omitted) |
 | `withInteraction()` | Collaboration / approval flows |
@@ -162,11 +163,11 @@ See [Context Engineering](/guides/context-engineering/) for full tier defaults.
 | `withFallbacks(config)` | `{ providers?, models?, errorThreshold? }` fallback chain |
 | `withLogging(config)` | `makeLoggerService` — `{ level?, format?, output?: "console" \| "file" \| WritableStream, filePath?, maxFileSizeBytes?, maxFiles? }` |
 | `withHealthCheck()` | Enables `agent.health()` |
-| `withVerificationStep(config?)` | Post-answer LLM self-review. `{ mode: "reflect" \| "loop", prompt? }`. `"reflect"` makes one extra LLM call; `"loop"` re-enters the ReAct loop (V1.1) |
-| `withOutputValidator(fn, options?)` | Validate output before accepting. `fn(output) => { valid, feedback? }`. Failed validation injects feedback and retries up to `maxRetries` (default 2) |
-| `withCustomTermination(fn)` | Re-run until `fn({ output }) === true`, up to 3 times. For domain-specific completion criteria |
-| `withTaskContext(record)` | `Record<string, string>` injected as background data into reasoning context — distinct from `systemPrompt` instructions |
-| `withProgressCheckpoint(every, options?)` | Store resumption checkpoint config every N iterations. `{ autoResume? }`. PlanStore execution integration is V1.1 |
+| `withVerificationStep(config?)` | Post-answer LLM self-review. `{ mode: "reflect" \| "loop", prompt? }`. Reflect mode adds one LLM confirmation call; loop mode (V1.1) re-enters the ReAct loop |
+| `withOutputValidator(fn, opts?)` | Validate output before accepting. `fn(output) => { valid, feedback? }`. Failed validation injects feedback and retries (`opts.maxRetries`, default 2) |
+| `withCustomTermination(fn)` | Re-run until `fn({ output }) === true`, up to 3 additional times. For domain-specific completion criteria |
+| `withTaskContext(record)` | `Record<string, string>` of background facts injected into reasoning context — distinct from system prompt instructions |
+| `withProgressCheckpoint(n, opts?)` | Store checkpoint config every N iterations. `{ autoResume? }`. PlanStore write execution is V1.1 |
 | `withReactiveIntelligence(false)` | Disable the Reactive Intelligence layer (enabled by default). |
 | `withReactiveIntelligence(options?)` | Entropy, controller, telemetry, hooks (`onEntropyScored`, `onControllerDecision`, …), `constraints`, `autonomy`. See [Reactive Intelligence](/features/reactive-intelligence/) |
 | `withSkills(config?)` | `{ paths?, packages?, evolution?: { mode?, refinementThreshold?, rollbackOnRegression? }, overrides? }` |
@@ -726,6 +727,14 @@ yield* eventBus.on("ReasoningStepCompleted", onStepComplete);
 | `BudgetExhausted` | `agentId`, `tokensUsed`, `dailyBudget` |
 | `StrategySwitchEvaluated` | `taskId`, `fromStrategy`, `recommendedStrategy`, `rationale`, `willSwitch` |
 | `StrategySwitched` | `taskId`, `fromStrategy`, `toStrategy`, `switchNumber`, `stepsCarriedOver` |
+| `ProviderFallbackActivated` | `taskId`, `fromProvider`, `toProvider`, `reason`, `attemptNumber` |
+| `DebriefCompleted` | `taskId`, `agentId`, `debrief` |
+| `ChatTurn` | `taskId`, `sessionId`, `role`, `content`, `routedVia`, `tokensUsed?` |
+| `MemorySnapshot` | `taskId`, `iteration`, `working`, `episodicCount`, `semanticCount`, `skillsActive` |
+| `ContextPressure` | `taskId`, `utilizationPct`, `tokensUsed`, `tokensAvailable`, `level` |
+| `AgentHealthReport` | `agentId`, `status`, `checks[]`, `uptimeMs` |
+| `AgentConnected` | `agentId`, `runId`, `cortexUrl` |
+| `AgentDisconnected` | `agentId`, `runId`, `reason` |
 
 ## AgentResult
 

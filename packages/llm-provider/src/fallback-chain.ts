@@ -22,6 +22,14 @@ export interface FallbackConfig {
   readonly errorThreshold?: number;
 }
 
+/** Called when the chain switches to the next provider. */
+export type FallbackCallback = (
+  fromProvider: string,
+  toProvider: string,
+  reason: string,
+  attemptNumber: number,
+) => void;
+
 /**
  * FallbackChain manages graceful degradation when LLM providers or models fail.
  *
@@ -74,7 +82,10 @@ export class FallbackChain {
   /** Threshold for switching to next provider. */
   private readonly threshold: number;
 
-  constructor(private readonly config: FallbackConfig) {
+  constructor(
+    private readonly config: FallbackConfig,
+    private readonly onFallback?: FallbackCallback,
+  ) {
     this.threshold = config.errorThreshold ?? 3;
   }
 
@@ -90,7 +101,10 @@ export class FallbackChain {
 
     // Switch to next provider if threshold met and not at the end
     if (count >= this.threshold && this.currentProviderIndex < this.config.providers.length - 1) {
+      const fromProvider = this.config.providers[this.currentProviderIndex] ?? provider;
       this.currentProviderIndex++;
+      const toProvider = this.config.providers[this.currentProviderIndex] ?? "unknown";
+      this.onFallback?.(fromProvider, toProvider, `error_threshold:${count}`, count);
     }
   }
 

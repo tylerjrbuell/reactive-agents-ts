@@ -75,6 +75,12 @@ export type { ExporterConfig, VerbosityLevel } from "./observability-service.js"
 // ─── Runtime ───
 export { createObservabilityLayer } from "./runtime.js";
 
+export {
+  CortexReporter,
+  CortexReporterLive,
+  CortexReporterError,
+} from "./cortex/cortex-reporter.js";
+
 // ─── Telemetry ───
 export {
   TelemetryRecordSchema,

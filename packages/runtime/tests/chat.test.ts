@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import { ReactiveAgents } from "reactive-agents";
+import { ReactiveAgents } from "../src/index.js";
+import type { AgentEvent } from "@reactive-agents/core";
 
 describe("agent.chat()", () => {
   it("chat() method exists on ReactiveAgent", async () => {
@@ -82,5 +83,55 @@ describe("agent.chat()", () => {
     // history cleared after end
     expect(session.history().length).toBe(0);
     await agent.dispose();
+  });
+
+  it("emits ChatTurn events for user and assistant turns", async () => {
+    const agent = await ReactiveAgents.create()
+      .withName("chat-turn-events")
+      .withTestScenario([{ text: "Hello back!" }])
+      .build();
+
+    const events: AgentEvent[] = [];
+    const unsubscribe = await agent.subscribe((event) => {
+      events.push(event);
+    });
+
+    await agent.chat("Hello");
+
+    unsubscribe();
+    await agent.dispose();
+
+    const chatTurnEvents = events.filter((event) => event._tag === "ChatTurn");
+    expect(chatTurnEvents).toHaveLength(2);
+    expect(chatTurnEvents[0]?._tag).toBe("ChatTurn");
+    expect(chatTurnEvents[1]?._tag).toBe("ChatTurn");
+  });
+
+  it("emits direct-llm ChatTurn events with assistant tokensUsed", async () => {
+    const agent = await ReactiveAgents.create()
+      .withName("chat-turn-direct-fields")
+      .withTestScenario([{ text: "direct reply", usage: { totalTokens: 123 } as any } as any])
+      .build();
+
+    const events: AgentEvent[] = [];
+    const unsubscribe = await agent.subscribe((event) => {
+      events.push(event);
+    });
+
+    await agent.chat("Hello direct");
+
+    unsubscribe();
+    await agent.dispose();
+
+    const chatTurnEvents = events.filter(
+      (event): event is Extract<AgentEvent, { _tag: "ChatTurn" }> => event._tag === "ChatTurn",
+    );
+    expect(chatTurnEvents).toHaveLength(2);
+    expect(chatTurnEvents[0]?.routedVia).toBe("direct-llm");
+    expect(chatTurnEvents[0]?.role).toBe("user");
+    expect(chatTurnEvents[1]?.routedVia).toBe("direct-llm");
+    expect(chatTurnEvents[1]?.role).toBe("assistant");
+    expect(typeof chatTurnEvents[1]?.tokensUsed).toBe("number");
+    expect((chatTurnEvents[1]?.tokensUsed ?? 0) > 0).toBe(true);
   });
 });

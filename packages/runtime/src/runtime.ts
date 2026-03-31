@@ -1,4 +1,4 @@
-import { Layer, Effect, Context, Schedule, Duration } from "effect";
+import { Layer, Effect, Context, Schedule, Duration, Ref } from "effect";
 import { LifecycleHookRegistryLive } from "./hooks.js";
 import { ExecutionEngineLive } from "./execution-engine.js";
 import type { ReactiveAgentsConfig } from "./types.js";
@@ -10,6 +10,7 @@ import {
   getProviderDefaultModel,
   LLMService,
   makeRateLimitedProvider,
+  FallbackChain,
 } from "@reactive-agents/llm-provider";
 import type { TestTurn } from "@reactive-agents/llm-provider";
 import { createMemoryLayer, ExperienceStoreLive, MemoryConsolidatorServiceLive, SessionStoreLive } from "@reactive-agents/memory";
@@ -233,7 +234,7 @@ export interface RuntimeOptions {
    *
    * Default: undefined (no extra layers)
    */
-  extraLayers?: Layer.Layer<any, any>;
+  extraLayers?: Layer.Layer<any, any, any>;
 
   // ─── Optional Features ───
 
@@ -861,9 +862,7 @@ export const createRuntime = (options: RuntimeOptions) => {
   // Build effectiveLlmLayer: if fallbackConfig has additional providers, wrap
   // the primary layer with Effect.catchAll chains so failures cascade through
   // fallback providers automatically.
-  const fallbackProviders = (options.fallbackConfig?.providers ?? []).filter(
-    (p) => p !== (options.provider ?? "test"),
-  );
+  const fallbackProviders = (options.fallbackConfig?.providers ?? []).slice(1);
   const effectiveLlmLayer: Layer.Layer<LLMService> =
     fallbackProviders.length > 0
       ? Layer.effect(
@@ -877,9 +876,9 @@ export const createRuntime = (options: RuntimeOptions) => {
                 LLMService.pipe(
                   Effect.provide(
                     createLLMProviderLayer(fp as Parameters<typeof createLLMProviderLayer>[0], undefined, undefined, {
-                      temperature: options.temperature,
-                      maxTokens: options.maxTokens,
-                    }) as Layer.Layer<LLMService, never, never>,
+                        temperature: options.temperature,
+                        maxTokens: options.maxTokens,
+                      }) as Layer.Layer<LLMService, never, never>,
                   ),
                 ),
               ),
@@ -889,12 +888,58 @@ export const createRuntime = (options: RuntimeOptions) => {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             return {
               complete: (req: Parameters<typeof primary.complete>[0]) => {
+                const fallbackTransitions: Array<{
+                  fromProvider: string;
+                  toProvider: string;
+                  reason: string;
+                  attemptNumber: number;
+                }> = [];
+                const fallbackChain = new FallbackChain(
+                  {
+                    providers: [options.provider ?? "test", ...fallbackProviders],
+                    errorThreshold: options.fallbackConfig?.errorThreshold,
+                  },
+                  (fromProvider, toProvider, reason, attemptNumber) => {
+                    fallbackTransitions.push({
+                      fromProvider,
+                      toProvider,
+                      reason,
+                      attemptNumber,
+                    });
+                  },
+                );
                 let effect = primary.complete(req);
                 for (const fb of fallbacks) {
                   const captured = fb;
-                  effect = effect.pipe(Effect.catchAll(() => captured.complete(req)));
+                  effect = effect.pipe(
+                    Effect.catchAllCause(() =>
+                      Effect.sync(() => {
+                        fallbackChain.recordError(options.provider ?? "test");
+                      }).pipe(Effect.zipRight(captured.complete(req))),
+                    ),
+                  );
                 }
-                return effect;
+                return effect.pipe(
+                  Effect.flatMap((response) =>
+                    Effect.gen(function* () {
+                      const transitions = [...fallbackTransitions];
+
+                      return transitions.length > 0
+                        ? ({
+                            ...response,
+                            fallbackTransitions: transitions,
+                          } as typeof response & {
+                            fallbackTransitions: Array<{
+                              fromProvider: string;
+                              toProvider: string;
+                              reason: string;
+                              attemptNumber: number;
+                            }>;
+                          })
+                        : response;
+                    }),
+                  ),
+                );
               },
               stream: (req: Parameters<typeof primary.stream>[0]) => primary.stream(req),
               completeStructured: (req: Parameters<typeof primary.completeStructured>[0]) => {

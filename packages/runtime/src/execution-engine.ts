@@ -134,6 +134,49 @@ function extractTaskText(input: unknown): string {
   return JSON.stringify(input);
 }
 
+type ExecutionReasoningResult = {
+  output: unknown;
+  status: string;
+  strategy?: string;
+  steps?: readonly { id: string; type: string; content: string; metadata?: { toolUsed?: string; duration?: number } }[];
+  metadata: { cost: number; tokensUsed: number; stepsCount: number; strategyFallback?: boolean; confidence?: number };
+};
+
+function normalizeReasoningResult(
+  value: unknown,
+): ExecutionReasoningResult | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const candidate = value as Record<string, unknown>;
+  const metadata = candidate.metadata;
+  if (typeof metadata !== "object" || metadata === null) return undefined;
+  const md = metadata as Record<string, unknown>;
+  if (
+    typeof md.cost !== "number" ||
+    typeof md.tokensUsed !== "number" ||
+    typeof md.stepsCount !== "number"
+  ) {
+    return undefined;
+  }
+
+  return {
+    output: candidate.output,
+    status: typeof candidate.status === "string" ? candidate.status : "error",
+    strategy: typeof candidate.strategy === "string" ? candidate.strategy : undefined,
+    steps: Array.isArray(candidate.steps)
+      ? (candidate.steps as ExecutionReasoningResult["steps"])
+      : undefined,
+    metadata: {
+      cost: md.cost,
+      tokensUsed: md.tokensUsed,
+      stepsCount: md.stepsCount,
+      strategyFallback: typeof md.strategyFallback === "boolean"
+        ? md.strategyFallback
+        : undefined,
+      confidence: typeof md.confidence === "number" ? md.confidence : undefined,
+    },
+  };
+}
+
 // ─── Task Complexity Classification ───
 
 type TaskComplexity = "trivial" | "moderate" | "complex";
@@ -1182,14 +1225,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         }
                       }
 
-                      type ReasoningResult = {
-                        output: unknown;
-                        status: string;
-                        strategy?: string;
-                        steps?: readonly { id: string; type: string; content: string; metadata?: { toolUsed?: string; duration?: number } }[];
-                        metadata: { cost: number; tokensUsed: number; stepsCount: number; strategyFallback?: boolean; confidence?: number };
-                      };
-                      let result: ReasoningResult;
+                      let result: ExecutionReasoningResult;
                       // Build initial messages — seed the conversation thread with the task
                       const initialMessages: readonly { readonly role: "user" | "assistant"; readonly content: string }[] = [
                         { role: "user", content: extractTaskText(task.input) },
@@ -1236,7 +1272,12 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       });
                       const strategyOutcome = yield* Effect.exit(strategyEffect);
                       if (strategyOutcome._tag === "Success") {
-                        result = strategyOutcome.value as ReasoningResult;
+                        result = normalizeReasoningResult(strategyOutcome.value) ?? {
+                          output: "Strategy returned an invalid result shape",
+                          status: "error",
+                          steps: [],
+                          metadata: { cost: 0, tokensUsed: 0, stepsCount: 0, strategyFallback: true },
+                        };
                       } else {
                         const strategyError = strategyOutcome.cause;
                         if (obs) {
@@ -1324,7 +1365,8 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         }),
                       );
                       if (retryOutcome._tag === "Success") {
-                        const retryResult = retryOutcome.value as typeof result;
+                        const retryResult = normalizeReasoningResult(retryOutcome.value);
+                        if (!retryResult) break;
                         ctx = {
                           ...ctx,
                           cost: ctx.cost + (retryResult.metadata.cost ?? 0),
@@ -1376,17 +1418,19 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         }),
                       );
                       if (continuationOutcome._tag === "Success") {
-                        const contResult = continuationOutcome.value as typeof result;
-                        ctx = {
-                          ...ctx,
-                          cost: ctx.cost + (contResult.metadata.cost ?? 0),
-                          tokensUsed: ctx.tokensUsed + (contResult.metadata.tokensUsed ?? 0),
-                          metadata: {
-                            ...ctx.metadata,
-                            lastResponse: String(contResult.output ?? ""),
-                            reasoningResult: contResult,
-                          },
-                        };
+                        const contResult = normalizeReasoningResult(continuationOutcome.value);
+                        if (contResult) {
+                          ctx = {
+                            ...ctx,
+                            cost: ctx.cost + (contResult.metadata.cost ?? 0),
+                            tokensUsed: ctx.tokensUsed + (contResult.metadata.tokensUsed ?? 0),
+                            metadata: {
+                              ...ctx.metadata,
+                              lastResponse: String(contResult.output ?? ""),
+                              reasoningResult: contResult,
+                            },
+                          };
+                        }
                       }
                     }
                   }
@@ -1476,7 +1520,8 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         }),
                       );
                       if (retryOutcome._tag === "Success") {
-                        const retryResult = retryOutcome.value as typeof result;
+                        const retryResult = normalizeReasoningResult(retryOutcome.value);
+                        if (!retryResult) break;
                         ctx = {
                           ...ctx,
                           cost: ctx.cost + (retryResult.metadata.cost ?? 0),
@@ -1875,7 +1920,8 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                             messages: messagesToSend,
                             model: c.selectedModel,
                             ...(llmTools ? { tools: llmTools } : {}),
-                          };
+                            taskId: c.taskId,
+                          } as Parameters<typeof llm.complete>[0] & { taskId: string };
 
                           const reqId = `req-${Date.now()}`;
                           if (eb) {
@@ -1892,6 +1938,25 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                           const llmCallStart = performance.now();
                           const response = yield* llm.complete(llmRequest);
                           const llmDurationMs = performance.now() - llmCallStart;
+
+                          const fallbackTransitions = (response as { fallbackTransitions?: Array<{
+                            fromProvider: string;
+                            toProvider: string;
+                            reason: string;
+                            attemptNumber: number;
+                          }> }).fallbackTransitions;
+                          if (eb && fallbackTransitions && fallbackTransitions.length > 0) {
+                            for (const transition of fallbackTransitions) {
+                              yield* eb.publish({
+                                _tag: "ProviderFallbackActivated",
+                                taskId: c.taskId,
+                                fromProvider: transition.fromProvider,
+                                toProvider: transition.toProvider,
+                                reason: transition.reason,
+                                attemptNumber: transition.attemptNumber,
+                              }).pipe(Effect.catchAll(() => Effect.void));
+                            }
+                          }
 
                           // Update selectedModel to the actual model used by the provider
                           const actualModel = (response as any).model;
@@ -2612,9 +2677,29 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         const llmRequest = {
                           messages: messagesToSend,
                           model: c.selectedModel,
-                        };
+                          taskId: c.taskId,
+                        } as Parameters<typeof llm.complete>[0] & { taskId: string };
 
                         const response = yield* llm.complete(llmRequest);
+
+                        const fallbackTransitions = (response as { fallbackTransitions?: Array<{
+                          fromProvider: string;
+                          toProvider: string;
+                          reason: string;
+                          attemptNumber: number;
+                        }> }).fallbackTransitions;
+                        if (eb && fallbackTransitions && fallbackTransitions.length > 0) {
+                          for (const transition of fallbackTransitions) {
+                            yield* eb.publish({
+                              _tag: "ProviderFallbackActivated",
+                              taskId: c.taskId,
+                              fromProvider: transition.fromProvider,
+                              toProvider: transition.toProvider,
+                              reason: transition.reason,
+                              attemptNumber: transition.attemptNumber,
+                            }).pipe(Effect.catchAll(() => Effect.void));
+                          }
+                        }
 
                         const retryDone =
                           response.stopReason === "end_turn" &&
@@ -3035,15 +3120,28 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 // LLM calls in direct-LLM path tests and non-memory configurations.
                 // Also requires LLMService to be available in context — use serviceOption to check.
                 // Proportional: skip debrief for trivial and moderate tasks (only run for complex).
-                const taskComplexityForDebrief = (ctx.metadata.taskComplexity as TaskComplexity | undefined) ?? "complex";
-                const debrief: AgentDebrief | undefined = yield* (rr !== undefined && config.enableMemory && taskComplexityForDebrief === "complex"
+                const debrief: AgentDebrief | undefined = yield* (rr !== undefined && config.enableMemory
                   ? Effect.serviceOption(
                       Context.GenericTag<{ complete: (req: unknown) => Effect.Effect<unknown> }>("LLMService"),
                     ).pipe(
                       Effect.flatMap((llmOpt) => {
                         if (llmOpt._tag !== "Some") return Effect.succeed(undefined as AgentDebrief | undefined);
                         return synthesizeDebrief(debriefInput).pipe(
-                          Effect.map((d) => d as AgentDebrief),
+                          Effect.flatMap((d) => {
+                            const debrief = d as AgentDebrief;
+                            if (!eb) {
+                              return Effect.succeed(debrief);
+                            }
+                            return eb.publish({
+                              _tag: "DebriefCompleted",
+                              taskId: debriefInput.taskId,
+                              agentId: debriefInput.agentId,
+                              debrief,
+                            }).pipe(
+                              Effect.catchAll(() => Effect.void),
+                              Effect.as(debrief),
+                            );
+                          }),
                           Effect.catchAll(() => Effect.succeed(undefined as AgentDebrief | undefined)),
                         );
                       }),

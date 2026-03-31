@@ -58,6 +58,7 @@ Most AI agent frameworks are dynamically typed, monolithic, and opaque. They ass
 - **Harness quality controls** -- `withMinIterations(n)` blocks early exit, `withVerificationStep()` adds LLM self-review, `withOutputValidator(fn)` retries on invalid output, `withCustomTermination(fn)` user-defined done predicate, `withProgressCheckpoint(n)` resumable agents, `withTaskContext(record)` background data injection
 - **ToolBuilder fluent API** -- define tools without raw schema objects
 - **Provider fallback chains** -- `FallbackChain` + `withFallbacks()` for graceful degradation across providers/models
+- **Cortex live reporting** -- `.withCortex(url?)` streams runtime EventBus telemetry to Cortex over WebSocket (`/ws/ingest`) with best-effort delivery
 - **Structured logging** -- `makeLoggerService()` with level filtering, JSON/text format, and file output with rotation via `withLogging()`
 - **Health checks** -- `withHealthCheck()` + `agent.health()` returns `{ status, checks[] }`
 - **Reactive intelligence** -- 5-source entropy sensor, reactive controller (10 mid-run decisions including early-stop, context compression, strategy switch, temp-adjust, skill-activate, prompt-switch, tool-inject, memory-boost, skill-reinject, human-escalate), local learning engine (conformal calibration, Thompson Sampling bandit, skill synthesis), telemetry client (api.reactiveagents.dev), `.withReactiveIntelligence()` builder method with hooks, constraints, and autonomy control
