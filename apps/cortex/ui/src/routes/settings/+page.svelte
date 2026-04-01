@@ -161,7 +161,7 @@
         Default Agent Config
       </h2>
       <p class="font-mono text-[10px] text-outline/60">
-        Used when launching agents from the Mission Control input bar or Lab Builder without explicit configuration.
+        Used when launching agents from the Beacon input bar or Lab Builder without explicit configuration.
       </p>
       <div class="grid grid-cols-2 gap-3">
         <div>

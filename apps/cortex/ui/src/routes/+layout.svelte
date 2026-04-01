@@ -28,7 +28,7 @@
   const wsClient = createWsClient("/ws/live/cortex-broadcast");
 
   const navItems = [
-    { label: "Mission Control", href: "/", icon: "hub" },
+    { label: "Beacon", href: "/", icon: "radar" },
     { label: "Runs",     href: "/runs",    icon: "history" },
     { label: "Lab", href: "/workshop", icon: "science" },
   ];

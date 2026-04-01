@@ -230,7 +230,7 @@
 
   <!-- Breadcrumb + replay controls + export -->
   <nav class="flex-shrink-0 px-4 py-2 border-b border-white/5 flex items-center gap-2 text-[10px] font-mono text-outline">
-    <a href="/" class="text-secondary hover:text-primary no-underline">Mission Control</a>
+    <a href="/" class="text-secondary hover:text-primary no-underline">Beacon</a>
     <span class="text-on-surface/20">/</span>
     <span class="text-on-surface/60 truncate max-w-[120px]" title={runId}>{runId.slice(0, 12)}…</span>
     {#if $runStore.isChat}
