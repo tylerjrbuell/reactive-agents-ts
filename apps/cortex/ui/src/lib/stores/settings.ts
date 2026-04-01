@@ -14,6 +14,7 @@ export interface CortexSettings {
   notificationsEnabled: boolean;
   runRetentionDays: number;
   debugMode: boolean;
+  theme: "dark" | "light";
 }
 
 export const DEFAULTS: CortexSettings = {
@@ -23,6 +24,7 @@ export const DEFAULTS: CortexSettings = {
   notificationsEnabled: false,
   runRetentionDays: 30,
   debugMode: false,
+  theme: "dark",
 };
 
 const STORAGE_KEY = "cortex-settings";
@@ -73,7 +75,11 @@ function createSettingsStore() {
     init,
     save,
     reset,
-    get: () => get(store),
+    /** Always returns up-to-date settings; lazy-initialises from localStorage on first call. */
+    get: () => {
+      if (!initialised) init();
+      return get(store);
+    },
   };
 }
 

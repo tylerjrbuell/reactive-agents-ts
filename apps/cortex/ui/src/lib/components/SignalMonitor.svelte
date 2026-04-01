@@ -24,9 +24,21 @@
   const TRACK_GAP = 8;
   const ENTROPY_GRAD_ID = "cortex-entropy-grad";
 
+  /** Read whether light mode is active by checking if .dark is absent from <html> */
+  function isLightMode() {
+    return typeof document !== "undefined" && !document.documentElement.classList.contains("dark");
+  }
+
   function renderChart() {
     const svg = svgEl;
     if (!svg || !data) return;
+
+    const light = isLightMode();
+    const TRACK_BG = light ? "#e8ecf0" : "#0c0e12";
+    const TRACK_BORDER = light ? "rgba(0,0,0,0.08)" : "rgba(255,255,255,0.05)";
+    const LABEL_COLOR = light ? "#64748b" : "#888b96";
+    const TICK_COLOR = light ? "#94a3b8" : "#494454";
+    const EMPTY_TEXT_COLOR = light ? "#94a3b8" : "#494454";
 
     const svgD3 = d3.select(svg);
     svgD3.selectAll("*").remove();
@@ -65,11 +77,11 @@
         parentG.append("line")
           .attr("x1", 0).attr("x2", 4)
           .attr("y1", yScale(tick)).attr("y2", yScale(tick))
-          .attr("stroke", "rgba(255,255,255,0.08)").attr("stroke-width", 1);
+          .attr("stroke", light ? "rgba(0,0,0,0.1)" : "rgba(255,255,255,0.08)").attr("stroke-width", 1);
         parentG.append("text")
           .attr("x", 6)
           .attr("y", yScale(tick) + 3)
-          .attr("fill", "#494454")
+          .attr("fill", EMPTY_TEXT_COLOR)
           .attr("font-family", "ui-monospace, monospace")
           .attr("font-size", "7.5px")
           .text(fmt(tick));
@@ -93,7 +105,7 @@
       g.append("text")
         .attr("x", 0)
         .attr("y", trackH / 2 + 3)
-        .attr("fill", "#888b96")
+        .attr("fill", LABEL_COLOR)
         .attr("font-family", "ui-monospace, monospace")
         .attr("font-size", "8.5px")
         .attr("text-anchor", "start")
@@ -108,8 +120,8 @@
         .attr("width", TRACK_W)
         .attr("height", trackH)
         .attr("rx", 2)
-        .attr("fill", "#0c0e12")
-        .attr("stroke", "rgba(255,255,255,0.05)")
+        .attr("fill", TRACK_BG)
+        .attr("stroke", TRACK_BORDER)
         .attr("stroke-width", 1);
 
       // Y-axis reference scale (always visible, even when track is empty)
@@ -181,7 +193,7 @@
         if (data.tokens.length === 0) {
           trackG.append("text")
             .attr("x", TRACK_W / 2).attr("y", trackH / 2 + 4)
-            .attr("text-anchor", "middle").attr("fill", "#494454")
+            .attr("text-anchor", "middle").attr("fill", EMPTY_TEXT_COLOR)
             .attr("font-size", "9px").attr("font-family", "ui-monospace, monospace")
             .text("no token data");
         } else {
@@ -216,7 +228,7 @@
         if (data.latency.length === 0) {
           trackG.append("text")
             .attr("x", TRACK_W / 2).attr("y", trackH / 2 + 4)
-            .attr("text-anchor", "middle").attr("fill", "#494454")
+            .attr("text-anchor", "middle").attr("fill", EMPTY_TEXT_COLOR)
             .attr("font-size", "9px").attr("font-family", "ui-monospace, monospace")
             .text("no latency data");
         } else {

@@ -11,6 +11,144 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Theme-aware surface tokens ───────────────────────────────── */
+/* These CSS variables change with dark/light mode and are used    */
+/* as overrides on key structural elements below.                   */
+:root {
+  /* Default = light */
+  --cortex-bg:           #f1f5f9;
+  --cortex-surface:      #ffffff;
+  --cortex-surface-low:  #f8fafc;
+  --cortex-surface-mid:  #e2e8f0;
+  --cortex-text:         #0f172a;
+  --cortex-text-muted:   #475569;
+  --cortex-border:       rgba(0, 0, 0, 0.08);
+  --cortex-nav-bg:       #f8fafc;
+}
+
+html.dark {
+  --cortex-bg:           #17181c;
+  --cortex-surface:      #1a1d24;
+  --cortex-surface-low:  #24272f;
+  --cortex-surface-mid:  #353841;
+  --cortex-text:         #eceef2;
+  --cortex-text-muted:   #c0c2c7;
+  --cortex-border:       rgba(255, 255, 255, 0.05);
+  --cortex-nav-bg:       #17181c;
+}
+
+/* Apply theme tokens to structural elements */
+body {
+  background-color: var(--cortex-bg) !important;
+  color: var(--cortex-text) !important;
+}
+
+/* Nav/header */
+header.cortex-nav {
+  background-color: var(--cortex-nav-bg) !important;
+}
+
+/* Main surface panels */
+.cortex-surface {
+  background-color: var(--cortex-surface) !important;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   LIGHT MODE OVERRIDES
+   All selectors under html:not(.dark) so they only fire in light mode.
+   Uses !important to override Tailwind compiled static values.
+   ══════════════════════════════════════════════════════════════════ */
+
+/* ── Text ─────────────────────────────────────────────────────── */
+html:not(.dark) .text-on-surface     { color: #0f172a !important; }
+html:not(.dark) .text-on-surface-variant { color: #334155 !important; }
+html:not(.dark) [class*="text-on-surface/"] { color: rgba(15,23,42,0.75) !important; }
+html:not(.dark) .text-outline        { color: #64748b !important; }
+html:not(.dark) [class*="text-outline/"] { color: rgba(100,116,139,0.8) !important; }
+html:not(.dark) [class*="text-on-surface"] { color: rgba(15,23,42,0.75) !important; }
+
+/* ── Page / section backgrounds ──────────────────────────────── */
+html:not(.dark) .bg-background,
+html:not(.dark) .bg-surface-dim,
+html:not(.dark) .bg-surface                { background-color: #f1f5f9 !important; }
+html:not(.dark) .bg-surface-container-low  { background-color: #f8fafc !important; }
+html:not(.dark) .bg-surface-container      { background-color: #ffffff !important; }
+html:not(.dark) .bg-surface-container-lowest { background-color: #e8ecf0 !important; }
+html:not(.dark) .bg-surface-container-high { background-color: #f1f5f9 !important; }
+
+/* ── Inline hardcoded hex backgrounds ────────────────────────── */
+html:not(.dark) .bg-\[#17181c\],
+html:not(.dark) .bg-\[#0f1115\],
+html:not(.dark) .bg-\[#111317\]        { background-color: #f8fafc !important; }
+html:not(.dark) .bg-\[#1a1d24\],
+html:not(.dark) .bg-\[#1e2024\],
+html:not(.dark) .bg-\[#12131a\]        { background-color: #ffffff !important; }
+html:not(.dark) .bg-\[#0c0e12\],
+html:not(.dark) .bg-\[#0d0f14\]        { background-color: #e8ecf0 !important; }
+
+/* ── gradient-border-glow panels (Trace, Signal Monitor, etc.) ─ */
+html:not(.dark) .gradient-border-glow,
+html:not(.dark) .gradient-border       { background: #ffffff !important; }
+/* The ::before pseudo gradient border — lighten it slightly */
+html:not(.dark) .gradient-border-glow::before {
+  opacity: 0.5;
+  animation: none;
+}
+
+/* ── Inline dark backgrounds used in RunDetail / VitalsStrip ─── */
+html:not(.dark) [style*="background-color: #17181c"],
+html:not(.dark) [style*="background-color: #111317"],
+html:not(.dark) [style*="background-color: #0f1115"] {
+  background-color: #f8fafc !important;
+}
+html:not(.dark) [style*="background-color: #1a1d24"],
+html:not(.dark) [style*="background-color: #1e2024"] {
+  background-color: #ffffff !important;
+}
+
+/* ── Footer / bottom panel ────────────────────────────────────── */
+html:not(.dark) .bg-\[#17181c\]\/80,
+html:not(.dark) .bg-\[#17181c\]\/90 { background-color: rgba(248,250,252,0.9) !important; }
+html:not(.dark) footer { background-color: #f8fafc !important; }
+
+/* ── Borders ─────────────────────────────────────────────────── */
+html:not(.dark) .border-white\/5        { border-color: rgba(0,0,0,0.07) !important; }
+html:not(.dark) [class*="border-white/"]  { border-color: rgba(0,0,0,0.08) !important; }
+html:not(.dark) .border-outline-variant\/10,
+html:not(.dark) .border-outline-variant\/15,
+html:not(.dark) .border-outline-variant\/20 { border-color: rgba(0,0,0,0.1) !important; }
+
+/* ── Signal monitor D3 SVG track backgrounds ─────────────────── */
+/* These are filled via D3 with fill="#0c0e12" — override with attr selector */
+html:not(.dark) rect[fill="#0c0e12"] { fill: #e8ecf0 !important; }
+html:not(.dark) rect[stroke="rgba(255,255,255,0.05)"] { stroke: rgba(0,0,0,0.08) !important; }
+
+/* ── Opacity-variant backgrounds (Tailwind bg-X/Y classes) ─────── */
+/* Tailwind compiles bg-surface-container-low/80 to a different class
+   than bg-surface-container-low, so we need to catch via partial match.
+   Target: bottom input bar, settings form fields, workshop panels.      */
+html:not(.dark) [class*="bg-surface-container-low"] { background-color: rgba(248,250,252,0.9) !important; }
+html:not(.dark) [class*="bg-surface-container-lowest"] { background-color: #e8ecf0 !important; }
+html:not(.dark) [class*="bg-surface-container-high"] { background-color: #f1f5f9 !important; }
+html:not(.dark) [class*="bg-\[#17181c\]"] { background-color: #f8fafc !important; }
+html:not(.dark) [class*="bg-\[#111317\]"] { background-color: #f8fafc !important; }
+
+/* ── Form inputs / textareas (settings page, builder) ───────────── */
+html:not(.dark) input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+html:not(.dark) textarea,
+html:not(.dark) select {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: rgba(0,0,0,0.15) !important;
+}
+html:not(.dark) input::placeholder,
+html:not(.dark) textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+/* ── Primary/violet text stays readable on light bg ──────────── */
+/* (violet on light is fine — no override needed) */
+
 /* ── RA brand custom properties (mirrors docs custom.css) ─────── */
 :root {
   --ra-violet:      #8b5cf6;

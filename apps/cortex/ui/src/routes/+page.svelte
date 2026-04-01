@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { getContext } from "svelte";
+  import { getContext, onMount, onDestroy } from "svelte";
   import AgentGrid from "$lib/components/AgentGrid.svelte";
   import BottomInputBar from "$lib/components/BottomInputBar.svelte";
   import type { AgentStore } from "$lib/stores/agent-store.js";
@@ -9,6 +9,11 @@
   const stageStore = getContext<StageStore>("stageStore");
 
   let inputBarRef = $state<{ focus: () => void } | undefined>(undefined);
+
+  // Handle R shortcut from layout
+  function handleFocusInput() { inputBarRef?.focus(); }
+  onMount(() => window.addEventListener("cortex:focus-input", handleFocusInput));
+  onDestroy(() => window.removeEventListener("cortex:focus-input", handleFocusInput));
 
   const activeCount = $derived(
     $agentStore.filter((a) => ["running", "exploring", "stressed"].includes(a.state)).length,

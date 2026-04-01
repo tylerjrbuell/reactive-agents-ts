@@ -5,8 +5,10 @@
     frame: IterationFrame | null;
     frames?: IterationFrame[];
     status?: string;
+    /** Live streaming text from TextDeltaReceived events — shown above trace when live */
+    streamText?: string;
   }
-  let { frame, frames = [], status = "live" }: Props = $props();
+  let { frame, frames = [], status = "live", streamText = "" }: Props = $props();
 
   // Svelte 5: use array reassignment for reactivity (Set mutation doesn't trigger)
   let expandedRows = $state<number[]>([]);
@@ -128,6 +130,19 @@
           {/if}
         </div><!-- end expandable -->
       {/if}
+    </div>
+  {/if}
+
+  <!-- ── LIVE STREAMING TEXT ───────────────────────────────────────────────── -->
+  {#if status === "live" && streamText}
+    <div class="flex-shrink-0 mx-3 mb-1 px-3 py-2 bg-primary/5 border border-primary/15 rounded-lg">
+      <div class="flex items-center gap-2 mb-1.5">
+        <span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse flex-shrink-0"></span>
+        <span class="text-[9px] font-mono text-primary/70 uppercase tracking-widest">Streaming…</span>
+      </div>
+      <p class="font-mono text-[10px] text-on-surface/70 leading-relaxed whitespace-pre-wrap break-words">
+        {streamText}<span class="inline-block w-2 h-3 bg-primary/50 ml-0.5 animate-pulse"></span>
+      </p>
     </div>
   {/if}
 

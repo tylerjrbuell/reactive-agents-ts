@@ -8,6 +8,7 @@
   import CommandPalette from "$lib/components/CommandPalette.svelte";
   import { commandPalette } from "$lib/stores/command-palette.js";
   import { toast } from "$lib/stores/toast-store.js";
+  import { settings } from "$lib/stores/settings.js";
   import { createWsClient } from "$lib/stores/ws-client.js";
   import { createAgentStore } from "$lib/stores/agent-store.js";
   import { createStageStore } from "$lib/stores/stage-store.js";
@@ -32,8 +33,47 @@
     { label: "Workshop", href: "/workshop",icon: "build" },
   ];
 
+  let isDark = $state(true);
+
+  function applyTheme(theme: "dark" | "light") {
+    isDark = theme === "dark";
+    if (typeof document !== "undefined") {
+      // Toggle the .dark class — Tailwind reads this for dark: variants
+      document.documentElement.classList.toggle("dark", isDark);
+      // Also set data-theme for any CSS selectors that use it
+      document.documentElement.setAttribute("data-theme", theme);
+    }
+  }
+
+  function toggleTheme() {
+    const next = isDark ? "light" : "dark";
+    applyTheme(next);
+    settings.save({ theme: next });
+  }
+
+  function handleGlobalKeydown(e: KeyboardEvent) {
+    const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+    const isInput = tag === "input" || tag === "textarea" || tag === "select" || (e.target as HTMLElement)?.isContentEditable;
+    if (isInput) return;
+    if ((e.metaKey || e.ctrlKey) && e.key === "k") { e.preventDefault(); commandPalette.toggle(); return; }
+    // R — go to Stage and focus input bar
+    if (e.key === "r" || e.key === "R") {
+      e.preventDefault();
+      void goto("/");
+      // Broadcast to stage page that input should be focused
+      window.dispatchEvent(new CustomEvent("cortex:focus-input"));
+    }
+  }
+
   onMount(() => {
+    settings.init(); // warm up from localStorage before any submitPrompt call
+
+    // Apply saved theme immediately
+    const s = settings.get();
+    applyTheme(s.theme);
+
     stageStore.setNavigate((path) => goto(path));
+    window.addEventListener("keydown", handleGlobalKeydown);
 
     wsUnsub = wsClient.onMessage((raw) => {
       const msg = raw as {
@@ -86,6 +126,7 @@
     }, 5000);
 
     return () => {
+      window.removeEventListener("keydown", handleGlobalKeydown);
       wsUnsub?.();
       wsUnsub = null;
       if (refreshTimer) {
@@ -103,7 +144,7 @@
 
 <div class="h-screen w-screen flex flex-col overflow-hidden bg-background text-on-surface">
   <header
-    class="bg-[#17181c] flex justify-between items-center w-full px-6 h-12 border-b border-white/5 shadow-neural z-50 flex-shrink-0"
+    class="cortex-nav bg-[#17181c] flex justify-between items-center w-full px-6 h-12 border-b border-white/5 shadow-neural z-50 flex-shrink-0"
   >
     <!-- RA neural network logo + wordmark (matches docs site identity) -->
     <a href="/" class="flex items-center gap-2.5 no-underline group" aria-label="Cortex home">
@@ -177,6 +218,13 @@
         <span class="material-symbols-outlined text-sm text-secondary">terminal</span>
         ⌘K
       </button>
+      <button
+        type="button"
+        onclick={toggleTheme}
+        class="material-symbols-outlined text-outline hover:text-primary transition-colors p-1 bg-transparent border-0 cursor-pointer"
+        title="Toggle {isDark ? 'light' : 'dark'} mode"
+        aria-label="Toggle theme"
+      >{isDark ? "light_mode" : "dark_mode"}</button>
       <a href="/settings" class="material-symbols-outlined text-outline hover:text-primary transition-colors p-1" title="Settings">settings</a>
     </div>
   </header>

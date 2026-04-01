@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { getContext } from "svelte";
-  import { onDestroy } from "svelte";
+  import { getContext, onDestroy, onMount } from "svelte";
+  import { writable } from "svelte/store";
   import { goto } from "$app/navigation";
   import VitalsStrip from "$lib/components/VitalsStrip.svelte";
   import TracePanel from "$lib/components/TracePanel.svelte";
@@ -11,12 +11,14 @@
   import SignalMonitor from "$lib/components/SignalMonitor.svelte";
   import RawEventLog from "$lib/components/RawEventLog.svelte";
   import DebriefPanel from "$lib/components/DebriefPanel.svelte";
-  import ReplayControls from "$lib/components/ReplayControls.svelte";
+  import ConfirmModal from "$lib/components/ConfirmModal.svelte";
   import { createRunStore } from "$lib/stores/run-store.js";
   import { createSignalStore } from "$lib/stores/signal-store.js";
   import { createTraceStore } from "$lib/stores/trace-store.js";
-  import type { CortexLiveMsg } from "$lib/stores/run-store.js";
+  import type { CortexLiveMsg, RunState } from "$lib/stores/run-store.js";
   import type { AgentStore } from "$lib/stores/agent-store.js";
+  import { CORTEX_SERVER_URL } from "$lib/constants.js";
+  import { toast } from "$lib/stores/toast-store.js";
 
   interface Props {
     runId: string;
@@ -25,12 +27,130 @@
 
   const runStore = createRunStore(runId);
   const agentStore = getContext<AgentStore>("agentStore");
-  const signalStore = createSignalStore(runStore);
-  const traceStore = createTraceStore(runStore);
+
+  // ── Replay state ───────────────────────────────────────────────────────
+  // null = live mode; number = replay cursor (target iteration index 1-based)
+  let replayIteration = $state<number | null>(null);
+  let replayPlaying = $state(false);
+  let replayTimer: ReturnType<typeof setInterval> | null = null;
+
+  // The activeState writable is what signal/trace stores consume.
+  // In live mode it mirrors runStore; in replay mode events are sliced.
+  const activeState = writable<RunState>({ ...$runStore });
+
+  // Keep activeState in sync whenever runStore or replayIteration changes
+  $effect(() => {
+    const run = $runStore;
+    if (replayIteration === null) {
+      activeState.set(run);
+    } else {
+      // Slice events up to the Nth ReasoningIterationProgress boundary
+      const events = run.events;
+      let count = 0;
+      let cutIdx = events.length - 1;
+      for (let i = 0; i < events.length; i++) {
+        if (events[i]!.type === "ReasoningIterationProgress") {
+          count++;
+          if (count >= replayIteration) { cutIdx = i; break; }
+        }
+      }
+      activeState.set({ ...run, events: events.slice(0, cutIdx + 1) });
+    }
+  });
+
+  const signalStore = createSignalStore(activeState);
+  const traceStore = createTraceStore(activeState);
+
+  // Derived: max iterations available for replay
+  const replayMax = $derived(
+    $runStore.events.filter((e) => e.type === "ReasoningIterationProgress").length,
+  );
+
+  function enterReplay() {
+    if (replayMax === 0) return;
+    replayIteration = replayMax; // start at end (full view)
+  }
+
+  function exitReplay() {
+    replayIteration = null;
+    stopReplayPlay();
+  }
+
+  function stepBack() {
+    if (replayIteration !== null && replayIteration > 1) replayIteration--;
+  }
+
+  function stepForward() {
+    if (replayIteration !== null && replayIteration < replayMax) replayIteration++;
+    else if (replayIteration === replayMax) exitReplay();
+  }
+
+  function startReplayPlay() {
+    if (replayIteration === null) enterReplay();
+    replayIteration = 1;
+    replayPlaying = true;
+    replayTimer = setInterval(() => {
+      if (replayIteration !== null && replayIteration < replayMax) {
+        replayIteration++;
+      } else {
+        stopReplayPlay();
+      }
+    }, 800);
+  }
+
+  function stopReplayPlay() {
+    replayPlaying = false;
+    if (replayTimer) { clearInterval(replayTimer); replayTimer = null; }
+  }
+
+  // ── Export ─────────────────────────────────────────────────────────────
+  async function exportJSON() {
+    try {
+      const [runRes, eventsRes] = await Promise.all([
+        fetch(`${CORTEX_SERVER_URL}/api/runs/${encodeURIComponent(runId)}`),
+        fetch(`${CORTEX_SERVER_URL}/api/runs/${encodeURIComponent(runId)}/events`),
+      ]);
+      const run = await runRes.json();
+      const events = await eventsRes.json();
+      const blob = new Blob([JSON.stringify({ run, events }, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `cortex-run-${runId.slice(0, 8)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("Run exported", "Saved as JSON");
+    } catch { toast.error("Export failed"); }
+  }
+
+  async function copyMarkdown() {
+    const md = ($runStore.debrief as any)?.markdown;
+    if (md) {
+      await navigator.clipboard.writeText(md);
+      toast.success("Copied debrief markdown");
+    } else {
+      // Generate minimal markdown from trace
+      const lines = [`# Run ${runId.slice(0, 8)}`, `**Status:** ${$runStore.status}`,
+        `**Tokens:** ${$runStore.vitals.tokensUsed.toLocaleString()}`,
+        `**Provider:** ${$runStore.vitals.provider ?? "unknown"} / ${$runStore.vitals.model ?? "unknown"}`, ""];
+      for (const f of $traceStore) {
+        lines.push(`## Iteration ${f.iteration}`, f.thought, "");
+      }
+      await navigator.clipboard.writeText(lines.join("\n"));
+      toast.success("Copied run as markdown");
+    }
+  }
+
+  // ── Confirmation modal ────────────────────────────────────────────────
+  let showDeleteConfirm = $state(false);
 
   let selectedIteration = $state<number | null>(null);
   let bottomTab = $state<"decisions" | "memory" | "context" | "debrief" | "signal" | "events">("decisions");
   let deletingRun = $state(false);
+
+  onDestroy(() => {
+    stopReplayPlay();
+  });
 
   // ── Resizable bottom panel (with minimize) ────────────────────────────
   const MIN_H = 100;
@@ -89,23 +209,16 @@
     return msgs.map((m) => ({ type: m.type, payload: m.payload, ts: m.ts }));
   }
 
-  async function handleDeleteRun() {
-    if (deletingRun) return;
-    const ok = globalThis.confirm(`Delete run ${runId.slice(0, 8)}…? This also removes its events.`);
-    if (!ok) return;
+  async function confirmDeleteRun() {
+    showDeleteConfirm = false;
     deletingRun = true;
     try {
       const deleted = await runStore.deleteRun();
-      if (deleted) {
-        await agentStore.refresh();
-        await goto("/");
-      }
-    } finally {
-      deletingRun = false;
-    }
+      if (deleted) { await agentStore.refresh(); await goto("/"); }
+    } finally { deletingRun = false; }
   }
 
-  onDestroy(() => runStore.destroy());
+  onDestroy(() => { runStore.destroy(); stopReplayPlay(); });
 </script>
 
 <svelte:head>
@@ -114,16 +227,63 @@
 
 <div class="flex flex-col h-full overflow-hidden min-h-0">
 
-  <!-- Breadcrumb -->
+  <!-- Breadcrumb + replay controls + export -->
   <nav class="flex-shrink-0 px-4 py-2 border-b border-white/5 flex items-center gap-2 text-[10px] font-mono text-outline">
     <a href="/" class="text-secondary hover:text-primary no-underline">Stage</a>
     <span class="text-on-surface/20">/</span>
-    <span class="text-on-surface/60 truncate max-w-[160px]" title={runId}>{runId.slice(0, 16)}…</span>
+    <span class="text-on-surface/60 truncate max-w-[120px]" title={runId}>{runId.slice(0, 12)}…</span>
     {#if $runStore.isChat}
       <span class="ml-1 px-1.5 py-0.5 rounded border border-primary/30 text-primary text-[9px]">CHAT</span>
     {/if}
+
+    {#if replayIteration !== null}
+      <!-- Replay mode badge + controls -->
+      <span class="px-2 py-0.5 rounded bg-tertiary/15 border border-tertiary/30 text-tertiary text-[9px] uppercase tracking-wider">
+        REPLAY iter {replayIteration}/{replayMax}
+      </span>
+      <div class="flex items-center gap-1">
+        <button type="button" onclick={stepBack} disabled={replayIteration <= 1}
+          class="material-symbols-outlined text-sm text-outline hover:text-primary disabled:opacity-30 bg-transparent border-0 cursor-pointer p-0.5">
+          skip_previous</button>
+        {#if replayPlaying}
+          <button type="button" onclick={stopReplayPlay}
+            class="material-symbols-outlined text-sm text-tertiary bg-transparent border-0 cursor-pointer p-0.5">
+            pause</button>
+        {:else}
+          <button type="button" onclick={startReplayPlay}
+            class="material-symbols-outlined text-sm text-outline hover:text-primary bg-transparent border-0 cursor-pointer p-0.5">
+            play_arrow</button>
+        {/if}
+        <button type="button" onclick={stepForward} disabled={replayIteration >= replayMax}
+          class="material-symbols-outlined text-sm text-outline hover:text-primary disabled:opacity-30 bg-transparent border-0 cursor-pointer p-0.5">
+          skip_next</button>
+        <button type="button" onclick={exitReplay}
+          class="material-symbols-outlined text-sm text-outline hover:text-error bg-transparent border-0 cursor-pointer p-0.5"
+          title="Exit replay">close</button>
+      </div>
+    {:else if $runStore.status !== "live" && replayMax > 0}
+      <!-- Enter replay button for completed runs -->
+      <button type="button" onclick={enterReplay}
+        class="flex items-center gap-1 px-2 py-0.5 border border-outline-variant/20 text-outline rounded
+               hover:border-tertiary/40 hover:text-tertiary transition-colors bg-transparent cursor-pointer text-[9px] uppercase">
+        <span class="material-symbols-outlined text-[12px]">replay</span>
+        Replay
+      </button>
+    {/if}
+
     <div class="flex-1"></div>
-    <ReplayControls status={$runStore.status} />
+
+    <!-- Export buttons -->
+    <button type="button" onclick={exportJSON}
+      class="flex items-center gap-1 text-outline hover:text-primary transition-colors bg-transparent border-0 cursor-pointer"
+      title="Download as JSON">
+      <span class="material-symbols-outlined text-sm">download</span>
+    </button>
+    <button type="button" onclick={copyMarkdown}
+      class="flex items-center gap-1 text-outline hover:text-primary transition-colors bg-transparent border-0 cursor-pointer"
+      title="Copy as Markdown">
+      <span class="material-symbols-outlined text-sm">content_copy</span>
+    </button>
   </nav>
 
   <!-- Vitals strip -->
@@ -160,6 +320,7 @@
         <TracePanel
           frames={$traceStore}
           status={$runStore.status}
+          streamText={$runStore.streamText}
           frame={selectedIteration === null
             ? $traceStore[$traceStore.length - 1] ?? null
             : ($traceStore.find((f) => f.iteration === selectedIteration) ?? null)}
@@ -243,7 +404,7 @@
         class="px-3 py-1.5 border border-error/30 text-error font-mono text-[10px] uppercase
                rounded bg-transparent cursor-pointer hover:bg-error/10 transition-colors
                disabled:opacity-40 disabled:cursor-not-allowed"
-        onclick={() => void handleDeleteRun()}
+        onclick={() => (showDeleteConfirm = true)}
       >{deletingRun ? "…" : "Delete"}</button>
     </div>
   </footer>
@@ -306,3 +467,13 @@
     </div>
   </div>
 </div>
+
+{#if showDeleteConfirm}
+  <ConfirmModal
+    title="Delete Run"
+    message="Delete run {runId.slice(0, 8)}…? This permanently removes the run and all its events from Cortex."
+    confirmLabel="Delete"
+    onConfirm={confirmDeleteRun}
+    onCancel={() => (showDeleteConfirm = false)}
+  />
+{/if}

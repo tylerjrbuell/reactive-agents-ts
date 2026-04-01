@@ -50,6 +50,9 @@ export interface RunState {
   /** Populated from `DebriefCompleted` — shape matches framework `DebriefPayload`. */
   readonly debrief: unknown | null;
   readonly isChat: boolean;
+  /** Accumulated streaming text from TextDeltaReceived events (live only, not persisted).
+   *  Resets at each ReasoningIterationProgress boundary. */
+  readonly streamText: string;
 }
 
 const DEFAULT_VITALS: RunVitals = {
@@ -180,6 +183,7 @@ export function createRunStore(runId: string, options?: CreateRunStoreOptions) {
     events: [],
     debrief: null,
     isChat: false,
+    streamText: "",
   });
 
   let unsubMsg: (() => void) | null = null;
@@ -205,12 +209,24 @@ export function createRunStore(runId: string, options?: CreateRunStoreOptions) {
         debrief = msg.payload.debrief;
       }
       const isChat = s.isChat || msg.type === "ChatTurn";
+
+      // Live streaming text — accumulate TextDeltaReceived, clear on new iteration
+      let streamText = s.streamText;
+      if (msg.type === "TextDeltaReceived" || msg.type === "TextDelta") {
+        const delta = typeof msg.payload.text === "string" ? msg.payload.text
+          : typeof msg.payload.delta === "string" ? msg.payload.delta : "";
+        streamText = s.streamText + delta;
+      } else if (msg.type === "ReasoningIterationProgress") {
+        streamText = ""; // new iteration clears the streaming buffer
+      }
+
       return {
         ...s,
         events,
         vitals,
         status,
         debrief,
+        streamText,
         isChat,
         agentId: msg.agentId || s.agentId,
       };
