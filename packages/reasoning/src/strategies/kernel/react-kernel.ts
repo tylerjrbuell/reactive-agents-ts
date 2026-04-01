@@ -72,6 +72,7 @@ import {
   type ThoughtKernel,
 } from "./kernel-state.js";
 import type { KernelMetaToolsConfig } from "../../types/kernel-meta-tools.js";
+import { checkToolCall, defaultGuards } from "./phases/guard.js";
 
 /** Meta-tool names — not counted as "real work" for completion detection. */
 const META_TOOL_SET = new Set(["final-answer", "task-complete", "context-status", "brief", "pulse", "find", "recall"]);
@@ -1191,130 +1192,24 @@ function handleActing(
           continue;
         }
 
-        // ── Check blocked tools ───────────────────────────────────────────────
-        const isBlocked = input.blockedTools?.includes(tc.name) ?? false;
-        if (isBlocked) {
-          const blockMsg = `⚠️ BLOCKED: ${tc.name} already executed successfully in a prior pass.`;
+        // ── Guard pipeline (blocked / duplicate / side-effect / repetition) ────
+        const guardCheck = checkToolCall(defaultGuards);
+        const guardOutcome = guardCheck(tc, transitionState(state, { steps: allSteps }), input);
+        if (!guardOutcome.pass) {
           const actionStep = makeStep("action", `${tc.name}(${JSON.stringify(tc.arguments)})`, {
             toolCall: { id: tc.id, name: tc.name, arguments: tc.arguments },
           });
-          const blockObsStep = makeStep("observation", blockMsg, {
-            observationResult: makeObservationResult(tc.name, true, blockMsg),
+          const guardObsStep = makeStep("observation", guardOutcome.observation, {
+            observationResult: makeObservationResult(tc.name, true, guardOutcome.observation),
           });
           yield* hooks.onAction(state, tc.name, JSON.stringify(tc.arguments));
           yield* hooks.onObservation(
             transitionState(state, { steps: [...allSteps, actionStep] }),
-            blockMsg,
+            guardOutcome.observation,
             true,
           );
-          allSteps = [...allSteps, actionStep, blockObsStep];
+          allSteps = [...allSteps, actionStep, guardObsStep];
           continue;
-        }
-
-        // ── Duplicate action detection (FC) ───────────────────────────────────
-        // Has this exact tool call (same name + same args) already succeeded?
-        const currentActionJson = JSON.stringify({ tool: tc.name, args: tc.arguments });
-        const isDuplicate = allSteps.some((step, idx) => {
-          if (step.type !== "action") return false;
-          const stepTc = step.metadata?.toolCall as { name: string; arguments: unknown } | undefined;
-          if (!stepTc) return false;
-          if (JSON.stringify({ tool: stepTc.name, args: stepTc.arguments }) !== currentActionJson) return false;
-          const next = allSteps[idx + 1];
-          return next?.type === "observation" && next.metadata?.observationResult?.success === true;
-        });
-        if (isDuplicate) {
-          // Surface prior result with advisory — don't re-execute
-          const priorSuccessIdx = allSteps.findIndex((step, idx) => {
-            if (step.type !== "action") return false;
-            const stepTc = step.metadata?.toolCall as { name: string; arguments: unknown } | undefined;
-            if (!stepTc) return false;
-            if (JSON.stringify({ tool: stepTc.name, args: stepTc.arguments }) !== currentActionJson) return false;
-            const next = allSteps[idx + 1];
-            return next?.type === "observation" && next.metadata?.observationResult?.success === true;
-          });
-          const priorObsContent = priorSuccessIdx >= 0 ? allSteps[priorSuccessIdx + 1]?.content ?? "" : "";
-          const reqTools = input.requiredTools ?? [];
-          const missingReq = reqTools.filter((t) => !newToolsUsed.has(t));
-          const nextHint = missingReq.length > 0
-            ? `You still need to call: ${missingReq.join(", ")}. Do that now.`
-            : "Give FINAL ANSWER if all steps are complete.";
-          const dupContent = `${priorObsContent} [Already done — do NOT repeat. ${nextHint}]`;
-          const actionStep = makeStep("action", `${tc.name}(${JSON.stringify(tc.arguments)})`, {
-            toolCall: { id: tc.id, name: tc.name, arguments: tc.arguments },
-          });
-          const dupObsStep = makeStep("observation", dupContent, {
-            observationResult: makeObservationResult(tc.name, true, dupContent),
-          });
-          yield* hooks.onAction(state, tc.name, JSON.stringify(tc.arguments));
-          yield* hooks.onObservation(
-            transitionState(state, { steps: [...allSteps, actionStep] }),
-            dupContent,
-            true,
-          );
-          allSteps = [...allSteps, actionStep, dupObsStep];
-          continue;
-        }
-
-        // ── Side-effect guard (FC) ────────────────────────────────────────────
-        // Tools that mutate external state must not run twice even with different parameters
-        const SIDE_EFFECT_PREFIXES = ["send", "create", "delete", "push", "merge", "fork", "update", "assign", "remove"];
-        const isSideEffectTool = SIDE_EFFECT_PREFIXES.some(
-          (p) => tc.name.toLowerCase().includes(p),
-        );
-        if (isSideEffectTool) {
-          const sideEffectAlreadyDone = allSteps.some((step, idx) => {
-            if (step.type !== "action") return false;
-            const stepTc = step.metadata?.toolCall as { name: string } | undefined;
-            if (stepTc?.name !== tc.name) return false;
-            const next = allSteps[idx + 1];
-            return next?.type === "observation" && next.metadata?.observationResult?.success === true;
-          });
-          if (sideEffectAlreadyDone) {
-            const sideEffectMsg = `⚠️ ${tc.name} already executed successfully with different parameters. Side-effect tools must NOT be called twice. Move on to the next step or give FINAL ANSWER.`;
-            const actionStep = makeStep("action", `${tc.name}(${JSON.stringify(tc.arguments)})`, {
-              toolCall: { id: tc.id, name: tc.name, arguments: tc.arguments },
-            });
-            const sideObsStep = makeStep("observation", sideEffectMsg, {
-              observationResult: makeObservationResult(tc.name, true, sideEffectMsg),
-            });
-            yield* hooks.onAction(state, tc.name, JSON.stringify(tc.arguments));
-            yield* hooks.onObservation(
-              transitionState(state, { steps: [...allSteps, actionStep] }),
-              sideEffectMsg,
-              true,
-            );
-            allSteps = [...allSteps, actionStep, sideObsStep];
-            continue;
-          }
-        }
-
-        // ── Repetition guard (FC) ─────────────────────────────────────────────
-        // When the same tool is called 2+ times, nudge to synthesize
-        if (!META_TOOL_NAMES.has(tc.name)) {
-          const priorCallsOfSameTool = allSteps.filter((s) => {
-            if (s.type !== "action") return false;
-            const stepTc = s.metadata?.toolCall as { name: string } | undefined;
-            return (stepTc?.name ?? "") === tc.name;
-          }).length;
-          if (priorCallsOfSameTool >= 2) {
-            // Include missing required tools in the nudge so the model knows what to do next
-            const reqTools = input.requiredTools ?? [];
-            const missingRequired = reqTools.filter((t) => !newToolsUsed.has(t));
-            const missingHint = missingRequired.length > 0
-              ? ` You still need to call: ${missingRequired.join(", ")}. Do that now instead of repeating ${tc.name}.`
-              : " Use final-answer to respond now.";
-            const nudge = `⚠️ You have already called ${tc.name} ${priorCallsOfSameTool} times. Stop repeating this tool.${missingHint}`;
-            const nudgeStep = makeStep("observation", nudge, {
-              observationResult: makeObservationResult(tc.name, false, nudge),
-            });
-            yield* hooks.onObservation(
-              transitionState(state, { steps: allSteps }),
-              nudge,
-              false,
-            );
-            allSteps = [...allSteps, nudgeStep];
-            continue;
-          }
         }
 
         // ── Execute the tool via ToolService ──────────────────────────────────

@@ -1,0 +1,164 @@
+/**
+ * Guard pipeline for the acting phase.
+ *
+ * Each Guard is a pure function: (toolCall, state, input) → GuardOutcome.
+ * Guards run in order; first failure short-circuits with an observation
+ * injected back into the LLM context on the next turn.
+ *
+ * Strategies configure their own chain by passing a custom Guard[] to checkToolCall().
+ */
+import type { KernelState, ReActKernelInput } from "../kernel-state.js";
+import type { ToolCallSpec } from "@reactive-agents/tools";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export type GuardOutcome =
+  | { readonly pass: true }
+  | { readonly pass: false; readonly observation: string };
+
+export type Guard = (
+  tc: ToolCallSpec,
+  state: KernelState,
+  input: ReActKernelInput,
+) => GuardOutcome;
+
+// ─── Shared Constants ─────────────────────────────────────────────────────────
+
+const META_TOOL_NAMES = new Set([
+  "final-answer", "task-complete", "context-status",
+  "brief", "pulse", "find", "recall",
+]);
+
+// ─── Individual Guards ────────────────────────────────────────────────────────
+
+/** Blocks tools explicitly listed in input.blockedTools. */
+export const blockedGuard: Guard = (tc, _state, input) => {
+  const isBlocked = input.blockedTools?.includes(tc.name) ?? false;
+  if (isBlocked) {
+    return {
+      pass: false,
+      observation: `⚠️ BLOCKED: ${tc.name} already executed successfully in a prior pass.`,
+    };
+  }
+  return { pass: true };
+};
+
+/** Blocks the exact same tool+arguments pair if it already succeeded. */
+export const duplicateGuard: Guard = (tc, state, input) => {
+  const currentActionJson = JSON.stringify({ tool: tc.name, args: tc.arguments });
+  const isDuplicate = state.steps.some((step, idx) => {
+    if (step.type !== "action") return false;
+    const stepTc = step.metadata?.toolCall as { name: string; arguments: unknown } | undefined;
+    if (!stepTc) return false;
+    if (JSON.stringify({ tool: stepTc.name, args: stepTc.arguments }) !== currentActionJson) return false;
+    const next = state.steps[idx + 1];
+    return next?.type === "observation" && next.metadata?.observationResult?.success === true;
+  });
+
+  if (!isDuplicate) return { pass: true };
+
+  // Surface prior result with advisory — don't re-execute
+  const priorSuccessIdx = state.steps.findIndex((step, idx) => {
+    if (step.type !== "action") return false;
+    const stepTc = step.metadata?.toolCall as { name: string; arguments: unknown } | undefined;
+    if (!stepTc) return false;
+    if (JSON.stringify({ tool: stepTc.name, args: stepTc.arguments }) !== currentActionJson) return false;
+    const next = state.steps[idx + 1];
+    return next?.type === "observation" && next.metadata?.observationResult?.success === true;
+  });
+  const priorObsContent = priorSuccessIdx >= 0 ? state.steps[priorSuccessIdx + 1]?.content ?? "" : "";
+  const reqTools = input.requiredTools ?? [];
+  const missingReq = reqTools.filter((t) => !state.toolsUsed.has(t));
+  const nextHint = missingReq.length > 0
+    ? `You still need to call: ${missingReq.join(", ")}. Do that now.`
+    : "Give FINAL ANSWER if all steps are complete.";
+  const dupContent = `${priorObsContent} [Already done — do NOT repeat. ${nextHint}]`;
+
+  return {
+    pass: false,
+    observation: dupContent,
+  };
+};
+
+/** Blocks side-effect tools (send*, create*, delete*, etc.) from running twice. */
+export const sideEffectGuard: Guard = (tc, state, _input) => {
+  const SIDE_EFFECT_PREFIXES = ["send", "create", "delete", "push", "merge", "fork", "update", "assign", "remove"];
+  const isSideEffectTool = SIDE_EFFECT_PREFIXES.some(
+    (p) => tc.name.toLowerCase().includes(p),
+  );
+  if (!isSideEffectTool) return { pass: true };
+
+  const sideEffectAlreadyDone = state.steps.some((step, idx) => {
+    if (step.type !== "action") return false;
+    const stepTc = step.metadata?.toolCall as { name: string } | undefined;
+    if (stepTc?.name !== tc.name) return false;
+    const next = state.steps[idx + 1];
+    return next?.type === "observation" && next.metadata?.observationResult?.success === true;
+  });
+
+  if (!sideEffectAlreadyDone) return { pass: true };
+
+  return {
+    pass: false,
+    observation: `⚠️ ${tc.name} already executed successfully with different parameters. Side-effect tools must NOT be called twice. Move on to the next step or give FINAL ANSWER.`,
+  };
+};
+
+/** Nudges the LLM when it calls the same non-meta tool 2+ times. */
+export const repetitionGuard: Guard = (tc, state, input) => {
+  if (META_TOOL_NAMES.has(tc.name)) return { pass: true };
+
+  const priorCallsOfSameTool = state.steps.filter((s) => {
+    if (s.type !== "action") return false;
+    const stepTc = s.metadata?.toolCall as { name: string } | undefined;
+    return (stepTc?.name ?? "") === tc.name;
+  }).length;
+
+  if (priorCallsOfSameTool < 2) return { pass: true };
+
+  // Include missing required tools in the nudge so the model knows what to do next
+  const reqTools = input.requiredTools ?? [];
+  const missingRequired = reqTools.filter((t) => !state.toolsUsed.has(t));
+  const missingHint = missingRequired.length > 0
+    ? ` You still need to call: ${missingRequired.join(", ")}. Do that now instead of repeating ${tc.name}.`
+    : " Use final-answer to respond now.";
+  const nudge = `⚠️ You have already called ${tc.name} ${priorCallsOfSameTool} times. Stop repeating this tool.${missingHint}`;
+
+  return {
+    pass: false,
+    observation: nudge,
+  };
+};
+
+// ─── Default Pipeline ─────────────────────────────────────────────────────────
+
+/** Default guard chain used by the standard ReAct kernel. */
+export const defaultGuards: Guard[] = [
+  blockedGuard,
+  duplicateGuard,
+  sideEffectGuard,
+  repetitionGuard,
+];
+
+// ─── Pipeline Runner ──────────────────────────────────────────────────────────
+
+/**
+ * Builds a guard-check function from a guard pipeline.
+ * Guards run in order; first failure short-circuits.
+ *
+ * @example
+ * // Standard usage
+ * const check = checkToolCall(defaultGuards);
+ *
+ * // Strategy-specific: skip repetition guard
+ * const check = checkToolCall([blockedGuard, duplicateGuard, sideEffectGuard]);
+ */
+export function checkToolCall(guards: Guard[]) {
+  return (tc: ToolCallSpec, state: KernelState, input: ReActKernelInput): GuardOutcome => {
+    for (const guard of guards) {
+      const outcome = guard(tc, state, input);
+      if (!outcome.pass) return outcome;
+    }
+    return { pass: true };
+  };
+}
