@@ -52,6 +52,30 @@
     grad.append("stop").attr("offset", "60%").attr("stop-color", "#f7be1d");
     grad.append("stop").attr("offset", "100%").attr("stop-color", "#f7be1d");
 
+    /** Draw 3-tick Y-axis scale on the left edge of a track. */
+    function addYScale(
+      parentG: d3.Selection<SVGGElement, unknown, null, undefined>,
+      trackH: number,
+      domain: [number, number],
+      fmt: (v: number) => string,
+    ) {
+      const yScale = d3.scaleLinear().domain(domain).range([trackH - 3, 3]);
+      const ticks = [domain[0], (domain[0] + domain[1]) / 2, domain[1]];
+      ticks.forEach((tick) => {
+        parentG.append("line")
+          .attr("x1", 0).attr("x2", 4)
+          .attr("y1", yScale(tick)).attr("y2", yScale(tick))
+          .attr("stroke", "rgba(255,255,255,0.08)").attr("stroke-width", 1);
+        parentG.append("text")
+          .attr("x", 6)
+          .attr("y", yScale(tick) + 3)
+          .attr("fill", "#494454")
+          .attr("font-family", "ui-monospace, monospace")
+          .attr("font-size", "7.5px")
+          .text(fmt(tick));
+      });
+    }
+
     let yOffset = 0;
 
     TRACK_PROPORTIONS.forEach((prop, trackIdx) => {
@@ -87,6 +111,19 @@
         .attr("fill", "#0c0e12")
         .attr("stroke", "rgba(255,255,255,0.05)")
         .attr("stroke-width", 1);
+
+      // Y-axis reference scale (always visible, even when track is empty)
+      if (trackIdx === 0) {
+        addYScale(trackG, trackH, [0, 1], (v) => v.toFixed(1));
+      } else if (trackIdx === 1 && data.tokens.length > 0) {
+        const maxTokLabel = Math.max(...data.tokens.map((d) => d.tokens), 1);
+        addYScale(trackG, trackH, [0, maxTokLabel], (v) =>
+          v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(Math.round(v)));
+      } else if (trackIdx === 2 && data.latency.length > 0) {
+        const maxMsLabel = Math.max(...data.latency.map((d) => d.value), 1);
+        addYScale(trackG, trackH, [0, maxMsLabel], (v) =>
+          v >= 1000 ? `${(v / 1000).toFixed(1)}s` : `${Math.round(v)}ms`);
+      }
 
       if (trackIdx === 0 && data.entropy.length > 1) {
         const yScale = d3.scaleLinear().domain([0, 1]).range([trackH - 4, 4]);

@@ -2,6 +2,7 @@ import { writable } from "svelte/store";
 import { CORTEX_SERVER_URL } from "../constants.js";
 import { resolveRunIdFromRunsApi } from "../resolve-run-id.js";
 import { toast } from "./toast-store.js";
+import { settings } from "./settings.js";
 import type { AgentNode } from "./agent-store.js";
 
 export interface StageState {
@@ -44,13 +45,17 @@ export function createStageStore(options?: CreateStageStoreOptions) {
   async function submitPrompt(prompt: string): Promise<void> {
     state.update((s) => ({ ...s, submitting: true, lastSubmitError: null }));
     const sinceMs = Date.now();
+    // Read settings at call time (not captured at store creation) so changes
+    // made on the Settings page take effect immediately without a page reload.
+    const s = settings.get();
     try {
       const res = await fetchFn(`${CORTEX_SERVER_URL}/api/runs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           prompt,
-          provider: "anthropic",
+          provider: s.defaultProvider,
+          model: s.defaultModel || undefined,
           tools: ["web-search"],
         }),
       });

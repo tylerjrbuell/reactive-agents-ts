@@ -2,29 +2,10 @@
   import { onMount } from "svelte";
   import { toast } from "$lib/stores/toast-store.js";
   import { CORTEX_SERVER_URL } from "$lib/constants.js";
+  import { settings as settingsStore, DEFAULTS } from "$lib/stores/settings.js";
 
-  // ── Persisted settings (localStorage) ────────────────────────────────────
-  type NotificationLevel = "all" | "completions" | "failures" | "none";
-
-  interface Settings {
-    defaultProvider: string;
-    defaultModel: string;
-    notificationLevel: NotificationLevel;
-    notificationsEnabled: boolean;
-    runRetentionDays: number;
-    debugMode: boolean;
-  }
-
-  const DEFAULTS: Settings = {
-    defaultProvider: "anthropic",
-    defaultModel: "claude-sonnet-4-6",
-    notificationLevel: "completions",
-    notificationsEnabled: false,
-    runRetentionDays: 30,
-    debugMode: false,
-  };
-
-  let settings = $state<Settings>({ ...DEFAULTS });
+  // Local reactive copy — bound to form inputs, written to shared store on Save
+  let localSettings = $state({ ...DEFAULTS });
   let saved = $state(false);
   let notifPermission = $state<NotificationPermission>("default");
   let serverHealth = $state<"checking" | "online" | "offline">("checking");
@@ -63,47 +44,33 @@
     ],
   };
 
-  const currentModels = $derived(MODELS[settings.defaultProvider] ?? []);
+  const currentModels = $derived(MODELS[localSettings.defaultProvider] ?? []);
 
   onMount(() => {
-    // Load from localStorage
-    try {
-      const raw = localStorage.getItem("cortex-settings");
-      if (raw) {
-        const parsed = JSON.parse(raw) as Partial<Settings>;
-        settings = { ...DEFAULTS, ...parsed };
-      }
-    } catch { /* ignore */ }
+    settingsStore.init();
+    // Populate local form from persisted settings
+    localSettings = { ...settingsStore.get() };
 
-    // Check notification permission
     if ("Notification" in window) {
       notifPermission = Notification.permission;
     }
 
-    // Check server health
     fetch(`${CORTEX_SERVER_URL}/api/runs?limit=0`)
-      .then(() => {
-        serverHealth = "online";
-      })
-      .catch(() => {
-        serverHealth = "offline";
-      });
+      .then(() => { serverHealth = "online"; })
+      .catch(() => { serverHealth = "offline"; });
   });
 
   function saveSettings() {
-    try {
-      localStorage.setItem("cortex-settings", JSON.stringify(settings));
-      saved = true;
-      toast.success("Settings saved");
-      setTimeout(() => (saved = false), 2000);
-    } catch (e) {
-      toast.error("Failed to save settings", String(e));
-    }
+    // Write to shared store — propagates live to stage prompt + builder form
+    settingsStore.save(localSettings);
+    saved = true;
+    toast.success("Settings saved", "Provider and model defaults updated.");
+    setTimeout(() => (saved = false), 2000);
   }
 
   function resetSettings() {
-    settings = { ...DEFAULTS };
-    localStorage.removeItem("cortex-settings");
+    localSettings = { ...DEFAULTS };
+    settingsStore.reset();
     toast.info("Settings reset to defaults");
   }
 
@@ -132,7 +99,7 @@
       const res = await fetch(`${CORTEX_SERVER_URL}/api/runs/prune`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ olderThanDays: settings.runRetentionDays }),
+        body: JSON.stringify({ olderThanDays: localSettings.runRetentionDays }),
       });
       if (!res.ok) throw new Error(`Server returned ${res.status}`);
       const { pruned } = await res.json() as { pruned: number };
@@ -200,10 +167,10 @@
         <div>
           <label class="font-mono text-[10px] text-outline uppercase tracking-widest block mb-1.5">Provider</label>
           <select
-            bind:value={settings.defaultProvider}
+            bind:value={localSettings.defaultProvider}
             onchange={() => {
-              const models = MODELS[settings.defaultProvider];
-              if (models?.[0]) settings = { ...settings, defaultModel: models[0].value };
+              const models = MODELS[localSettings.defaultProvider];
+              if (models?.[0]) localSettings = { ...localSettings, defaultModel: models[0].value };
             }}
             class="w-full bg-surface-container-lowest border border-outline-variant/20 rounded px-3 py-2
                    text-sm font-mono text-on-surface focus:border-primary/50 focus:outline-none"
@@ -216,14 +183,14 @@
         <div>
           <label class="font-mono text-[10px] text-outline uppercase tracking-widest block mb-1.5">Model</label>
           <select
-            bind:value={settings.defaultModel}
+            bind:value={localSettings.defaultModel}
             class="w-full bg-surface-container-lowest border border-outline-variant/20 rounded px-3 py-2
                    text-sm font-mono text-on-surface focus:border-primary/50 focus:outline-none"
           >
             {#each currentModels as m}
               <option value={m.value}>{m.label}</option>
             {/each}
-            <option value={settings.defaultModel}>{settings.defaultModel}</option>
+            <option value={localSettings.defaultModel}>{localSettings.defaultModel}</option>
           </select>
         </div>
       </div>
@@ -289,7 +256,7 @@
                 type="radio"
                 name="notifLevel"
                 value={option.value}
-                bind:group={settings.notificationLevel}
+                bind:group={localSettings.notificationLevel}
                 class="accent-primary"
               />
               <span class="font-mono text-[11px] text-on-surface/70">{option.label}</span>
@@ -316,11 +283,11 @@
               type="range"
               min="1"
               max="90"
-              bind:value={settings.runRetentionDays}
+              bind:value={localSettings.runRetentionDays}
               class="flex-1 accent-primary"
             />
             <span class="font-mono text-sm text-primary w-16 text-right tabular-nums">
-              {settings.runRetentionDays}d
+              {localSettings.runRetentionDays}d
             </span>
           </div>
         </div>
@@ -347,7 +314,7 @@
         Developer
       </h2>
       <label class="flex items-center gap-3 cursor-pointer">
-        <input type="checkbox" bind:checked={settings.debugMode} class="accent-primary w-4 h-4" />
+        <input type="checkbox" bind:checked={localSettings.debugMode} class="accent-primary w-4 h-4" />
         <div>
           <div class="font-mono text-[11px] text-on-surface/80">Debug mode</div>
           <div class="font-mono text-[10px] text-outline/60 mt-0.5">
