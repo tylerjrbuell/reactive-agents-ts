@@ -51,6 +51,10 @@ export function updateRunStats(
     status?: string;
     debrief?: string;
     completedAt?: number;
+    /** SET only when not already stored (first-seen wins) */
+    provider?: string;
+    model?: string;
+    strategy?: string;
   },
 ): void {
   const sets: string[] = [];
@@ -85,6 +89,19 @@ export function updateRunStats(
     sets.push("completed_at = ?");
     values.push(patch.completedAt);
   }
+  // First-seen-wins: only store when the column is still NULL
+  if (patch.provider !== undefined) {
+    sets.push("provider = COALESCE(provider, ?)");
+    values.push(patch.provider);
+  }
+  if (patch.model !== undefined) {
+    sets.push("model = COALESCE(model, ?)");
+    values.push(patch.model);
+  }
+  if (patch.strategy !== undefined) {
+    sets.push("strategy = COALESCE(strategy, ?)");
+    values.push(patch.strategy);
+  }
 
   if (sets.length === 0) return;
   values.push(runId);
@@ -103,10 +120,13 @@ type RunRow = {
   tokens_used: number;
   cost_usd: number;
   has_debrief: number;
+  provider: string | null;
+  model: string | null;
+  strategy: string | null;
 };
 
 function rowToRunSummary(row: RunRow): RunSummary {
-  const base = {
+  const base: RunSummary = {
     runId: row.run_id,
     agentId: row.agent_id,
     startedAt: row.started_at,
@@ -115,10 +135,12 @@ function rowToRunSummary(row: RunRow): RunSummary {
     tokensUsed: row.tokens_used,
     cost: row.cost_usd,
     hasDebrief: row.has_debrief === 1,
+    ...(row.provider ? { provider: row.provider } : {}),
+    ...(row.model    ? { model:    row.model    } : {}),
+    ...(row.strategy ? { strategy: row.strategy } : {}),
+    ...(row.completed_at != null ? { completedAt: row.completed_at } : {}),
   };
-  return row.completed_at == null
-    ? base
-    : { ...base, completedAt: row.completed_at };
+  return base;
 }
 
 export function getRecentRuns(db: Database, limit = 50): RunSummary[] {
@@ -127,7 +149,8 @@ export function getRecentRuns(db: Database, limit = 50): RunSummary[] {
       `
     SELECT run_id, agent_id, started_at, completed_at, status,
            iteration_count, tokens_used, cost_usd,
-           (debrief IS NOT NULL) AS has_debrief
+           (debrief IS NOT NULL) AS has_debrief,
+           provider, model, strategy
     FROM cortex_runs
     ORDER BY started_at DESC
     LIMIT ?
@@ -143,7 +166,8 @@ export function getRunById(db: Database, runId: string): RunSummary | null {
       `
     SELECT run_id, agent_id, started_at, completed_at, status,
            iteration_count, tokens_used, cost_usd,
-           (debrief IS NOT NULL) AS has_debrief
+           (debrief IS NOT NULL) AS has_debrief,
+           provider, model, strategy
     FROM cortex_runs
     WHERE run_id = ?
   `,
@@ -170,6 +194,7 @@ export function getRunDetail(
     SELECT run_id, agent_id, started_at, completed_at, status,
            iteration_count, tokens_used, cost_usd,
            (debrief IS NOT NULL) AS has_debrief,
+           provider, model, strategy,
            debrief
     FROM cortex_runs WHERE run_id = ?
   `,

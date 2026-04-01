@@ -121,9 +121,40 @@
       </div>
     {/if}
 
+    <!-- Config pills: provider · model · strategy -->
+    {#if vitals.provider || vitals.model || vitals.strategy}
+      <div class="h-4 w-px bg-primary/20 mx-4 flex-shrink-0"></div>
+      <div class="flex items-center gap-2">
+        {#if vitals.provider}
+          <span
+            class="px-1.5 py-0.5 bg-surface-container border border-outline-variant/20 rounded text-[9px] font-mono text-outline/70 uppercase tracking-wider"
+            title="Provider"
+          >
+            {vitals.provider}
+          </span>
+        {/if}
+        {#if vitals.model}
+          <span
+            class="px-1.5 py-0.5 bg-primary/8 border border-primary/20 rounded text-[9px] font-mono text-primary/70 max-w-[140px] truncate"
+            title="Model: {vitals.model}"
+          >
+            {vitals.model}
+          </span>
+        {/if}
+        {#if vitals.strategy}
+          <span
+            class="px-1.5 py-0.5 bg-secondary/8 border border-secondary/20 rounded text-[9px] font-mono text-secondary/60 uppercase tracking-wider"
+            title="Strategy"
+          >
+            {vitals.strategy}
+          </span>
+        {/if}
+      </div>
+    {/if}
+
     {#if vitals.fallbackProvider}
       <div
-        class="ml-4 flex items-center gap-1 px-2 py-0.5 bg-tertiary/10 border border-tertiary/30 rounded text-[10px] text-tertiary"
+        class="ml-2 flex items-center gap-1 px-2 py-0.5 bg-tertiary/10 border border-tertiary/30 rounded text-[10px] text-tertiary"
       >
         <span class="material-symbols-outlined text-xs">electric_bolt</span>
         → {vitals.fallbackProvider}

@@ -131,6 +131,50 @@
     {/if}
   </div>
 
+  <!-- ── Run Config ────────────────────────────────────────────────────── -->
+  {#if vitals.provider || vitals.model || vitals.strategy}
+    <div class="bg-surface-container-low/40 border border-outline-variant/10 rounded-lg p-3">
+      <div class="text-[9px] font-mono text-outline/70 uppercase tracking-widest mb-2.5">Config</div>
+      <div class="space-y-2">
+        {#if vitals.provider}
+          <div class="flex items-center justify-between">
+            <span class="text-[9px] font-mono text-outline/50 uppercase">Provider</span>
+            <span class="text-[10px] font-mono text-on-surface/80 font-medium capitalize">
+              {vitals.provider}
+              {#if vitals.fallbackProvider}
+                <span class="text-tertiary ml-1 text-[9px]">→ {vitals.fallbackProvider}</span>
+              {/if}
+            </span>
+          </div>
+        {/if}
+        {#if vitals.model}
+          <div class="flex items-start justify-between gap-2">
+            <span class="text-[9px] font-mono text-outline/50 uppercase flex-shrink-0">Model</span>
+            <span class="text-[10px] font-mono text-primary/80 text-right break-all">
+              {vitals.model}
+            </span>
+          </div>
+        {/if}
+        {#if vitals.strategy}
+          <div class="flex items-center justify-between">
+            <span class="text-[9px] font-mono text-outline/50 uppercase">Strategy</span>
+            <span class="text-[10px] font-mono text-secondary/80 uppercase tracking-wide">
+              {vitals.strategy}
+            </span>
+          </div>
+        {/if}
+        {#if vitals.maxIterations > 0}
+          <div class="flex items-center justify-between">
+            <span class="text-[9px] font-mono text-outline/50 uppercase">Max Iter</span>
+            <span class="text-[10px] font-mono text-on-surface/50 tabular-nums">
+              {vitals.maxIterations}
+            </span>
+          </div>
+        {/if}
+      </div>
+    </div>
+  {/if}
+
   <!-- ── Stats grid ─────────────────────────────────────────────────────── -->
   <div class="grid grid-cols-2 gap-2">
     {#each [

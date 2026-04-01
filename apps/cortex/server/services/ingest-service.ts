@@ -36,18 +36,38 @@ const deriveRunStats = (
   status: string;
   completedAt: number;
   debrief: string;
+  provider: string;
+  model: string;
+  strategy: string;
 }> => {
+  // AgentStarted fires first — definitive provider + model for the run
+  if (event._tag === "AgentStarted") {
+    const e = event as { provider?: string; model?: string };
+    return {
+      ...(typeof e.provider === "string" && e.provider ? { provider: e.provider } : {}),
+      ...(typeof e.model    === "string" && e.model    ? { model:    e.model    } : {}),
+    };
+  }
   if (event._tag === "LLMRequestCompleted") {
-    const e = event as { tokensUsed?: number; estimatedCost?: number };
-    return { tokensUsed: e.tokensUsed ?? 0, cost: e.estimatedCost ?? 0 };
+    const e = event as { tokensUsed?: number; estimatedCost?: number; provider?: string; model?: string };
+    return {
+      tokensUsed: e.tokensUsed ?? 0,
+      cost: e.estimatedCost ?? 0,
+      // Override with actual model used (may differ from AgentStarted if routing changed it)
+      ...(typeof e.provider === "string" && e.provider && e.provider !== "unknown" ? { provider: e.provider } : {}),
+      ...(typeof e.model    === "string" && e.model    && e.model    !== "unknown" ? { model:    e.model    } : {}),
+    };
   }
   if (event._tag === "ReasoningStepCompleted") {
     const e = event as { totalSteps?: number; step?: number };
     return { iterationCount: e.totalSteps ?? e.step ?? 0 };
   }
   if (event._tag === "ReasoningIterationProgress") {
-    const e = event as { iteration?: number };
-    return { iterationCount: e.iteration ?? 0 };
+    const e = event as { iteration?: number; strategy?: string };
+    return {
+      iterationCount: e.iteration ?? 0,
+      ...(typeof e.strategy === "string" && e.strategy ? { strategy: e.strategy } : {}),
+    };
   }
   if (event._tag === "AgentCompleted") {
     const e = event as { success?: boolean; totalTokens?: number; durationMs?: number };

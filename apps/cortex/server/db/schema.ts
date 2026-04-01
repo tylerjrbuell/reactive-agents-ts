@@ -38,6 +38,9 @@ export function applySchema(db: Database): void {
       iteration_count INTEGER NOT NULL DEFAULT 0,
       tokens_used     INTEGER NOT NULL DEFAULT 0,
       cost_usd        REAL    NOT NULL DEFAULT 0,
+      provider        TEXT,
+      model           TEXT,
+      strategy        TEXT,
       debrief         TEXT,
       created_at      INTEGER NOT NULL DEFAULT (unixepoch('now','subsec') * 1000)
     );
@@ -57,6 +60,13 @@ export function applySchema(db: Database): void {
       updated_at  INTEGER NOT NULL DEFAULT (unixepoch('now','subsec') * 1000)
     );
   `);
+
+  // Migrations — safe to run on existing DBs (ALTER TABLE IF NOT EXISTS column)
+  const runCols = (db.prepare("PRAGMA table_info(cortex_runs)").all() as Array<{ name: string }>)
+    .map((c) => c.name);
+  if (!runCols.includes("provider")) db.exec("ALTER TABLE cortex_runs ADD COLUMN provider TEXT");
+  if (!runCols.includes("model"))    db.exec("ALTER TABLE cortex_runs ADD COLUMN model    TEXT");
+  if (!runCols.includes("strategy")) db.exec("ALTER TABLE cortex_runs ADD COLUMN strategy TEXT");
 }
 
 /** Enforce retention: keep only the 50 most recent runs per agent. */

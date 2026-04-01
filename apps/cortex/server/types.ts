@@ -68,6 +68,9 @@ export interface RunSummary {
   readonly tokensUsed: number;
   readonly cost: number;
   readonly hasDebrief: boolean;
+  readonly provider?: string;
+  readonly model?: string;
+  readonly strategy?: string;
 }
 
 export interface AgentSummary {

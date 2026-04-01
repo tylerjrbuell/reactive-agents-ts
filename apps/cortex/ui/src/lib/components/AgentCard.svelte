@@ -149,9 +149,25 @@
       </div>
     {/if}
 
+    <!-- Provider + model config — persists from DB on refresh -->
+    {#if agent.provider || agent.model}
+      <div class="mt-3 flex flex-wrap gap-1 justify-center">
+        {#if agent.provider}
+          <span class="px-1.5 py-0.5 bg-surface-container border border-outline-variant/20 rounded text-[8px] font-mono text-outline/60 uppercase">
+            {agent.provider}
+          </span>
+        {/if}
+        {#if agent.model}
+          <span class="px-1.5 py-0.5 bg-primary/8 border border-primary/15 rounded text-[8px] font-mono text-primary/60 max-w-[120px] truncate" title={agent.model}>
+            {agent.model}
+          </span>
+        {/if}
+      </div>
+    {/if}
+
     <!-- Tokens: show for any state when we have real data -->
     {#if agent.tokensUsed > 0}
-      <div class="mt-3 text-[10px] font-mono {isCompleted ? 'text-outline' : 'text-outline/60'}">
+      <div class="mt-2 text-[10px] font-mono {isCompleted ? 'text-outline' : 'text-outline/60'}">
         {agent.tokensUsed.toLocaleString()} tok
         {#if agent.cost > 0} · ${agent.cost.toFixed(4)}{/if}
       </div>

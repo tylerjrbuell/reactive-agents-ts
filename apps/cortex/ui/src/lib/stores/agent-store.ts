@@ -28,6 +28,12 @@ export interface AgentNode {
   readonly connectedAt: number;
   readonly completedAt?: number;
   readonly lastEventAt: number;
+  /** Provider name — persisted from DB, survives refresh */
+  readonly provider?: string;
+  /** Model name — persisted from DB, survives refresh */
+  readonly model?: string;
+  /** Reasoning strategy — persisted from DB, survives refresh */
+  readonly strategy?: string;
 }
 
 export interface AgentStoreState {
@@ -44,6 +50,9 @@ export interface RunSummaryDto {
   readonly iterationCount: number;
   readonly tokensUsed: number;
   readonly cost: number;
+  readonly provider?: string;
+  readonly model?: string;
+  readonly strategy?: string;
 }
 
 export function entropyToState(entropy: number, isRunning: boolean): AgentCognitiveState {
@@ -68,6 +77,9 @@ function runToSeedNode(run: RunSummaryDto, now: number): AgentNode {
     cost: run.cost,
     connectedAt: 0,
     lastEventAt: now,
+    provider: run.provider,
+    model:    run.model,
+    strategy: run.strategy,
   };
 }
 
@@ -116,6 +128,10 @@ export function createAgentStore(options?: CreateAgentStoreOptions) {
                   cost: Math.max(existing.cost, seeded.cost),
                   connectedAt: existing.connectedAt,
                   lastEventAt: Math.max(existing.lastEventAt, seeded.lastEventAt),
+                  // Prefer DB-sourced config (persists across refresh) over live defaults
+                  provider: seeded.provider ?? existing.provider,
+                  model:    seeded.model    ?? existing.model,
+                  strategy: seeded.strategy ?? existing.strategy,
                 }
               : seeded,
           );
@@ -143,6 +159,13 @@ export function createAgentStore(options?: CreateAgentStoreOptions) {
         case "AgentConnected":
           patch.state = "running";
           patch.connectedAt = nowFn();
+          break;
+        // AgentStarted fires first — capture config immediately for live runs
+        case "AgentStarted":
+          if (typeof msg.payload.provider === "string" && msg.payload.provider)
+            patch.provider = msg.payload.provider as string;
+          if (typeof msg.payload.model === "string" && msg.payload.model)
+            patch.model = msg.payload.model as string;
           break;
         case "EntropyScored": {
           const entropy = typeof msg.payload.composite === "number" ? msg.payload.composite : 0;

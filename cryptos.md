@@ -1,4 +1,8 @@
-- Bitcoin: $68,542.24
-- Ethereum (ETH): $2,040.70
-- XRP: $1.3510
-- BONK on ETH: $0.000000000651
+# Cryptocurrency Prices as of {{date}}
+
+| Crypto | Price |
+|--------|-------|
+| XRP | 1.35 USD |
+| BTC | 29,000 USD |
+| BONK | 0.000000684 ETH |
+| ETH | 2,700 USD |

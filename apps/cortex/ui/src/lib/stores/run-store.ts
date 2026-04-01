@@ -15,7 +15,13 @@ export interface RunVitals {
   readonly durationMs: number;
   readonly iteration: number;
   readonly maxIterations: number;
+  /** LLM provider name (e.g. "anthropic", "openai") — from LLMRequestCompleted */
   readonly provider?: string;
+  /** LLM model name (e.g. "claude-sonnet-4-6") — from LLMRequestCompleted */
+  readonly model?: string;
+  /** Reasoning strategy (e.g. "react", "plan-execute-reflect") — from ReasoningIterationProgress */
+  readonly strategy?: string;
+  /** Provider switched to after fallback — from ProviderFallbackActivated */
   readonly fallbackProvider?: string;
 }
 
@@ -53,7 +59,7 @@ const DEFAULT_VITALS: RunVitals = {
   cost: 0,
   durationMs: 0,
   iteration: 0,
-  maxIterations: 10,
+  maxIterations: 0,  // 0 = unknown; VitalsStrip omits the /N suffix when 0
 };
 
 function readTokensUsed(p: Record<string, unknown>): number {
@@ -84,12 +90,23 @@ function updateVitals(v: RunVitals, msg: CortexLiveMsg, runStartMs: number): Run
               : "EXPLORING";
       return { ...v, entropy: composite, trajectory };
     }
+    // AgentStarted fires first — definitive provider + model at run start
+    case "AgentStarted":
+      return {
+        ...v,
+        provider: typeof p.provider === "string" && p.provider ? p.provider : v.provider,
+        model:    typeof p.model    === "string" && p.model    ? p.model    : v.model,
+      };
     case "LLMRequestCompleted":
       return {
         ...v,
         tokensUsed: v.tokensUsed + readTokensUsed(p),
         cost: v.cost + (typeof p.estimatedCost === "number" ? p.estimatedCost : 0),
         durationMs: Math.max(0, msg.ts - runStartMs),
+        // LLMRequestCompleted.model may be the "actual" model used (e.g. after routing)
+        // Override AgentStarted values with the real model from the first LLM call
+        provider: (typeof p.provider === "string" && p.provider && p.provider !== "unknown") ? p.provider : v.provider,
+        model:    (typeof p.model    === "string" && p.model    && p.model    !== "unknown") ? p.model    : v.model,
       };
     case "ReasoningStepCompleted": {
       const iter =
@@ -110,7 +127,13 @@ function updateVitals(v: RunVitals, msg: CortexLiveMsg, runStartMs: number): Run
           ? p.maxIterations
           : v.maxIterations;
       const clampedIter = Math.max(v.iteration, Math.max(0, iter));
-      return { ...v, iteration: clampedIter, maxIterations: max };
+      return {
+        ...v,
+        iteration: clampedIter,
+        maxIterations: max,
+        // Strategy is consistent across iterations; capture once
+        strategy: v.strategy ?? (typeof p.strategy === "string" ? p.strategy : undefined),
+      };
     }
     case "AgentCompleted":
       return {
