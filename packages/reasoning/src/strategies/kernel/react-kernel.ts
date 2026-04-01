@@ -17,6 +17,12 @@ import type { ReasoningStep } from "../../types/index.js";
 import { ExecutionError } from "../../errors/errors.js";
 import { LLMService, selectAdapter } from "@reactive-agents/llm-provider";
 import type { StreamEvent, LLMMessage } from "@reactive-agents/llm-provider";
+import {
+  buildSystemPrompt,
+  toProviderMessage,
+  buildToolSchemas,
+  buildConversationMessages,
+} from "./phases/context-builder.js";
 import { StreamingTextCallback } from "@reactive-agents/core";
 import type { ContextProfile } from "../../context/context-profile.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
@@ -57,7 +63,6 @@ import {
 import { evaluateTermination, defaultEvaluators, type TerminationContext } from "./utils/termination-oracle.js";
 import { assembleOutput } from "./output-assembly.js";
 import { buildStaticContext, buildDynamicContext, buildRules } from "../../context/context-engine.js";
-import { applyMessageWindow } from "../../context/message-window.js";
 import type { MemoryItem } from "../../context/context-engine.js";
 import { extractThinking, rescueFromThinking } from "./utils/stream-parser.js";
 import { makeStep } from "./utils/step-utils.js";
@@ -83,32 +88,6 @@ const META_TOOL_SET = new Set(["final-answer", "task-complete", "context-status"
 import type { ReActKernelInput, ReActKernelResult } from "./kernel-state.js";
 export type { ReActKernelInput, ReActKernelResult };
 
-/**
- * Build the system prompt text.
- * Tier-adaptive: frontier/large models get detailed reasoning guidance;
- * mid models get standard guidance; local models get minimal prompt.
- */
-function buildSystemPrompt(
-  _task: string,
-  systemPrompt?: string,
-  tier?: "local" | "mid" | "large" | "frontier",
-): string {
-  // Use custom system prompt if provided (no task appended — task is in messages[0])
-  if (systemPrompt) return systemPrompt;
-
-  // Lean tier-adaptive instruction — NO task, NO tool schemas, NO format rules
-  // The task is seeded as state.messages[0] by the execution engine.
-  const t = tier ?? "mid";
-  if (t === "local") {
-    return "You are a helpful assistant. Use the provided tools when needed to complete tasks.";
-  }
-  if (t === "frontier" || t === "large") {
-    return "You are an expert reasoning agent. Think step by step. Use tools precisely and efficiently. Prefer concise, direct answers once you have sufficient information.";
-  }
-  // mid tier
-  return "You are a reasoning agent. Think step by step and use available tools when needed.";
-}
-
 // ── reactKernel: ThoughtKernel ───────────────────────────────────────────────
 
 /**
@@ -133,40 +112,6 @@ export const reactKernel: ThoughtKernel = (
   // For any other status, return state as-is (done/failed/observing are terminal or handled)
   return Effect.succeed(state);
 };
-
-// ── KernelMessage → LLMMessage conversion ────────────────────────────────────
-
-/** Convert a KernelMessage to provider-native LLMMessage format. */
-function toProviderMessage(msg: KernelMessage): LLMMessage {
-  if (msg.role === "assistant") {
-    if (msg.toolCalls && msg.toolCalls.length > 0) {
-      // Assistant message with tool calls — provider maps to their format
-      return {
-        role: "assistant",
-        content: [
-          ...(msg.content ? [{ type: "text" as const, text: msg.content }] : []),
-          ...msg.toolCalls.map((tc) => ({
-            type: "tool_use" as const,
-            id: tc.id,
-            name: tc.name,
-            input: tc.arguments,
-          })),
-        ],
-      } as LLMMessage;
-    }
-    return { role: "assistant", content: msg.content };
-  }
-  if (msg.role === "tool_result") {
-    return {
-      role: "tool" as const,
-      toolCallId: msg.toolCallId,
-      toolName: msg.toolName,
-      content: msg.content,
-    } as LLMMessage;
-  }
-  // user role (or fallback)
-  return { role: "user", content: msg.content };
-}
 
 // ── Thinking phase ───────────────────────────────────────────────────────────
 
@@ -310,13 +255,7 @@ function handleThinking(
     // parameter to only required (unsatisfied) + meta tools. This forces models
     // like cogito:14b (which lack tool_choice support) to select the right tool
     // instead of stubbornly re-selecting a previously successful one.
-    const META_TOOL_NAMES = new Set(["final-answer", "task-complete", "context-status", "brief", "pulse", "find", "recall"]);
-    const gateBlockedTools = (state.meta.gateBlockedTools as readonly string[] | undefined) ?? [];
-    const missingRequired = (input.requiredTools ?? []).filter((t) => !state.toolsUsed.has(t));
-    const filteredToolSchemas = gateBlockedTools.length > 0 && missingRequired.length > 0
-      ? augmentedToolSchemas.filter((ts) =>
-          missingRequired.includes(ts.name) || META_TOOL_NAMES.has(ts.name))
-      : augmentedToolSchemas;
+    const filteredToolSchemas = buildToolSchemas(state, input, profile, augmentedToolSchemas);
     const llmTools = filteredToolSchemas.map((ts) => ({
       name: ts.name,
       description: ts.description,
@@ -339,39 +278,9 @@ function handleThinking(
 
     // ── Build conversation messages ──────────────────────────────────────────
     // Prefer ICS briefs (set by kernel-runner after tool rounds); otherwise sliding window.
-    let conversationMessages: LLMMessage[];
-
-    if (state.synthesizedContext) {
-      conversationMessages = [...state.synthesizedContext.messages];
-      state = transitionState(state, { synthesizedContext: null });
-      if (autoForwardSection) {
-        conversationMessages = [
-          ...conversationMessages,
-          { role: "user", content: autoForwardSection },
-        ];
-      }
-    } else {
-      let compactedMessages = applyMessageWindow(
-        state.messages,
-        profile as import("../../context/context-profile.js").ContextProfile,
-      );
-      if (compactedMessages.length === 0) {
-        compactedMessages = [{ role: "user" as const, content: thoughtPrompt }];
-      }
-      // taskFraming hook — on first iteration, let adapter annotate the task message
-      // to help local models understand the full sequence of steps required.
-      if (state.iteration === 0 && compactedMessages.length === 1 && compactedMessages[0]?.role === "user") {
-        const framedTask = adapter.taskFraming?.({
-          task: compactedMessages[0].content as string,
-          requiredTools: input.requiredTools ?? [],
-          tier: profile.tier ?? "mid",
-        });
-        if (framedTask) {
-          compactedMessages = [{ role: "user" as const, content: framedTask }];
-        }
-      }
-      conversationMessages = (compactedMessages as readonly KernelMessage[]).map(toProviderMessage);
-    }
+    const { messages: conversationMessages, updatedState: stateAfterMessages } =
+      buildConversationMessages(state, input, profile, adapter, thoughtPrompt, autoForwardSection);
+    state = stateAfterMessages;
 
     const llmStreamEffect = llm.stream({
       messages: conversationMessages,
