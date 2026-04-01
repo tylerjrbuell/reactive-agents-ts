@@ -38,6 +38,7 @@ import {
   type KernelContext,
   type KernelInput,
   type ThoughtKernel,
+  type Phase,
 } from "./kernel-state.js";
 import { handleThinking } from "./phases/think.js";
 import { handleActing } from "./phases/act.js";
@@ -48,30 +49,46 @@ import { handleActing } from "./phases/act.js";
 import type { ReActKernelInput, ReActKernelResult } from "./kernel-state.js";
 export type { ReActKernelInput, ReActKernelResult };
 
-// ── reactKernel: ThoughtKernel ───────────────────────────────────────────────
+// ── makeKernel / reactKernel ─────────────────────────────────────────────────
 
 /**
- * The ReAct ThoughtKernel — a single-step transition function.
+ * Creates a ReAct kernel with a configurable phase pipeline.
  *
- * Given a KernelState, performs ONE reasoning step and returns the next state.
- * Reads `state.status` to decide what to do:
+ * The default pipeline is [handleThinking, handleActing].
+ * Strategies and custom kernels may substitute individual phases:
  *
- * - "thinking": Build context, call LLM, parse response, transition to "acting" or "done"
- * - "acting": Execute tool from meta.pendingNativeToolCalls (native FC), observe, transition to "thinking" or "done"
+ * @example
+ * // Standard kernel (default)
+ * const kernel = makeKernel();
+ *
+ * // Custom kernel with a different thinking phase
+ * const kernel = makeKernel({ phases: [myThinkPhase, handleActing] });
+ *
+ * // Test kernel with a mock thinking phase
+ * const kernel = makeKernel({ phases: [mockThink, handleActing] });
  */
-export const reactKernel: ThoughtKernel = (
-  state: KernelState,
-  context: KernelContext,
-): Effect.Effect<KernelState, never, LLMService> => {
-  if (state.status === "thinking") {
-    return handleThinking(state, context);
-  }
-  if (state.status === "acting") {
-    return handleActing(state, context);
-  }
-  // For any other status, return state as-is (done/failed/observing are terminal or handled)
-  return Effect.succeed(state);
-};
+export function makeKernel(options?: { phases?: Phase[] }): ThoughtKernel {
+  const [thinkPhase, actPhase] = options?.phases ?? [handleThinking, handleActing];
+  return (
+    state: KernelState,
+    context: KernelContext,
+  ): Effect.Effect<KernelState, never, LLMService> => {
+    if (state.status === "thinking") return thinkPhase!(state, context);
+    if (state.status === "acting") return actPhase!(state, context);
+    // Any other status (done/failed) is terminal — return state unchanged
+    return Effect.succeed(state);
+  };
+}
+
+/**
+ * The standard ReAct ThoughtKernel — a single-step transition function built
+ * from the default [handleThinking, handleActing] pipeline.
+ *
+ * Reads `state.status` to decide what to do:
+ * - "thinking": Build context, call LLM, parse response → "acting" or "done"
+ * - "acting":   Execute tool from meta.pendingNativeToolCalls → "thinking" or "done"
+ */
+export const reactKernel: ThoughtKernel = makeKernel();
 
 // ── Backwards-compatible wrapper ─────────────────────────────────────────────
 

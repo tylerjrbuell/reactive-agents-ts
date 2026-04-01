@@ -490,13 +490,16 @@ export interface ReActKernelResult {
  * A single step in the kernel turn pipeline.
  *
  * Pure state transition: takes the current immutable KernelState and a read-only
- * PhaseContext, returns an Effect that produces the next KernelState.
+ * KernelContext, returns an Effect that produces the next KernelState.
  *
  * Composable: custom kernels substitute individual phases via makeKernel({ phases }).
+ *
+ * Note: KernelContext is used (not PhaseContext) because phases need access to
+ * compression, toolService, and other fields that PhaseContext does not expose.
  */
 export type Phase = (
   state: KernelState,
-  ctx: PhaseContext,
+  context: KernelContext,
 ) => Effect.Effect<KernelState, never, LLMService>;
 
 /**
