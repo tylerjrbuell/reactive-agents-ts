@@ -9,7 +9,7 @@
 
 import type { ReasoningStep } from "../../../types/index.js";
 import type { ToolSchema } from "./tool-utils.js";
-import { extractFinalAnswer } from "./tool-utils.js";
+import { FINAL_ANSWER_RE, extractFinalAnswer } from "./tool-utils.js";
 
 // ── Local structural types ──────────────────────────────────────────────
 // These mirror shapes from @reactive-agents/reactive-intelligence without
@@ -81,12 +81,6 @@ export interface TerminationDecision {
   readonly output?: string;
   readonly allVerdicts: ReadonlyArray<{ evaluator: string; verdict: SignalVerdict }>;
 }
-
-// ── Expanded FINAL ANSWER regex ─────────────────────────────────────────
-// Defined locally here; will be moved/unified with tool-utils.ts in Task 5.
-
-/** Expanded regex matching FINAL ANSWER with optional markdown bold and various colon forms. */
-export const FINAL_ANSWER_RE = /(?:\*{0,2})final\s*answer(?:\*{0,2})\s*[:：]?\s*/i;
 
 // ── Resolver ────────────────────────────────────────────────────────────
 

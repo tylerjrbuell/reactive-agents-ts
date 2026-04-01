@@ -10,7 +10,7 @@
  * All functions are pure (no Effect, no LLM calls) — string template assembly only.
  */
 
-import type { PlanStep } from "../../types/plan.js";
+import type { PlanStep } from "../types/plan.js";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 

@@ -25,7 +25,7 @@ type PromptServiceInstance = {
 };
 
 /** Narrow EntropySensorService surface used by kernel runner */
-type EntropySensorInstance = typeof EntropySensorService.Type;
+type EntropySensorInstance = EntropySensorService["Type"];
 
 /** Narrow ReactiveControllerService surface — resolved via GenericTag to avoid
  *  depending on @reactive-agents/reactive-intelligence from the reasoning package. */

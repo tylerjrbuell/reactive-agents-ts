@@ -10,6 +10,7 @@
  * Extracted from kernel-runner.ts to keep the main loop focused on iteration logic.
  */
 import { Effect } from "effect";
+import { LLMService } from "@reactive-agents/llm-provider";
 import { ContextSynthesizerService } from "../../../context/context-synthesizer.js";
 import { classifyTaskPhase } from "../../../context/task-phase.js";
 import type { SynthesisConfig, SynthesisInput, SynthesisEntropySignals } from "../../../context/synthesis-types.js";
@@ -44,7 +45,7 @@ export function coordinateICS(
   currentOptions: KernelRunOptions,
   currentContext: KernelContext,
   hooks: KernelHooks,
-): Effect.Effect<KernelState, never> {
+): Effect.Effect<KernelState, never, LLMService> {
   return Effect.gen(function* () {
     const synthesisCfg: SynthesisConfig = currentInput.synthesisConfig ?? { mode: "auto" };
     if (synthesisCfg.mode === "off" || state.status !== "thinking") {
