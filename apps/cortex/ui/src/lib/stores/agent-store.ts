@@ -119,19 +119,29 @@ export function createAgentStore(options?: CreateAgentStoreOptions) {
             existing
               ? {
                   ...seeded,
-                  // Preserve richer live-derived fields when present.
-                  entropy: existing.entropy,
-                  iteration: Math.max(existing.iteration, seeded.iteration),
-                  maxIterations: existing.maxIterations,
-                  // Never regress visible totals due to delayed/stale summary rows.
-                  tokensUsed: Math.max(existing.tokensUsed, seeded.tokensUsed),
-                  cost: Math.max(existing.cost, seeded.cost),
-                  connectedAt: existing.connectedAt,
-                  lastEventAt: Math.max(existing.lastEventAt, seeded.lastEventAt),
-                  // Prefer DB-sourced config (persists across refresh) over live defaults
-                  provider: seeded.provider ?? existing.provider,
-                  model:    seeded.model    ?? existing.model,
-                  strategy: seeded.strategy ?? existing.strategy,
+                  // ── Live-WS fields beat REST/DB during an active run ──────────
+                  // Never let a periodic REST refresh degrade data that live WS
+                  // events have already set more accurately.
+                  //
+                  // State: if existing is a live cognitive state, keep it.
+                  // REST may return "live"→"running" (less precise) or even lag behind.
+                  state: (
+                    existing.state === "running" ||
+                    existing.state === "exploring" ||
+                    existing.state === "stressed"
+                  ) ? existing.state : seeded.state,
+                  entropy:      existing.entropy,
+                  iteration:    Math.max(existing.iteration, seeded.iteration),
+                  maxIterations: existing.maxIterations || seeded.maxIterations,
+                  tokensUsed:   Math.max(existing.tokensUsed, seeded.tokensUsed),
+                  cost:         Math.max(existing.cost, seeded.cost),
+                  connectedAt:  existing.connectedAt,
+                  lastEventAt:  Math.max(existing.lastEventAt, seeded.lastEventAt),
+                  // Use || not ?? so that empty strings from DB also fall back to
+                  // the live WS value (which has the real value).
+                  provider: seeded.provider || existing.provider,
+                  model:    seeded.model    || existing.model,
+                  strategy: seeded.strategy || existing.strategy,
                 }
               : seeded,
           );

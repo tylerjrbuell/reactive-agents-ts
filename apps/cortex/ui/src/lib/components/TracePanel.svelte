@@ -11,6 +11,7 @@
   // Svelte 5: use array reassignment for reactivity (Set mutation doesn't trigger)
   let expandedRows = $state<number[]>([]);
   let expandedMessages = $state<number[]>([]); // conversation thread toggles
+  let finalResultCollapsed = $state(false);
 
   function toggleRow(idx: number) {
     expandedRows = expandedRows.includes(idx)
@@ -70,53 +71,62 @@
     {/if}
   </div>
 
-  <!-- ── FINAL RESULT BANNER ──────────────────────────────────────────────── -->
-  <!-- Shown prominently when run is complete — the most important thing to see -->
+  <!-- ── FINAL RESULT BANNER (collapsible) ──────────────────────────────── -->
   {#if isComplete && finalFrame}
     <div
-      class="flex-shrink-0 mx-3 mt-3 rounded-lg border p-4
-             {status === 'failed'
-               ? 'bg-error/8 border-error/30'
-               : 'bg-secondary/8 border-secondary/30'}"
+      class="flex-shrink-0 mx-3 mt-3 rounded-lg border
+             {status === 'failed' ? 'bg-error/8 border-error/30' : 'bg-secondary/8 border-secondary/30'}"
     >
-      <div class="flex items-center gap-2 mb-2">
+      <!-- Header row — always visible, click to collapse -->
+      <button
+        type="button"
+        class="w-full flex items-center gap-2 px-4 py-2.5 cursor-pointer bg-transparent border-0 text-left"
+        onclick={() => (finalResultCollapsed = !finalResultCollapsed)}
+      >
         <span
           class="material-symbols-outlined text-sm {status === 'failed' ? 'text-error' : 'text-secondary'}"
           style="font-variation-settings: 'FILL' 1;"
         >
           {status === "failed" ? "error" : "task_alt"}
         </span>
-        <span
-          class="font-mono text-[10px] uppercase tracking-widest font-bold {status === 'failed'
-            ? 'text-error'
-            : 'text-secondary'}"
-        >
+        <span class="font-mono text-[10px] uppercase tracking-widest font-bold {status === 'failed' ? 'text-error' : 'text-secondary'}">
           {status === "failed" ? "Run Failed" : "Final Result"}
         </span>
-        {#if finalFrame.model}
-          <span class="ml-auto text-[9px] font-mono text-outline/50">{finalFrame.model}</span>
+        {#if finalResultCollapsed && finalFrame.thought}
+          <!-- Preview when collapsed -->
+          <span class="flex-1 font-mono text-[10px] text-on-surface/50 truncate min-w-0 text-left">
+            {finalFrame.thought.slice(0, 60)}{finalFrame.thought.length > 60 ? "…" : ""}
+          </span>
+        {:else if finalFrame.model}
+          <span class="ml-auto text-[9px] font-mono text-outline/50 flex-shrink-0">{finalFrame.model}</span>
         {/if}
-      </div>
-      <div class="max-h-48 overflow-y-auto">
-        <p
-          class="font-mono text-[11px] leading-relaxed whitespace-pre-wrap break-words
-                 {status === 'failed' ? 'text-error/80' : 'text-on-surface/80'}"
-        >
-          {finalFrame.thought}
-        </p>
-      </div>
-      {#if finalFrame.tokensUsed > 0 || finalFrame.estimatedCost}
-        <div class="flex gap-3 mt-2 font-mono text-[9px] text-outline/50">
-          {#if finalFrame.tokensUsed > 0}
-            <span>{finalFrame.tokensUsed.toLocaleString()} tok</span>
+        <span class="flex-shrink-0 material-symbols-outlined text-sm text-outline/30 transition-transform {finalResultCollapsed ? '-rotate-90' : ''}">
+          expand_more
+        </span>
+      </button>
+
+      <!-- Expandable content -->
+      {#if !finalResultCollapsed}
+        <div class="px-4 pb-3">
+          <div class="max-h-48 overflow-y-auto">
+            <p class="font-mono text-[11px] leading-relaxed whitespace-pre-wrap break-words {status === 'failed' ? 'text-error/80' : 'text-on-surface/80'}">
+              {finalFrame.thought}
+            </p>
+          </div>
+          {#if finalFrame.tokensUsed > 0 || finalFrame.estimatedCost}
+            <div class="flex gap-3 mt-2 font-mono text-[9px] text-outline/50">
+              {#if finalFrame.tokensUsed > 0}
+                <span>{finalFrame.tokensUsed.toLocaleString()} tok</span>
+              {/if}
+              {#if finalFrame.estimatedCost}
+                <span>${finalFrame.estimatedCost.toFixed(4)}</span>
+              {/if}
+              {#if finalFrame.durationMs > 0}
+                <span>{(finalFrame.durationMs / 1000).toFixed(1)}s</span>
+              {/if}
+            </div>
           {/if}
-          {#if finalFrame.estimatedCost}
-            <span>${finalFrame.estimatedCost.toFixed(4)}</span>
-          {/if}
-          {#if finalFrame.durationMs > 0}
-            <span>{(finalFrame.durationMs / 1000).toFixed(1)}s</span>
-          {/if}
-        </div>
+        </div><!-- end expandable -->
       {/if}
     </div>
   {/if}

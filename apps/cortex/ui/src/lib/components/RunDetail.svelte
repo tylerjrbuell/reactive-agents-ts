@@ -32,12 +32,24 @@
   let bottomTab = $state<"decisions" | "memory" | "context" | "debrief" | "signal" | "events">("decisions");
   let deletingRun = $state(false);
 
-  // ── Resizable bottom panel ─────────────────────────────────────────────
+  // ── Resizable bottom panel (with minimize) ────────────────────────────
   const MIN_H = 100;
   const MAX_H = 520;
   const DEFAULT_H = 180;
   let panelHeight = $state(DEFAULT_H);
+  let panelMinimized = $state(false);
   let isDragging = $state(false);
+  let heightBeforeMinimize = DEFAULT_H;
+
+  function toggleMinimize() {
+    if (panelMinimized) {
+      panelMinimized = false;
+      panelHeight = Math.max(MIN_H, heightBeforeMinimize);
+    } else {
+      heightBeforeMinimize = panelHeight;
+      panelMinimized = true;
+    }
+  }
   let dragStartY = 0;
   let dragStartH = 0;
 
@@ -185,8 +197,12 @@
                  border-0 bg-transparent cursor-pointer transition-all duration-150
                  {bottomTab === tab.id
                    ? 'text-primary border-t-2 border-primary -mt-0.5 bg-primary/5'
-                   : 'text-outline/50 hover:text-outline hover:bg-white/5'}"
-          onclick={() => (bottomTab = tab.id as typeof bottomTab)}
+                   : 'text-outline hover:text-on-surface hover:bg-white/5'}"
+          onclick={() => {
+            bottomTab = tab.id as typeof bottomTab;
+            // Clicking a tab restores the panel if it was minimized
+            if (panelMinimized) panelMinimized = false;
+          }}
         >
           <span class="relative">
             <span class="material-symbols-outlined text-[13px]">{tab.icon}</span>
@@ -203,28 +219,29 @@
       {#if $runStore.status === "live"}
         <button
           type="button"
-          class="px-4 py-1 border border-primary/20 text-primary font-mono text-[10px] uppercase
+          class="px-4 py-1.5 border border-primary/35 text-primary font-mono text-[10px] uppercase
                  rounded bg-transparent cursor-pointer hover:bg-primary/10 transition-colors"
           onclick={() => void runStore.pause()}
         >Pause</button>
         <button
           type="button"
-          class="px-4 py-1 border border-error/20 text-error font-mono text-[10px] uppercase
+          class="px-4 py-1.5 border border-error/35 text-error font-mono text-[10px] uppercase
                  rounded bg-transparent cursor-pointer hover:bg-error/10 transition-colors"
           onclick={() => void runStore.stop()}
         >Stop</button>
       {/if}
       <button
         type="button"
-        class="px-3 py-1 border border-outline-variant/15 text-outline/60 font-mono text-[10px]
-               uppercase rounded bg-transparent cursor-pointer hover:text-on-surface transition-colors"
+        class="px-3 py-1.5 border border-outline-variant/30 text-outline font-mono text-[10px]
+               uppercase rounded bg-transparent cursor-pointer hover:text-on-surface hover:border-outline-variant/60
+               transition-colors"
         onclick={() => goto("/")}
       >Back</button>
       <button
         type="button"
         disabled={deletingRun}
-        class="px-3 py-1 border border-error/15 text-error/60 font-mono text-[10px] uppercase
-               rounded bg-transparent cursor-pointer hover:bg-error/8 hover:text-error transition-colors
+        class="px-3 py-1.5 border border-error/30 text-error font-mono text-[10px] uppercase
+               rounded bg-transparent cursor-pointer hover:bg-error/10 transition-colors
                disabled:opacity-40 disabled:cursor-not-allowed"
         onclick={() => void handleDeleteRun()}
       >{deletingRun ? "…" : "Delete"}</button>
@@ -233,22 +250,36 @@
 
   <!-- ── Resizable bottom panel (VS Code terminal style) ───────────────── -->
   <div
-    class="flex-shrink-0 flex flex-col border-t border-white/5 bg-surface-container-lowest/60"
-    style="height: {panelHeight}px;"
+    class="flex-shrink-0 flex flex-col border-t border-white/5 bg-surface-container-lowest/60 transition-none"
+    style="height: {panelMinimized ? '0px' : panelHeight + 'px'}; overflow: {panelMinimized ? 'hidden' : 'visible'};"
   >
-    <!-- Drag handle — grab top edge to resize -->
+    <!-- Drag handle row — resize + minimize control -->
     <!-- svelte-ignore a11y-no-static-element-interactions -->
-    <div
-      class="flex-shrink-0 h-1.5 cursor-ns-resize group relative flex items-center justify-center
-             hover:bg-primary/20 transition-colors {isDragging ? 'bg-primary/30' : ''}"
-      onmousedown={startResize}
-      ontouchstart={startResize}
-      role="separator"
-      aria-orientation="horizontal"
-      aria-label="Resize panel"
-    >
-      <!-- Visual drag indicator -->
-      <div class="w-8 h-0.5 rounded-full bg-outline/20 group-hover:bg-primary/50 transition-colors {isDragging ? 'bg-primary/60' : ''}"></div>
+    <div class="flex-shrink-0 h-6 flex items-center group relative border-t border-white/5">
+      <!-- Draggable zone (left 80%) -->
+      <div
+        class="flex-1 h-full cursor-ns-resize flex items-center justify-center
+               hover:bg-primary/10 transition-colors {isDragging ? 'bg-primary/15' : ''}"
+        onmousedown={startResize}
+        ontouchstart={startResize}
+        role="separator"
+        aria-orientation="horizontal"
+        aria-label="Resize panel"
+      >
+        <div class="w-10 h-0.5 rounded-full bg-outline/15 group-hover:bg-primary/40 transition-colors"></div>
+      </div>
+      <!-- Minimize toggle button -->
+      <button
+        type="button"
+        onclick={toggleMinimize}
+        class="flex-shrink-0 h-full px-3 flex items-center text-outline/30 hover:text-primary/60
+               transition-colors bg-transparent border-0 cursor-pointer"
+        title={panelMinimized ? "Expand panel" : "Minimize panel"}
+      >
+        <span class="material-symbols-outlined text-[13px] transition-transform {panelMinimized ? 'rotate-180' : ''}">
+          keyboard_arrow_down
+        </span>
+      </button>
     </div>
 
     <!-- Panel content (takes remaining height) -->
