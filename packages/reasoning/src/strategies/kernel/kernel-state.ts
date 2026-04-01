@@ -9,7 +9,7 @@
 import { Effect } from "effect";
 import type { ReasoningStep } from "../../types/index.js";
 import type { ContextProfile } from "../../context/context-profile.js";
-import type { ResultCompressionConfig, ToolCallSpec } from "@reactive-agents/tools";
+import type { ResultCompressionConfig, ToolCallSpec, FinalAnswerCapture } from "@reactive-agents/tools";
 import type { LLMService } from "@reactive-agents/llm-provider";
 import type { ToolSchema } from "./utils/tool-utils.js";
 import type { KernelMetaToolsConfig } from "../../types/kernel-meta-tools.js";
@@ -399,3 +399,112 @@ export const noopHooks: KernelHooks = {
   onStrategySwitchEvaluated: () => Effect.void,
   onContextSynthesized: () => Effect.void,
 };
+
+// ─── ReAct Kernel Input / Output ─────────────────────────────────────────────
+
+export interface ReActKernelInput {
+  /** The task description to accomplish */
+  task: string;
+  /** Optional custom system prompt for steering behavior */
+  systemPrompt?: string;
+  /** Full tool schemas — passed from execution engine via availableToolSchemas */
+  availableToolSchemas?: readonly ToolSchema[];
+  /**
+   * Optional prior context to inject above the task.
+   * Used by Reflexion (critique text), Plan-Execute (plan context), etc.
+   */
+  priorContext?: string;
+  /** Maximum iterations before giving up. Default: 10 */
+  maxIterations?: number;
+  /** Model context profile controlling compaction thresholds, result sizes, etc. */
+  contextProfile?: Partial<ContextProfile>;
+  /** Tool result compression configuration */
+  resultCompression?: ResultCompressionConfig;
+  /** LLM sampling temperature */
+  temperature?: number;
+  /** Task ID for EventBus correlation */
+  taskId?: string;
+  /** Name of the calling strategy (for event tagging) */
+  parentStrategy?: string;
+  /** Descriptive label for this kernel invocation (e.g. "reflexion:generate", "plan-execute:step-3") */
+  kernelPass?: string;
+  /** Agent ID for tool execution attribution. Falls back to "reasoning-agent". */
+  agentId?: string;
+  /** Session ID for tool execution attribution. Falls back to "reasoning-session". */
+  sessionId?: string;
+  /**
+   * Full unfiltered tool schemas from the registry. Used by the dynamic task
+   * completion guard to detect MCP namespaces referenced in the task, even
+   * when adaptive filtering has hidden some tools from the LLM prompt.
+   */
+  allToolSchemas?: readonly ToolSchema[];
+  /**
+   * Tools that MUST NOT be executed — hard code-level guard.
+   * When the model requests a blocked tool, a synthetic observation is returned
+   * instead of executing. Used by reflexion to prevent re-executing side-effect
+   * tools (send, write, create, etc.) that already succeeded in a prior pass.
+   */
+  blockedTools?: readonly string[];
+  /**
+   * Tools that MUST be called before the agent can declare success.
+   * If the agent attempts to end without using all required tools,
+   * it will be redirected up to `maxRequiredToolRetries` times before failing.
+   */
+  requiredTools?: readonly string[];
+  /** Max redirects when required tools are missing (default: 2) */
+  maxRequiredToolRetries?: number;
+  /** Model identifier for routing/entropy scoring */
+  modelId?: string;
+  /** Exit kernel loop when all scoped tools have been called successfully */
+  exitOnAllToolsCalled?: boolean;
+  /** Meta-tool configuration and pre-computed static data for brief/pulse/recall/find. */
+  metaTools?: KernelMetaToolsConfig;
+  /** Pre-built ToolCallResolver instance — injected by the kernel runner when FC is active */
+  toolCallResolver?: import("@reactive-agents/tools").ToolCallResolver;
+  /** Intelligent Context Synthesis config — threaded from .withReasoning() */
+  synthesisConfig?: import("../../context/synthesis-types.js").SynthesisConfig;
+}
+
+export interface ReActKernelResult {
+  /** Final answer text */
+  output: string;
+  /** All reasoning steps (thought / action / observation) */
+  steps: ReasoningStep[];
+  /** Total tokens consumed across all LLM calls */
+  totalTokens: number;
+  /** Total estimated cost */
+  totalCost: number;
+  /** Distinct tool names that were called at least once */
+  toolsUsed: string[];
+  /** Number of iterations completed */
+  iterations: number;
+  /** How the loop terminated */
+  terminatedBy: "final_answer" | "final_answer_tool" | "max_iterations" | "end_turn" | "llm_error";
+  /** Captured final-answer tool payload — present when terminatedBy === "final_answer_tool" */
+  finalAnswerCapture?: FinalAnswerCapture;
+}
+
+// ─── Phase Pipeline Types ─────────────────────────────────────────────────────
+
+/**
+ * A single step in the kernel turn pipeline.
+ *
+ * Pure state transition: takes the current immutable KernelState and a read-only
+ * PhaseContext, returns an Effect that produces the next KernelState.
+ *
+ * Composable: custom kernels substitute individual phases via makeKernel({ phases }).
+ */
+export type Phase = (
+  state: KernelState,
+  ctx: PhaseContext,
+) => Effect.Effect<KernelState, never, LLMService>;
+
+/**
+ * Immutable per-turn context passed to every phase.
+ * Phases read from ctx, write only to returned KernelState.
+ */
+export interface PhaseContext {
+  readonly input: ReActKernelInput;
+  readonly profile: ContextProfile;
+  readonly hooks: KernelHooks;
+}
