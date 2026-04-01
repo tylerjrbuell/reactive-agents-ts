@@ -1,0 +1,149 @@
+<script lang="ts">
+  import type { RunVitals, RunStatus } from "$lib/stores/run-store.js";
+
+  interface Props {
+    vitals: RunVitals;
+    status: RunStatus;
+    runId: string;
+  }
+  let { vitals, status, runId }: Props = $props();
+
+  const statusLabel = $derived(
+    status === "live"
+      ? "LIVE"
+      : status === "paused"
+        ? "PAUSED"
+        : status === "completed"
+          ? "DONE"
+          : status === "failed"
+            ? "FAILED"
+            : status === "loading"
+              ? "…"
+              : "…",
+  );
+
+  const statusClass = $derived(
+    status === "live"
+      ? "text-green-400 border-green-500/20 bg-green-500/10"
+      : status === "failed"
+        ? "text-error border-error/20 bg-error/10"
+        : "text-secondary border-secondary/20 bg-secondary/10",
+  );
+
+  const trajectoryClass = $derived(
+    vitals.trajectory === "CONVERGING"
+      ? "text-primary border-primary/30 bg-primary/10"
+      : vitals.trajectory === "STRESSED"
+        ? "text-error border-error/30 bg-error/10"
+        : "text-tertiary border-tertiary/30 bg-tertiary/10",
+  );
+
+  const costStr = $derived(vitals.cost < 0.001 ? `<$0.001` : `$${vitals.cost.toFixed(4)}`);
+
+  const durationStr = $derived(
+    vitals.durationMs < 1000
+      ? `${vitals.durationMs}ms`
+      : `${(vitals.durationMs / 1000).toFixed(1)}s`,
+  );
+
+  const ekgStroke = $derived(
+    vitals.trajectory === "STRESSED"
+      ? "#ffb4ab"
+      : vitals.trajectory === "EXPLORING"
+        ? "#f7be1d"
+        : "#d0bcff",
+  );
+
+  const runShort = $derived(runId.length > 12 ? `${runId.slice(0, 8)}…` : runId);
+</script>
+
+<div class="w-full bg-[#111317] border-b border-white/5 relative overflow-hidden flex-shrink-0">
+  <div
+    class="max-w-full px-6 py-3 flex items-center gap-0 font-mono text-[11px] uppercase tracking-widest text-on-surface-variant overflow-x-auto"
+  >
+    <div class="flex items-center gap-2 pr-5">
+      <span class="text-[9px] text-outline normal-case tracking-normal truncate max-w-[100px]" title={runId}
+        >{runShort}</span
+      >
+      <div class="flex items-center gap-2 px-2 py-0.5 rounded-full border {statusClass}">
+        {#if status === "live"}
+          <span class="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></span>
+        {/if}
+        <span class="text-[10px]">{statusLabel}</span>
+      </div>
+    </div>
+
+    <div class="h-4 w-px bg-primary/20 mx-4 flex-shrink-0"></div>
+
+    <div class="flex items-center gap-2 pr-5">
+      <span class="text-primary">η</span>
+      <span class="text-on-surface tabular-nums">{vitals.entropy.toFixed(2)}</span>
+    </div>
+    <div class="px-2 py-0.5 rounded text-[10px] border mr-5 {trajectoryClass}">
+      {vitals.trajectory}
+    </div>
+
+    <div class="h-4 w-px bg-primary/20 mx-4 flex-shrink-0"></div>
+
+    <div class="flex items-center gap-2 mr-5">
+      <span class="text-primary tabular-nums">{vitals.tokensUsed.toLocaleString()}</span>
+      <span class="text-on-surface-variant">TOKENS</span>
+    </div>
+
+    <div class="h-4 w-px bg-primary/20 mx-4 flex-shrink-0"></div>
+
+    <div class="flex items-center gap-2 mr-5">
+      <span class="text-primary">{costStr}</span>
+      <span class="text-on-surface-variant">COST</span>
+    </div>
+
+    <div class="h-4 w-px bg-primary/20 mx-4 flex-shrink-0"></div>
+
+    <div class="flex items-center gap-2 mr-5">
+      <span class="text-primary tabular-nums">{durationStr}</span>
+      <span class="text-on-surface-variant">DURATION</span>
+    </div>
+
+    {#if vitals.iteration > 0}
+      <div class="h-4 w-px bg-primary/20 mx-4 flex-shrink-0"></div>
+      <div class="flex items-center gap-2">
+        <span class="text-tertiary">ITER</span>
+        <span
+          class="tabular-nums {vitals.iteration > vitals.maxIterations && vitals.maxIterations > 0
+            ? 'text-tertiary'
+            : 'text-on-surface'}"
+          title={vitals.maxIterations > 0 ? `Max: ${vitals.maxIterations}` : undefined}
+        >
+          {vitals.iteration}{vitals.maxIterations > 0 && vitals.iteration <= vitals.maxIterations
+            ? `/${vitals.maxIterations}`
+            : ""}
+        </span>
+      </div>
+    {/if}
+
+    {#if vitals.fallbackProvider}
+      <div
+        class="ml-4 flex items-center gap-1 px-2 py-0.5 bg-tertiary/10 border border-tertiary/30 rounded text-[10px] text-tertiary"
+      >
+        <span class="material-symbols-outlined text-xs">electric_bolt</span>
+        → {vitals.fallbackProvider}
+      </div>
+    {/if}
+  </div>
+
+  <div class="absolute bottom-0 left-0 w-full h-[2px]">
+    <svg
+      class="w-full h-8 absolute bottom-0 overflow-visible"
+      preserveAspectRatio="none"
+      viewBox="0 0 1000 32"
+    >
+      <path
+        class="ekg-line {status === 'live' ? '' : 'ekg-paused'}"
+        d="M0 16 L100 16 L110 5 L120 27 L130 16 L300 16 L310 16 L320 2 L330 30 L340 16 L600 16 L610 8 L620 24 L630 16 L850 16 L860 0 L870 32 L880 16 L1000 16"
+        fill="none"
+        stroke={ekgStroke}
+        stroke-width="1"
+      />
+    </svg>
+  </div>
+</div>
