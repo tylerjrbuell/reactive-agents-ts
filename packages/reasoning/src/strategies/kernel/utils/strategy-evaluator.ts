@@ -11,7 +11,7 @@
  */
 import { Effect } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
-import type { KernelState } from "./kernel-state.js";
+import type { KernelState } from "../kernel-state.js";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

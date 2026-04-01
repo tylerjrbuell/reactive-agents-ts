@@ -17,10 +17,10 @@ import { executeReactive } from "./reactive.js";
 import { executeReflexion } from "./reflexion.js";
 import { executePlanExecute } from "./plan-execute.js";
 import { executeTreeOfThought } from "./tree-of-thought.js";
-import { resolveStrategyServices, compilePromptOrFallback, publishReasoningStep } from "./kernel/service-utils.js";
-import { makeStep, buildStrategyResult } from "./kernel/step-utils.js";
-import { stripThinking } from "./kernel/thinking-utils.js";
-import type { ToolSchema } from "./kernel/tool-utils.js";
+import { resolveStrategyServices, compilePromptOrFallback, publishReasoningStep } from "./kernel/utils/service-utils.js";
+import { makeStep, buildStrategyResult } from "./kernel/utils/step-utils.js";
+import { stripThinking } from "./kernel/utils/stream-parser.js";
+import type { ToolSchema } from "./kernel/utils/tool-utils.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { ContextProfile } from "../context/context-profile.js";
 

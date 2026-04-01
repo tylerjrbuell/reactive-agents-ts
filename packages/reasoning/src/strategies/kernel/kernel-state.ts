@@ -11,7 +11,7 @@ import type { ReasoningStep } from "../../types/index.js";
 import type { ContextProfile } from "../../context/context-profile.js";
 import type { ResultCompressionConfig, ToolCallSpec } from "@reactive-agents/tools";
 import type { LLMService } from "@reactive-agents/llm-provider";
-import type { ToolSchema } from "./tool-utils.js";
+import type { ToolSchema } from "./utils/tool-utils.js";
 import type { KernelMetaToolsConfig } from "../../types/kernel-meta-tools.js";
 
 // ── Kernel Status ────────────────────────────────────────────────────────────

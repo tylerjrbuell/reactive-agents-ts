@@ -13,7 +13,7 @@ import { EventBus, EntropySensorService } from "@reactive-agents/core";
 
 // ── Narrow types — shared types from kernel-state, prompt type local ─────────
 
-import type { MaybeService, ToolServiceInstance, EventBusInstance } from "./kernel-state.js";
+import type { MaybeService, ToolServiceInstance, EventBusInstance } from "../kernel-state.js";
 
 /** Minimal PromptService surface used by strategies */
 type PromptServiceInstance = {

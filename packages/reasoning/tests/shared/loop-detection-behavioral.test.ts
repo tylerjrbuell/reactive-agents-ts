@@ -22,7 +22,7 @@ import {
   type KernelState,
   type ThoughtKernel,
 } from "../../src/strategies/kernel/kernel-state.js";
-import { makeStep } from "../../src/strategies/kernel/step-utils.js";
+import { makeStep } from "../../src/strategies/kernel/utils/step-utils.js";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

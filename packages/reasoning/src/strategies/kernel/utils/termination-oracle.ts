@@ -7,7 +7,7 @@
  * short-circuit semantics for high-confidence signals.
  */
 
-import type { ReasoningStep } from "../../types/index.js";
+import type { ReasoningStep } from "../../../types/index.js";
 import type { ToolSchema } from "./tool-utils.js";
 import { extractFinalAnswer } from "./tool-utils.js";
 

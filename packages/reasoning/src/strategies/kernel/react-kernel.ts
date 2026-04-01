@@ -47,21 +47,21 @@ import {
 // Re-export for test and consumer backward compatibility
 export { detectCompletionGaps } from "@reactive-agents/tools";
 
-import type { ToolSchema } from "./tool-utils.js";
+import type { ToolSchema } from "./utils/tool-utils.js";
 import {
   hasFinalAnswer,
   extractFinalAnswer,
   gateNativeToolCallsForRequiredTools,
   computeNoveltyRatio,
-} from "./tool-utils.js";
-import { evaluateTermination, defaultEvaluators, type TerminationContext } from "./termination-oracle.js";
+} from "./utils/tool-utils.js";
+import { evaluateTermination, defaultEvaluators, type TerminationContext } from "./utils/termination-oracle.js";
 import { assembleOutput } from "./output-assembly.js";
 import { buildStaticContext, buildDynamicContext, buildRules } from "../../context/context-engine.js";
 import { applyMessageWindow } from "../../context/message-window.js";
 import type { MemoryItem } from "../../context/context-engine.js";
-import { extractThinking, rescueFromThinking } from "./thinking-utils.js";
-import { makeStep } from "./step-utils.js";
-import { executeNativeToolCall, makeObservationResult } from "./tool-execution.js";
+import { extractThinking, rescueFromThinking } from "./utils/stream-parser.js";
+import { makeStep } from "./utils/step-utils.js";
+import { executeNativeToolCall, makeObservationResult } from "./utils/tool-execution.js";
 import { runKernel } from "./kernel-runner.js";
 import {
   transitionState,

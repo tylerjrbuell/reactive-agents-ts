@@ -1,7 +1,7 @@
 // File: src/strategies/kernel/context-utils.ts
-import type { ReasoningStep } from "../../types/index.js";
-import type { ContextProfile } from "../../context/context-profile.js";
-import { stripThinking } from "./thinking-utils.js";
+import type { ReasoningStep } from "../../../types/index.js";
+import type { ContextProfile } from "../../../context/context-profile.js";
+import { stripThinking } from "./stream-parser.js";
 
 /**
  * Format a single reasoning step in ReAct style for inclusion in context.

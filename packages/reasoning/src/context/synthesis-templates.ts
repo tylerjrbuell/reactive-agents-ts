@@ -14,7 +14,7 @@
 import { Effect } from "effect";
 import type { LLMMessage } from "@reactive-agents/llm-provider";
 import type { KernelMessage } from "../strategies/kernel/kernel-state.js";
-import { formatToolSchemaCompact } from "../strategies/kernel/tool-utils.js";
+import { formatToolSchemaCompact } from "../strategies/kernel/utils/tool-utils.js";
 import type { SynthesisInput } from "./synthesis-types.js";
 
 function isToolResultMessage(m: KernelMessage): m is Extract<KernelMessage, { role: "tool_result" }> {

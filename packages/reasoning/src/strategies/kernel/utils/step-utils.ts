@@ -6,9 +6,9 @@
  * and tree-of-thought strategies.
  */
 import { ulid } from "ulid";
-import type { ReasoningResult, ReasoningStep } from "../../types/index.js";
-import type { StepId } from "../../types/step.js";
-import type { ReasoningStrategy } from "../../types/index.js";
+import type { ReasoningResult, ReasoningStep } from "../../../types/index.js";
+import type { StepId } from "../../../types/step.js";
+import type { ReasoningStrategy } from "../../../types/index.js";
 import { sanitizeAgentOutput } from "./quality-utils.js";
 
 /**

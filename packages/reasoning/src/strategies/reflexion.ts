@@ -22,11 +22,11 @@ import {
   resolveStrategyServices,
   compilePromptOrFallback,
   publishReasoningStep,
-} from "./kernel/service-utils.js";
-import { makeStep, buildStrategyResult } from "./kernel/step-utils.js";
-import { isSatisfied, isCritiqueStagnant } from "./kernel/quality-utils.js";
-import { extractThinking } from "./kernel/thinking-utils.js";
-import type { ToolSchema } from "./kernel/tool-utils.js";
+} from "./kernel/utils/service-utils.js";
+import { makeStep, buildStrategyResult } from "./kernel/utils/step-utils.js";
+import { isSatisfied, isCritiqueStagnant } from "./kernel/utils/quality-utils.js";
+import { extractThinking } from "./kernel/utils/stream-parser.js";
+import type { ToolSchema } from "./kernel/utils/tool-utils.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 
 interface ReflexionInput {

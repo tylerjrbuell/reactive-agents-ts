@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { buildCompactedContext, formatStepForContext } from "../../../src/strategies/kernel/context-utils.js";
+import { buildCompactedContext, formatStepForContext } from "../../../src/strategies/kernel/utils/context-utils.js";
 
 const makeStep = (type: string, content: string) => ({
   id: "01JTEST",

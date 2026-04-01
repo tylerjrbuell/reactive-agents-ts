@@ -4,12 +4,12 @@
 
 import type { ReasoningStep } from "../types/step.js";
 import type { ContextProfile } from "./context-profile.js";
-import type { ToolSchema } from "../strategies/kernel/tool-utils.js";
+import type { ToolSchema } from "../strategies/kernel/utils/tool-utils.js";
 import {
   formatToolSchemas,
   formatToolSchemaCompact,
-} from "../strategies/kernel/tool-utils.js";
-import { formatStepForContext, summarizeStepsTriplets } from "../strategies/kernel/context-utils.js";
+} from "../strategies/kernel/utils/tool-utils.js";
+import { formatStepForContext, summarizeStepsTriplets } from "../strategies/kernel/utils/context-utils.js";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 

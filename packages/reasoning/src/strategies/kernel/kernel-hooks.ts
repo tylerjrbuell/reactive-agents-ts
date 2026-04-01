@@ -14,7 +14,7 @@ import type { AgentEvent } from "@reactive-agents/core";
 import type { LLMMessage } from "@reactive-agents/llm-provider";
 import type { KernelHooks, KernelState, EventBusInstance, MaybeService } from "./kernel-state.js";
 import type { SynthesizedContext } from "../../context/synthesis-types.js";
-import { publishReasoningStep } from "./service-utils.js";
+import { publishReasoningStep } from "./utils/service-utils.js";
 
 function llmMessageToSynthesisPayload(m: LLMMessage): { readonly role: string; readonly content: string | null } {
   const role = m.role;

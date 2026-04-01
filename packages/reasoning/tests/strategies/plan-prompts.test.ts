@@ -4,8 +4,8 @@ import {
   buildPatchPrompt,
   buildStepExecutionPrompt,
   buildReflectionPrompt,
-} from "../../../src/strategies/kernel/plan-prompts.js";
-import type { PlanStep } from "../../../src/types/plan.js";
+} from "../../src/strategies/plan-prompts.js";
+import type { PlanStep } from "../../src/types/plan.js";
 
 describe("Plan prompts", () => {
   it("buildPlanGenerationPrompt includes goal and tools", () => {

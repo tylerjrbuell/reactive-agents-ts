@@ -18,9 +18,9 @@ import type { ProviderCapabilities } from "@reactive-agents/llm-provider";
 import { createToolCallResolver } from "@reactive-agents/tools";
 import { CONTEXT_PROFILES } from "../../context/context-profile.js";
 import type { ContextProfile } from "../../context/context-profile.js";
-import { resolveStrategyServices } from "./service-utils.js";
+import { resolveStrategyServices } from "./utils/service-utils.js";
 import { buildKernelHooks } from "./kernel-hooks.js";
-import { makeStep } from "./step-utils.js";
+import { makeStep } from "./utils/step-utils.js";
 import {
   initialKernelState,
   transitionState,
@@ -30,7 +30,7 @@ import {
   type KernelRunOptions,
   type ThoughtKernel,
 } from "./kernel-state.js";
-import { evaluateStrategySwitch, buildHandoff } from "./strategy-evaluator.js";
+import { evaluateStrategySwitch, buildHandoff } from "./utils/strategy-evaluator.js";
 import { ContextSynthesizerService } from "../../context/context-synthesizer.js";
 import { classifyTaskPhase } from "../../context/task-phase.js";
 import type { SynthesisConfig, SynthesisInput, SynthesisEntropySignals } from "../../context/synthesis-types.js";

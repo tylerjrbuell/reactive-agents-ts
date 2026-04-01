@@ -42,7 +42,7 @@ import {
   type ThoughtKernel,
   type EventBusInstance,
 } from "../../src/strategies/kernel/kernel-state.js";
-import { makeStep } from "../../src/strategies/kernel/step-utils.js";
+import { makeStep } from "../../src/strategies/kernel/utils/step-utils.js";
 
 // ── Mock EventBus helper ──────────────────────────────────────────────────────
 

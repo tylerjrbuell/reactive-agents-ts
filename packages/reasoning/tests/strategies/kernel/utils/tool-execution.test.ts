@@ -5,8 +5,8 @@ import {
   truncateForDisplay,
   executeToolCall,
   type ToolExecutionResult,
-} from "../../../src/strategies/kernel/tool-execution.js";
-import type { MaybeService, ToolServiceInstance } from "../../../src/strategies/kernel/kernel-state.js";
+} from "../../../../src/strategies/kernel/utils/tool-execution.js";
+import type { MaybeService, ToolServiceInstance } from "../../../../src/strategies/kernel/kernel-state.js";
 
 // ── makeObservationResult ────────────────────────────────────────────────────
 

@@ -16,12 +16,12 @@
  *   - resolveToolArgs(toolService, toolRequest) — resolve raw ACTION args
  */
 import { Effect } from "effect";
-import type { ObservationResult } from "../../types/observation.js";
-import { categorizeToolName, deriveResultKind } from "../../types/observation.js";
-import type { ContextProfile } from "../../context/context-profile.js";
+import type { ObservationResult } from "../../../types/observation.js";
+import { categorizeToolName, deriveResultKind } from "../../../types/observation.js";
+import type { ContextProfile } from "../../../context/context-profile.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import { evaluateTransform, compressToolResult, nextToolResultKey } from "./tool-utils.js";
-import type { MaybeService, ToolServiceInstance } from "./kernel-state.js";
+import type { MaybeService, ToolServiceInstance } from "../kernel-state.js";
 import type { ToolCallSpec } from "@reactive-agents/tools";
 
 // ── Result type ──────────────────────────────────────────────────────────────
