@@ -159,6 +159,6 @@
   <BottomInputBar
     bind:this={inputBarRef}
     loading={$stageStore.submitting}
-    onSubmit={(prompt) => void stageStore.submitPrompt(prompt)}
+    onSubmit={(prompt, config) => void stageStore.submitPrompt(prompt, config)}
   />
 </div>

@@ -42,22 +42,21 @@ export function createStageStore(options?: CreateStageStoreOptions) {
     });
   }
 
-  async function submitPrompt(prompt: string): Promise<void> {
+  async function submitPrompt(
+    prompt: string,
+    overrides?: { provider?: string; model?: string; tools?: string[] },
+  ): Promise<void> {
     state.update((s) => ({ ...s, submitting: true, lastSubmitError: null }));
     const sinceMs = Date.now();
-    // Read settings at call time (not captured at store creation) so changes
-    // made on the Settings page take effect immediately without a page reload.
     const s = settings.get();
+    const provider = overrides?.provider || s.defaultProvider;
+    const model    = overrides?.model    || s.defaultModel  || undefined;
+    const tools    = overrides?.tools    ?? ["web-search"];
     try {
       const res = await fetchFn(`${CORTEX_SERVER_URL}/api/runs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt,
-          provider: s.defaultProvider,
-          model: s.defaultModel || undefined,
-          tools: ["web-search"],
-        }),
+        body: JSON.stringify({ prompt, provider, model, tools }),
       });
       if (res.status === 501) {
         const body = (await res.json().catch(() => ({}))) as { error?: string };
