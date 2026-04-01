@@ -14,11 +14,11 @@
   let width = $state(600);
   let height = $state(400);
 
-  const TRACK_PROPORTIONS = [0.3, 0.2, 0.24, 0.26] as const;
+  // 3 D3 SVG tracks (tools moved to scrollable HTML row below)
+  const TRACK_PROPORTIONS = [0.42, 0.28, 0.30] as const;
   const TRACK_LABELS = [
     "01 // Entropy",
-    "02 // Tokens",
-    "03 // Tools",
+    "02 // Tokens / Request",
     "04 // LLM Latency (ms)",
   ] as const;
   const TRACK_GAP = 8;
@@ -169,70 +169,8 @@
         } // end tokens.length > 0
       }
 
+      // trackIdx 2 = latency (tools moved to scrollable HTML row)
       if (trackIdx === 2) {
-        if (data.tools.length === 0) {
-          trackG.append("text")
-            .attr("x", TRACK_W / 2).attr("y", trackH / 2 + 4)
-            .attr("text-anchor", "middle").attr("fill", "#494454")
-            .attr("font-size", "9px").attr("font-family", "ui-monospace, monospace")
-            .text("no tool calls yet");
-        } else {
-        const spanH = 14;
-        const labelH = 13; // label above span
-        const totalH = spanH + labelH + 2;
-        const topPad = Math.max(0, (trackH - totalH) / 2);
-        const rectY = topPad + labelH + 2;
-
-        trackG
-          .selectAll("g.tool")
-          .data(data.tools)
-          .join("g")
-          .attr("class", "tool")
-          .each(function toolEach(d) {
-            const gg = d3.select(this);
-            const x1 = xScale(d.tStart);
-            const x2 = d.tEnd !== undefined ? xScale(d.tEnd) : Math.min(TRACK_W, x1 + 40);
-            const w = Math.max(12, x2 - x1);
-            const color = d.status === "active" ? "#f7be1d" : d.status === "error" ? "#ffb4ab" : "#4cd7f6";
-
-            // Span rect
-            gg.append("rect")
-              .attr("x", x1)
-              .attr("y", rectY)
-              .attr("width", w)
-              .attr("height", spanH)
-              .attr("rx", 3)
-              .attr("fill", color)
-              .attr("fill-opacity", d.status === "active" ? 0.9 : 1);
-
-            // Tool name label — rendered ABOVE the rect, always readable
-            const label = d.name.length > 16 ? d.name.slice(0, 14) + "…" : d.name;
-            gg.append("text")
-              .attr("x", x1 + w / 2)
-              .attr("y", rectY - 3)
-              .attr("text-anchor", "middle")
-              .attr("fill", "#e2e2e8")
-              .attr("font-size", "10px")
-              .attr("font-family", "ui-monospace, monospace")
-              .attr("font-weight", "500")
-              .text(label);
-
-            // Latency badge inside wide spans
-            if (d.latencyMs && w > 50) {
-              gg.append("text")
-                .attr("x", x1 + w / 2)
-                .attr("y", rectY + spanH - 3)
-                .attr("text-anchor", "middle")
-                .attr("fill", d.status === "active" ? "#3f2e00" : "#001f26")
-                .attr("font-size", "9px")
-                .attr("font-family", "ui-monospace, monospace")
-                .text(`${d.latencyMs}ms`);
-            }
-          });
-        } // end tools.length > 0
-      }
-
-      if (trackIdx === 3) {
         if (data.latency.length === 0) {
           trackG.append("text")
             .attr("x", TRACK_W / 2).attr("y", trackH / 2 + 4)
@@ -322,7 +260,46 @@
     </div>
   </div>
 
-  <div bind:this={container} class="flex-1 relative px-4 pb-4 min-h-0">
+  <!-- D3 SVG tracks (entropy + tokens + latency — no tools) -->
+  <div bind:this={container} class="flex-1 relative px-4 min-h-0" style="padding-bottom:0">
     <svg bind:this={svgEl} {width} {height} class="w-full h-full overflow-visible block"></svg>
+  </div>
+
+  <!-- Tools track — separate scrollable HTML row (prevents SVG overflow/cramping) -->
+  <div class="flex-shrink-0 px-4 pb-3">
+    <div class="flex items-center gap-2 mb-1">
+      <span class="text-[9px] font-mono text-primary/70 uppercase tracking-widest w-[120px]">03 // Tools</span>
+      {#if data.tools.length === 0}
+        <span class="text-[9px] font-mono text-outline/30 italic">no tool calls yet</span>
+      {/if}
+    </div>
+    <div
+      class="h-9 bg-[#0c0e12] rounded border border-white/5 overflow-x-auto overflow-y-hidden
+             scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent"
+      style="min-height:36px"
+    >
+      <div class="flex items-center gap-1.5 h-full px-2" style="min-width: max-content;">
+        {#each data.tools as tool, i (tool.tStart + i)}
+          {@const isDone = tool.status !== "active"}
+          {@const color = tool.status === "active" ? "bg-tertiary/80 border-tertiary/50 text-tertiary" : tool.status === "error" ? "bg-error/20 border-error/40 text-error" : "bg-secondary/20 border-secondary/40 text-secondary"}
+          <div
+            class="flex-shrink-0 flex items-center gap-1 px-2.5 py-1 rounded border text-[10px] font-mono font-medium {color} whitespace-nowrap"
+            title="{tool.name}{tool.latencyMs ? ` — ${tool.latencyMs}ms` : ''}"
+          >
+            {#if tool.status === "active"}
+              <span class="w-1.5 h-1.5 rounded-full bg-tertiary animate-pulse flex-shrink-0"></span>
+            {:else if tool.status === "error"}
+              <span class="material-symbols-outlined text-[11px] flex-shrink-0">error</span>
+            {:else}
+              <span class="material-symbols-outlined text-[11px] flex-shrink-0">check</span>
+            {/if}
+            {tool.name}
+            {#if tool.latencyMs && isDone}
+              <span class="opacity-60 text-[9px] ml-0.5">{tool.latencyMs}ms</span>
+            {/if}
+          </div>
+        {/each}
+      </div>
+    </div>
   </div>
 </div>

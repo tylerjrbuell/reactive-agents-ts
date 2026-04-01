@@ -3,10 +3,11 @@
   import { page } from "$app/stores";
   import { goto } from "$app/navigation";
   import { onMount, onDestroy, setContext } from "svelte";
-  import { get, writable } from "svelte/store";
-  import Toast from "$lib/components/Toast.svelte";
+  import { get } from "svelte/store";
+  import ToastContainer from "$lib/components/ToastContainer.svelte";
   import CommandPalette from "$lib/components/CommandPalette.svelte";
   import { commandPalette } from "$lib/stores/command-palette.js";
+  import { toast } from "$lib/stores/toast-store.js";
   import { createWsClient } from "$lib/stores/ws-client.js";
   import { createAgentStore } from "$lib/stores/agent-store.js";
   import { createStageStore } from "$lib/stores/stage-store.js";
@@ -20,8 +21,6 @@
 
   setContext("agentStore", agentStore);
   setContext("stageStore", stageStore);
-
-  const toasts = writable<Array<{ id: string; agentId: string }>>([]);
 
   let wsUnsub: (() => void) | null = null;
   let refreshTimer: ReturnType<typeof setInterval> | null = null;
@@ -54,9 +53,29 @@
 
       const agents = get(agentStore);
       const node = agents.find((a) => a.runId === msg.runId);
-      if (node && msg.type === "AgentConnected") {
-        stageStore.handleAgentConnected(node, agents.length);
-        toasts.update((t) => [...t, { id: crypto.randomUUID(), agentId: msg.agentId! }]);
+
+      // Toasts for key lifecycle events
+      if (msg.type === "AgentConnected") {
+        stageStore.handleAgentConnected(node ?? { agentId: msg.agentId!, runId: msg.runId!, name: msg.agentId!, state: "running", entropy: 0, iteration: 0, maxIterations: 10, tokensUsed: 0, cost: 0, connectedAt: Date.now(), lastEventAt: Date.now() } as any, agents.length);
+        toast.connection(
+          `${msg.agentId!.slice(0, 20)} connected`,
+          "Agent is streaming to Cortex",
+          { label: "View run", href: `/run/${msg.runId}` },
+        );
+      } else if (msg.type === "AgentCompleted") {
+        const success = (msg.payload as any)?.success !== false;
+        const agentName = node?.name ?? msg.agentId!.slice(0, 20);
+        if (success) {
+          toast.success(`${agentName} completed`, undefined, { label: "View run", href: `/run/${msg.runId}` });
+        } else {
+          toast.error(`${agentName} failed`, undefined, { label: "View run", href: `/run/${msg.runId}` });
+        }
+      } else if (msg.type === "TaskFailed") {
+        toast.error(
+          `Run failed`,
+          typeof (msg.payload as any)?.error === "string" ? (msg.payload as any).error.slice(0, 80) : undefined,
+          { label: "View run", href: `/run/${msg.runId}` },
+        );
       }
     });
 
@@ -158,7 +177,7 @@
         <span class="material-symbols-outlined text-sm text-secondary">terminal</span>
         ⌘K
       </button>
-      <span class="material-symbols-outlined text-outline p-1" aria-hidden="true">settings</span>
+      <a href="/settings" class="material-symbols-outlined text-outline hover:text-primary transition-colors p-1" title="Settings">settings</a>
     </div>
   </header>
 
@@ -168,10 +187,4 @@
 </div>
 
 <CommandPalette />
-
-{#each $toasts as toast (toast.id)}
-  <Toast
-    agentId={toast.agentId}
-    onClose={() => toasts.update((t) => t.filter((x) => x.id !== toast.id))}
-  />
-{/each}
+<ToastContainer />

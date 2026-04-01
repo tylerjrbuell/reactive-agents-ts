@@ -72,24 +72,28 @@ export function createSignalStore(runState: Readable<RunState>) {
           llmStart = msg.ts;
           break;
         case "LLMRequestCompleted": {
-          // Duration: explicit field > start tracking > 1ms sentinel so points always render
+          // Duration: prefer explicit field, then timestamp delta
           const durationMs =
             typeof p.durationMs === "number" && p.durationMs > 0
               ? p.durationMs
               : llmStart !== null && msg.ts > llmStart
                 ? msg.ts - llmStart
-                : 1;
-          latency.push({
-            ts: msg.ts,
-            value: durationMs,
-            color: "#4cd7f6",
-            iteration: currentIteration,
-          });
+                : 0;
+          // Only push latency when we have a real duration — no sentinel
+          if (durationMs > 0) {
+            latency.push({
+              ts: msg.ts,
+              value: durationMs,
+              color: "#06b6d4",
+              iteration: currentIteration,
+            });
+          }
           llmStart = null;
           const t = readTokensFromPayload(p);
-          // Always push a bar for every LLM request — use at least 1 so the bar is visible
-          // even when the provider doesn't report token usage (e.g., test provider)
-          tokens.push({ ts: msg.ts, iteration: currentIteration, tokens: Math.max(1, t) });
+          // Only push token bar when we have real token data
+          if (t > 0) {
+            tokens.push({ ts: msg.ts, iteration: currentIteration, tokens: t });
+          }
           break;
         }
         case "ReasoningStepCompleted":

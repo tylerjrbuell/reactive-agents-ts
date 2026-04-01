@@ -1,6 +1,7 @@
 import { writable } from "svelte/store";
 import { CORTEX_SERVER_URL } from "../constants.js";
 import { resolveRunIdFromRunsApi } from "../resolve-run-id.js";
+import { toast } from "./toast-store.js";
 import type { AgentNode } from "./agent-store.js";
 
 export interface StageState {
@@ -69,9 +70,12 @@ export function createStageStore(options?: CreateStageStoreOptions) {
           "Run started but run id was not available yet. Check Stage — the agent may still be connecting.",
         );
       }
+      toast.info("Agent started", "Connecting to Cortex…");
       void navigate?.(`/run/${runId}`);
     } catch (e) {
-      state.update((s) => ({ ...s, lastSubmitError: String(e) }));
+      const msg = String(e).replace(/^Error: /, "");
+      toast.error("Failed to start agent", msg);
+      state.update((s) => ({ ...s, lastSubmitError: msg }));
     } finally {
       state.update((s) => ({ ...s, submitting: false }));
     }

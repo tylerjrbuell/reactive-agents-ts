@@ -149,9 +149,11 @@
       </div>
     {/if}
 
-    {#if isCompleted}
-      <div class="mt-4 text-xs font-mono text-outline">
-        {agent.tokensUsed.toLocaleString()} tok · ${agent.cost.toFixed(4)}
+    <!-- Tokens: show for any state when we have real data -->
+    {#if agent.tokensUsed > 0}
+      <div class="mt-3 text-[10px] font-mono {isCompleted ? 'text-outline' : 'text-outline/60'}">
+        {agent.tokensUsed.toLocaleString()} tok
+        {#if agent.cost > 0} · ${agent.cost.toFixed(4)}{/if}
       </div>
     {/if}
 
