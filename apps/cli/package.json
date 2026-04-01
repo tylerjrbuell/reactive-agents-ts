@@ -9,6 +9,7 @@
   },
   "scripts": {
     "build": "tsup --config tsup.config.ts",
+    "build:cortex-ui": "cd ../cortex/ui && bun run build && rm -rf ../cli/assets/cortex && mkdir -p ../cli/assets/cortex && cp -r build/* ../cli/assets/cortex/",
     "typecheck": "tsc --noEmit",
     "test": "bun test"
   },
@@ -23,6 +24,7 @@
   },
   "files": [
     "dist",
+    "assets",
     "README.md",
     "LICENSE"
   ],

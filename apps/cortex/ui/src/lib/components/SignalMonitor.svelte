@@ -305,8 +305,20 @@
 <div class="gradient-border-glow rounded-lg h-full flex flex-col min-h-[320px]">
   <div class="flex justify-between items-center px-6 py-4 flex-shrink-0">
     <h2 class="font-headline text-sm font-bold tracking-tight text-on-surface/90 uppercase">Signal Monitor</h2>
-    <div class="flex gap-4 text-[10px] font-mono text-on-surface/30">
-      <span>{data.entropy.length} η samples</span>
+    <!-- Event count badges — green when data present, muted when empty -->
+    <div class="flex gap-3 text-[9px] font-mono">
+      <span class="{data.entropy.length > 0 ? 'text-primary/70' : 'text-outline/30'}" title="Entropy samples">
+        η {data.entropy.length}
+      </span>
+      <span class="{data.tokens.length > 0 ? 'text-primary/70' : 'text-outline/30'}" title="Token bars">
+        tok {data.tokens.length}
+      </span>
+      <span class="{data.tools.length > 0 ? 'text-tertiary/70' : 'text-outline/30'}" title="Tool spans">
+        tools {data.tools.length}
+      </span>
+      <span class="{data.latency.length > 0 ? 'text-secondary/70' : 'text-outline/30'}" title="Latency points">
+        lat {data.latency.length}
+      </span>
     </div>
   </div>
 

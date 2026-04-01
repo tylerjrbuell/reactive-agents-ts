@@ -1,10 +1,20 @@
-import { afterEach, describe, expect, it } from "bun:test";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "bun:test";
 import { Effect, Layer } from "effect";
 import { EventBus } from "@reactive-agents/core";
 import { CortexReporter, CortexReporterLive } from "../src/cortex/cortex-reporter.js";
 
 describe("CortexReporter", () => {
   const originalWebSocket = globalThis.WebSocket;
+  const prevCortexLog = process.env.CORTEX_LOG;
+
+  beforeAll(() => {
+    process.env.CORTEX_LOG = "error";
+  });
+
+  afterAll(() => {
+    if (prevCortexLog === undefined) delete process.env.CORTEX_LOG;
+    else process.env.CORTEX_LOG = prevCortexLog;
+  });
 
   afterEach(() => {
     globalThis.WebSocket = originalWebSocket;

@@ -7,6 +7,7 @@ import { runInspect } from "./commands/inspect.js";
 import { runBench } from "./commands/bench.js";
 import { runDemo } from "./commands/demo.js";
 import { runAgent } from "./commands/run.js";
+import { runCortexCli } from "./commands/cortex.js";
 import { runServe } from "./commands/serve.js";
 import { runDiscover } from "./commands/discover.js";
 import { runDeploy } from "./commands/deploy/index.js";
@@ -19,7 +20,8 @@ const HELP = `
   Commands:
     init <name> [--template minimal|standard|full]   Scaffold a new project
     create agent <name> [--recipe basic|...]          Generate an agent file
-    run <prompt> [--provider ...] [--model ...]       Run an agent with a prompt
+    run <prompt> [--provider ...] [options]           Run an agent (see --help on usage error)
+    cortex [--dev] [--port <n>] [--no-open] [--help]  Cortex studio (API; --dev adds Vite UI)
     serve [--port <n>] [--name <name>]               Start agent as A2A server
     discover <url>                                    Fetch and display remote agent card
     dev [--entry <path>] [--no-watch]                Run agent entrypoint in dev mode
@@ -41,6 +43,12 @@ const HELP = `
 
   Quick start:
     rax demo                                    See reactive-agents in action (no setup needed)
+
+  Cortex (companion studio):
+    rax cortex --dev                            API + Vite UI (open http://localhost:5173)
+    rax cortex                                  API only (or bundled static UI if built)
+    rax run "…" --cortex --provider anthropic   Stream run events to Cortex (.withCortex())
+    rax cortex --help                           Options, env vars, and workflow
 `.trimEnd();
 
 export function main(argv: string[] = process.argv.slice(2)) {
@@ -72,6 +80,10 @@ export function main(argv: string[] = process.argv.slice(2)) {
 
     case "run":
       runAsync(runAgent(argv.slice(1)));
+      break;
+
+    case "cortex":
+      runAsync(runCortexCli(argv.slice(1)));
       break;
 
     case "serve":

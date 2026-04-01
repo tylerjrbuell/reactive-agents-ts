@@ -1,7 +1,9 @@
 import { ReactiveAgents } from "reactive-agents";
 import { existsSync, readFileSync } from "fs";
 import { resolve } from "path";
-import { createSpinner, kv, muted, fail, section, info } from "../ui.js";
+import { createSpinner, kv, muted, fail, section, info, hint } from "../ui.js";
+
+const DEFAULT_CORTEX_URL = "http://127.0.0.1:4321";
 
 interface MCPConfigFile {
   servers: Array<{
@@ -52,6 +54,7 @@ export async function runAgent(args: string[]): Promise<void> {
   let verbose = false;
   let quiet = false;
   let stream = false;
+  let enableCortex = false;
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -78,6 +81,8 @@ export async function runAgent(args: string[]): Promise<void> {
       quiet = true;
     } else if (arg === "--stream") {
       stream = true;
+    } else if (arg === "--cortex") {
+      enableCortex = true;
     } else if (!arg.startsWith("--")) {
       promptParts.push(arg);
     }
@@ -96,6 +101,13 @@ export async function runAgent(args: string[]): Promise<void> {
     console.error(kv("--verbose, -v", "Show phase-by-phase execution details"));
     console.error(kv("--quiet, -q", "Show only output (no metadata)"));
     console.error(kv("--stream", "Stream LLM output tokens"));
+    console.error(
+      kv(
+        "--cortex",
+        `Call .withCortex() — events to Cortex ingest (CORTEX_URL or ${DEFAULT_CORTEX_URL})`,
+      ),
+    );
+    console.error(hint("Start studio: rax cortex   then run with --cortex in another terminal"));
     process.exit(1);
   }
 
@@ -127,6 +139,7 @@ export async function runAgent(args: string[]): Promise<void> {
 
   // Build agent
   const spin = quiet ? null : createSpinner(`Building agent "${name}" with provider: ${provider}`);
+  let agent: { dispose: () => Promise<void>; agentId: string } | null = null;
 
   let builder = ReactiveAgents.create()
     .withName(name)
@@ -150,8 +163,16 @@ export async function runAgent(args: string[]): Promise<void> {
     }
   }
 
+  if (enableCortex) {
+    const cortexUrl = process.env.CORTEX_URL?.trim() || DEFAULT_CORTEX_URL;
+    process.env.CORTEX_URL = cortexUrl;
+    builder = builder.withCortex(cortexUrl);
+  }
+
+  let buildPhase = true;
   try {
-    const agent = await builder.build();
+    agent = await builder.build();
+    buildPhase = false;
     spin?.stop(`Agent ready: ${agent.agentId}`);
 
     if (verbose) {
@@ -160,11 +181,22 @@ export async function runAgent(args: string[]): Promise<void> {
       console.log(kv("Tools", enableTools ? "enabled" : "disabled"));
       console.log(kv("Reasoning", enableReasoning ? "enabled" : "disabled"));
       if (mcpConfig) console.log(kv("MCP servers", String(mcpConfig.servers.length)));
+      if (enableCortex) {
+        console.log(kv("Cortex", `${process.env.CORTEX_URL} (ingest WS)`));
+      }
       console.log("");
     }
 
     if (!quiet) {
       console.log(info(`Running: "${prompt}"\n`));
+      if (enableCortex && !verbose) {
+        console.log(
+          info(
+            `Cortex → ${process.env.CORTEX_URL} (ingest WS). Start studio: rax cortex`,
+          ),
+        );
+        console.log("");
+      }
     }
 
     const execSpin = quiet || stream ? null : createSpinner("Executing...");
@@ -251,7 +283,7 @@ export async function runAgent(args: string[]): Promise<void> {
       process.exit(1);
     }
   } catch (err) {
-    spin?.fail("Build failed");
+    spin?.fail(buildPhase ? "Build failed" : "Execution failed");
     const msg = err instanceof Error ? err.message : String(err);
     const cause = readErrorCause(err);
     const causeStr = cause
@@ -259,5 +291,13 @@ export async function runAgent(args: string[]): Promise<void> {
       : "";
     console.error(fail(`${msg}${causeStr}`));
     process.exit(1);
+  } finally {
+    if (agent) {
+      try {
+        await agent.dispose();
+      } catch {
+        // Best-effort cleanup only; preserve original execution outcome.
+      }
+    }
   }
 }

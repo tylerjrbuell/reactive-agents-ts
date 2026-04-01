@@ -1,4 +1,4 @@
-import { Effect, Layer, Schema, ManagedRuntime, Stream as EStream, Context } from "effect";
+import { Effect, Layer, Schema, ManagedRuntime, Runtime, Stream as EStream, Context } from "effect";
 import { createRuntime, createLightRuntime } from "./runtime.js";
 import type { MCPServerConfig } from "./runtime.js";
 import { builderToConfig } from "./agent-config.js";
@@ -21,7 +21,7 @@ import type { RemoteAgentClient } from "@reactive-agents/tools";
 import type { PromptTemplate } from "@reactive-agents/prompts";
 import type { Task, TaskResult } from "@reactive-agents/core";
 import type { TaskError } from "@reactive-agents/core";
-import { generateTaskId, AgentId } from "@reactive-agents/core";
+import { generateTaskId, AgentId, TaskId } from "@reactive-agents/core";
 import type { AgentEvent, OutputFormat, TerminatedBy } from "@reactive-agents/core";
 import { EventBus } from "@reactive-agents/core";
 import { KillSwitchService } from "@reactive-agents/guardrails";
@@ -2336,14 +2336,14 @@ export class ReactiveAgentBuilder {
         };
       }
 
-      let composedExtraLayers = self._extraLayers;
+      const composedExtraLayers = self._extraLayers;
+      /** Merged after `ExecutionEngine` is resolved so init does not run under transient `provide` scope (see CortexReporterLive). */
+      let cortexReporterLayer: Layer.Layer<unknown> | null = null;
       if (self._cortexUrl !== null) {
-        const { CortexReporterLive } = yield* Effect.promise(
-          () => import("@reactive-agents/observability"),
+        const { RuntimeCortexReporterLive } = yield* Effect.promise(
+          () => import("./cortex-reporter.js"),
         );
-        composedExtraLayers = composedExtraLayers
-          ? Layer.mergeAll(composedExtraLayers, CortexReporterLive(self._cortexUrl))
-          : CortexReporterLive(self._cortexUrl);
+        cortexReporterLayer = RuntimeCortexReporterLive(self._cortexUrl) as Layer.Layer<unknown>;
       }
 
       const baseRuntime = createRuntime({
@@ -2453,6 +2453,19 @@ export class ReactiveAgentBuilder {
 
       const engine = yield* ExecutionEngine.pipe(Effect.provide(baseRuntime));
 
+      const runtimeWithCortex: Layer.Layer<any, any> = cortexReporterLayer
+        ? (Layer.merge(
+            baseRuntime as unknown as Layer.Layer<any>,
+            (
+              cortexReporterLayer as unknown as Layer.Layer<any>
+            ).pipe(
+              // Layer.merge does not auto-feed sibling outputs into sibling requirements.
+              // Explicitly provide baseRuntime so reporter can resolve EventBus.
+              Layer.provide(baseRuntime as unknown as Layer.Layer<any>),
+            ),
+          ) as Layer.Layer<any, any>)
+        : (baseRuntime as Layer.Layer<any, any>);
+
       for (const hook of hooks) {
         yield* engine.registerHook(hook);
       }
@@ -2528,10 +2541,7 @@ export class ReactiveAgentBuilder {
       // ManagedRuntime scope. Because Layer.merge uses reference-identity memoization,
       // the same ToolService instance (from baseRuntime) receives all registrations
       // AND serves the engine — MCP tools are visible to the LLM.
-      let fullRuntime: Layer.Layer<any, any> = baseRuntime as Layer.Layer<
-        any,
-        any
-      >;
+      let fullRuntime: Layer.Layer<any, any> = runtimeWithCortex;
 
       if (
         agentTools.length > 0 ||
@@ -3024,10 +3034,10 @@ export class ReactiveAgentBuilder {
         // reference so both the engine and the init effect share the same ToolService.
         const agentToolInitLayer = Layer.effectDiscard(
           agentToolInitEffect as Effect.Effect<unknown, never, never>,
-        ).pipe(Layer.provide(baseRuntime as unknown as Layer.Layer<any>));
+        ).pipe(Layer.provide(runtimeWithCortex as unknown as Layer.Layer<any>));
 
         fullRuntime = Layer.merge(
-          baseRuntime as unknown as Layer.Layer<any>,
+          runtimeWithCortex as unknown as Layer.Layer<any>,
           agentToolInitLayer,
         );
       }
@@ -3537,6 +3547,7 @@ export class ReactiveAgent {
    * cost, tokens used, and reasoning strategy/iteration count.
    *
    * @param input - The task prompt or question
+   * @param options.taskId - Optional stable task id (e.g. Cortex desk pre-registers a DB row before `run()`).
    * @returns Promise resolving to an AgentResult with output, success status, and metadata
    * @throws Error if the task fails or required services are unavailable
    * @example
@@ -3547,8 +3558,11 @@ export class ReactiveAgent {
    * console.log(`Cost: $${result.metadata.cost}`);
    * ```
    */
-  async run(input: string): Promise<AgentResult> {
-    return Effect.runPromise(this.runEffect(input)).catch((e) => {
+  async run(input: string, options?: { readonly taskId?: string }): Promise<AgentResult> {
+    // Run the task on ManagedRuntime only — do not wrap in Effect.runPromise(Effect.promise(...)),
+    // which nests the default runtime with ManagedRuntime and can yield pure interruption
+    // ("All fibers interrupted without errors") on first execution (e.g. with Cortex + reasoning).
+    return this.runtime.runPromise(this.buildRunTaskEffect(input, options)).catch((e) => {
       const unwrapped = unwrapError(e);
       if (this._errorHandler) {
         try {
@@ -3572,6 +3586,7 @@ export class ReactiveAgent {
    * task execution into larger Effect workflows or for custom error handling.
    *
    * @param input - The task prompt or question
+   * @param options.taskId - Optional stable task id (same as `run()`).
    * @returns Effect that produces an AgentResult
    * @example
    * ```typescript
@@ -3581,13 +3596,38 @@ export class ReactiveAgent {
    * ));
    * ```
    */
-  runEffect(input: string): Effect.Effect<AgentResult, Error> {
+  runEffect(
+    input: string,
+    options?: { readonly taskId?: string },
+  ): Effect.Effect<AgentResult, Error> {
+    const pipeline = this.buildRunTaskEffect(input, options);
+    const self = this;
+    return Effect.gen(function* () {
+      const rt = yield* Effect.promise(() => self.runtime.runtime());
+      return yield* Effect.tryPromise({
+        try: () => Runtime.runPromise(rt, pipeline),
+        catch: (e) => (e instanceof Error ? e : new Error(String(e))),
+      });
+    });
+  }
+
+  /**
+   * Core task execution Effect (requires services from the agent's ManagedRuntime).
+   */
+  private buildRunTaskEffect(
+    input: string,
+    options?: { readonly taskId?: string },
+  ): Effect.Effect<AgentResult, Error> {
     // Pre-set the task description so sub-agents spawned on the first iteration
     // have access to the full user prompt (including phone numbers, URLs, etc.)
     this._setTaskDescription?.(input.slice(0, 500));
 
+    const taskId = options?.taskId
+      ? Schema.decodeSync(TaskId)(options.taskId)
+      : generateTaskId();
+
     const task: Task = {
-      id: generateTaskId(),
+      id: taskId,
       agentId: Schema.decodeSync(AgentId)(this.agentId),
       type: "query" as const,
       input: { question: input },
@@ -3597,65 +3637,61 @@ export class ReactiveAgent {
       createdAt: new Date(),
     };
 
-    return Effect.promise(() =>
-      this.runtime.runPromise(
-        this.engine.execute(task).pipe(
-          Effect.map((result: TaskResult) => {
-            const r = result as TaskResult & {
-              format?: OutputFormat;
-              terminatedBy?: TerminatedBy;
-              debrief?: AgentDebrief;
-            };
-            const agentResult: AgentResult = {
-              output: String(r.output ?? ""),
-              success: r.success,
-              taskId: String(r.taskId),
-              agentId: String(r.agentId),
-              metadata: r.metadata as AgentResultMetadata,
-              ...(r.format !== undefined ? { format: r.format } : {}),
-              ...(r.terminatedBy !== undefined ? { terminatedBy: r.terminatedBy } : {}),
-              ...(r.debrief !== undefined ? { debrief: r.debrief } : {}),
-            };
-            // Capture debrief for use as context in subsequent chat() calls
-            if (agentResult.debrief) this._lastDebrief = agentResult.debrief;
-            // Capture reasoning context so chat() has access to actual data.
-            // Includes: tool observations + agent analysis thoughts (which contain
-            // the synthesized data from tool results, not just compressed previews).
-            const steps = ((r.metadata as any)?.reasoningSteps ?? []) as Array<{
-              type: string;
-              content: string;
-              metadata?: { observationResult?: { success?: boolean }; toolUsed?: string };
-            }>;
-            const contextParts: string[] = [];
-            for (let i = 0; i < steps.length; i++) {
-              const s = steps[i]!;
-              if (s.type === "observation") {
-                // Include successful observations (tool results)
-                if (s.metadata?.observationResult?.success !== false &&
-                    s.content.length > 10 &&
-                    !s.content.startsWith("⚠️") &&
-                    !s.content.startsWith("✓ final-answer")) {
-                  contextParts.push(`[Tool result]: ${s.content}`);
-                }
-              } else if (s.type === "thought" && i > 0) {
-                // Include analysis thoughts that follow observations — these contain
-                // the actual synthesized data (e.g. commit summaries, parsed results).
-                const prev = steps[i - 1];
-                if (prev?.type === "observation" && s.content.length > 50) {
-                  contextParts.push(`[Agent analysis]: ${s.content}`);
-                }
-              }
+    return this.engine.execute(task).pipe(
+      Effect.map((result: TaskResult) => {
+        const r = result as TaskResult & {
+          format?: OutputFormat;
+          terminatedBy?: TerminatedBy;
+          debrief?: AgentDebrief;
+        };
+        const agentResult: AgentResult = {
+          output: String(r.output ?? ""),
+          success: r.success,
+          taskId: String(r.taskId),
+          agentId: String(r.agentId),
+          metadata: r.metadata as AgentResultMetadata,
+          ...(r.format !== undefined ? { format: r.format } : {}),
+          ...(r.terminatedBy !== undefined ? { terminatedBy: r.terminatedBy } : {}),
+          ...(r.debrief !== undefined ? { debrief: r.debrief } : {}),
+        };
+        // Capture debrief for use as context in subsequent chat() calls
+        if (agentResult.debrief) this._lastDebrief = agentResult.debrief;
+        // Capture reasoning context so chat() has access to actual data.
+        // Includes: tool observations + agent analysis thoughts (which contain
+        // the synthesized data from tool results, not just compressed previews).
+        const steps = ((r.metadata as any)?.reasoningSteps ?? []) as Array<{
+          type: string;
+          content: string;
+          metadata?: { observationResult?: { success?: boolean }; toolUsed?: string };
+        }>;
+        const contextParts: string[] = [];
+        for (let i = 0; i < steps.length; i++) {
+          const s = steps[i]!;
+          if (s.type === "observation") {
+            // Include successful observations (tool results)
+            if (s.metadata?.observationResult?.success !== false &&
+                s.content.length > 10 &&
+                !s.content.startsWith("⚠️") &&
+                !s.content.startsWith("✓ final-answer")) {
+              contextParts.push(`[Tool result]: ${s.content}`);
             }
-            this._lastRunObservations = contextParts;
-            return agentResult;
-          }),
-          Effect.mapError(
-            (e: RuntimeErrors | TaskError) =>
-              new Error("message" in e ? e.message : String(e)),
-          ),
-        ) as Effect.Effect<AgentResult, Error>,
+          } else if (s.type === "thought" && i > 0) {
+            // Include analysis thoughts that follow observations — these contain
+            // the actual synthesized data (e.g. commit summaries, parsed results).
+            const prev = steps[i - 1];
+            if (prev?.type === "observation" && s.content.length > 50) {
+              contextParts.push(`[Agent analysis]: ${s.content}`);
+            }
+          }
+        }
+        this._lastRunObservations = contextParts;
+        return agentResult;
+      }),
+      Effect.mapError(
+        (e: RuntimeErrors | TaskError) =>
+          new Error("message" in e ? e.message : String(e)),
       ),
-    );
+    ) as Effect.Effect<AgentResult, Error>;
   }
 
   /**

@@ -6,7 +6,6 @@ export default defineConfig({
   // Docs now deploy to a custom domain at the root path.
   site: "https://docs.reactiveagents.dev",
   base: "/",
-  legacy: { collections: true },
   integrations: [
     skills(),
     starlight({

@@ -79,13 +79,43 @@ Run an agent with a prompt.
 
 ```bash
 rax run <prompt> [--provider anthropic|openai|ollama|gemini|litellm|test]
-          [--model <model>] [--name <name>] [--tools] [--reasoning] [--stream]
+          [--model <model>] [--name <name>] [--tools] [--reasoning] [--stream] [--cortex]
 ```
+
+**`--cortex`:** Enables `.withCortex()` on the builder so run lifecycle events are sent to a local **Cortex** companion studio (WebSocket ingest). Start the studio with `rax cortex` in another terminal, or set `CORTEX_URL` to the HTTP base (default `http://127.0.0.1:4321`). See `rax cortex --help` for ports, static UI bundle, and env vars.
 
 **Example:**
 
 ```bash
 rax run "Explain quantum computing" --provider anthropic --model claude-sonnet-4-20250514
+```
+
+### `rax cortex`
+
+Start the **Cortex** studio: HTTP API, WebSocket `/ws/ingest`, and the static UI when a bundle is present.
+
+```bash
+rax cortex [--dev] [--port <n>] [--no-open] [--help]
+```
+
+| Flag | Purpose |
+|------|---------|
+| `--dev` | Start **API + Vite dev UI** together (same as `cd apps/cortex && bun start`). Open **http://localhost:5173**; Vite proxies `/api` and `/ws` to the API port (`CORTEX_PORT`). |
+| `--port <n>` | API listen port (default `4321`). Passed through so the dev UI proxy matches. |
+
+| Variable | Purpose |
+|----------|---------|
+| `CORTEX_PORT` | API listen port (default `4321`); also read by `apps/cortex/ui` Vite proxy when using `--dev` |
+| `CORTEX_NO_OPEN` | Set to `1` to skip opening a browser |
+| `CORTEX_URL` | Injected for the child server process so desk runners target the right host |
+| `CORTEX_STATIC_PATH` | Directory containing built `index.html` (CLI `build:cortex-ui`; not used when `--dev`) |
+
+**Example:**
+
+```bash
+rax cortex --dev
+# other terminal:
+rax run "Research topic" --cortex --provider anthropic
 ```
 
 ### `rax serve`

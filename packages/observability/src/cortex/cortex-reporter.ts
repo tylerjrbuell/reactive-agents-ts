@@ -2,6 +2,46 @@ import { Context, Data, Effect, Layer, Ref } from "effect";
 import { EventBus } from "@reactive-agents/core";
 import type { AgentEvent } from "@reactive-agents/core";
 
+/** Aligns with Cortex server `CORTEX_LOG` (error | warn | info | debug | off). Default: info. */
+type ReporterLogFloor = "error" | "warn" | "info" | "debug" | "off";
+const REP_SEVERITY: Record<Exclude<ReporterLogFloor, "off">, number> = {
+  error: 0,
+  warn: 1,
+  info: 2,
+  debug: 3,
+};
+
+function reporterLogFloor(): ReporterLogFloor {
+  const raw =
+    typeof process !== "undefined" && process.env && process.env.CORTEX_LOG
+      ? process.env.CORTEX_LOG.trim().toLowerCase()
+      : "";
+  if (raw === "off" || raw === "0" || raw === "false") return "off";
+  if (raw === "error") return "error";
+  if (raw === "warn" || raw === "warning") return "warn";
+  if (raw === "debug" || raw === "trace" || raw === "verbose" || raw === "all") return "debug";
+  return "info";
+}
+
+function repShouldLog(level: Exclude<ReporterLogFloor, "off">): boolean {
+  const floor = reporterLogFloor();
+  if (floor === "off") return false;
+  return REP_SEVERITY[level] <= REP_SEVERITY[floor as Exclude<ReporterLogFloor, "off">];
+}
+
+function repLog(
+  level: Exclude<ReporterLogFloor, "off">,
+  message: string,
+  extra?: Record<string, unknown>,
+): void {
+  if (!repShouldLog(level)) return;
+  const suffix = extra && Object.keys(extra).length > 0 ? ` ${JSON.stringify(extra)}` : "";
+  const line = `[CortexReporter] ${message}${suffix}`;
+  if (level === "error") console.error(line);
+  else if (level === "warn") console.warn(line);
+  else console.log(line);
+}
+
 export class CortexReporterError extends Data.TaggedError("CortexReporterError")<{
   readonly message: string;
 }> {}
@@ -45,6 +85,7 @@ export const CortexReporterLive = (cortexUrl: string) =>
       const reconnectEnabledRef = yield* Ref.make(false);
       const retryTimerRef = yield* Ref.make<ReturnType<typeof setTimeout> | null>(null);
       const ingestUrlRef = yield* Ref.make(toWebSocketIngestUrl(cortexUrl));
+      const droppedWhileDisconnectedRef = yield* Ref.make(0);
 
       const clearRetryTimer = Effect.gen(function* () {
         const timer = yield* Ref.get(retryTimerRef);
@@ -57,8 +98,12 @@ export const CortexReporterLive = (cortexUrl: string) =>
       const connectSocket = (): Effect.Effect<void, never> =>
         Ref.get(ingestUrlRef).pipe(
           Effect.flatMap((ingestUrl) => Effect.sync(() => {
+            repLog("info", "connecting ingest WebSocket", { url: ingestUrl });
             const socket = new WebSocket(ingestUrl);
           socket.onopen = () => {
+            repLog("info", "ingest WebSocket open — EventBus events will forward to Cortex", {
+              url: ingestUrl,
+            });
             Effect.runFork(
               Ref.set(connectedRef, true).pipe(
                 Effect.zipRight(Ref.set(retryAttemptRef, 0)),
@@ -68,11 +113,13 @@ export const CortexReporterLive = (cortexUrl: string) =>
             );
           };
           socket.onerror = () => {
+            repLog("warn", "ingest WebSocket error", { url: ingestUrl });
             Effect.runFork(
               Ref.set(connectedRef, false).pipe(Effect.catchAll(() => Effect.void)),
             );
           };
           socket.onclose = () => {
+            repLog("info", "ingest WebSocket closed", { url: ingestUrl });
             Effect.runFork(
               Effect.gen(function* () {
                 yield* Ref.set(connectedRef, false);
@@ -80,6 +127,7 @@ export const CortexReporterLive = (cortexUrl: string) =>
                 if (!shouldReconnect) return;
                 const attempt = yield* Ref.updateAndGet(retryAttemptRef, (n) => n + 1);
                 const delayMs = Math.min(BACKOFF_BASE_MS * (2 ** Math.max(0, attempt - 1)), BACKOFF_MAX_MS);
+                repLog("debug", "ingest WebSocket reconnect scheduled", { attempt, delayMs, url: ingestUrl });
                 const timer = setTimeout(() => {
                   Effect.runFork(connectSocket());
                 }, delayMs);
@@ -120,7 +168,28 @@ export const CortexReporterLive = (cortexUrl: string) =>
         Effect.gen(function* () {
           const socket = yield* Ref.get(socketRef);
           const connected = yield* Ref.get(connectedRef);
-          if (!socket || !connected || socket.readyState !== WebSocket.OPEN) return;
+          if (!socket || !connected || socket.readyState !== WebSocket.OPEN) {
+            const n = yield* Ref.updateAndGet(droppedWhileDisconnectedRef, (c) => c + 1);
+            if (n === 1) {
+              yield* Effect.sync(() =>
+                repLog("warn", "EventBus event dropped — ingest WebSocket not ready", {
+                  eventTag: (event as { _tag?: string })._tag,
+                  hasSocket: Boolean(socket),
+                  connected,
+                  readyState: socket?.readyState ?? null,
+                }),
+              );
+            } else if (n % 100 === 0) {
+              yield* Effect.sync(() =>
+                repLog(
+                  "warn",
+                  `${n} EventBus events dropped while ingest WebSocket was not OPEN`,
+                  { lastEventTag: (event as { _tag?: string })._tag },
+                ),
+              );
+            }
+            return;
+          }
           yield* Effect.sync(() => {
             socket.send(JSON.stringify(toIngestMessage(event)));
           }).pipe(Effect.catchAll(() => Effect.void));

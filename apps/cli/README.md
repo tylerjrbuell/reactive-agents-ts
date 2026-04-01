@@ -23,8 +23,15 @@ rax init <name> [--template minimal|standard|full]
 rax create agent <name> [--recipe basic|researcher|coder|orchestrator]
   Generate an agent file in your project
 
-rax run <prompt> [--provider anthropic|openai|ollama|gemini|litellm|test] [--model <model>] [--name <name>] [--stream]
-  Run an agent with a prompt and print the result
+rax run <prompt> [--provider anthropic|openai|ollama|gemini|litellm|test] [--model <model>] [--name <name>] [--stream] [--cortex]
+  Run an agent with a prompt and print the result. `--cortex` calls `.withCortex()` so events stream
+  to a local Cortex studio (`rax cortex` in another terminal). Override the ingest base URL with `CORTEX_URL`
+  (default `http://127.0.0.1:4321`).
+
+rax cortex [--dev] [--port <n>] [--no-open] [--help]
+  Start the Cortex companion studio. **`--dev`** runs the same stack as `apps/cortex` → `bun start`
+  (API + SvelteKit/Vite; open **http://localhost:5173**). Without `--dev`, only the API starts unless
+  you ran `bun run build:cortex-ui` in `apps/cli` (bundled static UI).
 
 rax dev [--entry src/index.ts] [--no-watch]
   Run your local agent entrypoint in watch mode
@@ -86,6 +93,11 @@ rax create agent researcher --recipe researcher
 # Run a one-off prompt
 export ANTHROPIC_API_KEY=sk-ant-...
 rax run "Summarize the state of fusion energy" --provider anthropic
+
+# Cortex: API + Vite UI, then stream run events into the studio
+rax cortex --dev
+# open http://localhost:5173 — other terminal:
+rax run "Research topic X" --cortex --provider anthropic
 ```
 
 ## Documentation

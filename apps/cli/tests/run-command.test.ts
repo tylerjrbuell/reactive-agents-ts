@@ -33,6 +33,15 @@ describe("CLI Run Command — Agent Integration", () => {
     });
     const helpText = proc.stdout.toString() + proc.stderr.toString();
     expect(helpText).toContain("run");
-    expect(helpText).toContain("rax");  // CLI brand name
+    expect(helpText).toContain("rax"); // CLI brand name
+  });
+
+  it("run usage lists --cortex", () => {
+    const proc = Bun.spawnSync(["bun", CLI_ENTRY, "run"], {
+      stderr: "pipe",
+    });
+    expect(proc.exitCode).not.toBe(0);
+    const text = proc.stdout.toString() + proc.stderr.toString();
+    expect(text).toContain("--cortex");
   });
 });

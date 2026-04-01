@@ -1,21 +1,24 @@
 import { ReactiveAgents } from 'reactive-agents'
 
 const agent = await ReactiveAgents.create()
+    .withName('local-researcher')
     .withProvider('ollama')
-    .withPersona({
-        name: 'research assistant',
-        role: 'An assistant that researches topics and summarizes findings.',
-        instructions:
-            'Use web-search once or twice if needed, then you MUST call file-write to save the report to the exact path the user names. Do not finish with only search results — the deliverable is the markdown file on disk.',
-        tone: 'Professional and concise',
+    .withModel('cogito:14b')
+    .withReasoning({
+        defaultStrategy: 'reflexion',
+        enableStrategySwitching: true,
     })
-    .withModel({ model: 'qwen3.5', temperature: 0.2 })
-    .withTools()
-    .withReasoning({ defaultStrategy: 'adaptive', synthesis: 'auto' })
-    .withObservability({ verbosity: 'debug', live: true, logModelIO: false })
+    .withTools({ allowedTools: ['web-search', 'file-read', 'file-write'] })
+    .withContextProfile({ tier: 'local' })
+    .withMaxIterations(8)
+    .withKillSwitch()
+    .withMemory()
+    .withObservability({ verbosity: 'normal', live: true })
     .build()
 
 const result = await agent.run(
-    'Research the latest news and trends for AI Agents and AI Agent Frameworks, then summarize the key points into a concise but comprehensive report and write it to ./agent-news.md'
+    'Read the CLAUDE.md file. Then explore the codebase and find the most relevant files to the project.'
 )
-console.log('Agent Result:', result)
+console.log(result.output)
+
+await agent.dispose()

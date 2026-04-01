@@ -17,4 +17,11 @@
  */
 export { createAgentStream } from "./agent-stream.js";
 export { createAgent } from "./agent.js";
-export type { AgentStreamState, AgentState } from "./types.js";
+export type { AgentStreamState } from "./agent-stream.js";
+export type { AgentState } from "./agent.js";
+export type {
+  AgentStreamEvent,
+  AgentHookState,
+  UseAgentReturn,
+  UseAgentStreamReturn,
+} from "./types.js";

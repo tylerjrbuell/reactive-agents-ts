@@ -9,6 +9,13 @@ bun.lockb
 # Astro generated type cache
 .astro/
 
+# SvelteKit build artifacts (Cortex UI)
+apps/cortex/ui/build/
+apps/cortex/ui/.svelte-kit/
+
+# Cortex runtime data
+apps/cortex/.cortex/
+
 # Git worktrees
 .worktrees/
 
