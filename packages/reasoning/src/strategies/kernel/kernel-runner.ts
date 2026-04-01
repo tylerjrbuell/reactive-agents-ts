@@ -31,36 +31,9 @@ import {
   type ThoughtKernel,
 } from "./kernel-state.js";
 import { evaluateStrategySwitch, buildHandoff } from "./utils/strategy-evaluator.js";
-import { ContextSynthesizerService } from "../../context/context-synthesizer.js";
-import { classifyTaskPhase } from "../../context/task-phase.js";
-import type { SynthesisConfig, SynthesisInput, SynthesisEntropySignals } from "../../context/synthesis-types.js";
-import type { ReasoningStep } from "../../types/index.js";
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-/** Error strings from recent failed tool observations — feeds ICS escalation. */
-function getLastErrors(steps: readonly ReasoningStep[]): readonly string[] {
-  return steps
-    .filter(
-      (s) => s.type === "observation" && s.metadata?.observationResult?.success === false,
-    )
-    .slice(-3)
-    .map((s) => s.metadata?.observationResult?.displayText ?? s.content.slice(0, 100));
-}
-
-/**
- * Normalize action content for comparison — parses JSON and re-serializes with
- * sorted keys so that `{"a":1,"b":2}` and `{"b":2,"a":1}` are treated as equal.
- * Falls back to trimmed string comparison on parse failure.
- */
-function normalizeActionContent(content: string): string {
-  try {
-    const parsed = JSON.parse(content);
-    return JSON.stringify(parsed, Object.keys(parsed).sort());
-  } catch {
-    return content.trim();
-  }
-}
+import { coordinateICS } from "./utils/ics-coordinator.js";
+import { runReactiveObserver } from "./utils/reactive-observer.js";
+import { detectLoop, checkAllToolsCalled } from "./utils/loop-detector.js";
 
 // ── Main entry point ──────────────────────────────────────────────────────────
 
@@ -166,125 +139,10 @@ export function runKernel(
         mutableScratchpad.set(k, v);
       }
 
-      // ── Entropy scoring (post-kernel, pre-loop-detection) ──────────────
-      if (services.entropySensor._tag === "Some") {
-        const newThoughtSteps = state.steps.filter(
-          (s, idx) => s.type === "thought" && idx >= prevStepCount,
-        );
-        if (newThoughtSteps.length > 0) {
-          const latestThought = newThoughtSteps[newThoughtSteps.length - 1]!;
-          const priorThoughts = state.steps
-            .slice(0, prevStepCount)
-            .filter((s) => s.type === "thought");
-          const priorThought = priorThoughts.length > 0
-            ? priorThoughts[priorThoughts.length - 1]!.content
-            : undefined;
-
-          yield* services.entropySensor.value
-            .score({
-              thought: latestThought.content ?? "",
-              taskDescription: (state.meta.entropy as any)?.taskDescription ?? "",
-              strategy: state.strategy,
-              iteration: state.iteration,
-              maxIterations: (state.meta.maxIterations as number) ?? 10,
-              modelId: (state.meta.entropy as any)?.modelId ?? "unknown",
-              temperature: (state.meta.entropy as any)?.temperature ?? 0,
-              priorThought,
-              logprobs: (state.meta.entropy as any)?.lastLogprobs,
-              kernelState: state,
-              taskCategory: (state.meta.entropy as any)?.taskCategory,
-            })
-            .pipe(
-              Effect.tap((score: any) => {
-                const entropyMeta = (state.meta as any).entropy ?? {};
-                const history = entropyMeta.entropyHistory ?? [];
-                history.push(score);
-                (state.meta as any).entropy = { ...entropyMeta, entropyHistory: history };
-
-                if (eventBus._tag === "Some") {
-                  return eventBus.value.publish({
-                    _tag: "EntropyScored",
-                    taskId: state.taskId,
-                    iteration: score.iteration,
-                    composite: score.composite,
-                    sources: score.sources,
-                    trajectory: score.trajectory,
-                    confidence: score.confidence,
-                    modelTier: score.modelTier,
-                    iterationWeight: score.iterationWeight,
-                  });
-                }
-                return Effect.void;
-              }),
-              Effect.catchAll(() => Effect.void),
-            );
-        }
-      }
-      prevStepCount = state.steps.length;
-
-      // ── Reactive Controller evaluation ──────────────────────────────────
-      if (services.reactiveController._tag === "Some") {
-        const entropyHistory = ((state.meta as any).entropy?.entropyHistory ?? []) as readonly any[];
-        if (entropyHistory.length > 0) {
-          const latestScore = entropyHistory[entropyHistory.length - 1];
-          const decisions = yield* services.reactiveController.value.evaluate({
-            entropyHistory,
-            iteration: state.iteration,
-            maxIterations: currentOptions.maxIterations,
-            strategy: state.strategy,
-            calibration: {
-              highEntropyThreshold: 0.8,
-              convergenceThreshold: 0.4,
-              calibrated: false,
-              sampleCount: 0,
-            },
-            config: (state.meta as any).entropy?.controllerConfig ?? {
-              earlyStop: true,
-              contextCompression: true,
-              strategySwitch: true,
-            },
-            contextPressure: latestScore?.sources?.contextPressure ?? 0,
-            behavioralLoopScore: latestScore?.sources?.behavioral ?? 0,
-          });
-
-          for (const decision of decisions) {
-            // Publish ReactiveDecision event
-            if (eventBus._tag === "Some") {
-              yield* eventBus.value.publish({
-                _tag: "ReactiveDecision",
-                taskId: state.taskId,
-                iteration: state.iteration,
-                decision: (decision as any).decision,
-                reason: (decision as any).reason,
-                entropyBefore: latestScore?.composite ?? 0,
-              }).pipe(Effect.catchAll(() => Effect.void));
-            }
-          }
-
-          // Store all controller decisions on state so the termination oracle can consume them.
-          // The oracle's reactiveControllerEarlyStopEvaluator reads state.meta.controllerDecisions
-          // and signals a high-confidence exit when an early-stop decision is present.
-          if (decisions.length > 0) {
-            state = transitionState(state, {
-              meta: { ...state.meta, controllerDecisions: decisions },
-            });
-
-            // NEW: accumulate into controllerDecisionLog for pulse tool access
-            const formatted = decisions.map((d: Record<string, unknown>) => {
-              const decision = String(d.decision ?? "");
-              const context =
-                typeof d.reason === "string" ? d.reason
-                : "sections" in d && Array.isArray(d.sections) ? `sections=[${(d.sections as string[]).join(",")}]`
-                : typeof d.skillName === "string" ? d.skillName
-                : "";
-              return context ? `${decision}: ${context}` : decision;
-            });
-            state = transitionState(state, {
-              controllerDecisionLog: [...state.controllerDecisionLog, ...formatted],
-            });
-          }
-        }
-      }
+      // ── Entropy scoring + Reactive Controller evaluation ────────────────
+      ({ state, prevStepCount } = yield* runReactiveObserver(
+        state, services, eventBus, prevStepCount, currentOptions,
+      ));
 
       // ── Iteration progress hook ──────────────────────────────────────────
       // Compute which tools were called in THIS iteration (new since prev step).
@@ -295,154 +153,23 @@ export function runKernel(
       // ── Intelligent Context Synthesis (before thinking step) ──
       // Fires on ALL iterations including iteration 0 so the orient phase
       // receives synthesized context with tool hints (GAP 1 fix).
-      const synthesisCfg: SynthesisConfig = currentInput.synthesisConfig ?? { mode: "auto" };
-      if (synthesisCfg.mode !== "off" && state.status === "thinking") {
-        const synthesizerOpt = yield* Effect.serviceOption(ContextSynthesizerService);
-        if (synthesizerOpt._tag === "Some") {
-          const entropyMeta = (state.meta as Record<string, unknown>).entropy as
-            | { entropyHistory?: readonly SynthesisEntropySignals[] }
-            | undefined;
-          const hist = entropyMeta?.entropyHistory;
-          const latestEntropy =
-            hist && hist.length > 0 ? (hist[hist.length - 1] as SynthesisEntropySignals) : undefined;
-
-          const taskPhase = classifyTaskPhase({
-            iteration: state.iteration,
-            toolsUsed: state.toolsUsed,
-            requiredTools: currentInput.requiredTools ?? [],
-            steps: state.steps,
-          });
-
-          const profile = currentContext.profile;
-          const synthesisInput: SynthesisInput = {
-            transcript: state.messages,
-            task: currentInput.task,
-            taskPhase,
-            requiredTools: currentInput.requiredTools ?? [],
-            toolsUsed: state.toolsUsed,
-            availableTools: currentInput.availableToolSchemas ?? [],
-            entropy: latestEntropy,
-            iteration: state.iteration,
-            maxIterations: currentOptions.maxIterations,
-            lastErrors: getLastErrors(state.steps),
-            tier: profile.tier ?? "mid",
-            tokenBudget: Math.floor(8192 * ((profile.contextBudgetPercent ?? 80) / 100)),
-            synthesisConfig: synthesisCfg,
-          };
-
-          const synthesized = yield* synthesizerOpt.value
-            .synthesize(synthesisInput)
-            .pipe(Effect.catchAll(() => Effect.succeed(null)));
-
-          if (synthesized !== null) {
-            yield* hooks
-              .onContextSynthesized(
-                synthesized,
-                state.taskId,
-                currentInput.agentId ?? "unknown",
-              )
-              .pipe(Effect.catchAll(() => Effect.void));
-
-            state = transitionState(state, { synthesizedContext: synthesized });
-          }
-        }
-      }
+      state = yield* coordinateICS(state, currentInput, currentOptions, currentContext, hooks);
 
       // ── Early exit: primary scoped tools called ─────────────────────────
       // For composite steps in plan-execute, exit as soon as all primary
-      // (non-utility) tools have been called. Utility tools like scratchpad
-      // are optional — the agent may not need them for every step.
-      if (
-        currentOptions.exitOnAllToolsCalled &&
-        state.status !== "done" &&
-        state.status !== "failed" &&
-        currentInput.availableToolSchemas &&
-        currentInput.availableToolSchemas.length > 0 &&
-        state.toolsUsed.size > 0
-      ) {
-        const UTILITY_TOOLS = new Set(["recall"]);
-        const primaryTools = currentInput.availableToolSchemas
-          .map((t) => t.name)
-          .filter((name) => !UTILITY_TOOLS.has(name));
-        // If there are primary tools, check if all were called
-        // If ALL tools are utility tools, don't early-exit (let LLM finish naturally)
-        if (primaryTools.length > 0) {
-          const allPrimaryCalled = primaryTools.every((name) => state.toolsUsed.has(name));
-          if (allPrimaryCalled) {
-            const lastObs = [...state.steps].reverse().find((s) => s.type === "observation");
-            state = transitionState(state, {
-              status: "done",
-              output: lastObs?.content ?? state.output ?? "[All tools executed successfully]",
-            });
-            (state.meta as any).terminatedBy = "all_tools_called";
-          }
-        }
-      }
+      // (non-utility) tools have been called.
+      state = checkAllToolsCalled(state, currentInput, currentOptions);
 
-      // ── Loop detection ───────────────────────────────────────────────────
+      // ── Loop detection + strategy switching ─────────────────────────────
       // Check the most recent steps for patterns that indicate a stuck loop.
       // Only fire if the loop hasn't already terminated (status still active).
       if (state.status !== "done" && state.status !== "failed") {
-        const steps = state.steps;
-        let loopMsg: string | null = null;
-
-        // (a) Repeated tool calls: same tool + same args N times in a row
-        //     Filter first, then take the last N — ensures we compare actual
-        //     actions, not a mix of action/thought/observation steps.
-        const allActions = steps.filter((s) => s.type === "action");
-        if (allActions.length >= maxSameTool) {
-          const recentActions = allActions.slice(-maxSameTool);
-          const firstNorm = normalizeActionContent(recentActions[0]!.content);
-          const allSame = recentActions.every((s) => normalizeActionContent(s.content) === firstNorm);
-          if (allSame) {
-            loopMsg = `Loop detected: same tool call repeated ${maxSameTool} times`;
-          }
-        }
-
-        // (b) Repeated thoughts: identical thought content N times in recent history
-        //     Only flag when NO action steps are interleaved — if the model is
-        //     making tool calls between identical thoughts, it is progressing
-        //     (FC models often produce brief/identical reasoning text before each
-        //     tool call; the real work is in the tool calls themselves).
-        if (loopMsg === null) {
-          const allThoughts = steps.filter((s) => s.type === "thought");
-          if (allThoughts.length >= maxRepeatedThought) {
-            const recentThoughts = allThoughts.slice(-maxRepeatedThought);
-            const lastThought = recentThoughts[recentThoughts.length - 1]!.content;
-            const allSameThought = recentThoughts.every((s) => s.content === lastThought);
-            if (allSameThought) {
-              const recentActions = steps.filter((s) => s.type === "action");
-              const hasRecentProgress = recentActions.length > 0
-                && recentActions.some((a) => {
-                  const idx = steps.indexOf(a);
-                  const firstThoughtIdx = steps.indexOf(recentThoughts[0]!);
-                  return idx >= firstThoughtIdx;
-                });
-              if (!hasRecentProgress) {
-                loopMsg = `Loop detected: the model repeated the same thought ${maxRepeatedThought} times without making progress.\n` +
-                  `Fix: (1) Add a persona instruction like "Think step-by-step then call tools immediately", ` +
-                  `(2) Use .withReasoning({ defaultStrategy: 'plan-execute-reflect' }) for multi-step tasks, ` +
-                  `(3) Check that tool descriptions are clear and unambiguous.`;
-              }
-            }
-          }
-        }
-
-        // (c) Consecutive thoughts without any action — agent is stuck thinking
-        //     without making progress. Count trailing thought steps (no action between them).
-        if (loopMsg === null) {
-          let consecutiveThoughts = 0;
-          for (let i = steps.length - 1; i >= 0; i--) {
-            if (steps[i]!.type === "thought") consecutiveThoughts++;
-            else break; // any non-thought (action/observation) resets the streak
-          }
-          if (consecutiveThoughts >= maxConsecutiveThoughts) {
-            loopMsg = `Loop detected: ${consecutiveThoughts} consecutive thinking steps with no tool calls.\n` +
-              `Fix: (1) Verify the model supports function calling for your provider, ` +
-              `(2) Simplify the task description — the model may not know which tool to use, ` +
-              `(3) For local models, try .withContextProfile({ tier: 'local' }) for stronger tool guidance.`;
-          }
-        }
+        const loopMsg = detectLoop(
+          state.steps,
+          maxSameTool,
+          maxRepeatedThought,
+          maxConsecutiveThoughts,
+        );
 
         // ── Strategy switching ────────────────────────────────────────────
         if (loopMsg !== null) {
