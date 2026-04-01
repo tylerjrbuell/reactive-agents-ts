@@ -23,8 +23,9 @@
   interface Props {
     runId: string;
   }
-  let { runId }: Props = $props();
+  const { runId } = $props();
 
+  // svelte-ignore state_referenced_locally — parent uses {#key runId} to remount on change
   const runStore = createRunStore(runId);
   const agentStore = getContext<AgentStore>("agentStore");
 
@@ -415,9 +416,9 @@
     style="height: {panelMinimized ? '0px' : panelHeight + 'px'}; overflow: {panelMinimized ? 'hidden' : 'visible'};"
   >
     <!-- Drag handle row — resize + minimize control -->
-    <!-- svelte-ignore a11y-no-static-element-interactions -->
     <div class="flex-shrink-0 h-6 flex items-center group relative border-t border-white/5">
-      <!-- Draggable zone (left 80%) -->
+      <!-- Draggable zone uses role=separator which is interactive -->
+      <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
       <div
         class="flex-1 h-full cursor-ns-resize flex items-center justify-center
                hover:bg-primary/10 transition-colors {isDragging ? 'bg-primary/15' : ''}"

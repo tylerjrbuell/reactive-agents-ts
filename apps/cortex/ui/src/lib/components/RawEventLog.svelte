@@ -133,10 +133,9 @@
       {#each filtered as ev, i (ev.ts + i)}
         {@const isExpanded = expandedIdx === i}
 
-        <!-- svelte-ignore a11y-click-events-have-key-events -->
-        <!-- svelte-ignore a11y-no-static-element-interactions -->
-        <div
-          class="flex items-start gap-2 px-3 py-1 cursor-pointer hover:bg-surface-container-low/40 transition-colors border-b border-white/[0.02]
+        <button
+          type="button"
+          class="w-full text-left flex items-start gap-2 px-3 py-1 cursor-pointer hover:bg-surface-container-low/40 transition-colors border-b border-white/[0.02] bg-transparent border-x-0 border-t-0
                  {isExpanded ? 'bg-surface-container-low/60' : ''}"
           onclick={() => (expandedIdx = isExpanded ? null : i)}
         >
@@ -182,15 +181,12 @@
           <span class="flex-shrink-0 material-symbols-outlined text-[11px] text-outline/20 {isExpanded ? 'rotate-180' : ''}">
             expand_more
           </span>
-        </div>
+        </button>
 
         <!-- Expanded payload -->
         {#if isExpanded}
-          <!-- svelte-ignore a11y-click-events-have-key-events -->
-          <!-- svelte-ignore a11y-no-static-element-interactions -->
           <div
             class="bg-surface-container-lowest/60 border-b border-white/5 px-3 py-2"
-            onclick={(e) => e.stopPropagation()}
           >
             <pre class="text-[9px] font-mono text-on-surface/50 whitespace-pre-wrap break-all overflow-x-auto max-h-64 overflow-y-auto">{JSON.stringify(
                 ev.payload,

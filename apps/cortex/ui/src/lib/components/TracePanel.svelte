@@ -159,11 +159,10 @@
         {@const hasRichData = !!(f.llmThought || f.rawResponse || f.messages?.length || f.observation || f.action)}
         {@const isFinal = f.kind === "final"}
 
-        <!-- Row container -->
-        <!-- svelte-ignore a11y-click-events-have-key-events -->
-        <!-- svelte-ignore a11y-no-static-element-interactions -->
-        <div
-          class="mx-2 mb-1 rounded-md cursor-pointer transition-all duration-150
+        <!-- Row container — button for a11y -->
+        <button
+          type="button"
+          class="w-full text-left mx-2 mb-1 rounded-md cursor-pointer transition-all duration-150 border-0 bg-transparent p-0
                  {isFinal
                    ? 'border-l-2 border-secondary/50 bg-secondary/5'
                    : isSelected
@@ -232,11 +231,10 @@
 
           <!-- ── Expanded detail ──────────────────────────────────────────── -->
           {#if isExpanded}
-            <!-- svelte-ignore a11y-click-events-have-key-events -->
-            <!-- svelte-ignore a11y-no-static-element-interactions -->
             <div
               class="px-3 pb-4 space-y-4 border-t border-white/5 pt-3 animate-fade-up"
-              onclick={(e) => e.stopPropagation()}
+              role="region"
+              aria-label="Iteration {f.iteration} details"
             >
 
               <!-- LLM Thought (agent's reasoning) -->
@@ -378,7 +376,7 @@
               </div>
             </div>
           {/if}
-        </div>
+        </button>
       {/each}
     {/if}
   </div>

@@ -13,6 +13,8 @@
   let svgEl = $state<SVGSVGElement | undefined>(undefined);
   let width = $state(600);
   let height = $state(400);
+  // Reactive dark-mode state — updated by MutationObserver on <html>
+  let dark = $state(typeof document !== "undefined" ? document.documentElement.classList.contains("dark") : true);
 
   // 3 D3 SVG tracks (tools moved to scrollable HTML row below)
   const TRACK_PROPORTIONS = [0.40, 0.28, 0.32] as const;
@@ -292,7 +294,14 @@
       }
     });
     ro.observe(container);
-    return () => ro.disconnect();
+
+    // Watch for dark/light mode toggle so tools track recolors reactively
+    const mo = new MutationObserver(() => {
+      dark = document.documentElement.classList.contains("dark");
+    });
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+
+    return () => { ro.disconnect(); mo.disconnect(); };
   });
 </script>
 
@@ -326,9 +335,9 @@
       {/if}
     </div>
     <div
-      class="h-9 bg-[#0c0e12] rounded border border-white/5 overflow-x-auto overflow-y-hidden
+      class="h-9 rounded overflow-x-auto overflow-y-hidden border
              scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent"
-      style="min-height:36px"
+      style="min-height:36px; background:{dark ? '#0c0e12' : '#e8ecf0'}; border-color:{dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.08)'};"
     >
       <div class="flex items-center gap-1.5 h-full px-2" style="min-width: max-content;">
         {#each data.tools as tool, i (tool.tStart + i)}
