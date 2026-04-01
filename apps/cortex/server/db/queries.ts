@@ -43,7 +43,10 @@ export function updateRunStats(
   runId: string,
   patch: {
     iterationCount?: number;
+    /** Additive: added to accumulated per-call total */
     tokensUsed?: number;
+    /** Override: sets tokens_used to MAX(existing, this) — for AgentCompleted.totalTokens */
+    tokensUsedTotal?: number;
     cost?: number;
     status?: string;
     debrief?: string;
@@ -60,6 +63,11 @@ export function updateRunStats(
   if (patch.tokensUsed !== undefined) {
     sets.push("tokens_used = tokens_used + ?");
     values.push(patch.tokensUsed);
+  }
+  if (patch.tokensUsedTotal !== undefined) {
+    // AgentCompleted.totalTokens: take the MAX so it corrects runs where per-call was 0
+    sets.push("tokens_used = MAX(tokens_used, ?)");
+    values.push(patch.tokensUsedTotal);
   }
   if (patch.cost !== undefined) {
     sets.push("cost_usd = cost_usd + ?");

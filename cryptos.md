@@ -1,7 +1,4 @@
-# Cryptocurrency Prices
-| Currency | Price |
-|----------|-------|
-| Bitcoin (BTC) | $68812.00 |
-| Ethereum (ETH) | $2133.24 |
-| Binance Coin (BNB) | $614.09 |
-| Ripple (XRP) | $1.350000 
+- Bitcoin: $68,542.24
+- Ethereum (ETH): $2,040.70
+- XRP: $1.3510
+- BONK on ETH: $0.000000000651

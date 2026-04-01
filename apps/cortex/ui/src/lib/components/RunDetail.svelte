@@ -3,14 +3,15 @@
   import { onDestroy } from "svelte";
   import { goto } from "$app/navigation";
   import VitalsStrip from "$lib/components/VitalsStrip.svelte";
-  import SignalMonitor from "$lib/components/SignalMonitor.svelte";
   import TracePanel from "$lib/components/TracePanel.svelte";
+  import RunOverview from "$lib/components/RunOverview.svelte";
   import DecisionLog from "$lib/components/DecisionLog.svelte";
   import MemoryPanel from "$lib/components/MemoryPanel.svelte";
   import ContextGauge from "$lib/components/ContextGauge.svelte";
-  import DebriefCard from "$lib/components/DebriefCard.svelte";
-  import ReplayControls from "$lib/components/ReplayControls.svelte";
+  import SignalMonitor from "$lib/components/SignalMonitor.svelte";
   import RawEventLog from "$lib/components/RawEventLog.svelte";
+  import DebriefPanel from "$lib/components/DebriefPanel.svelte";
+  import ReplayControls from "$lib/components/ReplayControls.svelte";
   import { createRunStore } from "$lib/stores/run-store.js";
   import { createSignalStore } from "$lib/stores/signal-store.js";
   import { createTraceStore } from "$lib/stores/trace-store.js";
@@ -22,18 +23,57 @@
   }
   let { runId }: Props = $props();
 
-  /* #key on parent remounts this component when runId changes — one store per mount. */
-  // svelte-ignore state_referenced_locally
   const runStore = createRunStore(runId);
   const agentStore = getContext<AgentStore>("agentStore");
   const signalStore = createSignalStore(runStore);
   const traceStore = createTraceStore(runStore);
 
   let selectedIteration = $state<number | null>(null);
-  let bottomTab = $state<"decisions" | "memory" | "context" | "events">("decisions");
+  let bottomTab = $state<"decisions" | "memory" | "context" | "debrief" | "signal" | "events">("decisions");
   let deletingRun = $state(false);
 
-  function panelEvents(msgs: CortexLiveMsg[]): Array<{ type: string; payload: Record<string, unknown>; ts: number }> {
+  // ── Resizable bottom panel ─────────────────────────────────────────────
+  const MIN_H = 100;
+  const MAX_H = 520;
+  const DEFAULT_H = 180;
+  let panelHeight = $state(DEFAULT_H);
+  let isDragging = $state(false);
+  let dragStartY = 0;
+  let dragStartH = 0;
+
+  function startResize(e: MouseEvent | TouchEvent) {
+    isDragging = true;
+    dragStartY = "touches" in e ? e.touches[0]!.clientY : e.clientY;
+    dragStartH = panelHeight;
+
+    const onMove = (ev: MouseEvent | TouchEvent) => {
+      const y = "touches" in ev ? ev.touches[0]!.clientY : ev.clientY;
+      const delta = dragStartY - y; // dragging UP = larger panel
+      panelHeight = Math.max(MIN_H, Math.min(MAX_H, dragStartH + delta));
+    };
+    const onUp = () => {
+      isDragging = false;
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      window.removeEventListener("touchmove", onMove as EventListener);
+      window.removeEventListener("touchend", onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    window.addEventListener("touchmove", onMove as EventListener, { passive: false });
+    window.addEventListener("touchend", onUp);
+  }
+
+  // Auto-open debrief tab when debrief arrives and user hasn't manually switched
+  let autoOpenedDebrief = $state(false);
+  $effect(() => {
+    if ($runStore.debrief && !autoOpenedDebrief && bottomTab === "decisions") {
+      bottomTab = "debrief";
+      autoOpenedDebrief = true;
+    }
+  });
+
+  function panelEvents(msgs: CortexLiveMsg[]) {
     return msgs.map((m) => ({ type: m.type, payload: m.payload, ts: m.ts }));
   }
 
@@ -61,52 +101,167 @@
 </svelte:head>
 
 <div class="flex flex-col h-full overflow-hidden min-h-0">
-  <nav
-    class="flex-shrink-0 px-4 py-2 border-b border-white/5 flex items-center gap-2 text-[10px] font-mono text-outline"
-  >
+
+  <!-- Breadcrumb -->
+  <nav class="flex-shrink-0 px-4 py-2 border-b border-white/5 flex items-center gap-2 text-[10px] font-mono text-outline">
     <a href="/" class="text-secondary hover:text-primary no-underline">Stage</a>
-    <span class="text-on-surface/30">/</span>
-    <span class="text-on-surface truncate max-w-[200px]" title={runId}>{runId}</span>
+    <span class="text-on-surface/20">/</span>
+    <span class="text-on-surface/60 truncate max-w-[160px]" title={runId}>{runId.slice(0, 16)}…</span>
     {#if $runStore.isChat}
-      <span class="ml-2 px-1.5 py-0.5 rounded border border-primary/30 text-primary text-[9px]">CHAT</span>
+      <span class="ml-1 px-1.5 py-0.5 rounded border border-primary/30 text-primary text-[9px]">CHAT</span>
     {/if}
     <div class="flex-1"></div>
     <ReplayControls status={$runStore.status} />
   </nav>
 
+  <!-- Vitals strip -->
   <VitalsStrip vitals={$runStore.vitals} status={$runStore.status} {runId} />
 
-  <div class="flex-1 grid grid-cols-1 md:grid-cols-[65%_35%] gap-4 p-4 overflow-hidden min-h-0">
-    <section class="flex flex-col gap-4 overflow-hidden min-h-0">
-      <!-- Failed run error panel — shown prominently when run failed -->
+  <!-- ── Main content: TRACE (left, wider) + OVERVIEW (right, compact) ── -->
+  <div class="flex-1 grid grid-cols-1 md:grid-cols-[60%_40%] gap-3 p-3 overflow-hidden min-h-0">
+
+    <!-- Left: Execution Trace — the primary view -->
+    <section class="min-h-0 overflow-hidden flex flex-col">
       {#if $runStore.status === "failed"}
+        <!-- Error banner when run failed -->
         {@const errorEvents = $runStore.events.filter(
-          (e) => e.type === "TaskFailed" || e.type === "AgentCompleted" && e.payload.success === false,
+          (e) => e.type === "TaskFailed" || (e.type === "AgentCompleted" && e.payload.success === false),
         )}
-        <div class="flex-shrink-0 gradient-border rounded-lg p-4 border-error/40 bg-error/5">
-          <div class="flex items-center gap-2 mb-3">
-            <span class="material-symbols-outlined text-error text-sm">error</span>
+        <div class="flex-shrink-0 mb-2 bg-error/6 border border-error/25 rounded-lg p-3">
+          <div class="flex items-center gap-2 mb-1.5">
+            <span class="material-symbols-outlined text-error text-sm" style="font-variation-settings: 'FILL' 1;">error</span>
             <span class="font-mono text-xs text-error uppercase tracking-widest font-bold">Run Failed</span>
           </div>
-          {#each errorEvents as ev}
-            {@const msg = typeof ev.payload.error === "string"
-              ? ev.payload.error
-              : typeof ev.payload.reason === "string"
-                ? ev.payload.reason
-                : "Agent terminated with failure"}
-            <p class="font-mono text-[11px] text-error/80 leading-relaxed bg-error/10 rounded p-2 border border-error/20">
-              {msg}
+          {#each errorEvents.slice(0, 1) as ev}
+            <p class="font-mono text-[10px] text-error/70 leading-relaxed">
+              {typeof ev.payload.error === "string"
+                ? ev.payload.error
+                : typeof ev.payload.reason === "string"
+                  ? ev.payload.reason
+                  : "Agent terminated with failure — see trace for last known state."}
             </p>
           {/each}
-          {#if errorEvents.length === 0}
-            <p class="font-mono text-[11px] text-error/60">
-              The run failed without a captured error message. Check the trace and signal monitor for the last state.
-            </p>
-          {/if}
         </div>
       {/if}
 
-      <div class="flex-1 min-h-[280px] overflow-hidden">
+      <div class="flex-1 min-h-0 overflow-hidden">
+        <TracePanel
+          frames={$traceStore}
+          status={$runStore.status}
+          frame={selectedIteration === null
+            ? $traceStore[$traceStore.length - 1] ?? null
+            : ($traceStore.find((f) => f.iteration === selectedIteration) ?? null)}
+        />
+      </div>
+    </section>
+
+    <!-- Right: Compact overview panel -->
+    <section class="min-h-0 overflow-hidden">
+      <RunOverview
+        vitals={$runStore.vitals}
+        status={$runStore.status}
+        signal={$signalStore}
+        debrief={$runStore.debrief}
+        eventCount={$runStore.events.length}
+      />
+    </section>
+  </div>
+
+  <!-- ── Footer: tabs + controls ────────────────────────────────────────── -->
+  <footer class="bg-[#17181c]/90 backdrop-blur-md flex justify-between items-center px-4 flex-shrink-0 border-t border-white/5 h-12">
+    <div class="flex items-center h-full gap-0">
+      {#each [
+        { id: "decisions", label: "Decisions",    icon: "analytics"    },
+        { id: "memory",    label: "Memory",       icon: "account_tree" },
+        { id: "context",   label: "Context",      icon: "data_usage"   },
+        { id: "debrief",   label: "Debrief",      icon: "summarize",
+          dot: !!$runStore.debrief },
+        { id: "signal",    label: "Signal",       icon: "show_chart"   },
+        { id: "events",    label: "Events",       icon: "terminal"     },
+      ] as tab (tab.id)}
+        <button
+          type="button"
+          class="flex items-center gap-1.5 px-3 h-full text-[10px] font-mono uppercase tracking-wider
+                 border-0 bg-transparent cursor-pointer transition-all duration-150
+                 {bottomTab === tab.id
+                   ? 'text-primary border-t-2 border-primary -mt-0.5 bg-primary/5'
+                   : 'text-outline/50 hover:text-outline hover:bg-white/5'}"
+          onclick={() => (bottomTab = tab.id as typeof bottomTab)}
+        >
+          <span class="relative">
+            <span class="material-symbols-outlined text-[13px]">{tab.icon}</span>
+            {#if (tab as any).dot}
+              <span class="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-secondary"></span>
+            {/if}
+          </span>
+          <span class="hidden sm:inline">{tab.label}</span>
+        </button>
+      {/each}
+    </div>
+
+    <div class="flex items-center gap-2">
+      {#if $runStore.status === "live"}
+        <button
+          type="button"
+          class="px-4 py-1 border border-primary/20 text-primary font-mono text-[10px] uppercase
+                 rounded bg-transparent cursor-pointer hover:bg-primary/10 transition-colors"
+          onclick={() => void runStore.pause()}
+        >Pause</button>
+        <button
+          type="button"
+          class="px-4 py-1 border border-error/20 text-error font-mono text-[10px] uppercase
+                 rounded bg-transparent cursor-pointer hover:bg-error/10 transition-colors"
+          onclick={() => void runStore.stop()}
+        >Stop</button>
+      {/if}
+      <button
+        type="button"
+        class="px-3 py-1 border border-outline-variant/15 text-outline/60 font-mono text-[10px]
+               uppercase rounded bg-transparent cursor-pointer hover:text-on-surface transition-colors"
+        onclick={() => goto("/")}
+      >Back</button>
+      <button
+        type="button"
+        disabled={deletingRun}
+        class="px-3 py-1 border border-error/15 text-error/60 font-mono text-[10px] uppercase
+               rounded bg-transparent cursor-pointer hover:bg-error/8 hover:text-error transition-colors
+               disabled:opacity-40 disabled:cursor-not-allowed"
+        onclick={() => void handleDeleteRun()}
+      >{deletingRun ? "…" : "Delete"}</button>
+    </div>
+  </footer>
+
+  <!-- ── Resizable bottom panel (VS Code terminal style) ───────────────── -->
+  <div
+    class="flex-shrink-0 flex flex-col border-t border-white/5 bg-surface-container-lowest/60"
+    style="height: {panelHeight}px;"
+  >
+    <!-- Drag handle — grab top edge to resize -->
+    <!-- svelte-ignore a11y-no-static-element-interactions -->
+    <div
+      class="flex-shrink-0 h-1.5 cursor-ns-resize group relative flex items-center justify-center
+             hover:bg-primary/20 transition-colors {isDragging ? 'bg-primary/30' : ''}"
+      onmousedown={startResize}
+      ontouchstart={startResize}
+      role="separator"
+      aria-orientation="horizontal"
+      aria-label="Resize panel"
+    >
+      <!-- Visual drag indicator -->
+      <div class="w-8 h-0.5 rounded-full bg-outline/20 group-hover:bg-primary/50 transition-colors {isDragging ? 'bg-primary/60' : ''}"></div>
+    </div>
+
+    <!-- Panel content (takes remaining height) -->
+    <div class="flex-1 overflow-hidden min-h-0">
+      {#if bottomTab === "decisions"}
+        <DecisionLog events={panelEvents($runStore.events)} />
+      {:else if bottomTab === "memory"}
+        <MemoryPanel events={panelEvents($runStore.events)} />
+      {:else if bottomTab === "context"}
+        <ContextGauge events={panelEvents($runStore.events)} />
+      {:else if bottomTab === "debrief"}
+        <DebriefPanel debrief={$runStore.debrief} status={$runStore.status} />
+      {:else if bottomTab === "signal"}
         <SignalMonitor
           data={$signalStore}
           onselectIteration={(n) => {
@@ -114,92 +269,9 @@
             signalStore.selectIteration(n);
           }}
         />
-      </div>
-
-      {#if $runStore.debrief}
-        <div class="flex-shrink-0 max-h-64 overflow-y-auto">
-          <DebriefCard debrief={$runStore.debrief} />
-        </div>
+      {:else}
+        <RawEventLog events={panelEvents($runStore.events)} />
       {/if}
-    </section>
-
-    <section class="min-h-0 overflow-hidden flex flex-col">
-      <TracePanel
-        frames={$traceStore}
-        status={$runStore.status}
-        frame={selectedIteration === null
-          ? $traceStore[$traceStore.length - 1] ?? null
-          : ($traceStore.find((f) => f.iteration === selectedIteration) ?? null)}
-      />
-    </section>
-  </div>
-
-  <footer
-    class="bg-[#111317]/80 backdrop-blur-md flex justify-between items-center px-6 flex-shrink-0 border-t border-primary/10 h-14"
-  >
-    <div class="flex items-center h-full">
-      {#each [{ id: "decisions", label: "Decisions", icon: "analytics" }, { id: "memory", label: "Memory", icon: "account_tree" }, { id: "context", label: "Context", icon: "data_usage" }, { id: "events", label: "Raw Events", icon: "terminal" }] as tab (tab.id)}
-        <button
-          type="button"
-          class="flex flex-col items-center justify-center px-5 h-full transition-all duration-200 font-mono text-[10px] uppercase tracking-wider border-0 bg-transparent cursor-pointer {bottomTab ===
-          tab.id
-            ? 'text-primary border-t-2 border-primary bg-primary/5 -mt-0.5'
-            : 'text-outline hover:bg-white/5 hover:text-secondary'}"
-          onclick={() => (bottomTab = tab.id as typeof bottomTab)}
-        >
-          <span class="material-symbols-outlined text-sm mb-0.5">{tab.icon}</span>
-          {tab.label}
-        </button>
-      {/each}
     </div>
-
-    <div class="flex items-center gap-3">
-      {#if $runStore.status === "live"}
-        <button
-          type="button"
-          class="px-5 py-1.5 border border-primary/20 text-primary font-mono text-xs uppercase hover:bg-primary/10 transition-colors rounded bg-transparent cursor-pointer"
-          onclick={() => void runStore.pause()}
-        >
-          Pause
-        </button>
-        <button
-          type="button"
-          class="px-5 py-1.5 border border-error/20 text-error font-mono text-xs uppercase hover:bg-error/10 transition-colors rounded bg-transparent cursor-pointer"
-          onclick={() => void runStore.stop()}
-        >
-          Stop
-        </button>
-      {/if}
-      <button
-        type="button"
-        class="px-4 py-1.5 border border-outline-variant/20 text-outline font-mono text-xs uppercase rounded bg-transparent cursor-pointer hover:text-on-surface"
-        onclick={() => goto("/")}
-      >
-        Back
-      </button>
-      <button
-        type="button"
-        disabled={deletingRun}
-        class="px-4 py-1.5 border border-error/20 text-error font-mono text-xs uppercase rounded bg-transparent cursor-pointer hover:bg-error/10 disabled:opacity-50 disabled:cursor-not-allowed"
-        onclick={() => void handleDeleteRun()}
-      >
-        {deletingRun ? "Deleting…" : "Delete Run"}
-      </button>
-    </div>
-  </footer>
-
-  <div
-    class="bg-surface-container-low border-t border-outline-variant/10 overflow-hidden transition-all duration-300 flex-shrink-0
-           {bottomTab === 'events' ? 'h-64' : 'h-40'}"
-  >
-    {#if bottomTab === "decisions"}
-      <DecisionLog events={panelEvents($runStore.events)} />
-    {:else if bottomTab === "memory"}
-      <MemoryPanel events={panelEvents($runStore.events)} />
-    {:else if bottomTab === "context"}
-      <ContextGauge events={panelEvents($runStore.events)} />
-    {:else}
-      <RawEventLog events={panelEvents($runStore.events)} />
-    {/if}
   </div>
 </div>

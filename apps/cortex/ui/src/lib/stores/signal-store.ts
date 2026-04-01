@@ -54,6 +54,10 @@ export function createSignalStore(runState: Readable<RunState>) {
     const callIdToIndex = new Map<string, number>();
     let llmStart: number | null = null;
     let currentIteration = 0;
+    // Carry values accumulated between iteration boundaries
+    let carryTokens = 0;
+    let carryDurationMs = 0;
+    let prevIterTs = 0;  // timestamp of previous ReasoningIterationProgress
 
     for (const msg of $state.events) {
       const p = msg.payload;
@@ -72,28 +76,19 @@ export function createSignalStore(runState: Readable<RunState>) {
           llmStart = msg.ts;
           break;
         case "LLMRequestCompleted": {
-          // Duration: prefer explicit field, then timestamp delta
+          // Accumulate carry values — push bars at ReasoningIterationProgress boundary
+          // (same pattern as trace-store) because per-call tokensUsed may be 0 when
+          // framework accumulates into AgentCompleted.totalTokens instead.
           const durationMs =
             typeof p.durationMs === "number" && p.durationMs > 0
               ? p.durationMs
               : llmStart !== null && msg.ts > llmStart
                 ? msg.ts - llmStart
                 : 0;
-          // Only push latency when we have a real duration — no sentinel
-          if (durationMs > 0) {
-            latency.push({
-              ts: msg.ts,
-              value: durationMs,
-              color: "#06b6d4",
-              iteration: currentIteration,
-            });
-          }
+          if (durationMs > 0) carryDurationMs = Math.max(carryDurationMs, durationMs);
           llmStart = null;
           const t = readTokensFromPayload(p);
-          // Only push token bar when we have real token data
-          if (t > 0) {
-            tokens.push({ ts: msg.ts, iteration: currentIteration, tokens: t });
-          }
+          if (t > 0) carryTokens += t;
           break;
         }
         case "ReasoningStepCompleted":
@@ -105,9 +100,29 @@ export function createSignalStore(runState: Readable<RunState>) {
             currentIteration = Math.max(currentIteration, p.step);
           }
           break;
-        case "ReasoningIterationProgress":
-          if (typeof p.iteration === "number") currentIteration = p.iteration;
+        case "ReasoningIterationProgress": {
+          const iter = typeof p.iteration === "number" ? p.iteration : currentIteration;
+          currentIteration = iter;
+
+          // Push token bar — accumulated carry since last iteration
+          if (carryTokens > 0) {
+            tokens.push({ ts: msg.ts, iteration: iter, tokens: carryTokens });
+          }
+          // Push latency — prefer carry from LLMRequestCompleted, else time since prev iteration
+          const iterDuration =
+            carryDurationMs > 0
+              ? carryDurationMs
+              : prevIterTs > 0 && msg.ts > prevIterTs
+                ? msg.ts - prevIterTs
+                : 0;
+          if (iterDuration > 0) {
+            latency.push({ ts: msg.ts, value: iterDuration, color: "#06b6d4", iteration: iter });
+          }
+          carryTokens = 0;
+          carryDurationMs = 0;
+          prevIterTs = msg.ts;
           break;
+        }
         case "ToolCallStarted": {
           const name = typeof p.toolName === "string" ? p.toolName : "unknown";
           const callId = typeof p.callId === "string" ? p.callId : `${msg.ts}-${name}`;
@@ -141,6 +156,36 @@ export function createSignalStore(runState: Readable<RunState>) {
               tEnd: msg.ts,
               latencyMs: dur || undefined,
             });
+          }
+          break;
+        }
+        case "AgentCompleted": {
+          // Flush remaining carry
+          if (carryTokens > 0) {
+            tokens.push({ ts: msg.ts, iteration: Math.max(1, currentIteration), tokens: carryTokens });
+            carryTokens = 0;
+          }
+          // Fallback: distribute AgentCompleted.totalTokens across iterations when no per-call data
+          const total = typeof p.totalTokens === "number" ? p.totalTokens : 0;
+          if (total > 0 && tokens.length === 0 && currentIteration > 0) {
+            // Create evenly-distributed synthetic bars so the chart has something useful to show.
+            // Per-iteration height is equal; relative comparison across iterations isn't meaningful
+            // but at least the chart is populated and shows the total was non-zero.
+            const perIter = Math.ceil(total / currentIteration);
+            for (let i = 1; i <= currentIteration; i++) {
+              tokens.push({ ts: msg.ts, iteration: i, tokens: perIter });
+            }
+          } else if (total > 0 && tokens.length === 0) {
+            tokens.push({ ts: msg.ts, iteration: 1, tokens: total });
+          }
+          // Latency fallback
+          const totalDur = typeof p.durationMs === "number" ? p.durationMs : 0;
+          if (totalDur > 0 && latency.length === 0 && currentIteration > 0) {
+            // Same approach — distribute evenly
+            const perIterMs = Math.ceil(totalDur / currentIteration);
+            for (let i = 1; i <= currentIteration; i++) {
+              latency.push({ ts: msg.ts, value: perIterMs, color: "#06b6d4", iteration: i });
+            }
           }
           break;
         }

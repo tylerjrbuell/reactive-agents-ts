@@ -31,6 +31,7 @@ const deriveRunStats = (
 ): Partial<{
   iterationCount: number;
   tokensUsed: number;
+  tokensUsedTotal: number;
   cost: number;
   status: string;
   completedAt: number;
@@ -49,8 +50,16 @@ const deriveRunStats = (
     return { iterationCount: e.iteration ?? 0 };
   }
   if (event._tag === "AgentCompleted") {
-    const e = event as { success?: boolean };
-    return { status: e.success ? "completed" : "failed", completedAt: Date.now() };
+    const e = event as { success?: boolean; totalTokens?: number; durationMs?: number };
+    return {
+      status: e.success ? "completed" : "failed",
+      completedAt: Date.now(),
+      // totalTokens is the authoritative count — persisted via MAX so it doesn't
+      // overcount when added to per-call accumulated values.
+      ...(typeof e.totalTokens === "number" && e.totalTokens > 0
+        ? { tokensUsedTotal: e.totalTokens }
+        : {}),
+    };
   }
   if (event._tag === "TaskFailed") {
     return { status: "failed", completedAt: Date.now() };

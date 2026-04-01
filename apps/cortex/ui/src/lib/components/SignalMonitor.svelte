@@ -15,11 +15,11 @@
   let height = $state(400);
 
   // 3 D3 SVG tracks (tools moved to scrollable HTML row below)
-  const TRACK_PROPORTIONS = [0.42, 0.28, 0.30] as const;
+  const TRACK_PROPORTIONS = [0.40, 0.28, 0.32] as const;
   const TRACK_LABELS = [
-    "01 // Entropy",
-    "02 // Tokens / Request",
-    "04 // LLM Latency (ms)",
+    "Entropy",
+    "Tokens / Iter",
+    "LLM Latency",
   ] as const;
   const TRACK_GAP = 8;
   const ENTROPY_GRAD_ID = "cortex-entropy-grad";
@@ -33,8 +33,8 @@
 
     const W = width;
     const H = height;
-    const LABEL_W = 120;
-    const TRACK_W = Math.max(40, W - LABEL_W - 16);
+    const LABEL_W = 90;
+    const TRACK_W = Math.max(40, W - LABEL_W - 12);
 
     const allTs = [
       ...data.entropy.map((d) => d.ts),
@@ -68,11 +68,11 @@
 
       g.append("text")
         .attr("x", 0)
-        .attr("y", trackH / 2 + 4)
-        .attr("fill", "#8b5cf6")
+        .attr("y", trackH / 2 + 3)
+        .attr("fill", "#888b96")
         .attr("font-family", "ui-monospace, monospace")
-        .attr("font-size", "9px")
-        .attr("letter-spacing", "0.05em")
+        .attr("font-size", "8.5px")
+        .attr("text-anchor", "start")
         .text(TRACK_LABELS[trackIdx] ?? "");
 
       const trackG = g.append("g")
@@ -146,22 +146,27 @@
             .attr("x", TRACK_W / 2).attr("y", trackH / 2 + 4)
             .attr("text-anchor", "middle").attr("fill", "#494454")
             .attr("font-size", "9px").attr("font-family", "ui-monospace, monospace")
-            .text("awaiting LLM requests…");
+            .text("no token data");
         } else {
         const maxTok = Math.max(...data.tokens.map((d) => d.tokens), 1);
-        const yScale = d3.scaleLinear().domain([0, maxTok]).range([trackH - 4, 4]);
-        const barW = Math.max(2, Math.min(20, TRACK_W / (data.tokens.length + 1) - 2));
+        const yScale = d3.scaleLinear().domain([0, maxTok]).range([trackH - 3, 3]);
+        const n = data.tokens.length;
+        // Iteration-based x positioning — evenly distribute bars regardless of timestamps.
+        // Token bars represent "tokens per iteration", not a time-series, so iteration is
+        // the natural axis. This ensures bars are always visible and spread across the track.
+        const slotW = TRACK_W / n;
+        const barW = Math.max(3, Math.min(slotW * 0.7, 22));
 
         trackG
           .selectAll("rect.bar")
           .data(data.tokens)
           .join("rect")
           .attr("class", "bar")
-          .attr("x", (d) => xScale(d.ts))
+          .attr("x", (_d, i) => i * slotW + (slotW - barW) / 2)
           .attr("y", (d) => yScale(d.tokens))
           .attr("width", barW)
-          .attr("height", (d) => trackH - yScale(d.tokens))
-          .attr("fill", "#d0bcff")
+          .attr("height", (d) => Math.max(2, trackH - yScale(d.tokens)))
+          .attr("fill", "#8b5cf6")
           .attr("fill-opacity", 0.8)
           .attr("rx", 1)
           .style("cursor", "pointer")
@@ -169,48 +174,50 @@
         } // end tokens.length > 0
       }
 
-      // trackIdx 2 = latency (tools moved to scrollable HTML row)
+      // trackIdx 2 = latency
       if (trackIdx === 2) {
         if (data.latency.length === 0) {
           trackG.append("text")
             .attr("x", TRACK_W / 2).attr("y", trackH / 2 + 4)
             .attr("text-anchor", "middle").attr("fill", "#494454")
             .attr("font-size", "9px").attr("font-family", "ui-monospace, monospace")
-            .text("awaiting LLM requests…");
+            .text("no latency data");
         } else {
-
         const maxMs = Math.max(...data.latency.map((d) => d.value), 1);
-        const yScale = d3.scaleLinear().domain([0, maxMs]).range([trackH - 4, 4]);
+        const yScale = d3.scaleLinear().domain([0, maxMs]).range([trackH - 3, 3]);
+        const n = data.latency.length;
+        // Use iteration index for x positioning (same reasoning as tokens track)
+        const iterXScale = d3.scaleLinear().domain([0, Math.max(n - 1, 1)]).range([0, TRACK_W]);
 
         const area = d3
           .area<(typeof data.latency)[0]>()
-          .x((d) => xScale(d.ts))
+          .x((_d, i) => iterXScale(i))
           .y0(trackH)
           .y1((d) => yScale(d.value))
           .curve(d3.curveMonotoneX);
 
         const line = d3
           .line<(typeof data.latency)[0]>()
-          .x((d) => xScale(d.ts))
+          .x((_d, i) => iterXScale(i))
           .y((d) => yScale(d.value))
           .curve(d3.curveMonotoneX);
 
-        trackG.append("path").datum(data.latency).attr("d", area).attr("fill", "#4cd7f6").attr("fill-opacity", 0.15);
+        trackG.append("path").datum(data.latency).attr("d", area).attr("fill", "#06b6d4").attr("fill-opacity", 0.12);
         trackG
           .append("path")
           .datum(data.latency)
           .attr("d", line)
           .attr("fill", "none")
-          .attr("stroke", "#4cd7f6")
+          .attr("stroke", "#06b6d4")
           .attr("stroke-width", 1.5);
 
         if (data.latency.length === 1) {
           trackG
             .append("circle")
-            .attr("cx", xScale(data.latency[0]!.ts))
+            .attr("cx", TRACK_W / 2)
             .attr("cy", yScale(data.latency[0]!.value))
-            .attr("r", 3)
-            .attr("fill", "#4cd7f6");
+            .attr("r", 3.5)
+            .attr("fill", "#06b6d4");
         }
         } // end latency.length > 0
       }
@@ -243,18 +250,14 @@
 <div class="gradient-border-glow rounded-lg h-full flex flex-col min-h-[320px]">
   <div class="flex justify-between items-center px-6 py-4 flex-shrink-0">
     <h2 class="font-headline text-sm font-bold tracking-tight text-on-surface/90 uppercase">Signal Monitor</h2>
-    <!-- Event count badges — green when data present, muted when empty -->
-    <div class="flex gap-3 text-[9px] font-mono">
-      <span class="{data.entropy.length > 0 ? 'text-primary/70' : 'text-outline/30'}" title="Entropy samples">
+    <div class="flex gap-3 text-[9px] font-mono tabular-nums">
+      <span class="{data.entropy.length > 0 ? 'text-primary/60' : 'text-outline/25'}" title="{data.entropy.length} entropy samples">
         η {data.entropy.length}
       </span>
-      <span class="{data.tokens.length > 0 ? 'text-primary/70' : 'text-outline/30'}" title="Token bars">
+      <span class="{data.tokens.length > 0 ? 'text-primary/60' : 'text-outline/25'}" title="{data.tokens.length} token bars">
         tok {data.tokens.length}
       </span>
-      <span class="{data.tools.length > 0 ? 'text-tertiary/70' : 'text-outline/30'}" title="Tool spans">
-        tools {data.tools.length}
-      </span>
-      <span class="{data.latency.length > 0 ? 'text-secondary/70' : 'text-outline/30'}" title="Latency points">
+      <span class="{data.latency.length > 0 ? 'text-secondary/60' : 'text-outline/25'}" title="{data.latency.length} latency points">
         lat {data.latency.length}
       </span>
     </div>
@@ -268,7 +271,7 @@
   <!-- Tools track — separate scrollable HTML row (prevents SVG overflow/cramping) -->
   <div class="flex-shrink-0 px-4 pb-3">
     <div class="flex items-center gap-2 mb-1">
-      <span class="text-[9px] font-mono text-primary/70 uppercase tracking-widest w-[120px]">03 // Tools</span>
+      <span class="text-[9px] font-mono text-primary/70 uppercase tracking-widest w-[120px]">Tool Calls</span>
       {#if data.tools.length === 0}
         <span class="text-[9px] font-mono text-outline/30 italic">no tool calls yet</span>
       {/if}
