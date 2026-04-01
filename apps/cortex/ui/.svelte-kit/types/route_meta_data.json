@@ -1,0 +1,15 @@
+{
+	"/": [
+		"src/routes/+layout.ts",
+		"src/routes/+layout.ts"
+	],
+	"/run": [
+		"src/routes/+layout.ts"
+	],
+	"/run/[runId]": [
+		"src/routes/+layout.ts"
+	],
+	"/workshop": [
+		"src/routes/+layout.ts"
+	]
+}

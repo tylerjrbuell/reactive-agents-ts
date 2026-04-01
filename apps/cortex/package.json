@@ -1,0 +1,30 @@
+{
+  "name": "@reactive-agents/cortex",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "bun run server/index.ts",
+    "dev:server": "bun run server/index.ts",
+    "dev:ui": "cd ui && bun run dev",
+    "start": "bun run scripts/dev-stack.ts",
+    "build:ui": "cd ui && bun run build",
+    "test": "bun test server/tests --timeout 15000",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "elysia": "^1.1.0",
+    "effect": "^3.10.0",
+    "@reactive-agents/core": "workspace:*",
+    "@reactive-agents/memory": "workspace:*",
+    "@reactive-agents/runtime": "workspace:*",
+    "@reactive-agents/observability": "workspace:*",
+    "@reactive-agents/gateway": "workspace:*",
+    "@reactive-agents/llm-provider": "workspace:*",
+    "@reactive-agents/tools": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "@types/bun": "latest"
+  }
+}

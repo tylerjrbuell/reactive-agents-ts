@@ -131,19 +131,44 @@
     {/if}
   </div>
 
-  <div class="absolute bottom-0 left-0 w-full h-[2px]">
-    <svg
-      class="w-full h-8 absolute bottom-0 overflow-visible"
-      preserveAspectRatio="none"
-      viewBox="0 0 1000 32"
-    >
-      <path
-        class="ekg-line {status === 'live' ? '' : 'ekg-paused'}"
-        d="M0 16 L100 16 L110 5 L120 27 L130 16 L300 16 L310 16 L320 2 L330 30 L340 16 L600 16 L610 8 L620 24 L630 16 L850 16 L860 0 L870 32 L880 16 L1000 16"
-        fill="none"
-        stroke={ekgStroke}
-        stroke-width="1"
-      />
+  <!-- EKG heartbeat row — separate from metrics, never overlaps text -->
+  <div class="w-full h-7 relative overflow-hidden bg-transparent border-t border-white/[0.03]">
+    <svg class="w-full h-full" preserveAspectRatio="none" viewBox="0 0 1000 28">
+      {#if status === 'live' || status === 'loading'}
+        <!-- Animated heartbeat when running -->
+        <path
+          class="ekg-line"
+          d="M0 14 L100 14 L110 4 L120 24 L130 14 L300 14 L310 14 L320 2 L330 26 L340 14 L600 14 L610 7 L620 21 L630 14 L850 14 L860 0 L870 28 L880 14 L1000 14"
+          fill="none"
+          stroke={ekgStroke}
+          stroke-width="1.5"
+          opacity="0.7"
+        />
+      {:else if status === 'paused'}
+        <!-- Frozen mid-wave when paused -->
+        <path
+          d="M0 14 L100 14 L110 4 L120 24 L130 14 L500 14"
+          fill="none"
+          stroke={ekgStroke}
+          stroke-width="1.5"
+          opacity="0.5"
+          stroke-dasharray="4 3"
+        />
+      {:else}
+        <!-- Flat settled line when completed or failed -->
+        <line
+          x1="0" y1="14" x2="1000" y2="14"
+          stroke={status === 'failed' ? '#ffb4ab' : '#4cd7f6'}
+          stroke-width="1"
+          opacity="0.3"
+        />
+        <!-- Small terminal mark -->
+        <circle
+          cx="980" cy="14" r="2.5"
+          fill={status === 'failed' ? '#ffb4ab' : '#4cd7f6'}
+          opacity="0.5"
+        />
+      {/if}
     </svg>
   </div>
 </div>

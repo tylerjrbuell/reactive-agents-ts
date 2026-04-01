@@ -1,0 +1,177 @@
+<script lang="ts">
+  import "../app.css";
+  import { page } from "$app/stores";
+  import { goto } from "$app/navigation";
+  import { onMount, onDestroy, setContext } from "svelte";
+  import { get, writable } from "svelte/store";
+  import Toast from "$lib/components/Toast.svelte";
+  import CommandPalette from "$lib/components/CommandPalette.svelte";
+  import { commandPalette } from "$lib/stores/command-palette.js";
+  import { createWsClient } from "$lib/stores/ws-client.js";
+  import { createAgentStore } from "$lib/stores/agent-store.js";
+  import { createStageStore } from "$lib/stores/stage-store.js";
+  import type { AgentStore } from "$lib/stores/agent-store.js";
+  import type { StageStore } from "$lib/stores/stage-store.js";
+
+  let { children } = $props();
+
+  const agentStore: AgentStore = createAgentStore();
+  const stageStore: StageStore = createStageStore();
+
+  setContext("agentStore", agentStore);
+  setContext("stageStore", stageStore);
+
+  const toasts = writable<Array<{ id: string; agentId: string }>>([]);
+
+  let wsUnsub: (() => void) | null = null;
+  let refreshTimer: ReturnType<typeof setInterval> | null = null;
+  const wsClient = createWsClient("/ws/live/cortex-broadcast");
+
+  const navItems = [
+    { label: "Stage", href: "/", icon: "hub" },
+    { label: "Run", href: "/run", icon: "analytics" },
+    { label: "Workshop", href: "/workshop", icon: "build" },
+  ];
+
+  onMount(() => {
+    stageStore.setNavigate((path) => goto(path));
+
+    wsUnsub = wsClient.onMessage((raw) => {
+      const msg = raw as {
+        agentId?: string;
+        runId?: string;
+        type?: string;
+        payload?: Record<string, unknown>;
+      };
+      if (!msg?.agentId || !msg.runId || !msg.type) return;
+
+      agentStore.handleLiveMessage({
+        agentId: msg.agentId,
+        runId: msg.runId,
+        type: msg.type,
+        payload: msg.payload ?? {},
+      });
+
+      const agents = get(agentStore);
+      const node = agents.find((a) => a.runId === msg.runId);
+      if (node && msg.type === "AgentConnected") {
+        stageStore.handleAgentConnected(node, agents.length);
+        toasts.update((t) => [...t, { id: crypto.randomUUID(), agentId: msg.agentId! }]);
+      }
+    });
+
+    // Safety-net reconciliation so deletes/new runs reflect without manual reload
+    // even if a WS message is missed during navigation transitions.
+    refreshTimer = setInterval(() => {
+      void agentStore.refresh();
+    }, 5000);
+
+    return () => {
+      wsUnsub?.();
+      wsUnsub = null;
+      if (refreshTimer) {
+        clearInterval(refreshTimer);
+        refreshTimer = null;
+      }
+    };
+  });
+
+  onDestroy(() => {
+    wsClient.close();
+    agentStore.destroy();
+  });
+</script>
+
+<div class="h-screen w-screen flex flex-col overflow-hidden bg-background text-on-surface">
+  <header
+    class="bg-[#17181c] flex justify-between items-center w-full px-6 h-12 border-b border-white/5 shadow-neural z-50 flex-shrink-0"
+  >
+    <!-- RA neural network logo + wordmark (matches docs site identity) -->
+    <a href="/" class="flex items-center gap-2.5 no-underline group" aria-label="Cortex home">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="22" height="22" class="flex-shrink-0" aria-hidden="true">
+        <defs>
+          <linearGradient id="lh-ed" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.8"/><stop offset="100%" stop-color="#06b6d4" stop-opacity="0.35"/>
+          </linearGradient>
+          <linearGradient id="lh-ed2" x1="100%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stop-color="#06b6d4" stop-opacity="0.6"/><stop offset="100%" stop-color="#8b5cf6" stop-opacity="0.25"/>
+          </linearGradient>
+          <filter id="lh-gN" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="1.2" result="b"/>
+            <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+        </defs>
+        <circle cx="24" cy="24" r="18" fill="#8b5cf6" opacity="0.05"/>
+        <line x1="14" y1="6" x2="34" y2="6" stroke="url(#lh-ed)" stroke-width="1.1" stroke-linecap="round"/>
+        <line x1="14" y1="6" x2="6" y2="20" stroke="url(#lh-ed)" stroke-width="1.1" stroke-linecap="round"/>
+        <line x1="34" y1="6" x2="42" y2="20" stroke="url(#lh-ed)" stroke-width="1.1" stroke-linecap="round"/>
+        <line x1="6" y1="20" x2="6" y2="34" stroke="url(#lh-ed)" stroke-width="1.1" stroke-linecap="round"/>
+        <line x1="42" y1="20" x2="42" y2="34" stroke="url(#lh-ed)" stroke-width="1.1" stroke-linecap="round"/>
+        <line x1="6" y1="34" x2="18" y2="44" stroke="url(#lh-ed)" stroke-width="1.1" stroke-linecap="round"/>
+        <line x1="42" y1="34" x2="30" y2="44" stroke="url(#lh-ed)" stroke-width="1.1" stroke-linecap="round"/>
+        <line x1="18" y1="44" x2="30" y2="44" stroke="url(#lh-ed)" stroke-width="1.1" stroke-linecap="round"/>
+        <line x1="14" y1="6" x2="24" y2="24" stroke="url(#lh-ed2)" stroke-width="1.3" stroke-linecap="round"/>
+        <line x1="34" y1="6" x2="24" y2="24" stroke="url(#lh-ed2)" stroke-width="1.3" stroke-linecap="round"/>
+        <line x1="6" y1="20" x2="24" y2="24" stroke="url(#lh-ed2)" stroke-width="1.3" stroke-linecap="round"/>
+        <line x1="42" y1="20" x2="24" y2="24" stroke="url(#lh-ed2)" stroke-width="1.3" stroke-linecap="round"/>
+        <line x1="6" y1="34" x2="24" y2="24" stroke="url(#lh-ed2)" stroke-width="1.3" stroke-linecap="round"/>
+        <line x1="42" y1="34" x2="24" y2="24" stroke="url(#lh-ed2)" stroke-width="1.3" stroke-linecap="round"/>
+        <line x1="18" y1="44" x2="24" y2="24" stroke="url(#lh-ed2)" stroke-width="1.3" stroke-linecap="round"/>
+        <line x1="30" y1="44" x2="24" y2="24" stroke="url(#lh-ed2)" stroke-width="1.3" stroke-linecap="round"/>
+        <circle cx="14" cy="6" r="2.5" fill="#8b5cf6" filter="url(#lh-gN)"/>
+        <circle cx="34" cy="6" r="2.5" fill="#06b6d4" filter="url(#lh-gN)"/>
+        <circle cx="6" cy="20" r="2" fill="#a78bfa" filter="url(#lh-gN)"/>
+        <circle cx="42" cy="20" r="2" fill="#c4b5fd" filter="url(#lh-gN)"/>
+        <circle cx="6" cy="34" r="2" fill="#06b6d4" filter="url(#lh-gN)"/>
+        <circle cx="42" cy="34" r="2" fill="#8b5cf6" filter="url(#lh-gN)"/>
+        <circle cx="18" cy="44" r="2.5" fill="#a78bfa" filter="url(#lh-gN)"/>
+        <circle cx="30" cy="44" r="2.5" fill="#06b6d4" filter="url(#lh-gN)"/>
+        <circle cx="24" cy="24" r="4.8" fill="#8b5cf6" opacity="0.9"/>
+        <circle cx="24" cy="24" r="7.5" fill="none" stroke="#06b6d4" stroke-width="0.5" opacity="0.2"/>
+      </svg>
+      <span class="text-base font-semibold tracking-tight ra-gradient-text uppercase select-none">
+        Cortex
+      </span>
+    </a>
+
+    <nav class="hidden md:flex items-center gap-6">
+      {#each navItems as item}
+        {@const active =
+          item.href === "/" ? $page.url.pathname === "/" : $page.url.pathname.startsWith(item.href)}
+        <a
+          href={item.href}
+          class="flex items-center gap-1.5 text-sm font-medium transition-colors duration-200 no-underline {active
+            ? 'text-primary border-b-2 border-primary pb-0.5'
+            : 'text-outline hover:text-primary'}"
+        >
+          {item.label}
+        </a>
+      {/each}
+    </nav>
+
+    <div class="flex items-center gap-3">
+      <button
+        type="button"
+        class="hidden md:flex items-center gap-2 px-3 py-1.5 bg-surface-container-lowest rounded border border-outline-variant/10 text-[10px] font-mono text-outline uppercase tracking-widest hover:border-outline-variant/30 transition-colors cursor-pointer border-solid"
+        onclick={() => commandPalette.open()}
+      >
+        <span class="material-symbols-outlined text-sm text-secondary">terminal</span>
+        ⌘K
+      </button>
+      <span class="material-symbols-outlined text-outline p-1" aria-hidden="true">settings</span>
+    </div>
+  </header>
+
+  <main class="flex-1 overflow-hidden min-h-0">
+    {@render children()}
+  </main>
+</div>
+
+<CommandPalette />
+
+{#each $toasts as toast (toast.id)}
+  <Toast
+    agentId={toast.agentId}
+    onClose={() => toasts.update((t) => t.filter((x) => x.id !== toast.id))}
+  />
+{/each}

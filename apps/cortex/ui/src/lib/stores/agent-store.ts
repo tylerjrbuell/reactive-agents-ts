@@ -1,0 +1,240 @@
+/**
+ * Cortex **desk** store: multiple agents, live WebSocket events, REST run history.
+ *
+ * For single-run HTTP/stream UX, use `createAgent` / `createAgentStream` (or `createCortexAgentRun` /
+ * `createCortexAgentStreamRun`) from `./framework.js` — those come from `@reactive-agents/svelte`.
+ */
+import { writable, derived } from "svelte/store";
+import { CORTEX_SERVER_URL } from "../constants.js";
+
+export type AgentCognitiveState =
+  | "idle"
+  | "running"
+  | "exploring"
+  | "stressed"
+  | "completed"
+  | "error";
+
+export interface AgentNode {
+  readonly agentId: string;
+  readonly runId: string;
+  readonly name: string;
+  readonly state: AgentCognitiveState;
+  readonly entropy: number;
+  readonly iteration: number;
+  readonly maxIterations: number;
+  readonly tokensUsed: number;
+  readonly cost: number;
+  readonly connectedAt: number;
+  readonly completedAt?: number;
+  readonly lastEventAt: number;
+}
+
+export interface AgentStoreState {
+  /** Keyed by runId (stable per execution). */
+  readonly agents: Map<string, AgentNode>;
+  readonly loading: boolean;
+}
+
+/** Matches `RunSummary` from Cortex server `/api/runs`. */
+export interface RunSummaryDto {
+  readonly runId: string;
+  readonly agentId: string;
+  readonly status: string;
+  readonly iterationCount: number;
+  readonly tokensUsed: number;
+  readonly cost: number;
+}
+
+export function entropyToState(entropy: number, isRunning: boolean): AgentCognitiveState {
+  if (!isRunning) return "idle";
+  if (entropy < 0.5) return "running";
+  if (entropy < 0.75) return "exploring";
+  return "stressed";
+}
+
+function runToSeedNode(run: RunSummaryDto, now: number): AgentNode {
+  const state: AgentCognitiveState =
+    run.status === "live" ? "running" : run.status === "failed" ? "error" : "completed";
+  return {
+    agentId: run.agentId,
+    runId: run.runId,
+    name: run.agentId,
+    state,
+    entropy: 0,
+    iteration: run.iterationCount,
+    maxIterations: 0,
+    tokensUsed: run.tokensUsed,
+    cost: run.cost,
+    connectedAt: 0,
+    lastEventAt: now,
+  };
+}
+
+export interface CreateAgentStoreOptions {
+  readonly loadOnInit?: boolean;
+  readonly fetchImpl?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+  readonly now?: () => number;
+}
+
+export function createAgentStore(options?: CreateAgentStoreOptions) {
+  const loadOnInit = options?.loadOnInit !== false;
+  const fetchFn = options?.fetchImpl ?? globalThis.fetch.bind(globalThis);
+  const nowFn = options?.now ?? (() => Date.now());
+
+  const state = writable<AgentStoreState>({ agents: new Map(), loading: false });
+
+  const agents = derived(state, ($s) => Array.from($s.agents.values()));
+
+  async function loadAgents() {
+    state.update((s) => ({ ...s, loading: true }));
+    try {
+      const res = await fetchFn(`${CORTEX_SERVER_URL}/api/runs`);
+      if (!res.ok) throw new Error(String(res.status));
+      const runs = (await res.json()) as RunSummaryDto[];
+      const trimmed = runs.slice(0, 20);
+      const t = nowFn();
+
+      state.update((s) => {
+        // Reconcile from server snapshot so deletes/stale runs disappear without hard refresh.
+        const prev = s.agents;
+        const next = new Map<string, AgentNode>();
+        for (const run of trimmed) {
+          const seeded = runToSeedNode(run, t);
+          const existing = prev.get(run.runId);
+          next.set(
+            run.runId,
+            existing
+              ? {
+                  ...seeded,
+                  // Preserve richer live-derived fields when present.
+                  entropy: existing.entropy,
+                  iteration: Math.max(existing.iteration, seeded.iteration),
+                  maxIterations: existing.maxIterations,
+                  // Never regress visible totals due to delayed/stale summary rows.
+                  tokensUsed: Math.max(existing.tokensUsed, seeded.tokensUsed),
+                  cost: Math.max(existing.cost, seeded.cost),
+                  connectedAt: existing.connectedAt,
+                  lastEventAt: Math.max(existing.lastEventAt, seeded.lastEventAt),
+                }
+              : seeded,
+          );
+        }
+        return { agents: next, loading: false };
+      });
+    } catch {
+      state.update((s) => ({ ...s, loading: false }));
+    }
+  }
+
+  function handleLiveMessage(msg: {
+    agentId: string;
+    runId: string;
+    type: string;
+    payload: Record<string, unknown>;
+  }) {
+    state.update((s) => {
+      const map = new Map(s.agents);
+      const existing = map.get(msg.runId);
+      type MutablePatch = { -readonly [K in keyof AgentNode]?: AgentNode[K] };
+      const patch: MutablePatch = { lastEventAt: nowFn() };
+
+      switch (msg.type) {
+        case "AgentConnected":
+          patch.state = "running";
+          patch.connectedAt = nowFn();
+          break;
+        case "EntropyScored": {
+          const entropy = typeof msg.payload.composite === "number" ? msg.payload.composite : 0;
+          const isRunning = existing?.state !== "completed" && existing?.state !== "error";
+          patch.entropy = entropy;
+          patch.state = entropyToState(entropy, Boolean(isRunning));
+          break;
+        }
+        case "LLMRequestCompleted": {
+          const tokens =
+            typeof msg.payload.tokensUsed === "number"
+              ? msg.payload.tokensUsed
+              : typeof (msg.payload.tokensUsed as { total?: number } | undefined)?.total === "number"
+                ? (msg.payload.tokensUsed as { total: number }).total
+                : 0;
+          const est =
+            typeof msg.payload.estimatedCost === "number" ? msg.payload.estimatedCost : 0;
+          patch.tokensUsed = (existing?.tokensUsed ?? 0) + tokens;
+          patch.cost = (existing?.cost ?? 0) + est;
+          break;
+        }
+        case "ReasoningStepCompleted": {
+          const iter =
+            typeof (msg.payload as { iteration?: number }).iteration === "number"
+              ? (msg.payload as { iteration: number }).iteration
+              : typeof (msg.payload as { totalSteps?: number }).totalSteps === "number"
+                ? (msg.payload as { totalSteps: number }).totalSteps
+                : (existing?.iteration ?? 0);
+          patch.iteration = iter;
+          break;
+        }
+        case "ReasoningIterationProgress": {
+          const iter = typeof (msg.payload as { iteration?: number }).iteration === "number"
+            ? (msg.payload as { iteration: number }).iteration
+            : existing?.iteration ?? 0;
+          const max = typeof (msg.payload as { maxIterations?: number }).maxIterations === "number"
+            ? (msg.payload as { maxIterations: number }).maxIterations
+            : existing?.maxIterations ?? 0;
+          patch.iteration = iter;
+          patch.maxIterations = max;
+          if (existing?.state !== "completed" && existing?.state !== "error") {
+            patch.state = entropyToState(existing?.entropy ?? 0, true);
+          }
+          break;
+        }
+        case "FinalAnswerProduced":
+          // Keep Stage card responsive near completion.
+          patch.state = "running";
+          break;
+        case "AgentCompleted":
+          patch.state = msg.payload.success === true ? "completed" : "error";
+          if (typeof msg.payload.totalTokens === "number") {
+            patch.tokensUsed = Math.max(existing?.tokensUsed ?? 0, msg.payload.totalTokens);
+          }
+          patch.completedAt = nowFn();
+          break;
+        case "TaskFailed":
+          patch.state = "error";
+          patch.completedAt = nowFn();
+          break;
+      }
+
+      const updated: AgentNode = {
+        agentId: msg.agentId,
+        runId: msg.runId,
+        name: existing?.name ?? msg.agentId,
+        state: existing?.state ?? "running",
+        entropy: existing?.entropy ?? 0,
+        iteration: existing?.iteration ?? 0,
+        maxIterations: existing?.maxIterations ?? 0,
+        tokensUsed: existing?.tokensUsed ?? 0,
+        cost: existing?.cost ?? 0,
+        connectedAt: existing?.connectedAt ?? nowFn(),
+        lastEventAt: nowFn(),
+        ...patch,
+      };
+
+      map.set(msg.runId, updated);
+      return { ...s, agents: map };
+    });
+  }
+
+  if (loadOnInit) void loadAgents();
+
+  return {
+    subscribe: agents.subscribe,
+    state,
+    handleLiveMessage,
+    refresh: loadAgents,
+    /** No-op placeholder for layout teardown symmetry; unsubscribe WS in `onMount` cleanup. */
+    destroy: () => {},
+  };
+}
+
+export type AgentStore = ReturnType<typeof createAgentStore>;

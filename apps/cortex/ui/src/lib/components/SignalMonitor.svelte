@@ -56,19 +56,28 @@
 
     TRACK_PROPORTIONS.forEach((prop, trackIdx) => {
       const trackH = Math.max(24, Math.floor(H * prop) - TRACK_GAP);
+      const clipId = `clip-track-${trackIdx}`;
       const g = svgD3.append("g").attr("transform", `translate(0, ${yOffset})`);
+
+      // Clip path — prevents tool labels and spans from drawing outside track bounds
+      defs.append("clipPath")
+        .attr("id", clipId)
+        .append("rect")
+        .attr("x", 0).attr("y", -14)  // allow label text above rect
+        .attr("width", TRACK_W).attr("height", trackH + 16);
 
       g.append("text")
         .attr("x", 0)
         .attr("y", trackH / 2 + 4)
-        .attr("fill", "#d0bcff")
+        .attr("fill", "#8b5cf6")
         .attr("font-family", "ui-monospace, monospace")
         .attr("font-size", "9px")
-        .attr("text-transform", "uppercase")
         .attr("letter-spacing", "0.05em")
         .text(TRACK_LABELS[trackIdx] ?? "");
 
-      const trackG = g.append("g").attr("transform", `translate(${LABEL_W}, 0)`);
+      const trackG = g.append("g")
+        .attr("transform", `translate(${LABEL_W}, 0)`)
+        .attr("clip-path", `url(#${clipId})`);
 
       trackG
         .append("rect")
@@ -131,7 +140,14 @@
           });
       }
 
-      if (trackIdx === 1 && data.tokens.length > 0) {
+      if (trackIdx === 1) {
+        if (data.tokens.length === 0) {
+          trackG.append("text")
+            .attr("x", TRACK_W / 2).attr("y", trackH / 2 + 4)
+            .attr("text-anchor", "middle").attr("fill", "#494454")
+            .attr("font-size", "9px").attr("font-family", "ui-monospace, monospace")
+            .text("awaiting LLM requests…");
+        } else {
         const maxTok = Math.max(...data.tokens.map((d) => d.tokens), 1);
         const yScale = d3.scaleLinear().domain([0, maxTok]).range([trackH - 4, 4]);
         const barW = Math.max(2, Math.min(20, TRACK_W / (data.tokens.length + 1) - 2));
@@ -150,9 +166,17 @@
           .attr("rx", 1)
           .style("cursor", "pointer")
           .on("click", (_e, d) => onselectIteration?.(d.iteration));
+        } // end tokens.length > 0
       }
 
-      if (trackIdx === 2 && data.tools.length > 0) {
+      if (trackIdx === 2) {
+        if (data.tools.length === 0) {
+          trackG.append("text")
+            .attr("x", TRACK_W / 2).attr("y", trackH / 2 + 4)
+            .attr("text-anchor", "middle").attr("fill", "#494454")
+            .attr("font-size", "9px").attr("font-family", "ui-monospace, monospace")
+            .text("no tool calls yet");
+        } else {
         const spanH = 14;
         const labelH = 13; // label above span
         const totalH = spanH + labelH + 2;
@@ -205,9 +229,18 @@
                 .text(`${d.latencyMs}ms`);
             }
           });
+        } // end tools.length > 0
       }
 
-      if (trackIdx === 3 && data.latency.length > 0) {
+      if (trackIdx === 3) {
+        if (data.latency.length === 0) {
+          trackG.append("text")
+            .attr("x", TRACK_W / 2).attr("y", trackH / 2 + 4)
+            .attr("text-anchor", "middle").attr("fill", "#494454")
+            .attr("font-size", "9px").attr("font-family", "ui-monospace, monospace")
+            .text("awaiting LLM requests…");
+        } else {
+
         const maxMs = Math.max(...data.latency.map((d) => d.value), 1);
         const yScale = d3.scaleLinear().domain([0, maxMs]).range([trackH - 4, 4]);
 
@@ -241,6 +274,7 @@
             .attr("r", 3)
             .attr("fill", "#4cd7f6");
         }
+        } // end latency.length > 0
       }
 
       yOffset += trackH + TRACK_GAP;

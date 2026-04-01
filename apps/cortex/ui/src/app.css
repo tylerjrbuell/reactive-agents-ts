@@ -1,0 +1,168 @@
+/* ================================================================
+   Cortex — Reactive Agents Studio
+   Design system aligned with docs.reactiveagents.dev
+   Geist Variable · Violet #8b5cf6 · Cyan #06b6d4
+   ================================================================ */
+
+/* Geist Variable — same font as docs site */
+@import "@fontsource-variable/geist";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── RA brand custom properties (mirrors docs custom.css) ─────── */
+:root {
+  --ra-violet:      #8b5cf6;
+  --ra-violet-deep: #7c3aed;
+  --ra-violet-dark: #4c1d95;
+  --ra-cyan:        #06b6d4;
+  --ra-amber:       #eab308;
+  --ra-error:       #ef4444;
+  --ra-green:       #22c55e;
+
+  /* Panel inner bg — matches docs ra-panel-inner */
+  --ra-surface-panel: #12131a;
+}
+
+/* ── Base font ────────────────────────────────────────────────── */
+html {
+  font-family: "Geist Variable", "Geist", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Material Symbols ─────────────────────────────────────────── */
+.material-symbols-outlined {
+  font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+  user-select: none;
+  font-size: inherit;
+  line-height: 1;
+  vertical-align: middle;
+}
+
+/* ── Gradient border panel — docs ra-panel treatment ─────────── */
+/* Simple opaque gradient border (no glow, clean) */
+.gradient-border {
+  position: relative;
+  background: var(--ra-surface-panel);
+  background-clip: padding-box;
+  border: 1px solid transparent;
+}
+
+.gradient-border::before {
+  content: "";
+  position: absolute;
+  top: 0; right: 0; bottom: 0; left: 0;
+  z-index: -1;
+  margin: -1px;
+  border-radius: inherit;
+  background: linear-gradient(135deg, rgba(139,92,246,0.6) 0%, rgba(6,182,212,0.3) 50%, rgba(139,92,246,0.6) 100%);
+}
+
+/* Animated breathing glow variant — for active panels */
+.gradient-border-glow {
+  position: relative;
+  background: #1a1d24;
+}
+
+.gradient-border-glow::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, var(--ra-violet) 0%, var(--ra-cyan) 100%);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  animation: ra-border-breathe 8s ease-in-out infinite;
+}
+
+@keyframes ra-border-breathe {
+  0%, 100% { opacity: 0.6; }
+  50%       { opacity: 1.0; }
+}
+
+/* ── Sonar rings (Stage running agent nodes) ──────────────────── */
+.sonar-ring {
+  position: absolute;
+  border: 1.5px solid var(--ring-color, var(--ra-violet));
+  border-radius: 50%;
+  animation: ra-sonar-pulse 3s cubic-bezier(0, 0.2, 0.8, 1) infinite;
+}
+.sonar-ring:nth-child(2) { animation-delay: -1s; }
+.sonar-ring:nth-child(3) { animation-delay: -2s; }
+
+@keyframes ra-sonar-pulse {
+  0%   { transform: scale(0.8); opacity: 0.8; }
+  100% { transform: scale(3.5); opacity: 0;   }
+}
+
+/* ── EKG animation ────────────────────────────────────────────── */
+.ekg-line {
+  stroke-dasharray: 1000;
+  stroke-dashoffset: 1000;
+  animation: ra-ekg-draw 5s linear infinite;
+}
+
+@keyframes ra-ekg-draw {
+  to { stroke-dashoffset: 0; }
+}
+
+/* ── Animations ──────────────────────────────────────────────── */
+@keyframes ra-fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0);   }
+}
+.animate-fade-up { animation: ra-fade-up 0.25s ease-out; }
+
+@keyframes ra-slide-right {
+  from { opacity: 0; transform: translateX(16px); }
+  to   { opacity: 1; transform: translateX(0);    }
+}
+.animate-slide-right { animation: ra-slide-right 0.3s ease-out; }
+
+/* ── Gradient text — matches docs site-title treatment ───────── */
+.ra-gradient-text {
+  background: linear-gradient(135deg, var(--ra-violet), var(--ra-cyan));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* ── Hover lift — matches docs card hover ────────────────────── */
+.hover-lift {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 20px rgba(139,92,246,0.15);
+}
+
+/* ── Scrollbar — docs treatment ──────────────────────────────── */
+::-webkit-scrollbar       { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(to bottom, var(--ra-violet), var(--ra-cyan));
+  border-radius: 2px;
+}
+
+/* ── Selection ────────────────────────────────────────────────── */
+::selection { background: rgba(139,92,246,0.3); }
+
+/* ── Code / mono content ─────────────────────────────────────── */
+code, pre, .font-mono {
+  font-family: "JetBrains Mono", ui-monospace, "Cascadia Code", "Fira Code", monospace;
+}
+
+/* ── Inline code — matches docs treatment ────────────────────── */
+:not(pre) > code {
+  background: rgba(139,92,246,0.10) !important;
+  color: var(--ra-violet) !important;
+  border-radius: 3px;
+  padding: 0.12em 0.3em;
+  font-size: 0.875em;
+}

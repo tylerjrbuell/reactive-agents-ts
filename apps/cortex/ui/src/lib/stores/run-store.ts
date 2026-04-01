@@ -208,14 +208,23 @@ export function createRunStore(runId: string, options?: CreateRunStoreOptions) {
         iterationCount?: number;
         tokensUsed?: number;
         cost?: number;
+        debrief?: string | null;
       };
       runStartMs = typeof run.startedAt === "number" ? run.startedAt : Date.now();
       const mapped: RunStatus =
         run.status === "live" ? "live" : run.status === "failed" ? "failed" : "completed";
+
+      // Parse debrief from DB (stored as JSON string)
+      let parsedDebrief: unknown = null;
+      if (typeof run.debrief === "string" && run.debrief) {
+        try { parsedDebrief = JSON.parse(run.debrief); } catch { /* ignore */ }
+      }
+
       state.update((s) => ({
         ...s,
         agentId: run.agentId,
         status: mapped === "live" && s.events.length === 0 ? "loading" : mapped,
+        debrief: parsedDebrief ?? s.debrief,
         vitals: {
           ...s.vitals,
           iteration: run.iterationCount ?? s.vitals.iteration,

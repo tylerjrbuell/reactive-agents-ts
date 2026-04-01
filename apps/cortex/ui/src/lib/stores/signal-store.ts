@@ -87,10 +87,9 @@ export function createSignalStore(runState: Readable<RunState>) {
           });
           llmStart = null;
           const t = readTokensFromPayload(p);
-          if (t > 0) {
-            // Raw token count per request — more readable than tokens/sec
-            tokens.push({ ts: msg.ts, iteration: currentIteration, tokens: t });
-          }
+          // Always push a bar for every LLM request — use at least 1 so the bar is visible
+          // even when the provider doesn't report token usage (e.g., test provider)
+          tokens.push({ ts: msg.ts, iteration: currentIteration, tokens: Math.max(1, t) });
           break;
         }
         case "ReasoningStepCompleted":
