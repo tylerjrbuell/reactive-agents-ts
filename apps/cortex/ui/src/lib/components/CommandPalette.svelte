@@ -94,7 +94,7 @@
     },
     {
       id: "workshop",
-      label: "Open Workshop",
+      label: "Open Lab",
       description: "Builder, skills, tools",
       icon: "build",
       keywords: ["workshop", "builder"],
@@ -105,7 +105,7 @@
     },
     {
       id: "skills-tab",
-      label: "Workshop — Skills",
+      label: "Lab — Skills",
       description: "Living skills browser",
       icon: "psychology",
       keywords: ["skills"],
@@ -116,7 +116,7 @@
     },
     {
       id: "tools-tab",
-      label: "Workshop — Tools",
+      label: "Lab — Tools",
       description: "Tool registry",
       icon: "construction",
       keywords: ["tools"],

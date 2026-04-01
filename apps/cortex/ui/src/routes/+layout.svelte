@@ -28,9 +28,9 @@
   const wsClient = createWsClient("/ws/live/cortex-broadcast");
 
   const navItems = [
-    { label: "Stage",    href: "/",        icon: "hub" },
+    { label: "Mission Control", href: "/", icon: "hub" },
     { label: "Runs",     href: "/runs",    icon: "history" },
-    { label: "Workshop", href: "/workshop",icon: "build" },
+    { label: "Lab", href: "/workshop", icon: "science" },
   ];
 
   let isDark = $state(true);

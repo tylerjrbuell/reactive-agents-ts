@@ -21,7 +21,7 @@
 </script>
 
 <svelte:head>
-  <title>CORTEX — Stage</title>
+  <title>CORTEX — Mission Control</title>
 </svelte:head>
 
 <div class="relative h-full flex flex-col overflow-hidden">

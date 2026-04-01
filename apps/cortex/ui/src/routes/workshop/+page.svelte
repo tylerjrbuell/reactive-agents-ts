@@ -39,7 +39,7 @@
 </script>
 
 <svelte:head>
-  <title>CORTEX — Workshop</title>
+  <title>CORTEX — Lab</title>
 </svelte:head>
 
 <div class="h-full flex flex-col overflow-hidden p-6 gap-4">
