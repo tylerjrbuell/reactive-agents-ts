@@ -46,13 +46,8 @@
       : `${(vitals.durationMs / 1000).toFixed(1)}s`,
   );
 
-  const ekgStroke = $derived(
-    vitals.trajectory === "STRESSED"
-      ? "#ffb4ab"
-      : vitals.trajectory === "EXPLORING"
-        ? "#f7be1d"
-        : "#d0bcff",
-  );
+  // EKG uses the scrollbar gradient (violet→cyan) defined as SVG linearGradient.
+  // Only STRESSED/FAILED override to red for semantic clarity.
 
   const runShort = $derived(runId.length > 12 ? `${runId.slice(0, 8)}…` : runId);
 </script>
@@ -165,40 +160,75 @@
   <!-- EKG heartbeat row — separate from metrics, never overlaps text -->
   <div class="w-full h-7 relative overflow-hidden bg-transparent border-t border-white/[0.03]">
     <svg class="w-full h-full" preserveAspectRatio="none" viewBox="0 0 1000 28">
+      <defs>
+        <!-- Scrollbar-matching gradient: violet → cyan (left to right along the pulse) -->
+        <linearGradient id="ekg-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%"   stop-color="#8b5cf6" />
+          <stop offset="100%" stop-color="#06b6d4" />
+        </linearGradient>
+        <!-- Glow filter -->
+        <filter id="ekg-glow" x="-5%" y="-100%" width="110%" height="300%">
+          <feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="blur" />
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+      </defs>
+
       {#if status === 'live' || status === 'loading'}
-        <!-- Animated heartbeat when running -->
+        <!-- Glow bloom layer -->
+        <path
+          d="M0 14 L100 14 L110 4 L120 24 L130 14 L300 14 L310 14 L320 2 L330 26 L340 14 L600 14 L610 7 L620 21 L630 14 L850 14 L860 0 L870 28 L880 14 L1000 14"
+          fill="none"
+          stroke="url(#ekg-grad)"
+          stroke-width="5"
+          opacity="0.2"
+          filter="url(#ekg-glow)"
+          class="ekg-line"
+        />
+        <!-- Sharp gradient line -->
         <path
           class="ekg-line"
           d="M0 14 L100 14 L110 4 L120 24 L130 14 L300 14 L310 14 L320 2 L330 26 L340 14 L600 14 L610 7 L620 21 L630 14 L850 14 L860 0 L870 28 L880 14 L1000 14"
           fill="none"
-          stroke={ekgStroke}
+          stroke="url(#ekg-grad)"
           stroke-width="1.5"
-          opacity="0.7"
+          opacity="0.9"
         />
       {:else if status === 'paused'}
-        <!-- Frozen mid-wave when paused -->
         <path
           d="M0 14 L100 14 L110 4 L120 24 L130 14 L500 14"
           fill="none"
-          stroke={ekgStroke}
+          stroke="url(#ekg-grad)"
+          stroke-width="4"
+          opacity="0.12"
+          filter="url(#ekg-glow)"
+        />
+        <path
+          d="M0 14 L100 14 L110 4 L120 24 L130 14 L500 14"
+          fill="none"
+          stroke="url(#ekg-grad)"
           stroke-width="1.5"
-          opacity="0.5"
+          opacity="0.45"
           stroke-dasharray="4 3"
         />
       {:else}
-        <!-- Flat settled line when completed or failed -->
+        <!-- Settled flat line -->
         <line
           x1="0" y1="14" x2="1000" y2="14"
-          stroke={status === 'failed' ? '#ffb4ab' : '#4cd7f6'}
+          stroke={status === 'failed' ? '#ef4444' : 'url(#ekg-grad)'}
           stroke-width="1"
-          opacity="0.3"
+          opacity="0.2"
         />
-        <!-- Small terminal mark -->
-        <circle
-          cx="980" cy="14" r="2.5"
-          fill={status === 'failed' ? '#ffb4ab' : '#4cd7f6'}
-          opacity="0.5"
-        />
+        <!-- Terminal dot — cyan end of gradient -->
+        <circle cx="980" cy="14" r="3.5"
+          fill={status === 'failed' ? '#ef4444' : '#06b6d4'}
+          opacity="0.35" filter="url(#ekg-glow)" />
+        <circle cx="980" cy="14" r="2"
+          fill={status === 'failed' ? '#ef4444' : '#06b6d4'}
+          opacity="0.7" />
       {/if}
     </svg>
   </div>
