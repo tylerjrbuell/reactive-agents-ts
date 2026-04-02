@@ -11,6 +11,7 @@
   import { settings } from "$lib/stores/settings.js";
   import type { AgentConfig, CortexAgentToolConfig } from "$lib/types/agent-config.js";
   import { defaultConfig } from "$lib/types/agent-config.js";
+  import { formatTaskContextLines, parseTaskContextLines } from "$lib/task-context-lines.js";
 
   export { type AgentConfig, defaultConfig };
   type PanelAgentConfig = AgentConfig & {
@@ -40,6 +41,22 @@
     const n = new Set(openSections);
     if (n.has(s)) n.delete(s); else n.add(s);
     openSections = n;
+  }
+
+  let taskContextLinesDraft = $state("");
+  let lastTaskContextSig = $state("");
+  $effect(() => {
+    const sig = JSON.stringify(config.taskContext ?? {});
+    if (sig !== lastTaskContextSig) {
+      lastTaskContextSig = sig;
+      taskContextLinesDraft = formatTaskContextLines(config.taskContext ?? {});
+    }
+  });
+
+  function commitTaskContextDraft() {
+    const next = parseTaskContextLines(taskContextLinesDraft);
+    lastTaskContextSig = JSON.stringify(next);
+    config = { ...config, taskContext: next };
   }
 
   // ── Ollama dynamic models ─────────────────────────────────────────────
@@ -376,6 +393,24 @@
             rows="3"
             class="config-input resize-none leading-relaxed"></textarea>
         </div>
+        <div>
+          <label for="task-context-lines" class="config-label">Task context <span class="text-outline/30 normal-case font-normal">(`withTaskContext` — one key=value per line)</span></label>
+          <textarea id="task-context-lines"
+            bind:value={taskContextLinesDraft}
+            onblur={commitTaskContextDraft}
+            placeholder={"project=my-app\nenvironment=staging"}
+            rows="3"
+            class="config-input resize-none leading-relaxed font-mono text-[10px]"></textarea>
+        </div>
+        <label class="flex items-center gap-3 cursor-pointer">
+          <input type="checkbox" checked={config.healthCheck}
+            onchange={() => (config = { ...config, healthCheck: !config.healthCheck })}
+            class="accent-primary w-3.5 h-3.5" />
+          <div>
+            <div class="font-mono text-[10px] text-on-surface/80">Enable health check</div>
+            <div class="font-mono text-[9px] text-outline/40">Calls `withHealthCheck()` so `agent.health()` is available after build</div>
+          </div>
+        </label>
       </div>
     {/if}
   </div>
@@ -639,54 +674,54 @@
             {#if at.kind === "remote"}
               <div class="grid grid-cols-2 gap-2">
                 <div>
-                  <label class="config-label">Tool name</label>
-                  <input class="config-input" value={at.toolName}
+                  <label class="config-label" for={`subagent-r-${i}-tool`}>Tool name</label>
+                  <input id={`subagent-r-${i}-tool`} class="config-input" value={at.toolName}
                     oninput={(e) => patchAgentTool(i, { ...at, toolName: (e.target as HTMLInputElement).value })} />
                 </div>
                 <div class="col-span-2">
-                  <label class="config-label">Remote URL</label>
-                  <input class="config-input font-mono text-[10px]" value={at.remoteUrl}
+                  <label class="config-label" for={`subagent-r-${i}-url`}>Remote URL</label>
+                  <input id={`subagent-r-${i}-url`} class="config-input font-mono text-[10px]" value={at.remoteUrl}
                     oninput={(e) => patchAgentTool(i, { ...at, remoteUrl: (e.target as HTMLInputElement).value })} />
                 </div>
               </div>
             {:else}
               <div class="grid grid-cols-2 gap-2">
                 <div>
-                  <label class="config-label">Tool name</label>
-                  <input class="config-input" value={at.toolName}
+                  <label class="config-label" for={`subagent-l-${i}-tool`}>Tool name</label>
+                  <input id={`subagent-l-${i}-tool`} class="config-input" value={at.toolName}
                     oninput={(e) => patchAgentTool(i, { ...at, toolName: (e.target as HTMLInputElement).value })} />
                 </div>
                 <div>
-                  <label class="config-label">Display name</label>
-                  <input class="config-input" value={at.agent.name}
+                  <label class="config-label" for={`subagent-l-${i}-display`}>Display name</label>
+                  <input id={`subagent-l-${i}-display`} class="config-input" value={at.agent.name}
                     oninput={(e) => patchAgentTool(i, { ...at, agent: { ...at.agent, name: (e.target as HTMLInputElement).value } })} />
                 </div>
                 <div class="col-span-2">
-                  <label class="config-label">Description</label>
-                  <input class="config-input" value={at.agent.description ?? ""}
+                  <label class="config-label" for={`subagent-l-${i}-desc`}>Description</label>
+                  <input id={`subagent-l-${i}-desc`} class="config-input" value={at.agent.description ?? ""}
                     oninput={(e) => patchAgentTool(i, { ...at, agent: { ...at.agent, description: (e.target as HTMLInputElement).value } })} />
                 </div>
                 <div>
-                  <label class="config-label">Provider <span class="normal-case text-outline/40">(optional)</span></label>
-                  <input class="config-input" value={at.agent.provider ?? ""} placeholder="inherit"
+                  <label class="config-label" for={`subagent-l-${i}-provider`}>Provider <span class="normal-case text-outline/40">(optional)</span></label>
+                  <input id={`subagent-l-${i}-provider`} class="config-input" value={at.agent.provider ?? ""} placeholder="inherit"
                     oninput={(e) => patchAgentTool(i, { ...at, agent: { ...at.agent, provider: (e.target as HTMLInputElement).value || undefined } })} />
                 </div>
                 <div>
-                  <label class="config-label">Model <span class="normal-case text-outline/40">(optional)</span></label>
-                  <input class="config-input" value={at.agent.model ?? ""} placeholder="inherit"
+                  <label class="config-label" for={`subagent-l-${i}-model`}>Model <span class="normal-case text-outline/40">(optional)</span></label>
+                  <input id={`subagent-l-${i}-model`} class="config-input" value={at.agent.model ?? ""} placeholder="inherit"
                     oninput={(e) => patchAgentTool(i, { ...at, agent: { ...at.agent, model: (e.target as HTMLInputElement).value || undefined } })} />
                 </div>
                 <div>
-                  <label class="config-label">Max iterations</label>
-                  <input type="number" min="1" max="50" class="config-input" value={at.agent.maxIterations ?? 8}
+                  <label class="config-label" for={`subagent-l-${i}-maxiter`}>Max iterations</label>
+                  <input id={`subagent-l-${i}-maxiter`} type="number" min="1" max="50" class="config-input" value={at.agent.maxIterations ?? 8}
                     oninput={(e) => patchAgentTool(i, {
                       ...at,
                       agent: { ...at.agent, maxIterations: Math.max(1, parseInt((e.target as HTMLInputElement).value || "8", 10)) },
                     })} />
                 </div>
                 <div class="col-span-2">
-                  <label class="config-label">Sub-agent tools <span class="normal-case text-outline/40">(comma-separated)</span></label>
-                  <input class="config-input font-mono text-[10px]"
+                  <label class="config-label" for={`subagent-l-${i}-tools`}>Sub-agent tools <span class="normal-case text-outline/40">(comma-separated)</span></label>
+                  <input id={`subagent-l-${i}-tools`} class="config-input font-mono text-[10px]"
                     value={(at.agent.tools ?? []).join(", ")}
                     oninput={(e) => {
                       const raw = (e.target as HTMLInputElement).value;
@@ -695,8 +730,8 @@
                     }} />
                 </div>
                 <div class="col-span-2">
-                  <label class="config-label">System prompt</label>
-                  <textarea rows="2" class="config-input resize-none" value={at.agent.systemPrompt ?? ""}
+                  <label class="config-label" for={`subagent-l-${i}-sysprompt`}>System prompt</label>
+                  <textarea id={`subagent-l-${i}-sysprompt`} rows="2" class="config-input resize-none" value={at.agent.systemPrompt ?? ""}
                     oninput={(e) => patchAgentTool(i, { ...at, agent: { ...at.agent, systemPrompt: (e.target as HTMLInputElement).value || undefined } })}></textarea>
                 </div>
               </div>

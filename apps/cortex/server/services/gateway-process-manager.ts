@@ -18,6 +18,7 @@ import type { Database } from "bun:sqlite";
 import { getGatewayAgents, getGatewayAgent, updateGatewayAgent, upsertRun } from "../db/queries.js";
 import { getMcpServersByIds, parseMcpConfig } from "../db/mcp-queries.js";
 import {
+  coerceTaskContextRecord,
   mergeCortexAllowedTools,
   normalizeCortexAgentConfig,
   type CortexAgentToolEntry,
@@ -269,6 +270,10 @@ export class GatewayProcessManager {
       // ── System prompt ─────────────────────────────────────────────────
       const systemPrompt = (config.systemPrompt as string | undefined)?.trim();
       if (systemPrompt) builder = builder.withSystemPrompt(systemPrompt);
+
+      const taskContext = coerceTaskContextRecord(config.taskContext);
+      if (taskContext) builder = builder.withTaskContext(taskContext);
+      if (config.healthCheck === true) builder = builder.withHealthCheck();
 
       // ── Execution controls ────────────────────────────────────────────
       const timeout = typeof config.timeout === "number" ? config.timeout : 0;

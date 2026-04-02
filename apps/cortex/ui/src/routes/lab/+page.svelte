@@ -45,7 +45,6 @@
 
   // ── Quick Run builder ─────────────────────────────────────────────────
   let builderConfig = $state<BuilderAgentConfig>(builderDefaultsFromSettings());
-  let builderPrompt = $state("");
   let builderAgentType = $state<"ad-hoc" | "persistent">("ad-hoc");
   let builderPersistentName = $state("");
   let builderPersistentSchedule = $state("");
@@ -54,14 +53,14 @@
   let builderSaving = $state(false);
 
   async function runFromBuilder() {
-    if (!builderPrompt.trim()) return;
+    if (!builderConfig.prompt.trim()) return;
     builderRunning = true;
     try {
       const res = await fetch(`${CORTEX_SERVER_URL}/api/runs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          prompt:              builderPrompt.trim(),
+          prompt:              builderConfig.prompt.trim(),
           provider:            builderConfig.provider,
           model:               builderConfig.model || undefined,
           tools:               builderConfig.tools,
@@ -83,6 +82,10 @@
           mcpServerIds:        builderConfig.mcpServerIds?.length ? builderConfig.mcpServerIds : undefined,
           agentTools:          builderConfig.agentTools?.length ? builderConfig.agentTools : undefined,
           dynamicSubAgents:    builderConfig.dynamicSubAgents?.enabled ? builderConfig.dynamicSubAgents : undefined,
+          ...(Object.keys(builderConfig.taskContext ?? {}).length > 0
+            ? { taskContext: builderConfig.taskContext }
+            : {}),
+          ...(builderConfig.healthCheck ? { healthCheck: true as const } : {}),
         }),
       });
       if (!res.ok) throw new Error(`Server error ${res.status}`);
@@ -109,7 +112,7 @@
           name: builderPersistentName.trim(),
           type,
           runNow: builderAgentType === "ad-hoc" ? builderRunNow : false,
-          config: { ...builderConfig, prompt: builderPrompt.trim() },
+          config: { ...builderConfig, prompt: builderConfig.prompt.trim() },
           schedule: builderAgentType === "persistent" ? (builderPersistentSchedule.trim() || null) : null,
         }),
       });
@@ -193,7 +196,6 @@
   function openCreate() {
     // New-agent creation now goes through the unified Builder flow.
     builderConfig = builderDefaultsFromSettings();
-    builderPrompt = "";
     builderAgentType = "persistent";
     builderPersistentName = "";
     builderPersistentSchedule = "";
@@ -223,7 +225,7 @@
         body: JSON.stringify({
           name: formName.trim(),
           type: formAgentType,
-          config: formConfig,
+          config: { ...formConfig, prompt: formConfig.prompt.trim() },
           schedule: formAgentType === "gateway" ? (formSchedule.trim() || null) : null,
         }),
       });
@@ -253,19 +255,6 @@
     await loadGatewayAgents();
   }
 
-  function extractPromptFromConfig(config: AgentConfig): string {
-    const cfg = config as AgentConfig & { prompt?: unknown };
-    return typeof cfg.prompt === "string" ? cfg.prompt : "";
-  }
-
-  function pickPromptFromPayload(payload: Record<string, unknown>): string {
-    const candidates = [payload.prompt, payload.task, payload.input, payload.userPrompt, payload.instruction];
-    for (const value of candidates) {
-      if (typeof value === "string" && value.trim().length > 0) return value.trim();
-    }
-    return "";
-  }
-
   async function useConfigInBuilder(agent: GatewayRow) {
     const defaults = builderDefaultsFromSettings();
     const sourceConfig = agent.config as BuilderAgentConfig;
@@ -288,12 +277,12 @@
         ...defaults.dynamicSubAgents,
         ...sourceConfig.dynamicSubAgents,
       },
+      taskContext: { ...defaults.taskContext, ...(sourceConfig.taskContext ?? {}) },
+      healthCheck: sourceConfig.healthCheck ?? defaults.healthCheck,
     };
     builderAgentType = agent.agentType === "gateway" ? "persistent" : "ad-hoc";
     builderPersistentName = agent.name;
     builderPersistentSchedule = agent.agentType === "gateway" ? (agent.schedule ?? "") : "";
-    const promptFromConfig = extractPromptFromConfig(agent.config);
-    builderPrompt = promptFromConfig;
     activeTab = "builder";
     toast.success("Config loaded into Builder", agent.name);
   }
@@ -531,7 +520,7 @@
 
         <div>
           <label for="builder-prompt" class="text-[9px] font-mono text-outline/60 uppercase tracking-widest block mb-1.5">Prompt</label>
-          <textarea id="builder-prompt" bind:value={builderPrompt}
+          <textarea id="builder-prompt" bind:value={builderConfig.prompt}
             placeholder="Describe what you want the agent to do…" rows="3"
             class="w-full bg-surface-container-lowest/60 border border-outline-variant/20 rounded-lg px-4 py-3
                    text-sm font-mono text-on-surface placeholder:text-outline/40 resize-none focus:border-primary/50 focus:outline-none">
@@ -585,7 +574,7 @@
               {/if}
               Create Ad-hoc Agent
             </button>
-            <button type="button" disabled={!builderPrompt.trim() || builderRunning} onclick={runFromBuilder}
+            <button type="button" disabled={!builderConfig.prompt.trim() || builderRunning} onclick={runFromBuilder}
               class="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-outline-variant/20 bg-transparent cursor-pointer font-mono
                      text-[10px] uppercase tracking-wider text-outline disabled:opacity-40 hover:text-on-surface transition-all">
               {#if builderRunning}
@@ -671,6 +660,19 @@
                 </p>
               </div>
             {/if}
+          </div>
+          <div>
+            <label for="gateway-edit-prompt" class="text-[9px] font-mono text-outline/60 uppercase tracking-widest block mb-1.5">
+              Prompt <span class="text-outline/30 normal-case font-normal">(default task — same as Builder tab)</span>
+            </label>
+            <textarea id="gateway-edit-prompt" bind:value={formConfig.prompt}
+              placeholder="Describe what this agent should do when triggered or on schedule…" rows="3"
+              class="w-full bg-surface-container-lowest/60 border border-outline-variant/20 rounded-lg px-4 py-3
+                     text-sm font-mono text-on-surface placeholder:text-outline/40 resize-none focus:border-primary/50 focus:outline-none">
+            </textarea>
+            <p class="text-[9px] font-mono text-outline/35 mt-1">
+              Model-level instructions live in <span class="text-outline/50">Inference → System Prompt</span> below.
+            </p>
           </div>
           <AgentConfigPanel bind:config={formConfig} />
           <div class="flex justify-end gap-3 pt-1">
@@ -805,11 +807,11 @@
         </p>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div class="space-y-2">
-            <label class="text-[9px] font-mono text-outline/60 uppercase tracking-widest">Name</label>
-            <input bind:value={mcpDraftName} placeholder="e.g. filesystem"
+            <label class="text-[9px] font-mono text-outline/60 uppercase tracking-widest" for="mcp-draft-name">Name</label>
+            <input id="mcp-draft-name" bind:value={mcpDraftName} placeholder="e.g. filesystem"
               class="w-full bg-surface-container-lowest/60 border border-outline-variant/20 rounded-lg px-3 py-2 text-sm font-mono" />
-            <label class="text-[9px] font-mono text-outline/60 uppercase tracking-widest">Transport</label>
-            <select bind:value={mcpDraftTransport}
+            <label class="text-[9px] font-mono text-outline/60 uppercase tracking-widest" for="mcp-draft-transport">Transport</label>
+            <select id="mcp-draft-transport" bind:value={mcpDraftTransport}
               class="w-full bg-surface-container-lowest/60 border border-outline-variant/20 rounded-lg px-3 py-2 text-sm font-mono">
               <option value="stdio">stdio</option>
               <option value="sse">sse</option>
@@ -817,24 +819,24 @@
               <option value="streamable-http">streamable-http</option>
             </select>
             {#if mcpDraftTransport === "stdio"}
-              <label class="text-[9px] font-mono text-outline/60 uppercase tracking-widest">Command</label>
-              <input bind:value={mcpDraftCommand} placeholder="bunx"
+              <label class="text-[9px] font-mono text-outline/60 uppercase tracking-widest" for="mcp-draft-command">Command</label>
+              <input id="mcp-draft-command" bind:value={mcpDraftCommand} placeholder="bunx"
                 class="w-full bg-surface-container-lowest/60 border border-outline-variant/20 rounded-lg px-3 py-2 text-sm font-mono" />
-              <label class="text-[9px] font-mono text-outline/60 uppercase tracking-widest">Args (comma-separated)</label>
-              <input bind:value={mcpDraftArgs} placeholder="-y, @modelcontextprotocol/server-filesystem, ."
+              <label class="text-[9px] font-mono text-outline/60 uppercase tracking-widest" for="mcp-draft-args">Args (comma-separated)</label>
+              <input id="mcp-draft-args" bind:value={mcpDraftArgs} placeholder="-y, @modelcontextprotocol/server-filesystem, ."
                 class="w-full bg-surface-container-lowest/60 border border-outline-variant/20 rounded-lg px-3 py-2 text-sm font-mono" />
             {:else}
-              <label class="text-[9px] font-mono text-outline/60 uppercase tracking-widest">Endpoint URL</label>
-              <input bind:value={mcpDraftEndpoint} placeholder="http://127.0.0.1:8080/mcp"
+              <label class="text-[9px] font-mono text-outline/60 uppercase tracking-widest" for="mcp-draft-endpoint">Endpoint URL</label>
+              <input id="mcp-draft-endpoint" bind:value={mcpDraftEndpoint} placeholder="http://127.0.0.1:8080/mcp"
                 class="w-full bg-surface-container-lowest/60 border border-outline-variant/20 rounded-lg px-3 py-2 text-sm font-mono" />
             {/if}
-            <label class="text-[9px] font-mono text-outline/60 uppercase tracking-widest">Headers JSON <span class="normal-case text-outline/35">(optional)</span></label>
-            <textarea bind:value={mcpDraftHeaders} rows="2"
+            <label class="text-[9px] font-mono text-outline/60 uppercase tracking-widest" for="mcp-draft-headers">Headers JSON <span class="normal-case text-outline/35">(optional)</span></label>
+            <textarea id="mcp-draft-headers" bind:value={mcpDraftHeaders} rows="2"
               placeholder={"{ \"Authorization\": \"Bearer …\" }"}
               class="w-full bg-surface-container-lowest/60 border border-outline-variant/20 rounded-lg px-3 py-2 text-[11px] font-mono resize-none"></textarea>
             {#if mcpDraftTransport === "stdio"}
-              <label class="text-[9px] font-mono text-outline/60 uppercase tracking-widest">Env JSON <span class="normal-case text-outline/35">(optional)</span></label>
-              <textarea bind:value={mcpDraftEnv} rows="2"
+              <label class="text-[9px] font-mono text-outline/60 uppercase tracking-widest" for="mcp-draft-env">Env JSON <span class="normal-case text-outline/35">(optional)</span></label>
+              <textarea id="mcp-draft-env" bind:value={mcpDraftEnv} rows="2"
                 class="w-full bg-surface-container-lowest/60 border border-outline-variant/20 rounded-lg px-3 py-2 text-[11px] font-mono resize-none"></textarea>
             {/if}
             <button type="button" disabled={mcpSaving} onclick={saveMcpServer}

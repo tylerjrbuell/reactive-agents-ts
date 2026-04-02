@@ -10,7 +10,8 @@
  *   2. apps/cortex/server/services/runner-service.ts   (LaunchParams + builder)
  *   3. apps/cortex/server/services/gateway-process-manager.ts  (fireAgent builder)
  *   4. apps/cortex/server/api/runs.ts                  (POST body schema)
- *   5. apps/cortex/ui/src/routes/lab/+page.svelte      (builder run() call)
+ *   5. apps/cortex/ui/src/routes/lab/+page.svelte      (builder run() call + AgentConfig types)
+ *   Phase 1 extras: taskContext, healthCheck → withTaskContext / withHealthCheck
  *   MCP / sub-agents also wire through gateway `fireAgent` + `normalizeCortexAgentConfig`.
  *
  * HOW TO USE: Run `bun test apps/cortex/server/tests --timeout 15000`.
@@ -62,6 +63,10 @@ const FULL_CONFIG_BODY = {
     { kind: "local", toolName: "researcher", agent: { name: "Research", tools: ["web-search"], maxIterations: 5 } },
   ],
   dynamicSubAgents:   { enabled: true, maxIterations: 6 },
+  /** Phase 1 — background context for reasoning (`withTaskContext`) */
+  taskContext:        { project: "acme", environment: "staging" },
+  /** Phase 1 — enables `agent.health()` on built agents */
+  healthCheck:        true,
 };
 
 describe("AgentConfig → LaunchParams parity", () => {
@@ -128,5 +133,8 @@ describe("AgentConfig → LaunchParams parity", () => {
     expect(p.agentTools![0]?.toolName).toBe("researcher");
     expect(p.dynamicSubAgents?.enabled).toBe(true);
     expect(p.dynamicSubAgents?.maxIterations).toBe(6);
+
+    expect(p.taskContext).toEqual({ project: "acme", environment: "staging" });
+    expect(p.healthCheck).toBe(true);
   });
 });

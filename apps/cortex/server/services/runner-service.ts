@@ -43,6 +43,10 @@ export interface LaunchParams {
   readonly metaTools?: { enabled?: boolean; brief?: boolean; find?: boolean; pulse?: boolean; recall?: boolean; harnessSkill?: boolean };
   readonly verificationStep?: string;
   readonly observabilityVerbosity?: "off" | "minimal" | "normal" | "verbose";
+  /** Injected into reasoning via builder `withTaskContext`. */
+  readonly taskContext?: Record<string, string>;
+  /** When true, builder enables `withHealthCheck()`. */
+  readonly healthCheck?: boolean;
 }
 
 type ActiveEntry = {
@@ -155,6 +159,10 @@ export const CortexRunnerServiceLive = Layer.effect(
 
               // ── System prompt ─────────────────────────────────────────
               if (params.systemPrompt?.trim()) b = b.withSystemPrompt(params.systemPrompt.trim());
+
+              const tc = params.taskContext;
+              if (tc && Object.keys(tc).length > 0) b = b.withTaskContext(tc);
+              if (params.healthCheck === true) b = b.withHealthCheck();
 
               // ── Execution controls ────────────────────────────────────
               if (params.timeout && params.timeout > 0) b = b.withTimeout(params.timeout);

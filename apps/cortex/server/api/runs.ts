@@ -38,6 +38,10 @@ export const runsRouter = (
             ...(b.metaTools        ? { metaTools:        b.metaTools }        : {}),
             ...(b.verificationStep ? { verificationStep: b.verificationStep } : {}),
             ...(b.observabilityVerbosity ? { observabilityVerbosity: b.observabilityVerbosity } : {}),
+            ...(b.taskContext && typeof b.taskContext === "object" && !Array.isArray(b.taskContext) && Object.keys(b.taskContext).length > 0
+              ? { taskContext: b.taskContext as Record<string, string> }
+              : {}),
+            ...(b.healthCheck === true ? { healthCheck: true as const } : {}),
           });
         });
         try {
@@ -76,6 +80,8 @@ export const runsRouter = (
               maxIterations: t.Optional(t.Number()),
             }),
           ),
+          taskContext: t.Optional(t.Record(t.String(), t.String())),
+          healthCheck: t.Optional(t.Boolean()),
         }),
       },
     )

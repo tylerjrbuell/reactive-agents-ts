@@ -46,6 +46,20 @@ describe("normalizeCortexAgentConfig", () => {
     });
   });
 
+  test("coerces taskContext to string record and drops empty", () => {
+    const out = normalizeCortexAgentConfig({
+      taskContext: { project: "acme", count: 3 as unknown as string },
+    });
+    expect(out.taskContext).toEqual({ project: "acme", count: "3" });
+    const empty = normalizeCortexAgentConfig({ taskContext: {} });
+    expect(empty.taskContext).toBeUndefined();
+  });
+
+  test("preserves healthCheck when true", () => {
+    expect(normalizeCortexAgentConfig({ healthCheck: true }).healthCheck).toBe(true);
+    expect(normalizeCortexAgentConfig({ healthCheck: false }).healthCheck).toBeUndefined();
+  });
+
   test("normalizes agentTools and dynamicSubAgents", () => {
     const out = normalizeCortexAgentConfig({
       agentTools: [

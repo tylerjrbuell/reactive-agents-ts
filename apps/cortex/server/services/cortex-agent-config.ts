@@ -28,6 +28,24 @@ function asStringArray(v: unknown): string[] | undefined {
 }
 
 /**
+ * Coerces `taskContext` to `Record<string, string>` for the builder's `withTaskContext`.
+ * Non-object input yields `undefined`; values are stringified so JSON numbers/booleans round-trip safely.
+ */
+export function coerceTaskContextRecord(raw: unknown): Record<string, string> | undefined {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const o = raw as Record<string, unknown>;
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(o)) {
+    const key = k.trim();
+    if (!key) continue;
+    if (v === null || v === undefined) continue;
+    const s = typeof v === "string" ? v : String(v);
+    if (s.length > 0) out[key] = s;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+/**
  * Returns a shallow copy with coerced primitives and nested objects safe for
  * {@link GatewayProcessManager} / runner-style agent construction.
  */
@@ -64,6 +82,13 @@ export function normalizeCortexAgentConfig(raw: Record<string, unknown>): Record
 
   const prompt = typeof raw.prompt === "string" ? raw.prompt : undefined;
   if (prompt !== undefined) out.prompt = prompt;
+
+  const tc = coerceTaskContextRecord(raw.taskContext);
+  if (tc !== undefined) out.taskContext = tc;
+  else delete out.taskContext;
+
+  if (raw.healthCheck === true) out.healthCheck = true;
+  else delete out.healthCheck;
 
   const tools = asStringArray(raw.tools);
   if (tools !== undefined) out.tools = tools;

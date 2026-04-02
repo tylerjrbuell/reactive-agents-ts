@@ -49,6 +49,11 @@ export interface AgentConfig {
     piiThreshold: number;
     toxicityThreshold: number;
   };
+  /**
+   * Default task instruction for saved agents (Builder “Prompt”): used when triggering
+   * gateway/cron runs or ad-hoc saved agents. Distinct from `systemPrompt` (LLM system message).
+   */
+  prompt: string;
   systemPrompt: string;
   agentName: string;
   persona: AgentPersona;
@@ -63,6 +68,10 @@ export interface AgentConfig {
   fallbacks: { enabled: boolean; providers: string[]; errorThreshold: number };
   // ── Observability ────────────────────────────────────────────────────
   observabilityVerbosity: "off" | "minimal" | "normal" | "verbose";
+  /** Background key/value facts for framework `withTaskContext` (Lab: KEY=value per line). */
+  taskContext: Record<string, string>;
+  /** Enables framework health probes (`agent.health()`). */
+  healthCheck: boolean;
 }
 
 export function defaultConfig(): AgentConfig {
@@ -83,6 +92,7 @@ export function defaultConfig(): AgentConfig {
     memory: { working: true, episodic: false, semantic: false },
     contextSynthesis: "auto",
     guardrails: { enabled: false, injectionThreshold: 0.8, piiThreshold: 0.9, toxicityThreshold: 0.7 },
+    prompt: "",
     systemPrompt: "",
     agentName: "",
     persona: { enabled: false, role: "", tone: "concise", traits: "", responseStyle: "prose" },
@@ -93,5 +103,7 @@ export function defaultConfig(): AgentConfig {
     metaTools: { enabled: false, brief: false, find: false, pulse: false, recall: false, harnessSkill: false },
     fallbacks: { enabled: false, providers: [], errorThreshold: 3 },
     observabilityVerbosity: "off",
+    taskContext: {},
+    healthCheck: false,
   };
 }
