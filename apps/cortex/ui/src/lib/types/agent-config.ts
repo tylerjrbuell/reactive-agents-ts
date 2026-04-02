@@ -72,6 +72,11 @@ export interface AgentConfig {
   taskContext: Record<string, string>;
   /** Enables framework health probes (`agent.health()`). */
   healthCheck: boolean;
+  /** Living skills: SKILL.md directories + optional evolution (framework `withSkills`). */
+  skills: {
+    paths: string[];
+    evolution?: { mode?: string; refinementThreshold?: number; rollbackOnRegression?: boolean };
+  };
 }
 
 export function defaultConfig(): AgentConfig {
@@ -105,5 +110,6 @@ export function defaultConfig(): AgentConfig {
     observabilityVerbosity: "off",
     taskContext: {},
     healthCheck: false,
+    skills: { paths: [] },
   };
 }

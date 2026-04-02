@@ -26,6 +26,7 @@
     mcpServerIds: string[];
     agentTools: CortexAgentToolConfig[];
     dynamicSubAgents: { enabled: boolean; maxIterations: number };
+    skills: { paths: string[]; evolution?: { mode?: string; refinementThreshold?: number; rollbackOnRegression?: boolean } };
   };
 
   interface Props {
@@ -57,6 +58,29 @@
     const next = parseTaskContextLines(taskContextLinesDraft);
     lastTaskContextSig = JSON.stringify(next);
     config = { ...config, taskContext: next };
+  }
+
+  function parseSkillPathsLines(s: string): string[] {
+    return s.split("\n").map((l) => l.trim()).filter((l) => l.length > 0);
+  }
+  function formatSkillPathsLines(paths: string[]): string {
+    return paths.join("\n");
+  }
+
+  let skillsPathsDraft = $state("");
+  let lastSkillsPathsSig = $state("");
+  $effect(() => {
+    const sig = JSON.stringify(config.skills?.paths ?? []);
+    if (sig !== lastSkillsPathsSig) {
+      lastSkillsPathsSig = sig;
+      skillsPathsDraft = formatSkillPathsLines(config.skills?.paths ?? []);
+    }
+  });
+
+  function commitSkillsPathsDraft() {
+    const paths = parseSkillPathsLines(skillsPathsDraft);
+    lastSkillsPathsSig = JSON.stringify(paths);
+    config = { ...config, skills: { ...config.skills, paths } };
   }
 
   // ── Ollama dynamic models ─────────────────────────────────────────────
@@ -738,6 +762,83 @@
             {/if}
           </div>
         {/each}
+      </div>
+    {/if}
+  </div>
+  {/if}
+
+  <!-- ── Section: Living skills ─────────────────────────────────────── -->
+  {#if !compact}
+  <div class="border border-outline-variant/15 rounded-lg overflow-hidden">
+    <button type="button"
+      class="w-full flex items-center gap-2 px-3 py-2 bg-surface-container-lowest/40 border-0 cursor-pointer hover:bg-surface-container-low/50 transition-colors text-left"
+      onclick={() => toggle("skills")}>
+      <span class="material-symbols-outlined text-[13px] text-secondary/70">auto_awesome</span>
+      <span class="font-mono font-semibold text-on-surface/80">Living skills</span>
+      <span class="ml-2 text-[9px] font-mono text-outline/50">{(config.skills?.paths ?? []).length} path{(config.skills?.paths ?? []).length !== 1 ? "s" : ""}</span>
+      <span class="ml-auto material-symbols-outlined text-[13px] text-outline/40 transition-transform {openSections.has('skills') ? '' : '-rotate-90'}">expand_more</span>
+    </button>
+    {#if openSections.has("skills")}
+      <div class="px-3 py-3 space-y-3 border-t border-outline-variant/10">
+        <div>
+          <label for="skills-paths-lines" class="config-label">Skill directories <span class="text-outline/30 normal-case font-normal">(`withSkills` paths — one per line)</span></label>
+          <textarea id="skills-paths-lines"
+            bind:value={skillsPathsDraft}
+            onblur={commitSkillsPathsDraft}
+            placeholder={".claude/skills\n./my-skills"}
+            rows="3"
+            class="config-input resize-none leading-relaxed font-mono text-[10px]"></textarea>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label for="skills-evolution-mode" class="config-label">Evolution mode</label>
+            <select id="skills-evolution-mode" class="config-input"
+              value={config.skills.evolution?.mode ?? ""}
+              onchange={(e) => {
+                const mode = (e.target as HTMLSelectElement).value;
+                const ev = { ...config.skills.evolution };
+                if (mode) ev.mode = mode;
+                else delete ev.mode;
+                config = {
+                  ...config,
+                  skills: { ...config.skills, evolution: Object.keys(ev).length > 0 ? ev : undefined },
+                };
+              }}>
+              <option value="">Default</option>
+              <option value="suggest">Suggest</option>
+              <option value="auto">Auto</option>
+            </select>
+          </div>
+          <div>
+            <label for="skills-refinement-threshold" class="config-label">Refinement threshold <span class="text-outline/30 normal-case font-normal">(0 = omit)</span></label>
+            <input id="skills-refinement-threshold" type="number" min="0" class="config-input"
+              value={config.skills.evolution?.refinementThreshold ?? 0}
+              onchange={(e) => {
+                const n = parseInt((e.target as HTMLInputElement).value || "0", 10);
+                const ev = { ...config.skills.evolution };
+                if (Number.isFinite(n) && n > 0) ev.refinementThreshold = n;
+                else delete ev.refinementThreshold;
+                config = {
+                  ...config,
+                  skills: { ...config.skills, evolution: Object.keys(ev).length > 0 ? ev : undefined },
+                };
+              }} />
+          </div>
+        </div>
+        <label class="flex items-center gap-3 cursor-pointer">
+          <input type="checkbox" class="accent-primary w-3.5 h-3.5"
+            checked={config.skills.evolution?.rollbackOnRegression === true}
+            onchange={() => {
+              const ev = { ...config.skills.evolution };
+              if (ev.rollbackOnRegression) delete ev.rollbackOnRegression;
+              else ev.rollbackOnRegression = true;
+              config = {
+                ...config,
+                skills: { ...config.skills, evolution: Object.keys(ev).length > 0 ? ev : undefined },
+              };
+            }} />
+          <span class="font-mono text-[10px] text-on-surface/80">Rollback on regression</span>
+        </label>
       </div>
     {/if}
   </div>

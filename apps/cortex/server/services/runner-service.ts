@@ -17,6 +17,7 @@ import {
   mergeCortexAllowedTools,
   type CortexAgentToolEntry,
   type CortexDynamicSubAgentsConfig,
+  type CortexSkillsConfig,
 } from "./cortex-agent-config.js";
 
 export interface LaunchParams {
@@ -47,6 +48,8 @@ export interface LaunchParams {
   readonly taskContext?: Record<string, string>;
   /** When true, builder enables `withHealthCheck()`. */
   readonly healthCheck?: boolean;
+  /** Living skills directories (framework `withSkills`). */
+  readonly skills?: CortexSkillsConfig;
 }
 
 type ActiveEntry = {
@@ -163,6 +166,14 @@ export const CortexRunnerServiceLive = Layer.effect(
               const tc = params.taskContext;
               if (tc && Object.keys(tc).length > 0) b = b.withTaskContext(tc);
               if (params.healthCheck === true) b = b.withHealthCheck();
+
+              const sk = params.skills;
+              if (sk?.paths?.length) {
+                b = b.withSkills({
+                  paths: [...sk.paths],
+                  ...(sk.evolution ? { evolution: { ...sk.evolution } } : {}),
+                });
+              }
 
               // ── Execution controls ────────────────────────────────────
               if (params.timeout && params.timeout > 0) b = b.withTimeout(params.timeout);

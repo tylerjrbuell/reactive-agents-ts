@@ -45,6 +45,48 @@ export function coerceTaskContextRecord(raw: unknown): Record<string, string> | 
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
+/** Living skills / SKILL.md paths + optional evolution options for `withSkills`. */
+export type CortexSkillsConfig = {
+  readonly paths: readonly string[];
+  readonly evolution?: {
+    readonly mode?: string;
+    readonly refinementThreshold?: number;
+    readonly rollbackOnRegression?: boolean;
+  };
+};
+
+/** Parses `skills` from a raw config blob for the builder's `withSkills`. */
+export function parseCortexSkillsConfig(raw: unknown): CortexSkillsConfig | undefined {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const o = raw as Record<string, unknown>;
+  const pr = o.paths;
+  if (!Array.isArray(pr)) return undefined;
+  const paths = pr
+    .filter((x): x is string => typeof x === "string" && x.trim().length > 0)
+    .map((x) => x.trim());
+  if (paths.length === 0) return undefined;
+
+  const evRaw = o.evolution;
+  if (!evRaw || typeof evRaw !== "object" || Array.isArray(evRaw)) {
+    return { paths };
+  }
+  const e = evRaw as Record<string, unknown>;
+  const mode = typeof e.mode === "string" && e.mode.trim() ? e.mode.trim() : undefined;
+  const refinementThreshold = asFiniteNumber(e.refinementThreshold);
+  const rollbackOnRegression = e.rollbackOnRegression === true;
+  if (!mode && refinementThreshold === undefined && !rollbackOnRegression) {
+    return { paths };
+  }
+  return {
+    paths,
+    evolution: {
+      ...(mode ? { mode } : {}),
+      ...(refinementThreshold !== undefined ? { refinementThreshold } : {}),
+      ...(rollbackOnRegression ? { rollbackOnRegression: true } : {}),
+    },
+  };
+}
+
 /**
  * Returns a shallow copy with coerced primitives and nested objects safe for
  * {@link GatewayProcessManager} / runner-style agent construction.
@@ -161,6 +203,14 @@ export function normalizeCortexAgentConfig(raw: Record<string, unknown>): Record
       };
     }
   }
+
+  const skillsParsed = parseCortexSkillsConfig(raw.skills);
+  if (skillsParsed !== undefined) {
+    out.skills = {
+      paths: [...skillsParsed.paths],
+      ...(skillsParsed.evolution ? { evolution: { ...skillsParsed.evolution } } : {}),
+    };
+  } else delete out.skills;
 
   return out;
 }

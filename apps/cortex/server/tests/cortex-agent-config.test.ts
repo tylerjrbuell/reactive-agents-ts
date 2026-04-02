@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   mergeCortexAllowedTools,
   normalizeCortexAgentConfig,
+  parseCortexSkillsConfig,
 } from "../services/cortex-agent-config.js";
 
 describe("normalizeCortexAgentConfig", () => {
@@ -60,6 +61,13 @@ describe("normalizeCortexAgentConfig", () => {
     expect(normalizeCortexAgentConfig({ healthCheck: false }).healthCheck).toBeUndefined();
   });
 
+  test("normalizeCortexAgentConfig parses skills", () => {
+    const out = normalizeCortexAgentConfig({
+      skills: { paths: ["./x"], evolution: { mode: "auto" } },
+    });
+    expect(out.skills).toEqual({ paths: ["./x"], evolution: { mode: "auto" } });
+  });
+
   test("normalizes agentTools and dynamicSubAgents", () => {
     const out = normalizeCortexAgentConfig({
       agentTools: [
@@ -71,6 +79,24 @@ describe("normalizeCortexAgentConfig", () => {
     expect(out.agentTools).toHaveLength(2);
     expect((out.agentTools![0] as { kind: string }).kind).toBe("local");
     expect(out.dynamicSubAgents).toEqual({ enabled: true, maxIterations: 3 });
+  });
+});
+
+describe("parseCortexSkillsConfig", () => {
+  test("requires non-empty paths", () => {
+    expect(parseCortexSkillsConfig(null)).toBeUndefined();
+    expect(parseCortexSkillsConfig({ paths: [] })).toBeUndefined();
+    expect(parseCortexSkillsConfig({ paths: [" ./a ", "b"] })?.paths).toEqual(["./a", "b"]);
+  });
+
+  test("includes evolution when present", () => {
+    const sk = parseCortexSkillsConfig({
+      paths: ["./s"],
+      evolution: { mode: "suggest", refinementThreshold: 5, rollbackOnRegression: true },
+    });
+    expect(sk?.evolution?.mode).toBe("suggest");
+    expect(sk?.evolution?.refinementThreshold).toBe(5);
+    expect(sk?.evolution?.rollbackOnRegression).toBe(true);
   });
 });
 

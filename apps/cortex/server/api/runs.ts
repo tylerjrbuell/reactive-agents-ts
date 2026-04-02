@@ -42,6 +42,7 @@ export const runsRouter = (
               ? { taskContext: b.taskContext as Record<string, string> }
               : {}),
             ...(b.healthCheck === true ? { healthCheck: true as const } : {}),
+            ...(b.skills?.paths?.length ? { skills: b.skills } : {}),
           });
         });
         try {
@@ -82,6 +83,18 @@ export const runsRouter = (
           ),
           taskContext: t.Optional(t.Record(t.String(), t.String())),
           healthCheck: t.Optional(t.Boolean()),
+          skills: t.Optional(
+            t.Object({
+              paths: t.Array(t.String()),
+              evolution: t.Optional(
+                t.Object({
+                  mode: t.Optional(t.String()),
+                  refinementThreshold: t.Optional(t.Number()),
+                  rollbackOnRegression: t.Optional(t.Boolean()),
+                }),
+              ),
+            }),
+          ),
         }),
       },
     )

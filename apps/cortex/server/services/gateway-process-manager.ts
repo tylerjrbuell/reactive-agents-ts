@@ -21,6 +21,7 @@ import {
   coerceTaskContextRecord,
   mergeCortexAllowedTools,
   normalizeCortexAgentConfig,
+  parseCortexSkillsConfig,
   type CortexAgentToolEntry,
   type CortexDynamicSubAgentsConfig,
   type CortexMetaToolsConfig,
@@ -274,6 +275,14 @@ export class GatewayProcessManager {
       const taskContext = coerceTaskContextRecord(config.taskContext);
       if (taskContext) builder = builder.withTaskContext(taskContext);
       if (config.healthCheck === true) builder = builder.withHealthCheck();
+
+      const skillsCfg = parseCortexSkillsConfig(config.skills);
+      if (skillsCfg) {
+        builder = builder.withSkills({
+          paths: [...skillsCfg.paths],
+          ...(skillsCfg.evolution ? { evolution: { ...skillsCfg.evolution } } : {}),
+        });
+      }
 
       // ── Execution controls ────────────────────────────────────────────
       const timeout = typeof config.timeout === "number" ? config.timeout : 0;

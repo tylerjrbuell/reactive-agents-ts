@@ -11,7 +11,8 @@
  *   3. apps/cortex/server/services/gateway-process-manager.ts  (fireAgent builder)
  *   4. apps/cortex/server/api/runs.ts                  (POST body schema)
  *   5. apps/cortex/ui/src/routes/lab/+page.svelte      (builder run() call + AgentConfig types)
- *   Phase 1 extras: taskContext, healthCheck → withTaskContext / withHealthCheck
+ *   Phase 1: taskContext, healthCheck → withTaskContext / withHealthCheck
+ *   Phase 2: skills → withSkills({ paths, evolution })
  *   MCP / sub-agents also wire through gateway `fireAgent` + `normalizeCortexAgentConfig`.
  *
  * HOW TO USE: Run `bun test apps/cortex/server/tests --timeout 15000`.
@@ -67,6 +68,10 @@ const FULL_CONFIG_BODY = {
   taskContext:        { project: "acme", environment: "staging" },
   /** Phase 1 — enables `agent.health()` on built agents */
   healthCheck:        true,
+  skills: {
+    paths: ["./.claude/skills", "./skills"],
+    evolution: { mode: "suggest", refinementThreshold: 10, rollbackOnRegression: true },
+  },
 };
 
 describe("AgentConfig → LaunchParams parity", () => {
@@ -136,5 +141,10 @@ describe("AgentConfig → LaunchParams parity", () => {
 
     expect(p.taskContext).toEqual({ project: "acme", environment: "staging" });
     expect(p.healthCheck).toBe(true);
+
+    expect(p.skills?.paths).toEqual(["./.claude/skills", "./skills"]);
+    expect(p.skills?.evolution?.mode).toBe("suggest");
+    expect(p.skills?.evolution?.refinementThreshold).toBe(10);
+    expect(p.skills?.evolution?.rollbackOnRegression).toBe(true);
   });
 });

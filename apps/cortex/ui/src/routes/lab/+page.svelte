@@ -86,6 +86,16 @@
             ? { taskContext: builderConfig.taskContext }
             : {}),
           ...(builderConfig.healthCheck ? { healthCheck: true as const } : {}),
+          ...(builderConfig.skills?.paths?.length
+            ? {
+                skills: {
+                  paths: builderConfig.skills.paths,
+                  ...(builderConfig.skills.evolution
+                    ? { evolution: { ...builderConfig.skills.evolution } }
+                    : {}),
+                },
+              }
+            : {}),
         }),
       });
       if (!res.ok) throw new Error(`Server error ${res.status}`);
@@ -279,6 +289,12 @@
       },
       taskContext: { ...defaults.taskContext, ...(sourceConfig.taskContext ?? {}) },
       healthCheck: sourceConfig.healthCheck ?? defaults.healthCheck,
+      skills: {
+        paths: [...(sourceConfig.skills?.paths ?? defaults.skills.paths)],
+        ...(sourceConfig.skills?.evolution
+          ? { evolution: { ...sourceConfig.skills.evolution } }
+          : {}),
+      },
     };
     builderAgentType = agent.agentType === "gateway" ? "persistent" : "ad-hoc";
     builderPersistentName = agent.name;
