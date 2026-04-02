@@ -133,7 +133,7 @@
 
     {#if isRunning && agent.maxIterations > 0}
       <div class="mt-4 flex gap-1 justify-center items-end h-5">
-        {#each Array(Math.min(agent.iteration, 8)) as _, i (i)}
+        {#each Array(Math.min(agent.loopIteration, 8)) as _, i (i)}
           <div
             class="w-1 rounded-full transition-all {agent.state === 'running'
               ? 'bg-primary'
@@ -145,7 +145,8 @@
         {/each}
       </div>
       <div class="mt-2 text-[10px] font-mono text-outline">
-        iter {agent.iteration}/{agent.maxIterations}
+        loop {agent.loopIteration}/{agent.maxIterations}{#if agent.reasoningSteps > agent.loopIteration}
+          <span class="text-outline/50"> · steps {agent.reasoningSteps}</span>{/if}
       </div>
     {/if}
 

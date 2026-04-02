@@ -99,21 +99,35 @@
       <span class="text-on-surface-variant">DURATION</span>
     </div>
 
-    {#if vitals.iteration > 0}
+    {#if vitals.loopIteration > 0 || vitals.reasoningSteps > 0}
       <div class="h-4 w-px bg-primary/20 mx-4 flex-shrink-0"></div>
-      <div class="flex items-center gap-2">
-        <span class="text-tertiary">ITER</span>
-        <span
-          class="tabular-nums {vitals.iteration > vitals.maxIterations && vitals.maxIterations > 0
-            ? 'text-tertiary'
-            : 'text-on-surface'}"
-          title={vitals.maxIterations > 0 ? `Max: ${vitals.maxIterations}` : undefined}
-        >
-          {vitals.iteration}{vitals.maxIterations > 0 && vitals.iteration <= vitals.maxIterations
-            ? `/${vitals.maxIterations}`
-            : ""}
-        </span>
-      </div>
+      {#if vitals.loopIteration > 0}
+        <div class="flex items-center gap-2 mr-3">
+          <span class="text-tertiary" title="Outer kernel loop (ReasoningIterationProgress) — matches trace rows"
+            >LOOP</span
+          >
+          <span
+            class="tabular-nums {vitals.loopIteration > vitals.maxIterations && vitals.maxIterations > 0
+              ? 'text-tertiary'
+              : 'text-on-surface'}"
+            title={vitals.maxIterations > 0 ? `Configured max: ${vitals.maxIterations}` : undefined}
+          >
+            {vitals.loopIteration}{vitals.maxIterations > 0 && vitals.loopIteration <= vitals.maxIterations
+              ? `/${vitals.maxIterations}`
+              : ""}
+          </span>
+        </div>
+      {/if}
+      {#if vitals.reasoningSteps > 0}
+        <div class="flex items-center gap-2 mr-5">
+          <span
+            class="text-tertiary"
+            title="Reasoning steps (ReasoningStepCompleted) — may exceed loop count in multi-step strategies"
+            >STEPS</span
+          >
+          <span class="tabular-nums text-on-surface">{vitals.reasoningSteps}</span>
+        </div>
+      {/if}
     {/if}
 
     <!-- Config pills: provider · model · strategy -->

@@ -13,7 +13,16 @@ export interface RunVitals {
   readonly tokensUsed: number;
   readonly cost: number;
   readonly durationMs: number;
-  readonly iteration: number;
+  /**
+   * Outer kernel-loop count (`ReasoningIterationProgress.iteration`, `AgentCompleted.totalIterations`).
+   * Compare to `maxIterations`; aligns with trace rows (one step row per loop tick).
+   */
+  readonly loopIteration: number;
+  /**
+   * Highest reasoning-step index from `ReasoningStepCompleted` (`step` / `totalSteps`).
+   * Can exceed `loopIteration` when strategies emit multiple steps per outer loop.
+   */
+  readonly reasoningSteps: number;
   readonly maxIterations: number;
   /** LLM provider name (e.g. "anthropic", "openai") — from LLMRequestCompleted */
   readonly provider?: string;
@@ -61,7 +70,8 @@ const DEFAULT_VITALS: RunVitals = {
   tokensUsed: 0,
   cost: 0,
   durationMs: 0,
-  iteration: 0,
+  loopIteration: 0,
+  reasoningSteps: 0,
   maxIterations: 0,  // 0 = unknown; VitalsStrip omits the /N suffix when 0
 };
 
@@ -112,27 +122,27 @@ function updateVitals(v: RunVitals, msg: CortexLiveMsg, runStartMs: number): Run
         model:    (typeof p.model    === "string" && p.model    && p.model    !== "unknown") ? p.model    : v.model,
       };
     case "ReasoningStepCompleted": {
-      const iter =
+      const steps =
         typeof p.totalSteps === "number"
           ? p.totalSteps
           : typeof p.step === "number"
             ? p.step
-            : v.iteration;
-      const clampedIter = Math.max(v.iteration, Math.max(0, iter));
-      return { ...v, iteration: clampedIter, maxIterations: Math.max(v.maxIterations, clampedIter) };
+            : v.reasoningSteps;
+      const clamped = Math.max(v.reasoningSteps, Math.max(0, steps));
+      return { ...v, reasoningSteps: clamped };
     }
     case "ReasoningIterationProgress": {
-      const iter = typeof p.iteration === "number" ? p.iteration : v.iteration;
+      const iter = typeof p.iteration === "number" ? p.iteration : v.loopIteration;
       // maxIterations: use what the framework configured, never let it grow with actual count.
       // If agent runs over, we just show "26" not "26/26" — handled in VitalsStrip display.
       const max =
         typeof p.maxIterations === "number" && p.maxIterations > 0
           ? p.maxIterations
           : v.maxIterations;
-      const clampedIter = Math.max(v.iteration, Math.max(0, iter));
+      const clampedLoop = Math.max(v.loopIteration, Math.max(0, iter));
       return {
         ...v,
-        iteration: clampedIter,
+        loopIteration: clampedLoop,
         maxIterations: max,
         // Strategy is consistent across iterations; capture once
         strategy: v.strategy ?? (typeof p.strategy === "string" ? p.strategy : undefined),
@@ -141,7 +151,8 @@ function updateVitals(v: RunVitals, msg: CortexLiveMsg, runStartMs: number): Run
     case "AgentCompleted":
       return {
         ...v,
-        iteration: typeof p.totalIterations === "number" ? p.totalIterations : v.iteration,
+        loopIteration:
+          typeof p.totalIterations === "number" ? p.totalIterations : v.loopIteration,
         tokensUsed: typeof p.totalTokens === "number" ? p.totalTokens : v.tokensUsed,
         durationMs: typeof p.durationMs === "number" ? p.durationMs : v.durationMs,
       };
@@ -267,7 +278,9 @@ export function createRunStore(runId: string, options?: CreateRunStoreOptions) {
         debrief: parsedDebrief ?? s.debrief,
         vitals: {
           ...s.vitals,
-          iteration: run.iterationCount ?? s.vitals.iteration,
+          // DB stores a single merged count until we persist both; replayed events refine this.
+          loopIteration: run.iterationCount ?? s.vitals.loopIteration,
+          reasoningSteps: run.iterationCount ?? s.vitals.reasoningSteps,
           tokensUsed: run.tokensUsed ?? s.vitals.tokensUsed,
           cost: run.cost ?? s.vitals.cost,
           durationMs: Date.now() - runStartMs,

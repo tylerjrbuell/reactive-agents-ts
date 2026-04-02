@@ -97,7 +97,24 @@
 
       // Toasts for key lifecycle events
       if (msg.type === "AgentConnected") {
-        stageStore.handleAgentConnected(node ?? { agentId: msg.agentId!, runId: msg.runId!, name: msg.agentId!, state: "running", entropy: 0, iteration: 0, maxIterations: 10, tokensUsed: 0, cost: 0, connectedAt: Date.now(), lastEventAt: Date.now() } as any, agents.length);
+        stageStore.handleAgentConnected(
+          node ??
+            ({
+              agentId: msg.agentId!,
+              runId: msg.runId!,
+              name: msg.agentId!,
+              state: "running",
+              entropy: 0,
+              loopIteration: 0,
+              reasoningSteps: 0,
+              maxIterations: 10,
+              tokensUsed: 0,
+              cost: 0,
+              connectedAt: Date.now(),
+              lastEventAt: Date.now(),
+            } as import("$lib/stores/agent-store.js").AgentNode),
+          agents.length,
+        );
         toast.connection(
           `${msg.agentId!.slice(0, 20)} connected`,
           "Agent is streaming to Cortex",

@@ -178,12 +178,31 @@
   <!-- ── Stats grid ─────────────────────────────────────────────────────── -->
   <div class="grid grid-cols-2 gap-2">
     {#each [
-      { label: "Iterations", value: String(vitals.iteration), sub: vitals.maxIterations > 0 && vitals.iteration <= vitals.maxIterations ? `/ ${vitals.maxIterations}` : undefined, color: "text-primary" },
-      { label: "Tokens", value: vitals.tokensUsed > 0 ? vitals.tokensUsed.toLocaleString() : "—", color: "text-primary" },
-      { label: "Cost", value: vitals.cost < 0.0001 ? "<$0.0001" : `$${vitals.cost.toFixed(4)}`, color: "text-secondary/80" },
-      { label: "Duration", value: vitals.durationMs > 0 ? vitals.durationMs < 1000 ? `${vitals.durationMs}ms` : `${(vitals.durationMs/1000).toFixed(1)}s` : "—", color: "text-secondary/80" },
+      {
+        label: "Loop",
+        hint: "Outer kernel iterations (matches trace)",
+        value: vitals.loopIteration > 0 ? String(vitals.loopIteration) : "—",
+        sub:
+          vitals.maxIterations > 0 && vitals.loopIteration > 0 && vitals.loopIteration <= vitals.maxIterations
+            ? `/ ${vitals.maxIterations}`
+            : undefined,
+        color: "text-primary",
+      },
+      {
+        label: "Steps",
+        hint: "Reasoning steps (may exceed loop in plan/ToT/etc.)",
+        value: vitals.reasoningSteps > 0 ? String(vitals.reasoningSteps) : "—",
+        sub: undefined,
+        color: "text-primary",
+      },
+      { label: "Tokens", hint: "", value: vitals.tokensUsed > 0 ? vitals.tokensUsed.toLocaleString() : "—", sub: undefined, color: "text-primary" },
+      { label: "Cost", hint: "", value: vitals.cost < 0.0001 ? "<$0.0001" : `$${vitals.cost.toFixed(4)}`, sub: undefined, color: "text-secondary/80" },
+      { label: "Duration", hint: "", value: vitals.durationMs > 0 ? vitals.durationMs < 1000 ? `${vitals.durationMs}ms` : `${(vitals.durationMs/1000).toFixed(1)}s` : "—", sub: undefined, color: "text-secondary/80" },
     ] as stat}
-      <div class="bg-surface-container-low/30 border border-outline-variant/10 rounded p-2.5">
+      <div
+        class="bg-surface-container-low/30 border border-outline-variant/10 rounded p-2.5 {stat.label === 'Duration' ? 'col-span-2' : ''}"
+        title={stat.hint || undefined}
+      >
         <div class="font-mono text-[9px] text-outline/50 uppercase tracking-widest mb-1">{stat.label}</div>
         <div class="font-mono text-[13px] font-semibold {stat.color} tabular-nums">
           {stat.value}

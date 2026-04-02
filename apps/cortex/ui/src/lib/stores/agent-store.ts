@@ -21,7 +21,10 @@ export interface AgentNode {
   readonly name: string;
   readonly state: AgentCognitiveState;
   readonly entropy: number;
-  readonly iteration: number;
+  /** Outer kernel loop — `ReasoningIterationProgress` */
+  readonly loopIteration: number;
+  /** Reasoning steps — `ReasoningStepCompleted` (can exceed loop) */
+  readonly reasoningSteps: number;
   readonly maxIterations: number;
   readonly tokensUsed: number;
   readonly cost: number;
@@ -71,7 +74,8 @@ function runToSeedNode(run: RunSummaryDto, now: number): AgentNode {
     name: run.agentId,
     state,
     entropy: 0,
-    iteration: run.iterationCount,
+    loopIteration: run.iterationCount,
+    reasoningSteps: run.iterationCount,
     maxIterations: 0,
     tokensUsed: run.tokensUsed,
     cost: run.cost,
@@ -131,7 +135,8 @@ export function createAgentStore(options?: CreateAgentStoreOptions) {
                     existing.state === "stressed"
                   ) ? existing.state : seeded.state,
                   entropy:      existing.entropy,
-                  iteration:    Math.max(existing.iteration, seeded.iteration),
+                  loopIteration: Math.max(existing.loopIteration, seeded.loopIteration),
+                  reasoningSteps: Math.max(existing.reasoningSteps, seeded.reasoningSteps),
                   maxIterations: existing.maxIterations || seeded.maxIterations,
                   tokensUsed:   Math.max(existing.tokensUsed, seeded.tokensUsed),
                   cost:         Math.max(existing.cost, seeded.cost),
@@ -198,23 +203,24 @@ export function createAgentStore(options?: CreateAgentStoreOptions) {
           break;
         }
         case "ReasoningStepCompleted": {
-          const iter =
-            typeof (msg.payload as { iteration?: number }).iteration === "number"
-              ? (msg.payload as { iteration: number }).iteration
-              : typeof (msg.payload as { totalSteps?: number }).totalSteps === "number"
-                ? (msg.payload as { totalSteps: number }).totalSteps
-                : (existing?.iteration ?? 0);
-          patch.iteration = iter;
+          const p = msg.payload as { totalSteps?: number; step?: number };
+          const steps =
+            typeof p.totalSteps === "number"
+              ? p.totalSteps
+              : typeof p.step === "number"
+                ? p.step
+                : (existing?.reasoningSteps ?? 0);
+          patch.reasoningSteps = Math.max(existing?.reasoningSteps ?? 0, Math.max(0, steps));
           break;
         }
         case "ReasoningIterationProgress": {
           const iter = typeof (msg.payload as { iteration?: number }).iteration === "number"
             ? (msg.payload as { iteration: number }).iteration
-            : existing?.iteration ?? 0;
+            : existing?.loopIteration ?? 0;
           const max = typeof (msg.payload as { maxIterations?: number }).maxIterations === "number"
             ? (msg.payload as { maxIterations: number }).maxIterations
             : existing?.maxIterations ?? 0;
-          patch.iteration = iter;
+          patch.loopIteration = Math.max(existing?.loopIteration ?? 0, Math.max(0, iter));
           patch.maxIterations = max;
           if (existing?.state !== "completed" && existing?.state !== "error") {
             patch.state = entropyToState(existing?.entropy ?? 0, true);
@@ -244,7 +250,8 @@ export function createAgentStore(options?: CreateAgentStoreOptions) {
         name: existing?.name ?? msg.agentId,
         state: existing?.state ?? "running",
         entropy: existing?.entropy ?? 0,
-        iteration: existing?.iteration ?? 0,
+        loopIteration: existing?.loopIteration ?? 0,
+        reasoningSteps: existing?.reasoningSteps ?? 0,
         maxIterations: existing?.maxIterations ?? 0,
         tokensUsed: existing?.tokensUsed ?? 0,
         cost: existing?.cost ?? 0,
