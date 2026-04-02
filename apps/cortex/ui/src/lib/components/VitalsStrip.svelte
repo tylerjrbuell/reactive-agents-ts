@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { RunVitals, RunStatus } from "$lib/stores/run-store.js";
+  import Tooltip from "$lib/components/Tooltip.svelte";
 
   interface Props {
     vitals: RunVitals;
@@ -50,6 +51,15 @@
   // Only STRESSED/FAILED override to red for semantic clarity.
 
   const runShort = $derived(runId.length > 12 ? `${runId.slice(0, 8)}…` : runId);
+
+  const loopTooltipText = $derived(
+    vitals.maxIterations > 0
+      ? `Kernel loops (ReasoningIterationProgress). Same axis as trace rows and replay.\nConfigured max: ${vitals.maxIterations}.`
+      : `Kernel loops (ReasoningIterationProgress). Same axis as trace rows and replay.`,
+  );
+
+  const stepsTooltipText =
+    "Reasoning steps (ReasoningStepCompleted). Can exceed LOOP when a strategy emits multiple inner steps per kernel loop. Replay does not step through these individually.";
 </script>
 
 <div class="w-full bg-[#111317] border-b border-white/5 relative overflow-hidden flex-shrink-0">
@@ -57,9 +67,9 @@
     class="max-w-full px-6 py-3 flex items-center gap-0 font-mono text-[11px] uppercase tracking-widest text-on-surface-variant overflow-x-auto"
   >
     <div class="flex items-center gap-2 pr-5">
-      <span class="text-[9px] text-outline normal-case tracking-normal truncate max-w-[100px]" title={runId}
-        >{runShort}</span
-      >
+      <Tooltip text={runId} class="max-w-[100px] min-w-0">
+        <span class="text-[9px] text-outline normal-case tracking-normal truncate block">{runShort}</span>
+      </Tooltip>
       <div class="flex items-center gap-2 px-2 py-0.5 rounded-full border {statusClass}">
         {#if status === "live"}
           <span class="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></span>
@@ -102,33 +112,28 @@
     {#if vitals.loopIteration > 0 || vitals.reasoningSteps > 0}
       <div class="h-4 w-px bg-primary/20 mx-4 flex-shrink-0"></div>
       {#if vitals.loopIteration > 0}
-        <div class="flex items-center gap-2 mr-3">
-          <span
-            class="text-tertiary"
-            title="Kernel loops (ReasoningIterationProgress). Same axis as trace rows and replay. Compare to max iterations."
-            >LOOP</span
-          >
-          <span
-            class="tabular-nums {vitals.loopIteration > vitals.maxIterations && vitals.maxIterations > 0
-              ? 'text-tertiary'
-              : 'text-on-surface'}"
-            title={vitals.maxIterations > 0 ? `Configured max: ${vitals.maxIterations}` : undefined}
-          >
-            {vitals.loopIteration}{vitals.maxIterations > 0 && vitals.loopIteration <= vitals.maxIterations
-              ? `/${vitals.maxIterations}`
-              : ""}
-          </span>
-        </div>
+        <Tooltip text={loopTooltipText} class="mr-3">
+          <div class="flex cursor-help items-center gap-2">
+            <span class="text-tertiary">LOOP</span>
+            <span
+              class="tabular-nums {vitals.loopIteration > vitals.maxIterations && vitals.maxIterations > 0
+                ? 'text-tertiary'
+                : 'text-on-surface'}"
+            >
+              {vitals.loopIteration}{vitals.maxIterations > 0 && vitals.loopIteration <= vitals.maxIterations
+                ? `/${vitals.maxIterations}`
+                : ""}
+            </span>
+          </div>
+        </Tooltip>
       {/if}
       {#if vitals.reasoningSteps > 0}
-        <div class="flex items-center gap-2 mr-5">
-          <span
-            class="text-tertiary"
-            title="Reasoning steps (ReasoningStepCompleted). Can exceed LOOP when a strategy emits multiple steps per kernel loop. Replay does not step through these individually."
-            >STEPS</span
-          >
-          <span class="tabular-nums text-on-surface">{vitals.reasoningSteps}</span>
-        </div>
+        <Tooltip text={stepsTooltipText} class="mr-5">
+          <div class="flex cursor-help items-center gap-2">
+            <span class="text-tertiary">STEPS</span>
+            <span class="tabular-nums text-on-surface">{vitals.reasoningSteps}</span>
+          </div>
+        </Tooltip>
       {/if}
     {/if}
 
@@ -137,28 +142,31 @@
       <div class="h-4 w-px bg-primary/20 mx-4 flex-shrink-0"></div>
       <div class="flex items-center gap-2">
         {#if vitals.provider}
-          <span
-            class="px-1.5 py-0.5 bg-surface-container border border-outline-variant/20 rounded text-[9px] font-mono text-outline/70 uppercase tracking-wider"
-            title="Provider"
-          >
-            {vitals.provider}
-          </span>
+          <Tooltip text={`LLM provider: ${vitals.provider}`}>
+            <span
+              class="px-1.5 py-0.5 bg-surface-container border border-outline-variant/20 rounded text-[9px] font-mono text-outline/70 uppercase tracking-wider"
+            >
+              {vitals.provider}
+            </span>
+          </Tooltip>
         {/if}
         {#if vitals.model}
-          <span
-            class="px-1.5 py-0.5 bg-primary/8 border border-primary/20 rounded text-[9px] font-mono text-primary/70 max-w-[140px] truncate"
-            title="Model: {vitals.model}"
-          >
-            {vitals.model}
-          </span>
+          <Tooltip text={`Model: ${vitals.model}`} class="max-w-[140px] min-w-0">
+            <span
+              class="w-full truncate px-1.5 py-0.5 bg-primary/8 border border-primary/20 rounded text-[9px] font-mono text-primary/70 block"
+            >
+              {vitals.model}
+            </span>
+          </Tooltip>
         {/if}
         {#if vitals.strategy}
-          <span
-            class="px-1.5 py-0.5 bg-secondary/8 border border-secondary/20 rounded text-[9px] font-mono text-secondary/60 uppercase tracking-wider"
-            title="Strategy"
-          >
-            {vitals.strategy}
-          </span>
+          <Tooltip text={`Reasoning strategy: ${vitals.strategy}`}>
+            <span
+              class="px-1.5 py-0.5 bg-secondary/8 border border-secondary/20 rounded text-[9px] font-mono text-secondary/60 uppercase tracking-wider"
+            >
+              {vitals.strategy}
+            </span>
+          </Tooltip>
         {/if}
       </div>
     {/if}

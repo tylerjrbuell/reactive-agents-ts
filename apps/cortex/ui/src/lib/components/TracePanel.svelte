@@ -1,5 +1,9 @@
 <script lang="ts">
   import type { CortexTraceFrame } from "../stores/trace-store.js";
+  import Tooltip from "$lib/components/Tooltip.svelte";
+
+  const TRACE_ROWS_TOOLTIP =
+    "Rows follow kernel loops (ReasoningIterationProgress). Inner reasoning steps are counted separately as STEPS in the vitals strip.";
 
   interface Props {
     frame: CortexTraceFrame | null;
@@ -98,35 +102,34 @@
           </span>
         {/if}
       </div>
-      <p
-        class="text-[9px] font-mono text-outline/45 normal-case tracking-normal pl-7 leading-tight"
-        title="Rows follow kernel loops (ReasoningIterationProgress). Inner reasoning steps are counted separately as STEPS in the header."
-      >
-        Rows = kernel loops · not each reasoning step
-      </p>
+      <Tooltip text={TRACE_ROWS_TOOLTIP} class="w-full min-w-0 pl-7">
+        <p class="text-[9px] font-mono text-outline/45 normal-case tracking-normal leading-tight m-0 cursor-help">
+          Rows = kernel loops · not each reasoning step
+        </p>
+      </Tooltip>
     </div>
     <div class="flex items-center gap-1.5 flex-shrink-0 pt-0.5">
       {#if traceRows.length > 0}
-        <button
-          type="button"
-          onclick={toggleExpandCollapseAll}
-          class="p-1.5 rounded border border-outline-variant/25 text-outline hover:text-primary hover:border-primary/30 bg-transparent cursor-pointer flex-shrink-0"
-          title={traceFullyExpanded ? "Collapse all" : "Expand all"}
-          aria-label={traceFullyExpanded ? "Collapse all trace sections" : "Expand all trace sections"}
-          aria-pressed={traceFullyExpanded}
-        >
-          <span class="material-symbols-outlined text-base leading-none">
-            {traceFullyExpanded ? "collapse_all" : "expand_all"}
-          </span>
-        </button>
+        <Tooltip text={traceFullyExpanded ? "Collapse all trace sections" : "Expand all trace sections"}>
+          <button
+            type="button"
+            onclick={toggleExpandCollapseAll}
+            class="p-1.5 rounded border border-outline-variant/25 text-outline hover:text-primary hover:border-primary/30 bg-transparent cursor-pointer flex-shrink-0"
+            aria-label={traceFullyExpanded ? "Collapse all trace sections" : "Expand all trace sections"}
+            aria-pressed={traceFullyExpanded}
+          >
+            <span class="material-symbols-outlined text-base leading-none">
+              {traceFullyExpanded ? "collapse_all" : "expand_all"}
+            </span>
+          </button>
+        </Tooltip>
       {/if}
       {#if frame}
-        <span
-          class="text-[10px] font-mono text-primary/70 bg-primary/10 px-2 py-0.5 rounded"
-          title="Kernel loop index for this row"
-        >
-          LOOP {String(frame.iteration).padStart(2, "0")}
-        </span>
+        <Tooltip text={`Kernel loop index for this trace row: ${frame.iteration}`}>
+          <span class="text-[10px] font-mono text-primary/70 bg-primary/10 px-2 py-0.5 rounded inline-block">
+            LOOP {String(frame.iteration).padStart(2, "0")}
+          </span>
+        </Tooltip>
       {/if}
     </div>
   </div>
@@ -240,7 +243,9 @@
                        ? 'text-secondary bg-secondary/15 border border-secondary/25'
                        : 'text-primary/80 bg-primary/10'}"
             >
-              <span title="Kernel loop {f.iteration}">{isFinal ? "FINAL" : `L${f.iteration}`}</span>
+              <span
+                title={isFinal ? "Final answer row" : `Kernel loop ${f.iteration}`}
+              >{isFinal ? "FINAL" : `L${f.iteration}`}</span>
             </span>
 
             <!-- Summary text -->

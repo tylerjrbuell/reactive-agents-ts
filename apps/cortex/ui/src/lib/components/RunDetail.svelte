@@ -12,6 +12,7 @@
   import RawEventLog from "$lib/components/RawEventLog.svelte";
   import DebriefPanel from "$lib/components/DebriefPanel.svelte";
   import ConfirmModal from "$lib/components/ConfirmModal.svelte";
+  import Tooltip from "$lib/components/Tooltip.svelte";
   import { createRunStore } from "$lib/stores/run-store.js";
   import { createSignalStore } from "$lib/stores/signal-store.js";
   import { createTraceStore } from "$lib/stores/trace-store.js";
@@ -84,6 +85,14 @@
 
   const replayMismatchExplain = $derived(
     `Replay moves through ${replayMaxLoops} stored ReasoningIterationProgress event(s). The LOOP figure in the bar (${reportedLoopIteration}${reportedMaxIterations > 0 ? `/${reportedMaxIterations}` : ""}) is the framework-reported loop index — they can differ if some loops were not recorded or telemetry used a different counter.`,
+  );
+
+  const replayActiveBadgeTooltip = $derived(
+    `${REPLAY_LOOP_TOOLTIP}\n\nDenominator (${replayMaxLoops}) = ReasoningIterationProgress events stored for this run.`,
+  );
+
+  const replayEnterButtonTooltip = $derived(
+    `${REPLAY_LOOP_TOOLTIP}\n\nYou will scrub ${replayMaxLoops} stored event(s).`,
   );
 
   function enterReplay() {
@@ -250,7 +259,9 @@
   <nav class="flex-shrink-0 px-4 py-2 border-b border-white/5 flex items-center gap-2 text-[10px] font-mono text-outline">
     <a href="/" class="text-secondary hover:text-primary no-underline">Beacon</a>
     <span class="text-on-surface/20">/</span>
-    <span class="text-on-surface/60 truncate max-w-[120px]" title={runId}>{runId.slice(0, 12)}…</span>
+    <Tooltip text={runId} class="max-w-[120px] min-w-0">
+      <span class="text-on-surface/60 truncate block">{runId.slice(0, 12)}…</span>
+    </Tooltip>
     {#if $runStore.isChat}
       <span class="ml-1 px-1.5 py-0.5 rounded border border-primary/30 text-primary text-[9px]">CHAT</span>
     {/if}
@@ -259,61 +270,73 @@
       <!-- Replay mode: scrub index is 1..N where N = stored RIP count (may differ from header LOOP) -->
       <div class="flex flex-col gap-0.5 items-start min-w-0 max-w-[min(100%,320px)]">
         <div class="flex items-center gap-1 flex-wrap">
-          <span
-            class="px-2 py-0.5 rounded bg-tertiary/15 border border-tertiary/30 text-tertiary text-[9px] uppercase tracking-wider"
-            title="{REPLAY_LOOP_TOOLTIP} Denominator ({replayMaxLoops}) = ReasoningIterationProgress events in this run."
-          >
-            REPLAY {replayLoopIndex}/{replayMaxLoops} events
-          </span>
+          <Tooltip text={replayActiveBadgeTooltip}>
+            <span
+              class="px-2 py-0.5 rounded bg-tertiary/15 border border-tertiary/30 text-tertiary text-[9px] uppercase tracking-wider"
+            >
+              REPLAY {replayLoopIndex}/{replayMaxLoops} events
+            </span>
+          </Tooltip>
           <div class="flex items-center gap-1">
-            <button type="button" onclick={stepBack} disabled={replayLoopIndex <= 1}
-              class="material-symbols-outlined text-sm text-outline hover:text-primary disabled:opacity-30 bg-transparent border-0 cursor-pointer p-0.5"
-              title="Previous stored progress event">skip_previous</button>
+            <Tooltip text="Previous stored ReasoningIterationProgress boundary">
+              <span class="inline-flex">
+                <button type="button" onclick={stepBack} disabled={replayLoopIndex <= 1}
+                  aria-label="Previous stored progress event"
+                  class="material-symbols-outlined text-sm text-outline hover:text-primary disabled:opacity-30 bg-transparent border-0 cursor-pointer p-0.5">skip_previous</button>
+              </span>
+            </Tooltip>
             {#if replayPlaying}
-              <button type="button" onclick={stopReplayPlay}
-                class="material-symbols-outlined text-sm text-tertiary bg-transparent border-0 cursor-pointer p-0.5">
-                pause</button>
+              <Tooltip text="Pause replay">
+                <button type="button" onclick={stopReplayPlay} aria-label="Pause replay"
+                  class="material-symbols-outlined text-sm text-tertiary bg-transparent border-0 cursor-pointer p-0.5">
+                  pause</button>
+              </Tooltip>
             {:else}
-              <button type="button" onclick={startReplayPlay}
-                class="material-symbols-outlined text-sm text-outline hover:text-primary bg-transparent border-0 cursor-pointer p-0.5"
-                title="Play through stored events">play_arrow</button>
+              <Tooltip text="Play through stored progress events">
+                <button type="button" onclick={startReplayPlay} aria-label="Play replay"
+                  class="material-symbols-outlined text-sm text-outline hover:text-primary bg-transparent border-0 cursor-pointer p-0.5">play_arrow</button>
+              </Tooltip>
             {/if}
-            <button type="button" onclick={stepForward} disabled={replayLoopIndex >= replayMaxLoops}
-              class="material-symbols-outlined text-sm text-outline hover:text-primary disabled:opacity-30 bg-transparent border-0 cursor-pointer p-0.5"
-              title="Next stored progress event">skip_next</button>
-            <button type="button" onclick={exitReplay}
-              class="material-symbols-outlined text-sm text-outline hover:text-error bg-transparent border-0 cursor-pointer p-0.5"
-              title="Exit replay">close</button>
+            <Tooltip text="Next stored ReasoningIterationProgress boundary">
+              <span class="inline-flex">
+                <button type="button" onclick={stepForward} disabled={replayLoopIndex >= replayMaxLoops}
+                  aria-label="Next stored progress event"
+                  class="material-symbols-outlined text-sm text-outline hover:text-primary disabled:opacity-30 bg-transparent border-0 cursor-pointer p-0.5">skip_next</button>
+              </span>
+            </Tooltip>
+            <Tooltip text="Exit replay mode">
+              <button type="button" onclick={exitReplay} aria-label="Exit replay"
+                class="material-symbols-outlined text-sm text-outline hover:text-error bg-transparent border-0 cursor-pointer p-0.5">close</button>
+            </Tooltip>
           </div>
         </div>
         {#if replayStoredVsReportedMismatch}
-          <p
-            class="text-[8px] font-mono text-outline/60 normal-case tracking-normal leading-snug m-0"
-            title={replayMismatchExplain}
-          >
-            Bar LOOP {reportedLoopIteration}{#if reportedMaxIterations > 0}<span class="text-outline/40">/{reportedMaxIterations}</span>{/if}
-            = reported index · replay = {replayMaxLoops} stored events
-          </p>
+          <Tooltip text={replayMismatchExplain} class="w-full max-w-[min(100%,280px)]">
+            <p class="text-[8px] font-mono text-outline/60 normal-case tracking-normal leading-snug m-0">
+              Bar LOOP {reportedLoopIteration}{#if reportedMaxIterations > 0}<span class="text-outline/40">/{reportedMaxIterations}</span>{/if}
+              = reported index · replay = {replayMaxLoops} stored events
+            </p>
+          </Tooltip>
         {/if}
       </div>
     {:else if $runStore.status !== "live" && replayMaxLoops > 0}
       <div class="flex flex-col gap-0.5 items-start min-w-0 max-w-[min(100%,280px)]">
-        <button type="button" onclick={enterReplay}
-          class="flex items-center gap-1 px-2 py-0.5 border border-outline-variant/20 text-outline rounded
-                 hover:border-tertiary/40 hover:text-tertiary transition-colors bg-transparent cursor-pointer text-[9px] uppercase"
-          title="{REPLAY_LOOP_TOOLTIP} You will scrub {replayMaxLoops} stored event(s)."
-        >
-          <span class="material-symbols-outlined text-[12px]">replay</span>
-          Replay ({replayMaxLoops} events)
-        </button>
-        {#if replayStoredVsReportedMismatch}
-          <p
-            class="text-[8px] font-mono text-outline/60 normal-case tracking-normal leading-snug m-0"
-            title={replayMismatchExplain}
+        <Tooltip text={replayEnterButtonTooltip}>
+          <button type="button" onclick={enterReplay} aria-label="Replay stored progress events"
+            class="flex items-center gap-1 px-2 py-0.5 border border-outline-variant/20 text-outline rounded
+                   hover:border-tertiary/40 hover:text-tertiary transition-colors bg-transparent cursor-pointer text-[9px] uppercase"
           >
-            LOOP bar {reportedLoopIteration}{#if reportedMaxIterations > 0}<span class="text-outline/40">/{reportedMaxIterations}</span>{/if}
-            ≠ {replayMaxLoops} stored replay steps — see tooltip
-          </p>
+            <span class="material-symbols-outlined text-[12px]">replay</span>
+            Replay ({replayMaxLoops} events)
+          </button>
+        </Tooltip>
+        {#if replayStoredVsReportedMismatch}
+          <Tooltip text={replayMismatchExplain} class="w-full max-w-[min(100%,280px)]">
+            <p class="text-[8px] font-mono text-outline/60 normal-case tracking-normal leading-snug m-0">
+              LOOP bar {reportedLoopIteration}{#if reportedMaxIterations > 0}<span class="text-outline/40">/{reportedMaxIterations}</span>{/if}
+              ≠ {replayMaxLoops} stored replay steps — hover for details
+            </p>
+          </Tooltip>
         {/if}
       </div>
     {/if}
@@ -321,16 +344,18 @@
     <div class="flex-1"></div>
 
     <!-- Export buttons -->
-    <button type="button" onclick={exportJSON}
-      class="flex items-center gap-1 text-outline hover:text-primary transition-colors bg-transparent border-0 cursor-pointer"
-      title="Download as JSON">
-      <span class="material-symbols-outlined text-sm">download</span>
-    </button>
-    <button type="button" onclick={copyMarkdown}
-      class="flex items-center gap-1 text-outline hover:text-primary transition-colors bg-transparent border-0 cursor-pointer"
-      title="Copy as Markdown">
-      <span class="material-symbols-outlined text-sm">content_copy</span>
-    </button>
+    <Tooltip text="Download run + events as JSON">
+      <button type="button" onclick={exportJSON} aria-label="Download as JSON"
+        class="flex items-center gap-1 text-outline hover:text-primary transition-colors bg-transparent border-0 cursor-pointer">
+        <span class="material-symbols-outlined text-sm">download</span>
+      </button>
+    </Tooltip>
+    <Tooltip text="Copy debrief markdown, or a minimal trace export">
+      <button type="button" onclick={copyMarkdown} aria-label="Copy as Markdown"
+        class="flex items-center gap-1 text-outline hover:text-primary transition-colors bg-transparent border-0 cursor-pointer">
+        <span class="material-symbols-outlined text-sm">content_copy</span>
+      </button>
+    </Tooltip>
   </nav>
 
   <!-- Vitals strip -->

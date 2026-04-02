@@ -7,6 +7,7 @@
    */
   import type { RunVitals, RunStatus } from "$lib/stores/run-store.js";
   import type { SignalData } from "$lib/stores/signal-store.js";
+  import Tooltip from "$lib/components/Tooltip.svelte";
 
   interface Props {
     vitals: RunVitals;
@@ -199,16 +200,33 @@
       { label: "Cost", hint: "", value: vitals.cost < 0.0001 ? "<$0.0001" : `$${vitals.cost.toFixed(4)}`, sub: undefined, color: "text-secondary/80" },
       { label: "Duration", hint: "", value: vitals.durationMs > 0 ? vitals.durationMs < 1000 ? `${vitals.durationMs}ms` : `${(vitals.durationMs/1000).toFixed(1)}s` : "—", sub: undefined, color: "text-secondary/80" },
     ] as stat}
-      <div
-        class="bg-surface-container-low/30 border border-outline-variant/10 rounded p-2.5 {stat.label === 'Duration' ? 'col-span-2' : ''}"
-        title={stat.hint || undefined}
-      >
-        <div class="font-mono text-[9px] text-outline/50 uppercase tracking-widest mb-1">{stat.label}</div>
-        <div class="font-mono text-[13px] font-semibold {stat.color} tabular-nums">
-          {stat.value}
-          {#if stat.sub}<span class="text-[10px] text-outline/40">{stat.sub}</span>{/if}
+      {#if stat.hint}
+        <Tooltip
+          text={stat.hint}
+          placement="bottom"
+          class={stat.label === "Duration" ? "col-span-2 min-w-0" : "min-w-0"}
+        >
+          <div
+            class="bg-surface-container-low/30 border border-outline-variant/10 rounded p-2.5 w-full cursor-help"
+          >
+            <div class="font-mono text-[9px] text-outline/50 uppercase tracking-widest mb-1">{stat.label}</div>
+            <div class="font-mono text-[13px] font-semibold {stat.color} tabular-nums">
+              {stat.value}
+              {#if stat.sub}<span class="text-[10px] text-outline/40">{stat.sub}</span>{/if}
+            </div>
+          </div>
+        </Tooltip>
+      {:else}
+        <div
+          class="bg-surface-container-low/30 border border-outline-variant/10 rounded p-2.5 {stat.label === 'Duration' ? 'col-span-2' : ''}"
+        >
+          <div class="font-mono text-[9px] text-outline/50 uppercase tracking-widest mb-1">{stat.label}</div>
+          <div class="font-mono text-[13px] font-semibold {stat.color} tabular-nums">
+            {stat.value}
+            {#if stat.sub}<span class="text-[10px] text-outline/40">{stat.sub}</span>{/if}
+          </div>
         </div>
-      </div>
+      {/if}
     {/each}
   </div>
 
