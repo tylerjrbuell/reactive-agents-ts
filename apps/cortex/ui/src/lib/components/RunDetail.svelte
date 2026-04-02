@@ -71,6 +71,21 @@
     $runStore.events.filter((e) => e.type === "ReasoningIterationProgress").length,
   );
 
+  /** LOOP in vitals = last framework-reported loop index; replay denominator = RIP events in this run. */
+  const reportedLoopIteration = $derived($runStore.vitals.loopIteration);
+  const reportedMaxIterations = $derived($runStore.vitals.maxIterations);
+
+  const replayStoredVsReportedMismatch = $derived(
+    $runStore.status !== "live" &&
+      replayMaxLoops > 0 &&
+      reportedLoopIteration > 0 &&
+      reportedLoopIteration !== replayMaxLoops,
+  );
+
+  const replayMismatchExplain = $derived(
+    `Replay moves through ${replayMaxLoops} stored ReasoningIterationProgress event(s). The LOOP figure in the bar (${reportedLoopIteration}${reportedMaxIterations > 0 ? `/${reportedMaxIterations}` : ""}) is the framework-reported loop index — they can differ if some loops were not recorded or telemetry used a different counter.`,
+  );
+
   function enterReplay() {
     if (replayMaxLoops === 0) return;
     replayLoopIndex = replayMaxLoops; // start at end (full view)
@@ -241,43 +256,66 @@
     {/if}
 
     {#if replayLoopIndex !== null}
-      <!-- Replay mode: scrub by kernel loop (same axis as LOOP + trace rows) -->
-      <span
-        class="px-2 py-0.5 rounded bg-tertiary/15 border border-tertiary/30 text-tertiary text-[9px] uppercase tracking-wider max-w-[min(100%,220px)] truncate"
-        title={REPLAY_LOOP_TOOLTIP}
-      >
-        REPLAY LOOP {replayLoopIndex}/{replayMaxLoops}
-      </span>
-      <div class="flex items-center gap-1">
-        <button type="button" onclick={stepBack} disabled={replayLoopIndex <= 1}
-          class="material-symbols-outlined text-sm text-outline hover:text-primary disabled:opacity-30 bg-transparent border-0 cursor-pointer p-0.5"
-          title="Previous kernel loop">skip_previous</button>
-        {#if replayPlaying}
-          <button type="button" onclick={stopReplayPlay}
-            class="material-symbols-outlined text-sm text-tertiary bg-transparent border-0 cursor-pointer p-0.5">
-            pause</button>
-        {:else}
-          <button type="button" onclick={startReplayPlay}
-            class="material-symbols-outlined text-sm text-outline hover:text-primary bg-transparent border-0 cursor-pointer p-0.5"
-            title="Play through loops">play_arrow</button>
+      <!-- Replay mode: scrub index is 1..N where N = stored RIP count (may differ from header LOOP) -->
+      <div class="flex flex-col gap-0.5 items-start min-w-0 max-w-[min(100%,320px)]">
+        <div class="flex items-center gap-1 flex-wrap">
+          <span
+            class="px-2 py-0.5 rounded bg-tertiary/15 border border-tertiary/30 text-tertiary text-[9px] uppercase tracking-wider"
+            title="{REPLAY_LOOP_TOOLTIP} Denominator ({replayMaxLoops}) = ReasoningIterationProgress events in this run."
+          >
+            REPLAY {replayLoopIndex}/{replayMaxLoops} events
+          </span>
+          <div class="flex items-center gap-1">
+            <button type="button" onclick={stepBack} disabled={replayLoopIndex <= 1}
+              class="material-symbols-outlined text-sm text-outline hover:text-primary disabled:opacity-30 bg-transparent border-0 cursor-pointer p-0.5"
+              title="Previous stored progress event">skip_previous</button>
+            {#if replayPlaying}
+              <button type="button" onclick={stopReplayPlay}
+                class="material-symbols-outlined text-sm text-tertiary bg-transparent border-0 cursor-pointer p-0.5">
+                pause</button>
+            {:else}
+              <button type="button" onclick={startReplayPlay}
+                class="material-symbols-outlined text-sm text-outline hover:text-primary bg-transparent border-0 cursor-pointer p-0.5"
+                title="Play through stored events">play_arrow</button>
+            {/if}
+            <button type="button" onclick={stepForward} disabled={replayLoopIndex >= replayMaxLoops}
+              class="material-symbols-outlined text-sm text-outline hover:text-primary disabled:opacity-30 bg-transparent border-0 cursor-pointer p-0.5"
+              title="Next stored progress event">skip_next</button>
+            <button type="button" onclick={exitReplay}
+              class="material-symbols-outlined text-sm text-outline hover:text-error bg-transparent border-0 cursor-pointer p-0.5"
+              title="Exit replay">close</button>
+          </div>
+        </div>
+        {#if replayStoredVsReportedMismatch}
+          <p
+            class="text-[8px] font-mono text-outline/60 normal-case tracking-normal leading-snug m-0"
+            title={replayMismatchExplain}
+          >
+            Bar LOOP {reportedLoopIteration}{#if reportedMaxIterations > 0}<span class="text-outline/40">/{reportedMaxIterations}</span>{/if}
+            = reported index · replay = {replayMaxLoops} stored events
+          </p>
         {/if}
-        <button type="button" onclick={stepForward} disabled={replayLoopIndex >= replayMaxLoops}
-          class="material-symbols-outlined text-sm text-outline hover:text-primary disabled:opacity-30 bg-transparent border-0 cursor-pointer p-0.5"
-          title="Next kernel loop">skip_next</button>
-        <button type="button" onclick={exitReplay}
-          class="material-symbols-outlined text-sm text-outline hover:text-error bg-transparent border-0 cursor-pointer p-0.5"
-          title="Exit replay">close</button>
       </div>
     {:else if $runStore.status !== "live" && replayMaxLoops > 0}
-      <!-- Enter replay button for completed runs -->
-      <button type="button" onclick={enterReplay}
-        class="flex items-center gap-1 px-2 py-0.5 border border-outline-variant/20 text-outline rounded
-               hover:border-tertiary/40 hover:text-tertiary transition-colors bg-transparent cursor-pointer text-[9px] uppercase"
-        title={REPLAY_LOOP_TOOLTIP}
-      >
-        <span class="material-symbols-outlined text-[12px]">replay</span>
-        Replay loops
-      </button>
+      <div class="flex flex-col gap-0.5 items-start min-w-0 max-w-[min(100%,280px)]">
+        <button type="button" onclick={enterReplay}
+          class="flex items-center gap-1 px-2 py-0.5 border border-outline-variant/20 text-outline rounded
+                 hover:border-tertiary/40 hover:text-tertiary transition-colors bg-transparent cursor-pointer text-[9px] uppercase"
+          title="{REPLAY_LOOP_TOOLTIP} You will scrub {replayMaxLoops} stored event(s)."
+        >
+          <span class="material-symbols-outlined text-[12px]">replay</span>
+          Replay ({replayMaxLoops} events)
+        </button>
+        {#if replayStoredVsReportedMismatch}
+          <p
+            class="text-[8px] font-mono text-outline/60 normal-case tracking-normal leading-snug m-0"
+            title={replayMismatchExplain}
+          >
+            LOOP bar {reportedLoopIteration}{#if reportedMaxIterations > 0}<span class="text-outline/40">/{reportedMaxIterations}</span>{/if}
+            ≠ {replayMaxLoops} stored replay steps — see tooltip
+          </p>
+        {/if}
+      </div>
     {/if}
 
     <div class="flex-1"></div>
