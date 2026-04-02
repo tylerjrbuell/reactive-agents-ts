@@ -88,11 +88,15 @@
   );
 
   const replayActiveBadgeTooltip = $derived(
-    `${REPLAY_LOOP_TOOLTIP}\n\nDenominator (${replayMaxLoops}) = ReasoningIterationProgress events stored for this run.`,
+    replayStoredVsReportedMismatch
+      ? `${REPLAY_LOOP_TOOLTIP}\n\nDenominator (${replayMaxLoops}) = ReasoningIterationProgress events stored for this run.\n\n${replayMismatchExplain}`
+      : `${REPLAY_LOOP_TOOLTIP}\n\nDenominator (${replayMaxLoops}) = ReasoningIterationProgress events stored for this run.`,
   );
 
   const replayEnterButtonTooltip = $derived(
-    `${REPLAY_LOOP_TOOLTIP}\n\nYou will scrub ${replayMaxLoops} stored event(s).`,
+    replayStoredVsReportedMismatch
+      ? `${REPLAY_LOOP_TOOLTIP}\n\nYou will scrub ${replayMaxLoops} stored event(s).\n\n${replayMismatchExplain}`
+      : `${REPLAY_LOOP_TOOLTIP}\n\nYou will scrub ${replayMaxLoops} stored event(s).`,
   );
 
   function enterReplay() {
@@ -268,16 +272,15 @@
 
     {#if replayLoopIndex !== null}
       <!-- Replay mode: scrub index is 1..N where N = stored RIP count (may differ from header LOOP) -->
-      <div class="flex flex-col gap-0.5 items-start min-w-0 max-w-[min(100%,320px)]">
-        <div class="flex items-center gap-1 flex-wrap">
-          <Tooltip text={replayActiveBadgeTooltip}>
-            <span
-              class="px-2 py-0.5 rounded bg-tertiary/15 border border-tertiary/30 text-tertiary text-[9px] uppercase tracking-wider"
-            >
-              REPLAY {replayLoopIndex}/{replayMaxLoops} events
-            </span>
-          </Tooltip>
-          <div class="flex items-center gap-1">
+      <div class="flex items-center gap-1 flex-wrap min-w-0 max-w-[min(100%,320px)]">
+        <Tooltip text={replayActiveBadgeTooltip}>
+          <span
+            class="px-2 py-0.5 rounded bg-tertiary/15 border border-tertiary/30 text-tertiary text-[9px] uppercase tracking-wider"
+          >
+            REPLAY {replayLoopIndex}/{replayMaxLoops} events
+          </span>
+        </Tooltip>
+        <div class="flex items-center gap-1">
             <Tooltip text="Previous stored ReasoningIterationProgress boundary">
               <span class="inline-flex">
                 <button type="button" onclick={stepBack} disabled={replayLoopIndex <= 1}
@@ -308,37 +311,18 @@
               <button type="button" onclick={exitReplay} aria-label="Exit replay"
                 class="material-symbols-outlined text-sm text-outline hover:text-error bg-transparent border-0 cursor-pointer p-0.5">close</button>
             </Tooltip>
-          </div>
         </div>
-        {#if replayStoredVsReportedMismatch}
-          <Tooltip text={replayMismatchExplain} class="w-full max-w-[min(100%,280px)]">
-            <p class="text-[8px] font-mono text-outline/60 normal-case tracking-normal leading-snug m-0">
-              Bar LOOP {reportedLoopIteration}{#if reportedMaxIterations > 0}<span class="text-outline/40">/{reportedMaxIterations}</span>{/if}
-              = reported index · replay = {replayMaxLoops} stored events
-            </p>
-          </Tooltip>
-        {/if}
       </div>
     {:else if $runStore.status !== "live" && replayMaxLoops > 0}
-      <div class="flex flex-col gap-0.5 items-start min-w-0 max-w-[min(100%,280px)]">
-        <Tooltip text={replayEnterButtonTooltip}>
-          <button type="button" onclick={enterReplay} aria-label="Replay stored progress events"
-            class="flex items-center gap-1 px-2 py-0.5 border border-outline-variant/20 text-outline rounded
-                   hover:border-tertiary/40 hover:text-tertiary transition-colors bg-transparent cursor-pointer text-[9px] uppercase"
-          >
-            <span class="material-symbols-outlined text-[12px]">replay</span>
-            Replay ({replayMaxLoops} events)
-          </button>
-        </Tooltip>
-        {#if replayStoredVsReportedMismatch}
-          <Tooltip text={replayMismatchExplain} class="w-full max-w-[min(100%,280px)]">
-            <p class="text-[8px] font-mono text-outline/60 normal-case tracking-normal leading-snug m-0">
-              LOOP bar {reportedLoopIteration}{#if reportedMaxIterations > 0}<span class="text-outline/40">/{reportedMaxIterations}</span>{/if}
-              ≠ {replayMaxLoops} stored replay steps — hover for details
-            </p>
-          </Tooltip>
-        {/if}
-      </div>
+      <Tooltip text={replayEnterButtonTooltip} class="min-w-0 max-w-[min(100%,280px)]">
+        <button type="button" onclick={enterReplay} aria-label="Replay stored progress events"
+          class="flex items-center gap-1 px-2 py-0.5 border border-outline-variant/20 text-outline rounded
+                 hover:border-tertiary/40 hover:text-tertiary transition-colors bg-transparent cursor-pointer text-[9px] uppercase"
+        >
+          <span class="material-symbols-outlined text-[12px]">replay</span>
+          Replay ({replayMaxLoops} events)
+        </button>
+      </Tooltip>
     {/if}
 
     <div class="flex-1"></div>
