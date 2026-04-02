@@ -13,13 +13,14 @@
 
 import { Effect } from "effect";
 import { parseCron, shouldFireAt } from "@reactive-agents/gateway";
-import { cortexLog } from "../cortex-log.js";
+import { cortexLog, formatErrorDetails } from "../cortex-log.js";
 import type { Database } from "bun:sqlite";
-import { getGatewayAgents, getGatewayAgent, updateGatewayAgent } from "../db/queries.js";
+import { getGatewayAgents, getGatewayAgent, updateGatewayAgent, upsertRun } from "../db/queries.js";
+import { normalizeCortexAgentConfig } from "./cortex-agent-config.js";
+import { ensureParentDirForFile } from "./ensure-log-path.js";
 import { CortexIngestService } from "./ingest-service.js";
 import type { Layer } from "effect";
 import { ReactiveAgents, type ProviderName } from "@reactive-agents/runtime";
-import { CortexError } from "../errors.js";
 import { generateTaskId } from "@reactive-agents/core";
 
 interface AgentProcess {
@@ -49,7 +50,7 @@ export class GatewayProcessManager {
   /** Call once on server start — re-hydrates all active agents from DB. */
   async hydrate(): Promise<void> {
     const agents = getGatewayAgents(this.db);
-    const active = agents.filter((a) => a.status === "active");
+    const active = agents.filter((a) => a.status === "active" && a.agent_type === "gateway");
     for (const a of active) {
       this.startProcess(a.agent_id, a.name, a.schedule, JSON.parse(a.config) as Record<string, unknown>);
     }
@@ -96,8 +97,8 @@ export class GatewayProcessManager {
     const row = getGatewayAgent(this.db, agentId);
     if (!row) return { error: `Agent ${agentId} not found in DB` };
 
-    // Ensure a process entry exists so fireAgent can track running state
-    if (!this.processes.has(agentId)) {
+    // Gateway agents maintain a managed process. Ad-hoc agents are fire-on-demand only.
+    if (row.agent_type === "gateway" && !this.processes.has(agentId)) {
       this.startProcess(agentId, row.name, row.schedule, JSON.parse(row.config) as Record<string, unknown>);
     }
 
@@ -166,16 +167,20 @@ export class GatewayProcessManager {
   private async fireAgent(
     agentId: string,
     name: string,
-    config: Record<string, unknown>,
+    configRaw: Record<string, unknown>,
   ): Promise<{ runId: string; agentId: string } | null> {
     const proc = this.processes.get(agentId);
     if (proc) proc.running = true;
 
+    const config = normalizeCortexAgentConfig(configRaw);
+
+    // `prompt` is the task instruction; `systemPrompt` is the separate system context.
+    // Fallback chain: explicit prompt > systemPrompt (legacy) > generic instruction.
     const prompt = (config.prompt as string | undefined)
-      ?? (config.systemPrompt as string | undefined)
       ?? "Execute your assigned task.";
 
     const providerRaw = (config.provider as string | undefined) ?? "anthropic";
+    const modelRaw    = (config.model    as string | undefined) ?? undefined;
     const runId = generateTaskId();
 
     try {
@@ -183,14 +188,124 @@ export class GatewayProcessManager {
         CortexIngestService.pipe(Effect.provide(this.ingestLayer)),
       );
 
-      const agent = await ReactiveAgents.create()
+      let builder = ReactiveAgents.create()
         .withName(name)
-        .withProvider(providerRaw as ProviderName)
-        .withReasoning(config.strategy ? { defaultStrategy: config.strategy as any } : undefined)
-        .withMemory()
-        .build();
+        .withProvider(providerRaw as ProviderName);
 
+      // ── Model + inference params (temperature 0 is valid — do not use truthiness) ──
+      const maxTokens = typeof config.maxTokens === "number" ? config.maxTokens : 0;
+      const temperature = typeof config.temperature === "number" ? config.temperature : undefined;
+      if (modelRaw || temperature !== undefined || maxTokens > 0) {
+        const mp: Record<string, unknown> = {};
+        if (modelRaw) mp.model = modelRaw;
+        if (temperature !== undefined) mp.temperature = temperature;
+        if (maxTokens > 0) mp.maxTokens = maxTokens;
+        builder = builder.withModel(mp as any);
+      }
+
+      // ── Reasoning ────────────────────────────────────────────────────
+      const reasoningOpts: Record<string, unknown> = {};
+      if (config.strategy) reasoningOpts.defaultStrategy = config.strategy;
+      const maxIterations = typeof config.maxIterations === "number" ? config.maxIterations : 0;
+      if (maxIterations > 0) reasoningOpts.maxIterations = maxIterations;
+      if (Object.keys(reasoningOpts).length > 0) builder = builder.withReasoning(reasoningOpts as any);
+
+      // ── Memory / tools ────────────────────────────────────────────────
+      builder = builder.withMemory();
+      const tools = config.tools as string[] | undefined;
+      if (tools && tools.length > 0) builder = builder.withTools();
+
+      // ── System prompt ─────────────────────────────────────────────────
+      const systemPrompt = (config.systemPrompt as string | undefined)?.trim();
+      if (systemPrompt) builder = builder.withSystemPrompt(systemPrompt);
+
+      // ── Execution controls ────────────────────────────────────────────
+      const timeout = typeof config.timeout === "number" ? config.timeout : 0;
+      if (timeout > 0) builder = builder.withTimeout(timeout);
+
+      const retryPolicyCfg = config.retryPolicy as { enabled?: boolean; maxRetries?: number; backoffMs?: number } | undefined;
+      const maxRetries = retryPolicyCfg?.maxRetries;
+      if (
+        retryPolicyCfg?.enabled === true
+        && typeof maxRetries === "number"
+        && maxRetries > 0
+      ) {
+        builder = builder.withRetryPolicy({
+          maxRetries,
+          backoffMs: typeof retryPolicyCfg.backoffMs === "number" ? retryPolicyCfg.backoffMs : 1000,
+        });
+      }
+
+      const cacheTimeout = typeof config.cacheTimeout === "number" ? config.cacheTimeout : 0;
+      if (cacheTimeout > 0) builder = builder.withCacheTimeout(cacheTimeout);
+
+      const progressCheckpoint = typeof config.progressCheckpoint === "number" ? config.progressCheckpoint : 0;
+      if (progressCheckpoint > 0) builder = builder.withProgressCheckpoint(progressCheckpoint);
+
+      // ── Fallbacks ─────────────────────────────────────────────────────
+      const fallbacksCfg = config.fallbacks as { enabled?: boolean; providers?: string[]; errorThreshold?: number } | undefined;
+      if (fallbacksCfg?.enabled && fallbacksCfg.providers?.length) {
+        builder = builder.withFallbacks({ providers: fallbacksCfg.providers, errorThreshold: fallbacksCfg.errorThreshold ?? 3 });
+      }
+
+      // ── Meta tools ────────────────────────────────────────────────────
+      const metaToolsCfg = config.metaTools as { enabled?: boolean; brief?: boolean; find?: boolean; pulse?: boolean; recall?: boolean; harnessSkill?: boolean } | undefined;
+      if (metaToolsCfg?.enabled) {
+        builder = builder.withMetaTools({
+          brief: metaToolsCfg.brief ?? false,
+          find: metaToolsCfg.find ?? false,
+          pulse: metaToolsCfg.pulse ?? false,
+          recall: metaToolsCfg.recall ?? false,
+          harnessSkill: metaToolsCfg.harnessSkill ?? false,
+        });
+      }
+
+      // ── Min iterations ────────────────────────────────────────────────
+      const minIterations = typeof config.minIterations === "number" ? config.minIterations : 0;
+      if (minIterations > 0) builder = builder.withMinIterations(minIterations);
+
+      // ── Verification step ─────────────────────────────────────────────
+      const verificationStep = config.verificationStep as "none" | "reflect" | undefined;
+      if (verificationStep === "reflect") builder = builder.withVerificationStep({ mode: "reflect" });
+
+      // ── Observability / logging ───────────────────────────────────────
+      const observabilityVerbosity =
+        config.observabilityVerbosity as "off" | "minimal" | "normal" | "verbose" | undefined;
+      if (observabilityVerbosity && observabilityVerbosity !== "off") {
+        builder = builder.withObservability({ verbosity: observabilityVerbosity, live: true } as any);
+      }
+      const agentLogFile = process.env.CORTEX_AGENT_LOG_FILE ?? ".cortex/logs/agent-debug.log";
+      if (observabilityVerbosity === "verbose") {
+        ensureParentDirForFile(agentLogFile);
+        builder = builder.withLogging({
+          level: "debug",
+          format: "json",
+          output: "file",
+          filePath: agentLogFile,
+        } as any);
+      } else if (observabilityVerbosity && observabilityVerbosity !== "off") {
+        ensureParentDirForFile(agentLogFile);
+        builder = builder.withLogging({
+          level: "info",
+          format: "json",
+          output: "file",
+          filePath: agentLogFile,
+        } as any);
+      }
+
+      cortexLog("debug", "gateway", "prepared normalized agent config for run", {
+        agentId,
+        runId,
+        config,
+      });
+
+      const agent = await builder.build();
       const agentId_ = agent.agentId;
+
+      // Pre-create the run row so the UI can find it immediately on navigation.
+      // Without this, a GET /api/runs/:runId races the first ingest event and returns 404,
+      // causing run-store to give up and show the run as "failed".
+      upsertRun(this.db, agentId_, runId);
 
       const unsubscribe = await agent.subscribe((event) => {
         Effect.runFork(
@@ -216,7 +331,9 @@ export class GatewayProcessManager {
         })
         .catch((err) => {
           cortexLog("warn", "gateway", `Agent "${name}" run failed`, {
-            agentId, runId, error: String(err),
+            agentId,
+            runId,
+            ...formatErrorDetails(err),
           });
         })
         .finally(() => {
@@ -233,7 +350,10 @@ export class GatewayProcessManager {
       return { runId, agentId: agentId_ };
     } catch (e) {
       const msg = String(e);
-      cortexLog("warn", "gateway", `Failed to start agent "${name}": ${msg}`, { agentId });
+      cortexLog("warn", "gateway", `Failed to start agent "${name}": ${msg}`, {
+        agentId,
+        ...formatErrorDetails(e),
+      });
       if (proc) proc.running = false;
       // Re-throw so triggerNow can return a proper error
       throw new Error(msg);

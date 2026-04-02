@@ -157,7 +157,7 @@
 </script>
 
 <svelte:head>
-  <title>CORTEX — Thalamus</title>
+  <title>CORTEX — Trace</title>
 </svelte:head>
 
 <div class="h-full flex flex-col overflow-hidden p-6 gap-4">
@@ -165,7 +165,7 @@
   <div class="flex items-center justify-between flex-shrink-0">
     <div>
       <h1 class="font-headline text-2xl font-light text-on-surface">
-        Run <span class="font-bold text-primary">Thalamus</span>
+        Execution <span class="font-bold text-primary">Trace</span>
       </h1>
       {#if !loading && !error}
         <p class="font-mono text-[10px] text-outline mt-0.5">
@@ -176,7 +176,7 @@
       {/if}
     </div>
     <a href="/" class="text-[11px] font-mono text-secondary hover:text-primary transition-colors no-underline flex items-center gap-1">
-      <span class="material-symbols-outlined text-sm">arrow_back</span> Stage
+      <span class="material-symbols-outlined text-sm">arrow_back</span> Beacon
     </a>
   </div>
 

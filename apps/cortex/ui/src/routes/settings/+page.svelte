@@ -4,8 +4,23 @@
   import { CORTEX_SERVER_URL } from "$lib/constants.js";
   import { settings as settingsStore, DEFAULTS } from "$lib/stores/settings.js";
 
+  /**
+   * Explicit shape for this form state. Matches `CortexSettings` in `$lib/stores/settings.ts`
+   * (Svelte’s TS analysis in `.svelte` files can lose `ollamaEndpoint` when using imported `CortexSettings` alone).
+   */
+  type LocalSettings = {
+    defaultProvider: string;
+    defaultModel: string;
+    notificationLevel: "all" | "completions" | "failures" | "none";
+    notificationsEnabled: boolean;
+    runRetentionDays: number;
+    debugMode: boolean;
+    theme: "dark" | "light";
+    ollamaEndpoint: string;
+  };
+
   // Local reactive copy — bound to form inputs, written to shared store on Save
-  let localSettings = $state({ ...DEFAULTS });
+  let localSettings = $state<LocalSettings>({ ...DEFAULTS } as LocalSettings);
   let saved = $state(false);
   let notifPermission = $state<NotificationPermission>("default");
   let serverHealth = $state<"checking" | "online" | "offline">("checking");
@@ -49,7 +64,7 @@
   onMount(() => {
     settingsStore.init();
     // Populate local form from persisted settings
-    localSettings = { ...settingsStore.get() };
+    localSettings = { ...settingsStore.get() } as LocalSettings;
 
     if ("Notification" in window) {
       notifPermission = Notification.permission;
@@ -69,7 +84,7 @@
   }
 
   function resetSettings() {
-    localSettings = { ...DEFAULTS };
+    localSettings = { ...DEFAULTS } as LocalSettings;
     settingsStore.reset();
     toast.info("Settings reset to defaults");
   }
@@ -82,14 +97,14 @@
     const result = await Notification.requestPermission();
     notifPermission = result;
     if (result === "granted") {
-      settings = { ...settings, notificationsEnabled: true };
+      localSettings = { ...localSettings, notificationsEnabled: true };
       toast.success("Notifications enabled", "You'll be notified when agents complete or fail.");
       new Notification("Cortex", {
         body: "Notifications are now enabled for Reactive Agents.",
         icon: "/favicon.svg",
       });
     } else if (result === "denied") {
-      settings = { ...settings, notificationsEnabled: false };
+      localSettings = { ...localSettings, notificationsEnabled: false };
       toast.error("Notifications blocked", "Enable them in your browser settings.");
     }
   }
@@ -127,7 +142,7 @@
       </div>
       <a href="/" class="text-[11px] font-mono text-secondary hover:text-primary transition-colors no-underline flex items-center gap-1">
         <span class="material-symbols-outlined text-sm">arrow_back</span>
-        Stage
+        Beacon
       </a>
     </div>
 
@@ -152,6 +167,23 @@
       <p class="font-mono text-[10px] text-outline/60">
         To use a different server, set <code class="text-primary">CORTEX_URL</code> before starting: <code class="text-primary">CORTEX_URL=http://host:port rax cortex</code>
       </p>
+      <div>
+        <label for="settings-ollama-endpoint" class="font-mono text-[10px] text-outline uppercase tracking-widest block mb-1.5">
+          Ollama Endpoint
+        </label>
+        <input
+          id="settings-ollama-endpoint"
+          bind:value={localSettings.ollamaEndpoint}
+          placeholder="http://localhost:11434  (leave blank for default)"
+          class="w-full bg-surface-container-lowest border border-outline-variant/20 rounded px-3 py-2
+                 text-sm font-mono text-on-surface placeholder:text-outline/40
+                 focus:border-primary/50 focus:outline-none"
+        />
+        <p class="font-mono text-[10px] text-outline/50 mt-1">
+          Override the Ollama server used when selecting the Ollama provider in agent config.
+          Can also be set server-side via <code class="text-primary/70">OLLAMA_HOST</code>.
+        </p>
+      </div>
     </section>
 
     <!-- Default Agent Config -->
@@ -161,12 +193,13 @@
         Default Agent Config
       </h2>
       <p class="font-mono text-[10px] text-outline/60">
-        Used when launching agents from the Beacon input bar or Lab Builder without explicit configuration.
+        Used when launching agents from the Beacon input bar or the Lab Builder without explicit configuration.
       </p>
       <div class="grid grid-cols-2 gap-3">
         <div>
-          <label class="font-mono text-[10px] text-outline uppercase tracking-widest block mb-1.5">Provider</label>
+          <label for="settings-default-provider" class="font-mono text-[10px] text-outline uppercase tracking-widest block mb-1.5">Provider</label>
           <select
+            id="settings-default-provider"
             bind:value={localSettings.defaultProvider}
             onchange={() => {
               const models = MODELS[localSettings.defaultProvider];
@@ -181,8 +214,9 @@
           </select>
         </div>
         <div>
-          <label class="font-mono text-[10px] text-outline uppercase tracking-widest block mb-1.5">Model</label>
+          <label for="settings-default-model" class="font-mono text-[10px] text-outline uppercase tracking-widest block mb-1.5">Model</label>
           <select
+            id="settings-default-model"
             bind:value={localSettings.defaultModel}
             class="w-full bg-surface-container-lowest border border-outline-variant/20 rounded px-3 py-2
                    text-sm font-mono text-on-surface focus:border-primary/50 focus:outline-none"
@@ -242,8 +276,10 @@
         {/if}
       </div>
 
-      <div>
-        <label class="font-mono text-[10px] text-outline uppercase tracking-widest block mb-1.5">Notify me when</label>
+      <fieldset class="border-0 p-0 m-0 min-w-0">
+        <legend class="font-mono text-[10px] text-outline uppercase tracking-widest block mb-1.5 px-0">
+          Notify me when
+        </legend>
         <div class="space-y-2">
           {#each [
             { value: "all",         label: "All events (completions, failures, errors, decisions)" },
@@ -263,7 +299,7 @@
             </label>
           {/each}
         </div>
-      </div>
+      </fieldset>
     </section>
 
     <!-- Data & Storage -->
@@ -275,11 +311,12 @@
 
       <div class="flex items-center gap-4">
         <div class="flex-1">
-          <label class="font-mono text-[10px] text-outline uppercase tracking-widest block mb-1.5">
+          <label for="settings-run-retention" class="font-mono text-[10px] text-outline uppercase tracking-widest block mb-1.5">
             Keep runs for
           </label>
           <div class="flex items-center gap-3">
             <input
+              id="settings-run-retention"
               type="range"
               min="1"
               max="90"

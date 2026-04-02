@@ -111,4 +111,14 @@ describe("LoggerService", () => {
     expect(content).toContain("error msg");
     fs.unlinkSync(tmpFile);
   });
+
+  test("creates parent directories for nested file paths before first write", () => {
+    const base = path.join(os.tmpdir(), `ra-log-nested-${Date.now()}`);
+    const tmpFile = path.join(base, "a", "b", "agent.log");
+    const logger = makeLoggerService({ level: "info", format: "text", output: "file", filePath: tmpFile });
+    logger.info("nested path ok");
+    expect(fs.existsSync(tmpFile)).toBe(true);
+    expect(fs.readFileSync(tmpFile, "utf8")).toContain("nested path ok");
+    fs.rmSync(base, { recursive: true, force: true });
+  });
 });

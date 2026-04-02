@@ -6,7 +6,7 @@ export interface ConvMessage {
   readonly content: string;
 }
 
-export interface IterationFrame {
+export interface CortexTraceFrame {
   readonly iteration: number;
   /** Human-readable summary: tool list or "(reasoning)" */
   readonly thought: string;
@@ -34,6 +34,9 @@ export interface IterationFrame {
   readonly provider?: string;
   readonly estimatedCost?: number;
 }
+
+/** Backward-compatible alias — prefer `CortexTraceFrame` in UI code. */
+export type IterationFrame = CortexTraceFrame;
 
 function readTokens(p: Record<string, unknown>): number {
   const raw = p.tokensUsed;
@@ -78,8 +81,8 @@ function safeMessages(raw: unknown): readonly ConvMessage[] | undefined {
  * 6. `EntropyScored` — provides entropy value for each frame.
  */
 export function createTraceStore(runState: Readable<RunState>) {
-  return derived(runState, ($state): IterationFrame[] => {
-    const frames: IterationFrame[] = [];
+  return derived(runState, ($state): CortexTraceFrame[] => {
+    const frames: CortexTraceFrame[] = [];
 
     // Carry values collected between iteration boundaries
     let carryEntropy: number | undefined;
@@ -204,6 +207,11 @@ export function createTraceStore(runState: Readable<RunState>) {
           const answer = typeof p.answer === "string" ? p.answer.trim() : "";
           if (!answer) break;
 
+          // If a more substantial final frame already exists (e.g. plan-execute synthesis),
+          // don't replace it with a shorter verification-pass response ("PASS" / "REVISE: …").
+          const existingFinalIdx = frames.findLastIndex((f) => f.kind === "final");
+          if (existingFinalIdx >= 0 && (frames[existingFinalIdx]?.thought.length ?? 0) > answer.length) break;
+
           const iteration =
             typeof p.iteration === "number"
               ? p.iteration
@@ -211,7 +219,7 @@ export function createTraceStore(runState: Readable<RunState>) {
                 ? (frames[frames.length - 1]?.iteration ?? 0) + 1
                 : 1;
 
-          frames.push({
+          const newFrame: CortexTraceFrame = {
             iteration,
             thought: answer,
             rawResponse: carryRawResponse || undefined,
@@ -222,7 +230,13 @@ export function createTraceStore(runState: Readable<RunState>) {
             kind: "final",
             model: carryModel,
             provider: carryProvider,
-          });
+          };
+
+          if (existingFinalIdx >= 0) {
+            frames[existingFinalIdx] = newFrame;
+          } else {
+            frames.push(newFrame);
+          }
 
           carryTokens = 0;
           carryDurationMs = 0;

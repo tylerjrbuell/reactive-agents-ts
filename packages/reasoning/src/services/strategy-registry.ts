@@ -110,6 +110,8 @@ export const StrategyRegistryLive = Layer.effect(
     const registryRef = yield* Ref.make<Map<string, StrategyFn>>(
       new Map<string, StrategyFn>([
         ["reactive", executeReactive],
+        /** UI / docs alias — same implementation as `reactive` (ReAct loop). */
+        ["react", executeReactive],
         ["reflexion", executeReflexion],
         ["plan-execute-reflect", executePlanExecute],
         ["tree-of-thought", executeTreeOfThought],

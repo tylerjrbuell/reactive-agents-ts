@@ -34,6 +34,17 @@ export function makeLoggerService(config: LoggingConfig): LoggerService {
   const minLevel = LOG_LEVEL_ORDER[config.level] ?? 1;
   const format = config.format ?? "text";
 
+  /** Ensure parent directory exists before append; avoids ENOENT on nested paths like `.cortex/logs/foo.log`. */
+  const ensureDirForFile = (filePath: string): void => {
+    const dir = path.dirname(filePath);
+    if (!dir || dir === "." || dir === path.parse(filePath).root) return;
+    try {
+      fs.mkdirSync(dir, { recursive: true });
+    } catch {
+      // Non-fatal; appendFileSync will surface permission errors
+    }
+  };
+
   const shouldLog = (level: string): boolean =>
     (LOG_LEVEL_ORDER[level] ?? 0) >= minLevel;
 
@@ -62,6 +73,7 @@ export function makeLoggerService(config: LoggingConfig): LoggerService {
         currentFilePath = ext ? `${base}.${fileRotationIndex}${ext}` : `${base}.${fileRotationIndex}`;
         currentFileSize = 0;
       }
+      ensureDirForFile(currentFilePath!);
       fs.appendFileSync(currentFilePath!, line + "\n");
       currentFileSize += line.length + 1;
     } else if (typeof config.output === "object" && config.output instanceof WritableStream) {

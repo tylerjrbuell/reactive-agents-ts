@@ -351,7 +351,7 @@ export function recomputeRunStats(db: Database, runId: string): boolean {
         );
         break;
       case "AgentCompleted":
-        status = p.success === true ? "completed" : "failed";
+        status = p.success === false ? "failed" : "completed";
         completedAt = row.ts;
         break;
       case "TaskFailed":
@@ -386,6 +386,7 @@ export interface GatewayAgentRow {
   readonly agent_id: string;
   readonly name: string;
   readonly config: string;
+  readonly agent_type: "gateway" | "ad-hoc";
   readonly status: string;
   readonly run_count: number;
   readonly last_run_at: number | null;
@@ -395,7 +396,7 @@ export interface GatewayAgentRow {
 }
 
 const AGENT_SELECT = `
-  SELECT agent_id, name, config, status, run_count, last_run_at, schedule, created_at, updated_at
+  SELECT agent_id, name, config, agent_type, status, run_count, last_run_at, schedule, created_at, updated_at
   FROM cortex_agents
 `;
 
@@ -413,23 +414,25 @@ export function createGatewayAgent(
   name: string,
   config: string,
   schedule: string | null,
+  agentType: "gateway" | "ad-hoc" = "gateway",
 ): void {
   db.prepare(`
     INSERT OR REPLACE INTO cortex_agents
-      (agent_id, name, config, status, run_count, schedule, created_at, updated_at)
-    VALUES (?, ?, ?, 'active', 0, ?, unixepoch('now','subsec')*1000, unixepoch('now','subsec')*1000)
-  `).run(agentId, name, config, schedule);
+      (agent_id, name, config, agent_type, status, run_count, schedule, created_at, updated_at)
+    VALUES (?, ?, ?, ?, 'active', 0, ?, unixepoch('now','subsec')*1000, unixepoch('now','subsec')*1000)
+  `).run(agentId, name, config, agentType, schedule);
 }
 
 export function updateGatewayAgent(
   db: Database,
   agentId: string,
-  patch: { name?: string; config?: string; status?: string; schedule?: string | null },
+  patch: { name?: string; config?: string; type?: "gateway" | "ad-hoc"; status?: string; schedule?: string | null },
 ): void {
   const sets: string[] = ["updated_at = unixepoch('now','subsec')*1000"];
   const values: unknown[] = [];
   if (patch.name !== undefined)   { sets.push("name = ?");     values.push(patch.name); }
   if (patch.config !== undefined) { sets.push("config = ?");   values.push(patch.config); }
+  if (patch.type !== undefined)   { sets.push("agent_type = ?"); values.push(patch.type); }
   if (patch.status !== undefined) { sets.push("status = ?");   values.push(patch.status); }
   if ("schedule" in patch)        { sets.push("schedule = ?"); values.push(patch.schedule ?? null); }
   if (sets.length === 1) return;

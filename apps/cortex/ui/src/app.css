@@ -126,7 +126,7 @@ html:not(.dark) rect[stroke="rgba(255,255,255,0.05)"] { stroke: rgba(0,0,0,0.08)
 /* ── Opacity-variant backgrounds (Tailwind bg-X/Y classes) ─────── */
 /* Tailwind compiles bg-surface-container-low/80 to a different class
    than bg-surface-container-low, so we need to catch via partial match.
-   Target: bottom input bar, settings form fields, workshop panels.      */
+   Target: bottom input bar, settings form fields, Lab panels.      */
 html:not(.dark) [class*="bg-surface-container-low"] { background-color: rgba(248,250,252,0.9) !important; }
 html:not(.dark) [class*="bg-surface-container-lowest"] { background-color: #e8ecf0 !important; }
 html:not(.dark) [class*="bg-surface-container-high"] { background-color: #f1f5f9 !important; }

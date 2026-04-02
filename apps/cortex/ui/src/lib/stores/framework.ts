@@ -6,7 +6,7 @@
  *
  * - **`createAgentStore`** (see `./agent-store.js`) — Cortex **desk**: multi-agent map, live `CortexLiveMessage`
  *   from `/ws/live/...`, and hydration from `GET /api/runs`. Compose both: desk for observability, framework
- *   stores for “run a prompt” flows (Workshop / Quick Run).
+ *   stores for “run a prompt” flows (Lab / Quick Run).
  */
 import { createAgent, createAgentStream } from "@reactive-agents/svelte";
 

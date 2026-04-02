@@ -11,7 +11,8 @@ import type { RunId } from "../types.js";
 import { CortexError } from "../errors.js";
 import { CortexIngestService } from "./ingest-service.js";
 import { CortexStoreService } from "./store-service.js";
-import { cortexLog, cortexLogRunnerExecution } from "../cortex-log.js";
+import { cortexLog, cortexLogRunnerExecution, formatErrorDetails } from "../cortex-log.js";
+import { ensureParentDirForFile } from "./ensure-log-path.js";
 
 export interface LaunchParams {
   readonly prompt: string;
@@ -21,8 +22,18 @@ export interface LaunchParams {
   readonly strategy?: string;
   readonly temperature?: number;
   readonly maxIterations?: number;
+  readonly minIterations?: number;
   readonly systemPrompt?: string;
   readonly agentName?: string;
+  readonly maxTokens?: number;
+  readonly timeout?: number;
+  readonly retryPolicy?: { enabled?: boolean; maxRetries: number; backoffMs?: number };
+  readonly cacheTimeout?: number;
+  readonly progressCheckpoint?: number;
+  readonly fallbacks?: { enabled?: boolean; providers?: string[]; errorThreshold?: number };
+  readonly metaTools?: { enabled?: boolean; brief?: boolean; find?: boolean; pulse?: boolean; recall?: boolean; harnessSkill?: boolean };
+  readonly verificationStep?: string;
+  readonly observabilityVerbosity?: "off" | "minimal" | "normal" | "verbose";
 }
 
 type ActiveEntry = {
@@ -67,30 +78,79 @@ export const CortexRunnerServiceLive = Layer.effect(
                 || `cortex-desk-${Date.now()}`;
               let b = ReactiveAgents.create()
                 .withName(agentName)
-                .withProvider(providerRaw as ProviderName)
-                .withReasoning(
-                  params.strategy
-                    ? { defaultStrategy: params.strategy as any }
-                    : undefined,
-                )
-                .withMemory();
-              if (params.model?.trim()) {
-                const modelParams: Record<string, unknown> = { model: params.model.trim() };
-                if (params.temperature != null) modelParams.temperature = params.temperature;
-                b = b.withModel(modelParams as any);
-              } else if (params.temperature != null) {
-                b = b.withModel({ model: "", temperature: params.temperature } as any);
+                .withProvider(providerRaw as ProviderName);
+
+              // ── Model / inference ────────────────────────────────────
+              if (params.model?.trim() || params.temperature != null || params.maxTokens) {
+                const mp: Record<string, unknown> = {};
+                if (params.model?.trim()) mp.model = params.model.trim();
+                if (params.temperature != null) mp.temperature = params.temperature;
+                if (params.maxTokens) mp.maxTokens = params.maxTokens;
+                b = b.withModel(mp as any);
               }
-              if (params.tools && params.tools.length > 0) {
-                b = b.withTools();
+
+              // ── Reasoning ────────────────────────────────────────────
+              const reasoningOpts: Record<string, unknown> = {};
+              if (params.strategy) reasoningOpts.defaultStrategy = params.strategy;
+              if (params.maxIterations && params.maxIterations > 0) reasoningOpts.maxIterations = params.maxIterations;
+              if (Object.keys(reasoningOpts).length > 0) b = b.withReasoning(reasoningOpts as any);
+
+              // ── Memory / tools ────────────────────────────────────────
+              b = b.withMemory();
+              if (params.tools && params.tools.length > 0) b = b.withTools();
+
+              // ── System prompt ─────────────────────────────────────────
+              if (params.systemPrompt?.trim()) b = b.withSystemPrompt(params.systemPrompt.trim());
+
+              // ── Execution controls ────────────────────────────────────
+              if (params.timeout && params.timeout > 0) b = b.withTimeout(params.timeout);
+              if (params.retryPolicy?.enabled && params.retryPolicy.maxRetries) {
+                b = b.withRetryPolicy({ maxRetries: params.retryPolicy.maxRetries, backoffMs: params.retryPolicy.backoffMs ?? 1000 });
               }
-              if (params.maxIterations && params.maxIterations > 0) {
-                // maxIterations is set via reasoning config
-                b = b.withReasoning({ maxIterations: params.maxIterations } as any);
+              if (params.cacheTimeout && params.cacheTimeout > 0) b = b.withCacheTimeout(params.cacheTimeout);
+              if (params.progressCheckpoint && params.progressCheckpoint > 0) b = b.withProgressCheckpoint(params.progressCheckpoint);
+              if (params.minIterations && params.minIterations > 0) b = b.withMinIterations(params.minIterations);
+              if (params.verificationStep === "reflect") b = b.withVerificationStep({ mode: "reflect" });
+
+              // ── Fallbacks ─────────────────────────────────────────────
+              if (params.fallbacks?.enabled && params.fallbacks.providers?.length) {
+                b = b.withFallbacks({ providers: params.fallbacks.providers, errorThreshold: params.fallbacks.errorThreshold ?? 3 });
               }
-              if (params.systemPrompt?.trim()) {
-                b = b.withSystemPrompt(params.systemPrompt.trim());
+
+              // ── Meta tools (Conductor's Suite) ────────────────────────
+              if (params.metaTools?.enabled) {
+                b = b.withMetaTools({
+                  brief: params.metaTools.brief ?? false,
+                  find: params.metaTools.find ?? false,
+                  pulse: params.metaTools.pulse ?? false,
+                  recall: params.metaTools.recall ?? false,
+                  harnessSkill: params.metaTools.harnessSkill ?? false,
+                });
               }
+
+              // ── Observability / logging ───────────────────────────────
+              if (params.observabilityVerbosity && params.observabilityVerbosity !== "off") {
+                b = b.withObservability({ verbosity: params.observabilityVerbosity, live: true } as any);
+              }
+              const agentLogFile = process.env.CORTEX_AGENT_LOG_FILE ?? ".cortex/logs/agent-debug.log";
+              if (params.observabilityVerbosity === "verbose") {
+                ensureParentDirForFile(agentLogFile);
+                b = b.withLogging({
+                  level: "debug",
+                  format: "json",
+                  output: "file",
+                  filePath: agentLogFile,
+                } as any);
+              } else if (params.observabilityVerbosity && params.observabilityVerbosity !== "off") {
+                ensureParentDirForFile(agentLogFile);
+                b = b.withLogging({
+                  level: "info",
+                  format: "json",
+                  output: "file",
+                  filePath: agentLogFile,
+                } as any);
+              }
+
               return b.build();
             },
             catch: (e) => new CortexError({ message: `Failed to build agent: ${String(e)}`, cause: e }),
@@ -141,7 +201,13 @@ export const CortexRunnerServiceLive = Layer.effect(
             provider: providerRaw,
             cortexUrl: cortexHttp,
             tools: params.tools?.length ? params.tools : [],
+            observabilityVerbosity: params.observabilityVerbosity ?? "off",
             promptChars: params.prompt.length,
+          });
+          cortexLog("debug", "runner", "runner launch params", {
+            agentId,
+            runId,
+            params,
           });
 
           void agent
@@ -176,7 +242,7 @@ export const CortexRunnerServiceLive = Layer.effect(
               cortexLogRunnerExecution("agent.run rejected or threw", {
                 agentId,
                 runId,
-                error: err instanceof Error ? err.message : String(err),
+                ...formatErrorDetails(err),
               });
             })
             .finally(() => {

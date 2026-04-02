@@ -19,7 +19,7 @@ export interface RunVitals {
   readonly provider?: string;
   /** LLM model name (e.g. "claude-sonnet-4-6") — from LLMRequestCompleted */
   readonly model?: string;
-  /** Reasoning strategy (e.g. "react", "plan-execute-reflect") — from ReasoningIterationProgress */
+  /** Reasoning strategy (e.g. "reactive", "plan-execute-reflect") — from ReasoningIterationProgress */
   readonly strategy?: string;
   /** Provider switched to after fallback — from ProviderFallbackActivated */
   readonly fallbackProvider?: string;
@@ -158,14 +158,15 @@ function updateVitals(v: RunVitals, msg: CortexLiveMsg, runStartMs: number): Run
 function deriveStatus(current: RunStatus, msg: CortexLiveMsg): RunStatus {
   if (msg.type === "AgentCompleted") return pSuccess(msg.payload) ? "completed" : "failed";
   if (msg.type === "TaskFailed") return "failed";
-  // DebriefCompleted fires after AgentCompleted — belt-and-suspenders stop for EKG animation
-  if (msg.type === "DebriefCompleted") return "completed";
+  // Debrief may fire before or after AgentCompleted; never promote a known failure back to completed.
+  if (msg.type === "DebriefCompleted") return current === "failed" ? "failed" : "completed";
   if (current === "loading" && msg.type) return "live";
   return current;
 }
 
+/** True unless the framework explicitly reported failure (`success === false`). */
 function pSuccess(p: Record<string, unknown>): boolean {
-  return p.success === true;
+  return p.success !== false;
 }
 
 export interface CreateRunStoreOptions {

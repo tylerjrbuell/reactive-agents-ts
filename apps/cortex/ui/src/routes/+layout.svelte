@@ -29,8 +29,8 @@
 
   const navItems = [
     { label: "Beacon", href: "/", icon: "radar" },
-    { label: "Thalamus", href: "/runs", icon: "alt_route" },
-    { label: "Lab", href: "/workshop", icon: "science" },
+    { label: "Trace",  href: "/runs",     icon: "alt_route" },
+    { label: "Lab",    href: "/lab", icon: "science" },
   ];
 
   let isDark = $state(true);
@@ -56,11 +56,11 @@
     const isInput = tag === "input" || tag === "textarea" || tag === "select" || (e.target as HTMLElement)?.isContentEditable;
     if (isInput) return;
     if ((e.metaKey || e.ctrlKey) && e.key === "k") { e.preventDefault(); commandPalette.toggle(); return; }
-    // R — go to Stage and focus input bar
+    // R — go to Beacon and focus input bar
     if (e.key === "r" || e.key === "R") {
       e.preventDefault();
       void goto("/");
-      // Broadcast to stage page that input should be focused
+      // Broadcast to Beacon page that input should be focused
       window.dispatchEvent(new CustomEvent("cortex:focus-input"));
     }
   }
@@ -74,6 +74,7 @@
 
     stageStore.setNavigate((path) => goto(path));
     window.addEventListener("keydown", handleGlobalKeydown);
+    window.addEventListener("cortex:toggle-theme", toggleTheme as EventListener);
 
     wsUnsub = wsClient.onMessage((raw) => {
       const msg = raw as {
@@ -127,6 +128,7 @@
 
     return () => {
       window.removeEventListener("keydown", handleGlobalKeydown);
+      window.removeEventListener("cortex:toggle-theme", toggleTheme as EventListener);
       wsUnsub?.();
       wsUnsub = null;
       if (refreshTimer) {

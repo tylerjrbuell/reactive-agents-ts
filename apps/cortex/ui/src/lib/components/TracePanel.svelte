@@ -1,19 +1,28 @@
 <script lang="ts">
-  import type { IterationFrame, ConvMessage } from "$lib/stores/trace-store.js";
+  import type { CortexTraceFrame } from "../stores/trace-store.js";
 
   interface Props {
-    frame: IterationFrame | null;
-    frames?: IterationFrame[];
+    frame: CortexTraceFrame | null;
+    frames?: CortexTraceFrame[];
     status?: string;
     /** Live streaming text from TextDeltaReceived events — shown above trace when live */
     streamText?: string;
   }
-  let { frame, frames = [], status = "live", streamText = "" }: Props = $props();
+
+  // Default `[]` alone is inferred as `never[]` and breaks element typing in `{#each}`.
+  // Bind prop `frames` → `traceRows` so markup does not resolve `frames` to `Window.frames` (breaks types).
+  let {
+    frame,
+    frames: traceRows = [] as CortexTraceFrame[],
+    status = "live",
+    streamText = "",
+  }: Props = $props();
 
   // Svelte 5: use array reassignment for reactivity (Set mutation doesn't trigger)
   let expandedRows = $state<number[]>([]);
   let expandedMessages = $state<number[]>([]); // conversation thread toggles
-  let finalResultCollapsed = $state(false);
+  /** Final-result banner: start collapsed */
+  let finalResultCollapsed = $state(true);
 
   function toggleRow(idx: number) {
     expandedRows = expandedRows.includes(idx)
@@ -27,16 +36,19 @@
       : [...expandedMessages, idx];
   }
 
-  $effect(() => {
-    if (frame !== null) {
-      const idx = frames.findLastIndex(
-        (f) => f.iteration === frame?.iteration && f.kind === frame?.kind,
-      );
-      if (idx >= 0 && !expandedRows.includes(idx)) {
-        expandedRows = [...expandedRows, idx];
-      }
-    }
-  });
+  function expandAll() {
+    expandedRows = traceRows.map((_, i) => i);
+    expandedMessages = traceRows
+      .map((f, i) => ((f.messages?.length ?? 0) > 0 ? i : -1))
+      .filter((i) => i >= 0);
+    finalResultCollapsed = false;
+  }
+
+  function collapseAll() {
+    expandedRows = [];
+    expandedMessages = [];
+    finalResultCollapsed = true;
+  }
 
   function truncate(s: string, max = 100) {
     return s.length > max ? s.slice(0, max) + "…" : s;
@@ -49,28 +61,63 @@
   }
 
   // Find final answer frame
-  const finalFrame = $derived(frames.findLast((f) => f.kind === "final"));
+  const finalFrame = $derived(traceRows.findLast((f) => f.kind === "final"));
   const hasFinal = $derived(!!finalFrame);
   const isComplete = $derived(status === "completed" || status === "failed");
+
+  /** True when every trace row, message sub-thread, and final banner are expanded. */
+  const traceFullyExpanded = $derived.by(() => {
+    if (traceRows.length === 0) return false;
+    const rowSet = new Set(expandedRows);
+    for (let i = 0; i < traceRows.length; i++) {
+      if (!rowSet.has(i)) return false;
+    }
+    for (let i = 0; i < traceRows.length; i++) {
+      if ((traceRows[i].messages?.length ?? 0) > 0 && !expandedMessages.includes(i)) return false;
+    }
+    if (isComplete && finalFrame && finalResultCollapsed) return false;
+    return true;
+  });
+
+  function toggleExpandCollapseAll() {
+    if (traceFullyExpanded) collapseAll();
+    else expandAll();
+  }
 </script>
 
 <div class="gradient-border-glow rounded-lg h-full flex flex-col overflow-hidden min-h-0">
   <!-- Header -->
-  <div class="flex items-center justify-between px-4 py-3 border-b border-white/5 flex-shrink-0">
-    <div class="flex items-center gap-2">
-      <span class="material-symbols-outlined text-sm text-primary">receipt_long</span>
-      <h3 class="font-headline text-sm font-bold uppercase tracking-wide">Execution Trace</h3>
-      {#if frames.length > 0}
-        <span class="text-[10px] font-mono text-outline bg-surface-container px-1.5 py-0.5 rounded">
-          {frames.length}
+  <div class="flex items-center justify-between px-4 py-3 border-b border-white/5 flex-shrink-0 gap-2">
+    <div class="flex items-center gap-2 min-w-0">
+      <span class="material-symbols-outlined text-sm text-primary flex-shrink-0">receipt_long</span>
+      <h3 class="font-headline text-sm font-bold uppercase tracking-wide truncate">Execution Trace</h3>
+      {#if traceRows.length > 0}
+        <span class="text-[10px] font-mono text-outline bg-surface-container px-1.5 py-0.5 rounded flex-shrink-0">
+          {traceRows.length}
         </span>
       {/if}
     </div>
-    {#if frame}
-      <span class="text-[10px] font-mono text-primary/70 bg-primary/10 px-2 py-0.5 rounded">
-        iter {String(frame.iteration).padStart(2, "0")}
-      </span>
-    {/if}
+    <div class="flex items-center gap-1.5 flex-shrink-0">
+      {#if traceRows.length > 0}
+        <button
+          type="button"
+          onclick={toggleExpandCollapseAll}
+          class="p-1.5 rounded border border-outline-variant/25 text-outline hover:text-primary hover:border-primary/30 bg-transparent cursor-pointer flex-shrink-0"
+          title={traceFullyExpanded ? "Collapse all" : "Expand all"}
+          aria-label={traceFullyExpanded ? "Collapse all trace sections" : "Expand all trace sections"}
+          aria-pressed={traceFullyExpanded}
+        >
+          <span class="material-symbols-outlined text-base leading-none">
+            {traceFullyExpanded ? "collapse_all" : "expand_all"}
+          </span>
+        </button>
+      {/if}
+      {#if frame}
+        <span class="text-[10px] font-mono text-primary/70 bg-primary/10 px-2 py-0.5 rounded">
+          iter {String(frame.iteration).padStart(2, "0")}
+        </span>
+      {/if}
+    </div>
   </div>
 
   <!-- ── FINAL RESULT BANNER (collapsible) ──────────────────────────────── -->
@@ -148,28 +195,31 @@
 
   <!-- ── ITERATION LOG ────────────────────────────────────────────────────── -->
   <div class="flex-1 overflow-y-auto min-h-0 py-2">
-    {#if frames.length === 0}
+    {#if traceRows.length === 0}
       <p class="font-mono text-[10px] text-outline text-center mt-8 px-4">
         Trace will appear here as the agent runs…
       </p>
     {:else}
-      {#each frames as f, idx (f.ts + ":" + f.iteration + ":" + (f.kind ?? "step"))}
+      {#each traceRows as f, idx (idx)}
         {@const isExpanded = expandedRows.includes(idx)}
         {@const isSelected = frame?.iteration === f.iteration && frame?.kind === f.kind}
         {@const hasRichData = !!(f.llmThought || f.rawResponse || f.messages?.length || f.observation || f.action)}
         {@const isFinal = f.kind === "final"}
 
-        <!-- Row container — button for a11y -->
-        <button
-          type="button"
-          class="w-full text-left mx-2 mb-1 rounded-md cursor-pointer transition-all duration-150 border-0 bg-transparent p-0
+        <!-- Row: summary is a real button; details are a sibling (no nested buttons — fixes broken toggles). -->
+        <div
+          class="mx-2 mb-1 rounded-md transition-all duration-150
                  {isFinal
                    ? 'border-l-2 border-secondary/50 bg-secondary/5'
                    : isSelected
                      ? 'border-l-2 border-primary/60 bg-primary/8'
                      : 'border-l-2 border-transparent hover:border-outline-variant/40 bg-surface-container-lowest/30 hover:bg-surface-container-low/50'}"
-          onclick={() => toggleRow(idx)}
         >
+          <button
+            type="button"
+            class="w-full text-left cursor-pointer border-0 bg-transparent p-0 rounded-md"
+            onclick={() => toggleRow(idx)}
+          >
           <!-- ── Collapsed summary row ──────────────────────────────────── -->
           <div class="flex items-center gap-2 px-3 py-2">
             <!-- Iter badge -->
@@ -228,6 +278,7 @@
               expand_more
             </span>
           </div>
+          </button>
 
           <!-- ── Expanded detail ──────────────────────────────────────────── -->
           {#if isExpanded}
@@ -323,10 +374,10 @@
               {#if f.messages && f.messages.length > 0}
                 <div class="relative pl-3">
                   <div class="absolute left-0 top-0 bottom-0 w-0.5 bg-outline-variant/30 rounded-full"></div>
-                  <div role="button" tabindex="0"
-                    class="flex items-center gap-2 mb-1.5 cursor-pointer w-full text-left"
+                  <button
+                    type="button"
+                    class="flex items-center gap-2 mb-1.5 cursor-pointer w-full text-left bg-transparent border-0 p-0"
                     onclick={() => toggleMessages(idx)}
-                    onkeydown={(e) => e.key === "Enter" && toggleMessages(idx)}
                   >
                     <span class="text-[9px] font-mono text-outline/70 uppercase tracking-widest">
                       Conversation Thread ({f.messages.length} msgs)
@@ -334,7 +385,7 @@
                     <span class="material-symbols-outlined text-[11px] text-outline/40 transition-transform {expandedMessages.includes(idx) ? 'rotate-180' : ''}">
                       expand_more
                     </span>
-                  </div>
+                  </button>
                   {#if expandedMessages.includes(idx)}
                     <div class="space-y-1 max-h-72 overflow-y-auto">
                       {#each f.messages as msg, mi (mi)}
@@ -376,7 +427,7 @@
               </div>
             </div>
           {/if}
-        </button>
+        </div>
       {/each}
     {/if}
   </div>

@@ -122,6 +122,55 @@ describe("CortexIngestService", () => {
     expect(row.status).toBe("completed");
   });
 
+  it("marks run completed when AgentCompleted omits success (only explicit false is failure)", async () => {
+    const db = makeTestDb();
+    const program = Effect.gen(function* () {
+      const svc = yield* CortexIngestService;
+      yield* svc.handleEvent("a", "r-ac-no-success", {
+        v: 1,
+        agentId: "a",
+        runId: "r-ac-no-success",
+        event: {
+          _tag: "AgentCompleted",
+          taskId: "t",
+          agentId: "a",
+          totalIterations: 1,
+          totalTokens: 8,
+          durationMs: 40,
+        } as { _tag: "AgentCompleted"; taskId: string; agentId: string; totalIterations: number; totalTokens: number; durationMs: number },
+      });
+    });
+    await Effect.runPromise(program.pipe(Effect.provide(makeTestLayer(db))));
+    const row = db
+      .prepare("SELECT status FROM cortex_runs WHERE run_id = 'r-ac-no-success'")
+      .get() as { status: string };
+    expect(row.status).toBe("completed");
+  });
+
+  it("marks run failed from AgentCompleted with success false", async () => {
+    const db = makeTestDb();
+    const program = Effect.gen(function* () {
+      const svc = yield* CortexIngestService;
+      yield* svc.handleEvent("a", "r-ac-fail", {
+        v: 1,
+        agentId: "a",
+        runId: "r-ac-fail",
+        event: {
+          _tag: "AgentCompleted",
+          taskId: "t",
+          agentId: "a",
+          success: false,
+          totalIterations: 1,
+          totalTokens: 0,
+          durationMs: 10,
+        },
+      });
+    });
+    await Effect.runPromise(program.pipe(Effect.provide(makeTestLayer(db))));
+    const row = db.prepare("SELECT status FROM cortex_runs WHERE run_id = 'r-ac-fail'").get() as { status: string };
+    expect(row.status).toBe("failed");
+  });
+
   it("marks run failed from TaskFailed", async () => {
     const db = makeTestDb();
     const program = Effect.gen(function* () {

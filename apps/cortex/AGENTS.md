@@ -90,15 +90,15 @@ Canonical live payload shape: **`CortexLiveMessage`** in `server/types.ts` (`v`,
 
 | Route | Purpose |
 |-------|---------|
-| `/` | Stage — agent grid, empty state, bottom bar, `stage-store` + layout `agentStore`. |
+| `/` | Beacon — agent grid, empty state, bottom bar, `stage-store` + layout `agentStore`. |
 | `/run` | Placeholder hub for run UX. |
 | `/run/[runId]` | **Run view** — `RunDetail.svelte`, run/signal/trace stores, D3 monitor, trace panel, debrief, bottom tabs. |
-| `/workshop` | Placeholder (Phase 5+). |
+| `/lab` | Lab — builder, gateway agents, skills, tools tabs. |
 
 ### Layout context
 
-- **`routes/+layout.svelte`** — Creates **`createAgentStore()`**, **`createStageStore()`**, `setContext("agentStore" | "stageStore", …)`, live WS for Stage, toasts, command palette shell, top nav. Calls **`stageStore.setNavigate(goto)`** in `onMount`.
-- **`routes/+page.svelte` (Stage)** — Must use **`getContext`** for both stores (do not instantiate a second `createStageStore()` on the page).
+- **`routes/+layout.svelte`** — Creates **`createAgentStore()`**, **`createStageStore()`**, `setContext("agentStore" | "stageStore", …)`, live WS for Beacon, toasts, command palette shell, top nav. Calls **`stageStore.setNavigate(goto)`** in `onMount`.
+- **`routes/+page.svelte` (Beacon)** — Must use **`getContext`** for both stores (do not instantiate a second `createStageStore()` on the page).
 
 ### Stores (UI `lib/stores/`)
 
@@ -130,7 +130,7 @@ The UI depends on **`@reactive-agents/svelte`** (via `framework.ts` and package 
 | `docs/superpowers/plans/2026-03-31-cortex-app-phase2-ui-foundation.md` | UI scaffold, stores, Tailwind. |
 | `docs/superpowers/plans/2026-03-31-cortex-app-phase3-stage-view.md` | Stage view components. |
 | `docs/superpowers/plans/2026-03-31-cortex-app-phase4-run-view.md` | Run view, D3, trace, debrief. |
-| `docs/superpowers/plans/2026-03-31-cortex-app-phase5-workshop-and-cli.md` | Next: workshop, palette, CLI. |
+| `docs/superpowers/plans/2026-03-31-cortex-app-phase5-lab-and-cli.md` | Next: lab, palette, CLI. |
 | `docs/superpowers/specs/cortex-design-export.html` | Visual reference (HTML mockups). |
 
 ---

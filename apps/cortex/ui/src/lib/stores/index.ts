@@ -27,4 +27,4 @@ export type {
   CreateRunStoreOptions,
 } from "./run-store.js";
 export type { SignalData, TrackPoint, BarPoint, ToolSpan, SignalStore } from "./signal-store.js";
-export type { IterationFrame, TraceStore } from "./trace-store.js";
+export type { ConvMessage, CortexTraceFrame, IterationFrame, TraceStore } from "./trace-store.js";

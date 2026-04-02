@@ -32,6 +32,19 @@ describe("StrategyRegistry", () => {
     );
   });
 
+  it("should resolve react alias to the same implementation as reactive", async () => {
+    const program = Effect.gen(function* () {
+      const registry = yield* StrategyRegistry;
+      const reactiveFn = yield* registry.get("reactive");
+      const reactAlias = yield* registry.get("react" as any);
+      expect(reactAlias).toBe(reactiveFn);
+    });
+
+    await Effect.runPromise(
+      program.pipe(Effect.provide(StrategyRegistryLive)),
+    );
+  });
+
   it("should fail with StrategyNotFoundError for unknown strategy", async () => {
     const program = Effect.gen(function* () {
       const registry = yield* StrategyRegistry;

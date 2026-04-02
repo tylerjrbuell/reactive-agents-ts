@@ -7,12 +7,13 @@ import { Elysia } from "elysia";
 interface OllamaTag { name: string; modified_at: string; size: number }
 interface OllamaTagsResponse { models?: OllamaTag[] }
 
-const OLLAMA_URL = process.env.OLLAMA_HOST ?? "http://localhost:11434";
+const OLLAMA_DEFAULT = process.env.OLLAMA_HOST ?? "http://localhost:11434";
 
 export const modelsRouter = new Elysia({ prefix: "/api/models" })
-  .get("/ollama", async ({ set }) => {
+  .get("/ollama", async ({ set, query }) => {
+    const ollamaUrl = (query as Record<string, string | undefined>).endpoint?.trim() || OLLAMA_DEFAULT;
     try {
-      const res = await fetch(`${OLLAMA_URL}/api/tags`, {
+      const res = await fetch(`${ollamaUrl}/api/tags`, {
         signal: AbortSignal.timeout(3000),
       });
       if (!res.ok) {
@@ -29,7 +30,7 @@ export const modelsRouter = new Elysia({ prefix: "/api/models" })
     } catch (e) {
       set.status = 503;
       return {
-        error: `Ollama not reachable at ${OLLAMA_URL}: ${String(e)}`,
+        error: `Ollama not reachable at ${ollamaUrl}: ${String(e)}`,
         models: [],
       };
     }

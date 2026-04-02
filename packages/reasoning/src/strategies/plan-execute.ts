@@ -427,6 +427,17 @@ export const executePlanExecute = (
             observation: `[EXEC ${step.id}] ${result.success ? "✓" : "✗"} ${result.output}`,
             kernelPass: `plan-execute:step-${stepIndex + 1}:done`,
           });
+
+          // Emit an iteration-progress boundary so the Cortex replay scrubber has
+          // one checkpoint per plan step (mirrors how react-kernel emits per iteration).
+          yield* publishReasoningStep(eventBus, {
+            _tag: "ReasoningIterationProgress",
+            taskId: input.taskId ?? "plan-execute",
+            iteration: stepIndex + 1,
+            maxIterations: plan.steps.length,
+            strategy: "plan-execute-reflect",
+            toolsThisStep: step.toolName ? [step.toolName] : [],
+          });
         }
       }
 

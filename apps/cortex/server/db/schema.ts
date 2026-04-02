@@ -52,6 +52,7 @@ export function applySchema(db: Database): void {
       agent_id    TEXT PRIMARY KEY,
       name        TEXT    NOT NULL,
       config      TEXT    NOT NULL,
+      agent_type  TEXT    NOT NULL DEFAULT 'gateway',
       status      TEXT    NOT NULL DEFAULT 'active',
       run_count   INTEGER NOT NULL DEFAULT 0,
       last_run_at INTEGER,
@@ -67,6 +68,12 @@ export function applySchema(db: Database): void {
   if (!runCols.includes("provider")) db.exec("ALTER TABLE cortex_runs ADD COLUMN provider TEXT");
   if (!runCols.includes("model"))    db.exec("ALTER TABLE cortex_runs ADD COLUMN model    TEXT");
   if (!runCols.includes("strategy")) db.exec("ALTER TABLE cortex_runs ADD COLUMN strategy TEXT");
+
+  const agentCols = (db.prepare("PRAGMA table_info(cortex_agents)").all() as Array<{ name: string }>)
+    .map((c) => c.name);
+  if (!agentCols.includes("agent_type")) {
+    db.exec("ALTER TABLE cortex_agents ADD COLUMN agent_type TEXT NOT NULL DEFAULT 'gateway'");
+  }
 }
 
 /** Enforce retention: keep only the 50 most recent runs per agent. */

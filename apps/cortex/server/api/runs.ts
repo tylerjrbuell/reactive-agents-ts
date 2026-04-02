@@ -12,13 +12,29 @@ export const runsRouter = (
     .post(
       "/",
       async ({ body, set }) => {
+        const b = body as any;
         const program = Effect.gen(function* () {
           const runner = yield* CortexRunnerService;
           return yield* runner.start({
-            prompt: body.prompt,
-            ...(body.provider ? { provider: body.provider } : {}),
-            ...(body.model ? { model: body.model } : {}),
-            ...(body.tools ? { tools: body.tools } : {}),
+            prompt: b.prompt,
+            ...(b.provider         ? { provider:         b.provider }         : {}),
+            ...(b.model            ? { model:            b.model }            : {}),
+            ...(b.tools            ? { tools:            b.tools }            : {}),
+            ...(b.strategy         ? { strategy:         b.strategy }         : {}),
+            ...(b.temperature != null ? { temperature:   b.temperature }      : {}),
+            ...(b.maxIterations    ? { maxIterations:    b.maxIterations }    : {}),
+            ...(b.minIterations    ? { minIterations:    b.minIterations }    : {}),
+            ...(b.systemPrompt     ? { systemPrompt:     b.systemPrompt }     : {}),
+            ...(b.agentName        ? { agentName:        b.agentName }        : {}),
+            ...(b.maxTokens        ? { maxTokens:        b.maxTokens }        : {}),
+            ...(b.timeout          ? { timeout:          b.timeout }          : {}),
+            ...(b.retryPolicy      ? { retryPolicy:      b.retryPolicy }      : {}),
+            ...(b.cacheTimeout     ? { cacheTimeout:     b.cacheTimeout }     : {}),
+            ...(b.progressCheckpoint ? { progressCheckpoint: b.progressCheckpoint } : {}),
+            ...(b.fallbacks        ? { fallbacks:        b.fallbacks }        : {}),
+            ...(b.metaTools        ? { metaTools:        b.metaTools }        : {}),
+            ...(b.verificationStep ? { verificationStep: b.verificationStep } : {}),
+            ...(b.observabilityVerbosity ? { observabilityVerbosity: b.observabilityVerbosity } : {}),
           });
         });
         try {
@@ -31,9 +47,24 @@ export const runsRouter = (
       {
         body: t.Object({
           prompt: t.String(),
-          provider: t.Optional(t.String()),
-          model: t.Optional(t.String()),
-          tools: t.Optional(t.Array(t.String())),
+          provider:           t.Optional(t.String()),
+          model:              t.Optional(t.String()),
+          tools:              t.Optional(t.Array(t.String())),
+          strategy:           t.Optional(t.String()),
+          temperature:        t.Optional(t.Number()),
+          maxIterations:      t.Optional(t.Number()),
+          minIterations:      t.Optional(t.Number()),
+          systemPrompt:       t.Optional(t.String()),
+          agentName:          t.Optional(t.String()),
+          maxTokens:          t.Optional(t.Number()),
+          timeout:            t.Optional(t.Number()),
+          retryPolicy:        t.Optional(t.Object({ enabled: t.Optional(t.Boolean()), maxRetries: t.Number(), backoffMs: t.Optional(t.Number()) })),
+          cacheTimeout:       t.Optional(t.Number()),
+          progressCheckpoint: t.Optional(t.Number()),
+          fallbacks:          t.Optional(t.Object({ enabled: t.Optional(t.Boolean()), providers: t.Optional(t.Array(t.String())), errorThreshold: t.Optional(t.Number()) })),
+          metaTools:          t.Optional(t.Object({ enabled: t.Optional(t.Boolean()), brief: t.Optional(t.Boolean()), find: t.Optional(t.Boolean()), pulse: t.Optional(t.Boolean()), recall: t.Optional(t.Boolean()), harnessSkill: t.Optional(t.Boolean()) })),
+          verificationStep:   t.Optional(t.String()),
+          observabilityVerbosity: t.Optional(t.Union([t.Literal("off"), t.Literal("minimal"), t.Literal("normal"), t.Literal("verbose")])),
         }),
       },
     )

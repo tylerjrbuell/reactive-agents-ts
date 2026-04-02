@@ -15,6 +15,8 @@ export interface CortexSettings {
   runRetentionDays: number;
   debugMode: boolean;
   theme: "dark" | "light";
+  /** Override Ollama endpoint (empty = server default localhost:11434) */
+  ollamaEndpoint: string;
 }
 
 export const DEFAULTS: CortexSettings = {
@@ -25,6 +27,7 @@ export const DEFAULTS: CortexSettings = {
   runRetentionDays: 30,
   debugMode: false,
   theme: "dark",
+  ollamaEndpoint: "",
 };
 
 const STORAGE_KEY = "cortex-settings";

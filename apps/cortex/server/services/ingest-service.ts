@@ -59,8 +59,11 @@ const deriveRunStats = (
     };
   }
   if (event._tag === "ReasoningStepCompleted") {
-    const e = event as { totalSteps?: number; step?: number };
-    return { iterationCount: e.totalSteps ?? e.step ?? 0 };
+    const e = event as { totalSteps?: number; step?: number; strategy?: string };
+    return {
+      iterationCount: e.totalSteps ?? e.step ?? 0,
+      ...(typeof e.strategy === "string" && e.strategy ? { strategy: e.strategy } : {}),
+    };
   }
   if (event._tag === "ReasoningIterationProgress") {
     const e = event as { iteration?: number; strategy?: string };
@@ -71,8 +74,10 @@ const deriveRunStats = (
   }
   if (event._tag === "AgentCompleted") {
     const e = event as { success?: boolean; totalTokens?: number; durationMs?: number };
+    // Only explicit false is failure — omitted `success` is treated as completed (matches desk UX; some paths omit the flag).
+    const status = e.success === false ? "failed" : "completed";
     return {
-      status: e.success ? "completed" : "failed",
+      status,
       completedAt: Date.now(),
       // totalTokens is the authoritative count — persisted via MAX so it doesn't
       // overcount when added to per-call accumulated values.
