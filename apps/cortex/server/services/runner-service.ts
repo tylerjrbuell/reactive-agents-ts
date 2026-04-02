@@ -18,6 +18,11 @@ export interface LaunchParams {
   readonly provider?: string;
   readonly model?: string;
   readonly tools?: string[];
+  readonly strategy?: string;
+  readonly temperature?: number;
+  readonly maxIterations?: number;
+  readonly systemPrompt?: string;
+  readonly agentName?: string;
 }
 
 type ActiveEntry = {
@@ -58,16 +63,33 @@ export const CortexRunnerServiceLive = Layer.effect(
 
           const agent = yield* Effect.tryPromise({
             try: async () => {
+              const agentName = params.agentName?.trim()
+                || `cortex-desk-${Date.now()}`;
               let b = ReactiveAgents.create()
-                .withName(`cortex-desk-${Date.now()}`)
+                .withName(agentName)
                 .withProvider(providerRaw as ProviderName)
-                .withReasoning()  // ensures ReasoningIterationProgress + LLMRequestCompleted events
-                .withMemory();    // ensures MemoryBootstrapped + MemoryFlushed events
+                .withReasoning(
+                  params.strategy
+                    ? { defaultStrategy: params.strategy as any }
+                    : undefined,
+                )
+                .withMemory();
               if (params.model?.trim()) {
-                b = b.withModel(params.model.trim());
+                const modelParams: Record<string, unknown> = { model: params.model.trim() };
+                if (params.temperature != null) modelParams.temperature = params.temperature;
+                b = b.withModel(modelParams as any);
+              } else if (params.temperature != null) {
+                b = b.withModel({ model: "", temperature: params.temperature } as any);
               }
               if (params.tools && params.tools.length > 0) {
                 b = b.withTools();
+              }
+              if (params.maxIterations && params.maxIterations > 0) {
+                // maxIterations is set via reasoning config
+                b = b.withReasoning({ maxIterations: params.maxIterations } as any);
+              }
+              if (params.systemPrompt?.trim()) {
+                b = b.withSystemPrompt(params.systemPrompt.trim());
               }
               return b.build();
             },

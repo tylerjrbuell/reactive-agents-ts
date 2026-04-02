@@ -11,7 +11,7 @@ describe("GET /api/agents", () => {
   it("returns empty array (gateway stub)", async () => {
     const db = new Database(":memory:");
     applySchema(db);
-    const app = new Elysia().use(agentsRouter(CortexStoreServiceLive(db)));
+    const app = new Elysia().use(agentsRouter(db));
     const res = await app.handle(new Request("http://localhost/api/agents"));
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual([]);

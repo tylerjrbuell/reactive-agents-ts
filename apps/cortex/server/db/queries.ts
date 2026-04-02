@@ -379,3 +379,66 @@ export function recomputeRunStats(db: Database, runId: string): boolean {
 
   return true;
 }
+
+// ─── Gateway Agent CRUD ──────────────────────────────────────────────────────
+
+export interface GatewayAgentRow {
+  readonly agent_id: string;
+  readonly name: string;
+  readonly config: string;
+  readonly status: string;
+  readonly run_count: number;
+  readonly last_run_at: number | null;
+  readonly schedule: string | null;
+  readonly created_at: number;
+  readonly updated_at: number;
+}
+
+const AGENT_SELECT = `
+  SELECT agent_id, name, config, status, run_count, last_run_at, schedule, created_at, updated_at
+  FROM cortex_agents
+`;
+
+export function getGatewayAgents(db: Database): GatewayAgentRow[] {
+  return db.prepare(`${AGENT_SELECT} ORDER BY created_at DESC`).all() as GatewayAgentRow[];
+}
+
+export function getGatewayAgent(db: Database, agentId: string): GatewayAgentRow | null {
+  return db.prepare(`${AGENT_SELECT} WHERE agent_id = ?`).get(agentId) as GatewayAgentRow | null;
+}
+
+export function createGatewayAgent(
+  db: Database,
+  agentId: string,
+  name: string,
+  config: string,
+  schedule: string | null,
+): void {
+  db.prepare(`
+    INSERT OR REPLACE INTO cortex_agents
+      (agent_id, name, config, status, run_count, schedule, created_at, updated_at)
+    VALUES (?, ?, ?, 'active', 0, ?, unixepoch('now','subsec')*1000, unixepoch('now','subsec')*1000)
+  `).run(agentId, name, config, schedule);
+}
+
+export function updateGatewayAgent(
+  db: Database,
+  agentId: string,
+  patch: { name?: string; config?: string; status?: string; schedule?: string | null },
+): void {
+  const sets: string[] = ["updated_at = unixepoch('now','subsec')*1000"];
+  const values: unknown[] = [];
+  if (patch.name !== undefined)   { sets.push("name = ?");     values.push(patch.name); }
+  if (patch.config !== undefined) { sets.push("config = ?");   values.push(patch.config); }
+  if (patch.status !== undefined) { sets.push("status = ?");   values.push(patch.status); }
+  if ("schedule" in patch)        { sets.push("schedule = ?"); values.push(patch.schedule ?? null); }
+  if (sets.length === 1) return;
+  values.push(agentId);
+  // bun:sqlite run() accepts SQLQueryBindings spread
+  (db.prepare(`UPDATE cortex_agents SET ${sets.join(", ")} WHERE agent_id = ?`) as any).run(...values);
+}
+
+export function deleteGatewayAgent(db: Database, agentId: string): boolean {
+  const info = db.prepare("DELETE FROM cortex_agents WHERE agent_id = ?").run(agentId) as { changes?: number };
+  return (info.changes ?? 0) > 0;
+}

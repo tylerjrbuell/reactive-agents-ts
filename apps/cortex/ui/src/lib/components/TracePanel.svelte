@@ -323,10 +323,10 @@
               {#if f.messages && f.messages.length > 0}
                 <div class="relative pl-3">
                   <div class="absolute left-0 top-0 bottom-0 w-0.5 bg-outline-variant/30 rounded-full"></div>
-                  <button
-                    type="button"
-                    class="flex items-center gap-2 mb-1.5 cursor-pointer bg-transparent border-0 p-0 w-full text-left"
+                  <div role="button" tabindex="0"
+                    class="flex items-center gap-2 mb-1.5 cursor-pointer w-full text-left"
                     onclick={() => toggleMessages(idx)}
+                    onkeydown={(e) => e.key === "Enter" && toggleMessages(idx)}
                   >
                     <span class="text-[9px] font-mono text-outline/70 uppercase tracking-widest">
                       Conversation Thread ({f.messages.length} msgs)
@@ -334,7 +334,7 @@
                     <span class="material-symbols-outlined text-[11px] text-outline/40 transition-transform {expandedMessages.includes(idx) ? 'rotate-180' : ''}">
                       expand_more
                     </span>
-                  </button>
+                  </div>
                   {#if expandedMessages.includes(idx)}
                     <div class="space-y-1 max-h-72 overflow-y-auto">
                       {#each f.messages as msg, mi (mi)}

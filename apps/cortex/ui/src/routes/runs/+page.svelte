@@ -240,9 +240,9 @@
       {#each filtered as run (run.runId)}
         {@const isPinned = pinned.has(run.runId)}
         {@const isSelected = selected.has(run.runId)}
-        <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
-        <div
-          class="flex items-center gap-3 px-4 py-3 rounded-lg border cursor-pointer transition-all group
+        <button
+          type="button"
+          class="w-full text-left flex items-center gap-3 px-4 py-3 rounded-lg border cursor-pointer transition-all group bg-transparent
                  {isSelected
                    ? 'bg-primary/8 border-primary/25'
                    : isPinned
@@ -250,9 +250,11 @@
                      : 'bg-surface-container-low/40 border-outline-variant/10 hover:border-primary/20 hover:bg-surface-container-low/70'}"
           onclick={() => goto(`/run/${run.runId}`)}
         >
-          <!-- Checkbox (shown on hover or when selected) -->
-          <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
-          <div class="flex-shrink-0 w-5 flex items-center justify-center" onclick={(e) => toggleSelect(run.runId, e)}>
+          <!-- Checkbox col — span with role=button to avoid nested button -->
+          <span role="button" tabindex="0"
+            class="flex-shrink-0 w-5 flex items-center justify-center cursor-pointer"
+            onclick={(e) => toggleSelect(run.runId, e)}
+            onkeydown={(e) => e.key === "Enter" && toggleSelect(run.runId, e as any)}>
             {#if isSelected || selected.size > 0}
               <input type="checkbox" checked={isSelected} onchange={() => {}}
                 class="accent-primary w-3.5 h-3.5 cursor-pointer" />
@@ -261,7 +263,7 @@
                 style="font-variation-settings: 'FILL' 1;">
                 {statusIcon(run.status)}</span>
             {/if}
-          </div>
+          </span>
 
           <!-- Status icon (when no checkbox) -->
           {#if !isSelected && selected.size === 0}
@@ -311,19 +313,19 @@
           <!-- Time + pin + arrow -->
           <div class="flex items-center gap-2 flex-shrink-0">
             <span class="font-mono text-[10px] text-outline/40 w-16 text-right">{relativeTime(run.startedAt)}</span>
-            <!-- Pin toggle -->
-            <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
-            <span
+            <!-- Pin toggle — span/role=button (nested button not allowed) -->
+            <span role="button" tabindex="0"
               class="material-symbols-outlined text-sm transition-colors cursor-pointer
                      {isPinned ? 'text-primary/60 hover:text-primary' : 'text-outline/0 group-hover:text-outline/30 hover:text-primary'}"
               style="font-variation-settings: 'FILL' {isPinned ? '1' : '0'};"
               title={isPinned ? "Unpin" : "Pin"}
               onclick={(e) => togglePin(run.runId, e)}
+              onkeydown={(e) => e.key === "Enter" && togglePin(run.runId, e as any)}
             >push_pin</span>
             <span class="material-symbols-outlined text-sm text-outline/20 group-hover:text-primary/40 transition-colors">
               chevron_right</span>
           </div>
-        </div>
+        </button>
       {/each}
     {/if}
   </div>

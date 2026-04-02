@@ -13,6 +13,8 @@ export interface CortexRuntime {
   readonly bridgeLayer: Layer.Layer<CortexEventBridge>;
   readonly storeLayer: ReturnType<typeof CortexStoreServiceLive>;
   readonly runnerLayer: Layer.Layer<CortexRunnerService>;
+  /** Raw DB reference for routers that need direct query access (agents, etc.) */
+  readonly rawDb: Database;
 }
 
 export function createCortexRuntime(config: CortexConfig): CortexRuntime {
@@ -31,5 +33,5 @@ export function createCortexRuntime(config: CortexConfig): CortexRuntime {
     Layer.provide(Layer.merge(storeLayer, ingestLayer)),
   );
 
-  return { db, ingestLayer, bridgeLayer, storeLayer, runnerLayer };
+  return { db, ingestLayer, bridgeLayer, storeLayer, runnerLayer, rawDb: db };
 }

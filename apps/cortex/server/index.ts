@@ -5,6 +5,7 @@ import { runsRouter } from "./api/runs.js";
 import { agentsRouter } from "./api/agents.js";
 import { toolsRouter } from "./api/tools.js";
 import { skillsRouter } from "./api/skills.js";
+import { modelsRouter } from "./api/models.js";
 import { handleIngestMessage } from "./ws/ingest.js";
 import {
   handleLiveOpen,
@@ -41,9 +42,10 @@ export async function startCortexServer(config: CortexConfig = defaultCortexConf
 
   const app = new Elysia()
     .use(runsRouter(runtime.storeLayer, runtime.runnerLayer))
-    .use(agentsRouter(runtime.storeLayer))
+    .use(agentsRouter(runtime.rawDb))
     .use(toolsRouter(runtime.storeLayer))
     .use(skillsRouter(runtime.storeLayer))
+    .use(modelsRouter)
     .ws("/ws/ingest", {
       open() {
         cortexLog("info", "ingest-ws", "ingest client connected");
