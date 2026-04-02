@@ -16,7 +16,11 @@ import { parseCron, shouldFireAt } from "@reactive-agents/gateway";
 import { cortexLog, formatErrorDetails } from "../cortex-log.js";
 import type { Database } from "bun:sqlite";
 import { getGatewayAgents, getGatewayAgent, updateGatewayAgent, upsertRun } from "../db/queries.js";
-import { normalizeCortexAgentConfig } from "./cortex-agent-config.js";
+import {
+  mergeCortexAllowedTools,
+  normalizeCortexAgentConfig,
+  type CortexMetaToolsConfig,
+} from "./cortex-agent-config.js";
 import { ensureParentDirForFile } from "./ensure-log-path.js";
 import { CortexIngestService } from "./ingest-service.js";
 import type { Layer } from "effect";
@@ -213,7 +217,12 @@ export class GatewayProcessManager {
       // ── Memory / tools ────────────────────────────────────────────────
       builder = builder.withMemory();
       const tools = config.tools as string[] | undefined;
-      if (tools && tools.length > 0) builder = builder.withTools();
+      const metaToolsCfg = config.metaTools as CortexMetaToolsConfig | undefined;
+      if (tools && tools.length > 0) {
+        builder = builder.withTools({
+          allowedTools: mergeCortexAllowedTools(tools, metaToolsCfg),
+        });
+      }
 
       // ── System prompt ─────────────────────────────────────────────────
       const systemPrompt = (config.systemPrompt as string | undefined)?.trim();
@@ -249,7 +258,6 @@ export class GatewayProcessManager {
       }
 
       // ── Meta tools ────────────────────────────────────────────────────
-      const metaToolsCfg = config.metaTools as { enabled?: boolean; brief?: boolean; find?: boolean; pulse?: boolean; recall?: boolean; harnessSkill?: boolean } | undefined;
       if (metaToolsCfg?.enabled) {
         builder = builder.withMetaTools({
           brief: metaToolsCfg.brief ?? false,

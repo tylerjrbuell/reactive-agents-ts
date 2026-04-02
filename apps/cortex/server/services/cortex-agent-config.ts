@@ -116,3 +116,38 @@ export function normalizeCortexAgentConfig(raw: Record<string, unknown>): Record
 
   return out;
 }
+
+/** Conductor / kernel tools that must stay callable when `allowedTools` filtering is on. */
+const CORTEX_FRAMEWORK_ALLOWED_TOOLS = [
+  "final-answer",
+  "task-complete",
+  "context-status",
+] as const;
+
+export type CortexMetaToolsConfig = {
+  readonly enabled?: boolean;
+  readonly brief?: boolean;
+  readonly find?: boolean;
+  readonly pulse?: boolean;
+  readonly recall?: boolean;
+  readonly harnessSkill?: boolean;
+};
+
+/**
+ * Builds the `allowedTools` list for {@link ReactiveAgents.withTools}: Cortex builder selections
+ * plus framework tools the reasoning kernel may execute or inject (so filtering does not block
+ * completion), and any Conductor meta-tools the user enabled.
+ */
+export function mergeCortexAllowedTools(
+  userTools: readonly string[],
+  metaTools?: CortexMetaToolsConfig,
+): string[] {
+  const names = new Set<string>([...userTools, ...CORTEX_FRAMEWORK_ALLOWED_TOOLS]);
+  if (metaTools?.enabled) {
+    if (metaTools.brief) names.add("brief");
+    if (metaTools.find) names.add("find");
+    if (metaTools.pulse) names.add("pulse");
+    if (metaTools.recall) names.add("recall");
+  }
+  return [...names];
+}

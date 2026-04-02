@@ -13,6 +13,7 @@ import { CortexIngestService } from "./ingest-service.js";
 import { CortexStoreService } from "./store-service.js";
 import { cortexLog, cortexLogRunnerExecution, formatErrorDetails } from "../cortex-log.js";
 import { ensureParentDirForFile } from "./ensure-log-path.js";
+import { mergeCortexAllowedTools } from "./cortex-agent-config.js";
 
 export interface LaunchParams {
   readonly prompt: string;
@@ -97,7 +98,11 @@ export const CortexRunnerServiceLive = Layer.effect(
 
               // ── Memory / tools ────────────────────────────────────────
               b = b.withMemory();
-              if (params.tools && params.tools.length > 0) b = b.withTools();
+              if (params.tools && params.tools.length > 0) {
+                b = b.withTools({
+                  allowedTools: mergeCortexAllowedTools(params.tools, params.metaTools),
+                });
+              }
 
               // ── System prompt ─────────────────────────────────────────
               if (params.systemPrompt?.trim()) b = b.withSystemPrompt(params.systemPrompt.trim());

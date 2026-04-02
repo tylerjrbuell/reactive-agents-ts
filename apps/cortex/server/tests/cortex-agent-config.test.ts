@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { normalizeCortexAgentConfig } from "../services/cortex-agent-config.js";
+import {
+  mergeCortexAllowedTools,
+  normalizeCortexAgentConfig,
+} from "../services/cortex-agent-config.js";
 
 describe("normalizeCortexAgentConfig", () => {
   test("coerces numeric fields from strings", () => {
@@ -41,5 +44,39 @@ describe("normalizeCortexAgentConfig", () => {
       maxRetries: 3,
       backoffMs: 500,
     });
+  });
+});
+
+describe("mergeCortexAllowedTools", () => {
+  test("adds kernel completion tools to user selection", () => {
+    const merged = mergeCortexAllowedTools(["web-search"], undefined);
+    expect(merged).toEqual(
+      expect.arrayContaining([
+        "web-search",
+        "final-answer",
+        "task-complete",
+        "context-status",
+      ]),
+    );
+    expect(merged).toHaveLength(4);
+  });
+
+  test("includes conductor tools when metaTools enabled and flagged", () => {
+    const merged = mergeCortexAllowedTools(["file-read"], {
+      enabled: true,
+      recall: true,
+      find: true,
+      brief: false,
+      pulse: false,
+    });
+    expect(merged).toEqual(
+      expect.arrayContaining(["file-read", "recall", "find", "final-answer"]),
+    );
+    expect(merged).not.toContain("brief");
+  });
+
+  test("deduplicates user tool names", () => {
+    const merged = mergeCortexAllowedTools(["web-search", "web-search"], undefined);
+    expect(merged.filter((n) => n === "web-search")).toHaveLength(1);
   });
 });
