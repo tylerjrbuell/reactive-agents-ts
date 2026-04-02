@@ -53,4 +53,14 @@ describe("GET /api/skills", () => {
     const body = await res.json();
     expect(Array.isArray(body)).toBe(true);
   });
+
+  it("GET /api/skills/discover returns { paths: string[] }", async () => {
+    const db = new Database(":memory:");
+    applySchema(db);
+    const app = new Elysia().use(skillsRouter(CortexStoreServiceLive(db)));
+    const res = await app.handle(new Request("http://localhost/api/skills/discover"));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { paths: string[] };
+    expect(Array.isArray(body.paths)).toBe(true);
+  });
 });

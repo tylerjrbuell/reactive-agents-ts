@@ -308,6 +308,34 @@
   let tools  = $state<ToolRow[]>([]);
   let selectedSkill = $state<SkillRow | null>(null);
   let selectedTool  = $state<ToolRow | null>(null);
+  /** Relative dirs on disk from GET /api/skills/discover (framework `withSkills` hints). */
+  let discoveredSkillPaths = $state<string[]>([]);
+
+  async function loadSkillDiscover() {
+    try {
+      const res = await fetch(`${CORTEX_SERVER_URL}/api/skills/discover`);
+      discoveredSkillPaths = res.ok ? ((await res.json()) as { paths?: string[] }).paths ?? [] : [];
+    } catch {
+      discoveredSkillPaths = [];
+    }
+  }
+
+  function appendPathsToBuilderLivingSkills(paths: string[]) {
+    const add = paths.map((p) => p.trim()).filter((p) => p.length > 0);
+    if (add.length === 0) return;
+    const next = new Set([...(builderConfig.skills?.paths ?? []), ...add]);
+    builderConfig = { ...builderConfig, skills: { ...builderConfig.skills, paths: [...next] } };
+    activeTab = "builder";
+    toast.success("Living skills updated", `${add.length} path(s) — expand Agent config → Living skills`);
+  }
+
+  function skillPathInBuilder(p: string): boolean {
+    return (builderConfig.skills?.paths ?? []).includes(p);
+  }
+
+  $effect(() => {
+    if (activeTab === "skills") void loadSkillDiscover();
+  });
 
   type McpListRow = {
     serverId: string;
@@ -785,9 +813,50 @@
 
   <!-- ── SKILLS ──────────────────────────────────────────────────────── -->
   {:else if activeTab === "skills"}
+    <div class="flex flex-col gap-4 flex-1 min-h-0 overflow-hidden">
+      <div class="rounded-lg border border-outline-variant/20 bg-surface-container-low/30 p-4 flex-shrink-0 space-y-3">
+        <div class="flex items-center justify-between gap-2 flex-wrap">
+          <h3 class="font-headline text-sm font-semibold text-on-surface">Living skills (framework)</h3>
+          <button type="button" onclick={() => loadSkillDiscover()}
+            class="text-[10px] font-mono px-3 py-1.5 rounded border border-outline-variant/25 text-outline hover:text-primary cursor-pointer bg-transparent">
+            ↻ Rescan disk
+          </button>
+        </div>
+        <p class="font-mono text-[9px] text-outline/60 leading-relaxed">
+          These folders are what <strong class="text-on-surface/80">withSkills</strong> uses (SKILL.md trees). They are separate from the SQLite list below.
+          Paths are relative to the Cortex server working directory (usually your repo root). Add them here, then fine-tune under <strong class="text-on-surface/80">Builder → Agent config → Living skills</strong>.
+        </p>
+        {#if discoveredSkillPaths.length === 0}
+          <p class="font-mono text-[10px] text-outline/50">No known skill directories found (checked <code class="text-primary/60">.claude/skills</code>, <code class="text-primary/60">.agents/skills</code>, <code class="text-primary/60">skills</code>).</p>
+        {:else}
+          <ul class="space-y-2">
+            {#each discoveredSkillPaths as p (p)}
+              <li class="flex items-center justify-between gap-2 flex-wrap font-mono text-[10px]">
+                <code class="text-secondary/90 bg-surface-container-lowest/80 px-2 py-1 rounded">{p}</code>
+                <button type="button" disabled={skillPathInBuilder(p)} onclick={() => appendPathsToBuilderLivingSkills([p])}
+                  class="text-[9px] px-2 py-1 rounded border border-primary/35 text-primary hover:bg-primary/10 cursor-pointer bg-transparent disabled:opacity-40 disabled:cursor-not-allowed">
+                  {skillPathInBuilder(p) ? "Already in Builder" : "Add to Builder"}
+                </button>
+              </li>
+            {/each}
+          </ul>
+          {@const missing = discoveredSkillPaths.filter((p) => !skillPathInBuilder(p))}
+          {#if missing.length > 0}
+            <button type="button" onclick={() => appendPathsToBuilderLivingSkills(missing)}
+              class="w-full py-2 rounded-lg border-0 font-mono text-[10px] uppercase text-white cursor-pointer hover:brightness-110"
+              style="background:linear-gradient(135deg,#8b5cf6,#06b6d4);">
+              Add all {missing.length} missing to Builder
+            </button>
+          {/if}
+        {/if}
+      </div>
+
+      <div class="text-[9px] font-mono text-outline/50 uppercase tracking-widest px-0.5 flex-shrink-0">SQLite skills catalog</div>
+      <p class="font-mono text-[9px] text-outline/45 -mt-2 flex-shrink-0">Optional rows from the <code class="text-outline/60">skills</code> table for browsing — not wired to <code class="text-outline/60">withSkills</code> automatically.</p>
+
     <div class="grid grid-cols-1 md:grid-cols-[280px_1fr] gap-4 flex-1 min-h-0 overflow-hidden">
       <div class="space-y-1 overflow-y-auto">
-        {#if skills.length === 0}<p class="font-mono text-xs text-outline text-center mt-8">No skills yet.</p>{/if}
+        {#if skills.length === 0}<p class="font-mono text-xs text-outline text-center mt-8">No rows in the skills table.</p>{/if}
         {#each skills as s, i (s.id ?? i)}
           <button type="button" class="w-full text-left p-3 rounded border transition-all {selectedSkill===s ? 'bg-primary/10 border-primary/30' : 'bg-surface-container-low border-outline-variant/10 hover:border-primary/20'}" onclick={() => (selectedSkill=s)}>
             <div class="font-mono text-xs text-on-surface font-medium">{s.name ?? s.id ?? "skill"}</div>
@@ -803,6 +872,7 @@
       {:else}
         <div class="flex items-center justify-center text-outline font-mono text-xs">Select a skill to view content.</div>
       {/if}
+    </div>
     </div>
 
   <!-- ── TOOLS (MCP registry + legacy SQLite tools) ───────────────────── -->
