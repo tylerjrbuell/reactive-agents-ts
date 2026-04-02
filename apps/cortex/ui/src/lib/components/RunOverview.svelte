@@ -180,7 +180,7 @@
     {#each [
       {
         label: "Loop",
-        hint: "Outer kernel iterations (matches trace)",
+        hint: "Kernel loops — same axis as trace rows and replay",
         value: vitals.loopIteration > 0 ? String(vitals.loopIteration) : "—",
         sub:
           vitals.maxIterations > 0 && vitals.loopIteration > 0 && vitals.loopIteration <= vitals.maxIterations
@@ -190,7 +190,7 @@
       },
       {
         label: "Steps",
-        hint: "Reasoning steps (may exceed loop in plan/ToT/etc.)",
+        hint: "Inner reasoning steps — can exceed LOOP; replay does not scrub by step",
         value: vitals.reasoningSteps > 0 ? String(vitals.reasoningSteps) : "—",
         sub: undefined,
         color: "text-primary",

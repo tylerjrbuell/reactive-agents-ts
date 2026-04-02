@@ -87,17 +87,25 @@
 
 <div class="gradient-border-glow rounded-lg h-full flex flex-col overflow-hidden min-h-0">
   <!-- Header -->
-  <div class="flex items-center justify-between px-4 py-3 border-b border-white/5 flex-shrink-0 gap-2">
-    <div class="flex items-center gap-2 min-w-0">
-      <span class="material-symbols-outlined text-sm text-primary flex-shrink-0">receipt_long</span>
-      <h3 class="font-headline text-sm font-bold uppercase tracking-wide truncate">Execution Trace</h3>
-      {#if traceRows.length > 0}
-        <span class="text-[10px] font-mono text-outline bg-surface-container px-1.5 py-0.5 rounded flex-shrink-0">
-          {traceRows.length}
-        </span>
-      {/if}
+  <div class="flex items-start justify-between px-4 py-3 border-b border-white/5 flex-shrink-0 gap-2">
+    <div class="flex flex-col gap-0.5 min-w-0 flex-1">
+      <div class="flex items-center gap-2 min-w-0">
+        <span class="material-symbols-outlined text-sm text-primary flex-shrink-0">receipt_long</span>
+        <h3 class="font-headline text-sm font-bold uppercase tracking-wide truncate">Execution trace</h3>
+        {#if traceRows.length > 0}
+          <span class="text-[10px] font-mono text-outline bg-surface-container px-1.5 py-0.5 rounded flex-shrink-0">
+            {traceRows.length}
+          </span>
+        {/if}
+      </div>
+      <p
+        class="text-[9px] font-mono text-outline/45 normal-case tracking-normal pl-7 leading-tight"
+        title="Rows follow kernel loops (ReasoningIterationProgress). Inner reasoning steps are counted separately as STEPS in the header."
+      >
+        Rows = kernel loops · not each reasoning step
+      </p>
     </div>
-    <div class="flex items-center gap-1.5 flex-shrink-0">
+    <div class="flex items-center gap-1.5 flex-shrink-0 pt-0.5">
       {#if traceRows.length > 0}
         <button
           type="button"
@@ -113,8 +121,11 @@
         </button>
       {/if}
       {#if frame}
-        <span class="text-[10px] font-mono text-primary/70 bg-primary/10 px-2 py-0.5 rounded">
-          iter {String(frame.iteration).padStart(2, "0")}
+        <span
+          class="text-[10px] font-mono text-primary/70 bg-primary/10 px-2 py-0.5 rounded"
+          title="Kernel loop index for this row"
+        >
+          LOOP {String(frame.iteration).padStart(2, "0")}
         </span>
       {/if}
     </div>
@@ -229,7 +240,7 @@
                        ? 'text-secondary bg-secondary/15 border border-secondary/25'
                        : 'text-primary/80 bg-primary/10'}"
             >
-              {isFinal ? "FINAL" : `#${f.iteration}`}
+              <span title="Kernel loop {f.iteration}">{isFinal ? "FINAL" : `L${f.iteration}`}</span>
             </span>
 
             <!-- Summary text -->
@@ -285,7 +296,7 @@
             <div
               class="px-3 pb-4 space-y-4 border-t border-white/5 pt-3 animate-fade-up"
               role="region"
-              aria-label="Iteration {f.iteration} details"
+              aria-label="Kernel loop {f.iteration} details"
             >
 
               <!-- LLM Thought (agent's reasoning) -->

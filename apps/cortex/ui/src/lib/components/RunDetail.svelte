@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { getContext, onDestroy, onMount } from "svelte";
+  import { getContext, onDestroy } from "svelte";
   import { writable } from "svelte/store";
   import { goto } from "$app/navigation";
   import VitalsStrip from "$lib/components/VitalsStrip.svelte";
@@ -29,9 +29,13 @@
   const runStore = createRunStore(runId);
   const agentStore = getContext<AgentStore>("agentStore");
 
+  /** Explains replay: same axis as LOOP in the vitals strip and rows in the trace (not STEPS). */
+  const REPLAY_LOOP_TOOLTIP =
+    "Replay moves through kernel loops (ReasoningIterationProgress): one loop per trace row. Reasoning steps (inner strategy steps) are counted separately as STEPS.";
+
   // ── Replay state ───────────────────────────────────────────────────────
-  // null = live mode; number = replay cursor (target iteration index 1-based)
-  let replayIteration = $state<number | null>(null);
+  // null = live mode; number = 1-based kernel loop index (same as trace / LOOP vitals)
+  let replayLoopIndex = $state<number | null>(null);
   let replayPlaying = $state(false);
   let replayTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -39,10 +43,10 @@
   // In live mode it mirrors runStore; in replay mode events are sliced.
   const activeState = writable<RunState>({ ...$runStore });
 
-  // Keep activeState in sync whenever runStore or replayIteration changes
+  // Keep activeState in sync whenever runStore or replayLoopIndex changes
   $effect(() => {
     const run = $runStore;
-    if (replayIteration === null) {
+    if (replayLoopIndex === null) {
       activeState.set(run);
     } else {
       // Slice events up to the Nth ReasoningIterationProgress boundary
@@ -52,7 +56,7 @@
       for (let i = 0; i < events.length; i++) {
         if (events[i]!.type === "ReasoningIterationProgress") {
           count++;
-          if (count >= replayIteration) { cutIdx = i; break; }
+          if (count >= replayLoopIndex) { cutIdx = i; break; }
         }
       }
       activeState.set({ ...run, events: events.slice(0, cutIdx + 1) });
@@ -62,37 +66,37 @@
   const signalStore = createSignalStore(activeState);
   const traceStore = createTraceStore(activeState);
 
-  // Derived: max iterations available for replay
-  const replayMax = $derived(
+  // Derived: max kernel loops available for replay (= trace step rows from RIP, before final-only rows)
+  const replayMaxLoops = $derived(
     $runStore.events.filter((e) => e.type === "ReasoningIterationProgress").length,
   );
 
   function enterReplay() {
-    if (replayMax === 0) return;
-    replayIteration = replayMax; // start at end (full view)
+    if (replayMaxLoops === 0) return;
+    replayLoopIndex = replayMaxLoops; // start at end (full view)
   }
 
   function exitReplay() {
-    replayIteration = null;
+    replayLoopIndex = null;
     stopReplayPlay();
   }
 
   function stepBack() {
-    if (replayIteration !== null && replayIteration > 1) replayIteration--;
+    if (replayLoopIndex !== null && replayLoopIndex > 1) replayLoopIndex--;
   }
 
   function stepForward() {
-    if (replayIteration !== null && replayIteration < replayMax) replayIteration++;
-    else if (replayIteration === replayMax) exitReplay();
+    if (replayLoopIndex !== null && replayLoopIndex < replayMaxLoops) replayLoopIndex++;
+    else if (replayLoopIndex === replayMaxLoops) exitReplay();
   }
 
   function startReplayPlay() {
-    if (replayIteration === null) enterReplay();
-    replayIteration = 1;
+    if (replayLoopIndex === null) enterReplay();
+    replayLoopIndex = 1;
     replayPlaying = true;
     replayTimer = setInterval(() => {
-      if (replayIteration !== null && replayIteration < replayMax) {
-        replayIteration++;
+      if (replayLoopIndex !== null && replayLoopIndex < replayMaxLoops) {
+        replayLoopIndex++;
       } else {
         stopReplayPlay();
       }
@@ -135,7 +139,7 @@
         `**Tokens:** ${$runStore.vitals.tokensUsed.toLocaleString()}`,
         `**Provider:** ${$runStore.vitals.provider ?? "unknown"} / ${$runStore.vitals.model ?? "unknown"}`, ""];
       for (const f of $traceStore) {
-        lines.push(`## Iteration ${f.iteration}`, f.thought, "");
+        lines.push(`## Loop ${f.iteration}`, f.thought, "");
       }
       await navigator.clipboard.writeText(lines.join("\n"));
       toast.success("Copied run as markdown");
@@ -148,10 +152,6 @@
   let selectedIteration = $state<number | null>(null);
   let bottomTab = $state<"decisions" | "memory" | "context" | "debrief" | "signal" | "events">("decisions");
   let deletingRun = $state(false);
-
-  onDestroy(() => {
-    stopReplayPlay();
-  });
 
   // ── Resizable bottom panel (with minimize) ────────────────────────────
   const MIN_H = 100;
@@ -219,7 +219,10 @@
     } finally { deletingRun = false; }
   }
 
-  onDestroy(() => { runStore.destroy(); stopReplayPlay(); });
+  onDestroy(() => {
+    stopReplayPlay();
+    runStore.destroy();
+  });
 </script>
 
 <svelte:head>
@@ -237,38 +240,43 @@
       <span class="ml-1 px-1.5 py-0.5 rounded border border-primary/30 text-primary text-[9px]">CHAT</span>
     {/if}
 
-    {#if replayIteration !== null}
-      <!-- Replay mode badge + controls -->
-      <span class="px-2 py-0.5 rounded bg-tertiary/15 border border-tertiary/30 text-tertiary text-[9px] uppercase tracking-wider">
-        REPLAY iter {replayIteration}/{replayMax}
+    {#if replayLoopIndex !== null}
+      <!-- Replay mode: scrub by kernel loop (same axis as LOOP + trace rows) -->
+      <span
+        class="px-2 py-0.5 rounded bg-tertiary/15 border border-tertiary/30 text-tertiary text-[9px] uppercase tracking-wider max-w-[min(100%,220px)] truncate"
+        title={REPLAY_LOOP_TOOLTIP}
+      >
+        REPLAY LOOP {replayLoopIndex}/{replayMaxLoops}
       </span>
       <div class="flex items-center gap-1">
-        <button type="button" onclick={stepBack} disabled={replayIteration <= 1}
-          class="material-symbols-outlined text-sm text-outline hover:text-primary disabled:opacity-30 bg-transparent border-0 cursor-pointer p-0.5">
-          skip_previous</button>
+        <button type="button" onclick={stepBack} disabled={replayLoopIndex <= 1}
+          class="material-symbols-outlined text-sm text-outline hover:text-primary disabled:opacity-30 bg-transparent border-0 cursor-pointer p-0.5"
+          title="Previous kernel loop">skip_previous</button>
         {#if replayPlaying}
           <button type="button" onclick={stopReplayPlay}
             class="material-symbols-outlined text-sm text-tertiary bg-transparent border-0 cursor-pointer p-0.5">
             pause</button>
         {:else}
           <button type="button" onclick={startReplayPlay}
-            class="material-symbols-outlined text-sm text-outline hover:text-primary bg-transparent border-0 cursor-pointer p-0.5">
-            play_arrow</button>
+            class="material-symbols-outlined text-sm text-outline hover:text-primary bg-transparent border-0 cursor-pointer p-0.5"
+            title="Play through loops">play_arrow</button>
         {/if}
-        <button type="button" onclick={stepForward} disabled={replayIteration >= replayMax}
-          class="material-symbols-outlined text-sm text-outline hover:text-primary disabled:opacity-30 bg-transparent border-0 cursor-pointer p-0.5">
-          skip_next</button>
+        <button type="button" onclick={stepForward} disabled={replayLoopIndex >= replayMaxLoops}
+          class="material-symbols-outlined text-sm text-outline hover:text-primary disabled:opacity-30 bg-transparent border-0 cursor-pointer p-0.5"
+          title="Next kernel loop">skip_next</button>
         <button type="button" onclick={exitReplay}
           class="material-symbols-outlined text-sm text-outline hover:text-error bg-transparent border-0 cursor-pointer p-0.5"
           title="Exit replay">close</button>
       </div>
-    {:else if $runStore.status !== "live" && replayMax > 0}
+    {:else if $runStore.status !== "live" && replayMaxLoops > 0}
       <!-- Enter replay button for completed runs -->
       <button type="button" onclick={enterReplay}
         class="flex items-center gap-1 px-2 py-0.5 border border-outline-variant/20 text-outline rounded
-               hover:border-tertiary/40 hover:text-tertiary transition-colors bg-transparent cursor-pointer text-[9px] uppercase">
+               hover:border-tertiary/40 hover:text-tertiary transition-colors bg-transparent cursor-pointer text-[9px] uppercase"
+        title={REPLAY_LOOP_TOOLTIP}
+      >
         <span class="material-symbols-outlined text-[12px]">replay</span>
-        Replay
+        Replay loops
       </button>
     {/if}
 

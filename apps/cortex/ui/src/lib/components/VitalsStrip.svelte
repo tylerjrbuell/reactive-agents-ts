@@ -103,7 +103,9 @@
       <div class="h-4 w-px bg-primary/20 mx-4 flex-shrink-0"></div>
       {#if vitals.loopIteration > 0}
         <div class="flex items-center gap-2 mr-3">
-          <span class="text-tertiary" title="Outer kernel loop (ReasoningIterationProgress) — matches trace rows"
+          <span
+            class="text-tertiary"
+            title="Kernel loops (ReasoningIterationProgress). Same axis as trace rows and replay. Compare to max iterations."
             >LOOP</span
           >
           <span
@@ -122,7 +124,7 @@
         <div class="flex items-center gap-2 mr-5">
           <span
             class="text-tertiary"
-            title="Reasoning steps (ReasoningStepCompleted) — may exceed loop count in multi-step strategies"
+            title="Reasoning steps (ReasoningStepCompleted). Can exceed LOOP when a strategy emits multiple steps per kernel loop. Replay does not step through these individually."
             >STEPS</span
           >
           <span class="tabular-nums text-on-surface">{vitals.reasoningSteps}</span>
