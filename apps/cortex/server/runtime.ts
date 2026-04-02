@@ -5,6 +5,7 @@ import { CortexIngestServiceLive, CortexIngestService } from "./services/ingest-
 import { CortexEventBridge, CortexEventBridgeLive } from "./services/event-bridge.js";
 import { CortexStoreServiceLive } from "./services/store-service.js";
 import { CortexRunnerServiceLive, CortexRunnerService } from "./services/runner-service.js";
+import { GatewayProcessManager } from "./services/gateway-process-manager.js";
 import type { CortexConfig } from "./types.js";
 
 export interface CortexRuntime {
@@ -15,6 +16,8 @@ export interface CortexRuntime {
   readonly runnerLayer: Layer.Layer<CortexRunnerService>;
   /** Raw DB reference for routers that need direct query access (agents, etc.) */
   readonly rawDb: Database;
+  /** Gateway process manager — owns lifecycle of all scheduled agents */
+  readonly gateway: GatewayProcessManager;
 }
 
 export function createCortexRuntime(config: CortexConfig): CortexRuntime {
@@ -33,5 +36,7 @@ export function createCortexRuntime(config: CortexConfig): CortexRuntime {
     Layer.provide(Layer.merge(storeLayer, ingestLayer)),
   );
 
-  return { db, ingestLayer, bridgeLayer, storeLayer, runnerLayer, rawDb: db };
+  const gateway = new GatewayProcessManager(db, ingestLayer);
+
+  return { db, ingestLayer, bridgeLayer, storeLayer, runnerLayer, rawDb: db, gateway };
 }

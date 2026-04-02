@@ -60,6 +60,38 @@
   let formName     = $state("");
   let formSchedule = $state("");
   let formSaving   = $state(false);
+  let triggeringAgent = $state<string | null>(null);
+
+  // Friendly schedule presets → cron expressions
+  const SCHEDULE_PRESETS = [
+    { label: "Every minute",    cron: "* * * * *"    },
+    { label: "Every 5 minutes", cron: "*/5 * * * *"  },
+    { label: "Every 15 minutes",cron: "*/15 * * * *" },
+    { label: "Every hour",      cron: "0 * * * *"    },
+    { label: "Every day 9am",   cron: "0 9 * * *"    },
+    { label: "Every Mon 9am",   cron: "0 9 * * MON"  },
+    { label: "Every weekday 9am",cron:"0 9 * * 1-5"  },
+    { label: "First of month",  cron: "0 9 1 * *"    },
+  ];
+
+  async function triggerAgent(agent: GatewayRow) {
+    triggeringAgent = agent.agentId;
+    try {
+      const res = await fetch(`${CORTEX_SERVER_URL}/api/agents/${agent.agentId}/trigger`, { method: "POST" });
+      const data = await res.json() as { runId?: string; error?: string };
+      if (res.ok) {
+        toast.success(`${agent.name} triggered`, "Run started");
+        if (data.runId) void goto(`/run/${data.runId}`);
+        await loadGatewayAgents();
+      } else {
+        toast.error("Trigger failed", data.error ?? `Server returned ${res.status}`);
+      }
+    } catch (e) {
+      toast.error("Trigger failed", String(e));
+    } finally {
+      triggeringAgent = null;
+    }
+  }
 
   async function loadGatewayAgents() {
     gatewayLoading = true;
@@ -219,10 +251,33 @@
             </div>
             <div>
               <label class="text-[9px] font-mono text-outline/60 uppercase tracking-widest block mb-1.5">
-                Schedule <span class="text-outline/30 normal-case font-normal">(cron or blank for manual)</span>
+                Schedule <span class="text-outline/30 normal-case font-normal">(preset or cron, blank = manual)</span>
               </label>
-              <input bind:value={formSchedule} placeholder="0 9 * * MON"
+              <!-- Friendly presets -->
+              <div class="flex flex-wrap gap-1 mb-1.5">
+                {#each SCHEDULE_PRESETS as preset}
+                  <button type="button"
+                    onclick={() => (formSchedule = preset.cron)}
+                    class="text-[8px] font-mono px-1.5 py-0.5 rounded border cursor-pointer transition-colors
+                           {formSchedule === preset.cron ? 'bg-primary/15 border-primary/40 text-primary' : 'border-outline-variant/20 text-outline/50 hover:border-primary/30 hover:text-primary'}">
+                    {preset.label}
+                  </button>
+                {/each}
+                {#if formSchedule && !SCHEDULE_PRESETS.some(p => p.cron === formSchedule)}
+                  <span class="text-[8px] font-mono text-outline/30 self-center">custom:</span>
+                {/if}
+              </div>
+              <input bind:value={formSchedule} placeholder="*/5 * * * *  or leave blank for manual"
                 class="w-full bg-surface-container-lowest/60 border border-outline-variant/20 rounded-lg px-3 py-2 text-sm font-mono text-on-surface focus:border-primary/50 focus:outline-none" />
+              {#if formSchedule}
+                <p class="text-[9px] font-mono text-secondary/50 mt-1">
+                  Agent process will start immediately and fire on this schedule.
+                </p>
+              {:else}
+                <p class="text-[9px] font-mono text-outline/30 mt-1">
+                  No schedule — use "Trigger Now" to run manually.
+                </p>
+              {/if}
             </div>
           </div>
           <AgentConfigPanel bind:config={formConfig} />
@@ -280,6 +335,14 @@
                   </div>
                 </div>
                 <div class="flex items-center gap-1 flex-shrink-0">
+                  <!-- Trigger Now -->
+                  <button type="button" onclick={() => triggerAgent(agent)}
+                    disabled={triggeringAgent === agent.agentId || (agent as any).processRunning}
+                    class="text-[9px] font-mono px-2 py-1 rounded border cursor-pointer bg-transparent transition-colors
+                           border-primary/30 text-primary hover:bg-primary/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                    title="Run now (ignores schedule)">
+                    {triggeringAgent === agent.agentId ? "…" : "▶ Run"}
+                  </button>
                   <button type="button" onclick={() => toggleStatus(agent)}
                     class="text-[9px] font-mono px-2 py-1 rounded border cursor-pointer bg-transparent transition-colors
                            {agent.status==='active' ? 'border-tertiary/30 text-tertiary hover:bg-tertiary/10' : 'border-secondary/30 text-secondary hover:bg-secondary/10'}">

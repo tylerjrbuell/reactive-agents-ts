@@ -40,9 +40,12 @@ export async function startCortexServer(config: CortexConfig = defaultCortexConf
     CortexEventBridge.pipe(Effect.provide(runtime.bridgeLayer)),
   );
 
+  // Hydrate gateway agents — starts persistent processes for all active agents
+  void runtime.gateway.hydrate();
+
   const app = new Elysia()
     .use(runsRouter(runtime.storeLayer, runtime.runnerLayer))
-    .use(agentsRouter(runtime.rawDb))
+    .use(agentsRouter(runtime.rawDb, runtime.gateway))
     .use(toolsRouter(runtime.storeLayer))
     .use(skillsRouter(runtime.storeLayer))
     .use(modelsRouter)
