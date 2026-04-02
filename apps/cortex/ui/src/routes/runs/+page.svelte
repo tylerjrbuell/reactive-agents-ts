@@ -157,7 +157,7 @@
 </script>
 
 <svelte:head>
-  <title>CORTEX — Run History</title>
+  <title>CORTEX — Thalamus</title>
 </svelte:head>
 
 <div class="h-full flex flex-col overflow-hidden p-6 gap-4">
@@ -165,7 +165,7 @@
   <div class="flex items-center justify-between flex-shrink-0">
     <div>
       <h1 class="font-headline text-2xl font-light text-on-surface">
-        Run <span class="font-bold text-primary">History</span>
+        Run <span class="font-bold text-primary">Thalamus</span>
       </h1>
       {#if !loading && !error}
         <p class="font-mono text-[10px] text-outline mt-0.5">

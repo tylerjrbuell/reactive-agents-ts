@@ -29,7 +29,7 @@
 
   const navItems = [
     { label: "Beacon", href: "/", icon: "radar" },
-    { label: "Runs",     href: "/runs",    icon: "history" },
+    { label: "Thalamus", href: "/runs", icon: "alt_route" },
     { label: "Lab", href: "/workshop", icon: "science" },
   ];
 
