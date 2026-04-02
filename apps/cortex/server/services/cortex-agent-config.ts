@@ -114,7 +114,69 @@ export function normalizeCortexAgentConfig(raw: Record<string, unknown>): Record
     out.verificationStep = vs === "reflect" ? "reflect" : "none";
   }
 
+  const mids = raw.mcpServerIds;
+  if (Array.isArray(mids)) {
+    const ids = mids.filter((x): x is string => typeof x === "string" && x.trim().length > 0).map((x) => x.trim());
+    if (ids.length > 0) out.mcpServerIds = ids;
+  }
+
+  const at = raw.agentTools;
+  if (Array.isArray(at)) {
+    const parsed = at.map(parseAgentToolEntry).filter((x): x is CortexAgentToolEntry => x != null);
+    if (parsed.length > 0) out.agentTools = parsed;
+  }
+
+  const ds = raw.dynamicSubAgents;
+  if (ds && typeof ds === "object" && !Array.isArray(ds)) {
+    const o = ds as Record<string, unknown>;
+    if (o.enabled === true) {
+      out.dynamicSubAgents = {
+        enabled: true,
+        ...(typeof o.maxIterations === "number" && o.maxIterations > 0 ? { maxIterations: o.maxIterations } : {}),
+      };
+    }
+  }
+
   return out;
+}
+
+function parseAgentToolEntry(x: unknown): CortexAgentToolEntry | null {
+  if (!x || typeof x !== "object" || Array.isArray(x)) return null;
+  const o = x as Record<string, unknown>;
+  const kind = o.kind;
+  const toolName = typeof o.toolName === "string" ? o.toolName.trim() : "";
+  if (!toolName) return null;
+  if (kind === "remote") {
+    const remoteUrl = typeof o.remoteUrl === "string" ? o.remoteUrl.trim() : "";
+    if (!remoteUrl) return null;
+    return { kind: "remote", toolName, remoteUrl };
+  }
+  if (kind === "local") {
+    const ag = o.agent;
+    if (!ag || typeof ag !== "object" || Array.isArray(ag)) return null;
+    const a = ag as Record<string, unknown>;
+    const name = typeof a.name === "string" ? a.name.trim() : "";
+    if (!name) return null;
+    const tools = Array.isArray(a.tools)
+      ? a.tools.filter((t): t is string => typeof t === "string" && t.length > 0)
+      : undefined;
+    return {
+      kind: "local",
+      toolName,
+      agent: {
+        name,
+        ...(typeof a.description === "string" && a.description.trim() ? { description: a.description.trim() } : {}),
+        ...(typeof a.provider === "string" && a.provider.trim() ? { provider: a.provider.trim() } : {}),
+        ...(typeof a.model === "string" && a.model.trim() ? { model: a.model.trim() } : {}),
+        ...(tools && tools.length > 0 ? { tools } : {}),
+        ...(typeof a.maxIterations === "number" && a.maxIterations > 0 ? { maxIterations: a.maxIterations } : {}),
+        ...(typeof a.systemPrompt === "string" && a.systemPrompt.trim()
+          ? { systemPrompt: a.systemPrompt.trim() }
+          : {}),
+      },
+    };
+  }
+  return null;
 }
 
 /** Conductor / kernel tools that must stay callable when `allowedTools` filtering is on. */
@@ -133,6 +195,34 @@ export type CortexMetaToolsConfig = {
   readonly harnessSkill?: boolean;
 };
 
+export type CortexAgentToolEntry =
+  | {
+      readonly kind: "local";
+      readonly toolName: string;
+      readonly agent: {
+        readonly name: string;
+        readonly description?: string;
+        readonly provider?: string;
+        readonly model?: string;
+        readonly tools?: readonly string[];
+        readonly maxIterations?: number;
+        readonly systemPrompt?: string;
+      };
+    }
+  | { readonly kind: "remote"; readonly toolName: string; readonly remoteUrl: string };
+
+export type CortexDynamicSubAgentsConfig = {
+  readonly enabled: boolean;
+  readonly maxIterations?: number;
+};
+
+export type CortexAllowedToolsExtras = {
+  /** Parent-callable tool names from {@link ReactiveAgents.withAgentTool} / {@link ReactiveAgents.withRemoteAgent}. */
+  readonly agentToolNames?: readonly string[];
+  /** When {@link ReactiveAgents.withDynamicSubAgents} is enabled. */
+  readonly spawnAgent?: boolean;
+};
+
 /**
  * Builds the `allowedTools` list for {@link ReactiveAgents.withTools}: Cortex builder selections
  * plus framework tools the reasoning kernel may execute or inject (so filtering does not block
@@ -141,6 +231,7 @@ export type CortexMetaToolsConfig = {
 export function mergeCortexAllowedTools(
   userTools: readonly string[],
   metaTools?: CortexMetaToolsConfig,
+  extras?: CortexAllowedToolsExtras,
 ): string[] {
   const names = new Set<string>([...userTools, ...CORTEX_FRAMEWORK_ALLOWED_TOOLS]);
   if (metaTools?.enabled) {
@@ -148,6 +239,11 @@ export function mergeCortexAllowedTools(
     if (metaTools.find) names.add("find");
     if (metaTools.pulse) names.add("pulse");
     if (metaTools.recall) names.add("recall");
+  }
+  if (extras?.spawnAgent) names.add("spawn-agent");
+  for (const n of extras?.agentToolNames ?? []) {
+    const t = n.trim();
+    if (t.length > 0) names.add(t);
   }
   return [...names];
 }

@@ -11,6 +11,7 @@
  *   3. apps/cortex/server/services/gateway-process-manager.ts  (fireAgent builder)
  *   4. apps/cortex/server/api/runs.ts                  (POST body schema)
  *   5. apps/cortex/ui/src/routes/lab/+page.svelte      (builder run() call)
+ *   MCP / sub-agents also wire through gateway `fireAgent` + `normalizeCortexAgentConfig`.
  *
  * HOW TO USE: Run `bun test apps/cortex/server/tests --timeout 15000`.
  * A failure here means a new config field isn't wired somewhere.
@@ -57,6 +58,10 @@ const FULL_CONFIG_BODY = {
   retryPolicy:        { enabled: true, maxRetries: 2, backoffMs: 500 },
   fallbacks:          { enabled: true, providers: ["openai"], errorThreshold: 2 },
   metaTools:          { enabled: true, brief: true, find: true, pulse: false, recall: true, harnessSkill: false },
+  agentTools:         [
+    { kind: "local", toolName: "researcher", agent: { name: "Research", tools: ["web-search"], maxIterations: 5 } },
+  ],
+  dynamicSubAgents:   { enabled: true, maxIterations: 6 },
 };
 
 describe("AgentConfig → LaunchParams parity", () => {
@@ -117,5 +122,11 @@ describe("AgentConfig → LaunchParams parity", () => {
     expect(p.metaTools?.find).toBe(true);
     expect(p.metaTools?.recall).toBe(true);
     expect(p.metaTools?.harnessSkill).toBe(false);
+
+    expect(p.agentTools).toHaveLength(1);
+    expect(p.agentTools![0]?.kind).toBe("local");
+    expect(p.agentTools![0]?.toolName).toBe("researcher");
+    expect(p.dynamicSubAgents?.enabled).toBe(true);
+    expect(p.dynamicSubAgents?.maxIterations).toBe(6);
   });
 });

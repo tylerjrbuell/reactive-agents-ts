@@ -13,13 +13,21 @@ import { CortexIngestService } from "./ingest-service.js";
 import { CortexStoreService } from "./store-service.js";
 import { cortexLog, cortexLogRunnerExecution, formatErrorDetails } from "../cortex-log.js";
 import { ensureParentDirForFile } from "./ensure-log-path.js";
-import { mergeCortexAllowedTools } from "./cortex-agent-config.js";
+import {
+  mergeCortexAllowedTools,
+  type CortexAgentToolEntry,
+  type CortexDynamicSubAgentsConfig,
+} from "./cortex-agent-config.js";
 
 export interface LaunchParams {
   readonly prompt: string;
   readonly provider?: string;
   readonly model?: string;
   readonly tools?: string[];
+  /** Saved MCP server rows to connect with {@link ReactiveAgents.withMCP}. */
+  readonly mcpServerIds?: string[];
+  readonly agentTools?: CortexAgentToolEntry[];
+  readonly dynamicSubAgents?: CortexDynamicSubAgentsConfig;
   readonly strategy?: string;
   readonly temperature?: number;
   readonly maxIterations?: number;
@@ -73,6 +81,24 @@ export const CortexRunnerServiceLive = Layer.effect(
         Effect.gen(function* () {
           const providerRaw = params.provider ?? process.env.CORTEX_RUNNER_PROVIDER ?? "test";
 
+          const mcpConfigs =
+            params.mcpServerIds && params.mcpServerIds.length > 0
+              ? yield* store.getMcpServerConfigsByIds(params.mcpServerIds)
+              : [];
+
+          const allowExtras = {
+            spawnAgent: params.dynamicSubAgents?.enabled === true,
+            agentToolNames: params.agentTools?.map((t) => t.toolName) ?? [],
+          };
+          const userTools = params.tools ?? [];
+          const mergedAllowed = mergeCortexAllowedTools(userTools, params.metaTools, allowExtras);
+          const needsToolLayer =
+            mcpConfigs.length > 0 ||
+            (params.agentTools && params.agentTools.length > 0) ||
+            params.dynamicSubAgents?.enabled === true ||
+            (params.tools && params.tools.length > 0) ||
+            params.metaTools?.enabled === true;
+
           const agent = yield* Effect.tryPromise({
             try: async () => {
               const agentName = params.agentName?.trim()
@@ -96,12 +122,35 @@ export const CortexRunnerServiceLive = Layer.effect(
               if (params.maxIterations && params.maxIterations > 0) reasoningOpts.maxIterations = params.maxIterations;
               if (Object.keys(reasoningOpts).length > 0) b = b.withReasoning(reasoningOpts as any);
 
-              // ── Memory / tools ────────────────────────────────────────
+              // ── Memory / MCP / sub-agents / tool allowlist ───────────
               b = b.withMemory();
-              if (params.tools && params.tools.length > 0) {
-                b = b.withTools({
-                  allowedTools: mergeCortexAllowedTools(params.tools, params.metaTools),
-                });
+              for (const c of mcpConfigs) {
+                b = b.withMCP(c);
+              }
+              for (const at of params.agentTools ?? []) {
+                if (at.kind === "remote") {
+                  b = b.withRemoteAgent(at.toolName, at.remoteUrl);
+                } else {
+                  b = b.withAgentTool(at.toolName, {
+                    name: at.agent.name,
+                    ...(at.agent.description ? { description: at.agent.description } : {}),
+                    ...(at.agent.provider ? { provider: at.agent.provider } : {}),
+                    ...(at.agent.model ? { model: at.agent.model } : {}),
+                    ...(at.agent.tools && at.agent.tools.length > 0 ? { tools: [...at.agent.tools] } : {}),
+                    ...(at.agent.maxIterations ? { maxIterations: at.agent.maxIterations } : {}),
+                    ...(at.agent.systemPrompt ? { systemPrompt: at.agent.systemPrompt } : {}),
+                  });
+                }
+              }
+              if (params.dynamicSubAgents?.enabled) {
+                b = b.withDynamicSubAgents(
+                  params.dynamicSubAgents.maxIterations
+                    ? { maxIterations: params.dynamicSubAgents.maxIterations }
+                    : undefined,
+                );
+              }
+              if (needsToolLayer) {
+                b = b.withTools({ allowedTools: mergedAllowed });
               }
 
               // ── System prompt ─────────────────────────────────────────

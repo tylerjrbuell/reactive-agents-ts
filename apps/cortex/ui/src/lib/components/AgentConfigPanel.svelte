@@ -9,7 +9,7 @@
   import { CORTEX_SERVER_URL } from "$lib/constants.js";
   import { toast } from "$lib/stores/toast-store.js";
   import { settings } from "$lib/stores/settings.js";
-  import type { AgentConfig } from "$lib/types/agent-config.js";
+  import type { AgentConfig, CortexAgentToolConfig } from "$lib/types/agent-config.js";
   import { defaultConfig } from "$lib/types/agent-config.js";
 
   export { type AgentConfig, defaultConfig };
@@ -22,6 +22,9 @@
     metaTools: { enabled: boolean; brief: boolean; find: boolean; pulse: boolean; recall: boolean; harnessSkill: boolean };
     fallbacks: { enabled: boolean; providers: string[]; errorThreshold: number };
     observabilityVerbosity: "off" | "minimal" | "normal" | "verbose";
+    mcpServerIds: string[];
+    agentTools: CortexAgentToolConfig[];
+    dynamicSubAgents: { enabled: boolean; maxIterations: number };
   };
 
   interface Props {
@@ -169,6 +172,82 @@
       ? config.tools.filter((t) => t !== id)
       : [...config.tools, id];
     config = { ...config, tools };
+  }
+
+  type McpCatalogRow = {
+    serverId: string;
+    name: string;
+    tools: { toolName: string; description?: string }[];
+  };
+  let mcpCatalog = $state<McpCatalogRow[]>([]);
+
+  async function loadMcpCatalog() {
+    try {
+      const res = await fetch(`${CORTEX_SERVER_URL}/api/mcp-servers`);
+      if (!res.ok) return;
+      mcpCatalog = (await res.json()) as McpCatalogRow[];
+    } catch {
+      mcpCatalog = [];
+    }
+  }
+
+  onMount(() => {
+    void loadMcpCatalog();
+  });
+
+  function pruneMcpServerIds(tools: string[], catalog: McpCatalogRow[]): string[] {
+    const keep = new Set<string>();
+    for (const s of catalog) {
+      const fromServer = s.tools.some((t) => tools.includes(t.toolName));
+      if (fromServer) keep.add(s.serverId);
+    }
+    return (config.mcpServerIds ?? []).filter((id) => keep.has(id));
+  }
+
+  function toggleMcpRegistryTool(_serverId: string, fullToolName: string) {
+    let tools = [...config.tools];
+    if (tools.includes(fullToolName)) {
+      tools = tools.filter((t) => t !== fullToolName);
+    } else {
+      tools.push(fullToolName);
+    }
+    const mcpServerIds = pruneMcpServerIds(tools, mcpCatalog);
+    config = { ...config, tools, mcpServerIds };
+  }
+
+  function addLocalAgentTool() {
+    const base = defaultConfig();
+    const n = (config.agentTools ?? base.agentTools).length + 1;
+    const entry: CortexAgentToolConfig = {
+      kind: "local",
+      toolName: `researcher_${n}`,
+      agent: { name: `Researcher ${n}`, maxIterations: 8, tools: ["web-search"] },
+    };
+    config = { ...config, agentTools: [...(config.agentTools ?? base.agentTools), entry] };
+  }
+
+  function addRemoteAgentTool() {
+    const base = defaultConfig();
+    const entry: CortexAgentToolConfig = {
+      kind: "remote",
+      toolName: `remote_agent_${(config.agentTools ?? base.agentTools).length + 1}`,
+      remoteUrl: "http://127.0.0.1:8000",
+    };
+    config = { ...config, agentTools: [...(config.agentTools ?? base.agentTools), entry] };
+  }
+
+  function removeAgentToolAt(index: number) {
+    const base = defaultConfig();
+    const agentTools = [...(config.agentTools ?? base.agentTools)];
+    agentTools.splice(index, 1);
+    config = { ...config, agentTools };
+  }
+
+  function patchAgentTool(index: number, next: CortexAgentToolConfig) {
+    const base = defaultConfig();
+    const agentTools = [...(config.agentTools ?? base.agentTools)];
+    agentTools[index] = next;
+    config = { ...config, agentTools };
   }
 </script>
 
@@ -464,9 +543,170 @@
             </button>
           {/each}
         </div>
+        <div class="mt-4 pt-3 border-t border-outline-variant/10 space-y-2">
+          <div class="flex items-center justify-between gap-2">
+            <span class="config-label mb-0">MCP tools <span class="text-outline/30 normal-case font-normal">(from Tools tab)</span></span>
+            <button type="button" onclick={() => loadMcpCatalog()}
+              class="text-[9px] font-mono text-secondary hover:text-primary bg-transparent border-0 cursor-pointer">↻ Refresh list</button>
+          </div>
+          {#if mcpCatalog.length === 0}
+            <p class="font-mono text-[9px] text-outline/45">No MCP servers saved. Add one under Lab → Tools.</p>
+          {:else}
+            {#each mcpCatalog as srv}
+              <div class="rounded-lg border border-outline-variant/15 bg-surface-container-low/30 px-2 py-2 space-y-1.5">
+                <div class="font-mono text-[10px] text-on-surface/80">{srv.name}</div>
+                {#if srv.tools.length === 0}
+                  <p class="font-mono text-[9px] text-outline/40">No tools cached — run “Refresh tools” in Tools tab.</p>
+                {:else}
+                  <div class="flex flex-wrap gap-1">
+                    {#each srv.tools as mt}
+                      {@const active = config.tools.includes(mt.toolName)}
+                      <button type="button" onclick={() => toggleMcpRegistryTool(srv.serverId, mt.toolName)}
+                        class="px-2 py-1 rounded border text-[9px] font-mono cursor-pointer transition-colors
+                               {active ? 'bg-primary/12 border-primary/35 text-primary' : 'border-outline-variant/20 text-outline/60 hover:border-primary/25'}">
+                        {mt.toolName}
+                      </button>
+                    {/each}
+                  </div>
+                {/if}
+              </div>
+            {/each}
+          {/if}
+        </div>
+        <div class="mt-4 pt-3 border-t border-outline-variant/10 space-y-2">
+          <label class="flex items-center gap-3 cursor-pointer">
+            <input type="checkbox"
+              checked={config.dynamicSubAgents?.enabled ?? false}
+              onchange={() => (config = {
+                ...config,
+                dynamicSubAgents: {
+                  enabled: !(config.dynamicSubAgents?.enabled ?? false),
+                  maxIterations: config.dynamicSubAgents?.maxIterations ?? 8,
+                },
+              })}
+              class="accent-primary w-3.5 h-3.5" />
+            <div>
+              <div class="font-mono text-[10px] text-on-surface/80">Dynamic sub-agents</div>
+              <div class="font-mono text-[9px] text-outline/40">Expose <code class="text-[8px]">spawn-agent</code> for runtime delegation</div>
+            </div>
+          </label>
+          {#if config.dynamicSubAgents?.enabled}
+            <div>
+              <label for="dyn-sub-max" class="config-label">Spawn max iterations</label>
+              <input id="dyn-sub-max" type="number" min="1" max="50" step="1"
+                value={config.dynamicSubAgents?.maxIterations ?? 8}
+                oninput={(e) => (config = {
+                  ...config,
+                  dynamicSubAgents: {
+                    enabled: true,
+                    maxIterations: Math.max(1, parseInt((e.target as HTMLInputElement).value || "8", 10)),
+                  },
+                })}
+                class="config-input" />
+            </div>
+          {/if}
+        </div>
       </div>
     {/if}
   </div>
+
+  <!-- ── Section: Sub-agents (static / remote) ─────────────────────────── -->
+  {#if !compact}
+  <div class="border border-outline-variant/15 rounded-lg overflow-hidden">
+    <button type="button"
+      class="w-full flex items-center gap-2 px-3 py-2 bg-surface-container-lowest/40 border-0 cursor-pointer hover:bg-surface-container-low/50 transition-colors text-left"
+      onclick={() => toggle("subagents")}>
+      <span class="material-symbols-outlined text-[13px] text-primary/70">hub</span>
+      <span class="font-mono font-semibold text-on-surface/80">Sub-agents</span>
+      <span class="ml-2 text-[9px] font-mono text-outline/50">{(config.agentTools ?? []).length} registered</span>
+      <span class="ml-auto material-symbols-outlined text-[13px] text-outline/40 transition-transform {openSections.has('subagents') ? '' : '-rotate-90'}">expand_more</span>
+    </button>
+    {#if openSections.has("subagents")}
+      <div class="px-3 py-3 border-t border-outline-variant/10 space-y-3">
+        <div class="flex flex-wrap gap-2">
+          <button type="button" onclick={addLocalAgentTool}
+            class="text-[9px] font-mono px-2 py-1 rounded border border-primary/30 text-primary hover:bg-primary/10 cursor-pointer bg-transparent">+ Local sub-agent</button>
+          <button type="button" onclick={addRemoteAgentTool}
+            class="text-[9px] font-mono px-2 py-1 rounded border border-secondary/30 text-secondary hover:bg-secondary/10 cursor-pointer bg-transparent">+ Remote (A2A URL)</button>
+        </div>
+        {#each config.agentTools ?? [] as at, i (i)}
+          <div class="rounded-lg border border-outline-variant/15 p-2.5 space-y-2 bg-surface-container-low/25">
+            <div class="flex items-center justify-between gap-2">
+              <span class="font-mono text-[9px] text-outline/50 uppercase">#{i + 1}</span>
+              <button type="button" onclick={() => removeAgentToolAt(i)}
+                class="text-[9px] font-mono text-error/70 hover:text-error bg-transparent border-0 cursor-pointer">Remove</button>
+            </div>
+            {#if at.kind === "remote"}
+              <div class="grid grid-cols-2 gap-2">
+                <div>
+                  <label class="config-label">Tool name</label>
+                  <input class="config-input" value={at.toolName}
+                    oninput={(e) => patchAgentTool(i, { ...at, toolName: (e.target as HTMLInputElement).value })} />
+                </div>
+                <div class="col-span-2">
+                  <label class="config-label">Remote URL</label>
+                  <input class="config-input font-mono text-[10px]" value={at.remoteUrl}
+                    oninput={(e) => patchAgentTool(i, { ...at, remoteUrl: (e.target as HTMLInputElement).value })} />
+                </div>
+              </div>
+            {:else}
+              <div class="grid grid-cols-2 gap-2">
+                <div>
+                  <label class="config-label">Tool name</label>
+                  <input class="config-input" value={at.toolName}
+                    oninput={(e) => patchAgentTool(i, { ...at, toolName: (e.target as HTMLInputElement).value })} />
+                </div>
+                <div>
+                  <label class="config-label">Display name</label>
+                  <input class="config-input" value={at.agent.name}
+                    oninput={(e) => patchAgentTool(i, { ...at, agent: { ...at.agent, name: (e.target as HTMLInputElement).value } })} />
+                </div>
+                <div class="col-span-2">
+                  <label class="config-label">Description</label>
+                  <input class="config-input" value={at.agent.description ?? ""}
+                    oninput={(e) => patchAgentTool(i, { ...at, agent: { ...at.agent, description: (e.target as HTMLInputElement).value } })} />
+                </div>
+                <div>
+                  <label class="config-label">Provider <span class="normal-case text-outline/40">(optional)</span></label>
+                  <input class="config-input" value={at.agent.provider ?? ""} placeholder="inherit"
+                    oninput={(e) => patchAgentTool(i, { ...at, agent: { ...at.agent, provider: (e.target as HTMLInputElement).value || undefined } })} />
+                </div>
+                <div>
+                  <label class="config-label">Model <span class="normal-case text-outline/40">(optional)</span></label>
+                  <input class="config-input" value={at.agent.model ?? ""} placeholder="inherit"
+                    oninput={(e) => patchAgentTool(i, { ...at, agent: { ...at.agent, model: (e.target as HTMLInputElement).value || undefined } })} />
+                </div>
+                <div>
+                  <label class="config-label">Max iterations</label>
+                  <input type="number" min="1" max="50" class="config-input" value={at.agent.maxIterations ?? 8}
+                    oninput={(e) => patchAgentTool(i, {
+                      ...at,
+                      agent: { ...at.agent, maxIterations: Math.max(1, parseInt((e.target as HTMLInputElement).value || "8", 10)) },
+                    })} />
+                </div>
+                <div class="col-span-2">
+                  <label class="config-label">Sub-agent tools <span class="normal-case text-outline/40">(comma-separated)</span></label>
+                  <input class="config-input font-mono text-[10px]"
+                    value={(at.agent.tools ?? []).join(", ")}
+                    oninput={(e) => {
+                      const raw = (e.target as HTMLInputElement).value;
+                      const tools = raw.split(",").map((s) => s.trim()).filter(Boolean);
+                      patchAgentTool(i, { ...at, agent: { ...at.agent, tools: tools.length ? tools : undefined } });
+                    }} />
+                </div>
+                <div class="col-span-2">
+                  <label class="config-label">System prompt</label>
+                  <textarea rows="2" class="config-input resize-none" value={at.agent.systemPrompt ?? ""}
+                    oninput={(e) => patchAgentTool(i, { ...at, agent: { ...at.agent, systemPrompt: (e.target as HTMLInputElement).value || undefined } })}></textarea>
+                </div>
+              </div>
+            {/if}
+          </div>
+        {/each}
+      </div>
+    {/if}
+  </div>
+  {/if}
 
   <!-- ── Section: Memory ──────────────────────────────────────────────── -->
   <div class="border border-outline-variant/15 rounded-lg overflow-hidden">

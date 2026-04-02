@@ -16,9 +16,12 @@ import { parseCron, shouldFireAt } from "@reactive-agents/gateway";
 import { cortexLog, formatErrorDetails } from "../cortex-log.js";
 import type { Database } from "bun:sqlite";
 import { getGatewayAgents, getGatewayAgent, updateGatewayAgent, upsertRun } from "../db/queries.js";
+import { getMcpServersByIds, parseMcpConfig } from "../db/mcp-queries.js";
 import {
   mergeCortexAllowedTools,
   normalizeCortexAgentConfig,
+  type CortexAgentToolEntry,
+  type CortexDynamicSubAgentsConfig,
   type CortexMetaToolsConfig,
 } from "./cortex-agent-config.js";
 import { ensureParentDirForFile } from "./ensure-log-path.js";
@@ -214,14 +217,53 @@ export class GatewayProcessManager {
       if (maxIterations > 0) reasoningOpts.maxIterations = maxIterations;
       if (Object.keys(reasoningOpts).length > 0) builder = builder.withReasoning(reasoningOpts as any);
 
-      // ── Memory / tools ────────────────────────────────────────────────
+      // ── Memory / MCP / sub-agents / tool allowlist ─────────────────────
       builder = builder.withMemory();
       const tools = config.tools as string[] | undefined;
       const metaToolsCfg = config.metaTools as CortexMetaToolsConfig | undefined;
-      if (tools && tools.length > 0) {
-        builder = builder.withTools({
-          allowedTools: mergeCortexAllowedTools(tools, metaToolsCfg),
-        });
+      const mcpIds = (config.mcpServerIds as string[] | undefined)?.filter((x) => typeof x === "string" && x.length > 0) ?? [];
+      const mcpRows = mcpIds.length > 0 ? getMcpServersByIds(this.db, mcpIds) : [];
+      const mcpConfigs = mcpRows.map(parseMcpConfig);
+      const agentTools = config.agentTools as CortexAgentToolEntry[] | undefined;
+      const dynamicSub = config.dynamicSubAgents as CortexDynamicSubAgentsConfig | undefined;
+      const allowExtras = {
+        spawnAgent: dynamicSub?.enabled === true,
+        agentToolNames: agentTools?.map((t) => t.toolName) ?? [],
+      };
+      const userTools = tools ?? [];
+      const mergedAllowed = mergeCortexAllowedTools(userTools, metaToolsCfg, allowExtras);
+      const needsToolLayer =
+        mcpConfigs.length > 0 ||
+        (agentTools && agentTools.length > 0) ||
+        dynamicSub?.enabled === true ||
+        (tools && tools.length > 0) ||
+        metaToolsCfg?.enabled === true;
+
+      for (const c of mcpConfigs) {
+        builder = builder.withMCP(c);
+      }
+      for (const at of agentTools ?? []) {
+        if (at.kind === "remote") {
+          builder = builder.withRemoteAgent(at.toolName, at.remoteUrl);
+        } else {
+          builder = builder.withAgentTool(at.toolName, {
+            name: at.agent.name,
+            ...(at.agent.description ? { description: at.agent.description } : {}),
+            ...(at.agent.provider ? { provider: at.agent.provider } : {}),
+            ...(at.agent.model ? { model: at.agent.model } : {}),
+            ...(at.agent.tools && at.agent.tools.length > 0 ? { tools: [...at.agent.tools] } : {}),
+            ...(at.agent.maxIterations ? { maxIterations: at.agent.maxIterations } : {}),
+            ...(at.agent.systemPrompt ? { systemPrompt: at.agent.systemPrompt } : {}),
+          });
+        }
+      }
+      if (dynamicSub?.enabled) {
+        builder = builder.withDynamicSubAgents(
+          dynamicSub.maxIterations ? { maxIterations: dynamicSub.maxIterations } : undefined,
+        );
+      }
+      if (needsToolLayer) {
+        builder = builder.withTools({ allowedTools: mergedAllowed });
       }
 
       // ── System prompt ─────────────────────────────────────────────────

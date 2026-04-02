@@ -20,6 +20,9 @@ export const runsRouter = (
             ...(b.provider         ? { provider:         b.provider }         : {}),
             ...(b.model            ? { model:            b.model }            : {}),
             ...(b.tools            ? { tools:            b.tools }            : {}),
+            ...(b.mcpServerIds?.length ? { mcpServerIds: b.mcpServerIds } : {}),
+            ...(b.agentTools?.length ? { agentTools: b.agentTools } : {}),
+            ...(b.dynamicSubAgents ? { dynamicSubAgents: b.dynamicSubAgents } : {}),
             ...(b.strategy         ? { strategy:         b.strategy }         : {}),
             ...(b.temperature != null ? { temperature:   b.temperature }      : {}),
             ...(b.maxIterations    ? { maxIterations:    b.maxIterations }    : {}),
@@ -65,6 +68,14 @@ export const runsRouter = (
           metaTools:          t.Optional(t.Object({ enabled: t.Optional(t.Boolean()), brief: t.Optional(t.Boolean()), find: t.Optional(t.Boolean()), pulse: t.Optional(t.Boolean()), recall: t.Optional(t.Boolean()), harnessSkill: t.Optional(t.Boolean()) })),
           verificationStep:   t.Optional(t.String()),
           observabilityVerbosity: t.Optional(t.Union([t.Literal("off"), t.Literal("minimal"), t.Literal("normal"), t.Literal("verbose")])),
+          mcpServerIds: t.Optional(t.Array(t.String())),
+          agentTools: t.Optional(t.Array(t.Unknown())),
+          dynamicSubAgents: t.Optional(
+            t.Object({
+              enabled: t.Boolean(),
+              maxIterations: t.Optional(t.Number()),
+            }),
+          ),
         }),
       },
     )

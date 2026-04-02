@@ -45,6 +45,19 @@ describe("normalizeCortexAgentConfig", () => {
       backoffMs: 500,
     });
   });
+
+  test("normalizes agentTools and dynamicSubAgents", () => {
+    const out = normalizeCortexAgentConfig({
+      agentTools: [
+        { kind: "local", toolName: "a", agent: { name: "A", maxIterations: 4, tools: ["web-search"] } },
+        { kind: "remote", toolName: "r", remoteUrl: "http://x" },
+      ],
+      dynamicSubAgents: { enabled: true, maxIterations: 3 },
+    });
+    expect(out.agentTools).toHaveLength(2);
+    expect((out.agentTools![0] as { kind: string }).kind).toBe("local");
+    expect(out.dynamicSubAgents).toEqual({ enabled: true, maxIterations: 3 });
+  });
 });
 
 describe("mergeCortexAllowedTools", () => {
@@ -78,5 +91,13 @@ describe("mergeCortexAllowedTools", () => {
   test("deduplicates user tool names", () => {
     const merged = mergeCortexAllowedTools(["web-search", "web-search"], undefined);
     expect(merged.filter((n) => n === "web-search")).toHaveLength(1);
+  });
+
+  test("adds spawn-agent and static sub-agent tool names via extras", () => {
+    const merged = mergeCortexAllowedTools(["web-search"], undefined, {
+      spawnAgent: true,
+      agentToolNames: ["researcher"],
+    });
+    expect(merged).toEqual(expect.arrayContaining(["spawn-agent", "researcher", "final-answer"]));
   });
 });

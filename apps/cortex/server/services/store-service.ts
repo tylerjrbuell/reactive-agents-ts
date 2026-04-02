@@ -10,8 +10,10 @@ import {
   recomputeRunStats,
   upsertRun,
 } from "../db/queries.js";
+import { getMcpServersByIds, parseMcpConfig } from "../db/mcp-queries.js";
 import { CortexError } from "../errors.js";
 import type { RunSummary } from "../types.js";
+import type { MCPServerConfig } from "@reactive-agents/runtime";
 
 export class CortexStoreService extends Context.Tag("CortexStoreService")<
   CortexStoreService,
@@ -32,6 +34,10 @@ export class CortexStoreService extends Context.Tag("CortexStoreService")<
     readonly recomputeRunStats: (runId: string) => Effect.Effect<boolean, CortexError>;
     readonly getSkills: () => Effect.Effect<unknown[], CortexError>;
     readonly getTools: () => Effect.Effect<unknown[], CortexError>;
+    /** MCP configs for desk runs (runner). Unknown ids are skipped. */
+    readonly getMcpServerConfigsByIds: (
+      ids: readonly string[],
+    ) => Effect.Effect<MCPServerConfig[], CortexError>;
   }
 >() {}
 
@@ -105,4 +111,13 @@ export const CortexStoreServiceLive = (db: Database) =>
           return [];
         }
       }),
+
+    getMcpServerConfigsByIds: (ids) =>
+      Effect.sync(() => {
+        if (ids.length === 0) return [];
+        const rows = getMcpServersByIds(db, ids);
+        return rows.map((r) => parseMcpConfig(r));
+      }).pipe(
+        Effect.catchAll((e) => Effect.fail(new CortexError({ message: String(e), cause: e }))),
+      ),
   });

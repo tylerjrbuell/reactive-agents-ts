@@ -4,6 +4,7 @@ import { createCortexRuntime } from "./runtime.js";
 import { runsRouter } from "./api/runs.js";
 import { agentsRouter } from "./api/agents.js";
 import { toolsRouter } from "./api/tools.js";
+import { mcpServersRouter } from "./api/mcp-servers.js";
 import { skillsRouter } from "./api/skills.js";
 import { modelsRouter } from "./api/models.js";
 import { handleIngestMessage } from "./ws/ingest.js";
@@ -47,6 +48,7 @@ export async function startCortexServer(config: CortexConfig = defaultCortexConf
     .use(runsRouter(runtime.storeLayer, runtime.runnerLayer))
     .use(agentsRouter(runtime.rawDb, runtime.gateway))
     .use(toolsRouter(runtime.storeLayer))
+    .use(mcpServersRouter(runtime.rawDb))
     .use(skillsRouter(runtime.storeLayer))
     .use(modelsRouter)
     .ws("/ws/ingest", {

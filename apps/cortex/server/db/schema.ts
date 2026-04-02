@@ -60,6 +60,25 @@ export function applySchema(db: Database): void {
       created_at  INTEGER NOT NULL DEFAULT (unixepoch('now','subsec') * 1000),
       updated_at  INTEGER NOT NULL DEFAULT (unixepoch('now','subsec') * 1000)
     );
+
+    CREATE TABLE IF NOT EXISTS cortex_mcp_servers (
+      server_id   TEXT PRIMARY KEY,
+      name        TEXT    NOT NULL UNIQUE,
+      config_json TEXT    NOT NULL,
+      created_at  INTEGER NOT NULL DEFAULT (unixepoch('now','subsec') * 1000),
+      updated_at  INTEGER NOT NULL DEFAULT (unixepoch('now','subsec') * 1000)
+    );
+
+    CREATE TABLE IF NOT EXISTS cortex_mcp_cached_tools (
+      server_id   TEXT    NOT NULL,
+      tool_name   TEXT    NOT NULL,
+      description TEXT,
+      PRIMARY KEY (server_id, tool_name),
+      FOREIGN KEY (server_id) REFERENCES cortex_mcp_servers(server_id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_mcp_cached_tools_server
+      ON cortex_mcp_cached_tools(server_id);
   `);
 
   // Migrations — safe to run on existing DBs (ALTER TABLE IF NOT EXISTS column)

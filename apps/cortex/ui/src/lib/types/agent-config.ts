@@ -1,5 +1,22 @@
 /** Shared AgentConfig type and defaults used across Cortex UI */
 
+/** Matches server `CortexAgentToolEntry` for POST /api/runs and saved gateway config. */
+export type CortexAgentToolConfig =
+  | {
+      kind: "local";
+      toolName: string;
+      agent: {
+        name: string;
+        description?: string;
+        provider?: string;
+        model?: string;
+        tools?: string[];
+        maxIterations?: number;
+        systemPrompt?: string;
+      };
+    }
+  | { kind: "remote"; toolName: string; remoteUrl: string };
+
 export interface AgentPersona {
   enabled: boolean;
   role: string;
@@ -20,6 +37,10 @@ export interface AgentConfig {
   strategySwitching: boolean;
   verificationStep: "none" | "reflect";
   tools: string[];
+  /** MCP servers (Cortex Tools tab) to connect at run time — tool names use `name/tool` form in `tools`. */
+  mcpServerIds: string[];
+  agentTools: CortexAgentToolConfig[];
+  dynamicSubAgents: { enabled: boolean; maxIterations: number };
   memory: { working: boolean; episodic: boolean; semantic: boolean };
   contextSynthesis: "auto" | "template" | "llm" | "none";
   guardrails: {
@@ -56,6 +77,9 @@ export function defaultConfig(): AgentConfig {
     strategySwitching: false,
     verificationStep: "none",
     tools: ["web-search"],
+    mcpServerIds: [],
+    agentTools: [],
+    dynamicSubAgents: { enabled: false, maxIterations: 8 },
     memory: { working: true, episodic: false, semantic: false },
     contextSynthesis: "auto",
     guardrails: { enabled: false, injectionThreshold: 0.8, piiThreshold: 0.9, toxicityThreshold: 0.7 },

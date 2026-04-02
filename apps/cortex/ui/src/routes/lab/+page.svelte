@@ -25,6 +25,9 @@
     fallbacks: { enabled: boolean; providers: string[]; errorThreshold: number };
     metaTools: { enabled: boolean; brief: boolean; find: boolean; pulse: boolean; recall: boolean; harnessSkill: boolean };
     observabilityVerbosity: "off" | "minimal" | "normal" | "verbose";
+    mcpServerIds: string[];
+    agentTools: import("$lib/types/agent-config.js").CortexAgentToolConfig[];
+    dynamicSubAgents: { enabled: boolean; maxIterations: number };
   };
 
   /** Base config for Builder / forms: static defaults + Cortex Settings default provider/model. */
@@ -77,6 +80,9 @@
           metaTools:           builderConfig.metaTools.enabled ? builderConfig.metaTools : undefined,
           verificationStep:    builderConfig.verificationStep !== "none" ? builderConfig.verificationStep : undefined,
           observabilityVerbosity: builderConfig.observabilityVerbosity,
+          mcpServerIds:        builderConfig.mcpServerIds?.length ? builderConfig.mcpServerIds : undefined,
+          agentTools:          builderConfig.agentTools?.length ? builderConfig.agentTools : undefined,
+          dynamicSubAgents:    builderConfig.dynamicSubAgents?.enabled ? builderConfig.dynamicSubAgents : undefined,
         }),
       });
       if (!res.ok) throw new Error(`Server error ${res.status}`);
@@ -276,6 +282,12 @@
         ...sourceConfig.fallbacks,
         providers: [...(sourceConfig.fallbacks?.providers ?? defaults.fallbacks.providers)],
       },
+      mcpServerIds: [...(sourceConfig.mcpServerIds ?? defaults.mcpServerIds)],
+      agentTools: [...(sourceConfig.agentTools ?? defaults.agentTools)],
+      dynamicSubAgents: {
+        ...defaults.dynamicSubAgents,
+        ...sourceConfig.dynamicSubAgents,
+      },
     };
     builderAgentType = agent.agentType === "gateway" ? "persistent" : "ad-hoc";
     builderPersistentName = agent.name;
@@ -291,6 +303,146 @@
   let tools  = $state<ToolRow[]>([]);
   let selectedSkill = $state<SkillRow | null>(null);
   let selectedTool  = $state<ToolRow | null>(null);
+
+  type McpListRow = {
+    serverId: string;
+    name: string;
+    config: Record<string, unknown>;
+    tools: { toolName: string; description?: string }[];
+  };
+  let mcpServersList = $state<McpListRow[]>([]);
+  let selectedMcp = $state<McpListRow | null>(null);
+  let mcpRefreshing = $state<string | null>(null);
+  let mcpSaving = $state(false);
+  let mcpDraftName = $state("");
+  let mcpDraftTransport = $state<"stdio" | "sse" | "websocket" | "streamable-http">("stdio");
+  let mcpDraftCommand = $state("");
+  let mcpDraftArgs = $state("");
+  let mcpDraftEndpoint = $state("");
+  let mcpDraftHeaders = $state("");
+  let mcpDraftEnv = $state("");
+
+  async function loadMcpServers() {
+    try {
+      const res = await fetch(`${CORTEX_SERVER_URL}/api/mcp-servers`);
+      mcpServersList = res.ok ? ((await res.json()) as McpListRow[]) : [];
+      if (selectedMcp) {
+        const u = mcpServersList.find((s) => s.serverId === selectedMcp!.serverId);
+        selectedMcp = u ?? null;
+      }
+    } catch {
+      mcpServersList = [];
+    }
+  }
+
+  function resetMcpDraft() {
+    mcpDraftName = "";
+    mcpDraftTransport = "stdio";
+    mcpDraftCommand = "";
+    mcpDraftArgs = "";
+    mcpDraftEndpoint = "";
+    mcpDraftHeaders = "";
+    mcpDraftEnv = "";
+  }
+
+  function openNewMcp() {
+    resetMcpDraft();
+    selectedMcp = null;
+  }
+
+  function openEditMcp(row: McpListRow) {
+    selectedMcp = row;
+    const c = row.config;
+    mcpDraftName = typeof c.name === "string" ? c.name : row.name;
+    mcpDraftTransport = (c.transport as typeof mcpDraftTransport) ?? "stdio";
+    mcpDraftCommand = typeof c.command === "string" ? c.command : "";
+    mcpDraftArgs = Array.isArray(c.args) ? (c.args as string[]).join(", ") : "";
+    mcpDraftEndpoint = typeof c.endpoint === "string" ? c.endpoint : "";
+    mcpDraftHeaders = c.headers && typeof c.headers === "object" ? JSON.stringify(c.headers, null, 2) : "";
+    mcpDraftEnv = c.env && typeof c.env === "object" ? JSON.stringify(c.env, null, 2) : "";
+  }
+
+  function buildMcpPayload(): Record<string, unknown> {
+    const name = mcpDraftName.trim();
+    const transport = mcpDraftTransport;
+    const body: Record<string, unknown> = { name, transport };
+    if (transport === "stdio") {
+      if (mcpDraftCommand.trim()) body.command = mcpDraftCommand.trim();
+      const args = mcpDraftArgs.split(/[\n,]/).map((s) => s.trim()).filter(Boolean);
+      if (args.length > 0) body.args = args;
+    } else {
+      if (mcpDraftEndpoint.trim()) body.endpoint = mcpDraftEndpoint.trim();
+    }
+    if (mcpDraftHeaders.trim()) {
+      body.headers = JSON.parse(mcpDraftHeaders) as Record<string, string>;
+    }
+    if (mcpDraftEnv.trim()) {
+      body.env = JSON.parse(mcpDraftEnv) as Record<string, string>;
+    }
+    return body;
+  }
+
+  async function saveMcpServer() {
+    if (!mcpDraftName.trim()) {
+      toast.warning("MCP server name is required");
+      return;
+    }
+    try {
+      if (mcpDraftHeaders.trim()) JSON.parse(mcpDraftHeaders);
+      if (mcpDraftEnv.trim()) JSON.parse(mcpDraftEnv);
+    } catch {
+      toast.error("Invalid JSON", "Headers or env must be valid JSON objects");
+      return;
+    }
+    mcpSaving = true;
+    try {
+      const payload = buildMcpPayload();
+      const isEdit = selectedMcp != null;
+      const url = isEdit
+        ? `${CORTEX_SERVER_URL}/api/mcp-servers/${selectedMcp!.serverId}`
+        : `${CORTEX_SERVER_URL}/api/mcp-servers`;
+      const res = await fetch(url, {
+        method: isEdit ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(j.error ?? `HTTP ${res.status}`);
+      }
+      toast.success(isEdit ? "MCP server updated" : "MCP server created");
+      await loadMcpServers();
+      if (!isEdit) resetMcpDraft();
+    } catch (e) {
+      toast.error("Save failed", String(e));
+    } finally {
+      mcpSaving = false;
+    }
+  }
+
+  async function refreshMcpTools(serverId: string) {
+    mcpRefreshing = serverId;
+    try {
+      const res = await fetch(`${CORTEX_SERVER_URL}/api/mcp-servers/${serverId}/refresh-tools`, { method: "POST" });
+      const j = (await res.json()) as { tools?: unknown[]; error?: string };
+      if (!res.ok) throw new Error(j.error ?? `HTTP ${res.status}`);
+      toast.success("Tools refreshed", `${(j.tools ?? []).length} tool(s)`);
+      await loadMcpServers();
+    } catch (e) {
+      toast.error("Refresh failed", String(e));
+    } finally {
+      mcpRefreshing = null;
+    }
+  }
+
+  async function deleteMcpServerRow(serverId: string) {
+    const res = await fetch(`${CORTEX_SERVER_URL}/api/mcp-servers/${serverId}`, { method: "DELETE" });
+    if (res.ok) {
+      toast.success("MCP server removed");
+      if (selectedMcp?.serverId === serverId) selectedMcp = null;
+      await loadMcpServers();
+    } else toast.error("Delete failed");
+  }
 
   function relativeTime(ts?: number) {
     if (!ts) return "never";
@@ -319,6 +471,7 @@
     void Promise.all([
       fetch(`${CORTEX_SERVER_URL}/api/skills`).then(r => r.ok ? r.json() : []).then(j => { skills = j; }).catch(() => {}),
       fetch(`${CORTEX_SERVER_URL}/api/tools`).then(r => r.ok ? r.json() : []).then(j => { tools = j; }).catch(() => {}),
+      loadMcpServers(),
     ]);
 
     return () => window.removeEventListener("cortex:lab-tab", onTabSwitch);
@@ -634,26 +787,109 @@
       {/if}
     </div>
 
-  <!-- ── TOOLS ───────────────────────────────────────────────────────── -->
+  <!-- ── TOOLS (MCP registry + legacy SQLite tools) ───────────────────── -->
   {:else}
-    <div class="grid grid-cols-1 md:grid-cols-[280px_1fr] gap-4 flex-1 min-h-0 overflow-hidden">
-      <div class="space-y-1 overflow-y-auto">
-        {#if tools.length === 0}<p class="font-mono text-xs text-outline text-center mt-8">No tools registered.</p>{/if}
-        {#each tools as t, i (t.name ?? i)}
-          <button type="button" class="w-full text-left p-3 rounded border transition-all {selectedTool===t ? 'bg-primary/10 border-primary/30' : 'bg-surface-container-low border-outline-variant/10 hover:border-primary/20'}" onclick={() => (selectedTool=t)}>
-            <div class="font-mono text-xs text-on-surface font-medium">{t.name ?? "tool"}</div>
-            <div class="font-mono text-[10px] text-outline mt-0.5">{(t as any).description ?? ""}</div>
-          </button>
-        {/each}
-      </div>
-      {#if selectedTool}
-        <div class="rounded-lg border border-outline-variant/20 bg-surface-container-low/40 p-4 overflow-y-auto">
-          <h3 class="font-headline text-sm font-bold text-primary mb-3">{selectedTool.name}</h3>
-          <pre class="font-mono text-[10px] text-on-surface/70 whitespace-pre-wrap">{JSON.stringify(selectedTool.schema ?? selectedTool, null, 2)}</pre>
+    <div class="flex flex-col gap-4 flex-1 min-h-0 overflow-hidden">
+      <div class="rounded-lg border border-outline-variant/20 bg-surface-container-low/30 p-4 space-y-3 flex-shrink-0">
+        <div class="flex items-center justify-between gap-2 flex-wrap">
+          <h3 class="font-headline text-sm font-semibold text-on-surface">MCP servers</h3>
+          <div class="flex gap-2">
+            <button type="button" onclick={() => openNewMcp()}
+              class="text-[10px] font-mono px-3 py-1.5 rounded border border-primary/35 text-primary hover:bg-primary/10 cursor-pointer bg-transparent">+ New server</button>
+            <button type="button" onclick={() => loadMcpServers()}
+              class="text-[10px] font-mono px-3 py-1.5 rounded border border-outline-variant/25 text-outline hover:text-primary cursor-pointer bg-transparent">↻ Reload</button>
+          </div>
         </div>
-      {:else}
-        <div class="flex items-center justify-center text-outline font-mono text-xs">Select a tool to view schema.</div>
-      {/if}
+        <p class="font-mono text-[9px] text-outline/50">
+          Configure MCP here, then use <strong class="text-on-surface/70">Refresh tools</strong> to cache tool names. In Builder → Tools, enable MCP tools per run.
+        </p>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div class="space-y-2">
+            <label class="text-[9px] font-mono text-outline/60 uppercase tracking-widest">Name</label>
+            <input bind:value={mcpDraftName} placeholder="e.g. filesystem"
+              class="w-full bg-surface-container-lowest/60 border border-outline-variant/20 rounded-lg px-3 py-2 text-sm font-mono" />
+            <label class="text-[9px] font-mono text-outline/60 uppercase tracking-widest">Transport</label>
+            <select bind:value={mcpDraftTransport}
+              class="w-full bg-surface-container-lowest/60 border border-outline-variant/20 rounded-lg px-3 py-2 text-sm font-mono">
+              <option value="stdio">stdio</option>
+              <option value="sse">sse</option>
+              <option value="websocket">websocket</option>
+              <option value="streamable-http">streamable-http</option>
+            </select>
+            {#if mcpDraftTransport === "stdio"}
+              <label class="text-[9px] font-mono text-outline/60 uppercase tracking-widest">Command</label>
+              <input bind:value={mcpDraftCommand} placeholder="bunx"
+                class="w-full bg-surface-container-lowest/60 border border-outline-variant/20 rounded-lg px-3 py-2 text-sm font-mono" />
+              <label class="text-[9px] font-mono text-outline/60 uppercase tracking-widest">Args (comma-separated)</label>
+              <input bind:value={mcpDraftArgs} placeholder="-y, @modelcontextprotocol/server-filesystem, ."
+                class="w-full bg-surface-container-lowest/60 border border-outline-variant/20 rounded-lg px-3 py-2 text-sm font-mono" />
+            {:else}
+              <label class="text-[9px] font-mono text-outline/60 uppercase tracking-widest">Endpoint URL</label>
+              <input bind:value={mcpDraftEndpoint} placeholder="http://127.0.0.1:8080/mcp"
+                class="w-full bg-surface-container-lowest/60 border border-outline-variant/20 rounded-lg px-3 py-2 text-sm font-mono" />
+            {/if}
+            <label class="text-[9px] font-mono text-outline/60 uppercase tracking-widest">Headers JSON <span class="normal-case text-outline/35">(optional)</span></label>
+            <textarea bind:value={mcpDraftHeaders} rows="2"
+              placeholder={"{ \"Authorization\": \"Bearer …\" }"}
+              class="w-full bg-surface-container-lowest/60 border border-outline-variant/20 rounded-lg px-3 py-2 text-[11px] font-mono resize-none"></textarea>
+            {#if mcpDraftTransport === "stdio"}
+              <label class="text-[9px] font-mono text-outline/60 uppercase tracking-widest">Env JSON <span class="normal-case text-outline/35">(optional)</span></label>
+              <textarea bind:value={mcpDraftEnv} rows="2"
+                class="w-full bg-surface-container-lowest/60 border border-outline-variant/20 rounded-lg px-3 py-2 text-[11px] font-mono resize-none"></textarea>
+            {/if}
+            <button type="button" disabled={mcpSaving} onclick={saveMcpServer}
+              class="w-full py-2 rounded-lg border-0 font-mono text-[10px] uppercase text-white cursor-pointer disabled:opacity-40"
+              style="background:linear-gradient(135deg,#8b5cf6,#06b6d4);">
+              {mcpSaving ? "Saving…" : selectedMcp ? "Update server" : "Create server"}
+            </button>
+          </div>
+          <div class="rounded-lg border border-outline-variant/15 bg-surface-container-lowest/40 p-3 overflow-y-auto max-h-[320px]">
+            <div class="text-[9px] font-mono text-outline/50 uppercase tracking-widest mb-2">Saved servers</div>
+            {#if mcpServersList.length === 0}
+              <p class="font-mono text-xs text-outline/40">None yet.</p>
+            {:else}
+              <div class="space-y-2">
+                {#each mcpServersList as s (s.serverId)}
+                  <div class="rounded border border-outline-variant/15 p-2 flex flex-col gap-1.5">
+                    <div class="flex items-center justify-between gap-2">
+                      <button type="button" onclick={() => openEditMcp(s)}
+                        class="text-left font-mono text-[11px] text-primary hover:underline bg-transparent border-0 cursor-pointer p-0">{s.name}</button>
+                      <span class="text-[8px] font-mono text-outline/40">{s.tools.length} tools</span>
+                    </div>
+                    <div class="flex flex-wrap gap-1">
+                      <button type="button" disabled={mcpRefreshing === s.serverId} onclick={() => refreshMcpTools(s.serverId)}
+                        class="text-[8px] font-mono px-2 py-0.5 rounded border border-secondary/30 text-secondary hover:bg-secondary/10 cursor-pointer bg-transparent disabled:opacity-40">
+                        {mcpRefreshing === s.serverId ? "…" : "Refresh tools"}</button>
+                      <button type="button" onclick={() => deleteMcpServerRow(s.serverId)}
+                        class="text-[8px] font-mono px-2 py-0.5 rounded border border-error/30 text-error/80 hover:bg-error/10 cursor-pointer bg-transparent">Delete</button>
+                    </div>
+                  </div>
+                {/each}
+              </div>
+            {/if}
+          </div>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-[280px_1fr] gap-4 flex-1 min-h-0 overflow-hidden">
+        <div class="space-y-1 overflow-y-auto min-h-0">
+          <p class="text-[9px] font-mono text-outline/40 uppercase tracking-widest px-1">Legacy DB tools</p>
+          {#if tools.length === 0}<p class="font-mono text-xs text-outline text-center mt-4">No rows in <code class="text-[10px]">tools</code> table.</p>{/if}
+          {#each tools as t, i (t.name ?? i)}
+            <button type="button" class="w-full text-left p-3 rounded border transition-all {selectedTool===t ? 'bg-primary/10 border-primary/30' : 'bg-surface-container-low border-outline-variant/10 hover:border-primary/20'}" onclick={() => (selectedTool=t)}>
+              <div class="font-mono text-xs text-on-surface font-medium">{t.name ?? "tool"}</div>
+              <div class="font-mono text-[10px] text-outline mt-0.5">{(t as Record<string, unknown>).description ?? ""}</div>
+            </button>
+          {/each}
+        </div>
+        {#if selectedTool}
+          <div class="rounded-lg border border-outline-variant/20 bg-surface-container-low/40 p-4 overflow-y-auto min-h-0">
+            <h3 class="font-headline text-sm font-bold text-primary mb-3">{selectedTool.name}</h3>
+            <pre class="font-mono text-[10px] text-on-surface/70 whitespace-pre-wrap">{JSON.stringify((selectedTool as Record<string, unknown>).schema ?? selectedTool, null, 2)}</pre>
+          </div>
+        {:else}
+          <div class="flex items-center justify-center text-outline font-mono text-xs min-h-[120px]">Select a legacy tool row to inspect.</div>
+        {/if}
+      </div>
     </div>
   {/if}
 </div>
