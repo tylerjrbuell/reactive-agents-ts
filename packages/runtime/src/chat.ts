@@ -144,6 +144,34 @@ export function buildContextSummary(
   return parts.join("\n");
 }
 
+/**
+ * Formats {@link ReactiveAgentBuilder.withTaskContext} data for `agent.chat()` system context.
+ * ExecutionEngine injects the same record into the reasoning loop on `run()`; chat must merge it
+ * explicitly because the direct-LLM path does not boot the full execution pipeline.
+ */
+export function formatTaskContextForChat(ctx?: Record<string, string> | undefined): string {
+  if (!ctx) return "";
+  const entries = Object.entries(ctx).filter(
+    ([, v]) => typeof v === "string" && v.trim().length > 0,
+  );
+  if (entries.length === 0) return "";
+  const body = entries.map(([k, v]) => `### ${k}\n${v.trim()}`).join("\n\n");
+  return `## Task / session grounding\n\n${body}`;
+}
+
+/**
+ * Full conversational context: static task context from build time plus last `.run()` debrief/observations.
+ */
+export function buildChatSystemContext(
+  taskContext?: Record<string, string> | undefined,
+  lastDebrief?: AgentDebrief,
+  observations?: readonly string[],
+): string {
+  const taskBlock = formatTaskContextForChat(taskContext);
+  const runBlock = buildContextSummary(lastDebrief, observations);
+  return [taskBlock, runBlock].filter(Boolean).join("\n\n---\n\n");
+}
+
 // ─── Direct LLM chat (no tools) ────────────────────────────────────────────
 
 export function directChat(

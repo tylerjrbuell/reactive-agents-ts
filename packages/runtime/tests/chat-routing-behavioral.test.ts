@@ -9,7 +9,11 @@
 import { describe, it, expect } from "bun:test";
 import { Effect } from "effect";
 import { ReactiveAgents } from "../src/builder.js";
-import { requiresTools } from "../src/chat.js";
+import {
+  requiresTools,
+  formatTaskContextForChat,
+  buildChatSystemContext,
+} from "../src/chat.js";
 
 // ─── Helper: minimal tool definition ─────────────────────────────────────────
 
@@ -73,6 +77,40 @@ describe("requiresTools() heuristic", () => {
   it("returns false for past-tense / reflective messages", () => {
     expect(requiresTools("in the last run, what happened?")).toBe(false);
     expect(requiresTools("what did you do earlier?")).toBe(false);
+  });
+});
+
+describe("formatTaskContextForChat / buildChatSystemContext", () => {
+  it("includes builder taskContext keys in the chat system block", () => {
+    const s = formatTaskContextForChat({
+      cortexRunId: "run-abc",
+      cortexPriorRun: "Summary line 1\nLine 2",
+    });
+    expect(s).toContain("cortexRunId");
+    expect(s).toContain("run-abc");
+    expect(s).toContain("cortexPriorRun");
+    expect(s).toContain("Summary line 1");
+  });
+
+  it("merges task context with debrief summary for chat()", () => {
+    const merged = buildChatSystemContext(
+      { cortexPriorRun: "Prior run facts here." },
+      {
+        outcome: "success",
+        confidence: "high",
+        summary: "Did a thing",
+        keyFindings: ["a"],
+        toolsUsed: [],
+        errorsEncountered: [],
+        lessonsLearned: [],
+        metrics: { tokens: 1, duration: 1, iterations: 1, cost: 0 },
+        markdown: "",
+      },
+      undefined,
+    );
+    expect(merged).toContain("Prior run facts here.");
+    expect(merged).toContain("Did a thing");
+    expect(merged).toContain("---");
   });
 });
 

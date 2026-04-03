@@ -1084,7 +1084,7 @@ export const createRuntime = (options: RuntimeOptions) => {
         bridgedLLM,
       );
     }),
-  ).pipe(Layer.provide(rateLimitedLlmLayer));
+  ).pipe(Layer.provide(Layer.merge(rateLimitedLlmLayer, eventBusLayer)));
   const hookLayer = LifecycleHookRegistryLive;
   const engineLayer = ExecutionEngineLive(config).pipe(
     Layer.provide(hookLayer),

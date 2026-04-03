@@ -33,6 +33,7 @@ import {
   directChat,
   requiresTools,
   buildContextSummary,
+  buildChatSystemContext,
   publishChatTurnEvents,
   type ChatMessage,
   type ChatOptions,
@@ -695,6 +696,7 @@ export const ReactiveAgents = {
  */
 export class ReactiveAgentBuilder {
   private _name: string = "agent";
+  private _stableAgentId?: string;
   private _provider: ProviderName = "test";
   private _model?: string;
   private _thinking?: boolean;
@@ -815,6 +817,20 @@ export class ReactiveAgentBuilder {
    */
   withName(name: string): this {
     this._name = name;
+    return this;
+  }
+
+  /**
+   * Pin a stable agent identity for this agent.
+   *
+   * When set, `build()` uses this value as the `agentId` instead of generating
+   * a new `${name}-${Date.now()}` ID. All memory and run data keyed on `agentId`
+   * will accumulate across multiple builds that share the same ID.
+   *
+   * @param id - The stable identifier to use (e.g. a UUID or Cortex session ID).
+   */
+  withAgentId(id: string): this {
+    this._stableAgentId = id;
     return this;
   }
 
@@ -2278,7 +2294,7 @@ export class ReactiveAgentBuilder {
         }
       }
 
-      const agentId = `${self._name}-${Date.now()}`;
+      const agentId = self._stableAgentId ?? `${self._name}-${Date.now()}`;
 
       // Compose persona into system prompt if provided
       let composedSystemPrompt = self._systemPrompt;
@@ -3811,7 +3827,11 @@ export class ReactiveAgent {
     _sessionId?: string,
   ): Promise<ChatReply> {
     const useTools = options?.useTools ?? requiresTools(message);
-    const contextSummary = buildContextSummary(this._lastDebrief, this._lastRunObservations);
+    const contextSummary = buildChatSystemContext(
+      this._config?.taskContext,
+      this._lastDebrief,
+      this._lastRunObservations,
+    );
     const sessionId = _sessionId ?? `chat_${Date.now()}`;
     const publishChatTurns = async (
       routedVia: "direct-llm" | "react-loop",

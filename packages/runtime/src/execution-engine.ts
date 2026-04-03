@@ -729,6 +729,35 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   }
                 }
 
+                // ── Publish MemorySnapshot so Cortex UI can display memory state ──
+                if (eb) {
+                  const mc = ctx.memoryContext as {
+                    workingMemory?: Array<{ id?: string; content?: string }>;
+                    recentEpisodes?: unknown[];
+                    semanticContext?: string;
+                  } | undefined;
+                  const resolvedSkills = (ctx.metadata?.resolvedSkills as Array<{ name?: string; id?: string }> | undefined) ?? [];
+                  const working = (mc?.workingMemory ?? []).map((item) => ({
+                    key: item.id ?? "item",
+                    preview: typeof item.content === "string"
+                      ? item.content.slice(0, 120)
+                      : String(item.content ?? ""),
+                  }));
+                  const semanticLines = (mc?.semanticContext ?? "")
+                    .split("\n").filter((l: string) => l.trim()).length;
+                  yield* eb.publish({
+                    _tag: "MemorySnapshot" as const,
+                    taskId: task.id,
+                    iteration: 0,
+                    working,
+                    episodicCount: (mc?.recentEpisodes ?? []).length,
+                    semanticCount: semanticLines,
+                    skillsActive: resolvedSkills
+                      .map((s) => s?.name ?? s?.id ?? "")
+                      .filter(Boolean),
+                  } as any).pipe(Effect.catchAll(() => Effect.void));
+                }
+
                 // ── Phase 2: GUARDRAIL (optional) ── H2
                 if (config.enableGuardrails) {
                   ctx = yield* guardedPhase(ctx, "guardrail", (c) =>

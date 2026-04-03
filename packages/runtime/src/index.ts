@@ -125,6 +125,8 @@ export {
   directChat,
   requiresTools,
   buildContextSummary,
+  formatTaskContextForChat,
+  buildChatSystemContext,
   type ChatMessage,
   type ChatReply,
   type ChatOptions,
