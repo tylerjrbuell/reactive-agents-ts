@@ -99,11 +99,16 @@ export async function buildCortexAgent(
     .withProvider(providerRaw as ProviderName);
 
   // ── Model / inference ──────────────────────────────────────────────────
-  // ModelParams.model is required; fall back to "" when only temperature/maxTokens
-  // are set (no dedicated withTemperature/withMaxTokens setters exist on the builder).
+  // ModelParams.model is required (Schema.String, not optional), so we cannot
+  // omit it even when only temperature/maxTokens are set. Pass "" in that case —
+  // the provider layer treats an empty model as "use provider default".
+  // There are no dedicated withTemperature/withMaxTokens setters on the builder.
   if (params.model?.trim() || params.temperature != null || params.maxTokens) {
+    const modelStr = params.model?.trim();
     const mp: ModelParams = {
-      model: params.model?.trim() ?? "",
+      // Only set model when a non-empty value was provided; ModelParams.model is
+      // required so we fall back to "" (provider default) when absent.
+      model: modelStr ?? "",
       ...(params.temperature != null ? { temperature: params.temperature } : {}),
       ...(params.maxTokens ? { maxTokens: params.maxTokens } : {}),
     };
@@ -111,13 +116,13 @@ export async function buildCortexAgent(
   }
 
   // ── Reasoning ──────────────────────────────────────────────────────────
-  const reasoningOptsRaw: Record<string, unknown> = {};
-  if (params.strategy) reasoningOptsRaw.defaultStrategy = params.strategy;
+  const reasoningOpts: Partial<ReasoningOptions> = {};
+  if (params.strategy) reasoningOpts.defaultStrategy = params.strategy as ReasoningOptions["defaultStrategy"];
   if (params.maxIterations && params.maxIterations > 0) {
-    reasoningOptsRaw.maxIterations = params.maxIterations;
+    reasoningOpts.maxIterations = params.maxIterations;
   }
   if (params.strategySwitching === true) {
-    reasoningOptsRaw.enableStrategySwitching = true;
+    reasoningOpts.enableStrategySwitching = true;
   }
   if (params.contextSynthesis && params.contextSynthesis !== "none") {
     const synthesisMap: Record<string, "auto" | "fast" | "deep" | "custom" | "off"> = {
@@ -125,10 +130,10 @@ export async function buildCortexAgent(
       template: "fast",
       llm: "deep",
     };
-    reasoningOptsRaw.synthesis = synthesisMap[params.contextSynthesis] ?? "auto";
+    reasoningOpts.synthesis = synthesisMap[params.contextSynthesis] ?? "auto";
   }
-  if (Object.keys(reasoningOptsRaw).length > 0) {
-    b = b.withReasoning(reasoningOptsRaw as ReasoningOptions);
+  if (Object.keys(reasoningOpts).length > 0) {
+    b = b.withReasoning(reasoningOpts as ReasoningOptions);
   }
 
   // ── Memory ─────────────────────────────────────────────────────────────
