@@ -28,8 +28,8 @@ import { CostService } from "@reactive-agents/cost";
 import { EventBus, EntropySensorService } from "@reactive-agents/core";
 import type { AgentEvent, KernelStateLike } from "@reactive-agents/core";
 import { synthesizeDebrief, type DebriefInput, type AgentDebrief } from "./debrief.js";
-import { DebriefStoreService, PlanStoreService } from "@reactive-agents/memory";
-import { TelemetryClient as TelemetryClientImpl, classifyTaskCategory as classifyTaskCategoryFn, lookupModel as lookupModelFn } from "@reactive-agents/reactive-intelligence";
+import { DebriefStoreService, PlanStoreService, ProceduralMemoryService } from "@reactive-agents/memory";
+import { TelemetryClient as TelemetryClientImpl, classifyTaskCategory as classifyTaskCategoryFn, lookupModel as lookupModelFn, skillFragmentToProceduralEntry } from "@reactive-agents/reactive-intelligence";
 import { recommendStrategyForTier } from "@reactive-agents/llm-provider";
 import { buildTrajectoryFingerprint, abstractifyToolName, firstConvergenceIteration, peakContextPressure, deriveTaskComplexity, deriveFailurePattern, deriveThoughtToActionRatio } from "./telemetry-enrichment.js";
 import { resolveSynthesisConfigForStrategy } from "./synthesis-resolve.js";
@@ -3407,24 +3407,46 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   ).pipe(
                     Effect.flatMap((opt) => {
                       if (opt._tag !== "Some") return Effect.void;
-                      return opt.value.onRunCompleted({
-                        modelId: String(ctx.selectedModel ?? config.defaultModel ?? "unknown"),
-                        taskDescription: extractTaskText(task.input),
-                        strategy: ctx.selectedStrategy ?? "reactive",
-                        outcome: terminatedByRaw === "max_iterations" ? "partial"
-                          : errorsFromLoop.length > 0 && terminatedByRaw !== "final_answer_tool" && terminatedByRaw !== "final_answer" ? "failure"
-                          : "success",
-                        entropyHistory: entropyLog,
-                        totalTokens: ctx.tokensUsed,
-                        durationMs: executionDurationMs,
-                        temperature: (config as any).temperature ?? 0.7,
-                        maxIterations: config.maxIterations ?? 10,
-                        provider: String(ctx.provider ?? config.provider ?? "unknown"),
-                        skillsActivated: (ctx.metadata as any)?.resolvedSkills?.filter((s: any) => s.confidence === "expert").map((s: any) => s.name) ?? [],
-                        convergenceIteration: entropyLog.length > 0
-                          ? entropyLog.findIndex((e: any) => e.trajectory?.shape === "converging")
-                          : null,
-                        toolCallSequence: (ctx.metadata as any)?.toolCallSequence ?? [],
+                      return Effect.gen(function* () {
+                        const modelId = String(ctx.selectedModel ?? config.defaultModel ?? "unknown");
+                        const learningResult = yield* opt.value.onRunCompleted({
+                          modelId,
+                          taskDescription: extractTaskText(task.input),
+                          strategy: ctx.selectedStrategy ?? "reactive",
+                          outcome: terminatedByRaw === "max_iterations" ? "partial"
+                            : errorsFromLoop.length > 0 && terminatedByRaw !== "final_answer_tool" && terminatedByRaw !== "final_answer" ? "failure"
+                            : "success",
+                          entropyHistory: entropyLog,
+                          totalTokens: ctx.tokensUsed,
+                          durationMs: executionDurationMs,
+                          temperature: (config as any).temperature ?? 0.7,
+                          maxIterations: config.maxIterations ?? 10,
+                          provider: String(ctx.provider ?? config.provider ?? "unknown"),
+                          skillsActivated: (ctx.metadata as any)?.resolvedSkills?.filter((s: any) => s.confidence === "expert").map((s: any) => s.name) ?? [],
+                          convergenceIteration: entropyLog.length > 0
+                            ? entropyLog.findIndex((e: any) => e.trajectory?.shape === "converging")
+                            : null,
+                          toolCallSequence: (ctx.metadata as any)?.toolCallSequence ?? [],
+                        });
+
+                        // Persist synthesized skill fragment to procedural memory
+                        if (learningResult?.skillSynthesized && learningResult?.skillFragment) {
+                          const entry = skillFragmentToProceduralEntry({
+                            fragment: learningResult.skillFragment,
+                            agentId: config.agentId,
+                            taskCategory: learningResult.taskCategory,
+                            modelId,
+                          });
+                          yield* Effect.serviceOption(ProceduralMemoryService).pipe(
+                            Effect.flatMap((svcOpt) => {
+                              if (svcOpt._tag !== "Some") return Effect.void;
+                              return svcOpt.value.store(entry as any).pipe(
+                                Effect.catchAll(() => Effect.void),
+                              );
+                            }),
+                            Effect.catchAll(() => Effect.void),
+                          );
+                        }
                       });
                     }),
                     Effect.catchAll(() => Effect.void),
