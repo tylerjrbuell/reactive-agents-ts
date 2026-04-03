@@ -73,6 +73,20 @@ export interface KernelState {
    * Consumed and cleared (null) by handleThinking — never accumulated.
    */
   readonly synthesizedContext?: import("../../context/synthesis-types.js").SynthesizedContext | null;
+
+  /**
+   * Stage 1 max_output_tokens recovery: override token limit to 64k for one re-run.
+   * Set when the LLM first hits its output token limit. The runner re-executes the
+   * same think phase with this value passed as maxTokens to the LLM call.
+   */
+  readonly maxOutputTokensOverride?: number;
+
+  /**
+   * Stage 2 max_output_tokens recovery: count of recovery message injections.
+   * Incremented each time a recovery user-turn is injected. Capped at 3.
+   * When this reaches 3 and max_tokens fires again, the run fails.
+   */
+  readonly maxOutputTokensRecoveryCount?: number;
 }
 
 // ── KernelInput — Frozen execution input ─────────────────────────────────────

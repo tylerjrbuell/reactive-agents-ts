@@ -225,7 +225,7 @@ export function handleThinking(
     const llmStreamEffect = llm.stream({
       messages: conversationMessages,
       systemPrompt: systemPromptText,
-      maxTokens: outputMaxTokens,
+      maxTokens: state.maxOutputTokensOverride ?? outputMaxTokens,
       temperature: temp,
       ...(llmTools.length > 0 ? { tools: llmTools } : {}),
       ...(wantLogprobs ? { logprobs: true, topLogprobs: 5 } : {}),
@@ -346,6 +346,38 @@ export function handleThinking(
 
     // Increment LLM call counter
     state = transitionState(state, { llmCalls: (state.llmCalls ?? 0) + 1 });
+
+    // ── max_output_tokens recovery ───────────────────────────────────────────
+    // Stage 1: LLM hit its output token limit for the first time — escalate to
+    //          64k tokens and re-run the same request (no message injection).
+    // Stage 2: Override already set — inject a recovery user turn and continue.
+    //          Maximum 3 Stage 2 attempts before failing.
+    if (thoughtResponse.stopReason === "max_tokens") {
+      const recoveryCount = state.maxOutputTokensRecoveryCount ?? 0;
+
+      if (!state.maxOutputTokensOverride) {
+        // Stage 1: escalate token limit, re-run same request (no iteration bump)
+        return transitionState(state, {
+          maxOutputTokensOverride: 64_000,
+        });
+      } else if (recoveryCount < 3) {
+        // Stage 2: inject recovery message, continue conversation (no iteration bump)
+        const recoveryMessage: KernelMessage = {
+          role: "user",
+          content: "Output token limit hit. Resume directly — no apology, no recap of what you were doing. Pick up mid-thought if that is where the cut happened. Break remaining work into smaller pieces.",
+        };
+        return transitionState(state, {
+          messages: [...state.messages, recoveryMessage],
+          maxOutputTokensRecoveryCount: recoveryCount + 1,
+        });
+      } else {
+        // Exhausted all recovery attempts — surface error
+        return transitionState(state, {
+          status: "failed",
+          error: "max_output_tokens limit reached after recovery attempts",
+        });
+      }
+    }
 
     const rawThought = thoughtResponse.content;
     const newTokens = state.tokens + thoughtResponse.usage.totalTokens;
