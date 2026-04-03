@@ -9,12 +9,29 @@
 - [Project Dispatch](project_dispatch.md) — NL automation builder product, separate repo, Elysia + Svelte + SQLite
 - [Composable Strategy Architecture](project_composable_strategies.md) — V1.1: strategies as composable capabilities, not exclusive modes
 - [Composable Provider Adapters](project_composable_adapters.md) — V1.1 DONE in v0.8.5: all 7 hooks implemented
-- [Composable Reasoning Phases](project_composable_phases.md) — V1.1: explicit phase pipeline (plan/execute/verify/reflect/terminate), strategies become presets
+- [Composable Reasoning Phases](project_composable_phases.md) — ✅ SHIPPED Apr 3, 2026: `strategies/kernel/` composable phase architecture merged to main
 
-## Current Status (Mar 29, 2026)
-- **v0.8.5+ in progress** — 22 packages + 2 apps, 3,036 tests across 350 files (3036 pass, 30 skip, 0 fail)
-- **Harness quality controls shipped** — 6 new builder methods for execution quality and reliability
-- **Preparing for Show HN** — architecture solid, DX polished, local model reliability improved
+## Current Status (Apr 3, 2026)
+- **v0.8.5+ / kernel refactor merged** — 22 packages + 2 apps, 3,242 tests across 381 files (0 fail)
+- **Kernel composable phase architecture shipped** — `strategies/kernel/` with `Phase[]` pipeline, `Guard[]` chain, `MetaToolHandler` registry, `makeKernel()` factory
+- **Preparing for Show HN** — architecture solid, DX polished
+
+## What Shipped Apr 3, 2026
+
+### Kernel Composable Phase Architecture
+- `strategies/shared/` renamed to `strategies/kernel/` — name describes what it is, not who uses it
+- `react-kernel.ts` 1,700 → 197 lines; thin orchestrator + `makeKernel({ phases?: Phase[] })` factory
+- `kernel-runner.ts` 612 → 339 lines; ICS, reactive observer, loop detector extracted to `utils/`
+- **`kernel/phases/`** — four phase files, each answers one question:
+  - `context-builder.ts` — what will the LLM see this turn? (pure data, no LLM calls)
+  - `think.ts` — what did the LLM decide to do? (stream, FC parsing, fast-path, loop detection)
+  - `guard.ts` — is this tool call allowed? (`Guard[]` pipeline, `checkToolCall(guards)`)
+  - `act.ts` — what happened when tools ran? (`MetaToolHandler` registry, final-answer gate)
+- **`kernel/utils/`** — 11 utility files + `ics-coordinator.ts`, `reactive-observer.ts`, `loop-detector.ts`
+- `Phase` type: `(state: KernelState, context: KernelContext) => Effect<KernelState, never, LLMService>`
+- `Guard` type: `(tc, state, input) => GuardOutcome` — strategies pass custom chains to `checkToolCall()`
+- `MetaToolHandler` registry in `act.ts` — new inline meta-tools are one-line additions
+- Spec: `docs/superpowers/specs/2026-03-30-kernel-refactor-design.md`
 
 ## What Shipped Mar 29, 2026
 
@@ -29,99 +46,67 @@
 ### Memory Consolidation Improvements
 - Date normalization in MemoryExtractor (Tier 1 + Tier 2 + heuristic fallback) — "yesterday" → ISO date
 - Near-duplicate decay in MemoryConsolidatorLive Step 4 — SQL substr(content,1,40) matching
-- Session resumption in bootstrap — prior debrief + active plan surfaced into memCtx
 
-### Kernel Hooks Fix
-- `ToolCallCompleted` no longer emitted for system observations (completion-guard redirects)
-- Eliminates "unknown" tool name from metrics dashboard
-- Debug-level `Effect.logDebug` still fires for troubleshooting visibility
+## Architecture (Post Apr 3 Refactor) — CRITICAL PATTERNS
 
-## What Shipped v0.8.5 (Mar 28, 2026)
+### Kernel Directory Layout
+```
+strategies/kernel/
+  kernel-state.ts      ← KernelState, Phase type, KernelContext, ThoughtKernel
+  kernel-runner.ts     ← the loop (runKernel)
+  kernel-hooks.ts      ← KernelHooks lifecycle hooks
+  react-kernel.ts      ← makeKernel() + reactKernel + executeReActKernel
+  phases/
+    context-builder.ts ← pure data: buildSystemPrompt, toProviderMessage, buildConversationMessages, buildToolSchemas
+    think.ts           ← LLM stream, FC parsing, loop detection, fast-path
+    guard.ts           ← Guard[], defaultGuards, checkToolCall()
+    act.ts             ← MetaToolHandler registry, final-answer gate, tool dispatch
+  utils/
+    ics-coordinator.ts, reactive-observer.ts, loop-detector.ts
+    tool-utils.ts, tool-execution.ts, termination-oracle.ts, strategy-evaluator.ts
+    stream-parser.ts (was thinking-utils), context-utils.ts, quality-utils.ts, service-utils.ts, step-utils.ts
+```
 
-### Gate Hardening & Dynamic Stopping
-- Relevant tools pass through gate even when required tools pending
-- Satisfied required tools can be re-called for supplementary research  
-- Per-tool call budget auto-set to 3 for search tools from classification results
-- Novelty signal (Jaccard word-token overlap): <20% novel → inject synthesis nudge
-- `computeNoveltyRatio()` in tool-utils — pure math, no LLM call
-
-### Text Tool Call Fallback (NativeFCStrategy)
-- Parse JSON tool calls from model text output (fenced or bare JSON)
-- Validates against available tools, normalizes underscore→hyphen
-- Supports 4+ JSON schemas; native toolCalls always take priority
-
-### Provider Adapter Hooks — ALL 7 COMPLETE
-- taskFraming, toolGuidance, continuationHint, errorRecovery, synthesisPrompt, qualityCheck, systemPromptPatch
-- midModelAdapter: lighter guidance for 7-30B models
-- selectAdapter() returns midModelAdapter for tier="mid"
-- All hooks wired in react-kernel.ts at correct call sites
-
-### Observability & DX
-- logModelIO: full FC conversation thread with role labels [USER]/[ASSISTANT]/[TOOL]
-- Raw response logged before parsing; messages[] on ReasoningStepCompleted event
-- strategyUsed shows actual sub-strategy (e.g. "reactive" not "adaptive")
-- [think] log shows "(adaptive→reactive)" suffix at INFO level
-- Actionable failure messages: loop detection + required tools + stall detection all include Fix: suggestions
-
-### CLI & Web Framework
-- rax init: uses unified "reactive-agents" package (not 14 granular packages)
-- @reactive-agents/react: useAgentStream + useAgent hooks
-- @reactive-agents/vue: useAgentStream + useAgent composables  
-- @reactive-agents/svelte: createAgentStream + createAgent stores
-- All consume AgentStream.toSSE() endpoints; compatible with Next.js, SvelteKit, Nuxt
-
-## Architecture (v0.8.5) — CRITICAL PATTERNS
-
-### Two Independent Records
+### Two Independent Records (unchanged)
 ```
 state.messages[]  ← What LLM sees (proper multi-turn FC conversation thread)
-state.steps[]     ← What systems observe (entropy, metrics, debrief) — unchanged
+state.steps[]     ← What systems observe (entropy, metrics, debrief)
 ```
 
-### Gate Logic (in priority order)
-1. Pre-filter calls exceeding maxCallsPerTool budget
-2. Required tools missing → allow only first missing required tool
-3. Relevant tools OR satisfied required tools → allow through
-4. Otherwise → blockedOptionalBatch: true (redirect message injected)
+### Extending the Kernel
+- **New phase**: add `phases/reflect.ts`, insert into `makeKernel({ phases: [..., reflect] })`
+- **New guard**: add `Guard` fn to `guard.ts`, add to `defaultGuards[]`
+- **New inline meta-tool**: add one entry to `metaToolRegistry` in `act.ts`
+- **Custom kernel**: `makeKernel({ phases: [myThink, act] })`
 
 ### Provider Adapter Hook Points (all 7)
-- systemPromptPatch: at system prompt build time
-- toolGuidance: appended after schema block in system prompt
-- taskFraming: first iteration user message (iteration === 0)
-- continuationHint: after each tool round in nudge message
-- errorRecovery: appended to failed tool observation content
-- synthesisPrompt: replaces progress message on research→produce transition
-- qualityCheck: injected before final answer (gated by qualityCheckDone meta flag)
-
-### Benchmark Results (Anthropic Sonnet 4)
-- 35/35 (100%) consistently
-- 897 avg tok/task (-15%), 42% fewer tokens on simple tasks
-- Zero iteration explosions
+- systemPromptPatch, toolGuidance, taskFraming, continuationHint, errorRecovery, synthesisPrompt, qualityCheck
+- `selectAdapter(capabilities, tier)` picks adapter by tier
 
 ## Critical Build Patterns
 - **Native FC**: All providers pass `tools` to both `complete()` AND `stream()` methods
+- **Anthropic streaming**: Use raw `streamEvent` not helper events (`inputJson` fires before `contentBlock`)
+- **Gemini tool results**: `functionResponse.name` must use `msg.toolName` not hard-coded "tool"
+- **Ollama streaming**: `chunk.message.tool_calls` on `chunk.done`, emit `tool_use_start` + `tool_use_delta`
 - **Loop detection**: `maxConsecutiveThoughts: 3` — nudge observations reset the counter
-- **Compressed results in FC**: Strip `[STORED: key]` header → `[toolName result — compressed preview]`
-- **adapter in handleActing**: must be re-computed via selectAdapter() — NOT inherited from handleThinking scope
 - See [build-patterns.md](build-patterns.md) for tsconfig, package.json, Effect-TS patterns
 
 ## Architecture Debt (Remaining)
-1. `react-kernel.ts` at ~1,650 LOC — benefits from splitting (FC path, guards, observations as separate modules)
-2. cogito:14b still inconsistent on reactive strategy (8B works fine, 14B doesn't)
-3. Benchmark: c6-multi-agent still fragile across providers
-4. Provider adapter: 2 of 5 V1.1 composable hooks planned (full composable system deferred)
+1. `buildDynamicContext`/`buildStaticContext` still in codebase behind flag (~560 LOC dead)
+2. `context-engine.ts` has ~690 LOC mostly dead text-assembly functions
+3. cogito:14b still inconsistent on reactive strategy (8B works fine, 14B doesn't)
+4. Strategy routing disabled — no clean solution for local model multi-step tasks
+5. Provider adapter: remaining 5 V1.1 composable hooks not yet wired into phases
 
 ## Show HN Readiness
+- ✅ Kernel composable phase architecture (clean codebase for contributors)
 - ✅ Text tool call fallback for models that output JSON in text
 - ✅ Gate hardening: relevant + satisfied-required tools pass through
 - ✅ Dynamic stopping: novelty signal + per-tool budget
 - ✅ Full prompt observability (logModelIO)
 - ✅ Actionable failure messages with Fix: suggestions
-- ✅ Adaptive strategy sub-strategy reporting
-- ✅ rax init uses unified package
-- ✅ React/Vue/Svelte web hooks
 - ✅ Provider adapter 7/7 hooks
-- 🔲 react-kernel.ts split (code quality for contributors)
+- ✅ React/Vue/Svelte web hooks
 - 🔲 Benchmark suite published results
 - 🔲 Docs refresh (in progress)
 
