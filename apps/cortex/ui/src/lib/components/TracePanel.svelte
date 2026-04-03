@@ -25,9 +25,6 @@
   // Svelte 5: use array reassignment for reactivity (Set mutation doesn't trigger)
   let expandedRows = $state<number[]>([]);
   let expandedMessages = $state<number[]>([]); // conversation thread toggles
-  /** Final-result banner: start collapsed */
-  let finalResultCollapsed = $state(true);
-
   function toggleRow(idx: number) {
     expandedRows = expandedRows.includes(idx)
       ? expandedRows.filter((i) => i !== idx)
@@ -45,13 +42,11 @@
     expandedMessages = traceRows
       .map((f, i) => ((f.messages?.length ?? 0) > 0 ? i : -1))
       .filter((i) => i >= 0);
-    finalResultCollapsed = false;
   }
 
   function collapseAll() {
     expandedRows = [];
     expandedMessages = [];
-    finalResultCollapsed = true;
   }
 
   function truncate(s: string, max = 100) {
@@ -64,12 +59,7 @@
     return "text-secondary";
   }
 
-  // Find final answer frame
-  const finalFrame = $derived(traceRows.findLast((f) => f.kind === "final"));
-  const hasFinal = $derived(!!finalFrame);
-  const isComplete = $derived(status === "completed" || status === "failed");
-
-  /** True when every trace row, message sub-thread, and final banner are expanded. */
+  /** True when every trace row and message sub-thread are expanded. */
   const traceFullyExpanded = $derived.by(() => {
     if (traceRows.length === 0) return false;
     const rowSet = new Set(expandedRows);
@@ -79,7 +69,6 @@
     for (let i = 0; i < traceRows.length; i++) {
       if ((traceRows[i].messages?.length ?? 0) > 0 && !expandedMessages.includes(i)) return false;
     }
-    if (isComplete && finalFrame && finalResultCollapsed) return false;
     return true;
   });
 
@@ -102,11 +91,15 @@
           </span>
         {/if}
       </div>
-      <Tooltip text={TRACE_ROWS_TOOLTIP} class="w-full min-w-0 pl-7">
-        <p class="text-[9px] font-mono text-outline/45 normal-case tracking-normal leading-tight m-0 cursor-help">
-          Rows = kernel loops · not each reasoning step
-        </p>
-      </Tooltip>
+      <div class="pl-7 min-w-0 self-start">
+        <Tooltip text={TRACE_ROWS_TOOLTIP} class="w-fit max-w-full">
+          <p
+            class="text-[9px] font-mono text-outline/45 normal-case tracking-normal leading-tight m-0 cursor-help"
+          >
+            Rows = kernel loops · not each reasoning step
+          </p>
+        </Tooltip>
+      </div>
     </div>
     <div class="flex items-center gap-1.5 flex-shrink-0 pt-0.5">
       {#if traceRows.length > 0}
@@ -133,66 +126,6 @@
       {/if}
     </div>
   </div>
-
-  <!-- ── FINAL RESULT BANNER (collapsible) ──────────────────────────────── -->
-  {#if isComplete && finalFrame}
-    <div
-      class="flex-shrink-0 mx-3 mt-3 rounded-lg border
-             {status === 'failed' ? 'bg-error/8 border-error/30' : 'bg-secondary/8 border-secondary/30'}"
-    >
-      <!-- Header row — always visible, click to collapse -->
-      <button
-        type="button"
-        class="w-full flex items-center gap-2 px-4 py-2.5 cursor-pointer bg-transparent border-0 text-left"
-        onclick={() => (finalResultCollapsed = !finalResultCollapsed)}
-      >
-        <span
-          class="material-symbols-outlined text-sm {status === 'failed' ? 'text-error' : 'text-secondary'}"
-          style="font-variation-settings: 'FILL' 1;"
-        >
-          {status === "failed" ? "error" : "task_alt"}
-        </span>
-        <span class="font-mono text-[10px] uppercase tracking-widest font-bold {status === 'failed' ? 'text-error' : 'text-secondary'}">
-          {status === "failed" ? "Run Failed" : "Final Result"}
-        </span>
-        {#if finalResultCollapsed && finalFrame.thought}
-          <!-- Preview when collapsed -->
-          <span class="flex-1 font-mono text-[10px] text-on-surface/50 truncate min-w-0 text-left">
-            {finalFrame.thought.slice(0, 60)}{finalFrame.thought.length > 60 ? "…" : ""}
-          </span>
-        {:else if finalFrame.model}
-          <span class="ml-auto text-[9px] font-mono text-outline/50 flex-shrink-0">{finalFrame.model}</span>
-        {/if}
-        <span class="flex-shrink-0 material-symbols-outlined text-sm text-outline/30 transition-transform {finalResultCollapsed ? '-rotate-90' : ''}">
-          expand_more
-        </span>
-      </button>
-
-      <!-- Expandable content -->
-      {#if !finalResultCollapsed}
-        <div class="px-4 pb-3">
-          <div class="max-h-48 overflow-y-auto">
-            <p class="font-mono text-[11px] leading-relaxed whitespace-pre-wrap break-words {status === 'failed' ? 'text-error/80' : 'text-on-surface/80'}">
-              {finalFrame.thought}
-            </p>
-          </div>
-          {#if finalFrame.tokensUsed > 0 || finalFrame.estimatedCost}
-            <div class="flex gap-3 mt-2 font-mono text-[9px] text-outline/50">
-              {#if finalFrame.tokensUsed > 0}
-                <span>{finalFrame.tokensUsed.toLocaleString()} tok</span>
-              {/if}
-              {#if finalFrame.estimatedCost}
-                <span>${finalFrame.estimatedCost.toFixed(4)}</span>
-              {/if}
-              {#if finalFrame.durationMs > 0}
-                <span>{(finalFrame.durationMs / 1000).toFixed(1)}s</span>
-              {/if}
-            </div>
-          {/if}
-        </div><!-- end expandable -->
-      {/if}
-    </div>
-  {/if}
 
   <!-- ── LIVE STREAMING TEXT ───────────────────────────────────────────────── -->
   {#if status === "live" && streamText}

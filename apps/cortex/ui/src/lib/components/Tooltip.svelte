@@ -30,6 +30,10 @@
   /** Viewport-fixed top-left of the tooltip panel (px) */
   let tipLeft = $state(0);
   let tipTop = $state(0);
+  /** Tooltip is drawn above the trigger (arrow on bottom edge toward target). */
+  let tipAboveTrigger = $state(true);
+  /** Arrow center X relative to the panel’s left edge (px), clamped inside the panel. */
+  let tipArrowLeftPx = $state(16);
 
   let hideTimer: ReturnType<typeof setTimeout> | null = null;
   let triggerEl: HTMLElement | null = null;
@@ -77,6 +81,14 @@
     const cx = r.left + r.width / 2;
     let left = cx - w / 2;
     left = Math.min(Math.max(MARGIN, left), vw - MARGIN - w);
+
+    const arrowHalf = 5;
+    const arrowPad = 8;
+    const arrowCenter = cx - left;
+    const lo = arrowPad + arrowHalf;
+    const hi = w - arrowPad - arrowHalf;
+    tipArrowLeftPx = lo <= hi ? Math.min(Math.max(lo, arrowCenter), hi) : w / 2;
+    tipAboveTrigger = useAbove;
 
     tipLeft = left;
     tipTop = top;
@@ -142,10 +154,32 @@
   <span
     bind:this={panelEl}
     role="tooltip"
-    class="cortex-tooltip-panel pointer-events-none fixed z-[99999] max-h-[min(40vh,18rem)] max-w-[min(100vw-1.5rem,22rem)] overflow-y-auto whitespace-pre-wrap break-words rounded-md border border-outline-variant/35 bg-surface-container-low px-2.5 py-2 text-left font-mono text-[10px] font-normal normal-case leading-relaxed tracking-normal text-on-surface/90 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.55)] ring-1 ring-primary/[0.12] dark:shadow-[0_12px_40px_-8px_rgba(0,0,0,0.75)]"
+    class="cortex-tooltip-panel pointer-events-none fixed z-[99999] flex max-h-[min(40vh,18rem)] max-w-[min(100vw-1.5rem,22rem)] flex-col overflow-visible rounded-md border border-outline-variant/35 bg-surface-container-low text-left shadow-[0_10px_40px_-10px_rgba(0,0,0,0.55)] ring-1 ring-primary/[0.12] dark:shadow-[0_12px_40px_-8px_rgba(0,0,0,0.75)]"
     style:left="{tipLeft}px"
     style:top="{tipTop}px"
   >
-    {body}
+    {#if !tipAboveTrigger}
+      <span
+        class="pointer-events-none absolute z-[1] box-border h-2 w-2 border-l border-t border-outline-variant/35 bg-surface-container-low"
+        style:left="{tipArrowLeftPx}px"
+        style:top="-5px"
+        style:transform="translateX(-50%) translateY(-50%) rotate(45deg)"
+        aria-hidden="true"
+      ></span>
+    {/if}
+    <span
+      class="min-h-0 max-h-full overflow-y-auto whitespace-pre-wrap break-words px-2.5 py-2 font-mono text-[10px] font-normal normal-case leading-relaxed tracking-normal text-on-surface/90"
+    >
+      {body}
+    </span>
+    {#if tipAboveTrigger}
+      <span
+        class="pointer-events-none absolute z-[1] box-border h-2 w-2 border-b border-r border-outline-variant/35 bg-surface-container-low"
+        style:left="{tipArrowLeftPx}px"
+        style:bottom="-5px"
+        style:transform="translateX(-50%) translateY(50%) rotate(45deg)"
+        aria-hidden="true"
+      ></span>
+    {/if}
   </span>
 {/if}

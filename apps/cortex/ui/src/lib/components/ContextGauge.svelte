@@ -32,19 +32,31 @@
       }
     }
     // Fallback derived signal when explicit ContextPressure events are unavailable.
-    let used = 0;
+    let usedFromRequests = 0;
+    let totalFromCompleted = 0;
     let iteration = 0;
     let maxIterations = 0;
     for (const e of events) {
-      if (e.type === "LLMRequestCompleted") used += tokensFromPayload(e.payload);
+      if (e.type === "LLMRequestCompleted") usedFromRequests += tokensFromPayload(e.payload);
       if (e.type === "ReasoningIterationProgress") {
         iteration =
           typeof e.payload.iteration === "number" ? e.payload.iteration : iteration;
         maxIterations =
           typeof e.payload.maxIterations === "number" ? e.payload.maxIterations : maxIterations;
       }
+      // AgentCompleted and FinalAnswerProduced carry authoritative totals —
+      // use them as fallback when per-request usage is 0 (local/Ollama models omit usage).
+      if (e.type === "AgentCompleted") {
+        const t = e.payload.totalTokens;
+        if (typeof t === "number" && t > 0) totalFromCompleted = t;
+      }
+      if (e.type === "FinalAnswerProduced") {
+        const t = e.payload.totalTokens;
+        if (typeof t === "number" && t > totalFromCompleted) totalFromCompleted = t;
+      }
     }
-    if (used <= 0 && maxIterations <= 0) return null;
+    const tokensUsed = usedFromRequests > 0 ? usedFromRequests : totalFromCompleted;
+    if (tokensUsed <= 0 && maxIterations <= 0) return null;
     const ratio = maxIterations > 0 ? Math.min(1, iteration / maxIterations) : 0;
     const utilizationPct = Math.max(0, Math.min(100, ratio * 100));
     const level =
@@ -52,8 +64,8 @@
     return {
       utilizationPct,
       level,
-      tokensUsed: used,
-      tokensAvailable: maxIterations > 0 ? Math.max(used, Math.round(used / Math.max(ratio, 0.2))) : used,
+      tokensUsed,
+      tokensAvailable: undefined,
     };
   });
 
@@ -79,8 +91,12 @@
       ></div>
     </div>
     <div class="flex justify-between font-mono text-[10px] text-outline">
-      <span>{(pressure.tokensUsed ?? 0).toLocaleString()} used</span>
-      <span>{(pressure.tokensAvailable ?? 0).toLocaleString()} available</span>
+      <span>{(pressure.tokensUsed ?? 0).toLocaleString()} tokens</span>
+      {#if pressure.tokensAvailable != null}
+        <span>{pressure.tokensAvailable.toLocaleString()} available</span>
+      {:else}
+        <span>{pct.toFixed(0)}% of iterations</span>
+      {/if}
     </div>
   {/if}
 </div>

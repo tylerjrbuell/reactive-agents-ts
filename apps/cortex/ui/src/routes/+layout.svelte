@@ -8,7 +8,7 @@
   import CommandPalette from "$lib/components/CommandPalette.svelte";
   import { commandPalette } from "$lib/stores/command-palette.js";
   import { toast } from "$lib/stores/toast-store.js";
-  import { settings } from "$lib/stores/settings.js";
+  import { settings, type CortexSettings } from "$lib/stores/settings.js";
   import { createWsClient } from "$lib/stores/ws-client.js";
   import { createAgentStore } from "$lib/stores/agent-store.js";
   import { createStageStore } from "$lib/stores/stage-store.js";
@@ -29,8 +29,9 @@
 
   const navItems = [
     { label: "Beacon", href: "/", icon: "radar" },
-    { label: "Trace",  href: "/runs",     icon: "alt_route" },
-    { label: "Lab",    href: "/lab", icon: "science" },
+    { label: "Chat", href: "/chat", icon: "chat" },
+    { label: "Trace", href: "/runs", icon: "alt_route" },
+    { label: "Lab", href: "/lab", icon: "science" },
   ];
 
   let isDark = $state(true);
@@ -69,7 +70,7 @@
     settings.init(); // warm up from localStorage before any submitPrompt call
 
     // Apply saved theme immediately
-    const s = settings.get();
+    const s: CortexSettings = settings.get();
     applyTheme(s.theme);
 
     stageStore.setNavigate((path) => goto(path));

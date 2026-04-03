@@ -11,6 +11,8 @@
   import SignalMonitor from "$lib/components/SignalMonitor.svelte";
   import RawEventLog from "$lib/components/RawEventLog.svelte";
   import MessagesPanel from "$lib/components/MessagesPanel.svelte";
+  import RunChatTab from "$lib/components/RunChatTab.svelte";
+  import RunFinalDeliverable from "$lib/components/RunFinalDeliverable.svelte";
   import DebriefPanel from "$lib/components/DebriefPanel.svelte";
   import ConfirmModal from "$lib/components/ConfirmModal.svelte";
   import Tooltip from "$lib/components/Tooltip.svelte";
@@ -158,13 +160,58 @@
     } catch { toast.error("Export failed"); }
   }
 
+  const finalTraceFrame = $derived($traceStore.findLast((f) => f.kind === "final") ?? null);
+
+  const finalDeliverableText = $derived.by(() => {
+    const fromTrace = finalTraceFrame?.thought?.trim() ?? "";
+    if (fromTrace) return fromTrace;
+    for (let i = $runStore.events.length - 1; i >= 0; i--) {
+      const e = $runStore.events[i];
+      if (e?.type === "FinalAnswerProduced") {
+        const a = e.payload?.answer;
+        if (typeof a === "string" && a.trim()) return a.trim();
+      }
+    }
+    return "";
+  });
+
+  const failurePrimaryMessage = $derived.by(() => {
+    if ($runStore.status !== "failed") return "";
+    const ev = $runStore.events.find(
+      (e) =>
+        e.type === "TaskFailed" ||
+        (e.type === "AgentCompleted" && e.payload.success === false),
+    );
+    if (!ev) return "";
+    const p = ev.payload;
+    if (typeof p.error === "string") return p.error;
+    if (typeof p.reason === "string") return p.reason;
+    return "";
+  });
+
+  const finalDeliverableMeta = $derived(
+    finalTraceFrame
+      ? {
+          model: finalTraceFrame.model,
+          tokensUsed: finalTraceFrame.tokensUsed,
+          estimatedCost: finalTraceFrame.estimatedCost,
+          durationMs: finalTraceFrame.durationMs,
+        }
+      : undefined,
+  );
+
   async function copyMarkdown() {
-    const md = ($runStore.debrief as any)?.markdown;
-    if (md) {
+    const primary = finalDeliverableText.trim();
+    if (primary) {
+      await navigator.clipboard.writeText(primary);
+      toast.success("Copied", "Final answer copied to clipboard");
+      return;
+    }
+    const md = ($runStore.debrief as { markdown?: string } | null)?.markdown;
+    if (typeof md === "string" && md) {
       await navigator.clipboard.writeText(md);
       toast.success("Copied debrief markdown");
     } else {
-      // Generate minimal markdown from trace
       const lines = [`# Run ${runId.slice(0, 8)}`, `**Status:** ${$runStore.status}`,
         `**Tokens:** ${$runStore.vitals.tokensUsed.toLocaleString()}`,
         `**Provider:** ${$runStore.vitals.provider ?? "unknown"} / ${$runStore.vitals.model ?? "unknown"}`, ""];
@@ -181,7 +228,7 @@
 
   let selectedIteration = $state<number | null>(null);
   let bottomTab = $state<
-    "decisions" | "memory" | "context" | "debrief" | "signal" | "events" | "messages"
+    "decisions" | "memory" | "context" | "debrief" | "signal" | "events" | "messages" | "chat"
   >("decisions");
 
   /** Matches `GET /api/runs/:runId/messages` — includes synthetic thought/action/observation rows. */
@@ -343,7 +390,7 @@
         <span class="material-symbols-outlined text-sm">download</span>
       </button>
     </Tooltip>
-    <Tooltip text="Copy debrief markdown, or a minimal trace export">
+    <Tooltip text="Copy final answer (markdown), else debrief or trace export">
       <button type="button" onclick={copyMarkdown} aria-label="Copy as Markdown"
         class="flex items-center gap-1 text-outline hover:text-primary transition-colors bg-transparent border-0 cursor-pointer">
         <span class="material-symbols-outlined text-sm">content_copy</span>
@@ -353,6 +400,14 @@
 
   <!-- Vitals strip -->
   <VitalsStrip vitals={$runStore.vitals} status={$runStore.status} {runId} />
+
+  <RunFinalDeliverable
+    status={$runStore.status}
+    deliverableText={finalDeliverableText}
+    streamText={$runStore.streamText}
+    failureMessage={failurePrimaryMessage}
+    meta={finalDeliverableMeta}
+  />
 
   <!-- ── Main content: TRACE (left, wider) + OVERVIEW (right, compact) ── -->
   <div class="flex-1 grid grid-cols-1 md:grid-cols-[60%_40%] gap-3 p-3 overflow-hidden min-h-0">
@@ -417,6 +472,7 @@
         { id: "signal",    label: "Signal",       icon: "show_chart"   },
         { id: "events",    label: "Events",       icon: "terminal"     },
         { id: "messages",  label: "Messages",     icon: "chat_bubble"  },
+        { id: "chat",      label: "Chat",         icon: "forum"        },
       ] as tab (tab.id)}
         <button
           type="button"
@@ -431,20 +487,21 @@
             if (panelMinimized) panelMinimized = false;
           }}
         >
-          <span class="relative inline-flex items-center">
+          <span class="relative inline-flex items-center shrink-0">
             <span class="material-symbols-outlined text-[13px]">{tab.icon}</span>
             {#if (tab as any).dot}
               <span class="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-secondary"></span>
             {/if}
-            {#if tab.id === "messages" && cortexMessageCount > 0}
-              <span
-                class="absolute -top-1 -right-2 min-w-[14px] h-[14px] px-0.5 flex items-center justify-center
-                       rounded-full bg-primary/25 border border-primary/40 text-[8px] font-mono text-primary/90 leading-none"
-                title={`${cortexMessageCount} message row(s) from ReasoningStepCompleted`}
-              >{cortexMessageCount > 99 ? "99+" : cortexMessageCount}</span>
-            {/if}
           </span>
           <span class="hidden sm:inline">{tab.label}</span>
+          {#if tab.id === "messages" && cortexMessageCount > 0}
+            <span
+              class="shrink-0 min-h-[18px] min-w-[20px] px-1.5 py-0.5 rounded-md
+                     bg-surface-container-low border border-primary/50 text-[9px] font-mono font-semibold tabular-nums
+                     text-primary leading-none flex items-center justify-center ring-1 ring-black/30"
+              title={`${cortexMessageCount} message row(s) from ReasoningStepCompleted`}
+            >{cortexMessageCount > 99 ? "99+" : String(cortexMessageCount)}</span>
+          {/if}
         </button>
       {/each}
     </div>
@@ -538,6 +595,12 @@
         <RawEventLog events={panelEvents($runStore.events)} />
       {:else if bottomTab === "messages"}
         <MessagesPanel {runId} />
+      {:else if bottomTab === "chat"}
+        <RunChatTab
+          {runId}
+          provider={$runStore.vitals.provider}
+          model={$runStore.vitals.model}
+        />
       {/if}
     </div>
   </div>

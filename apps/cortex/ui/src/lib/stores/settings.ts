@@ -5,7 +5,7 @@
  * Settings are initialised lazily (on first read) so they work in SSR/build
  * contexts where localStorage is unavailable.
  */
-import { writable, get } from "svelte/store";
+import { writable, get, type Writable } from "svelte/store";
 
 export interface CortexSettings {
   defaultProvider: string;
@@ -32,6 +32,15 @@ export const DEFAULTS: CortexSettings = {
 
 const STORAGE_KEY = "cortex-settings";
 
+/** Public API of the settings singleton — explicit typing avoids Svelte/TS inference gaps on `.get()` / `.save()`. */
+export type CortexSettingsStore = {
+  subscribe: Writable<CortexSettings>["subscribe"];
+  init: () => void;
+  save: (patch: Partial<CortexSettings>) => void;
+  reset: () => void;
+  get: () => CortexSettings;
+};
+
 function load(): CortexSettings {
   if (typeof localStorage === "undefined") return { ...DEFAULTS };
   try {
@@ -43,7 +52,7 @@ function load(): CortexSettings {
   }
 }
 
-function createSettingsStore() {
+function createSettingsStore(): CortexSettingsStore {
   const store = writable<CortexSettings>(DEFAULTS);
   let initialised = false;
 

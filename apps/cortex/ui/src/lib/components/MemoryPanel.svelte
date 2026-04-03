@@ -34,11 +34,12 @@
     return null;
   });
 
-  const summary = $derived.by((): MemorySummary => {
+  const summary = $derived.by((): MemorySummary & { runCompleted: boolean } => {
     const tiers = new Set<string>();
     let flushCount = 0;
     let snapshotCount = 0;
     let lastMemoryTs: number | undefined;
+    let runCompleted = false;
     for (const e of events) {
       if (e.type === "MemoryBootstrapped") {
         if (typeof e.payload.tier === "string") tiers.add(e.payload.tier);
@@ -49,15 +50,19 @@
       } else if (e.type === "MemorySnapshotSaved") {
         snapshotCount += 1;
         lastMemoryTs = e.ts;
+      } else if (e.type === "AgentCompleted" || e.type === "TaskFailed") {
+        runCompleted = true;
       }
     }
-    return { bootstrappedTiers: [...tiers], flushCount, snapshotCount, lastMemoryTs };
+    return { bootstrappedTiers: [...tiers], flushCount, snapshotCount, lastMemoryTs, runCompleted };
   });
 </script>
 
 <div class="h-full overflow-y-auto px-4 py-3">
   {#if !snapshot && summary.flushCount === 0 && summary.snapshotCount === 0 && summary.bootstrappedTiers.length === 0}
-    <p class="font-mono text-[10px] text-outline text-center mt-4">No memory events yet.</p>
+    <p class="font-mono text-[10px] text-outline text-center mt-4">
+      {summary.runCompleted ? "Memory was not enabled for this run." : "No memory events yet."}
+    </p>
   {:else}
     <div class="space-y-3">
       <div class="flex gap-4 font-mono text-[10px] flex-wrap">

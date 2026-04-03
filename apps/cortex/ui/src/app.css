@@ -24,6 +24,27 @@
   --cortex-text-muted:   #475569;
   --cortex-border:       rgba(0, 0, 0, 0.08);
   --cortex-nav-bg:       #f8fafc;
+
+  /* MarkdownRich — prose + KaTeX */
+  --cortex-md-text:                #1e293b;
+  --cortex-md-text-muted:          #475569;
+  --cortex-md-h1:                  #0e7490;
+  --cortex-md-h4:                  #6d28d9;
+  --cortex-md-blockquote:          #475569;
+  --cortex-md-blockquote-border:   rgba(124, 58, 237, 0.4);
+  --cortex-md-code-bg:             #f1f5f9;
+  --cortex-md-code-fg:             #6d28d9;
+  --cortex-md-code-border:         rgba(0, 0, 0, 0.08);
+  --cortex-md-pre-bg:              #f8fafc;
+  --cortex-md-pre-fg:              #334155;
+  --cortex-md-pre-border:          rgba(0, 0, 0, 0.12);
+  --cortex-md-link:                #6d28d9;
+  --cortex-md-link-hover:          #5b21b6;
+  --cortex-md-hr:                  rgba(0, 0, 0, 0.12);
+  --cortex-md-table-border:        rgba(0, 0, 0, 0.12);
+  --cortex-md-th-bg:               rgba(139, 92, 246, 0.12);
+  --cortex-md-th-text:             #1e293b;
+  --cortex-md-katex:               #0f172a;
 }
 
 html.dark {
@@ -35,6 +56,26 @@ html.dark {
   --cortex-text-muted:   #c0c2c7;
   --cortex-border:       rgba(255, 255, 255, 0.05);
   --cortex-nav-bg:       #17181c;
+
+  --cortex-md-text:                rgb(236 238 242 / 0.92);
+  --cortex-md-text-muted:          rgb(236 238 242 / 0.88);
+  --cortex-md-h1:                  rgb(6 182 212 / 0.95);
+  --cortex-md-h4:                  rgb(139 92 246 / 0.9);
+  --cortex-md-blockquote:          rgb(236 238 242 / 0.75);
+  --cortex-md-blockquote-border:   rgb(139 92 246 / 0.45);
+  --cortex-md-code-bg:            rgb(15 17 21 / 0.9);
+  --cortex-md-code-fg:             rgb(234 179 8 / 0.95);
+  --cortex-md-code-border:         rgb(255 255 255 / 0.06);
+  --cortex-md-pre-bg:              rgb(15 17 21 / 0.95);
+  --cortex-md-pre-fg:              rgb(236 238 242 / 0.82);
+  --cortex-md-pre-border:          rgb(255 255 255 / 0.08);
+  --cortex-md-link:                rgb(139 92 246 / 1);
+  --cortex-md-link-hover:          rgb(196 181 253 / 1);
+  --cortex-md-hr:                  rgb(255 255 255 / 0.08);
+  --cortex-md-table-border:        rgb(255 255 255 / 0.1);
+  --cortex-md-th-bg:               rgb(139 92 246 / 0.12);
+  --cortex-md-th-text:             rgb(236 238 242 / 0.9);
+  --cortex-md-katex:               rgb(236 238 242 / 0.94);
 }
 
 /* Apply theme tokens to structural elements */
@@ -239,15 +280,15 @@ html {
   100% { transform: scale(3.5); opacity: 0;   }
 }
 
-/* ── EKG animation ────────────────────────────────────────────── */
-.ekg-line {
-  stroke-dasharray: 1000;
-  stroke-dashoffset: 1000;
-  animation: ra-ekg-draw 5s linear infinite;
+/* ── Vitals strip: indeterminate loop progress (no maxIterations yet) ─ */
+.vitals-progress-indeterminate {
+  animation: vitals-progress-sweep 2.2s ease-in-out infinite;
 }
 
-@keyframes ra-ekg-draw {
-  to { stroke-dashoffset: 0; }
+@keyframes vitals-progress-sweep {
+  0%   { transform: translateX(-100%); opacity: 0.35; }
+  50%  { opacity: 0.85; }
+  100% { transform: translateX(350%); opacity: 0.35; }
 }
 
 /* ── Animations ──────────────────────────────────────────────── */

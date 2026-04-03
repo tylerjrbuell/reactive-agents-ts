@@ -47,9 +47,6 @@
       : `${(vitals.durationMs / 1000).toFixed(1)}s`,
   );
 
-  // EKG uses the scrollbar gradient (violet→cyan) defined as SVG linearGradient.
-  // Only STRESSED/FAILED override to red for semantic clarity.
-
   const runShort = $derived(runId.length > 12 ? `${runId.slice(0, 8)}…` : runId);
 
   const loopTooltipText = $derived(
@@ -60,6 +57,57 @@
 
   const stepsTooltipText =
     "Reasoning steps (ReasoningStepCompleted). Can exceed LOOP when a strategy emits multiple inner steps per kernel loop. Replay does not step through these individually.";
+
+  /** Kernel-loop progress when maxIterations is known; null → indeterminate UI. */
+  const loopProgressPct = $derived.by((): number | null => {
+    const max = vitals.maxIterations;
+    if (max <= 0) return null;
+    const cur = Math.max(0, vitals.loopIteration);
+    return Math.min(100, (cur / max) * 100);
+  });
+
+  const loopExceededMax = $derived(
+    vitals.maxIterations > 0 && vitals.loopIteration > vitals.maxIterations,
+  );
+
+  const progressBarTooltip = $derived.by(() => {
+    const max = vitals.maxIterations;
+    const cur = vitals.loopIteration;
+    if (max > 0) {
+      const tail = loopExceededMax ? " (at or past configured max)" : "";
+      return `Kernel loop progress: ${cur} / ${max} configured outer iterations.${tail}\nMatches trace rows and replay.`;
+    }
+    if (status === "live" || status === "loading") {
+      return `Kernel loops: ${cur || "—"} (no maxIterations from the framework yet — relative bar unavailable).`;
+    }
+    if (status === "completed") {
+      return `Run finished after ${cur} kernel loop${cur === 1 ? "" : "s"}.`;
+    }
+    if (status === "failed") {
+      return `Run ended after ${cur} kernel loop${cur === 1 ? "" : "s"}.`;
+    }
+    return "Kernel loop progress";
+  });
+
+  const showIndeterminateProgress = $derived(
+    loopProgressPct === null && (status === "live" || status === "loading"),
+  );
+
+  const progressFillPct = $derived.by(() => {
+    if (status === "completed" && loopProgressPct === null) return 100;
+    if (loopProgressPct === null) return 0;
+    if (status === "completed" || status === "failed") {
+      return loopExceededMax ? 100 : Math.max(loopProgressPct, 100);
+    }
+    return loopExceededMax ? 100 : loopProgressPct;
+  });
+
+  /** Completed/failed with a known cap: show exact final ratio, not forced 100% width, unless exceeded. */
+  const terminalDeterminateWidth = $derived(
+    (status === "completed" || status === "failed") &&
+      loopProgressPct !== null &&
+      !loopExceededMax,
+  );
 </script>
 
 <div class="w-full bg-[#111317] border-b border-white/5 relative overflow-hidden flex-shrink-0">
@@ -181,79 +229,59 @@
     {/if}
   </div>
 
-  <!-- EKG heartbeat row — separate from metrics, never overlaps text -->
-  <div class="w-full h-7 relative overflow-hidden bg-transparent border-t border-white/[0.03]">
-    <svg class="w-full h-full" preserveAspectRatio="none" viewBox="0 0 1000 28">
-      <defs>
-        <!-- Scrollbar-matching gradient: violet → cyan (left to right along the pulse) -->
-        <linearGradient id="ekg-grad" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%"   stop-color="#8b5cf6" />
-          <stop offset="100%" stop-color="#06b6d4" />
-        </linearGradient>
-        <!-- Glow filter -->
-        <filter id="ekg-glow" x="-5%" y="-100%" width="110%" height="300%">
-          <feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="blur" />
-          <feMerge>
-            <feMergeNode in="blur" />
-            <feMergeNode in="blur" />
-            <feMergeNode in="SourceGraphic" />
-          </feMerge>
-        </filter>
-      </defs>
-
-      {#if status === 'live' || status === 'loading'}
-        <!-- Glow bloom layer -->
-        <path
-          d="M0 14 L100 14 L110 4 L120 24 L130 14 L300 14 L310 14 L320 2 L330 26 L340 14 L600 14 L610 7 L620 21 L630 14 L850 14 L860 0 L870 28 L880 14 L1000 14"
-          fill="none"
-          stroke="url(#ekg-grad)"
-          stroke-width="5"
-          opacity="0.2"
-          filter="url(#ekg-glow)"
-          class="ekg-line"
-        />
-        <!-- Sharp gradient line -->
-        <path
-          class="ekg-line"
-          d="M0 14 L100 14 L110 4 L120 24 L130 14 L300 14 L310 14 L320 2 L330 26 L340 14 L600 14 L610 7 L620 21 L630 14 L850 14 L860 0 L870 28 L880 14 L1000 14"
-          fill="none"
-          stroke="url(#ekg-grad)"
-          stroke-width="1.5"
-          opacity="0.9"
-        />
-      {:else if status === 'paused'}
-        <path
-          d="M0 14 L100 14 L110 4 L120 24 L130 14 L500 14"
-          fill="none"
-          stroke="url(#ekg-grad)"
-          stroke-width="4"
-          opacity="0.12"
-          filter="url(#ekg-glow)"
-        />
-        <path
-          d="M0 14 L100 14 L110 4 L120 24 L130 14 L500 14"
-          fill="none"
-          stroke="url(#ekg-grad)"
-          stroke-width="1.5"
-          opacity="0.45"
-          stroke-dasharray="4 3"
-        />
-      {:else}
-        <!-- Settled flat line -->
-        <line
-          x1="0" y1="14" x2="1000" y2="14"
-          stroke={status === 'failed' ? '#ef4444' : 'url(#ekg-grad)'}
-          stroke-width="1"
-          opacity="0.2"
-        />
-        <!-- Terminal dot — cyan end of gradient -->
-        <circle cx="980" cy="14" r="3.5"
-          fill={status === 'failed' ? '#ef4444' : '#06b6d4'}
-          opacity="0.35" filter="url(#ekg-glow)" />
-        <circle cx="980" cy="14" r="2"
-          fill={status === 'failed' ? '#ef4444' : '#06b6d4'}
-          opacity="0.7" />
-      {/if}
-    </svg>
-  </div>
+  <!-- Kernel loop progress — LOOP / maxIterations (indeterminate when cap unknown) -->
+  <Tooltip text={progressBarTooltip} class="w-full block min-w-0">
+    <div
+      class="w-full flex items-center gap-3 px-4 sm:px-6 py-2 box-border border-t border-white/[0.03] cursor-help"
+      role="group"
+      aria-label="Kernel loop progress"
+    >
+      <span class="material-symbols-outlined text-[16px] text-outline/50 flex-shrink-0" aria-hidden="true"
+        >linear_scale</span
+      >
+      <div
+        class="flex-1 min-w-[100px] h-2 rounded-full bg-white/[0.06] overflow-hidden relative
+               {status === 'paused' ? 'ring-1 ring-dashed ring-outline-variant/25' : ''}"
+        role="progressbar"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        aria-valuenow={showIndeterminateProgress
+          ? undefined
+          : Math.round(terminalDeterminateWidth ? loopProgressPct! : progressFillPct)}
+        aria-valuetext={showIndeterminateProgress ? "Indeterminate" : `${Math.round(terminalDeterminateWidth ? loopProgressPct! : progressFillPct)} percent`}
+      >
+        {#if showIndeterminateProgress || (status === "paused" && loopProgressPct === null)}
+          <div
+            class="absolute inset-y-0 left-0 w-[38%] rounded-full bg-gradient-to-r from-transparent via-primary/55 to-transparent vitals-progress-indeterminate
+                   {status === 'paused' ? 'opacity-50 motion-reduce:animate-none' : 'motion-reduce:animate-none'}"
+          ></div>
+        {:else if loopProgressPct !== null}
+          <div
+            class="h-full rounded-full transition-[width] duration-500 ease-out
+                   {status === 'failed'
+              ? 'bg-gradient-to-r from-error/90 to-error'
+              : loopExceededMax
+                ? 'bg-gradient-to-r from-tertiary to-tertiary/70'
+                : 'bg-gradient-to-r from-primary to-secondary'}"
+            style="width: {terminalDeterminateWidth ? `${loopProgressPct}%` : `${progressFillPct}%`}"
+          ></div>
+        {:else}
+          <!-- Completed / terminal with no maxIterations cap -->
+          <div
+            class="h-full w-full rounded-full opacity-40 bg-gradient-to-r from-primary/50 to-secondary/50
+                   {status === 'failed' ? 'from-error/40 to-error/30 opacity-60' : ''}"
+          ></div>
+        {/if}
+      </div>
+      <span class="font-mono text-[9px] text-outline/70 tabular-nums flex-shrink-0 w-[4.5rem] text-right">
+        {#if vitals.maxIterations > 0}
+          {vitals.loopIteration}<span class="text-outline/40">/{vitals.maxIterations}</span>
+        {:else if vitals.loopIteration > 0}
+          {vitals.loopIteration}<span class="text-outline/35">/—</span>
+        {:else}
+          <span class="text-outline/35">—</span>
+        {/if}
+      </span>
+    </div>
+  </Tooltip>
 </div>
