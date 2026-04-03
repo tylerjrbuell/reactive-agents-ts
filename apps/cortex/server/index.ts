@@ -8,6 +8,8 @@ import { toolsRouter } from "./api/tools.js";
 import { mcpServersRouter } from "./api/mcp-servers.js";
 import { skillsRouter } from "./api/skills.js";
 import { modelsRouter } from "./api/models.js";
+import { chatRouter } from "./api/chat.js";
+import { ChatSessionService } from "./services/chat-session-service.js";
 import { handleIngestMessage } from "./ws/ingest.js";
 import {
   handleLiveOpen,
@@ -45,6 +47,8 @@ export async function startCortexServer(config: CortexConfig = defaultCortexConf
   // Hydrate gateway agents — starts persistent processes for all active agents
   void runtime.gateway.hydrate();
 
+  const chatSessionService = new ChatSessionService(runtime.rawDb);
+
   const app = new Elysia()
     .use(runsRouter(runtime.storeLayer, runtime.runnerLayer))
     .use(messagesRouter(runtime.rawDb))
@@ -53,6 +57,7 @@ export async function startCortexServer(config: CortexConfig = defaultCortexConf
     .use(mcpServersRouter(runtime.rawDb))
     .use(skillsRouter(runtime.storeLayer))
     .use(modelsRouter)
+    .use(chatRouter(chatSessionService))
     .ws("/ws/ingest", {
       open() {
         cortexLog("info", "ingest-ws", "ingest client connected");

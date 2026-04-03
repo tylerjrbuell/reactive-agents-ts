@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
 import type { CortexIngestMessage, RunSummary } from "../types.js";
+import { deleteChatSessionsForRun } from "./chat-queries.js";
 
 export function insertEvent(
   db: Database,
@@ -246,6 +247,7 @@ export function getNextSeq(db: Database, runId: string): number {
 }
 
 export function deleteRun(db: Database, runId: string): boolean {
+  deleteChatSessionsForRun(db, runId);
   db.prepare(`DELETE FROM cortex_events WHERE run_id = ?`).run(runId);
   const result = db.prepare(`DELETE FROM cortex_runs WHERE run_id = ?`).run(runId) as {
     changes?: number;

@@ -1,6 +1,7 @@
 import { Database } from "bun:sqlite";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
+import { deleteRun } from "./queries.js";
 
 export function openDatabase(dbPath: string): Database {
   mkdirSync(path.dirname(dbPath), { recursive: true });
@@ -12,6 +13,8 @@ export function openDatabase(dbPath: string): Database {
 }
 
 export function applySchema(db: Database): void {
+  /** Required for `REFERENCES … ON DELETE CASCADE` (e.g. chat turns → sessions). */
+  db.exec("PRAGMA foreign_keys = ON");
   db.exec(`
     CREATE TABLE IF NOT EXISTS cortex_events (
       id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -79,6 +82,30 @@ export function applySchema(db: Database): void {
 
     CREATE INDEX IF NOT EXISTS idx_mcp_cached_tools_server
       ON cortex_mcp_cached_tools(server_id);
+
+    CREATE TABLE IF NOT EXISTS cortex_chat_sessions (
+      session_id   TEXT PRIMARY KEY,
+      name         TEXT    NOT NULL DEFAULT 'New Chat',
+      agent_config TEXT    NOT NULL,
+      created_at   INTEGER NOT NULL DEFAULT (unixepoch('now','subsec') * 1000),
+      last_used_at INTEGER NOT NULL DEFAULT (unixepoch('now','subsec') * 1000)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_chat_sessions_last_used
+      ON cortex_chat_sessions(last_used_at DESC);
+
+    CREATE TABLE IF NOT EXISTS cortex_chat_turns (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id   TEXT    NOT NULL REFERENCES cortex_chat_sessions(session_id) ON DELETE CASCADE,
+      role         TEXT    NOT NULL,
+      content      TEXT    NOT NULL,
+      tokens_used  INTEGER NOT NULL DEFAULT 0,
+      tools_json   TEXT,
+      ts           INTEGER NOT NULL DEFAULT (unixepoch('now','subsec') * 1000)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_chat_turns_session
+      ON cortex_chat_turns(session_id, id ASC);
   `);
 
   // Migrations — safe to run on existing DBs (ALTER TABLE IF NOT EXISTS column)
@@ -92,6 +119,18 @@ export function applySchema(db: Database): void {
     .map((c) => c.name);
   if (!agentCols.includes("agent_type")) {
     db.exec("ALTER TABLE cortex_agents ADD COLUMN agent_type TEXT NOT NULL DEFAULT 'gateway'");
+  }
+
+  const chatTurnCols = (db.prepare("PRAGMA table_info(cortex_chat_turns)").all() as Array<{ name: string }>)
+    .map((c) => c.name);
+  if (!chatTurnCols.includes("tools_json")) {
+    db.exec("ALTER TABLE cortex_chat_turns ADD COLUMN tools_json TEXT");
+  }
+
+  const chatSessionCols = (db.prepare("PRAGMA table_info(cortex_chat_sessions)").all() as Array<{ name: string }>)
+    .map((c) => c.name);
+  if (!chatSessionCols.includes("stable_agent_id")) {
+    db.exec("ALTER TABLE cortex_chat_sessions ADD COLUMN stable_agent_id TEXT");
   }
 }
 
@@ -110,10 +149,7 @@ export function enforceRetention(db: Database, agentId: string): void {
 
   if (staleRunIds.length === 0) return;
 
-  const deleteEvents = db.prepare(`DELETE FROM cortex_events WHERE run_id = ?`);
-  const deleteRun = db.prepare(`DELETE FROM cortex_runs WHERE run_id = ?`);
   for (const { run_id } of staleRunIds) {
-    deleteEvents.run(run_id);
-    deleteRun.run(run_id);
+    deleteRun(db, run_id);
   }
 }

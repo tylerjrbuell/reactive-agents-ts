@@ -237,6 +237,7 @@ export class GatewayProcessManager {
 
       const agent = await buildCortexAgent({
         agentName: name,
+        agentId,
         provider: providerRaw,
         ...(modelRaw ? { model: modelRaw } : {}),
         ...(_temperature != null ? { temperature: _temperature } : {}),

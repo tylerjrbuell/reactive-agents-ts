@@ -186,4 +186,27 @@ describe("GatewayProcessManager — triggerNow", () => {
 
     gpm.destroy();
   });
+
+  it("triggerNow passes the gateway agent_id to buildCortexAgent (stable identity)", async () => {
+    const db = new Database(":memory:");
+    applySchema(db);
+    const gpm = makeGateway(db);
+
+    const stableId = "gateway-stable-id-abc";
+    createGatewayAgent(
+      db,
+      stableId,
+      "Stable Gateway Agent",
+      JSON.stringify({ prompt: "Do work", provider: "test", model: "test-model" }),
+      null,
+    );
+
+    const result = await gpm.triggerNow(stableId);
+    expect("error" in result).toBe(false);
+    if (!("error" in result)) {
+      expect(result.agentId).toBe(stableId);
+    }
+
+    gpm.destroy();
+  });
 });

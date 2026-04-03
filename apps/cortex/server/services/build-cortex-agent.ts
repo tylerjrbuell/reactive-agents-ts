@@ -9,6 +9,7 @@
  * then agentConfigToBuilder() handles all schema-covered fields. A thin overlay
  * applies Cortex-specific fields that have no AgentConfig representation.
  */
+import type { TestTurn } from "@reactive-agents/llm-provider";
 import {
   agentConfigToBuilder,
   ReactiveAgents,
@@ -27,6 +28,12 @@ import { cortexParamsToAgentConfig } from "./cortex-to-agent-config.js";
 
 export interface BuildCortexAgentParams {
   readonly agentName?: string;
+  /**
+   * Stable agent identity to use for this build.
+   * When set, the framework uses this instead of generating a name-timestamp ID.
+   * All memory keyed on agentId accumulates across server restarts.
+   */
+  readonly agentId?: string;
   readonly provider?: string;
   readonly model?: string;
   readonly temperature?: number;
@@ -80,6 +87,8 @@ export interface BuildCortexAgentParams {
     readonly traits?: string;
     readonly responseStyle?: string;
   };
+  /** When set (e.g. desk chat with `provider: "test"`), wires `withTestScenario` on the builder. */
+  readonly testScenario?: readonly TestTurn[];
 }
 
 /**
@@ -96,6 +105,12 @@ export async function buildCortexAgent(
   const agentConfig = cortexParamsToAgentConfig(params, agentNameFallback);
 
   let b = await agentConfigToBuilder(agentConfig);
+
+  if (params.agentId) b = b.withAgentId(params.agentId);
+
+  if (params.testScenario && params.testScenario.length > 0) {
+    b = b.withTestScenario([...params.testScenario]);
+  }
 
   // Legacy parity: always enable the memory layer when the desk did not map memory tiers.
   if (!agentConfig.memory) {

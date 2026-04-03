@@ -3,7 +3,7 @@ import { extractReasoningStepDisplayMessages } from "../../messages-extract.js";
 
 describe("extractReasoningStepDisplayMessages", () => {
   it("uses non-empty messages[] when present", () => {
-    const msgs = [{ role: "user", content: "hi" }];
+    const msgs = [{ role: "user" as const, content: "hi" }];
     const out = extractReasoningStepDisplayMessages({
       messages: msgs,
       thought: "ignored when messages set",

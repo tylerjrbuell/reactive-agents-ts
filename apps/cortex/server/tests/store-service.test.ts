@@ -3,6 +3,7 @@ import { Effect, Option } from "effect";
 import { Database } from "bun:sqlite";
 import { applySchema } from "../db/schema.js";
 import { upsertRun, updateRunStats } from "../db/queries.js";
+import { appendChatTurn, createChatSession, getChatSession, getChatTurns } from "../db/chat-queries.js";
 import { CortexStoreService, CortexStoreServiceLive } from "../services/store-service.js";
 
 const makeLayer = (db: Database) => CortexStoreServiceLive(db);
@@ -117,6 +118,39 @@ describe("CortexStoreService", () => {
     const remainingEvents = db.prepare("SELECT COUNT(*) as c FROM cortex_events WHERE run_id = ?").get("run-del") as { c: number };
     expect(remaining.c).toBe(0);
     expect(remainingEvents.c).toBe(0);
+  });
+
+  it("deleteRun removes chat sessions whose agent_config.runId matches the run", async () => {
+    const db = new Database(":memory:");
+    applySchema(db);
+    upsertRun(db, "a", "run-chat");
+    upsertRun(db, "a", "run-other");
+    const boundId = createChatSession(db, {
+      name: "Bound",
+      agentConfig: { provider: "test", runId: "run-chat" },
+    });
+    appendChatTurn(db, { sessionId: boundId, role: "user", content: "hi", tokensUsed: 0 });
+    const looseId = createChatSession(db, {
+      name: "Loose",
+      agentConfig: { provider: "test", runId: "run-other" },
+    });
+    const deskId = createChatSession(db, {
+      name: "Desk",
+      agentConfig: { provider: "test" },
+    });
+
+    const deleted = await Effect.runPromise(
+      Effect.gen(function* () {
+        const svc = yield* CortexStoreService;
+        return yield* svc.deleteRun("run-chat");
+      }).pipe(Effect.provide(makeLayer(db))),
+    );
+    expect(deleted).toBe(true);
+
+    expect(getChatSession(db, boundId)).toBeNull();
+    expect(getChatTurns(db, boundId)).toHaveLength(0);
+    expect(getChatSession(db, looseId)).not.toBeNull();
+    expect(getChatSession(db, deskId)).not.toBeNull();
   });
 
   it("pruneRuns deletes old non-live runs and preserves old live runs by default", async () => {

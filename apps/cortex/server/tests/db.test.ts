@@ -27,6 +27,8 @@ describe("CortexDB schema + queries", () => {
     expect(names).toContain("cortex_events");
     expect(names).toContain("cortex_runs");
     expect(names).toContain("cortex_agents");
+    expect(names).toContain("cortex_chat_sessions");
+    expect(names).toContain("cortex_chat_turns");
   });
 
   it("should insert and retrieve events", () => {
@@ -194,5 +196,23 @@ describe("CortexDB schema + queries", () => {
     upsertRun(db, "b", "only");
     enforceRetention(db, "b");
     expect(getRunById(db, "only")).not.toBeNull();
+  });
+
+  it("cortex_chat_sessions has stable_agent_id column after migration", () => {
+    const db2 = new Database(":memory:");
+    db2.exec(`
+      CREATE TABLE IF NOT EXISTS cortex_chat_sessions (
+        session_id   TEXT PRIMARY KEY,
+        name         TEXT    NOT NULL DEFAULT 'New Chat',
+        agent_config TEXT    NOT NULL,
+        created_at   INTEGER NOT NULL DEFAULT 0,
+        last_used_at INTEGER NOT NULL DEFAULT 0
+      )
+    `);
+    applySchema(db2);
+    const cols = (db2.prepare("PRAGMA table_info(cortex_chat_sessions)").all() as Array<{ name: string }>).map(
+      (c) => c.name,
+    );
+    expect(cols).toContain("stable_agent_id");
   });
 });
