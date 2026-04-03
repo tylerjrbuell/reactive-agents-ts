@@ -134,10 +134,11 @@ describe("CortexIngestService", () => {
           _tag: "AgentCompleted",
           taskId: "t",
           agentId: "a",
+          success: true,
           totalIterations: 1,
           totalTokens: 8,
           durationMs: 40,
-        } as { _tag: "AgentCompleted"; taskId: string; agentId: string; totalIterations: number; totalTokens: number; durationMs: number },
+        } as { _tag: "AgentCompleted"; taskId: string; agentId: string; success: boolean; totalIterations: number; totalTokens: number; durationMs: number },
       });
     });
     await Effect.runPromise(program.pipe(Effect.provide(makeTestLayer(db))));

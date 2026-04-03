@@ -217,36 +217,54 @@ export class GatewayProcessManager {
         config,
       });
 
+      const _temperature = typeof config.temperature === "number" ? config.temperature : undefined;
+      const _maxTokens = typeof config.maxTokens === "number" && config.maxTokens > 0 ? config.maxTokens : undefined;
+      const _strategy = config.strategy as string | undefined;
+      const _maxIterations = typeof config.maxIterations === "number" && config.maxIterations > 0 ? config.maxIterations : undefined;
+      const _minIterations = typeof config.minIterations === "number" && config.minIterations > 0 ? config.minIterations : undefined;
+      const _systemPrompt = (config.systemPrompt as string | undefined)?.trim() || undefined;
+      const _taskContext = coerceTaskContextRecord(config.taskContext) ?? undefined;
+      const _skills = parseCortexSkillsConfig(config.skills) ?? undefined;
+      const _timeout = typeof config.timeout === "number" && config.timeout > 0 ? config.timeout : undefined;
+      const _cacheTimeout = typeof config.cacheTimeout === "number" && config.cacheTimeout > 0 ? config.cacheTimeout : undefined;
+      const _progressCheckpoint = typeof config.progressCheckpoint === "number" && config.progressCheckpoint > 0 ? config.progressCheckpoint : undefined;
+      const _verificationStep = config.verificationStep as string | undefined;
+      const _observabilityVerbosity = config.observabilityVerbosity as "off" | "minimal" | "normal" | "verbose" | undefined;
+      const _memory = config.memory as { working?: boolean; episodic?: boolean; semantic?: boolean } | undefined;
+      const _contextSynthesis = config.contextSynthesis as "auto" | "template" | "llm" | "none" | undefined;
+      const _guardrails = config.guardrails as { enabled?: boolean; injectionThreshold?: number; piiThreshold?: number; toxicityThreshold?: number } | undefined;
+      const _persona = config.persona as { enabled?: boolean; role?: string; tone?: string; traits?: string; responseStyle?: string } | undefined;
+
       const agent = await buildCortexAgent({
         agentName: name,
         provider: providerRaw,
-        model: modelRaw,
-        temperature: typeof config.temperature === "number" ? config.temperature : undefined,
-        maxTokens: typeof config.maxTokens === "number" && config.maxTokens > 0 ? config.maxTokens : undefined,
-        strategy: config.strategy as string | undefined,
-        maxIterations: typeof config.maxIterations === "number" && config.maxIterations > 0 ? config.maxIterations : undefined,
-        minIterations: typeof config.minIterations === "number" && config.minIterations > 0 ? config.minIterations : undefined,
-        systemPrompt: (config.systemPrompt as string | undefined)?.trim() || undefined,
-        taskContext: coerceTaskContextRecord(config.taskContext) ?? undefined,
+        ...(modelRaw ? { model: modelRaw } : {}),
+        ...(_temperature != null ? { temperature: _temperature } : {}),
+        ...(_maxTokens != null ? { maxTokens: _maxTokens } : {}),
+        ...(_strategy ? { strategy: _strategy } : {}),
+        ...(_maxIterations != null ? { maxIterations: _maxIterations } : {}),
+        ...(_minIterations != null ? { minIterations: _minIterations } : {}),
+        ...(_systemPrompt ? { systemPrompt: _systemPrompt } : {}),
+        ...(_taskContext ? { taskContext: _taskContext } : {}),
         healthCheck: config.healthCheck === true,
-        skills: parseCortexSkillsConfig(config.skills) ?? undefined,
+        ...(_skills ? { skills: _skills } : {}),
         mcpConfigs,
-        tools,
-        agentTools,
-        dynamicSubAgents: dynamicSub,
-        metaTools: metaToolsCfg,
-        timeout: typeof config.timeout === "number" && config.timeout > 0 ? config.timeout : undefined,
-        retryPolicy,
-        cacheTimeout: typeof config.cacheTimeout === "number" && config.cacheTimeout > 0 ? config.cacheTimeout : undefined,
-        progressCheckpoint: typeof config.progressCheckpoint === "number" && config.progressCheckpoint > 0 ? config.progressCheckpoint : undefined,
-        fallbacks: fallbacksCfg,
-        verificationStep: config.verificationStep as string | undefined,
-        observabilityVerbosity: config.observabilityVerbosity as "off" | "minimal" | "normal" | "verbose" | undefined,
+        ...(tools ? { tools } : {}),
+        ...(agentTools ? { agentTools } : {}),
+        ...(dynamicSub ? { dynamicSubAgents: dynamicSub } : {}),
+        ...(metaToolsCfg ? { metaTools: metaToolsCfg } : {}),
+        ...(_timeout != null ? { timeout: _timeout } : {}),
+        ...(retryPolicy ? { retryPolicy } : {}),
+        ...(_cacheTimeout != null ? { cacheTimeout: _cacheTimeout } : {}),
+        ...(_progressCheckpoint != null ? { progressCheckpoint: _progressCheckpoint } : {}),
+        ...(fallbacksCfg ? { fallbacks: fallbacksCfg } : {}),
+        ...(_verificationStep ? { verificationStep: _verificationStep } : {}),
+        ...(_observabilityVerbosity ? { observabilityVerbosity: _observabilityVerbosity } : {}),
         strategySwitching: config.strategySwitching === true,
-        memory: config.memory as { working?: boolean; episodic?: boolean; semantic?: boolean } | undefined,
-        contextSynthesis: config.contextSynthesis as "auto" | "template" | "llm" | "none" | undefined,
-        guardrails: config.guardrails as { enabled?: boolean; injectionThreshold?: number; piiThreshold?: number; toxicityThreshold?: number } | undefined,
-        persona: config.persona as { enabled?: boolean; role?: string; tone?: string; traits?: string; responseStyle?: string } | undefined,
+        ...(_memory ? { memory: _memory } : {}),
+        ...(_contextSynthesis ? { contextSynthesis: _contextSynthesis } : {}),
+        ...(_guardrails ? { guardrails: _guardrails } : {}),
+        ...(_persona ? { persona: _persona } : {}),
       });
       const agentId_ = agent.agentId;
 

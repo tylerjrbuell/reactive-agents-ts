@@ -116,25 +116,20 @@ export async function buildCortexAgent(
   }
 
   // ── Reasoning ──────────────────────────────────────────────────────────
-  const reasoningOpts: Partial<ReasoningOptions> = {};
-  if (params.strategy) reasoningOpts.defaultStrategy = params.strategy as ReasoningOptions["defaultStrategy"];
-  if (params.maxIterations && params.maxIterations > 0) {
-    reasoningOpts.maxIterations = params.maxIterations;
-  }
-  if (params.strategySwitching === true) {
-    reasoningOpts.enableStrategySwitching = true;
-  }
+  const ro: {
+    defaultStrategy?: ReasoningOptions["defaultStrategy"];
+    maxIterations?: number;
+    enableStrategySwitching?: boolean;
+    synthesis?: string;
+  } = {};
+  if (params.strategy) ro.defaultStrategy = params.strategy as ReasoningOptions["defaultStrategy"];
+  if (params.maxIterations && params.maxIterations > 0) ro.maxIterations = params.maxIterations;
+  if (params.strategySwitching === true) ro.enableStrategySwitching = true;
   if (params.contextSynthesis && params.contextSynthesis !== "none") {
-    const synthesisMap: Record<string, "auto" | "fast" | "deep" | "custom" | "off"> = {
-      auto: "auto",
-      template: "fast",
-      llm: "deep",
-    };
-    reasoningOpts.synthesis = synthesisMap[params.contextSynthesis] ?? "auto";
+    const synthesisMap: Record<string, string> = { auto: "auto", template: "fast", llm: "deep" };
+    ro.synthesis = synthesisMap[params.contextSynthesis] ?? "auto";
   }
-  if (Object.keys(reasoningOpts).length > 0) {
-    b = b.withReasoning(reasoningOpts as ReasoningOptions);
-  }
+  if (Object.keys(ro).length > 0) b = b.withReasoning(ro as ReasoningOptions);
 
   // ── Memory ─────────────────────────────────────────────────────────────
   // episodic or semantic → enhanced tier; otherwise standard (no-args = tier "1")

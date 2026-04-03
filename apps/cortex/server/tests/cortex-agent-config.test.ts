@@ -77,7 +77,7 @@ describe("normalizeCortexAgentConfig", () => {
       dynamicSubAgents: { enabled: true, maxIterations: 3 },
     });
     expect(out.agentTools).toHaveLength(2);
-    expect((out.agentTools![0] as { kind: string }).kind).toBe("local");
+    expect((out.agentTools as Array<{ kind: string }>)[0]!.kind).toBe("local");
     expect(out.dynamicSubAgents).toEqual({ enabled: true, maxIterations: 3 });
   });
 });
