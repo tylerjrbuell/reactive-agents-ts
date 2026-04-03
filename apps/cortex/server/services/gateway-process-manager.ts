@@ -19,18 +19,16 @@ import { getGatewayAgents, getGatewayAgent, updateGatewayAgent, upsertRun } from
 import { getMcpServersByIds, parseMcpConfig } from "../db/mcp-queries.js";
 import {
   coerceTaskContextRecord,
-  mergeCortexAllowedTools,
   normalizeCortexAgentConfig,
   parseCortexSkillsConfig,
   type CortexAgentToolEntry,
   type CortexDynamicSubAgentsConfig,
   type CortexMetaToolsConfig,
 } from "./cortex-agent-config.js";
-import { ensureParentDirForFile } from "./ensure-log-path.js";
 import { CortexIngestService } from "./ingest-service.js";
 import type { Layer } from "effect";
-import { ReactiveAgents, type ProviderName } from "@reactive-agents/runtime";
 import { generateTaskId } from "@reactive-agents/core";
+import { buildCortexAgent } from "./build-cortex-agent.js";
 
 interface AgentProcess {
   readonly agentId: string;
@@ -197,30 +195,6 @@ export class GatewayProcessManager {
         CortexIngestService.pipe(Effect.provide(this.ingestLayer)),
       );
 
-      let builder = ReactiveAgents.create()
-        .withName(name)
-        .withProvider(providerRaw as ProviderName);
-
-      // ── Model + inference params (temperature 0 is valid — do not use truthiness) ──
-      const maxTokens = typeof config.maxTokens === "number" ? config.maxTokens : 0;
-      const temperature = typeof config.temperature === "number" ? config.temperature : undefined;
-      if (modelRaw || temperature !== undefined || maxTokens > 0) {
-        const mp: Record<string, unknown> = {};
-        if (modelRaw) mp.model = modelRaw;
-        if (temperature !== undefined) mp.temperature = temperature;
-        if (maxTokens > 0) mp.maxTokens = maxTokens;
-        builder = builder.withModel(mp as any);
-      }
-
-      // ── Reasoning ────────────────────────────────────────────────────
-      const reasoningOpts: Record<string, unknown> = {};
-      if (config.strategy) reasoningOpts.defaultStrategy = config.strategy;
-      const maxIterations = typeof config.maxIterations === "number" ? config.maxIterations : 0;
-      if (maxIterations > 0) reasoningOpts.maxIterations = maxIterations;
-      if (Object.keys(reasoningOpts).length > 0) builder = builder.withReasoning(reasoningOpts as any);
-
-      // ── Memory / MCP / sub-agents / tool allowlist ─────────────────────
-      builder = builder.withMemory();
       const tools = config.tools as string[] | undefined;
       const metaToolsCfg = config.metaTools as CortexMetaToolsConfig | undefined;
       const mcpIds = (config.mcpServerIds as string[] | undefined)?.filter((x) => typeof x === "string" && x.length > 0) ?? [];
@@ -228,134 +202,14 @@ export class GatewayProcessManager {
       const mcpConfigs = mcpRows.map(parseMcpConfig);
       const agentTools = config.agentTools as CortexAgentToolEntry[] | undefined;
       const dynamicSub = config.dynamicSubAgents as CortexDynamicSubAgentsConfig | undefined;
-      const allowExtras = {
-        spawnAgent: dynamicSub?.enabled === true,
-        agentToolNames: agentTools?.map((t) => t.toolName) ?? [],
-      };
-      const userTools = tools ?? [];
-      const mergedAllowed = mergeCortexAllowedTools(userTools, metaToolsCfg, allowExtras);
-      const needsToolLayer =
-        mcpConfigs.length > 0 ||
-        (agentTools && agentTools.length > 0) ||
-        dynamicSub?.enabled === true ||
-        (tools && tools.length > 0) ||
-        metaToolsCfg?.enabled === true;
-
-      for (const c of mcpConfigs) {
-        builder = builder.withMCP(c);
-      }
-      for (const at of agentTools ?? []) {
-        if (at.kind === "remote") {
-          builder = builder.withRemoteAgent(at.toolName, at.remoteUrl);
-        } else {
-          builder = builder.withAgentTool(at.toolName, {
-            name: at.agent.name,
-            ...(at.agent.description ? { description: at.agent.description } : {}),
-            ...(at.agent.provider ? { provider: at.agent.provider } : {}),
-            ...(at.agent.model ? { model: at.agent.model } : {}),
-            ...(at.agent.tools && at.agent.tools.length > 0 ? { tools: [...at.agent.tools] } : {}),
-            ...(at.agent.maxIterations ? { maxIterations: at.agent.maxIterations } : {}),
-            ...(at.agent.systemPrompt ? { systemPrompt: at.agent.systemPrompt } : {}),
-          });
-        }
-      }
-      if (dynamicSub?.enabled) {
-        builder = builder.withDynamicSubAgents(
-          dynamicSub.maxIterations ? { maxIterations: dynamicSub.maxIterations } : undefined,
-        );
-      }
-      if (needsToolLayer) {
-        builder = builder.withTools({ allowedTools: mergedAllowed });
-      }
-
-      // ── System prompt ─────────────────────────────────────────────────
-      const systemPrompt = (config.systemPrompt as string | undefined)?.trim();
-      if (systemPrompt) builder = builder.withSystemPrompt(systemPrompt);
-
-      const taskContext = coerceTaskContextRecord(config.taskContext);
-      if (taskContext) builder = builder.withTaskContext(taskContext);
-      if (config.healthCheck === true) builder = builder.withHealthCheck();
-
-      const skillsCfg = parseCortexSkillsConfig(config.skills);
-      if (skillsCfg) {
-        builder = builder.withSkills({
-          paths: [...skillsCfg.paths],
-          ...(skillsCfg.evolution ? { evolution: { ...skillsCfg.evolution } } : {}),
-        });
-      }
-
-      // ── Execution controls ────────────────────────────────────────────
-      const timeout = typeof config.timeout === "number" ? config.timeout : 0;
-      if (timeout > 0) builder = builder.withTimeout(timeout);
 
       const retryPolicyCfg = config.retryPolicy as { enabled?: boolean; maxRetries?: number; backoffMs?: number } | undefined;
       const maxRetries = retryPolicyCfg?.maxRetries;
-      if (
-        retryPolicyCfg?.enabled === true
-        && typeof maxRetries === "number"
-        && maxRetries > 0
-      ) {
-        builder = builder.withRetryPolicy({
-          maxRetries,
-          backoffMs: typeof retryPolicyCfg.backoffMs === "number" ? retryPolicyCfg.backoffMs : 1000,
-        });
-      }
+      const retryPolicy = retryPolicyCfg?.enabled === true && typeof maxRetries === "number" && maxRetries > 0
+        ? { enabled: true, maxRetries, backoffMs: typeof retryPolicyCfg.backoffMs === "number" ? retryPolicyCfg.backoffMs : 1000 }
+        : undefined;
 
-      const cacheTimeout = typeof config.cacheTimeout === "number" ? config.cacheTimeout : 0;
-      if (cacheTimeout > 0) builder = builder.withCacheTimeout(cacheTimeout);
-
-      const progressCheckpoint = typeof config.progressCheckpoint === "number" ? config.progressCheckpoint : 0;
-      if (progressCheckpoint > 0) builder = builder.withProgressCheckpoint(progressCheckpoint);
-
-      // ── Fallbacks ─────────────────────────────────────────────────────
       const fallbacksCfg = config.fallbacks as { enabled?: boolean; providers?: string[]; errorThreshold?: number } | undefined;
-      if (fallbacksCfg?.enabled && fallbacksCfg.providers?.length) {
-        builder = builder.withFallbacks({ providers: fallbacksCfg.providers, errorThreshold: fallbacksCfg.errorThreshold ?? 3 });
-      }
-
-      // ── Meta tools ────────────────────────────────────────────────────
-      if (metaToolsCfg?.enabled) {
-        builder = builder.withMetaTools({
-          brief: metaToolsCfg.brief ?? false,
-          find: metaToolsCfg.find ?? false,
-          pulse: metaToolsCfg.pulse ?? false,
-          recall: metaToolsCfg.recall ?? false,
-          harnessSkill: metaToolsCfg.harnessSkill ?? false,
-        });
-      }
-
-      // ── Min iterations ────────────────────────────────────────────────
-      const minIterations = typeof config.minIterations === "number" ? config.minIterations : 0;
-      if (minIterations > 0) builder = builder.withMinIterations(minIterations);
-
-      // ── Verification step ─────────────────────────────────────────────
-      const verificationStep = config.verificationStep as "none" | "reflect" | undefined;
-      if (verificationStep === "reflect") builder = builder.withVerificationStep({ mode: "reflect" });
-
-      // ── Observability / logging ───────────────────────────────────────
-      const observabilityVerbosity =
-        config.observabilityVerbosity as "off" | "minimal" | "normal" | "verbose" | undefined;
-      if (observabilityVerbosity && observabilityVerbosity !== "off") {
-        builder = builder.withObservability({ verbosity: observabilityVerbosity, live: true } as any);
-      }
-      const agentLogFile = process.env.CORTEX_AGENT_LOG_FILE ?? ".cortex/logs/agent-debug.log";
-      if (observabilityVerbosity === "verbose") {
-        ensureParentDirForFile(agentLogFile);
-        builder = builder.withLogging({
-          level: "debug",
-          format: "json",
-          output: "file",
-          filePath: agentLogFile,
-        } as any);
-      } else if (observabilityVerbosity && observabilityVerbosity !== "off") {
-        ensureParentDirForFile(agentLogFile);
-        builder = builder.withLogging({
-          level: "info",
-          format: "json",
-          output: "file",
-          filePath: agentLogFile,
-        } as any);
-      }
 
       cortexLog("debug", "gateway", "prepared normalized agent config for run", {
         agentId,
@@ -363,7 +217,37 @@ export class GatewayProcessManager {
         config,
       });
 
-      const agent = await builder.build();
+      const agent = await buildCortexAgent({
+        agentName: name,
+        provider: providerRaw,
+        model: modelRaw,
+        temperature: typeof config.temperature === "number" ? config.temperature : undefined,
+        maxTokens: typeof config.maxTokens === "number" && config.maxTokens > 0 ? config.maxTokens : undefined,
+        strategy: config.strategy as string | undefined,
+        maxIterations: typeof config.maxIterations === "number" && config.maxIterations > 0 ? config.maxIterations : undefined,
+        minIterations: typeof config.minIterations === "number" && config.minIterations > 0 ? config.minIterations : undefined,
+        systemPrompt: (config.systemPrompt as string | undefined)?.trim() || undefined,
+        taskContext: coerceTaskContextRecord(config.taskContext) ?? undefined,
+        healthCheck: config.healthCheck === true,
+        skills: parseCortexSkillsConfig(config.skills) ?? undefined,
+        mcpConfigs,
+        tools,
+        agentTools,
+        dynamicSubAgents: dynamicSub,
+        metaTools: metaToolsCfg,
+        timeout: typeof config.timeout === "number" && config.timeout > 0 ? config.timeout : undefined,
+        retryPolicy,
+        cacheTimeout: typeof config.cacheTimeout === "number" && config.cacheTimeout > 0 ? config.cacheTimeout : undefined,
+        progressCheckpoint: typeof config.progressCheckpoint === "number" && config.progressCheckpoint > 0 ? config.progressCheckpoint : undefined,
+        fallbacks: fallbacksCfg,
+        verificationStep: config.verificationStep as string | undefined,
+        observabilityVerbosity: config.observabilityVerbosity as "off" | "minimal" | "normal" | "verbose" | undefined,
+        strategySwitching: config.strategySwitching === true,
+        memory: config.memory as { working?: boolean; episodic?: boolean; semantic?: boolean } | undefined,
+        contextSynthesis: config.contextSynthesis as "auto" | "template" | "llm" | "none" | undefined,
+        guardrails: config.guardrails as { enabled?: boolean; injectionThreshold?: number; piiThreshold?: number; toxicityThreshold?: number } | undefined,
+        persona: config.persona as { enabled?: boolean; role?: string; tone?: string; traits?: string; responseStyle?: string } | undefined,
+      });
       const agentId_ = agent.agentId;
 
       // Pre-create the run row so the UI can find it immediately on navigation.

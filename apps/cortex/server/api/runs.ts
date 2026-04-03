@@ -43,6 +43,11 @@ export const runsRouter = (
               : {}),
             ...(b.healthCheck === true ? { healthCheck: true as const } : {}),
             ...(b.skills?.paths?.length ? { skills: b.skills } : {}),
+            ...(b.strategySwitching != null ? { strategySwitching: b.strategySwitching } : {}),
+            ...(b.memory ? { memory: b.memory } : {}),
+            ...(b.contextSynthesis ? { contextSynthesis: b.contextSynthesis } : {}),
+            ...(b.guardrails ? { guardrails: b.guardrails } : {}),
+            ...(b.persona ? { persona: b.persona } : {}),
           });
         });
         try {
@@ -83,6 +88,11 @@ export const runsRouter = (
           ),
           taskContext: t.Optional(t.Record(t.String(), t.String())),
           healthCheck: t.Optional(t.Boolean()),
+          strategySwitching: t.Optional(t.Boolean()),
+          memory: t.Optional(t.Object({ working: t.Optional(t.Boolean()), episodic: t.Optional(t.Boolean()), semantic: t.Optional(t.Boolean()) })),
+          contextSynthesis: t.Optional(t.Union([t.Literal("auto"), t.Literal("template"), t.Literal("llm"), t.Literal("none")])),
+          guardrails: t.Optional(t.Object({ enabled: t.Optional(t.Boolean()), injectionThreshold: t.Optional(t.Number()), piiThreshold: t.Optional(t.Number()), toxicityThreshold: t.Optional(t.Number()) })),
+          persona: t.Optional(t.Object({ enabled: t.Optional(t.Boolean()), role: t.Optional(t.String()), tone: t.Optional(t.String()), traits: t.Optional(t.String()), responseStyle: t.Optional(t.String()) })),
           skills: t.Optional(
             t.Object({
               paths: t.Array(t.String()),

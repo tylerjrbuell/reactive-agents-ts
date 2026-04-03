@@ -6,19 +6,17 @@
  */
 import { Effect, Context, Layer, Ref } from "effect";
 import { generateTaskId } from "@reactive-agents/core";
-import { ReactiveAgents, type ProviderName } from "@reactive-agents/runtime";
 import type { RunId } from "../types.js";
 import { CortexError } from "../errors.js";
 import { CortexIngestService } from "./ingest-service.js";
 import { CortexStoreService } from "./store-service.js";
 import { cortexLog, cortexLogRunnerExecution, formatErrorDetails } from "../cortex-log.js";
-import { ensureParentDirForFile } from "./ensure-log-path.js";
-import {
-  mergeCortexAllowedTools,
-  type CortexAgentToolEntry,
-  type CortexDynamicSubAgentsConfig,
-  type CortexSkillsConfig,
+import type {
+  CortexAgentToolEntry,
+  CortexDynamicSubAgentsConfig,
+  CortexSkillsConfig,
 } from "./cortex-agent-config.js";
+import { buildCortexAgent } from "./build-cortex-agent.js";
 
 export interface LaunchParams {
   readonly prompt: string;
@@ -50,6 +48,16 @@ export interface LaunchParams {
   readonly healthCheck?: boolean;
   /** Living skills directories (framework `withSkills`). */
   readonly skills?: CortexSkillsConfig;
+  /** When true, enables automatic strategy switching on loop detection. */
+  readonly strategySwitching?: boolean;
+  /** Memory tier selection. episodic or semantic presence → enhanced tier. */
+  readonly memory?: { working?: boolean; episodic?: boolean; semantic?: boolean };
+  /** Context synthesis mode passed to `.withReasoning({ synthesis })`. */
+  readonly contextSynthesis?: "auto" | "template" | "llm" | "none";
+  /** Guardrails config; wires `.withGuardrails()` when enabled. */
+  readonly guardrails?: { enabled?: boolean; injectionThreshold?: number; piiThreshold?: number; toxicityThreshold?: number };
+  /** Persona config; wires `.withPersona()` when enabled. */
+  readonly persona?: { enabled?: boolean; role?: string; tone?: string; traits?: string; responseStyle?: string };
 }
 
 type ActiveEntry = {
@@ -93,139 +101,39 @@ export const CortexRunnerServiceLive = Layer.effect(
               ? yield* store.getMcpServerConfigsByIds(params.mcpServerIds)
               : [];
 
-          const allowExtras = {
-            spawnAgent: params.dynamicSubAgents?.enabled === true,
-            agentToolNames: params.agentTools?.map((t) => t.toolName) ?? [],
-          };
-          const userTools = params.tools ?? [];
-          const mergedAllowed = mergeCortexAllowedTools(userTools, params.metaTools, allowExtras);
-          const needsToolLayer =
-            mcpConfigs.length > 0 ||
-            (params.agentTools && params.agentTools.length > 0) ||
-            params.dynamicSubAgents?.enabled === true ||
-            (params.tools && params.tools.length > 0) ||
-            params.metaTools?.enabled === true;
-
           const agent = yield* Effect.tryPromise({
-            try: async () => {
-              const agentName = params.agentName?.trim()
-                || `cortex-desk-${Date.now()}`;
-              let b = ReactiveAgents.create()
-                .withName(agentName)
-                .withProvider(providerRaw as ProviderName);
-
-              // ── Model / inference ────────────────────────────────────
-              if (params.model?.trim() || params.temperature != null || params.maxTokens) {
-                const mp: Record<string, unknown> = {};
-                if (params.model?.trim()) mp.model = params.model.trim();
-                if (params.temperature != null) mp.temperature = params.temperature;
-                if (params.maxTokens) mp.maxTokens = params.maxTokens;
-                b = b.withModel(mp as any);
-              }
-
-              // ── Reasoning ────────────────────────────────────────────
-              const reasoningOpts: Record<string, unknown> = {};
-              if (params.strategy) reasoningOpts.defaultStrategy = params.strategy;
-              if (params.maxIterations && params.maxIterations > 0) reasoningOpts.maxIterations = params.maxIterations;
-              if (Object.keys(reasoningOpts).length > 0) b = b.withReasoning(reasoningOpts as any);
-
-              // ── Memory / MCP / sub-agents / tool allowlist ───────────
-              b = b.withMemory();
-              for (const c of mcpConfigs) {
-                b = b.withMCP(c);
-              }
-              for (const at of params.agentTools ?? []) {
-                if (at.kind === "remote") {
-                  b = b.withRemoteAgent(at.toolName, at.remoteUrl);
-                } else {
-                  b = b.withAgentTool(at.toolName, {
-                    name: at.agent.name,
-                    ...(at.agent.description ? { description: at.agent.description } : {}),
-                    ...(at.agent.provider ? { provider: at.agent.provider } : {}),
-                    ...(at.agent.model ? { model: at.agent.model } : {}),
-                    ...(at.agent.tools && at.agent.tools.length > 0 ? { tools: [...at.agent.tools] } : {}),
-                    ...(at.agent.maxIterations ? { maxIterations: at.agent.maxIterations } : {}),
-                    ...(at.agent.systemPrompt ? { systemPrompt: at.agent.systemPrompt } : {}),
-                  });
-                }
-              }
-              if (params.dynamicSubAgents?.enabled) {
-                b = b.withDynamicSubAgents(
-                  params.dynamicSubAgents.maxIterations
-                    ? { maxIterations: params.dynamicSubAgents.maxIterations }
-                    : undefined,
-                );
-              }
-              if (needsToolLayer) {
-                b = b.withTools({ allowedTools: mergedAllowed });
-              }
-
-              // ── System prompt ─────────────────────────────────────────
-              if (params.systemPrompt?.trim()) b = b.withSystemPrompt(params.systemPrompt.trim());
-
-              const tc = params.taskContext;
-              if (tc && Object.keys(tc).length > 0) b = b.withTaskContext(tc);
-              if (params.healthCheck === true) b = b.withHealthCheck();
-
-              const sk = params.skills;
-              if (sk?.paths?.length) {
-                b = b.withSkills({
-                  paths: [...sk.paths],
-                  ...(sk.evolution ? { evolution: { ...sk.evolution } } : {}),
-                });
-              }
-
-              // ── Execution controls ────────────────────────────────────
-              if (params.timeout && params.timeout > 0) b = b.withTimeout(params.timeout);
-              if (params.retryPolicy?.enabled && params.retryPolicy.maxRetries) {
-                b = b.withRetryPolicy({ maxRetries: params.retryPolicy.maxRetries, backoffMs: params.retryPolicy.backoffMs ?? 1000 });
-              }
-              if (params.cacheTimeout && params.cacheTimeout > 0) b = b.withCacheTimeout(params.cacheTimeout);
-              if (params.progressCheckpoint && params.progressCheckpoint > 0) b = b.withProgressCheckpoint(params.progressCheckpoint);
-              if (params.minIterations && params.minIterations > 0) b = b.withMinIterations(params.minIterations);
-              if (params.verificationStep === "reflect") b = b.withVerificationStep({ mode: "reflect" });
-
-              // ── Fallbacks ─────────────────────────────────────────────
-              if (params.fallbacks?.enabled && params.fallbacks.providers?.length) {
-                b = b.withFallbacks({ providers: params.fallbacks.providers, errorThreshold: params.fallbacks.errorThreshold ?? 3 });
-              }
-
-              // ── Meta tools (Conductor's Suite) ────────────────────────
-              if (params.metaTools?.enabled) {
-                b = b.withMetaTools({
-                  brief: params.metaTools.brief ?? false,
-                  find: params.metaTools.find ?? false,
-                  pulse: params.metaTools.pulse ?? false,
-                  recall: params.metaTools.recall ?? false,
-                  harnessSkill: params.metaTools.harnessSkill ?? false,
-                });
-              }
-
-              // ── Observability / logging ───────────────────────────────
-              if (params.observabilityVerbosity && params.observabilityVerbosity !== "off") {
-                b = b.withObservability({ verbosity: params.observabilityVerbosity, live: true } as any);
-              }
-              const agentLogFile = process.env.CORTEX_AGENT_LOG_FILE ?? ".cortex/logs/agent-debug.log";
-              if (params.observabilityVerbosity === "verbose") {
-                ensureParentDirForFile(agentLogFile);
-                b = b.withLogging({
-                  level: "debug",
-                  format: "json",
-                  output: "file",
-                  filePath: agentLogFile,
-                } as any);
-              } else if (params.observabilityVerbosity && params.observabilityVerbosity !== "off") {
-                ensureParentDirForFile(agentLogFile);
-                b = b.withLogging({
-                  level: "info",
-                  format: "json",
-                  output: "file",
-                  filePath: agentLogFile,
-                } as any);
-              }
-
-              return b.build();
-            },
+            try: () =>
+              buildCortexAgent({
+                agentName: params.agentName,
+                provider: providerRaw,
+                model: params.model,
+                temperature: params.temperature,
+                maxTokens: params.maxTokens,
+                strategy: params.strategy,
+                maxIterations: params.maxIterations,
+                minIterations: params.minIterations,
+                systemPrompt: params.systemPrompt,
+                taskContext: params.taskContext,
+                healthCheck: params.healthCheck,
+                skills: params.skills,
+                mcpConfigs,
+                tools: params.tools,
+                agentTools: params.agentTools,
+                dynamicSubAgents: params.dynamicSubAgents,
+                metaTools: params.metaTools,
+                timeout: params.timeout,
+                retryPolicy: params.retryPolicy,
+                cacheTimeout: params.cacheTimeout,
+                progressCheckpoint: params.progressCheckpoint,
+                fallbacks: params.fallbacks,
+                verificationStep: params.verificationStep,
+                observabilityVerbosity: params.observabilityVerbosity,
+                strategySwitching: params.strategySwitching,
+                memory: params.memory,
+                contextSynthesis: params.contextSynthesis,
+                guardrails: params.guardrails,
+                persona: params.persona,
+              }),
             catch: (e) => new CortexError({ message: `Failed to build agent: ${String(e)}`, cause: e }),
           });
 

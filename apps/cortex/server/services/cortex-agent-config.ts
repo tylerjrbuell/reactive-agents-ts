@@ -212,6 +212,63 @@ export function normalizeCortexAgentConfig(raw: Record<string, unknown>): Record
     };
   } else delete out.skills;
 
+  // ── Five previously dead-end fields ─────────────────────────────────────
+
+  out.strategySwitching = raw.strategySwitching === true;
+
+  const mem = raw.memory;
+  if (mem && typeof mem === "object" && !Array.isArray(mem)) {
+    const m = mem as Record<string, unknown>;
+    out.memory = {
+      working: m.working === true,
+      episodic: m.episodic === true,
+      semantic: m.semantic === true,
+    };
+  } else {
+    delete out.memory;
+  }
+
+  const validSynthesisModes = new Set(["auto", "template", "llm", "none"]);
+  const cs = asNonEmptyString(raw.contextSynthesis);
+  if (cs && validSynthesisModes.has(cs)) {
+    out.contextSynthesis = cs;
+  } else {
+    delete out.contextSynthesis;
+  }
+
+  const gr = raw.guardrails;
+  if (gr && typeof gr === "object" && !Array.isArray(gr)) {
+    const g = gr as Record<string, unknown>;
+    out.guardrails = {
+      enabled: g.enabled === true,
+      ...(asFiniteNumber(g.injectionThreshold) !== undefined
+        ? { injectionThreshold: asFiniteNumber(g.injectionThreshold) }
+        : {}),
+      ...(asFiniteNumber(g.piiThreshold) !== undefined
+        ? { piiThreshold: asFiniteNumber(g.piiThreshold) }
+        : {}),
+      ...(asFiniteNumber(g.toxicityThreshold) !== undefined
+        ? { toxicityThreshold: asFiniteNumber(g.toxicityThreshold) }
+        : {}),
+    };
+  } else {
+    delete out.guardrails;
+  }
+
+  const pe = raw.persona;
+  if (pe && typeof pe === "object" && !Array.isArray(pe)) {
+    const p = pe as Record<string, unknown>;
+    out.persona = {
+      enabled: p.enabled === true,
+      ...(asNonEmptyString(p.role) !== undefined ? { role: asNonEmptyString(p.role) } : {}),
+      ...(asNonEmptyString(p.tone) !== undefined ? { tone: asNonEmptyString(p.tone) } : {}),
+      ...(asNonEmptyString(p.traits) !== undefined ? { traits: asNonEmptyString(p.traits) } : {}),
+      ...(asNonEmptyString(p.responseStyle) !== undefined ? { responseStyle: asNonEmptyString(p.responseStyle) } : {}),
+    };
+  } else {
+    delete out.persona;
+  }
+
   return out;
 }
 
