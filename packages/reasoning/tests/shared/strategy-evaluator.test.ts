@@ -1,7 +1,7 @@
 import { describe, it, expect } from "bun:test";
 import { Effect, Layer } from "effect";
-import type { StrategyHandoff, StrategyEvaluation } from "../../src/strategies/shared/strategy-evaluator.js";
-import { evaluateStrategySwitch, buildHandoff } from "../../src/strategies/shared/strategy-evaluator.js";
+import type { StrategyHandoff, StrategyEvaluation } from "../../src/strategies/kernel/utils/strategy-evaluator.js";
+import { evaluateStrategySwitch, buildHandoff } from "../../src/strategies/kernel/utils/strategy-evaluator.js";
 
 describe("StrategyHandoff interface", () => {
   it("StrategyHandoff conforms to expected shape", () => {

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "bun:test";
-import { transitionState, initialKernelState } from "../../src/strategies/shared/kernel-state.js";
-import type { KernelRunOptions } from "../../src/strategies/shared/kernel-state.js";
+import { transitionState, initialKernelState } from "../../src/strategies/kernel/kernel-state.js";
+import type { KernelRunOptions } from "../../src/strategies/kernel/kernel-state.js";
 
 describe("KernelStatus evaluating", () => {
   it("transitionState accepts evaluating status", () => {

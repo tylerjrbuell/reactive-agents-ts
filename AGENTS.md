@@ -89,7 +89,7 @@ Foundation (no reactive-agents deps)
 
 | Symptom | Start reading |
 |---|---|
-| Agent not calling tools | `packages/reasoning/src/strategies/reactive.ts` → `packages/reasoning/src/strategies/shared/kernel-runner.ts` |
+| Agent not calling tools | `packages/reasoning/src/strategies/reactive.ts` → `packages/reasoning/src/strategies/kernel/kernel-runner.ts` |
 | EventBus events not firing | `packages/core/src/services/event-bus.ts` → check `ManagedRuntime` is shared |
 | LLM call fails silently | `packages/llm-provider/src/runtime.ts` → provider-specific file in `src/providers/` |
 | Memory not persisting | `packages/memory/src/runtime.ts` → check `createMemoryLayer()` wiring |

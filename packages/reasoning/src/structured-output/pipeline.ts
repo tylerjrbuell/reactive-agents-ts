@@ -19,7 +19,7 @@ import { Effect, Option, Schema } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { EventBus } from "@reactive-agents/core";
 import { extractJsonBlock, repairJson } from "./json-repair.js";
-import { stripThinking } from "../strategies/shared/thinking-utils.js";
+import { stripThinking } from "../strategies/kernel/utils/stream-parser.js";
 
 export interface StructuredOutputConfig<T> {
   readonly schema: Schema.Schema<T>;

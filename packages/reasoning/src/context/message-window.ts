@@ -1,4 +1,4 @@
-import type { KernelMessage } from "../strategies/shared/kernel-state.js";
+import type { KernelMessage } from "../strategies/kernel/kernel-state.js";
 import type { ContextProfile } from "./context-profile.js";
 
 /** Full-turn window sizes per model tier. */

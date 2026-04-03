@@ -33,16 +33,16 @@ import { describe, it, expect } from "bun:test";
 import { Effect, Layer } from "effect";
 import { EventBus } from "@reactive-agents/core";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
-import { runKernel } from "../../src/strategies/shared/kernel-runner.js";
-import { buildKernelHooks } from "../../src/strategies/shared/kernel-hooks.js";
+import { runKernel } from "../../src/strategies/kernel/kernel-runner.js";
+import { buildKernelHooks } from "../../src/strategies/kernel/kernel-hooks.js";
 import {
   transitionState,
   initialKernelState,
   type KernelState,
   type ThoughtKernel,
   type EventBusInstance,
-} from "../../src/strategies/shared/kernel-state.js";
-import { makeStep } from "../../src/strategies/shared/step-utils.js";
+} from "../../src/strategies/kernel/kernel-state.js";
+import { makeStep } from "../../src/strategies/kernel/utils/step-utils.js";
 
 // ── Mock EventBus helper ──────────────────────────────────────────────────────
 

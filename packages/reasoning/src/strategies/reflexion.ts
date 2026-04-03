@@ -16,17 +16,17 @@ import type { ReasoningResult, ReasoningStep } from "../types/index.js";
 import { ExecutionError } from "../errors/errors.js";
 import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
-import { runKernel } from "./shared/kernel-runner.js";
-import { reactKernel } from "./shared/react-kernel.js";
+import { runKernel } from "./kernel/kernel-runner.js";
+import { reactKernel } from "./kernel/react-kernel.js";
 import {
   resolveStrategyServices,
   compilePromptOrFallback,
   publishReasoningStep,
-} from "./shared/service-utils.js";
-import { makeStep, buildStrategyResult } from "./shared/step-utils.js";
-import { isSatisfied, isCritiqueStagnant } from "./shared/quality-utils.js";
-import { extractThinking } from "./shared/thinking-utils.js";
-import type { ToolSchema } from "./shared/tool-utils.js";
+} from "./kernel/utils/service-utils.js";
+import { makeStep, buildStrategyResult } from "./kernel/utils/step-utils.js";
+import { isSatisfied, isCritiqueStagnant } from "./kernel/utils/quality-utils.js";
+import { extractThinking } from "./kernel/utils/stream-parser.js";
+import type { ToolSchema } from "./kernel/utils/tool-utils.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
 
