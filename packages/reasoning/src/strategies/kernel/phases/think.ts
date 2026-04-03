@@ -379,6 +379,17 @@ export function handleThinking(
       }
     }
 
+    // Clear recovery state after a successful (non-max_tokens) response so that
+    // maxOutputTokensOverride does not persist and silently inflate billing for
+    // all remaining iterations. Also reset the count so a later max_tokens event
+    // in the same run re-enters Stage 1 cleanly.
+    if (state.maxOutputTokensOverride !== undefined) {
+      state = transitionState(state, {
+        maxOutputTokensOverride: undefined,
+        maxOutputTokensRecoveryCount: undefined,
+      });
+    }
+
     const rawThought = thoughtResponse.content;
     const newTokens = state.tokens + thoughtResponse.usage.totalTokens;
     const newCost = state.cost + thoughtResponse.usage.estimatedCost;

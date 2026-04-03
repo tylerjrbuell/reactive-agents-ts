@@ -233,6 +233,46 @@ describe("max_output_tokens recovery — think phase", () => {
     expect((result as any).maxOutputTokensRecoveryCount ?? 0).toBe(0);
   });
 
+  // ── Recovery state cleared after successful response ─────────────────────
+
+  it("Recovery cleared: maxOutputTokensOverride and maxOutputTokensRecoveryCount are undefined after a successful end_turn response when override was previously set", async () => {
+    const normalEvents: StreamEvent[] = [
+      { type: "text_delta", text: "Here is my answer to the task after recovery." },
+      { type: "content_complete", content: "Here is my answer to the task after recovery." },
+      { type: "usage", usage: { inputTokens: 10, outputTokens: 30, totalTokens: 40, estimatedCost: 0 } },
+    ];
+
+    const normalLayer = Layer.succeed(
+      LLMService,
+      LLMService.of({
+        complete: () => Effect.succeed({ content: "", stopReason: "end_turn" as const, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0, estimatedCost: 0 }, model: "test" }),
+        stream: (_req) => Effect.succeed(Stream.fromIterable(normalEvents) as any),
+        embed: (texts) => Effect.succeed(texts.map(() => new Array(768).fill(0))),
+        countTokens: (msgs) => Effect.succeed(msgs.length * 10),
+        getModelConfig: () => Effect.succeed({ provider: "anthropic" as const, model: "test-model" }),
+        getStructuredOutputCapabilities: () => Effect.succeed({ nativeJsonMode: true, jsonSchemaEnforcement: false, prefillSupport: false, grammarConstraints: false }),
+        completeStructured: () => Effect.succeed({} as any),
+        capabilities: () => Effect.succeed({ supportsToolCalling: true, supportsStreaming: true, supportsSystemPrompt: true, supportsLogprobs: false, supportsNativeStreaming: true, supportsPromptCaching: false }),
+      }),
+    );
+
+    // Simulate post-Stage-1 state: override was set in a prior recovery iteration
+    const state = makeState({
+      maxOutputTokensOverride: 64_000,
+      maxOutputTokensRecoveryCount: 1,
+    } as any);
+    const context = makeContext();
+
+    const result = await Effect.runPromise(
+      handleThinking(state, context).pipe(Effect.provide(normalLayer)),
+    );
+
+    // Recovery state must be cleared — the override persisting would silently
+    // inflate billing for all remaining iterations.
+    expect((result as any).maxOutputTokensOverride).toBeUndefined();
+    expect((result as any).maxOutputTokensRecoveryCount).toBeUndefined();
+  });
+
   // ── Recovery message verbatim check ──────────────────────────────────────
 
   it("Stage 2: recovery message matches exact required text", async () => {
