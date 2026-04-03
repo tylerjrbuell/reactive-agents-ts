@@ -105,7 +105,7 @@ describe("skill learning loop — store side", () => {
 
       const svcOpt = yield* Effect.serviceOption(ProceduralMemoryService);
       if (svcOpt._tag === "Some") {
-        yield* svcOpt.value.store(entry as any).pipe(
+        yield* svcOpt.value.store(entry).pipe(
           Effect.catchAll(() => Effect.void),
         );
       }
@@ -133,7 +133,7 @@ describe("skill learning loop — store side", () => {
 
       const svcOpt = yield* Effect.serviceOption(ProceduralMemoryService);
       if (svcOpt._tag === "Some") {
-        yield* svcOpt.value.store(entry as any).pipe(
+        yield* svcOpt.value.store(entry).pipe(
           Effect.catchAll(() => Effect.void),
         );
         return "stored";
@@ -205,7 +205,7 @@ describe("skill learning loop — store side", () => {
 
         const svcOpt = yield* Effect.serviceOption(ProceduralMemoryService);
         if (svcOpt._tag === "Some") {
-          yield* svcOpt.value.store(entry as any).pipe(
+          yield* svcOpt.value.store(entry).pipe(
             Effect.catchAll(() => Effect.void),
           );
         }

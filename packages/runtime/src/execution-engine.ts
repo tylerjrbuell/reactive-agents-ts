@@ -3440,7 +3440,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                           yield* Effect.serviceOption(ProceduralMemoryService).pipe(
                             Effect.flatMap((svcOpt) => {
                               if (svcOpt._tag !== "Some") return Effect.void;
-                              return svcOpt.value.store(entry as any).pipe(
+                              return svcOpt.value.store(entry).pipe(
                                 Effect.catchAll(() => Effect.void),
                               );
                             }),

@@ -1,3 +1,4 @@
+import type { ProceduralEntry, MemoryId } from "@reactive-agents/memory";
 import type { SkillFragment } from "../telemetry/types.js";
 
 type EntropyEntry = {
@@ -95,19 +96,6 @@ export function extractSkillFragment(
   };
 }
 
-type ProceduralEntryShape = {
-  id: string;
-  agentId: string;
-  name: string;
-  description: string;
-  pattern: string;
-  successRate: number;
-  useCount: number;
-  tags: string[];
-  createdAt: Date;
-  updatedAt: Date;
-};
-
 type SkillFragmentToProceduralEntryParams = {
   readonly fragment: SkillFragment;
   readonly agentId: string;
@@ -124,11 +112,11 @@ type SkillFragmentToProceduralEntryParams = {
  */
 export function skillFragmentToProceduralEntry(
   params: SkillFragmentToProceduralEntryParams,
-): ProceduralEntryShape {
+): ProceduralEntry {
   const { fragment, agentId, taskCategory, modelId } = params;
   const now = new Date();
   return {
-    id: crypto.randomUUID(),
+    id: crypto.randomUUID() as MemoryId,
     agentId,
     name: `${taskCategory}:${modelId}`,
     description: `Learned skill for ${taskCategory} tasks on ${modelId} (entropy: ${fragment.meanComposite.toFixed(2)}, convergence at iter ${fragment.convergenceIteration ?? "?"})`,
