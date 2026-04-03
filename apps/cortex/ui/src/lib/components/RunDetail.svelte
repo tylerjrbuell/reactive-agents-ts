@@ -10,6 +10,7 @@
   import ContextGauge from "$lib/components/ContextGauge.svelte";
   import SignalMonitor from "$lib/components/SignalMonitor.svelte";
   import RawEventLog from "$lib/components/RawEventLog.svelte";
+  import MessagesPanel from "$lib/components/MessagesPanel.svelte";
   import DebriefPanel from "$lib/components/DebriefPanel.svelte";
   import ConfirmModal from "$lib/components/ConfirmModal.svelte";
   import Tooltip from "$lib/components/Tooltip.svelte";
@@ -178,7 +179,9 @@
   let showDeleteConfirm = $state(false);
 
   let selectedIteration = $state<number | null>(null);
-  let bottomTab = $state<"decisions" | "memory" | "context" | "debrief" | "signal" | "events">("decisions");
+  let bottomTab = $state<
+    "decisions" | "memory" | "context" | "debrief" | "signal" | "events" | "messages"
+  >("decisions");
   let deletingRun = $state(false);
 
   // ── Resizable bottom panel (with minimize) ────────────────────────────
@@ -407,6 +410,7 @@
           dot: !!$runStore.debrief },
         { id: "signal",    label: "Signal",       icon: "show_chart"   },
         { id: "events",    label: "Events",       icon: "terminal"     },
+        { id: "messages",  label: "Messages",     icon: "chat_bubble"  },
       ] as tab (tab.id)}
         <button
           type="button"
@@ -517,8 +521,10 @@
             signalStore.selectIteration(n);
           }}
         />
-      {:else}
+      {:else if bottomTab === "events"}
         <RawEventLog events={panelEvents($runStore.events)} />
+      {:else if bottomTab === "messages"}
+        <MessagesPanel {runId} />
       {/if}
     </div>
   </div>
