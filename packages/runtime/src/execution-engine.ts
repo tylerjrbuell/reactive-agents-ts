@@ -3398,6 +3398,10 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   }
                 }
 
+                // Scoped variable to pass LearningResult from the RI block to the outcome block.
+                // ctx.metadata is observable agent context — never use it as a private scratchpad.
+                let lastLearningResult: import("@reactive-agents/reactive-intelligence").LearningResult | undefined;
+
                 // ── Local Learning: update calibration, bandit, and skill store ──
                 if (config.enableReactiveIntelligence && entropyLog.length > 0) {
                   yield* Effect.serviceOption(
@@ -3429,8 +3433,8 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                           toolCallSequence: (ctx.metadata as any)?.toolCallSequence ?? [],
                         });
 
-                        // Stash learning result in ctx.metadata so the outcome block can reference it
-                        ctx = { ...ctx, metadata: { ...ctx.metadata, _lastLearningResult: learningResult } };
+                        // Pass learning result to the outcome block via a scoped variable.
+                        lastLearningResult = learningResult;
 
                         // Persist synthesized skill fragment to procedural memory
                         if (learningResult?.skillSynthesized && learningResult?.skillFragment) {
@@ -3475,7 +3479,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
 
                           // Change 3: re-store improved fragment when entropy improved on a full success
                           if (config.enableReactiveIntelligence) {
-                            const learningResultRef = (ctx.metadata as any)?._lastLearningResult;
+                            const learningResultRef = lastLearningResult;
                             const appliedSkillMeanEntropy = (ctx.metadata as any)?.appliedSkillMeanEntropy as number | undefined;
                             if (
                               skillOutcome === "success" &&

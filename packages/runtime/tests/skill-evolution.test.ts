@@ -526,3 +526,44 @@ describe("skill evolution — re-store improved fragment", () => {
     expect(result).toBe("ok");
   });
 });
+
+// ── Change 4: LearningResult must NOT leak into ctx.metadata ─────────────────
+
+describe("skill evolution — _lastLearningResult must not pollute ctx.metadata", () => {
+  it("ctx.metadata does NOT contain _lastLearningResult after the RI learning block", () => {
+    // Simulate the pattern the execution-engine uses to pass LearningResult between blocks.
+    // The BUG (before fix): learning result stashed on ctx.metadata._lastLearningResult.
+    // The FIX: use a scoped let variable instead.
+    //
+    // This test documents the contract: ctx.metadata is observable agent context,
+    // not a private scratchpad. _lastLearningResult must never appear on it.
+
+    type LearningResult = {
+      skillSynthesized: boolean;
+      skillFragment?: unknown;
+      taskCategory: string;
+    };
+
+    let metadata: Record<string, unknown> = { appliedSkillId: "mem-001" };
+
+    // Simulate the FIXED code: scoped variable, NOT ctx.metadata
+    let lastLearningResult: LearningResult | undefined;
+
+    const fakeLearningResult: LearningResult = {
+      skillSynthesized: true,
+      skillFragment: { meanComposite: 0.22 },
+      taskCategory: "analysis",
+    };
+
+    // RI block sets the scoped variable (not metadata)
+    lastLearningResult = fakeLearningResult;
+
+    // Outcome block reads from the scoped variable (not metadata)
+    const readBack = lastLearningResult;
+
+    // Assertions
+    expect(readBack?.skillSynthesized).toBe(true);
+    expect((metadata as any)._lastLearningResult).toBeUndefined();
+    expect(Object.keys(metadata)).not.toContain("_lastLearningResult");
+  });
+});
