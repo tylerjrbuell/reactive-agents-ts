@@ -21,6 +21,7 @@
   import type { AgentStore } from "$lib/stores/agent-store.js";
   import { CORTEX_SERVER_URL } from "$lib/constants.js";
   import { toast } from "$lib/stores/toast-store.js";
+  import { countReasoningStepDisplayMessagesInRunEvents } from "@cortex/messages-extract";
 
   interface Props {
     runId: string;
@@ -182,6 +183,11 @@
   let bottomTab = $state<
     "decisions" | "memory" | "context" | "debrief" | "signal" | "events" | "messages"
   >("decisions");
+
+  /** Matches `GET /api/runs/:runId/messages` — includes synthetic thought/action/observation rows. */
+  const cortexMessageCount = $derived(
+    countReasoningStepDisplayMessagesInRunEvents($runStore.events),
+  );
   let deletingRun = $state(false);
 
   // ── Resizable bottom panel (with minimize) ────────────────────────────
@@ -425,10 +431,17 @@
             if (panelMinimized) panelMinimized = false;
           }}
         >
-          <span class="relative">
+          <span class="relative inline-flex items-center">
             <span class="material-symbols-outlined text-[13px]">{tab.icon}</span>
             {#if (tab as any).dot}
               <span class="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-secondary"></span>
+            {/if}
+            {#if tab.id === "messages" && cortexMessageCount > 0}
+              <span
+                class="absolute -top-1 -right-2 min-w-[14px] h-[14px] px-0.5 flex items-center justify-center
+                       rounded-full bg-primary/25 border border-primary/40 text-[8px] font-mono text-primary/90 leading-none"
+                title={`${cortexMessageCount} message row(s) from ReasoningStepCompleted`}
+              >{cortexMessageCount > 99 ? "99+" : cortexMessageCount}</span>
             {/if}
           </span>
           <span class="hidden sm:inline">{tab.label}</span>

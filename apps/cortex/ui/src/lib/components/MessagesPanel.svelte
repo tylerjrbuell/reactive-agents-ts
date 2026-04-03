@@ -10,6 +10,7 @@
   let groups = $state<MessageGroup[]>([]);
   let loading = $state(true);
   let error = $state<string | null>(null);
+  /** Collapse state keyed by event `seq` (unique); avoids clashes when `kernelPass` repeats. */
   let collapsed = $state<Set<number>>(new Set());
 
   $effect(() => {
@@ -30,10 +31,10 @@
       });
   });
 
-  function toggleCollapse(kernelPass: number) {
+  function toggleCollapse(seq: number) {
     const next = new Set(collapsed);
-    if (next.has(kernelPass)) next.delete(kernelPass);
-    else next.add(kernelPass);
+    if (next.has(seq)) next.delete(seq);
+    else next.add(seq);
     collapsed = next;
   }
 
@@ -75,7 +76,8 @@
     <p class="text-error/70">Failed to load: {error}</p>
   {:else if groups.length === 0}
     <p class="text-outline/40 italic">
-      No LLM messages recorded for this run. Messages are captured from ReasoningStepCompleted events.
+      No LLM messages recorded for this run. Messages are built from ReasoningStepCompleted events (full
+    `messages[]` when logged, otherwise thought / action / observation).
     </p>
   {:else}
     {#each groups as group (group.seq)}
@@ -85,12 +87,16 @@
           type="button"
           class="flex items-center gap-2 w-full text-left text-[10px] text-outline/50 uppercase tracking-widest
                  mb-2 hover:text-outline/80 bg-transparent border-0 cursor-pointer p-0"
-          onclick={() => toggleCollapse(group.kernelPass)}
+          onclick={() => toggleCollapse(group.seq)}
         >
           <span class="material-symbols-outlined text-[11px]">
-            {collapsed.has(group.kernelPass) ? "chevron_right" : "expand_more"}
+            {collapsed.has(group.seq) ? "chevron_right" : "expand_more"}
           </span>
-          Loop {group.kernelPass}
+          {#if group.phaseLabel}
+            <span class="text-outline/70 normal-case tracking-normal font-mono">{group.phaseLabel}</span>
+          {:else}
+            Loop {group.kernelPass}
+          {/if}
           {#if group.totalSteps > 1}
             <span class="text-outline/30">· step {group.step}/{group.totalSteps}</span>
           {/if}
@@ -98,7 +104,7 @@
           <span class="text-outline/20">· {group.messages.length} messages</span>
         </button>
 
-        {#if !collapsed.has(group.kernelPass)}
+        {#if !collapsed.has(group.seq)}
           <div class="space-y-1.5 pl-2">
             {#each group.messages as msg, i (i)}
               {@const style = roleStyle[msg.role] ?? roleStyle["system"]!}

@@ -1,4 +1,9 @@
 import type { Database } from "bun:sqlite";
+import {
+  extractReasoningStepDisplayMessages,
+  numericKernelPassFromPayload,
+  phaseLabelFromPayload,
+} from "../../messages-extract.js";
 
 export type KernelMessageRole = "system" | "user" | "assistant" | "tool";
 
@@ -13,6 +18,8 @@ export type KernelMessage = {
 export type MessageGroup = {
   seq: number;
   kernelPass: number;
+  /** When `kernelPass` was a string (e.g. `plan-execute:step-1:done`), show this in the UI header. */
+  phaseLabel?: string;
   step: number;
   totalSteps: number;
   strategy: string;
@@ -36,11 +43,13 @@ export function getRunMessages(db: Database, runId: string): MessageGroup[] {
     } catch {
       continue;
     }
-    const messages = Array.isArray(parsed.messages) ? (parsed.messages as KernelMessage[]) : [];
+    const messages = extractReasoningStepDisplayMessages(parsed) as KernelMessage[];
     if (messages.length === 0) continue;
+    const phaseLabel = phaseLabelFromPayload(parsed);
     groups.push({
       seq: row.seq,
-      kernelPass: typeof parsed.kernelPass === "number" ? parsed.kernelPass : groups.length + 1,
+      kernelPass: numericKernelPassFromPayload(parsed, groups.length + 1),
+      ...(phaseLabel !== undefined ? { phaseLabel } : {}),
       step: typeof parsed.step === "number" ? parsed.step : 1,
       totalSteps: typeof parsed.totalSteps === "number" ? parsed.totalSteps : 1,
       strategy: typeof parsed.strategy === "string" ? parsed.strategy : "unknown",

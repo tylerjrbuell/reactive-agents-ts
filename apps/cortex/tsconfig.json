@@ -13,6 +13,6 @@
     "noEmit": true,
     "paths": {}
   },
-  "include": ["server/**/*"],
+  "include": ["server/**/*", "messages-extract.ts"],
   "exclude": ["node_modules", "dist"]
 }

@@ -9,6 +9,8 @@ export type KernelMessage = {
 export type MessageGroup = {
   seq: number;
   kernelPass: number;
+  /** Present when the framework used a string `kernelPass` (e.g. plan-execute step id). */
+  phaseLabel?: string;
   step: number;
   totalSteps: number;
   strategy: string;
