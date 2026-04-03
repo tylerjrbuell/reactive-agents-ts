@@ -1,5 +1,26 @@
 import type { ToolDefinition } from "../types.js";
 
+/** One row in `brief` skills output — same shape as `staticBriefInfo.availableSkills`. */
+export type BriefSkillEntry = { readonly name: string; readonly purpose: string };
+
+/**
+ * Merge build-time static skills with runtime-resolved skills (e.g. SkillResolver).
+ * Dedupes by `name`; when both define the same name, the resolved entry wins.
+ */
+export function mergeBriefAvailableSkills(
+  staticSkills: readonly BriefSkillEntry[] | undefined,
+  resolvedSkills: readonly BriefSkillEntry[] | undefined,
+): readonly BriefSkillEntry[] {
+  const byName = new Map<string, BriefSkillEntry>();
+  for (const s of staticSkills ?? []) {
+    byName.set(s.name, s);
+  }
+  for (const r of resolvedSkills ?? []) {
+    byName.set(r.name, r);
+  }
+  return [...byName.values()];
+}
+
 export interface BriefInput {
   section: string | undefined;
   availableTools: readonly { name: string; description: string; parameters: readonly unknown[] }[];

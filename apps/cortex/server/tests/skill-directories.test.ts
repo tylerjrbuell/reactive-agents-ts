@@ -17,10 +17,12 @@ describe("discoverSkillDirectoryPaths", () => {
     const base = join(process.cwd(), `tmp-skill-found-${Date.now()}`);
     await mkdir(join(base, ".claude", "skills"), { recursive: true });
     await mkdir(join(base, "skills"), { recursive: true });
+    await mkdir(join(base, "apps", "cortex", ".agents", "skills"), { recursive: true });
     try {
       const found = discoverSkillDirectoryPaths(base);
       expect(found).toContain(".claude/skills");
       expect(found).toContain("skills");
+      expect(found).toContain("apps/cortex/.agents/skills");
       expect(found).not.toContain(".agents/skills");
     } finally {
       await rm(base, { recursive: true, force: true }).catch(() => {});

@@ -23,6 +23,7 @@ import { stripThinking } from "./shared/thinking-utils.js";
 import type { ToolSchema } from "./shared/tool-utils.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { ContextProfile } from "../context/context-profile.js";
+import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
 
 /** Record of a past strategy execution outcome for self-improvement. */
 export interface StrategyOutcome {
@@ -68,6 +69,8 @@ interface AdaptiveInput {
   /** LLM temperature override */
   readonly temperature?: number;
   readonly synthesisConfig?: import("../context/synthesis-types.js").SynthesisConfig;
+  readonly metaTools?: KernelMetaToolsConfig;
+  readonly briefResolvedSkills?: readonly { readonly name: string; readonly purpose: string }[];
 }
 
 type SubStrategy =

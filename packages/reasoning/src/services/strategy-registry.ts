@@ -60,6 +60,8 @@ export type StrategyFn = (input: {
   readonly environmentContext?: Readonly<Record<string, string>>;
   /** Meta-tool configuration and pre-computed static data for brief/pulse/recall/find. */
   readonly metaTools?: KernelMetaToolsConfig;
+  /** Runtime-resolved skills merged into `brief` alongside static catalog. */
+  readonly briefResolvedSkills?: readonly { readonly name: string; readonly purpose: string }[];
   /** Initial messages to seed the kernel conversation thread (e.g. task as user message). */
   readonly initialMessages?: readonly { readonly role: "user" | "assistant"; readonly content: string }[];
   readonly synthesisConfig?: import("../context/synthesis-types.js").SynthesisConfig;

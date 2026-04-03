@@ -73,6 +73,8 @@ interface ReactiveInput {
   readonly environmentContext?: Readonly<Record<string, string>>;
   /** Meta-tool configuration and pre-computed static data for brief/pulse/recall/find. */
   readonly metaTools?: KernelMetaToolsConfig;
+  /** Runtime-resolved skills merged into `brief` (SkillResolver, etc.). */
+  readonly briefResolvedSkills?: readonly { readonly name: string; readonly purpose: string }[];
   /** Initial messages to seed the kernel conversation thread (e.g. task as user message). */
   readonly initialMessages?: readonly KernelMessage[];
   /** Intelligent Context Synthesis — from .withReasoning({ synthesis: ... }) */
@@ -139,6 +141,7 @@ export const executeReactive = (
       maxRequiredToolRetries: input.maxRequiredToolRetries,
       environmentContext: input.environmentContext,
       metaTools: input.metaTools,
+      briefResolvedSkills: input.briefResolvedSkills,
       initialMessages: input.initialMessages,
       synthesisConfig: input.synthesisConfig,
     };

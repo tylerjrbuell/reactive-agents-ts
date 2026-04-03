@@ -131,6 +131,11 @@ export interface KernelInput {
   readonly synthesisConfig?: import("../../context/synthesis-types.js").SynthesisConfig;
   /** Meta-tool configuration and pre-computed static data for brief/pulse/recall/find. */
   readonly metaTools?: KernelMetaToolsConfig;
+  /**
+   * Runtime-resolved skills (e.g. SkillResolver) merged into `brief` alongside
+   * `metaTools.staticBriefInfo.availableSkills` — resolved wins on name collision.
+   */
+  readonly briefResolvedSkills?: readonly { readonly name: string; readonly purpose: string }[];
 }
 
 // ── Narrow service types ─────────────────────────────────────────────────────

@@ -206,7 +206,9 @@ export {
   briefTool,
   buildBriefResponse,
   computeEntropyGrade,
+  mergeBriefAvailableSkills,
   type BriefInput,
+  type BriefSkillEntry,
 } from "./skills/brief.js";
 export {
   pulseTool,

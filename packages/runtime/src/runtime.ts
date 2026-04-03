@@ -41,7 +41,11 @@ import {
 import { createInteractionLayer } from "@reactive-agents/interaction";
 import { createPromptLayer } from "@reactive-agents/prompts";
 import { createOrchestrationLayer } from "@reactive-agents/orchestration";
-import { createReactiveIntelligenceLayer } from "@reactive-agents/reactive-intelligence";
+import {
+  createReactiveIntelligenceLayer,
+  makeSkillResolverService,
+  type SkillLayerConfig,
+} from "@reactive-agents/reactive-intelligence";
 
 // ─── Runtime Options ───
 
@@ -687,6 +691,26 @@ export interface RuntimeOptions {
 
   /** Configuration for reactive intelligence. */
   reactiveIntelligenceOptions?: Record<string, unknown>;
+
+  /**
+   * Living skills: directories that contain subfolders with `SKILL.md` (agentskills.io layout).
+   * When `paths` is non-empty, registers `SkillResolverService` so the execution engine can
+   * inject `<available_skills>` and resolve filesystem skills alongside optional SQLite skills.
+   */
+  skills?: {
+    readonly paths?: readonly string[];
+    readonly evolution?: {
+      mode?: string;
+      refinementThreshold?: number;
+      rollbackOnRegression?: boolean;
+    };
+  };
+
+  /**
+   * Project root used when resolving relative skill scan paths in the skill registry
+   * (default: `process.cwd()` at runtime creation).
+   */
+  skillDiscoveryRoot?: string;
 
   /**
    * Graceful degradation configuration. When provided, the runtime creates a
@@ -1405,9 +1429,33 @@ export const createRuntime = (options: RuntimeOptions) => {
     runtime = Layer.merge(runtime, healthLayer) as any;
   }
 
-  // ── Reactive Intelligence (entropy sensing) ──
+  // ── Reactive Intelligence (entropy sensing) + optional skill resolver ──
+  const skillResolverPaths =
+    options.skills?.paths?.filter(
+      (p): p is string => typeof p === "string" && p.trim().length > 0,
+    ).map((p) => p.trim()) ?? [];
+  const skillLayerForRi: SkillLayerConfig | undefined =
+    skillResolverPaths.length > 0
+      ? {
+          resolver: {
+            customPaths: skillResolverPaths,
+            agentId: options.agentId,
+            projectRoot: options.skillDiscoveryRoot ?? process.cwd(),
+          },
+        }
+      : undefined;
+
   if (options.enableReactiveIntelligence) {
-    runtime = Layer.merge(runtime, createReactiveIntelligenceLayer(options.reactiveIntelligenceOptions as any)) as any;
+    runtime = Layer.merge(
+      runtime,
+      createReactiveIntelligenceLayer(
+        options.reactiveIntelligenceOptions as any,
+        undefined,
+        skillLayerForRi,
+      ),
+    ) as any;
+  } else if (skillLayerForRi?.resolver) {
+    runtime = Layer.merge(runtime, makeSkillResolverService(skillLayerForRi.resolver)) as any;
   }
 
   if (options.enableInteraction) {

@@ -28,6 +28,7 @@ import { isSatisfied, isCritiqueStagnant } from "./shared/quality-utils.js";
 import { extractThinking } from "./shared/thinking-utils.js";
 import type { ToolSchema } from "./shared/tool-utils.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
+import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
 
 interface ReflexionInput {
   readonly taskDescription: string;
@@ -58,6 +59,8 @@ interface ReflexionInput {
   /** LLM temperature override */
   readonly temperature?: number;
   readonly synthesisConfig?: import("../context/synthesis-types.js").SynthesisConfig;
+  readonly metaTools?: KernelMetaToolsConfig;
+  readonly briefResolvedSkills?: readonly { readonly name: string; readonly purpose: string }[];
 }
 
 /**
@@ -118,6 +121,8 @@ export const executeReflexion = (
       requiredTools: input.requiredTools,
       maxRequiredToolRetries: input.maxRequiredToolRetries,
       synthesisConfig: input.synthesisConfig,
+      metaTools: input.metaTools,
+      briefResolvedSkills: input.briefResolvedSkills,
     }, {
       maxIterations: input.config.strategies.reflexion?.kernelMaxIterations ?? 3,
       strategy: "reflexion",
@@ -297,6 +302,8 @@ export const executeReflexion = (
         requiredTools: input.requiredTools,
         maxRequiredToolRetries: input.maxRequiredToolRetries,
         synthesisConfig: input.synthesisConfig,
+        metaTools: input.metaTools,
+        briefResolvedSkills: input.briefResolvedSkills,
       }, {
         maxIterations: input.config.strategies.reflexion?.kernelMaxIterations ?? 3,
         strategy: "reflexion",

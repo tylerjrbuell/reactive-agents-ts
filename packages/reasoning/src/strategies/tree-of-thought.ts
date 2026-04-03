@@ -21,6 +21,7 @@ import { parseScore } from "./shared/quality-utils.js";
 import { stripThinking } from "./shared/thinking-utils.js";
 import type { ToolSchema } from "./shared/tool-utils.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
+import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
 import { makeStep, buildStrategyResult } from "./shared/step-utils.js";
 
 interface TreeOfThoughtInput {
@@ -49,6 +50,8 @@ interface TreeOfThoughtInput {
   /** LLM temperature override */
   readonly temperature?: number;
   readonly synthesisConfig?: import("../context/synthesis-types.js").SynthesisConfig;
+  readonly metaTools?: KernelMetaToolsConfig;
+  readonly briefResolvedSkills?: readonly { readonly name: string; readonly purpose: string }[];
 }
 
 interface ThoughtNode {
@@ -291,6 +294,8 @@ export const executeTreeOfThought = (
       requiredTools: input.requiredTools,
       maxRequiredToolRetries: input.maxRequiredToolRetries,
       synthesisConfig: input.synthesisConfig,
+      metaTools: input.metaTools,
+      briefResolvedSkills: input.briefResolvedSkills,
     }, {
       maxIterations: input.config.strategies.treeOfThought?.depth ?? 3,
       strategy: "tree-of-thought",

@@ -1,5 +1,10 @@
 import { describe, it, expect } from "bun:test";
-import { buildBriefResponse, briefTool, computeEntropyGrade } from "../src/skills/brief.js";
+import {
+  buildBriefResponse,
+  briefTool,
+  computeEntropyGrade,
+  mergeBriefAvailableSkills,
+} from "../src/skills/brief.js";
 import type { BriefInput } from "../src/skills/brief.js";
 
 const baseInput: BriefInput = {
@@ -19,6 +24,37 @@ const baseInput: BriefInput = {
   entropy: undefined,
   controllerDecisionLog: [],
 };
+
+describe("mergeBriefAvailableSkills", () => {
+  it("returns static only when resolved is empty", () => {
+    const staticSkills = [{ name: "a", purpose: "static" }];
+    expect(mergeBriefAvailableSkills(staticSkills, undefined)).toEqual(staticSkills);
+    expect(mergeBriefAvailableSkills(staticSkills, [])).toEqual(staticSkills);
+  });
+
+  it("returns resolved only when static is empty", () => {
+    const resolved = [{ name: "x", purpose: "from resolver" }];
+    expect(mergeBriefAvailableSkills(undefined, resolved)).toEqual(resolved);
+    expect(mergeBriefAvailableSkills([], resolved)).toEqual(resolved);
+  });
+
+  it("dedupes by name with resolved winning over static", () => {
+    expect(
+      mergeBriefAvailableSkills(
+        [{ name: "skill-a", purpose: "build-time" }],
+        [{ name: "skill-a", purpose: "runtime" }],
+      ),
+    ).toEqual([{ name: "skill-a", purpose: "runtime" }]);
+  });
+
+  it("keeps static order for non-colliding names then adds resolved-only entries", () => {
+    const merged = mergeBriefAvailableSkills(
+      [{ name: "first", purpose: "1" }, { name: "second", purpose: "2" }],
+      [{ name: "third", purpose: "3" }],
+    );
+    expect(merged.map((s) => s.name)).toEqual(["first", "second", "third"]);
+  });
+});
 
 describe("briefTool definition", () => {
   it("has name 'brief'", () => expect(briefTool.name).toBe("brief"));

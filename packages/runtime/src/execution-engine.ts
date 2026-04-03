@@ -134,6 +134,27 @@ function extractTaskText(input: unknown): string {
   return JSON.stringify(input);
 }
 
+/** Map SkillResolver rows on execution metadata into `brief` skill entries. */
+function briefResolvedSkillsFromMetadata(
+  metadata: Record<string, unknown>,
+): readonly { readonly name: string; readonly purpose: string }[] | undefined {
+  const rs = metadata.resolvedSkills;
+  if (!Array.isArray(rs) || rs.length === 0) return undefined;
+  const out: { name: string; purpose: string }[] = [];
+  for (const item of rs) {
+    if (typeof item !== "object" || item === null) continue;
+    const rec = item as Record<string, unknown>;
+    const name = rec.name;
+    if (typeof name !== "string" || name.length === 0) continue;
+    const description = rec.description;
+    out.push({
+      name,
+      purpose: typeof description === "string" ? description : "",
+    });
+  }
+  return out.length > 0 ? out : undefined;
+}
+
 type ExecutionReasoningResult = {
   output: unknown;
   status: string;
@@ -650,8 +671,19 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     }).pipe(Effect.catchAll(() => Effect.succeed({ all: [], autoActivate: [], catalog: [] })));
 
                     if (resolved.all.length > 0) {
-                      // Store resolved skills on context metadata
-                      ctx = { ...ctx, metadata: { ...ctx.metadata, resolvedSkills: resolved.all, autoActivateSkills: resolved.autoActivate } };
+                      const catalogXml = resolver.generateCatalogXml(resolved.catalog, {
+                        catalogOnlyHint: true,
+                      });
+                      // Store resolved skills + catalog XML for strategy (memoryContext) and telemetry
+                      ctx = {
+                        ...ctx,
+                        metadata: {
+                          ...ctx.metadata,
+                          resolvedSkills: resolved.all,
+                          autoActivateSkills: resolved.autoActivate,
+                          skillCatalogXml: catalogXml,
+                        },
+                      };
 
                       if (obs) {
                         yield* obs.info(`Skills resolved: ${resolved.all.length} total, ${resolved.autoActivate.length} auto-activate`).pipe(Effect.catchAll(() => Effect.void));
@@ -1008,6 +1040,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         };
                         harnessContent?: string;
                       };
+                      briefResolvedSkills?: readonly { readonly name: string; readonly purpose: string }[];
                       initialMessages?: readonly { readonly role: "user" | "assistant"; readonly content: string }[];
                       synthesisConfig?: import("@reactive-agents/reasoning").SynthesisConfig;
                     }) => Effect.Effect<{
@@ -1147,6 +1180,11 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     Effect.gen(function* () {
                       // ── Self-improvement read-back: surface prior strategy outcomes ──
                       let memCtx = String((c.memoryContext as any)?.semanticContext ?? "");
+                      const skillCatalogXml = (c.metadata as { skillCatalogXml?: string } | undefined)
+                        ?.skillCatalogXml;
+                      if (skillCatalogXml && skillCatalogXml.trim().length > 0) {
+                        memCtx = `${skillCatalogXml.trim()}\n\n${memCtx}`;
+                      }
                       if (config.enableSelfImprovement) {
                         const episodes = (c.memoryContext as any)?.recentEpisodes as
                           | readonly { eventType?: string; content?: string; metadata?: Record<string, unknown> }[]
@@ -1263,6 +1301,9 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         temperature: config.contextProfile?.temperature as number | undefined,
                         environmentContext: config.environmentContext as Record<string, string> | undefined,
                         metaTools: config.metaTools,
+                        briefResolvedSkills: briefResolvedSkillsFromMetadata(
+                          c.metadata as Record<string, unknown>,
+                        ),
                         initialMessages,
                         synthesisConfig: resolveSynthesisConfigForStrategy(
                           config.reasoningOptions,
@@ -1352,6 +1393,10 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                           requiredTools: effectiveRequiredTools,
                           modelId: String(config.defaultModel ?? ""),
                           taskCategory,
+                          metaTools: config.metaTools,
+                          briefResolvedSkills: briefResolvedSkillsFromMetadata(
+                            ctx.metadata as Record<string, unknown>,
+                          ),
                           initialMessages: [
                             { role: "user" as const, content: extractTaskText(task.input) },
                             { role: "assistant" as const, content: currentOutput },
@@ -1405,6 +1450,10 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                           requiredTools: effectiveRequiredTools,
                           modelId: String(config.defaultModel ?? ""),
                           taskCategory,
+                          metaTools: config.metaTools,
+                          briefResolvedSkills: briefResolvedSkillsFromMetadata(
+                            ctx.metadata as Record<string, unknown>,
+                          ),
                           initialMessages: [
                             { role: "user" as const, content: extractTaskText(task.input) },
                             { role: "assistant" as const, content: String(ctx.metadata.lastResponse ?? "") },
@@ -1507,6 +1556,10 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                           requiredTools: effectiveRequiredTools,
                           modelId: String(config.defaultModel ?? ""),
                           taskCategory,
+                          metaTools: config.metaTools,
+                          briefResolvedSkills: briefResolvedSkillsFromMetadata(
+                            ctx.metadata as Record<string, unknown>,
+                          ),
                           initialMessages: [
                             { role: "user" as const, content: extractTaskText(task.input) },
                             { role: "assistant" as const, content: currentOutput },

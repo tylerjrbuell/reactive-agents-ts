@@ -2418,6 +2418,16 @@ export class ReactiveAgentBuilder {
         customTermination: self._customTermination,
         enableReactiveIntelligence: self._enableReactiveIntelligence,
         reactiveIntelligenceOptions: self._reactiveIntelligenceOptions,
+        ...(self._skillsConfig?.paths?.length
+          ? {
+              skills: {
+                paths: [...self._skillsConfig.paths],
+                ...(self._skillsConfig.evolution
+                  ? { evolution: { ...self._skillsConfig.evolution } }
+                  : {}),
+              },
+            }
+          : {}),
         fallbackConfig: self._fallbackConfig,
         pricingRegistry: Object.keys(self._pricingRegistry).length > 0 ? self._pricingRegistry : undefined,
         metaTools: kernelMetaTools,
