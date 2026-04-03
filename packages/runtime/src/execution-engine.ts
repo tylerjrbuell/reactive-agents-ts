@@ -645,7 +645,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                           }).pipe(Effect.catchAll(() => Effect.void));
                         }
                         // Store skill reference on context metadata for downstream use
-                        ctx = { ...ctx, metadata: { ...ctx.metadata, appliedSkill: matchingSkill.name } };
+                        ctx = { ...ctx, metadata: { ...ctx.metadata, appliedSkill: matchingSkill.name, appliedSkillId: matchingSkill.id, appliedSkillMeanEntropy: fragment.meanComposite } };
                       } catch {
                         // Invalid pattern — ignore
                       }
@@ -3429,6 +3429,9 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                           toolCallSequence: (ctx.metadata as any)?.toolCallSequence ?? [],
                         });
 
+                        // Stash learning result in ctx.metadata so the outcome block can reference it
+                        ctx = { ...ctx, metadata: { ...ctx.metadata, _lastLearningResult: learningResult } };
+
                         // Persist synthesized skill fragment to procedural memory
                         if (learningResult?.skillSynthesized && learningResult?.skillFragment) {
                           const entry = skillFragmentToProceduralEntry({
@@ -3451,6 +3454,53 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     }),
                     Effect.catchAll(() => Effect.void),
                   );
+                }
+
+                // ── Record outcome for applied skill ──
+                {
+                  const appliedSkillId = (ctx.metadata as any)?.appliedSkillId;
+                  if (appliedSkillId) {
+                    const skillOutcome = terminatedByRaw === "max_iterations" ? "partial"
+                      : errorsFromLoop.length > 0 && terminatedByRaw !== "final_answer_tool" && terminatedByRaw !== "final_answer" ? "failure"
+                      : "success";
+
+                    yield* Effect.serviceOption(ProceduralMemoryService).pipe(
+                      Effect.flatMap((svcOpt) => {
+                        if (svcOpt._tag !== "Some") return Effect.void;
+                        return Effect.gen(function* () {
+                          // Change 2: record outcome (success rate update)
+                          yield* svcOpt.value.recordOutcome(appliedSkillId, skillOutcome !== "failure").pipe(
+                            Effect.catchAll(() => Effect.void),
+                          );
+
+                          // Change 3: re-store improved fragment when entropy improved on a full success
+                          if (config.enableReactiveIntelligence) {
+                            const learningResultRef = (ctx.metadata as any)?._lastLearningResult;
+                            const appliedSkillMeanEntropy = (ctx.metadata as any)?.appliedSkillMeanEntropy as number | undefined;
+                            if (
+                              skillOutcome === "success" &&
+                              learningResultRef?.skillSynthesized &&
+                              learningResultRef?.skillFragment != null &&
+                              typeof appliedSkillMeanEntropy === "number" &&
+                              learningResultRef.skillFragment.meanComposite < appliedSkillMeanEntropy
+                            ) {
+                              const modelId = String(ctx.selectedModel ?? config.defaultModel ?? "unknown");
+                              const entry = skillFragmentToProceduralEntry({
+                                fragment: learningResultRef.skillFragment,
+                                agentId: config.agentId,
+                                taskCategory: learningResultRef.taskCategory,
+                                modelId,
+                              });
+                              yield* svcOpt.value.store(entry).pipe(
+                                Effect.catchAll(() => Effect.void),
+                              );
+                            }
+                          }
+                        });
+                      }),
+                      Effect.catchAll(() => Effect.void),
+                    );
+                  }
                 }
 
                 // Phase 0.2: Lifecycle completion events (aligned with TaskResult.success)
