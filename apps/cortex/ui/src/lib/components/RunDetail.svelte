@@ -578,7 +578,7 @@
       {#if bottomTab === "decisions"}
         <DecisionLog events={panelEvents($runStore.events)} />
       {:else if bottomTab === "memory"}
-        <MemoryPanel events={panelEvents($runStore.events)} />
+        <MemoryPanel events={panelEvents($runStore.events)} agentId={$runStore.agentId} />
       {:else if bottomTab === "context"}
         <ContextGauge events={panelEvents($runStore.events)} />
       {:else if bottomTab === "debrief"}

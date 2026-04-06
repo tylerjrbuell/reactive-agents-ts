@@ -9,6 +9,7 @@ import { mcpServersRouter } from "./api/mcp-servers.js";
 import { skillsRouter } from "./api/skills.js";
 import { modelsRouter } from "./api/models.js";
 import { chatRouter } from "./api/chat.js";
+import { memoryRouter } from "./api/memory.js";
 import { ChatSessionService } from "./services/chat-session-service.js";
 import { handleIngestMessage } from "./ws/ingest.js";
 import {
@@ -58,6 +59,7 @@ export async function startCortexServer(config: CortexConfig = defaultCortexConf
     .use(skillsRouter(runtime.storeLayer))
     .use(modelsRouter)
     .use(chatRouter(chatSessionService))
+    .use(memoryRouter())
     .ws("/ws/ingest", {
       open() {
         cortexLog("info", "ingest-ws", "ingest client connected");

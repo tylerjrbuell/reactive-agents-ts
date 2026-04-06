@@ -76,6 +76,8 @@ html.dark {
   --cortex-md-th-bg:               rgb(139 92 246 / 0.12);
   --cortex-md-th-text:             rgb(236 238 242 / 0.9);
   --cortex-md-katex:               rgb(236 238 242 / 0.94);
+
+  --cortex-tip-caret-stroke: color-mix(in srgb, var(--ra-violet) 28%, rgb(255 255 255 / 0.11));
 }
 
 /* Apply theme tokens to structural elements */
@@ -202,6 +204,9 @@ html:not(.dark) textarea::placeholder {
 
   /* Panel inner bg — matches docs ra-panel-inner */
   --ra-surface-panel: #12131a;
+
+  /* Tooltip caret stroke — after --ra-violet so color-mix resolves */
+  --cortex-tip-caret-stroke: color-mix(in srgb, var(--ra-violet) 22%, rgb(0 0 0 / 0.16));
 }
 
 /* ── Base font ────────────────────────────────────────────────── */
@@ -289,6 +294,11 @@ html {
   0%   { transform: translateX(-100%); opacity: 0.35; }
   50%  { opacity: 0.85; }
   100% { transform: translateX(350%); opacity: 0.35; }
+}
+
+.cortex-tooltip-caret {
+  display: block;
+  overflow: visible;
 }
 
 /* ── Animations ──────────────────────────────────────────────── */

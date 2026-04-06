@@ -82,8 +82,8 @@
     let left = cx - w / 2;
     left = Math.min(Math.max(MARGIN, left), vw - MARGIN - w);
 
-    const arrowHalf = 5;
-    const arrowPad = 8;
+    const arrowHalf = 8;
+    const arrowPad = 10;
     const arrowCenter = cx - left;
     const lo = arrowPad + arrowHalf;
     const hi = w - arrowPad - arrowHalf;
@@ -159,13 +159,24 @@
     style:top="{tipTop}px"
   >
     {#if !tipAboveTrigger}
-      <span
-        class="pointer-events-none absolute z-[1] box-border h-2 w-2 border-l border-t border-outline-variant/35 bg-surface-container-low"
+      <!-- Points up — tooltip sits below trigger -->
+      <svg
+        class="cortex-tooltip-caret pointer-events-none absolute z-[2] w-[18px] h-[9px]"
         style:left="{tipArrowLeftPx}px"
-        style:top="-5px"
-        style:transform="translateX(-50%) translateY(-50%) rotate(45deg)"
+        style:top="-8px"
+        style:transform="translateX(-50%)"
+        viewBox="0 0 18 9"
+        fill="none"
         aria-hidden="true"
-      ></span>
+      >
+        <path
+          d="M9 0.85 L16.35 8.15 H1.65 L9 0.85Z"
+          fill="var(--cortex-surface-low)"
+          stroke="var(--cortex-tip-caret-stroke)"
+          stroke-width="1"
+          stroke-linejoin="round"
+        />
+      </svg>
     {/if}
     <span
       class="min-h-0 max-h-full overflow-y-auto whitespace-pre-wrap break-words px-2.5 py-2 font-mono text-[10px] font-normal normal-case leading-relaxed tracking-normal text-on-surface/90"
@@ -173,13 +184,24 @@
       {body}
     </span>
     {#if tipAboveTrigger}
-      <span
-        class="pointer-events-none absolute z-[1] box-border h-2 w-2 border-b border-r border-outline-variant/35 bg-surface-container-low"
+      <!-- Points down — tooltip sits above trigger -->
+      <svg
+        class="cortex-tooltip-caret pointer-events-none absolute z-[2] w-[18px] h-[9px]"
         style:left="{tipArrowLeftPx}px"
-        style:bottom="-5px"
-        style:transform="translateX(-50%) translateY(50%) rotate(45deg)"
+        style:bottom="-8px"
+        style:transform="translateX(-50%)"
+        viewBox="0 0 18 9"
+        fill="none"
         aria-hidden="true"
-      ></span>
+      >
+        <path
+          d="M9 8.15 L1.65 0.85 H16.35 L9 8.15Z"
+          fill="var(--cortex-surface-low)"
+          stroke="var(--cortex-tip-caret-stroke)"
+          stroke-width="1"
+          stroke-linejoin="round"
+        />
+      </svg>
     {/if}
   </span>
 {/if}
