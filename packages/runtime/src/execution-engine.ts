@@ -28,8 +28,8 @@ import { CostService } from "@reactive-agents/cost";
 import { EventBus, EntropySensorService } from "@reactive-agents/core";
 import type { AgentEvent, KernelStateLike } from "@reactive-agents/core";
 import { synthesizeDebrief, type DebriefInput, type AgentDebrief } from "./debrief.js";
-import { DebriefStoreService, PlanStoreService } from "@reactive-agents/memory";
-import { TelemetryClient as TelemetryClientImpl, classifyTaskCategory as classifyTaskCategoryFn, lookupModel as lookupModelFn } from "@reactive-agents/reactive-intelligence";
+import { DebriefStoreService, PlanStoreService, ProceduralMemoryService } from "@reactive-agents/memory";
+import { TelemetryClient as TelemetryClientImpl, classifyTaskCategory as classifyTaskCategoryFn, lookupModel as lookupModelFn, skillFragmentToProceduralEntry } from "@reactive-agents/reactive-intelligence";
 import { recommendStrategyForTier } from "@reactive-agents/llm-provider";
 import { buildTrajectoryFingerprint, abstractifyToolName, firstConvergenceIteration, peakContextPressure, deriveTaskComplexity, deriveFailurePattern, deriveThoughtToActionRatio } from "./telemetry-enrichment.js";
 import { resolveSynthesisConfigForStrategy } from "./synthesis-resolve.js";
@@ -645,7 +645,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                           }).pipe(Effect.catchAll(() => Effect.void));
                         }
                         // Store skill reference on context metadata for downstream use
-                        ctx = { ...ctx, metadata: { ...ctx.metadata, appliedSkill: matchingSkill.name } };
+                        ctx = { ...ctx, metadata: { ...ctx.metadata, appliedSkill: matchingSkill.name, appliedSkillId: matchingSkill.id, appliedSkillMeanEntropy: fragment.meanComposite } };
                       } catch {
                         // Invalid pattern — ignore
                       }
@@ -3427,6 +3427,10 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   }
                 }
 
+                // Scoped variable to pass LearningResult from the RI block to the outcome block.
+                // ctx.metadata is observable agent context — never use it as a private scratchpad.
+                let lastLearningResult: import("@reactive-agents/reactive-intelligence").LearningResult | undefined;
+
                 // ── Local Learning: update calibration, bandit, and skill store ──
                 if (config.enableReactiveIntelligence && entropyLog.length > 0) {
                   yield* Effect.serviceOption(
@@ -3436,28 +3440,100 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   ).pipe(
                     Effect.flatMap((opt) => {
                       if (opt._tag !== "Some") return Effect.void;
-                      return opt.value.onRunCompleted({
-                        modelId: String(ctx.selectedModel ?? config.defaultModel ?? "unknown"),
-                        taskDescription: extractTaskText(task.input),
-                        strategy: ctx.selectedStrategy ?? "reactive",
-                        outcome: terminatedByRaw === "max_iterations" ? "partial"
-                          : errorsFromLoop.length > 0 && terminatedByRaw !== "final_answer_tool" && terminatedByRaw !== "final_answer" ? "failure"
-                          : "success",
-                        entropyHistory: entropyLog,
-                        totalTokens: ctx.tokensUsed,
-                        durationMs: executionDurationMs,
-                        temperature: (config as any).temperature ?? 0.7,
-                        maxIterations: config.maxIterations ?? 10,
-                        provider: String(ctx.provider ?? config.provider ?? "unknown"),
-                        skillsActivated: (ctx.metadata as any)?.resolvedSkills?.filter((s: any) => s.confidence === "expert").map((s: any) => s.name) ?? [],
-                        convergenceIteration: entropyLog.length > 0
-                          ? entropyLog.findIndex((e: any) => e.trajectory?.shape === "converging")
-                          : null,
-                        toolCallSequence: (ctx.metadata as any)?.toolCallSequence ?? [],
+                      return Effect.gen(function* () {
+                        const modelId = String(ctx.selectedModel ?? config.defaultModel ?? "unknown");
+                        const learningResult = yield* opt.value.onRunCompleted({
+                          modelId,
+                          taskDescription: extractTaskText(task.input),
+                          strategy: ctx.selectedStrategy ?? "reactive",
+                          outcome: terminatedByRaw === "max_iterations" ? "partial"
+                            : errorsFromLoop.length > 0 && terminatedByRaw !== "final_answer_tool" && terminatedByRaw !== "final_answer" ? "failure"
+                            : "success",
+                          entropyHistory: entropyLog,
+                          totalTokens: ctx.tokensUsed,
+                          durationMs: executionDurationMs,
+                          temperature: (config as any).temperature ?? 0.7,
+                          maxIterations: config.maxIterations ?? 10,
+                          provider: String(ctx.provider ?? config.provider ?? "unknown"),
+                          skillsActivated: (ctx.metadata as any)?.resolvedSkills?.filter((s: any) => s.confidence === "expert").map((s: any) => s.name) ?? [],
+                          convergenceIteration: entropyLog.length > 0
+                            ? entropyLog.findIndex((e: any) => e.trajectory?.shape === "converging")
+                            : null,
+                          toolCallSequence: (ctx.metadata as any)?.toolCallSequence ?? [],
+                        });
+
+                        // Pass learning result to the outcome block via a scoped variable.
+                        lastLearningResult = learningResult;
+
+                        // Persist synthesized skill fragment to procedural memory
+                        if (learningResult?.skillSynthesized && learningResult?.skillFragment) {
+                          const entry = skillFragmentToProceduralEntry({
+                            fragment: learningResult.skillFragment,
+                            agentId: config.agentId,
+                            taskCategory: learningResult.taskCategory,
+                            modelId,
+                          });
+                          yield* Effect.serviceOption(ProceduralMemoryService).pipe(
+                            Effect.flatMap((svcOpt) => {
+                              if (svcOpt._tag !== "Some") return Effect.void;
+                              return svcOpt.value.store(entry).pipe(
+                                Effect.catchAll(() => Effect.void),
+                              );
+                            }),
+                            Effect.catchAll(() => Effect.void),
+                          );
+                        }
                       });
                     }),
                     Effect.catchAll(() => Effect.void),
                   );
+                }
+
+                // ── Record outcome for applied skill ──
+                {
+                  const appliedSkillId = (ctx.metadata as any)?.appliedSkillId;
+                  if (appliedSkillId) {
+                    const skillOutcome = terminatedByRaw === "max_iterations" ? "partial"
+                      : errorsFromLoop.length > 0 && terminatedByRaw !== "final_answer_tool" && terminatedByRaw !== "final_answer" ? "failure"
+                      : "success";
+
+                    yield* Effect.serviceOption(ProceduralMemoryService).pipe(
+                      Effect.flatMap((svcOpt) => {
+                        if (svcOpt._tag !== "Some") return Effect.void;
+                        return Effect.gen(function* () {
+                          // Change 2: record outcome (success rate update)
+                          yield* svcOpt.value.recordOutcome(appliedSkillId, skillOutcome !== "failure").pipe(
+                            Effect.catchAll(() => Effect.void),
+                          );
+
+                          // Change 3: re-store improved fragment when entropy improved on a full success
+                          if (config.enableReactiveIntelligence) {
+                            const learningResultRef = lastLearningResult;
+                            const appliedSkillMeanEntropy = (ctx.metadata as any)?.appliedSkillMeanEntropy as number | undefined;
+                            if (
+                              skillOutcome === "success" &&
+                              learningResultRef?.skillSynthesized &&
+                              learningResultRef?.skillFragment != null &&
+                              typeof appliedSkillMeanEntropy === "number" &&
+                              learningResultRef.skillFragment.meanComposite < appliedSkillMeanEntropy
+                            ) {
+                              const modelId = String(ctx.selectedModel ?? config.defaultModel ?? "unknown");
+                              const entry = skillFragmentToProceduralEntry({
+                                fragment: learningResultRef.skillFragment,
+                                agentId: config.agentId,
+                                taskCategory: learningResultRef.taskCategory,
+                                modelId,
+                              });
+                              yield* svcOpt.value.store(entry).pipe(
+                                Effect.catchAll(() => Effect.void),
+                              );
+                            }
+                          }
+                        });
+                      }),
+                      Effect.catchAll(() => Effect.void),
+                    );
+                  }
                 }
 
                 // Phase 0.2: Lifecycle completion events (aligned with TaskResult.success)
