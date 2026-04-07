@@ -1,7 +1,8 @@
 /* ================================================================
    Cortex — Reactive Agents Studio
    Design system aligned with docs.reactiveagents.dev
-   Geist Variable · Violet #8b5cf6 · Cyan #06b6d4
+   Geist Variable (UI) · Outfit (wordmark) · JetBrains Mono (data)
+   Brand accents · Violet #8b5cf6 · Cyan #06b6d4
    ================================================================ */
 
 /* Geist Variable — same font as docs site */
@@ -54,7 +55,8 @@ html.dark {
   --cortex-surface-mid:  #353841;
   --cortex-text:         #eceef2;
   --cortex-text-muted:   #c0c2c7;
-  --cortex-border:       rgba(255, 255, 255, 0.05);
+  /* Violet-tinted hairline — avoids a cool white “halo” on dark desk chrome */
+  --cortex-border:       color-mix(in srgb, var(--ra-violet) 32%, rgb(0 0 0 / 0.55));
   --cortex-nav-bg:       #17181c;
 
   --cortex-md-text:                rgb(236 238 242 / 0.92);
@@ -84,6 +86,281 @@ html.dark {
 body {
   background-color: var(--cortex-bg) !important;
   color: var(--cortex-text) !important;
+}
+
+/* Keyboard focus — chrome & cards (form controls use component / browser defaults) */
+a:focus-visible,
+button:focus-visible,
+[role="button"]:focus-visible,
+[role="tab"]:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--ra-cyan) 75%, white 25%);
+  outline-offset: 3px;
+}
+
+/* Horizontal nav scroll on narrow viewports */
+.cortex-no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.cortex-no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Subtle engineering grid + soft radial (keeps RA accents, avoids flat void) */
+.cortex-shell-bg {
+  background-color: var(--cortex-bg);
+  background-image:
+    radial-gradient(ellipse 90% 55% at 50% -30%, rgba(139, 92, 246, 0.09), transparent 55%),
+    radial-gradient(ellipse 70% 45% at 100% 0%, rgba(6, 182, 212, 0.06), transparent 50%),
+    linear-gradient(rgba(255, 255, 255, 0.028) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.028) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 32px 32px, 32px 32px;
+  background-attachment: local, local, fixed, fixed;
+}
+
+html:not(.dark) .cortex-shell-bg {
+  background-image:
+    radial-gradient(ellipse 90% 55% at 50% -30%, rgba(139, 92, 246, 0.07), transparent 55%),
+    radial-gradient(ellipse 70% 45% at 100% 0%, rgba(6, 182, 212, 0.05), transparent 50%),
+    linear-gradient(rgba(15, 23, 42, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15, 23, 42, 0.06) 1px, transparent 1px);
+}
+
+/* Beacon desk — fluid slots inside a panel (matches shell / nav density) */
+.cortex-beacon-desk-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 272px), 1fr));
+}
+
+@media (min-width: 640px) {
+  .cortex-beacon-desk-grid {
+    gap: 1rem;
+  }
+}
+
+/* Kbd chips — RA neon (no gray “white” chrome) */
+.cortex-kbd {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  padding: 0.2rem 0.5rem;
+  border-radius: 0.3rem;
+  border: 1px solid color-mix(in srgb, var(--ra-violet) 55%, rgba(6, 182, 212, 0.35));
+  background: linear-gradient(
+    165deg,
+    color-mix(in srgb, var(--ra-violet) 22%, transparent),
+    color-mix(in srgb, var(--ra-cyan) 12%, transparent)
+  );
+  color: color-mix(in srgb, #c4b5fd 90%, var(--cortex-text));
+  box-shadow:
+    0 0 10px color-mix(in srgb, var(--ra-cyan) 18%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--ra-cyan) 15%, transparent);
+}
+
+html:not(.dark) .cortex-kbd {
+  color: #5b21b6;
+  border-color: rgba(124, 58, 237, 0.4);
+  background: linear-gradient(165deg, rgba(139, 92, 246, 0.14), rgba(6, 182, 212, 0.08));
+  box-shadow: 0 0 8px rgba(6, 182, 212, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+/* Vitals / run: progress — inset groove + gel fill (violet → cyan) */
+.cortex-progress-track {
+  position: relative;
+  height: 0.8125rem;
+  padding: 2px;
+  border-radius: 9999px;
+  box-sizing: border-box;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06) 0%, transparent 45%),
+    linear-gradient(180deg, rgba(6, 8, 12, 0.98), rgba(18, 20, 28, 0.94));
+  box-shadow:
+    inset 0 2px 8px rgba(0, 0, 0, 0.65),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    inset 0 0 0 1px rgba(139, 92, 246, 0.22),
+    inset 0 0 20px rgba(6, 182, 212, 0.04),
+    0 1px 0 rgba(0, 0, 0, 0.35),
+    0 0 0 1px rgba(139, 92, 246, 0.12),
+    0 4px 20px rgba(0, 0, 0, 0.25);
+}
+
+html:not(.dark) .cortex-progress-track {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.85) 0%, rgba(248, 246, 252, 0.98) 100%),
+    linear-gradient(180deg, #e4dff5, #f0eef8);
+  box-shadow:
+    inset 0 2px 5px rgba(15, 23, 42, 0.07),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    inset 0 0 0 1px rgba(139, 92, 246, 0.2),
+    0 1px 2px rgba(124, 58, 237, 0.08),
+    0 2px 12px rgba(6, 182, 212, 0.06);
+}
+
+/* Smooth width changes for all fills (determinate + status colors) */
+.cortex-progress-track > div {
+  transition: width 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cortex-progress-fill {
+  position: relative;
+  height: 100%;
+  min-height: 0.4rem;
+  border-radius: 9999px;
+  background: linear-gradient(
+    92deg,
+    #5b21b2 0%,
+    #6d28d9 12%,
+    var(--ra-violet) 32%,
+    #a78bfa 48%,
+    #38bdf8 72%,
+    var(--ra-cyan) 88%,
+    #22d3ee 100%
+  );
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.12) inset,
+    0 2px 6px rgba(0, 0, 0, 0.2) inset,
+    0 0 16px rgba(139, 92, 246, 0.45),
+    0 0 28px rgba(6, 182, 212, 0.22),
+    -1px 0 12px rgba(139, 92, 246, 0.15);
+}
+
+/* Specular strip + leading-edge bloom */
+.cortex-progress-fill::before {
+  content: "";
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  top: 1px;
+  height: 42%;
+  border-radius: inherit;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.08) 55%, transparent);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.cortex-progress-fill--terminal {
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.08) inset,
+    0 2px 5px rgba(0, 0, 0, 0.18) inset,
+    0 0 12px rgba(139, 92, 246, 0.32),
+    0 0 18px rgba(6, 182, 212, 0.12);
+}
+
+html:not(.dark) .cortex-progress-fill,
+html:not(.dark) .cortex-progress-fill--terminal {
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.65) inset,
+    0 2px 4px rgba(15, 23, 42, 0.06) inset,
+    0 1px 8px rgba(124, 58, 237, 0.2),
+    0 2px 14px rgba(6, 182, 212, 0.12);
+}
+
+html:not(.dark) .cortex-progress-fill::before {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.75), rgba(255, 255, 255, 0.2) 50%, transparent);
+}
+
+/* Replay scrub — amber gel (pairs with .cortex-progress-fill--shimmer while playing) */
+.cortex-progress-fill--replay {
+  position: relative;
+  height: 100%;
+  min-height: 0.4rem;
+  border-radius: 9999px;
+  background: linear-gradient(92deg, #92400e 0%, #c2410c 38%, #ea580c 68%, #f59e0b 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    0 2px 5px rgba(15, 23, 42, 0.1) inset,
+    0 0 14px rgba(217, 119, 6, 0.32),
+    0 2px 16px rgba(180, 83, 9, 0.18);
+}
+
+html.dark .cortex-progress-fill--replay {
+  background: linear-gradient(92deg, #431407 0%, #7c2d12 28%, #b45309 58%, #ca8a04 92%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    0 2px 6px rgba(0, 0, 0, 0.35) inset,
+    0 0 18px rgba(180, 83, 9, 0.38),
+    0 0 26px rgba(69, 26, 3, 0.4);
+}
+
+.cortex-progress-fill--shimmer {
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.cortex-progress-fill--shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    105deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.08) 38%,
+    rgba(255, 255, 255, 0.28) 50%,
+    rgba(255, 255, 255, 0.08) 62%,
+    transparent 100%
+  );
+  animation: cortex-progress-shimmer 2.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  pointer-events: none;
+  z-index: 2;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cortex-progress-fill--shimmer::after {
+    animation: none;
+  }
+
+  .cortex-progress-track > div {
+    transition-duration: 0.01ms;
+  }
+
+  .vitals-progress-indeterminate {
+    animation: none;
+  }
+}
+
+@keyframes cortex-progress-shimmer {
+  0% {
+    transform: translateX(-120%) skewX(-6deg);
+  }
+  100% {
+    transform: translateX(220%) skewX(-6deg);
+  }
+}
+
+.cortex-progress-indeterminate-bar {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 0;
+  width: 38%;
+  border-radius: 9999px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(109, 40, 217, 0.25) 18%,
+    rgba(139, 92, 246, 0.95) 38%,
+    rgba(167, 139, 250, 0.9) 48%,
+    var(--ra-cyan) 62%,
+    rgba(34, 211, 238, 0.75) 78%,
+    transparent 100%
+  );
+  box-shadow:
+    0 0 14px rgba(139, 92, 246, 0.55),
+    0 0 22px rgba(6, 182, 212, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  filter: drop-shadow(0 0 6px rgba(139, 92, 246, 0.5));
+}
+
+html:not(.dark) .cortex-progress-indeterminate-bar {
+  top: 2px;
+  bottom: 2px;
+  filter: drop-shadow(0 0 5px rgba(124, 58, 237, 0.35));
+  box-shadow:
+    0 0 10px rgba(124, 58, 237, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
 }
 
 /* Nav/header */
@@ -287,13 +564,21 @@ html {
 
 /* ── Vitals strip: indeterminate loop progress (no maxIterations yet) ─ */
 .vitals-progress-indeterminate {
-  animation: vitals-progress-sweep 2.2s ease-in-out infinite;
+  animation: vitals-progress-sweep 1.85s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 
 @keyframes vitals-progress-sweep {
-  0%   { transform: translateX(-100%); opacity: 0.35; }
-  50%  { opacity: 0.85; }
-  100% { transform: translateX(350%); opacity: 0.35; }
+  0% {
+    transform: translateX(-115%);
+    opacity: 0.5;
+  }
+  45% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(320%);
+    opacity: 0.45;
+  }
 }
 
 .cortex-tooltip-caret {

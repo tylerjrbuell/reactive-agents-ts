@@ -45,7 +45,7 @@
     </div>
   {:else}
     <!-- Toolbar -->
-    <div class="flex items-center gap-3 px-4 py-2 border-b border-white/5 flex-shrink-0">
+    <div class="flex flex-shrink-0 items-center gap-3 border-b border-[var(--cortex-border)] px-4 py-2">
       <!-- Outcome badge -->
       <span
         class="flex items-center gap-1.5 text-[10px] font-mono font-bold uppercase tracking-wide
@@ -60,7 +60,7 @@
         {isFailed ? "Failed" : "Success"}
       </span>
 
-      <div class="h-3 w-px bg-white/10"></div>
+      <div class="h-3 w-px bg-outline-variant/40 dark:bg-outline-variant/30"></div>
 
       <!-- View toggle -->
       <div class="flex gap-1">
@@ -191,7 +191,7 @@
 
           <!-- Metrics footer -->
           {#if d.metrics}
-            <div class="pt-3 border-t border-white/5 flex flex-wrap gap-4 font-mono text-[9px] text-outline/40">
+            <div class="flex flex-wrap gap-4 border-t border-[var(--cortex-border)] pt-3 font-mono text-[9px] text-outline/40">
               <span class="text-outline/50 uppercase tracking-widest">Metrics</span>
               {#if d.metrics.iterations}<span>{d.metrics.iterations} iterations</span>{/if}
               {#if d.metrics.tokens}<span>·</span><span>{(d.metrics.tokens).toLocaleString()} tokens</span>{/if}

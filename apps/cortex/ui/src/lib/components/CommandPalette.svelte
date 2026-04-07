@@ -33,12 +33,7 @@
   }
 
   function onGlobalKeydown(e: KeyboardEvent) {
-    const meta = e.metaKey || e.ctrlKey;
-    if (meta && e.key === "k") {
-      e.preventDefault();
-      commandPalette.toggle();
-      return;
-    }
+    // ⌘K / Ctrl+K is handled in +layout.svelte only (two listeners here caused open→toggle→close).
     if (!$commandPaletteOpen) return;
     if (e.key === "Escape") {
       e.preventDefault();
@@ -83,6 +78,14 @@
       shortcut: "R",
       keywords: ["home", "beacon", "launch", "run", "start"],
       action: () => { commandPalette.close(); void goto("/"); },
+    },
+    {
+      id: "go-chat",
+      label: "Go to Chat",
+      description: "Conversational sessions and message history",
+      icon: "chat",
+      keywords: ["chat", "conversation", "session", "messages"],
+      action: () => { commandPalette.close(); void goto("/chat"); },
     },
     {
       id: "go-trace",
@@ -233,17 +236,17 @@
     role="presentation"
   >
     <div
-      class="w-full max-w-lg rounded-xl border border-outline-variant/20 bg-surface-container shadow-neural-strong p-4"
+      class="w-full max-w-lg rounded-xl border border-outline-variant/25 bg-surface-container/95 dark:bg-surface-container-low/95 backdrop-blur-xl shadow-[0_24px_80px_rgba(0,0,0,0.35)] dark:shadow-[0_24px_80px_rgba(0,0,0,0.55)] p-4"
       role="dialog"
       aria-modal="true"
       aria-label="Command palette"
     >
-      <div class="flex items-center gap-2 border-b border-outline-variant/10 pb-3 mb-3">
-        <span class="material-symbols-outlined text-outline text-sm">search</span>
+      <div class="flex items-center gap-2 border-b border-outline-variant/15 pb-3 mb-3">
+        <span class="material-symbols-outlined text-secondary/80 text-lg" aria-hidden="true">search</span>
         <input
           bind:this={inputEl}
-          class="flex-1 bg-transparent font-mono text-sm text-on-surface outline-none placeholder:text-on-surface-variant"
-          placeholder="Search commands…"
+          class="flex-1 bg-transparent font-mono text-sm text-on-surface outline-none placeholder:text-on-surface-variant/80"
+          placeholder="Type a command or route…"
           value={$commandPaletteQuery}
           oninput={(e) => commandPaletteQuery.set(e.currentTarget.value)}
           autocomplete="off"

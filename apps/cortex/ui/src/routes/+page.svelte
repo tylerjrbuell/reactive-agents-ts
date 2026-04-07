@@ -2,11 +2,13 @@
   import { getContext, onMount, onDestroy } from "svelte";
   import AgentGrid from "$lib/components/AgentGrid.svelte";
   import BottomInputBar from "$lib/components/BottomInputBar.svelte";
+  import CortexDeskShell from "$lib/components/CortexDeskShell.svelte";
   import type { AgentStore } from "$lib/stores/agent-store.js";
   import type { StageStore } from "$lib/stores/stage-store.js";
 
   const agentStore = getContext<AgentStore>("agentStore");
-  const stageStore = getContext<StageStore>("stageStore");
+  /** Explicit cast — SvelteKit `getContext` typing can widen store methods. */
+  const stageStore = getContext("stageStore") as StageStore;
 
   let inputBarRef = $state<{ focus: () => void } | undefined>(undefined);
 
@@ -15,38 +17,15 @@
   onMount(() => window.addEventListener("cortex:focus-input", handleFocusInput));
   onDestroy(() => window.removeEventListener("cortex:focus-input", handleFocusInput));
 
-  const activeCount = $derived(
-    $agentStore.filter((a) => ["running", "exploring", "stressed"].includes(a.state)).length,
-  );
 </script>
 
 <svelte:head>
   <title>CORTEX — Beacon</title>
 </svelte:head>
 
-<div class="relative h-full flex flex-col overflow-hidden">
-  <!-- Ambient background glows -->
-  <div class="absolute top-1/4 left-1/3 w-[600px] h-[600px] bg-primary/4 blur-[140px] rounded-full pointer-events-none"></div>
-  <div class="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] bg-secondary/4 blur-[100px] rounded-full pointer-events-none"></div>
-
+<CortexDeskShell>
   {#if $agentStore.length > 0}
-    <!-- ── Active state: minimal status bar + agent grid ────────────── -->
-    <div class="flex items-center justify-between px-6 pt-4 pb-2 relative z-10 flex-shrink-0">
-      <div class="flex items-center gap-3">
-        {#if activeCount > 0}
-          <span class="flex items-center gap-1.5 text-[10px] font-mono text-secondary/80">
-            <span class="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse"></span>
-            {activeCount} active
-          </span>
-          <span class="text-outline/30 text-[10px]">·</span>
-        {/if}
-        <span class="text-[10px] font-mono text-outline/50">
-          {$agentStore.length} node{$agentStore.length !== 1 ? "s" : ""}
-        </span>
-      </div>
-    </div>
-
-    <div class="flex-1 relative overflow-y-auto px-6 pb-32 z-10 min-h-0">
+    <div class="flex-1 relative overflow-y-auto px-4 sm:px-6 pt-4 pb-32 z-10 min-h-0">
       <AgentGrid agents={$agentStore} />
     </div>
   {:else}
@@ -131,25 +110,39 @@
       </div>
 
       <!-- Status text -->
-      <p class="font-mono text-[11px] text-outline uppercase tracking-[0.2em] mb-8 flex items-center gap-2">
-        <span class="w-1.5 h-1.5 rounded-full bg-primary/40 animate-pulse"></span>
+      <p class="font-mono text-[11px] text-outline uppercase tracking-[0.18em] mb-2 flex items-center justify-center gap-2">
+        <span
+          class="w-1.5 h-1.5 rounded-full bg-violet-500 animate-pulse shadow-[0_0_6px_rgba(124,58,237,0.45)] dark:bg-violet-400 dark:shadow-[0_0_10px_rgba(167,139,250,0.7)]"
+        ></span>
         Awaiting connections
-        <span class="w-1.5 h-1.5 rounded-full bg-primary/40 animate-pulse" style="animation-delay: 0.5s"></span>
+        <span
+          class="w-1.5 h-1.5 rounded-full bg-cyan-600 animate-pulse shadow-[0_0_6px_rgba(6,182,212,0.45)] dark:bg-cyan-400 dark:shadow-[0_0_10px_rgba(34,211,238,0.6)]"
+          style="animation-delay: 0.5s"
+        ></span>
+      </p>
+      <p class="text-center text-[11px] text-on-surface-variant/75 font-medium max-w-md px-6 mb-8 leading-relaxed">
+        Local desk — stream runs with <code class="font-mono text-[10px] text-secondary/90">rax … --cortex</code> or
+        <code class="font-mono text-[10px] text-primary/90">.withCortex()</code>. Press
+        <kbd class="cortex-kbd align-middle mx-0.5">R</kbd> to focus the prompt.
       </p>
 
       <!-- Connection methods -->
       <div class="space-y-3 text-center max-w-sm">
-        <div class="px-5 py-2.5 bg-primary/6 border border-primary/15 rounded-lg">
-          <code class="font-mono text-[11px] text-primary/80">
+        <div
+          class="px-5 py-2.5 rounded-lg bg-violet-100/95 dark:bg-violet-950/35 shadow-[0_0_0_1px_rgba(124,58,237,0.28),0_4px_16px_rgba(124,58,237,0.08)] dark:shadow-[0_0_0_1px_rgba(139,92,246,0.45),0_0_20px_rgba(139,92,246,0.15)]"
+        >
+          <code class="font-mono text-[11px] text-violet-900 dark:text-violet-200">
             rax run "your prompt" --cortex
           </code>
         </div>
-        <div class="text-[9px] font-mono text-outline/40 uppercase tracking-widest">or</div>
-        <div class="px-5 py-2.5 bg-surface-container-low border border-outline-variant/10 rounded-lg">
-          <code class="font-mono text-[10px] text-outline/60">
+        <div class="text-[9px] font-mono text-secondary/50 uppercase tracking-widest">or</div>
+        <div
+          class="px-5 py-2.5 rounded-lg bg-cyan-100/95 dark:bg-cyan-950/30 shadow-[0_0_0_1px_rgba(6,182,212,0.28),0_4px_14px_rgba(6,182,212,0.08)] dark:shadow-[0_0_0_1px_rgba(6,182,212,0.4),0_0_18px_rgba(6,182,212,0.12)]"
+        >
+          <code class="font-mono text-[10px] text-cyan-900 dark:text-cyan-200/95">
             .withCortex()
           </code>
-          <span class="font-mono text-[9px] text-outline/40 ml-2">— one builder line</span>
+          <span class="font-mono text-[9px] text-cyan-700/70 dark:text-cyan-400/50 ml-2">— one builder line</span>
         </div>
         <div class="text-[9px] font-mono text-outline/40 uppercase tracking-widest">or type below</div>
       </div>
@@ -159,6 +152,8 @@
   <BottomInputBar
     bind:this={inputBarRef}
     loading={$stageStore.submitting}
-    onSubmit={(prompt, cfg) => void stageStore.submitPrompt(prompt, cfg)}
+    onSubmit={(prompt, cfg) => {
+      void stageStore.submitPrompt(prompt, cfg);
+    }}
   />
-</div>
+</CortexDeskShell>

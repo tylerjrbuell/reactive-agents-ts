@@ -76,7 +76,7 @@
 
 <div class="h-full flex flex-col overflow-hidden">
   <!-- Filter + summary bar -->
-  <div class="flex items-center gap-2 px-3 py-2 border-b border-white/5 flex-shrink-0">
+  <div class="flex flex-shrink-0 items-center gap-2 border-b border-[var(--cortex-border)] px-3 py-2">
     <span class="material-symbols-outlined text-sm text-outline/50">search</span>
     <input
       type="text"
@@ -100,7 +100,7 @@
 
   <!-- Top event types summary -->
   {#if topTypes.length > 0 && !filterText}
-    <div class="flex gap-2 px-3 py-1.5 border-b border-white/5 flex-shrink-0 overflow-x-auto">
+    <div class="flex flex-shrink-0 gap-2 overflow-x-auto border-b border-[var(--cortex-border)] px-3 py-1.5">
       {#each topTypes as [type, count]}
         <button
           type="button"
@@ -135,7 +135,7 @@
 
         <button
           type="button"
-          class="w-full text-left flex items-start gap-2 px-3 py-1 cursor-pointer hover:bg-surface-container-low/40 transition-colors border-b border-white/[0.02] bg-transparent border-x-0 border-t-0
+          class="flex w-full cursor-pointer items-start gap-2 border-x-0 border-b border-t-0 border-[var(--cortex-border)] bg-transparent px-3 py-1 text-left transition-colors hover:bg-surface-container-low/40
                  {isExpanded ? 'bg-surface-container-low/60' : ''}"
           onclick={() => (expandedIdx = isExpanded ? null : i)}
         >
@@ -186,7 +186,7 @@
         <!-- Expanded payload -->
         {#if isExpanded}
           <div
-            class="bg-surface-container-lowest/60 border-b border-white/5 px-3 py-2"
+            class="border-b border-[var(--cortex-border)] bg-surface-container-lowest/60 px-3 py-2"
           >
             <pre class="text-[9px] font-mono text-on-surface/50 whitespace-pre-wrap break-all overflow-x-auto max-h-64 overflow-y-auto">{JSON.stringify(
                 ev.payload,

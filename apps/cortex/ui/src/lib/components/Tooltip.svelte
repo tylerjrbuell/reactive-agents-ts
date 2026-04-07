@@ -1,7 +1,9 @@
 <script lang="ts">
   import { browser } from "$app/environment";
+  import { portal } from "$lib/actions/portal.js";
+  import { settings } from "$lib/stores/settings.js";
   import type { Snippet } from "svelte";
-  import { onDestroy, tick } from "svelte";
+  import { onDestroy, onMount, tick } from "svelte";
 
   interface Props {
     /** Tooltip body; empty string hides the bubble */
@@ -10,6 +12,8 @@
     placement?: "top" | "bottom";
     /** Extra classes on the trigger wrapper (width, flex, etc.) */
     class?: string;
+    /** When true, never open (overrides global Settings → tooltips). */
+    disabled?: boolean;
     children: Snippet;
   }
 
@@ -17,11 +21,27 @@
     text,
     placement = "top",
     class: className = "",
+    disabled = false,
     children,
   }: Props = $props();
 
   const body = $derived(text.trim());
   const hasBody = $derived(body.length > 0);
+
+  /** Mirrors persisted `tooltipsEnabled`; updated on subscribe after init. */
+  let tooltipsGloballyEnabled = $state(true);
+
+  onMount(() => {
+    settings.init();
+    tooltipsGloballyEnabled = settings.get().tooltipsEnabled !== false;
+    return settings.subscribe((s) => {
+      tooltipsGloballyEnabled = s.tooltipsEnabled !== false;
+    });
+  });
+
+  const tooltipEligible = $derived(
+    hasBody && tooltipsGloballyEnabled && !disabled,
+  );
 
   const MARGIN = 10;
   const GAP = 8;
@@ -111,7 +131,7 @@
   }
 
   function showFrom(target: EventTarget | null) {
-    if (!hasBody || !(target instanceof HTMLElement)) return;
+    if (!tooltipEligible || !(target instanceof HTMLElement)) return;
     void openAndFit(target);
   }
 
@@ -125,6 +145,14 @@
   }
 
   onDestroy(() => clearHideTimer());
+
+  $effect(() => {
+    if (!tooltipEligible && open) {
+      clearHideTimer();
+      open = false;
+      triggerEl = null;
+    }
+  });
 
   $effect(() => {
     if (!browser || !open) return;
@@ -141,7 +169,7 @@
   role="group"
   data-cortex-tip-root
   class="relative inline-flex max-w-full align-middle {className}"
-  class:cursor-help={hasBody}
+  class:cursor-help={tooltipEligible}
   onpointerenter={(e) => showFrom(e.currentTarget)}
   onpointerleave={scheduleHide}
   onfocusin={(e) => showFrom(e.currentTarget)}
@@ -150,11 +178,12 @@
   {@render children()}
 </span>
 
-{#if open && hasBody}
+{#if open && tooltipEligible}
   <span
     bind:this={panelEl}
+    use:portal={browser ? document.body : undefined}
     role="tooltip"
-    class="cortex-tooltip-panel pointer-events-none fixed z-[99999] flex max-h-[min(40vh,18rem)] max-w-[min(100vw-1.5rem,22rem)] flex-col overflow-visible rounded-md border border-outline-variant/35 bg-surface-container-low text-left shadow-[0_10px_40px_-10px_rgba(0,0,0,0.55)] ring-1 ring-primary/[0.12] dark:shadow-[0_12px_40px_-8px_rgba(0,0,0,0.75)]"
+    class="cortex-tooltip-panel pointer-events-none fixed z-[99999] flex max-h-[min(40vh,18rem)] max-w-[min(100vw-1.5rem,22rem)] flex-col overflow-visible rounded-md border border-[var(--cortex-border)] bg-surface-container-low text-left shadow-[0_10px_40px_-10px_rgba(0,0,0,0.55)] ring-1 ring-primary/[0.12] dark:border-primary/20 dark:shadow-[0_12px_40px_-8px_rgba(0,0,0,0.75)]"
     style:left="{tipLeft}px"
     style:top="{tipTop}px"
   >

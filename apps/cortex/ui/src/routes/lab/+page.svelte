@@ -7,9 +7,12 @@
   import ConfirmModal from "$lib/components/ConfirmModal.svelte";
   import { toast } from "$lib/stores/toast-store.js";
   import { goto } from "$app/navigation";
+  import MarkdownRich from "$lib/components/MarkdownRich.svelte";
+  import ToolWorkshop from "$lib/components/ToolWorkshop.svelte";
+  import CortexDeskShell from "$lib/components/CortexDeskShell.svelte";
+  import { cortexRunsPostBody } from "$lib/cortex-runs-post-body.js";
 
   type SkillRow  = { id?: string; name?: string; description?: string; content?: string };
-  type ToolRow   = { name?: string; description?: string; schema?: unknown };
   type GatewayRow = {
     agentId: string; name: string; config: AgentConfig;
     status: string; runCount: number; lastRunAt?: number; schedule?: string;
@@ -48,7 +51,6 @@
   let builderAgentType = $state<"ad-hoc" | "persistent">("ad-hoc");
   let builderPersistentName = $state("");
   let builderPersistentSchedule = $state("");
-  let builderRunNow = $state(true);
   let builderRunning = $state(false);
   let builderSaving = $state(false);
 
@@ -59,44 +61,7 @@
       const res = await fetch(`${CORTEX_SERVER_URL}/api/runs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt:              builderConfig.prompt.trim(),
-          provider:            builderConfig.provider,
-          model:               builderConfig.model || undefined,
-          tools:               builderConfig.tools,
-          strategy:            builderConfig.strategy,
-          temperature:         builderConfig.temperature,
-          maxIterations:       builderConfig.maxIterations || undefined,
-          minIterations:       builderConfig.minIterations || undefined,
-          systemPrompt:        builderConfig.systemPrompt || undefined,
-          agentName:           builderConfig.agentName || undefined,
-          maxTokens:           builderConfig.maxTokens || undefined,
-          timeout:             builderConfig.timeout || undefined,
-          retryPolicy:         builderConfig.retryPolicy.enabled ? builderConfig.retryPolicy : undefined,
-          cacheTimeout:        builderConfig.cacheTimeout || undefined,
-          progressCheckpoint:  builderConfig.progressCheckpoint || undefined,
-          fallbacks:           builderConfig.fallbacks.enabled ? builderConfig.fallbacks : undefined,
-          metaTools:           builderConfig.metaTools.enabled ? builderConfig.metaTools : undefined,
-          verificationStep:    builderConfig.verificationStep !== "none" ? builderConfig.verificationStep : undefined,
-          observabilityVerbosity: builderConfig.observabilityVerbosity,
-          mcpServerIds:        builderConfig.mcpServerIds?.length ? builderConfig.mcpServerIds : undefined,
-          agentTools:          builderConfig.agentTools?.length ? builderConfig.agentTools : undefined,
-          dynamicSubAgents:    builderConfig.dynamicSubAgents?.enabled ? builderConfig.dynamicSubAgents : undefined,
-          ...(Object.keys(builderConfig.taskContext ?? {}).length > 0
-            ? { taskContext: builderConfig.taskContext }
-            : {}),
-          ...(builderConfig.healthCheck ? { healthCheck: true as const } : {}),
-          ...(builderConfig.skills?.paths?.length
-            ? {
-                skills: {
-                  paths: builderConfig.skills.paths,
-                  ...(builderConfig.skills.evolution
-                    ? { evolution: { ...builderConfig.skills.evolution } }
-                    : {}),
-                },
-              }
-            : {}),
-        }),
+        body: JSON.stringify(cortexRunsPostBody(builderConfig.prompt.trim(), builderConfig)),
       });
       if (!res.ok) throw new Error(`Server error ${res.status}`);
       const data = await res.json() as { runId?: string };
@@ -107,9 +72,13 @@
     } finally { builderRunning = false; }
   }
 
-  async function createAgentFromBuilder() {
+  async function createAgentFromBuilder(runNow: boolean) {
     if (!builderPersistentName.trim()) {
       toast.warning("Name is required");
+      return;
+    }
+    if (runNow && builderAgentType === "ad-hoc" && !builderConfig.prompt.trim()) {
+      toast.warning("Add a prompt first", "Save & run uses the prompt stored on the agent.");
       return;
     }
     builderSaving = true;
@@ -121,7 +90,7 @@
         body: JSON.stringify({
           name: builderPersistentName.trim(),
           type,
-          runNow: builderAgentType === "ad-hoc" ? builderRunNow : false,
+          runNow: builderAgentType === "ad-hoc" ? runNow : false,
           config: { ...builderConfig, prompt: builderConfig.prompt.trim() },
           schedule: builderAgentType === "persistent" ? (builderPersistentSchedule.trim() || null) : null,
         }),
@@ -209,7 +178,6 @@
     builderAgentType = "persistent";
     builderPersistentName = "";
     builderPersistentSchedule = "";
-    builderRunNow = true;
     editingAgent = null;
     showForm = false;
     activeTab = "builder";
@@ -305,11 +273,35 @@
 
   // ── Skills / Tools ────────────────────────────────────────────────────
   let skills = $state<SkillRow[]>([]);
-  let tools  = $state<ToolRow[]>([]);
-  let selectedSkill = $state<SkillRow | null>(null);
-  let selectedTool  = $state<ToolRow | null>(null);
   /** Relative dirs on disk from GET /api/skills/discover (framework `withSkills` hints). */
   let discoveredSkillPaths = $state<string[]>([]);
+
+  type FsSkillSummary = {
+    source: "filesystem";
+    relPath: string;
+    skillDir: string;
+    name: string;
+    description: string;
+  };
+  type SkillDetail = {
+    name: string;
+    description: string;
+    instructions: string;
+    metadata: Record<string, unknown>;
+    filePath: string;
+    resources: { scripts: string[]; references: string[]; assets: string[] };
+    declaredFields?: Record<string, unknown>;
+  };
+  type SkillListSelection =
+    | { kind: "filesystem"; relPath: string }
+    | { kind: "sqlite"; id: string };
+
+  let fsSkillSummaries = $state<FsSkillSummary[]>([]);
+  let skillCatalogFilter = $state("");
+  let skillListSelection = $state<SkillListSelection | null>(null);
+  let skillDetail = $state<SkillDetail | null>(null);
+  let skillDetailLoading = $state(false);
+  let skillDetailError = $state<string | null>(null);
 
   async function loadSkillDiscover() {
     try {
@@ -318,6 +310,108 @@
     } catch {
       discoveredSkillPaths = [];
     }
+  }
+
+  async function loadFsSkillSummaries() {
+    try {
+      const res = await fetch(`${CORTEX_SERVER_URL}/api/skills/files`);
+      const data = res.ok ? ((await res.json()) as { skills?: FsSkillSummary[] }) : {};
+      fsSkillSummaries = data.skills ?? [];
+    } catch {
+      fsSkillSummaries = [];
+    }
+  }
+
+  type SkillCatalogRow =
+    | { t: "hdr"; label: string }
+    | { t: "fs"; s: FsSkillSummary }
+    | { t: "sql"; s: SkillRow; rowKey: string };
+
+  /** Single scroll list: section headers + disk skills + SQLite rows (workshop catalog). */
+  const skillCatalogRows = $derived.by((): SkillCatalogRow[] => {
+    const q = skillCatalogFilter;
+    const match = (name: string, desc: string) => {
+      const qq = q.trim().toLowerCase();
+      if (!qq) return true;
+      return name.toLowerCase().includes(qq) || desc.toLowerCase().includes(qq);
+    };
+    const rows: SkillCatalogRow[] = [];
+    const fsFiltered = fsSkillSummaries.filter((x) => match(x.name, x.description));
+    const sqlFiltered = skills.filter((s) =>
+      match(String(s.name ?? ""), String(s.description ?? "")),
+    );
+    if (fsFiltered.length > 0) {
+      rows.push({ t: "hdr", label: "On disk" });
+      for (const s of fsFiltered) rows.push({ t: "fs", s });
+    }
+    if (sqlFiltered.length > 0) {
+      rows.push({ t: "hdr", label: "SQLite (desk DB)" });
+      for (let i = 0; i < sqlFiltered.length; i++) {
+        const s = sqlFiltered[i]!;
+        rows.push({ t: "sql", s, rowKey: `sql-${String(s.id ?? `i${i}`)}` });
+      }
+    }
+    return rows;
+  });
+
+  async function loadSkillDetail(sel: SkillListSelection) {
+    skillListSelection = sel;
+    skillDetailLoading = true;
+    skillDetailError = null;
+    skillDetail = null;
+    try {
+      if (sel.kind === "filesystem") {
+        const res = await fetch(
+          `${CORTEX_SERVER_URL}/api/skills/file?path=${encodeURIComponent(sel.relPath)}`,
+        );
+        const data = (await res.json()) as SkillDetail & { error?: string };
+        if (!res.ok) {
+          skillDetailError = data.error ?? `HTTP ${res.status}`;
+          return;
+        }
+        skillDetail = data;
+      } else {
+        const res = await fetch(`${CORTEX_SERVER_URL}/api/skills/sqlite/${encodeURIComponent(sel.id)}`);
+        const data = (await res.json()) as SkillDetail & { error?: string };
+        if (!res.ok) {
+          skillDetailError = data.error ?? `HTTP ${res.status}`;
+          return;
+        }
+        skillDetail = data;
+      }
+    } catch (e) {
+      skillDetailError = String(e);
+    } finally {
+      skillDetailLoading = false;
+    }
+  }
+
+  function selectFilesystemSkill(s: FsSkillSummary) {
+    void loadSkillDetail({ kind: "filesystem", relPath: s.relPath });
+  }
+
+  function selectSqliteSkill(s: SkillRow) {
+    const id = s.id != null ? String(s.id) : "";
+    if (!id) {
+      toast.warning("This row has no id", "Cannot load SQLite skill detail.");
+      return;
+    }
+    void loadSkillDetail({ kind: "sqlite", id });
+  }
+
+  function isFsSkillSelected(s: FsSkillSummary): boolean {
+    return skillListSelection?.kind === "filesystem" && skillListSelection.relPath === s.relPath;
+  }
+
+  function isSqliteSkillSelected(s: SkillRow): boolean {
+    const id = s.id != null ? String(s.id) : "";
+    return skillListSelection?.kind === "sqlite" && id !== "" && skillListSelection.id === id;
+  }
+
+  function formatYamlValue(v: unknown): string {
+    if (v === null || v === undefined) return "";
+    if (typeof v === "object") return JSON.stringify(v);
+    return String(v);
   }
 
   function appendPathsToBuilderLivingSkills(paths: string[]) {
@@ -334,148 +428,11 @@
   }
 
   $effect(() => {
-    if (activeTab === "skills") void loadSkillDiscover();
+    if (activeTab === "skills") {
+      void loadSkillDiscover();
+      void loadFsSkillSummaries();
+    }
   });
-
-  type McpListRow = {
-    serverId: string;
-    name: string;
-    config: Record<string, unknown>;
-    tools: { toolName: string; description?: string }[];
-  };
-  let mcpServersList = $state<McpListRow[]>([]);
-  let selectedMcp = $state<McpListRow | null>(null);
-  let mcpRefreshing = $state<string | null>(null);
-  let mcpSaving = $state(false);
-  let mcpDraftName = $state("");
-  let mcpDraftTransport = $state<"stdio" | "sse" | "websocket" | "streamable-http">("stdio");
-  let mcpDraftCommand = $state("");
-  let mcpDraftArgs = $state("");
-  let mcpDraftEndpoint = $state("");
-  let mcpDraftHeaders = $state("");
-  let mcpDraftEnv = $state("");
-
-  async function loadMcpServers() {
-    try {
-      const res = await fetch(`${CORTEX_SERVER_URL}/api/mcp-servers`);
-      mcpServersList = res.ok ? ((await res.json()) as McpListRow[]) : [];
-      if (selectedMcp) {
-        const u = mcpServersList.find((s) => s.serverId === selectedMcp!.serverId);
-        selectedMcp = u ?? null;
-      }
-    } catch {
-      mcpServersList = [];
-    }
-  }
-
-  function resetMcpDraft() {
-    mcpDraftName = "";
-    mcpDraftTransport = "stdio";
-    mcpDraftCommand = "";
-    mcpDraftArgs = "";
-    mcpDraftEndpoint = "";
-    mcpDraftHeaders = "";
-    mcpDraftEnv = "";
-  }
-
-  function openNewMcp() {
-    resetMcpDraft();
-    selectedMcp = null;
-  }
-
-  function openEditMcp(row: McpListRow) {
-    selectedMcp = row;
-    const c = row.config;
-    mcpDraftName = typeof c.name === "string" ? c.name : row.name;
-    mcpDraftTransport = (c.transport as typeof mcpDraftTransport) ?? "stdio";
-    mcpDraftCommand = typeof c.command === "string" ? c.command : "";
-    mcpDraftArgs = Array.isArray(c.args) ? (c.args as string[]).join(", ") : "";
-    mcpDraftEndpoint = typeof c.endpoint === "string" ? c.endpoint : "";
-    mcpDraftHeaders = c.headers && typeof c.headers === "object" ? JSON.stringify(c.headers, null, 2) : "";
-    mcpDraftEnv = c.env && typeof c.env === "object" ? JSON.stringify(c.env, null, 2) : "";
-  }
-
-  function buildMcpPayload(): Record<string, unknown> {
-    const name = mcpDraftName.trim();
-    const transport = mcpDraftTransport;
-    const body: Record<string, unknown> = { name, transport };
-    if (transport === "stdio") {
-      if (mcpDraftCommand.trim()) body.command = mcpDraftCommand.trim();
-      const args = mcpDraftArgs.split(/[\n,]/).map((s) => s.trim()).filter(Boolean);
-      if (args.length > 0) body.args = args;
-    } else {
-      if (mcpDraftEndpoint.trim()) body.endpoint = mcpDraftEndpoint.trim();
-    }
-    if (mcpDraftHeaders.trim()) {
-      body.headers = JSON.parse(mcpDraftHeaders) as Record<string, string>;
-    }
-    if (mcpDraftEnv.trim()) {
-      body.env = JSON.parse(mcpDraftEnv) as Record<string, string>;
-    }
-    return body;
-  }
-
-  async function saveMcpServer() {
-    if (!mcpDraftName.trim()) {
-      toast.warning("MCP server name is required");
-      return;
-    }
-    try {
-      if (mcpDraftHeaders.trim()) JSON.parse(mcpDraftHeaders);
-      if (mcpDraftEnv.trim()) JSON.parse(mcpDraftEnv);
-    } catch {
-      toast.error("Invalid JSON", "Headers or env must be valid JSON objects");
-      return;
-    }
-    mcpSaving = true;
-    try {
-      const payload = buildMcpPayload();
-      const isEdit = selectedMcp != null;
-      const url = isEdit
-        ? `${CORTEX_SERVER_URL}/api/mcp-servers/${selectedMcp!.serverId}`
-        : `${CORTEX_SERVER_URL}/api/mcp-servers`;
-      const res = await fetch(url, {
-        method: isEdit ? "PATCH" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) {
-        const j = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(j.error ?? `HTTP ${res.status}`);
-      }
-      toast.success(isEdit ? "MCP server updated" : "MCP server created");
-      await loadMcpServers();
-      if (!isEdit) resetMcpDraft();
-    } catch (e) {
-      toast.error("Save failed", String(e));
-    } finally {
-      mcpSaving = false;
-    }
-  }
-
-  async function refreshMcpTools(serverId: string) {
-    mcpRefreshing = serverId;
-    try {
-      const res = await fetch(`${CORTEX_SERVER_URL}/api/mcp-servers/${serverId}/refresh-tools`, { method: "POST" });
-      const j = (await res.json()) as { tools?: unknown[]; error?: string };
-      if (!res.ok) throw new Error(j.error ?? `HTTP ${res.status}`);
-      toast.success("Tools refreshed", `${(j.tools ?? []).length} tool(s)`);
-      await loadMcpServers();
-    } catch (e) {
-      toast.error("Refresh failed", String(e));
-    } finally {
-      mcpRefreshing = null;
-    }
-  }
-
-  async function deleteMcpServerRow(serverId: string) {
-    const res = await fetch(`${CORTEX_SERVER_URL}/api/mcp-servers/${serverId}`, { method: "DELETE" });
-    if (res.ok) {
-      toast.success("MCP server removed");
-      if (selectedMcp?.serverId === serverId) selectedMcp = null;
-      await loadMcpServers();
-    } else toast.error("Delete failed");
-  }
 
   function relativeTime(ts?: number) {
     if (!ts) return "never";
@@ -503,8 +460,7 @@
     void loadGatewayAgents();
     void Promise.all([
       fetch(`${CORTEX_SERVER_URL}/api/skills`).then(r => r.ok ? r.json() : []).then(j => { skills = j; }).catch(() => {}),
-      fetch(`${CORTEX_SERVER_URL}/api/tools`).then(r => r.ok ? r.json() : []).then(j => { tools = j; }).catch(() => {}),
-      loadMcpServers(),
+      fetch(`${CORTEX_SERVER_URL}/api/skills/files`).then(r => r.ok ? r.json() : { skills: [] }).then((j: { skills?: FsSkillSummary[] }) => { fsSkillSummaries = j.skills ?? []; }).catch(() => {}),
     ]);
 
     return () => window.removeEventListener("cortex:lab-tab", onTabSwitch);
@@ -513,9 +469,10 @@
 
 <svelte:head><title>CORTEX — Lab</title></svelte:head>
 
-<div class="h-full flex flex-col overflow-hidden p-4 gap-3">
+<CortexDeskShell>
+<div class="relative z-10 flex h-full min-h-0 flex-col gap-3 overflow-hidden p-4">
   <!-- Tabs -->
-  <div class="flex items-center gap-1 border-b border-outline-variant/20 pb-0 flex-shrink-0">
+  <div class="flex flex-shrink-0 items-center gap-1 border-b border-primary/15 pb-0 dark:border-outline-variant/20">
     {#each [
       { id: "builder", label: "Builder", icon: "build" },
       { id: "gateway", label: "Agents", icon: "hub", badge: gatewayAgents.length },
@@ -523,9 +480,10 @@
       { id: "tools",   label: "Tools",   icon: "construction" },
     ] as tab}
       <button type="button"
-        class="flex items-center gap-2 px-4 py-2.5 font-mono text-xs uppercase tracking-wider
-               transition-colors border-b-2 -mb-px
-               {activeTab === tab.id ? 'border-primary text-primary' : 'border-transparent text-outline hover:text-primary'}"
+        class="-mb-px flex items-center gap-2 border-b-2 px-4 py-2.5 font-mono text-xs uppercase tracking-wider transition-colors
+               {activeTab === tab.id
+          ? 'border-primary text-primary'
+          : 'border-transparent text-outline hover:text-primary'}"
         onclick={() => (activeTab = tab.id as typeof activeTab)}>
         <span class="material-symbols-outlined text-sm">{tab.icon}</span>{tab.label}
         {#if (tab as any).badge > 0}
@@ -572,7 +530,7 @@
         </div>
 
         <div class="grid grid-cols-2 gap-3">
-          <div>
+          <div class={builderAgentType === "persistent" ? "" : "col-span-2"}>
             <label for="builder-persistent-name" class="text-[9px] font-mono text-outline/60 uppercase tracking-widest block mb-1.5">Name *</label>
             <input
               id="builder-persistent-name"
@@ -593,44 +551,53 @@
                 class="w-full bg-surface-container-lowest/60 border border-outline-variant/20 rounded-lg px-3 py-2 text-sm font-mono text-on-surface focus:border-primary/50 focus:outline-none"
               />
             </div>
-          {:else}
-            <div class="flex items-end">
-              <label class="flex items-center gap-2 text-[10px] font-mono text-outline/70 select-none cursor-pointer">
-                <input type="checkbox" bind:checked={builderRunNow} />
-                Run immediately after create
-              </label>
-            </div>
           {/if}
         </div>
 
         <AgentConfigPanel bind:config={builderConfig} />
-        <div class="flex justify-end pt-1">
+        <div class="flex flex-col gap-2 pt-1 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
           {#if builderAgentType === "ad-hoc"}
-            <div class="flex items-center gap-2">
-            <button type="button" disabled={!builderPersistentName.trim() || builderSaving} onclick={createAgentFromBuilder}
-              class="flex items-center gap-2 px-6 py-2.5 rounded-lg border-0 cursor-pointer font-mono
-                     text-[11px] uppercase tracking-wider text-white disabled:opacity-40 hover:brightness-110 transition-all"
-              style="background:linear-gradient(135deg,#8b5cf6,#06b6d4);box-shadow:0 0 16px rgba(139,92,246,.3);">
-              {#if builderSaving}
-                <span class="material-symbols-outlined text-sm animate-spin">progress_activity</span>
-              {:else}
-                <span class="material-symbols-outlined text-sm">save</span>
-              {/if}
-              Create Ad-hoc Agent
-            </button>
-            <button type="button" disabled={!builderConfig.prompt.trim() || builderRunning} onclick={runFromBuilder}
-              class="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-outline-variant/20 bg-transparent cursor-pointer font-mono
-                     text-[10px] uppercase tracking-wider text-outline disabled:opacity-40 hover:text-on-surface transition-all">
-              {#if builderRunning}
-                <span class="material-symbols-outlined text-sm animate-spin">progress_activity</span>
-              {:else}
-                <span class="material-symbols-outlined text-sm">send</span>
-              {/if}
-              Run Unsaved
-            </button>
+            <p class="w-full text-[10px] font-mono text-outline/55 sm:mr-auto sm:w-auto sm:max-w-[22rem]">
+              Save stores this blueprint under Agents. <span class="text-on-surface/70">Run without saving</span> tries the current form without writing.
+            </p>
+            <div class="flex flex-wrap items-stretch justify-end gap-2">
+              <button type="button" disabled={!builderConfig.prompt.trim() || builderRunning} onclick={runFromBuilder}
+                class="flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-outline-variant/25 bg-surface-container-low/40 cursor-pointer font-mono
+                       text-[10px] uppercase tracking-wider text-outline disabled:opacity-40 hover:border-primary/35 hover:text-on-surface transition-all">
+                {#if builderRunning}
+                  <span class="material-symbols-outlined text-sm animate-spin">progress_activity</span>
+                {:else}
+                  <span class="material-symbols-outlined text-sm">science</span>
+                {/if}
+                Run without saving
+              </button>
+              <button type="button" disabled={!builderPersistentName.trim() || builderSaving} onclick={() => createAgentFromBuilder(false)}
+                class="flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-outline-variant/30 bg-transparent cursor-pointer font-mono
+                       text-[10px] uppercase tracking-wider text-on-surface/90 disabled:opacity-40 hover:border-primary/40 transition-all">
+                {#if builderSaving}
+                  <span class="material-symbols-outlined text-sm animate-spin">progress_activity</span>
+                {:else}
+                  <span class="material-symbols-outlined text-sm">bookmark_add</span>
+                {/if}
+                Save only
+              </button>
+              <button type="button"
+                disabled={!builderPersistentName.trim() || !builderConfig.prompt.trim() || builderSaving}
+                onclick={() => createAgentFromBuilder(true)}
+                title={!builderConfig.prompt.trim() ? "Add a prompt above — it is stored on the agent and used for the first run." : undefined}
+                class="flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg border-0 cursor-pointer font-mono
+                       text-[11px] uppercase tracking-wider text-white disabled:opacity-40 hover:brightness-110 transition-all"
+                style="background:linear-gradient(135deg,#8b5cf6,#06b6d4);box-shadow:0 0 16px rgba(139,92,246,.3);">
+                {#if builderSaving}
+                  <span class="material-symbols-outlined text-sm animate-spin">progress_activity</span>
+                {:else}
+                  <span class="material-symbols-outlined text-sm">rocket_launch</span>
+                {/if}
+                Save &amp; run
+              </button>
             </div>
           {:else}
-            <button type="button" disabled={!builderPersistentName.trim() || builderSaving} onclick={createAgentFromBuilder}
+            <button type="button" disabled={!builderPersistentName.trim() || builderSaving} onclick={() => createAgentFromBuilder(false)}
               class="flex items-center gap-2 px-6 py-2.5 rounded-lg border-0 cursor-pointer font-mono
                      text-[11px] uppercase tracking-wider text-white disabled:opacity-40 hover:brightness-110 transition-all"
               style="background:linear-gradient(135deg,#8b5cf6,#06b6d4);box-shadow:0 0 16px rgba(139,92,246,.3);">
@@ -811,176 +778,247 @@
       </div>
     {/if}
 
-  <!-- ── SKILLS ──────────────────────────────────────────────────────── -->
+  <!-- ── SKILLS (workshop layout: catalog | document | meta) ─────────── -->
   {:else if activeTab === "skills"}
-    <div class="flex flex-col gap-4 flex-1 min-h-0 overflow-hidden">
-      <div class="rounded-lg border border-outline-variant/20 bg-surface-container-low/30 p-4 flex-shrink-0 space-y-3">
-        <div class="flex items-center justify-between gap-2 flex-wrap">
-          <h3 class="font-headline text-sm font-semibold text-on-surface">Living skills (framework)</h3>
-          <button type="button" onclick={() => loadSkillDiscover()}
-            class="text-[10px] font-mono px-3 py-1.5 rounded border border-outline-variant/25 text-outline hover:text-primary cursor-pointer bg-transparent">
-            ↻ Rescan disk
+    <div class="flex flex-col flex-1 min-h-0 overflow-hidden gap-3">
+      <header class="flex-shrink-0 flex flex-col gap-2 border-b border-outline-variant/15 pb-3">
+        <div class="flex flex-wrap items-end justify-between gap-2">
+          <div>
+            <h2 class="font-headline text-sm font-semibold text-on-surface tracking-tight">Skills workshop</h2>
+            <p class="font-mono text-[10px] text-outline/55 mt-1 max-w-3xl leading-relaxed">
+              Open Agent Skills use <code class="text-secondary/90">.agents/skills/&lt;skill-name&gt;/SKILL.md</code>
+              (YAML + markdown). The desk scans <strong class="text-on-surface/75">your process cwd</strong> and
+              <strong class="text-on-surface/75">the Cortex app folder</strong> for the roots below, so skills still appear if you start the API from an unexpected directory.
+              Optional: set <code class="text-outline/50">CORTEX_SKILL_SCAN_ROOT</code> to add another base path.
+            </p>
+          </div>
+          <button
+            type="button"
+            onclick={() => {
+              void loadSkillDiscover();
+              void loadFsSkillSummaries();
+            }}
+            class="text-[10px] font-mono px-3 py-1.5 rounded border border-outline-variant/25 text-outline hover:text-primary cursor-pointer bg-transparent shrink-0"
+          >
+            ↻ Rescan
           </button>
         </div>
-        <p class="font-mono text-[9px] text-outline/60 leading-relaxed">
-          These folders are what <strong class="text-on-surface/80">withSkills</strong> uses (SKILL.md trees). They are separate from the SQLite list below.
-          Paths are relative to the Cortex server working directory (usually your repo root). Add them here, then fine-tune under <strong class="text-on-surface/80">Builder → Agent config → Living skills</strong>.
-        </p>
-        {#if discoveredSkillPaths.length === 0}
-          <p class="font-mono text-[10px] text-outline/50">No known skill directories found (checked <code class="text-primary/60">.claude/skills</code>, <code class="text-primary/60">.agents/skills</code>, <code class="text-primary/60">skills</code>).</p>
-        {:else}
-          <ul class="space-y-2">
-            {#each discoveredSkillPaths as p (p)}
-              <li class="flex items-center justify-between gap-2 flex-wrap font-mono text-[10px]">
-                <code class="text-secondary/90 bg-surface-container-lowest/80 px-2 py-1 rounded">{p}</code>
-                <button type="button" disabled={skillPathInBuilder(p)} onclick={() => appendPathsToBuilderLivingSkills([p])}
-                  class="text-[9px] px-2 py-1 rounded border border-primary/35 text-primary hover:bg-primary/10 cursor-pointer bg-transparent disabled:opacity-40 disabled:cursor-not-allowed">
-                  {skillPathInBuilder(p) ? "Already in Builder" : "Add to Builder"}
-                </button>
-              </li>
-            {/each}
-          </ul>
-          {@const missing = discoveredSkillPaths.filter((p) => !skillPathInBuilder(p))}
-          {#if missing.length > 0}
-            <button type="button" onclick={() => appendPathsToBuilderLivingSkills(missing)}
-              class="w-full py-2 rounded-lg border-0 font-mono text-[10px] uppercase text-white cursor-pointer hover:brightness-110"
-              style="background:linear-gradient(135deg,#8b5cf6,#06b6d4);">
-              Add all {missing.length} missing to Builder
-            </button>
-          {/if}
-        {/if}
-      </div>
+      </header>
 
-      <div class="text-[9px] font-mono text-outline/50 uppercase tracking-widest px-0.5 flex-shrink-0">SQLite skills catalog</div>
-      <p class="font-mono text-[9px] text-outline/45 -mt-2 flex-shrink-0">Optional rows from the <code class="text-outline/60">skills</code> table for browsing — not wired to <code class="text-outline/60">withSkills</code> automatically.</p>
-
-    <div class="grid grid-cols-1 md:grid-cols-[280px_1fr] gap-4 flex-1 min-h-0 overflow-hidden">
-      <div class="space-y-1 overflow-y-auto">
-        {#if skills.length === 0}<p class="font-mono text-xs text-outline text-center mt-8">No rows in the skills table.</p>{/if}
-        {#each skills as s, i (s.id ?? i)}
-          <button type="button" class="w-full text-left p-3 rounded border transition-all {selectedSkill===s ? 'bg-primary/10 border-primary/30' : 'bg-surface-container-low border-outline-variant/10 hover:border-primary/20'}" onclick={() => (selectedSkill=s)}>
-            <div class="font-mono text-xs text-on-surface font-medium">{s.name ?? s.id ?? "skill"}</div>
-            <div class="font-mono text-[10px] text-outline mt-0.5">{s.description ?? ""}</div>
-          </button>
-        {/each}
-      </div>
-      {#if selectedSkill}
-        <div class="rounded-lg border border-outline-variant/20 bg-surface-container-low/40 p-4 overflow-y-auto">
-          <h3 class="font-headline text-sm font-bold text-primary mb-3">{selectedSkill.name ?? selectedSkill.id}</h3>
-          <pre class="font-mono text-[10px] text-on-surface/70 whitespace-pre-wrap leading-relaxed">{selectedSkill.content ?? "No content."}</pre>
-        </div>
-      {:else}
-        <div class="flex items-center justify-center text-outline font-mono text-xs">Select a skill to view content.</div>
-      {/if}
-    </div>
-    </div>
-
-  <!-- ── TOOLS (MCP registry + legacy SQLite tools) ───────────────────── -->
-  {:else}
-    <div class="flex flex-col gap-4 flex-1 min-h-0 overflow-hidden">
-      <div class="rounded-lg border border-outline-variant/20 bg-surface-container-low/30 p-4 space-y-3 flex-shrink-0">
-        <div class="flex items-center justify-between gap-2 flex-wrap">
-          <h3 class="font-headline text-sm font-semibold text-on-surface">MCP servers</h3>
-          <div class="flex gap-2">
-            <button type="button" onclick={() => openNewMcp()}
-              class="text-[10px] font-mono px-3 py-1.5 rounded border border-primary/35 text-primary hover:bg-primary/10 cursor-pointer bg-transparent">+ New server</button>
-            <button type="button" onclick={() => loadMcpServers()}
-              class="text-[10px] font-mono px-3 py-1.5 rounded border border-outline-variant/25 text-outline hover:text-primary cursor-pointer bg-transparent">↻ Reload</button>
+      <div
+        class="grid flex-1 min-h-0 gap-0 overflow-hidden rounded-lg border border-outline-variant/20 bg-surface-container-low/20
+               grid-cols-1 md:grid-cols-[minmax(240px,280px)_minmax(0,1fr)] xl:grid-cols-[minmax(240px,280px)_minmax(0,1fr)_minmax(220px,260px)]"
+      >
+        <!-- 1 — Catalog -->
+        <aside
+          class="flex flex-col min-h-0 border-b md:border-b-0 md:border-r border-outline-variant/15 bg-surface-container-low/30"
+        >
+          <div class="p-3 border-b border-outline-variant/10 flex-shrink-0 space-y-2">
+            <label for="skill-catalog-filter" class="text-[9px] font-mono text-outline/50 uppercase tracking-widest">Filter catalog</label>
+            <input
+              id="skill-catalog-filter"
+              bind:value={skillCatalogFilter}
+              placeholder="Filter skills…"
+              class="w-full bg-surface-container-lowest/60 border border-outline-variant/20 rounded-lg px-3 py-2 text-xs font-mono text-on-surface placeholder:text-outline/40 focus:border-primary/50 focus:outline-none"
+            />
           </div>
-        </div>
-        <p class="font-mono text-[9px] text-outline/50">
-          Configure MCP here, then use <strong class="text-on-surface/70">Refresh tools</strong> to cache tool names. In Builder → Tools, enable MCP tools per run.
-        </p>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div class="space-y-2">
-            <label class="text-[9px] font-mono text-outline/60 uppercase tracking-widest" for="mcp-draft-name">Name</label>
-            <input id="mcp-draft-name" bind:value={mcpDraftName} placeholder="e.g. filesystem"
-              class="w-full bg-surface-container-lowest/60 border border-outline-variant/20 rounded-lg px-3 py-2 text-sm font-mono" />
-            <label class="text-[9px] font-mono text-outline/60 uppercase tracking-widest" for="mcp-draft-transport">Transport</label>
-            <select id="mcp-draft-transport" bind:value={mcpDraftTransport}
-              class="w-full bg-surface-container-lowest/60 border border-outline-variant/20 rounded-lg px-3 py-2 text-sm font-mono">
-              <option value="stdio">stdio</option>
-              <option value="sse">sse</option>
-              <option value="websocket">websocket</option>
-              <option value="streamable-http">streamable-http</option>
-            </select>
-            {#if mcpDraftTransport === "stdio"}
-              <label class="text-[9px] font-mono text-outline/60 uppercase tracking-widest" for="mcp-draft-command">Command</label>
-              <input id="mcp-draft-command" bind:value={mcpDraftCommand} placeholder="bunx"
-                class="w-full bg-surface-container-lowest/60 border border-outline-variant/20 rounded-lg px-3 py-2 text-sm font-mono" />
-              <label class="text-[9px] font-mono text-outline/60 uppercase tracking-widest" for="mcp-draft-args">Args (comma-separated)</label>
-              <input id="mcp-draft-args" bind:value={mcpDraftArgs} placeholder="-y, @modelcontextprotocol/server-filesystem, ."
-                class="w-full bg-surface-container-lowest/60 border border-outline-variant/20 rounded-lg px-3 py-2 text-sm font-mono" />
-            {:else}
-              <label class="text-[9px] font-mono text-outline/60 uppercase tracking-widest" for="mcp-draft-endpoint">Endpoint URL</label>
-              <input id="mcp-draft-endpoint" bind:value={mcpDraftEndpoint} placeholder="http://127.0.0.1:8080/mcp"
-                class="w-full bg-surface-container-lowest/60 border border-outline-variant/20 rounded-lg px-3 py-2 text-sm font-mono" />
-            {/if}
-            <label class="text-[9px] font-mono text-outline/60 uppercase tracking-widest" for="mcp-draft-headers">Headers JSON <span class="normal-case text-outline/35">(optional)</span></label>
-            <textarea id="mcp-draft-headers" bind:value={mcpDraftHeaders} rows="2"
-              placeholder={"{ \"Authorization\": \"Bearer …\" }"}
-              class="w-full bg-surface-container-lowest/60 border border-outline-variant/20 rounded-lg px-3 py-2 text-[11px] font-mono resize-none"></textarea>
-            {#if mcpDraftTransport === "stdio"}
-              <label class="text-[9px] font-mono text-outline/60 uppercase tracking-widest" for="mcp-draft-env">Env JSON <span class="normal-case text-outline/35">(optional)</span></label>
-              <textarea id="mcp-draft-env" bind:value={mcpDraftEnv} rows="2"
-                class="w-full bg-surface-container-lowest/60 border border-outline-variant/20 rounded-lg px-3 py-2 text-[11px] font-mono resize-none"></textarea>
-            {/if}
-            <button type="button" disabled={mcpSaving} onclick={saveMcpServer}
-              class="w-full py-2 rounded-lg border-0 font-mono text-[10px] uppercase text-white cursor-pointer disabled:opacity-40"
-              style="background:linear-gradient(135deg,#8b5cf6,#06b6d4);">
-              {mcpSaving ? "Saving…" : selectedMcp ? "Update server" : "Create server"}
-            </button>
-          </div>
-          <div class="rounded-lg border border-outline-variant/15 bg-surface-container-lowest/40 p-3 overflow-y-auto max-h-[320px]">
-            <div class="text-[9px] font-mono text-outline/50 uppercase tracking-widest mb-2">Saved servers</div>
-            {#if mcpServersList.length === 0}
-              <p class="font-mono text-xs text-outline/40">None yet.</p>
-            {:else}
-              <div class="space-y-2">
-                {#each mcpServersList as s (s.serverId)}
-                  <div class="rounded border border-outline-variant/15 p-2 flex flex-col gap-1.5">
-                    <div class="flex items-center justify-between gap-2">
-                      <button type="button" onclick={() => openEditMcp(s)}
-                        class="text-left font-mono text-[11px] text-primary hover:underline bg-transparent border-0 cursor-pointer p-0">{s.name}</button>
-                      <span class="text-[8px] font-mono text-outline/40">{s.tools.length} tools</span>
-                    </div>
-                    <div class="flex flex-wrap gap-1">
-                      <button type="button" disabled={mcpRefreshing === s.serverId} onclick={() => refreshMcpTools(s.serverId)}
-                        class="text-[8px] font-mono px-2 py-0.5 rounded border border-secondary/30 text-secondary hover:bg-secondary/10 cursor-pointer bg-transparent disabled:opacity-40">
-                        {mcpRefreshing === s.serverId ? "…" : "Refresh tools"}</button>
-                      <button type="button" onclick={() => deleteMcpServerRow(s.serverId)}
-                        class="text-[8px] font-mono px-2 py-0.5 rounded border border-error/30 text-error/80 hover:bg-error/10 cursor-pointer bg-transparent">Delete</button>
-                    </div>
-                  </div>
-                {/each}
+          <div class="flex-1 min-h-0 overflow-y-auto p-2 space-y-1">
+            {#if skillCatalogRows.length === 0}
+              <div class="font-mono text-[10px] text-outline/55 p-4 space-y-2 leading-relaxed">
+                {#if fsSkillSummaries.length === 0 && skills.length === 0}
+                  <p>No skills found.</p>
+                  <p class="text-outline/40">
+                    Create <code class="text-primary/70">.agents/skills/&lt;name&gt;/SKILL.md</code> (open skill layout), ensure the Cortex server cwd is the folder that contains <code class="text-outline/50">.agents</code>, then <strong class="text-outline/60">Rescan</strong>.
+                  </p>
+                {:else}
+                  <p>No skills match the filter.</p>
+                  <p class="text-outline/40">Clear the filter or try another name.</p>
+                {/if}
               </div>
             {/if}
+            {#each skillCatalogRows as row, idx (row.t === "hdr" ? `h-${idx}-${row.label}` : row.t === "fs" ? `f-${row.s.relPath}` : row.rowKey)}
+              {#if row.t === "hdr"}
+                <div
+                  class="font-mono text-[9px] uppercase tracking-widest text-secondary/75 px-2 pt-3 pb-1 first:pt-1 border-t border-outline-variant/10 first:border-t-0"
+                >
+                  {row.label}
+                </div>
+              {:else if row.t === "fs"}
+                <button
+                  type="button"
+                  class="w-full text-left p-2.5 rounded-md border transition-all {isFsSkillSelected(row.s)
+                    ? 'bg-primary/12 border-primary/35 shadow-[0_0_0_1px_rgba(139,92,246,0.15)]'
+                    : 'bg-surface-container-lowest/40 border-outline-variant/10 hover:border-primary/25'}"
+                  onclick={() => selectFilesystemSkill(row.s)}
+                >
+                  <div class="font-mono text-[11px] font-medium text-on-surface leading-snug">{row.s.name}</div>
+                  <div class="font-mono text-[9px] text-outline/65 mt-1 line-clamp-2">{row.s.description || "—"}</div>
+                  <div class="font-mono text-[8px] text-outline/35 mt-1.5 truncate" title={row.s.relPath}>{row.s.relPath}</div>
+                </button>
+              {:else}
+                <button
+                  type="button"
+                  class="w-full text-left p-2.5 rounded-md border transition-all {isSqliteSkillSelected(row.s)
+                    ? 'bg-primary/12 border-primary/35'
+                    : 'bg-surface-container-lowest/40 border-outline-variant/10 hover:border-primary/25'}"
+                  onclick={() => selectSqliteSkill(row.s)}
+                >
+                  <div class="flex items-center gap-1.5 mb-0.5">
+                    <span class="font-mono text-[7px] uppercase text-outline/50 border border-outline-variant/20 px-1 rounded">db</span>
+                    <span class="font-mono text-[11px] font-medium text-on-surface">{row.s.name ?? row.s.id ?? "skill"}</span>
+                  </div>
+                  <div class="font-mono text-[9px] text-outline/65 line-clamp-2">{row.s.description ?? ""}</div>
+                </button>
+              {/if}
+            {/each}
           </div>
-        </div>
-      </div>
-      <div class="grid grid-cols-1 md:grid-cols-[280px_1fr] gap-4 flex-1 min-h-0 overflow-hidden">
-        <div class="space-y-1 overflow-y-auto min-h-0">
-          <p class="text-[9px] font-mono text-outline/40 uppercase tracking-widest px-1">Legacy DB tools</p>
-          {#if tools.length === 0}<p class="font-mono text-xs text-outline text-center mt-4">No rows in <code class="text-[10px]">tools</code> table.</p>{/if}
-          {#each tools as t, i (t.name ?? i)}
-            <button type="button" class="w-full text-left p-3 rounded border transition-all {selectedTool===t ? 'bg-primary/10 border-primary/30' : 'bg-surface-container-low border-outline-variant/10 hover:border-primary/20'}" onclick={() => (selectedTool=t)}>
-              <div class="font-mono text-xs text-on-surface font-medium">{t.name ?? "tool"}</div>
-              <div class="font-mono text-[10px] text-outline mt-0.5">{(t as Record<string, unknown>).description ?? ""}</div>
-            </button>
-          {/each}
-        </div>
-        {#if selectedTool}
-          <div class="rounded-lg border border-outline-variant/20 bg-surface-container-low/40 p-4 overflow-y-auto min-h-0">
-            <h3 class="font-headline text-sm font-bold text-primary mb-3">{selectedTool.name}</h3>
-            <pre class="font-mono text-[10px] text-on-surface/70 whitespace-pre-wrap">{JSON.stringify((selectedTool as Record<string, unknown>).schema ?? selectedTool, null, 2)}</pre>
+        </aside>
+
+        <!-- 2 — Document (primary reading column) -->
+        <main class="flex flex-col min-h-0 min-w-0 border-b md:border-b-0 xl:border-r border-outline-variant/15">
+          {#if skillDetailLoading}
+            <div class="flex flex-1 items-center justify-center gap-2 text-outline font-mono text-xs p-8">
+              <span class="material-symbols-outlined text-primary animate-spin">progress_activity</span>
+              Loading…
+            </div>
+          {:else if skillDetailError}
+            <div class="m-4 rounded border border-error/30 bg-error/5 p-4 font-mono text-[11px] text-error/90">{skillDetailError}</div>
+          {:else if skillDetail}
+            <div class="flex-shrink-0 p-4 border-b border-outline-variant/10 bg-surface-container-low/25">
+              <div class="flex flex-wrap items-start gap-2">
+                <span class="material-symbols-outlined text-secondary/80 text-xl shrink-0" aria-hidden="true">bolt</span>
+                <div class="min-w-0 flex-1">
+                  <h3 class="font-headline text-lg font-bold text-on-surface tracking-tight uppercase">{skillDetail.name}</h3>
+                  <div class="flex flex-wrap gap-1.5 mt-2">
+                    <span
+                      class="font-mono text-[8px] uppercase tracking-wider px-2 py-0.5 rounded border border-outline-variant/25 text-outline/70"
+                    >
+                      {skillDetail.filePath.startsWith("sqlite:") ? "SQLite" : "Open skill"}
+                    </span>
+                    {#if skillDetail.description}
+                      <span class="font-mono text-[8px] uppercase tracking-wider px-2 py-0.5 rounded border border-secondary/25 text-secondary/80">when to use</span>
+                    {/if}
+                  </div>
+                </div>
+              </div>
+              {#if skillDetail.description}
+                <p class="font-mono text-[11px] text-on-surface/80 mt-3 leading-relaxed border-l-2 border-secondary/30 pl-3">
+                  {skillDetail.description}
+                </p>
+              {/if}
+            </div>
+            <div class="flex-1 min-h-0 overflow-y-auto p-4">
+              <div class="text-[9px] font-mono text-outline/45 uppercase tracking-widest mb-2">Core instructions</div>
+              <MarkdownRich markdown={skillDetail.instructions} class="text-sm max-w-none" showCopy={true} />
+            </div>
+          {:else}
+            <div class="flex flex-1 items-center justify-center text-outline font-mono text-xs text-center px-6 py-16">
+              Pick a skill from the catalog to preview instructions.
+            </div>
+          {/if}
+        </main>
+
+        <!-- 3 — Meta sidebar (YAML, roots, wire-up) -->
+        <aside
+          class="flex flex-col min-h-0 overflow-y-auto bg-surface-container-low/25 md:col-span-2 xl:col-span-1 xl:max-h-full max-h-[50vh] md:max-h-none"
+        >
+          <div class="p-3 space-y-3 border-b border-outline-variant/10">
+            <div class="text-[9px] font-mono text-outline/50 uppercase tracking-widest">Skill roots scanned</div>
+            <p class="font-mono text-[9px] text-outline/45 leading-relaxed">
+              Under each scan base, Cortex looks for: <code class="text-secondary/80">.agents/skills</code>,
+              <code class="text-outline/60">skills</code>, <code class="text-outline/60">.claude/skills</code>,
+              <code class="text-outline/60">apps/cortex/.agents/skills</code> (last is for monorepo-root cwd).
+            </p>
+            {#if discoveredSkillPaths.length === 0}
+              <p class="font-mono text-[9px] text-outline/40">No roots found on disk from this cwd.</p>
+            {:else}
+              <ul class="space-y-2">
+                {#each discoveredSkillPaths as p (p)}
+                  <li class="flex flex-col gap-1.5 font-mono text-[9px]">
+                    <code class="text-secondary/85 bg-surface-container-lowest/70 px-2 py-1 rounded break-all">{p}</code>
+                    <button
+                      type="button"
+                      disabled={skillPathInBuilder(p)}
+                      onclick={() => appendPathsToBuilderLivingSkills([p])}
+                      class="self-start text-[8px] px-2 py-1 rounded border border-primary/35 text-primary hover:bg-primary/10 cursor-pointer bg-transparent disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {skillPathInBuilder(p) ? "In Builder" : "Add to Builder"}
+                    </button>
+                  </li>
+                {/each}
+              </ul>
+              {@const missing = discoveredSkillPaths.filter((p) => !skillPathInBuilder(p))}
+              {#if missing.length > 0}
+                <button
+                  type="button"
+                  onclick={() => appendPathsToBuilderLivingSkills(missing)}
+                  class="w-full py-2 rounded-md border-0 font-mono text-[9px] uppercase text-white cursor-pointer hover:brightness-110"
+                  style="background:linear-gradient(135deg,#8b5cf6,#06b6d4);"
+                >
+                  Add all roots to Builder
+                </button>
+              {/if}
+            {/if}
+            <p class="font-mono text-[8px] text-outline/35 leading-relaxed">
+              Framework runs use <strong class="text-outline/50">Living skills</strong> paths in Builder → Agent config.
+            </p>
           </div>
-        {:else}
-          <div class="flex items-center justify-center text-outline font-mono text-xs min-h-[120px]">Select a legacy tool row to inspect.</div>
-        {/if}
+
+          {#if skillDetail && !skillDetailLoading && !skillDetailError}
+            <div class="p-3 space-y-3 flex-1">
+              {#if skillDetail.declaredFields && Object.keys(skillDetail.declaredFields).length > 0}
+                <div>
+                  <div class="text-[9px] font-mono text-outline/50 uppercase tracking-widest mb-2">Frontmatter</div>
+                  <div class="flex flex-wrap gap-1">
+                    {#each Object.entries(skillDetail.declaredFields) as [k, v] (k)}
+                      <span
+                        class="font-mono text-[8px] px-1.5 py-0.5 rounded border border-outline-variant/20 bg-surface-container-lowest/50 text-on-surface/80 max-w-full break-all"
+                        title={formatYamlValue(v)}
+                      >
+                        <span class="text-secondary/75">{k}</span>={formatYamlValue(v)}
+                      </span>
+                    {/each}
+                  </div>
+                </div>
+              {/if}
+              {#if skillDetail.metadata && Object.keys(skillDetail.metadata).length > 0}
+                <details class="group">
+                  <summary class="font-mono text-[9px] text-outline/60 cursor-pointer uppercase tracking-widest list-none flex items-center gap-1">
+                    <span class="material-symbols-outlined text-[14px] text-outline/50">expand_more</span>
+                    metadata block
+                  </summary>
+                  <pre
+                    class="font-mono text-[9px] text-on-surface/70 whitespace-pre-wrap break-words mt-2 rounded border border-outline-variant/15 bg-surface-container-lowest/40 p-2 overflow-x-auto max-h-40 overflow-y-auto"
+                  >{JSON.stringify(skillDetail.metadata, null, 2)}</pre>
+                </details>
+              {/if}
+              {#if skillDetail.resources && (skillDetail.resources.scripts.length + skillDetail.resources.references.length + skillDetail.resources.assets.length > 0)}
+                <div>
+                  <div class="text-[9px] font-mono text-outline/50 uppercase tracking-widest mb-1.5">Resources</div>
+                  <ul class="font-mono text-[9px] text-outline/75 space-y-0.5">
+                    {#if skillDetail.resources.scripts.length}<li>scripts: {skillDetail.resources.scripts.join(", ")}</li>{/if}
+                    {#if skillDetail.resources.references.length}<li>references: {skillDetail.resources.references.join(", ")}</li>{/if}
+                    {#if skillDetail.resources.assets.length}<li>assets: {skillDetail.resources.assets.join(", ")}</li>{/if}
+                  </ul>
+                </div>
+              {/if}
+              <div class="font-mono text-[8px] text-outline/35 pt-2 border-t border-outline-variant/10">
+                File: <span class="text-outline/55 break-all">{skillDetail.filePath}</span>
+              </div>
+            </div>
+          {/if}
+        </aside>
       </div>
+    </div>
+
+  <!-- ── TOOLS (unified catalog + create tool: custom + MCP) ───────────── -->
+  {:else}
+    <div class="flex flex-col flex-1 min-h-0 overflow-hidden">
+      <ToolWorkshop serverUrl={CORTEX_SERVER_URL} />
     </div>
   {/if}
 </div>
+</CortexDeskShell>
 
 {#if deleteConfirmAgent}
   <ConfirmModal

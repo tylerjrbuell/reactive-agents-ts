@@ -83,6 +83,15 @@ export function applySchema(db: Database): void {
     CREATE INDEX IF NOT EXISTS idx_mcp_cached_tools_server
       ON cortex_mcp_cached_tools(server_id);
 
+    CREATE TABLE IF NOT EXISTS cortex_lab_custom_tools (
+      tool_id         TEXT PRIMARY KEY,
+      name            TEXT    NOT NULL UNIQUE,
+      description     TEXT    NOT NULL,
+      parameters_json TEXT    NOT NULL,
+      disabled        INTEGER NOT NULL DEFAULT 0,
+      created_at      INTEGER NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS cortex_chat_sessions (
       session_id   TEXT PRIMARY KEY,
       name         TEXT    NOT NULL DEFAULT 'New Chat',

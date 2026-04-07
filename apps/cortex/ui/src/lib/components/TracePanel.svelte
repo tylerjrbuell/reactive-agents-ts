@@ -78,20 +78,28 @@
   }
 </script>
 
-<div class="gradient-border-glow rounded-lg h-full flex flex-col overflow-hidden min-h-0">
+<div
+  class="rounded-xl h-full flex flex-col overflow-hidden min-h-0 border border-outline-variant/15 bg-surface-container-low/45 dark:bg-surface-container-low/35 backdrop-blur-[4px]
+         {status === 'live'
+          ? 'ring-1 ring-inset ring-primary/15 shadow-neural'
+          : 'shadow-[inset_0_1px_0_rgba(0,0,0,0.04)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]'}"
+>
   <!-- Header -->
-  <div class="flex items-start justify-between px-4 py-3 border-b border-white/5 flex-shrink-0 gap-2">
+  <div class="flex flex-shrink-0 items-start justify-between gap-2 border-b border-[var(--cortex-border)] px-3 py-2.5 sm:px-4">
     <div class="flex flex-col gap-0.5 min-w-0 flex-1">
       <div class="flex items-center gap-2 min-w-0">
-        <span class="material-symbols-outlined text-sm text-primary flex-shrink-0">receipt_long</span>
-        <h3 class="font-headline text-sm font-bold uppercase tracking-wide truncate">Execution trace</h3>
+        <span class="material-symbols-outlined text-base text-secondary/90 flex-shrink-0" aria-hidden="true"
+          >receipt_long</span>
+        <h3 class="font-display text-xs font-semibold uppercase tracking-[0.14em] text-on-surface truncate">
+          Execution trace
+        </h3>
         {#if traceRows.length > 0}
           <span class="text-[10px] font-mono text-outline bg-surface-container px-1.5 py-0.5 rounded flex-shrink-0">
             {traceRows.length}
           </span>
         {/if}
       </div>
-      <div class="pl-7 min-w-0 self-start">
+      <div class="pl-8 min-w-0 self-start">
         <Tooltip text={TRACE_ROWS_TOOLTIP} class="w-fit max-w-full">
           <p
             class="text-[9px] font-mono text-outline/45 normal-case tracking-normal leading-tight m-0 cursor-help"
@@ -190,7 +198,9 @@
             {#if f.toolsThisStep && f.toolsThisStep.length > 0 && !isFinal}
               <div class="flex-shrink-0 flex gap-1">
                 {#each f.toolsThisStep.slice(0, 2) as tool}
-                  <span class="text-[8px] font-mono px-1 py-0.5 bg-tertiary/10 text-tertiary rounded-sm">
+                  <span
+                    class="rounded-sm bg-amber-100/90 px-1 py-0.5 font-mono text-[8px] text-amber-900 dark:bg-amber-950/45 dark:text-amber-600/95"
+                  >
                     {tool.length > 12 ? tool.slice(0, 10) + "…" : tool}
                   </span>
                 {/each}
@@ -232,7 +242,7 @@
           <!-- ── Expanded detail ──────────────────────────────────────────── -->
           {#if isExpanded}
             <div
-              class="px-3 pb-4 space-y-4 border-t border-white/5 pt-3 animate-fade-up"
+              class="animate-fade-up space-y-4 border-t border-[var(--cortex-border)] px-3 pb-4 pt-3"
               role="region"
               aria-label="Kernel loop {f.iteration} details"
             >
@@ -253,11 +263,11 @@
               <!-- Action -->
               {#if f.action}
                 <div class="relative pl-3">
-                  <div class="absolute left-0 top-0 bottom-0 w-0.5 bg-tertiary/30 rounded-full"></div>
-                  <span class="text-[9px] font-mono text-tertiary/80 uppercase tracking-widest block mb-1.5">
+                  <div class="absolute bottom-0 left-0 top-0 w-0.5 rounded-full bg-amber-600/35 dark:bg-amber-700/40"></div>
+                  <span class="mb-1.5 block text-[9px] font-mono uppercase tracking-widest text-amber-800/90 dark:text-amber-600/85">
                     Action
                   </span>
-                  <div class="bg-tertiary/5 rounded p-2 border border-tertiary/10">
+                  <div class="rounded border border-amber-200/60 bg-amber-50/80 p-2 dark:border-amber-900/35 dark:bg-amber-950/25">
                     <code class="text-[10px] font-mono text-on-surface/70 break-all whitespace-pre-wrap">{f.action}</code>
                   </div>
                 </div>
@@ -266,13 +276,15 @@
               <!-- Tools called this iteration -->
               {#if f.toolsThisStep && f.toolsThisStep.length > 0}
                 <div class="relative pl-3">
-                  <div class="absolute left-0 top-0 bottom-0 w-0.5 bg-tertiary/30 rounded-full"></div>
-                  <span class="text-[9px] font-mono text-tertiary/80 uppercase tracking-widest block mb-1.5">
+                  <div class="absolute bottom-0 left-0 top-0 w-0.5 rounded-full bg-amber-600/35 dark:bg-amber-700/40"></div>
+                  <span class="mb-1.5 block text-[9px] font-mono uppercase tracking-widest text-amber-800/90 dark:text-amber-600/85">
                     Tools ({f.toolsThisStep.length})
                   </span>
                   <div class="flex flex-wrap gap-1.5">
                     {#each f.toolsThisStep as tool}
-                      <span class="px-2 py-1 bg-tertiary/10 border border-tertiary/25 text-tertiary text-[10px] font-mono rounded">
+                      <span
+                        class="rounded border border-amber-300/55 bg-amber-100/85 px-2 py-1 font-mono text-[10px] text-amber-900 dark:border-amber-800/45 dark:bg-amber-950/40 dark:text-amber-600/95"
+                      >
                         {tool}
                       </span>
                     {/each}
@@ -309,7 +321,7 @@
                   <span class="text-[9px] font-mono text-outline uppercase tracking-widest block mb-1.5">
                     Raw LLM Response
                   </span>
-                  <div class="bg-surface-container-lowest border border-white/5 rounded overflow-hidden">
+                  <div class="overflow-hidden rounded border border-[var(--cortex-border)] bg-surface-container-lowest">
                     <div class="max-h-56 overflow-y-auto p-2">
                       <code class="text-[10px] font-mono text-on-surface/55 break-all whitespace-pre-wrap">
                         {f.rawResponse}
@@ -356,7 +368,7 @@
               {/if}
 
               <!-- Stats footer -->
-              <div class="flex flex-wrap gap-3 text-[9px] font-mono text-outline/40 pl-3 border-t border-white/5 pt-2">
+              <div class="flex flex-wrap gap-3 border-t border-[var(--cortex-border)] pl-3 pt-2 font-mono text-[9px] text-outline/40">
                 {#if f.model}
                   <span class="text-outline/60">{f.model}</span>
                 {/if}

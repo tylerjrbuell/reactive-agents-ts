@@ -45,6 +45,7 @@
         "@reactive-agents/llm-provider": "workspace:*",
         "@reactive-agents/memory": "workspace:*",
         "@reactive-agents/observability": "workspace:*",
+        "@reactive-agents/reactive-intelligence": "workspace:*",
         "@reactive-agents/runtime": "workspace:*",
         "@reactive-agents/tools": "workspace:*",
         "effect": "^3.10.0",

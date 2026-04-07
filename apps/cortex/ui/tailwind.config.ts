@@ -65,12 +65,14 @@ export default {
       },
 
       fontFamily: {
-        // Geist Variable — matches docs site
+        // Geist Variable — matches docs site (UI body)
         sans:     ["Geist Variable", "Geist", "ui-sans-serif", "system-ui", "sans-serif"],
         headline: ["Geist Variable", "Geist", "ui-sans-serif", "sans-serif"],
         body:     ["Geist Variable", "Geist", "ui-sans-serif", "sans-serif"],
         label:    ["Geist Variable", "Geist", "ui-sans-serif", "sans-serif"],
         geist:    ["Geist Variable", "Geist", "ui-sans-serif", "sans-serif"],
+        // Outfit — wordmark / section titles (local desk, not generic UI sans)
+        display:  ["Outfit", "Geist Variable", "Geist", "ui-sans-serif", "system-ui", "sans-serif"],
         // JetBrains Mono — data, metrics, code, trace
         mono:     ["JetBrains Mono", "ui-monospace", "Cascadia Code", "monospace"],
       },

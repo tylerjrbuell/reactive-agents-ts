@@ -52,6 +52,7 @@ User-facing overview: **`README.md`** in this folder.
 | `CORTEX_URL` | — | Public base URL (HTTP) for display / agent `.withCortex()` alignment. |
 | `CORTEX_NO_OPEN` | unset | `1` disables opening a browser when starting the server alone. |
 | `CORTEX_LOG` | `info` | Server log verbosity: `error` \| `warn` \| `info` \| `debug` \| `off`. **`debug`** logs every persisted ingest event, empty bridge broadcasts, replay counts. The framework **`CortexReporter`** reads the same variable for connection / dropped-event warnings. |
+| `CORTEX_SKILL_SCAN_ROOT` | — | Optional extra absolute path merged with `process.cwd()` and the Cortex app root when discovering `SKILL.md` trees for Lab / `GET /api/skills/files`. |
 
 DB file defaults to **`.cortex/cortex.db`** relative to the server process cwd (usually `apps/cortex`). See `server/types.ts` → `defaultCortexConfig`.
 
@@ -62,7 +63,7 @@ DB file defaults to **`.cortex/cortex.db`** relative to the server process cwd (
 1. **`server/index.ts`** — Wires routers, `/ws/ingest`, `/ws/live/:agentId`, optional static UI from `ui/build`.
 2. **Ingest** — Agents POST events to **`/ws/ingest`**. `CortexIngestService` persists rows and **`CortexEventBridge.broadcast(agentId, liveMsg)`** — subscribers are keyed by **real `agentId`**, not run id.
 3. **Live** — Clients connect to **`/ws/live/:agentId?runId=`**. `runId` triggers **replay** of stored events for that run on open (`ws/live.ts` + `replayRunEvents`).
-4. **REST** — `GET /api/runs`, `GET /api/runs/:runId`, `GET /api/runs/:runId/events`, **`POST /api/runs`** (desk runner). Routers under `server/api/`.
+4. **REST** — `GET /api/runs`, `GET /api/runs/:runId`, `GET /api/runs/:runId/events`, **`POST /api/runs`** (desk runner). Skills: `GET /api/skills/files`, `GET /api/skills/file?path=`, `GET /api/skills/sqlite/:id` (open-skill YAML + markdown). Routers under `server/api/`.
 
 Canonical live payload shape: **`CortexLiveMessage`** in `server/types.ts` (`v`, `ts`, `agentId`, `runId`, `source`, `type`, `payload`). Event `type` is the AgentEvent `_tag` string; `payload` is the event object as JSON.
 
@@ -91,9 +92,28 @@ Canonical live payload shape: **`CortexLiveMessage`** in `server/types.ts` (`v`,
 | Route | Purpose |
 |-------|---------|
 | `/` | Beacon — agent grid, empty state, bottom bar, `stage-store` + layout `agentStore`. |
+| `/chat` | Chat — conversational sessions (`ChatSessionList`, `ChatPanel`, etc.). |
+| `/runs` | Trace hub — run history list / entry to run detail. |
 | `/run` | Placeholder hub for run UX. |
 | `/run/[runId]` | **Run view** — `RunDetail.svelte`, run/signal/trace stores, D3 monitor, trace panel, debrief, bottom tabs. |
-| `/lab` | Lab — builder, gateway agents, skills, tools tabs. |
+| `/lab` | Lab — builder, gateway agents, skills (SKILL.md + SQLite), tools tabs. |
+| `/settings` | Settings — provider defaults, notifications, storage. |
+
+### UI theme (stay consistent)
+
+Cortex is a **local desk**: readable, keyboard-friendly, and visually aligned with **Reactive Agents docs** (`docs.reactiveagents.dev`), not a generic marketing site.
+
+| What | Where |
+|------|--------|
+| CSS variables (light/dark surfaces, markdown, borders) | `ui/src/app.css` — `--cortex-*`, `--ra-*` (violet / cyan brand) |
+| Tailwind tokens (surfaces, primary/secondary, fonts) | `ui/tailwind.config.ts` — Geist (UI), JetBrains Mono (data/code); display wordmark uses Outfit in `ui/src/app.html` |
+| Shell layout (nav, command palette, Beacon WS) | `ui/src/routes/+layout.svelte` |
+| Beacon desk grid (fluid slots, panel chrome) | `AgentGrid.svelte`, `.cortex-beacon-desk-grid` in `app.css` |
+| **Ambient desk shell** (violet/cyan orbs behind content — all full-height routes) | `CortexDeskShell.svelte`; wrap each page root the same way as Beacon (`/`, `/chat`, `/runs`, `/lab`, `/settings`, `/run`, `/run/[runId]`) |
+| Run detail (vitals, trace, summary shell, bottom tabs + panel) | `RunDetail.svelte`, `VitalsStrip`, `TracePanel`, `RunOverview`, `RunFinalDeliverable` |
+| Visual reference mockups | `docs/superpowers/specs/cortex-design-export.html` |
+
+When adding pages or chrome, reuse these tokens and patterns so the app stays one coherent **Cortex** product (same contrast behavior in light mode as enforced by the `html:not(.dark)` overrides in `app.css`).
 
 ### Layout context
 
@@ -159,8 +179,10 @@ The UI depends on **`@reactive-agents/svelte`** (via `framework.ts` and package 
 |--------|--------|
 | New script or env var | `README.md`, and this file if agent-facing. |
 | New WS route or payload | This file + any UI `constants` / store comments. |
+| New primary route or nav entry | This file **Routes** table + `+layout.svelte` nav / `CommandPalette` if applicable. |
 | Phase completion | Plan checkboxes in `docs/superpowers/plans/…` if the team tracks there; bump descriptions in `README.md` / here. |
 | User-facing framework behavior | Root `CLAUDE.md` / docs site only if Cortex is documented there (optional). |
+| Significant UI / theme or token changes | `ui/src/app.css`, `ui/tailwind.config.ts`, and the **UI theme** subsection above. |
 
 ---
 

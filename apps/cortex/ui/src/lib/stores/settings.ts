@@ -17,17 +17,21 @@ export interface CortexSettings {
   theme: "dark" | "light";
   /** Override Ollama endpoint (empty = server default localhost:11434) */
   ollamaEndpoint: string;
+  /** When false, hover/focus tooltips are suppressed app-wide (Tooltip component). */
+  tooltipsEnabled: boolean;
 }
 
 export const DEFAULTS: CortexSettings = {
   defaultProvider: "anthropic",
-  defaultModel: "claude-sonnet-4-6",
+  /** Matches `@reactive-agents/llm-provider` PROVIDER_DEFAULT_MODELS.anthropic */
+  defaultModel: "claude-sonnet-4-20250514",
   notificationLevel: "completions",
   notificationsEnabled: false,
   runRetentionDays: 30,
   debugMode: false,
   theme: "dark",
   ollamaEndpoint: "",
+  tooltipsEnabled: true,
 };
 
 const STORAGE_KEY = "cortex-settings";

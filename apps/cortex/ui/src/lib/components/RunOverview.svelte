@@ -49,7 +49,11 @@
       ? { color: "text-secondary border-secondary/30 bg-secondary/8", dot: "bg-secondary" }
       : vitals.trajectory === "STRESSED" || vitals.trajectory === "DIVERGING"
         ? { color: "text-error border-error/30 bg-error/8", dot: "bg-error" }
-        : { color: "text-tertiary border-tertiary/30 bg-tertiary/8", dot: "bg-tertiary" },
+        : {
+            color:
+              "text-amber-900 border-amber-400/45 bg-amber-100/85 dark:text-amber-600/95 dark:border-amber-800/50 dark:bg-amber-950/40",
+            dot: "bg-amber-600 dark:bg-amber-700",
+          },
   );
 
   // ── Tool summary from signal data ─────────────────────────────────────────
@@ -68,10 +72,21 @@
   // Note: full debrief + copy lives in the DebriefPanel bottom tab
 </script>
 
-<div class="flex flex-col gap-3 h-full overflow-y-auto">
+<div
+  class="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-outline-variant/15 bg-surface-container-low/35 shadow-[inset_0_1px_0_rgba(0,0,0,0.04)] dark:bg-surface-container-low/25 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]"
+>
+  <div
+    class="flex-shrink-0 flex items-center gap-2 px-3 py-2 border-b border-outline-variant/10 bg-surface-container-low/25"
+  >
+    <span class="material-symbols-outlined text-secondary/90 text-base shrink-0" aria-hidden="true">insights</span>
+    <h2 class="font-display text-[11px] font-semibold uppercase tracking-[0.12em] text-on-surface truncate">
+      Summary
+    </h2>
+  </div>
 
+  <div class="flex flex-col gap-3 flex-1 min-h-0 overflow-y-auto p-3">
   <!-- ── Entropy mini-chart ─────────────────────────────────────────────── -->
-  <div class="bg-surface-container-low/40 border border-outline-variant/10 rounded-lg p-3">
+  <div class="bg-surface-container-low/50 border border-outline-variant/10 rounded-lg p-3">
     <div class="flex items-center justify-between mb-2">
       <span class="text-[9px] font-mono text-outline/70 uppercase tracking-widest">Entropy</span>
       <span class="text-[9px] font-mono px-1.5 py-0.5 rounded border {trajectoryConfig.color}">
@@ -85,8 +100,8 @@
           <defs>
             <linearGradient id="ov-entropy-fill" x1="0%" y1="0%" x2="100%" y2="0%">
               <stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.2"/>
-              <stop offset="60%" stop-color="#eab308" stop-opacity="0.15"/>
-              <stop offset="100%" stop-color="#eab308" stop-opacity="0.1"/>
+              <stop offset="60%" stop-color="#b45309" stop-opacity="0.12"/>
+              <stop offset="100%" stop-color="#b45309" stop-opacity="0.08"/>
             </linearGradient>
           </defs>
           {#if entropyPath}
@@ -99,7 +114,7 @@
             <polyline
               points={entropyPath}
               fill="none"
-              stroke={vitals.trajectory === "CONVERGING" ? "#06b6d4" : vitals.trajectory === "STRESSED" ? "#ef4444" : "#eab308"}
+              stroke={vitals.trajectory === "CONVERGING" ? "#06b6d4" : vitals.trajectory === "STRESSED" || vitals.trajectory === "DIVERGING" ? "#ef4444" : "#b45309"}
               stroke-width="1.5"
               stroke-linecap="round"
               stroke-linejoin="round"
@@ -112,7 +127,7 @@
               cx={W}
               cy={H - last.value * H}
               r="2.5"
-              fill={vitals.trajectory === "CONVERGING" ? "#06b6d4" : "#eab308"}
+              fill={vitals.trajectory === "CONVERGING" ? "#06b6d4" : "#b45309"}
             />
           {/if}
         </svg>
@@ -143,7 +158,7 @@
             <span class="text-[10px] font-mono text-on-surface/80 font-medium capitalize">
               {vitals.provider}
               {#if vitals.fallbackProvider}
-                <span class="text-tertiary ml-1 text-[9px]">→ {vitals.fallbackProvider}</span>
+                <span class="ml-1 text-[9px] text-amber-800 dark:text-amber-600/95">→ {vitals.fallbackProvider}</span>
               {/if}
             </span>
           </div>
@@ -270,7 +285,8 @@
   {/if}
 
   <!-- ── Event count hint ────────────────────────────────────────────────── -->
-  <div class="mt-auto text-[9px] font-mono text-outline/25 text-center pb-1">
+  <div class="mt-auto text-[9px] font-mono text-outline/30 text-center pb-0.5">
     {eventCount} events · Raw Events ↓
+  </div>
   </div>
 </div>

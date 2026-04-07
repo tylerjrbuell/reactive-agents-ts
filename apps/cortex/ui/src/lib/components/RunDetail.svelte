@@ -313,25 +313,36 @@
   <title>CORTEX — Run {runId.slice(0, 8)}</title>
 </svelte:head>
 
-<div class="flex flex-col h-full overflow-hidden min-h-0">
+<div class="flex flex-col h-full overflow-hidden min-h-0 bg-background/0">
 
   <!-- Breadcrumb + replay controls + export -->
-  <nav class="flex-shrink-0 px-4 py-2 border-b border-white/5 flex items-center gap-2 text-[10px] font-mono text-outline">
-    <a href="/" class="text-secondary hover:text-primary no-underline">Beacon</a>
-    <span class="text-on-surface/20">/</span>
-    <Tooltip text={runId} class="max-w-[120px] min-w-0">
-      <span class="text-on-surface/60 truncate block">{runId.slice(0, 12)}…</span>
-    </Tooltip>
+  <nav
+    class="flex-shrink-0 px-3 sm:px-4 py-2 border-b border-[var(--cortex-border)] flex flex-wrap items-center gap-x-2 gap-y-2 text-[10px] font-mono text-outline bg-surface-container-low/35 dark:bg-surface-container-low/25 backdrop-blur-sm"
+  >
+    <div class="flex items-center gap-1.5 min-w-0">
+      <span class="material-symbols-outlined text-secondary/80 text-[15px] shrink-0" aria-hidden="true"
+        >alt_route</span>
+      <a href="/" class="text-secondary hover:text-primary no-underline shrink-0">Beacon</a>
+      <span class="text-on-surface/25 shrink-0">/</span>
+      <Tooltip text={runId} class="max-w-[min(100%,140px)] min-w-0">
+        <span class="text-on-surface/70 truncate block font-mono text-[9px] normal-case tracking-normal"
+          >{runId.slice(0, 12)}…</span>
+      </Tooltip>
+    </div>
     {#if $runStore.isChat}
-      <span class="ml-1 px-1.5 py-0.5 rounded border border-primary/30 text-primary text-[9px]">CHAT</span>
+      <span
+        class="px-1.5 py-0.5 rounded-md border border-primary/35 bg-primary/8 text-primary text-[9px] font-semibold tracking-wide"
+        >CHAT</span>
     {/if}
 
     {#if replayLoopIndex !== null}
       <!-- Replay mode: scrub index is 1..N where N = stored RIP count (may differ from header LOOP) -->
-      <div class="flex items-center gap-1 flex-wrap min-w-0 max-w-[min(100%,320px)]">
+      <div
+        class="flex items-center gap-1 flex-wrap min-w-0 max-w-[min(100%,320px)] rounded-lg border border-[var(--cortex-border)] bg-surface-container-low/50 px-1 py-0.5"
+      >
         <Tooltip text={replayActiveBadgeTooltip}>
           <span
-            class="px-2 py-0.5 rounded bg-tertiary/15 border border-tertiary/30 text-tertiary text-[9px] uppercase tracking-wider"
+            class="rounded border border-amber-400/45 bg-amber-100/80 px-2 py-0.5 text-[9px] uppercase tracking-wider text-amber-900 dark:border-amber-800/50 dark:bg-amber-950/40 dark:text-amber-600/95"
           >
             REPLAY {replayLoopIndex}/{replayMaxLoops} events
           </span>
@@ -347,7 +358,7 @@
             {#if replayPlaying}
               <Tooltip text="Pause replay">
                 <button type="button" onclick={stopReplayPlay} aria-label="Pause replay"
-                  class="material-symbols-outlined text-sm text-tertiary bg-transparent border-0 cursor-pointer p-0.5">
+                  class="material-symbols-outlined cursor-pointer border-0 bg-transparent p-0.5 text-sm text-amber-800 dark:text-amber-600">
                   pause</button>
               </Tooltip>
             {:else}
@@ -371,9 +382,11 @@
       </div>
     {:else if $runStore.status !== "live" && replayMaxLoops > 0}
       <Tooltip text={replayEnterButtonTooltip} class="min-w-0 max-w-[min(100%,280px)]">
-        <button type="button" onclick={enterReplay} aria-label="Replay stored progress events"
-          class="flex items-center gap-1 px-2 py-0.5 border border-outline-variant/20 text-outline rounded
-                 hover:border-tertiary/40 hover:text-tertiary transition-colors bg-transparent cursor-pointer text-[9px] uppercase"
+        <button
+          type="button"
+          onclick={enterReplay}
+          aria-label="Replay stored progress events"
+          class="flex cursor-pointer items-center gap-1 rounded-md border border-outline-variant/20 bg-surface-container-low/40 px-2 py-1 text-[9px] uppercase text-outline transition-colors hover:border-amber-500/35 hover:bg-amber-100/50 hover:text-amber-900 dark:hover:border-amber-800/45 dark:hover:bg-amber-950/30 dark:hover:text-amber-600"
         >
           <span class="material-symbols-outlined text-[12px]">replay</span>
           Replay ({replayMaxLoops} events)
@@ -381,25 +394,44 @@
       </Tooltip>
     {/if}
 
-    <div class="flex-1"></div>
+    <div class="flex-1 min-w-[8px]"></div>
 
     <!-- Export buttons -->
-    <Tooltip text="Download run + events as JSON">
-      <button type="button" onclick={exportJSON} aria-label="Download as JSON"
-        class="flex items-center gap-1 text-outline hover:text-primary transition-colors bg-transparent border-0 cursor-pointer">
-        <span class="material-symbols-outlined text-sm">download</span>
-      </button>
-    </Tooltip>
-    <Tooltip text="Copy final answer (markdown), else debrief or trace export">
-      <button type="button" onclick={copyMarkdown} aria-label="Copy as Markdown"
-        class="flex items-center gap-1 text-outline hover:text-primary transition-colors bg-transparent border-0 cursor-pointer">
-        <span class="material-symbols-outlined text-sm">content_copy</span>
-      </button>
-    </Tooltip>
+    <div
+      class="inline-flex items-center rounded-lg border border-[var(--cortex-border)] bg-surface-container-low/45 p-0.5 gap-0.5 shrink-0"
+    >
+      <Tooltip text="Download run + events as JSON">
+        <button
+          type="button"
+          onclick={exportJSON}
+          aria-label="Download as JSON"
+          class="flex items-center justify-center w-8 h-8 rounded-md text-outline hover:text-primary hover:bg-primary/10 transition-colors bg-transparent border-0 cursor-pointer"
+        >
+          <span class="material-symbols-outlined text-lg">download</span>
+        </button>
+      </Tooltip>
+      <Tooltip text="Copy final answer (markdown), else debrief or trace export">
+        <button
+          type="button"
+          onclick={copyMarkdown}
+          aria-label="Copy as Markdown"
+          class="flex items-center justify-center w-8 h-8 rounded-md text-outline hover:text-primary hover:bg-primary/10 transition-colors bg-transparent border-0 cursor-pointer"
+        >
+          <span class="material-symbols-outlined text-lg">content_copy</span>
+        </button>
+      </Tooltip>
+    </div>
   </nav>
 
   <!-- Vitals strip -->
-  <VitalsStrip vitals={$runStore.vitals} status={$runStore.status} {runId} />
+  <VitalsStrip
+    vitals={$runStore.vitals}
+    status={$runStore.status}
+    {runId}
+    replayLoopIndex={replayLoopIndex}
+    replayMaxLoops={replayMaxLoops}
+    replayPlaying={replayPlaying}
+  />
 
   <RunFinalDeliverable
     status={$runStore.status}
@@ -409,20 +441,27 @@
     meta={finalDeliverableMeta}
   />
 
-  <!-- ── Main content: TRACE (left, wider) + OVERVIEW (right, compact) ── -->
-  <div class="flex-1 grid grid-cols-1 md:grid-cols-[60%_40%] gap-3 p-3 overflow-hidden min-h-0">
-
+  <!-- ── Main content: TRACE + SUMMARY (desk shell) ── -->
+  <div class="flex-1 min-h-0 overflow-hidden px-3 sm:px-4 py-2">
+    <div
+      class="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-outline-variant/15 bg-surface-container-low/30 backdrop-blur-[6px] shadow-[inset_0_1px_0_rgba(0,0,0,0.05)] dark:bg-surface-container-low/22 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
+    >
+      <div
+        class="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-[minmax(0,1.2fr)_minmax(260px,0.88fr)] gap-3 md:gap-0 md:divide-x md:divide-outline-variant/12 p-2 sm:p-3 overflow-hidden"
+      >
     <!-- Left: Execution Trace — the primary view -->
-    <section class="min-h-0 overflow-hidden flex flex-col">
+    <section class="min-h-0 overflow-hidden flex flex-col md:pr-3">
       {#if $runStore.status === "failed"}
         <!-- Error banner when run failed -->
         {@const errorEvents = $runStore.events.filter(
           (e) => e.type === "TaskFailed" || (e.type === "AgentCompleted" && e.payload.success === false),
         )}
-        <div class="flex-shrink-0 mb-2 bg-error/6 border border-error/25 rounded-lg p-3">
+        <div
+          class="flex-shrink-0 mb-2 bg-error/8 border border-error/30 rounded-lg p-3 shadow-[inset_0_0_0_1px_rgba(239,68,68,0.08)]"
+        >
           <div class="flex items-center gap-2 mb-1.5">
             <span class="material-symbols-outlined text-error text-sm" style="font-variation-settings: 'FILL' 1;">error</span>
-            <span class="font-mono text-xs text-error uppercase tracking-widest font-bold">Run Failed</span>
+            <span class="font-display text-[11px] text-error uppercase tracking-[0.12em] font-semibold">Run failed</span>
           </div>
           {#each errorEvents.slice(0, 1) as ev}
             <p class="font-mono text-[10px] text-error/70 leading-relaxed">
@@ -448,8 +487,8 @@
       </div>
     </section>
 
-    <!-- Right: Compact overview panel -->
-    <section class="min-h-0 overflow-hidden">
+    <!-- Right: Summary panel -->
+    <section class="min-h-0 overflow-hidden flex flex-col md:pl-3 pt-2 md:pt-0">
       <RunOverview
         vitals={$runStore.vitals}
         status={$runStore.status}
@@ -458,11 +497,17 @@
         eventCount={$runStore.events.length}
       />
     </section>
+      </div>
+    </div>
   </div>
 
-  <!-- ── Footer: tabs + controls ────────────────────────────────────────── -->
-  <footer class="bg-[#17181c]/90 backdrop-blur-md flex justify-between items-center px-4 flex-shrink-0 border-t border-white/5 h-12">
-    <div class="flex items-center h-full gap-0">
+  <!-- ── Footer: segmented tabs + actions (desk chrome) ─────────────────── -->
+  <footer
+    class="flex-shrink-0 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between px-3 sm:px-4 py-2 border-t border-[var(--cortex-border)] bg-surface-container-low/75 dark:bg-surface-container-low/55 backdrop-blur-xl"
+  >
+    <div
+      class="cortex-no-scrollbar flex items-center gap-0.5 overflow-x-auto rounded-lg border border-[var(--cortex-border)] bg-surface-container-low/45 dark:bg-surface-container-low/35 p-0.5 min-w-0 flex-1"
+    >
       {#each [
         { id: "decisions", label: "Decisions",    icon: "analytics"    },
         { id: "memory",    label: "Memory",       icon: "account_tree" },
@@ -476,29 +521,27 @@
       ] as tab (tab.id)}
         <button
           type="button"
-          class="flex items-center gap-1.5 px-3 h-full text-[10px] font-mono uppercase tracking-wider
-                 border-0 bg-transparent cursor-pointer transition-all duration-150
+          class="flex items-center gap-1.5 whitespace-nowrap rounded-md px-2 sm:px-2.5 py-1.5 text-[10px] font-mono uppercase tracking-wide border-0 cursor-pointer transition-colors duration-150 shrink-0
                  {bottomTab === tab.id
-                   ? 'text-primary border-t-2 border-primary -mt-0.5 bg-primary/5'
-                   : 'text-outline hover:text-on-surface hover:bg-white/5'}"
+            ? 'bg-primary/14 text-primary shadow-[inset_0_0_0_1px_rgba(139,92,246,0.28)]'
+            : 'text-outline hover:text-on-surface hover:bg-surface-container-high/60 bg-transparent'}"
           onclick={() => {
             bottomTab = tab.id as typeof bottomTab;
-            // Clicking a tab restores the panel if it was minimized
             if (panelMinimized) panelMinimized = false;
           }}
         >
           <span class="relative inline-flex items-center shrink-0">
-            <span class="material-symbols-outlined text-[13px]">{tab.icon}</span>
-            {#if (tab as any).dot}
-              <span class="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-secondary"></span>
+            <span class="material-symbols-outlined text-[16px] opacity-90">{tab.icon}</span>
+            {#if (tab as { dot?: boolean }).dot}
+              <span class="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-secondary ring-1 ring-surface-container-low"></span>
             {/if}
           </span>
           <span class="hidden sm:inline">{tab.label}</span>
           {#if tab.id === "messages" && cortexMessageCount > 0}
             <span
               class="shrink-0 min-h-[18px] min-w-[20px] px-1.5 py-0.5 rounded-md
-                     bg-surface-container-low border border-primary/50 text-[9px] font-mono font-semibold tabular-nums
-                     text-primary leading-none flex items-center justify-center ring-1 ring-black/30"
+                     bg-surface-container-lowest/80 border border-primary/40 text-[9px] font-mono font-semibold tabular-nums
+                     text-primary leading-none flex items-center justify-center"
               title={`${cortexMessageCount} message row(s) from ReasoningStepCompleted`}
             >{cortexMessageCount > 99 ? "99+" : String(cortexMessageCount)}</span>
           {/if}
@@ -506,46 +549,46 @@
       {/each}
     </div>
 
-    <div class="flex items-center gap-2">
+    <div class="flex flex-wrap items-center justify-end gap-1.5 shrink-0">
       {#if $runStore.status === "live"}
         <button
           type="button"
-          class="px-4 py-1.5 border border-primary/35 text-primary font-mono text-[10px] uppercase
-                 rounded bg-transparent cursor-pointer hover:bg-primary/10 transition-colors"
+          class="px-3 py-1.5 border border-primary/35 text-primary font-mono text-[10px] uppercase
+                 rounded-md bg-primary/5 cursor-pointer hover:bg-primary/12 transition-colors"
           onclick={() => void runStore.pause()}
         >Pause</button>
         <button
           type="button"
-          class="px-4 py-1.5 border border-error/35 text-error font-mono text-[10px] uppercase
-                 rounded bg-transparent cursor-pointer hover:bg-error/10 transition-colors"
+          class="px-3 py-1.5 border border-error/40 text-error font-mono text-[10px] uppercase
+                 rounded-md bg-error/5 cursor-pointer hover:bg-error/10 transition-colors"
           onclick={() => void runStore.stop()}
         >Stop</button>
       {/if}
       <button
         type="button"
-        class="px-3 py-1.5 border border-outline-variant/30 text-outline font-mono text-[10px]
-               uppercase rounded bg-transparent cursor-pointer hover:text-on-surface hover:border-outline-variant/60
+        class="px-3 py-1.5 border border-outline-variant/25 text-outline font-mono text-[10px]
+               uppercase rounded-md bg-transparent cursor-pointer hover:text-on-surface hover:border-outline-variant/50
                transition-colors"
         onclick={() => goto("/")}
       >Back</button>
       <button
         type="button"
         disabled={deletingRun}
-        class="px-3 py-1.5 border border-error/30 text-error font-mono text-[10px] uppercase
-               rounded bg-transparent cursor-pointer hover:bg-error/10 transition-colors
+        class="px-3 py-1.5 border border-error/35 text-error font-mono text-[10px] uppercase
+               rounded-md bg-transparent cursor-pointer hover:bg-error/10 transition-colors
                disabled:opacity-40 disabled:cursor-not-allowed"
         onclick={() => (showDeleteConfirm = true)}
       >{deletingRun ? "…" : "Delete"}</button>
     </div>
   </footer>
 
-  <!-- ── Resizable bottom panel (VS Code terminal style) ───────────────── -->
+  <!-- ── Resizable bottom panel ─────────────────────────────────────────── -->
   <div
-    class="flex-shrink-0 flex flex-col border-t border-white/5 bg-surface-container-lowest/60 transition-none"
+    class="flex-shrink-0 flex flex-col border-t border-[var(--cortex-border)] bg-surface-container-lowest/55 dark:bg-surface-container-lowest/45 backdrop-blur-sm transition-none"
     style="height: {panelMinimized ? '0px' : panelHeight + 'px'}; overflow: {panelMinimized ? 'hidden' : 'visible'};"
   >
     <!-- Drag handle row — resize + minimize control -->
-    <div class="flex-shrink-0 h-6 flex items-center group relative border-t border-white/5">
+    <div class="group relative flex h-6 flex-shrink-0 items-center border-b border-[var(--cortex-border)]">
       <!-- Draggable zone uses role=separator which is interactive -->
       <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
       <div
@@ -557,7 +600,9 @@
         aria-orientation="horizontal"
         aria-label="Resize panel"
       >
-        <div class="w-10 h-0.5 rounded-full bg-outline/15 group-hover:bg-primary/40 transition-colors"></div>
+        <div
+          class="w-10 h-0.5 rounded-full bg-on-surface/12 dark:bg-on-surface/20 group-hover:bg-primary/45 transition-colors"
+        ></div>
       </div>
       <!-- Minimize toggle button -->
       <button

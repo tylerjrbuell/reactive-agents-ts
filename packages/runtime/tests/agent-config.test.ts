@@ -201,6 +201,19 @@ describe("agentConfigToBuilder — builder reconstruction", () => {
     expect((builder as any)._provider).toBe("test");
   });
 
+  test("taskContext maps to builder withTaskContext", async () => {
+    const config: AgentConfig = {
+      name: "ctx-agent",
+      provider: "test",
+      taskContext: { project: "acme", environment: "staging" },
+    };
+    const builder = await agentConfigToBuilder(config);
+    expect((builder as any)._taskContext).toEqual({
+      project: "acme",
+      environment: "staging",
+    });
+  });
+
   test("reasoning config maps to builder reasoning options", async () => {
     const config: AgentConfig = {
       name: "agent",

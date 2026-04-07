@@ -1,7 +1,9 @@
 /**
  * /api/models — dynamic model lists per provider.
- * Ollama: proxies to localhost:11434/api/tags
+ * - /framework/:provider — from @reactive-agents/llm-provider (ModelPresets + defaults)
+ * - /ollama — proxies to Ollama /api/tags
  */
+import { listFrameworkModelsForProvider } from "@reactive-agents/llm-provider";
 import { Elysia } from "elysia";
 
 interface OllamaTag { name: string; modified_at: string; size: number }
@@ -10,6 +12,11 @@ interface OllamaTagsResponse { models?: OllamaTag[] }
 const OLLAMA_DEFAULT = process.env.OLLAMA_HOST ?? "http://localhost:11434";
 
 export const modelsRouter = new Elysia({ prefix: "/api/models" })
+  .get("/framework/:provider", ({ params }) => {
+    const provider = decodeURIComponent(params.provider ?? "").trim();
+    const models = listFrameworkModelsForProvider(provider);
+    return { models };
+  })
   .get("/ollama", async ({ set, query }) => {
     const ollamaUrl = (query as Record<string, string | undefined>).endpoint?.trim() || OLLAMA_DEFAULT;
     try {

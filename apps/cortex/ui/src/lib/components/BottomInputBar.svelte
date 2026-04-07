@@ -10,7 +10,7 @@
     onSubmit?: (prompt: string, config: AgentConfig) => void;
   }
   let {
-    placeholder = "What should your agent do?",
+    placeholder = "Ask or describe a task for the agent…",
     loading = false,
     onSubmit,
   }: Props = $props();
@@ -58,8 +58,11 @@
   <!-- ── Config accordion (above pill) ──────────────────────────────── -->
   {#if expanded}
     <div
-      class="mb-2 bg-surface-container-low/95 backdrop-blur-xl border border-primary/20 rounded-2xl
-             shadow-neural-strong animate-fade-up overflow-y-auto max-h-[60vh] p-4"
+      class="mb-2 rounded-2xl backdrop-blur-xl animate-fade-up overflow-y-auto max-h-[60vh] p-4
+             bg-gradient-to-b from-white/98 via-violet-50/85 to-slate-100/95
+             dark:from-[#1a1c26]/98 dark:via-[#151821]/98 dark:to-[#12141c]/98
+             shadow-[0_0_0_1px_rgba(124,58,237,0.22),0_1px_3px_rgba(15,23,42,0.06),0_12px_32px_rgba(124,58,237,0.07)]
+             dark:shadow-[0_0_0_1px_rgba(139,92,246,0.45),0_0_0_1px_rgba(6,182,212,0.12)_inset,0_12px_40px_rgba(139,92,246,0.18)]"
     >
       <AgentConfigPanel bind:config compact={false} />
     </div>
@@ -67,10 +70,13 @@
 
   <!-- ── Main pill ───────────────────────────────────────────────────── -->
   <div
-    class="bg-surface-container-low/80 backdrop-blur-md border border-primary/20 p-1.5
-           flex items-center shadow-[0_0_30px_rgba(139,92,246,0.1)]
-           focus-within:shadow-[0_0_40px_rgba(139,92,246,0.2)] focus-within:border-primary/40
-           transition-all duration-300
+    class="backdrop-blur-md p-1.5 flex items-center transition-all duration-300
+           bg-gradient-to-r from-white/98 via-violet-50/75 to-slate-50/95
+           dark:from-[#1e2130]/95 dark:via-[#161822]/98 dark:to-[#1a2330]/95
+           shadow-[0_0_0_1px_rgba(124,58,237,0.28),0_0_0_1px_rgba(255,255,255,0.6)_inset,0_4px_22px_rgba(124,58,237,0.1)]
+           dark:shadow-[0_0_0_1px_rgba(139,92,246,0.5),0_0_0_1px_rgba(6,182,212,0.15)_inset,0_4px_28px_rgba(139,92,246,0.2),0_0_48px_rgba(6,182,212,0.08)]
+           focus-within:shadow-[0_0_0_1px_rgba(6,182,212,0.4),0_0_0_1px_rgba(124,58,237,0.2)_inset,0_6px_28px_rgba(124,58,237,0.18)]
+           dark:focus-within:shadow-[0_0_0_1px_rgba(6,182,212,0.55),0_0_0_1px_rgba(139,92,246,0.35)_inset,0_6px_36px_rgba(139,92,246,0.35),0_0_60px_rgba(6,182,212,0.15)]
            {expanded ? 'rounded-2xl' : 'rounded-full'}"
   >
     <!-- Config toggle -->
@@ -78,7 +84,7 @@
       type="button"
       onclick={() => (expanded = !expanded)}
       class="flex items-center gap-1.5 pl-3 pr-2 py-1.5 rounded-full border-0 bg-transparent
-             cursor-pointer hover:bg-primary/8 transition-colors flex-shrink-0 group"
+             cursor-pointer hover:bg-primary/15 transition-colors flex-shrink-0 group text-primary"
       title="Configure agent params ({configSummary})"
     >
       <span class="material-symbols-outlined text-primary text-base flex-shrink-0 transition-transform
@@ -93,7 +99,9 @@
       {/if}
     </button>
 
-    <div class="w-px h-5 bg-outline-variant/20 mx-1 flex-shrink-0"></div>
+    <div
+      class="w-px h-6 mx-1 flex-shrink-0 bg-gradient-to-b from-transparent via-primary/60 to-transparent opacity-90"
+    ></div>
 
     <input
       bind:this={inputEl}
@@ -102,9 +110,8 @@
       {placeholder}
       disabled={loading}
       onkeydown={handleKeydown}
-      class="flex-1 bg-transparent border-none outline-none text-on-surface font-mono text-xs
-             uppercase tracking-widest py-3 px-2 placeholder:text-outline/40
-             placeholder:normal-case placeholder:tracking-normal"
+      class="flex-1 bg-transparent border-none outline-none text-on-surface text-sm py-3 px-2
+             placeholder:text-outline/45 placeholder:font-mono placeholder:text-[13px]"
     />
 
     <!-- Submit: gradient neural pulse button -->
@@ -113,13 +120,16 @@
       onclick={handleSubmit}
       disabled={!value.trim() || loading}
       class="relative flex-shrink-0 h-11 w-11 rounded-full border-0 cursor-pointer
-             disabled:opacity-40 disabled:cursor-not-allowed group"
-      style="background: linear-gradient(135deg, #8b5cf6 0%, #06b6d4 100%);
-             box-shadow: 0 0 20px rgba(139,92,246,0.4);"
+             disabled:opacity-40 disabled:cursor-not-allowed group
+             bg-gradient-to-br from-violet-600 via-violet-500 to-cyan-400
+             shadow-[0_0_0_1px_rgba(124,58,237,0.45),0_6px_16px_rgba(124,58,237,0.35),0_0_12px_rgba(6,182,212,0.22)]
+             dark:shadow-[0_0_0_1px_rgba(196,181,253,0.35),0_0_20px_rgba(139,92,246,0.55),0_0_28px_rgba(6,182,212,0.35)]"
     >
       {#if value.trim() && !loading}
-        <span class="absolute inset-0 rounded-full animate-ping"
-          style="background: rgba(139,92,246,0.25); animation-duration: 2s;"></span>
+        <span
+          class="absolute inset-0 rounded-full animate-ping bg-violet-500/20 dark:bg-violet-400/25"
+          style="animation-duration: 2s;"
+        ></span>
       {/if}
       <span class="relative z-10 flex items-center justify-center h-full w-full">
         {#if loading}

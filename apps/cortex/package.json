@@ -21,7 +21,8 @@
     "@reactive-agents/observability": "workspace:*",
     "@reactive-agents/gateway": "workspace:*",
     "@reactive-agents/llm-provider": "workspace:*",
-    "@reactive-agents/tools": "workspace:*"
+    "@reactive-agents/tools": "workspace:*",
+    "@reactive-agents/reactive-intelligence": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.9.3",

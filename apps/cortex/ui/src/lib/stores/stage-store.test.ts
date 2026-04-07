@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeEach } from "bun:test";
+import { describe, it, expect } from "bun:test";
 import { get } from "svelte/store";
 import { createStageStore } from "./stage-store.js";
 import type { AgentNode } from "./agent-store.js";
+import { defaultConfig } from "../types/agent-config.js";
 
 const baseAgent = (over: Partial<AgentNode> = {}): AgentNode => ({
   agentId: "a1",
@@ -66,6 +67,28 @@ describe("createStageStore", () => {
 
     expect(paths).toEqual(["/run/rx"]);
     expect(get(store).lastSubmitError).toBeNull();
+  });
+
+  it("submitPrompt forwards taskContext in POST body when cfg is passed", async () => {
+    let posted: string | undefined;
+    const fetchImpl = async (_url: string, init?: RequestInit) => {
+      posted = init?.body as string;
+      return new Response(JSON.stringify({ runId: "r-tc" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    };
+
+    const store = createStageStore({ fetchImpl: fetchImpl as typeof fetch });
+    const cfg = {
+      ...defaultConfig(),
+      taskContext: { project: "beacon-test" },
+    };
+    await store.submitPrompt("hello", cfg);
+
+    const body = JSON.parse(posted!) as { taskContext?: Record<string, string> };
+    expect(body.taskContext).toEqual({ project: "beacon-test" });
+    expect(body.prompt).toBe("hello");
   });
 
   it("submitPrompt polls GET /api/runs when POST returns agentId only", async () => {

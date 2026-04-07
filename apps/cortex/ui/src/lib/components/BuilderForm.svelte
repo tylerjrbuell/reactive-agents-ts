@@ -1,7 +1,8 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
   import { CORTEX_SERVER_URL } from "$lib/constants.js";
+  import { fetchModelsForProvider, type UiModelOption } from "$lib/framework-models.js";
   import { resolveRunIdFromRunsApi } from "$lib/resolve-run-id.js";
   import { settings } from "$lib/stores/settings.js";
   import { toast } from "$lib/stores/toast-store.js";
@@ -42,6 +43,29 @@
   ] as const;
 
   const providers = ["anthropic", "openai", "gemini", "ollama", "litellm", "test"] as const;
+
+  let builderModelOptions = $state<UiModelOption[]>([]);
+  let builderModelsLoading = $state(false);
+
+  async function loadBuilderModels(p: string) {
+    builderModelsLoading = true;
+    settings.init();
+    const { options } = await fetchModelsForProvider(
+      p,
+      p === "ollama" ? settings.get().ollamaEndpoint : undefined,
+    );
+    builderModelOptions = options;
+    builderModelsLoading = false;
+    const cur = untrack(() => model);
+    if (options.length > 0 && !cur.trim()) {
+      model = options[0]!.value;
+    }
+  }
+
+  $effect(() => {
+    const p = provider;
+    void loadBuilderModels(p);
+  });
 
   function toggleCapability(id: string) {
     const next = new Set(enabledCapabilities);
@@ -107,6 +131,9 @@
       </label>
       <select
         bind:value={provider}
+        onchange={() => {
+          model = "";
+        }}
         class="w-full bg-surface-container-lowest border border-outline-variant/20 rounded px-3 py-2
                text-sm font-mono text-on-surface focus:border-primary/50 focus:outline-none"
       >
@@ -122,13 +149,35 @@
           <span class="text-primary/40 ml-1">· from settings</span>
         {/if}
       </label>
-      <input
-        bind:value={model}
-        placeholder="Default model"
-        class="w-full bg-surface-container-lowest border border-outline-variant/20 rounded px-3 py-2
-               text-sm font-mono text-on-surface placeholder:text-outline/40
-               focus:border-primary/50 focus:outline-none"
-      />
+      {#if builderModelsLoading}
+        <div
+          class="w-full bg-surface-container-lowest border border-outline-variant/20 rounded px-3 py-2
+                 text-sm font-mono text-outline/50"
+        >
+          Loading models…
+        </div>
+      {:else if builderModelOptions.length > 0}
+        <select
+          bind:value={model}
+          class="w-full bg-surface-container-lowest border border-outline-variant/20 rounded px-3 py-2
+                 text-sm font-mono text-on-surface focus:border-primary/50 focus:outline-none"
+        >
+          {#each builderModelOptions as m}
+            <option value={m.value}>{m.label}</option>
+          {/each}
+          {#if model.trim() && !builderModelOptions.some((o) => o.value === model)}
+            <option value={model}>{model} (custom)</option>
+          {/if}
+        </select>
+      {:else}
+        <input
+          bind:value={model}
+          placeholder="Model id"
+          class="w-full bg-surface-container-lowest border border-outline-variant/20 rounded px-3 py-2
+                 text-sm font-mono text-on-surface placeholder:text-outline/40
+                 focus:border-primary/50 focus:outline-none"
+        />
+      {/if}
     </div>
   </div>
 

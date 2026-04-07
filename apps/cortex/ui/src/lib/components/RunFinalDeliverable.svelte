@@ -62,18 +62,43 @@
       toast.error("Copy failed");
     }
   }
+
+  /** Toggle expand/collapse from the shell; ignore links/buttons and the scrollable answer body when expanded. */
+  function onDeliverableShellClick(e: MouseEvent) {
+    if (!showDeliverable) return;
+    const el = e.target as HTMLElement | null;
+    if (!el) return;
+    if (el.closest("a, button, input, textarea, select, [data-no-deliverable-toggle]")) return;
+    if (deliverableExpanded && el.closest("[data-deliverable-scroll]")) return;
+    deliverableExpanded = !deliverableExpanded;
+  }
+
+  function onDeliverableSectionKeydown(e: KeyboardEvent) {
+    if (!showDeliverable) return;
+    if (e.key !== "Enter" && e.key !== " ") return;
+    if ((e.target as HTMLElement).closest("a, button, input, textarea, select")) return;
+    e.preventDefault();
+    deliverableExpanded = !deliverableExpanded;
+  }
 </script>
 
 {#if showSection}
+  <!-- Composite control: whole card toggles deliverable; copy is a separate button; markdown body ignores toggles when expanded. -->
+  <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
   <section
-    class="flex-shrink-0 mx-3 mt-2 sm:mt-3 pt-2 sm:pt-2.5 mb-1 rounded-xl border overflow-hidden
+    class="flex-shrink-0 mx-3 sm:mx-4 mt-2 sm:mt-3 mb-1 rounded-xl border overflow-hidden
+           {showDeliverable ? 'cursor-pointer' : ''}
            {showFailureOnly && !showDeliverable
-      ? 'bg-error/6 border-error/25'
-      : 'bg-gradient-to-b from-secondary/8 to-surface-container-low/40 border-secondary/25'}"
-    aria-label="Run result"
+      ? 'border-error/30 bg-error/8 backdrop-blur-[4px]'
+      : 'border-outline-variant/15 bg-surface-container-low/30 backdrop-blur-[6px] shadow-[inset_0_1px_0_rgba(0,0,0,0.05)] dark:bg-surface-container-low/22 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]'}"
+    aria-label={showDeliverable ? "Final result — click to expand or collapse" : "Run result"}
+    tabindex={showDeliverable ? 0 : undefined}
+    onclick={onDeliverableShellClick}
+    onkeydown={onDeliverableSectionKeydown}
   >
     <div
-      class="flex items-center gap-2 px-3 py-1.5 sm:px-4 sm:py-2 border-b border-white/5 min-h-[2.25rem]"
+      class="flex min-h-[2.25rem] items-center gap-2 border-b border-[var(--cortex-border)] px-3 py-1.5 sm:px-4 sm:py-2"
     >
       <span
         class="material-symbols-outlined text-base flex-shrink-0
@@ -84,7 +109,7 @@
       </span>
       <div class="min-w-0 flex-1">
         <h2
-          class="font-mono text-[10px] uppercase tracking-[0.18em] font-bold m-0 leading-tight
+          class="font-display text-[11px] uppercase tracking-[0.12em] font-semibold m-0 leading-tight
                  {showFailureOnly && !showDeliverable ? 'text-error' : 'text-secondary'}"
         >
           {showLiveStream && !showDeliverable
@@ -108,7 +133,11 @@
         <Tooltip text="Copy final answer (markdown / LaTeX source)">
           <button
             type="button"
-            onclick={() => void copyDeliverable()}
+            data-no-deliverable-toggle
+            onclick={(e) => {
+              e.stopPropagation();
+              void copyDeliverable();
+            }}
             aria-label="Copy final answer"
             class="flex-shrink-0 p-1 rounded border border-outline-variant/20 text-outline hover:text-primary
                    hover:border-primary/30 bg-transparent cursor-pointer transition-colors"
@@ -116,33 +145,24 @@
             <span class="material-symbols-outlined text-[18px] leading-none">content_copy</span>
           </button>
         </Tooltip>
-        <Tooltip text={deliverableExpanded ? "Collapse" : "Expand full answer"}>
-          <button
-            type="button"
-            onclick={() => (deliverableExpanded = !deliverableExpanded)}
-            aria-expanded={deliverableExpanded}
-            aria-label={deliverableExpanded ? "Collapse final answer" : "Expand final answer"}
-            class="flex-shrink-0 p-1 rounded border border-outline-variant/20 text-outline hover:text-secondary
-                   hover:border-secondary/35 bg-transparent cursor-pointer transition-colors"
-          >
-            <span
-              class="material-symbols-outlined text-[20px] leading-none transition-transform duration-200
-                     {deliverableExpanded ? 'rotate-180' : ''}"
-            >expand_more</span>
-          </button>
-        </Tooltip>
+        <span
+          class="material-symbols-outlined text-[20px] leading-none flex-shrink-0 text-outline/50 pointer-events-none transition-transform duration-200
+                 {deliverableExpanded ? 'rotate-180' : ''}"
+          aria-hidden="true"
+        >expand_more</span>
       {/if}
     </div>
 
     {#if showDeliverable}
       {#if deliverableExpanded}
         <div
-          class="px-3 py-2 sm:px-4 max-h-[min(32vh,17rem)] overflow-y-auto min-h-0 border-t border-white/5"
+          data-deliverable-scroll
+          class="deliverable-scroll max-h-[min(32vh,17rem)] min-h-0 cursor-auto overflow-y-auto border-t border-[var(--cortex-border)] px-3 py-2 sm:px-4"
         >
           <MarkdownRich markdown={deliverableText} showCopy={false} />
           {#if meta && ((meta.estimatedCost ?? 0) > 0 || (meta.durationMs ?? 0) > 0)}
             <div
-              class="flex flex-wrap gap-3 mt-2 pt-2 border-t border-white/5 font-mono text-[9px] text-outline/45"
+              class="mt-2 flex flex-wrap gap-3 border-t border-[var(--cortex-border)] pt-2 font-mono text-[9px] text-outline/45"
             >
               {#if (meta.estimatedCost ?? 0) > 0}
                 <span>${meta.estimatedCost!.toFixed(4)}</span>
@@ -158,12 +178,8 @@
           {/if}
         </div>
       {:else}
-        <button
-          type="button"
-          class="w-full text-left px-3 py-2 sm:px-4 border-t border-white/5 cursor-pointer
-                 bg-transparent hover:bg-white/[0.03] transition-colors group"
-          onclick={() => (deliverableExpanded = true)}
-          aria-label="Expand full final answer"
+        <div
+          class="group w-full border-t border-[var(--cortex-border)] px-3 py-2 text-left transition-colors hover:bg-primary/[0.05] dark:hover:bg-white/[0.04] sm:px-4"
         >
           <p
             class="text-[11px] text-on-surface/65 leading-snug m-0 pr-6 line-clamp-2 group-hover:text-on-surface/80"
@@ -173,12 +189,12 @@
           <span
             class="font-mono text-[9px] text-secondary/70 uppercase tracking-wider mt-1 inline-block"
           >
-            Show full answer
+            Click to expand full answer
           </span>
-        </button>
+        </div>
       {/if}
     {:else if showLiveStream}
-      <div class="px-3 py-2 sm:px-4 max-h-32 overflow-y-auto border-t border-white/5">
+      <div class="max-h-32 overflow-y-auto border-t border-[var(--cortex-border)] px-3 py-2 sm:px-4">
         <div class="flex items-center gap-2 mb-1.5">
           <span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse flex-shrink-0"></span>
           <span class="text-[9px] font-mono text-primary/70 uppercase tracking-widest">Live</span>
@@ -192,7 +208,7 @@
         </p>
       </div>
     {:else if showFailureOnly}
-      <div class="px-3 py-2 sm:px-4 border-t border-white/5">
+      <div class="border-t border-[var(--cortex-border)] px-3 py-2 sm:px-4">
         <p class="font-mono text-[11px] text-error/80 leading-relaxed whitespace-pre-wrap break-words m-0">
           {failureMessage}
         </p>

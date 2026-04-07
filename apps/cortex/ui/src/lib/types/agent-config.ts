@@ -82,7 +82,7 @@ export interface AgentConfig {
 export function defaultConfig(): AgentConfig {
   return {
     provider: "anthropic",
-    model: "claude-sonnet-4-6",
+    model: "claude-sonnet-4-20250514",
     temperature: 0.7,
     maxTokens: 0,
     strategy: "reactive",

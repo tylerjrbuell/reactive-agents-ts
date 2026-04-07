@@ -4,12 +4,8 @@
   import { toast } from "$lib/stores/toast-store.js";
   import { settings, type CortexSettings } from "$lib/stores/settings.js";
   import { CORTEX_SERVER_URL } from "$lib/constants.js";
-  import {
-    CHAT_PROVIDERS,
-    STATIC_MODEL_OPTIONS,
-    CHAT_TOOL_PRESETS,
-    type ChatProviderId,
-  } from "$lib/inference-presets.js";
+  import { fetchModelsForProvider, type UiModelOption } from "$lib/framework-models.js";
+  import { CHAT_PROVIDERS, CHAT_TOOL_PRESETS, type ChatProviderId } from "$lib/inference-presets.js";
 
   interface Props {
     sessions: ChatSession[];
@@ -33,48 +29,28 @@
   let runs = $state<RunOption[]>([]);
   let selectedRunId = $state("");
 
-  let ollamaModels = $state<{ name: string; label: string }[]>([]);
-  let ollamaLoading = $state(false);
+  let providerModelOptions = $state<UiModelOption[]>([]);
+  let modelsListLoading = $state(false);
+  let modelsListError = $state<string | null>(null);
 
-  const modelOptions = $derived(
-    newProvider === "ollama"
-      ? ollamaModels.map((m) => ({ value: m.name, label: m.label }))
-      : [...(STATIC_MODEL_OPTIONS[newProvider] ?? [])],
-  );
-
-  async function fetchOllamaModels() {
-    if (newProvider !== "ollama") return;
-    ollamaLoading = true;
-    try {
-      const cfg: CortexSettings = settings.get();
-      const endpoint = cfg.ollamaEndpoint?.trim();
-      const url = endpoint
-        ? `${CORTEX_SERVER_URL}/api/models/ollama?endpoint=${encodeURIComponent(endpoint)}`
-        : `${CORTEX_SERVER_URL}/api/models/ollama`;
-      const res = await fetch(url);
-      const data = (await res.json()) as { models: { name: string; label: string }[]; error?: string };
-      if (data.error) {
-        ollamaModels = [];
-      } else {
-        ollamaModels = data.models;
-        if (data.models[0] && !newModel) newModel = data.models[0].name;
-      }
-    } catch {
-      ollamaModels = [];
-    } finally {
-      ollamaLoading = false;
-    }
+  async function loadChatModelOptions(p: string) {
+    modelsListLoading = true;
+    modelsListError = null;
+    settings.init();
+    const { options, error } = await fetchModelsForProvider(
+      p,
+      p === "ollama" ? settings.get().ollamaEndpoint : undefined,
+    );
+    providerModelOptions = options;
+    modelsListError = error ?? null;
+    modelsListLoading = false;
   }
 
-  $effect(() => {
-    if (newProvider === "ollama") void fetchOllamaModels();
-  });
-
-  function setProvider(p: string) {
+  async function setProvider(p: string) {
     newProvider = p;
-    const opts = STATIC_MODEL_OPTIONS[p];
-    if (opts && opts.length > 0) newModel = opts[0].value;
-    else if (p !== "ollama") newModel = "";
+    newModel = "";
+    await loadChatModelOptions(p);
+    if (providerModelOptions[0]) newModel = providerModelOptions[0].value;
   }
 
   function toggleTool(id: string) {
@@ -90,10 +66,7 @@
     const s: CortexSettings = settings.get();
     newProvider = s.defaultProvider;
     newModel = s.defaultModel;
-    if (STATIC_MODEL_OPTIONS[newProvider]?.length && !STATIC_MODEL_OPTIONS[newProvider]?.some((m) => m.value === newModel)) {
-      const first = STATIC_MODEL_OPTIONS[newProvider]?.[0];
-      if (first) newModel = first.value;
-    }
+    void loadChatModelOptions(newProvider);
     void (async () => {
       try {
         const res = await fetch(`${CORTEX_SERVER_URL}/api/runs`);
@@ -121,7 +94,7 @@
       if (!res.ok) return;
       const r = (await res.json()) as { provider?: string; model?: string };
       if (typeof r.provider === "string" && r.provider && CHAT_PROVIDERS.includes(r.provider as ChatProviderId)) {
-        setProvider(r.provider);
+        await setProvider(r.provider);
       }
       if (typeof r.model === "string" && r.model.trim()) {
         newModel = r.model.trim();
@@ -169,7 +142,7 @@
 </script>
 
 <div
-  class="flex h-full flex-col border-r border-[color:var(--cortex-border)] bg-[var(--cortex-surface-low)]"
+  class="flex h-full flex-col border-r border-primary/15 bg-surface-container-low/92 backdrop-blur-md dark:border-[color:var(--cortex-border)] dark:bg-surface-container-low/78"
 >
   <div
     class="flex flex-shrink-0 items-center justify-between border-b border-[color:var(--cortex-border)] px-3 py-2"
@@ -210,7 +183,11 @@
 
       <div>
         <span class={label}>Provider</span>
-        <select class={field} value={newProvider} onchange={(e) => setProvider((e.target as HTMLSelectElement).value)}>
+        <select
+          class={field}
+          value={newProvider}
+          onchange={(e) => void setProvider((e.target as HTMLSelectElement).value)}
+        >
           {#each CHAT_PROVIDERS as p (p)}
             <option value={p}>{p}</option>
           {/each}
@@ -219,22 +196,19 @@
 
       <div>
         <span class={label}>Model</span>
-        {#if newProvider === "ollama"}
-          {#if ollamaLoading}
-            <p class="font-mono text-[10px] text-[var(--cortex-text-muted)]">Loading Ollama models…</p>
-          {:else if modelOptions.length > 0}
-            <select class={field} bind:value={newModel}>
-              {#each modelOptions as m (m.value)}
-                <option value={m.value}>{m.label}</option>
-              {/each}
-            </select>
-          {/if}
-          <input class="{field} mt-1" bind:value={newModel} placeholder="Or type model name…" />
-        {:else if modelOptions.length > 0}
+        {#if modelsListError}
+          <p class="font-mono text-[10px] text-error/80 mb-1">{modelsListError}</p>
+        {/if}
+        {#if modelsListLoading}
+          <p class="font-mono text-[10px] text-[var(--cortex-text-muted)]">Loading models…</p>
+        {:else if providerModelOptions.length > 0}
           <select class={field} bind:value={newModel}>
-            {#each modelOptions as m (m.value)}
+            {#each providerModelOptions as m (m.value)}
               <option value={m.value}>{m.label}</option>
             {/each}
+            {#if newModel.trim() && !providerModelOptions.some((m) => m.value === newModel)}
+              <option value={newModel}>{newModel} (custom)</option>
+            {/if}
           </select>
         {:else}
           <input class={field} bind:value={newModel} placeholder="Model id…" />

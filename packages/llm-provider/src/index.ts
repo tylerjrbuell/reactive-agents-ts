@@ -100,6 +100,12 @@ export type {
 // ─── Provider Defaults ───
 export { PROVIDER_DEFAULT_MODELS, getProviderDefaultModel } from "./provider-defaults.js";
 
+// ─── Model catalog (UI / Cortex) ───
+export {
+  listFrameworkModelsForProvider,
+  type FrameworkModelOption,
+} from "./model-catalog.js";
+
 // ─── Runtime ───
 export {
   createLLMProviderLayer,

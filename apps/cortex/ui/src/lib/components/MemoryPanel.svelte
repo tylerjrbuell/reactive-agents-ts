@@ -102,7 +102,7 @@
 
     {#if memoryData?.available}
       <!-- Sub-tabs -->
-      <div class="flex gap-0 border-b border-white/5 flex-shrink-0">
+      <div class="flex flex-shrink-0 gap-0 border-b border-[var(--cortex-border)]">
         {#each [
           { id: "episodic",   label: "Episodic",   count: memoryData.episodic.length },
           { id: "semantic",   label: "Semantic",   count: memoryData.semantic.length },
@@ -127,7 +127,7 @@
         {:else}
           <div class="space-y-2">
             {#each memoryData.episodic as ep (ep.id)}
-              <div class="bg-surface-container-low/40 border border-white/5 rounded p-2.5 space-y-1">
+              <div class="bg-surface-container-low/40 border border-[var(--cortex-border)] rounded p-2.5 space-y-1">
                 <div class="flex items-center gap-2 flex-wrap">
                   <span class="text-[9px] font-mono text-outline">{fmtDate(ep.date || ep.createdAt)}</span>
                   {#if ep.eventType}
@@ -147,7 +147,7 @@
         {:else}
           <div class="space-y-2">
             {#each memoryData.semantic as sm (sm.id)}
-              <div class="bg-surface-container-low/40 border border-white/5 rounded p-2.5 space-y-1">
+              <div class="bg-surface-container-low/40 border border-[var(--cortex-border)] rounded p-2.5 space-y-1">
                 <div class="flex items-center gap-2 flex-wrap">
                   <span class="text-[9px] font-mono text-primary/60">importance {sm.importance.toFixed(2)}</span>
                   <span class="text-[9px] font-mono text-outline">{sm.accessCount} access{sm.accessCount !== 1 ? "es" : ""}</span>
@@ -171,7 +171,7 @@
         {:else}
           <div class="space-y-2">
             {#each memoryData.procedural as pr (pr.id)}
-              <div class="bg-surface-container-low/40 border border-white/5 rounded p-2.5 space-y-1">
+              <div class="bg-surface-container-low/40 border border-[var(--cortex-border)] rounded p-2.5 space-y-1">
                 <div class="flex items-center gap-2">
                   <span class="text-[10px] font-mono text-on-surface/80 font-semibold">{pr.name}</span>
                   <span class="text-[9px] font-mono text-outline">{(pr.successRate * 100).toFixed(0)}% success</span>
@@ -192,7 +192,7 @@
         {:else}
           <div class="space-y-2">
             {#each memoryData.sessions as sess (sess.id)}
-              <div class="bg-surface-container-low/40 border border-white/5 rounded p-2.5 space-y-1">
+              <div class="bg-surface-container-low/40 border border-[var(--cortex-border)] rounded p-2.5 space-y-1">
                 <div class="flex items-center gap-2 flex-wrap">
                   <span class="text-[9px] font-mono text-outline">{fmtDate(sess.startedAt)}</span>
                   {#if sess.totalTokens > 0}

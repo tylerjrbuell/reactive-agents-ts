@@ -1,6 +1,8 @@
-import { writable } from "svelte/store";
+import { writable, type Writable } from "svelte/store";
 import { CORTEX_SERVER_URL } from "../constants.js";
+import { cortexRunsPostBody } from "../cortex-runs-post-body.js";
 import { resolveRunIdFromRunsApi } from "../resolve-run-id.js";
+import type { AgentConfig } from "../types/agent-config.js";
 import { toast } from "./toast-store.js";
 import { settings } from "./settings.js";
 import type { AgentNode } from "./agent-store.js";
@@ -11,13 +13,24 @@ export interface StageState {
   readonly firstConnectHandled: boolean;
 }
 
+export interface StageStore {
+  readonly subscribe: Writable<StageState>["subscribe"];
+  setNavigate: (fn: (path: string) => void | Promise<void>) => void;
+  handleAgentConnected: (agent: AgentNode, totalAgentCount: number) => void;
+  /**
+   * Start a run from Beacon. When `cfg` is passed (BottomInputBar agent blueprint),
+   * the full body is serialized — including `taskContext` for `withTaskContext`.
+   */
+  submitPrompt: (prompt: string, cfg?: AgentConfig) => Promise<void>;
+}
+
 export interface CreateStageStoreOptions {
   /** Injected for tests; defaults to SvelteKit `goto` when running in the app. */
   readonly navigate?: (path: string) => void | Promise<void>;
   readonly fetchImpl?: typeof fetch;
 }
 
-export function createStageStore(options?: CreateStageStoreOptions) {
+export function createStageStore(options?: CreateStageStoreOptions): StageStore {
   const fetchFn = options?.fetchImpl ?? globalThis.fetch.bind(globalThis);
   let navigate = options?.navigate;
 
@@ -42,37 +55,23 @@ export function createStageStore(options?: CreateStageStoreOptions) {
     });
   }
 
-  async function submitPrompt(
-    prompt: string,
-    overrides?: {
-      provider?: string; model?: string; tools?: string[];
-      strategy?: string; temperature?: number; maxIterations?: number;
-      systemPrompt?: string; agentName?: string;
-    },
-  ): Promise<void> {
+  async function submitPrompt(prompt: string, cfg?: AgentConfig): Promise<void> {
     state.update((s) => ({ ...s, submitting: true, lastSubmitError: null }));
     const sinceMs = Date.now();
     const s = settings.get();
-    const provider       = overrides?.provider    || s.defaultProvider;
-    const model          = overrides?.model        || s.defaultModel  || undefined;
-    const tools          = overrides?.tools        ?? ["web-search"];
-    const strategy       = overrides?.strategy;
-    const temperature    = overrides?.temperature;
-    const maxIterations  = overrides?.maxIterations;
-    const systemPrompt   = overrides?.systemPrompt;
-    const agentName      = overrides?.agentName;
+    const body = cfg
+      ? cortexRunsPostBody(prompt, cfg)
+      : {
+          prompt,
+          provider: s.defaultProvider,
+          model: s.defaultModel || undefined,
+          tools: ["web-search"] as string[],
+        };
     try {
       const res = await fetchFn(`${CORTEX_SERVER_URL}/api/runs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt, provider, model, tools,
-          ...(strategy      ? { strategy }      : {}),
-          ...(temperature != null ? { temperature }  : {}),
-          ...(maxIterations ? { maxIterations }  : {}),
-          ...(systemPrompt  ? { systemPrompt }   : {}),
-          ...(agentName     ? { agentName }      : {}),
-        }),
+        body: JSON.stringify(body),
       });
       if (res.status === 501) {
         const body = (await res.json().catch(() => ({}))) as { error?: string };
@@ -108,5 +107,3 @@ export function createStageStore(options?: CreateStageStoreOptions) {
     submitPrompt,
   };
 }
-
-export type StageStore = ReturnType<typeof createStageStore>;

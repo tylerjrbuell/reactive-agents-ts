@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
-import { parseSKILLmd, discoverSkills } from "../../src/skills/skill-registry.js";
+import {
+  parseSKILLmd,
+  parseSKILLmdContent,
+  parseSkillMarkdownLoose,
+  discoverSkills,
+} from "../../src/skills/skill-registry.js";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
@@ -83,6 +88,35 @@ Body content.
       const dir = writeSkill(TMP_DIR, "broken", `not yaml at all`);
       const result = parseSKILLmd(path.join(dir, "SKILL.md"));
       expect(result).toBeNull();
+    });
+
+    it("parseSKILLmdContent matches parseSKILLmd for file content", () => {
+      const dir = writeSkill(TMP_DIR, "content-api", `---
+name: content-api
+description: API test
+---
+
+# Doc
+`);
+      const fp = path.join(dir, "SKILL.md");
+      const fromFile = parseSKILLmd(fp);
+      const raw = fs.readFileSync(fp, "utf-8");
+      const fromContent = parseSKILLmdContent(raw, fp);
+      expect(fromContent).not.toBeNull();
+      expect(fromContent!.name).toBe(fromFile!.name);
+      expect(fromContent!.instructions).toBe(fromFile!.instructions);
+      expect(fromContent!.declaredFields?.name).toBe("content-api");
+    });
+
+    it("parseSkillMarkdownLoose falls back when frontmatter missing", () => {
+      const s = parseSkillMarkdownLoose("# Only markdown\n\nHello.", "sqlite:1", {
+        name: "fallback",
+        description: "row",
+      });
+      expect(s.name).toBe("fallback");
+      expect(s.description).toBe("row");
+      expect(s.instructions).toContain("# Only markdown");
+      expect(s.declaredFields).toBeUndefined();
     });
 
     it("detects scripts/ and references/ resources", () => {

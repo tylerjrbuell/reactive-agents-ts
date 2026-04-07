@@ -491,6 +491,10 @@ export async function agentConfigToBuilder(config: AgentConfig): Promise<Reactiv
     builder = builder.withModelPricing(config.pricingRegistry);
   }
 
+  if (config.taskContext && Object.keys(config.taskContext).length > 0) {
+    builder = builder.withTaskContext(config.taskContext);
+  }
+
   return builder;
 }
 

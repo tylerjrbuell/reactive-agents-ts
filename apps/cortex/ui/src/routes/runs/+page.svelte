@@ -3,6 +3,7 @@
   import { goto } from "$app/navigation";
   import { CORTEX_SERVER_URL } from "$lib/constants.js";
   import ConfirmModal from "$lib/components/ConfirmModal.svelte";
+  import CortexDeskShell from "$lib/components/CortexDeskShell.svelte";
   import { toast } from "$lib/stores/toast-store.js";
 
   type RunRow = {
@@ -160,12 +161,13 @@
   <title>CORTEX — Trace</title>
 </svelte:head>
 
-<div class="h-full flex flex-col overflow-hidden p-6 gap-4">
+<CortexDeskShell>
+<div class="relative z-10 flex h-full min-h-0 flex-col gap-4 overflow-hidden p-4 sm:p-6">
   <!-- Header -->
-  <div class="flex items-center justify-between flex-shrink-0">
+  <div class="flex flex-shrink-0 items-center justify-between">
     <div>
-      <h1 class="font-headline text-2xl font-light text-on-surface">
-        Execution <span class="font-bold text-primary">Trace</span>
+      <h1 class="font-display text-2xl font-light tracking-tight text-on-surface">
+        Execution <span class="font-semibold text-primary">Trace</span>
       </h1>
       {#if !loading && !error}
         <p class="font-mono text-[10px] text-outline mt-0.5">
@@ -175,14 +177,16 @@
         </p>
       {/if}
     </div>
-    <a href="/" class="text-[11px] font-mono text-secondary hover:text-primary transition-colors no-underline flex items-center gap-1">
+    <a href="/" class="flex items-center gap-1 font-mono text-[11px] text-cyan-700 no-underline transition-colors hover:text-primary dark:text-secondary">
       <span class="material-symbols-outlined text-sm">arrow_back</span> Beacon
     </a>
   </div>
 
   <!-- Filter bar -->
-  <div class="flex items-center gap-3 flex-shrink-0">
-    <div class="flex-1 flex items-center gap-2 bg-surface-container-low rounded-lg px-3 py-2 border border-outline-variant/10">
+  <div class="flex flex-shrink-0 items-center gap-3">
+    <div
+      class="flex flex-1 items-center gap-2 rounded-lg border border-primary/18 bg-surface-container-low/90 px-3 py-2 shadow-sm backdrop-blur-sm dark:border-outline-variant/15 dark:bg-surface-container-low/70"
+    >
       <span class="material-symbols-outlined text-sm text-outline/50">search</span>
       <input type="text" bind:value={searchText} placeholder="Search run ID, agent, provider, model…"
         class="flex-1 bg-transparent border-none outline-none text-sm font-mono text-on-surface placeholder:text-outline/40" />
@@ -195,8 +199,10 @@
     <div class="flex gap-1">
       {#each [["all","All"],["live","Live"],["completed","Done"],["failed","Failed"]] as [val, label]}
         <button type="button"
-          class="px-3 py-1.5 text-[10px] font-mono rounded border transition-colors
-                 {statusFilter === val ? 'bg-primary/10 border-primary/30 text-primary' : 'border-outline-variant/20 text-outline hover:border-primary/20 hover:text-primary'}"
+          class="rounded border px-3 py-1.5 font-mono text-[10px] transition-colors
+                 {statusFilter === val
+            ? 'border-primary/35 bg-violet-100/90 text-violet-900 shadow-sm dark:bg-primary/10 dark:text-primary'
+            : 'border-outline-variant/25 text-outline hover:border-primary/25 hover:text-primary dark:border-outline-variant/20'}"
           onclick={() => (statusFilter = val as typeof statusFilter)}>
           {label}</button>
       {/each}
@@ -242,12 +248,12 @@
         {@const isSelected = selected.has(run.runId)}
         <button
           type="button"
-          class="w-full text-left flex items-center gap-3 px-4 py-3 rounded-lg border cursor-pointer transition-all group bg-transparent
+          class="group flex w-full cursor-pointer items-center gap-3 rounded-lg border bg-transparent px-4 py-3 text-left transition-all backdrop-blur-[2px]
                  {isSelected
-                   ? 'bg-primary/8 border-primary/25'
+                   ? 'border-primary/30 bg-violet-100/80 dark:bg-primary/8 dark:border-primary/25'
                    : isPinned
-                     ? 'bg-surface-container-low/60 border-primary/15 hover:border-primary/25'
-                     : 'bg-surface-container-low/40 border-outline-variant/10 hover:border-primary/20 hover:bg-surface-container-low/70'}"
+                     ? 'border-primary/20 bg-surface-container-low/85 hover:border-primary/30 dark:bg-surface-container-low/60'
+                     : 'border-outline-variant/15 bg-surface-container-low/70 hover:border-primary/22 hover:bg-surface-container-low/90 dark:border-outline-variant/10 dark:bg-surface-container-low/40 dark:hover:bg-surface-container-low/70'}"
           onclick={() => goto(`/run/${run.runId}`)}
         >
           <!-- Checkbox col — span with role=button to avoid nested button -->
@@ -330,6 +336,7 @@
     {/if}
   </div>
 </div>
+</CortexDeskShell>
 
 {#if showBulkDeleteConfirm}
   <ConfirmModal

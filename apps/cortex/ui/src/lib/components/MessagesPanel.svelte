@@ -58,7 +58,7 @@
   }
 
   const roleStyle: Record<string, { border: string; label: string; labelColor: string }> = {
-    system: { border: "border-white/10", label: "system", labelColor: "text-outline/50" },
+    system: { border: "border-outline-variant/30 dark:border-outline-variant/25", label: "system", labelColor: "text-outline/50" },
     user: { border: "border-primary/25", label: "user", labelColor: "text-primary/70" },
     assistant: {
       border: "border-secondary/25",

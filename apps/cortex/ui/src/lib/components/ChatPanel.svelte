@@ -45,7 +45,9 @@
     "max-w-[80%] rounded-lg border border-[color:var(--cortex-border)] bg-[var(--cortex-surface-low)] px-3 py-2 text-[var(--cortex-text)]";
 </script>
 
-<div class="flex h-full flex-col bg-[var(--cortex-surface)] text-[var(--cortex-text)]">
+<div
+  class="flex h-full min-h-0 w-full flex-col bg-surface-container-lowest/88 text-on-surface backdrop-blur-md dark:bg-surface/92"
+>
   <div
     bind:this={scrollEl}
     class="flex-1 space-y-4 overflow-y-auto p-4 font-mono text-[12px]"

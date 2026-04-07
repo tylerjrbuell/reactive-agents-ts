@@ -42,6 +42,11 @@ interface StreamableHttpTransport {
   headers: Record<string, string>;
   /** Session ID assigned by the server in the initialize response. Null until then. */
   sessionId: string | null;
+  /**
+   * Sent as `Mcp-Protocol-Version` on every POST/DELETE (spec + strict servers e.g. Go MCP SDK).
+   * Updated from the `initialize` result when the server returns `protocolVersion`.
+   */
+  protocolVersion: string;
   pendingRequests: Map<
     string | number,
     {
@@ -220,6 +225,17 @@ const isWebSocketTransport = (t: ActiveTransport): t is WebSocketTransport =>
 
 const isStreamableHttpTransport = (t: ActiveTransport): t is StreamableHttpTransport =>
   t.type === "streamable-http";
+
+function streamableHttpBaseHeaders(transport: StreamableHttpTransport): Record<string, string> {
+  const h: Record<string, string> = {
+    "Content-Type": "application/json",
+    Accept: "application/json, text/event-stream",
+    "Mcp-Protocol-Version": transport.protocolVersion,
+    ...transport.headers,
+  };
+  if (transport.sessionId) h["Mcp-Session-Id"] = transport.sessionId;
+  return h;
+}
 
 const parseSseEvent = (line: string): { event?: string; data?: string } => {
   if (line.startsWith("event:")) {
@@ -578,6 +594,7 @@ const createTransport = (
         endpoint,
         headers: config.headers ?? {},
         sessionId: null,
+        protocolVersion: "2025-03-26",
         pendingRequests: new Map(),
         connected: true,
       };
@@ -625,12 +642,7 @@ const sendNotification = (
   if (config.transport === "streamable-http") {
     const transport = activeTransports.get(config.name);
     if (!transport || !isStreamableHttpTransport(transport)) return;
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-      "Accept": "application/json, text/event-stream",
-      ...transport.headers,
-    };
-    if (transport.sessionId) headers["Mcp-Session-Id"] = transport.sessionId;
+    const headers = streamableHttpBaseHeaders(transport);
     void fetch(transport.endpoint, { method: "POST", headers, body: payload })
       .catch(() => {/* notifications are fire-and-forget */});
     return;
@@ -928,12 +940,7 @@ const sendRequest = (
           );
         }
 
-        const headers: Record<string, string> = {
-          "Content-Type": "application/json",
-          "Accept": "application/json, text/event-stream",
-          ...transport.headers,
-        };
-        if (transport.sessionId) headers["Mcp-Session-Id"] = transport.sessionId;
+        const headers = streamableHttpBaseHeaders(transport);
 
         const response = await fetch(transport.endpoint, {
           method: "POST",
@@ -942,8 +949,10 @@ const sendRequest = (
         });
 
         if (!response.ok) {
+          const errBody = await response.text().catch(() => "");
+          const hint = errBody.trim() ? `: ${errBody.trim().slice(0, 300)}` : "";
           throw new Error(
-            `HTTP ${response.status} ${response.statusText} from MCP server "${config.name}"`,
+            `HTTP ${response.status} ${response.statusText} from MCP server "${config.name}"${hint}`,
           );
         }
 
@@ -999,7 +1008,13 @@ export const makeMCPClient = Effect.gen(function* () {
         Effect.mapError(
           (e) =>
             new MCPConnectionError({
-              message: `Failed to connect to MCP server "${config.name}"`,
+              message: `Failed to connect to MCP server "${config.name}"${
+                e instanceof Error && e.message
+                  ? `: ${e.message}`
+                  : e != null
+                    ? `: ${String(e)}`
+                    : ""
+              }`,
               serverName: config.name,
               transport: config.transport,
               cause: e,
@@ -1019,6 +1034,18 @@ export const makeMCPClient = Effect.gen(function* () {
           clientInfo: { name: "reactive-agents", version: "1.0.0" },
         },
       });
+
+      const initResult = initResponse.result as Record<string, unknown> | undefined;
+      const negotiated = initResult?.protocolVersion;
+      const streamT = activeTransports.get(config.name);
+      if (
+        streamT &&
+        isStreamableHttpTransport(streamT) &&
+        typeof negotiated === "string" &&
+        negotiated.length > 0
+      ) {
+        streamT.protocolVersion = negotiated;
+      }
 
       // Required by MCP spec: notify the server that the client is ready.
       // Must be sent after initialize response, before any other requests.
@@ -1190,7 +1217,10 @@ export const makeMCPClient = Effect.gen(function* () {
           transport.connected = false;
         } else if (isStreamableHttpTransport(transport)) {
           // Send HTTP DELETE to terminate the session on the server side (spec §session-management)
-          const headers: Record<string, string> = { ...transport.headers };
+          const headers: Record<string, string> = {
+            "Mcp-Protocol-Version": transport.protocolVersion,
+            ...transport.headers,
+          };
           if (transport.sessionId) headers["Mcp-Session-Id"] = transport.sessionId;
           void fetch(transport.endpoint, { method: "DELETE", headers })
             .catch(() => {/* ignore errors — server may return 405 if DELETE is unsupported */});

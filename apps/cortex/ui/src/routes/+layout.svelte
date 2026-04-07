@@ -53,10 +53,16 @@
   }
 
   function handleGlobalKeydown(e: KeyboardEvent) {
+    // Command palette: always available (even from inputs). Use `code` so layout/locale match physical K.
+    if ((e.metaKey || e.ctrlKey) && e.code === "KeyK") {
+      e.preventDefault();
+      commandPalette.toggle();
+      return;
+    }
     const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
-    const isInput = tag === "input" || tag === "textarea" || tag === "select" || (e.target as HTMLElement)?.isContentEditable;
+    const isInput =
+      tag === "input" || tag === "textarea" || tag === "select" || (e.target as HTMLElement)?.isContentEditable;
     if (isInput) return;
-    if ((e.metaKey || e.ctrlKey) && e.key === "k") { e.preventDefault(); commandPalette.toggle(); return; }
     // R — go to Beacon and focus input bar
     if (e.key === "r" || e.key === "R") {
       e.preventDefault();
@@ -162,12 +168,16 @@
   });
 </script>
 
-<div class="h-screen w-screen flex flex-col overflow-hidden bg-background text-on-surface">
+<div class="h-screen w-screen flex flex-col overflow-hidden cortex-shell-bg text-on-surface">
   <header
-    class="cortex-nav bg-[#17181c] flex justify-between items-center w-full px-6 h-12 border-b border-white/5 shadow-neural z-50 flex-shrink-0"
+    class="cortex-nav flex justify-between items-center w-full px-4 sm:px-6 h-[3.25rem] border-b border-[var(--cortex-border)] shadow-[0_1px_0_rgba(0,0,0,0.12)] dark:shadow-[0_1px_0_rgba(255,255,255,0.04)] z-50 flex-shrink-0 gap-2"
   >
     <!-- RA neural network logo + wordmark (matches docs site identity) -->
-    <a href="/" class="flex items-center gap-2.5 no-underline group" aria-label="Cortex home">
+    <a
+      href="/"
+      class="flex items-center gap-2.5 no-underline group flex-shrink-0 rounded-md -ml-1 px-1 py-0.5"
+      aria-label="Cortex home"
+    >
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="22" height="22" class="flex-shrink-0" aria-hidden="true">
         <defs>
           <linearGradient id="lh-ed" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -209,43 +219,70 @@
         <circle cx="24" cy="24" r="4.8" fill="#8b5cf6" opacity="0.9"/>
         <circle cx="24" cy="24" r="7.5" fill="none" stroke="#06b6d4" stroke-width="0.5" opacity="0.2"/>
       </svg>
-      <span class="text-base font-semibold tracking-tight ra-gradient-text uppercase select-none">
+      <span class="text-[1.05rem] font-display font-semibold tracking-tight ra-gradient-text uppercase select-none">
         Cortex
       </span>
     </a>
 
-    <nav class="hidden md:flex items-center gap-6">
-      {#each navItems as item}
-        {@const active =
-          item.href === "/" ? $page.url.pathname === "/" : $page.url.pathname.startsWith(item.href)}
-        <a
-          href={item.href}
-          class="flex items-center gap-1.5 text-sm font-medium transition-colors duration-200 no-underline {active
-            ? 'text-primary border-b-2 border-primary pb-0.5'
-            : 'text-outline hover:text-primary'}"
-        >
-          {item.label}
-        </a>
-      {/each}
+    <nav
+      class="cortex-no-scrollbar flex flex-1 min-w-0 items-center justify-center md:justify-center overflow-x-auto"
+      aria-label="Primary"
+    >
+      <div
+        class="inline-flex items-center gap-0.5 rounded-lg bg-white/80 dark:bg-surface-container-low/45 px-1 py-0.5 backdrop-blur-sm
+               shadow-[0_0_0_1px_rgba(124,58,237,0.2),0_0_0_1px_rgba(255,255,255,0.7)_inset]
+               dark:shadow-[0_0_0_1px_rgba(139,92,246,0.28),0_0_0_1px_rgba(6,182,212,0.08)_inset]"
+      >
+        {#each navItems as item}
+          {@const active =
+            item.href === "/" ? $page.url.pathname === "/" : $page.url.pathname.startsWith(item.href)}
+          <a
+            href={item.href}
+            title={item.label}
+            class="flex items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors duration-150 no-underline sm:gap-2 sm:px-3 sm:text-[13px] {active
+              ? 'bg-violet-100/90 dark:bg-primary/14 text-violet-800 dark:text-primary shadow-[inset_0_0_0_1px_rgba(124,58,237,0.22)] dark:shadow-[inset_0_0_0_1px_rgba(139,92,246,0.25)]'
+              : 'text-on-surface-variant hover:bg-surface-container-high/80 hover:text-on-surface'}"
+            aria-current={active ? "page" : undefined}
+          >
+            <span class="material-symbols-outlined text-[18px] opacity-80" aria-hidden="true">{item.icon}</span>
+            <span class="hidden sm:inline">{item.label}</span>
+          </a>
+        {/each}
+      </div>
     </nav>
 
-    <div class="flex items-center gap-3">
+    <div class="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
       <button
         type="button"
-        class="hidden md:flex items-center gap-2 px-3 py-1.5 bg-surface-container-lowest rounded border border-outline-variant/10 text-[10px] font-mono text-outline uppercase tracking-widest hover:border-outline-variant/30 transition-colors cursor-pointer border-solid"
+        class="hidden sm:inline-flex items-center gap-2 px-2.5 py-1.5 rounded-md cursor-pointer border-0
+               bg-gradient-to-r from-violet-100 to-cyan-100 dark:from-violet-950/40 dark:to-cyan-950/30
+               text-violet-900 dark:text-cyan-100/90
+               shadow-[0_0_0_1px_rgba(124,58,237,0.22),0_2px_10px_rgba(124,58,237,0.08)]
+               dark:shadow-[0_0_0_1px_rgba(139,92,246,0.4),0_0_14px_rgba(6,182,212,0.12)]
+               hover:shadow-[0_0_0_1px_rgba(6,182,212,0.35),0_4px_14px_rgba(6,182,212,0.12)]
+               dark:hover:shadow-[0_0_0_1px_rgba(6,182,212,0.45),0_0_20px_rgba(139,92,246,0.2)]
+               hover:text-violet-950 dark:hover:text-cyan-200 transition-all"
         onclick={() => commandPalette.open()}
+        title="Command palette (⌘K or Ctrl+K)"
       >
-        <span class="material-symbols-outlined text-sm text-secondary">terminal</span>
-        ⌘K
+        <span
+          class="material-symbols-outlined text-base text-cyan-700 dark:text-secondary/90"
+          aria-hidden="true">terminal</span>
+        <span class="cortex-kbd hidden md:inline">⌘K</span>
+        <span class="cortex-kbd md:hidden">^K</span>
       </button>
       <button
         type="button"
         onclick={toggleTheme}
-        class="material-symbols-outlined text-outline hover:text-primary transition-colors p-1 bg-transparent border-0 cursor-pointer"
+        class="material-symbols-outlined text-outline hover:text-primary transition-colors p-1.5 rounded-md bg-transparent border-0 cursor-pointer"
         title="Toggle {isDark ? 'light' : 'dark'} mode"
         aria-label="Toggle theme"
       >{isDark ? "light_mode" : "dark_mode"}</button>
-      <a href="/settings" class="material-symbols-outlined text-outline hover:text-primary transition-colors p-1" title="Settings">settings</a>
+      <a
+        href="/settings"
+        class="material-symbols-outlined text-outline hover:text-primary transition-colors p-1.5 rounded-md inline-flex"
+        title="Settings"
+        aria-label="Settings">settings</a>
     </div>
   </header>
 

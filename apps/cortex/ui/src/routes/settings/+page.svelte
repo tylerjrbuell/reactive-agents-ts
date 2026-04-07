@@ -2,7 +2,9 @@
   import { onMount } from "svelte";
   import { toast } from "$lib/stores/toast-store.js";
   import { CORTEX_SERVER_URL } from "$lib/constants.js";
+  import { fetchModelsForProvider, type UiModelOption } from "$lib/framework-models.js";
   import { settings as settingsStore, DEFAULTS } from "$lib/stores/settings.js";
+  import CortexDeskShell from "$lib/components/CortexDeskShell.svelte";
 
   /**
    * Explicit shape for this form state. Matches `CortexSettings` in `$lib/stores/settings.ts`
@@ -17,6 +19,7 @@
     debugMode: boolean;
     theme: "dark" | "light";
     ollamaEndpoint: string;
+    tooltipsEnabled: boolean;
   };
 
   // Local reactive copy — bound to form inputs, written to shared store on Save
@@ -26,6 +29,11 @@
   let serverHealth = $state<"checking" | "online" | "offline">("checking");
   let serverVersion = $state<string | null>(null);
 
+  /** From `/api/models/framework/*` or live Ollama tags (same source as Lab builder). */
+  let providerModelOptions = $state<UiModelOption[]>([]);
+  let modelsLoading = $state(false);
+  let modelsError = $state<string | null>(null);
+
   const PROVIDERS = [
     { value: "anthropic", label: "Anthropic" },
     { value: "openai",    label: "OpenAI" },
@@ -34,32 +42,26 @@
     { value: "litellm",  label: "LiteLLM" },
   ];
 
-  const MODELS: Record<string, { value: string; label: string }[]> = {
-    anthropic: [
-      { value: "claude-sonnet-4-6",          label: "Claude Sonnet 4.6 (recommended)" },
-      { value: "claude-opus-4-6",            label: "Claude Opus 4.6" },
-      { value: "claude-haiku-4-5-20251001",  label: "Claude Haiku 4.5 (fast)" },
-    ],
-    openai: [
-      { value: "gpt-4o",       label: "GPT-4o" },
-      { value: "gpt-4o-mini",  label: "GPT-4o Mini (fast)" },
-      { value: "o1",           label: "o1" },
-    ],
-    gemini: [
-      { value: "gemini-2.0-flash",   label: "Gemini 2.0 Flash" },
-      { value: "gemini-2.0-pro",     label: "Gemini 2.0 Pro" },
-    ],
-    ollama: [
-      { value: "llama3.2",   label: "Llama 3.2" },
-      { value: "mistral",    label: "Mistral" },
-      { value: "cogito:14b", label: "Cogito 14B" },
-    ],
-    litellm: [
-      { value: "gpt-4o",  label: "via LiteLLM (any model)" },
-    ],
-  };
-
-  const currentModels = $derived(MODELS[localSettings.defaultProvider] ?? []);
+  $effect(() => {
+    const p = localSettings.defaultProvider;
+    const ep = localSettings.ollamaEndpoint;
+    let cancelled = false;
+    void (async () => {
+      modelsLoading = true;
+      modelsError = null;
+      const { options, error } = await fetchModelsForProvider(
+        p,
+        p === "ollama" ? ep : undefined,
+      );
+      if (cancelled) return;
+      providerModelOptions = options;
+      modelsError = error ?? null;
+      modelsLoading = false;
+    })();
+    return () => {
+      cancelled = true;
+    };
+  });
 
   onMount(() => {
     settingsStore.init();
@@ -129,18 +131,19 @@
   <title>CORTEX — Settings</title>
 </svelte:head>
 
-<div class="h-full overflow-y-auto p-6">
-  <div class="max-w-2xl mx-auto space-y-8">
+<CortexDeskShell>
+<div class="relative z-10 h-full min-h-0 overflow-y-auto p-4 sm:p-6">
+  <div class="mx-auto max-w-2xl space-y-8">
 
     <!-- Header -->
     <div class="flex items-center justify-between">
       <div>
-        <h1 class="font-headline text-2xl font-light text-on-surface">
-          <span class="font-bold text-primary">Settings</span>
+        <h1 class="font-display text-2xl font-light tracking-tight text-on-surface">
+          <span class="font-semibold text-primary">Settings</span>
         </h1>
         <p class="font-mono text-[10px] text-outline mt-1">Cortex companion studio preferences</p>
       </div>
-      <a href="/" class="text-[11px] font-mono text-secondary hover:text-primary transition-colors no-underline flex items-center gap-1">
+      <a href="/" class="flex items-center gap-1 font-mono text-[11px] text-cyan-700 no-underline transition-colors hover:text-primary dark:text-secondary">
         <span class="material-symbols-outlined text-sm">arrow_back</span>
         Beacon
       </a>
@@ -201,9 +204,16 @@
           <select
             id="settings-default-provider"
             bind:value={localSettings.defaultProvider}
-            onchange={() => {
-              const models = MODELS[localSettings.defaultProvider];
-              if (models?.[0]) localSettings = { ...localSettings, defaultModel: models[0].value };
+            onchange={async () => {
+              localSettings = { ...localSettings, defaultModel: "" };
+              const p = localSettings.defaultProvider;
+              const { options } = await fetchModelsForProvider(
+                p,
+                p === "ollama" ? localSettings.ollamaEndpoint : undefined,
+              );
+              if (options[0]) {
+                localSettings = { ...localSettings, defaultModel: options[0].value };
+              }
             }}
             class="w-full bg-surface-container-lowest border border-outline-variant/20 rounded px-3 py-2
                    text-sm font-mono text-on-surface focus:border-primary/50 focus:outline-none"
@@ -215,17 +225,40 @@
         </div>
         <div>
           <label for="settings-default-model" class="font-mono text-[10px] text-outline uppercase tracking-widest block mb-1.5">Model</label>
-          <select
-            id="settings-default-model"
-            bind:value={localSettings.defaultModel}
-            class="w-full bg-surface-container-lowest border border-outline-variant/20 rounded px-3 py-2
-                   text-sm font-mono text-on-surface focus:border-primary/50 focus:outline-none"
-          >
-            {#each currentModels as m}
-              <option value={m.value}>{m.label}</option>
-            {/each}
-            <option value={localSettings.defaultModel}>{localSettings.defaultModel}</option>
-          </select>
+          {#if modelsError}
+            <p class="font-mono text-[10px] text-error/80 mb-1.5">{modelsError}</p>
+          {/if}
+          {#if modelsLoading}
+            <div
+              class="w-full bg-surface-container-lowest border border-outline-variant/20 rounded px-3 py-2
+                     text-sm font-mono text-outline/50"
+            >
+              Loading models…
+            </div>
+          {:else if providerModelOptions.length > 0}
+            <select
+              id="settings-default-model"
+              bind:value={localSettings.defaultModel}
+              class="w-full bg-surface-container-lowest border border-outline-variant/20 rounded px-3 py-2
+                     text-sm font-mono text-on-surface focus:border-primary/50 focus:outline-none"
+            >
+              {#each providerModelOptions as m}
+                <option value={m.value}>{m.label}</option>
+              {/each}
+              {#if localSettings.defaultModel.trim() && !providerModelOptions.some((o) => o.value === localSettings.defaultModel)}
+                <option value={localSettings.defaultModel}>{localSettings.defaultModel} (saved)</option>
+              {/if}
+            </select>
+          {:else}
+            <input
+              id="settings-default-model"
+              bind:value={localSettings.defaultModel}
+              placeholder="Model id"
+              class="w-full bg-surface-container-lowest border border-outline-variant/20 rounded px-3 py-2
+                     text-sm font-mono text-on-surface placeholder:text-outline/40
+                     focus:border-primary/50 focus:outline-none"
+            />
+          {/if}
         </div>
       </div>
       <p class="font-mono text-[10px] text-outline/50">
@@ -359,6 +392,15 @@
           </div>
         </div>
       </label>
+      <label class="flex items-center gap-3 cursor-pointer">
+        <input type="checkbox" bind:checked={localSettings.tooltipsEnabled} class="accent-primary w-4 h-4" />
+        <div>
+          <div class="font-mono text-[11px] text-on-surface/80">Show hover tooltips</div>
+          <div class="font-mono text-[10px] text-outline/60 mt-0.5">
+            Help text on controls (Lab, runs, command palette). Turn off if you find them distracting.
+          </div>
+        </div>
+      </label>
       <div class="flex gap-2 flex-wrap text-[10px] font-mono text-outline/50">
         <span>Connect snippet:</span>
         <code class="text-primary/70 bg-primary/8 px-1.5 py-0.5 rounded">.withCortex()</code>
@@ -389,3 +431,4 @@
 
   </div>
 </div>
+</CortexDeskShell>

@@ -1,6 +1,5 @@
-# Cryptocurrency Prices as of Today
-
-XRP: 1.29 USD
-BTC: 30,685.47 USD
-BONK: 0.00000568 USD
-ETH: 2,061.52 USD
+Current Crypto Prices:
+Bitcoin: $69331
+XRP: $0.3584
+BONK: $0.002500
+Ethereum: $2230

@@ -14,4 +14,8 @@ describe("CortexSettings", () => {
   it("DEFAULTS includes ollamaEndpoint for ChatSessionList / Ollama model fetch", () => {
     expect(typeof DEFAULTS.ollamaEndpoint).toBe("string");
   });
+
+  it("DEFAULTS enables UI tooltips (opt-out in settings)", () => {
+    expect(DEFAULTS.tooltipsEnabled).toBe(true);
+  });
 });
