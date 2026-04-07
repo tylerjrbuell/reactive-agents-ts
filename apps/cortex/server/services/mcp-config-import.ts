@@ -21,6 +21,22 @@ export function inferHttpMcpTransport(endpoint: string): "sse" | "streamable-htt
 }
 
 /**
+ * Fix configs where `transport` is wrongly `sse` for a streamable-HTTP `/mcp` endpoint (common in pasted JSON).
+ * Safe to call on every load from DB or after {@link parseConfigBody}.
+ */
+export function normalizeMcpHttpTransport(cfg: MCPServerConfig): MCPServerConfig {
+  if (
+    cfg.transport === "sse" &&
+    typeof cfg.endpoint === "string" &&
+    cfg.endpoint.trim() &&
+    inferHttpMcpTransport(cfg.endpoint) === "streamable-http"
+  ) {
+    return { ...cfg, transport: "streamable-http" };
+  }
+  return cfg;
+}
+
+/**
  * Parse request body into a single {@link MCPServerConfig} (shared with POST /api/mcp-servers).
  * Accepts `url` as an alias for `endpoint` and infers `transport` when omitted.
  */
@@ -67,7 +83,8 @@ export function parseConfigBody(body: Record<string, unknown>): MCPServerConfig 
     }
     if (Object.keys(headers).length > 0) cfg.headers = headers;
   }
-  return cfg;
+
+  return normalizeMcpHttpTransport(cfg);
 }
 
 function normalizeOne(raw: Record<string, unknown>, nameFromKey?: string): MCPServerConfig | null {

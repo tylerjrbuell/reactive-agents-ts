@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Database } from "bun:sqlite";
 import type { MCPServerConfig } from "@reactive-agents/runtime";
-import { insertMcpServer } from "../db/mcp-queries.js";
+import { upsertMcpServer } from "../db/mcp-queries.js";
 import { expandMcpConfigsFromJson } from "./mcp-config-import.js";
 
 export type McpJsonImportResult =
@@ -30,8 +30,8 @@ export function executeMcpJsonImport(db: Database, jsonText: string): McpJsonImp
   const runImport = db.transaction((list: MCPServerConfig[]) => {
     const out: Array<{ serverId: string; name: string }> = [];
     for (const cfg of list) {
-      const serverId = randomUUID();
-      insertMcpServer(db, serverId, cfg);
+      // upsert: update config if a server with this name already exists, keeping its server_id
+      const serverId = upsertMcpServer(db, randomUUID(), cfg);
       out.push({ serverId, name: cfg.name });
     }
     return out;

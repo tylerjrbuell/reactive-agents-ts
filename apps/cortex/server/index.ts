@@ -101,16 +101,21 @@ export async function startCortexServer(config: CortexConfig = defaultCortexConf
 
   const displayUrl = cortexListenDisplayUrl(config.port);
 
-  app.listen(config.port, () => {
-    if (process.env.CORTEX_SPAWNED_BY_RAX !== "1") {
-      console.log(`\n◈ CORTEX running at ${displayUrl}\n`);
-      cortexLog(
-        "info",
-        "server",
-        "logging: set CORTEX_LOG=debug for per-event ingest + WS details (default is info)",
-      );
-    }
-  });
+  // Bun’s default idleTimeout (~10s) drops connections that send no response bytes yet — e.g. long MCP
+  // `refresh-tools` (docker pull / handshake). Node’s Vite proxy then logs "socket hang up". 0 disables.
+  app.listen(
+    { port: config.port, idleTimeout: 0 },
+    () => {
+      if (process.env.CORTEX_SPAWNED_BY_RAX !== "1") {
+        console.log(`\n◈ CORTEX running at ${displayUrl}\n`);
+        cortexLog(
+          "info",
+          "server",
+          "logging: set CORTEX_LOG=debug for per-event ingest + WS details (default is info)",
+        );
+      }
+    },
+  );
 
   if (config.openBrowser) {
     const { exec } = await import("node:child_process");

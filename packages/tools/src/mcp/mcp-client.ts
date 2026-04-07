@@ -1,1266 +1,615 @@
+/**
+ * MCP Client — powered by the official @modelcontextprotocol/sdk.
+ *
+ * Supports all standard MCP transports:
+ *   • stdio           — subprocess (node, python, npx, uvx, bun, uv, …)
+ *   • streamable-http — modern HTTP MCP (2025-03-26 spec)
+ *   • sse             — legacy Server-Sent Events transport
+ *
+ * **Smart auto-detection for Docker/subprocess HTTP MCP servers**
+ * Some containers (e.g. mcp/context7) start an HTTP server instead of
+ * speaking MCP over stdio. When a subprocess prints an HTTP startup URL to
+ * stderr and the SDK stdio handshake hasn't completed yet, the client
+ * automatically:
+ *   1. Force-stops the probe container via `docker rm -f`
+ *   2. Re-spawns the command with `-p PORT:PORT` and a unique `--name`
+ *   3. Polls the endpoint until the HTTP server is healthy (up to 60s)
+ *   4. Connects via streamable-http, falling back to SSE
+ *   5. On dispose/cleanup, calls `docker rm -f <name>` so the container is
+ *      actually stopped (killing the docker run process alone is not enough —
+ *      Docker keeps the container alive even when the client process exits)
+ * — all transparent to callers; no port config required.
+ *
+ * For pure stdio servers (GitHub MCP, filesystem, etc.) the HTTP startup
+ * message never appears, so the race resolves on the stdio path immediately.
+ */
+import { spawn as nodeSpawn } from "node:child_process";
 import { Effect, Ref } from "effect";
-
-import type { MCPServer, MCPRequest, MCPResponse } from "../types.js";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
+import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
+import type { MCPServer } from "../types.js";
 import { MCPConnectionError, ToolExecutionError } from "../errors.js";
 
-// ─── Active Transport State ───
+// ─── Types ───────────────────────────────────────────────────────────────────
 
-interface StdioTransport {
-  type: "stdio";
-  subprocess: ReturnType<typeof Bun.spawn>;
-  pendingRequests: Map<
-    string | number,
-    {
-      resolve: (response: MCPResponse) => void;
-      reject: (err: Error) => void;
-    }
-  >;
-  readerStopped: boolean;
-}
+type ConnectConfig = Omit<
+  Pick<MCPServer, "name" | "transport" | "endpoint" | "command" | "args" | "cwd" | "env" | "headers">,
+  "transport"
+> & { transport?: MCPServer["transport"] };
 
-interface SseTransport {
-  type: "sse";
-  endpoint: string;
-  headers: Record<string, string>;
-  pendingRequests: Map<
-    string | number,
-    {
-      resolve: (response: MCPResponse) => void;
-      reject: (err: Error) => void;
-    }
-  >;
-  abortController: AbortController | null;
-  connected: boolean;
-  reconnectAttempt: number;
-  reconnectTimeoutId: ReturnType<typeof setTimeout> | null;
-}
-
-interface StreamableHttpTransport {
-  type: "streamable-http";
-  endpoint: string;
-  /** User-supplied auth/custom headers sent on every request. */
-  headers: Record<string, string>;
-  /** Session ID assigned by the server in the initialize response. Null until then. */
-  sessionId: string | null;
+interface ActiveConnection {
+  client: Client;
+  transport: Transport;
+  server: MCPServer;
   /**
-   * Sent as `Mcp-Protocol-Version` on every POST/DELETE (spec + strict servers e.g. Go MCP SDK).
-   * Updated from the `initialize` result when the server returns `protocolVersion`.
+   * Name of the docker container to stop on cleanup.
+   * Set when the server was auto-detected as HTTP-only and re-spawned with a
+   * port mapping. `docker rm -f` is used instead of process.kill() because
+   * killing the `docker run` process does NOT stop the container — the Docker
+   * daemon keeps it alive until explicitly told to stop it.
    */
-  protocolVersion: string;
-  pendingRequests: Map<
-    string | number,
-    {
-      resolve: (response: MCPResponse) => void;
-      reject: (err: Error) => void;
-    }
-  >;
-  connected: boolean;
+  dockerContainerName?: string;
 }
 
-interface WebSocketTransport {
-  type: "websocket";
-  socket: WebSocket | null;
-  endpoint: string;
-  pendingRequests: Map<
-    string | number,
-    {
-      resolve: (response: MCPResponse) => void;
-      reject: (err: Error) => void;
-    }
-  >;
-  connected: boolean;
-  reconnectAttempt: number;
-  reconnectTimeoutId: ReturnType<typeof setTimeout> | null;
-  reconnecting: boolean;
-  closing: boolean;
-}
+// ─── Module-level State ───────────────────────────────────────────────────────
 
-type ActiveTransport = StdioTransport | SseTransport | StreamableHttpTransport | WebSocketTransport;
+const activeConnections = new Map<string, ActiveConnection>();
 
-// Module-level map: serverName -> ActiveTransport
-const activeTransports = new Map<string, ActiveTransport>();
-
-/**
- * Kill all active stdio subprocesses on process exit.
- * Safety net — prevents Docker containers (and other MCP subprocesses) from
- * leaking when the agent errors out without calling dispose().
- */
-function cleanupActiveTransports(): void {
-  for (const [name, transport] of activeTransports) {
-    try {
-      if (transport.type === "stdio") {
-        (transport as StdioTransport).readerStopped = true;
-        (transport as StdioTransport).subprocess.kill();
-      } else if (transport.type === "sse") {
-        (transport as SseTransport).abortController?.abort();
-      } else if (transport.type === "websocket") {
-        (transport as WebSocketTransport).closing = true;
-        (transport as WebSocketTransport).socket?.close();
-      }
-    } catch { /* already gone */ }
-    activeTransports.delete(name);
-  }
-}
-
-// Register once — idempotent even if module is re-evaluated
-let exitHandlerRegistered = false;
-function ensureExitHandler(): void {
-  if (exitHandlerRegistered) return;
-  exitHandlerRegistered = true;
-  process.on("exit", cleanupActiveTransports);
-  // SIGINT/SIGTERM: run cleanup then re-raise so the process actually exits
-  for (const sig of ["SIGINT", "SIGTERM"] as const) {
-    process.on(sig, () => {
-      cleanupActiveTransports();
-      process.exit(128 + (sig === "SIGINT" ? 2 : 15));
-    });
-  }
-}
-
-/** Register a transport and ensure process exit cleanup is armed. */
-function registerTransport(name: string, transport: ActiveTransport): void {
-  activeTransports.set(name, transport);
-  ensureExitHandler();
-}
-
-// Module-level map: serverName -> notification callback
 const notificationCallbacks = new Map<
   string,
   (method: string, params: Record<string, unknown>) => void
 >();
 
-// ─── Background stdout reader ───
+// ─── Exit Cleanup ─────────────────────────────────────────────────────────────
 
-const startStdioReader = (
-  serverName: string,
-  transport: StdioTransport,
-): void => {
-  const { subprocess } = transport;
-
-  void (async () => {
-    // Cast to AsyncIterable — Bun.spawn({stdout:"pipe"}) returns ReadableStream
-    const stdout = subprocess.stdout as AsyncIterable<Uint8Array> | null;
-    if (!stdout) return;
-
-    const decoder = new TextDecoder();
-    let buffer = "";
-
-    try {
-      for await (const chunk of stdout) {
-        if (transport.readerStopped) break;
-
-        buffer += decoder.decode(chunk as Uint8Array, { stream: true });
-
-        // Split on newlines — process each complete line
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed) continue;
-
-          let parsed: MCPResponse;
-          try {
-            parsed = JSON.parse(trimmed) as MCPResponse;
-          } catch {
-            // Not valid JSON (e.g., server log lines) — skip
-            continue;
-          }
-
-          const pending = transport.pendingRequests.get(parsed.id);
-          if (pending) {
-            transport.pendingRequests.delete(parsed.id);
-            pending.resolve(parsed);
-          } else {
-            // Server-sent notification (no matching pending request)
-            // Forward to registered callback if available
-            const sName = [...activeTransports.entries()]
-              .find(([, t]) => t === transport)?.[0];
-            if (sName) {
-              const callback = notificationCallbacks.get(sName);
-              if (callback) {
-                try {
-                  // MCP notifications have method/params fields not present in MCPResponse
-                  const notification = parsed as unknown as Record<string, unknown>;
-                  callback(
-                    (notification.method as string) ?? "unknown",
-                    (notification.params as Record<string, unknown>) ?? {},
-                  );
-                } catch { /* don't let callback errors kill the reader */ }
-              }
-            }
-          }
-        }
-      }
-    } catch (err) {
-      // Reader died — reject all pending requests
-      transport.readerStopped = true;
-      for (const [id, pending] of transport.pendingRequests) {
-        transport.pendingRequests.delete(id);
-        pending.reject(
-          err instanceof Error
-            ? err
-            : new Error(
-                `MCP stdio reader error for "${serverName}": ${String(err)}`,
-              ),
-        );
-      }
-    }
-  })();
-};
-
-// ─── SSE Transport ───
-
-const SSE_RECONNECT_DELAYS = [1000, 2000, 4000, 8000, 16000, 30000];
-const SSE_CONNECTION_TIMEOUT = 30000;
-
-const isStdioTransport = (t: ActiveTransport): t is StdioTransport =>
-  t.type === "stdio";
-
-const isSseTransport = (t: ActiveTransport): t is SseTransport =>
-  t.type === "sse";
-
-const isWebSocketTransport = (t: ActiveTransport): t is WebSocketTransport =>
-  t.type === "websocket";
-
-const isStreamableHttpTransport = (t: ActiveTransport): t is StreamableHttpTransport =>
-  t.type === "streamable-http";
-
-function streamableHttpBaseHeaders(transport: StreamableHttpTransport): Record<string, string> {
-  const h: Record<string, string> = {
-    "Content-Type": "application/json",
-    Accept: "application/json, text/event-stream",
-    "Mcp-Protocol-Version": transport.protocolVersion,
-    ...transport.headers,
-  };
-  if (transport.sessionId) h["Mcp-Session-Id"] = transport.sessionId;
-  return h;
+function cleanupAll(): void {
+  for (const [name] of activeConnections) {
+    cleanupMcpTransport(name);
+  }
 }
 
-const parseSseEvent = (line: string): { event?: string; data?: string } => {
-  if (line.startsWith("event:")) {
-    return { event: line.slice(6).trim() };
-  }
-  if (line.startsWith("data:")) {
-    return { data: line.slice(5).trim() };
-  }
-  return {};
-};
-
-const startSseReader = (
-  serverName: string,
-  transport: SseTransport,
-): void => {
-  const connect = () => {
-    if (transport.connected) return;
-
-    // Abort any existing controller before creating a new one
-    if (transport.abortController) {
-      transport.abortController.abort();
-    }
-
-    const abortController = new AbortController();
-    transport.abortController = abortController;
-
-    const sseEndpoint = transport.endpoint.includes("?")
-      ? `${transport.endpoint}&session=${serverName}`
-      : `${transport.endpoint}?session=${serverName}`;
-
-    const initSSE = async () => {
-      const timeoutId = setTimeout(() => {
-        abortController.abort();
-      }, SSE_CONNECTION_TIMEOUT);
-
-      try {
-        transport.connected = true;
-        transport.reconnectAttempt = 0;
-
-        const response = await fetch(sseEndpoint, {
-          method: "GET",
-          headers: { Accept: "text/event-stream", ...transport.headers },
-          signal: abortController.signal,
-        });
-
-        clearTimeout(timeoutId);
-
-        if (!response.ok || !response.body) {
-          throw new Error(`SSE connection failed: ${response.status}`);
-        }
-
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-
-        const readStream = async (): Promise<void> => {
-          try {
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done || abortController.signal.aborted) break;
-
-              buffer += decoder.decode(value, { stream: true });
-              const lines = buffer.split("\n");
-              buffer = lines.pop() ?? "";
-
-              let eventType = "";
-              let eventData = "";
-
-              for (const line of lines) {
-                const parsed = parseSseEvent(line);
-                if (parsed.event) eventType = parsed.event;
-                if (parsed.data) eventData = parsed.data;
-              }
-
-              if (eventType === "message" && eventData) {
-                try {
-                  const parsed = JSON.parse(eventData) as MCPResponse;
-                  const pending = transport.pendingRequests.get(parsed.id);
-                  if (pending) {
-                    transport.pendingRequests.delete(parsed.id);
-                    pending.resolve(parsed);
-                  }
-                } catch {
-                  // Invalid JSON in SSE data - skip
-                }
-              }
-
-              if (eventType === "ping" || eventType === "keepalive") {
-                // Keepalive received, reset reconnect attempt
-                transport.reconnectAttempt = 0;
-              }
-            }
-          } catch {
-            // Stream ended or error
-          }
-        };
-
-        readStream().catch(() => {
-          // Ignore read errors during cleanup
-        });
-      } catch (err) {
-        clearTimeout(timeoutId);
-        transport.connected = false;
-
-        if (!abortController.signal.aborted) {
-          const delay =
-            SSE_RECONNECT_DELAYS[
-              Math.min(
-                transport.reconnectAttempt,
-                SSE_RECONNECT_DELAYS.length - 1,
-              )
-            ];
-          transport.reconnectAttempt++;
-
-          transport.reconnectTimeoutId = setTimeout(() => {
-            if (!abortController.signal.aborted) {
-              initSSE();
-            }
-          }, delay);
-        }
-      }
-    };
-
-    initSSE();
-  };
-
-  connect();
-};
-
-const createSseTransport = (
-  config: Pick<MCPServer, "name" | "endpoint" | "headers">,
-): SseTransport => {
-  const endpoint = config.endpoint ?? "";
-  return {
-    type: "sse",
-    endpoint,
-    headers: config.headers ?? {},
-    pendingRequests: new Map(),
-    abortController: null,
-    connected: false,
-    reconnectAttempt: 0,
-    reconnectTimeoutId: null,
-  };
-};
-
-// ─── WebSocket Transport ───
-
-const WS_RECONNECT_DELAYS = [1000, 2000, 4000, 8000, 16000, 30000];
-const WS_CONNECTION_TIMEOUT = 30000;
-
-const createWebSocketTransport = (
-  config: Pick<MCPServer, "name" | "endpoint">,
-): WebSocketTransport => {
-  const endpoint = config.endpoint ?? "";
-  return {
-    type: "websocket",
-    socket: null,
-    endpoint,
-    pendingRequests: new Map(),
-    connected: false,
-    reconnectAttempt: 0,
-    reconnectTimeoutId: null,
-    reconnecting: false,
-    closing: false,
-  };
-};
-
-const connectWebSocket = (
-  serverName: string,
-  transport: WebSocketTransport,
-): Promise<void> => {
-  if (transport.connected && transport.socket?.readyState === WebSocket.OPEN) {
-    return Promise.resolve();
-  }
-
-  if (transport.socket && transport.socket.readyState === WebSocket.CONNECTING) {
-    return new Promise((resolve, reject) => {
-      const timeoutId = setTimeout(() => {
-        reject(new Error(`WebSocket connecting timeout for "${serverName}"`));
-      }, WS_CONNECTION_TIMEOUT);
-
-      transport.socket!.onopen = () => {
-        clearTimeout(timeoutId);
-        transport.connected = true;
-        resolve();
-      };
-      transport.socket!.onerror = () => {
-        clearTimeout(timeoutId);
-        reject(new Error(`WebSocket error while connecting for "${serverName}"`));
-      };
+let exitHandlerRegistered = false;
+function ensureExitHandler(): void {
+  if (exitHandlerRegistered) return;
+  exitHandlerRegistered = true;
+  process.on("exit", cleanupAll);
+  for (const sig of ["SIGINT", "SIGTERM"] as const) {
+    process.on(sig, () => {
+      cleanupAll();
+      process.exit(128 + (sig === "SIGINT" ? 2 : 15));
     });
   }
+}
 
-  if (transport.socket) {
-    try {
-      transport.socket.close();
-    } catch {
-      // Ignore close errors
-    }
-  }
+// ─── Docker Container Helpers ─────────────────────────────────────────────────
 
-  return new Promise((resolve, reject) => {
-    const endpoint = transport.endpoint;
-    if (!endpoint) {
-      const err = new Error(
-        `WebSocket endpoint not configured for MCP server "${serverName}"`,
-      );
-      reject(err);
-      return;
-    }
-
-    const timeoutId = setTimeout(() => {
-      if (transport.socket && transport.socket.readyState === WebSocket.CONNECTING) {
-        transport.socket.close();
-      }
-      reject(new Error(`WebSocket connection timeout for "${serverName}"`));
-    }, WS_CONNECTION_TIMEOUT);
-
-    const socket = new WebSocket(endpoint);
-    transport.socket = socket;
-
-    socket.onopen = () => {
-      clearTimeout(timeoutId);
-      transport.connected = true;
-      transport.reconnectAttempt = 0;
-      transport.reconnecting = false;
-      resolve();
-    };
-
-    socket.onmessage = (event) => {
-      try {
-        const parsed = JSON.parse(event.data as string) as MCPResponse;
-        const pending = transport.pendingRequests.get(parsed.id);
-        if (pending) {
-          transport.pendingRequests.delete(parsed.id);
-          pending.resolve(parsed);
-        }
-      } catch {
-        // Invalid JSON - skip
-      }
-    };
-
-    socket.onerror = () => {
-      clearTimeout(timeoutId);
-      transport.connected = false;
-      reject(new Error(`WebSocket error for "${serverName}"`));
-    };
-
-    socket.onclose = () => {
-      clearTimeout(timeoutId);
-      transport.connected = false;
-
-      if (!transport.closing && transport.reconnectAttempt < WS_RECONNECT_DELAYS.length) {
-        transport.reconnecting = true;
-        const delay = WS_RECONNECT_DELAYS[transport.reconnectAttempt];
-        transport.reconnectAttempt++;
-
-        transport.reconnectTimeoutId = setTimeout(() => {
-          if (!transport.closing) {
-            connectWebSocket(serverName, transport).catch(() => {});
-          }
-        }, delay);
-      }
-    };
-  });
-};
-
-// ─── Transport Creation ───
-
-const createTransport = (
-  config: Pick<
-    MCPServer,
-    "name" | "transport" | "endpoint" | "command" | "args" | "cwd" | "env" | "headers"
-  >,
-): Effect.Effect<void, unknown> => {
-  if (config.transport === "stdio") {
-    return Effect.tryPromise(async () => {
-      const command = config.command;
-      if (!command) {
-        throw new Error(
-          `MCP server "${config.name}" has transport "stdio" but no command specified`,
-        );
-      }
-
-      const spawnEnv = config.env
-        ? { ...process.env, ...config.env }
-        : undefined;
-
-      const subprocess = Bun.spawn([command, ...(config.args ?? [])], {
-        stdin: "pipe",
-        stdout: "pipe",
-        stderr: "pipe",
-        ...(config.cwd ? { cwd: config.cwd } : {}),
-        ...(spawnEnv ? { env: spawnEnv } : {}),
-      });
-
-      const transport: StdioTransport = {
-        type: "stdio",
-        subprocess,
-        pendingRequests: new Map(),
-        readerStopped: false,
-      };
-
-      registerTransport(config.name, transport);
-      startStdioReader(config.name, transport);
-    });
-  }
-
-  // SSE transport — implement HTTP event stream
-  if (config.transport === "sse") {
-    return Effect.tryPromise(async () => {
-      const endpoint = config.endpoint;
-      if (!endpoint) {
-        throw new Error(
-          `MCP server "${config.name}" has transport "sse" but no endpoint specified`,
-        );
-      }
-
-      const transport = createSseTransport({ name: config.name, endpoint, headers: config.headers });
-      registerTransport(config.name, transport);
-      startSseReader(config.name, transport);
-    });
-  }
-
-  // WebSocket transport
-  if (config.transport === "websocket") {
-    return Effect.tryPromise(async () => {
-      const endpoint = config.endpoint;
-      if (!endpoint) {
-        throw new Error(
-          `MCP server "${config.name}" has transport "websocket" but no endpoint specified`,
-        );
-      }
-
-      const transport = createWebSocketTransport({
-        name: config.name,
-        endpoint,
-      });
-      registerTransport(config.name, transport);
-      await connectWebSocket(config.name, transport);
-    });
-  }
-
-  // Streamable HTTP transport (MCP spec 2025-03-26)
-  if (config.transport === "streamable-http") {
-    return Effect.tryPromise(async () => {
-      const endpoint = config.endpoint;
-      if (!endpoint) {
-        throw new Error(
-          `MCP server "${config.name}" has transport "streamable-http" but no endpoint specified`,
-        );
-      }
-
-      const transport: StreamableHttpTransport = {
-        type: "streamable-http",
-        endpoint,
-        headers: config.headers ?? {},
-        sessionId: null,
-        protocolVersion: "2025-03-26",
-        pendingRequests: new Map(),
-        connected: true,
-      };
-
-      registerTransport(config.name, transport);
-    });
-  }
-
-  return Effect.void;
-};
-
-// ─── JSON-RPC Notification Sender (fire-and-forget, no response expected) ───
-
-const sendNotification = (
-  config: Pick<MCPServer, "name" | "transport" | "endpoint" | "headers">,
-  method: string,
-): void => {
-  const payload = JSON.stringify({ jsonrpc: "2.0", method });
-
-  if (config.transport === "stdio") {
-    const transport = activeTransports.get(config.name);
-    if (transport && isStdioTransport(transport) && transport.subprocess.stdin) {
-      const encoded = new TextEncoder().encode(payload + "\n");
-      try {
-        (transport.subprocess.stdin as unknown as { write(b: Uint8Array): number }).write(encoded);
-        (transport.subprocess.stdin as unknown as { flush?(): void | Promise<void> }).flush?.();
-      } catch {
-        // notifications are fire-and-forget; ignore write errors
-      }
-    }
-    return;
-  }
-
-  if (config.transport === "sse") {
-    const transport = activeTransports.get(config.name);
-    if (!transport || !isSseTransport(transport)) return;
-    void fetch(transport.endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...transport.headers },
-      body: payload,
-    }).catch(() => {/* notifications are fire-and-forget */});
-    return;
-  }
-
-  if (config.transport === "streamable-http") {
-    const transport = activeTransports.get(config.name);
-    if (!transport || !isStreamableHttpTransport(transport)) return;
-    const headers = streamableHttpBaseHeaders(transport);
-    void fetch(transport.endpoint, { method: "POST", headers, body: payload })
-      .catch(() => {/* notifications are fire-and-forget */});
-    return;
-  }
-
-  if (config.transport === "websocket") {
-    const transport = activeTransports.get(config.name);
-    if (transport && isWebSocketTransport(transport) && transport.socket?.readyState === WebSocket.OPEN) {
-      transport.socket.send(payload);
-    }
-  }
-};
-
-// ─── SSE stream reader for Streamable HTTP responses ───
-
-const readSseStreamResponse = async (
-  response: Response,
-  requestId: string | number,
-): Promise<MCPResponse> => {
-  if (!response.body) {
-    throw new Error("No response body on SSE stream");
-  }
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-
+/**
+ * Stop and remove a named docker container. Fire-and-forget — errors are silenced
+ * because the container may already be gone. The spawned rm process is unref'd so
+ * it doesn't block the Node.js event loop on exit.
+ */
+function dockerRmForce(containerName: string): void {
   try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+    const rm = nodeSpawn("docker", ["rm", "-f", containerName], { stdio: "ignore" });
+    rm.unref();
+  } catch { /* ignore */ }
+}
 
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split("\n");
-      buffer = lines.pop() ?? "";
+// ─── Public Cleanup ───────────────────────────────────────────────────────────
 
-      let eventData = "";
-      for (const line of lines) {
-        if (line.startsWith("data: ")) eventData = line.slice(6).trim();
-      }
+/**
+ * Forcibly close a named MCP transport and stop any managed docker container.
+ * Called on DELETE, agent dispose, and refresh-tools timeout.
+ */
+export function cleanupMcpTransport(serverName: string): void {
+  const conn = activeConnections.get(serverName);
+  if (!conn) return;
 
-      if (eventData) {
-        try {
-          const parsed = JSON.parse(eventData) as MCPResponse;
-          // Accept matching id, or any response if the server doesn't echo id
-          if (parsed.id === requestId || parsed.id !== undefined) {
-            return parsed;
-          }
-        } catch {
-          // Invalid JSON in SSE data — skip
-        }
-      }
+  if (conn.dockerContainerName) {
+    // Must use `docker rm -f` — killing the docker run process is not enough
+    // because the Docker daemon keeps the container alive independently.
+    console.log(`[MCP cleanup] stopping container "${conn.dockerContainerName}"`);
+    dockerRmForce(conn.dockerContainerName);
+  }
+  try { void conn.transport.close(); } catch { /* already gone */ }
+  activeConnections.delete(serverName);
+  console.log(`[MCP cleanup] "${serverName}" transport closed`);
+}
+
+// ─── Utilities ────────────────────────────────────────────────────────────────
+
+function inferHttpTransportType(url: string): "streamable-http" | "sse" {
+  try {
+    const p = new URL(url).pathname.toLowerCase().replace(/\/+$/, "") || "/";
+    if (p === "/mcp" || p.endsWith("/mcp")) return "streamable-http";
+  } catch { /* fall through */ }
+  return "sse";
+}
+
+/**
+ * Scan a line of stderr for an HTTP server startup URL.
+ * Matches explicit http(s):// URLs with a port, and bare ":PORT" startup lines.
+ */
+function detectHttpStartupUrl(line: string): string | undefined {
+  const urlMatch = line.match(/\b(https?:\/\/[\w.-]+:\d{2,5}[/\w.%-]*)/i);
+  if (urlMatch) return urlMatch[1]!.replace(/\/\/0\.0\.0\.0:/, "//localhost:");
+  const portMatch = line.match(
+    /(?:running on|listening (?:on|at)|started (?:on|at)|server (?:on|at)|http server)\b.*?:(\d{2,5})\b/i,
+  );
+  if (portMatch) return `http://localhost:${portMatch[1]}/mcp`;
+  return undefined;
+}
+
+/**
+ * Insert `-p PORT:PORT` into `docker run` args immediately before the image name.
+ */
+function addDockerPortMapping(args: readonly string[], port: number): string[] {
+  if (args[0] !== "run") return [...args];
+
+  const consumesNext = new Set([
+    "-e","--env","-v","--volume","-p","--publish","--name",
+    "--network","-u","--user","-w","--workdir","-l","--label",
+    "--mount","--hostname","-h","--memory","--cpus","--restart",
+    "--entrypoint","--env-file","--add-host","--log-driver","--log-opt",
+    "--platform","--pull","--device","--dns","--gpus","--group-add",
+    "--health-cmd","--health-interval","--health-retries","--health-timeout",
+    "--ip","--isolation","--runtime","--shm-size","--sysctl","--tmpfs",
+    "--security-opt","--ulimit","--volumes-from","--stop-signal",
+    "-a","--attach","--cgroupns","--cidfile","--cpu-period","--cpu-quota",
+    "--cpu-shares","--cpuset-cpus","--cpuset-mems","--dns-option","--dns-search",
+    "--domainname",
+  ]);
+
+  const result = [...args];
+  let i = 1;
+  while (i < result.length) {
+    const arg = result[i]!;
+    if (arg === "--") break;
+    if (!arg.startsWith("-")) {
+      result.splice(i, 0, "-p", `${port}:${port}`);
+      return result;
     }
-  } finally {
-    reader.releaseLock();
+    if (arg.startsWith("--") && arg.includes("=")) { i++; continue; }
+    if (consumesNext.has(arg)) { i += 2; } else { i++; }
+  }
+  return result;
+}
+
+/**
+ * Insert a flag+value pair right after "run" in docker args.
+ */
+function insertDockerFlag(args: readonly string[], flag: string, value: string): string[] {
+  if (args[0] !== "run") return [...args];
+  return ["run", flag, value, ...args.slice(1)];
+}
+
+/**
+ * Poll an HTTP endpoint until it responds with a non-5xx status.
+ * POST with a JSON-RPC ping is the most reliable probe; 405 on POST still means the server is up.
+ */
+async function waitForHttpEndpoint(url: string, timeoutMs: number): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  let lastErr: unknown;
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 0, method: "ping" }),
+        signal: AbortSignal.timeout(2_000),
+      });
+      if (res.status < 500) { await res.body?.cancel(); return; }
+    } catch (e) { lastErr = e; }
+    await new Promise<void>((r) => setTimeout(r, 500));
+  }
+  throw new Error(`Endpoint ${url} not healthy within ${timeoutMs}ms${lastErr ? `: ${String(lastErr)}` : ""}`);
+}
+
+// ─── Transport Creation ────────────────────────────────────────────────────────
+
+function resolveTransport(config: ConnectConfig): MCPServer["transport"] {
+  if (config.transport) return config.transport;
+  if (config.command) return "stdio";
+  if (config.endpoint) return inferHttpTransportType(config.endpoint);
+  throw new Error(
+    `MCP server "${config.name}": cannot infer transport — provide either a command or an endpoint`,
+  );
+}
+
+function createTransport(config: ConnectConfig, overrideArgs?: string[]): Transport {
+  const headers = config.headers ?? {};
+  const transport = resolveTransport(config);
+
+  switch (transport) {
+    case "stdio": {
+      if (!config.command) throw new Error(
+        `MCP server "${config.name}" has transport "stdio" but no command specified`,
+      );
+      return new StdioClientTransport({
+        command: config.command,
+        args: overrideArgs ?? [...(config.args ?? [])],
+        env: config.env ? { ...process.env as Record<string, string>, ...config.env } : undefined,
+        cwd: config.cwd,
+        stderr: "pipe",
+      });
+    }
+    case "streamable-http": {
+      if (!config.endpoint) throw new Error(
+        `MCP server "${config.name}" has transport "streamable-http" but no endpoint specified`,
+      );
+      return new StreamableHTTPClientTransport(new URL(config.endpoint), { requestInit: { headers } });
+    }
+    case "sse": {
+      if (!config.endpoint) throw new Error(
+        `MCP server "${config.name}" has transport "sse" but no endpoint specified`,
+      );
+      return new SSEClientTransport(new URL(config.endpoint), { requestInit: { headers } });
+    }
+    case "websocket":
+      throw new Error(
+        `MCP server "${config.name}": websocket transport is not supported. Use streamable-http or sse.`,
+      );
+    default:
+      throw new Error(`MCP server "${config.name}": unknown transport "${String(config.transport)}"`);
+  }
+}
+
+// ─── HTTP Reconnect ────────────────────────────────────────────────────────────
+
+async function reconnectViaHttp(
+  config: ConnectConfig,
+  detectedUrl: string,
+  probeContainerName?: string,
+): Promise<ActiveConnection> {
+  const resolvedUrl = detectedUrl.replace(/\/\/0\.0\.0\.0:/, "//localhost:");
+  let port: number;
+  try {
+    port = parseInt(new URL(resolvedUrl).port, 10) || 80;
+  } catch {
+    throw new Error(`MCP server "${config.name}": cannot parse URL "${resolvedUrl}"`);
   }
 
-  throw new Error(`SSE stream ended without a response for request id=${String(requestId)}`);
-};
+  // Stop the probe container before checking/spawning the port-mapped one.
+  // This is the only reliable way — killing the docker run process does not stop the container.
+  if (probeContainerName) {
+    console.log(`[MCP http-mode] "${config.name}" — stopping probe container "${probeContainerName}"`);
+    dockerRmForce(probeContainerName);
+    // Brief settle for docker networking to release the container's internal resources
+    await new Promise<void>((r) => setTimeout(r, 800));
+  }
 
-// ─── JSON-RPC Request Sender ───
+  // Check if the endpoint is already accessible (e.g. same agent re-connecting, named container still up)
+  const alreadyUp = await waitForHttpEndpoint(resolvedUrl, 1_500).then(() => true).catch(() => false);
 
-const sendRequest = (
-  config: Pick<MCPServer, "name" | "transport" | "endpoint" | "command" | "headers">,
-  request: MCPRequest,
-): Effect.Effect<MCPResponse, MCPConnectionError> => {
-  if (config.transport === "stdio") {
-    return Effect.tryPromise({
-      try: () => {
-        const transport = activeTransports.get(config.name);
-        if (!transport || !isStdioTransport(transport)) {
-          return Promise.reject(
-            new Error(
-              `No active stdio transport for MCP server "${config.name}" — was createTransport called?`,
-            ),
-          );
-        }
+  let dockerContainerName: string | undefined;
 
-        return new Promise<MCPResponse>((resolve, reject) => {
-          // Register before writing to avoid a race where the server
-          // responds faster than we register the handler
-          transport.pendingRequests.set(request.id, { resolve, reject });
+  if (alreadyUp) {
+    console.log(`[MCP http-mode] "${config.name}" — endpoint already up at ${resolvedUrl}; reusing`);
+  } else {
+    // Spawn a port-mapped container with a unique name: rax-mcp-<server>-<pid>
+    // The name includes the process PID so multiple agents running the same server don't conflict.
+    dockerContainerName = `rax-mcp-${config.name.replace(/[^a-zA-Z0-9]/g, "-")}-${process.pid}`;
 
-          const line = JSON.stringify(request) + "\n";
-          const encoded = new TextEncoder().encode(line);
-          const stdin = transport.subprocess.stdin;
+    // Ensure --rm is present so the container auto-removes when docker rm -f is called
+    const baseArgs = config.args ?? [];
+    const argsWithRm = (
+      config.command === "docker" && baseArgs.includes("run") && !baseArgs.includes("--rm")
+    ) ? ["run", "--rm", ...baseArgs.slice(1)] : baseArgs;
 
-          if (!stdin) {
-            transport.pendingRequests.delete(request.id);
-            reject(
-              new Error(
-                `Subprocess stdin is not writable for MCP server "${config.name}"`,
-              ),
-            );
-            return;
-          }
+    // Add --name then -p PORT:PORT
+    const namedArgs = (config.command === "docker" && argsWithRm.includes("run"))
+      ? insertDockerFlag(argsWithRm, "--name", dockerContainerName)
+      : argsWithRm;
+    const portMappedArgs = addDockerPortMapping(namedArgs, port);
 
-          // Bun.FileSink.write() is synchronous — returns bytes written, not a Promise
-          try {
-            (stdin as unknown as { write(b: Uint8Array): number }).write(
-              encoded,
-            );
-            // flush() may return void or Promise<void>
-            const flushed = (
-              stdin as unknown as { flush?(): void | Promise<void> }
-            ).flush?.();
-            if (flushed instanceof Promise) {
-              flushed.catch((err: unknown) => {
-                transport.pendingRequests.delete(request.id);
-                reject(
-                  err instanceof Error
-                    ? err
-                    : new Error(
-                        `Flush failed for MCP server "${config.name}": ${String(err)}`,
-                      ),
-                );
-              });
-            }
-          } catch (err) {
-            transport.pendingRequests.delete(request.id);
-            reject(
-              err instanceof Error
-                ? err
-                : new Error(
-                    `Failed to write to MCP server "${config.name}" stdin: ${String(err)}`,
-                  ),
-            );
-          }
-        });
-      },
-      catch: (e) =>
-        new MCPConnectionError({
-          message:
-            e instanceof Error
-              ? e.message
-              : `Failed to send request to MCP server "${config.name}"`,
-          serverName: config.name,
-          transport: config.transport,
-          cause: e,
-        }),
+    console.log(`[MCP http-mode] "${config.name}" — spawning "${dockerContainerName}" with -p ${port}:${port}`);
+
+    const spawnEnv = config.env ? { ...process.env, ...config.env } : { ...process.env };
+    const subprocess = nodeSpawn(config.command!, portMappedArgs, {
+      stdio: ["ignore", "ignore", "pipe"],
+      cwd: config.cwd,
+      env: spawnEnv as NodeJS.ProcessEnv,
+      detached: false,
     });
-  }
-
-  // SSE transport
-  if (config.transport === "sse") {
-    return Effect.tryPromise({
-      try: () => {
-        const transport = activeTransports.get(config.name);
-        if (!transport || !isSseTransport(transport)) {
-          return Promise.reject(
-            new Error(
-              `No active SSE transport for MCP server "${config.name}" — was createTransport called?`,
-            ),
-          );
-        }
-
-        const endpoint = transport.endpoint;
-        if (!endpoint) {
-          return Promise.reject(
-            new Error(
-              `No endpoint configured for SSE transport on "${config.name}"`,
-            ),
-          );
-        }
-
-        return new Promise<MCPResponse>((resolve, reject) => {
-          transport.pendingRequests.set(request.id, { resolve, reject });
-
-          const rpcMessage = JSON.stringify(request);
-
-          fetch(endpoint, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Accept: "application/json",
-              ...transport.headers,
-            },
-            body: rpcMessage,
-          })
-            .then((response) => {
-              if (!response.ok) {
-                transport.pendingRequests.delete(request.id);
-                reject(
-                  new Error(
-                    `SSE request failed for "${config.name}": ${response.status} ${response.statusText}`,
-                  ),
-                );
-                return null;
-              }
-              return response.text();
-            })
-            .then((text) => {
-              if (text) {
-                try {
-                  const data = JSON.parse(text) as MCPResponse;
-                  transport.pendingRequests.delete(request.id);
-                  resolve(data);
-                } catch {
-                  transport.pendingRequests.delete(request.id);
-                  reject(
-                    new Error(
-                      `SSE response parse error for "${config.name}": ${text}`,
-                    ),
-                  );
-                }
-              }
-            })
-            .catch((err) => {
-              transport.pendingRequests.delete(request.id);
-              reject(
-                err instanceof Error
-                  ? err
-                  : new Error(
-                      `SSE request failed for "${config.name}": ${String(err)}`,
-                    ),
-              );
-            });
-        });
-      },
-      catch: (e) =>
-        new MCPConnectionError({
-          message:
-            e instanceof Error
-              ? e.message
-              : `Failed to send request to MCP server "${config.name}"`,
-          serverName: config.name,
-          transport: config.transport,
-          cause: e,
-        }),
+    subprocess.unref(); // don't block Node.js event loop
+    subprocess.stderr?.on("data", (chunk: Buffer) => {
+      const trimmed = chunk.toString().trimEnd();
+      if (trimmed) process.stderr.write(`[MCP ${config.name}] ${trimmed}\n`);
     });
-  }
 
-  // WebSocket transport
-  if (config.transport === "websocket") {
-    return Effect.tryPromise({
-      try: async () => {
-        const transport = activeTransports.get(config.name);
-        if (!transport || !isWebSocketTransport(transport)) {
-          throw new Error(
-            `No active WebSocket transport for MCP server "${config.name}" — was createTransport called?`,
-          );
-        }
-
-        if (!transport.connected || !transport.socket || transport.socket.readyState !== WebSocket.OPEN) {
-          await connectWebSocket(config.name, transport);
-        }
-
-        const socket = transport.socket;
-        if (!socket || socket.readyState !== WebSocket.OPEN) {
-          throw new Error(
-            `WebSocket not connected for MCP server "${config.name}" (state: ${socket?.readyState})`,
-          );
-        }
-
-        return new Promise<MCPResponse>((resolve, reject) => {
-          transport.pendingRequests.set(request.id, { resolve, reject });
-
-          const rpcMessage = JSON.stringify(request);
-
-          try {
-            socket.send(rpcMessage);
-          } catch (err) {
-            transport.pendingRequests.delete(request.id);
-            reject(
-              err instanceof Error
-                ? err
-                : new Error(
-                    `Failed to send WebSocket message to MCP server "${config.name}": ${String(err)}`,
-                  ),
-            );
-          }
-        });
-      },
-      catch: (e) =>
-        new MCPConnectionError({
-          message:
-            e instanceof Error
-              ? e.message
-              : `Failed to send request to MCP server "${config.name}"`,
-          serverName: config.name,
-          transport: config.transport,
-          cause: e,
-        }),
+    console.log(`[MCP http-mode] "${config.name}" — waiting for ${resolvedUrl} to be healthy…`);
+    await waitForHttpEndpoint(resolvedUrl, 60_000).catch((e) => {
+      dockerRmForce(dockerContainerName!);
+      throw e;
     });
+    console.log(`[MCP http-mode] "${config.name}" — endpoint healthy`);
   }
 
-  // Streamable HTTP transport (MCP spec 2025-03-26)
-  if (config.transport === "streamable-http") {
-    return Effect.tryPromise({
-      try: async () => {
-        const transport = activeTransports.get(config.name);
-        if (!transport || !isStreamableHttpTransport(transport)) {
-          throw new Error(
-            `No active streamable-http transport for MCP server "${config.name}" — was createTransport called?`,
-          );
-        }
+  // Try streamable-http first, fall back to SSE
+  const baseUrl = new URL(resolvedUrl);
+  const sseUrl = new URL("/sse", baseUrl).toString();
+  const candidates: Array<{ type: "streamable-http" | "sse"; url: string }> = [
+    { type: "streamable-http", url: resolvedUrl },
+    { type: "sse", url: sseUrl },
+  ];
 
-        const headers = streamableHttpBaseHeaders(transport);
+  let lastError: unknown;
+  for (const candidate of candidates) {
+    const httpTransport: Transport =
+      candidate.type === "streamable-http"
+        ? new StreamableHTTPClientTransport(new URL(candidate.url), { requestInit: { headers: config.headers ?? {} } })
+        : new SSEClientTransport(new URL(candidate.url), { requestInit: { headers: config.headers ?? {} } });
 
-        const response = await fetch(transport.endpoint, {
-          method: "POST",
-          headers,
-          body: JSON.stringify(request),
-        });
-
-        if (!response.ok) {
-          const errBody = await response.text().catch(() => "");
-          const hint = errBody.trim() ? `: ${errBody.trim().slice(0, 300)}` : "";
-          throw new Error(
-            `HTTP ${response.status} ${response.statusText} from MCP server "${config.name}"${hint}`,
-          );
-        }
-
-        // Capture session ID from server (assigned during initialize)
-        const sessionId = response.headers.get("Mcp-Session-Id");
-        if (sessionId && !transport.sessionId) {
-          transport.sessionId = sessionId;
-        }
-
-        const contentType = response.headers.get("Content-Type") ?? "";
-        if (contentType.includes("text/event-stream")) {
-          return readSseStreamResponse(response, request.id);
-        }
-
-        return response.json() as Promise<MCPResponse>;
-      },
-      catch: (e) =>
-        new MCPConnectionError({
-          message:
-            e instanceof Error
-              ? e.message
-              : `Failed to send request to MCP server "${config.name}"`,
-          serverName: config.name,
-          transport: config.transport,
-          cause: e,
-        }),
-    });
+    const sdkClient = new Client({ name: "reactive-agents", version: "1.0.0" }, { capabilities: {} });
+    try {
+      console.log(`[MCP http-mode] "${config.name}" — trying ${candidate.type} at ${candidate.url}`);
+      await sdkClient.connect(httpTransport);
+      console.log(`[MCP init] "${config.name}" — connected via ${candidate.type}`);
+      return {
+        client: sdkClient,
+        transport: httpTransport,
+        server: await buildMCPServer(config.name, candidate.type, candidate.url, config, sdkClient),
+        dockerContainerName,  // undefined when reusing an existing server
+      };
+    } catch (e) {
+      lastError = e;
+      console.warn(`[MCP http-mode] "${config.name}" — ${candidate.type} failed: ${e instanceof Error ? e.message : e}`);
+      try { await httpTransport.close(); } catch { /* ignore */ }
+    }
   }
 
-  return Effect.succeed({
-    jsonrpc: "2.0" as const,
-    id: request.id,
-    result: {},
-  });
-};
+  if (dockerContainerName) dockerRmForce(dockerContainerName);
+  throw new Error(
+    `MCP server "${config.name}": all HTTP transports failed. Last error: ${
+      lastError instanceof Error ? lastError.message : String(lastError)
+    }`,
+  );
+}
 
-// ─── MCP Client ───
+// ─── Handshake Helper ─────────────────────────────────────────────────────────
+
+async function buildMCPServer(
+  name: string,
+  transport: MCPServer["transport"],
+  endpoint: string | undefined,
+  config: ConnectConfig,
+  sdkClient: Client,
+): Promise<MCPServer> {
+  const serverVersion = sdkClient.getServerVersion();
+  const toolsResult = await sdkClient.listTools();
+  const tools = toolsResult.tools ?? [];
+  const toolNames = tools.map((t) => t.name);
+
+  console.log(
+    `[MCP tools] "${name}" — ${toolNames.length} tool(s)` +
+    (toolNames.length > 0
+      ? `: ${toolNames.slice(0, 5).join(", ")}${toolNames.length > 5 ? ` … +${toolNames.length - 5} more` : ""}`
+      : " (none)"),
+  );
+
+  return {
+    name,
+    version: serverVersion?.version ?? "unknown",
+    transport,
+    endpoint,
+    command: config.command,
+    args: config.args,
+    tools: toolNames,
+    toolSchemas: tools.map((t) => ({
+      name: t.name,
+      description: t.description,
+      inputSchema: t.inputSchema as Record<string, unknown> | undefined,
+    })),
+    status: "connected",
+  };
+}
+
+// ─── Core Connect ─────────────────────────────────────────────────────────────
+
+async function connectInternal(config: ConnectConfig): Promise<ActiveConnection> {
+  const effectiveTransport = resolveTransport(config);
+
+  // ── stdio path ──
+  if (effectiveTransport === "stdio") {
+    // For docker commands, assign a unique probe container name so we can stop it
+    // reliably via `docker rm -f` when switching to HTTP mode.
+    const isDocker = config.command === "docker" && (config.args ?? []).includes("run");
+    const probeContainerName = isDocker
+      ? `rax-probe-${config.name.replace(/[^a-zA-Z0-9]/g, "-")}-${process.pid}`
+      : undefined;
+
+    const probeArgs = (isDocker && probeContainerName && config.args)
+      ? insertDockerFlag(config.args, "--name", probeContainerName)
+      : undefined;
+
+    const transport = createTransport(config, probeArgs) as StdioClientTransport;
+    const sdkClient = new Client({ name: "reactive-agents", version: "1.0.0" }, { capabilities: {} });
+
+    const stderrLines: string[] = [];
+    let httpDetectedResolve: ((url: string) => void) | undefined;
+    const httpDetectedPromise = new Promise<string>((r) => { httpDetectedResolve = r; });
+
+    const stderrStream = transport.stderr;
+    if (stderrStream) {
+      stderrStream.on("data", (chunk: Buffer | string) => {
+        const text = typeof chunk === "string" ? chunk : chunk.toString("utf8");
+        for (const raw of text.split("\n")) {
+          const trimmed = raw.trimEnd();
+          if (!trimmed) continue;
+          process.stderr.write(`[MCP ${config.name}] ${trimmed}\n`);
+          stderrLines.push(trimmed);
+          if (stderrLines.length > 50) stderrLines.shift();
+          const found = detectHttpStartupUrl(trimmed);
+          if (found) httpDetectedResolve?.(found);
+        }
+      });
+    }
+
+    console.log(
+      `[MCP spawn] "${config.name}" — ${config.command} ${(probeArgs ?? config.args ?? []).join(" ")}` +
+      (config.cwd ? ` (cwd: ${config.cwd})` : ""),
+    );
+
+    type RaceResult =
+      | { type: "connected" }
+      | { type: "http"; url: string }
+      | { type: "error"; error: unknown };
+
+    const connectRace: Promise<RaceResult> = sdkClient
+      .connect(transport, { timeout: 600_000 })
+      .then(() => ({ type: "connected" as const }))
+      .catch((e: unknown) => ({ type: "error" as const, error: e }));
+
+    const httpRace: Promise<RaceResult> = httpDetectedPromise.then((url) => ({
+      type: "http" as const, url,
+    }));
+
+    const winner = await Promise.race([connectRace, httpRace]);
+
+    if (winner.type === "http") {
+      console.log(`[MCP auto-detect] "${config.name}" — HTTP server detected; switching to HTTP mode`);
+      void transport.close().catch(() => {});
+      return reconnectViaHttp(config, winner.url, probeContainerName);
+    }
+
+    if (winner.type === "error") {
+      const httpUrl = await Promise.race([
+        httpDetectedPromise,
+        new Promise<undefined>((r) => setTimeout(() => r(undefined), 200)),
+      ]);
+      if (httpUrl) {
+        console.log(`[MCP auto-detect] "${config.name}" — stdio error + HTTP URL seen; switching to HTTP`);
+        void transport.close().catch(() => {});
+        return reconnectViaHttp(config, httpUrl, probeContainerName);
+      }
+      const stderrContext = stderrLines.slice(-5).join(" | ").trim();
+      const base = winner.error instanceof Error ? winner.error.message : String(winner.error);
+      const detail = stderrContext ? `\nServer stderr: ${stderrContext}` : "";
+      throw new Error(`MCP server "${config.name}" connection failed: ${base}${detail}`);
+    }
+
+    // stdio MCP server — connected normally
+    console.log(`[MCP init] "${config.name}" — connected via stdio`);
+    const server = await buildMCPServer(config.name, "stdio", undefined, config, sdkClient);
+    return { client: sdkClient, transport, server };
+  }
+
+  // ── HTTP / SSE ──
+  const transport = createTransport(config);
+  const sdkClient = new Client({ name: "reactive-agents", version: "1.0.0" }, { capabilities: {} });
+  await sdkClient.connect(transport);
+  console.log(`[MCP init] "${config.name}" — connected via ${effectiveTransport}`);
+  const server = await buildMCPServer(config.name, effectiveTransport, config.endpoint, config, sdkClient);
+  return { client: sdkClient, transport, server };
+}
+
+// ─── MCP Client (Effect-TS facade) ───────────────────────────────────────────
 
 export const makeMCPClient = Effect.gen(function* () {
   const serversRef = yield* Ref.make<Map<string, MCPServer>>(new Map());
-  const requestIdRef = yield* Ref.make(0);
 
-  const nextRequestId = Ref.updateAndGet(requestIdRef, (id) => id + 1);
-
-  const connect = (
-    config: Pick<
-      MCPServer,
-      "name" | "transport" | "endpoint" | "command" | "args" | "cwd" | "env" | "headers"
-    >,
-  ): Effect.Effect<MCPServer, MCPConnectionError> =>
-    Effect.gen(function* () {
-      yield* createTransport(config).pipe(
-        Effect.mapError(
-          (e) =>
-            new MCPConnectionError({
-              message: `Failed to connect to MCP server "${config.name}"${
-                e instanceof Error && e.message
-                  ? `: ${e.message}`
-                  : e != null
-                    ? `: ${String(e)}`
-                    : ""
-              }`,
-              serverName: config.name,
-              transport: config.transport,
-              cause: e,
-            }),
-        ),
-      );
-
-      // MCP initialize handshake
-      const reqId1 = yield* nextRequestId;
-      const initResponse = yield* sendRequest(config, {
-        jsonrpc: "2.0",
-        id: reqId1,
-        method: "initialize",
-        params: {
-          protocolVersion: "2025-03-26",
-          capabilities: { tools: {} },
-          clientInfo: { name: "reactive-agents", version: "1.0.0" },
-        },
-      });
-
-      const initResult = initResponse.result as Record<string, unknown> | undefined;
-      const negotiated = initResult?.protocolVersion;
-      const streamT = activeTransports.get(config.name);
-      if (
-        streamT &&
-        isStreamableHttpTransport(streamT) &&
-        typeof negotiated === "string" &&
-        negotiated.length > 0
-      ) {
-        streamT.protocolVersion = negotiated;
-      }
-
-      // Required by MCP spec: notify the server that the client is ready.
-      // Must be sent after initialize response, before any other requests.
-      sendNotification(config, "notifications/initialized");
-
-      // Discover available tools
-      const reqId2 = yield* nextRequestId;
-      const toolsResponse = yield* sendRequest(config, {
-        jsonrpc: "2.0",
-        id: reqId2,
-        method: "tools/list",
-      });
-
-      // Parse full tool schemas from MCP tools/list response
-      const rawTools = Array.isArray(
-        (toolsResponse.result as Record<string, unknown>)?.tools,
-      )
-        ? ((toolsResponse.result as Record<string, unknown>).tools as Array<
-            Record<string, unknown>
-          >)
-        : Array.isArray(toolsResponse.result)
-          ? (toolsResponse.result as Array<Record<string, unknown>>)
-          : [];
-
-      const toolNames = rawTools.map((t) => t.name as string);
-      const toolSchemas = rawTools.map((t) => ({
-        name: t.name as string,
-        description: t.description as string | undefined,
-        inputSchema: t.inputSchema as
-          | Record<string, unknown>
-          | undefined,
-      }));
-
-      const server: MCPServer = {
-        name: config.name,
-        version:
-          (initResponse.result as Record<string, unknown>)?.serverInfo != null
-            ? String(
-                (
-                  (initResponse.result as Record<string, unknown>)
-                    .serverInfo as Record<string, unknown>
-                )?.version,
-              )
-            : "unknown",
-        transport: config.transport,
-        endpoint: config.endpoint,
-        command: config.command,
-        args: config.args,
-        tools: toolNames,
-        toolSchemas,
-        status: "connected",
-      };
-
-      yield* Ref.update(serversRef, (servers) => {
-        const newServers = new Map(servers);
-        newServers.set(server.name, server);
-        return newServers;
-      });
-
-      return server;
-    });
+  const connect = (config: ConnectConfig): Effect.Effect<MCPServer, MCPConnectionError> =>
+    Effect.tryPromise({
+      try: async () => {
+        const conn = await connectInternal(config);
+        const cb = notificationCallbacks.get(config.name);
+        if (cb) {
+          conn.client.fallbackNotificationHandler = async (notification) => {
+            cb(notification.method, (notification.params ?? {}) as Record<string, unknown>);
+          };
+        }
+        ensureExitHandler();
+        activeConnections.set(config.name, conn);
+        return conn.server;
+      },
+      catch: (e) =>
+        new MCPConnectionError({
+          message: e instanceof Error ? e.message : String(e),
+          serverName: config.name,
+          transport: config.transport ?? "stdio",
+          cause: e,
+        }),
+    }).pipe(
+      Effect.tap((server) =>
+        Ref.update(serversRef, (m) => { const n = new Map(m); n.set(server.name, server); return n; }),
+      ),
+    );
 
   const callTool = (
     serverName: string,
     toolName: string,
     args: Record<string, unknown>,
-  ): Effect.Effect<unknown, MCPConnectionError | ToolExecutionError> =>
-    Effect.gen(function* () {
-      const servers = yield* Ref.get(serversRef);
-      const server = servers.get(serverName);
-
-      if (!server || server.status !== "connected") {
-        return yield* Effect.fail(
-          new MCPConnectionError({
-            message: `MCP server "${serverName}" not connected`,
-            serverName,
-            transport: server?.transport ?? "unknown",
-          }),
-        );
-      }
-
-      const reqId = yield* nextRequestId;
-      const response = yield* sendRequest(
-        {
-          name: serverName,
-          transport: server.transport,
-          endpoint: server.endpoint,
-          command: server.command,
-        },
-        {
-          jsonrpc: "2.0",
-          id: reqId,
-          method: "tools/call",
-          params: { name: toolName, arguments: args },
-        },
-      );
-
-      if (response.error) {
-        return yield* Effect.fail(
-          new ToolExecutionError({
-            message: `MCP tool "${toolName}" failed: ${response.error.message}`,
-            toolName,
-            input: args,
-          }),
-        );
-      }
-
-      // MCP tools/call returns { content: [{type, text?, data?, mimeType?}], isError? }
-      // Extract text content so the model receives readable output, not raw JSON.
-      const raw = response.result as {
-        content?: Array<{ type: string; text?: string; data?: string; mimeType?: string }>;
-        isError?: boolean;
-      } | unknown;
-
-      if (raw && typeof raw === "object" && Array.isArray((raw as { content?: unknown }).content)) {
-        const result = raw as { content: Array<{ type: string; text?: string }>; isError?: boolean };
-        const text = result.content
-          .filter((item) => item.type === "text")
-          .map((item) => item.text ?? "")
-          .join("\n");
-
-        if (result.isError) {
-          return yield* Effect.fail(
-            new ToolExecutionError({
-              message: text || `MCP tool "${toolName}" returned an error`,
-              toolName,
-              input: args,
-            }),
-          );
+  ): Effect.Effect<unknown, MCPConnectionError | ToolExecutionError> => {
+    const conn = activeConnections.get(serverName);
+    if (!conn) {
+      return Effect.fail(new MCPConnectionError({
+        message: `MCP server "${serverName}" is not connected`,
+        serverName,
+        transport: "unknown",
+      }));
+    }
+    return Effect.tryPromise({
+      try: async () => {
+        const result = await conn.client.callTool({ name: toolName, arguments: args });
+        if (result.content && Array.isArray(result.content)) {
+          const textParts = (result.content as Array<{ type: string; text?: string }>)
+            .filter((c) => c.type === "text")
+            .map((c) => c.text ?? "");
+          if (result.isError) throw new Error(textParts.join("\n") || `MCP tool "${toolName}" returned an error`);
+          return textParts.length > 0 ? textParts.join("\n") : result;
         }
-
-        // Return text if we extracted any; fall back to full result for non-text content
-        return text || raw;
-      }
-
-      return response.result;
+        return result;
+      },
+      catch: (e) =>
+        e instanceof MCPConnectionError
+          ? e
+          : new ToolExecutionError({ message: e instanceof Error ? e.message : String(e), toolName, input: args }),
     });
+  };
 
-  const disconnect = (
-    serverName: string,
-  ): Effect.Effect<void, MCPConnectionError> =>
-    Effect.gen(function* () {
-      const transport = activeTransports.get(serverName);
-      if (transport) {
-        // Reject any in-flight requests before disconnecting
-        for (const [id, pending] of transport.pendingRequests) {
-          transport.pendingRequests.delete(id);
-          pending.reject(
-            new Error(
-              `MCP server "${serverName}" disconnected with pending request id=${String(id)}`,
-            ),
-          );
+  const disconnect = (serverName: string): Effect.Effect<void, MCPConnectionError> =>
+    Effect.tryPromise({
+      try: async () => {
+        const conn = activeConnections.get(serverName);
+        if (conn) {
+          if (conn.dockerContainerName) {
+            console.log(`[MCP disconnect] stopping container "${conn.dockerContainerName}"`);
+            dockerRmForce(conn.dockerContainerName);
+          }
+          try { await conn.transport.close(); } catch { /* already gone */ }
+          activeConnections.delete(serverName);
         }
-
-        if (isStdioTransport(transport)) {
-          transport.readerStopped = true;
-          try {
-            transport.subprocess.kill();
-          } catch {
-            // Process may already be gone
-          }
-        } else if (isSseTransport(transport)) {
-          if (transport.reconnectTimeoutId) {
-            clearTimeout(transport.reconnectTimeoutId);
-          }
-          if (transport.abortController) {
-            transport.abortController.abort();
-          }
-          transport.connected = false;
-        } else if (isStreamableHttpTransport(transport)) {
-          // Send HTTP DELETE to terminate the session on the server side (spec §session-management)
-          const headers: Record<string, string> = {
-            "Mcp-Protocol-Version": transport.protocolVersion,
-            ...transport.headers,
-          };
-          if (transport.sessionId) headers["Mcp-Session-Id"] = transport.sessionId;
-          void fetch(transport.endpoint, { method: "DELETE", headers })
-            .catch(() => {/* ignore errors — server may return 405 if DELETE is unsupported */});
-          transport.connected = false;
-        } else if (isWebSocketTransport(transport)) {
-          if (transport.reconnectTimeoutId) {
-            clearTimeout(transport.reconnectTimeoutId);
-          }
-          transport.closing = true;
-          if (transport.socket) {
-            transport.socket.close();
-            transport.socket = null;
-          }
-          transport.connected = false;
-        }
-
-        activeTransports.delete(serverName);
-      }
-
-      yield* Ref.update(serversRef, (servers) => {
-        const newServers = new Map(servers);
-        const server = newServers.get(serverName);
-        if (server) {
-          newServers.set(serverName, { ...server, status: "disconnected" });
-        }
-        return newServers;
-      });
-    });
+      },
+      catch: (e) =>
+        new MCPConnectionError({ message: e instanceof Error ? e.message : String(e), serverName, transport: "unknown" }),
+    }).pipe(
+      Effect.tap(() =>
+        Ref.update(serversRef, (m) => {
+          const n = new Map(m);
+          const s = n.get(serverName);
+          if (s) n.set(serverName, { ...s, status: "disconnected" });
+          return n;
+        }),
+      ),
+    );
 
   const listServers = (): Effect.Effect<readonly MCPServer[], never> =>
-    Effect.gen(function* () {
-      const servers = yield* Ref.get(serversRef);
-      return [...servers.values()];
-    });
+    Ref.get(serversRef).pipe(Effect.map((m) => [...m.values()]));
 
   const onNotification = (
     serverName: string,
     callback: (method: string, params: Record<string, unknown>) => void,
   ): void => {
     notificationCallbacks.set(serverName, callback);
+    const conn = activeConnections.get(serverName);
+    if (conn) {
+      conn.client.fallbackNotificationHandler = async (notification) => {
+        callback(notification.method, (notification.params ?? {}) as Record<string, unknown>);
+      };
+    }
   };
 
   return { connect, callTool, disconnect, listServers, onNotification };

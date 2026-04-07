@@ -53,7 +53,7 @@ const createMockMcpServer = (port: number) => {
             return Response.json({
               jsonrpc: "2.0",
               id: body.id,
-              result: { tools: [{ name: "test-tool", description: "Test", inputSchema: {} }] },
+              result: { tools: [{ name: "test-tool", description: "Test", inputSchema: { type: "object" } }] },
             });
           }
           return Response.json({ jsonrpc: "2.0", id: body.id, result: {} });
@@ -303,8 +303,8 @@ describe("ToolService", () => {
 
       const server = yield* tools.connectMCPServer({
         name: "test-server",
-        transport: "sse",
-        endpoint: `http://localhost:${mockServer.port}/sse`,
+        transport: "streamable-http",
+        endpoint: `http://localhost:${mockServer.port}/mcp`,
       });
 
       expect(server.status).toBe("connected");
@@ -323,8 +323,8 @@ describe("ToolService", () => {
 
       yield* tools.connectMCPServer({
         name: "test-server",
-        transport: "sse",
-        endpoint: `http://localhost:${mockServer.port}/sse`,
+        transport: "streamable-http",
+        endpoint: `http://localhost:${mockServer.port}/mcp`,
       });
 
       yield* tools.disconnectMCPServer("test-server");
@@ -399,8 +399,8 @@ describe("ToolService", () => {
 
       const server = yield* tools.connectMCPServer({
         name: "schema-test",
-        transport: "sse",
-        endpoint: `http://localhost:${mockServer.port}/sse`,
+        transport: "streamable-http",
+        endpoint: `http://localhost:${mockServer.port}/mcp`,
       });
 
       expect(server.status).toBe("connected");

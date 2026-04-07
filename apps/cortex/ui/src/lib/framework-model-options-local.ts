@@ -45,7 +45,7 @@ function presetKeyToLabel(key: string): string {
 export function localFrameworkModelOptions(provider: string): LocalModelOption[] {
   const p = provider.trim();
   const seen = new Set<string>();
-  const out: UiModelOption[] = [];
+  const out: Array<{ name: string; label: string }> = [];
 
   for (const [presetKey, preset] of Object.entries(MODEL_PRESETS)) {
     if (preset.provider !== p) continue;
@@ -62,7 +62,7 @@ export function localFrameworkModelOptions(provider: string): LocalModelOption[]
     const m = getProviderDefaultModel("litellm") ?? "gpt-4o";
     return [
       {
-        name: m,
+        value: m,
         label: `LiteLLM — ${m} (any model id your proxy routes)`,
       },
     ];
@@ -70,7 +70,7 @@ export function localFrameworkModelOptions(provider: string): LocalModelOption[]
 
   if (p === "test") {
     const m = getProviderDefaultModel("test") ?? "test-model";
-    return [{ name: m, label: "Test model (mock LLM)" }];
+    return [{ value: m, label: "Test model (mock LLM)" }];
   }
 
   if (p === "ollama" || p === "custom") {

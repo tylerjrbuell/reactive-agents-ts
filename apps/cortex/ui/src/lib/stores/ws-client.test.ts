@@ -57,7 +57,7 @@ describe("createWsClient", () => {
 
   it("onMessage receives parsed JSON payloads", async () => {
     let constructed = 0;
-    let lastInstance: InstanceType<typeof MockWs> | null = null;
+    const capture: { instance: WsHooks | null } = { instance: null };
 
     class MockWs {
       static readonly CONNECTING = 0;
@@ -73,7 +73,7 @@ describe("createWsClient", () => {
       constructor(url: string | URL) {
         this.url = String(url);
         constructed++;
-        lastInstance = this;
+        capture.instance = this;
         queueMicrotask(() => this.onopen?.(new Event("open")));
       }
       send() {}
@@ -90,7 +90,7 @@ describe("createWsClient", () => {
     client.onMessage((d) => received.push(d));
 
     await new Promise((r) => queueMicrotask(r));
-    lastInstance?.onmessage?.(new MessageEvent("message", { data: '{"hello":1}' }));
+    capture.instance?.onmessage?.(new MessageEvent("message", { data: '{"hello":1}' }));
     expect(received).toEqual([{ hello: 1 }]);
 
     client.close();

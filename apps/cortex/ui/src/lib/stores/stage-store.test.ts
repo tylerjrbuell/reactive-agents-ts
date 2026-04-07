@@ -44,7 +44,7 @@ describe("createStageStore", () => {
         headers: { "Content-Type": "application/json" },
       });
 
-    const store = createStageStore({ fetchImpl });
+    const store = createStageStore({ fetchImpl: fetchImpl as unknown as typeof fetch });
     await store.submitPrompt("hello");
 
     expect(get(store).lastSubmitError).toContain("not implemented");
@@ -60,8 +60,8 @@ describe("createStageStore", () => {
       });
 
     const store = createStageStore({
-      fetchImpl,
-      navigate: (p) => paths.push(p),
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      navigate: (p) => { paths.push(p); },
     });
     await store.submitPrompt("go");
 
@@ -86,7 +86,7 @@ describe("createStageStore", () => {
     };
     await store.submitPrompt("hello", cfg);
 
-    const body = JSON.parse(posted!) as { taskContext?: Record<string, string> };
+    const body = JSON.parse(posted!) as { prompt: string; taskContext?: Record<string, string> };
     expect(body.taskContext).toEqual({ project: "beacon-test" });
     expect(body.prompt).toBe("hello");
   });
@@ -116,7 +116,7 @@ describe("createStageStore", () => {
 
     const store = createStageStore({
       fetchImpl: fetchImpl as typeof fetch,
-      navigate: (p) => paths.push(p),
+      navigate: (p) => { paths.push(p); },
     });
     await store.submitPrompt("go");
 

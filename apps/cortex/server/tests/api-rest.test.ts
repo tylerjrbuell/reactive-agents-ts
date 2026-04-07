@@ -220,22 +220,13 @@ describe("POST /api/mcp-servers/import-json", () => {
     expect(rows.some((r) => r.name === "alpha")).toBe(true);
   });
 
-  it("imports array and rolls back on duplicate name", async () => {
+  it("upserts on duplicate name — re-importing same config updates instead of failing", async () => {
     const db = new Database(":memory:");
     applySchema(db);
     const app = new Elysia().use(mcpServersRouter(db));
-    const first = await app.handle(
-      new Request("http://localhost/api/mcp-servers/import-json", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          json: JSON.stringify([{ name: "dup", command: "a" }, { name: "dup", command: "b" }]),
-        }),
-      }),
-    );
-    expect(first.status).toBe(400);
 
-    const second = await app.handle(
+    // First import: two distinct servers
+    const first = await app.handle(
       new Request("http://localhost/api/mcp-servers/import-json", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -247,12 +238,32 @@ describe("POST /api/mcp-servers/import-json", () => {
         }),
       }),
     );
+    expect(first.status).toBe(200);
+    const firstBody = (await first.json()) as { count: number; created: { serverId: string; name: string }[] };
+    expect(firstBody.count).toBe(2);
+    const originalServerId = firstBody.created.find((c) => c.name === "one")!.serverId;
+
+    // Second import: same name "one", updated config — should succeed as upsert, not 400
+    const second = await app.handle(
+      new Request("http://localhost/api/mcp-servers/import-json", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          json: JSON.stringify([{ name: "one", command: "x-updated" }]),
+        }),
+      }),
+    );
     expect(second.status).toBe(200);
-    const body = (await second.json()) as { count: number };
-    expect(body.count).toBe(2);
+    const secondBody = (await second.json()) as { count: number; created: { serverId: string; name: string }[] };
+    expect(secondBody.count).toBe(1);
+    // server_id must be preserved (agent configs referencing it stay valid)
+    expect(secondBody.created[0]!.serverId).toBe(originalServerId);
+
     const list = await app.handle(new Request("http://localhost/api/mcp-servers"));
-    const rows = (await list.json()) as { name: string }[];
+    const rows = (await list.json()) as { name: string; config: { command?: string } }[];
     expect(rows.length).toBe(2);
+    const updated = rows.find((r) => r.name === "one");
+    expect(updated?.config.command).toBe("x-updated");
   });
 });
 

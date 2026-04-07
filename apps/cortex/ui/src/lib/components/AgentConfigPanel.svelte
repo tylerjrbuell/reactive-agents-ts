@@ -306,27 +306,41 @@
     }
   }
 
-  onMount(() => {
-    void loadMcpCatalog();
+  // Reload the MCP catalog whenever the "tools" accordion section is opened.
+  // This ensures that servers imported (or tools refreshed) in the Tools tab are
+  // immediately visible without requiring a manual "↻ Refresh list" click.
+  $effect(() => {
+    if (openSections.has("tools")) {
+      void loadMcpCatalog();
+    }
   });
 
-  function pruneMcpServerIds(tools: string[], catalog: McpCatalogRow[]): string[] {
-    const keep = new Set<string>();
+  /**
+   * Derive the set of MCP server IDs required by the given tool selection.
+   * Returns ALL server IDs that have at least one tool in `tools` — does not
+   * filter against the existing `config.mcpServerIds` so adding a tool from a
+   * new server always wires that server into the run.
+   */
+  function deriveMcpServerIds(tools: string[], catalog: McpCatalogRow[]): string[] {
+    const ids = new Set<string>();
     for (const s of catalog) {
-      const fromServer = s.tools.some((t) => tools.includes(t.toolName));
-      if (fromServer) keep.add(s.serverId);
+      if (s.tools.some((t) => tools.includes(t.toolName))) ids.add(s.serverId);
     }
-    return (config.mcpServerIds ?? []).filter((id) => keep.has(id));
+    return [...ids];
   }
 
-  function toggleMcpRegistryTool(_serverId: string, fullToolName: string) {
+  function toggleMcpRegistryTool(serverId: string, fullToolName: string) {
     let tools = [...config.tools];
     if (tools.includes(fullToolName)) {
       tools = tools.filter((t) => t !== fullToolName);
     } else {
       tools.push(fullToolName);
     }
-    const mcpServerIds = pruneMcpServerIds(tools, mcpCatalog);
+    const mcpServerIds = deriveMcpServerIds(tools, mcpCatalog);
+    // Safety: if catalog hasn't loaded yet, keep the server that owns this tool
+    if (mcpServerIds.length === 0 && tools.includes(fullToolName) && !mcpServerIds.includes(serverId)) {
+      mcpServerIds.push(serverId);
+    }
     config = { ...config, tools, mcpServerIds };
   }
 

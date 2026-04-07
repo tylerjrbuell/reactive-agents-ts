@@ -11,10 +11,25 @@
 - [Composable Provider Adapters](project_composable_adapters.md) — V1.1 DONE in v0.8.5: all 7 hooks implemented
 - [Composable Reasoning Phases](project_composable_phases.md) — ✅ SHIPPED Apr 3, 2026: `strategies/kernel/` composable phase architecture merged to main
 
-## Current Status (Apr 3, 2026)
-- **v0.8.5+ / kernel refactor merged** — 22 packages + 2 apps, 3,242 tests across 381 files (0 fail)
+## Current Status (Apr 7, 2026)
+- **v0.9.0 / MCP production hardening** — 22 packages + 2 apps, 3,394 tests across 400 files (0 fail)
+- **MCP client on @modelcontextprotocol/sdk** — smart auto-detection (stdio race vs HTTP URL in stderr), two-phase probe+managed docker containers, `docker rm -f` cleanup (NOT process kill), PID-based naming prevents agent conflicts
 - **Kernel composable phase architecture shipped** — `strategies/kernel/` with `Phase[]` pipeline, `Guard[]` chain, `MetaToolHandler` registry, `makeKernel()` factory
 - **Preparing for Show HN** — architecture solid, DX polished
+
+## What Shipped Apr 7, 2026
+
+### MCP Client Production Hardening
+- `packages/tools/src/mcp/mcp-client.ts` rewritten on `@modelcontextprotocol/sdk` (Client, StdioClientTransport, StreamableHTTPClientTransport, SSEClientTransport)
+- **Two docker MCP patterns**: (A) stdio MCP — reads JSON-RPC from stdin (GitHub MCP, filesystem); (B) HTTP-only — starts HTTP server, ignores stdin (mcp/context7)
+- **Smart auto-detection**: stdio connect races against HTTP URL detection in stderr; when HTTP wins, client switches to port-mapped HTTP mode automatically
+- **`docker rm -f` is the ONLY reliable container stop** — `subprocess.kill()` leaves the container running; Docker daemon keeps it alive independently
+- **Two-phase docker containers**: probe `rax-probe-<name>-<pid>` (initial stdio attempt), managed `rax-mcp-<name>-<pid>` (port-mapped HTTP); PID ensures no conflicts between concurrent agents
+- Transport auto-inferred: `command` → `"stdio"`, endpoint `/mcp` → `"streamable-http"`, other endpoint → `"sse"`
+- `transport` field is now optional in `MCPServerConfig`, `runtime.ts`, `agent-config.ts`
+- `cleanupMcpTransport(serverName)` calls `docker rm -f <containerName>` then `transport.close()`; called by Cortex DELETE and agent dispose
+- Cortex: `parseConfigBody` + `expandMcpConfigsFromJson` handle Cursor/Claude JSON mcpServers shapes
+- Full test coverage: 27 mcp-client tests in tools package, 29 tests in Cortex mcp-config-import + api-mcp-servers
 
 ## What Shipped Apr 3, 2026
 

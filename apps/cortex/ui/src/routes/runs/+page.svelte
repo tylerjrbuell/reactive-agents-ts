@@ -119,14 +119,18 @@
     if (s === "completed") return "check_circle";
     if (s === "failed") return "error";
     if (s === "live") return "radio_button_checked";
+    if (s === "paused") return "pause_circle";
+    if (s === "loading") return "hourglass_empty";
     return "schedule";
   }
 
   function statusClass(s: string): string {
-    if (s === "completed") return "text-secondary";
+    if (s === "completed") return "text-emerald-600 dark:text-emerald-400";
     if (s === "failed") return "text-error";
     if (s === "live") return "text-primary";
-    return "text-outline";
+    if (s === "paused") return "text-amber-700 dark:text-amber-500";
+    if (s === "loading") return "text-slate-600 dark:text-slate-400";
+    return "text-outline dark:text-on-surface-variant";
   }
 
   function durationStr(row: RunRow): string {
@@ -293,6 +297,8 @@
               {/if}
               {#if run.status === "live"}
                 <span class="text-[9px] font-mono text-primary animate-pulse">● LIVE</span>
+              {:else if run.status === "paused"}
+                <span class="text-[9px] font-mono text-amber-700 dark:text-amber-500">● PAUSED</span>
               {/if}
             </div>
             <div class="flex items-center gap-2 mt-0.5">

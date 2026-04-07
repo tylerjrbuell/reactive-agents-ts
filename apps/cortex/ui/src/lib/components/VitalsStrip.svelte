@@ -42,8 +42,12 @@
       : status === "failed"
         ? "text-red-800 dark:text-red-200 border-red-400/45 dark:border-red-500/45 bg-red-500/12 dark:bg-red-600/18 shadow-sm dark:shadow-[0_0_12px_rgba(239,68,68,0.3)]"
         : status === "completed"
-          ? "text-emerald-900 border-emerald-600/50 bg-emerald-100/90 shadow-sm dark:text-emerald-600/90 dark:border-emerald-900/50 dark:bg-emerald-950/45 dark:shadow-none"
-          : "text-violet-800 dark:text-violet-200 border-violet-400/40 dark:border-secondary/45 bg-violet-100/80 dark:bg-secondary/14 shadow-sm dark:shadow-[0_0_10px_rgba(6,182,212,0.2)]",
+          ? "text-emerald-900 border-emerald-600/50 bg-emerald-100/90 shadow-sm dark:text-emerald-400/95 dark:border-emerald-700/55 dark:bg-emerald-950/50 dark:shadow-none"
+          : status === "paused"
+            ? "text-amber-950 border-amber-500/45 bg-amber-100/90 shadow-sm dark:text-amber-500/95 dark:border-amber-700/50 dark:bg-amber-950/50 dark:shadow-none"
+            : status === "loading"
+              ? "text-slate-800 border-slate-400/45 bg-slate-100/90 shadow-sm dark:text-slate-300 dark:border-slate-600/50 dark:bg-slate-900/55 dark:shadow-none"
+              : "text-outline border-outline-variant/40 bg-surface-container-high/70 dark:text-on-surface-variant dark:border-outline-variant/45 dark:bg-surface-container-high/40",
   );
 
   const trajectoryClass = $derived(
@@ -164,6 +168,14 @@
         {#if status === "live"}
           <span
             class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_8px_rgba(34,211,238,0.85)]"
+          ></span>
+        {:else if status === "paused"}
+          <span
+            class="w-1.5 h-1.5 rounded-full bg-amber-500 dark:bg-amber-500 shadow-[0_0_8px_rgba(234,179,8,0.55)] dark:shadow-[0_0_10px_rgba(234,179,8,0.35)]"
+          ></span>
+        {:else if status === "loading"}
+          <span
+            class="w-1.5 h-1.5 rounded-full bg-slate-500 dark:bg-slate-500 animate-pulse opacity-90"
           ></span>
         {/if}
         <span class="text-[10px]">{statusLabel}</span>

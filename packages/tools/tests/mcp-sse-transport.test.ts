@@ -13,36 +13,6 @@ const createMockMcpServer = (port: number): MockServer => {
     port,
     idleTimeout: 5,
     fetch(req) {
-      const url = new URL(req.url);
-
-      if (req.method === "GET" && (url.pathname.endsWith("/sse") || url.pathname === "/")) {
-        return new Response(
-          new ReadableStream({
-            start(controller) {
-              const encoder = new TextEncoder();
-              const initialData = JSON.stringify({
-                jsonrpc: "2.0",
-                id: null,
-                result: { tools: [] },
-              });
-              controller.enqueue(
-                encoder.encode(`event: message\ndata: ${initialData}\n\n`),
-              );
-              setTimeout(() => {
-                try { controller.close(); } catch { /* already closed */ }
-              }, 100);
-            },
-          }),
-          {
-            headers: {
-              "Content-Type": "text/event-stream",
-              "Cache-Control": "no-cache",
-              Connection: "keep-alive",
-            },
-          },
-        );
-      }
-
       if (req.method === "POST") {
         return req.json().then((body) => {
           if (body.method === "initialize") {
@@ -97,7 +67,7 @@ const createMockMcpServer = (port: number): MockServer => {
   return server;
 };
 
-describe("MCP SSE Transport", () => {
+describe("MCP Streamable-HTTP Transport", () => {
   let mockServer: MockServer;
 
   beforeEach(() => {
@@ -114,13 +84,13 @@ describe("MCP SSE Transport", () => {
 
       const server = yield* client.connect({
         name: "test-sse-server",
-        transport: "sse",
-        endpoint: `http://localhost:${mockServer.port}/sse`,
+        transport: "streamable-http",
+        endpoint: `http://localhost:${mockServer.port}/mcp`,
       });
 
       expect(server.name).toBe("test-sse-server");
       expect(server.status).toBe("connected");
-      expect(server.transport).toBe("sse");
+      expect(server.transport).toBe("streamable-http");
       expect(server.tools).toContain("test-tool");
       expect(server.version).toBe("1.0.0");
     });
@@ -134,8 +104,8 @@ describe("MCP SSE Transport", () => {
 
       yield* client.connect({
         name: "reconnect-test",
-        transport: "sse",
-        endpoint: `http://localhost:${mockServer.port}/sse`,
+        transport: "streamable-http",
+        endpoint: `http://localhost:${mockServer.port}/mcp`,
       });
 
       yield* client.disconnect("reconnect-test");
@@ -148,14 +118,14 @@ describe("MCP SSE Transport", () => {
     await Effect.runPromise(program);
   });
 
-  it("should call tools via SSE transport", async () => {
+  it("should call tools via streamable-http transport", async () => {
     const program = Effect.gen(function* () {
       const client = yield* makeMCPClient;
 
       yield* client.connect({
         name: "tool-call-test",
-        transport: "sse",
-        endpoint: `http://localhost:${mockServer.port}/sse`,
+        transport: "streamable-http",
+        endpoint: `http://localhost:${mockServer.port}/mcp`,
       });
 
       const result = yield* client.callTool("tool-call-test", "test-tool", {
@@ -175,7 +145,7 @@ describe("MCP SSE Transport", () => {
       const error = yield* client
         .connect({
           name: "no-endpoint",
-          transport: "sse",
+          transport: "streamable-http",
           endpoint: "",
         })
         .pipe(Effect.flip);
@@ -195,8 +165,8 @@ describe("SSE Transport Error Handling", () => {
       const error = yield* client
         .connect({
           name: "refused-server",
-          transport: "sse",
-          endpoint: "http://localhost:19999/sse",
+          transport: "streamable-http",
+          endpoint: "http://localhost:19999/mcp",
         })
         .pipe(Effect.flip);
 
@@ -220,41 +190,12 @@ describe("SSE Transport Error Handling", () => {
     await Effect.runPromise(program);
   });
 
-  it("should handle malformed SSE events gracefully", async () => {
+  it("should handle malformed server response gracefully", async () => {
     const badServer = Bun.serve({
       port: 0,
       idleTimeout: 5,
-      fetch(req) {
-        if (req.method === "GET") {
-          return new Response(
-            new ReadableStream({
-              start(controller) {
-                const encoder = new TextEncoder();
-                controller.enqueue(
-                  encoder.encode("not valid sse\nevent: message\ndata: invalid json\n\n"),
-                );
-                setTimeout(() => { try { controller.close(); } catch { /* already closed */ } }, 100);
-              },
-            }),
-            {
-              headers: {
-                "Content-Type": "text/event-stream",
-              },
-            },
-          );
-        }
-
-        return req.json().then((body) =>
-          Response.json({
-            jsonrpc: "2.0",
-            id: body.id,
-            result: {
-              protocolVersion: "2024-11-05",
-              capabilities: { tools: {} },
-              serverInfo: { name: "mock-mcp", version: "1.0.0" },
-            },
-          }),
-        );
+      fetch() {
+        return new Response("not valid json", { status: 200 });
       },
     });
 
@@ -262,14 +203,15 @@ describe("SSE Transport Error Handling", () => {
       const program = Effect.gen(function* () {
         const client = yield* makeMCPClient;
 
-        const server = yield* client.connect({
-          name: "bad-sse-server",
-          transport: "sse",
-          endpoint: `http://localhost:${badServer.port}/sse`,
-        });
+        const error = yield* client
+          .connect({
+            name: "bad-server",
+            transport: "streamable-http",
+            endpoint: `http://localhost:${badServer.port}/mcp`,
+          })
+          .pipe(Effect.flip);
 
-        expect(server.name).toBe("bad-sse-server");
-        expect(server.status).toBe("connected");
+        expect(error._tag).toBe("MCPConnectionError");
       });
 
       await Effect.runPromise(program);

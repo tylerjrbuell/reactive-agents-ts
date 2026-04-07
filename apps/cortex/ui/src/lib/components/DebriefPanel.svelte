@@ -49,7 +49,7 @@
       <!-- Outcome badge -->
       <span
         class="flex items-center gap-1.5 text-[10px] font-mono font-bold uppercase tracking-wide
-               {isFailed ? 'text-error' : 'text-secondary'}"
+               {isFailed ? 'text-error' : 'text-emerald-800 dark:text-emerald-400'}"
       >
         <span
           class="material-symbols-outlined text-sm"

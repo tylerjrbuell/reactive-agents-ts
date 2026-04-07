@@ -149,11 +149,13 @@ export const GatewayConfigSchema = Schema.Struct({
 
 export const MCPServerConfigSchema = Schema.Struct({
   name: Schema.String,
-  transport: Schema.Literal("stdio", "sse", "websocket", "streamable-http"),
+  transport: Schema.optional(Schema.Literal("stdio", "sse", "websocket", "streamable-http")),
   command: Schema.optional(Schema.String),
   args: Schema.optional(Schema.Array(Schema.String)),
-  url: Schema.optional(Schema.String),
+  endpoint: Schema.optional(Schema.String),
+  cwd: Schema.optional(Schema.String),
   env: Schema.optional(Schema.Record({ key: Schema.String, value: Schema.String })),
+  headers: Schema.optional(Schema.Record({ key: Schema.String, value: Schema.String })),
 });
 
 export const ReactiveIntelligenceConfigSchema = Schema.Struct({
@@ -260,6 +262,10 @@ export const AgentConfigSchema = Schema.Struct({
       key: Schema.String,
       value: Schema.Struct({ input: Schema.Number, output: Schema.Number }),
     }),
+  ),
+  /** Background data injected into reasoning memory context. */
+  taskContext: Schema.optional(
+    Schema.Record({ key: Schema.String, value: Schema.String }),
   ),
 });
 

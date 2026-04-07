@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 
-import { makeMCPClient } from "../src/mcp/mcp-client.js";
+import { makeMCPClient, cleanupMcpTransport } from "../src/mcp/mcp-client.js";
 
 const createMockMcpServer = (port: number) => {
   return Bun.serve({
@@ -56,7 +56,7 @@ const createMockMcpServer = (port: number) => {
             return Response.json({
               jsonrpc: "2.0",
               id: body.id,
-              result: { tools: [{ name: "test-tool", description: "Test", inputSchema: {} }] },
+              result: { tools: [{ name: "test-tool", description: "Test", inputSchema: { type: "object" } }] },
             });
           }
           return Response.json({ jsonrpc: "2.0", id: body.id, result: {} });
@@ -86,13 +86,13 @@ describe("MCPClient", () => {
 
       const serverConn = yield* client.connect({
         name: "test-server",
-        transport: "sse",
-        endpoint: `http://localhost:${server.port}/sse`,
+        transport: "streamable-http",
+        endpoint: `http://localhost:${server.port}/mcp`,
       });
 
       expect(serverConn.name).toBe("test-server");
       expect(serverConn.status).toBe("connected");
-      expect(serverConn.transport).toBe("sse");
+      expect(serverConn.transport).toBe("streamable-http");
       expect(serverConn.version).toBe("1.0.0");
     });
 
@@ -105,8 +105,8 @@ describe("MCPClient", () => {
 
       yield* client.connect({
         name: "server-a",
-        transport: "sse",
-        endpoint: `http://localhost:${server.port}/sse`,
+        transport: "streamable-http",
+        endpoint: `http://localhost:${server.port}/mcp`,
       });
 
       yield* client.disconnect("server-a");
@@ -125,8 +125,8 @@ describe("MCPClient", () => {
 
       yield* client.connect({
         name: "test-server",
-        transport: "sse",
-        endpoint: `http://localhost:${server.port}/sse`,
+        transport: "streamable-http",
+        endpoint: `http://localhost:${server.port}/mcp`,
       });
 
       yield* client.disconnect("test-server");
@@ -150,5 +150,42 @@ describe("MCPClient", () => {
     });
 
     await Effect.runPromise(program);
+  });
+
+  it("should auto-infer streamable-http transport from /mcp endpoint", async () => {
+    const program = Effect.gen(function* () {
+      const client = yield* makeMCPClient;
+
+      // transport omitted — should be inferred as streamable-http from /mcp path
+      const srv = yield* client.connect({
+        name: "inferred-transport",
+        endpoint: `http://localhost:${server.port}/mcp`,
+      });
+
+      expect(srv.transport).toBe("streamable-http");
+      expect(srv.status).toBe("connected");
+    });
+
+    await Effect.runPromise(program);
+  });
+
+  it("should surface MCPConnectionError for websocket transport", async () => {
+    const program = Effect.gen(function* () {
+      const client = yield* makeMCPClient;
+
+      const error = yield* client
+        .connect({ name: "ws-unsupported", transport: "websocket", endpoint: "ws://localhost:9999" })
+        .pipe(Effect.flip);
+
+      expect(error._tag).toBe("MCPConnectionError");
+      expect(error.message).toContain("websocket");
+    });
+
+    await Effect.runPromise(program);
+  });
+
+  it("cleanupMcpTransport is a no-op for unknown server names", () => {
+    // Should not throw
+    expect(() => cleanupMcpTransport("never-connected")).not.toThrow();
   });
 });

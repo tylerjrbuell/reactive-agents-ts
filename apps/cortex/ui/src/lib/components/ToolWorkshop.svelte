@@ -59,6 +59,7 @@
 
   let showCreate = $state(false);
   let createKind = $state<CreateKind>("custom");
+  let mcpCreateMode = $state<"manual" | "import">("manual");
 
   let newName = $state("");
   let newDescription = $state("");
@@ -80,10 +81,13 @@
   let mcpDraftEnv = $state("");
   let mcpJsonImport = $state("");
   let mcpImporting = $state(false);
+  let mcpImportPreview = $state<string | null>(null);
+  let mcpImportPreviewError = $state<string | null>(null);
 
-  function openCreate(kind: CreateKind = "custom") {
+  function openCreate(kind: CreateKind = "mcp") {
     createKind = kind;
     showCreate = true;
+    if (kind === "mcp") mcpCreateMode = "manual";
     if (kind === "custom") {
       selectedMcp = null;
     }
@@ -256,14 +260,83 @@
         );
       }
       if (!res.ok) throw new Error(j.error ?? `HTTP ${res.status}`);
-      toast.success("MCP servers imported", `${j.count ?? 0} server(s)`);
+      const imported = (j as { ok?: boolean; count?: number; created?: { serverId: string; name: string }[]; error?: string }).created ?? [];
+      toast.success("MCP servers imported", `${j.count ?? 0} server(s) — refreshing tools…`);
       mcpJsonImport = "";
+      mcpImportPreview = null;
+      mcpImportPreviewError = null;
       await loadMcpServers();
       await loadCatalog();
+      mcpCreateMode = "manual";
+      // Auto-discover tools for every newly imported server in the background.
+      // Fire-and-forget: each refresh updates the server list when it completes.
+      // Long-running transports (e.g. first docker pull) handle their own timeouts server-side.
+      for (const { serverId, name } of imported) {
+        void (async () => {
+          try {
+            const r = await fetch(`${serverUrl}/api/mcp-servers/${serverId}/refresh-tools`, { method: "POST" });
+            const rj = (await r.json()) as { tools?: unknown[]; error?: string };
+            if (r.ok) {
+              await loadMcpServers();
+              await loadCatalog();
+            } else {
+              toast.error(`Refresh failed: ${name}`, rj.error ?? `HTTP ${r.status}`);
+            }
+          } catch (e) {
+            toast.error(`Refresh failed: ${name}`, String(e));
+          }
+        })();
+      }
     } catch (e) {
       toast.error("Import failed", String(e));
     } finally {
       mcpImporting = false;
+    }
+  }
+
+  function previewMcpImportJson() {
+    const raw = mcpJsonImport.trim();
+    mcpImportPreview = null;
+    mcpImportPreviewError = null;
+    if (!raw) {
+      mcpImportPreviewError = "Paste JSON to validate/import.";
+      return;
+    }
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      const describeServer = (obj: Record<string, unknown>) => {
+        const hasCommand = typeof obj.command === "string" || Array.isArray(obj.args);
+        const hasUrl = typeof obj.url === "string" || typeof obj.endpoint === "string";
+        return hasCommand ? "stdio" : hasUrl ? "url-based" : "unspecified";
+      };
+      if (Array.isArray(parsed)) {
+        mcpImportPreview = `Detected array with ${parsed.length} server entries.`;
+        return;
+      }
+      if (parsed && typeof parsed === "object") {
+        const rec = parsed as Record<string, unknown>;
+        if (Array.isArray(rec.servers)) {
+          mcpImportPreview = `Detected { servers: [...] } with ${rec.servers.length} entries.`;
+          return;
+        }
+        if (rec.mcpServers && typeof rec.mcpServers === "object" && !Array.isArray(rec.mcpServers)) {
+          const entries = Object.entries(rec.mcpServers as Record<string, unknown>);
+          const hints = entries
+            .slice(0, 3)
+            .map(([name, cfg]) => {
+              const kind = cfg && typeof cfg === "object" ? describeServer(cfg as Record<string, unknown>) : "unspecified";
+              return `${name} (${kind})`;
+            })
+            .join(", ");
+          mcpImportPreview = `Detected Cursor-style mcpServers (${entries.length}): ${hints}${entries.length > 3 ? ", ..." : ""}`;
+          return;
+        }
+        mcpImportPreview = "Detected single server object.";
+        return;
+      }
+      mcpImportPreviewError = "JSON shape is unsupported. Use object/array.";
+    } catch (e) {
+      mcpImportPreviewError = `Invalid JSON: ${String(e)}`;
     }
   }
 
@@ -471,7 +544,7 @@
     <div class="flex items-center gap-2">
       <button
         type="button"
-        onclick={() => openCreate("custom")}
+        onclick={() => openCreate("mcp")}
         class="text-[10px] font-mono px-3 py-1.5 rounded border border-primary/35 text-primary hover:bg-primary/10 cursor-pointer bg-transparent"
       >
         + Create tool
@@ -504,36 +577,38 @@
         <strong class="text-on-surface/75">Refresh tools</strong> to list its tools. Built-in and meta tools ship with the framework and show up automatically — allowlist them under Builder → Tools.
       </p>
 
-      <div class="flex flex-wrap gap-2" role="tablist" aria-label="Tool creation type">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
         <button
           type="button"
-          role="tab"
-          aria-selected={createKind === "custom"}
+          onclick={() => {
+            createKind = "mcp";
+            mcpCreateMode = "manual";
+          }}
+          class="rounded-lg border p-3 text-left transition-colors
+                 {createKind === 'mcp'
+            ? 'border-primary/45 bg-primary/10'
+            : 'border-outline-variant/20 bg-surface-container-low/35 hover:border-primary/25'}"
+        >
+          <div class="font-mono text-[10px] uppercase tracking-wider text-primary/90">MCP-backed tool</div>
+          <p class="mt-1 font-mono text-[9px] text-outline/65 leading-relaxed">
+            Connect via stdio or endpoint, refresh discovered tools, then invoke from the same test panel.
+          </p>
+        </button>
+        <button
+          type="button"
           onclick={() => {
             createKind = "custom";
             selectedMcp = null;
           }}
-          class="px-3 py-2 rounded-lg font-mono text-[10px] uppercase tracking-wider border transition-colors
+          class="rounded-lg border p-3 text-left transition-colors
                  {createKind === 'custom'
-            ? 'border-primary/50 bg-primary/15 text-primary'
-            : 'border-outline-variant/25 text-outline/70 hover:border-primary/30'}"
+            ? 'border-primary/45 bg-primary/10'
+            : 'border-outline-variant/20 bg-surface-container-low/35 hover:border-primary/25'}"
         >
-          Custom (lab)
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={createKind === "mcp"}
-          onclick={() => {
-            createKind = "mcp";
-            showCreate = true;
-          }}
-          class="px-3 py-2 rounded-lg font-mono text-[10px] uppercase tracking-wider border transition-colors
-                 {createKind === 'mcp'
-            ? 'border-primary/50 bg-primary/15 text-primary'
-            : 'border-outline-variant/25 text-outline/70 hover:border-primary/30'}"
-        >
-          MCP server
+          <div class="font-mono text-[10px] uppercase tracking-wider text-primary/90">Custom tool</div>
+          <p class="mt-1 font-mono text-[9px] text-outline/65 leading-relaxed">
+            Fast prototype in Lab catalog. Define params, then execute with request JSON.
+          </p>
         </button>
       </div>
 
@@ -567,6 +642,9 @@
               rows="5"
               class="w-full bg-surface-container-lowest/60 border border-outline-variant/20 rounded-lg px-3 py-2 text-[11px] font-mono resize-y min-h-[88px]"
             ></textarea>
+            <p class="mt-1 font-mono text-[8px] text-outline/45">
+              Example: <code>{'[{"name":"query","type":"string","required":true,"description":"Search phrase"}]'}</code>
+            </p>
           </div>
           <div class="flex justify-end gap-2">
             <button
@@ -589,6 +667,69 @@
         </div>
       {:else}
         <div class="space-y-3 pt-1 border-t border-outline-variant/15">
+          <div class="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onclick={() => (mcpCreateMode = "manual")}
+              class="px-3 py-1.5 rounded border text-[9px] font-mono uppercase tracking-wider
+                     {mcpCreateMode === 'manual'
+                ? 'border-primary/45 bg-primary/12 text-primary'
+                : 'border-outline-variant/25 text-outline/70 hover:border-primary/30'}"
+            >
+              Manual setup
+            </button>
+            <button
+              type="button"
+              onclick={() => (mcpCreateMode = "import")}
+              class="px-3 py-1.5 rounded border text-[9px] font-mono uppercase tracking-wider
+                     {mcpCreateMode === 'import'
+                ? 'border-primary/45 bg-primary/12 text-primary'
+                : 'border-outline-variant/25 text-outline/70 hover:border-primary/30'}"
+            >
+              Import JSON
+            </button>
+          </div>
+          <div class="rounded-lg border border-outline-variant/15 bg-surface-container-lowest/40 p-3 min-h-[140px] max-h-[260px] overflow-y-auto">
+            <div class="text-[9px] font-mono text-outline/50 uppercase tracking-widest mb-2">Saved servers (live)</div>
+            {#if mcpServersList.length === 0}
+              <p class="font-mono text-xs text-outline/40">No servers yet — import or save one to see tools immediately.</p>
+            {:else}
+              <div class="space-y-2">
+                {#each mcpServersList as s (s.serverId)}
+                  <div class="rounded border border-outline-variant/15 p-2 flex flex-col gap-1.5">
+                    <div class="flex items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        onclick={() => openEditMcp(s)}
+                        class="text-left font-mono text-[11px] text-primary hover:underline bg-transparent border-0 cursor-pointer p-0"
+                      >
+                        {s.name}
+                      </button>
+                      <span class="text-[8px] font-mono text-outline/40">{s.tools.length} tools</span>
+                    </div>
+                    <div class="flex flex-wrap gap-1">
+                      <button
+                        type="button"
+                        disabled={mcpRefreshing === s.serverId}
+                        onclick={() => refreshMcpTools(s.serverId)}
+                        class="text-[8px] font-mono px-2 py-0.5 rounded border border-secondary/30 text-secondary hover:bg-secondary/10 cursor-pointer bg-transparent disabled:opacity-40"
+                      >
+                        {mcpRefreshing === s.serverId ? "…" : "Refresh tools"}
+                      </button>
+                      <button
+                        type="button"
+                        onclick={() => deleteMcpServerRow(s.serverId)}
+                        class="text-[8px] font-mono px-2 py-0.5 rounded border border-error/30 text-error/80 hover:bg-error/10 cursor-pointer bg-transparent"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                {/each}
+              </div>
+            {/if}
+          </div>
+          {#if mcpCreateMode === "manual"}
           <div class="flex items-center justify-between gap-2 flex-wrap">
             <button
               type="button"
@@ -608,8 +749,7 @@
               ↻ Reload servers
             </button>
           </div>
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div class="space-y-2">
+          <div class="space-y-2">
               <label class="text-[9px] font-mono text-outline/60 uppercase tracking-widest" for="tw-mcp-name">Server name</label>
               <input
                 id="tw-mcp-name"
@@ -678,73 +818,55 @@
               >
                 {mcpSaving ? "Saving…" : selectedMcp ? "Update server" : "Save server"}
               </button>
-            </div>
-            <div class="rounded-lg border border-outline-variant/15 bg-surface-container-lowest/40 p-3 min-h-[200px] max-h-[340px] overflow-y-auto">
-              <div class="text-[9px] font-mono text-outline/50 uppercase tracking-widest mb-2">Saved servers</div>
-              {#if mcpServersList.length === 0}
-                <p class="font-mono text-xs text-outline/40">None yet — save a server, then refresh tools to populate the catalog.</p>
-              {:else}
-                <div class="space-y-2">
-                  {#each mcpServersList as s (s.serverId)}
-                    <div class="rounded border border-outline-variant/15 p-2 flex flex-col gap-1.5">
-                      <div class="flex items-center justify-between gap-2">
-                        <button
-                          type="button"
-                          onclick={() => openEditMcp(s)}
-                          class="text-left font-mono text-[11px] text-primary hover:underline bg-transparent border-0 cursor-pointer p-0"
-                        >
-                          {s.name}
-                        </button>
-                        <span class="text-[8px] font-mono text-outline/40">{s.tools.length} tools</span>
-                      </div>
-                      <div class="flex flex-wrap gap-1">
-                        <button
-                          type="button"
-                          disabled={mcpRefreshing === s.serverId}
-                          onclick={() => refreshMcpTools(s.serverId)}
-                          class="text-[8px] font-mono px-2 py-0.5 rounded border border-secondary/30 text-secondary hover:bg-secondary/10 cursor-pointer bg-transparent disabled:opacity-40"
-                        >
-                          {mcpRefreshing === s.serverId ? "…" : "Refresh tools"}
-                        </button>
-                        <button
-                          type="button"
-                          onclick={() => deleteMcpServerRow(s.serverId)}
-                          class="text-[8px] font-mono px-2 py-0.5 rounded border border-error/30 text-error/80 hover:bg-error/10 cursor-pointer bg-transparent"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-                  {/each}
-                </div>
-              {/if}
-            </div>
           </div>
+          {:else}
           <div class="border-t border-outline-variant/15 pt-3 space-y-2">
             <div class="text-[9px] font-mono text-outline/60 uppercase tracking-widest">Import from JSON</div>
             <p class="font-mono text-[9px] text-outline/45 leading-relaxed">
               One object, an array, <code class="text-outline/55">{`{ "servers": [...] }`}</code>, or Cursor-style
-              <code class="text-outline/55">{`{ "mcpServers": { "name": { ... } } }`}</code>.               <code class="text-outline/55">url</code> → <code class="text-outline/55">endpoint</code>. Omitted transport: stdio if
+              <code class="text-outline/55">{`{ "mcpServers": { "name": { ... } } }`}</code>.
+              <code class="text-outline/55">url</code> → <code class="text-outline/55">endpoint</code>. Omitted transport: stdio if
               <code class="text-outline/55">command</code>/<code class="text-outline/55">args</code>; URLs ending in <code class="text-outline/55">/mcp</code> →
-              <code class="text-outline/55">streamable-http</code> (e.g. Context7); other URLs → <code class="text-outline/55">sse</code>. You can set
-              <code class="text-outline/55">transport</code> explicitly in JSON or the form.
+              <code class="text-outline/55">streamable-http</code> (Context7 log: “HTTP at …/mcp”); other URLs → <code class="text-outline/55">sse</code>
+              (legacy “/sse”). Set <code class="text-outline/55">transport</code> explicitly if needed. Cortex must reach the host (same machine as the server for
+              <code class="text-outline/55">localhost</code>).
             </p>
             <textarea
               id="tw-mcp-json-import"
               bind:value={mcpJsonImport}
               rows="7"
-              placeholder={`{\n  "mcpServers": {\n    "demo": { "command": "bunx", "args": ["-y", "@modelcontextprotocol/server-everything"] }\n  }\n}`}
+              placeholder={`{\n  "mcpServers": {\n    "context7": { "url": "http://127.0.0.1:8080/mcp" },\n    "docker-demo": {\n      "command": "docker",\n      "args": ["run", "-i", "--rm", "mcp/context7"]\n    }\n  }\n}`}
               class="w-full bg-surface-container-lowest/60 border border-outline-variant/20 rounded-lg px-3 py-2 text-[11px] font-mono resize-y min-h-[120px]"
             ></textarea>
-            <button
-              type="button"
-              disabled={mcpImporting}
-              onclick={importMcpFromJson}
-              class="w-full py-2 rounded-lg border border-primary/35 font-mono text-[10px] uppercase text-primary hover:bg-primary/10 cursor-pointer bg-transparent disabled:opacity-40"
-            >
-              {mcpImporting ? "Importing…" : "Import JSON"}
-            </button>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <button
+                type="button"
+                onclick={previewMcpImportJson}
+                class="w-full py-2 rounded-lg border border-outline-variant/30 font-mono text-[10px] uppercase text-outline hover:text-primary hover:border-primary/25 cursor-pointer bg-transparent"
+              >
+                Validate & preview
+              </button>
+              <button
+                type="button"
+                disabled={mcpImporting}
+                onclick={importMcpFromJson}
+                class="w-full py-2 rounded-lg border border-primary/35 font-mono text-[10px] uppercase text-primary hover:bg-primary/10 cursor-pointer bg-transparent disabled:opacity-40"
+              >
+                {mcpImporting ? "Importing…" : "Import JSON"}
+              </button>
+            </div>
+            {#if mcpImportPreview}
+              <div class="rounded border border-primary/25 bg-primary/8 px-2.5 py-2 font-mono text-[9px] text-primary/90">
+                {mcpImportPreview}
+              </div>
+            {/if}
+            {#if mcpImportPreviewError}
+              <div class="rounded border border-error/35 bg-error/8 px-2.5 py-2 font-mono text-[9px] text-error/85">
+                {mcpImportPreviewError}
+              </div>
+            {/if}
           </div>
+          {/if}
           <div class="flex justify-end">
             <button
               type="button"

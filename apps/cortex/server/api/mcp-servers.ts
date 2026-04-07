@@ -14,6 +14,7 @@ import {
 import { discoverMcpTools } from "../services/mcp-discovery.js";
 import { parseConfigBody } from "../services/mcp-config-import.js";
 import { executeMcpJsonImport } from "../services/mcp-json-import-apply.js";
+import { cleanupMcpTransport } from "@reactive-agents/tools";
 
 export const mcpServersRouter = (db: Database) =>
   new Elysia({ prefix: "/api/mcp-servers" })
@@ -88,10 +89,19 @@ export const mcpServersRouter = (db: Database) =>
     .delete(
       "/:serverId",
       async ({ params, set }) => {
+        const row = getMcpServer(db, params.serverId);
+        if (!row) {
+          set.status = 404;
+          return { error: "MCP server not found" };
+        }
+        // Kill any active transport (subprocess / SSE / WS) before removing from DB.
+        // This stops docker containers and other long-running processes from leaking.
+        cleanupMcpTransport(row.name);
         if (!deleteMcpServer(db, params.serverId)) {
           set.status = 404;
           return { error: "MCP server not found" };
         }
+        console.log(`[MCP delete] "${row.name}" (${params.serverId}) removed and transport cleaned up`);
         return { ok: true as const };
       },
       { params: t.Object({ serverId: t.String() }) },
@@ -105,13 +115,36 @@ export const mcpServersRouter = (db: Database) =>
           return { error: "MCP server not found" };
         }
         const cfg = parseMcpConfig(row);
+        console.log(`[MCP refresh-tools] "${cfg.name}" transport=${cfg.transport}${cfg.endpoint ? ` endpoint=${cfg.endpoint}` : ""}${cfg.command ? ` command=${cfg.command}` : ""}`);
+
+        // 10-minute hard cap — covers the worst-case first `docker pull` of a large image.
+        // On expiry the subprocess is killed so the server process does not leak.
+        const DISCOVERY_TIMEOUT_MS = 600_000;
+
+        const discoveryPromise = discoverMcpTools(cfg);
+        // Prevent unhandled-rejection if the timeout settles first
+        discoveryPromise.catch(() => {});
+
+        let timeoutId: ReturnType<typeof setTimeout> | undefined;
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          timeoutId = setTimeout(() => {
+            cleanupMcpTransport(cfg.name);
+            reject(new Error(`MCP tool discovery timed out after ${DISCOVERY_TIMEOUT_MS / 60_000} minutes`));
+          }, DISCOVERY_TIMEOUT_MS);
+        });
+
         try {
-          const discovered = await discoverMcpTools(cfg);
+          const discovered = await Promise.race([discoveryPromise, timeoutPromise]);
           replaceMcpCachedTools(db, params.serverId, discovered);
+          console.log(`[MCP refresh-tools] "${cfg.name}" stored ${discovered.length} tool(s) in DB`);
           return { ok: true as const, tools: discovered };
         } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          console.error(`[MCP refresh-tools] "${cfg.name}" FAILED: ${msg}`);
           set.status = 502;
-          return { error: e instanceof Error ? e.message : String(e) };
+          return { error: msg };
+        } finally {
+          clearTimeout(timeoutId);
         }
       },
       { params: t.Object({ serverId: t.String() }) },

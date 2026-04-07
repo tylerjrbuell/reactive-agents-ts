@@ -470,9 +470,43 @@
 <svelte:head><title>CORTEX — Lab</title></svelte:head>
 
 <CortexDeskShell>
-<div class="relative z-10 flex h-full min-h-0 flex-col gap-3 overflow-hidden p-4">
+<div class="relative z-10 flex h-full min-h-0 flex-col gap-4 overflow-hidden p-4 sm:p-6">
+  <header class="flex flex-shrink-0 items-start justify-between gap-3">
+    <div class="min-w-0">
+      <h1 class="font-display text-2xl font-light tracking-tight text-on-surface">
+        Agent <span class="font-semibold text-primary">Lab</span>
+      </h1>
+      <p class="mt-1 max-w-3xl font-mono text-[10px] leading-relaxed text-outline">
+        Build, persist, and operate Cortex agents with one control surface for config, skills, and tool wiring.
+      </p>
+    </div>
+    <a href="/runs" class="flex items-center gap-1 font-mono text-[11px] text-cyan-700 no-underline transition-colors hover:text-primary dark:text-secondary">
+      <span class="material-symbols-outlined text-sm">timeline</span> Trace
+    </a>
+  </header>
+
+  <div class="grid flex-shrink-0 grid-cols-2 gap-2 sm:grid-cols-4">
+    <div class="rounded-lg border border-outline-variant/15 bg-surface-container-low/65 px-3 py-2 font-mono text-[10px]">
+      <div class="text-outline/45">Saved agents</div>
+      <div class="mt-0.5 text-primary">{gatewayAgents.length}</div>
+    </div>
+    <div class="rounded-lg border border-outline-variant/15 bg-surface-container-low/65 px-3 py-2 font-mono text-[10px]">
+      <div class="text-outline/45">Active tab</div>
+      <div class="mt-0.5 text-on-surface">{activeTab}</div>
+    </div>
+    <div class="rounded-lg border border-outline-variant/15 bg-surface-container-low/65 px-3 py-2 font-mono text-[10px]">
+      <div class="text-outline/45">Builder mode</div>
+      <div class="mt-0.5 text-secondary">{builderAgentType === "persistent" ? "persistent" : "ad-hoc"}</div>
+    </div>
+    <div class="rounded-lg border border-outline-variant/15 bg-surface-container-low/65 px-3 py-2 font-mono text-[10px]">
+      <div class="text-outline/45">Skill roots</div>
+      <div class="mt-0.5 text-on-surface">{discoveredSkillPaths.length}</div>
+    </div>
+  </div>
+
+  <div class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-outline-variant/20 bg-surface-container-low/25 p-3 shadow-[0_10px_40px_-24px_rgba(139,92,246,0.45)] backdrop-blur-[4px]">
   <!-- Tabs -->
-  <div class="flex flex-shrink-0 items-center gap-1 border-b border-primary/15 pb-0 dark:border-outline-variant/20">
+  <div class="flex flex-shrink-0 items-center gap-2 border-b border-primary/15 pb-2 dark:border-outline-variant/20">
     {#each [
       { id: "builder", label: "Builder", icon: "build" },
       { id: "gateway", label: "Agents", icon: "hub", badge: gatewayAgents.length },
@@ -480,10 +514,10 @@
       { id: "tools",   label: "Tools",   icon: "construction" },
     ] as tab}
       <button type="button"
-        class="-mb-px flex items-center gap-2 border-b-2 px-4 py-2.5 font-mono text-xs uppercase tracking-wider transition-colors
+        class="flex items-center gap-2 rounded-md border px-3 py-2 font-mono text-[10px] uppercase tracking-wider transition-colors
                {activeTab === tab.id
-          ? 'border-primary text-primary'
-          : 'border-transparent text-outline hover:text-primary'}"
+          ? 'border-primary/35 bg-primary/12 text-primary'
+          : 'border-outline-variant/20 text-outline hover:border-primary/25 hover:text-primary'}"
         onclick={() => (activeTab = tab.id as typeof activeTab)}>
         <span class="material-symbols-outlined text-sm">{tab.icon}</span>{tab.label}
         {#if (tab as any).badge > 0}
@@ -495,10 +529,10 @@
 
   <!-- ── BUILDER ─────────────────────────────────────────────────────── -->
   {#if activeTab === "builder"}
-    <div class="flex-1 overflow-y-auto min-h-0">
+    <div class="min-h-0 flex-1 overflow-y-auto">
       <div class="max-w-2xl mx-auto space-y-4">
         <div class="grid grid-cols-2 gap-3">
-          <label class="flex items-center gap-2 cursor-pointer p-2 rounded border border-outline-variant/20 hover:border-primary/40 transition-colors">
+          <label class="flex cursor-pointer items-center gap-2 rounded border border-outline-variant/20 bg-surface-container-low/40 p-2 transition-colors hover:border-primary/40">
             <input
               type="radio"
               name="builder-agent-type"
@@ -508,7 +542,7 @@
             />
             <span class="font-mono text-[10px] text-on-surface/80">Ad-hoc (saved, on-demand)</span>
           </label>
-          <label class="flex items-center gap-2 cursor-pointer p-2 rounded border border-outline-variant/20 hover:border-primary/40 transition-colors">
+          <label class="flex cursor-pointer items-center gap-2 rounded border border-outline-variant/20 bg-surface-container-low/40 p-2 transition-colors hover:border-primary/40">
             <input
               type="radio"
               name="builder-agent-type"
@@ -699,7 +733,7 @@
         </div>
       </div>
     {:else}
-      <div class="flex items-center justify-between flex-shrink-0 mb-1">
+      <div class="mb-1 flex flex-shrink-0 items-center justify-between">
         <p class="text-[10px] font-mono text-outline/50">{gatewayAgents.length} agent{gatewayAgents.length !== 1 ? "s" : ""}</p>
         <button type="button" onclick={openCreate}
           class="flex items-center gap-1.5 px-4 py-1.5 rounded border-0 cursor-pointer font-mono text-[10px] uppercase text-white hover:brightness-110 transition-all"
@@ -707,7 +741,7 @@
           <span class="material-symbols-outlined text-sm">add</span> New Agent
         </button>
       </div>
-      <div class="flex-1 overflow-y-auto min-h-0 space-y-2">
+      <div class="min-h-0 flex-1 space-y-2 overflow-y-auto">
         {#if gatewayLoading}
           <div class="flex items-center justify-center h-20">
             <span class="material-symbols-outlined text-primary animate-spin">progress_activity</span>
@@ -729,8 +763,14 @@
                                  {agent.agentType==='gateway' ? 'text-primary border-primary/30 bg-primary/8' : 'text-outline/60 border-outline-variant/25 bg-surface-container'}">
                       {agent.agentType === "gateway" ? "persistent" : "ad-hoc"}
                     </span>
-                    <span class="text-[9px] font-mono px-1.5 py-0.5 rounded border
-                                 {agent.status==='active' ? 'text-secondary border-secondary/30 bg-secondary/8' : agent.status==='paused' ? 'text-tertiary border-tertiary/30 bg-tertiary/8' : 'text-error border-error/30 bg-error/8'}">
+                    <span class="text-[9px] font-mono px-1.5 py-0.5 rounded border shadow-sm
+                                 {agent.status === 'active'
+                      ? 'text-cyan-800 dark:text-cyan-200 border-cyan-500/40 dark:border-cyan-500/45 bg-cyan-500/10 dark:bg-cyan-950/45 dark:shadow-none'
+                      : agent.status === 'paused'
+                        ? 'text-amber-950 dark:text-amber-500/95 border-amber-500/45 dark:border-amber-700/50 bg-amber-100/90 dark:bg-amber-950/50 dark:shadow-none'
+                        : agent.status === 'stopped'
+                          ? 'text-slate-700 dark:text-slate-300 border-slate-400/45 dark:border-slate-600/50 bg-slate-100/90 dark:bg-slate-900/55 dark:shadow-none'
+                          : 'text-red-800 dark:text-red-200 border-red-400/45 dark:border-red-500/45 bg-red-500/10 dark:bg-red-950/40 dark:shadow-none'}">
                       {agent.status}</span>
                     {#if agent.schedule}
                       <span class="text-[9px] font-mono text-outline/40 bg-surface-container px-1.5 py-0.5 rounded">⏰ {agent.schedule}</span>
@@ -1017,6 +1057,7 @@
       <ToolWorkshop serverUrl={CORTEX_SERVER_URL} />
     </div>
   {/if}
+</div>
 </div>
 </CortexDeskShell>
 

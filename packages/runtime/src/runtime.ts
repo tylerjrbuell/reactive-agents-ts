@@ -77,7 +77,13 @@ export interface MCPServerConfig {
    * - `"websocket"` — WebSocket bidirectional communication
    * - `"streamable-http"` — MCP 2025-03-26 Streamable HTTP (single POST endpoint, JSON or SSE response)
    */
-  transport: "stdio" | "sse" | "websocket" | "streamable-http";
+  /**
+   * Inferred automatically when omitted:
+   * - `command` present → `"stdio"` (auto-upgrades to HTTP if the subprocess starts an HTTP server)
+   * - `endpoint` with `/mcp` path → `"streamable-http"`
+   * - `endpoint` with `/sse` or plain HTTP → `"sse"`
+   */
+  transport?: "stdio" | "sse" | "websocket" | "streamable-http";
   /**
    * Command to execute (for `stdio` transport).
    *

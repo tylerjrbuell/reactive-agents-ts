@@ -9,6 +9,7 @@ import type { MCPServerConfig } from "@reactive-agents/runtime";
 export type DiscoveredMcpTool = { toolName: string; description?: string };
 
 export function discoverMcpTools(config: MCPServerConfig): Promise<DiscoveredMcpTool[]> {
+  console.log(`[MCP discover] "${config.name}" transport=${config.transport}${config.endpoint ? ` endpoint=${config.endpoint}` : ""}${config.command ? ` command=${config.command}` : ""}`);
   return Effect.runPromise(
     Effect.gen(function* () {
       const client = yield* makeMCPClient;
@@ -35,7 +36,11 @@ export function discoverMcpTools(config: MCPServerConfig): Promise<DiscoveredMcp
         );
       }
       yield* client.disconnect(server.name);
+      console.log(`[MCP discover] "${config.name}" → ${out.length} tool(s) cached`);
       return out;
     }),
-  );
+  ).catch((err: unknown) => {
+    console.error(`[MCP discover] "${config.name}" FAILED:`, err instanceof Error ? err.message : String(err));
+    throw err;
+  });
 }

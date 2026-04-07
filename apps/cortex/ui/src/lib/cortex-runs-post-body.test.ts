@@ -8,7 +8,7 @@ describe("cortexRunsPostBody", () => {
       ...defaultConfig(),
       taskContext: { project: "acme", environment: "staging" },
     };
-    const body = cortexRunsPostBody("do the thing", cfg) as { taskContext?: Record<string, string> };
+    const body = cortexRunsPostBody("do the thing", cfg) as { prompt: string; taskContext?: Record<string, string> };
     expect(body.prompt).toBe("do the thing");
     expect(body.taskContext).toEqual({ project: "acme", environment: "staging" });
   });
