@@ -11,41 +11,39 @@ import { ReactiveAgents } from 'reactive-agents'
 const agent = await ReactiveAgents.create()
     .withProvider('ollama')
     .withModel({ model: 'gemma4:e4b', temperature: 0.2, maxTokens: 10000 })
-    .withMCP({
-        name: 'context7',
-        transport: 'stdio',
-        command: 'docker',
-        args: ['run', '-i', '--rm', 'mcp/context7:latest'],
-    })
+    .withCortex()
     // .withMCP({
-    //     name: 'github',
+    //     name: 'context7',
     //     transport: 'stdio',
     //     command: 'docker',
-    //     args: [
-    //         'run',
-    //         '-i',
-    //         '--rm',
-    //         '-e',
-    //         'GITHUB_PERSONAL_ACCESS_TOKEN',
-    //         'ghcr.io/github/github-mcp-server',
-    //     ],
-    //     env: {
-    //         GITHUB_PERSONAL_ACCESS_TOKEN:
-    //             process.env.GITHUB_PERSONAL_ACCESS_TOKEN ?? '',
-    //     },
+    //     args: ['run', '-i', '--rm', 'mcp/context7:latest'],
     // })
-    .withReasoning({ defaultStrategy: 'reactive' })
-    .withTools({
-        allowedTools: [
-            'context7/resolve-library-id',
-            'context7/get-library-docs',
+    .withMCP({
+        name: 'github',
+        transport: 'stdio',
+        command: 'docker',
+        args: [
+            'run',
+            '-i',
+            '--rm',
+            '-e',
+            'GITHUB_PERSONAL_ACCESS_TOKEN',
+            'ghcr.io/github/github-mcp-server',
         ],
+        env: {
+            GITHUB_PERSONAL_ACCESS_TOKEN:
+                process.env.GITHUB_PERSONAL_ACCESS_TOKEN ?? '',
+        },
     })
+    .withReasoning({ defaultStrategy: 'reactive' })
+    // .withTools()
+    // .withDynamicSubAgents()
+    .withMemory()
     .withObservability({ verbosity: 'debug', live: true })
     .build()
 
 const result = await agent.run(
-    'Lookup Effect-Ts documentation and summarize what Effect-ts is and what it can be used for.'
+    'Fetch and summarize the 5 last commits to the tylerjrbuell/reactive-agents-ts repo. Include any relevant code changes.'
 )
 
 console.log('\n--- Result ---')
