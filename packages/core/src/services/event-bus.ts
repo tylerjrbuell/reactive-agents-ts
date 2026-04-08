@@ -392,6 +392,8 @@ export type AgentEvent =
       readonly totalTokens: number;
       /** Total execution duration in milliseconds */
       readonly durationMs: number;
+      /** Error message when `success` is false. */
+      readonly error?: string;
     }
   // ─── LLM request lifecycle ───
   | {

@@ -2,7 +2,7 @@
  * Think phase — calls the LLM and understands what it decided to do.
  *
  * Extracted verbatim from react-kernel.ts. Handles:
- * - Dynamic meta-tool injection (final-answer, brief, pulse)
+ * - Dynamic final-answer tool injection
  * - Harness skill injection
  * - System prompt + context assembly (static/ICS split)
  * - LLM stream consumption with text delta emission
@@ -24,10 +24,6 @@ import {
   finalAnswerTool,
   shouldShowFinalAnswer,
   detectCompletionGaps,
-  briefTool,
-  pulseTool,
-  recallTool,
-  findTool,
   type ToolCallSpec,
   type ResolverInput,
 } from "@reactive-agents/tools";
@@ -38,6 +34,7 @@ import {
   extractFinalAnswer,
   gateNativeToolCallsForRequiredTools,
   computeNoveltyRatio,
+  buildToolElaborationInjection,
 } from "../utils/tool-utils.js";
 import { evaluateTermination, defaultEvaluators, type TerminationContext } from "../utils/termination-oracle.js";
 import { assembleOutput } from "../output-assembly.js";
@@ -101,10 +98,6 @@ export function handleThinking(
     const augmentedToolSchemas: readonly ToolSchema[] = [
       ...(input.availableToolSchemas ?? []),
       ...(finalAnswerVisible ? [{ name: finalAnswerTool.name, description: finalAnswerTool.description, parameters: finalAnswerTool.parameters }] : []),
-      ...(input.metaTools?.brief ? [{ name: briefTool.name, description: briefTool.description, parameters: briefTool.parameters }] : []),
-      ...(input.metaTools?.pulse ? [{ name: pulseTool.name, description: pulseTool.description, parameters: pulseTool.parameters }] : []),
-      ...(input.metaTools?.recall ? [{ name: recallTool.name, description: recallTool.description, parameters: recallTool.parameters }] : []),
-      ...(input.metaTools?.find ? [{ name: findTool.name, description: findTool.description, parameters: findTool.parameters }] : []),
     ] as readonly ToolSchema[];
 
     // ── Context pressure hard gate ───────────────────────────────────────────
@@ -119,6 +112,24 @@ export function handleThinking(
     const effectiveSchemas: readonly ToolSchema[] = pressureCritical
       ? [{ name: finalAnswerTool.name, description: finalAnswerTool.description, parameters: finalAnswerTool.parameters }]
       : augmentedToolSchemas;
+
+    // ── Classification-based tool pruning ────────────────────────────────────
+    // When the classify phase identified required/relevant tools for this task,
+    // prune the system prompt to only show those tools + meta tools.
+    // This dramatically reduces attention load for local/mid models
+    // (e.g. 38 GitHub MCP tools → 3 classified tools), preventing the model
+    // from hallucinating tool names or losing track of the correct ones.
+    const classifiedRequired = input.requiredTools ?? [];
+    const classifiedRelevant = input.relevantTools ?? [];
+    const hasClassification = classifiedRequired.length > 0 || classifiedRelevant.length > 0;
+
+    const promptSchemas: readonly ToolSchema[] = hasClassification && !pressureCritical
+      ? effectiveSchemas.filter((ts) =>
+          classifiedRequired.includes(ts.name) ||
+          classifiedRelevant.includes(ts.name) ||
+          META_TOOL_SET.has(ts.name),
+        )
+      : effectiveSchemas;
 
     // ── Harness skill injection ──────────────────────────────────────────────
     const harnessContent = input.metaTools?.harnessContent;
@@ -140,20 +151,25 @@ export function handleThinking(
 
     // toolGuidance hook — append inline required-tool reminder after schema block
     const toolGuidancePatch = adapter.toolGuidance?.({
-      toolNames: effectiveSchemas.map((t) => t.name),
+      toolNames: promptSchemas.map((t) => t.name),
       requiredTools: input.requiredTools ?? [],
       tier: profile.tier ?? "mid",
     });
 
     // Always use full static context — stable system prompt, never overridden by ICS
+    // Uses promptSchemas (classification-pruned) so the model only sees high-signal tools.
     const staticContext = buildStaticContext({
       task: input.task,
       profile,
-      availableToolSchemas: effectiveSchemas,
+      availableToolSchemas: promptSchemas,
       requiredTools: input.requiredTools,
       environmentContext: input.environmentContext,
     });
-    const systemPromptText = `${patchedBase}\n\n${staticContext}${toolGuidancePatch ? `\n${toolGuidancePatch}` : ""}`;
+    const toolElaborationSection = buildToolElaborationInjection(
+      promptSchemas,
+      input.toolElaboration,
+    );
+    const systemPromptText = `${patchedBase}\n\n${staticContext}${toolGuidancePatch ? `\n${toolGuidancePatch}` : ""}${toolElaborationSection ? `\n\n${toolElaborationSection}` : ""}`;
 
     // ── Auto-forward: inject full stored result from last observation ──────────
     // When the previous tool result was compressed and auto-stored in the scratchpad
@@ -194,7 +210,9 @@ export function handleThinking(
     // parameter to only required (unsatisfied) + meta tools. This forces models
     // like cogito:14b (which lack tool_choice support) to select the right tool
     // instead of stubbornly re-selecting a previously successful one.
-    const filteredToolSchemas = buildToolSchemas(state, input, profile, effectiveSchemas);
+    // Uses promptSchemas (classification-pruned) so FC definitions match the
+    // system prompt — the model can only call tools it can actually see.
+    const filteredToolSchemas = buildToolSchemas(state, input, profile, promptSchemas);
     const llmTools = filteredToolSchemas.map((ts) => ({
       name: ts.name,
       description: ts.description,
@@ -541,6 +559,7 @@ export function handleThinking(
           input.relevantTools,
           toolCallCounts,
           input.maxCallsPerTool,
+          input.strictToolDependencyChain,
         );
 
         if (blockedOptionalBatch) {
@@ -552,7 +571,7 @@ export function handleThinking(
               ? ` Use the ${nextRequired} tool with a path from the task and the full report body as content (markdown).`
               : "";
           const blockMsg =
-            `Required tools not yet satisfied: ${missing.join(", ")}. Your tool batch did not include any of them — do not use optional tools until these are done. Call ${nextRequired} now with concrete arguments.${writeHint}`;
+            `Required tools not yet satisfied: ${missing.join(", ")}. Strict dependency mode blocked this tool batch because it did not include any missing required tool. Call ${nextRequired} now with concrete arguments.${writeHint}`;
 
           yield* hooks.onThought(state, `[GATE] Model tried: ${attemptedTools.join(", ")} — blocked, need: ${missing.join(", ")}`);
 
@@ -721,47 +740,11 @@ export function handleThinking(
         const thinkingContent = resolverResult.content.trim();
         const reqTools = input.requiredTools ?? [];
         const missingReq = reqTools.filter((t) => !state.toolsUsed.has(t));
-        const allRequiredMet = reqTools.length > 0 && missingReq.length === 0;
 
-        // ── Promote to done when all required tools are satisfied ─────────
-        // The model has completed its tool work. If it returned thinking
-        // (empty or non-empty), don't loop — assemble output from what we
-        // have: the tool results are the deliverable, not the model's prose.
-        if (allRequiredMet) {
-          const hasRealToolWork = [...state.toolsUsed].some(
-            (t) => !META_TOOL_SET.has(t),
-          );
-          if (hasRealToolWork) {
-            // Use thinking content as output if available, otherwise
-            // assemble a summary from tool results.
-            const output = thinkingContent
-              || state.priorThought
-              || "Task completed — all required tools have been executed.";
-
-            yield* hooks.onThought(state, `[ICS] All required tools met, promoting to done`);
-            const assembled = assembleOutput({
-              steps: newSteps,
-              finalAnswer: output,
-              terminatedBy: "llm_end_turn",
-              entropyScores: (state.meta.entropy as any)?.entropyHistory,
-            });
-            return transitionState(state, {
-              steps: newSteps,
-              tokens: newTokens,
-              cost: newCost,
-              status: "done" as const,
-              output: assembled.text,
-              priorThought: output,
-              iteration: state.iteration + 1,
-              meta: {
-                ...state.meta,
-                terminatedBy: "end_turn",
-              },
-            });
-          }
-        }
-
-        // ── Standard thinking handler (required tools still missing) ──────
+        // ── Standard thinking handler ──────────────────────────────────────
+        // Note: Even if all required tools are met, we continue the loop to
+        // allow the model to call final-answer explicitly. The act phase will
+        // accept final-answer once all required tools are satisfied.
         const consecutiveEmpty = !thinkingContent
           ? newSteps.reduceRight((count, s) => {
               if (count === -1) return -1;
@@ -808,12 +791,15 @@ export function handleThinking(
           if (realObs.length >= 3) {
             const lastObsText = realObs[realObs.length - 1].content;
             const priorObsText = realObs.slice(0, -1).map((s) => s.content).join(" ");
-            const novelty = computeNoveltyRatio(lastObsText, priorObsText);
-            if (novelty < 0.20) {
-              const pct = Math.round(novelty * 100);
-              nudgeMessage =
-                `Research context is sufficient (last search: ${pct}% new information — diminishing returns). ` +
-                `Do NOT search again. Call ${missingReq[0]} now to produce the output.`;
+            // Safeguard: skip novelty check if either observation is missing or empty
+            if (lastObsText && priorObsText) {
+              const novelty = computeNoveltyRatio(lastObsText, priorObsText);
+              if (novelty < 0.20) {
+                const pct = Math.round(novelty * 100);
+                nudgeMessage =
+                  `Research context is sufficient (last search: ${pct}% new information — diminishing returns). ` +
+                  `Do NOT search again. Call ${missingReq[0]} now to produce the output.`;
+              }
             }
           }
 

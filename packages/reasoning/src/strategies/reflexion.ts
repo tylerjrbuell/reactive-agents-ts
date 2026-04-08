@@ -29,6 +29,7 @@ import { extractThinking } from "./kernel/utils/stream-parser.js";
 import type { ToolSchema } from "./kernel/utils/tool-utils.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
+import { resolveExecutableToolCapabilities } from "./kernel/utils/tool-capabilities.js";
 
 interface ReflexionInput {
   readonly taskDescription: string;
@@ -90,6 +91,10 @@ export const executeReflexion = (
     let previousCritiques: string[] = input.priorCritiques
       ? [...input.priorCritiques]
       : [];
+    const capabilitySnapshot = yield* resolveExecutableToolCapabilities({
+      availableToolSchemas: input.availableToolSchemas,
+      metaTools: input.metaTools,
+    });
 
     // ── STEP 1: Initial generation (tool-aware via ReAct kernel) ──
     const genDefaultFallback = input.systemPrompt
@@ -113,7 +118,8 @@ export const executeReflexion = (
       task: buildGenerationPrompt(input, null),
       systemPrompt: genSystemPrompt,
       priorContext: genPriorContext,
-      availableToolSchemas: input.availableToolSchemas,
+      availableToolSchemas: capabilitySnapshot.availableToolSchemas,
+      allToolSchemas: capabilitySnapshot.allToolSchemas,
       resultCompression: input.resultCompression,
       temperature: 0.7,
       agentId: input.agentId,
@@ -293,7 +299,8 @@ export const executeReflexion = (
         task: improvementTask,
         systemPrompt: improveSystemPrompt,
         priorContext: improvePriorContext,
-        availableToolSchemas: input.availableToolSchemas,
+        availableToolSchemas: capabilitySnapshot.availableToolSchemas,
+        allToolSchemas: capabilitySnapshot.allToolSchemas,
         resultCompression: input.resultCompression,
         temperature: 0.6,
         agentId: input.agentId,

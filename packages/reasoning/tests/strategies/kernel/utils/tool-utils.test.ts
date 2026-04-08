@@ -8,6 +8,8 @@ import {
   formatToolSchemaMicro,
   filterToolsByRelevance,
   gateNativeToolCallsForRequiredTools,
+  buildToolElaborationInjection,
+  planNextMoveBatches,
 } from "../../../../src/strategies/kernel/utils/tool-utils.js";
 
 describe("hasFinalAnswer", () => {
@@ -191,6 +193,20 @@ describe("gateNativeToolCallsForRequiredTools", () => {
       ["web-search", "file-write"],
       new Set(["web-search"]),
     );
+    expect(r.effective.map((c) => c.name)).toEqual(["http-get"]);
+    expect(r.blockedOptionalBatch).toBe(false);
+  });
+
+  it("blocks when strict dependency mode is enabled and batch omits missing required tools", () => {
+    const r = gateNativeToolCallsForRequiredTools(
+      [{ name: "http-get", id: "x", arguments: {} }],
+      ["web-search", "file-write"],
+      new Set(["web-search"]),
+      undefined,
+      undefined,
+      undefined,
+      true,
+    );
     expect(r.effective.length).toBe(0);
     expect(r.blockedOptionalBatch).toBe(true);
   });
@@ -203,5 +219,56 @@ describe("gateNativeToolCallsForRequiredTools", () => {
     );
     expect(r.effective).toEqual(calls);
     expect(r.blockedOptionalBatch).toBe(false);
+  });
+});
+
+describe("buildToolElaborationInjection", () => {
+  it("returns empty string when disabled", () => {
+    const result = buildToolElaborationInjection(
+      [{ name: "web-search", parameters: [{ name: "query" }] }],
+      { enabled: false },
+    );
+    expect(result).toBe("");
+  });
+
+  it("builds a lightweight elaboration section when enabled", () => {
+    const result = buildToolElaborationInjection(
+      [
+        { name: "web-search", parameters: [{ name: "query" }, { name: "maxResults" }] },
+        { name: "file-write", parameters: [{ name: "path" }, { name: "content" }] },
+      ],
+      { enabled: true, maxHintsPerTool: 2 },
+    );
+    expect(result).toContain("Tool Elaboration");
+    expect(result).toContain("web-search");
+    expect(result).toContain("file-write");
+    expect(result).toContain("required args:");
+  });
+});
+
+describe("planNextMoveBatches", () => {
+  const calls = [
+    { id: "1", name: "web-search" },
+    { id: "2", name: "http-get" },
+    { id: "3", name: "file-read" },
+    { id: "4", name: "file-write" },
+    { id: "5", name: "web-search" },
+  ] as const;
+
+  it("returns singletons when planner is disabled", () => {
+    const batches = planNextMoveBatches(calls, { enabled: false });
+    expect(batches.length).toBe(calls.length);
+    expect(batches.every((b) => b.length === 1)).toBe(true);
+  });
+
+  it("groups safe contiguous calls and isolates side-effecting calls", () => {
+    const batches = planNextMoveBatches(calls, {
+      enabled: true,
+      maxBatchSize: 3,
+      allowParallelBatching: true,
+    });
+    expect(batches[0]?.map((c) => c.name)).toEqual(["web-search", "http-get", "file-read"]);
+    expect(batches[1]?.map((c) => c.name)).toEqual(["file-write"]);
+    expect(batches[2]?.map((c) => c.name)).toEqual(["web-search"]);
   });
 });

@@ -7,6 +7,19 @@ import { ReasoningStrategy } from "./reasoning.js";
 export const ReactiveConfigSchema = Schema.Struct({
   maxIterations: Schema.Number.pipe(Schema.int(), Schema.positive()),
   temperature: Schema.Number,
+  toolElaboration: Schema.optional(
+    Schema.Struct({
+      enabled: Schema.Boolean,
+      maxHintsPerTool: Schema.optional(Schema.Number.pipe(Schema.int(), Schema.positive())),
+    }),
+  ),
+  nextMovesPlanning: Schema.optional(
+    Schema.Struct({
+      enabled: Schema.Boolean,
+      maxBatchSize: Schema.optional(Schema.Number.pipe(Schema.int(), Schema.positive())),
+      allowParallelBatching: Schema.optional(Schema.Boolean),
+    }),
+  ),
 });
 export type ReactiveConfig = typeof ReactiveConfigSchema.Type;
 
@@ -59,7 +72,12 @@ export const defaultReasoningConfig: ReasoningConfig = {
   defaultStrategy: "reactive",
   adaptive: { enabled: false, learning: false },
   strategies: {
-    reactive: { maxIterations: 10, temperature: 0.7 },
+    reactive: {
+      maxIterations: 10,
+      temperature: 0.7,
+      toolElaboration: { enabled: false, maxHintsPerTool: 2 },
+      nextMovesPlanning: { enabled: false, maxBatchSize: 3, allowParallelBatching: true },
+    },
     planExecute: { maxRefinements: 2, reflectionDepth: "deep" },
     treeOfThought: { breadth: 3, depth: 3, pruningThreshold: 0.5 },
     reflexion: { maxRetries: 3, selfCritiqueDepth: "deep" },

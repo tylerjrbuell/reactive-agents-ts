@@ -14,6 +14,10 @@ describe("think.ts structural: no hasICS branch", () => {
   it("always calls buildStaticContext", () => {
     expect(src).toContain("buildStaticContext")
   })
+  it("supports tool elaboration injection", () => {
+    expect(src).toContain("buildToolElaborationInjection")
+    expect(src).toContain("toolElaborationSection")
+  })
   it("does not call buildDynamicContext", () => {
     expect(src).not.toContain("buildDynamicContext")
   })

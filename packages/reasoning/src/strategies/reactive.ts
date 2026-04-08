@@ -16,6 +16,7 @@ import { buildStrategyResult } from "./kernel/utils/step-utils.js";
 import type { KernelInput, KernelMessage } from "./kernel/kernel-state.js";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
 import type { TerminatedBy } from "@reactive-agents/core";
+import { resolveExecutableToolCapabilities } from "./kernel/utils/tool-capabilities.js";
 
 // ── Re-exports for backwards compatibility ────────────────────────────────────
 
@@ -122,11 +123,17 @@ export const executeReactive = (
             }))
           : undefined;
 
+    const capabilitySnapshot = yield* resolveExecutableToolCapabilities({
+      availableToolSchemas: toolSchemas,
+      allToolSchemas: input.allToolSchemas,
+      metaTools: input.metaTools,
+    });
+
     const kernelInput: KernelInput = {
       task: input.taskDescription,
       systemPrompt: input.systemPrompt,
-      availableToolSchemas: toolSchemas,
-      allToolSchemas: input.allToolSchemas,
+      availableToolSchemas: capabilitySnapshot.availableToolSchemas,
+      allToolSchemas: capabilitySnapshot.allToolSchemas,
       priorContext,
       contextProfile: input.contextProfile,
       resultCompression: input.resultCompression,
@@ -141,6 +148,8 @@ export const executeReactive = (
       maxRequiredToolRetries: input.maxRequiredToolRetries,
       environmentContext: input.environmentContext,
       metaTools: input.metaTools,
+      toolElaboration: input.config.strategies.reactive.toolElaboration,
+      nextMovesPlanning: input.config.strategies.reactive.nextMovesPlanning,
       briefResolvedSkills: input.briefResolvedSkills,
       initialMessages: input.initialMessages,
       synthesisConfig: input.synthesisConfig,

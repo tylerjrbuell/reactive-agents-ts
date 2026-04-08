@@ -34,6 +34,49 @@ import { evaluateStrategySwitch, buildHandoff } from "./utils/strategy-evaluator
 import { coordinateICS } from "./utils/ics-coordinator.js";
 import { runReactiveObserver } from "./utils/reactive-observer.js";
 import { detectLoop, checkAllToolsCalled } from "./utils/loop-detector.js";
+import { classifyToolRelevance } from "../../structured-output/infer-required-tools.js";
+
+/** Meta-tool names — not counted as "real work" for reclassification triggers. */
+const RUNNER_META_TOOLS = new Set(["final-answer", "task-complete", "context-status", "brief", "pulse", "find", "recall"]);
+
+// ── Harness deliverable assembly ──────────────────────────────────────────────
+
+/**
+ * Assemble a deliverable from accumulated tool results.
+ *
+ * When the harness determines the model is spinning but has already gathered
+ * useful data, this function extracts all successful non-meta tool observations
+ * and joins them as the final output. The harness owns task completion —
+ * it doesn't depend on the model calling `final-answer`.
+ *
+ * Filters out guard-blocked observations (which are marked success=true but
+ * contain warning markers) by requiring the tool to be in `state.toolsUsed`
+ * (only actually-executed tools are added to that set) and excluding known
+ * guard-block text patterns.
+ */
+export function assembleDeliverable(state: KernelState): string {
+  const artifacts: string[] = [];
+  for (const step of state.steps) {
+    if (step.type !== "observation") continue;
+    const r = step.metadata?.observationResult as
+      { success?: boolean; toolName?: string } | undefined;
+    if (!r?.success || !r.toolName) continue;
+    if (RUNNER_META_TOOLS.has(r.toolName)) continue;
+    if (!state.toolsUsed.has(r.toolName)) continue;
+    const content = (step.content ?? "").trim();
+    // Skip guard-block observations that leaked through as success=true
+    if (content.startsWith("\u26A0\uFE0F") || content.includes("[Already done")) continue;
+    if (content.length > 20) artifacts.push(content);
+  }
+
+  if (artifacts.length > 0) return artifacts.join("\n\n");
+
+  // Fallback: use the last substantive thought
+  const lastThought = [...state.steps]
+    .reverse()
+    .find((s) => s.type === "thought" && (s.content ?? "").length > 20);
+  return lastThought?.content ?? "Task complete.";
+}
 
 // ── Token-delta guard ─────────────────────────────────────────────────────────
 
@@ -194,7 +237,21 @@ export function runKernel(
     // currentInput tracks per-pass input (may carry handoff priorContext)
     let currentInput: KernelInput = effectiveInput;
     // currentContext tracks the KernelContext (rebuilt when input changes on switch)
+
+    // Dynamic tool reclassification state
+    // When the model is stuck (gate-blocked tools, no progress), re-classify
+    // which tools are required/relevant based on what the agent has learned so far.
+    let reclassifyCount = 0;
+    const maxReclassifications = 2;
+    let noProgressIterations = 0;
+    const hasInitialClassification =
+      (effectiveInput.requiredTools?.length ?? 0) > 0 ||
+      (effectiveInput.relevantTools?.length ?? 0) > 0;
     let currentContext: KernelContext = context;
+
+    // Harness stall tracking — counts consecutive iterations with no new non-meta tool results.
+    // When the model has gathered artifacts but stalls, the harness delivers accumulated data.
+    let consecutiveStalled = 0;
 
     while (
       state.status !== "done" &&
@@ -250,6 +307,32 @@ export function runKernel(
       yield* hooks.onIterationProgress(state, toolsThisStep);
       prevToolsUsed = new Set(state.toolsUsed);
 
+      // ── Harness artifact stall tracking ─────────────────────────────────
+      // Track whether this iteration produced new non-meta tool results.
+      // The harness owns completion: when the model stalls but has gathered
+      // useful data, it assembles and delivers the accumulated artifacts.
+      const nonMetaGains = toolsThisStep.filter((t) => !RUNNER_META_TOOLS.has(t));
+      consecutiveStalled = nonMetaGains.length > 0 ? 0 : consecutiveStalled + 1;
+
+      const totalArtifacts = [...state.toolsUsed].filter((t) => !RUNNER_META_TOOLS.has(t)).length;
+      if (
+        totalArtifacts > 0 &&
+        consecutiveStalled >= 2 &&
+        state.iteration >= 2 &&
+        state.status !== "done" &&
+        state.status !== "failed"
+      ) {
+        yield* Effect.log(
+          `[harness-deliverable] Assembling output from ${totalArtifacts} tool artifacts after ${consecutiveStalled} stalled iterations`,
+        );
+        state = transitionState(state, {
+          status: "done",
+          output: assembleDeliverable(state),
+          meta: { ...state.meta, terminatedBy: "harness_deliverable" },
+        });
+        break;
+      }
+
       // ── Intelligent Context Synthesis (before thinking step) ──
       // Produces a steering nudge appended to the FC thread — never replaces it.
       const icsResult = yield* coordinateICS(state, {
@@ -264,6 +347,103 @@ export function runKernel(
       });
       if (icsResult.steeringNudge) {
         state = transitionState(state, { steeringNudge: icsResult.steeringNudge });
+      }
+
+      // ── Dynamic tool reclassification ──────────────────────────────────
+      // When the model is struggling with the current tool set (gate-blocked
+      // attempts, or no new non-meta tools used for 2+ iterations), re-run
+      // classification with enriched context — the original task PLUS what
+      // the model has learned, attempted, and been blocked from doing.
+      // This allows the visible tool set to evolve with the agent's
+      // exploration instead of being locked to the initial classification.
+      // Guard: only reclassify when there are enough tools to warrant it
+      // (>3 non-meta tools); trivial tool sets don't benefit from reclassification.
+      const availableSchemaCount = currentInput.availableToolSchemas?.length ?? 0;
+      if (
+        state.status !== "done" &&
+        state.status !== "failed" &&
+        reclassifyCount < maxReclassifications &&
+        hasInitialClassification &&
+        availableSchemaCount > 3 &&
+        state.iteration >= 1
+      ) {
+        const newNonMetaTools = toolsThisStep.filter((t) => !RUNNER_META_TOOLS.has(t));
+        noProgressIterations = newNonMetaTools.length === 0 ? noProgressIterations + 1 : 0;
+
+        const gateBlocked = (state.meta.gateBlockedTools as readonly string[] | undefined) ?? [];
+        const shouldReclassify =
+          gateBlocked.length > 0 || noProgressIterations >= 2;
+
+        if (shouldReclassify) {
+          // Build enriched task description with current execution context
+          const toolsSoFar = [...state.toolsUsed].filter((t) => !RUNNER_META_TOOLS.has(t));
+          const recentObs = state.steps
+            .filter((s) => s.type === "observation")
+            .slice(-3)
+            .map((s) => (s.content ?? "").slice(0, 200))
+            .join("\n");
+          const lastThought = (state.meta.lastThought as string) ?? "";
+
+          const enrichedTask = [
+            `Original task: ${currentInput.task}`,
+            toolsSoFar.length > 0 ? `Tools already used successfully: ${toolsSoFar.join(", ")}` : "",
+            gateBlocked.length > 0 ? `Model attempted tools that were blocked: ${gateBlocked.join(", ")}` : "",
+            recentObs ? `Recent observations:\n${recentObs}` : "",
+            lastThought ? `Model's current reasoning: ${lastThought.slice(0, 300)}` : "",
+          ]
+            .filter(Boolean)
+            .join("\n");
+
+          const toolSummaries = (currentInput.availableToolSchemas ?? []).map((t) => ({
+            name: t.name,
+            description: t.description ?? "",
+            parameters: (t.parameters ?? []).map((p) => ({
+              name: p.name,
+              type: p.type ?? "string",
+              description: p.description ?? "",
+              required: Boolean(p.required),
+            })),
+          }));
+
+          const reclassResult = yield* classifyToolRelevance({
+            taskDescription: enrichedTask,
+            availableTools: toolSummaries,
+            systemPrompt: currentInput.systemPrompt,
+          }).pipe(
+            Effect.catchAllCause(() =>
+              Effect.succeed({ required: [] as readonly string[], relevant: [] as readonly string[] }),
+            ),
+          );
+
+          if (reclassResult.required.length > 0 || reclassResult.relevant.length > 0) {
+            // Merge: preserve original required tools, union with new classification
+            const prevRequired = currentInput.requiredTools ?? [];
+            const newRequired = [...new Set([...prevRequired, ...reclassResult.required])];
+            const newRelevant = [...new Set([
+              ...reclassResult.relevant,
+              ...(currentInput.relevantTools ?? []),
+            ])];
+
+            currentInput = {
+              ...currentInput,
+              requiredTools: newRequired,
+              relevantTools: newRelevant,
+            };
+            currentContext = { ...currentContext, input: currentInput };
+            reclassifyCount++;
+
+            // Clear gateBlockedTools since we've incorporated the feedback
+            state = transitionState(state, {
+              meta: { ...state.meta, gateBlockedTools: undefined },
+            });
+            noProgressIterations = 0;
+
+            yield* Effect.log(
+              `[reclassify] Updated tool classification (attempt ${reclassifyCount}/${maxReclassifications}): ` +
+                `required=[${newRequired.join(", ")}], relevant=[${newRelevant.join(", ")}]`,
+            );
+          }
+        }
       }
 
       // ── Oracle hard gate (pulse readyToAnswer two-stage escalation) ──────
@@ -402,13 +582,31 @@ export function runKernel(
               // Reset per-loop tracking
               prevToolsUsed = new Set<string>();
               requiredToolRedirects = 0;
+              noProgressIterations = 0;
+              reclassifyCount = 0;
+              consecutiveStalled = 0;
 
               // Continue the outer while loop with fresh state
               continue;
             }
           }
 
-          // Fall through to standard failure
+          // Before failing: if the model has gathered artifacts, succeed with them.
+          // Loops with data → deliver. Loops without data → fail.
+          const loopArtifactCount = [...state.toolsUsed].filter((t) => !RUNNER_META_TOOLS.has(t)).length;
+          if (loopArtifactCount > 0) {
+            yield* Effect.log(
+              `[harness-deliverable] Loop detected but ${loopArtifactCount} artifacts gathered — delivering instead of failing`,
+            );
+            state = transitionState(state, {
+              status: "done",
+              output: assembleDeliverable(state),
+              meta: { ...state.meta, terminatedBy: "harness_deliverable" },
+            });
+            break;
+          }
+
+          // No artifacts — genuine failure
           state = transitionState(state, {
             status: "failed",
             error: loopMsg,
@@ -456,7 +654,9 @@ export function runKernel(
     // ── 7. Post-loop required tools check ───────────────────────────────────
     // Final safety net: if the loop exited with "done" (e.g. via bare tool call
     // guard or max iterations) but required tools still haven't been called, fail.
-    if (state.status === "done" && requiredTools.length > 0) {
+    // Exception: harness_deliverable exits are deliberate — the harness determined
+    // enough data was gathered despite some tools not being called.
+    if (state.status === "done" && requiredTools.length > 0 && state.meta.terminatedBy !== "harness_deliverable") {
       const missingTools = requiredTools.filter((t) => !state.toolsUsed.has(t));
       if (missingTools.length > 0) {
         state = transitionState(state, {

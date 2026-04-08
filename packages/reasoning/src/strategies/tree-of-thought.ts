@@ -23,6 +23,7 @@ import type { ToolSchema } from "./kernel/utils/tool-utils.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
 import { makeStep, buildStrategyResult } from "./kernel/utils/step-utils.js";
+import { resolveExecutableToolCapabilities } from "./kernel/utils/tool-capabilities.js";
 
 interface TreeOfThoughtInput {
   readonly taskDescription: string;
@@ -75,6 +76,10 @@ export const executeTreeOfThought = (
 
     const { breadth, depth, pruningThreshold } =
       input.config.strategies.treeOfThought;
+    const capabilitySnapshot = yield* resolveExecutableToolCapabilities({
+      availableToolSchemas: input.availableToolSchemas,
+      metaTools: input.metaTools,
+    });
     const maxCost = input.config.strategies.treeOfThought.maxCost;
     const steps: ReasoningStep[] = [];
     const start = Date.now();
@@ -285,7 +290,8 @@ export const executeTreeOfThought = (
       systemPrompt: input.systemPrompt
         ? `${input.systemPrompt}\n\nYou are a systematic problem solver. Execute the given approach to produce a final answer.`
         : "You are a systematic problem solver. Execute the given approach to produce a final answer.",
-      availableToolSchemas: input.availableToolSchemas,
+      availableToolSchemas: capabilitySnapshot.availableToolSchemas,
+      allToolSchemas: capabilitySnapshot.allToolSchemas,
       priorContext: `Selected Approach (from planning phase):\n${bestPathSummary}`,
       resultCompression: input.resultCompression,
       temperature: 0.7,

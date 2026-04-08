@@ -106,7 +106,32 @@ function toToolCallSpec(
 
   // Normalize hyphenated names (some models use underscores)
   const normalizedName = name.replace(/_/g, "-");
-  const matchedName = toolNames.has(name) ? name : toolNames.has(normalizedName) ? normalizedName : null;
+  let matchedName = toolNames.has(name) ? name : toolNames.has(normalizedName) ? normalizedName : null;
+
+  // Fuzzy fallback: local models often hallucinate extra path segments
+  // (e.g. "github/repo/get_commits" instead of "github/list_commits").
+  // Try matching by the last path segment against tool name suffixes.
+  if (!matchedName) {
+    const segments = name.replace(/_/g, "-").split("/");
+    const lastSegment = segments[segments.length - 1] ?? "";
+    const prefix = segments[0] ?? "";
+    if (lastSegment) {
+      for (const candidate of toolNames) {
+        // Match: same namespace prefix AND same suffix (e.g. github/list-commits matches github/list_commits)
+        if (candidate.startsWith(prefix + "/") && candidate.endsWith(lastSegment)) {
+          matchedName = candidate;
+          break;
+        }
+        // Match: candidate ends with the last segment (e.g. "list-commits" matches "github/list-commits")
+        const candidateLastSegment = candidate.split("/").pop() ?? "";
+        if (candidateLastSegment === lastSegment) {
+          matchedName = candidate;
+          break;
+        }
+      }
+    }
+  }
+
   if (!matchedName) return null;
 
   return {

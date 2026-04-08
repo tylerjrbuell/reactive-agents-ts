@@ -561,6 +561,136 @@ export function computeNoveltyRatio(newText: string, priorText: string): number 
   return novelCount / newTokens.size;
 }
 
+export type ToolElaborationInjectionConfig = {
+  readonly enabled?: boolean;
+  readonly maxHintsPerTool?: number;
+};
+
+export type NextMovesPlanningConfig = {
+  readonly enabled?: boolean;
+  readonly maxBatchSize?: number;
+  readonly allowParallelBatching?: boolean;
+};
+
+function describeToolBehavior(name: string): readonly string[] {
+  const lowered = name.toLowerCase();
+  if (lowered.includes("search") || lowered.includes("http") || lowered.includes("fetch") || lowered.includes("get")) {
+    return [
+      "Use for read-only lookup and data retrieval.",
+      "Independent calls can be grouped before the next think step.",
+      "Prefer concrete, narrow arguments to reduce noisy observations.",
+    ];
+  }
+  if (lowered.includes("read") || lowered.includes("list") || lowered.includes("query")) {
+    return [
+      "Use for read-only inspection.",
+      "Safe candidate for short-term batched execution.",
+      "Return focused slices over broad payloads when possible.",
+    ];
+  }
+  if (lowered.includes("write") || lowered.includes("delete") || lowered.includes("update") || lowered.includes("create")) {
+    return [
+      "Has side effects; execute with explicit intent.",
+      "Avoid batching with other mutating calls unless ordering is guaranteed.",
+      "Confirm target path/resource arguments before invocation.",
+    ];
+  }
+  return [
+    "Use only when arguments are complete and specific.",
+    "Prefer one clear objective per call.",
+    "If multiple independent calls are needed, batch only safe read-like calls.",
+  ];
+}
+
+function isParallelBatchSafeTool(name: string): boolean {
+  const lowered = name.toLowerCase();
+  const LOCAL_META_TOOLS = new Set([
+    "final-answer",
+    "task-complete",
+    "context-status",
+    "brief",
+    "pulse",
+    "find",
+    "recall",
+  ]);
+  if (LOCAL_META_TOOLS.has(name)) return false;
+  if (lowered.includes("final-answer")) return false;
+  if (lowered.includes("write") || lowered.includes("delete") || lowered.includes("update") || lowered.includes("create")) {
+    return false;
+  }
+  return (
+    lowered.includes("search") ||
+    lowered.includes("http") ||
+    lowered.includes("fetch") ||
+    lowered.includes("get") ||
+    lowered.includes("read") ||
+    lowered.includes("list") ||
+    lowered.includes("query")
+  );
+}
+
+export function buildToolElaborationInjection(
+  toolSchemas: readonly { readonly name: string; readonly parameters?: readonly { readonly name: string }[] }[],
+  config?: ToolElaborationInjectionConfig,
+): string {
+  if (!config?.enabled || toolSchemas.length === 0) return "";
+  const maxHints = Math.max(1, config.maxHintsPerTool ?? 2);
+  const lines = toolSchemas.map((tool) => {
+    const hints = describeToolBehavior(tool.name).slice(0, maxHints);
+    const args = (tool.parameters ?? []).map((p) => p.name).join(", ");
+    const argsLine = args.length > 0 ? `required args: ${args}` : "required args: none";
+    return [
+      `- ${tool.name}`,
+      `  - ${argsLine}`,
+      ...hints.map((h) => `  - ${h}`),
+    ].join("\n");
+  });
+  return [
+    "## Tool Elaboration (lightweight)",
+    "Use these tool-specific hints to choose precise calls and avoid dead iterations.",
+    ...lines,
+  ].join("\n");
+}
+
+export function planNextMoveBatches<T extends { readonly name: string }>(
+  calls: readonly T[],
+  config?: NextMovesPlanningConfig,
+): readonly (readonly T[])[] {
+  if (calls.length === 0) return [];
+  if (!config?.enabled) return calls.map((c) => [c]);
+
+  const allowParallel = config.allowParallelBatching ?? true;
+  if (!allowParallel) return calls.map((c) => [c]);
+
+  const maxBatchSize = Math.max(1, config.maxBatchSize ?? 3);
+  const batches: T[][] = [];
+  let current: T[] = [];
+
+  for (const call of calls) {
+    const safe = isParallelBatchSafeTool(call.name);
+    if (!safe) {
+      if (current.length > 0) {
+        batches.push(current);
+        current = [];
+      }
+      batches.push([call]);
+      continue;
+    }
+
+    current.push(call);
+    if (current.length >= maxBatchSize) {
+      batches.push(current);
+      current = [];
+    }
+  }
+
+  if (current.length > 0) {
+    batches.push(current);
+  }
+
+  return batches;
+}
+
 /**
  * Gate native parallel tool batches against {@link requiredTools} so optional tools
  * (e.g. http-get) cannot run while a required tool (e.g. file-write) is still missing.
@@ -568,7 +698,9 @@ export function computeNoveltyRatio(newText: string, priorText: string): number 
  * - Pre-filters calls that have exceeded their per-tool budget (`maxCallsPerTool`).
  * - If any call targets a missing required tool → return only the first such call.
  * - If calls are all from {@link relevantTools} or satisfied required → allow through.
- * - If calls omit every missing required tool and aren't relevant → `blockedOptionalBatch: true`.
+ * - If calls omit every missing required tool and aren't relevant:
+ *   - strict mode: block batch (`blockedOptionalBatch: true`)
+ *   - default mode: allow one exploratory call to preserve discovery context.
  */
 export function gateNativeToolCallsForRequiredTools<T extends { readonly name: string }>(
   calls: readonly T[],
@@ -577,6 +709,7 @@ export function gateNativeToolCallsForRequiredTools<T extends { readonly name: s
   relevantTools?: readonly string[],
   toolCallCounts?: Readonly<Record<string, number>>,
   maxCallsPerTool?: Readonly<Record<string, number>>,
+  strictDependencyChain?: boolean,
 ): { readonly effective: readonly T[]; readonly blockedOptionalBatch: boolean } {
   // Layer 3: pre-filter calls that have exhausted their per-tool budget.
   const budgeted =
@@ -607,6 +740,14 @@ export function gateNativeToolCallsForRequiredTools<T extends { readonly name: s
       return { effective: allowedCalls, blockedOptionalBatch: false };
     }
   }
-  // Either all calls were over-budget or none were relevant — redirect to required.
-  return { effective: [], blockedOptionalBatch: budgeted.length > 0 || calls.length > 0 };
+  // Strict mode enforces required-tool hierarchy before exploratory context gathering.
+  if (strictDependencyChain) {
+    return { effective: [], blockedOptionalBatch: budgeted.length > 0 || calls.length > 0 };
+  }
+
+  // Non-strict mode keeps progress moving by allowing one exploratory call.
+  if (budgeted.length > 0) {
+    return { effective: [budgeted[0]!], blockedOptionalBatch: false };
+  }
+  return { effective: [], blockedOptionalBatch: false };
 }

@@ -13,6 +13,10 @@ import type { ResultCompressionConfig, ToolCallSpec, FinalAnswerCapture } from "
 import type { LLMService } from "@reactive-agents/llm-provider";
 import type { ToolSchema } from "./utils/tool-utils.js";
 import type { KernelMetaToolsConfig } from "../../types/kernel-meta-tools.js";
+import type {
+  ToolElaborationInjectionConfig,
+  NextMovesPlanningConfig,
+} from "./utils/tool-utils.js";
 
 // ── Kernel Status ────────────────────────────────────────────────────────────
 
@@ -155,6 +159,12 @@ export interface KernelInput {
    */
   readonly maxCallsPerTool?: Readonly<Record<string, number>>;
   /**
+   * Enforce a strict required-tool dependency chain.
+   * When false/omitted, the gate may allow one exploratory non-required tool call
+   * while still steering the model back toward missing required tools.
+   */
+  readonly strictToolDependencyChain?: boolean;
+  /**
    * Maximum number of times the kernel will redirect the agent back to
    * "thinking" when required tools haven't been used. Default: 2.
    * After this many redirects, the kernel fails with an error listing
@@ -176,6 +186,10 @@ export interface KernelInput {
   readonly synthesisConfig?: import("../../context/synthesis-types.js").SynthesisConfig;
   /** Meta-tool configuration and pre-computed static data for brief/pulse/recall/find. */
   readonly metaTools?: KernelMetaToolsConfig;
+  /** Lightweight tool elaboration injection shown in system prompt for better tool selection. */
+  readonly toolElaboration?: ToolElaborationInjectionConfig;
+  /** Short-term next-moves planner for optional native tool batch execution windows. */
+  readonly nextMovesPlanning?: NextMovesPlanningConfig;
   /**
    * Runtime-resolved skills (e.g. SkillResolver) merged into `brief` alongside
    * `metaTools.staticBriefInfo.availableSkills` — resolved wins on name collision.
@@ -514,6 +528,8 @@ export interface ReActKernelInput {
   requiredTools?: readonly string[];
   /** Max redirects when required tools are missing (default: 2) */
   maxRequiredToolRetries?: number;
+  /** Enforce strict required-tool dependency chain before exploratory calls. */
+  strictToolDependencyChain?: boolean;
   /** Model identifier for routing/entropy scoring */
   modelId?: string;
   /** Exit kernel loop when all scoped tools have been called successfully */

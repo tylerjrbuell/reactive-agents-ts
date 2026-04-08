@@ -28,6 +28,7 @@ import {
   type KernelContext,
   type KernelMessage,
 } from "../kernel-state.js";
+import { planNextMoveBatches } from "../utils/tool-utils.js";
 import { checkToolCall, defaultGuards, META_TOOL_SET } from "./guard.js";
 
 // ─── Meta-Tool Registry ───────────────────────────────────────────────────────
@@ -138,7 +139,28 @@ export function handleActing(
       let lastMetaToolCall: string | undefined = state.lastMetaToolCall;
       let consecutiveMetaToolCount: number = state.consecutiveMetaToolCount ?? 0;
 
-      for (const tc of pendingNativeCalls) {
+      const plannedBatches = planNextMoveBatches(
+        pendingNativeCalls,
+        input.nextMovesPlanning,
+      );
+      const batchLeaderToCalls = new Map<string, readonly ToolCallSpec[]>();
+      const batchFollowers = new Set<string>();
+      for (const batch of plannedBatches) {
+        if (batch.length <= 1) continue;
+        const leader = batch[0];
+        if (!leader) continue;
+        batchLeaderToCalls.set(leader.id, batch);
+        for (const follower of batch.slice(1)) {
+          batchFollowers.add(follower.id);
+        }
+      }
+
+      for (let idx = 0; idx < pendingNativeCalls.length; idx++) {
+        const tc = pendingNativeCalls[idx]!;
+        if (batchFollowers.has(tc.id)) {
+          continue;
+        }
+
         const META_TOOL_NAMES = new Set(["final-answer", "task-complete", "context-status", "brief", "pulse", "find", "recall"]);
 
         // ── Check meta-tool registry first (brief, pulse) ─────────────────────
@@ -257,6 +279,148 @@ export function handleActing(
           newToolsUsed.add(tc.name);
           allSteps = [...allSteps, actionStep, rejectObsStep];
           // final-answer is not a meta-introspection tool — reset tracking
+          lastMetaToolCall = undefined;
+          consecutiveMetaToolCount = 0;
+          continue;
+        }
+
+        const plannedBatch = batchLeaderToCalls.get(tc.id);
+        if (plannedBatch && plannedBatch.length > 1) {
+          const guardCheck = checkToolCall(defaultGuards);
+          const executableCalls: ToolCallSpec[] = [];
+
+          for (const batchCall of plannedBatch) {
+            const guardOutcome = guardCheck(
+              batchCall,
+              transitionState(state, { steps: allSteps, lastMetaToolCall, consecutiveMetaToolCount }),
+              input,
+            );
+
+            if (!guardOutcome.pass) {
+              const blockedActionStep = makeStep("action", `${batchCall.name}(${JSON.stringify(batchCall.arguments)})`, {
+                toolCall: { id: batchCall.id, name: batchCall.name, arguments: batchCall.arguments },
+              });
+              const blockedObsStep = makeStep("observation", guardOutcome.observation, {
+                observationResult: makeObservationResult(batchCall.name, true, guardOutcome.observation),
+              });
+              yield* hooks.onAction(state, batchCall.name, JSON.stringify(batchCall.arguments));
+              yield* hooks.onObservation(
+                transitionState(state, { steps: [...allSteps, blockedActionStep] }),
+                guardOutcome.observation,
+                true,
+              );
+              allSteps = [...allSteps, blockedActionStep, blockedObsStep];
+              continue;
+            }
+
+            executableCalls.push(batchCall);
+          }
+
+          if (executableCalls.length === 0) {
+            lastMetaToolCall = undefined;
+            consecutiveMetaToolCount = 0;
+            continue;
+          }
+
+          if (toolService._tag === "None") {
+            for (const batchCall of executableCalls) {
+              const actionStep = makeStep("action", `${batchCall.name}(${JSON.stringify(batchCall.arguments)})`, {
+                toolCall: { id: batchCall.id, name: batchCall.name, arguments: batchCall.arguments },
+                toolUsed: batchCall.name,
+              });
+              allSteps = [...allSteps, actionStep];
+              newToolsUsed.add(batchCall.name);
+
+              yield* hooks.onAction(state, batchCall.name, JSON.stringify(batchCall.arguments));
+              const errContent = `[Tool "${batchCall.name}" requested but ToolService is not available]`;
+              const errObsStep = makeStep("observation", errContent, {
+                observationResult: makeObservationResult(batchCall.name, false, errContent),
+              });
+              yield* hooks.onObservation(
+                transitionState(state, { steps: allSteps }),
+                errContent,
+                false,
+              );
+              allSteps = [...allSteps, errObsStep];
+            }
+
+            lastMetaToolCall = undefined;
+            consecutiveMetaToolCount = 0;
+            continue;
+          }
+
+          const actionIndexByCallId = new Map<string, number>();
+          for (const batchCall of executableCalls) {
+            const actionStep = makeStep("action", `${batchCall.name}(${JSON.stringify(batchCall.arguments)})`, {
+              toolCall: { id: batchCall.id, name: batchCall.name, arguments: batchCall.arguments },
+              toolUsed: batchCall.name,
+            });
+            allSteps = [...allSteps, actionStep];
+            actionIndexByCallId.set(batchCall.id, allSteps.length - 1);
+            newToolsUsed.add(batchCall.name);
+            yield* hooks.onAction(state, batchCall.name, JSON.stringify(batchCall.arguments));
+          }
+
+          const executionResults = yield* Effect.all(
+            executableCalls.map((batchCall) =>
+              Effect.gen(function* () {
+                const startMs = Date.now();
+                const execResult = yield* executeNativeToolCall(
+                  toolService.value,
+                  batchCall,
+                  input.agentId ?? "reasoning-agent",
+                  input.sessionId ?? "reasoning-session",
+                  { compression, scratchpad: state.scratchpad as Map<string, string> },
+                );
+                const durationMs = Date.now() - startMs;
+                return {
+                  callId: batchCall.id,
+                  toolName: batchCall.name,
+                  execResult,
+                  durationMs,
+                };
+              }),
+            ),
+            { concurrency: executableCalls.length },
+          );
+
+          for (const result of executionResults) {
+            const actionIdx = actionIndexByCallId.get(result.callId);
+            if (actionIdx !== undefined) {
+              const actionStep = allSteps[actionIdx];
+              if (actionStep) {
+                allSteps[actionIdx] = {
+                  ...actionStep,
+                  metadata: { ...(actionStep.metadata ?? {}), duration: result.durationMs },
+                };
+              }
+            }
+
+            let obsContent = result.execResult.content;
+            if (!result.execResult.success) {
+              const recovery = adapter.errorRecovery?.({
+                toolName: result.toolName,
+                errorContent: result.execResult.content,
+                missingTools: (input.requiredTools ?? []).filter((t) => !newToolsUsed.has(t)),
+                tier: profile.tier ?? "mid",
+              });
+              if (recovery) {
+                obsContent = `${result.execResult.content}\n\n[Recovery guidance: ${recovery}]`;
+              }
+            }
+
+            const obsStep = makeStep("observation", obsContent, {
+              observationResult: makeObservationResult(result.toolName, result.execResult.success, obsContent),
+            });
+
+            yield* hooks.onObservation(
+              transitionState(state, { steps: allSteps }),
+              obsContent,
+              result.execResult.success,
+            );
+            allSteps = [...allSteps, obsStep];
+          }
+
           lastMetaToolCall = undefined;
           consecutiveMetaToolCount = 0;
           continue;

@@ -17,16 +17,8 @@ import type { ReasoningStep } from "../../types/index.js";
 import { ExecutionError } from "../../errors/errors.js";
 import { LLMService } from "@reactive-agents/llm-provider";
 import {
-  scratchpadStoreRef,
   detectCompletionGaps,
   type FinalAnswerCapture,
-  makeRecallHandler,
-  recallTool,
-  makeFindHandler,
-  findTool,
-  ragMemoryStore,
-  webSearchHandler,
-  ToolService,
 } from "@reactive-agents/tools";
 
 // Re-export for test and consumer backward compatibility
@@ -48,6 +40,7 @@ import { handleActing } from "./phases/act.js";
 // Defined in kernel-state to avoid circular imports; re-exported here for backward compatibility
 import type { ReActKernelInput, ReActKernelResult } from "./kernel-state.js";
 export type { ReActKernelInput, ReActKernelResult };
+import { resolveExecutableToolCapabilities } from "./utils/tool-capabilities.js";
 
 // ── makeKernel / reactKernel ─────────────────────────────────────────────────
 
@@ -105,22 +98,11 @@ export const executeReActKernel = (
   input: ReActKernelInput,
 ): Effect.Effect<ReActKernelResult, ExecutionError, LLMService> =>
   Effect.gen(function* () {
-    // ── Register meta-tools into ToolService when enabled ────────────────────
-    const toolServiceOpt = yield* Effect.serviceOption(ToolService);
-    if (toolServiceOpt._tag === "Some") {
-      const ts = toolServiceOpt.value;
-      if (input.metaTools?.recall) {
-        yield* ts.register(recallTool, makeRecallHandler(scratchpadStoreRef)).pipe(Effect.catchAll(() => Effect.void));
-      }
-      if (input.metaTools?.find) {
-        yield* ts.register(findTool, makeFindHandler({
-          ragStore: ragMemoryStore,
-          webSearchHandler,
-          recallStoreRef: scratchpadStoreRef,
-          config: {},
-        })).pipe(Effect.catchAll(() => Effect.void));
-      }
-    }
+    const capabilitySnapshot = yield* resolveExecutableToolCapabilities({
+      availableToolSchemas: input.availableToolSchemas,
+      allToolSchemas: input.allToolSchemas,
+      metaTools: input.metaTools,
+    });
 
     // Native FC detection is handled by runKernel (kernel-runner.ts) —
     // it auto-detects provider capabilities and injects the FC flag + resolver.
@@ -129,7 +111,8 @@ export const executeReActKernel = (
     const state = yield* runKernel(reactKernel, {
       task: input.task,
       systemPrompt: input.systemPrompt,
-      availableToolSchemas: input.availableToolSchemas,
+      availableToolSchemas: capabilitySnapshot.availableToolSchemas,
+      allToolSchemas: capabilitySnapshot.allToolSchemas,
       priorContext: input.priorContext,
       contextProfile: input.contextProfile,
       resultCompression: input.resultCompression,
@@ -139,6 +122,7 @@ export const executeReActKernel = (
       blockedTools: input.blockedTools,
       requiredTools: input.requiredTools,
       maxRequiredToolRetries: input.maxRequiredToolRetries,
+      strictToolDependencyChain: input.strictToolDependencyChain,
       metaTools: input.metaTools,
       synthesisConfig: input.synthesisConfig,
       ...(input.toolCallResolver ? { toolCallResolver: input.toolCallResolver } : {}),
