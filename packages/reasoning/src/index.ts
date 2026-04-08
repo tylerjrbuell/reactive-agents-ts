@@ -118,15 +118,8 @@ export type {
 export { applyMessageWindow } from "./context/message-window.js";
 
 // ─── Intelligent Context Synthesis (ICS) ───
-export { classifyTaskPhase } from "./context/task-phase.js";
-export type { TaskPhase } from "./context/task-phase.js";
-export { fastSynthesis } from "./context/synthesis-templates.js";
-export {
-  deepSynthesis,
-  ContextSynthesizerService,
-  ContextSynthesizerLive,
-} from "./context/context-synthesizer.js";
 export type {
+  TaskPhase,
   SynthesisInput,
   SynthesizedContext,
   SynthesisConfig,

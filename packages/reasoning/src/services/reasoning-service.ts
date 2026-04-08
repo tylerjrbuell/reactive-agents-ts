@@ -13,7 +13,6 @@ import { LLMService } from "@reactive-agents/llm-provider";
 import { ToolService } from "@reactive-agents/tools";
 import type { SynthesisConfig } from "../context/synthesis-types.js";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
-import { ContextSynthesizerLive } from "../context/context-synthesizer.js";
 
 // ─── Service Tag ───
 
@@ -104,10 +103,7 @@ export const ReasoningServiceLive = (
       // Capture ToolService optionally — strategies like ReAct need it
       // for tool execution. When not available, strategies degrade gracefully.
       const toolServiceOpt = yield* Effect.serviceOption(ToolService);
-      let strategyLayer: Layer.Layer<any, never> = Layer.mergeAll(
-        llmLayer,
-        ContextSynthesizerLive,
-      );
+      let strategyLayer: Layer.Layer<any, never> = llmLayer;
       if (toolServiceOpt._tag === "Some") {
         strategyLayer = Layer.merge(
           strategyLayer,
