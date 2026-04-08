@@ -562,6 +562,8 @@ export interface AgentResult {
   readonly terminatedBy?: TerminatedBy;
   /** Structured post-run debrief synthesized after the kernel exits. */
   readonly debrief?: AgentDebrief;
+  /** Error message when `success` is false. */
+  readonly error?: string;
 }
 
 // ─── Persona Composition Helper ───────────────────────────────────────────────
@@ -3679,6 +3681,7 @@ export class ReactiveAgent {
           ...(r.format !== undefined ? { format: r.format } : {}),
           ...(r.terminatedBy !== undefined ? { terminatedBy: r.terminatedBy } : {}),
           ...(r.debrief !== undefined ? { debrief: r.debrief } : {}),
+          ...(r.error !== undefined ? { error: r.error } : {}),
         };
         // Capture debrief for use as context in subsequent chat() calls
         if (agentResult.debrief) this._lastDebrief = agentResult.debrief;

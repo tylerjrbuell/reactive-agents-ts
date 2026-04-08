@@ -2,6 +2,27 @@ import { describe, it, expect } from "bun:test";
 import { ReactiveAgents } from "../src/builder.js";
 
 describe("Conductor's Suite — integration", () => {
+  it("withTools() default meta-tools keeps recall executable", async () => {
+    const agent = await ReactiveAgents.create()
+      .withTestScenario([
+        { toolCall: { name: "recall", args: { key: "fact", content: "Paris is the capital of France." } } },
+        { toolCall: { name: "recall", args: { key: "fact" } } },
+        { text: "Paris is the capital of France." },
+      ])
+      .withTools()
+      .build();
+
+    let result;
+    try {
+      result = await agent.run("Store and recall a fact.");
+    } finally {
+      await agent.dispose();
+    }
+
+    expect(result.success).toBe(true);
+    expect(result.output).toContain("Paris");
+  });
+
   it("recall write and read within a run round-trips correctly", async () => {
     const agent = await ReactiveAgents.create()
       .withTestScenario([
@@ -19,6 +40,7 @@ describe("Conductor's Suite — integration", () => {
       await agent.dispose();
     }
 
+    expect(result.success).toBe(true);
     expect(result.output).toBeTruthy();
   });
 
@@ -39,6 +61,7 @@ describe("Conductor's Suite — integration", () => {
       await agent.dispose();
     }
 
+    expect(result.success).toBe(true);
     expect(result.output).toBeTruthy();
   });
 
@@ -58,6 +81,7 @@ describe("Conductor's Suite — integration", () => {
       await agent.dispose();
     }
 
+    expect(result.success).toBe(true);
     expect(result.output).toBeTruthy();
   });
 
@@ -78,6 +102,7 @@ describe("Conductor's Suite — integration", () => {
       await agent.dispose();
     }
 
+    expect(result.success).toBe(true);
     expect(result.output).toBeTruthy();
   });
 
@@ -97,6 +122,7 @@ describe("Conductor's Suite — integration", () => {
       await agent.dispose();
     }
 
+    expect(result.success).toBe(true);
     expect(result.output).toBeTruthy();
   });
 
@@ -117,6 +143,7 @@ describe("Conductor's Suite — integration", () => {
       await agent.dispose();
     }
 
+    expect(result.success).toBe(true);
     expect(result.output).toBeTruthy();
   });
 });

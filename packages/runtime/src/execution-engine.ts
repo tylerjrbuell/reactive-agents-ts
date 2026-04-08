@@ -3616,6 +3616,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     totalIterations: ctx.iteration,
                     totalTokens: ctx.tokensUsed,
                     durationMs: Date.now() - executionStartMs,
+                    ...(!executionSucceeded && result.error ? { error: result.error } : {}),
                   }).pipe(Effect.catchAll(() => Effect.void));
                   yield* eb.publish({
                     _tag: "TaskCompleted",
