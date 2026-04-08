@@ -35,6 +35,25 @@ import { coordinateICS } from "./utils/ics-coordinator.js";
 import { runReactiveObserver } from "./utils/reactive-observer.js";
 import { detectLoop, checkAllToolsCalled } from "./utils/loop-detector.js";
 
+// ── Token-delta guard ─────────────────────────────────────────────────────────
+
+/**
+ * Guard: exit when model stops making progress (2 consecutive low-delta iterations).
+ *
+ * Conditions that must ALL be true to trigger early exit:
+ * - iteration >= 3 (give the model at least a few steps before judging)
+ * - tokenDelta < 500 (this iteration added very few tokens — model is stalling)
+ * - consecutiveLowDeltaCount >= 2 (two consecutive low-delta iterations in a row)
+ */
+export function shouldExitOnLowDelta(opts: {
+  iteration: number
+  tokenDelta: number
+  consecutiveLowDeltaCount: number
+}): boolean {
+  const { iteration, tokenDelta, consecutiveLowDeltaCount } = opts
+  return iteration >= 3 && tokenDelta < 500 && consecutiveLowDeltaCount >= 2
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /** Error strings from recent failed tool observations — feeds ICS nudge content. */
@@ -144,7 +163,38 @@ export function runKernel(
       state.status !== "failed" &&
       state.iteration < currentOptions.maxIterations
     ) {
+      const prevTokens = state.tokens;
       state = yield* kernel(state, currentContext);
+
+      // ── Token-delta diminishing-returns guard ────────────────────────────
+      // Track consecutive iterations where the model adds fewer than 500 tokens.
+      // After 2 such iterations (starting from iteration 3), exit early to prevent
+      // wasted iterations on a stalled model.
+      // Guard is skipped when no LLM calls have been made (e.g. test/mock kernels
+      // that emit 0 tokens) to avoid false positives in non-LLM scenarios.
+      const tokenDelta = state.tokens - prevTokens;
+      if (state.tokens > 0 || prevTokens > 0) {
+        const lowDelta = tokenDelta < 500;
+        const newConsecutiveLowDelta = lowDelta ? (state.consecutiveLowDeltaCount ?? 0) + 1 : 0;
+        state = transitionState(state, { consecutiveLowDeltaCount: newConsecutiveLowDelta });
+
+        // Only fire the guard when there are remaining iterations to save
+      // (if we're already at the last iteration, the loop exits naturally).
+      const hasRemainingIterations = state.iteration < currentOptions.maxIterations - 1;
+        if (
+          hasRemainingIterations &&
+          state.status !== "done" &&
+          state.status !== "failed" &&
+          shouldExitOnLowDelta({ iteration: state.iteration, tokenDelta, consecutiveLowDeltaCount: newConsecutiveLowDelta })
+        ) {
+          yield* Effect.log(`[token-delta-guard] Early exit: 2 consecutive iterations with <500 token delta (delta=${tokenDelta}, iter=${state.iteration})`);
+          state = transitionState(state, {
+            status: "done",
+            meta: { ...state.meta, terminatedBy: "low_delta_guard" },
+          });
+          break;
+        }
+      }
 
       // Sync scratchpad: kernel may have added entries
       for (const [k, v] of state.scratchpad) {
