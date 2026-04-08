@@ -5,6 +5,7 @@ import {
   evaluateTransform,
   formatToolSchemas,
   formatToolSchemaCompact,
+  formatToolSchemaMicro,
   filterToolsByRelevance,
   gateNativeToolCallsForRequiredTools,
 } from "../../../../src/strategies/kernel/utils/tool-utils.js";
@@ -99,6 +100,31 @@ describe("formatToolSchemaCompact", () => {
     expect(result).toBe("- list-groups()");
   });
 });
+
+describe("formatToolSchemaMicro", () => {
+  const schema = {
+    name: "web-search",
+    description: "Search the web for information",
+    parameters: [{ name: "query", type: "string", description: "search query", required: true }],
+  }
+
+  it("returns name: description with no parameters shown", () => {
+    const result = formatToolSchemaMicro(schema)
+    expect(result).toBe("web-search: Search the web for information")
+  })
+
+  it("truncates long descriptions at 80 chars", () => {
+    const longSchema = { ...schema, description: "A".repeat(100) }
+    const result = formatToolSchemaMicro(longSchema)
+    expect(result).toBe(`web-search: ${"A".repeat(77)}...`)
+  })
+
+  it("handles undefined description", () => {
+    const noDesc = { ...schema, description: undefined as any }
+    const result = formatToolSchemaMicro(noDesc)
+    expect(result).toBe("web-search: ")
+  })
+})
 
 describe("filterToolsByRelevance", () => {
   const allTools = [

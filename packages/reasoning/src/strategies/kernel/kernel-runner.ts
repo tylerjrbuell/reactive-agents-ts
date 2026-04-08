@@ -35,6 +35,75 @@ import { coordinateICS } from "./utils/ics-coordinator.js";
 import { runReactiveObserver } from "./utils/reactive-observer.js";
 import { detectLoop, checkAllToolsCalled } from "./utils/loop-detector.js";
 
+// ── Token-delta guard ─────────────────────────────────────────────────────────
+
+/**
+ * Guard: exit when model stops making progress (2 consecutive low-delta iterations).
+ *
+ * Conditions that must ALL be true to trigger early exit:
+ * - iteration >= 3 (give the model at least a few steps before judging)
+ * - tokenDelta < 500 (this iteration added very few tokens — model is stalling)
+ * - consecutiveLowDeltaCount >= 2 (two consecutive low-delta iterations in a row)
+ */
+export function shouldExitOnLowDelta(opts: {
+  iteration: number
+  tokenDelta: number
+  consecutiveLowDeltaCount: number
+}): boolean {
+  const { iteration, tokenDelta, consecutiveLowDeltaCount } = opts
+  return iteration >= 3 && tokenDelta < 500 && consecutiveLowDeltaCount >= 2
+}
+
+// ── Oracle hard gate ──────────────────────────────────────────────────────────
+
+/**
+ * Guard: force exit when the pulse oracle has said readyToAnswer=true but the
+ * model has ignored it for 2 consecutive iterations (Stage 2).
+ *
+ * Stage 1 (nudgeCount < 2): caller should inject a mandatory steering nudge and
+ * increment readyToAnswerNudgeCount.
+ * Stage 2 (nudgeCount >= 2): return true → caller terminates with "oracle_forced".
+ */
+export function shouldForceOracleExit(opts: {
+  oracleReady: boolean
+  readyToAnswerNudgeCount: number
+}): boolean {
+  return opts.oracleReady && opts.readyToAnswerNudgeCount >= 2
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/**
+ * Extract the readyToAnswer flag from the most recent pulse observation step.
+ * Returns false when there is no pulse observation or the JSON cannot be parsed.
+ */
+function getLastPulseReadyToAnswer(state: KernelState): boolean {
+  const pulseObs = [...state.steps]
+    .reverse()
+    .find(
+      (s) =>
+        s.type === "observation" &&
+        s.metadata?.observationResult?.toolName === "pulse",
+    );
+  if (!pulseObs) return false;
+  try {
+    const parsed = JSON.parse(pulseObs.content ?? "");
+    return parsed?.readyToAnswer === true;
+  } catch {
+    return false;
+  }
+}
+
+/** Error strings from recent failed tool observations — feeds ICS nudge content. */
+function getLastErrors(state: KernelState): readonly string[] {
+  return state.steps
+    .filter(
+      (s) => s.type === "observation" && s.metadata?.observationResult?.success === false,
+    )
+    .slice(-2)
+    .map((s) => (s.metadata?.observationResult?.error as string | undefined) ?? "unknown error")
+}
+
 // ── Main entry point ──────────────────────────────────────────────────────────
 
 /**
@@ -132,7 +201,38 @@ export function runKernel(
       state.status !== "failed" &&
       state.iteration < currentOptions.maxIterations
     ) {
+      const prevTokens = state.tokens;
       state = yield* kernel(state, currentContext);
+
+      // ── Token-delta diminishing-returns guard ────────────────────────────
+      // Track consecutive iterations where the model adds fewer than 500 tokens.
+      // After 2 such iterations (starting from iteration 3), exit early to prevent
+      // wasted iterations on a stalled model.
+      // Guard is skipped when no LLM calls have been made (e.g. test/mock kernels
+      // that emit 0 tokens) to avoid false positives in non-LLM scenarios.
+      const tokenDelta = state.tokens - prevTokens;
+      if (state.tokens > 0 || prevTokens > 0) {
+        const lowDelta = tokenDelta < 500;
+        const newConsecutiveLowDelta = lowDelta ? (state.consecutiveLowDeltaCount ?? 0) + 1 : 0;
+        state = transitionState(state, { consecutiveLowDeltaCount: newConsecutiveLowDelta });
+
+        // Only fire the guard when there are remaining iterations to save
+        // (if we're already at the last iteration, the loop exits naturally).
+        const hasRemainingIterations = state.iteration < currentOptions.maxIterations - 1;
+        if (
+          hasRemainingIterations &&
+          state.status !== "done" &&
+          state.status !== "failed" &&
+          shouldExitOnLowDelta({ iteration: state.iteration, tokenDelta, consecutiveLowDeltaCount: newConsecutiveLowDelta })
+        ) {
+          yield* Effect.log(`[token-delta-guard] Early exit: 2 consecutive iterations with <500 token delta (delta=${tokenDelta}, iter=${state.iteration})`);
+          state = transitionState(state, {
+            status: "done",
+            meta: { ...state.meta, terminatedBy: "low_delta_guard" },
+          });
+          break;
+        }
+      }
 
       // Sync scratchpad: kernel may have added entries
       for (const [k, v] of state.scratchpad) {
@@ -151,9 +251,52 @@ export function runKernel(
       prevToolsUsed = new Set(state.toolsUsed);
 
       // ── Intelligent Context Synthesis (before thinking step) ──
-      // Fires on ALL iterations including iteration 0 so the orient phase
-      // receives synthesized context with tool hints (GAP 1 fix).
-      state = yield* coordinateICS(state, currentInput, currentOptions, currentContext, hooks);
+      // Produces a steering nudge appended to the FC thread — never replaces it.
+      const icsResult = yield* coordinateICS(state, {
+        task: currentInput.task,
+        requiredTools: currentInput.requiredTools ?? [],
+        toolsUsed: state.toolsUsed,
+        availableTools: (currentInput.availableToolSchemas ?? []) as readonly { name: string; description: string; parameters: unknown[] }[],
+        tier: profile.tier ?? "mid",
+        iteration: state.iteration,
+        maxIterations: (state.meta.maxIterations as number) ?? 10,
+        lastErrors: getLastErrors(state),
+      });
+      if (icsResult.steeringNudge) {
+        state = transitionState(state, { steeringNudge: icsResult.steeringNudge });
+      }
+
+      // ── Oracle hard gate (pulse readyToAnswer two-stage escalation) ──────
+      // When the pulse tool has reported readyToAnswer=true but the model
+      // has not called final-answer, escalate in two stages:
+      //   Stage 1: inject a mandatory steering nudge, increment nudge count.
+      //   Stage 2: after 2 ignored nudges, force-exit with "oracle_forced".
+      if (state.status !== "done" && state.status !== "failed") {
+        const oracleReady = getLastPulseReadyToAnswer(state);
+        const nudgeCount = state.readyToAnswerNudgeCount ?? 0;
+
+        if (shouldForceOracleExit({ oracleReady, readyToAnswerNudgeCount: nudgeCount })) {
+          // Stage 2: force exit — model has been nudged twice and still hasn't called final-answer
+          yield* Effect.log(`[oracle-gate] Forcing exit after ${nudgeCount} ignored readyToAnswer signals`);
+          const forcedOutput = state.output ?? state.steps.filter((s) => s.type === "thought").slice(-1)[0]?.content ?? "Task complete.";
+          state = transitionState(state, {
+            status: "done",
+            output: forcedOutput,
+            meta: { ...state.meta, terminatedBy: "oracle_forced" },
+          });
+        } else if (oracleReady) {
+          // Stage 1: inject mandatory steering nudge, increment count
+          const mandatoryNudge = "You are ready to answer. Call `final-answer` now with your complete response. This is mandatory.";
+          state = transitionState(state, {
+            readyToAnswerNudgeCount: nudgeCount + 1,
+            steeringNudge: mandatoryNudge,
+          });
+          yield* Effect.log(`[oracle-gate] Stage 1 nudge injected (nudgeCount now ${nudgeCount + 1})`);
+        } else if (nudgeCount > 0) {
+          // Oracle no longer ready — reset nudge count
+          state = transitionState(state, { readyToAnswerNudgeCount: 0 });
+        }
+      }
 
       // ── Early exit: primary scoped tools called ─────────────────────────
       // For composite steps in plan-execute, exit as soon as all primary

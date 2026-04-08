@@ -68,11 +68,22 @@ export interface KernelState {
   readonly messages: readonly KernelMessage[];
 
   /**
-   * Synthesized context for the next handleThinking call.
-   * Set by kernel-runner after handleActing completes.
-   * Consumed and cleared (null) by handleThinking — never accumulated.
+   * Steering nudge injected by ICS coordinator for the next think call.
+   * Appended as a user message to the FC thread. Cleared after consumption.
    */
-  readonly synthesizedContext?: import("../../context/synthesis-types.js").SynthesizedContext | null;
+  readonly steeringNudge?: string;
+
+  /**
+   * Tool result message IDs whose content has been microcompacted.
+   * Content is never re-stripped once frozen — preserves API cache prefix.
+   */
+  readonly frozenToolResultIds: ReadonlySet<string>;
+
+  /**
+   * Count of consecutive iterations with token-delta < 500.
+   * Used by the token-delta diminishing-returns guard.
+   */
+  readonly consecutiveLowDeltaCount?: number;
 
   /**
    * Stage 1 max_output_tokens recovery: override token limit to 64k for one re-run.
@@ -87,6 +98,26 @@ export interface KernelState {
    * When this reaches 3 and max_tokens fires again, the run fails.
    */
   readonly maxOutputTokensRecoveryCount?: number;
+
+  /**
+   * Count of iterations where the pulse oracle returned readyToAnswer=true
+   * but the model has not yet called final-answer.
+   * Stage 1: inject mandatory steering nudge.
+   * Stage 2: after 2 nudges, force-exit with terminatedBy: "oracle_forced".
+   */
+  readonly readyToAnswerNudgeCount?: number;
+
+  /**
+   * The last meta-tool that was called (brief, pulse, find, recall).
+   * Used by the meta-tool dedup guard to detect consecutive identical calls.
+   */
+  readonly lastMetaToolCall?: string;
+
+  /**
+   * Number of consecutive times `lastMetaToolCall` has been called in a row.
+   * Resets to 1 when a different meta-tool or non-meta tool is called.
+   */
+  readonly consecutiveMetaToolCount?: number;
 }
 
 // ── KernelInput — Frozen execution input ─────────────────────────────────────
@@ -315,7 +346,12 @@ export function initialKernelState(opts: KernelRunOptions): KernelState {
     },
     controllerDecisionLog: [],
     messages: [],
-    synthesizedContext: undefined,
+    steeringNudge: undefined,
+    frozenToolResultIds: new Set<string>(),
+    consecutiveLowDeltaCount: 0,
+    readyToAnswerNudgeCount: 0,
+    lastMetaToolCall: undefined,
+    consecutiveMetaToolCount: 0,
   };
 }
 
@@ -335,6 +371,7 @@ export function transitionState(
     // Preserve non-spreadable collection types — patch wins if present
     toolsUsed: patch.toolsUsed ?? state.toolsUsed,
     scratchpad: patch.scratchpad ?? state.scratchpad,
+    frozenToolResultIds: patch.frozenToolResultIds ?? state.frozenToolResultIds,
   };
 }
 
@@ -342,12 +379,13 @@ export function transitionState(
 
 /** JSON-safe representation of KernelState (Set → array, Map → object) */
 export interface SerializedKernelState
-  extends Omit<KernelState, "toolsUsed" | "scratchpad" | "steps" | "messages"> {
+  extends Omit<KernelState, "toolsUsed" | "scratchpad" | "steps" | "messages" | "frozenToolResultIds"> {
   readonly toolsUsed: readonly string[];
   readonly scratchpad: Readonly<Record<string, string>>;
   readonly steps: readonly ReasoningStep[];
   readonly messages: readonly KernelMessage[];
   readonly controllerDecisionLog: readonly string[];
+  readonly frozenToolResultIds: readonly string[];
 }
 
 /**
@@ -373,7 +411,9 @@ export function serializeKernelState(state: KernelState): SerializedKernelState 
     priorThought: state.priorThought,
     meta: state.meta,
     controllerDecisionLog: state.controllerDecisionLog,
-    synthesizedContext: state.synthesizedContext,
+    steeringNudge: state.steeringNudge,
+    frozenToolResultIds: [...state.frozenToolResultIds].sort(),
+    consecutiveLowDeltaCount: state.consecutiveLowDeltaCount,
   };
 }
 
@@ -400,7 +440,9 @@ export function deserializeKernelState(raw: SerializedKernelState): KernelState 
     priorThought: raw.priorThought,
     meta: raw.meta,
     controllerDecisionLog: (raw.controllerDecisionLog as string[]) ?? [],
-    synthesizedContext: raw.synthesizedContext,
+    steeringNudge: raw.steeringNudge,
+    frozenToolResultIds: new Set(raw.frozenToolResultIds ?? []),
+    consecutiveLowDeltaCount: raw.consecutiveLowDeltaCount,
   };
 }
 

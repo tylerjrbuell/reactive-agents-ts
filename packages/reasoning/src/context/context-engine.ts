@@ -8,6 +8,7 @@ import type { ToolSchema } from "../strategies/kernel/utils/tool-utils.js";
 import {
   formatToolSchemas,
   formatToolSchemaCompact,
+  formatToolSchemaMicro,
 } from "../strategies/kernel/utils/tool-utils.js";
 import { formatStepForContext, summarizeStepsTriplets } from "../strategies/kernel/utils/context-utils.js";
 
@@ -255,7 +256,7 @@ export function buildStaticContext(input: StaticContextInput): string {
   // Tool reference (full schemas — no pinned duplicate needed since both
   // tool ref and RULES are together in the system prompt now)
   sections.push(
-    buildToolReference(task, availableToolSchemas, requiredTools, profile.toolSchemaDetail),
+    buildToolReference(task, availableToolSchemas, requiredTools, profile.toolSchemaDetail, profile.tier),
   );
 
   // Task description
@@ -340,8 +341,9 @@ export function buildDynamicContext(input: DynamicContextInput): string {
 function buildToolReference(
   _task: string,
   availableToolSchemas?: readonly ToolSchema[],
-  _requiredTools?: readonly string[],
+  requiredTools?: readonly string[],
   toolSchemaDetail?: "names-only" | "names-and-types" | "full",
+  tier?: string,
 ): string {
   if (!availableToolSchemas || availableToolSchemas.length === 0) {
     return "No tools available for this task.";
@@ -349,7 +351,31 @@ function buildToolReference(
 
   const detail = toolSchemaDetail ?? "full";
 
-  // Native FC: the API carries full schemas — just list names/purposes
+  // Tier-adaptive compression (only when full schema verbosity is requested — preserves names-only/names-and-types overrides)
+  if (tier === "local" && detail === "full") {
+    const required = new Set(requiredTools ?? []);
+    const requiredSchemas = availableToolSchemas.filter((t) => required.has(t.name));
+    const otherSchemas = availableToolSchemas.filter((t) => !required.has(t.name));
+    const lines: string[] = [];
+    if (requiredSchemas.length > 0) {
+      lines.push("Required tools (call these):");
+      lines.push(...requiredSchemas.map(formatToolSchemaCompact));
+    }
+    if (otherSchemas.length > 0) {
+      if (lines.length > 0) lines.push("Other available tools:");
+      else lines.push("Available tools:");
+      lines.push(...otherSchemas.map(formatToolSchemaMicro));
+    }
+    return lines.join("\n");
+  }
+
+  if (tier === "mid" && detail === "full") {
+    const toolLines = availableToolSchemas.map(formatToolSchemaCompact).join("\n");
+    return `Available Tools:\n${toolLines}`;
+  }
+
+  // large / frontier / unspecified (or explicit names-only override) — existing behavior preserved exactly
+
   if (detail === "names-only") {
     const names = availableToolSchemas.map((t) => t.name).join(", ");
     return `Available Tools: ${names}`;

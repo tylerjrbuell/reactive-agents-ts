@@ -28,7 +28,7 @@ import {
   type KernelContext,
   type KernelMessage,
 } from "../kernel-state.js";
-import { checkToolCall, defaultGuards } from "./guard.js";
+import { checkToolCall, defaultGuards, META_TOOL_SET } from "./guard.js";
 
 // ─── Meta-Tool Registry ───────────────────────────────────────────────────────
 
@@ -134,6 +134,9 @@ export function handleActing(
     if (pendingNativeCalls && pendingNativeCalls.length > 0) {
       const newToolsUsed = new Set(state.toolsUsed);
       let allSteps = [...state.steps];
+      // Meta-tool dedup tracking — updated per tool call, written to state at the end.
+      let lastMetaToolCall: string | undefined = state.lastMetaToolCall;
+      let consecutiveMetaToolCount: number = state.consecutiveMetaToolCount ?? 0;
 
       for (const tc of pendingNativeCalls) {
         const META_TOOL_NAMES = new Set(["final-answer", "task-complete", "context-status", "brief", "pulse", "find", "recall"]);
@@ -159,6 +162,9 @@ export function handleActing(
           );
           newToolsUsed.add(tc.name);
           allSteps = [...allSteps, actionStep, obsStep];
+          // Update meta-tool dedup tracking
+          consecutiveMetaToolCount = tc.name === lastMetaToolCall ? consecutiveMetaToolCount + 1 : 1;
+          lastMetaToolCall = tc.name;
           continue;
         }
 
@@ -250,12 +256,15 @@ export function handleActing(
 
           newToolsUsed.add(tc.name);
           allSteps = [...allSteps, actionStep, rejectObsStep];
+          // final-answer is not a meta-introspection tool — reset tracking
+          lastMetaToolCall = undefined;
+          consecutiveMetaToolCount = 0;
           continue;
         }
 
-        // ── Guard pipeline (blocked / duplicate / side-effect / repetition) ────
+        // ── Guard pipeline (blocked / duplicate / side-effect / repetition / meta-dedup) ──
         const guardCheck = checkToolCall(defaultGuards);
-        const guardOutcome = guardCheck(tc, transitionState(state, { steps: allSteps }), input);
+        const guardOutcome = guardCheck(tc, transitionState(state, { steps: allSteps, lastMetaToolCall, consecutiveMetaToolCount }), input);
         if (!guardOutcome.pass) {
           const actionStep = makeStep("action", `${tc.name}(${JSON.stringify(tc.arguments)})`, {
             toolCall: { id: tc.id, name: tc.name, arguments: tc.arguments },
@@ -270,6 +279,14 @@ export function handleActing(
             true,
           );
           allSteps = [...allSteps, actionStep, guardObsStep];
+          // Update meta-tool dedup tracking even for blocked calls (the call still happened)
+          if (META_TOOL_SET.has(tc.name)) {
+            consecutiveMetaToolCount = tc.name === lastMetaToolCall ? consecutiveMetaToolCount + 1 : 1;
+            lastMetaToolCall = tc.name;
+          } else {
+            lastMetaToolCall = undefined;
+            consecutiveMetaToolCount = 0;
+          }
           continue;
         }
 
@@ -342,6 +359,9 @@ export function handleActing(
         );
 
         allSteps = [...allSteps, obsStep];
+        // Normal task tools reset meta-tool dedup tracking
+        lastMetaToolCall = undefined;
+        consecutiveMetaToolCount = 0;
       }
 
       // Sync scratchpad
@@ -454,6 +474,8 @@ export function handleActing(
         messages: newConversationHistory,
         status: "thinking",
         iteration: state.iteration + 1,
+        lastMetaToolCall,
+        consecutiveMetaToolCount,
         meta: {
           ...state.meta,
           pendingNativeToolCalls: undefined,

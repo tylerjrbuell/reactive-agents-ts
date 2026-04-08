@@ -269,6 +269,16 @@ export function formatToolSchemaCompact(tool: ToolSchema): string {
   return `- ${tool.name}(${params})`;
 }
 
+/**
+ * Micro tool format — name and description only, no parameters. ~8 tokens per tool.
+ * Used for collapsed/inactive tools in tier-compressed system prompts.
+ */
+export function formatToolSchemaMicro(tool: ToolSchema): string {
+  const desc = tool.description ?? ""
+  const truncated = desc.length > 80 ? `${desc.slice(0, 77)}...` : desc
+  return `${tool.name}: ${truncated}`
+}
+
 export interface FilteredTools {
   primary: readonly ToolSchema[];   // mentioned in task — full schema
   secondary: readonly ToolSchema[]; // not mentioned — compact/collapsed

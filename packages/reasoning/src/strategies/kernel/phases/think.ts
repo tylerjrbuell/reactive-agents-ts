@@ -26,6 +26,8 @@ import {
   detectCompletionGaps,
   briefTool,
   pulseTool,
+  recallTool,
+  findTool,
   type ToolCallSpec,
   type ResolverInput,
 } from "@reactive-agents/tools";
@@ -39,8 +41,7 @@ import {
 } from "../utils/tool-utils.js";
 import { evaluateTermination, defaultEvaluators, type TerminationContext } from "../utils/termination-oracle.js";
 import { assembleOutput } from "../output-assembly.js";
-import { buildStaticContext, buildDynamicContext, buildRules } from "../../../context/context-engine.js";
-import type { MemoryItem } from "../../../context/context-engine.js";
+import { buildStaticContext } from "../../../context/context-engine.js";
 import { extractThinking, rescueFromThinking } from "../utils/stream-parser.js";
 import { makeStep } from "../utils/step-utils.js";
 import { makeObservationResult } from "../utils/tool-execution.js";
@@ -54,6 +55,14 @@ import {
 
 /** Meta-tool names — not counted as "real work" for completion detection. */
 const META_TOOL_SET = new Set(["final-answer", "task-complete", "context-status", "brief", "pulse", "find", "recall"]);
+
+/** Returns true when token pressure is critical — only final-answer should be offered. */
+export function shouldNarrowToFinalAnswerOnly(opts: {
+  estimatedTokens: number
+  maxTokens: number
+}): boolean {
+  return opts.estimatedTokens / opts.maxTokens >= 0.95
+}
 
 export function handleThinking(
   state: KernelState,
@@ -94,7 +103,22 @@ export function handleThinking(
       ...(finalAnswerVisible ? [{ name: finalAnswerTool.name, description: finalAnswerTool.description, parameters: finalAnswerTool.parameters }] : []),
       ...(input.metaTools?.brief ? [{ name: briefTool.name, description: briefTool.description, parameters: briefTool.parameters }] : []),
       ...(input.metaTools?.pulse ? [{ name: pulseTool.name, description: pulseTool.description, parameters: pulseTool.parameters }] : []),
+      ...(input.metaTools?.recall ? [{ name: recallTool.name, description: recallTool.description, parameters: recallTool.parameters }] : []),
+      ...(input.metaTools?.find ? [{ name: findTool.name, description: findTool.description, parameters: findTool.parameters }] : []),
     ] as readonly ToolSchema[];
+
+    // ── Context pressure hard gate ───────────────────────────────────────────
+    // When token budget is 95%+ exhausted, the model has nothing useful to
+    // reason with. Narrow available tools to only final-answer so the model's
+    // next action is a clean exit rather than another fruitless iteration.
+    const pressureCritical = shouldNarrowToFinalAnswerOnly({
+      estimatedTokens: state.tokens,
+      maxTokens: (input.contextProfile as any)?.maxTokens ?? Number.MAX_SAFE_INTEGER,
+    });
+
+    const effectiveSchemas: readonly ToolSchema[] = pressureCritical
+      ? [{ name: finalAnswerTool.name, description: finalAnswerTool.description, parameters: finalAnswerTool.parameters }]
+      : augmentedToolSchemas;
 
     // ── Harness skill injection ──────────────────────────────────────────────
     const harnessContent = input.metaTools?.harnessContent;
@@ -110,35 +134,26 @@ export function handleThinking(
     // ── Split context: static in system prompt, dynamic in user message ─────
     // Static content (tool schemas, RULES, task) is sent once in the system prompt
     // to avoid repeating ~500-700 tokens of identical content every iteration.
-    // When ICS (synthesizedContext) is active, the synthesized messages already
-    // contain the task, tool hints, and phase guidance — use a lean system prompt
-    // to avoid double-context that overwhelms the model (GAP 2).
     const baseSystemPrompt = buildSystemPrompt(input.task, effectiveSystemPrompt, profile.tier);
     const adapter = selectAdapter({ supportsToolCalling: true }, profile.tier);
     const patchedBase = adapter.systemPromptPatch?.(baseSystemPrompt, profile.tier ?? "mid") ?? baseSystemPrompt;
 
     // toolGuidance hook — append inline required-tool reminder after schema block
     const toolGuidancePatch = adapter.toolGuidance?.({
-      toolNames: augmentedToolSchemas.map((t) => t.name),
+      toolNames: effectiveSchemas.map((t) => t.name),
       requiredTools: input.requiredTools ?? [],
       tier: profile.tier ?? "mid",
     });
 
-    const hasICS = state.synthesizedContext != null;
-    let systemPromptText: string;
-    if (hasICS) {
-      const rules = buildRules(augmentedToolSchemas, input.requiredTools, profile.tier);
-      systemPromptText = `${patchedBase}\n\n${rules}${toolGuidancePatch ? `\n${toolGuidancePatch}` : ""}`;
-    } else {
-      const staticContext = buildStaticContext({
-        task: input.task,
-        profile,
-        availableToolSchemas: augmentedToolSchemas,
-        requiredTools: input.requiredTools,
-        environmentContext: input.environmentContext,
-      });
-      systemPromptText = `${patchedBase}\n\n${staticContext}${toolGuidancePatch ? `\n${toolGuidancePatch}` : ""}`;
-    }
+    // Always use full static context — stable system prompt, never overridden by ICS
+    const staticContext = buildStaticContext({
+      task: input.task,
+      profile,
+      availableToolSchemas: effectiveSchemas,
+      requiredTools: input.requiredTools,
+      environmentContext: input.environmentContext,
+    });
+    const systemPromptText = `${patchedBase}\n\n${staticContext}${toolGuidancePatch ? `\n${toolGuidancePatch}` : ""}`;
 
     // ── Auto-forward: inject full stored result from last observation ──────────
     // When the previous tool result was compressed and auto-stored in the scratchpad
@@ -161,23 +176,7 @@ export function handleThinking(
       }
     }
 
-    let thoughtPrompt = buildDynamicContext({
-      task: input.task,
-      steps: state.steps,
-      availableToolSchemas: augmentedToolSchemas,
-      requiredTools: input.requiredTools,
-      iteration: state.iteration,
-      maxIterations: maxIter,
-      profile,
-      memories: (state.meta.memories as MemoryItem[] | undefined),
-      priorContext: input.priorContext,
-    });
-
-    if (autoForwardSection) {
-      thoughtPrompt += `\n\n${autoForwardSection}`;
-    }
-
-    thoughtPrompt += "\n\nThink step-by-step. Use available tools when needed, or provide your final answer directly.";
+    // autoForwardSection is passed directly to buildConversationMessages
 
     // ── STREAM (with text delta emission) ──────────────────────────────────
     // Token budget adapts to model tier: frontier models get more room for
@@ -195,7 +194,7 @@ export function handleThinking(
     // parameter to only required (unsatisfied) + meta tools. This forces models
     // like cogito:14b (which lack tool_choice support) to select the right tool
     // instead of stubbornly re-selecting a previously successful one.
-    const filteredToolSchemas = buildToolSchemas(state, input, profile, augmentedToolSchemas);
+    const filteredToolSchemas = buildToolSchemas(state, input, profile, effectiveSchemas);
     const llmTools = filteredToolSchemas.map((ts) => ({
       name: ts.name,
       description: ts.description,
@@ -219,7 +218,7 @@ export function handleThinking(
     // ── Build conversation messages ──────────────────────────────────────────
     // Prefer ICS briefs (set by kernel-runner after tool rounds); otherwise sliding window.
     const { messages: conversationMessages, updatedState: stateAfterMessages } =
-      buildConversationMessages(state, input, profile, adapter, thoughtPrompt, autoForwardSection);
+      buildConversationMessages(state, input, profile, adapter, autoForwardSection);
     state = stateAfterMessages;
 
     const llmStreamEffect = llm.stream({
@@ -328,6 +327,27 @@ export function handleThinking(
           terminatedBy: "llm_error",
         },
       });
+    }
+
+    // ── 0-token diagnostic ───────────────────────────────────────────────────
+    // Surface silent empty responses from providers (e.g. Gemini, GPT-4o-mini)
+    // before they silently produce success=false. The most likely cause is the
+    // fast-path firing despite requiredTools being set, OR a provider returning
+    // an empty stream with no error event.
+    if (
+      accumulatedUsage.totalTokens === 0 &&
+      accumulatedContent.length === 0 &&
+      accumulatedToolCalls.length === 0
+    ) {
+      const fastPathEligible = state.iteration === 0 && !((input.requiredTools?.length ?? 0) > 0);
+      yield* Effect.log(
+        `[think] WARNING: LLM returned 0 tokens at iteration ${state.iteration}. ` +
+        `stopReason=${accumulatedStopReason}. ` +
+        `hasRequiredTools=${(input.requiredTools?.length ?? 0) > 0} (${(input.requiredTools ?? []).join(",")}). ` +
+        `fast-path-eligible=${fastPathEligible}. ` +
+        `toolCallResolver=${!!(input as ReActKernelInput).toolCallResolver}. ` +
+        `llmToolsCount=${llmTools.length}.`
+      );
     }
 
     // Store logprobs in entropy meta for the entropy sensor
@@ -500,7 +520,7 @@ export function handleThinking(
 
       const resolverResult = yield* resolver.resolve(
         resolverInput,
-        augmentedToolSchemas.map((ts) => ({ name: ts.name })),
+        effectiveSchemas.map((ts) => ({ name: ts.name })),
       );
 
       if (resolverResult._tag === "tool_calls") {

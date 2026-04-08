@@ -833,6 +833,7 @@ export const createRuntime = (options: RuntimeOptions) => {
         }
       : undefined,
     adaptiveToolFiltering: options.adaptiveToolFiltering,
+    allowedTools: options.allowedTools,
     enableMemory: options.enableMemory ?? false,
     enableExperienceLearning: options.enableExperienceLearning,
     enableMemoryConsolidation: options.enableMemoryConsolidation,
@@ -1638,6 +1639,7 @@ export const createLightRuntime = (options: LightRuntimeOptions) => {
         }
       : undefined,
     adaptiveToolFiltering: false,
+    allowedTools: options.allowedTools,
     enableMemory: options.enableMemory ?? false,
     enableExperienceLearning: false,
     enableMemoryConsolidation: false,

@@ -1,10 +1,30 @@
 import { describe, it, expect } from "bun:test";
+import { readFileSync } from "fs";
 import {
   buildSystemPrompt,
   toProviderMessage,
   buildToolSchemas,
 } from "../../../../src/strategies/kernel/phases/context-builder.js";
 import type { KernelMessage, KernelState } from "../../../../src/strategies/kernel/kernel-state.js";
+
+// ── Structural checks ─────────────────────────────────────────────────────────
+
+const src = readFileSync(
+  new URL("../../../../src/strategies/kernel/phases/context-builder.ts", import.meta.url),
+  "utf8"
+);
+
+describe("context-builder.ts structural", () => {
+  it("does not reference synthesizedContext", () => {
+    expect(src).not.toContain("synthesizedContext");
+  });
+  it("consumes steeringNudge from state", () => {
+    expect(src).toContain("steeringNudge");
+  });
+  it("does not have thoughtPrompt parameter", () => {
+    expect(src).not.toContain("thoughtPrompt");
+  });
+});
 
 // ── buildSystemPrompt ─────────────────────────────────────────────────────────
 

@@ -6,7 +6,9 @@ import type { LLMMessage, LLMService } from "@reactive-agents/llm-provider";
 import type { ToolSchema } from "../strategies/kernel/utils/tool-utils.js";
 import type { KernelMessage } from "../strategies/kernel/kernel-state.js";
 import type { ModelTier } from "./context-profile.js";
-import type { TaskPhase } from "./task-phase.js";
+
+/** The current phase of a task execution (inlined from deleted task-phase.ts). */
+export type TaskPhase = "orient" | "gather" | "synthesize" | "produce" | "verify";
 
 // ─── Entropy shape for synthesis (no @reactive-agents/reactive-intelligence dependency) ───
 
