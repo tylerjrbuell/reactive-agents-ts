@@ -6,7 +6,7 @@
  */
 import type { LLMMessage, ProviderAdapter } from "@reactive-agents/llm-provider";
 import type { ContextProfile } from "../../../context/context-profile.js";
-import { applyMessageWindow } from "../../../context/message-window.js";
+import { applyMessageWindowWithCompact } from "../../../context/message-window.js";
 import type { ToolSchema } from "../utils/tool-utils.js";
 import type { KernelState, KernelMessage, ReActKernelInput } from "../kernel-state.js";
 import { transitionState } from "../kernel-state.js";
@@ -134,36 +134,51 @@ export function buildConversationMessages(
   adapter: ProviderAdapter,
   autoForwardSection: string,
 ): BuildConversationMessagesResult {
-  let compactedMessages = applyMessageWindow(state.messages, profile);
+  let currentState = state;
+  const { messages: compactedMessages, newlyFrozenIds } = applyMessageWindowWithCompact(
+    currentState.messages,
+    {
+      tier: profile.tier ?? "mid",
+      maxTokens: profile.maxTokens,
+      frozenToolResultIds: currentState.frozenToolResultIds,
+    },
+  );
+  // Persist newly frozen IDs into state
+  if (newlyFrozenIds.size > 0) {
+    currentState = transitionState(currentState, {
+      frozenToolResultIds: new Set([...currentState.frozenToolResultIds, ...newlyFrozenIds]),
+    });
+  }
+  let workingMessages = compactedMessages;
 
   // taskFraming hook — on first iteration, let adapter annotate the task message
   // to help local models understand the full sequence of steps required.
   if (
-    state.iteration === 0 &&
-    compactedMessages.length === 1 &&
-    compactedMessages[0]?.role === "user"
+    currentState.iteration === 0 &&
+    workingMessages.length === 1 &&
+    workingMessages[0]?.role === "user"
   ) {
     const framedTask = adapter.taskFraming?.({
-      task: compactedMessages[0].content as string,
+      task: workingMessages[0].content as string,
       requiredTools: input.requiredTools ?? [],
       tier: profile.tier ?? "mid",
     });
     if (framedTask) {
-      compactedMessages = [{ role: "user" as const, content: framedTask }];
+      workingMessages = [{ role: "user" as const, content: framedTask }];
     }
   }
 
-  let finalMessages: LLMMessage[] = (compactedMessages as readonly KernelMessage[]).map(toProviderMessage);
+  let finalMessages: LLMMessage[] = (workingMessages as readonly KernelMessage[]).map(toProviderMessage);
 
   if (autoForwardSection) {
     finalMessages = [...finalMessages, { role: "user" as const, content: autoForwardSection }];
   }
 
   // Consume steeringNudge: append as final user message, then clear from state
-  let updatedState = state;
-  if (state.steeringNudge) {
-    finalMessages = [...finalMessages, { role: "user" as const, content: state.steeringNudge }];
-    updatedState = transitionState(state, { steeringNudge: undefined });
+  let updatedState = currentState;
+  if (currentState.steeringNudge) {
+    finalMessages = [...finalMessages, { role: "user" as const, content: currentState.steeringNudge }];
+    updatedState = transitionState(currentState, { steeringNudge: undefined });
   }
 
   return { messages: finalMessages, updatedState };
