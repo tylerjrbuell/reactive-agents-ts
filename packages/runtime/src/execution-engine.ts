@@ -213,6 +213,22 @@ function classifyComplexity(
   return "complex";
 }
 
+// ─── allowedTools Mismatch Detection ───
+
+/**
+ * Returns allowedTools names that don't match any registered tool name.
+ *
+ * Used at bootstrap to warn when the caller specified tool names that are not
+ * actually registered (e.g. a typo or an MCP tool name change).
+ */
+export function checkAllowedToolsMismatch(
+  allowedTools: readonly string[],
+  registeredTools: readonly { name: string }[],
+): string[] {
+  const registered = new Set(registeredTools.map((t) => t.name))
+  return allowedTools.filter((name) => !registered.has(name))
+}
+
 // ─── Live Implementation ───
 
 export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
@@ -920,6 +936,18 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   ),
                   Effect.catchAll(() => Effect.succeed([] as readonly any[])),
                 );
+
+                // ── Warn on allowedTools names that don't match any registered tool ──
+                const effectiveAllowedTools = config.allowedTools ?? []
+                if (effectiveAllowedTools.length > 0) {
+                  const mismatches = checkAllowedToolsMismatch(effectiveAllowedTools, cachedToolDefs)
+                  if (mismatches.length > 0 && obs && isNormal) {
+                    yield* obs.info(
+                      `[allowedTools] These tools were specified but are NOT registered: ${mismatches.join(", ")}. ` +
+                      `Registered tools: ${cachedToolDefs.map((t: any) => t.name).join(", ")}`
+                    ).pipe(Effect.catchAll(() => Effect.void))
+                  }
+                }
 
                 // ── Log strategy-select summary ──
                 // Only show capability tools — hide framework infrastructure (conductor tools,

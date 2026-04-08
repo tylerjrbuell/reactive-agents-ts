@@ -429,6 +429,11 @@ export type ReactiveAgentsConfig = Schema.Schema.Type<typeof ReactiveAgentsConfi
   readonly outputValidator?: (output: string) => { valid: boolean; feedback?: string };
   /** Options for `outputValidator` — controls retry count. */
   readonly outputValidatorOptions?: { maxRetries?: number };
+  /**
+   * Whitelist of tool names the agent is allowed to use. Forwarded from runtime options so
+   * the execution engine can warn when a listed name does not match any registered tool.
+   */
+  readonly allowedTools?: readonly string[];
 };
 
 /**

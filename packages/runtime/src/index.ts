@@ -47,7 +47,7 @@ export {
 // ─── Services ───
 export { LifecycleHookRegistry, LifecycleHookRegistryLive } from "./hooks.js";
 
-export { ExecutionEngine, ExecutionEngineLive } from "./execution-engine.js";
+export { ExecutionEngine, ExecutionEngineLive, checkAllowedToolsMismatch } from "./execution-engine.js";
 
 // ─── Runtime ───
 export { createRuntime, createLightRuntime } from "./runtime.js";
