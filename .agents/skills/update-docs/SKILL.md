@@ -1,6 +1,6 @@
 ---
 name: update-docs
-description: Synchronize all documentation (Starlight docs, README, CHANGELOG, CLAUDE.md) after code changes. Use after completing a feature, fixing bugs, or changing public APIs.
+description: Synchronize all documentation (Starlight docs, README, AGENTS, skills, memory) after code changes. Use after completing a feature, fixing bugs, or changing public APIs.
 disable-model-invocation: true
 argument-hint: [optional: package-name or "release X.Y.Z"]
 ---
@@ -10,6 +10,8 @@ argument-hint: [optional: package-name or "release X.Y.Z"]
 ## Overview
 
 This skill ensures all documentation stays truthful after code changes. Run it after completing any feature work.
+
+Canonical source of truth for agent guidance is `AGENTS.md`. `CLAUDE.md` is a compatibility pointer only.
 
 ## Arguments
 
@@ -38,15 +40,15 @@ Categorize changes:
 - [ ] API signatures changed?
 - [ ] New features needing docs pages?
 
-## Step 2: Update CLAUDE.md
+## Step 2: Update AGENTS.md (Canonical)
 
 Check and update these sections as needed:
 
-1. **Project Status** (line 5) — test count, package count
-2. **Build Commands** — test count in comment
-3. **Skills Library** — if new skills added
-4. **Spec File Index** — if new spec files
-5. **Package Map** — if new packages
+1. **Project status snapshot** — test count, package count, latest shipped capabilities
+2. **Build commands** — keep commands current and scoped
+3. **Documentation workflow** — ensure references point to AGENTS/README/docs, not CLAUDE
+4. **Project skills index** — keep all `.agents/skills/*/SKILL.md` entries accurate
+5. **Key file paths** — include memory files and active docs
 
 ## Step 3: Update README.md
 
@@ -59,6 +61,11 @@ Check and update:
 5. **Strategies table** — add new strategies
 6. **Development section** — test count
 7. **Code examples** — verify they use actual API
+
+Cross-check against latest release notes (`CHANGELOG.md`) for:
+- Native function-calling behavior and tool-call fallback details
+- Required-tools gating, dynamic stopping, and per-tool call budgets
+- Builder/API additions (meta-tools, skills, composition, dynamic tools, pricing)
 
 ## Step 4: Update CHANGELOG.md
 
@@ -102,6 +109,14 @@ grep -r "oldMethodName\|oldPackageName" apps/docs/src/content/docs/
 | Architecture | `concepts/architecture.md`, `concepts/layer-system.md` |
 | New feature | Create new page in `features/` or `guides/` |
 
+Required audit pages for framework-level changes:
+- `apps/docs/src/content/docs/reference/builder-api.md`
+- `apps/docs/src/content/docs/reference/configuration.md`
+- `apps/docs/src/content/docs/guides/reasoning.md`
+- `apps/docs/src/content/docs/guides/tools.md`
+- `apps/docs/src/content/docs/guides/contributing.md`
+- `apps/docs/src/content/docs/features/llm-providers.md`
+
 ### If new docs page needed
 
 Create at `apps/docs/src/content/docs/{section}/{name}.md`:
@@ -129,23 +144,22 @@ The `.agents/skills/` directory contains skills used by agents to build with thi
 - Config field names change (e.g., `resultCompression` field names)
 - New strategy options added (`enableStrategySwitching`, etc.)
 
-### Skills index
+### Skills index (all project skills)
 
 | Skill file | What to check |
 |---|---|
-| `reasoning-strategy-selection/SKILL.md` | `withReasoning()` options, strategy names, `enableStrategySwitching` |
-| `streaming-real-time-agents/SKILL.md` | Stream event variants, `runStream()` signature, `AgentStream` adapters |
-| `reactive-agents-framework/SKILL.md` | Builder chains, new methods (`chat()`, `session()`, `withFallbacks()`, etc.) |
-| `context-engineering-optimization/SKILL.md` | `withContextProfile()` tiers, `resultCompression` field names |
-| `memory-consolidation/SKILL.md` | Memory tiers, `withMemoryConsolidation()`, `session({ persist: true })` |
-| `cost-budget-enforcement/SKILL.md` | Budget APIs, gateway `policies.dailyTokenBudget` |
-| `observability-instrumentation/SKILL.md` | Verbosity levels, EventBus events, `withLogging()`, `withErrorHandler()` |
-| `a2a-specialized-agents/SKILL.md` | `withAgentTool()`, `withRemoteAgent()` signatures |
-| `gateway-persistent-scheduled-agents/SKILL.md` | Gateway config shape, policy fields |
-| `identity-and-guardrails/SKILL.md` | `withGuardrails()` thresholds, `withBehavioralContracts()` |
-| `mcp-tool-integration/SKILL.md` | `withMCP()` transport config, disposal patterns |
-| `multi-agent-orchestration/SKILL.md` | Workflow patterns, `withDynamicSubAgents()` |
-| `verification-pipeline-design/SKILL.md` | `withVerification()` options |
+| `architecture-reference/SKILL.md` | Dependency graph, build order, canonical docs pointers |
+| `build-coordinator/SKILL.md` | Multi-agent coordination flow, parallelization assumptions |
+| `build-package/SKILL.md` | Spec mapping and canonical references (AGENTS, not CLAUDE) |
+| `codebase-to-course/SKILL.md` | Prompt quality, output structure, teaching flow |
+| `effect-ts-patterns/SKILL.md` | Core Effect-TS constraints and anti-patterns |
+| `implement-service/SKILL.md` | Service scaffolding patterns and exports |
+| `implement-test/SKILL.md` | Test harness usage and timeout guidance |
+| `llm-api-contract/SKILL.md` | `complete()/stream()/embed()` signatures and tool-call contracts |
+| `memory-patterns/SKILL.md` | SQLite/WAL/FTS5/vector memory patterns |
+| `review-patterns/SKILL.md` | 8-category compliance checks |
+| `update-docs/SKILL.md` | This workflow, docs + memory synchronization |
+| `validate-build/SKILL.md` | Build/test/review quality gates |
 
 ### How to update
 
@@ -155,26 +169,34 @@ The `.agents/skills/` directory contains skills used by agents to build with thi
 4. Bump `version` in the frontmatter if the change is significant
 5. Do NOT change prose that is still accurate — minimal diffs only
 
-## Step 7: Update ROADMAP.md
+## Step 7: Update Project Memory
+
+When docs or workflow guidance changes, update memory artifacts so future agents inherit the same context:
+
+1. Update `.agents/MEMORY.md` with a concise entry under current status and shipped changes.
+2. Update repository memory notes in `/memories/repo/` when conventions or canonical doc locations change.
+3. Keep memory entries terse and factual (what changed, why it matters, where to look).
+
+## Step 8: Update ROADMAP.md
 
 If a milestone shipped:
 - Move items from "target" to "✅ Released" with actual date
 - Update the "Current State" section
 - Update the Competitive Positioning table
 
-## Step 8: Verify
+## Step 9: Verify
 
 ```bash
 # Docs build
 cd apps/docs && npx astro build
 
 # Check for stale references
-grep -r "0\.3\.0\|0\.5\.0\|0\.6\.0\|300 tests\|600 tests\|15 packages\|17 packages" README.md CLAUDE.md apps/docs/
+grep -r "CLAUDE.md.*package map\|CLAUDE.md.*build commands\|withTestResponses\|15 packages\|17 packages\|2194 tests" AGENTS.md README.md apps/docs .agents/skills
 ```
 
-## Step 9: Update AGENTS.md
+## Step 10: CLAUDE.md Compatibility Check
 
-If workflow patterns changed, update the relevant section in `AGENTS.md`.
+Ensure `CLAUDE.md` remains a short compatibility pointer to `AGENTS.md` and does not become a second source of truth.
 
 ## Quick Reference: Current Stats
 

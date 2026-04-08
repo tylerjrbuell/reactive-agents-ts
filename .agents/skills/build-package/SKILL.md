@@ -39,11 +39,11 @@ Look up the package in the build order table. Read the corresponding spec file f
 | prompts       | `11-missing-capabilities-enhancement.md` (Package 3)   |
 | cli           | `11-missing-capabilities-enhancement.md` (Extension 7) |
 | a2a           | `14-v0.5-comprehensive-plan.md` (Sprint 1)              |
-| gateway       | No dedicated spec — see CLAUDE.md package map           |
-| testing       | No dedicated spec — see CLAUDE.md package map           |
-| benchmarks    | No dedicated spec — see CLAUDE.md package map           |
-| health        | No dedicated spec — see CLAUDE.md package map           |
-| reactive-intelligence | No dedicated spec — see CLAUDE.md package map   |
+| gateway       | No dedicated spec — see AGENTS.md package dependency tree and package map |
+| testing       | No dedicated spec — see AGENTS.md package dependency tree and package map |
+| benchmarks    | No dedicated spec — see AGENTS.md package dependency tree and package map |
+| health        | No dedicated spec — see AGENTS.md package dependency tree and package map |
+| reactive-intelligence | No dedicated spec — see AGENTS.md package dependency tree and package map |
 
 ### Step 2: Read the full spec
 

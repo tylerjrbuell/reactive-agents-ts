@@ -115,4 +115,4 @@ runKernel() loop:
 | LLM API signatures | `.agents/skills/llm-api-contract/SKILL.md` |
 | Memory/SQLite patterns | `.agents/skills/memory-patterns/SKILL.md` |
 | Spec documents | `spec/docs/` |
-| Build commands | `CLAUDE.md` (Build Commands section) |
+| Build commands | `AGENTS.md` (Build & Test Cycle) and `README.md` (quickstart/dev commands) |
