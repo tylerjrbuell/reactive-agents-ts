@@ -179,8 +179,8 @@ export function runKernel(
         state = transitionState(state, { consecutiveLowDeltaCount: newConsecutiveLowDelta });
 
         // Only fire the guard when there are remaining iterations to save
-      // (if we're already at the last iteration, the loop exits naturally).
-      const hasRemainingIterations = state.iteration < currentOptions.maxIterations - 1;
+        // (if we're already at the last iteration, the loop exits naturally).
+        const hasRemainingIterations = state.iteration < currentOptions.maxIterations - 1;
         if (
           hasRemainingIterations &&
           state.status !== "done" &&
