@@ -68,11 +68,22 @@ export interface KernelState {
   readonly messages: readonly KernelMessage[];
 
   /**
-   * Synthesized context for the next handleThinking call.
-   * Set by kernel-runner after handleActing completes.
-   * Consumed and cleared (null) by handleThinking — never accumulated.
+   * Steering nudge injected by ICS coordinator for the next think call.
+   * Appended as a user message to the FC thread. Cleared after consumption.
    */
-  readonly synthesizedContext?: import("../../context/synthesis-types.js").SynthesizedContext | null;
+  readonly steeringNudge?: string;
+
+  /**
+   * Tool result message IDs whose content has been microcompacted.
+   * Content is never re-stripped once frozen — preserves API cache prefix.
+   */
+  readonly frozenToolResultIds: ReadonlySet<string>;
+
+  /**
+   * Count of consecutive iterations with token-delta < 500.
+   * Used by the token-delta diminishing-returns guard.
+   */
+  readonly consecutiveLowDeltaCount?: number;
 
   /**
    * Stage 1 max_output_tokens recovery: override token limit to 64k for one re-run.
@@ -315,7 +326,9 @@ export function initialKernelState(opts: KernelRunOptions): KernelState {
     },
     controllerDecisionLog: [],
     messages: [],
-    synthesizedContext: undefined,
+    steeringNudge: undefined,
+    frozenToolResultIds: new Set<string>(),
+    consecutiveLowDeltaCount: 0,
   };
 }
 
@@ -335,6 +348,7 @@ export function transitionState(
     // Preserve non-spreadable collection types — patch wins if present
     toolsUsed: patch.toolsUsed ?? state.toolsUsed,
     scratchpad: patch.scratchpad ?? state.scratchpad,
+    frozenToolResultIds: patch.frozenToolResultIds ?? state.frozenToolResultIds,
   };
 }
 
@@ -342,12 +356,13 @@ export function transitionState(
 
 /** JSON-safe representation of KernelState (Set → array, Map → object) */
 export interface SerializedKernelState
-  extends Omit<KernelState, "toolsUsed" | "scratchpad" | "steps" | "messages"> {
+  extends Omit<KernelState, "toolsUsed" | "scratchpad" | "steps" | "messages" | "frozenToolResultIds"> {
   readonly toolsUsed: readonly string[];
   readonly scratchpad: Readonly<Record<string, string>>;
   readonly steps: readonly ReasoningStep[];
   readonly messages: readonly KernelMessage[];
   readonly controllerDecisionLog: readonly string[];
+  readonly frozenToolResultIds: readonly string[];
 }
 
 /**
@@ -373,7 +388,9 @@ export function serializeKernelState(state: KernelState): SerializedKernelState 
     priorThought: state.priorThought,
     meta: state.meta,
     controllerDecisionLog: state.controllerDecisionLog,
-    synthesizedContext: state.synthesizedContext,
+    steeringNudge: state.steeringNudge,
+    frozenToolResultIds: [...state.frozenToolResultIds].sort(),
+    consecutiveLowDeltaCount: state.consecutiveLowDeltaCount,
   };
 }
 
@@ -400,7 +417,9 @@ export function deserializeKernelState(raw: SerializedKernelState): KernelState 
     priorThought: raw.priorThought,
     meta: raw.meta,
     controllerDecisionLog: (raw.controllerDecisionLog as string[]) ?? [],
-    synthesizedContext: raw.synthesizedContext,
+    steeringNudge: raw.steeringNudge,
+    frozenToolResultIds: new Set(raw.frozenToolResultIds ?? []),
+    consecutiveLowDeltaCount: raw.consecutiveLowDeltaCount,
   };
 }
 

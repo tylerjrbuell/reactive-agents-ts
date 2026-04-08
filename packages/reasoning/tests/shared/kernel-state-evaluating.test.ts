@@ -2,6 +2,12 @@ import { describe, it, expect } from "bun:test";
 import { transitionState, initialKernelState } from "../../src/strategies/kernel/kernel-state.js";
 import type { KernelRunOptions } from "../../src/strategies/kernel/kernel-state.js";
 
+const defaultOpts: KernelRunOptions = {
+  maxIterations: 10,
+  strategy: "test",
+  kernelType: "react",
+};
+
 describe("KernelStatus evaluating", () => {
   it("transitionState accepts evaluating status", () => {
     const state = initialKernelState({
@@ -11,6 +17,23 @@ describe("KernelStatus evaluating", () => {
     });
     const next = transitionState(state, { status: "evaluating" });
     expect(next.status).toBe("evaluating");
+  });
+});
+
+describe("KernelState new fields", () => {
+  it("has steeringNudge undefined by default", () => {
+    const state = initialKernelState(defaultOpts);
+    expect(state.steeringNudge).toBeUndefined();
+  });
+
+  it("has frozenToolResultIds as empty set by default", () => {
+    const state = initialKernelState(defaultOpts);
+    expect(state.frozenToolResultIds.size).toBe(0);
+  });
+
+  it("does not have synthesizedContext field", () => {
+    const state = initialKernelState(defaultOpts);
+    expect("synthesizedContext" in state).toBe(false);
   });
 });
 
