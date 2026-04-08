@@ -121,4 +121,22 @@ describe("ChatSessionService", () => {
     expect(turns[0]!.role).toBe("user");
     expect(turns[1]!.role).toBe("assistant");
   });
+
+  it("chatStream collects tokens and tool metadata", async () => {
+    const id = await svc.createSession({
+      name: "Metadata Test",
+      agentConfig: { provider: "test", model: "test-model" },
+    });
+    let completed = false;
+    let metadata: any;
+    for await (const event of svc.chatStream(id, "ping")) {
+      if (event._tag === "StreamCompleted") {
+        completed = true;
+        metadata = event.metadata;
+      }
+    }
+    expect(completed).toBe(true);
+    expect(metadata).toBeDefined();
+    expect(typeof metadata.tokensUsed).toBe("number");
+  });
 });
