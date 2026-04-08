@@ -54,7 +54,45 @@ export function shouldExitOnLowDelta(opts: {
   return iteration >= 3 && tokenDelta < 500 && consecutiveLowDeltaCount >= 2
 }
 
+// ── Oracle hard gate ──────────────────────────────────────────────────────────
+
+/**
+ * Guard: force exit when the pulse oracle has said readyToAnswer=true but the
+ * model has ignored it for 2 consecutive iterations (Stage 2).
+ *
+ * Stage 1 (nudgeCount < 2): caller should inject a mandatory steering nudge and
+ * increment readyToAnswerNudgeCount.
+ * Stage 2 (nudgeCount >= 2): return true → caller terminates with "oracle_forced".
+ */
+export function shouldForceOracleExit(opts: {
+  oracleReady: boolean
+  readyToAnswerNudgeCount: number
+}): boolean {
+  return opts.oracleReady && opts.readyToAnswerNudgeCount >= 2
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+/**
+ * Extract the readyToAnswer flag from the most recent pulse observation step.
+ * Returns false when there is no pulse observation or the JSON cannot be parsed.
+ */
+function getLastPulseReadyToAnswer(state: KernelState): boolean {
+  const pulseObs = [...state.steps]
+    .reverse()
+    .find(
+      (s) =>
+        s.type === "observation" &&
+        s.metadata?.observationResult?.toolName === "pulse",
+    );
+  if (!pulseObs) return false;
+  try {
+    const parsed = JSON.parse(pulseObs.content ?? "");
+    return parsed?.readyToAnswer === true;
+  } catch {
+    return false;
+  }
+}
 
 /** Error strings from recent failed tool observations — feeds ICS nudge content. */
 function getLastErrors(state: KernelState): readonly string[] {
@@ -226,6 +264,38 @@ export function runKernel(
       });
       if (icsResult.steeringNudge) {
         state = transitionState(state, { steeringNudge: icsResult.steeringNudge });
+      }
+
+      // ── Oracle hard gate (pulse readyToAnswer two-stage escalation) ──────
+      // When the pulse tool has reported readyToAnswer=true but the model
+      // has not called final-answer, escalate in two stages:
+      //   Stage 1: inject a mandatory steering nudge, increment nudge count.
+      //   Stage 2: after 2 ignored nudges, force-exit with "oracle_forced".
+      if (state.status !== "done" && state.status !== "failed") {
+        const oracleReady = getLastPulseReadyToAnswer(state);
+        const nudgeCount = state.readyToAnswerNudgeCount ?? 0;
+
+        if (shouldForceOracleExit({ oracleReady, readyToAnswerNudgeCount: nudgeCount })) {
+          // Stage 2: force exit — model has been nudged twice and still hasn't called final-answer
+          yield* Effect.log(`[oracle-gate] Forcing exit after ${nudgeCount} ignored readyToAnswer signals`);
+          const forcedOutput = state.output ?? state.steps.filter((s) => s.type === "thought").slice(-1)[0]?.content ?? "Task complete.";
+          state = transitionState(state, {
+            status: "done",
+            output: forcedOutput,
+            meta: { ...state.meta, terminatedBy: "oracle_forced" },
+          });
+        } else if (oracleReady) {
+          // Stage 1: inject mandatory steering nudge, increment count
+          const mandatoryNudge = "You are ready to answer. Call `final-answer` now with your complete response. This is mandatory.";
+          state = transitionState(state, {
+            readyToAnswerNudgeCount: nudgeCount + 1,
+            steeringNudge: mandatoryNudge,
+          });
+          yield* Effect.log(`[oracle-gate] Stage 1 nudge injected (nudgeCount now ${nudgeCount + 1})`);
+        } else if (nudgeCount > 0) {
+          // Oracle no longer ready — reset nudge count
+          state = transitionState(state, { readyToAnswerNudgeCount: 0 });
+        }
       }
 
       // ── Early exit: primary scoped tools called ─────────────────────────

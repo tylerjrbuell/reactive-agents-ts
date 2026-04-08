@@ -98,6 +98,14 @@ export interface KernelState {
    * When this reaches 3 and max_tokens fires again, the run fails.
    */
   readonly maxOutputTokensRecoveryCount?: number;
+
+  /**
+   * Count of iterations where the pulse oracle returned readyToAnswer=true
+   * but the model has not yet called final-answer.
+   * Stage 1: inject mandatory steering nudge.
+   * Stage 2: after 2 nudges, force-exit with terminatedBy: "oracle_forced".
+   */
+  readonly readyToAnswerNudgeCount?: number;
 }
 
 // ── KernelInput — Frozen execution input ─────────────────────────────────────
@@ -329,6 +337,7 @@ export function initialKernelState(opts: KernelRunOptions): KernelState {
     steeringNudge: undefined,
     frozenToolResultIds: new Set<string>(),
     consecutiveLowDeltaCount: 0,
+    readyToAnswerNudgeCount: 0,
   };
 }
 
