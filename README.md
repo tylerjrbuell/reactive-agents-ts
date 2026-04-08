@@ -53,7 +53,8 @@ Most AI agent frameworks are dynamically typed, monolithic, and opaque. They ass
 - **Ed25519 identity** -- real cryptographic agent certificates, RBAC, delegation, and audit trails
 - **Cost tracking** -- complexity routing across 27 signals, semantic caching, budget enforcement with persistence across restarts, dynamic pricing fetching via `.withDynamicPricing()` (e.g. OpenRouter), cache-aware token discounts
 - **Professional metrics dashboard** -- EventBus-driven execution timeline, tool call summary, smart alerts, and cost estimation (zero manual instrumentation)
-- **Required tools guard** -- ensure agents call critical tools before answering (static list or adaptive LLM inference)
+- **Native function-calling harness** -- provider capability routing with robust fallback parsing for JSON tool calls embedded in model text (fenced or bare JSON) when native tool calls are missing
+- **Required tools guard** -- ensure agents call critical tools before answering (static list or adaptive LLM inference), with relevant-tool pass-through, satisfied-required re-calls, and per-tool call budgets (`maxCallsPerTool`) to prevent research loops
 - **Builder hardening** -- `withStrictValidation()`, `withTimeout()`, `withRetryPolicy()`, `withCacheTimeout()`, consolidated `withGuardrails()` thresholds, `withErrorHandler()`, `withFallbacks()`, `withLogging()`, `withHealthCheck()`, automatic strategy switching
 - **Harness quality controls** -- `withMinIterations(n)` blocks early exit, `withVerificationStep()` adds LLM self-review, `withOutputValidator(fn)` retries on invalid output, `withCustomTermination(fn)` user-defined done predicate, `withProgressCheckpoint(n)` resumable agents, `withTaskContext(record)` background data injection
 - **ToolBuilder fluent API** -- define tools without raw schema objects
