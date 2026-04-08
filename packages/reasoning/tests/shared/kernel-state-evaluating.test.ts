@@ -35,6 +35,11 @@ describe("KernelState new fields", () => {
     const state = initialKernelState(defaultOpts);
     expect("synthesizedContext" in state).toBe(false);
   });
+
+  it("has consecutiveLowDeltaCount as 0 by default", () => {
+    const state = initialKernelState(defaultOpts);
+    expect(state.consecutiveLowDeltaCount).toBe(0);
+  });
 });
 
 describe("KernelRunOptions strategySwitching", () => {
