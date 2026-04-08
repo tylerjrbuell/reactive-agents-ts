@@ -11,11 +11,20 @@
 - [Composable Provider Adapters](project_composable_adapters.md) — V1.1 DONE in v0.8.5: all 7 hooks implemented
 - [Composable Reasoning Phases](project_composable_phases.md) — ✅ SHIPPED Apr 3, 2026: `strategies/kernel/` composable phase architecture merged to main
 
-## Current Status (Apr 7, 2026)
-- **v0.9.0 / MCP production hardening** — 22 packages + 2 apps, 3,394 tests across 400 files (0 fail)
-- **MCP client on @modelcontextprotocol/sdk** — smart auto-detection (stdio race vs HTTP URL in stderr), two-phase probe+managed docker containers, `docker rm -f` cleanup (NOT process kill), PID-based naming prevents agent conflicts
-- **Kernel composable phase architecture shipped** — `strategies/kernel/` with `Phase[]` pipeline, `Guard[]` chain, `MetaToolHandler` registry, `makeKernel()` factory
+## Current Status (Apr 8, 2026)
+- **v0.9.0 docs canonicalization pass** — `AGENTS.md` is canonical; `CLAUDE.md` reduced to compatibility pointer
+- **Documentation workflow upgraded** — `update-docs` skill now explicitly includes `.agents/MEMORY.md` + repo memory updates and audits all 12 project skills in `.agents/skills/`
+- **Governance docs synchronized** — root/cortex AGENTS, spec `DOCUMENT_INDEX.md`, contributing guide, and reasoning guide aligned with latest changelog behaviors
 - **Preparing for Show HN** — architecture solid, DX polished
+
+## What Shipped Apr 8, 2026
+
+### Documentation and Guidance Consolidation
+- `CLAUDE.md` converted to compatibility pointer only; no duplicate operational truth
+- `AGENTS.md` now includes current v0.9.0 snapshot + recent shipped highlights and explicit docs cross-reference rules
+- `docs/spec/docs/DOCUMENT_INDEX.md` rewritten to reflect canonical docs + modern reading order
+- `apps/docs/src/content/docs/guides/contributing.md` updated with current test counts and AGENTS-first doc policy
+- `apps/docs/src/content/docs/guides/reasoning.md` expanded with required-tools gate hardening and native FC text JSON fallback behavior
 
 ## What Shipped Apr 7, 2026
 
