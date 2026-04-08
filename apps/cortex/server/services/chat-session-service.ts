@@ -117,7 +117,7 @@ export class ChatSessionService {
     const cfg = row.agentConfig;
     const enableTools = cfg.enableTools === true;
 
-    const provider = (cfg.provider as string | undefined) ?? "test";
+    const provider = (cfg.provider as string | undefined) ?? "anthropic";
     const agentName = `chat-${sessionId.slice(0, 8)}`;
     const stableAgentId = row.stableAgentId;
 
@@ -127,6 +127,7 @@ export class ChatSessionService {
       provider,
       ...(stableAgentId ? { agentId: stableAgentId } : {}),
       memory: { episodic: true },
+      streaming: true,
       ...(typeof cfg.model === "string" && cfg.model.trim()
         ? { model: cfg.model.trim() }
         : {}),

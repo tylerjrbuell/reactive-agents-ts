@@ -9,6 +9,12 @@ export type AgentStreamEvent =
   | { _tag: "StreamCancelled"; reason: string; iterationsCompleted: number }
   | Record<string, unknown>; // for other event types
 
+export type ReasoningStep = {
+  iteration: number;
+  maxIterations: number;
+  toolsCalledThisStep?: string[];
+};
+
 export type ChatTurn = {
   id: number;
   role: "user" | "assistant";
@@ -18,6 +24,8 @@ export type ChatTurn = {
   toolsUsed?: string[];
   steps?: number;
   streaming?: boolean;
+  streamProgress?: { iteration: number; maxIterations: number };
+  reasoningSteps?: ReasoningStep[];
 };
 
 export type ChatSession = {
@@ -209,15 +217,12 @@ function createChatStore() {
 
     try {
       const url = `${CORTEX_SERVER_URL}/api/chat/sessions/${encodeURIComponent(sessionId!)}/chat/stream`;
-      console.log("[Chat Stream] Requesting:", url);
 
       const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message }),
       });
-
-      console.log("[Chat Stream] Response status:", res.status, "ok:", res.ok);
 
       if (!res.ok) {
         let errorMsg = "Request failed";
@@ -227,7 +232,6 @@ function createChatStore() {
         } catch {
           errorMsg = `HTTP ${res.status}`;
         }
-        console.error("[Chat Stream] Error response:", errorMsg);
         update((s) => ({
           ...s,
           sending: false,
@@ -249,7 +253,6 @@ function createChatStore() {
 
       const reader = res.body?.getReader();
       if (!reader) {
-        console.error("[Chat Stream] No response body reader");
         update((s) => ({
           ...s,
           sending: false,
@@ -266,14 +269,10 @@ function createChatStore() {
       let buffer = "";
       let eventCount = 0;
 
-      console.log("[Chat Stream] Starting stream reader");
-
       while (true) {
         const { done, value } = await reader.read();
         if (done) {
-          // Finalize decoder to get any remaining data
           buffer += decoder.decode();
-          console.log("[Chat Stream] Stream done. Total events:", eventCount);
           break;
         }
 
@@ -298,22 +297,57 @@ function createChatStore() {
               try {
                 const event = JSON.parse(jsonStr) as AgentStreamEvent;
                 eventCount++;
-                console.log(`[Chat Stream] Event ${eventCount}:`, event._tag);
 
                 if (event._tag === "TextDelta") {
-                  console.log("[Chat Stream] TextDelta:", (event as any).text?.length, "chars");
-                  update((s) => {
-                    const idx = s.activeTurns.findIndex((t) => t.id === assistantTurnId);
-                    if (idx >= 0) {
-                      s.activeTurns[idx].content += event.text;
-                    }
-                    return s;
-                  });
+                  update((s) => ({
+                    ...s,
+                    activeTurns: s.activeTurns.map((t) =>
+                      t.id === assistantTurnId ? { ...t, content: t.content + event.text } : t,
+                    ),
+                  }));
+                } else if (event._tag === "IterationProgress") {
+                  const iter = (event as any).iteration as number;
+                  const max = (event as any).maxIterations as number;
+                  const tools = (event as any).toolsCalledThisStep as string[] | undefined;
+                  const step: ReasoningStep = {
+                    iteration: iter,
+                    maxIterations: max,
+                    ...(tools && tools.length > 0 ? { toolsCalledThisStep: tools } : {}),
+                  };
+                  update((s) => ({
+                    ...s,
+                    activeTurns: s.activeTurns.map((t) => {
+                      if (t.id !== assistantTurnId) return t;
+                      const existing = t.reasoningSteps ?? [];
+                      const idx = existing.findIndex((r) => r.iteration === iter);
+                      const steps = idx >= 0
+                        ? existing.map((r, i) => (i === idx ? step : r))
+                        : [...existing, step];
+                      return { ...t, streamProgress: { iteration: iter, maxIterations: max }, reasoningSteps: steps };
+                    }),
+                  }));
                 } else if (event._tag === "StreamCompleted") {
                   tokensUsed = (event.metadata?.tokensUsed as number) ?? 0;
                   steps = (event.metadata?.iterations as number) ?? 0;
                   if (event.toolSummary && event.toolSummary.length > 0) {
                     toolsUsed = event.toolSummary.map((t) => t.name);
+                  }
+                  // Fallback: if no TextDelta events arrived (final-answer meta-tool path),
+                  // use the output from StreamCompleted directly.
+                  const output = (event as any).output as string | undefined;
+                  if (output?.trim()) {
+                    update((s) => {
+                      const turn = s.activeTurns.find((t) => t.id === assistantTurnId);
+                      if (turn && !turn.content.trim()) {
+                        return {
+                          ...s,
+                          activeTurns: s.activeTurns.map((t) =>
+                            t.id === assistantTurnId ? { ...t, content: output } : t,
+                          ),
+                        };
+                      }
+                      return s;
+                    });
                   }
                 } else if (event._tag === "StreamError") {
                   // Handle stream errors
@@ -331,18 +365,23 @@ function createChatStore() {
         }
       }
 
-      console.log("[Chat Stream] Finalizing:", { tokensUsed, steps, toolsCount: toolsUsed.length });
-      update((s) => {
-        const idx = s.activeTurns.findIndex((t) => t.id === assistantTurnId);
-        if (idx >= 0) {
-          s.activeTurns[idx].streaming = false;
-          s.activeTurns[idx].tokensUsed = tokensUsed;
-          if (steps > 0) s.activeTurns[idx].steps = steps;
-          if (toolsUsed.length > 0) s.activeTurns[idx].toolsUsed = toolsUsed;
-        }
-        return { ...s, sending: false };
-      });
-      console.log("[Chat Stream] Finished successfully");
+      update((s) => ({
+        ...s,
+        sending: false,
+        activeTurns: s.activeTurns.map((t) =>
+          t.id === assistantTurnId
+            ? {
+                ...t,
+                streaming: false,
+                streamProgress: undefined,
+                // reasoningSteps intentionally kept for post-stream inspection
+                tokensUsed,
+                ...(steps > 0 ? { steps } : {}),
+                ...(toolsUsed.length > 0 ? { toolsUsed } : {}),
+              }
+            : t,
+        ),
+      }));
     } catch (e) {
       const errorMsg = String(e);
       console.error("[Chat Stream] Exception:", errorMsg, e);

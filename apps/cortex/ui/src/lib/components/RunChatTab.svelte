@@ -9,7 +9,8 @@
   import { settings } from "$lib/stores/settings.js";
   import { toast } from "$lib/stores/toast-store.js";
   import { CHAT_TOOL_PRESETS } from "$lib/inference-presets.js";
-  import type { ChatTurn } from "$lib/stores/chat-store.js";
+  import type { ChatTurn, AgentStreamEvent, ReasoningStep } from "$lib/stores/chat-store.js";
+  import MarkdownRich from "$lib/components/MarkdownRich.svelte";
   import {
     forgetRunChatSession,
     peekRunChatSession,
@@ -35,6 +36,15 @@
   let message = $state("");
   let inputEl = $state<HTMLTextAreaElement | null>(null);
   let scrollEl = $state<HTMLDivElement | null>(null);
+  let expandedSteps = $state<Set<number>>(new Set());
+
+  function toggleSteps(turnId: number) {
+    expandedSteps = new Set(
+      expandedSteps.has(turnId)
+        ? [...expandedSteps].filter((id) => id !== turnId)
+        : [...expandedSteps, turnId],
+    );
+  }
 
   function toggleTool(id: string) {
     if (selectedTools.includes(id)) selectedTools = selectedTools.filter((t) => t !== id);
@@ -119,50 +129,97 @@
     }
 
     message = "";
-    const optimisticTurn: ChatTurn = {
-      id: Date.now(),
-      role: "user",
-      content: text,
-      tokensUsed: 0,
-      ts: Date.now(),
-    };
-    turns = [...turns, optimisticTurn];
+    const userTurnId = Date.now();
+    const assistantTurnId = Date.now() + 1;
+    const optimisticTurn: ChatTurn = { id: userTurnId, role: "user", content: text, tokensUsed: 0, ts: Date.now() };
+    const assistantTurn: ChatTurn = { id: assistantTurnId, role: "assistant", content: "", tokensUsed: 0, ts: Date.now(), streaming: true };
+    turns = [...turns, optimisticTurn, assistantTurn];
     sending = true;
     error = null;
 
-    const res = await fetch(
-      `${CORTEX_SERVER_URL}/api/chat/sessions/${encodeURIComponent(sessionId!)}/chat`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text }),
-      },
-    );
+    try {
+      const res = await fetch(
+        `${CORTEX_SERVER_URL}/api/chat/sessions/${encodeURIComponent(sessionId!)}/chat/stream`,
+        { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: text }) },
+      );
 
-    if (!res.ok) {
-      const errBody = (await res.json()) as { error?: string };
-      error = errBody.error ?? "Request failed";
-      turns = turns.filter((t) => t.id !== optimisticTurn.id);
-      sending = false;
-      return;
+      if (!res.ok || !res.body) {
+        let errMsg = `HTTP ${res.status}`;
+        try { errMsg = ((await res.json()) as { error?: string }).error ?? errMsg; } catch { /* ignore */ }
+        error = errMsg;
+        turns = turns.filter((t) => t.id !== userTurnId && t.id !== assistantTurnId);
+        sending = false;
+        return;
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let tokensUsed = 0;
+      let toolsUsed: string[] = [];
+      let steps = 0;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) { buffer += decoder.decode(); break; }
+        buffer += decoder.decode(value, { stream: true });
+
+        const parts = buffer.split("\n\n");
+        buffer = parts[parts.length - 1];
+
+        for (let i = 0; i < parts.length - 1; i++) {
+          const msg = parts[i].trim();
+          if (!msg) continue;
+          for (const line of msg.split("\n")) {
+            if (!line.startsWith("data: ")) continue;
+            const jsonStr = line.slice(6).trim();
+            if (!jsonStr) continue;
+            try {
+              const event = JSON.parse(jsonStr) as AgentStreamEvent;
+              if (event._tag === "TextDelta") {
+                turns = turns.map((t) =>
+                  t.id === assistantTurnId ? { ...t, content: t.content + (event as any).text } : t,
+                );
+              } else if (event._tag === "IterationProgress") {
+                const iter = (event as any).iteration as number;
+                const max = (event as any).maxIterations as number;
+                const tools = (event as any).toolsCalledThisStep as string[] | undefined;
+                const step: ReasoningStep = { iteration: iter, maxIterations: max, ...(tools?.length ? { toolsCalledThisStep: tools } : {}) };
+                turns = turns.map((t) => {
+                  if (t.id !== assistantTurnId) return t;
+                  const existing = t.reasoningSteps ?? [];
+                  const idx = existing.findIndex((r) => r.iteration === iter);
+                  const steps = idx >= 0 ? existing.map((r, i) => (i === idx ? step : r)) : [...existing, step];
+                  return { ...t, streamProgress: { iteration: iter, maxIterations: max }, reasoningSteps: steps };
+                });
+              } else if (event._tag === "StreamCompleted") {
+                tokensUsed = (event.metadata?.tokensUsed as number) ?? 0;
+                steps = (event.metadata?.iterations as number) ?? 0;
+                if (event.toolSummary?.length) toolsUsed = event.toolSummary.map((t) => t.name);
+                const output = (event as any).output as string | undefined;
+                if (output?.trim()) {
+                  turns = turns.map((t) =>
+                    t.id === assistantTurnId && !t.content.trim() ? { ...t, content: output } : t,
+                  );
+                }
+              } else if (event._tag === "StreamError") {
+                error = (event as any).cause ?? "Stream error";
+              }
+            } catch { /* ignore parse errors */ }
+          }
+        }
+      }
+
+      turns = turns.map((t) =>
+        t.id === assistantTurnId
+          ? { ...t, streaming: false, streamProgress: undefined, tokensUsed, ...(steps > 0 ? { steps } : {}), ...(toolsUsed.length > 0 ? { toolsUsed } : {}) }
+          : t,
+      );
+    } catch (e) {
+      error = String(e);
+      turns = turns.filter((t) => t.id !== userTurnId && t.id !== assistantTurnId);
     }
 
-    const payload = (await res.json()) as {
-      reply: string;
-      tokensUsed: number;
-      toolsUsed?: string[];
-      steps?: number;
-    };
-    const assistantTurn: ChatTurn = {
-      id: Date.now() + 1,
-      role: "assistant",
-      content: payload.reply,
-      tokensUsed: payload.tokensUsed,
-      ts: Date.now(),
-      ...(payload.toolsUsed && payload.toolsUsed.length > 0 ? { toolsUsed: payload.toolsUsed } : {}),
-      ...(payload.steps != null ? { steps: payload.steps } : {}),
-    };
-    turns = [...turns, assistantTurn];
     sending = false;
     inputEl?.focus();
   }
@@ -269,17 +326,72 @@
                   {/each}
                 </div>
               {/if}
-              <p class="whitespace-pre-wrap leading-snug">{turn.content}</p>
+              {#if turn.role === "assistant"}
+                {#if turn.reasoningSteps && turn.reasoningSteps.length > 0}
+                  <div class="mb-1.5">
+                    <button
+                      type="button"
+                      onclick={() => toggleSteps(turn.id)}
+                      class="flex items-center gap-1 text-[8px] font-mono uppercase tracking-widest text-[var(--cortex-text-muted)] hover:text-[var(--cortex-text)] transition-colors cursor-pointer"
+                    >
+                      <span class="material-symbols-outlined text-[10px] leading-none transition-transform duration-150"
+                        style="transform: rotate({expandedSteps.has(turn.id) ? '90deg' : '0deg'})">chevron_right</span>
+                      {#if turn.streaming && turn.streamProgress}
+                        Reasoning… step {turn.streamProgress.iteration}/{turn.streamProgress.maxIterations}
+                      {:else}
+                        {turn.reasoningSteps.length} reasoning {turn.reasoningSteps.length === 1 ? "step" : "steps"}
+                      {/if}
+                    </button>
+                    {#if turn.streaming && turn.streamProgress}
+                      <div class="mt-0.5 h-px rounded-full overflow-hidden bg-[var(--cortex-surface-mid)]">
+                        <div
+                          class="h-full bg-secondary/60 rounded-full transition-[width] duration-500 ease-out"
+                          style="width: {Math.min(100, (turn.streamProgress.iteration / turn.streamProgress.maxIterations) * 100)}%"
+                        ></div>
+                      </div>
+                    {/if}
+                    {#if expandedSteps.has(turn.id)}
+                      <div class="mt-1 ml-2.5 space-y-0.5 border-l border-[color:var(--cortex-border)] pl-2">
+                        {#each turn.reasoningSteps as step (step.iteration)}
+                          <div class="flex items-start gap-1.5 text-[8px] font-mono text-[var(--cortex-text-muted)]">
+                            <span class="shrink-0 tabular-nums text-secondary/60">#{step.iteration}</span>
+                            {#if step.toolsCalledThisStep && step.toolsCalledThisStep.length > 0}
+                              <div class="flex flex-wrap gap-0.5">
+                                {#each step.toolsCalledThisStep as tool (tool)}
+                                  <span class="rounded bg-[var(--cortex-surface-mid)] px-1 py-px text-[var(--cortex-text)]">{tool}</span>
+                                {/each}
+                              </div>
+                            {:else}
+                              <span class="italic">thinking…</span>
+                            {/if}
+                          </div>
+                        {/each}
+                        {#if turn.streaming}
+                          <div class="flex items-center gap-1 text-[8px] font-mono text-[var(--cortex-text-muted)]">
+                            <span class="inline-block w-1 h-1 rounded-full bg-secondary/60 animate-pulse"></span>
+                          </div>
+                        {/if}
+                      </div>
+                    {/if}
+                  </div>
+                {:else if turn.streaming}
+                  <p class="text-[8px] font-mono text-[var(--cortex-text-muted)] italic mb-1">
+                    Thinking<span class="inline-block w-1.5 h-2.5 ml-0.5 bg-secondary/60 animate-pulse rounded-sm align-middle"></span>
+                  </p>
+                {/if}
+                {#if turn.streaming && !turn.content}
+                  <!-- awaiting first token -->
+                {:else if turn.streaming}
+                  <p class="whitespace-pre-wrap leading-snug text-[11px]">{turn.content}<span class="inline-block w-1 h-3 ml-0.5 bg-secondary/80 animate-pulse rounded-sm align-middle"></span></p>
+                {:else}
+                  <MarkdownRich markdown={turn.content} showCopy={true} class="text-[10px]" />
+                {/if}
+              {:else}
+                <p class="whitespace-pre-wrap leading-snug">{turn.content}</p>
+              {/if}
             </div>
           </div>
         {/each}
-        {#if sending}
-          <div class="flex justify-start">
-            <div class={bubbleAsst}>
-              <span class="text-[10px] italic text-[var(--cortex-text-muted)]">Thinking…</span>
-            </div>
-          </div>
-        {/if}
       {/if}
     </div>
 

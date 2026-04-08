@@ -837,6 +837,41 @@ export function handleThinking(
       }
     }
 
+    // ── NO-RESOLVER FALLBACK ────────────────────────────────────────────────
+    // When executeReactive is called directly (without execution engine wiring),
+    // toolCallResolver is absent but the LLM may still emit native FC events.
+    // Forward them to act.ts via pendingNativeToolCalls so ToolService executes them.
+    if (accumulatedToolCalls.length > 0) {
+      const parsedCalls: ToolCallSpec[] = accumulatedToolCalls.map((tc, i) => {
+        let parsedInput: unknown = {};
+        try {
+          parsedInput = tc.input ? JSON.parse(tc.input) : {};
+        } catch {
+          parsedInput = {};
+        }
+        return {
+          id: tc.id ?? `tc-${state.iteration}-${i}`,
+          name: tc.name,
+          arguments: parsedInput as Record<string, unknown>,
+        };
+      });
+
+      if (parsedCalls.length > 0) {
+        return transitionState(state, {
+          steps: newSteps,
+          tokens: newTokens,
+          cost: newCost,
+          status: "acting",
+          meta: {
+            ...state.meta,
+            pendingNativeToolCalls: parsedCalls,
+            lastThought: thought,
+            lastThinking: thinking,
+          },
+        });
+      }
+    }
+
     // ── TERMINATION ORACLE ──────────────────────────────────────────────────
     // Unified exit decision: replaces scattered hasFinalAnswer, end_turn, and
     // completion-gap checks with a single scored signal pipeline.

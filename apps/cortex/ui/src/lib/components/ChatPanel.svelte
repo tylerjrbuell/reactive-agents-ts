@@ -14,6 +14,15 @@
   let message = $state("");
   let inputEl = $state<HTMLTextAreaElement | null>(null);
   let scrollEl = $state<HTMLDivElement | null>(null);
+  let expandedSteps = $state<Set<number>>(new Set());
+
+  function toggleSteps(turnId: number) {
+    expandedSteps = new Set(
+      expandedSteps.has(turnId)
+        ? [...expandedSteps].filter((id) => id !== turnId)
+        : [...expandedSteps, turnId],
+    );
+  }
 
   $effect(() => {
     void sessionId;
@@ -136,10 +145,66 @@
             {/if}
             {#if turn.role === "assistant"}
               <div class="flex gap-2 items-start">
-                <div class="flex-1">
-                  <MarkdownRich markdown={turn.content} showCopy={true} class="text-[11px]" />
-                  {#if turn.streaming}
-                    <span class="inline-block w-2 h-4 ml-1 bg-secondary/80 animate-pulse rounded-sm"></span>
+                <div class="flex-1 min-w-0">
+                  {#if turn.reasoningSteps && turn.reasoningSteps.length > 0}
+                    <div class="mb-2">
+                      <button
+                        type="button"
+                        onclick={() => toggleSteps(turn.id)}
+                        class="flex items-center gap-1.5 text-[9px] font-mono uppercase tracking-widest text-[var(--cortex-text-muted)] hover:text-[var(--cortex-text)] transition-colors cursor-pointer"
+                      >
+                        <span class="material-symbols-outlined text-[11px] leading-none transition-transform duration-150"
+                          style="transform: rotate({expandedSteps.has(turn.id) ? '90deg' : '0deg'})"
+                        >chevron_right</span>
+                        {#if turn.streaming && turn.streamProgress}
+                          Reasoning… step {turn.streamProgress.iteration}/{turn.streamProgress.maxIterations}
+                        {:else}
+                          {turn.reasoningSteps.length} reasoning {turn.reasoningSteps.length === 1 ? "step" : "steps"}
+                        {/if}
+                      </button>
+                      {#if turn.streaming && turn.streamProgress}
+                        <div class="mt-1 h-px rounded-full overflow-hidden bg-[var(--cortex-surface-mid)]">
+                          <div
+                            class="h-full bg-secondary/60 rounded-full transition-[width] duration-500 ease-out"
+                            style="width: {Math.min(100, (turn.streamProgress.iteration / turn.streamProgress.maxIterations) * 100)}%"
+                          ></div>
+                        </div>
+                      {/if}
+                      {#if expandedSteps.has(turn.id)}
+                        <div class="mt-1.5 ml-3 space-y-1 border-l border-[color:var(--cortex-border)] pl-3">
+                          {#each turn.reasoningSteps as step (step.iteration)}
+                            <div class="flex items-start gap-2 text-[9px] font-mono text-[var(--cortex-text-muted)]">
+                              <span class="shrink-0 tabular-nums text-secondary/60">#{step.iteration}</span>
+                              {#if step.toolsCalledThisStep && step.toolsCalledThisStep.length > 0}
+                                <div class="flex flex-wrap gap-1">
+                                  {#each step.toolsCalledThisStep as tool (tool)}
+                                    <span class="rounded bg-[var(--cortex-surface-mid)] px-1 py-0.5 text-[var(--cortex-text)]">{tool}</span>
+                                  {/each}
+                                </div>
+                              {:else}
+                                <span class="italic">thinking…</span>
+                              {/if}
+                            </div>
+                          {/each}
+                          {#if turn.streaming}
+                            <div class="flex items-center gap-1 text-[9px] font-mono text-[var(--cortex-text-muted)]">
+                              <span class="inline-block w-1 h-1 rounded-full bg-secondary/60 animate-pulse"></span>
+                            </div>
+                          {/if}
+                        </div>
+                      {/if}
+                    </div>
+                  {:else if turn.streaming}
+                    <p class="text-[9px] font-mono text-[var(--cortex-text-muted)] italic mb-2">
+                      Thinking<span class="inline-block w-1.5 h-2.5 ml-0.5 bg-secondary/60 animate-pulse rounded-sm align-middle"></span>
+                    </p>
+                  {/if}
+                  {#if turn.streaming && !turn.content}
+                    <!-- content not yet started -->
+                  {:else if turn.streaming}
+                    <p class="whitespace-pre-wrap text-[11px] leading-relaxed m-0">{turn.content}<span class="inline-block w-1.5 h-3.5 ml-0.5 bg-secondary/80 animate-pulse rounded-sm align-middle"></span></p>
+                  {:else}
+                    <MarkdownRich markdown={turn.content} showCopy={true} class="text-[11px]" />
                   {/if}
                 </div>
               </div>
@@ -164,15 +229,6 @@
           </div>
         </div>
       {/each}
-      {#if sending}
-        <div class="flex justify-start">
-          <div
-            class="rounded-lg border border-[color:var(--cortex-border)] bg-[var(--cortex-surface-low)] px-3 py-2"
-          >
-            <span class="text-[11px] italic text-[var(--cortex-text-muted)]">Thinking…</span>
-          </div>
-        </div>
-      {/if}
     {/if}
   </div>
 

@@ -89,6 +89,8 @@ export interface BuildCortexAgentParams {
   };
   /** When set (e.g. desk chat with `provider: "test"`), wires `withTestScenario` on the builder. */
   readonly testScenario?: readonly TestTurn[];
+  /** When true, enables streaming mode for TextDelta event emission. */
+  readonly streaming?: boolean;
 }
 
 /**
@@ -207,6 +209,10 @@ export async function buildCortexAgent(
       recall: params.metaTools.recall ?? false,
       harnessSkill: params.metaTools.harnessSkill ?? false,
     });
+  }
+
+  if (params.streaming === true) {
+    b = b.withStreaming();
   }
 
   return b.build();

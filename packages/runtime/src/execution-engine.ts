@@ -1,4 +1,4 @@
-import { Effect, Context, Layer, Ref, Option, Queue, Stream as EStream, Duration } from "effect";
+import { Effect, Context, Layer, Ref, Option, Queue, Stream as EStream, Duration, FiberRef } from "effect";
 import type { ExecutionContext, ReactiveAgentsConfig } from "./types.js";
 import {
   ExecutionError,
@@ -1993,6 +1993,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                                 estimatedCost?: number;
                               };
                             }>;
+                            stream: (req: unknown) => Effect.Effect<import("effect").Stream.Stream<{ type: string; text?: string; content?: string; usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number; estimatedCost?: number }; stopReason?: string; toolCalls?: unknown[] }>>;
                           }>("LLMService");
 
                           const defaultPrompt =
@@ -2058,7 +2059,33 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                           }
 
                           const llmCallStart = performance.now();
-                          const response = yield* llm.complete(llmRequest);
+                          const streamCb = yield* FiberRef.get(StreamingTextCallback);
+                          let response: { content: string; toolCalls?: unknown[]; stopReason: string; usage?: { totalTokens?: number; estimatedCost?: number } };
+                          if (streamCb) {
+                            // Streaming path: emit TextDelta events as tokens arrive
+                            const llmStream = yield* llm.stream(llmRequest);
+                            let content = "";
+                            let toolCalls: unknown[] | undefined;
+                            let stopReason = "end_turn";
+                            let usage: { totalTokens?: number; estimatedCost?: number } | undefined;
+                            yield* EStream.runForEach(llmStream, (event: any) =>
+                              Effect.gen(function* () {
+                                if (event.type === "text_delta" && event.text) {
+                                  content += event.text;
+                                  yield* streamCb(event.text).pipe(Effect.catchAll(() => Effect.void));
+                                } else if (event.type === "content_complete") {
+                                  if (event.content) content = event.content;
+                                  if (event.stopReason) stopReason = event.stopReason;
+                                  if (event.toolCalls?.length) toolCalls = event.toolCalls;
+                                } else if (event.type === "usage") {
+                                  usage = { totalTokens: event.usage?.totalTokens, estimatedCost: event.usage?.estimatedCost };
+                                }
+                              }),
+                            ).pipe(Effect.catchAll(() => Effect.void));
+                            response = { content, stopReason, ...(toolCalls ? { toolCalls } : {}), ...(usage ? { usage } : {}) };
+                          } else {
+                            response = yield* llm.complete(llmRequest);
+                          }
                           const llmDurationMs = performance.now() - llmCallStart;
 
                           const fallbackTransitions = (response as { fallbackTransitions?: Array<{
@@ -3707,67 +3734,66 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
               ).pipe(Effect.catchAll(() => Effect.void));
             }
 
-            // Fork execution within the Effect context (services available).
-            // Events are pushed to the queue; no Queue.shutdown (preserves items).
-            yield* Effect.locally(
-              execute(task).pipe(
-                Effect.tap((taskResult) => {
-                  // Build toolSummary from debrief.toolsUsed if available
-                  const debriefToolsUsed = (taskResult as any).debrief?.toolsUsed as Array<{ name: string; calls: number; successRate: number }> | undefined;
-                  const toolSummary = debriefToolsUsed && debriefToolsUsed.length > 0
-                    ? debriefToolsUsed.map((t) => ({ name: t.name, calls: t.calls, avgMs: 0 }))
-                    : [];
-                  const completedEvent: AgentStreamEvent = {
-                    _tag: "StreamCompleted",
-                    output: String((taskResult as any).output ?? ""),
-                    metadata: (taskResult as any).metadata ?? {},
-                    taskId: String(task.id),
-                    agentId: String(task.agentId),
-                    ...(toolSummary.length > 0 ? { toolSummary } : {}),
-                  };
-                  const offer = Queue.offer(queue, completedEvent);
-                  if (!eb) return offer;
-                  return offer.pipe(
-                    Effect.tap(() =>
-                      eb.publish({
-                        _tag: "AgentStreamCompleted",
-                        taskId: String(task.id),
-                        agentId: config.agentId,
-                        success: true,
-                        durationMs: Date.now() - startMs,
-                      } as AgentEvent).pipe(Effect.catchAll(() => Effect.void)),
-                    ),
-                  );
-                }),
-                Effect.catchAll((err: unknown) => {
-                  const cause =
-                    typeof err === "object" &&
-                    err !== null &&
-                    "message" in err
-                      ? String((err as any).message)
-                      : String(err);
-                  const errorEvent: AgentStreamEvent = { _tag: "StreamError", cause };
-                  const offer = Queue.offer(queue, errorEvent);
-                  if (!eb) return offer;
-                  return offer.pipe(
-                    Effect.tap(() =>
-                      eb.publish({
-                        _tag: "AgentStreamCompleted",
-                        taskId: String(task.id),
-                        agentId: config.agentId,
-                        success: false,
-                        durationMs: Date.now() - startMs,
-                      } as AgentEvent).pipe(Effect.catchAll(() => Effect.void)),
-                    ),
-                  );
-                }),
-              ),
-              StreamingTextCallback,
-              (text: string) =>
-                Queue.offer(queue, { _tag: "TextDelta", text }).pipe(
-                  Effect.map(() => {}),
-                ),
-            ).pipe(Effect.forkDaemon);
+            // Set the streaming callback inside the daemon so the FiberRef is
+            // available to the reasoning kernel. forkDaemon creates a root fiber
+            // that does NOT inherit FiberRef values from Effect.locally — the only
+            // reliable way is FiberRef.set as the first step inside the fork.
+            const streamCallback = (text: string) =>
+              Queue.offer(queue, { _tag: "TextDelta", text }).pipe(
+                Effect.map(() => {}),
+              );
+
+            yield* FiberRef.set(StreamingTextCallback, streamCallback).pipe(
+              Effect.andThen(execute(task)),
+              Effect.tap((taskResult) => {
+                const debriefToolsUsed = (taskResult as any).debrief?.toolsUsed as Array<{ name: string; calls: number; successRate: number }> | undefined;
+                const toolSummary = debriefToolsUsed && debriefToolsUsed.length > 0
+                  ? debriefToolsUsed.map((t) => ({ name: t.name, calls: t.calls, avgMs: 0 }))
+                  : [];
+                const completedEvent: AgentStreamEvent = {
+                  _tag: "StreamCompleted",
+                  output: String((taskResult as any).output ?? ""),
+                  metadata: (taskResult as any).metadata ?? {},
+                  taskId: String(task.id),
+                  agentId: String(task.agentId),
+                  ...(toolSummary.length > 0 ? { toolSummary } : {}),
+                };
+                const offer = Queue.offer(queue, completedEvent);
+                if (!eb) return offer;
+                return offer.pipe(
+                  Effect.tap(() =>
+                    eb.publish({
+                      _tag: "AgentStreamCompleted",
+                      taskId: String(task.id),
+                      agentId: config.agentId,
+                      success: true,
+                      durationMs: Date.now() - startMs,
+                    } as AgentEvent).pipe(Effect.catchAll(() => Effect.void)),
+                  ),
+                );
+              }),
+              Effect.catchAll((err: unknown) => {
+                const cause =
+                  typeof err === "object" && err !== null && "message" in err
+                    ? String((err as any).message)
+                    : String(err);
+                const errorEvent: AgentStreamEvent = { _tag: "StreamError", cause };
+                const offer = Queue.offer(queue, errorEvent);
+                if (!eb) return offer;
+                return offer.pipe(
+                  Effect.tap(() =>
+                    eb.publish({
+                      _tag: "AgentStreamCompleted",
+                      taskId: String(task.id),
+                      agentId: config.agentId,
+                      success: false,
+                      durationMs: Date.now() - startMs,
+                    } as AgentEvent).pipe(Effect.catchAll(() => Effect.void)),
+                  ),
+                );
+              }),
+              Effect.forkDaemon,
+            );
 
             // Stream reads from queue, stops after terminal event.
             return EStream.unfoldEffect(false as boolean, (done) => {

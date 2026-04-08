@@ -1,6 +1,6 @@
 <script lang="ts">
   import { getContext, onMount, onDestroy } from "svelte";
-  import AgentGrid from "$lib/components/AgentGrid.svelte";
+  import BeaconCanvas from "$lib/components/BeaconCanvas.svelte";
   import BottomInputBar from "$lib/components/BottomInputBar.svelte";
   import CortexDeskShell from "$lib/components/CortexDeskShell.svelte";
   import type { AgentStore } from "$lib/stores/agent-store.js";
@@ -25,8 +25,8 @@
 
 <CortexDeskShell>
   {#if $agentStore.length > 0}
-    <div class="flex-1 relative overflow-y-auto px-4 sm:px-6 pt-4 pb-32 z-10 min-h-0">
-      <AgentGrid agents={$agentStore} />
+    <div class="flex-1 relative overflow-hidden z-10 min-h-0">
+      <BeaconCanvas agents={$agentStore} />
     </div>
   {:else}
     <!-- ── Empty state: pulsing neural core + instructions ──────────── -->
