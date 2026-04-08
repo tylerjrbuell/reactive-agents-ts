@@ -1,10 +1,11 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, onDestroy } from "svelte";
   import { goto } from "$app/navigation";
   import { CORTEX_SERVER_URL } from "$lib/constants.js";
   import ConfirmModal from "$lib/components/ConfirmModal.svelte";
   import CortexDeskShell from "$lib/components/CortexDeskShell.svelte";
   import { toast } from "$lib/stores/toast-store.js";
+  import { createWsClient } from "$lib/stores/ws-client.js";
 
   type RunRow = {
     runId: string;
@@ -26,6 +27,9 @@
   let error = $state<string | null>(null);
   let searchText = $state("");
   let statusFilter = $state<"all" | "live" | "completed" | "failed">("all");
+
+  let wsClient = $state<ReturnType<typeof createWsClient> | null>(null);
+  let wsUnsub: (() => void) | null = null;
 
   // ── Selection + bulk delete ──────────────────────────────────────────
   let selected = $state(new Set<string>());
@@ -82,6 +86,130 @@
     localStorage.setItem(PINS_KEY, JSON.stringify([...pinned]));
   }
 
+  function handleLiveMessage(msg: {
+    agentId?: string;
+    runId?: string;
+    type?: string;
+    payload?: Record<string, unknown>;
+  }) {
+    if (!msg?.agentId || !msg.runId || !msg.type) return;
+
+    const runId = msg.runId;
+    const type = msg.type;
+    const payload = msg.payload ?? {};
+
+    // Find or create run entry
+    let runIdx = runs.findIndex((r) => r.runId === runId);
+    if (runIdx === -1) {
+      // New run from live event — might not be in DB yet
+      // Create minimal entry; will be filled by subsequent events
+      const newRun: RunRow = {
+        runId,
+        agentId: msg.agentId,
+        startedAt: typeof payload.startedAt === "number" ? payload.startedAt : Date.now(),
+        status: "live",
+        iterationCount: 0,
+        tokensUsed: 0,
+        cost: 0,
+        hasDebrief: false,
+        provider: typeof payload.provider === "string" ? payload.provider : undefined,
+        model: typeof payload.model === "string" ? payload.model : undefined,
+        strategy: typeof payload.strategy === "string" ? payload.strategy : undefined,
+      };
+      runs = [newRun, ...runs];
+      runIdx = 0;
+    }
+
+    // Update run based on event type
+    const run = runs[runIdx];
+    let updated = false;
+
+    switch (type) {
+      case "AgentStarted": {
+        if (typeof payload.provider === "string" && payload.provider) {
+          run.provider = payload.provider;
+          updated = true;
+        }
+        if (typeof payload.model === "string" && payload.model) {
+          run.model = payload.model;
+          updated = true;
+        }
+        break;
+      }
+      case "ReasoningIterationProgress": {
+        const iter = typeof payload.iteration === "number" ? payload.iteration : run.iterationCount;
+        if (iter !== run.iterationCount) {
+          run.iterationCount = iter;
+          updated = true;
+        }
+        if (typeof payload.strategy === "string" && payload.strategy && !run.strategy) {
+          run.strategy = payload.strategy;
+          updated = true;
+        }
+        break;
+      }
+      case "LLMRequestCompleted": {
+        const tokens =
+          typeof payload.tokensUsed === "number"
+            ? payload.tokensUsed
+            : typeof (payload.tokensUsed as { total?: number } | undefined)?.total === "number"
+              ? (payload.tokensUsed as { total: number }).total
+              : 0;
+        const cost = typeof payload.estimatedCost === "number" ? payload.estimatedCost : 0;
+        if (tokens > 0 || cost > 0) {
+          run.tokensUsed += tokens;
+          run.cost += cost;
+          updated = true;
+        }
+        break;
+      }
+      case "ReasoningStepCompleted": {
+        // Re-sync iteration count if not yet set
+        if (run.iterationCount === 0) {
+          const step = typeof payload.step === "number" ? payload.step : 0;
+          if (step > 0) {
+            run.iterationCount = step;
+            updated = true;
+          }
+        }
+        break;
+      }
+      case "AgentCompleted": {
+        if (run.status !== "completed") {
+          run.status = payload.success === true ? "completed" : "failed";
+          run.completedAt = typeof payload.durationMs === "number"
+            ? run.startedAt + payload.durationMs
+            : Date.now();
+          if (typeof payload.totalTokens === "number") {
+            run.tokensUsed = Math.max(run.tokensUsed, payload.totalTokens);
+          }
+          updated = true;
+        }
+        break;
+      }
+      case "TaskFailed": {
+        if (run.status !== "failed") {
+          run.status = "failed";
+          run.completedAt = Date.now();
+          updated = true;
+        }
+        break;
+      }
+      case "DebriefCompleted": {
+        if (!run.hasDebrief) {
+          run.hasDebrief = true;
+          updated = true;
+        }
+        break;
+      }
+    }
+
+    // Trigger reactivity by reassigning the array
+    if (updated) {
+      runs = runs;
+    }
+  }
+
   onMount(async () => {
     loadPins();
     try {
@@ -93,6 +221,25 @@
     } finally {
       loading = false;
     }
+
+    // Subscribe to live WebSocket messages
+    wsClient = createWsClient("/ws/live/cortex-broadcast");
+    wsUnsub = wsClient.onMessage((raw) => {
+      const msg = raw as {
+        agentId?: string;
+        runId?: string;
+        type?: string;
+        payload?: Record<string, unknown>;
+      };
+      handleLiveMessage(msg);
+    });
+  });
+
+  onDestroy(() => {
+    wsUnsub?.();
+    wsUnsub = null;
+    wsClient?.close();
+    wsClient = null;
   });
 
   const filtered = $derived(

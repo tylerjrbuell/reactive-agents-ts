@@ -7,6 +7,10 @@
 
 /* Geist Variable — same font as docs site */
 @import "@fontsource-variable/geist";
+/* Outfit — display headings / wordmark */
+@import "@fontsource/outfit";
+/* JetBrains Mono — data and code sections */
+@import "@fontsource/jetbrains-mono";
 
 @tailwind base;
 @tailwind components;

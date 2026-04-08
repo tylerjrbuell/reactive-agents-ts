@@ -192,10 +192,11 @@ export const runsRouter = (
         return { error: String(e) };
       }
     })
-    .get("/", async () => {
+    .get("/", async ({ query }) => {
+      const limit = query.limit != null ? Math.max(0, Number(query.limit)) : 50;
       const program = Effect.gen(function* () {
         const store = yield* CortexStoreService;
-        return yield* store.getRecentRuns(50);
+        return yield* store.getRecentRuns(limit);
       });
       return Effect.runPromise(program.pipe(Effect.provide(storeLayer)));
     })

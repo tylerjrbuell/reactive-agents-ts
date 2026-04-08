@@ -92,6 +92,18 @@ function createChatStore() {
     }));
   }
 
+  async function renameSession(sessionId: string, newName: string): Promise<void> {
+    const res = await fetch(`${CORTEX_SERVER_URL}/api/chat/sessions/${encodeURIComponent(sessionId)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: newName }),
+    });
+    if (!res.ok) {
+      throw new Error("Failed to rename session");
+    }
+    await loadSessions();
+  }
+
   async function sendMessage(message: string): Promise<void> {
     let sessionId: string | null = null;
     update((s) => {
@@ -153,7 +165,7 @@ function createChatStore() {
     update((s) => ({ ...s, activeTurns: [...s.activeTurns, assistantTurn], sending: false }));
   }
 
-  return { subscribe, loadSessions, selectSession, createSession, deleteSession, sendMessage };
+  return { subscribe, loadSessions, selectSession, createSession, deleteSession, renameSession, sendMessage };
 }
 
 export const chatStore = createChatStore();

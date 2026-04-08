@@ -33,6 +33,10 @@
   let modelsListLoading = $state(false);
   let modelsListError = $state<string | null>(null);
 
+  let renamingSessionId = $state<string | null>(null);
+  let renameInputValue = $state("");
+  let renamingInProgress = $state(false);
+
   async function loadChatModelOptions(p: string) {
     modelsListLoading = true;
     modelsListError = null;
@@ -132,6 +136,36 @@
   async function del(e: MouseEvent, sessionId: string) {
     e.stopPropagation();
     await chatStore.deleteSession(sessionId);
+  }
+
+  function startRename(e: MouseEvent, sessionId: string, currentName: string) {
+    e.stopPropagation();
+    renamingSessionId = sessionId;
+    renameInputValue = currentName;
+  }
+
+  async function confirmRename(sessionId: string) {
+    if (renamingInProgress) return;
+    const trimmedName = renameInputValue.trim();
+    if (!trimmedName) {
+      toast.error("Session name cannot be empty");
+      return;
+    }
+    renamingInProgress = true;
+    try {
+      await chatStore.renameSession(sessionId, trimmedName);
+      renamingSessionId = null;
+      renameInputValue = "";
+    } catch (e) {
+      toast.error("Failed to rename session: " + String(e));
+    } finally {
+      renamingInProgress = false;
+    }
+  }
+
+  function cancelRename() {
+    renamingSessionId = null;
+    renameInputValue = "";
   }
 
   const field =
@@ -276,33 +310,81 @@
       <p class="p-3 font-mono text-[10px] italic text-[var(--cortex-text-muted)]">No sessions yet</p>
     {:else}
       {#each sessions as session (session.sessionId)}
-        <div
-          role="button"
-          tabindex="0"
-          class="flex w-full cursor-pointer items-center justify-between gap-2 border-b border-[color:var(--cortex-border)] px-3 py-2 text-left transition-colors hover:bg-[var(--cortex-surface-mid)] {activeSessionId === session.sessionId
-            ? 'bg-primary/10 text-primary'
-            : 'text-[var(--cortex-text)]'}"
-          onclick={() => onSelectSession(session.sessionId)}
-          onkeydown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              onSelectSession(session.sessionId);
-            }
-          }}
-        >
-          <div class="min-w-0 flex-1">
-            <div class="truncate font-mono text-[11px]">{session.name}</div>
-            <div class="font-mono text-[9px] text-[var(--cortex-text-muted)]">
-              {new Date(session.lastUsedAt).toLocaleString()}
+        {#if renamingSessionId === session.sessionId}
+          <div class="flex w-full flex-col gap-2 border-b border-[color:var(--cortex-border)] bg-[var(--cortex-surface-mid)] px-3 py-2">
+            <input
+              type="text"
+              class={field}
+              placeholder="Session name"
+              bind:value={renameInputValue}
+              disabled={renamingInProgress}
+              onkeydown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void confirmRename(session.sessionId);
+                } else if (e.key === "Escape") {
+                  e.preventDefault();
+                  cancelRename();
+                }
+              }}
+              autofocus
+            />
+            <div class="flex gap-2">
+              <button
+                type="button"
+                class="flex-1 rounded-md border border-primary/35 bg-primary/12 px-2 py-1 font-mono text-[10px] uppercase text-primary hover:bg-primary/20 disabled:opacity-40"
+                onclick={() => confirmRename(session.sessionId)}
+                disabled={renamingInProgress}
+              >
+                {renamingInProgress ? "Renaming…" : "Save"}
+              </button>
+              <button
+                type="button"
+                class="flex-1 rounded-md border border-[color:var(--cortex-border)] bg-[var(--cortex-surface)] px-2 py-1 font-mono text-[10px] uppercase text-[var(--cortex-text-muted)] hover:text-[var(--cortex-text)] disabled:opacity-40"
+                onclick={cancelRename}
+                disabled={renamingInProgress}
+              >
+                Cancel
+              </button>
             </div>
           </div>
-          <button
-            type="button"
-            class="material-symbols-outlined flex-shrink-0 cursor-pointer border-0 bg-transparent text-[13px] text-[var(--cortex-text-muted)] hover:text-error"
-            onclick={(e) => del(e, session.sessionId)}
-            title="Delete session"
-          >delete</button>
-        </div>
+        {:else}
+          <div
+            role="button"
+            tabindex="0"
+            class="flex w-full cursor-pointer items-center justify-between gap-2 border-b border-[color:var(--cortex-border)] px-3 py-2 text-left transition-colors hover:bg-[var(--cortex-surface-mid)] {activeSessionId === session.sessionId
+              ? 'bg-primary/10 text-primary'
+              : 'text-[var(--cortex-text)]'}"
+            onclick={() => onSelectSession(session.sessionId)}
+            onkeydown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onSelectSession(session.sessionId);
+              }
+            }}
+          >
+            <div class="min-w-0 flex-1">
+              <div class="truncate font-mono text-[11px]">{session.name}</div>
+              <div class="font-mono text-[9px] text-[var(--cortex-text-muted)]">
+                {new Date(session.lastUsedAt).toLocaleString()}
+              </div>
+            </div>
+            <div class="flex items-center gap-1 flex-shrink-0">
+              <button
+                type="button"
+                class="material-symbols-outlined cursor-pointer border-0 bg-transparent text-[13px] text-[var(--cortex-text-muted)] hover:text-primary"
+                onclick={(e) => startRename(e, session.sessionId, session.name)}
+                title="Rename session"
+              >edit</button>
+              <button
+                type="button"
+                class="material-symbols-outlined cursor-pointer border-0 bg-transparent text-[13px] text-[var(--cortex-text-muted)] hover:text-error"
+                onclick={(e) => del(e, session.sessionId)}
+                title="Delete session"
+              >delete</button>
+            </div>
+          </div>
+        {/if}
       {/each}
     {/if}
   </div>

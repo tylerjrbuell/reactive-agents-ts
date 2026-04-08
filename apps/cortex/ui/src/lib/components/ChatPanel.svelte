@@ -1,5 +1,6 @@
 <script lang="ts">
   import { chatStore, type ChatTurn } from "$lib/stores/chat-store.js";
+  import MarkdownRich from "$lib/components/MarkdownRich.svelte";
 
   interface Props {
     sessionId: string;
@@ -86,7 +87,11 @@
                 {/each}
               </div>
             {/if}
-            <p class="whitespace-pre-wrap text-[11px] leading-relaxed">{turn.content}</p>
+            {#if turn.role === "assistant"}
+              <MarkdownRich markdown={turn.content} showCopy={false} class="text-[11px]" />
+            {:else}
+              <p class="whitespace-pre-wrap text-[11px] leading-relaxed">{turn.content}</p>
+            {/if}
           </div>
         </div>
       {/each}
