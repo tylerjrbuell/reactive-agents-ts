@@ -24,8 +24,15 @@ export default defineConfig({
   plugins: [sveltekit()],
   server: {
     proxy: {
-      "/api": apiProxy,
-      "/ws": { target: `ws://127.0.0.1:${apiPort}`, ws: true },
+      "/api": {
+        ...apiProxy,
+        logLevel: "error", // Suppress timeout warnings for long-running requests like MCP refresh
+      },
+      "/ws": {
+        target: `ws://127.0.0.1:${apiPort}`,
+        ws: true,
+        logLevel: "error", // Suppress connection reset warnings
+      },
     },
   },
 });
