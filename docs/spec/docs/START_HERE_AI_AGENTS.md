@@ -2,7 +2,7 @@
 
 ## What You're Building
 
-**Reactive Agents** — a TypeScript + Effect-TS + Bun AI agent framework with 10 layers, 3 enhancement packages, a runtime, and a CLI. 15 packages total.
+**Reactive Agents** — a TypeScript + Effect-TS + Bun AI agent framework with layered runtime composition, enhancement packages, apps, and integration surfaces. See `AGENTS.md` for the current package/app counts and build graph.
 
 Every layer spec contains **exact code to copy**. Types use `Schema.Struct`, errors use `Data.TaggedError`, services use `Context.Tag` + `Layer.effect`. Do NOT deviate from these patterns.
 
@@ -24,7 +24,7 @@ Use this mode when running Claude Code with `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAM
 ### Prerequisites
 
 1. Monorepo must be scaffolded first — follow `00-monorepo-setup.md`
-2. All agents receive `CLAUDE.md` and `.claude/skills/` automatically
+2. All agents should read root `AGENTS.md` and load relevant skills from `.agents/skills/` (plus `.claude/skills/` where applicable)
 3. Read `00-master-architecture.md`, `implementation-guide-complete.md`, and `FRAMEWORK_USAGE_GUIDE.md` before starting
 
 ### Team Structure
