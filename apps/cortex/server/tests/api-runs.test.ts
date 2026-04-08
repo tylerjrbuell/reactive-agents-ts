@@ -354,3 +354,49 @@ describe("POST /api/runs/:runId/recompute-stats", () => {
     expect(body.ok).toBe(true);
   });
 });
+
+describe("error_message persistence", () => {
+  it("updateRunStats stores error_message when provided", () => {
+    const db = new Database(":memory:");
+    applySchema(db);
+    upsertRun(db, "a", "err-run");
+    updateRunStats(db, "err-run", {
+      status: "failed",
+      errorMessage: "LLM provider connection refused",
+    });
+
+    const row = db.prepare("SELECT error_message FROM cortex_runs WHERE run_id = ?").get("err-run") as {
+      error_message: string | null;
+    };
+    expect(row.error_message).toBe("LLM provider connection refused");
+  });
+
+  it("GET /api/runs/:runId includes errorMessage when failure has error", async () => {
+    const db = new Database(":memory:");
+    const app = appWithRunsDb(db);
+    upsertRun(db, "a", "err-run-api");
+    updateRunStats(db, "err-run-api", {
+      status: "failed",
+      errorMessage: "Execution timed out after 30000ms",
+    });
+
+    const res = await app.handle(new Request("http://localhost/api/runs/err-run-api"));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { runId: string; status: string; errorMessage?: string };
+    expect(body.status).toBe("failed");
+    expect(body.errorMessage).toBe("Execution timed out after 30000ms");
+  });
+
+  it("errorMessage is absent on successful runs", async () => {
+    const db = new Database(":memory:");
+    const app = appWithRunsDb(db);
+    upsertRun(db, "a", "ok-run");
+    updateRunStats(db, "ok-run", { status: "completed" });
+
+    const res = await app.handle(new Request("http://localhost/api/runs/ok-run"));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { runId: string; status: string; errorMessage?: string };
+    expect(body.status).toBe("completed");
+    expect(body.errorMessage).toBeUndefined();
+  });
+});

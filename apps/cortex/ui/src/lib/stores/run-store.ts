@@ -62,6 +62,8 @@ export interface RunState {
   /** Accumulated streaming text from TextDeltaReceived events (live only, not persisted).
    *  Resets at each ReasoningIterationProgress boundary. */
   readonly streamText: string;
+  /** Error message from AgentCompleted or TaskFailed when run failed. */
+  readonly errorMessage: string | null;
 }
 
 const DEFAULT_VITALS: RunVitals = {
@@ -196,6 +198,7 @@ export function createRunStore(runId: string, options?: CreateRunStoreOptions) {
     debrief: null,
     isChat: false,
     streamText: "",
+    errorMessage: null,
   });
 
   let unsubMsg: (() => void) | null = null;
@@ -232,6 +235,16 @@ export function createRunStore(runId: string, options?: CreateRunStoreOptions) {
         streamText = ""; // new iteration clears the streaming buffer
       }
 
+      // Extract error message from failure events
+      let errorMessage = s.errorMessage;
+      if (msg.type === "AgentCompleted" && msg.payload.success === false && typeof msg.payload.error === "string") {
+        errorMessage = msg.payload.error;
+      } else if (msg.type === "TaskFailed") {
+        const errStr = typeof msg.payload.error === "string" ? msg.payload.error
+          : typeof msg.payload.reason === "string" ? msg.payload.reason : null;
+        if (errStr) errorMessage = errStr;
+      }
+
       return {
         ...s,
         events,
@@ -240,6 +253,7 @@ export function createRunStore(runId: string, options?: CreateRunStoreOptions) {
         debrief,
         streamText,
         isChat,
+        errorMessage,
         agentId: msg.agentId || s.agentId,
       };
     });
@@ -260,6 +274,7 @@ export function createRunStore(runId: string, options?: CreateRunStoreOptions) {
         tokensUsed?: number;
         cost?: number;
         debrief?: string | null;
+        errorMessage?: string | null;
       };
       runStartMs = typeof run.startedAt === "number" ? run.startedAt : Date.now();
       const mapped: RunStatus =
@@ -276,6 +291,7 @@ export function createRunStore(runId: string, options?: CreateRunStoreOptions) {
         agentId: run.agentId,
         status: mapped === "live" && s.events.length === 0 ? "loading" : mapped,
         debrief: parsedDebrief ?? s.debrief,
+        errorMessage: run.errorMessage ?? s.errorMessage,
         vitals: {
           ...s.vitals,
           // DB stores a single merged count until we persist both; replayed events refine this.

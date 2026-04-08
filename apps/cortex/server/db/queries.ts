@@ -56,6 +56,7 @@ export function updateRunStats(
     provider?: string;
     model?: string;
     strategy?: string;
+    errorMessage?: string;
   },
 ): void {
   const sets: string[] = [];
@@ -103,6 +104,10 @@ export function updateRunStats(
     sets.push("strategy = COALESCE(strategy, ?)");
     values.push(patch.strategy);
   }
+  if (patch.errorMessage !== undefined) {
+    sets.push("error_message = ?");
+    values.push(patch.errorMessage);
+  }
 
   if (sets.length === 0) return;
   values.push(runId);
@@ -124,6 +129,7 @@ type RunRow = {
   provider: string | null;
   model: string | null;
   strategy: string | null;
+  error_message: string | null;
 };
 
 function rowToRunSummary(row: RunRow): RunSummary {
@@ -139,6 +145,7 @@ function rowToRunSummary(row: RunRow): RunSummary {
     ...(row.provider ? { provider: row.provider } : {}),
     ...(row.model    ? { model:    row.model    } : {}),
     ...(row.strategy ? { strategy: row.strategy } : {}),
+    ...(row.error_message ? { errorMessage: row.error_message } : {}),
     ...(row.completed_at != null ? { completedAt: row.completed_at } : {}),
   };
   return base;
@@ -151,7 +158,7 @@ export function getRecentRuns(db: Database, limit = 50): RunSummary[] {
     SELECT run_id, agent_id, started_at, completed_at, status,
            iteration_count, tokens_used, cost_usd,
            (debrief IS NOT NULL) AS has_debrief,
-           provider, model, strategy
+           provider, model, strategy, error_message
     FROM cortex_runs
     ORDER BY started_at DESC
     LIMIT ?
@@ -168,7 +175,7 @@ export function getRunById(db: Database, runId: string): RunSummary | null {
     SELECT run_id, agent_id, started_at, completed_at, status,
            iteration_count, tokens_used, cost_usd,
            (debrief IS NOT NULL) AS has_debrief,
-           provider, model, strategy
+           provider, model, strategy, error_message
     FROM cortex_runs
     WHERE run_id = ?
   `,
@@ -195,7 +202,7 @@ export function getRunDetail(
     SELECT run_id, agent_id, started_at, completed_at, status,
            iteration_count, tokens_used, cost_usd,
            (debrief IS NOT NULL) AS has_debrief,
-           provider, model, strategy,
+           provider, model, strategy, error_message,
            debrief
     FROM cortex_runs WHERE run_id = ?
   `,

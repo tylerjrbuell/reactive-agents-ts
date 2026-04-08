@@ -48,6 +48,87 @@ describe("createAgentStore", () => {
     expect(list[0]?.cost).toBe(0.01);
   });
 
+  it("refresh uses no-store and timestamp query for run polling", async () => {
+    const rows: RunSummaryDto[] = [];
+    let requestedUrl = "";
+    let requestedInit: RequestInit | undefined;
+
+    const fetchImpl = async (input: RequestInfo | URL, init?: RequestInit) => {
+      requestedUrl = String(input);
+      requestedInit = init;
+      return new Response(JSON.stringify(rows), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    };
+
+    const store = createAgentStore({
+      loadOnInit: false,
+      fetchImpl,
+      now: () => 1234,
+    });
+
+    await store.refresh();
+
+    expect(requestedUrl).toContain("/api/runs?ts=1234");
+    expect(requestedInit?.cache).toBe("no-store");
+  });
+
+  it("refresh trusts terminal REST status over stale live cognitive state", async () => {
+    const liveRows: RunSummaryDto[] = [
+      {
+        runId: "r1",
+        agentId: "agent-a",
+        status: "live",
+        iterationCount: 2,
+        tokensUsed: 100,
+        cost: 0.01,
+      },
+    ];
+    const completedRows: RunSummaryDto[] = [
+      {
+        runId: "r1",
+        agentId: "agent-a",
+        status: "completed",
+        iterationCount: 3,
+        tokensUsed: 150,
+        cost: 0.02,
+      },
+    ];
+
+    let callCount = 0;
+    const fetchImpl = async () => {
+      callCount += 1;
+      const payload = callCount === 1 ? liveRows : completedRows;
+      return new Response(JSON.stringify(payload), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    };
+
+    const store = createAgentStore({
+      loadOnInit: false,
+      fetchImpl,
+      now: () => 1_700_000_000_000,
+    });
+
+    await store.refresh();
+
+    // Simulate richer live cognitive state from WS before terminal REST snapshot arrives.
+    store.handleLiveMessage({
+      agentId: "agent-a",
+      runId: "r1",
+      type: "EntropyScored",
+      payload: { composite: 0.8 },
+    });
+    expect(get({ subscribe: store.subscribe })[0]?.state).toBe("stressed");
+
+    await store.refresh();
+
+    const list = get({ subscribe: store.subscribe });
+    expect(list[0]?.state).toBe("completed");
+  });
+
   it("handleLiveMessage merges EntropyScored into cognitive state", () => {
     const store = createAgentStore({ loadOnInit: false, now: () => 5 });
     store.handleLiveMessage({

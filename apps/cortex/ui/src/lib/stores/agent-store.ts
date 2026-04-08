@@ -60,6 +60,10 @@ export interface RunSummaryDto {
   readonly strategy?: string;
 }
 
+function isLiveCognitiveState(state: AgentCognitiveState): boolean {
+  return state === "running" || state === "exploring" || state === "stressed";
+}
+
 export function entropyToState(entropy: number, isRunning: boolean): AgentCognitiveState {
   if (!isRunning) return "idle";
   if (entropy < 0.5) return "running";
@@ -108,7 +112,9 @@ export function createAgentStore(options?: CreateAgentStoreOptions) {
   async function loadAgents() {
     state.update((s) => ({ ...s, loading: true }));
     try {
-      const res = await fetchFn(`${CORTEX_SERVER_URL}/api/runs`);
+      const res = await fetchFn(`${CORTEX_SERVER_URL}/api/runs?ts=${nowFn()}`, {
+        cache: "no-store",
+      });
       if (!res.ok) throw new Error(String(res.status));
       const runs = (await res.json()) as RunSummaryDto[];
       const trimmed = runs.slice(0, 20);
@@ -130,13 +136,16 @@ export function createAgentStore(options?: CreateAgentStoreOptions) {
                   // Never let a periodic REST refresh degrade data that live WS
                   // events have already set more accurately.
                   //
-                  // State: if existing is a live cognitive state, keep it.
-                  // REST may return "live"→"running" (less precise) or even lag behind.
-                  state: (
-                    existing.state === "running" ||
-                    existing.state === "exploring" ||
-                    existing.state === "stressed"
-                  ) ? existing.state : seeded.state,
+                  // Preserve richer live cognitive states only while REST still
+                  // reports the run as live. Once REST reaches a terminal
+                  // state, trust the server snapshot so missed WS completions
+                  // do not leave cards stuck as running.
+                  state:
+                    seeded.state === "completed" || seeded.state === "error"
+                      ? seeded.state
+                      : isLiveCognitiveState(existing.state)
+                        ? existing.state
+                        : seeded.state,
                   entropy:      existing.entropy,
                   loopIteration: Math.max(existing.loopIteration, seeded.loopIteration),
                   reasoningSteps: Math.max(existing.reasoningSteps, seeded.reasoningSteps),

@@ -73,7 +73,7 @@ const deriveRunStats = (
     };
   }
   if (event._tag === "AgentCompleted") {
-    const e = event as { success?: boolean; totalTokens?: number; durationMs?: number };
+    const e = event as { success?: boolean; totalTokens?: number; durationMs?: number; error?: string };
     // Only explicit false is failure — omitted `success` is treated as completed (matches desk UX; some paths omit the flag).
     const status = e.success === false ? "failed" : "completed";
     return {
@@ -84,10 +84,17 @@ const deriveRunStats = (
       ...(typeof e.totalTokens === "number" && e.totalTokens > 0
         ? { tokensUsedTotal: e.totalTokens }
         : {}),
+      ...(typeof e.error === "string" && e.error ? { errorMessage: e.error } : {}),
     };
   }
   if (event._tag === "TaskFailed") {
-    return { status: "failed", completedAt: Date.now() };
+    const e = event as { error?: string; reason?: string };
+    const errorMessage = e.error ?? e.reason;
+    return {
+      status: "failed",
+      completedAt: Date.now(),
+      ...(typeof errorMessage === "string" && errorMessage ? { errorMessage } : {}),
+    };
   }
   if (event._tag === "DebriefCompleted") {
     const e = event as { debrief: unknown };

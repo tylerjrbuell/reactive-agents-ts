@@ -182,10 +182,13 @@
         e.type === "TaskFailed" ||
         (e.type === "AgentCompleted" && e.payload.success === false),
     );
-    if (!ev) return "";
-    const p = ev.payload;
-    if (typeof p.error === "string") return p.error;
-    if (typeof p.reason === "string") return p.reason;
+    if (ev) {
+      const p = ev.payload;
+      if (typeof p.error === "string") return p.error;
+      if (typeof p.reason === "string") return p.reason;
+    }
+    // Fallback to errorMessage persisted in DB (hydrated on init)
+    if ($runStore.errorMessage) return $runStore.errorMessage;
     return "";
   });
 
@@ -495,6 +498,7 @@
         signal={$signalStore}
         debrief={$runStore.debrief}
         eventCount={$runStore.events.length}
+        errorMessage={$runStore.errorMessage}
       />
     </section>
       </div>

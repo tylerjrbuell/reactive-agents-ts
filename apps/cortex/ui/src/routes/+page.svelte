@@ -3,6 +3,7 @@
   import BeaconCanvas from "$lib/components/BeaconCanvas.svelte";
   import BottomInputBar from "$lib/components/BottomInputBar.svelte";
   import CortexDeskShell from "$lib/components/CortexDeskShell.svelte";
+  import type { AgentCognitiveState } from "$lib/stores/agent-store.js";
   import type { AgentStore } from "$lib/stores/agent-store.js";
   import type { StageStore } from "$lib/stores/stage-store.js";
 
@@ -11,11 +12,53 @@
   const stageStore = getContext("stageStore") as StageStore;
 
   let inputBarRef = $state<{ focus: () => void } | undefined>(undefined);
+  type StatusFilter = "all" | AgentCognitiveState;
+  const STATUS_FILTER_STORAGE_KEY = "cortex.beacon.statusFilter";
+  let statusFilter = $state<StatusFilter>("all");
+  let statusFilterHydrated = $state(false);
+  let organizeToken = $state(0);
+
+  const statusFilterOptions: ReadonlyArray<{ value: StatusFilter; label: string }> = [
+    { value: "all", label: "All" },
+    { value: "running", label: "Running" },
+    { value: "exploring", label: "Exploring" },
+    { value: "stressed", label: "Stressed" },
+    { value: "completed", label: "Completed" },
+    { value: "error", label: "Error" },
+    { value: "idle", label: "Idle" },
+  ];
+
+  const filteredAgents = $derived(
+    statusFilter === "all" ? $agentStore : $agentStore.filter((agent) => agent.state === statusFilter),
+  );
+
+  function isStatusFilter(value: string): value is StatusFilter {
+    return statusFilterOptions.some((option) => option.value === value);
+  }
+
+  $effect(() => {
+    if (typeof window === "undefined") return;
+    if (!statusFilterHydrated) return;
+    window.localStorage.setItem(STATUS_FILTER_STORAGE_KEY, statusFilter);
+  });
 
   // Handle R shortcut from layout
   function handleFocusInput() { inputBarRef?.focus(); }
-  onMount(() => window.addEventListener("cortex:focus-input", handleFocusInput));
+  onMount(() => {
+    window.addEventListener("cortex:focus-input", handleFocusInput);
+
+    const saved = window.localStorage.getItem(STATUS_FILTER_STORAGE_KEY);
+    if (saved && isStatusFilter(saved)) {
+      statusFilter = saved;
+    }
+
+    statusFilterHydrated = true;
+  });
   onDestroy(() => window.removeEventListener("cortex:focus-input", handleFocusInput));
+
+  function autoOrganizeBeacon() {
+    organizeToken += 1;
+  }
 
 </script>
 
@@ -26,7 +69,41 @@
 <CortexDeskShell>
   {#if $agentStore.length > 0}
     <div class="flex-1 relative overflow-hidden z-10 min-h-0">
-      <BeaconCanvas agents={$agentStore} />
+      <div class="absolute right-4 md:right-48 top-4 z-20 inline-flex items-center gap-2 rounded-lg px-2 py-1.5 backdrop-blur-sm bg-white/80 dark:bg-surface-container-low/45 shadow-[0_0_0_1px_rgba(124,58,237,0.2),0_0_0_1px_rgba(255,255,255,0.7)_inset] dark:shadow-[0_0_0_1px_rgba(139,92,246,0.28),0_0_0_1px_rgba(6,182,212,0.08)_inset]">
+        <button
+          type="button"
+          class="rounded-md border border-[var(--cortex-border)] bg-surface px-2 py-1 font-mono text-[10px] uppercase tracking-[0.1em] text-on-surface transition-colors hover:border-secondary hover:text-secondary"
+          onclick={autoOrganizeBeacon}
+        >
+          Auto-organize
+        </button>
+        <label for="beacon-status-filter" class="font-mono text-[10px] uppercase tracking-[0.14em] text-on-surface-variant/80">
+          Status
+        </label>
+        <select
+          id="beacon-status-filter"
+          aria-label="Filter agents by status"
+          bind:value={statusFilter}
+          class="rounded-md border border-[var(--cortex-border)] bg-surface px-2 py-1 font-mono text-[11px] text-on-surface outline-none transition-colors focus:border-secondary"
+        >
+          {#each statusFilterOptions as option}
+            <option value={option.value}>{option.label}</option>
+          {/each}
+        </select>
+        <span class="font-mono text-[10px] text-on-surface-variant/70">
+          {filteredAgents.length} / {$agentStore.length}
+        </span>
+      </div>
+
+      {#if filteredAgents.length > 0}
+        <BeaconCanvas agents={filteredAgents} autoOrganizeToken={organizeToken} />
+      {:else}
+        <div class="absolute inset-0 flex items-center justify-center px-6">
+          <p class="rounded-lg border border-[var(--cortex-border)] bg-surface/90 px-4 py-2 font-mono text-[11px] uppercase tracking-[0.12em] text-on-surface-variant/80 shadow-sm">
+            No agents match this status filter
+          </p>
+        </div>
+      {/if}
     </div>
   {:else}
     <!-- ── Empty state: pulsing neural core + instructions ──────────── -->

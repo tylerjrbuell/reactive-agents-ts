@@ -72,6 +72,11 @@
     }
   }
 
+  function refreshAgentsSoon() {
+    if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+    void agentStore.refresh();
+  }
+
   onMount(() => {
     settings.init(); // warm up from localStorage before any submitPrompt call
 
@@ -82,6 +87,9 @@
     stageStore.setNavigate((path) => goto(path));
     window.addEventListener("keydown", handleGlobalKeydown);
     window.addEventListener("cortex:toggle-theme", toggleTheme as EventListener);
+    window.addEventListener("focus", refreshAgentsSoon);
+    window.addEventListener("online", refreshAgentsSoon);
+    document.addEventListener("visibilitychange", refreshAgentsSoon);
 
     wsUnsub = wsClient.onMessage((raw) => {
       const msg = raw as {
@@ -153,6 +161,9 @@
     return () => {
       window.removeEventListener("keydown", handleGlobalKeydown);
       window.removeEventListener("cortex:toggle-theme", toggleTheme as EventListener);
+      window.removeEventListener("focus", refreshAgentsSoon);
+      window.removeEventListener("online", refreshAgentsSoon);
+      document.removeEventListener("visibilitychange", refreshAgentsSoon);
       wsUnsub?.();
       wsUnsub = null;
       if (refreshTimer) {

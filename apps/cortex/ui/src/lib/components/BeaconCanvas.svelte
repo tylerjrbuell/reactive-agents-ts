@@ -4,8 +4,9 @@
 
   interface Props {
     agents: AgentNode[];
+    autoOrganizeToken?: number;
   }
-  let { agents }: Props = $props();
+  let { agents, autoOrganizeToken = 0 }: Props = $props();
 
   // ── Positioning ────────────────────────────────────────────────────────────
 
@@ -21,6 +22,63 @@
       x: Math.max(9, Math.min(89, 50 + r * Math.cos(angle))),
       y: Math.max(8, Math.min(76, 42 + r * Math.sin(angle) * 0.6)),
     };
+  }
+
+  const stateOrder: ReadonlyArray<AgentNode["state"]> = [
+    "running",
+    "exploring",
+    "stressed",
+    "idle",
+    "completed",
+    "error",
+  ];
+
+  function autoOrganizePositions(list: AgentNode[]): Map<string, { x: number; y: number }> {
+    const byState = new Map<AgentNode["state"], AgentNode[]>();
+    for (const state of stateOrder) byState.set(state, []);
+
+    for (const agent of list) {
+      const group = byState.get(agent.state);
+      if (group) group.push(agent);
+    }
+
+    for (const [state, group] of byState) {
+      const sorted = [...group].sort((a, b) => {
+        const aParent = a.parentRunId ?? a.runId;
+        const bParent = b.parentRunId ?? b.runId;
+        if (aParent !== bParent) return aParent.localeCompare(bParent);
+        if (a.connectedAt !== b.connectedAt) return a.connectedAt - b.connectedAt;
+        return a.runId.localeCompare(b.runId);
+      });
+      byState.set(state, sorted);
+    }
+
+    const activeGroups = stateOrder.filter((state) => (byState.get(state)?.length ?? 0) > 0);
+    const groupCount = Math.max(1, activeGroups.length);
+    const minX = 12;
+    const maxX = 88;
+    const laneWidth = groupCount === 1 ? 0 : (maxX - minX) / (groupCount - 1);
+    const maxRows = 6;
+
+    const next = new Map<string, { x: number; y: number }>();
+    activeGroups.forEach((state, groupIndex) => {
+      const group = byState.get(state) ?? [];
+      const laneCenterX = groupCount === 1 ? 50 : minX + laneWidth * groupIndex;
+
+      group.forEach((agent, i) => {
+        const subCol = Math.floor(i / maxRows);
+        const row = i % maxRows;
+        const remaining = group.length - subCol * maxRows;
+        const rowCount = Math.min(maxRows, remaining);
+        const minY = 14;
+        const maxY = 74;
+        const y = rowCount <= 1 ? 42 : minY + (row * (maxY - minY)) / (rowCount - 1);
+        const x = Math.max(8, Math.min(92, laneCenterX + subCol * 4.5));
+        next.set(agent.runId, { x, y });
+      });
+    });
+
+    return next;
   }
 
   /**
@@ -46,6 +104,12 @@
       }
     }
     if (changed) posMap = next;
+  });
+
+  /** One-click cleanup: cluster visible nodes by cognitive state lanes. */
+  $effect(() => {
+    if (autoOrganizeToken <= 0 || agents.length === 0) return;
+    posMap = autoOrganizePositions(agents);
   });
 
   const nodePositions = $derived(

@@ -71,6 +71,7 @@ export interface RunSummary {
   readonly provider?: string;
   readonly model?: string;
   readonly strategy?: string;
+  readonly errorMessage?: string;
 }
 
 export interface AgentSummary {

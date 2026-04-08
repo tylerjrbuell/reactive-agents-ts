@@ -225,6 +225,27 @@ export const CortexRunnerServiceLive = Layer.effect(
                 runId,
                 ...formatErrorDetails(err),
               });
+              // Emit AgentCompleted with error so the UI transitions out of "loading"
+              const errorMessage = err instanceof Error ? err.message : String(err);
+              Effect.runFork(
+                ingest
+                  .handleEvent(agentId, runId, {
+                    v: 1,
+                    agentId,
+                    runId,
+                    event: {
+                      _tag: "AgentCompleted" as const,
+                      taskId: runId,
+                      agentId,
+                      success: false,
+                      totalIterations: 0,
+                      totalTokens: 0,
+                      durationMs: Date.now() - startedAt,
+                      error: errorMessage,
+                    } as any,
+                  })
+                  .pipe(Effect.catchAll(() => Effect.void)),
+              );
             })
             .finally(() => {
               try {
