@@ -56,6 +56,14 @@ import {
 /** Meta-tool names — not counted as "real work" for completion detection. */
 const META_TOOL_SET = new Set(["final-answer", "task-complete", "context-status", "brief", "pulse", "find", "recall"]);
 
+/** Returns true when token pressure is critical — only final-answer should be offered. */
+export function shouldNarrowToFinalAnswerOnly(opts: {
+  estimatedTokens: number
+  maxTokens: number
+}): boolean {
+  return opts.estimatedTokens / opts.maxTokens >= 0.95
+}
+
 export function handleThinking(
   state: KernelState,
   context: KernelContext,
@@ -99,6 +107,19 @@ export function handleThinking(
       ...(input.metaTools?.find ? [{ name: findTool.name, description: findTool.description, parameters: findTool.parameters }] : []),
     ] as readonly ToolSchema[];
 
+    // ── Context pressure hard gate ───────────────────────────────────────────
+    // When token budget is 95%+ exhausted, the model has nothing useful to
+    // reason with. Narrow available tools to only final-answer so the model's
+    // next action is a clean exit rather than another fruitless iteration.
+    const pressureCritical = shouldNarrowToFinalAnswerOnly({
+      estimatedTokens: state.tokens,
+      maxTokens: (input.contextProfile as any)?.maxTokens ?? Number.MAX_SAFE_INTEGER,
+    });
+
+    const effectiveSchemas: readonly ToolSchema[] = pressureCritical
+      ? [{ name: finalAnswerTool.name, description: finalAnswerTool.description, parameters: finalAnswerTool.parameters }]
+      : augmentedToolSchemas;
+
     // ── Harness skill injection ──────────────────────────────────────────────
     const harnessContent = input.metaTools?.harnessContent;
     const isNonTrivial =
@@ -119,7 +140,7 @@ export function handleThinking(
 
     // toolGuidance hook — append inline required-tool reminder after schema block
     const toolGuidancePatch = adapter.toolGuidance?.({
-      toolNames: augmentedToolSchemas.map((t) => t.name),
+      toolNames: effectiveSchemas.map((t) => t.name),
       requiredTools: input.requiredTools ?? [],
       tier: profile.tier ?? "mid",
     });
@@ -128,7 +149,7 @@ export function handleThinking(
     const staticContext = buildStaticContext({
       task: input.task,
       profile,
-      availableToolSchemas: augmentedToolSchemas,
+      availableToolSchemas: effectiveSchemas,
       requiredTools: input.requiredTools,
       environmentContext: input.environmentContext,
     });
@@ -173,7 +194,7 @@ export function handleThinking(
     // parameter to only required (unsatisfied) + meta tools. This forces models
     // like cogito:14b (which lack tool_choice support) to select the right tool
     // instead of stubbornly re-selecting a previously successful one.
-    const filteredToolSchemas = buildToolSchemas(state, input, profile, augmentedToolSchemas);
+    const filteredToolSchemas = buildToolSchemas(state, input, profile, effectiveSchemas);
     const llmTools = filteredToolSchemas.map((ts) => ({
       name: ts.name,
       description: ts.description,
@@ -478,7 +499,7 @@ export function handleThinking(
 
       const resolverResult = yield* resolver.resolve(
         resolverInput,
-        augmentedToolSchemas.map((ts) => ({ name: ts.name })),
+        effectiveSchemas.map((ts) => ({ name: ts.name })),
       );
 
       if (resolverResult._tag === "tool_calls") {
