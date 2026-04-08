@@ -208,21 +208,30 @@ function createChatStore() {
     }));
 
     try {
-      const res = await fetch(
-        `${CORTEX_SERVER_URL}/api/chat/sessions/${encodeURIComponent(sessionId!)}/chat/stream`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message }),
-        },
-      );
+      const url = `${CORTEX_SERVER_URL}/api/chat/sessions/${encodeURIComponent(sessionId!)}/chat/stream`;
+      console.log("[Chat Stream] Requesting:", url);
+
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message }),
+      });
+
+      console.log("[Chat Stream] Response status:", res.status, "ok:", res.ok);
 
       if (!res.ok) {
-        const body = (await res.json()) as { error: string };
+        let errorMsg = "Request failed";
+        try {
+          const body = (await res.json()) as { error: string };
+          errorMsg = body.error ?? errorMsg;
+        } catch {
+          errorMsg = `HTTP ${res.status}`;
+        }
+        console.error("[Chat Stream] Error response:", errorMsg);
         update((s) => ({
           ...s,
           sending: false,
-          error: body.error ?? "Request failed",
+          error: errorMsg,
           activeTurns: s.activeTurns.filter((t) => t.id !== optimisticUserTurn.id && t.id !== assistantTurnId),
         }));
         return;
@@ -238,18 +247,33 @@ function createChatStore() {
         return;
       }
 
-      const reader = res.body.getReader();
+      const reader = res.body?.getReader();
+      if (!reader) {
+        console.error("[Chat Stream] No response body reader");
+        update((s) => ({
+          ...s,
+          sending: false,
+          error: "No response body",
+          activeTurns: s.activeTurns.filter((t) => t.id !== optimisticUserTurn.id && t.id !== assistantTurnId),
+        }));
+        return;
+      }
+
       const decoder = new TextDecoder();
       let toolsUsed: string[] = [];
       let tokensUsed = 0;
       let steps = 0;
       let buffer = "";
+      let eventCount = 0;
+
+      console.log("[Chat Stream] Starting stream reader");
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) {
           // Finalize decoder to get any remaining data
           buffer += decoder.decode();
+          console.log("[Chat Stream] Stream done. Total events:", eventCount);
           break;
         }
 
@@ -273,8 +297,11 @@ function createChatStore() {
 
               try {
                 const event = JSON.parse(jsonStr) as AgentStreamEvent;
+                eventCount++;
+                console.log(`[Chat Stream] Event ${eventCount}:`, event._tag);
 
                 if (event._tag === "TextDelta") {
+                  console.log("[Chat Stream] TextDelta:", (event as any).text?.length, "chars");
                   update((s) => {
                     const idx = s.activeTurns.findIndex((t) => t.id === assistantTurnId);
                     if (idx >= 0) {
@@ -290,19 +317,21 @@ function createChatStore() {
                   }
                 } else if (event._tag === "StreamError") {
                   // Handle stream errors
+                  console.error("[Chat Stream] Stream error:", (event as any).cause);
                   update((s) => ({
                     ...s,
                     error: (event as any).cause ?? "Stream error",
                   }));
                 }
               } catch (e) {
-                // Ignore parse errors
+                console.error("[Chat Stream] Parse error:", e, "jsonStr:", jsonStr.slice(0, 100));
               }
             }
           }
         }
       }
 
+      console.log("[Chat Stream] Finalizing:", { tokensUsed, steps, toolsCount: toolsUsed.length });
       update((s) => {
         const idx = s.activeTurns.findIndex((t) => t.id === assistantTurnId);
         if (idx >= 0) {
@@ -313,8 +342,10 @@ function createChatStore() {
         }
         return { ...s, sending: false };
       });
+      console.log("[Chat Stream] Finished successfully");
     } catch (e) {
       const errorMsg = String(e);
+      console.error("[Chat Stream] Exception:", errorMsg, e);
       update((s) => ({
         ...s,
         sending: false,
