@@ -1370,7 +1370,14 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       });
                       const strategyOutcome = yield* Effect.exit(strategyEffect);
                       if (strategyOutcome._tag === "Success") {
-                        result = normalizeReasoningResult(strategyOutcome.value) ?? {
+                        const normalizedResult = normalizeReasoningResult(strategyOutcome.value);
+                        if (!normalizedResult && obs) {
+                          yield* obs.info(
+                            `[engine] WARN: normalizeReasoningResult returned null — strategyFallback triggered. ` +
+                            `classify.required=${effectiveRequiredTools?.join(",") ?? "(none)"}`
+                          ).pipe(Effect.catchAll(() => Effect.void));
+                        }
+                        result = normalizedResult ?? {
                           output: "Strategy returned an invalid result shape",
                           status: "error",
                           steps: [],
@@ -1380,6 +1387,11 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         const strategyError = strategyOutcome.cause;
                         if (obs) {
                           yield* obs.info(`⚠ Strategy failed, using fallback: ${String(strategyError)}`).pipe(Effect.catchAll(() => Effect.void));
+                          yield* obs.info(
+                            `[engine] WARN: strategy failed — strategyFallback triggered. ` +
+                            `classify.required=${effectiveRequiredTools?.join(",") ?? "(none)"}. ` +
+                            `error=${String(strategyError)}`
+                          ).pipe(Effect.catchAll(() => Effect.void));
                         }
                         result = {
                           output: `Strategy execution failed: ${String(strategyError)}`,

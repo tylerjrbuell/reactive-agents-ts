@@ -329,6 +329,27 @@ export function handleThinking(
       });
     }
 
+    // ── 0-token diagnostic ───────────────────────────────────────────────────
+    // Surface silent empty responses from providers (e.g. Gemini, GPT-4o-mini)
+    // before they silently produce success=false. The most likely cause is the
+    // fast-path firing despite requiredTools being set, OR a provider returning
+    // an empty stream with no error event.
+    if (
+      accumulatedUsage.totalTokens === 0 &&
+      accumulatedContent.length === 0 &&
+      accumulatedToolCalls.length === 0
+    ) {
+      const fastPathEligible = state.iteration === 0 && !((input.requiredTools?.length ?? 0) > 0);
+      yield* Effect.log(
+        `[think] WARNING: LLM returned 0 tokens at iteration ${state.iteration}. ` +
+        `stopReason=${accumulatedStopReason}. ` +
+        `hasRequiredTools=${(input.requiredTools?.length ?? 0) > 0} (${(input.requiredTools ?? []).join(",")}). ` +
+        `fast-path-eligible=${fastPathEligible}. ` +
+        `toolCallResolver=${!!(input as ReActKernelInput).toolCallResolver}. ` +
+        `llmToolsCount=${llmTools.length}.`
+      );
+    }
+
     // Store logprobs in entropy meta for the entropy sensor
     if (accumulatedLogprobs.length > 0) {
       const entropyMeta = (state.meta.entropy as any) ?? {};
