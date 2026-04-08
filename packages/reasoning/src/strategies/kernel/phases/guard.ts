@@ -29,6 +29,9 @@ const META_TOOL_NAMES = new Set([
   "brief", "pulse", "find", "recall",
 ]);
 
+/** Meta-introspection tools subject to dedup spam detection. */
+export const META_TOOL_SET = new Set(["brief", "pulse", "find", "recall"]);
+
 // ─── Individual Guards ────────────────────────────────────────────────────────
 
 /** Blocks tools explicitly listed in input.blockedTools. */
@@ -130,6 +133,40 @@ export const repetitionGuard: Guard = (tc, state, input) => {
   };
 };
 
+/**
+ * Returns true when the same meta-introspection tool has been called
+ * consecutiveCount times already and is being called again.
+ *
+ * Threshold: block on the 3rd+ consecutive identical call (consecutiveCount >= 2).
+ * The first repeat (count === 1) is allowed with a warning via the guard message.
+ */
+export function isConsecutiveMetaToolSpam(opts: {
+  toolName: string;
+  lastMetaToolCall: string | undefined;
+  consecutiveCount: number;
+}): boolean {
+  if (!META_TOOL_SET.has(opts.toolName)) return false;
+  return opts.toolName === opts.lastMetaToolCall && opts.consecutiveCount >= 2;
+}
+
+/**
+ * Blocks a meta-introspection tool (brief/pulse/find/recall) when it has been
+ * called 3+ consecutive times with the same tool name.
+ * Redirects the model to either use a task tool or call final-answer.
+ */
+export const metaToolDedupGuard: Guard = (tc, state) => {
+  if (!META_TOOL_SET.has(tc.name)) return { pass: true };
+  const lastMeta = state.lastMetaToolCall;
+  const count = state.consecutiveMetaToolCount ?? 0;
+  if (isConsecutiveMetaToolSpam({ toolName: tc.name, lastMetaToolCall: lastMeta, consecutiveCount: count })) {
+    return {
+      pass: false,
+      observation: `You just called ${tc.name} ${count} times in a row. Nothing has changed. Stop calling ${tc.name} and either use a task tool or call final-answer.`,
+    };
+  }
+  return { pass: true };
+};
+
 // ─── Default Pipeline ─────────────────────────────────────────────────────────
 
 /** Default guard chain used by the standard ReAct kernel. */
@@ -138,6 +175,7 @@ export const defaultGuards: Guard[] = [
   duplicateGuard,
   sideEffectGuard,
   repetitionGuard,
+  metaToolDedupGuard,
 ];
 
 // ─── Pipeline Runner ──────────────────────────────────────────────────────────

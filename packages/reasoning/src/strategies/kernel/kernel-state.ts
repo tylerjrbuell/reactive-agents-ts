@@ -106,6 +106,18 @@ export interface KernelState {
    * Stage 2: after 2 nudges, force-exit with terminatedBy: "oracle_forced".
    */
   readonly readyToAnswerNudgeCount?: number;
+
+  /**
+   * The last meta-tool that was called (brief, pulse, find, recall).
+   * Used by the meta-tool dedup guard to detect consecutive identical calls.
+   */
+  readonly lastMetaToolCall?: string;
+
+  /**
+   * Number of consecutive times `lastMetaToolCall` has been called in a row.
+   * Resets to 1 when a different meta-tool or non-meta tool is called.
+   */
+  readonly consecutiveMetaToolCount?: number;
 }
 
 // ── KernelInput — Frozen execution input ─────────────────────────────────────
@@ -338,6 +350,8 @@ export function initialKernelState(opts: KernelRunOptions): KernelState {
     frozenToolResultIds: new Set<string>(),
     consecutiveLowDeltaCount: 0,
     readyToAnswerNudgeCount: 0,
+    lastMetaToolCall: undefined,
+    consecutiveMetaToolCount: 0,
   };
 }
 
