@@ -39,8 +39,7 @@ import {
 } from "../utils/tool-utils.js";
 import { evaluateTermination, defaultEvaluators, type TerminationContext } from "../utils/termination-oracle.js";
 import { assembleOutput } from "../output-assembly.js";
-import { buildStaticContext, buildDynamicContext, buildRules } from "../../../context/context-engine.js";
-import type { MemoryItem } from "../../../context/context-engine.js";
+import { buildStaticContext } from "../../../context/context-engine.js";
 import { extractThinking, rescueFromThinking } from "../utils/stream-parser.js";
 import { makeStep } from "../utils/step-utils.js";
 import { makeObservationResult } from "../utils/tool-execution.js";
@@ -124,21 +123,15 @@ export function handleThinking(
       tier: profile.tier ?? "mid",
     });
 
-    const hasICS = state.synthesizedContext != null;
-    let systemPromptText: string;
-    if (hasICS) {
-      const rules = buildRules(augmentedToolSchemas, input.requiredTools, profile.tier);
-      systemPromptText = `${patchedBase}\n\n${rules}${toolGuidancePatch ? `\n${toolGuidancePatch}` : ""}`;
-    } else {
-      const staticContext = buildStaticContext({
-        task: input.task,
-        profile,
-        availableToolSchemas: augmentedToolSchemas,
-        requiredTools: input.requiredTools,
-        environmentContext: input.environmentContext,
-      });
-      systemPromptText = `${patchedBase}\n\n${staticContext}${toolGuidancePatch ? `\n${toolGuidancePatch}` : ""}`;
-    }
+    // Always use full static context — stable system prompt, never overridden by ICS
+    const staticContext = buildStaticContext({
+      task: input.task,
+      profile,
+      availableToolSchemas: augmentedToolSchemas,
+      requiredTools: input.requiredTools,
+      environmentContext: input.environmentContext,
+    });
+    const systemPromptText = `${patchedBase}\n\n${staticContext}${toolGuidancePatch ? `\n${toolGuidancePatch}` : ""}`;
 
     // ── Auto-forward: inject full stored result from last observation ──────────
     // When the previous tool result was compressed and auto-stored in the scratchpad
@@ -161,23 +154,7 @@ export function handleThinking(
       }
     }
 
-    let thoughtPrompt = buildDynamicContext({
-      task: input.task,
-      steps: state.steps,
-      availableToolSchemas: augmentedToolSchemas,
-      requiredTools: input.requiredTools,
-      iteration: state.iteration,
-      maxIterations: maxIter,
-      profile,
-      memories: (state.meta.memories as MemoryItem[] | undefined),
-      priorContext: input.priorContext,
-    });
-
-    if (autoForwardSection) {
-      thoughtPrompt += `\n\n${autoForwardSection}`;
-    }
-
-    thoughtPrompt += "\n\nThink step-by-step. Use available tools when needed, or provide your final answer directly.";
+    // autoForwardSection is passed directly to buildConversationMessages
 
     // ── STREAM (with text delta emission) ──────────────────────────────────
     // Token budget adapts to model tier: frontier models get more room for
@@ -219,7 +196,7 @@ export function handleThinking(
     // ── Build conversation messages ──────────────────────────────────────────
     // Prefer ICS briefs (set by kernel-runner after tool rounds); otherwise sliding window.
     const { messages: conversationMessages, updatedState: stateAfterMessages } =
-      buildConversationMessages(state, input, profile, adapter, thoughtPrompt, autoForwardSection);
+      buildConversationMessages(state, input, profile, adapter, "", autoForwardSection);
     state = stateAfterMessages;
 
     const llmStreamEffect = llm.stream({
