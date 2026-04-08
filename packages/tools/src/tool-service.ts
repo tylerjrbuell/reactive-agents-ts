@@ -452,7 +452,7 @@ export const ToolServiceLive = Layer.effect(
           yield* registry.register(
             {
               name: `${server.name}/${toolName}`,
-              description: schema?.description ?? `MCP tool from ${server.name}`,
+              description: `[${server.name}/${toolName}] ${schema?.description ?? `MCP tool from ${server.name}`}`,
               parameters,
               riskLevel: "medium",
               timeoutMs: 30_000,

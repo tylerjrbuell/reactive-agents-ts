@@ -444,7 +444,7 @@ export function buildRules(
   // Core rules — always included, small-model-safe count
   const rules: string[] = [
     "1. ONE action per turn. Wait for the result before proceeding.",
-    "2. Use EXACT parameter names from the tool reference.",
+    "2. Use EXACT tool names and parameter names from the tool reference. MCP tools require the full prefix (e.g. `context7/get-library-docs`, not `get-library-docs`).",
     "3. Do NOT fabricate data. Only use information from tool results.",
     "4. Once a tool succeeds, do NOT repeat it.",
   ];
