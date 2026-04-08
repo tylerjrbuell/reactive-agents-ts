@@ -35,6 +35,18 @@ import { coordinateICS } from "./utils/ics-coordinator.js";
 import { runReactiveObserver } from "./utils/reactive-observer.js";
 import { detectLoop, checkAllToolsCalled } from "./utils/loop-detector.js";
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/** Error strings from recent failed tool observations — feeds ICS nudge content. */
+function getLastErrors(state: KernelState): readonly string[] {
+  return state.steps
+    .filter(
+      (s) => s.type === "observation" && s.metadata?.observationResult?.success === false,
+    )
+    .slice(-2)
+    .map((s) => (s.metadata?.observationResult?.error as string | undefined) ?? "unknown error")
+}
+
 // ── Main entry point ──────────────────────────────────────────────────────────
 
 /**
@@ -151,9 +163,20 @@ export function runKernel(
       prevToolsUsed = new Set(state.toolsUsed);
 
       // ── Intelligent Context Synthesis (before thinking step) ──
-      // Fires on ALL iterations including iteration 0 so the orient phase
-      // receives synthesized context with tool hints (GAP 1 fix).
-      state = yield* coordinateICS(state, currentInput, currentOptions, currentContext, hooks);
+      // Produces a steering nudge appended to the FC thread — never replaces it.
+      const icsResult = yield* coordinateICS(state, {
+        task: currentInput.task,
+        requiredTools: currentInput.requiredTools ?? [],
+        toolsUsed: state.toolsUsed,
+        availableTools: (currentInput.availableToolSchemas ?? []) as readonly { name: string; description: string; parameters: unknown[] }[],
+        tier: profile.tier ?? "mid",
+        iteration: state.iteration,
+        maxIterations: (state.meta.maxIterations as number) ?? 10,
+        lastErrors: getLastErrors(state),
+      });
+      if (icsResult.steeringNudge) {
+        state = transitionState(state, { steeringNudge: icsResult.steeringNudge });
+      }
 
       // ── Early exit: primary scoped tools called ─────────────────────────
       // For composite steps in plan-execute, exit as soon as all primary

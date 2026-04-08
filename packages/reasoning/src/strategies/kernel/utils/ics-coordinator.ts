@@ -1,109 +1,71 @@
 /**
- * ICS Coordinator — prepares synthesized context between kernel iterations.
+ * ICS Coordinator — produces a steering nudge for the next think call.
  *
- * Calls ContextSynthesizerService when enabled, classifies the current task phase,
- * and returns a state with synthesizedContext set for the next think phase.
+ * Replaces the SynthesizedContext replacement system. The native FC
+ * conversation thread is never replaced; instead a lean steering nudge
+ * is appended as a user message when the model needs directional guidance.
  *
- * Fires on ALL iterations including iteration 0 so the orient phase receives
- * synthesized context with tool hints (GAP 1 fix).
- *
- * Extracted from kernel-runner.ts to keep the main loop focused on iteration logic.
+ * Nudge frequency is tier-adaptive:
+ * - local/mid: always nudge when required tools are missing
+ * - large/frontier: only nudge in the last 30% of iterations
  */
-import { Effect } from "effect";
-import { LLMService } from "@reactive-agents/llm-provider";
-import { ContextSynthesizerService } from "../../../context/context-synthesizer.js";
-import { classifyTaskPhase } from "../../../context/task-phase.js";
-import type { SynthesisConfig, SynthesisInput, SynthesisEntropySignals } from "../../../context/synthesis-types.js";
-import { transitionState } from "../kernel-state.js";
-import type { KernelState, KernelInput, KernelRunOptions, KernelContext, KernelHooks } from "../kernel-state.js";
-import type { ReasoningStep } from "../../../types/index.js";
+import { Effect } from "effect"
+import type { KernelState } from "../kernel-state.js"
 
-/** Error strings from recent failed tool observations — feeds ICS escalation. */
-function getLastErrors(steps: readonly ReasoningStep[]): readonly string[] {
-  return steps
-    .filter(
-      (s) => s.type === "observation" && s.metadata?.observationResult?.success === false,
-    )
-    .slice(-3)
-    .map((s) => s.metadata?.observationResult?.displayText ?? s.content.slice(0, 100));
+export interface ICSInput {
+  readonly task: string
+  readonly requiredTools: readonly string[]
+  readonly toolsUsed: ReadonlySet<string>
+  readonly availableTools: readonly { name: string; description: string; parameters: unknown[] }[]
+  readonly tier: string
+  readonly iteration: number
+  readonly maxIterations: number
+  readonly lastErrors: readonly string[]
+}
+
+export interface ICSOutput {
+  readonly steeringNudge: string | undefined
 }
 
 /**
- * Run the Intelligent Context Synthesis coordination block.
- *
- * Called after each kernel iteration (when state.status === "thinking") to produce
- * a synthesized context hint for the next think phase.
- *
- * Returns the state unchanged if:
- * - synthesisConfig.mode === "off"
- * - status !== "thinking"
- * - ContextSynthesizerService is not in the Effect environment
+ * Build a steering nudge message for the current iteration.
+ * Returns undefined when no nudge is needed.
  */
 export function coordinateICS(
-  state: KernelState,
-  currentInput: KernelInput,
-  currentOptions: KernelRunOptions,
-  currentContext: KernelContext,
-  hooks: KernelHooks,
-): Effect.Effect<KernelState, never, LLMService> {
-  return Effect.gen(function* () {
-    const synthesisCfg: SynthesisConfig = currentInput.synthesisConfig ?? { mode: "auto" };
-    if (synthesisCfg.mode === "off" || state.status !== "thinking") {
-      return state;
+  _state: KernelState,
+  input: ICSInput,
+): Effect.Effect<ICSOutput, never, never> {
+  return Effect.sync(() => {
+    const { requiredTools, toolsUsed, tier, iteration, maxIterations, lastErrors } = input
+    const missingTools = requiredTools.filter((t) => !toolsUsed.has(t))
+    const urgencyThreshold = maxIterations * 0.7 // nudge in last 30%
+
+    // Tier-adaptive nudge frequency
+    const shouldNudge =
+      tier === "local" || tier === "mid"
+        ? missingTools.length > 0
+        : iteration >= urgencyThreshold && missingTools.length > 0
+
+    if (!shouldNudge) return { steeringNudge: undefined }
+
+    const lines: string[] = []
+    const completedRequired = requiredTools.filter((t) => toolsUsed.has(t))
+
+    if (completedRequired.length > 0) {
+      lines.push(`Completed: ${completedRequired.map((t) => `${t} ✓`).join(", ")}`)
     }
 
-    const synthesizerOpt = yield* Effect.serviceOption(ContextSynthesizerService);
-    if (synthesizerOpt._tag !== "Some") {
-      return state;
+    for (const err of lastErrors) {
+      lines.push(`Error: ${err} — skip this tool, use data from other calls`)
     }
 
-    const entropyMeta = (state.meta as Record<string, unknown>).entropy as
-      | { entropyHistory?: readonly SynthesisEntropySignals[] }
-      | undefined;
-    const hist = entropyMeta?.entropyHistory;
-    const latestEntropy =
-      hist && hist.length > 0 ? (hist[hist.length - 1] as SynthesisEntropySignals) : undefined;
+    const iterationsLeft = maxIterations - iteration
+    const urgency = iterationsLeft <= 2 ? ` (${iterationsLeft} iterations remaining)` : ""
 
-    const taskPhase = classifyTaskPhase({
-      iteration: state.iteration,
-      toolsUsed: state.toolsUsed,
-      requiredTools: currentInput.requiredTools ?? [],
-      steps: state.steps,
-    });
-
-    const profile = currentContext.profile;
-    const synthesisInput: SynthesisInput = {
-      transcript: state.messages,
-      task: currentInput.task,
-      taskPhase,
-      requiredTools: currentInput.requiredTools ?? [],
-      toolsUsed: state.toolsUsed,
-      availableTools: currentInput.availableToolSchemas ?? [],
-      entropy: latestEntropy,
-      iteration: state.iteration,
-      maxIterations: currentOptions.maxIterations,
-      lastErrors: getLastErrors(state.steps),
-      tier: profile.tier ?? "mid",
-      tokenBudget: Math.floor(8192 * ((profile.contextBudgetPercent ?? 80) / 100)),
-      synthesisConfig: synthesisCfg,
-    };
-
-    const synthesized = yield* synthesizerOpt.value
-      .synthesize(synthesisInput)
-      .pipe(Effect.catchAll(() => Effect.succeed(null)));
-
-    if (synthesized !== null) {
-      yield* hooks
-        .onContextSynthesized(
-          synthesized,
-          state.taskId,
-          currentInput.agentId ?? "unknown",
-        )
-        .pipe(Effect.catchAll(() => Effect.void));
-
-      return transitionState(state, { synthesizedContext: synthesized });
+    if (missingTools.length > 0) {
+      lines.push(`Now call ${missingTools[0]} with the appropriate arguments.${urgency}`)
     }
 
-    return state;
-  });
+    return { steeringNudge: lines.length > 0 ? lines.join("\n") : undefined }
+  })
 }
