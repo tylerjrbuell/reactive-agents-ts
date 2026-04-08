@@ -26,6 +26,8 @@ import {
   detectCompletionGaps,
   briefTool,
   pulseTool,
+  recallTool,
+  findTool,
   type ToolCallSpec,
   type ResolverInput,
 } from "@reactive-agents/tools";
@@ -93,6 +95,8 @@ export function handleThinking(
       ...(finalAnswerVisible ? [{ name: finalAnswerTool.name, description: finalAnswerTool.description, parameters: finalAnswerTool.parameters }] : []),
       ...(input.metaTools?.brief ? [{ name: briefTool.name, description: briefTool.description, parameters: briefTool.parameters }] : []),
       ...(input.metaTools?.pulse ? [{ name: pulseTool.name, description: pulseTool.description, parameters: pulseTool.parameters }] : []),
+      ...(input.metaTools?.recall ? [{ name: recallTool.name, description: recallTool.description, parameters: recallTool.parameters }] : []),
+      ...(input.metaTools?.find ? [{ name: findTool.name, description: findTool.description, parameters: findTool.parameters }] : []),
     ] as readonly ToolSchema[];
 
     // ── Harness skill injection ──────────────────────────────────────────────
