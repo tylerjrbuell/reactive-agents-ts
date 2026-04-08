@@ -72,6 +72,27 @@
       logEl.scrollTop = logEl.scrollHeight;
     }
   });
+
+  async function copyEventPayload(payload: Record<string, unknown>) {
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
+    } catch {
+      // ignore clipboard errors
+    }
+  }
+
+  async function copyAllEventsAsJson() {
+    try {
+      const data = filtered.map((e) => ({
+        type: e.type,
+        payload: e.payload,
+        ts: e.ts,
+      }));
+      await navigator.clipboard.writeText(JSON.stringify(data, null, 2));
+    } catch {
+      // ignore clipboard errors
+    }
+  }
 </script>
 
 <div class="h-full flex flex-col overflow-hidden">
@@ -96,6 +117,16 @@
     >
       {autoScroll ? "↓ live" : "↓ paused"}
     </button>
+    {#if filtered.length > 0}
+      <button
+        type="button"
+        class="text-[9px] font-mono flex-shrink-0 border-0 bg-transparent cursor-pointer text-outline/40 hover:text-primary transition-colors"
+        onclick={copyAllEventsAsJson}
+        title="Copy all events as JSON"
+      >
+        copy all
+      </button>
+    {/if}
   </div>
 
   <!-- Top event types summary -->
@@ -188,6 +219,17 @@
           <div
             class="border-b border-[var(--cortex-border)] bg-surface-container-lowest/60 px-3 py-2"
           >
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-[8px] font-mono text-outline/40 uppercase tracking-widest">Payload JSON</span>
+              <button
+                type="button"
+                class="text-[8px] font-mono text-outline/40 hover:text-primary transition-colors border-0 bg-transparent cursor-pointer"
+                onclick={() => copyEventPayload(ev.payload)}
+                title="Copy JSON"
+              >
+                copy
+              </button>
+            </div>
             <pre class="text-[9px] font-mono text-on-surface/50 whitespace-pre-wrap break-all overflow-x-auto max-h-64 overflow-y-auto">{JSON.stringify(
                 ev.payload,
                 null,

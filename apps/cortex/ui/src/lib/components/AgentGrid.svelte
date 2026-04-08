@@ -8,6 +8,20 @@
   let { agents }: Props = $props();
 
   const activeCount = $derived(agents.filter((a) => ["running", "exploring", "stressed"].includes(a.state)).length);
+
+  // Build hierarchy map: parentRunId → childRunIds[]
+  const hierarchyMap = $derived.by(() => {
+    const map = new Map<string, string[]>();
+    for (const agent of agents) {
+      if (agent.parentRunId) {
+        if (!map.has(agent.parentRunId)) {
+          map.set(agent.parentRunId, []);
+        }
+        map.get(agent.parentRunId)!.push(agent.runId);
+      }
+    }
+    return map;
+  });
 </script>
 
 <div
@@ -44,8 +58,13 @@
 
   <div class="cortex-beacon-desk-grid relative z-10">
     {#each agents as agent, i (agent.runId)}
-      <div class="animate-fade-up" style="animation-delay: {Math.min(i, 8) * 35}ms">
-        <AgentCard {agent} />
+      <div
+        class="animate-fade-up"
+        style="animation-delay: {Math.min(i, 8) * 35}ms"
+        data-agent-id={agent.runId}
+        data-parent-run-id={agent.parentRunId}
+      >
+        <AgentCard {agent} parentRunId={agent.parentRunId} />
       </div>
     {/each}
   </div>

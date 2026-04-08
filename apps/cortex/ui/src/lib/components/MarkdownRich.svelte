@@ -2,6 +2,7 @@
   /**
    * Renders GitHub-flavored markdown to sanitized HTML (client-only).
    * Display math: `$$...$$` (outside fenced code) is rendered with KaTeX (`\text`, `\xrightarrow`, etc.).
+   * Code blocks have per-block copy buttons.
    */
   import { browser } from "$app/environment";
   import Tooltip from "$lib/components/Tooltip.svelte";
@@ -23,6 +24,8 @@
 
   let html = $state("");
   let renderError = $state(false);
+  let containerRef = $state<HTMLDivElement | null>(null);
+  let copiedBlockId = $state<string | null>(null);
 
   $effect(() => {
     if (!browser) return;
@@ -48,6 +51,68 @@
     return () => {
       cancelled = true;
     };
+  });
+
+  // Add copy buttons to code blocks after rendering
+  $effect(() => {
+    if (!browser || !containerRef || !html) return;
+
+    const preElements = containerRef.querySelectorAll("pre");
+    preElements.forEach((pre, index) => {
+      const blockId = `code-block-${index}`;
+      const code = pre.querySelector("code");
+
+      if (!code) return;
+
+      // Check if we've already added a button to this block
+      if (pre.querySelector(`[data-copy-block-id="${blockId}"]`)) {
+        return;
+      }
+
+      // Create button wrapper
+      const buttonWrapper = document.createElement("div");
+      buttonWrapper.setAttribute("data-copy-block-id", blockId);
+      buttonWrapper.className =
+        "absolute top-1 right-1 z-10 flex items-center gap-1";
+
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className =
+        "flex items-center gap-1 px-2 py-1 rounded-md border border-secondary/25 " +
+        "text-secondary/90 font-mono text-[9px] uppercase tracking-wider " +
+        "bg-surface-container-low/90 hover:bg-secondary/10 hover:border-secondary/40 " +
+        "transition-colors cursor-pointer shadow-sm";
+      button.setAttribute("aria-label", "Copy code block");
+
+      const icon = document.createElement("span");
+      icon.className = "material-symbols-outlined text-[14px] leading-none";
+      icon.textContent = "content_copy";
+
+      const label = document.createElement("span");
+      label.textContent = "Copy";
+
+      button.appendChild(icon);
+      button.appendChild(label);
+
+      button.addEventListener("click", async (e) => {
+        e.preventDefault();
+        try {
+          const codeText = code.innerText;
+          await navigator.clipboard.writeText(codeText);
+          toast.success("Copied", "Code block copied to clipboard");
+          copiedBlockId = blockId;
+          setTimeout(() => {
+            copiedBlockId = null;
+          }, 2000);
+        } catch {
+          toast.error("Copy failed");
+        }
+      });
+
+      buttonWrapper.appendChild(button);
+      pre.style.position = "relative";
+      pre.insertBefore(buttonWrapper, code);
+    });
   });
 
   async function copyRaw() {
@@ -81,7 +146,7 @@
   {/if}
 
   {#if browser && html}
-    <div class="markdown-deliverable pr-24 max-w-none">{@html html}</div>
+    <div bind:this={containerRef} class="markdown-deliverable pr-24 max-w-none">{@html html}</div>
   {:else if browser && markdown.trim() && !renderError}
     <p class="font-mono text-[10px] text-outline/40 m-0 py-2">Formatting…</p>
   {:else if renderError}

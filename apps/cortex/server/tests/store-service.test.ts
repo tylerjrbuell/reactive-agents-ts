@@ -202,10 +202,7 @@ describe("CortexStoreService", () => {
   it("getSkills returns rows when skills table exists", async () => {
     const db = new Database(":memory:");
     applySchema(db);
-    db.exec(`
-      CREATE TABLE skills (id INTEGER PRIMARY KEY, name TEXT, created_at INTEGER DEFAULT 0);
-      INSERT INTO skills (name) VALUES ('demo-skill');
-    `);
+    db.prepare("INSERT INTO skills (name) VALUES (?)").run("demo-skill");
     const program = Effect.gen(function* () {
       const svc = yield* CortexStoreService;
       return yield* svc.getSkills();

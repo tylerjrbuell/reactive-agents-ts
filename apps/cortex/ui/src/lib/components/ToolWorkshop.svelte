@@ -457,6 +457,46 @@
     URL.revokeObjectURL(a.href);
   }
 
+  async function copyToolSchema() {
+    if (!selected) return;
+    try {
+      const schema = {
+        name: selected.name,
+        displayName: selected.displayName,
+        description: selected.description,
+        parameters: selected.parameters,
+      };
+      await navigator.clipboard.writeText(JSON.stringify(schema, null, 2));
+    } catch {
+      // ignore clipboard errors
+    }
+  }
+
+  async function copyRequestJson() {
+    try {
+      await navigator.clipboard.writeText(requestJson);
+    } catch {
+      // ignore clipboard errors
+    }
+  }
+
+  async function copyResponseJson() {
+    try {
+      await navigator.clipboard.writeText(responseJson);
+    } catch {
+      // ignore clipboard errors
+    }
+  }
+
+  async function copyMcpConfig() {
+    if (!selectedMcp) return;
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(selectedMcp.config, null, 2));
+    } catch {
+      // ignore clipboard errors
+    }
+  }
+
   async function toggleCustomDisabled() {
     if (!selected || selected.kind !== "custom" || !selected.id.startsWith("lab:")) return;
     const toolId = selected.id.slice(4);
@@ -715,6 +755,16 @@
                         class="text-[8px] font-mono px-2 py-0.5 rounded border border-secondary/30 text-secondary hover:bg-secondary/10 cursor-pointer bg-transparent disabled:opacity-40"
                       >
                         {mcpRefreshing === s.serverId ? "…" : "Refresh tools"}
+                      </button>
+                      <button
+                        type="button"
+                        onclick={() => {
+                          selectedMcp = s;
+                          copyMcpConfig();
+                        }}
+                        class="text-[8px] font-mono px-2 py-0.5 rounded border border-outline-variant/30 text-outline/60 hover:text-primary hover:border-outline-variant/50 cursor-pointer bg-transparent"
+                      >
+                        Copy config
                       </button>
                       <button
                         type="button"
@@ -1001,7 +1051,19 @@
           </div>
 
           <div>
-            <div class="text-[8px] font-mono text-outline/50 uppercase tracking-widest mb-2">Input schema</div>
+            <div class="flex items-center justify-between mb-2">
+              <div class="text-[8px] font-mono text-outline/50 uppercase tracking-widest">Input schema</div>
+              {#if selected.parameters.length > 0}
+                <button
+                  type="button"
+                  class="text-[8px] font-mono text-outline/40 hover:text-primary transition-colors border-0 bg-transparent cursor-pointer"
+                  onclick={copyToolSchema}
+                  title="Copy schema JSON"
+                >
+                  copy
+                </button>
+              {/if}
+            </div>
             <div class="overflow-x-auto rounded border border-outline-variant/15">
               <table class="w-full text-left font-mono text-[9px]">
                 <thead class="bg-surface-container-lowest/80 text-outline/50 uppercase tracking-wider">
@@ -1049,15 +1111,26 @@
               class="flex items-center justify-between px-3 py-2 bg-surface-container-lowest/40 border-b border-outline-variant/10 flex-shrink-0"
             >
               <span class="font-mono text-[8px] uppercase tracking-widest text-outline/50">request_body.json</span>
-              <button
-                type="button"
-                disabled={!selected.executable || running}
-                onclick={runTest}
-                class="flex items-center gap-1 text-[9px] font-mono uppercase px-2 py-1 rounded border border-primary/40 text-primary hover:bg-primary/10 disabled:opacity-40 bg-transparent"
-              >
-                <span class="material-symbols-outlined text-[14px]">play_arrow</span>
-                {running ? "Running…" : "Run test"}
-              </button>
+              <div class="flex items-center gap-1">
+                <button
+                  type="button"
+                  disabled={!selected.executable}
+                  onclick={copyRequestJson}
+                  class="text-[8px] font-mono text-outline/40 hover:text-primary transition-colors border-0 bg-transparent cursor-pointer disabled:opacity-40"
+                  title="Copy request JSON"
+                >
+                  copy
+                </button>
+                <button
+                  type="button"
+                  disabled={!selected.executable || running}
+                  onclick={runTest}
+                  class="flex items-center gap-1 text-[9px] font-mono uppercase px-2 py-1 rounded border border-primary/40 text-primary hover:bg-primary/10 disabled:opacity-40 bg-transparent"
+                >
+                  <span class="material-symbols-outlined text-[14px]">play_arrow</span>
+                  {running ? "Running…" : "Run test"}
+                </button>
+              </div>
             </div>
             <textarea
               bind:value={requestJson}
@@ -1071,16 +1144,28 @@
               class="flex items-center justify-between px-3 py-2 bg-surface-container-lowest/40 border-b border-outline-variant/10 flex-shrink-0"
             >
               <span class="font-mono text-[8px] uppercase tracking-widest text-outline/50">response_buffer</span>
-              {#if responseMs != null}
-                <span class="flex items-center gap-1 font-mono text-[9px]">
-                  {#if responseOk === true}
-                    <span class="material-symbols-outlined text-[14px] text-secondary">check_circle</span>
-                  {:else if responseOk === false}
-                    <span class="material-symbols-outlined text-[14px] text-error">error</span>
-                  {/if}
-                  <span class="text-outline/60">{responseMs}ms</span>
-                </span>
-              {/if}
+              <div class="flex items-center gap-2">
+                {#if responseJson}
+                  <button
+                    type="button"
+                    onclick={copyResponseJson}
+                    class="text-[8px] font-mono text-outline/40 hover:text-primary transition-colors border-0 bg-transparent cursor-pointer"
+                    title="Copy response JSON"
+                  >
+                    copy
+                  </button>
+                {/if}
+                {#if responseMs != null}
+                  <span class="flex items-center gap-1 font-mono text-[9px]">
+                    {#if responseOk === true}
+                      <span class="material-symbols-outlined text-[14px] text-secondary">check_circle</span>
+                    {:else if responseOk === false}
+                      <span class="material-symbols-outlined text-[14px] text-error">error</span>
+                    {/if}
+                    <span class="text-outline/60">{responseMs}ms</span>
+                  </span>
+                {/if}
+              </div>
             </div>
             <div class="flex-1 min-h-[140px] relative">
               <pre

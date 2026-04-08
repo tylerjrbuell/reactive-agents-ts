@@ -72,8 +72,16 @@
       notifPermission = Notification.permission;
     }
 
-    fetch(`${CORTEX_SERVER_URL}/api/runs?limit=0`)
-      .then(() => { serverHealth = "online"; })
+    fetch(`${CORTEX_SERVER_URL}/api/health`)
+      .then(async (res) => {
+        if (res.ok) {
+          const data = await res.json() as { ok: boolean; version: string; uptime: number };
+          serverHealth = "online";
+          serverVersion = data.version;
+        } else {
+          serverHealth = "offline";
+        }
+      })
       .catch(() => { serverHealth = "offline"; });
   });
 
@@ -159,6 +167,9 @@
         <div>
           <div class="font-mono text-[11px] text-on-surface/70">Cortex Server</div>
           <div class="font-mono text-[10px] text-outline mt-0.5">{CORTEX_SERVER_URL}</div>
+          {#if serverVersion}
+            <div class="font-mono text-[10px] text-outline/60 mt-1">v{serverVersion}</div>
+          {/if}
         </div>
         <div class="flex items-center gap-2">
           <span class="w-2 h-2 rounded-full {serverHealth === 'online' ? 'bg-secondary' : serverHealth === 'offline' ? 'bg-error' : 'bg-outline/40'} {serverHealth === 'online' ? '' : ''}"></span>

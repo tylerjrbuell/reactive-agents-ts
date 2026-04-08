@@ -298,6 +298,15 @@
 
   let fsSkillSummaries = $state<FsSkillSummary[]>([]);
   let skillCatalogFilter = $state("");
+
+  // Skill creation form state
+  let showNewSkillForm = $state(false);
+  let newSkillName = $state("");
+  let newSkillInstructions = $state("");
+  let newSkillDescription = $state("");
+  let newSkillTags = $state("");
+  let newSkillSaving = $state(false);
+  let deleteConfirmSkill = $state<SkillRow | null>(null);
   let skillListSelection = $state<SkillListSelection | null>(null);
   let skillDetail = $state<SkillDetail | null>(null);
   let skillDetailLoading = $state(false);
@@ -353,6 +362,83 @@
     }
     return rows;
   });
+
+  async function createNewSkill() {
+    if (!newSkillName.trim()) {
+      toast.warning("Name is required");
+      return;
+    }
+    if (!newSkillInstructions.trim()) {
+      toast.warning("Instructions are required");
+      return;
+    }
+
+    newSkillSaving = true;
+    try {
+      const tags = newSkillTags
+        .split(",")
+        .map((t) => t.trim())
+        .filter((t) => t.length > 0);
+
+      const res = await fetch(`${CORTEX_SERVER_URL}/api/skills`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newSkillName.trim(),
+          instructions: newSkillInstructions.trim(),
+          description: newSkillDescription.trim() || undefined,
+          tags: tags.length > 0 ? tags : undefined,
+        }),
+      });
+
+      if (!res.ok) {
+        const errData = (await res.json()) as { error?: string };
+        throw new Error(errData.error || `HTTP ${res.status}`);
+      }
+
+      toast.success("Skill created", newSkillName.trim());
+      showNewSkillForm = false;
+      newSkillName = "";
+      newSkillInstructions = "";
+      newSkillDescription = "";
+      newSkillTags = "";
+
+      // Reload skills list
+      const skillsRes = await fetch(`${CORTEX_SERVER_URL}/api/skills`);
+      if (skillsRes.ok) {
+        skills = await skillsRes.json();
+      }
+    } catch (e) {
+      toast.error("Create failed", String(e));
+    } finally {
+      newSkillSaving = false;
+    }
+  }
+
+  async function deleteSkill(skill: SkillRow) {
+    deleteConfirmSkill = null;
+    if (!skill.id) {
+      toast.warning("Cannot delete skill without id");
+      return;
+    }
+
+    try {
+      const res = await fetch(`${CORTEX_SERVER_URL}/api/skills/${skill.id}`, { method: "DELETE" });
+      if (res.ok) {
+        toast.success(`Deleted ${skill.name ?? "skill"}`);
+        // Reload skills list
+        const skillsRes = await fetch(`${CORTEX_SERVER_URL}/api/skills`);
+        if (skillsRes.ok) {
+          skills = await skillsRes.json();
+        }
+      } else {
+        const errData = (await res.json()) as { error?: string };
+        toast.error("Delete failed", errData.error ?? `HTTP ${res.status}`);
+      }
+    } catch (e) {
+      toast.error("Delete failed", String(e));
+    }
+  }
 
   async function loadSkillDetail(sel: SkillListSelection) {
     skillListSelection = sel;
@@ -821,6 +907,54 @@
   <!-- ── SKILLS (workshop layout: catalog | document | meta) ─────────── -->
   {:else if activeTab === "skills"}
     <div class="flex flex-col flex-1 min-h-0 overflow-hidden gap-3">
+      {#if showNewSkillForm}
+        <div class="flex-shrink-0 rounded-lg border border-outline-variant/20 bg-surface-container-low/40 p-4">
+          <div class="max-w-2xl space-y-3">
+            <div class="flex items-center justify-between">
+              <h3 class="font-headline text-sm font-semibold text-on-surface">New Skill</h3>
+              <button type="button" onclick={() => (showNewSkillForm = false)}
+                class="material-symbols-outlined text-outline hover:text-primary bg-transparent border-0 cursor-pointer">close</button>
+            </div>
+
+            <div>
+              <label for="new-skill-name" class="text-[9px] font-mono text-outline/60 uppercase tracking-widest block mb-1.5">Name *</label>
+              <input id="new-skill-name" bind:value={newSkillName} placeholder="my-skill"
+                class="w-full bg-surface-container-lowest/60 border border-outline-variant/20 rounded-lg px-3 py-2 text-sm font-mono text-on-surface focus:border-primary/50 focus:outline-none" />
+            </div>
+
+            <div>
+              <label for="new-skill-instructions" class="text-[9px] font-mono text-outline/60 uppercase tracking-widest block mb-1.5">Instructions *</label>
+              <textarea id="new-skill-instructions" bind:value={newSkillInstructions} placeholder="Describe what this skill does and how to use it…" rows="6"
+                class="w-full bg-surface-container-lowest/60 border border-outline-variant/20 rounded-lg px-3 py-2 text-sm font-mono text-on-surface placeholder:text-outline/40 resize-none focus:border-primary/50 focus:outline-none">
+              </textarea>
+            </div>
+
+            <div>
+              <label for="new-skill-description" class="text-[9px] font-mono text-outline/60 uppercase tracking-widest block mb-1.5">Description <span class="text-outline/40 normal-case font-normal">(optional)</span></label>
+              <input id="new-skill-description" bind:value={newSkillDescription} placeholder="Brief one-liner"
+                class="w-full bg-surface-container-lowest/60 border border-outline-variant/20 rounded-lg px-3 py-2 text-sm font-mono text-on-surface focus:border-primary/50 focus:outline-none" />
+            </div>
+
+            <div>
+              <label for="new-skill-tags" class="text-[9px] font-mono text-outline/60 uppercase tracking-widest block mb-1.5">Tags <span class="text-outline/40 normal-case font-normal">(comma-separated, optional)</span></label>
+              <input id="new-skill-tags" bind:value={newSkillTags} placeholder="analytics, reporting, data"
+                class="w-full bg-surface-container-lowest/60 border border-outline-variant/20 rounded-lg px-3 py-2 text-sm font-mono text-on-surface focus:border-primary/50 focus:outline-none" />
+            </div>
+
+            <div class="flex justify-end gap-2 pt-2">
+              <button type="button" onclick={() => (showNewSkillForm = false)}
+                class="px-4 py-1.5 border border-outline-variant/20 text-outline font-mono text-[10px] uppercase rounded bg-transparent cursor-pointer hover:text-on-surface">
+                Cancel</button>
+              <button type="button" disabled={newSkillSaving || !newSkillName.trim() || !newSkillInstructions.trim()} onclick={createNewSkill}
+                class="px-6 py-1.5 rounded border-0 cursor-pointer font-mono text-[10px] uppercase text-white disabled:opacity-40 hover:brightness-110 transition-all"
+                style="background:linear-gradient(135deg,#8b5cf6,#06b6d4);">
+                {newSkillSaving ? "Saving…" : "Create Skill"}
+              </button>
+            </div>
+          </div>
+        </div>
+      {/if}
+
       <header class="flex-shrink-0 flex flex-col gap-2 border-b border-outline-variant/15 pb-3">
         <div class="flex flex-wrap items-end justify-between gap-2">
           <div>
@@ -832,16 +966,26 @@
               Optional: set <code class="text-outline/50">CORTEX_SKILL_SCAN_ROOT</code> to add another base path.
             </p>
           </div>
-          <button
-            type="button"
-            onclick={() => {
-              void loadSkillDiscover();
-              void loadFsSkillSummaries();
-            }}
-            class="text-[10px] font-mono px-3 py-1.5 rounded border border-outline-variant/25 text-outline hover:text-primary cursor-pointer bg-transparent shrink-0"
-          >
-            ↻ Rescan
-          </button>
+          <div class="flex items-center gap-2">
+            <button
+              type="button"
+              onclick={() => {
+                void loadSkillDiscover();
+                void loadFsSkillSummaries();
+              }}
+              class="text-[10px] font-mono px-3 py-1.5 rounded border border-outline-variant/25 text-outline hover:text-primary cursor-pointer bg-transparent shrink-0"
+            >
+              ↻ Rescan
+            </button>
+            <button
+              type="button"
+              onclick={() => (showNewSkillForm = true)}
+              class="flex items-center gap-1.5 px-4 py-1.5 rounded border-0 cursor-pointer font-mono text-[10px] uppercase text-white hover:brightness-110 transition-all shrink-0"
+              style="background:linear-gradient(135deg,#8b5cf6,#06b6d4);"
+            >
+              <span class="material-symbols-outlined text-sm">add</span> New Skill
+            </button>
+          </div>
         </div>
       </header>
 
@@ -896,19 +1040,29 @@
                   <div class="font-mono text-[8px] text-outline/35 mt-1.5 truncate" title={row.s.relPath}>{row.s.relPath}</div>
                 </button>
               {:else}
-                <button
-                  type="button"
-                  class="w-full text-left p-2.5 rounded-md border transition-all {isSqliteSkillSelected(row.s)
-                    ? 'bg-primary/12 border-primary/35'
-                    : 'bg-surface-container-lowest/40 border-outline-variant/10 hover:border-primary/25'}"
-                  onclick={() => selectSqliteSkill(row.s)}
-                >
-                  <div class="flex items-center gap-1.5 mb-0.5">
-                    <span class="font-mono text-[7px] uppercase text-outline/50 border border-outline-variant/20 px-1 rounded">db</span>
-                    <span class="font-mono text-[11px] font-medium text-on-surface">{row.s.name ?? row.s.id ?? "skill"}</span>
-                  </div>
-                  <div class="font-mono text-[9px] text-outline/65 line-clamp-2">{row.s.description ?? ""}</div>
-                </button>
+                <div class="flex items-stretch gap-1">
+                  <button
+                    type="button"
+                    class="flex-1 text-left p-2.5 rounded-md border transition-all {isSqliteSkillSelected(row.s)
+                      ? 'bg-primary/12 border-primary/35'
+                      : 'bg-surface-container-lowest/40 border-outline-variant/10 hover:border-primary/25'}"
+                    onclick={() => selectSqliteSkill(row.s)}
+                  >
+                    <div class="flex items-center gap-1.5 mb-0.5">
+                      <span class="font-mono text-[7px] uppercase text-outline/50 border border-outline-variant/20 px-1 rounded">db</span>
+                      <span class="font-mono text-[11px] font-medium text-on-surface">{row.s.name ?? row.s.id ?? "skill"}</span>
+                    </div>
+                    <div class="font-mono text-[9px] text-outline/65 line-clamp-2">{row.s.description ?? ""}</div>
+                  </button>
+                  <button
+                    type="button"
+                    onclick={() => (deleteConfirmSkill = row.s)}
+                    class="flex items-center justify-center p-2.5 text-outline hover:text-error bg-transparent border border-outline-variant/10 rounded-md cursor-pointer transition-colors"
+                    title="Delete skill"
+                  >
+                    <span class="material-symbols-outlined text-sm">delete</span>
+                  </button>
+                </div>
               {/if}
             {/each}
           </div>
@@ -1068,5 +1222,15 @@
     confirmLabel="Delete"
     onConfirm={() => deleteAgent(deleteConfirmAgent!)}
     onCancel={() => (deleteConfirmAgent = null)}
+  />
+{/if}
+
+{#if deleteConfirmSkill}
+  <ConfirmModal
+    title="Delete {deleteConfirmSkill.name ?? 'Skill'}"
+    message="This permanently deletes this skill from the database. This cannot be undone."
+    confirmLabel="Delete"
+    onConfirm={() => deleteSkill(deleteConfirmSkill!)}
+    onCancel={() => (deleteConfirmSkill = null)}
   />
 {/if}

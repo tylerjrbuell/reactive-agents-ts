@@ -1,5 +1,6 @@
 import { Elysia, t } from "elysia";
 import type { ChatSessionService } from "../services/chat-session-service.js";
+import type { AgentStreamEvent } from "@reactive-agents/runtime";
 
 export const chatRouter = (svc: ChatSessionService) =>
   new Elysia({ prefix: "/api/chat" })
@@ -79,6 +80,67 @@ export const chatRouter = (svc: ChatSessionService) =>
         try {
           const result = await svc.chat(params.sessionId, body.message);
           return result;
+        } catch (e) {
+          const msg = String(e);
+          set.status = msg.includes("not found") ? 404 : 500;
+          return { error: msg };
+        }
+      },
+      {
+        body: t.Object({ message: t.String() }),
+      },
+    )
+    .post(
+      "/sessions/:sessionId/chat/stream",
+      async ({ params, body, set }) => {
+        try {
+          const enc = new TextEncoder();
+          const readable = new ReadableStream({
+            async start(controller) {
+              try {
+                let totalTokens = 0;
+                let totalSteps = 0;
+                const toolsUsedSet = new Set<string>();
+
+                for await (const event of svc.chatStream(params.sessionId, body.message)) {
+                  // Collect metadata from StreamCompleted event for final summary
+                  if (event._tag === "StreamCompleted") {
+                    totalTokens = event.metadata.tokensUsed ?? 0;
+                    totalSteps = event.metadata.iterations ?? 0;
+                    if (event.toolSummary && event.toolSummary.length > 0) {
+                      event.toolSummary.forEach((t) => toolsUsedSet.add(t.name));
+                    }
+                  }
+
+                  // Stream the event as SSE
+                  controller.enqueue(enc.encode(`data: ${JSON.stringify(event)}\n\n`));
+
+                  if (event._tag === "StreamCompleted" || event._tag === "StreamError") {
+                    controller.close();
+                    return;
+                  }
+                }
+              } catch (e) {
+                try {
+                  const errorEvent = {
+                    _tag: "StreamError" as const,
+                    cause: String(e),
+                  };
+                  controller.enqueue(enc.encode(`data: ${JSON.stringify(errorEvent)}\n\n`));
+                  controller.close();
+                } catch {
+                  // controller already closed
+                }
+              }
+            },
+          });
+          return new Response(readable, {
+            headers: {
+              "Content-Type": "text/event-stream",
+              "Cache-Control": "no-cache",
+              Connection: "keep-alive",
+            },
+          });
         } catch (e) {
           const msg = String(e);
           set.status = msg.includes("not found") ? 404 : 500;

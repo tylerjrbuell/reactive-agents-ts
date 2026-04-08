@@ -148,9 +148,6 @@ describe("GET /api/skills", () => {
   it("GET /api/skills/sqlite/:id returns parsed row", async () => {
     const db = new Database(":memory:");
     applySchema(db);
-    db.exec(
-      "CREATE TABLE skills (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, description TEXT, content TEXT)",
-    );
     db.prepare(
       "INSERT INTO skills (name, description, content) VALUES (?, ?, ?)",
     ).run("row-skill", "Row desc", "---\nname: yaml-name\ndescription: Yaml desc\n---\n\n# Body\n");
@@ -160,6 +157,106 @@ describe("GET /api/skills", () => {
     const body = (await res.json()) as { name: string; instructions: string };
     expect(body.name).toBe("yaml-name");
     expect(body.instructions).toContain("# Body");
+  });
+
+  it("POST /api/skills creates a new skill", async () => {
+    const db = new Database(":memory:");
+    applySchema(db);
+    const app = new Elysia().use(skillsRouter(CortexStoreServiceLive(db), db));
+    const res = await app.handle(
+      new Request("http://localhost/api/skills", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "test-skill",
+          instructions: "Do something useful",
+          description: "A test skill",
+          tags: ["test", "demo"],
+        }),
+      }),
+    );
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { id: number; name: string; description: string };
+    expect(body.id).toBeGreaterThan(0);
+    expect(body.name).toBe("test-skill");
+    expect(body.description).toBe("A test skill");
+
+    // Verify it's in the database
+    const all = await app.handle(new Request("http://localhost/api/skills"));
+    const list = (await all.json()) as Array<{ id: number; name: string }>;
+    expect(list.some((s) => s.id === body.id)).toBe(true);
+  });
+
+  it("POST /api/skills rejects missing name", async () => {
+    const db = new Database(":memory:");
+    applySchema(db);
+    const app = new Elysia().use(skillsRouter(CortexStoreServiceLive(db), db));
+    const res = await app.handle(
+      new Request("http://localhost/api/skills", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          instructions: "Do something",
+        }),
+      }),
+    );
+    expect(res.status).toBe(422);
+  });
+
+  it("POST /api/skills rejects missing instructions", async () => {
+    const db = new Database(":memory:");
+    applySchema(db);
+    const app = new Elysia().use(skillsRouter(CortexStoreServiceLive(db), db));
+    const res = await app.handle(
+      new Request("http://localhost/api/skills", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "test-skill",
+        }),
+      }),
+    );
+    expect(res.status).toBe(422);
+  });
+
+  it("DELETE /api/skills/:id deletes a skill", async () => {
+    const db = new Database(":memory:");
+    applySchema(db);
+    db.prepare(
+      "INSERT INTO skills (name, description, content) VALUES (?, ?, ?)",
+    ).run("skill-to-delete", "Desc", "Content");
+    const app = new Elysia().use(skillsRouter(CortexStoreServiceLive(db), db));
+
+    // Verify it exists
+    const before = await app.handle(new Request("http://localhost/api/skills"));
+    const listBefore = (await before.json()) as Array<{ id: number }>;
+    const skillId = listBefore[0]?.id;
+    expect(skillId).toBeDefined();
+
+    // Delete it
+    const res = await app.handle(
+      new Request(`http://localhost/api/skills/${skillId}`, { method: "DELETE" }),
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok?: boolean };
+    expect(body.ok).toBe(true);
+
+    // Verify it's gone
+    const after = await app.handle(new Request("http://localhost/api/skills"));
+    const listAfter = (await after.json()) as Array<{ id: number }>;
+    expect(listAfter.every((s) => s.id !== skillId)).toBe(true);
+  });
+
+  it("DELETE /api/skills/:id returns 404 for non-existent skill", async () => {
+    const db = new Database(":memory:");
+    applySchema(db);
+    const app = new Elysia().use(skillsRouter(CortexStoreServiceLive(db), db));
+    const res = await app.handle(
+      new Request("http://localhost/api/skills/999", { method: "DELETE" }),
+    );
+    expect(res.status).toBe(404);
+    const body = (await res.json()) as { error?: string };
+    expect(body.error).toContain("not found");
   });
 });
 

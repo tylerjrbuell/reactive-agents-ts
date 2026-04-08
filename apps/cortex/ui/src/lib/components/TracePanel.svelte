@@ -25,6 +25,8 @@
   // Svelte 5: use array reassignment for reactivity (Set mutation doesn't trigger)
   let expandedRows = $state<number[]>([]);
   let expandedMessages = $state<number[]>([]); // conversation thread toggles
+  let copiedField = $state<string | null>(null); // track which field was just copied
+
   function toggleRow(idx: number) {
     expandedRows = expandedRows.includes(idx)
       ? expandedRows.filter((i) => i !== idx)
@@ -57,6 +59,18 @@
     if (role === "assistant") return "text-primary";
     if (role === "system") return "text-tertiary/70";
     return "text-secondary";
+  }
+
+  async function copyToClipboard(text: string, fieldId: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      copiedField = fieldId;
+      setTimeout(() => {
+        copiedField = null;
+      }, 2000);
+    } catch (err) {
+      console.error("Failed to copy:", err);
+    }
   }
 
   /** True when every trace row and message sub-thread are expanded. */
@@ -253,9 +267,21 @@
               {#if f.llmThought}
                 <div class="relative pl-3">
                   <div class="absolute left-0 top-0 bottom-0 w-0.5 bg-primary/30 rounded-full"></div>
-                  <span class="text-[9px] font-mono text-primary/80 uppercase tracking-widest block mb-1.5">
-                    Agent Reasoning
-                  </span>
+                  <div class="flex items-center justify-between mb-1.5">
+                    <span class="text-[9px] font-mono text-primary/80 uppercase tracking-widest">
+                      Agent Reasoning
+                    </span>
+                    <Tooltip text={copiedField === `thought-${idx}` ? "Copied!" : "Copy reasoning"}>
+                      <button
+                        type="button"
+                        class="text-primary/40 hover:text-primary/70 transition-colors bg-transparent border-0 cursor-pointer p-1"
+                        onclick={() => copyToClipboard(f.llmThought, `thought-${idx}`)}
+                        aria-label="Copy reasoning text"
+                      >
+                        <span class="material-symbols-outlined text-sm">{copiedField === `thought-${idx}` ? "check" : "content_copy"}</span>
+                      </button>
+                    </Tooltip>
+                  </div>
                   <p class="text-[11px] font-mono text-on-surface/75 leading-relaxed whitespace-pre-wrap break-words bg-primary/5 rounded p-2 border border-primary/10">
                     {f.llmThought}
                   </p>
@@ -266,9 +292,21 @@
               {#if f.action}
                 <div class="relative pl-3">
                   <div class="absolute bottom-0 left-0 top-0 w-0.5 rounded-full bg-amber-600/35 dark:bg-amber-700/40"></div>
-                  <span class="mb-1.5 block text-[9px] font-mono uppercase tracking-widest text-amber-800/90 dark:text-amber-600/85">
-                    Action
-                  </span>
+                  <div class="flex items-center justify-between mb-1.5">
+                    <span class="text-[9px] font-mono uppercase tracking-widest text-amber-800/90 dark:text-amber-600/85">
+                      Action
+                    </span>
+                    <Tooltip text={copiedField === `action-${idx}` ? "Copied!" : "Copy action"}>
+                      <button
+                        type="button"
+                        class="text-amber-700/40 hover:text-amber-700/70 dark:text-amber-600/40 dark:hover:text-amber-600/70 transition-colors bg-transparent border-0 cursor-pointer p-1"
+                        onclick={() => copyToClipboard(f.action, `action-${idx}`)}
+                        aria-label="Copy action text"
+                      >
+                        <span class="material-symbols-outlined text-sm">{copiedField === `action-${idx}` ? "check" : "content_copy"}</span>
+                      </button>
+                    </Tooltip>
+                  </div>
                   <div class="rounded border border-amber-200/60 bg-amber-50/80 p-2 dark:border-amber-900/35 dark:bg-amber-950/25">
                     <code class="text-[10px] font-mono text-on-surface/70 break-all whitespace-pre-wrap">{f.action}</code>
                   </div>
@@ -303,9 +341,21 @@
               {#if f.observation}
                 <div class="relative pl-3">
                   <div class="absolute left-0 top-0 bottom-0 w-0.5 bg-secondary/30 rounded-full"></div>
-                  <span class="text-[9px] font-mono text-secondary/80 uppercase tracking-widest block mb-1.5">
-                    Tool Result
-                  </span>
+                  <div class="flex items-center justify-between mb-1.5">
+                    <span class="text-[9px] font-mono text-secondary/80 uppercase tracking-widest">
+                      Tool Result
+                    </span>
+                    <Tooltip text={copiedField === `obs-${idx}` ? "Copied!" : "Copy tool result"}>
+                      <button
+                        type="button"
+                        class="text-secondary/40 hover:text-secondary/70 transition-colors bg-transparent border-0 cursor-pointer p-1"
+                        onclick={() => copyToClipboard(f.observation, `obs-${idx}`)}
+                        aria-label="Copy tool result"
+                      >
+                        <span class="material-symbols-outlined text-sm">{copiedField === `obs-${idx}` ? "check" : "content_copy"}</span>
+                      </button>
+                    </Tooltip>
+                  </div>
                   <div class="bg-secondary/5 border border-secondary/10 rounded overflow-hidden">
                     <div class="max-h-40 overflow-y-auto p-2">
                       <code class="text-[10px] font-mono text-on-surface/60 break-all whitespace-pre-wrap">
@@ -320,9 +370,21 @@
               {#if f.rawResponse}
                 <div class="relative pl-3">
                   <div class="absolute left-0 top-0 bottom-0 w-0.5 bg-outline-variant/40 rounded-full"></div>
-                  <span class="text-[9px] font-mono text-outline uppercase tracking-widest block mb-1.5">
-                    Raw LLM Response
-                  </span>
+                  <div class="flex items-center justify-between mb-1.5">
+                    <span class="text-[9px] font-mono text-outline uppercase tracking-widest">
+                      Raw LLM Response
+                    </span>
+                    <Tooltip text={copiedField === `raw-${idx}` ? "Copied!" : "Copy raw response"}>
+                      <button
+                        type="button"
+                        class="text-outline/40 hover:text-outline/70 transition-colors bg-transparent border-0 cursor-pointer p-1"
+                        onclick={() => copyToClipboard(f.rawResponse, `raw-${idx}`)}
+                        aria-label="Copy raw LLM response"
+                      >
+                        <span class="material-symbols-outlined text-sm">{copiedField === `raw-${idx}` ? "check" : "content_copy"}</span>
+                      </button>
+                    </Tooltip>
+                  </div>
                   <div class="overflow-hidden rounded border border-[var(--cortex-border)] bg-surface-container-lowest">
                     <div class="max-h-56 overflow-y-auto p-2">
                       <code class="text-[10px] font-mono text-on-surface/55 break-all whitespace-pre-wrap">
@@ -356,8 +418,18 @@
                           class="rounded p-2 text-[10px] font-mono border
                                  {msg.role === 'assistant' ? 'bg-primary/5 border-primary/10' : msg.role === 'system' ? 'bg-tertiary/5 border-tertiary/10' : 'bg-surface-container border-outline-variant/10'}"
                         >
-                          <div class="font-bold uppercase mb-1 text-[9px] tracking-wider {roleColor(msg.role)}">
-                            {msg.role}
+                          <div class="flex items-center justify-between gap-2 font-bold uppercase mb-1 text-[9px] tracking-wider {roleColor(msg.role)}">
+                            <span>{msg.role}</span>
+                            <Tooltip text={copiedField === `msg-${idx}-${mi}` ? "Copied!" : "Copy message"}>
+                              <button
+                                type="button"
+                                class="text-on-surface/30 hover:text-on-surface/60 transition-colors bg-transparent border-0 cursor-pointer p-0.5 flex-shrink-0"
+                                onclick={() => copyToClipboard(msg.content, `msg-${idx}-${mi}`)}
+                                aria-label="Copy message"
+                              >
+                                <span class="material-symbols-outlined text-sm">{copiedField === `msg-${idx}-${mi}` ? "check" : "content_copy"}</span>
+                              </button>
+                            </Tooltip>
                           </div>
                           <div class="text-on-surface/60 break-words whitespace-pre-wrap leading-relaxed max-h-32 overflow-y-auto">
                             {msg.content}

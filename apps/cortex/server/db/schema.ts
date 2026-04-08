@@ -115,6 +115,17 @@ export function applySchema(db: Database): void {
 
     CREATE INDEX IF NOT EXISTS idx_chat_turns_session
       ON cortex_chat_turns(session_id, id ASC);
+
+    CREATE TABLE IF NOT EXISTS skills (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      name        TEXT    NOT NULL,
+      description TEXT,
+      content     TEXT,
+      created_at  INTEGER NOT NULL DEFAULT (unixepoch('now','subsec') * 1000)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_skills_created
+      ON skills(created_at DESC);
   `);
 
   // Migrations — safe to run on existing DBs (ALTER TABLE IF NOT EXISTS column)

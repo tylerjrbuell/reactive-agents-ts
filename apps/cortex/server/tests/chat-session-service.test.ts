@@ -92,4 +92,33 @@ describe("ChatSessionService", () => {
     const row = getChatSession(db, id);
     expect(row!.stableAgentId).toBeDefined();
   });
+
+  it("chatStream yields events and completes with metadata", async () => {
+    const id = await svc.createSession({
+      name: "Stream Test",
+      agentConfig: { provider: "test", model: "test-model" },
+    });
+    const events = [];
+    for await (const event of svc.chatStream(id, "Hello stream")) {
+      events.push(event);
+    }
+    expect(events.length).toBeGreaterThan(0);
+    const lastEvent = events[events.length - 1]!;
+    expect(lastEvent._tag).toBe("StreamCompleted");
+  });
+
+  it("chatStream persists the assistant turn to DB", async () => {
+    const id = await svc.createSession({
+      name: "Stream Persist",
+      agentConfig: { provider: "test", model: "test-model" },
+    });
+    for await (const _event of svc.chatStream(id, "test message")) {
+      // consume all events
+    }
+    const { getChatTurns } = await import("../db/chat-queries.js");
+    const turns = getChatTurns(db, id);
+    expect(turns.length).toBeGreaterThanOrEqual(2); // user + assistant
+    expect(turns[0]!.role).toBe("user");
+    expect(turns[1]!.role).toBe("assistant");
+  });
 });

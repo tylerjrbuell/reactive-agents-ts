@@ -1,5 +1,6 @@
 <script lang="ts">
   import { chatStore, type ChatTurn } from "$lib/stores/chat-store.js";
+  import { toast } from "$lib/stores/toast-store.js";
   import MarkdownRich from "$lib/components/MarkdownRich.svelte";
 
   interface Props {
@@ -29,7 +30,7 @@
     const text = message.trim();
     if (!text || sending) return;
     message = "";
-    await chatStore.sendMessage(text);
+    await chatStore.sendMessageStream(text);
     inputEl?.focus();
   }
 
@@ -37,6 +38,30 @@
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       void submit();
+    }
+  }
+
+  async function copyUserMessage(content: string) {
+    try {
+      await navigator.clipboard.writeText(content);
+      toast.success("Copied", "Message copied to clipboard");
+    } catch {
+      toast.error("Copy failed");
+    }
+  }
+
+  async function copyAllConversation() {
+    try {
+      const formatted = turns
+        .map((turn) => {
+          const speaker = turn.role === "user" ? "You" : "Assistant";
+          return `**${speaker}**: ${turn.content}`;
+        })
+        .join("\n\n");
+      await navigator.clipboard.writeText(formatted);
+      toast.success("Copied", "Conversation copied to clipboard");
+    } catch {
+      toast.error("Copy failed");
     }
   }
 
@@ -50,6 +75,28 @@
   class="flex h-full min-h-0 w-full flex-col bg-surface-container-lowest/88 text-on-surface backdrop-blur-md dark:bg-surface/92"
 >
   <div
+    class="flex-shrink-0 border-b border-[color:var(--cortex-border)] px-4 py-3 flex items-center justify-between"
+  >
+    <h2 class="text-[11px] uppercase tracking-widest font-mono text-[var(--cortex-text-muted)]">
+      Conversation
+    </h2>
+    {#if turns.length > 0}
+      <button
+        type="button"
+        onclick={() => void copyAllConversation()}
+        class="flex items-center gap-1 px-2 py-1 rounded-md border border-secondary/25
+               text-secondary/90 font-mono text-[9px] uppercase tracking-wider
+               bg-surface-container-low/90 hover:bg-secondary/10 hover:border-secondary/40
+               transition-colors cursor-pointer shadow-sm"
+        aria-label="Copy all conversation"
+      >
+        <span class="material-symbols-outlined text-[14px] leading-none">content_copy</span>
+        Copy all
+      </button>
+    {/if}
+  </div>
+
+  <div
     bind:this={scrollEl}
     class="flex-1 space-y-4 overflow-y-auto p-4 font-mono text-[12px]"
   >
@@ -60,7 +107,7 @@
     {:else}
       {#each turns as turn (turn.id)}
         <div class="flex gap-2 {turn.role === 'user' ? 'justify-end' : 'justify-start'}">
-          <div class={turn.role === "user" ? bubbleUser : bubbleAsst}>
+          <div class="{turn.role === 'user' ? bubbleUser : bubbleAsst} relative group">
             <div class="mb-1 flex flex-wrap items-center gap-2">
               <span
                 class="text-[9px] uppercase tracking-widest {turn.role === 'user'
@@ -88,9 +135,31 @@
               </div>
             {/if}
             {#if turn.role === "assistant"}
-              <MarkdownRich markdown={turn.content} showCopy={false} class="text-[11px]" />
+              <div class="flex gap-2 items-start">
+                <div class="flex-1">
+                  <MarkdownRich markdown={turn.content} showCopy={true} class="text-[11px]" />
+                  {#if turn.streaming}
+                    <span class="inline-block w-2 h-4 ml-1 bg-secondary/80 animate-pulse rounded-sm"></span>
+                  {/if}
+                </div>
+              </div>
             {:else}
-              <p class="whitespace-pre-wrap text-[11px] leading-relaxed">{turn.content}</p>
+              <div class="flex gap-2 items-start">
+                <p class="flex-1 whitespace-pre-wrap text-[11px] leading-relaxed">{turn.content}</p>
+                <button
+                  type="button"
+                  onclick={() => void copyUserMessage(turn.content)}
+                  class="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity
+                         flex items-center justify-center px-2 py-1 rounded-md
+                         border border-primary/25 text-primary/90 font-mono text-[9px]
+                         uppercase tracking-wider bg-primary/5 hover:bg-primary/15
+                         hover:border-primary/40 cursor-pointer shadow-sm"
+                  aria-label="Copy message"
+                  title="Copy message"
+                >
+                  <span class="material-symbols-outlined text-[14px] leading-none">content_copy</span>
+                </button>
+              </div>
             {/if}
           </div>
         </div>

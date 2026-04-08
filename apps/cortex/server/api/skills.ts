@@ -78,4 +78,82 @@ export const skillsRouter = (
         return yield* store.getSkills();
       });
       return Effect.runPromise(program.pipe(Effect.provide(storeLayer)));
-    });
+    })
+    .post(
+      "/",
+      ({ body, set }) => {
+        try {
+          const { name, instructions, description, tags } = body as Record<string, unknown>;
+
+          // Validate required fields
+          if (typeof name !== "string" || !name.trim()) {
+            set.status = 400;
+            return { error: "name is required and must be non-empty" };
+          }
+          if (typeof instructions !== "string" || !instructions.trim()) {
+            set.status = 400;
+            return { error: "instructions is required and must be non-empty" };
+          }
+
+          const desc = typeof description === "string" ? description.trim() : "";
+          const tagsArray = Array.isArray(tags) ? tags.filter((t) => typeof t === "string") : [];
+
+          // Insert into skills table
+          const result = db.prepare(
+            "INSERT INTO skills (name, description, content, created_at) VALUES (?, ?, ?, ?)"
+          ).run(
+            name.trim(),
+            desc,
+            instructions.trim(),
+            Date.now()
+          );
+
+          const insertedId = result.lastInsertRowid;
+
+          set.status = 201;
+          return {
+            id: insertedId,
+            name: name.trim(),
+            description: desc,
+            instructions: instructions.trim(),
+            tags: tagsArray,
+          };
+        } catch (e) {
+          set.status = 500;
+          return { error: `Failed to create skill: ${String(e)}` };
+        }
+      },
+      {
+        body: t.Object({
+          name: t.String(),
+          instructions: t.String(),
+          description: t.Optional(t.String()),
+          tags: t.Optional(t.Array(t.String())),
+        }),
+      },
+    )
+    .delete(
+      "/:id",
+      ({ params, set }) => {
+        try {
+          const id = params.id;
+
+          // Check if skill exists
+          const existing = db.prepare("SELECT id FROM skills WHERE id = ?").get(id);
+          if (!existing) {
+            set.status = 404;
+            return { error: "Skill not found" };
+          }
+
+          // Delete the skill
+          db.prepare("DELETE FROM skills WHERE id = ?").run(id);
+
+          set.status = 200;
+          return { ok: true, message: `Skill deleted` };
+        } catch (e) {
+          set.status = 500;
+          return { error: `Failed to delete skill: ${String(e)}` };
+        }
+      },
+      { params: t.Object({ id: t.String() }) },
+    );

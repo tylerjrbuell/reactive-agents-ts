@@ -1,7 +1,7 @@
 import type { Database } from "bun:sqlite";
 import { generateTaskId } from "@reactive-agents/core";
 import type { TestTurn } from "@reactive-agents/llm-provider";
-import { AgentSession, type ChatMessage, type ChatOptions } from "@reactive-agents/runtime";
+import { AgentSession, type ChatMessage, type ChatOptions, type AgentStreamEvent } from "@reactive-agents/runtime";
 import {
   createChatSession,
   getChatSession,
@@ -108,6 +108,87 @@ export class ChatSessionService {
       ...(chatReply.steps != null ? { steps: chatReply.steps } : {}),
       ...(chatReply.cost != null ? { cost: chatReply.cost } : {}),
     };
+  }
+
+  async *chatStream(sessionId: string, message: string): AsyncGenerator<AgentStreamEvent> {
+    const row = getChatSession(this.db, sessionId);
+    if (!row) throw new Error(`Chat session ${sessionId} not found`);
+
+    const cfg = row.agentConfig;
+    const enableTools = cfg.enableTools === true;
+
+    const provider = (cfg.provider as string | undefined) ?? "test";
+    const agentName = `chat-${sessionId.slice(0, 8)}`;
+    const stableAgentId = row.stableAgentId;
+
+    // Build agent for streaming (not using AgentSession, just raw agent)
+    const agent = await buildCortexAgent({
+      agentName,
+      provider,
+      ...(stableAgentId ? { agentId: stableAgentId } : {}),
+      memory: { episodic: true },
+      ...(typeof cfg.model === "string" && cfg.model.trim()
+        ? { model: cfg.model.trim() }
+        : {}),
+      ...(typeof cfg.systemPrompt === "string" && cfg.systemPrompt.trim()
+        ? { systemPrompt: cfg.systemPrompt.trim() }
+        : {}),
+      ...(typeof cfg.temperature === "number" ? { temperature: cfg.temperature } : {}),
+      ...(typeof cfg.maxTokens === "number" && cfg.maxTokens > 0
+        ? { maxTokens: cfg.maxTokens }
+        : {}),
+      ...(enableTools
+        ? {
+            tools: mergeCortexAllowedTools(
+              Array.isArray(cfg.tools)
+                ? (cfg.tools as unknown[]).filter((x): x is string => typeof x === "string" && x.length > 0)
+                : [],
+              undefined,
+              {},
+            ),
+            strategy: "reactive",
+            maxIterations:
+              typeof cfg.maxIterations === "number" && cfg.maxIterations > 0
+                ? cfg.maxIterations
+                : 12,
+          }
+        : {}),
+    });
+
+    appendChatTurn(this.db, { sessionId, role: "user", content: message, tokensUsed: 0 });
+
+    let tokensUsed = 0;
+    let toolsUsed: string[] = [];
+    let steps = 0;
+    let replyText = "";
+
+    try {
+      for await (const event of agent.runStream(message, { density: "tokens" })) {
+        if (event._tag === "TextDelta") {
+          replyText += event.text;
+        } else if (event._tag === "StreamCompleted") {
+          tokensUsed = event.metadata.tokensUsed ?? 0;
+          steps = event.metadata.iterations ?? 0;
+          // Collect tool names from toolSummary if available
+          if (event.toolSummary && event.toolSummary.length > 0) {
+            toolsUsed = event.toolSummary.map((t) => t.name);
+          }
+        }
+        yield event;
+      }
+    } catch (e) {
+      throw e;
+    }
+
+    // Append assistant turn to database
+    appendChatTurn(this.db, {
+      sessionId,
+      role: "assistant",
+      content: replyText,
+      tokensUsed,
+      ...(toolsUsed && toolsUsed.length > 0 ? { toolsUsed } : {}),
+    });
+    updateSessionLastUsed(this.db, sessionId);
   }
 
   private async buildSession(

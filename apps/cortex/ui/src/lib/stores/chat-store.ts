@@ -1,6 +1,14 @@
 import { writable } from "svelte/store";
 import { CORTEX_SERVER_URL } from "$lib/constants.js";
 
+export type AgentStreamEvent =
+  | { _tag: "TextDelta"; text: string }
+  | { _tag: "StreamCompleted"; output: string; metadata: Record<string, unknown>; toolSummary?: Array<{ name: string; calls: number; avgMs: number }> }
+  | { _tag: "StreamError"; cause: string }
+  | { _tag: "IterationProgress"; iteration: number; maxIterations: number; status: string }
+  | { _tag: "StreamCancelled"; reason: string; iterationsCompleted: number }
+  | Record<string, unknown>; // for other event types
+
 export type ChatTurn = {
   id: number;
   role: "user" | "assistant";
@@ -9,6 +17,7 @@ export type ChatTurn = {
   ts: number;
   toolsUsed?: string[];
   steps?: number;
+  streaming?: boolean;
 };
 
 export type ChatSession = {
@@ -165,7 +174,144 @@ function createChatStore() {
     update((s) => ({ ...s, activeTurns: [...s.activeTurns, assistantTurn], sending: false }));
   }
 
-  return { subscribe, loadSessions, selectSession, createSession, deleteSession, renameSession, sendMessage };
+  async function sendMessageStream(message: string): Promise<void> {
+    let sessionId: string | null = null;
+    update((s) => {
+      sessionId = s.activeSessionId;
+      return s;
+    });
+    if (!sessionId) return;
+
+    const optimisticUserTurn: ChatTurn = {
+      id: Date.now(),
+      role: "user",
+      content: message,
+      tokensUsed: 0,
+      ts: Date.now(),
+    };
+
+    const assistantTurnId = Date.now() + 1;
+    const assistantTurn: ChatTurn = {
+      id: assistantTurnId,
+      role: "assistant",
+      content: "",
+      tokensUsed: 0,
+      ts: Date.now(),
+      streaming: true,
+    };
+
+    update((s) => ({
+      ...s,
+      activeTurns: [...s.activeTurns, optimisticUserTurn, assistantTurn],
+      sending: true,
+      error: null,
+    }));
+
+    try {
+      const res = await fetch(
+        `${CORTEX_SERVER_URL}/api/chat/sessions/${encodeURIComponent(sessionId!)}/chat/stream`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message }),
+        },
+      );
+
+      if (!res.ok) {
+        const body = (await res.json()) as { error: string };
+        update((s) => ({
+          ...s,
+          sending: false,
+          error: body.error ?? "Request failed",
+          activeTurns: s.activeTurns.filter((t) => t.id !== optimisticUserTurn.id && t.id !== assistantTurnId),
+        }));
+        return;
+      }
+
+      if (!res.body) {
+        update((s) => ({
+          ...s,
+          sending: false,
+          error: "No response body",
+          activeTurns: s.activeTurns.filter((t) => t.id !== optimisticUserTurn.id && t.id !== assistantTurnId),
+        }));
+        return;
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let toolsUsed: string[] = [];
+      let tokensUsed = 0;
+      let steps = 0;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split("\n");
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            const jsonStr = line.slice(6);
+            if (!jsonStr.trim()) continue;
+
+            try {
+              const event = JSON.parse(jsonStr) as AgentStreamEvent;
+
+              if (event._tag === "TextDelta") {
+                update((s) => {
+                  const idx = s.activeTurns.findIndex((t) => t.id === assistantTurnId);
+                  if (idx >= 0) {
+                    s.activeTurns[idx].content += event.text;
+                  }
+                  return s;
+                });
+              } else if (event._tag === "StreamCompleted") {
+                tokensUsed = (event.metadata?.tokensUsed as number) ?? 0;
+                steps = (event.metadata?.iterations as number) ?? 0;
+                if (event.toolSummary && event.toolSummary.length > 0) {
+                  toolsUsed = event.toolSummary.map((t) => t.name);
+                }
+              }
+            } catch {
+              // Ignore parse errors for incomplete JSON
+            }
+          }
+        }
+      }
+
+      update((s) => {
+        const idx = s.activeTurns.findIndex((t) => t.id === assistantTurnId);
+        if (idx >= 0) {
+          s.activeTurns[idx].streaming = false;
+          s.activeTurns[idx].tokensUsed = tokensUsed;
+          if (steps > 0) s.activeTurns[idx].steps = steps;
+          if (toolsUsed.length > 0) s.activeTurns[idx].toolsUsed = toolsUsed;
+        }
+        return { ...s, sending: false };
+      });
+    } catch (e) {
+      const errorMsg = String(e);
+      update((s) => ({
+        ...s,
+        sending: false,
+        error: errorMsg,
+        activeTurns: s.activeTurns.filter((t) => t.id !== optimisticUserTurn.id && t.id !== assistantTurnId),
+      }));
+    }
+  }
+
+  return {
+    subscribe,
+    loadSessions,
+    selectSession,
+    createSession,
+    deleteSession,
+    renameSession,
+    sendMessage,
+    sendMessageStream,
+  };
 }
 
 export const chatStore = createChatStore();

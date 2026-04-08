@@ -37,6 +37,8 @@ export interface AgentNode {
   readonly model?: string;
   /** Reasoning strategy — persisted from DB, survives refresh */
   readonly strategy?: string;
+  /** Parent run ID for sub-agent hierarchy — populated from AgentStarted event context */
+  readonly parentRunId?: string;
 }
 
 export interface AgentStoreState {
@@ -84,6 +86,7 @@ function runToSeedNode(run: RunSummaryDto, now: number): AgentNode {
     provider: run.provider,
     model:    run.model,
     strategy: run.strategy,
+    parentRunId: undefined,
   };
 }
 
@@ -181,6 +184,11 @@ export function createAgentStore(options?: CreateAgentStoreOptions) {
             patch.provider = msg.payload.provider as string;
           if (typeof msg.payload.model === "string" && msg.payload.model)
             patch.model = msg.payload.model as string;
+          // Capture parent context for sub-agent hierarchy
+          if (typeof msg.payload.parentAgentId === "string" && msg.payload.parentAgentId)
+            patch.parentRunId = msg.payload.parentAgentId as string;
+          else if (typeof msg.payload.parentRunId === "string" && msg.payload.parentRunId)
+            patch.parentRunId = msg.payload.parentRunId as string;
           break;
         case "EntropyScored": {
           const entropy = typeof msg.payload.composite === "number" ? msg.payload.composite : 0;
@@ -257,6 +265,7 @@ export function createAgentStore(options?: CreateAgentStoreOptions) {
         cost: existing?.cost ?? 0,
         connectedAt: existing?.connectedAt ?? nowFn(),
         lastEventAt: nowFn(),
+        parentRunId: existing?.parentRunId,
         ...patch,
       };
 

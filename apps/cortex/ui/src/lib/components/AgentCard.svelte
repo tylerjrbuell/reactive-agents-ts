@@ -2,11 +2,13 @@
   import type { AgentNode } from "$lib/stores/agent-store.js";
   import { AGENT_STATE_COLORS } from "$lib/constants.js";
   import { goto } from "$app/navigation";
+  import { toast } from "$lib/stores/toast-store.js";
 
   interface Props {
     agent: AgentNode;
+    parentRunId?: string;
   }
-  let { agent }: Props = $props();
+  let { agent, parentRunId }: Props = $props();
 
   const stateColor = $derived(AGENT_STATE_COLORS[agent.state] ?? AGENT_STATE_COLORS.idle);
   const isRunning = $derived(
@@ -24,6 +26,20 @@
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
       handleClick();
+    }
+  }
+
+  function handleRunIdClick(e: Event) {
+    e.stopPropagation();
+    navigator.clipboard.writeText(agent.runId).then(() => {
+      toast.success("Run ID copied", agent.runId);
+    });
+  }
+
+  function handleRunIdKeydown(e: KeyboardEvent) {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      handleRunIdClick(e);
     }
   }
 
@@ -182,7 +198,14 @@
         {agent.name}
       </h3>
 
-      <p class="font-mono text-[10px] text-outline/55 truncate" title={agent.runId}>
+      <p
+        class="font-mono text-[10px] text-outline/55 truncate cursor-pointer hover:text-primary hover:drop-shadow-[0_0_4px_rgba(139,92,246,0.3)] transition-colors"
+        title={agent.runId}
+        role="button"
+        tabindex="0"
+        onclick={handleRunIdClick}
+        onkeydown={handleRunIdKeydown}
+      >
         <span class="text-outline/40">run</span>
         {runIdShort}
       </p>

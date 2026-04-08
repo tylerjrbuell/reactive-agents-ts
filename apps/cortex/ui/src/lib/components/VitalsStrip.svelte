@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { RunVitals, RunStatus } from "$lib/stores/run-store.js";
   import Tooltip from "$lib/components/Tooltip.svelte";
+  import { toast } from "$lib/stores/toast-store.js";
 
   export interface Props {
     vitals: RunVitals;
@@ -152,6 +153,20 @@
         loopProgressPct !== null &&
         !loopExceededMax),
   );
+
+  function handleRunIdClick(e: Event) {
+    e.stopPropagation();
+    navigator.clipboard.writeText(runId).then(() => {
+      toast.success("Run ID copied", runId);
+    });
+  }
+
+  function handleRunIdKeydown(e: KeyboardEvent) {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      handleRunIdClick(e);
+    }
+  }
 </script>
 
 <div
@@ -161,8 +176,16 @@
     class="max-w-full px-6 py-3 flex items-center gap-0 font-mono text-[11px] uppercase tracking-widest text-on-surface-variant overflow-x-auto"
   >
     <div class="flex items-center gap-2 pr-5">
-      <Tooltip text={runId} class="max-w-[100px] min-w-0">
-        <span class="text-[9px] text-outline normal-case tracking-normal truncate block">{runShort}</span>
+      <Tooltip text={`Click to copy: ${runId}`} class="max-w-[100px] min-w-0">
+        <span
+          class="text-[9px] text-outline normal-case tracking-normal truncate block cursor-pointer hover:text-primary hover:drop-shadow-[0_0_4px_rgba(139,92,246,0.3)] transition-colors"
+          role="button"
+          tabindex="0"
+          onclick={handleRunIdClick}
+          onkeydown={handleRunIdKeydown}
+        >
+          {runShort}
+        </span>
       </Tooltip>
       <div class="flex items-center gap-2 px-2 py-0.5 rounded-full border {statusClass}">
         {#if status === "live"}
