@@ -370,6 +370,8 @@ export type AgentEvent =
       readonly model: string;
       /** Unix timestamp in milliseconds when execution started */
       readonly timestamp: number;
+      /** Agent ID of the parent that spawned this sub-agent (undefined for top-level agents) */
+      readonly parentAgentId?: string;
     }
   | {
       /**

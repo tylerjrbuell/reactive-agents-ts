@@ -2737,7 +2737,7 @@ export class ReactiveAgentBuilder {
                   input: { question: opts.task },
                   priority: "medium" as const,
                   status: "pending" as const,
-                  metadata: { tags: [] },
+                  metadata: { tags: [], parentAgentId: this.agentId },
                   createdAt: new Date(),
                 };
                 const result: TaskResult = await Effect.runPromise(
@@ -2982,7 +2982,7 @@ export class ReactiveAgentBuilder {
                         input: { question: opts.task },
                         priority: "medium" as const,
                         status: "pending" as const,
-                        metadata: { tags: [] },
+                        metadata: { tags: [], parentAgentId: this.agentId },
                         createdAt: new Date(),
                       };
                       return yield* subEngine.execute(taskObj);
