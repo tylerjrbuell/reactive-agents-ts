@@ -1,73 +1,104 @@
-# Reactive Agents: Document Index
+# Reactive Agents Documentation Index
 
-## Reading Order for AI Agents
+## Canonical Sources
 
-Read in this exact order:
+Use these as source of truth in this order:
 
-### 1. Entry Points (read first)
+1. `AGENTS.md` (root) — operational workflow, quality gates, package map, build/test commands
+2. `README.md` — public product overview and quickstart
+3. `apps/docs/src/content/docs/` — API and behavior truth (Starlight docs)
+4. `CHANGELOG.md` — release-level capability history and migration context
 
-| #   | File                               | Purpose                                                 |
-| --- | ---------------------------------- | ------------------------------------------------------- |
-| 0   | `00-monorepo-setup.md`             | **Run first:** Workspace scaffolding, root configs, package templates, dependency map |
-| 1   | `START_HERE_AI_AGENTS.md`          | **Entry point:** Solo + Agent Team build modes, phase launch prompts, build order, checklists |
-| 2   | `00-master-architecture.md`        | System overview, layer diagram, data flow, dependencies |
-| 3   | `implementation-guide-complete.md` | 14-week build plan, Effect-TS patterns, troubleshooting |
-| 4   | `FRAMEWORK_USAGE_GUIDE.md`         | **Public API usage guide**: createRuntime() builder, agent creation, task execution, LLM/memory/tools/interaction configuration, lifecycle hooks, multi-agent orchestration, testing patterns, complete examples |
-
-### 2. Layer Specs (read when implementing each layer)
-
-| #   | File                                           | Layer            | Package                          | Description                                                                                                                                                                                        |
-| --- | ---------------------------------------------- | ---------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 5   | `layer-01-core-detailed-design.md`             | L1 Core          | `@reactive-agents/core`          | Schema types, branded IDs, EventBus, AgentService, TaskService, CoreServicesLive. Build Order: 14 steps.                                                                                           |
-| 6   | `01.5-layer-llm-provider.md`                   | L1.5 LLM         | `@reactive-agents/llm-provider`  | Unified LLMService (complete/stream/structured/embed), AnthropicProvider, OpenAIProvider, TestLLMService, retry + circuit breaker. Build Order: 13 steps.                                          |
-| 7   | `02-layer-memory.md`                           | L2 Memory        | `@reactive-agents/memory`        | Working memory (7 items FIFO), Semantic (SQLite + memory.md), Episodic (daily logs + snapshots), Zettelkasten auto-linking. Tier 1 (FTS5) / Tier 2 (sqlite-vec). Build Order: 17 steps.           |
-| 8   | `03-layer-reasoning.md`                        | L3 Reasoning     | `@reactive-agents/reasoning`     | 5 pure Effect strategy functions (Reactive, PlanExecuteReflect, TreeOfThought, Reflexion, Adaptive), StrategySelector, EffectivenessTracker. Build Order: 17 steps.                                |
-| 9   | `04-layer-verification.md`                     | L4 Verification  | `@reactive-agents/verification`  | 5-layer hallucination detection (semantic entropy, fact decomposition, multi-source, self-consistency, NLI), adaptive risk selection. Gold standard format.                                        |
-| 10  | `05-layer-cost.md`                             | L5 Cost          | `@reactive-agents/cost`          | Complexity-based model routing, semantic cache (95% threshold), prompt compression (60% target), budget enforcement, real-time analytics.                                                          |
-| 11  | `06-layer-identity.md`                         | L6 Identity      | `@reactive-agents/identity`      | Ed25519 certificate-based auth, RBAC, immutable audit logs, delegation chains, credential rotation (7 days).                                                                                       |
-| 12  | `07-layer-orchestration.md`                    | L7 Orchestration | `@reactive-agents/orchestration` | 6 Anthropic workflow patterns, agent mesh, durable execution (event sourcing), human-in-loop, A2A protocol support.                                                                                |
-| 13  | `08-layer-tools.md`                            | L8 Tools         | `@reactive-agents/tools`         | MCP client (protocol v1.0), OpenAI-compatible function calling, skill bundles, tool registry with dynamic discovery.                                                                               |
-| 14  | `09-layer-observability.md`                    | L9 Observability | `@reactive-agents/observability` | OpenTelemetry integration, W3C distributed tracing, structured JSON logging, cost/latency/accuracy metrics.                                                                                        |
-| 15  | `layer-10-interaction-revolutionary-design.md` | L10 Interaction  | `@reactive-agents/interaction`   | 5 interaction modes (autonomous → interrogative), adaptive switching with escalation/de-escalation rules, checkpoint approval, preference learning, collaboration sessions. Build Order: 17 steps. |
-
-### 3. Enhancement Specs
-
-| #   | File                                     | Packages                               | Description                                                                                                                                                                                                                                                                                                                                                                                           |
-| --- | ---------------------------------------- | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 16  | `11-missing-capabilities-enhancement.md` | `guardrails`, `eval`, `prompts`, `cli` | **Package 1:** Agent contracts, PII detection, prompt injection defense, `guarded()` wrapper. **Package 2:** LLM-as-judge eval, regression detection, benchmarking. **Package 3:** Prompt templates, versioning, composition. **Extension 4-6:** AgentLearningService (→reasoning), ContextWindowManager (→core), StreamingService (→core). **Extension 7:** CLI scaffolding, dev server, playground. |
-
-### 4. Context Documents (reference only)
-
-| #   | File                                                    | Purpose                                                                                    |
-| --- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| 17  | `12-market-validation-feb-2026.md`                      | Feb 2026 market research: 13 competitors analyzed, 3-tier competitive advantage validation |
-| 18  | `reactive-agents-complete-competitive-analysis-2026.md` | Detailed competitive analysis                                                              |
-| 19  | `implementation-ready-summary.md`                       | Design decisions and competitive edge summary                                              |
-| 20  | `PLAN_REVIEW.md`                                        | Original spec review with identified improvements (historical)                             |
+`CLAUDE.md` is a compatibility pointer only and should not be treated as a separate canonical guide.
 
 ---
 
-## Spec Format
+## Recommended Reading Order for AI Agents
 
-All layer specs (items 4-15) follow the same structure:
+### 1) Entry and Orientation
 
-1. **Overview** — purpose, responsibilities
-2. **Package Structure** — directory layout
-3. **Build Order** — numbered implementation steps (follow exactly)
-4. **Types** — `Schema.Struct` definitions with full code
-5. **Errors** — `Data.TaggedError` definitions with full code
-6. **Services** — `Context.Tag` + `Layer.effect` implementations with full code
-7. **Runtime** — `createXxxLayer()` factory function
-8. **Tests** — test patterns with vitest
-9. **Package.json** — exact dependencies
+| # | File | Why read it |
+|---|---|---|
+| 0 | `AGENTS.md` | Build workflow, architecture quick reference, mandatory quality gates |
+| 1 | `README.md` | Public-facing framework capabilities and examples |
+| 2 | `START_HERE_AI_AGENTS.md` | Spec build sequencing and agent team launch workflow |
+| 3 | `00-master-architecture.md` | Layered architecture and system data flow |
+| 4 | `FRAMEWORK_USAGE_GUIDE.md` | API usage patterns and end-to-end framework examples |
+
+### 2) Core Specs
+
+| # | File | Layer / Package |
+|---|---|---|
+| 5 | `layer-01-core-detailed-design.md` | L1 core (`@reactive-agents/core`) |
+| 6 | `01.5-layer-llm-provider.md` | L1.5 llm-provider (`@reactive-agents/llm-provider`) |
+| 7 | `02-layer-memory.md` | L2 memory (`@reactive-agents/memory`) |
+| 8 | `03-layer-reasoning.md` | L3 reasoning (`@reactive-agents/reasoning`) |
+| 9 | `04-layer-verification.md` | L4 verification (`@reactive-agents/verification`) |
+| 10 | `05-layer-cost.md` | L5 cost (`@reactive-agents/cost`) |
+| 11 | `06-layer-identity.md` | L6 identity (`@reactive-agents/identity`) |
+| 12 | `07-layer-orchestration.md` | L7 orchestration (`@reactive-agents/orchestration`) |
+| 13 | `08-layer-tools.md` | L8 tools (`@reactive-agents/tools`) |
+| 14 | `09-layer-observability.md` | L9 observability (`@reactive-agents/observability`) |
+| 15 | `layer-10-interaction-revolutionary-design.md` | L10 interaction (`@reactive-agents/interaction`) |
+| 16 | `layer-01b-execution-engine.md` | Runtime execution (`@reactive-agents/runtime`) |
+
+### 3) Enhancement and Evolution Specs
+
+| # | File | Focus |
+|---|---|---|
+| 17 | `11-missing-capabilities-enhancement.md` | guardrails, eval, prompts, CLI enhancement path |
+| 18 | `14-v0.5-comprehensive-plan.md` | A2A + MCP + harness hardening roadmap history |
+| 19 | `00-VISION.md` | Product philosophy and strategic direction |
+| 20 | `09-ROADMAP.md` | Roadmap framing and evolution context |
+
+### 4) Historical Context (Reference Only)
+
+| # | File | Purpose |
+|---|---|---|
+| 21 | `12-market-validation-feb-2026.md` | Market validation snapshot |
+| 22 | `reactive-agents-complete-competitive-analysis-2026.md` | Competitive analysis |
+| 23 | `implementation-ready-summary.md` | Historical synthesis |
+| 24 | `PLAN_REVIEW.md`, `SPEC_REVIEW.md` | Audit trail and historical corrections |
 
 ---
 
-## Total Packages
+## Starlight Docs Map (Current API Truth)
 
-| Category             | Count  | Packages                                                                                                              |
-| -------------------- | ------ | --------------------------------------------------------------------------------------------------------------------- |
-| Core layers          | 11     | core, llm-provider, memory, reasoning, verification, cost, identity, orchestration, tools, observability, interaction |
-| Enhancement packages | 3      | guardrails, eval, prompts                                                                                             |
-| Apps                 | 1      | cli                                                                                                                   |
-| **Total**            | **15** |                                                                                                                       |
+Primary docs live under `apps/docs/src/content/docs/`:
+
+- `reference/` — builder API, CLI API, configuration defaults
+- `guides/` — quickstart, reasoning, tools, memory, local models, security, troubleshooting
+- `features/` — reactive intelligence, streaming, providers, gateway, orchestration, verification
+- `concepts/` — architecture, lifecycle, composable kernel, Effect-TS model
+- `cookbook/` — practical, copy-paste patterns
+
+When API behavior changes, update Starlight docs and then align `README.md` + `AGENTS.md` summaries.
+
+---
+
+## Spec Format Convention
+
+Most layer specs follow this pattern:
+
+1. Overview
+2. Package structure
+3. Build order
+4. Types (`Schema.Struct`)
+5. Errors (`Data.TaggedError`)
+6. Services (`Context.Tag` + `Layer.effect`)
+7. Runtime layer factory
+8. Tests
+9. Package dependencies
+
+---
+
+## Current Project Scale (v0.9.0)
+
+| Category | Count |
+|---|---|
+| Workspace packages | 25 |
+| Publishable packages | 20 |
+| Apps | 2 |
+| Test suite | 3,472 tests / 409 files |
+
+For current release details, use `CHANGELOG.md`.

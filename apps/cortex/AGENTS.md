@@ -181,7 +181,7 @@ The UI depends on **`@reactive-agents/svelte`** (via `framework.ts` and package 
 | New WS route or payload | This file + any UI `constants` / store comments. |
 | New primary route or nav entry | This file **Routes** table + `+layout.svelte` nav / `CommandPalette` if applicable. |
 | Phase completion | Plan checkboxes in `docs/superpowers/plans/…` if the team tracks there; bump descriptions in `README.md` / here. |
-| User-facing framework behavior | Root `CLAUDE.md` / docs site only if Cortex is documented there (optional). |
+| User-facing framework behavior | Root `AGENTS.md` / docs site only if Cortex is documented there (optional). |
 | Significant UI / theme or token changes | `ui/src/app.css`, `ui/tailwind.config.ts`, and the **UI theme** subsection above. |
 
 ---

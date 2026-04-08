@@ -11,7 +11,7 @@ sidebar:
 git clone https://github.com/tylerjrbuell/reactive-agents-ts.git
 cd reactive-agents-ts
 bun install
-bun test          # 2194 tests — all must pass
+bun test          # 3472 tests — all must pass
 bun run build     # ESM + DTS for all 22 packages
 ```
 
@@ -88,8 +88,8 @@ All 20 publishable packages move together in a fixed group — bumping any one b
 
 | Change | Update |
 |---|---|
-| New package | `CLAUDE.md` package map, `README.md` packages table, docs sidebar |
-| New builder method | `README.md`, `apps/docs/src/content/docs/reference/builder-api.md`, `CLAUDE.md` |
+| New package | `AGENTS.md` package map/status, `README.md` packages table, docs sidebar |
+| New builder method | `README.md`, `apps/docs/src/content/docs/reference/builder-api.md`, `AGENTS.md` |
 | New CLI command | `README.md`, `apps/docs/src/content/docs/reference/cli.md` |
 | New feature | `apps/docs/src/content/docs/features/<name>.md` |
 | API signature change | Search docs: `grep -r "oldMethod" apps/docs/` |
