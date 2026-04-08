@@ -50,7 +50,7 @@ bun run changeset
 ```
 
 The interactive prompt asks:
-- **Which packages changed?** — Select any package (all 20 are in a fixed group, so all move together)
+- **Which packages changed?** — Select any package (all 22 publishable packages are in a fixed group, so all move together)
 - **Bump type?** — `patch` for fixes, `minor` for new features, `major` for breaking changes
 - **Summary?** — One line description that becomes the CHANGELOG entry
 
@@ -78,7 +78,7 @@ When you're ready to ship, merge the "chore: version packages" PR. The workflow 
 | `minor` | New features, new builder methods, new exports | `0.7.6 → 0.8.0` |
 | `major` | Breaking API changes | `0.7.6 → 1.0.0` |
 
-All 20 publishable packages move together in a fixed group — bumping any one bumps all of them to the same version.
+All 22 publishable packages move together in a fixed group — bumping any one bumps all of them to the same version.
 
 ---
 

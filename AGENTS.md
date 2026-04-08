@@ -69,34 +69,34 @@ Foundation (no reactive-agents deps)
 
 ### Per-Layer Quick Reference
 
-| Package | First file to read | Key exports |
-|---|---|---|
-| `core` | `src/services/event-bus.ts` | `EventBus`, `AgentEvent`, `AgentId`, `TaskId` |
-| `llm-provider` | `src/runtime.ts` | `LLMService`, `createLLMProviderLayer()` |
-| `memory` | `src/runtime.ts` | `MemoryService`, `createMemoryLayer()` |
-| `reasoning` | `src/strategy-registry.ts` | `ReasoningService`, `StrategyRegistry`, `ThoughtKernel` |
-| `tools` | `src/services/tool-service.ts` | `ToolService`, `ToolDefinition`, `defineTool()` |
-| `guardrails` | `src/services/guardrail-service.ts` | `GuardrailService`, `KillSwitchService` |
-| `verification` | `src/services/verification-service.ts` | `VerificationService` |
-| `cost` | `src/services/cost-service.ts` | `CostService` |
-| `identity` | `src/services/identity-service.ts` | `IdentityService` |
-| `observability` | `src/services/observability-service.ts` | `ObservabilityService`, `ThoughtTracer` |
-| `gateway` | `src/services/gateway-service.ts` | `GatewayService`, `PolicyEngine`, `WebhookService` |
-| `eval` | `src/services/eval-service.ts` | `EvalService`, `EvalStore`, `EvalSuite` |
-| `runtime` | `src/builder.ts` | `ReactiveAgents`, `ReactiveAgentBuilder`, `createRuntime()` |
+| Package         | First file to read                      | Key exports                                                 |
+| --------------- | --------------------------------------- | ----------------------------------------------------------- |
+| `core`          | `src/services/event-bus.ts`             | `EventBus`, `AgentEvent`, `AgentId`, `TaskId`               |
+| `llm-provider`  | `src/runtime.ts`                        | `LLMService`, `createLLMProviderLayer()`                    |
+| `memory`        | `src/runtime.ts`                        | `MemoryService`, `createMemoryLayer()`                      |
+| `reasoning`     | `src/strategy-registry.ts`              | `ReasoningService`, `StrategyRegistry`, `ThoughtKernel`     |
+| `tools`         | `src/services/tool-service.ts`          | `ToolService`, `ToolDefinition`, `defineTool()`             |
+| `guardrails`    | `src/services/guardrail-service.ts`     | `GuardrailService`, `KillSwitchService`                     |
+| `verification`  | `src/services/verification-service.ts`  | `VerificationService`                                       |
+| `cost`          | `src/services/cost-service.ts`          | `CostService`                                               |
+| `identity`      | `src/services/identity-service.ts`      | `IdentityService`                                           |
+| `observability` | `src/services/observability-service.ts` | `ObservabilityService`, `ThoughtTracer`                     |
+| `gateway`       | `src/services/gateway-service.ts`       | `GatewayService`, `PolicyEngine`, `WebhookService`          |
+| `eval`          | `src/services/eval-service.ts`          | `EvalService`, `EvalStore`, `EvalSuite`                     |
+| `runtime`       | `src/builder.ts`                        | `ReactiveAgents`, `ReactiveAgentBuilder`, `createRuntime()` |
 
 ### Common Debugging Entry Points
 
-| Symptom | Start reading |
-|---|---|
-| Agent not calling tools | `packages/reasoning/src/strategies/reactive.ts` → `packages/reasoning/src/strategies/kernel/kernel-runner.ts` |
-| EventBus events not firing | `packages/core/src/services/event-bus.ts` → check `ManagedRuntime` is shared |
-| LLM call fails silently | `packages/llm-provider/src/runtime.ts` → provider-specific file in `src/providers/` |
-| Memory not persisting | `packages/memory/src/runtime.ts` → check `createMemoryLayer()` wiring |
-| Plan-execute loops forever | `packages/reasoning/src/strategies/plan-execute.ts` → `isSatisfied()` + all-steps-completed guard |
-| Gateway not starting | `packages/gateway/src/services/gateway-service.ts` → check `.withGateway()` in builder |
-| Metrics dashboard missing | `packages/observability/src/services/observability-service.ts` → `MetricsCollectorLive` layer |
-| Custom kernel not registering | `packages/reasoning/src/strategy-registry.ts` → `registerKernel()` call |
+| Symptom                       | Start reading                                                                                                 |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Agent not calling tools       | `packages/reasoning/src/strategies/reactive.ts` → `packages/reasoning/src/strategies/kernel/kernel-runner.ts` |
+| EventBus events not firing    | `packages/core/src/services/event-bus.ts` → check `ManagedRuntime` is shared                                  |
+| LLM call fails silently       | `packages/llm-provider/src/runtime.ts` → provider-specific file in `src/providers/`                           |
+| Memory not persisting         | `packages/memory/src/runtime.ts` → check `createMemoryLayer()` wiring                                         |
+| Plan-execute loops forever    | `packages/reasoning/src/strategies/plan-execute.ts` → `isSatisfied()` + all-steps-completed guard             |
+| Gateway not starting          | `packages/gateway/src/services/gateway-service.ts` → check `.withGateway()` in builder                        |
+| Metrics dashboard missing     | `packages/observability/src/services/observability-service.ts` → `MetricsCollectorLive` layer                 |
+| Custom kernel not registering | `packages/reasoning/src/strategy-registry.ts` → `registerKernel()` call                                       |
 
 ---
 
@@ -105,10 +105,11 @@ Foundation (no reactive-agents deps)
 **Read `CODING_STANDARDS.md` before writing any code.** It covers Effect-TS patterns, type safety, service definitions, error handling, naming, testing, file structure, and anti-patterns. All agents and contributors must conform.
 
 Key references:
-- `FRAMEWORK_INDEX.md` — comprehensive system map with file-level navigation, data flows, and architecture diagrams
-- `CODING_STANDARDS.md` — authoritative coding standards (types, services, errors, testing, naming, performance)
-- `.claude/skills/effect-ts-patterns/SKILL.md` — Effect-TS pattern reference (Schema.Struct, Context.Tag, Layer, Ref)
-- `.claude/skills/review-patterns/SKILL.md` — 8-category compliance checklist for code review
+
+-   `FRAMEWORK_INDEX.md` — comprehensive system map with file-level navigation, data flows, and architecture diagrams
+-   `CODING_STANDARDS.md` — authoritative coding standards (types, services, errors, testing, naming, performance)
+-   `.claude/skills/effect-ts-patterns/SKILL.md` — Effect-TS pattern reference (Schema.Struct, Context.Tag, Layer, Ref)
+-   `.claude/skills/review-patterns/SKILL.md` — 8-category compliance checklist for code review
 
 ## Golden Rules
 
@@ -119,8 +120,8 @@ Key references:
 5. **Deterministic over LLM-driven.** If a field can be computed from available data (tool stats from EventBus, outcome from terminatedBy, metrics from usage), compute it. Don't ask the LLM.
 6. **Keep docs truthful.** Every code change that affects public API, test counts, or capabilities must update documentation (see Documentation Workflow below).
 7. **Test everything.** New services need tests. New features need integration tests. Run `bun test` before declaring work complete.
-7. **One concern per commit.** Don't mix unrelated changes.
-8. **Write JSDoc comments.** Every public API needs a JSDoc comment.
+8. **One concern per commit.** Don't mix unrelated changes.
+9. **Write JSDoc comments.** Every public API needs a JSDoc comment.
 
 ## Terminal Execution Rules
 
@@ -145,12 +146,12 @@ When interacting with the terminal via tools (like `run_command` or similar), ag
 
 Before you add or modify code, confirm:
 
-- **Explicit over implicit**: No hidden magic or one-liner “createAgent” helpers. New behavior is configured via explicit builders/layers, not global state.
-- **Observable over opaque**: The behavior is visible in traces/events (EventBus, ThoughtTracer, tracing), without relying on `console.log`.
-- **Type-safe reliability**: Inputs are validated (e.g. Zod schemas), errors are part of explicit tagged unions, and all public APIs use precise, generic-friendly types (no `any`/`unknown` escape hatches).
-- **Composable and testable**: Logic is factored into small, Effect-TS services/middleware that can be wired together and tested independently.
-- **Efficient and local-first**: Code respects token/latency budgets, reuses existing caching/batching/context systems, and works well with local as well as cloud models.
-- **Secure and production-first**: Changes honor guardrails, avoid leaking secrets, and default to safe behavior suitable for production workloads.
+-   **Explicit over implicit**: No hidden magic or one-liner “createAgent” helpers. New behavior is configured via explicit builders/layers, not global state.
+-   **Observable over opaque**: The behavior is visible in traces/events (EventBus, ThoughtTracer, tracing), without relying on `console.log`.
+-   **Type-safe reliability**: Inputs are validated (e.g. Zod schemas), errors are part of explicit tagged unions, and all public APIs use precise, generic-friendly types (no `any`/`unknown` escape hatches).
+-   **Composable and testable**: Logic is factored into small, Effect-TS services/middleware that can be wired together and tested independently.
+-   **Efficient and local-first**: Code respects token/latency budgets, reuses existing caching/batching/context systems, and works well with local as well as cloud models.
+-   **Secure and production-first**: Changes honor guardrails, avoid leaking secrets, and default to safe behavior suitable for production workloads.
 
 ---
 
@@ -184,12 +185,12 @@ bun run docs:preview          # Preview built docs
 
 Run this checklist:
 
-- [ ] All tests pass (`bun test`)
-- [ ] Build succeeds (`bun run build`)
-- [ ] Documentation updated (see below)
-- [ ] Changeset added (`bun run changeset`) — see Release Workflow below
-- [ ] No new `TODO`/`FIXME` without a tracking issue
-- [ ] Pattern compliance verified (`/review-patterns <changed-files>`)
+-   [ ] All tests pass (`bun test`)
+-   [ ] Build succeeds (`bun run build`)
+-   [ ] Documentation updated (see below)
+-   [ ] Changeset added (`bun run changeset`) — see Release Workflow below
+-   [ ] No new `TODO`/`FIXME` without a tracking issue
+-   [ ] Pattern compliance verified (`/review-patterns <changed-files>`)
 
 ---
 
@@ -197,17 +198,17 @@ Run this checklist:
 
 ### When to Update What
 
-| Trigger                        | Files to Update                                                                                                                       |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
-| **New package created**        | `AGENTS.md` (package map/status), `README.md` (packages table), `CHANGELOG.md`, architecture-reference skill, docs site sidebar |
+| Trigger                        | Files to Update                                                                                                                        |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| **New package created**        | `AGENTS.md` (package map/status), `README.md` (packages table), `CHANGELOG.md`, architecture-reference skill, docs site sidebar        |
 | **New/changed builder method** | `README.md` (quick start + capabilities), `apps/docs/src/content/docs/reference/builder-api.md`, `AGENTS.md` (architecture/workflow)   |
-| **New CLI command**            | `README.md` (CLI section), `apps/docs/src/content/docs/reference/cli.md`, `AGENTS.md` (CLI/build workflow)                                   |
-| **Test count changed**         | `AGENTS.md` (build/test references), `README.md` (development section)                                                               |
-| **New reasoning strategy**     | `README.md` (strategies table), `apps/docs/src/content/docs/guides/reasoning.md`                                                      |
-| **New LLM provider**           | `README.md` (providers table), `apps/docs/src/content/docs/features/llm-providers.md`, `AGENTS.md` (env vars/workflow notes if needed)               |
-| **New feature page needed**    | `apps/docs/src/content/docs/features/<name>.md` or `guides/<name>.md`                                                                 |
-| **API signature change**       | Search all docs for old signature and update: `grep -r "oldMethod" apps/docs/`                                                        |
-| **Version bump / release**     | Add a changeset (`bun run changeset`) — versions and CHANGELOG are managed automatically                                              |
+| **New CLI command**            | `README.md` (CLI section), `apps/docs/src/content/docs/reference/cli.md`, `AGENTS.md` (CLI/build workflow)                             |
+| **Test count changed**         | `AGENTS.md` (build/test references), `README.md` (development section)                                                                 |
+| **New reasoning strategy**     | `README.md` (strategies table), `apps/docs/src/content/docs/guides/reasoning.md`                                                       |
+| **New LLM provider**           | `README.md` (providers table), `apps/docs/src/content/docs/features/llm-providers.md`, `AGENTS.md` (env vars/workflow notes if needed) |
+| **New feature page needed**    | `apps/docs/src/content/docs/features/<name>.md` or `guides/<name>.md`                                                                  |
+| **API signature change**       | Search all docs for old signature and update: `grep -r "oldMethod" apps/docs/`                                                         |
+| **Version bump / release**     | Add a changeset (`bun run changeset`) — versions and CHANGELOG are managed automatically                                               |
 
 ### Docs Site (Starlight/Astro)
 
@@ -221,27 +222,27 @@ bun run docs:preview          # Preview built docs
 
 Key files:
 
-- `astro.config.mjs` — sidebar structure (autogenerated from directories)
-- `src/content/docs/` — all documentation pages
-- `src/content.config.ts` — content collections (Astro 6 Content Layer: `docsLoader()` + schemas; custom loaders live under `src/content/`)
+-   `astro.config.mjs` — sidebar structure (autogenerated from directories)
+-   `src/content/docs/` — all documentation pages
+-   `src/content.config.ts` — content collections (Astro 6 Content Layer: `docsLoader()` + schemas; custom loaders live under `src/content/`)
 
 ### README.md
 
 The README is the public face. Keep it accurate:
 
-- Badge row at top
-- Architecture diagram reflects actual layers
-- Packages table lists all published packages
-- Test counts match reality
-- Code examples use actual API signatures (test them!)
+-   Badge row at top
+-   Architecture diagram reflects actual layers
+-   Packages table lists all published packages
+-   Test counts match reality
+-   Code examples use actual API signatures (test them!)
 
 ### ROADMAP.md
 
 Root `ROADMAP.md` is the authoritative forward-looking plan. Update when:
 
-- A milestone ships (move from "target" to "✅ Released")
-- Scope changes for a future version
-- New competitive intelligence changes priorities
+-   A milestone ships (move from "target" to "✅ Released")
+-   Scope changes for a future version
+-   New competitive intelligence changes priorities
 
 ---
 
@@ -259,13 +260,13 @@ For large features (new packages, cross-cutting changes):
 
 ### Parallelization Rules
 
-- Packages with no dependency relationship can be built in parallel
-- Always validate gate dependencies before starting dependent work:
-  ```
-  core → llm-provider → {memory, tools, reasoning} → runtime
-  ```
-- Run workspace-wide `bun run build` after each package completes
-- Use `/validate-build <pkg>` before moving to dependent packages
+-   Packages with no dependency relationship can be built in parallel
+-   Always validate gate dependencies before starting dependent work:
+    ```
+    core → llm-provider → {memory, tools, reasoning} → runtime
+    ```
+-   Run workspace-wide `bun run build` after each package completes
+-   Use `/validate-build <pkg>` before moving to dependent packages
 
 ### Communication Protocol
 
@@ -315,13 +316,13 @@ When creating a new package (e.g., `@reactive-agents/a2a`):
 
 ### Before Any Release
 
-| Check            | Details                                                       |
-| ---------------- | ------------------------------------------------------------- |
-| All above        | Plus full integration test                                    |
-| Changeset added  | `bun run changeset` with a clear summary of all changes       |
-| Docs site builds | `bun run docs:build`                                          |
-| README current   | Stats, packages, examples all accurate                        |
-| ROADMAP updated  | Shipped items marked, new targets set                         |
+| Check            | Details                                                 |
+| ---------------- | ------------------------------------------------------- |
+| All above        | Plus full integration test                              |
+| Changeset added  | `bun run changeset` with a clear summary of all changes |
+| Docs site builds | `bun run docs:build`                                    |
+| README current   | Stats, packages, examples all accurate                  |
+| ROADMAP updated  | Shipped items marked, new targets set                   |
 
 > **Do not manually bump versions or edit CHANGELOG.** The `changesets/action` PR handles both automatically when the "chore: version packages" PR is merged. See Release Workflow below.
 
@@ -360,44 +361,44 @@ GitHub Release created automatically with CHANGELOG notes
 
 ### Bump types
 
-| Type | When to use | Example |
-|---|---|---|
-| `patch` | Bug fixes, test fixes, docs | `0.7.6 → 0.7.7` |
+| Type    | When to use                                      | Example         |
+| ------- | ------------------------------------------------ | --------------- |
+| `patch` | Bug fixes, test fixes, docs                      | `0.7.6 → 0.7.7` |
 | `minor` | New features, backwards-compatible API additions | `0.7.6 → 0.8.0` |
-| `major` | Breaking API changes | `0.7.6 → 1.0.0` |
+| `major` | Breaking API changes                             | `0.7.6 → 1.0.0` |
 
-All 20 publishable packages move together (fixed group) — bumping any one package bumps all.
+All 22 publishable packages move together (fixed group) — bumping any one package bumps all.
 
 ### Private packages (never published)
 
-`@reactive-agents/benchmarks` and `@reactive-agents/health` have `"private": true` and are excluded from all publishing automatically. Do not remove this flag.
+`@reactive-agents/benchmarks` has `"private": true` and is excluded from publishing. Do not remove this flag.
 
 ### Key files
 
-| File | Purpose |
-|---|---|
-| `.changeset/config.json` | Fixed group of all packages, public access |
+| File                            | Purpose                                          |
+| ------------------------------- | ------------------------------------------------ |
+| `.changeset/config.json`        | Fixed group of all packages, public access       |
 | `.github/workflows/publish.yml` | Runs `changesets/action` on every push to `main` |
-| `package.json` `release` script | `bun run build && changeset publish` |
+| `package.json` `release` script | `bun run build && changeset publish`             |
 
 ---
 
 ## Key File Paths
 
-| Category  | Path                                       |
-| --------- | ------------------------------------------ |
-| **Memory** | `.agents/MEMORY.md` — **read first** for project context, status, patterns, and roadmap |
-| **Cortex app** | `apps/cortex/AGENTS.md` — Bun/Elysia desk server + SvelteKit UI (Stage/Run), WS ingest/live, SQLite; read before changing `apps/cortex/` |
-| Specs     | `spec/docs/`, `docs/superpowers/specs/`    |
-| Plans     | `docs/superpowers/plans/`                  |
-| Skills    | `.claude/skills/`, `.agents/skills/`       |
-| Legacy compatibility | `CLAUDE.md` — compatibility pointer to `AGENTS.md` only |
-| Packages  | `packages/{core,llm-provider,memory,...}/` |
-| CLI       | `apps/cli/`                                |
-| Docs      | `apps/docs/src/content/docs/`              |
-| Examples  | `apps/examples/`                           |
-| CI        | `.github/workflows/`                       |
-| v0.5 Plan | `spec/docs/14-v0.5-comprehensive-plan.md`  |
+| Category             | Path                                                                                                                                     |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| **Memory**           | `.agents/MEMORY.md` — **read first** for project context, status, patterns, and roadmap                                                  |
+| **Cortex app**       | `apps/cortex/AGENTS.md` — Bun/Elysia desk server + SvelteKit UI (Stage/Run), WS ingest/live, SQLite; read before changing `apps/cortex/` |
+| Specs                | `spec/docs/`, `docs/superpowers/specs/`                                                                                                  |
+| Plans                | `docs/superpowers/plans/`                                                                                                                |
+| Skills               | `.claude/skills/`, `.agents/skills/`                                                                                                     |
+| Legacy compatibility | `CLAUDE.md` — compatibility pointer to `AGENTS.md` only                                                                                  |
+| Packages             | `packages/{core,llm-provider,memory,...}/`                                                                                               |
+| CLI                  | `apps/cli/`                                                                                                                              |
+| Docs                 | `apps/docs/src/content/docs/`                                                                                                            |
+| Examples             | `apps/examples/`                                                                                                                         |
+| CI                   | `.github/workflows/`                                                                                                                     |
+| v0.5 Plan            | `spec/docs/14-v0.5-comprehensive-plan.md`                                                                                                |
 
 > **Note:** `.agents/MEMORY.md` contains cross-agent project memory — current status, build patterns, architecture decisions, known issues, and roadmap. All agents should read it before starting work and update it after completing significant features.
 
@@ -405,18 +406,18 @@ All 20 publishable packages move together (fixed group) — bumping any one pack
 
 Canonical project skills live in `.agents/skills/`:
 
-- `architecture-reference` — dependency graph, build order, architecture navigation
-- `build-coordinator` — multi-agent coordination workflow
-- `build-package` — package implementation from spec
-- `codebase-to-course` — educational HTML course generation from codebase
-- `effect-ts-patterns` — mandatory Effect-TS patterns and anti-patterns
-- `implement-service` — service creation workflow
-- `implement-test` — test creation workflow
-- `llm-api-contract` — LLM API signatures and tool-calling contracts
-- `memory-patterns` — memory/SQLite/FTS/vec patterns
-- `review-patterns` — 8-category compliance review
-- `update-docs` — documentation + skills + memory synchronization workflow
-- `validate-build` — quality gate checklist for build/test/review
+-   `architecture-reference` — dependency graph, build order, architecture navigation
+-   `build-coordinator` — multi-agent coordination workflow
+-   `build-package` — package implementation from spec
+-   `codebase-to-course` — educational HTML course generation from codebase
+-   `effect-ts-patterns` — mandatory Effect-TS patterns and anti-patterns
+-   `implement-service` — service creation workflow
+-   `implement-test` — test creation workflow
+-   `llm-api-contract` — LLM API signatures and tool-calling contracts
+-   `memory-patterns` — memory/SQLite/FTS/vec patterns
+-   `review-patterns` — 8-category compliance review
+-   `update-docs` — documentation + skills + memory synchronization workflow
+-   `validate-build` — quality gate checklist for build/test/review
 
 ---
 
@@ -435,9 +436,9 @@ Canonical project skills live in `.agents/skills/`:
 
 ## Current Framework Snapshot (v0.9.0)
 
-- Monorepo scale: **25 packages + 2 apps**
-- Verified quality: **3,472 tests across 409 files**
-- Public facade: `reactive-agents` built on Effect-TS layered runtime
+-   Monorepo scale: **25 packages + 2 apps**
+-   Verified quality: **3,472 tests across 409 files**
+-   Public facade: `reactive-agents` built on Effect-TS layered runtime
 
 ### Recently Shipped Highlights (cross-checked with `CHANGELOG.md`)
 
