@@ -243,39 +243,61 @@ function createChatStore() {
       let toolsUsed: string[] = [];
       let tokensUsed = 0;
       let steps = 0;
+      let buffer = "";
 
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done) {
+          // Finalize decoder to get any remaining data
+          buffer += decoder.decode();
+          break;
+        }
 
         const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split("\n");
+        buffer += chunk;
 
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            const jsonStr = line.slice(6);
-            if (!jsonStr.trim()) continue;
+        // Process complete SSE messages (separated by \n\n)
+        const parts = buffer.split("\n\n");
+        // Keep the last part in buffer in case it's incomplete
+        buffer = parts[parts.length - 1];
 
-            try {
-              const event = JSON.parse(jsonStr) as AgentStreamEvent;
+        for (let i = 0; i < parts.length - 1; i++) {
+          const message = parts[i].trim();
+          if (!message) continue;
 
-              if (event._tag === "TextDelta") {
-                update((s) => {
-                  const idx = s.activeTurns.findIndex((t) => t.id === assistantTurnId);
-                  if (idx >= 0) {
-                    s.activeTurns[idx].content += event.text;
+          const lines = message.split("\n");
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              const jsonStr = line.slice(6).trim();
+              if (!jsonStr) continue;
+
+              try {
+                const event = JSON.parse(jsonStr) as AgentStreamEvent;
+
+                if (event._tag === "TextDelta") {
+                  update((s) => {
+                    const idx = s.activeTurns.findIndex((t) => t.id === assistantTurnId);
+                    if (idx >= 0) {
+                      s.activeTurns[idx].content += event.text;
+                    }
+                    return s;
+                  });
+                } else if (event._tag === "StreamCompleted") {
+                  tokensUsed = (event.metadata?.tokensUsed as number) ?? 0;
+                  steps = (event.metadata?.iterations as number) ?? 0;
+                  if (event.toolSummary && event.toolSummary.length > 0) {
+                    toolsUsed = event.toolSummary.map((t) => t.name);
                   }
-                  return s;
-                });
-              } else if (event._tag === "StreamCompleted") {
-                tokensUsed = (event.metadata?.tokensUsed as number) ?? 0;
-                steps = (event.metadata?.iterations as number) ?? 0;
-                if (event.toolSummary && event.toolSummary.length > 0) {
-                  toolsUsed = event.toolSummary.map((t) => t.name);
+                } else if (event._tag === "StreamError") {
+                  // Handle stream errors
+                  update((s) => ({
+                    ...s,
+                    error: (event as any).cause ?? "Stream error",
+                  }));
                 }
+              } catch (e) {
+                // Ignore parse errors
               }
-            } catch {
-              // Ignore parse errors for incomplete JSON
             }
           }
         }

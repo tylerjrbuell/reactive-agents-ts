@@ -95,23 +95,10 @@ export const chatRouter = (svc: ChatSessionService) =>
       async ({ params, body, set }) => {
         try {
           const enc = new TextEncoder();
-          const readable = new ReadableStream({
+          const readable = new ReadableStream<Uint8Array>({
             async start(controller) {
               try {
-                let totalTokens = 0;
-                let totalSteps = 0;
-                const toolsUsedSet = new Set<string>();
-
                 for await (const event of svc.chatStream(params.sessionId, body.message)) {
-                  // Collect metadata from StreamCompleted event for final summary
-                  if (event._tag === "StreamCompleted") {
-                    totalTokens = event.metadata.tokensUsed ?? 0;
-                    totalSteps = event.metadata.iterations ?? 0;
-                    if (event.toolSummary && event.toolSummary.length > 0) {
-                      event.toolSummary.forEach((t) => toolsUsedSet.add(t.name));
-                    }
-                  }
-
                   // Stream the event as SSE
                   controller.enqueue(enc.encode(`data: ${JSON.stringify(event)}\n\n`));
 
