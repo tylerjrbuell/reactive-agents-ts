@@ -500,11 +500,19 @@ The EventBus `ReasoningStepCompleted` event still carries `strategy: "adaptive"`
 
 ## Required Tools and Per-Tool Budget
 
-When tools must be called before the agent can declare success, use `.withRequiredTools()`. The framework also auto-enforces a **per-tool call budget** for research tools — preventing infinite search loops.
+When tools must be called before the agent can declare success, use `.withRequiredTools()`. The required-tools gate now includes hardening for real-world research tasks.
+
+### Gate Hardening Behaviors
+
+- **Relevant-tools pass-through**: tools classified as relevant are allowed even while required output tools are still pending
+- **Satisfied-required re-calls**: once a required tool has been called at least once, it can be called again for follow-up research
+- **Output tools stay available**: output/finalization tools are never blocked by search budgets
+
+This avoids a common failure mode where agents are forced into rigid "one tool once" sequences and cannot complete coherent research + synthesis runs.
 
 ### Per-Tool Call Budget (`maxCallsPerTool`)
 
-When tool classification runs (`.withRequiredTools({ adaptive: true })`), the framework automatically caps search-type tools at **3 calls per run** using the `maxCallsPerTool` mechanism:
+When tool classification runs (`.withRequiredTools({ adaptive: true })`), the framework automatically caps search-type tools at **3 calls per run** using `maxCallsPerTool`:
 
 ```
 web-search: 3 calls max → budget enforced automatically
@@ -512,17 +520,26 @@ http-get:   3 calls max → budget enforced automatically
 file-write: no cap      → output tools are never capped
 ```
 
-Once a tool reaches its budget, the gate blocks further calls to it and the agent is nudged toward the remaining required tools. This prevents the common pattern of an agent repeatedly searching instead of producing output.
-
-You can also set explicit per-tool budgets via the kernel input directly for custom use cases — contact the reasoning layer API if you need lower-level control.
+Once a tool reaches its budget, further calls are blocked and the agent is nudged toward synthesis. This prevents repeated search loops with no deliverable.
 
 ### Dynamic Stopping — Novelty Signal
 
-The framework includes a **novelty-based synthesis nudge**: if the last observation adds less than 20% new information compared to the accumulated research context (measured by word-token Jaccard overlap), the continuation hint is replaced with:
+The framework includes a **novelty-based synthesis nudge**: if the last observation adds less than 20% new information compared to the accumulated research context (word-token Jaccard overlap), the continuation hint is replaced with:
 
 ```
 Research context is sufficient (last search: 8% new information — diminishing returns).
 Do NOT search again. Call file-write now to produce the output.
 ```
 
-This fires automatically — no configuration required. It's one of three dynamic stopping layers alongside the per-tool budget and the task phase transition (when all research tools are satisfied and only output tools remain, the synthesis prompt fires instead of a generic progress message).
+This fires automatically — no configuration required. It is one of three dynamic stopping layers alongside the per-tool budget and task-phase transition (when search tools are satisfied and only output tools remain, `synthesisPrompt` fires instead of a generic progress message).
+
+## Native Function Calling Fallback
+
+Native provider `toolCalls` are always preferred. If a model emits JSON tool calls in plain text instead, the harness applies a fallback parser:
+
+- Supports fenced ` ```json ` blocks and bare JSON payloads
+- Accepts common schemas: `name/arguments`, `tool/parameters`, `tool_name/args`, `name/input`
+- Validates tool names against the active tool registry
+- Normalizes underscore-style names to hyphenated tool names
+
+This fallback path improves reliability for local or mid-tier models that occasionally emit tool calls as plain text rather than structured provider events.
