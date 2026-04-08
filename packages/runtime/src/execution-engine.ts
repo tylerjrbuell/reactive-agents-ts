@@ -609,8 +609,8 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     provider: String(ctx.provider ?? "unknown"),
                     model: String(ctx.selectedModel ?? "unknown"),
                     timestamp: executionStartMs,
-                    ...(task.metadata?.parentAgentId
-                      ? { parentAgentId: String(task.metadata.parentAgentId) }
+                    ...(task.metadata?.context?.["parentAgentId"]
+                      ? { parentAgentId: String(task.metadata.context["parentAgentId"]) }
                       : {}),
                   }).pipe(Effect.catchAll(() => Effect.void));
                 }
