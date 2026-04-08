@@ -9,6 +9,7 @@ import type { ContextProfile } from "../../../context/context-profile.js";
 import { applyMessageWindow } from "../../../context/message-window.js";
 import type { ToolSchema } from "../utils/tool-utils.js";
 import type { KernelState, KernelMessage, ReActKernelInput } from "../kernel-state.js";
+import { transitionState } from "../kernel-state.js";
 
 // ── buildSystemPrompt ─────────────────────────────────────────────────────────
 
@@ -115,63 +116,55 @@ export function buildToolSchemas(
 
 export interface BuildConversationMessagesResult {
   messages: LLMMessage[];
-  /** The updated state (synthesizedContext cleared when ICS branch was taken). */
+  /** The updated state (steeringNudge cleared after consumption). */
   updatedState: KernelState;
 }
 
 /**
  * Build the conversation message list for this LLM turn.
  *
- * Handles two paths:
- *  1. ICS path: synthesizedContext is set → use pre-synthesized messages, clear it
- *  2. Normal path: apply sliding message window + task framing on first iteration
- *
- * In both cases, appends the auto-forward section when present.
+ * Applies the sliding message window + task framing on the first iteration.
+ * Appends the auto-forward section when present, then consumes any pending
+ * steeringNudge by appending it as a final user message and clearing it from state.
  */
 export function buildConversationMessages(
   state: KernelState,
   input: ReActKernelInput,
   profile: ContextProfile,
   adapter: ProviderAdapter,
-  thoughtPrompt: string,
   autoForwardSection: string,
 ): BuildConversationMessagesResult {
-  let updatedState = state;
-  let conversationMessages: LLMMessage[];
+  let compactedMessages = applyMessageWindow(state.messages, profile);
 
-  if (state.synthesizedContext) {
-    conversationMessages = [...state.synthesizedContext.messages];
-    // Clear synthesized context so it isn't replayed next iteration
-    updatedState = { ...state, synthesizedContext: null };
-    if (autoForwardSection) {
-      conversationMessages = [
-        ...conversationMessages,
-        { role: "user", content: autoForwardSection },
-      ];
+  // taskFraming hook — on first iteration, let adapter annotate the task message
+  // to help local models understand the full sequence of steps required.
+  if (
+    state.iteration === 0 &&
+    compactedMessages.length === 1 &&
+    compactedMessages[0]?.role === "user"
+  ) {
+    const framedTask = adapter.taskFraming?.({
+      task: compactedMessages[0].content as string,
+      requiredTools: input.requiredTools ?? [],
+      tier: profile.tier ?? "mid",
+    });
+    if (framedTask) {
+      compactedMessages = [{ role: "user" as const, content: framedTask }];
     }
-  } else {
-    let compactedMessages = applyMessageWindow(state.messages, profile);
-    if (compactedMessages.length === 0) {
-      compactedMessages = [{ role: "user" as const, content: thoughtPrompt }];
-    }
-    // taskFraming hook — on first iteration, let adapter annotate the task message
-    // to help local models understand the full sequence of steps required.
-    if (
-      state.iteration === 0 &&
-      compactedMessages.length === 1 &&
-      compactedMessages[0]?.role === "user"
-    ) {
-      const framedTask = adapter.taskFraming?.({
-        task: compactedMessages[0].content as string,
-        requiredTools: input.requiredTools ?? [],
-        tier: profile.tier ?? "mid",
-      });
-      if (framedTask) {
-        compactedMessages = [{ role: "user" as const, content: framedTask }];
-      }
-    }
-    conversationMessages = (compactedMessages as readonly KernelMessage[]).map(toProviderMessage);
   }
 
-  return { messages: conversationMessages, updatedState };
+  let finalMessages: LLMMessage[] = (compactedMessages as readonly KernelMessage[]).map(toProviderMessage);
+
+  if (autoForwardSection) {
+    finalMessages = [...finalMessages, { role: "user" as const, content: autoForwardSection }];
+  }
+
+  // Consume steeringNudge: append as final user message, then clear from state
+  let updatedState = state;
+  if (state.steeringNudge) {
+    finalMessages = [...finalMessages, { role: "user" as const, content: state.steeringNudge }];
+    updatedState = transitionState(state, { steeringNudge: undefined });
+  }
+
+  return { messages: finalMessages, updatedState };
 }

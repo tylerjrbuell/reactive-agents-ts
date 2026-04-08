@@ -109,9 +109,6 @@ export function handleThinking(
     // ── Split context: static in system prompt, dynamic in user message ─────
     // Static content (tool schemas, RULES, task) is sent once in the system prompt
     // to avoid repeating ~500-700 tokens of identical content every iteration.
-    // When ICS (synthesizedContext) is active, the synthesized messages already
-    // contain the task, tool hints, and phase guidance — use a lean system prompt
-    // to avoid double-context that overwhelms the model (GAP 2).
     const baseSystemPrompt = buildSystemPrompt(input.task, effectiveSystemPrompt, profile.tier);
     const adapter = selectAdapter({ supportsToolCalling: true }, profile.tier);
     const patchedBase = adapter.systemPromptPatch?.(baseSystemPrompt, profile.tier ?? "mid") ?? baseSystemPrompt;
@@ -196,7 +193,7 @@ export function handleThinking(
     // ── Build conversation messages ──────────────────────────────────────────
     // Prefer ICS briefs (set by kernel-runner after tool rounds); otherwise sliding window.
     const { messages: conversationMessages, updatedState: stateAfterMessages } =
-      buildConversationMessages(state, input, profile, adapter, "", autoForwardSection);
+      buildConversationMessages(state, input, profile, adapter, autoForwardSection);
     state = stateAfterMessages;
 
     const llmStreamEffect = llm.stream({
