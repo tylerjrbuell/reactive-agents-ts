@@ -79,6 +79,21 @@ const codes: Record<string, string> = {
     `    <span class="rm">--model</span> qwen3:14b`,
   ].join('\n'),
 
+  p6: [
+    `<span class="rc"># Terminal 1: start studio</span>`,
+    `<span class="rg">$</span> rax cortex <span class="rm">--dev</span>`,
+    `<span class="ro">UI → http://localhost:5173</span>`,
+    ``,
+    `<span class="rc"># Terminal 2: connect agent</span>`,
+    `<span class="rg">$</span> rax run <span class="rs">"Analyze codebase"</span> \\`,
+    `    <span class="rm">--provider</span> anthropic \\`,
+    `    <span class="rm">--cortex</span>`,
+    ``,
+    `<span class="rc">// or in code:</span>`,
+    `<span class="rp">.</span><span class="rm">withCortex</span><span class="rp">()</span>  <span class="rc">// one line</span>`,
+    `<span class="rc">// URL: CORTEX_URL env → localhost:4321</span>`,
+  ].join('\n'),
+
   p5: [
     `<span class="rp">.</span><span class="rm">withReactiveIntelligence</span><span class="rp">(&#123;</span>`,
     `  controller<span class="rp">: &#123;</span>`,
@@ -110,6 +125,7 @@ const codes: Record<string, string> = {
           <button class="fc-tab" data-tab="3" role="tab" aria-selected="false">Safety</button>
           <button class="fc-tab" data-tab="4" role="tab" aria-selected="false">Production</button>
           <button class="fc-tab" data-tab="5" role="tab" aria-selected="false">Web & DX</button>
+          <button class="fc-tab" data-tab="6" role="tab" aria-selected="false">Cortex Studio</button>
         </nav>
       </div>
 
@@ -331,12 +347,48 @@ const codes: Record<string, string> = {
               </div>
               <div class="fc-item">
                 <span class="fc-icon">🛠️</span>
-                <div><p class="fc-name">rax CLI + 3,032 Tests</p><p class="fc-desc">Scaffold, run, inspect — 25 modular packages, battle-tested across 349 test files</p></div>
+                <div><p class="fc-name">rax CLI + 3,472 Tests</p><p class="fc-desc">Scaffold, run, inspect — 25 modular packages, battle-tested across 409 test files</p></div>
               </div>
             </div>
             <div class="fc-code-box fc-code-box--mono">
               <div class="fc-code-label">rax cli</div>
               <pre class="fc-code" set:html={codes.p4}></pre>
+            </div>
+          </div>
+        </div>
+
+        <!-- Panel 6: Cortex Studio -->
+        <div class="fc-panel" data-panel="6" role="tabpanel">
+          <div class="fc-body">
+            <div class="fc-grid">
+              <div class="fc-item">
+                <span class="fc-icon">🔭</span>
+                <div><p class="fc-name">Beacon Agent Grid</p><p class="fc-desc">Live grid of all connected agents with real-time cognitive state and entropy status</p></div>
+              </div>
+              <div class="fc-item">
+                <span class="fc-icon">📈</span>
+                <div><p class="fc-name">Entropy Signal Charts</p><p class="fc-desc">D3-powered entropy trajectory: watch reasoning quality converge, plateau, or diverge in real time</p></div>
+              </div>
+              <div class="fc-item">
+                <span class="fc-icon">🧵</span>
+                <div><p class="fc-name">Step-by-Step Trace Panel</p><p class="fc-desc">Full Thought → Action → Observation breakdown per iteration, live-streamed or replayed from SQLite</p></div>
+              </div>
+              <div class="fc-item">
+                <span class="fc-icon">📋</span>
+                <div><p class="fc-name">Debrief Summaries</p><p class="fc-desc">Structured post-run cards: task, plan, outcome, sources, confidence score, and agent self-critique</p></div>
+              </div>
+              <div class="fc-item">
+                <span class="fc-icon">💬</span>
+                <div><p class="fc-name">Interactive Chat</p><p class="fc-desc">Multi-turn conversational sessions tied to agent runs — same context, persistent history</p></div>
+              </div>
+              <div class="fc-item">
+                <span class="fc-icon">🔬</span>
+                <div><p class="fc-name">Lab: Visual Builder</p><p class="fc-desc">Configure and launch agents without code — skills browser, tool workshop, gateway agent manager</p></div>
+              </div>
+            </div>
+            <div class="fc-code-box fc-code-box--mono">
+              <div class="fc-code-label">cortex studio</div>
+              <pre class="fc-code" set:html={codes.p6}></pre>
             </div>
           </div>
         </div>

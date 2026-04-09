@@ -3,51 +3,48 @@ title: Reactive Agents
 description: The open-source agent framework built for control, not magic. Type-safe, observable, and composable.
 template: splash
 hero:
-  tagline: "The open-source TypeScript agent framework built for control, not magic. Type-safe, observable, and model-adaptive — from local 8B models to frontier. React, Vue & Svelte hooks included."
-  image:
-    file: ../../assets/logo-dark.svg
-  actions:
-    - text: Get Started
-      link: guides/quickstart/
-      icon: right-arrow
-      variant: primary
-    - text: Meet Rax CLI
-      link: guides/cli-artisan/
-      icon: right-arrow
-      variant: secondary
-    - text: View on GitHub
-      link: https://github.com/tylerjrbuell/reactive-agents-ts
-      icon: external
+    tagline: 'Composable TypeScript agent framework — type-safe, fully observable, and model-adaptive. Runs on local Ollama models through Claude and GPT-4. 25 packages, take only what you need.'
+    image:
+        file: ../../assets/logo-dark.svg
+    actions:
+        - text: Get Started
+          link: guides/quickstart/
+          icon: right-arrow
+          variant: primary
+        - text: View on GitHub
+          link: https://github.com/tylerjrbuell/reactive-agents-ts
+          icon: external
+          variant: secondary
 ---
 
-import { Card, CardGrid, Tabs, TabItem } from "@astrojs/starlight/components";
-import HeroInteraction from "../../components/HeroInteraction.astro";
-import TerminalReplay from "../../components/TerminalReplay.astro";
-import FeatureCarousel from "../../components/FeatureCarousel.astro";
+import { Card, CardGrid, Tabs, TabItem } from '@astrojs/starlight/components'
+import HeroInteraction from '../../components/HeroInteraction.astro'
+import TerminalReplay from '../../components/TerminalReplay.astro'
+import FeatureCarousel from '../../components/FeatureCarousel.astro'
 
 <div class="ra-panel ra-stats-panel">
-  <div class="ra-panel-inner ra-stats">
-    <div class="ra-stat">
-      <span class="ra-stat-value">25</span>
-      <span class="ra-stat-label">Packages</span>
+    <div class="ra-panel-inner ra-stats">
+        <div class="ra-stat">
+            <span class="ra-stat-value">25</span>
+            <span class="ra-stat-label">Packages</span>
+        </div>
+        <div class="ra-stat">
+            <span class="ra-stat-value">3,472</span>
+            <span class="ra-stat-label">Tests</span>
+        </div>
+        <div class="ra-stat">
+            <span class="ra-stat-value">6</span>
+            <span class="ra-stat-label">LLM Providers</span>
+        </div>
+        <div class="ra-stat">
+            <span class="ra-stat-value">5</span>
+            <span class="ra-stat-label">Reasoning Strategies</span>
+        </div>
+        <div class="ra-stat">
+            <span class="ra-stat-value">10</span>
+            <span class="ra-stat-label">Execution Phases</span>
+        </div>
     </div>
-    <div class="ra-stat">
-      <span class="ra-stat-value">3,032</span>
-      <span class="ra-stat-label">Tests</span>
-    </div>
-    <div class="ra-stat">
-      <span class="ra-stat-value">6</span>
-      <span class="ra-stat-label">LLM Providers</span>
-    </div>
-    <div class="ra-stat">
-      <span class="ra-stat-value">5</span>
-      <span class="ra-stat-label">Reasoning Strategies</span>
-    </div>
-    <div class="ra-stat">
-      <span class="ra-stat-value">10</span>
-      <span class="ra-stat-label">Execution Phases</span>
-    </div>
-  </div>
 </div>
 
 <FeatureCarousel />
@@ -62,17 +59,17 @@ bun add reactive-agents    # or: npm install reactive-agents
 ```
 
 ```typescript
-import { ReactiveAgents } from "reactive-agents";
+import { ReactiveAgents } from 'reactive-agents'
 
 const agent = await ReactiveAgents.create()
-  .withProvider("anthropic")
-  .withReasoning()    // ReAct loop: Think → Act → Observe
-  .withTools()        // Built-in: web-search, file-read, code-execute
-  .withObservability()
-  .build();
+    .withProvider('anthropic')
+    .withReasoning() // ReAct loop: Think → Act → Observe
+    .withTools() // Built-in: web-search, file-read, code-execute
+    .withObservability()
+    .build()
 
-const result = await agent.run("Find the top 3 TypeScript testing frameworks");
-console.log(result.output);
+const result = await agent.run('Find the top 3 TypeScript testing frameworks')
+console.log(result.output)
 ```
 
 One package. Composable layers. Enable exactly what you need — skip everything you don't.
@@ -82,45 +79,53 @@ One package. Composable layers. Enable exactly what you need — skip everything
   </div>
 </div>
 
-
 <div class="ra-section-card ra-panel">
   <div class="ra-panel-inner">
 
 ## Why Reactive Agents?
 
 <CardGrid stagger>
-  <Card title="Type-Safe from End to End" icon="seti:typescript">
-    Every agent, tool, memory entry, and LLM call is validated by Effect-TS
-    schemas. Catch errors at compile time. Runtime validation at every service
-    boundary. Typed errors mean failures are explicit, not surprises.
-  </Card>
-  <Card title="Composable Layer Architecture" icon="puzzle">
-    Enable exactly the capabilities you need. Memory without guardrails? Just
-    reasoning and tools? Full production stack? Each layer is an independent
-    Effect Layer with explicit dependencies — no hidden coupling, no wasted
-    resources.
-  </Card>
-  <Card title="Observable Execution Engine" icon="magnifier">
-    Every agent task flows through a deterministic 10-phase lifecycle with
-    before/after/error hooks. Every phase emits spans, metrics, and EventBus
-    events. You see exactly what your agent decided, why, and how long it took.
-  </Card>
-  <Card title="5 Reasoning Strategies" icon="star">
-    ReAct for tool use. Reflexion for self-improvement. Plan-Execute for
-    structured work. Tree-of-Thought for creative exploration. Adaptive to
-    auto-select the best strategy. Register your own strategies too.
-  </Card>
-  <Card title="Model-Adaptive Intelligence" icon="setting">
-    Context profiles tune prompts, budgets, and tool strategies per model tier.
-    LLM-based tool classification, completion gap detection, and circuit breakers
-    help smaller models punch above their weight — same code, better results
-    across the full model spectrum.
-  </Card>
-  <Card title="Great DX" icon="rocket">
-    60 seconds to your first agent. Progressive disclosure — start with 3 lines,
-    add reasoning, memory, guardrails, and observability as you need them. The
-    builder API reads like a sentence. `rax` CLI scaffolds, runs, and inspects.
-  </Card>
+    <Card title="Type-Safe from End to End" icon="seti:typescript">
+        Every agent, tool, memory entry, and LLM call is validated by Effect-TS
+        schemas. Catch errors at compile time. Runtime validation at every
+        service boundary. Typed errors mean failures are explicit, not
+        surprises.
+    </Card>
+    <Card title="Composable Layer Architecture" icon="puzzle">
+        Enable exactly the capabilities you need. Memory without guardrails?
+        Just reasoning and tools? Full production stack? Each layer is an
+        independent Effect Layer with explicit dependencies — no hidden
+        coupling, no wasted resources.
+    </Card>
+    <Card title="Observable Execution Engine" icon="magnifier">
+        Every agent task flows through a deterministic 10-phase lifecycle with
+        before/after/error hooks. Every phase emits spans, metrics, and EventBus
+        events. You see exactly what your agent decided, why, and how long it
+        took.
+    </Card>
+    <Card title="5 Reasoning Strategies" icon="star">
+        ReAct for tool use. Reflexion for self-improvement. Plan-Execute for
+        structured work. Tree-of-Thought for creative exploration. Adaptive to
+        auto-select the best strategy. Register your own strategies too.
+    </Card>
+    <Card title="Model-Adaptive Intelligence" icon="setting">
+        Context profiles tune prompts, budgets, and tool strategies per model
+        tier. LLM-based tool classification, completion gap detection, and
+        circuit breakers help smaller models punch above their weight — same
+        code, better results across the full model spectrum.
+    </Card>
+    <Card title="Great DX" icon="rocket">
+        60 seconds to your first agent. Progressive disclosure — start with 3
+        lines, add reasoning, memory, guardrails, and observability as you need
+        them. The builder API reads like a sentence. `rax` CLI scaffolds, runs,
+        and inspects.
+    </Card>
+    <Card title="Cortex Local Studio" icon="laptop">
+        A full-featured companion web app — live agent grid, entropy signal
+        charts, step-by-step reasoning traces, debrief summaries, interactive
+        chat, and a visual agent builder. One flag away: `.withCortex()` or `rax
+        run --cortex`.
+    </Card>
 </CardGrid>
 
   </div>
@@ -132,27 +137,30 @@ One package. Composable layers. Enable exactly what you need — skip everything
 ## How It's Different
 
 <CardGrid>
-  <Card title="vs. LangChain / LlamaIndex" icon="document">
-    Python-first, dynamically typed, monolithic. Reactive Agents is
-    TypeScript-native with Effect-TS type safety, fully modular layers, and
-    built-in observability — you see every decision your agent makes, not just
-    the final output.
-  </Card>
-  <Card title="vs. Vercel AI SDK" icon="document">
-    Great for streaming and tool calling, but stops there. Reactive Agents adds
-    5 reasoning strategies, persistent 4-tier memory, guardrails, verification,
-    cost routing, and a 10-phase execution engine with full observability.
-  </Card>
-  <Card title="vs. AutoGen / CrewAI" icon="document">
-    Multi-agent frameworks without type safety, composable architecture, or
-    model-adaptive intelligence. Reactive Agents gives you all three — plus
-    model-adaptive context profiles that help local models perform far beyond naive prompting.
-  </Card>
-  <Card title="vs. Building From Scratch" icon="document">
-    22 production-ready packages with 3,000+ tests covering memory, reasoning,
-    tools, A2A protocol, gateway, reactive intelligence, safety, cost, identity, and orchestration.
-    Focus on your agent's logic, not infrastructure.
-  </Card>
+    <Card title="vs. LangChain / LlamaIndex" icon="document">
+        Python-first, dynamically typed, monolithic. Reactive Agents is
+        TypeScript-native with Effect-TS type safety, fully modular layers, and
+        built-in observability — you see every decision your agent makes, not
+        just the final output.
+    </Card>
+    <Card title="vs. Vercel AI SDK" icon="document">
+        Great for streaming and tool calling, but stops there. Reactive Agents
+        adds 5 reasoning strategies, persistent 4-tier memory, guardrails,
+        verification, cost routing, and a 10-phase execution engine with full
+        observability.
+    </Card>
+    <Card title="vs. AutoGen / CrewAI" icon="document">
+        Multi-agent frameworks without type safety, composable architecture, or
+        model-adaptive intelligence. Reactive Agents gives you all three — plus
+        model-adaptive context profiles that help local models perform far
+        beyond naive prompting.
+    </Card>
+    <Card title="vs. Building From Scratch" icon="document">
+        22 production-ready packages with 3,000+ tests covering memory,
+        reasoning, tools, A2A protocol, gateway, reactive intelligence, safety,
+        cost, identity, and orchestration. Focus on your agent's logic, not
+        infrastructure.
+    </Card>
 </CardGrid>
 
   </div>
@@ -175,7 +183,8 @@ for await (const event of agent.runStream("Write a haiku about TypeScript")) {
 
 // One-liner SSE endpoint
 Bun.serve({ fetch: (req) => AgentStream.toSSE(agent.runStream("Hello")) });
-```
+
+````
   </TabItem>
   <TabItem label="Chat Sessions">
 ```typescript
@@ -188,7 +197,8 @@ await session.chat("What's the capital of France?");
 await session.chat("What's the population?");
 // → "Paris has approximately 2.1 million residents..."
 // (remembers context from previous turn)
-```
+````
+
   </TabItem>
   <TabItem label="Persistent Gateway">
 ```typescript
@@ -205,7 +215,8 @@ const agent = await ReactiveAgents.create()
   })
   .build();
 
-agent.start();  // Runs forever, Ctrl+C to stop
+agent.start(); // Runs forever, Ctrl+C to stop
+
 ```
   </TabItem>
 </Tabs>
@@ -219,21 +230,23 @@ agent.start();  // Runs forever, Ctrl+C to stop
 ## Architecture at a Glance
 
 ```
+
 ReactiveAgentBuilder
-  → CoreServices    (EventBus, AgentService, TaskService)
-  → LLMProvider     (Anthropic, OpenAI, Gemini, Ollama, LiteLLM 40+)
-  → Memory          (Working, Semantic, Episodic, Procedural)
-  → Reasoning       (ReAct, Reflexion, Plan-Execute, ToT, Adaptive)
-  → Tools           (Registry, Sandbox, MCP Client)
-  → A2A             (Agent Cards, JSON-RPC, SSE Streaming)
-  → Guardrails      (Injection, PII, Toxicity, Behavioral Contracts)
-  → Verification    (Semantic Entropy, Fact Decomposition, Hallucination Detection)
-  → Cost            (Complexity Router, Budget Enforcer)
-  → Identity        (Certificates, RBAC)
-  → Observability   (Tracing, Metrics, Structured Logging)
-  → Interaction     (5 Modes, Checkpoints, Preference Learning)
-  → Gateway         (Heartbeats, Crons, Webhooks, Policy Engine)
-  → ExecutionEngine (10-phase lifecycle with hooks)
+→ CoreServices (EventBus, AgentService, TaskService)
+→ LLMProvider (Anthropic, OpenAI, Gemini, Ollama, LiteLLM 40+)
+→ Memory (Working, Semantic, Episodic, Procedural)
+→ Reasoning (ReAct, Reflexion, Plan-Execute, ToT, Adaptive)
+→ Tools (Registry, Sandbox, MCP Client)
+→ A2A (Agent Cards, JSON-RPC, SSE Streaming)
+→ Guardrails (Injection, PII, Toxicity, Behavioral Contracts)
+→ Verification (Semantic Entropy, Fact Decomposition, Hallucination Detection)
+→ Cost (Complexity Router, Budget Enforcer)
+→ Identity (Certificates, RBAC)
+→ Observability (Tracing, Metrics, Structured Logging)
+→ Interaction (5 Modes, Checkpoints, Preference Learning)
+→ Gateway (Heartbeats, Crons, Webhooks, Policy Engine)
+→ ExecutionEngine (10-phase lifecycle with hooks)
+
 ```
 
 [See full installation guide &rarr;](guides/installation/)
@@ -242,3 +255,4 @@ ReactiveAgentBuilder
 </div>
 
 <HeroInteraction />
+```

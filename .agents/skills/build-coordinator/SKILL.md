@@ -1,4 +1,3 @@
-```skill
 ---
 name: build-coordinator
 description: Coordinate cross-cutting changes, incremental features, and multi-package modifications across the Reactive Agents monorepo. Defines team structure, task assignment, parallelization strategy, and inter-package dependency gates.
@@ -14,9 +13,9 @@ This skill guides the **team lead** in organizing and delegating cross-cutting w
 
 ## Team Structure
 
-| Role | Responsibilities |
-|------|------------------|
-| **Lead** | Analyze change scope, plan task order, assign work to teammates, validate outputs, resolve cross-package issues |
+| Role         | Responsibilities                                                                                                |
+| ------------ | --------------------------------------------------------------------------------------------------------------- |
+| **Lead**     | Analyze change scope, plan task order, assign work to teammates, validate outputs, resolve cross-package issues |
 | **Teammate** | Implement changes using `/build-package`, `/implement-service`, `/implement-test`, and `/validate-build` skills |
 
 **Recommended team size:** 1 lead + 2–3 teammates (max 4 teammates).
@@ -30,21 +29,25 @@ This skill guides the **team lead** in organizing and delegating cross-cutting w
 Understanding the dependency graph is critical for ordering changes that touch multiple packages. Changes to upstream packages require downstream rebuilds and test runs.
 
 ### Layer 0 — No Internal Dependencies
+
 ```
 core
 ```
 
 ### Layer 1 — Depends on core
+
 ```
 llm-provider, identity, observability, prompts, health
 ```
 
 ### Layer 2 — Depends on core + llm-provider
+
 ```
 memory, tools, reasoning, guardrails, cost, eval, testing, benchmarks
 ```
 
 ### Layer 3 — Depends on multiple Layer 1–2 packages
+
 ```
 verification (core + llm-provider + memory)
 orchestration (core + llm-provider + tools + reasoning)
@@ -54,11 +57,13 @@ reactive-intelligence (core + llm-provider + reasoning)
 ```
 
 ### Layer 4 — Depends on ALL above
+
 ```
 runtime (imports from every layer)
 ```
 
 ### Layer 5 — Depends on runtime
+
 ```
 cli (runtime + interaction)
 ```
@@ -120,13 +125,13 @@ After all changes are complete:
 
 ## Task Sizing Guidelines
 
-| Change Scope | Examples | Task Size |
-|-------------|----------|-----------|
-| Single-package, small | Add a method to an existing service, fix a bug | 1 task |
-| Single-package, large | New service, new strategy, major refactor | 2–3 tasks |
-| Cross-cutting, narrow | New event type through EventBus → consumers | 1 task per affected package |
-| Cross-cutting, broad | New builder method end-to-end (builder → runtime → engine) | 3–5 tasks, sequential |
-| New package | Full package scaffold + implementation | Use `/build-package` skill |
+| Change Scope          | Examples                                                   | Task Size                   |
+| --------------------- | ---------------------------------------------------------- | --------------------------- |
+| Single-package, small | Add a method to an existing service, fix a bug             | 1 task                      |
+| Single-package, large | New service, new strategy, major refactor                  | 2–3 tasks                   |
+| Cross-cutting, narrow | New event type through EventBus → consumers                | 1 task per affected package |
+| Cross-cutting, broad  | New builder method end-to-end (builder → runtime → engine) | 3–5 tasks, sequential       |
+| New package           | Full package scaffold + implementation                     | Use `/build-package` skill  |
 
 **Rule:** Each teammate should have 3–6 active tasks. Break large changes into sub-tasks.
 
@@ -134,21 +139,21 @@ After all changes are complete:
 
 These are the critical integration interfaces — verify them explicitly when changes touch these boundaries:
 
-| Producer | Consumer(s) | Interface |
-|----------|------------|-----------|
-| `core` EventBus | ALL packages | `EventBus.publish()` / `EventBus.subscribe()` |
-| `core` AgentService | runtime, orchestration | `AgentService.get()` / `AgentService.updateStatus()` |
-| `core` TaskService | runtime, orchestration | `TaskService.create()` / `TaskService.updateStatus()` |
-| `llm-provider` LLMService | memory, reasoning, tools, verification, cost | `LLMService.complete()` / `LLMService.embed()` |
-| `llm-provider` FallbackChain | runtime | Provider/model fallback on transient errors |
-| `memory` MemoryService | runtime, verification | `MemoryService.bootstrap()` / `MemoryService.store()` / `MemoryService.search()` |
-| `memory` SessionStoreService | runtime (chat/session) | SQLite-backed chat session persistence |
-| `tools` ToolService | runtime, orchestration | `ToolService.register()` / `ToolService.execute()` |
-| `reasoning` StrategySelector | runtime | `StrategySelector.select()` → `ReasoningStrategy` |
-| `runtime` DebriefSynthesizer | runtime (post-run) | Structured `AgentDebrief` from execution signals |
-| `reactive-intelligence` EntropySensorService | reasoning (KernelRunner) | Post-kernel entropy scoring + trajectory analysis |
-| `health` HealthCheckService | runtime (agent.health()) | Readiness probes |
-| `gateway` GatewayService | runtime (.withGateway()) | Heartbeats, crons, webhooks, policy engine |
+| Producer                                     | Consumer(s)                                  | Interface                                                                        |
+| -------------------------------------------- | -------------------------------------------- | -------------------------------------------------------------------------------- |
+| `core` EventBus                              | ALL packages                                 | `EventBus.publish()` / `EventBus.subscribe()`                                    |
+| `core` AgentService                          | runtime, orchestration                       | `AgentService.get()` / `AgentService.updateStatus()`                             |
+| `core` TaskService                           | runtime, orchestration                       | `TaskService.create()` / `TaskService.updateStatus()`                            |
+| `llm-provider` LLMService                    | memory, reasoning, tools, verification, cost | `LLMService.complete()` / `LLMService.embed()`                                   |
+| `llm-provider` FallbackChain                 | runtime                                      | Provider/model fallback on transient errors                                      |
+| `memory` MemoryService                       | runtime, verification                        | `MemoryService.bootstrap()` / `MemoryService.store()` / `MemoryService.search()` |
+| `memory` SessionStoreService                 | runtime (chat/session)                       | SQLite-backed chat session persistence                                           |
+| `tools` ToolService                          | runtime, orchestration                       | `ToolService.register()` / `ToolService.execute()`                               |
+| `reasoning` StrategySelector                 | runtime                                      | `StrategySelector.select()` → `ReasoningStrategy`                                |
+| `runtime` DebriefSynthesizer                 | runtime (post-run)                           | Structured `AgentDebrief` from execution signals                                 |
+| `reactive-intelligence` EntropySensorService | reasoning (KernelRunner)                     | Post-kernel entropy scoring + trajectory analysis                                |
+| `health` HealthCheckService                  | runtime (agent.health())                     | Readiness probes                                                                 |
+| `gateway` GatewayService                     | runtime (.withGateway())                     | Heartbeats, crons, webhooks, policy engine                                       |
 
 ## All 22 Packages
 
@@ -191,4 +196,7 @@ apps/
 5. **Not verifying index.ts exports** — downstream packages will fail to import
 6. **Forgetting documentation updates** — run `/update-docs` after completing any feature work
 7. **Editing runtime without rebuilding** — packages use `dist/` compiled output; must `bun run build` after source changes
+
+```
+
 ```

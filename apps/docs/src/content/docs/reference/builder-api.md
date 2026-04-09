@@ -11,25 +11,25 @@ For copy-paste **recipe chains** (minimal LLM, ReAct + tools, memory, streaming,
 
 ## `ReactiveAgents` factory
 
-| API | Description |
-| --- | ----------- |
-| `ReactiveAgents.create()` | New empty builder (defaults: `name: "agent"`, `provider: "test"`). |
+| API                                 | Description                                                                      |
+| ----------------------------------- | -------------------------------------------------------------------------------- |
+| `ReactiveAgents.create()`           | New empty builder (defaults: `name: "agent"`, `provider: "test"`).               |
 | `ReactiveAgents.fromConfig(config)` | Async — rebuild a builder from an `AgentConfig` object (`agentConfigToBuilder`). |
-| `ReactiveAgents.fromJSON(json)` | Async — parse JSON → validate → same as `fromConfig`. |
+| `ReactiveAgents.fromJSON(json)`     | Async — parse JSON → validate → same as `fromConfig`.                            |
 
 ```typescript
-import { ReactiveAgents } from "reactive-agents";
+import { ReactiveAgents } from 'reactive-agents'
 // or: import { ReactiveAgents } from "@reactive-agents/runtime";
 
-const builder = ReactiveAgents.create();
+const builder = ReactiveAgents.create()
 ```
 
 ### Agent as Data (`toConfig` / serialization)
 
 On a configured builder:
 
-- **`toConfig()`** → `AgentConfig` (plain object, JSON-serializable except documented exceptions).
-- Use **`agentConfigToJSON`** / **`agentConfigFromJSON`** from **`reactive-agents`** or **`@reactive-agents/runtime`** for string round-trips.
+-   **`toConfig()`** → `AgentConfig` (plain object, JSON-serializable except documented exceptions).
+-   Use **`agentConfigToJSON`** / **`agentConfigFromJSON`** from **`reactive-agents`** or **`@reactive-agents/runtime`** for string round-trips.
 
 ## Builder methods
 
@@ -37,29 +37,29 @@ All chain methods return `this` unless noted.
 
 ### Identity & prompts
 
-| Method | Signature | Description |
-| ------ | --------- | ----------- |
-| `withName` | `(name: string) => this` | Display name / `agentId` basis |
-| `withPersona` | `(persona: AgentPersona) => this` | Structured steering: `{ name?, role?, background?, instructions?, tone? }` |
-| `withSystemPrompt` | `(prompt: string) => this` | Custom system prompt; if persona is set, persona text is prepended |
-| `withEnvironment` | `(context: Record<string, string>) => this` | Extra key/value context merged into the system prompt (framework already injects date/time/tz/platform) |
+| Method             | Signature                                   | Description                                                                                             |
+| ------------------ | ------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `withName`         | `(name: string) => this`                    | Display name / `agentId` basis                                                                          |
+| `withPersona`      | `(persona: AgentPersona) => this`           | Structured steering: `{ name?, role?, background?, instructions?, tone? }`                              |
+| `withSystemPrompt` | `(prompt: string) => this`                  | Custom system prompt; if persona is set, persona text is prepended                                      |
+| `withEnvironment`  | `(context: Record<string, string>) => this` | Extra key/value context merged into the system prompt (framework already injects date/time/tz/platform) |
 
 ### Model & Provider
 
-| Method | Signature | Description |
-| ------ | --------- | ----------- |
-| `withModel` | `(model: string) => this` | Set the LLM model by name (e.g., `"claude-sonnet-4-20250514"`) |
-| `withModel` | `(params: ModelParams) => this` | Set model with advanced parameters: `thinking`, `temperature`, `maxTokens` |
-| `withProvider` | `(provider: "anthropic" \| "openai" \| "ollama" \| "gemini" \| "litellm" \| "test") => this` | Set the LLM provider |
+| Method         | Signature                                                                                    | Description                                                                |
+| -------------- | -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `withModel`    | `(model: string) => this`                                                                    | Set the LLM model by name (e.g., `"claude-sonnet-4-20250514"`)             |
+| `withModel`    | `(params: ModelParams) => this`                                                              | Set model with advanced parameters: `thinking`, `temperature`, `maxTokens` |
+| `withProvider` | `(provider: "anthropic" \| "openai" \| "ollama" \| "gemini" \| "litellm" \| "test") => this` | Set the LLM provider                                                       |
 
 #### ModelParams
 
 ```typescript
 interface ModelParams {
-  model: string;         // Model identifier (provider-specific)
-  thinking?: boolean;    // Enable thinking/reasoning mode (auto-detected if omitted)
-  temperature?: number;  // Sampling temperature 0.0–1.0
-  maxTokens?: number;    // Maximum output tokens
+    model: string // Model identifier (provider-specific)
+    thinking?: boolean // Enable thinking/reasoning mode (auto-detected if omitted)
+    temperature?: number // Sampling temperature 0.0–1.0
+    maxTokens?: number // Maximum output tokens
 }
 ```
 
@@ -76,43 +76,43 @@ interface ModelParams {
 
 ### Memory
 
-| Method | Signature | Description |
-| ------ | --------- | ----------- |
+| Method       | Signature                                         | Description                                                                                                                                                                         |
+| ------------ | ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `withMemory` | `(options?: MemoryOptions \| "1" \| "2") => this` | Enable memory. Prefer `.withMemory()` or `.withMemory({ tier: "enhanced", ... })`. Strings `"1"` / `"2"` still work with a deprecation warning (`"1"` → standard, `"2"` → enhanced) |
 
 #### MemoryOptions
 
-| Field | Type | Default / notes |
-| ----- | ---- | ---------------- |
-| `tier` | `"standard" \| "enhanced"` | `"standard"` — enhanced = 4-layer memory + embeddings |
-| `dbPath` | `string` | SQLite path (default under `.reactive-agents/memory/{agentId}/`) |
-| `maxEntries` | `number` | Compaction cap |
-| `capacity` | `number` | Working memory slots (default `7`) |
-| `evictionPolicy` | `"fifo" \| "lru" \| "importance"` | Working set eviction |
-| `retainDays` | `number` | Episodic retention |
-| `importanceThreshold` | `number` | Semantic inclusion threshold |
+| Field                 | Type                              | Default / notes                                                  |
+| --------------------- | --------------------------------- | ---------------------------------------------------------------- |
+| `tier`                | `"standard" \| "enhanced"`        | `"standard"` — enhanced = 4-layer memory + embeddings            |
+| `dbPath`              | `string`                          | SQLite path (default under `.reactive-agents/memory/{agentId}/`) |
+| `maxEntries`          | `number`                          | Compaction cap                                                   |
+| `capacity`            | `number`                          | Working memory slots (default `7`)                               |
+| `evictionPolicy`      | `"fifo" \| "lru" \| "importance"` | Working set eviction                                             |
+| `retainDays`          | `number`                          | Episodic retention                                               |
+| `importanceThreshold` | `number`                          | Semantic inclusion threshold                                     |
 
 ### Execution
 
-| Method | Signature | Description |
-| ------ | --------- | ----------- |
-| `withMaxIterations` | `(n: number) => this` | Max agent loop iterations (default: 10) |
-| `withMinIterations` | `(n: number) => this` | Minimum iterations before `final-answer` is permitted — prevents fast-path exit on complex tasks |
-| `withContextProfile` | `(profile: Partial<ContextProfile>) => this` | Model-adaptive context overrides: compaction thresholds, tool result size limits, budget |
-| `withStrictValidation` | `() => this` | Throw at build time if required config is missing (provider, model, etc.) |
-| `withTimeout` | `(ms: number) => this` | Execution timeout in milliseconds. Throws `TimeoutError` if exceeded |
-| `withRetryPolicy` | `(policy: RetryPolicy) => this` | Retry on transient LLM failures. `{ maxRetries: number, backoffMs: number }` |
-| `withCacheTimeout` | `(ms: number) => this` | Semantic cache TTL in milliseconds. Entries older than this are evicted |
+| Method                 | Signature                                    | Description                                                                                      |
+| ---------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `withMaxIterations`    | `(n: number) => this`                        | Max agent loop iterations (default: 10)                                                          |
+| `withMinIterations`    | `(n: number) => this`                        | Minimum iterations before `final-answer` is permitted — prevents fast-path exit on complex tasks |
+| `withContextProfile`   | `(profile: Partial<ContextProfile>) => this` | Model-adaptive context overrides: compaction thresholds, tool result size limits, budget         |
+| `withStrictValidation` | `() => this`                                 | Throw at build time if required config is missing (provider, model, etc.)                        |
+| `withTimeout`          | `(ms: number) => this`                       | Execution timeout in milliseconds. Throws `TimeoutError` if exceeded                             |
+| `withRetryPolicy`      | `(policy: RetryPolicy) => this`              | Retry on transient LLM failures. `{ maxRetries: number, backoffMs: number }`                     |
+| `withCacheTimeout`     | `(ms: number) => this`                       | Semantic cache TTL in milliseconds. Entries older than this are evicted                          |
 
 #### ContextProfile fields
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `tier` | `"local" \| "mid" \| "large" \| "frontier"` | Model tier — controls which defaults are applied |
-| `budgetTokens` | `number` | Max tokens to include in the context window |
-| `toolResultMaxChars` | `number` | Truncate tool results beyond this length |
-| `compactionLevel` | `"full" \| "summary" \| "grouped" \| "dropped"` | How aggressively to compact older steps |
-| `maxStepsBeforeCompaction` | `number` | Steps to keep in full detail before compacting |
+| Field                      | Type                                            | Description                                      |
+| -------------------------- | ----------------------------------------------- | ------------------------------------------------ |
+| `tier`                     | `"local" \| "mid" \| "large" \| "frontier"`     | Model tier — controls which defaults are applied |
+| `budgetTokens`             | `number`                                        | Max tokens to include in the context window      |
+| `toolResultMaxChars`       | `number`                                        | Truncate tool results beyond this length         |
+| `compactionLevel`          | `"full" \| "summary" \| "grouped" \| "dropped"` | How aggressively to compact older steps          |
+| `maxStepsBeforeCompaction` | `number`                                        | Steps to keep in full detail before compacting   |
 
 ```typescript
 // Lean context for local small models
@@ -130,137 +130,146 @@ See [Context Engineering](/guides/context-engineering/) for full tier defaults.
 
 ### Optional features
 
-| Method | Description |
-| ------------------------------------ | ----------- |
-| `withGuardrails(options?)` | Toggle detectors: `{ injection?, pii?, toxicity?, customBlocklist? }`. All default **on** when guardrails are enabled. |
-| `withKillSwitch()` | Pause / resume / stop / terminate via `KillSwitchService` |
-| `withBehavioralContracts(contract)` | Rules such as `deniedTools`, `allowedTools`, `maxIterations`, etc. |
-| `withVerification(options?)` | Post-output checks — toggles and thresholds: `semanticEntropy`, `factDecomposition`, `multiSource`, `hallucinationDetection`, `passThreshold`, … |
-| `withCostTracking(options?)` | Budgets in USD: `{ perRequest?, perSession?, daily?, monthly? }` plus cost estimation / routing |
-| `withModelPricing(registry)` | Per-model $/1M tokens: `{ "model-id": { input, output } }` |
-| `withDynamicPricing(provider)` | Remote pricing (`openRouterPricingProvider`, etc.) fetched at build time |
-| `withCircuitBreaker(config?)` | LLM call circuit breaker (`@reactive-agents/llm-provider` `CircuitBreakerConfig`) |
-| `withRateLimiting(config?)` | Throttle LLM requests (`requestsPerMinute`, `tokensPerMinute`, concurrency, …) |
-| `withReasoning(options?)` | Strategies + ICS — see [ReasoningOptions](#reasoningoptions) |
-| `withTools(options?)` | Tool layer — see [ToolsOptions](#toolsoptions) below |
-| `withDocuments(docs)` | Chunk + index `DocumentSpec[]` for RAG (`rag-search`). Enables tools if needed |
-| `withRequiredTools(config)` | Tools that must run before success — `{ tools?, adaptive?, maxRetries? }`. When `adaptive: true`, the framework also auto-sets a per-tool call budget of 3 for search-type tools to prevent infinite research loops. |
-| `withIdentity()` | Ed25519 identity + RBAC |
-| `withObservability(options?)` | Metrics dashboard, tracing, verbosity. Options: `verbosity` (`"minimal"\|"normal"\|"verbose"\|"debug"`), `live` (stream phase events), `file` (JSONL path), `logPrefix`, `logModelIO` (when `true` or when `verbosity: "debug"`, logs the complete FC conversation thread with role labels `[USER]`/`[ASSISTANT]`/`[TOOL]` and raw LLM response for every iteration — essential for debugging prompt issues) |
-| `withCortex(url?)` | Enable best-effort Cortex reporting. Streams EventBus events to Cortex WS ingest (`/ws/ingest`) using URL priority: explicit `url` → `CORTEX_URL` env → `http://localhost:4321` |
-| `withStreaming(options?)` | Default density for `agent.runStream()`: `{ density?: "tokens" \| "full" }` |
-| `withTelemetry(config?)` | Opt-in run telemetry / privacy modes (`@reactive-agents/observability` `TelemetryConfig`; default mode `isolated` if omitted) |
-| `withInteraction()` | Collaboration / approval flows |
-| `withPrompts(options?)` | `{ templates?: PromptTemplate[] }` |
-| `withOrchestration()` | Multi-agent workflows |
-| `withExperienceLearning()` | `ExperienceStore` cross-agent tips |
-| `withMemoryConsolidation(config?)` | Background consolidation: `{ threshold?, decayFactor?, pruneThreshold? }` |
-| `withSelfImprovement()` | Strategy outcome logging for later bootstrap hints |
-| `withAudit()` | Audit trail |
-| `withEvents()` | Ensures EventBus wiring for `agent.subscribe()` |
-| `withGateway(options?)` | Heartbeats, crons, webhooks, policies, `port`, `channels`, … |
-| `withErrorHandler(handler)` | Observe-only callback on `agent.run()` failures — does not swallow errors |
-| `withFallbacks(config)` | `{ providers?, models?, errorThreshold? }` fallback chain |
-| `withLogging(config)` | `makeLoggerService` — `{ level?, format?, output?: "console" \| "file" \| WritableStream, filePath?, maxFileSizeBytes?, maxFiles? }` |
-| `withHealthCheck()` | Enables `agent.health()` |
-| `withVerificationStep(config?)` | Post-answer LLM self-review. `{ mode: "reflect" \| "loop", prompt? }`. Reflect mode adds one LLM confirmation call; loop mode (V1.1) re-enters the ReAct loop |
-| `withOutputValidator(fn, opts?)` | Validate output before accepting. `fn(output) => { valid, feedback? }`. Failed validation injects feedback and retries (`opts.maxRetries`, default 2) |
-| `withCustomTermination(fn)` | Re-run until `fn({ output }) === true`, up to 3 additional times. For domain-specific completion criteria |
-| `withTaskContext(record)` | `Record<string, string>` of background facts injected into reasoning context — distinct from system prompt instructions |
-| `withProgressCheckpoint(n, opts?)` | Store checkpoint config every N iterations. `{ autoResume? }`. PlanStore write execution is V1.1 |
-| `withReactiveIntelligence(false)` | Disable the Reactive Intelligence layer (enabled by default). |
-| `withReactiveIntelligence(options?)` | Entropy, controller, telemetry, hooks (`onEntropyScored`, `onControllerDecision`, …), `constraints`, `autonomy`. See [Reactive Intelligence](/features/reactive-intelligence/) |
-| `withSkills(config?)` | `{ paths?, packages?, evolution?: { mode?, refinementThreshold?, rollbackOnRegression? }, overrides? }` |
-| `withMetaTools(config?)` | Conductor meta-tools; pass **`false`** to turn off defaults when using `.withTools()`. See [MetaToolsConfig](#metatoolsconfig) |
+| Method                               | Description                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `withGuardrails(options?)`           | Toggle detectors: `{ injection?, pii?, toxicity?, customBlocklist? }`. All default **on** when guardrails are enabled.                                                                                                                                                                                                                                                                                       |
+| `withKillSwitch()`                   | Pause / resume / stop / terminate via `KillSwitchService`                                                                                                                                                                                                                                                                                                                                                    |
+| `withBehavioralContracts(contract)`  | Rules such as `deniedTools`, `allowedTools`, `maxIterations`, etc.                                                                                                                                                                                                                                                                                                                                           |
+| `withVerification(options?)`         | Post-output checks — toggles and thresholds: `semanticEntropy`, `factDecomposition`, `multiSource`, `hallucinationDetection`, `passThreshold`, …                                                                                                                                                                                                                                                             |
+| `withCostTracking(options?)`         | Budgets in USD: `{ perRequest?, perSession?, daily?, monthly? }` plus cost estimation / routing                                                                                                                                                                                                                                                                                                              |
+| `withModelPricing(registry)`         | Per-model $/1M tokens: `{ "model-id": { input, output } }`                                                                                                                                                                                                                                                                                                                                                   |
+| `withDynamicPricing(provider)`       | Remote pricing (`openRouterPricingProvider`, etc.) fetched at build time                                                                                                                                                                                                                                                                                                                                     |
+| `withCircuitBreaker(config?)`        | LLM call circuit breaker (`@reactive-agents/llm-provider` `CircuitBreakerConfig`)                                                                                                                                                                                                                                                                                                                            |
+| `withRateLimiting(config?)`          | Throttle LLM requests (`requestsPerMinute`, `tokensPerMinute`, concurrency, …)                                                                                                                                                                                                                                                                                                                               |
+| `withReasoning(options?)`            | Strategies + ICS — see [ReasoningOptions](#reasoningoptions)                                                                                                                                                                                                                                                                                                                                                 |
+| `withTools(options?)`                | Tool layer — see [ToolsOptions](#toolsoptions) below                                                                                                                                                                                                                                                                                                                                                         |
+| `withDocuments(docs)`                | Chunk + index `DocumentSpec[]` for RAG (`rag-search`). Enables tools if needed                                                                                                                                                                                                                                                                                                                               |
+| `withRequiredTools(config)`          | Tools that must run before success — `{ tools?, adaptive?, maxRetries? }`. When `adaptive: true`, the framework also auto-sets a per-tool call budget of 3 for search-type tools to prevent infinite research loops.                                                                                                                                                                                         |
+| `withIdentity()`                     | Ed25519 identity + RBAC                                                                                                                                                                                                                                                                                                                                                                                      |
+| `withObservability(options?)`        | Metrics dashboard, tracing, verbosity. Options: `verbosity` (`"minimal"\|"normal"\|"verbose"\|"debug"`), `live` (stream phase events), `file` (JSONL path), `logPrefix`, `logModelIO` (when `true` or when `verbosity: "debug"`, logs the complete FC conversation thread with role labels `[USER]`/`[ASSISTANT]`/`[TOOL]` and raw LLM response for every iteration — essential for debugging prompt issues) |
+| `withCortex(url?)`                   | Enable best-effort Cortex reporting. Streams all EventBus events to the [Cortex local studio](/features/cortex/) over WebSocket (`/ws/ingest`). URL priority: explicit `url` arg → `CORTEX_URL` env → `http://localhost:4321`. Connection is non-blocking — if Cortex is unreachable the agent continues normally. See [Cortex Studio](/features/cortex/) for the full feature reference.                    |
+| `withStreaming(options?)`            | Default density for `agent.runStream()`: `{ density?: "tokens" \| "full" }`                                                                                                                                                                                                                                                                                                                                  |
+| `withTelemetry(config?)`             | Opt-in run telemetry / privacy modes (`@reactive-agents/observability` `TelemetryConfig`; default mode `isolated` if omitted)                                                                                                                                                                                                                                                                                |
+| `withInteraction()`                  | Collaboration / approval flows                                                                                                                                                                                                                                                                                                                                                                               |
+| `withPrompts(options?)`              | `{ templates?: PromptTemplate[] }`                                                                                                                                                                                                                                                                                                                                                                           |
+| `withOrchestration()`                | Multi-agent workflows                                                                                                                                                                                                                                                                                                                                                                                        |
+| `withExperienceLearning()`           | `ExperienceStore` cross-agent tips                                                                                                                                                                                                                                                                                                                                                                           |
+| `withMemoryConsolidation(config?)`   | Background consolidation: `{ threshold?, decayFactor?, pruneThreshold? }`                                                                                                                                                                                                                                                                                                                                    |
+| `withSelfImprovement()`              | Strategy outcome logging for later bootstrap hints                                                                                                                                                                                                                                                                                                                                                           |
+| `withAudit()`                        | Audit trail                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `withEvents()`                       | Ensures EventBus wiring for `agent.subscribe()`                                                                                                                                                                                                                                                                                                                                                              |
+| `withGateway(options?)`              | Heartbeats, crons, webhooks, policies, `port`, `channels`, …                                                                                                                                                                                                                                                                                                                                                 |
+| `withErrorHandler(handler)`          | Observe-only callback on `agent.run()` failures — does not swallow errors                                                                                                                                                                                                                                                                                                                                    |
+| `withFallbacks(config)`              | `{ providers?, models?, errorThreshold? }` fallback chain                                                                                                                                                                                                                                                                                                                                                    |
+| `withLogging(config)`                | `makeLoggerService` — `{ level?, format?, output?: "console" \| "file" \| WritableStream, filePath?, maxFileSizeBytes?, maxFiles? }`                                                                                                                                                                                                                                                                         |
+| `withHealthCheck()`                  | Enables `agent.health()`                                                                                                                                                                                                                                                                                                                                                                                     |
+| `withVerificationStep(config?)`      | Post-answer LLM self-review. `{ mode: "reflect" \| "loop", prompt? }`. Reflect mode adds one LLM confirmation call; loop mode (V1.1) re-enters the ReAct loop                                                                                                                                                                                                                                                |
+| `withOutputValidator(fn, opts?)`     | Validate output before accepting. `fn(output) => { valid, feedback? }`. Failed validation injects feedback and retries (`opts.maxRetries`, default 2)                                                                                                                                                                                                                                                        |
+| `withCustomTermination(fn)`          | Re-run until `fn({ output }) === true`, up to 3 additional times. For domain-specific completion criteria                                                                                                                                                                                                                                                                                                    |
+| `withTaskContext(record)`            | `Record<string, string>` of background facts injected into reasoning context — distinct from system prompt instructions                                                                                                                                                                                                                                                                                      |
+| `withProgressCheckpoint(n, opts?)`   | Store checkpoint config every N iterations. `{ autoResume? }`. PlanStore write execution is V1.1                                                                                                                                                                                                                                                                                                             |
+| `withReactiveIntelligence(false)`    | Disable the Reactive Intelligence layer (enabled by default).                                                                                                                                                                                                                                                                                                                                                |
+| `withReactiveIntelligence(options?)` | Entropy, controller, telemetry, hooks (`onEntropyScored`, `onControllerDecision`, …), `constraints`, `autonomy`. See [Reactive Intelligence](/features/reactive-intelligence/)                                                                                                                                                                                                                               |
+| `withSkills(config?)`                | `{ paths?, packages?, evolution?: { mode?, refinementThreshold?, rollbackOnRegression? }, overrides? }`                                                                                                                                                                                                                                                                                                      |
+| `withMetaTools(config?)`             | Conductor meta-tools; pass **`false`** to turn off defaults when using `.withTools()`. See [MetaToolsConfig](#metatoolsconfig)                                                                                                                                                                                                                                                                               |
 
 #### ToolsOptions
 
-| Field | Description |
-| ----- | ----------- |
-| `tools` | `{ definition: ToolDefinition, handler: (args) => Effect.Effect<unknown> }[]` — custom tools (handlers return **Effect**) |
-| `resultCompression` | `ResultCompressionConfig` — previews, overflow keys, transforms |
-| `allowedTools` | If set, only these tool names are exposed to the model (others filtered) |
-| `adaptive` | Adaptive tool listing from task text (heuristic), reduces noise for small models |
+| Field               | Description                                                                                                               |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `tools`             | `{ definition: ToolDefinition, handler: (args) => Effect.Effect<unknown> }[]` — custom tools (handlers return **Effect**) |
+| `resultCompression` | `ResultCompressionConfig` — previews, overflow keys, transforms                                                           |
+| `allowedTools`      | If set, only these tool names are exposed to the model (others filtered)                                                  |
+| `adaptive`          | Adaptive tool listing from task text (heuristic), reduces noise for small models                                          |
 
 #### MetaToolsConfig
 
-| Field | Description |
-| ----- | ----------- |
-| `brief`, `find`, `pulse`, `recall` | Enable each Conductor meta-tool |
-| `harnessSkill` | `boolean`, path string, or `{ frontier?, local? }` for harness skill source |
-| `findConfig`, `pulseConfig`, `recallConfig` | Fine-tuning (scopes, previews, LLM pulse behavior, …) |
+| Field                                       | Description                                                                 |
+| ------------------------------------------- | --------------------------------------------------------------------------- |
+| `brief`, `find`, `pulse`, `recall`          | Enable each Conductor meta-tool                                             |
+| `harnessSkill`                              | `boolean`, path string, or `{ frontier?, local? }` for harness skill source |
+| `findConfig`, `pulseConfig`, `recallConfig` | Fine-tuning (scopes, previews, LLM pulse behavior, …)                       |
 
 #### ReasoningOptions
 
 ```typescript
 interface ReasoningOptions {
-  /**
-   * Which strategy to use. Defaults to "reactive".
-   * "adaptive" requires adaptive.enabled: true.
-   */
-  defaultStrategy?: "reactive" | "reflexion" | "plan-execute-reflect" | "tree-of-thought" | "adaptive";
+    /**
+     * Which strategy to use. Defaults to "reactive".
+     * "adaptive" requires adaptive.enabled: true.
+     */
+    defaultStrategy?:
+        | 'reactive'
+        | 'reflexion'
+        | 'plan-execute-reflect'
+        | 'tree-of-thought'
+        | 'adaptive'
 
-  /**
-   * Per-strategy overrides (iterations, temperatures, plan knobs, etc.).
-   * Each bundle may also set ICS fields (`synthesis`, `synthesisModel`, `synthesisProvider`,
-   * `synthesisStrategy`, `synthesisTemperature`) — they override the top-level synthesis
-   * options for that strategy only (see Intelligent Context Synthesis).
-   */
-  strategies?: Partial<{
-    reactive: ReasoningConfig["strategies"]["reactive"] & StrategySynthesisFields;
-    planExecute: ReasoningConfig["strategies"]["planExecute"] & StrategySynthesisFields;
-    treeOfThought: ReasoningConfig["strategies"]["treeOfThought"] & StrategySynthesisFields;
-    reflexion: ReasoningConfig["strategies"]["reflexion"] & StrategySynthesisFields;
-  }>;
+    /**
+     * Per-strategy overrides (iterations, temperatures, plan knobs, etc.).
+     * Each bundle may also set ICS fields (`synthesis`, `synthesisModel`, `synthesisProvider`,
+     * `synthesisStrategy`, `synthesisTemperature`) — they override the top-level synthesis
+     * options for that strategy only (see Intelligent Context Synthesis).
+     */
+    strategies?: Partial<{
+        reactive: ReasoningConfig['strategies']['reactive'] &
+            StrategySynthesisFields
+        planExecute: ReasoningConfig['strategies']['planExecute'] &
+            StrategySynthesisFields
+        treeOfThought: ReasoningConfig['strategies']['treeOfThought'] &
+            StrategySynthesisFields
+        reflexion: ReasoningConfig['strategies']['reflexion'] &
+            StrategySynthesisFields
+    }>
 
-  /** Adaptive strategy config. Must set enabled: true when defaultStrategy is "adaptive". */
-  adaptive?: {
-    enabled?: boolean;   // Required for adaptive strategy
-    learning?: boolean;  // Enable cross-run learning (default: false)
-  };
+    /** Adaptive strategy config. Must set enabled: true when defaultStrategy is "adaptive". */
+    adaptive?: {
+        enabled?: boolean // Required for adaptive strategy
+        learning?: boolean // Enable cross-run learning (default: false)
+    }
 
-  /** Max iterations of the reasoning loop (default: 10). */
-  maxIterations?: number;
+    /** Max iterations of the reasoning loop (default: 10). */
+    maxIterations?: number
 
-  /**
-   * Automatically switch to a better-suited strategy when the current one appears stuck
-   * (repeated tool calls, repeated thoughts, or consecutive think-only steps).
-   * Default: false.
-   */
-  enableStrategySwitching?: boolean;
+    /**
+     * Automatically switch to a better-suited strategy when the current one appears stuck
+     * (repeated tool calls, repeated thoughts, or consecutive think-only steps).
+     * Default: false.
+     */
+    enableStrategySwitching?: boolean
 
-  /**
-   * Maximum number of strategy switches allowed in a single run.
-   * Default: 1.
-   */
-  maxStrategySwitches?: number;
+    /**
+     * Maximum number of strategy switches allowed in a single run.
+     * Default: 1.
+     */
+    maxStrategySwitches?: number
 
-  /**
-   * When set, bypasses the LLM evaluator and always switches to this strategy on loop
-   * detection. Useful when you want deterministic switching without the extra LLM call.
-   * Example: "plan-execute-reflect"
-   */
-  fallbackStrategy?: string;
+    /**
+     * When set, bypasses the LLM evaluator and always switches to this strategy on loop
+     * detection. Useful when you want deterministic switching without the extra LLM call.
+     * Example: "plan-execute-reflect"
+     */
+    fallbackStrategy?: string
 
-  /** ICS default mode: auto (heuristic), fast (templates), deep (LLM), custom, or off. */
-  synthesis?: "auto" | "fast" | "deep" | "custom" | "off";
-  /** Model for deep synthesis when different from the executing model. */
-  synthesisModel?: string;
-  /** Provider for the synthesis model when different from the executing provider. */
-  synthesisProvider?: string;
-  /** Custom synthesis pipeline when `synthesis: "custom"`. */
-  synthesisStrategy?: SynthesisStrategy;
-  /** Temperature for deep synthesis LLM calls. */
-  synthesisTemperature?: number;
+    /** ICS default mode: auto (heuristic), fast (templates), deep (LLM), custom, or off. */
+    synthesis?: 'auto' | 'fast' | 'deep' | 'custom' | 'off'
+    /** Model for deep synthesis when different from the executing model. */
+    synthesisModel?: string
+    /** Provider for the synthesis model when different from the executing provider. */
+    synthesisProvider?: string
+    /** Custom synthesis pipeline when `synthesis: "custom"`. */
+    synthesisStrategy?: SynthesisStrategy
+    /** Temperature for deep synthesis LLM calls. */
+    synthesisTemperature?: number
 }
 
 /** ICS-only fields allowed on each `strategies.*` bundle (merged with top-level synthesis). */
 interface StrategySynthesisFields {
-  synthesis?: "auto" | "fast" | "deep" | "custom" | "off";
-  synthesisModel?: string;
-  synthesisProvider?: string;
-  synthesisStrategy?: SynthesisStrategy;
-  synthesisTemperature?: number;
+    synthesis?: 'auto' | 'fast' | 'deep' | 'custom' | 'off'
+    synthesisModel?: string
+    synthesisProvider?: string
+    synthesisStrategy?: SynthesisStrategy
+    synthesisTemperature?: number
 }
 ```
 
@@ -294,8 +303,9 @@ At runtime, `ReasoningOptions` may also include a non-JSON `synthesisStrategy` f
 ```
 
 When `enableStrategySwitching` is active, two EventBus events are emitted around each switch:
-- `StrategySwitchEvaluated` — after the evaluator runs, before the switch (includes `willSwitch`, `rationale`, `recommendedStrategy`)
-- `StrategySwitched` — after the new strategy takes over (includes `fromStrategy`, `toStrategy`, `switchNumber`, `stepsCarriedOver`)
+
+-   `StrategySwitchEvaluated` — after the evaluator runs, before the switch (includes `willSwitch`, `rationale`, `recommendedStrategy`)
+-   `StrategySwitched` — after the new strategy takes over (includes `fromStrategy`, `toStrategy`, `switchNumber`, `stepsCarriedOver`)
 
 See [Automatic Strategy Switching](/guides/choosing-strategies/#automatic-strategy-switching) for full details on loop detection triggers, handoff context, and EventBus subscription examples.
 
@@ -303,12 +313,12 @@ See [Automatic Strategy Switching](/guides/choosing-strategies/#automatic-strate
 
 ```typescript
 interface RequiredToolsConfig {
-  /** Static list of tool names the agent MUST call before answering. */
-  tools?: string[];
-  /** Enable adaptive inference — LLM analyzes task + tools to determine required tools. */
-  adaptive?: boolean;
-  /** Number of retry loops if required tools are missed (default: 2). */
-  maxRetries?: number;
+    /** Static list of tool names the agent MUST call before answering. */
+    tools?: string[]
+    /** Enable adaptive inference — LLM analyzes task + tools to determine required tools. */
+    adaptive?: boolean
+    /** Number of retry loops if required tools are missed (default: 2). */
+    maxRetries?: number
 }
 ```
 
@@ -329,31 +339,31 @@ When `adaptive: true`, the framework calls the LLM with the task description and
 
 ### A2A protocol
 
-| Method | Signature | Description |
-| ------ | --------- | ----------- |
-| `withA2A` | `(options?: A2AOptions) => this` | A2A JSON-RPC server — `port` (default `3000`), `basePath` (default `/`) |
-| `withAgentTool` | `(name: string, agent: { name: string; description?: string; provider?: string; model?: string; tools?: string[]; maxIterations?: number; systemPrompt?: string; persona?: AgentPersona }) => this` | Static sub-agent as a tool |
-| `withDynamicSubAgents` | `(options?: { maxIterations?: number }) => this` | `spawn-agent` for runtime sub-agents |
-| `withRemoteAgent` | `(name: string, remoteUrl: string) => this` | Remote A2A agent as a tool |
+| Method                 | Signature                                                                                                                                                                                           | Description                                                             |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `withA2A`              | `(options?: A2AOptions) => this`                                                                                                                                                                    | A2A JSON-RPC server — `port` (default `3000`), `basePath` (default `/`) |
+| `withAgentTool`        | `(name: string, agent: { name: string; description?: string; provider?: string; model?: string; tools?: string[]; maxIterations?: number; systemPrompt?: string; persona?: AgentPersona }) => this` | Static sub-agent as a tool                                              |
+| `withDynamicSubAgents` | `(options?: { maxIterations?: number }) => this`                                                                                                                                                    | `spawn-agent` for runtime sub-agents                                    |
+| `withRemoteAgent`      | `(name: string, remoteUrl: string) => this`                                                                                                                                                         | Remote A2A agent as a tool                                              |
 
 ### MCP
 
-| Method | Signature | Description |
-| ------ | --------- | ----------- |
+| Method    | Signature                                                | Description                                                                                     |
+| --------- | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
 | `withMCP` | `(config: MCPServerConfig \| MCPServerConfig[]) => this` | Connect to MCP servers. Accepts a single config or array. Automatically enables `.withTools()`. |
 
 #### MCPServerConfig
 
-| Field | Type | Transport | Description |
-|-------|------|-----------|-------------|
-| `name` | `string` | all | Unique name for this server. Tool names are prefixed `{name}/` |
-| `transport` | `"stdio" \| "streamable-http" \| "sse" \| "websocket"` | all | Protocol to use. Use `"streamable-http"` for modern remote servers, `"stdio"` for local subprocesses |
-| `command` | `string` | stdio | Executable to launch (`"bunx"`, `"docker"`, `"python"`, absolute path, etc.) |
-| `args` | `string[]` | stdio | Arguments passed to `command`. Includes package names, flags, Docker image, etc. |
-| `env` | `Record<string, string>` | stdio | Extra env vars merged on top of the parent process environment. Use for per-server secrets |
-| `cwd` | `string` | stdio | Working directory for the subprocess. Defaults to parent process `cwd` |
-| `endpoint` | `string` | streamable-http, sse, websocket | HTTP/WebSocket URL (`"https://mcp.example.com"`, `"ws://localhost:8000/mcp"`) |
-| `headers` | `Record<string, string>` | streamable-http, sse | HTTP headers sent on every request. Use for `Authorization`, `x-api-key`, etc. |
+| Field       | Type                                                   | Transport                       | Description                                                                                          |
+| ----------- | ------------------------------------------------------ | ------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `name`      | `string`                                               | all                             | Unique name for this server. Tool names are prefixed `{name}/`                                       |
+| `transport` | `"stdio" \| "streamable-http" \| "sse" \| "websocket"` | all                             | Protocol to use. Use `"streamable-http"` for modern remote servers, `"stdio"` for local subprocesses |
+| `command`   | `string`                                               | stdio                           | Executable to launch (`"bunx"`, `"docker"`, `"python"`, absolute path, etc.)                         |
+| `args`      | `string[]`                                             | stdio                           | Arguments passed to `command`. Includes package names, flags, Docker image, etc.                     |
+| `env`       | `Record<string, string>`                               | stdio                           | Extra env vars merged on top of the parent process environment. Use for per-server secrets           |
+| `cwd`       | `string`                                               | stdio                           | Working directory for the subprocess. Defaults to parent process `cwd`                               |
+| `endpoint`  | `string`                                               | streamable-http, sse, websocket | HTTP/WebSocket URL (`"https://mcp.example.com"`, `"ws://localhost:8000/mcp"`)                        |
+| `headers`   | `Record<string, string>`                               | streamable-http, sse            | HTTP headers sent on every request. Use for `Authorization`, `x-api-key`, etc.                       |
 
 **Examples:**
 
@@ -384,8 +394,8 @@ When `adaptive: true`, the framework calls the LLM with the task description and
 
 ### Lifecycle
 
-| Method | Signature | Description |
-| ------ | --------- | ----------- |
+| Method     | Signature                       | Description               |
+| ---------- | ------------------------------- | ------------------------- |
 | `withHook` | `(hook: LifecycleHook) => this` | Register a lifecycle hook |
 
 #### LifecycleHook
@@ -396,16 +406,16 @@ Use the exported `LifecycleHook` type from `@reactive-agents/runtime`. Handlers 
 
 ### Testing
 
-| Method | Signature | Description |
-| ------ | --------- | ----------- |
+| Method             | Signature                     | Description                                                                                                                                                                                                                                 |
+| ------------------ | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `withTestScenario` | `(turns: TestTurn[]) => this` | Deterministic **test** provider. Forces `provider: "test"`. Turns are `TestTurn` values from `@reactive-agents/llm-provider`: `{ text? }`, `{ toolCall? }`, `{ toolCalls? }`, `{ json? }`, `{ error? }`, optional `match?` (regex) per turn |
 
 See [Testing agents](/cookbook/testing-agents/) and [Configuration](/reference/configuration/) for examples.
 
 ### Advanced
 
-| Method | Signature | Description |
-| ------ | --------- | ----------- |
+| Method       | Signature                           | Description                             |
+| ------------ | ----------------------------------- | --------------------------------------- |
 | `withLayers` | `(layers: Layer<any, any>) => this` | Add custom Effect Layers to the runtime |
 
 ## Build Methods
@@ -432,11 +442,11 @@ Builds the agent, runs a single task, disposes all resources, and returns the re
 
 ```typescript
 const result = await ReactiveAgents.create()
-  .withProvider("anthropic")
-  .withReasoning()
-  .runOnce("Summarize the README in one paragraph");
+    .withProvider('anthropic')
+    .withReasoning()
+    .runOnce('Summarize the README in one paragraph')
 
-console.log(result.output);
+console.log(result.output)
 // Resources are already cleaned up
 ```
 
@@ -472,12 +482,17 @@ If you only need a single result and don't want to manage the agent handle at al
 
 ```typescript
 const result = await ReactiveAgents.create()
-  .withProvider("anthropic")
-  .withMCP({ name: "filesystem", transport: "stdio", command: "npx", args: ["@modelcontextprotocol/server-filesystem", "."] })
-  .withReasoning()
-  .runOnce("List the project files.");
+    .withProvider('anthropic')
+    .withMCP({
+        name: 'filesystem',
+        transport: 'stdio',
+        command: 'npx',
+        args: ['@modelcontextprotocol/server-filesystem', '.'],
+    })
+    .withReasoning()
+    .runOnce('List the project files.')
 
-console.log(result.output);
+console.log(result.output)
 // Resources already cleaned up
 ```
 
@@ -487,24 +502,24 @@ Call `dispose()` manually in a `finally` block when you need to reuse the agent 
 
 ```typescript
 const agent = await ReactiveAgents.create()
-  .withProvider("anthropic")
-  .withReasoning()
-  .build();
+    .withProvider('anthropic')
+    .withReasoning()
+    .build()
 
 try {
-  const r1 = await agent.run("First task");
-  const r2 = await agent.run("Second task");
-  console.log(r1.output, r2.output);
+    const r1 = await agent.run('First task')
+    const r2 = await agent.run('Second task')
+    console.log(r1.output, r2.output)
 } finally {
-  await agent.dispose();
+    await agent.dispose()
 }
 ```
 
-| Pattern | When to use |
-|---------|-------------|
+| Pattern       | When to use                                                 |
+| ------------- | ----------------------------------------------------------- |
 | `await using` | General purpose — automatic cleanup, works with `try/catch` |
-| `runOnce()` | Single-shot scripts and one-liners |
-| `dispose()` | Multiple sequential runs before teardown |
+| `runOnce()`   | Single-shot scripts and one-liners                          |
+| `dispose()`   | Multiple sequential runs before teardown                    |
 
 ### `run(input: string): Promise<AgentResult>`
 
@@ -520,39 +535,42 @@ Run a task as an Effect for composition (see [Effect-TS primer](/concepts/effect
 
 ### Dynamic tools & RAG (runtime)
 
-| Method | Description |
-| ------ | ----------- |
-| `registerTool(definition, handler)` | Register a tool after build; `handler` returns `Effect` |
-| `unregisterTool(name)` | Remove a previously registered custom tool |
+| Method                                      | Description                                               |
+| ------------------------------------------- | --------------------------------------------------------- |
+| `registerTool(definition, handler)`         | Register a tool after build; `handler` returns `Effect`   |
+| `unregisterTool(name)`                      | Remove a previously registered custom tool                |
 | `ingest(content, { source, format?, ... })` | Ingest text into RAG when tools / `withDocuments` enabled |
 
 ### `chat(message: string, options?: ChatOptions): Promise<ChatReply>`
 
 Conversational Q&A with the agent. Routes automatically:
-- **Direct LLM path** — for questions, summaries, and status checks (fast, no tools)
-- **ReAct loop path** — for tool-capable requests (search, fetch, write, create, etc.)
+
+-   **Direct LLM path** — for questions, summaries, and status checks (fast, no tools)
+-   **ReAct loop path** — for tool-capable requests (search, fetch, write, create, etc.)
 
 Injects context from the last run's debrief so the agent can answer "what did you do last time?" accurately.
 
 ```typescript
-const reply = await agent.chat("What did you accomplish last run?");
-console.log(reply.message);
+const reply = await agent.chat('What did you accomplish last run?')
+console.log(reply.message)
 
 // Force tool-capable path
-const reply2 = await agent.chat("Search for the latest AI news", { useTools: true });
-console.log(reply2.toolsUsed); // ["web-search"]
+const reply2 = await agent.chat('Search for the latest AI news', {
+    useTools: true,
+})
+console.log(reply2.toolsUsed) // ["web-search"]
 ```
 
 ```typescript
 interface ChatReply {
-  message: string;
-  toolsUsed?: string[];   // Set when tools were invoked
-  fromMemory?: boolean;   // Set when answered from debrief context
+    message: string
+    toolsUsed?: string[] // Set when tools were invoked
+    fromMemory?: boolean // Set when answered from debrief context
 }
 
 interface ChatOptions {
-  useTools?: boolean;     // Override auto-routing
-  maxIterations?: number; // Cap for tool-capable path (default: 5)
+    useTools?: boolean // Override auto-routing
+    maxIterations?: number // Cap for tool-capable path (default: 5)
 }
 ```
 
@@ -564,33 +582,39 @@ Pass `{ persist: true, id: "my-session" }` to persist conversation history to SQ
 
 ```typescript
 // In-memory session (default)
-const session = agent.session();
+const session = agent.session()
 
-const r1 = await session.chat("What are the key findings from your last run?");
-const r2 = await session.chat("Tell me more about the first finding");
+const r1 = await session.chat('What are the key findings from your last run?')
+const r2 = await session.chat('Tell me more about the first finding')
 // r2 has full context of r1
 
 // Persisted session — survives process restarts
-const persistedSession = agent.session({ persist: true, id: "research-session-1" });
-await persistedSession.chat("Start researching quantum computing");
+const persistedSession = agent.session({
+    persist: true,
+    id: 'research-session-1',
+})
+await persistedSession.chat('Start researching quantum computing')
 // On next run, restore the session:
-const restoredSession = agent.session({ persist: true, id: "research-session-1" });
-await restoredSession.chat("Continue where we left off");
+const restoredSession = agent.session({
+    persist: true,
+    id: 'research-session-1',
+})
+await restoredSession.chat('Continue where we left off')
 
-const history = session.history(); // ChatMessage[]
-await session.end();               // Clears history (and DB record if persisted)
+const history = session.history() // ChatMessage[]
+await session.end() // Clears history (and DB record if persisted)
 ```
 
 ```typescript
 interface SessionOptions {
-  persist?: boolean;   // Persist history to SQLite via SessionStoreService
-  id?: string;         // Session ID for persistence (auto-generated if omitted)
+    persist?: boolean // Persist history to SQLite via SessionStoreService
+    id?: string // Session ID for persistence (auto-generated if omitted)
 }
 
 interface AgentSession {
-  chat(message: string): Promise<ChatReply>;
-  history(): ChatMessage[];
-  end(): Promise<void>;
+    chat(message: string): Promise<ChatReply>
+    history(): ChatMessage[]
+    end(): Promise<void>
 }
 ```
 
@@ -601,23 +625,23 @@ Requires `.withHealthCheck()` to be enabled.
 Returns a structured health snapshot of all agent subsystems. Use for readiness probes, liveness checks, and monitoring dashboards.
 
 ```typescript
-const health = await agent.health();
-console.log(health.status);  // "healthy" | "degraded" | "unhealthy"
+const health = await agent.health()
+console.log(health.status) // "healthy" | "degraded" | "unhealthy"
 
 for (const check of health.checks) {
-  console.log(`${check.name}: ${check.status} — ${check.message}`);
+    console.log(`${check.name}: ${check.status} — ${check.message}`)
 }
 ```
 
 ```typescript
 interface HealthResult {
-  status: "healthy" | "degraded" | "unhealthy";
-  checks: Array<{
-    name: string;
-    status: "pass" | "warn" | "fail";
-    message?: string;
-    durationMs?: number;
-  }>;
+    status: 'healthy' | 'degraded' | 'unhealthy'
+    checks: Array<{
+        name: string
+        status: 'pass' | 'warn' | 'fail'
+        message?: string
+        durationMs?: number
+    }>
 }
 ```
 
@@ -633,12 +657,12 @@ Get the execution context of a running or completed task.
 
 Requires `.withKillSwitch()` to be enabled.
 
-| Method | Signature | Description |
-|--------|-----------|-------------|
-| `pause()` | `() => Promise<void>` | Pause execution at the next phase boundary. Blocks until `resume()` is called |
-| `resume()` | `() => Promise<void>` | Resume a paused agent |
-| `stop(reason)` | `(reason: string) => Promise<void>` | Graceful stop — signals intent; agent completes current phase then exits |
-| `terminate(reason)` | `(reason: string) => Promise<void>` | Immediate termination (also triggers kill switch) |
+| Method              | Signature                           | Description                                                                   |
+| ------------------- | ----------------------------------- | ----------------------------------------------------------------------------- |
+| `pause()`           | `() => Promise<void>`               | Pause execution at the next phase boundary. Blocks until `resume()` is called |
+| `resume()`          | `() => Promise<void>`               | Resume a paused agent                                                         |
+| `stop(reason)`      | `(reason: string) => Promise<void>` | Graceful stop — signals intent; agent completes current phase then exits      |
+| `terminate(reason)` | `(reason: string) => Promise<void>` | Immediate termination (also triggers kill switch)                             |
 
 ### Event Subscription
 
@@ -648,20 +672,20 @@ Requires an EventBus to be wired (any feature that enables it, e.g., `.withObser
 
 ```typescript
 // ── Tag-filtered: event is narrowed to the exact payload type ──────────────
-const unsub = await agent.subscribe("AgentCompleted", (event) => {
-  // TypeScript knows event has: taskId, agentId, success, totalIterations,
-  // totalTokens, durationMs — no _tag check, no cast needed
-  console.log(`Done in ${event.durationMs}ms, ${event.totalTokens} tokens`);
-});
-unsub();
+const unsub = await agent.subscribe('AgentCompleted', (event) => {
+    // TypeScript knows event has: taskId, agentId, success, totalIterations,
+    // totalTokens, durationMs — no _tag check, no cast needed
+    console.log(`Done in ${event.durationMs}ms, ${event.totalTokens} tokens`)
+})
+unsub()
 
 // ── Catch-all: receives the full AgentEvent union ──────────────────────────
 const unsub2 = await agent.subscribe((event) => {
-  // Discriminate via event._tag when handling multiple types in one handler
-  if (event._tag === "ToolCallStarted") console.log(`Tool: ${event.toolName}`);
-  if (event._tag === "LLMRequestStarted") console.log(`Model: ${event.model}`);
-});
-unsub2();
+    // Discriminate via event._tag when handling multiple types in one handler
+    if (event._tag === 'ToolCallStarted') console.log(`Tool: ${event.toolName}`)
+    if (event._tag === 'LLMRequestStarted') console.log(`Model: ${event.model}`)
+})
+unsub2()
 ```
 
 TypeScript signatures:
@@ -680,85 +704,89 @@ subscribe(handler: (event: AgentEvent) => void): Promise<() => void>;
 The `AgentEventTag` and `TypedEventHandler<T>` helpers are exported from `@reactive-agents/core` for use in your own service code:
 
 ```typescript
-import { Effect } from "effect";
-import type { AgentEventTag, TypedEventHandler } from "@reactive-agents/core";
+import { Effect } from 'effect'
+import type { AgentEventTag, TypedEventHandler } from '@reactive-agents/core'
 
 // Build a typed handler outside of an inline callback
-const onStepComplete: TypedEventHandler<"ReasoningStepCompleted"> = (event) => {
-  // event.thought, event.action, event.observation — all typed
-  return Effect.log(`Step ${event.step}: ${event.thought ?? event.action}`);
-};
+const onStepComplete: TypedEventHandler<'ReasoningStepCompleted'> = (event) => {
+    // event.thought, event.action, event.observation — all typed
+    return Effect.log(`Step ${event.step}: ${event.thought ?? event.action}`)
+}
 
-yield* eventBus.on("ReasoningStepCompleted", onStepComplete);
+yield * eventBus.on('ReasoningStepCompleted', onStepComplete)
 ```
 
 **Subscribable event tags:**
 
-| Tag | Payload fields |
-|-----|---------------|
-| `AgentStarted` | `taskId`, `agentId`, `provider`, `model`, `timestamp` |
-| `AgentCompleted` | `taskId`, `agentId`, `success`, `totalIterations`, `totalTokens`, `durationMs` |
-| `LLMRequestStarted` | `taskId`, `requestId`, `model`, `provider`, `contextSize` |
-| `LLMRequestCompleted` | `taskId`, `requestId`, `tokensUsed`, `durationMs` |
-| `ReasoningStepCompleted` | `taskId`, `strategy`, `step`, `thought\|action\|observation` |
-| `ToolCallStarted` | `taskId`, `toolName`, `callId` |
-| `ToolCallCompleted` | `taskId`, `toolName`, `callId`, `success`, `durationMs` |
-| `FinalAnswerProduced` | `taskId`, `strategy`, `answer`, `iteration`, `totalTokens` |
-| `GuardrailViolationDetected` | `taskId`, `violations`, `score`, `blocked` |
-| `ExecutionPhaseEntered` | `taskId`, `phase` |
-| `ExecutionPhaseCompleted` | `taskId`, `phase`, `durationMs` |
-| `ExecutionHookFired` | `taskId`, `phase`, `timing` |
-| `ExecutionCancelled` | `taskId` |
-| `MemoryBootstrapped` | `agentId`, `tier` |
-| `MemoryFlushed` | `agentId` |
-| `AgentPaused` | `agentId`, `taskId` |
-| `AgentResumed` | `agentId`, `taskId` |
-| `AgentStopped` | `agentId`, `taskId`, `reason` |
-| `TaskCompleted` | `taskId`, `success` |
-| `GatewayStarted` | `agentId`, `timestamp` |
-| `GatewayStopped` | `agentId`, `reason` |
-| `GatewayEventReceived` | `agentId`, `eventId`, `source`, `category` |
-| `ProactiveActionInitiated` | `agentId`, `eventId`, `action` |
-| `ProactiveActionCompleted` | `agentId`, `eventId`, `success`, `durationMs` |
-| `ProactiveActionSuppressed` | `agentId`, `eventId`, `reason` |
-| `PolicyDecisionMade` | `agentId`, `eventId`, `action`, `policyTag` |
-| `HeartbeatSkipped` | `agentId`, `consecutiveSkips`, `reason` |
-| `EventsMerged` | `agentId`, `mergedCount`, `mergeKey` |
-| `BudgetExhausted` | `agentId`, `tokensUsed`, `dailyBudget` |
-| `StrategySwitchEvaluated` | `taskId`, `fromStrategy`, `recommendedStrategy`, `rationale`, `willSwitch` |
-| `StrategySwitched` | `taskId`, `fromStrategy`, `toStrategy`, `switchNumber`, `stepsCarriedOver` |
-| `ProviderFallbackActivated` | `taskId`, `fromProvider`, `toProvider`, `reason`, `attemptNumber` |
-| `DebriefCompleted` | `taskId`, `agentId`, `debrief` |
-| `ChatTurn` | `taskId`, `sessionId`, `role`, `content`, `routedVia`, `tokensUsed?` |
-| `MemorySnapshot` | `taskId`, `iteration`, `working`, `episodicCount`, `semanticCount`, `skillsActive` |
-| `ContextPressure` | `taskId`, `utilizationPct`, `tokensUsed`, `tokensAvailable`, `level` |
-| `AgentHealthReport` | `agentId`, `status`, `checks[]`, `uptimeMs` |
-| `AgentConnected` | `agentId`, `runId`, `cortexUrl` |
-| `AgentDisconnected` | `agentId`, `runId`, `reason` |
+| Tag                          | Payload fields                                                                     |
+| ---------------------------- | ---------------------------------------------------------------------------------- |
+| `AgentStarted`               | `taskId`, `agentId`, `provider`, `model`, `timestamp`                              |
+| `AgentCompleted`             | `taskId`, `agentId`, `success`, `totalIterations`, `totalTokens`, `durationMs`     |
+| `LLMRequestStarted`          | `taskId`, `requestId`, `model`, `provider`, `contextSize`                          |
+| `LLMRequestCompleted`        | `taskId`, `requestId`, `tokensUsed`, `durationMs`                                  |
+| `ReasoningStepCompleted`     | `taskId`, `strategy`, `step`, `thought\|action\|observation`                       |
+| `ToolCallStarted`            | `taskId`, `toolName`, `callId`                                                     |
+| `ToolCallCompleted`          | `taskId`, `toolName`, `callId`, `success`, `durationMs`                            |
+| `FinalAnswerProduced`        | `taskId`, `strategy`, `answer`, `iteration`, `totalTokens`                         |
+| `GuardrailViolationDetected` | `taskId`, `violations`, `score`, `blocked`                                         |
+| `ExecutionPhaseEntered`      | `taskId`, `phase`                                                                  |
+| `ExecutionPhaseCompleted`    | `taskId`, `phase`, `durationMs`                                                    |
+| `ExecutionHookFired`         | `taskId`, `phase`, `timing`                                                        |
+| `ExecutionCancelled`         | `taskId`                                                                           |
+| `MemoryBootstrapped`         | `agentId`, `tier`                                                                  |
+| `MemoryFlushed`              | `agentId`                                                                          |
+| `AgentPaused`                | `agentId`, `taskId`                                                                |
+| `AgentResumed`               | `agentId`, `taskId`                                                                |
+| `AgentStopped`               | `agentId`, `taskId`, `reason`                                                      |
+| `TaskCompleted`              | `taskId`, `success`                                                                |
+| `GatewayStarted`             | `agentId`, `timestamp`                                                             |
+| `GatewayStopped`             | `agentId`, `reason`                                                                |
+| `GatewayEventReceived`       | `agentId`, `eventId`, `source`, `category`                                         |
+| `ProactiveActionInitiated`   | `agentId`, `eventId`, `action`                                                     |
+| `ProactiveActionCompleted`   | `agentId`, `eventId`, `success`, `durationMs`                                      |
+| `ProactiveActionSuppressed`  | `agentId`, `eventId`, `reason`                                                     |
+| `PolicyDecisionMade`         | `agentId`, `eventId`, `action`, `policyTag`                                        |
+| `HeartbeatSkipped`           | `agentId`, `consecutiveSkips`, `reason`                                            |
+| `EventsMerged`               | `agentId`, `mergedCount`, `mergeKey`                                               |
+| `BudgetExhausted`            | `agentId`, `tokensUsed`, `dailyBudget`                                             |
+| `StrategySwitchEvaluated`    | `taskId`, `fromStrategy`, `recommendedStrategy`, `rationale`, `willSwitch`         |
+| `StrategySwitched`           | `taskId`, `fromStrategy`, `toStrategy`, `switchNumber`, `stepsCarriedOver`         |
+| `ProviderFallbackActivated`  | `taskId`, `fromProvider`, `toProvider`, `reason`, `attemptNumber`                  |
+| `DebriefCompleted`           | `taskId`, `agentId`, `debrief`                                                     |
+| `ChatTurn`                   | `taskId`, `sessionId`, `role`, `content`, `routedVia`, `tokensUsed?`               |
+| `MemorySnapshot`             | `taskId`, `iteration`, `working`, `episodicCount`, `semanticCount`, `skillsActive` |
+| `ContextPressure`            | `taskId`, `utilizationPct`, `tokensUsed`, `tokensAvailable`, `level`               |
+| `AgentHealthReport`          | `agentId`, `status`, `checks[]`, `uptimeMs`                                        |
+| `AgentConnected`             | `agentId`, `runId`, `cortexUrl`                                                    |
+| `AgentDisconnected`          | `agentId`, `runId`, `reason`                                                       |
 
 ## AgentResult
 
 ```typescript
 interface AgentResult {
-  output: string;           // The agent's response
-  success: boolean;         // Whether the task completed successfully
-  taskId: string;           // Unique task identifier
-  agentId: string;          // Agent that ran the task
-  metadata: {
-    duration: number;       // Execution time in milliseconds
-    cost: number;           // Estimated cost in USD
-    tokensUsed: number;     // Total tokens consumed across all LLM calls
-    strategyUsed?: string;  // Reasoning strategy used (if reasoning enabled)
-    stepsCount: number;     // Number of reasoning steps / iterations
-    confidence?: "high" | "medium" | "low";  // From final-answer tool
-  };
+    output: string // The agent's response
+    success: boolean // Whether the task completed successfully
+    taskId: string // Unique task identifier
+    agentId: string // Agent that ran the task
+    metadata: {
+        duration: number // Execution time in milliseconds
+        cost: number // Estimated cost in USD
+        tokensUsed: number // Total tokens consumed across all LLM calls
+        strategyUsed?: string // Reasoning strategy used (if reasoning enabled)
+        stepsCount: number // Number of reasoning steps / iterations
+        confidence?: 'high' | 'medium' | 'low' // From final-answer tool
+    }
 
-  // Enriched fields (present when reasoning is enabled)
-  format?: "text" | "json" | "markdown" | "csv" | "html"; // Output format declared by agent
-  terminatedBy?: "final_answer_tool" | "final_answer" | "max_iterations" | "end_turn";
+    // Enriched fields (present when reasoning is enabled)
+    format?: 'text' | 'json' | 'markdown' | 'csv' | 'html' // Output format declared by agent
+    terminatedBy?:
+        | 'final_answer_tool'
+        | 'final_answer'
+        | 'max_iterations'
+        | 'end_turn'
 
-  // Debrief (present when .withMemory() + .withReasoning() are enabled)
-  debrief?: AgentDebrief;
+    // Debrief (present when .withMemory() + .withReasoning() are enabled)
+    debrief?: AgentDebrief
 }
 ```
 
@@ -768,26 +796,31 @@ A structured post-run synthesis produced automatically when memory is enabled:
 
 ```typescript
 interface AgentDebrief {
-  outcome: "success" | "partial" | "failed";
-  summary: string;                    // 2-3 sentence narrative
-  keyFindings: string[];
-  errorsEncountered: string[];
-  lessonsLearned: string[];           // Auto-fed to ExperienceStore
-  confidence: "high" | "medium" | "low";
-  caveats?: string;
-  toolsUsed: { name: string; calls: number; successRate: number }[];
-  metrics: { tokens: number; duration: number; iterations: number; cost: number };
-  markdown: string;                   // Pre-rendered Markdown version
+    outcome: 'success' | 'partial' | 'failed'
+    summary: string // 2-3 sentence narrative
+    keyFindings: string[]
+    errorsEncountered: string[]
+    lessonsLearned: string[] // Auto-fed to ExperienceStore
+    confidence: 'high' | 'medium' | 'low'
+    caveats?: string
+    toolsUsed: { name: string; calls: number; successRate: number }[]
+    metrics: {
+        tokens: number
+        duration: number
+        iterations: number
+        cost: number
+    }
+    markdown: string // Pre-rendered Markdown version
 }
 ```
 
 Access it from any run result:
 
 ```typescript
-const result = await agent.run("Fetch the latest commits and summarize");
+const result = await agent.run('Fetch the latest commits and summarize')
 if (result.debrief) {
-  console.log(result.debrief.summary);
-  console.log(result.debrief.markdown);
+    console.log(result.debrief.summary)
+    console.log(result.debrief.markdown)
 }
 ```
 
