@@ -18,32 +18,33 @@ const agent = await ReactiveAgents.create()
     //     command: 'docker',
     //     args: ['run', '-i', '--rm', 'mcp/context7:latest'],
     // })
-    .withMCP({
-        name: 'github',
-        transport: 'stdio',
-        command: 'docker',
-        args: [
-            'run',
-            '-i',
-            '--rm',
-            '-e',
-            'GITHUB_PERSONAL_ACCESS_TOKEN',
-            'ghcr.io/github/github-mcp-server',
-        ],
-        env: {
-            GITHUB_PERSONAL_ACCESS_TOKEN:
-                process.env.GITHUB_PERSONAL_ACCESS_TOKEN ?? '',
-        },
-    })
+    // .withMCP({
+    //     name: 'github',
+    //     transport: 'stdio',
+    //     command: 'docker',
+    //     args: [
+    //         'run',
+    //         '-i',
+    //         '--rm',
+    //         '-e',
+    //         'GITHUB_PERSONAL_ACCESS_TOKEN',
+    //         'ghcr.io/github/github-mcp-server',
+    //     ],
+    //     env: {
+    //         GITHUB_PERSONAL_ACCESS_TOKEN:
+    //             process.env.GITHUB_PERSONAL_ACCESS_TOKEN ?? '',
+    //     },
+    // })
     .withReasoning({ defaultStrategy: 'reactive' })
-    // .withTools()
+    .withTools()
     // .withDynamicSubAgents()
     .withMemory()
+    .withTerminalTools()
     .withObservability({ verbosity: 'debug', live: true })
     .build()
 
 const result = await agent.run(
-    'Fetch and summarize the 5 last commits to the tylerjrbuell/reactive-agents-ts repo. Include any relevant code changes.'
+    'Use the github cli "gh" to Fetch and summarize the 5 last commits to the tylerjrbuell/reactive-agents-ts repo. Then render a markdown table with columns for commit message, author, and date.'
 )
 
 console.log('\n--- Result ---')

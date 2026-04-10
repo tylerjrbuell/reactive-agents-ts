@@ -1,4 +1,9 @@
 
+import __ASTRO_IMAGE_IMPORT_Z2t1tuk from "../../../assets/cortex-beacon-landing.png?astroContentImageFlag=&importer=src%2Fcontent%2Fdocs%2Ffeatures%2Fcortex.md";
+import __ASTRO_IMAGE_IMPORT_Z2wBhRE from "../../../assets/cortex-beacon.png?astroContentImageFlag=&importer=src%2Fcontent%2Fdocs%2Ffeatures%2Fcortex.md";
+import __ASTRO_IMAGE_IMPORT_ZeeSW from "../../../assets/cortex-builder.png?astroContentImageFlag=&importer=src%2Fcontent%2Fdocs%2Ffeatures%2Fcortex.md";
+import __ASTRO_IMAGE_IMPORT_Z1pyffu from "../../../assets/cortex-chat-session.png?astroContentImageFlag=&importer=src%2Fcontent%2Fdocs%2Ffeatures%2Fcortex.md";
+import __ASTRO_IMAGE_IMPORT_ZTmn3 from "../../../assets/cortex-run-details.png?astroContentImageFlag=&importer=src%2Fcontent%2Fdocs%2Ffeatures%2Fcortex.md";
 import __ASTRO_IMAGE_IMPORT_Zc70I7 from "../../assets/logo-dark.svg?astroContentImageFlag=&importer=src%2Fcontent%2Fdocs%2Findex.mdx";
-export default new Map([["../../assets/logo-dark.svg?astroContentImageFlag=&importer=src%2Fcontent%2Fdocs%2Findex.mdx", __ASTRO_IMAGE_IMPORT_Zc70I7]]);
+export default new Map([["../../../assets/cortex-beacon-landing.png?astroContentImageFlag=&importer=src%2Fcontent%2Fdocs%2Ffeatures%2Fcortex.md", __ASTRO_IMAGE_IMPORT_Z2t1tuk], ["../../../assets/cortex-beacon.png?astroContentImageFlag=&importer=src%2Fcontent%2Fdocs%2Ffeatures%2Fcortex.md", __ASTRO_IMAGE_IMPORT_Z2wBhRE], ["../../../assets/cortex-builder.png?astroContentImageFlag=&importer=src%2Fcontent%2Fdocs%2Ffeatures%2Fcortex.md", __ASTRO_IMAGE_IMPORT_ZeeSW], ["../../../assets/cortex-chat-session.png?astroContentImageFlag=&importer=src%2Fcontent%2Fdocs%2Ffeatures%2Fcortex.md", __ASTRO_IMAGE_IMPORT_Z1pyffu], ["../../../assets/cortex-run-details.png?astroContentImageFlag=&importer=src%2Fcontent%2Fdocs%2Ffeatures%2Fcortex.md", __ASTRO_IMAGE_IMPORT_ZTmn3], ["../../assets/logo-dark.svg?astroContentImageFlag=&importer=src%2Fcontent%2Fdocs%2Findex.mdx", __ASTRO_IMAGE_IMPORT_Zc70I7]]);
 		
