@@ -87,8 +87,8 @@ const agent = await ReactiveAgents.create()
   { id: "policy-1", content: "Company policy...", metadata: { source: "policy" } },
 ])
 .withMemory({ tier: "enhanced", dbPath: "./agent.db" })
-.withTools({ allowedTools: ["rag-search", "recall", "checkpoint"] })
-// rag-search: searches over .withDocuments() content
+.withTools({ allowedTools: ["find", "recall", "checkpoint"] })
+// find: searches over .withDocuments() content (rag-search was removed — use find)
 // recall: searches over past agent interactions in memory
 ```
 
@@ -110,14 +110,15 @@ const writerAgent = await ReactiveAgents.create()
 | Method | Key params | Notes |
 |--------|-----------|-------|
 | `.withMemory(opts?)` | `"standard"\|"enhanced"\|{ tier, dbPath?, capacity? }` | No args = `"standard"` |
-| `.withDocuments(docs)` | `DocumentSpec[]` | RAG context — pairs with `rag-search` tool |
+| `.withDocuments(docs)` | `DocumentSpec[]` | RAG context — pairs with `find` tool |
 | `.withExperienceLearning()` | — | Injects prior-run experience tips from episodic memory |
 
 ## Pitfalls
 
 - `"1"` and `"2"` are **deprecated** tier names — use `"standard"` and `"enhanced"`
 - `"enhanced"` without `dbPath` uses a default path — always set `dbPath` explicitly in multi-agent environments to prevent collisions
-- `recall` and `find` tools require `.withMemory()` — they silently return empty results if memory is not configured
+- `recall` requires `.withMemory()` — silently returns empty results without it
+- `find` routes across multiple sources: `scope: "documents"` needs `.withDocuments()`, `scope: "memory"` needs `.withMemory()`, `scope: "web"` needs web-search enabled, `scope: "auto"` (default) tries documents first, falls back to web
 - SQLite requires a writable filesystem path — check permissions before deployment
 - `capacity` too low causes premature eviction of working memory; keep at 12–24 for long tasks
 - `.withExperienceLearning()` requires `.withMemory({ tier: "enhanced" })` — without it, no experience is persisted to inject

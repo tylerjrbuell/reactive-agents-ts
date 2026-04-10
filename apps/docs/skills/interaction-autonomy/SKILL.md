@@ -76,7 +76,7 @@ const agent = ReactiveAgents.create()
 const agent = ReactiveAgents.create()
   .withInteraction()
   .withGuardrails()
-  .withBehavioralContracts({ requireApprovalFor: ["file-write", "send-email"] })
+  .withGateway({ policies: { requireApprovalFor: ["file-write", "send-email"] } })
   .build();
 
 // "collaborative" — agent and user exchange messages during execution

@@ -102,7 +102,10 @@ Enable selectively with `allowedTools`:
 `web-search`, `http-get`, `file-read`, `file-write`, `code-execute`
 
 **Meta-tools** (registered by kernel, available in `.withTools()`):
-`checkpoint`, `recall`, `find`, `brief`, `pulse`, `context-status`, `task-complete`, `final-answer`, `shell-execute`
+`checkpoint`, `recall`, `find`, `brief`, `pulse`, `context-status`, `task-complete`, `final-answer`
+
+**Opt-in tools** (not auto-enabled — must be registered manually):
+`shell-execute` — see `shell-execution-sandbox` skill for registration pattern
 
 ```ts
 // Only allow read-only tools

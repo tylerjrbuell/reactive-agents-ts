@@ -91,11 +91,11 @@ await agent.dispose();
   { id: "product-docs", content: docsContent, metadata: { source: "docs" } },
 ])
 .withTools({
-  allowedTools: ["rag-search", "web-search", "http-get", "recall", "checkpoint"],
+  allowedTools: ["find", "web-search", "http-get", "recall", "checkpoint"],
 })
-// rag-search queries .withDocuments() content
-// recall queries past research in memory
-// web-search searches the live web
+// find: searches over .withDocuments() content (rag-search was removed)
+// recall: searches over past agent interactions in memory
+// web-search: searches the live web
 ```
 
 ### Cost-bounded research
