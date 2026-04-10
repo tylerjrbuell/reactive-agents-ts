@@ -406,16 +406,22 @@ All 22 publishable packages move together (fixed group) — bumping any one pack
 
 Canonical project skills live in `.agents/skills/`:
 
--   `architecture-reference` — dependency graph, build order, architecture navigation
+-   `architecture-reference` — dependency graph, build order, kernel/MCP navigation
 -   `build-coordinator` — multi-agent coordination workflow
--   `build-package` — package implementation from spec
--   `codebase-to-course` — educational HTML course generation from codebase
+-   `build-package` — add a net-new `@reactive-agents/*` package to the monorepo
+-   `agent-tdd` — Effect-TS TDD: timeouts, Effect.flip, server teardown
+-   `kernel-extension` — composable kernel phases, guards, meta-tools
+-   `kernel-debug` — symptom-to-phase debugging map
+-   `provider-streaming` — provider streaming quirks and adapter hooks
+-   `mcp-integration` — MCP client, Docker lifecycle, transport inference
+-   `reactive-feature-dev` — end-to-end feature workflow routing
+-   `prepare-release` — pre-flight checks, changeset, release doc template
 -   `effect-ts-patterns` — mandatory Effect-TS patterns and anti-patterns
 -   `implement-service` — service creation workflow
 -   `implement-test` — test creation workflow
 -   `llm-api-contract` — LLM API signatures and tool-calling contracts
 -   `memory-patterns` — memory/SQLite/FTS/vec patterns
--   `review-patterns` — 8-category compliance review
+-   `review-patterns` — 9-category compliance review (incl. kernel extension)
 -   `update-docs` — documentation + skills + memory synchronization workflow
 -   `validate-build` — quality gate checklist for build/test/review
 
