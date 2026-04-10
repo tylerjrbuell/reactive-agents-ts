@@ -6,6 +6,64 @@ argument-hint: <package-name-or-service>
 
 # Write Tests: $ARGUMENTS
 
+## Mandatory Rules — Read Before Writing Any Test
+
+These three rules prevent the most common test failures in this codebase. Violating them causes permanent hangs, flaky CI, and false greens.
+
+### Rule 1: Always pass `--timeout 15000`
+
+Effect-TS leaves dangling event loop handles (timers, sqlite connections, open streams). Without an explicit timeout, the test runner waits forever after tests complete.
+
+```bash
+# CORRECT — always targeted with timeout:
+bun test packages/<pkg>/tests/<file>.test.ts --timeout 15000
+
+# WRONG — never run without timeout:
+bun test
+```
+
+Add the run command as a comment at the top of every test file:
+
+```typescript
+// Run: bun test packages/<pkg>/tests/<this-file>.test.ts --timeout 15000
+```
+
+### Rule 2: Always tear down servers with `.stop(true)`
+
+Any `Bun.serve()`, Elysia, or Express instance left open after tests will trap the process permanently. Use `afterAll`:
+
+```typescript
+import { afterAll } from "bun:test";
+let server: ReturnType<typeof Bun.serve> | undefined;
+
+afterAll(async () => {
+  await server?.stop(true); // true = force close all connections
+});
+```
+
+### Rule 3: Use `Effect.flip` for error assertions
+
+Effect errors do not throw. Using `try/catch` around `Effect.runPromise` for error testing produces false greens (the test always passes because the catch block is never reached the way you expect).
+
+```typescript
+// WRONG — silent false green:
+try {
+  await effect.pipe(Effect.provide(layer), Effect.runPromise);
+} catch (e) {
+  expect(e).toBeDefined();
+}
+
+// CORRECT:
+const error = await effect.pipe(
+  Effect.provide(layer),
+  Effect.flip,
+  Effect.runPromise,
+);
+expect(error._tag).toBe("MyError");
+```
+
+---
+
 ## Test Framework
 
 - **Runner:** `bun:test` (built into Bun)
