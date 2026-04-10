@@ -14,7 +14,8 @@
 
 ## Current Status (Apr 8, 2026)
 - **v0.9.0 docs canonicalization pass** — `AGENTS.md` is canonical; `CLAUDE.md` reduced to compatibility pointer
-- **Documentation workflow upgraded** — `update-docs` skill now explicitly includes `.agents/MEMORY.md` + repo memory updates and audits all 12 project skills in `.agents/skills/`
+- **Documentation workflow upgraded** — `update-docs` skill now explicitly includes `.agents/MEMORY.md` + repo memory updates and audits all 13 project skills in `.agents/skills/`
+- **`harness-improvement-loop` skill added** — runs instrumented agent probes (5 probe types, debug verbosity, JSONL output), analyzes real runtime output against expected harness behavior, produces accumulating improvement reports; fix phase delegated to `agent-tdd`
 - **Governance docs synchronized** — root/cortex AGENTS, spec `DOCUMENT_INDEX.md`, contributing guide, and reasoning guide aligned with latest changelog behaviors
 - **Preparing for Show HN** — architecture solid, DX polished
 
