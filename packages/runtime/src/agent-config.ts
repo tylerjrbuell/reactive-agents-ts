@@ -590,6 +590,7 @@ export function builderToConfig(state: {
     const to = state._toolsOptions as any;
     if (to?.allowedTools) t["allowedTools"] = [...to.allowedTools];
     if (to?.adaptive !== undefined) t["adaptive"] = to.adaptive;
+    if (to?.terminal !== undefined) t["terminal"] = to.terminal;
     config["tools"] = t;
   }
 

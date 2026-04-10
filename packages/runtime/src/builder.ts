@@ -17,6 +17,7 @@ import type {
   ToolDefinition,
   ResultCompressionConfig,
 } from "@reactive-agents/tools";
+import { shellExecuteTool, shellExecuteHandler } from "@reactive-agents/tools";
 import type { RemoteAgentClient } from "@reactive-agents/tools";
 import type { PromptTemplate } from "@reactive-agents/prompts";
 import type { Task, TaskResult } from "@reactive-agents/core";
@@ -157,6 +158,25 @@ export interface ToolsOptions {
    * Default: false (all tools shown)
    */
   readonly adaptive?: boolean;
+  /**
+   * Enable the shell-execute tool for terminal/CLI command execution.
+   *
+   * When true, the agent gains access to controlled shell command execution with:
+   * - Allowlist of safe commands (git, ls, cat, grep, find, node, bun, npm, python, curl, echo, mkdir, cp, mv, wc, head, tail, sort, jq)
+   * - Blocklist patterns for dangerous operations (rm -rf, chmod 777, sudo, eval, etc.)
+   * - Working directory locked to project root or sandbox dir
+   * - 30s timeout per command, 4000 char output truncation
+   *
+   * Useful for agents that need to inspect files, run build commands, or execute scripts safely.
+   *
+   * @example
+   * ```typescript
+   * agent.withTools({ terminal: true })
+   * ```
+   *
+   * Default: false (shell-execute not available)
+   */
+  readonly terminal?: boolean;
 }
 
 /**
@@ -1318,6 +1338,32 @@ export class ReactiveAgentBuilder {
   }
 
   /**
+   * Enable the shell-execute tool for safe terminal command execution.
+   *
+   * Registers the shell-execute tool which allows controlled CLI command execution with:
+   * - Allowlisted safe commands (git, ls, cat, grep, find, node, bun, npm, python, curl, echo, mkdir, cp, mv, wc, head, tail, sort, jq)
+   * - Blocklist patterns for dangerous operations (rm -rf, chmod 777, sudo, eval, etc.)
+   * - Working directory constraint to project root or sandbox
+   * - 30s timeout and 4000 char output truncation per command
+   *
+   * Equivalent to calling `.withTools({ terminal: true })`.
+   *
+   * @returns `this` for chaining
+   * @example
+   * ```typescript
+   * const agent = await ReactiveAgents.create()
+   *   .withProvider("anthropic")
+   *   .withTerminalTools()
+   *   .build();
+   * ```
+   */
+  withTerminalTools(): this {
+    this._enableTools = true;
+    this._toolsOptions = { ...this._toolsOptions, terminal: true };
+    return this;
+  }
+
+  /**
    * Pre-load documents into the agent's RAG memory store at build time.
    *
    * Documents are chunked and indexed so the agent can retrieve them via the
@@ -2171,7 +2217,7 @@ export class ReactiveAgentBuilder {
     // Auto-resolve context profile from model name if not explicitly set
     if (!this._contextProfile && this._model) {
       const { resolveProfile } = await import("@reactive-agents/reasoning");
-      this._contextProfile = resolveProfile(this._model);
+      this._contextProfile = resolveProfile(this._model, undefined, this._provider);
     }
 
     // Build-time validation
@@ -3047,6 +3093,10 @@ export class ReactiveAgentBuilder {
             for (const tool of toolsOptions.tools) {
               yield* (ts as any).register(tool.definition, tool.handler);
             }
+          }
+          // Register terminal tool if enabled
+          if ((toolsOptions as any)?.terminal) {
+            yield* (ts as any).register(shellExecuteTool, shellExecuteHandler);
           }
           // Capture parent ToolService ref so spawn-agent can proxy MCP tools
           parentToolServiceRef = ts;
