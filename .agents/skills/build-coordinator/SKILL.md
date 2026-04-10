@@ -135,6 +135,8 @@ After all changes are complete:
 
 **Rule:** Each teammate should have 3–6 active tasks. Break large changes into sub-tasks.
 
+**Kernel changes (packages/reasoning):** The kernel uses a composable Phase pipeline. New behavior goes into `phases/<name>.ts` and is wired via `makeKernel({ phases: [...] })`. Do NOT add to `kernel-runner.ts` main loop. See `.agents/skills/kernel-extension/SKILL.md`.
+
 ## Cross-Package Communication Points
 
 These are the critical integration interfaces — verify them explicitly when changes touch these boundaries:
@@ -151,7 +153,7 @@ These are the critical integration interfaces — verify them explicitly when ch
 | `tools` ToolService                          | runtime, orchestration                       | `ToolService.register()` / `ToolService.execute()`                               |
 | `reasoning` StrategySelector                 | runtime                                      | `StrategySelector.select()` → `ReasoningStrategy`                                |
 | `runtime` DebriefSynthesizer                 | runtime (post-run)                           | Structured `AgentDebrief` from execution signals                                 |
-| `reactive-intelligence` EntropySensorService | reasoning (KernelRunner)                     | Post-kernel entropy scoring + trajectory analysis                                |
+| `reactive-intelligence` EntropySensorService | reasoning (composable kernel)               | Post-kernel entropy scoring + trajectory analysis                                |
 | `health` HealthCheckService                  | runtime (agent.health())                     | Readiness probes                                                                 |
 | `gateway` GatewayService                     | runtime (.withGateway())                     | Heartbeats, crons, webhooks, policy engine                                       |
 
@@ -196,7 +198,5 @@ apps/
 5. **Not verifying index.ts exports** — downstream packages will fail to import
 6. **Forgetting documentation updates** — run `/update-docs` after completing any feature work
 7. **Editing runtime without rebuilding** — packages use `dist/` compiled output; must `bun run build` after source changes
-
-```
-
-```
+8. **Adding kernel logic to kernel-runner.ts instead of a Phase** — the composable phase pipeline is how the kernel is extended. Direct edits to the main loop bypass the phase contract and cause subtle failures. Route all new per-turn behavior through a Phase or Guard.
+9. **Touching dead code areas** — `buildDynamicContext`/`buildStaticContext` and ~690 LOC in `context-engine.ts` are dead. Agents occasionally "fix" these. Do not touch them.
