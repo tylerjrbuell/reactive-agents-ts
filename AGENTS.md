@@ -465,3 +465,45 @@ When any capability changes, update all three:
 3. `apps/docs/src/content/docs/` for API and behavior details
 
 Do not maintain feature truth in multiple internal guides. Keep this file operational and workflow-focused; keep API truth in Starlight docs.
+
+---
+
+## Consumer Skills (Public — for agents building with the framework)
+
+For AI agents using reactive-agents-ts to build agents on behalf of users.
+Served from `apps/docs/skills/`, publicly fetchable at:
+
+- **Discover:** `https://docs.reactiveagents.dev/.well-known/skills/index.json`
+- **Fetch:** `https://docs.reactiveagents.dev/.well-known/skills/{skill-name}/`
+
+> **Directory distinction:** `.agents/skills/` = contributor skills (build the framework). `apps/docs/skills/` = consumer skills (use the framework, publicly fetchable).
+
+### Tier 1 — Discovery
+- `reactive-agents` — start here: framework orientation, builder API shape, skill routing decision tree
+
+### Tier 2 — Capabilities
+- `builder-api-reference` — complete ReactiveAgentBuilder API, layer composition, Effect layers
+- `reasoning-strategy-selection` — strategy selection, native FC harness, output quality pipeline
+- `context-and-continuity` — context pressure, windowing, checkpoint tool, auto-checkpoint
+- `tool-creation` — defineTool(), ToolRegistry, required-tools gate, maxCallsPerTool
+- `shell-execution-sandbox` — sandboxed shell tool, Docker sandbox, allowlist config
+- `mcp-tool-integration` — Docker lifecycle, two-phase containers, transport inference
+- `memory-patterns` — 4-layer memory, SQLite/FTS5/vec, working/episodic/semantic/procedural
+- `multi-agent-orchestration` — sequential, parallel, pipeline, map-reduce workflows
+- `gateway-persistent-agents` — heartbeats, crons, webhooks, policy engine
+- `identity-and-guardrails` — Ed25519 RBAC, injection/PII/toxicity detection, KillSwitch
+- `observability-instrumentation` — ThoughtTracer, logModelIO, EventBus tracing, MetricsCollector
+- `cost-budget-enforcement` — complexity router, budget enforcer, semantic cache
+- `quality-assurance` — runtime verification, LLM-as-judge eval, EvalStore regression
+- `ui-integration` — React/Vue/Svelte hooks, SSE streaming, real-time UI patterns
+- `interaction-autonomy` — 5 autonomy modes, approval gates, preference learning
+- `a2a-agent-networking` — Agent Cards, JSON-RPC 2.0, SSE streaming, A2A server/client
+- `provider-patterns` — 7 adapter hooks, native FC patterns, per-provider streaming quirks
+
+### Tier 3 — Recipes
+- `recipe-research-agent` — research/analysis agent with memory + verification
+- `recipe-code-assistant` — code generation + sandboxed execution agent
+- `recipe-persistent-monitor` — always-on monitoring agent via gateway
+- `recipe-orchestrated-workflow` — multi-agent pipeline with lead/builder/tester pattern
+- `recipe-saas-agent` — multi-tenant production agent with identity + cost controls
+- `recipe-embedded-app-agent` — agent embedded in React/Vue/Svelte with streaming UI

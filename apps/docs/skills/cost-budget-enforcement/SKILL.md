@@ -1,127 +1,149 @@
 ---
 name: cost-budget-enforcement
-description: Enforce per-task, daily, and monthly budgets with complexity-aware routing and graceful degradation.
-compatibility: Reactive Agents projects using cost tracking and budget policies.
+description: Set per-request, per-session, daily, and monthly spend limits, configure rate limiting and circuit breakers, and isolate costs per user or tenant.
+compatibility: Reactive Agents TypeScript projects using @reactive-agents/*
 metadata:
   author: reactive-agents
-  version: "1.0"
+  version: "2.0"
+  tier: "capability"
 ---
 
-# Cost Budget Enforcement
-
-Use this skill to keep agent execution financially predictable.
+# Cost and Budget Enforcement
 
 ## Agent objective
 
-When building budget-aware agents, produce implementations that:
+Produce a builder with cost tracking, budget limits, and rate limiting configured so the agent never exceeds defined spending thresholds.
 
-- Set clear per-task and aggregate budget constraints.
-- Route strategy/model choices by task value and complexity.
-- Surface budget state in runtime metadata and logs.
+## When to load this skill
 
-## What this skill does
+- Deploying agents in production with real API costs
+- Building multi-tenant SaaS where per-user cost isolation matters
+- Protecting against runaway agent loops consuming excessive tokens
+- Adding circuit breakers for provider reliability
 
-- Applies per-task and aggregate budget caps.
-- Routes model/strategy by complexity and budget headroom.
-- Triggers fallbacks when budgets approach limits.
+## Implementation baseline
 
-## Baseline policy
-
-- Hard cap: per-task maximum spend.
-- Soft cap: warning threshold (for example 80%).
-- Escalation: degrade strategy/model before hard-fail.
-
-## Implementation pattern
-
-- Enable cost tracking early in the execution lifecycle.
-- Include cost metadata in verification and observability outputs.
-- Fail fast on breached hard budget constraints.
-
-## Expected implementation output
-
-- Builder chain with `.withCostTracking()` and complementary verification/observability.
-- Policy configuration covering per-task and daily/monthly ceilings.
-- Runtime behavior that degrades gracefully before hard failure.
-
-## Code Examples
-
-### Enabling Cost Tracking
-
-To track token usage and estimate costs, use the `.withCostTracking()` builder method. The cost and token count will be available in the `metadata` of the result object.
-
-```typescript
+```ts
 import { ReactiveAgents } from "@reactive-agents/runtime";
-import { openRouterPricingProvider } from "@reactive-agents/llm-provider";
 
 const agent = await ReactiveAgents.create()
-  .withName("cost-tracked-agent")
+  .withName("assistant")
   .withProvider("anthropic")
-  // Enable cost tracking
-  .withCostTracking()
-  // Ensure prices are always accurate
-  .withDynamicPricing(openRouterPricingProvider)
+  .withReasoning({ defaultStrategy: "adaptive", maxIterations: 15 })
+  .withTools({ allowedTools: ["web-search", "http-get", "checkpoint"] })
+  .withCostTracking({
+    perRequest: 0.25,   // max $0.25 per LLM call
+    perSession: 2.0,    // max $2.00 per agent.run() call
+    daily: 10.0,        // max $10.00/day across all sessions
+    monthly: 100.0,     // max $100.00/month
+  })
+  .withRateLimiting({
+    requestsPerMinute: 30,
+    tokensPerMinute: 50_000,
+    maxConcurrent: 3,
+  })
+  .withCircuitBreaker()   // auto-opens on provider errors; prevents cascading failures
   .build();
-
-const result = await agent.run("What is the capital of France?");
-
-const cost = result.metadata.cost ?? 0;
-const tokens = result.metadata.tokensUsed ?? 0;
-
-console.log(`Output: ${result.output}`);
-console.log(`Tokens used: ${tokens}`);
-console.log(`Estimated cost: $${cost.toFixed(6)}`);
 ```
 
-### Daily Token Budget via Gateway Policies
+## Key patterns
 
-For persistent agents with daily token caps, use the gateway's built-in policy engine. It tracks token usage via the EventBus and emits a `BudgetExhausted` event when the daily limit is hit.
+### withCostTracking() — budget limits
 
-```typescript
-import { ReactiveAgents } from "@reactive-agents/runtime";
+```ts
+.withCostTracking()
+// Enables cost tracking with defaults:
+// perRequest: $1.00, perSession: $5.00, daily: $20.00, monthly: $200.00
 
-const agent = await ReactiveAgents.create()
-  .withName("budget-agent")
+.withCostTracking({
+  perRequest: 0.50,    // hard stop mid-request if cost would exceed this
+  perSession: 5.0,
+  daily: 20.0,
+  monthly: 200.0,
+})
+```
+
+When a budget is exceeded, the agent throws a `BudgetExceededError` and stops. Daily/monthly budgets reset based on the timezone configured in `.withGateway()` (if used) or UTC by default.
+
+### withRateLimiting() — throughput caps
+
+```ts
+.withRateLimiting()
+// Defaults: 60 RPM, 100,000 TPM, 10 concurrent requests
+
+.withRateLimiting({
+  requestsPerMinute: 60,     // max LLM requests per minute
+  tokensPerMinute: 100_000,  // max tokens per minute (input + output)
+  maxConcurrent: 10,         // max simultaneous in-flight LLM requests
+})
+```
+
+Requests that exceed limits are queued (not dropped) — the agent waits for capacity before proceeding.
+
+### withCircuitBreaker() — provider reliability
+
+```ts
+.withCircuitBreaker()
+// Default thresholds (open after 5 failures in 60s window, retry after 30s)
+
+.withCircuitBreaker({
+  failureThreshold: 5,       // open circuit after N consecutive failures
+  windowMs: 60_000,          // failure counting window
+  retryAfterMs: 30_000,      // wait before trying half-open probe
+})
+```
+
+Circuit breaker states: `closed` (normal) → `open` (failing fast) → `half-open` (probing recovery).
+
+### Per-user cost isolation (multi-tenant)
+
+```ts
+// Create one agent per user/tenant with separate tracking contexts
+const userAgent = await ReactiveAgents.create()
   .withProvider("anthropic")
-  .withCostTracking()
-  .withGateway({
-    policies: {
-      dailyTokenBudget: 50_000,   // Hard cap: 50k tokens per day
-      maxActionsPerHour: 30,      // Rate limit: 30 tool calls per hour
-    },
-  })
+  .withCostTracking({ perSession: 1.0, daily: 5.0 })
+  .withName(`user-${userId}`)
+  .withSystemPrompt(`You are assisting user ${userId}.`)
   .build();
 
-// Subscribe to budget events for monitoring
-await agent.subscribe("BudgetExhausted", (event) => {
-  console.warn(`Budget hit: ${event.tokensUsed} / ${event.dailyBudget} tokens`);
+// Or use per-request context injection:
+const result = await agent.run(task, {
+  context: { userId, tenantId },   // included in cost tracking metadata
 });
 ```
 
-### Manual Per-Run Budget Check
+### Dynamic pricing (LiteLLM / custom providers)
 
-For non-gateway agents, check cost metadata after each run:
+```ts
+import { createLiteLLMPricingProvider } from "@reactive-agents/llm-provider";
 
-```typescript
-let totalCost = 0;
-const dailyBudget = 1.00; // $1.00
-
-async function runWithBudget(prompt: string) {
-  if (totalCost >= dailyBudget) {
-    console.error("Daily budget exceeded. Halting operations.");
-    return;
-  }
-
-  const result = await agent.run(prompt);
-  const runCost = result.metadata.cost ?? 0;
-  totalCost += runCost;
-
-  console.log(`Run cost: $${runCost.toFixed(6)}, Total: $${totalCost.toFixed(6)}`);
-  return result;
-}
+.withDynamicPricing(createLiteLLMPricingProvider())
+// Fetches live model prices from LiteLLM pricing API
+// Required when using models whose costs are not in the built-in price table
 ```
 
-## Pitfalls to avoid
+## CostTrackingOptions reference
 
-- Tracking cost only after execution completes.
-- No policy for daily and monthly aggregate budgets.
-- High-complexity strategy defaults on low-value tasks.
+| Field | Type | Default | Notes |
+|-------|------|---------|-------|
+| `perRequest` | `number` | `1.00` | Max USD per single LLM request |
+| `perSession` | `number` | `5.00` | Max USD per `agent.run()` call |
+| `daily` | `number` | `20.00` | Max USD per calendar day |
+| `monthly` | `number` | `200.00` | Max USD per calendar month |
+
+## RateLimiterConfig reference
+
+| Field | Type | Default | Notes |
+|-------|------|---------|-------|
+| `requestsPerMinute` | `number` | `60` | Max LLM requests/minute |
+| `tokensPerMinute` | `number` | `100_000` | Max tokens/minute (input + output) |
+| `maxConcurrent` | `number` | `10` | Max simultaneous in-flight requests |
+
+## Pitfalls
+
+- Budget limits are enforced per-process — multiple processes running the same agent each get their own daily/monthly counters; use an external store for true cross-process budget tracking
+- `withCostTracking()` with no args is still useful — it enables cost telemetry without enforcing limits (all defaults are generous)
+- `withCircuitBreaker()` opens on LLM provider errors, not on budget exceeded errors — they are independent systems
+- Rate limiting queues requests rather than dropping them — set `maxConcurrent` based on your provider's actual concurrency limits to avoid provider-side 429s
+- `withDynamicPricing()` makes an external HTTP call during build — ensure network access and handle build failures
+- Daily budget resets at midnight UTC by default — to use a different timezone, configure it via `.withGateway({ timezone: "America/New_York" })`

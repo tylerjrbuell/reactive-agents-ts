@@ -1,93 +1,136 @@
 ---
 name: mcp-tool-integration
-description: Integrate MCP servers as agent tools for filesystem, GitHub, and external-system workflows.
-compatibility: Reactive Agents projects using .withMCP() and .withTools().
+description: Connect agents to MCP servers using stdio or HTTP transport, with automatic Docker lifecycle management and transport auto-detection.
+compatibility: Reactive Agents TypeScript projects using @reactive-agents/*
 metadata:
   author: reactive-agents
-  version: "1.0"
+  version: "2.0"
+  tier: "capability"
 ---
 
 # MCP Tool Integration
 
-Use this skill when building specialized agents that need external capabilities through MCP servers.
-
 ## Agent objective
 
-When an agent implements MCP integration, it should:
+Produce a builder with MCP servers correctly configured — right transport, Docker lifecycle, and auth — so the agent can discover and call MCP tools transparently.
 
-- Enable tools first, then bind MCP server definitions explicitly.
-- Keep MCP scope minimal to the required capability surface.
-- Ensure lifecycle-safe behavior for long-running transports.
+## When to load this skill
 
-## What this skill does
+- Adding external tools via MCP (GitHub, filesystem, databases, web APIs)
+- Connecting to Docker-hosted MCP servers
+- Debugging MCP connection or tool discovery failures
+- Building agents that use context7, GitHub MCP, or custom MCP servers
 
-- Connects MCP servers via stdio and transport config.
-- Exposes MCP toolsets to reasoning strategies through `.withTools()`.
-- Applies safe lifecycle patterns so transports are disposed and cleaned up.
-
-## Accurate builder patterns
+## Implementation baseline
 
 ```ts
 const agent = await ReactiveAgents.create()
-  .withName("mcp-filesystem-agent")
   .withProvider("anthropic")
-  .withTools()
-  .withMCP([
-    {
-      name: "filesystem",
-      transport: "stdio",
-      command: "bunx",
-      args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
-    },
-  ])
+  .withReasoning({ defaultStrategy: "adaptive" })
+  .withTools({
+    mcpServers: [
+      {
+        name: "filesystem",
+        command: "docker",
+        args: [
+          "run", "--rm", "-i",
+          "-v", `${process.cwd()}:/workspace`,
+          "mcp/filesystem", "/workspace",
+        ],
+        // transport auto-inferred as "stdio" (command present, no endpoint)
+      },
+    ],
+  })
   .build();
 ```
 
-## Use cases
+## Key patterns
 
-- File-aware coding agents using MCP filesystem tools.
-- Repo automation agents with GitHub MCP tools.
-- Messaging/workflow agents combining MCP tools with gateway scheduling.
+### Two Docker MCP patterns
 
-## Code Examples
+**Pattern A — stdio MCP** (GitHub MCP, filesystem MCP): reads JSON-RPC from stdin
 
-### Filesystem Agent
-
-This example demonstrates how to connect an agent to an MCP filesystem server. The agent can then use tools like `filesystem.readFile` and `filesystem.listFiles` to interact with the local filesystem.
-
-The `withMCP` method takes an array of server configurations. Here, we define a `filesystem` server that uses the `stdio` transport and is launched using `bunx`.
-
-*Source: [apps/examples/src/tools/06-mcp-filesystem.ts](apps/examples/src/tools/06-mcp-filesystem.ts)*
-
-```typescript
-import { ReactiveAgents } from "@reactive-agents/runtime";
-
-// ...
-
-const agent = await ReactiveAgents.create()
-  .withName("mcp-filesystem-agent")
-  .withProvider("anthropic")
-  .withTools()
-  .withMCP([{
-    name: "filesystem",
-    transport: "stdio",
-    command: "bunx",
-    args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
-  }])
-  .withMaxIterations(10)
-  .build();
-
-const result = await agent.run("What files or directories are available? Give a brief summary.");
+```ts
+{
+  name: "github",
+  command: "docker",
+  args: ["run", "--rm", "-i", "ghcr.io/github/github-mcp-server"],
+  env: { GITHUB_TOKEN: process.env.GITHUB_TOKEN ?? "" },
+  // transport: inferred as "stdio"
+}
 ```
 
-## Expected implementation output
+**Pattern B — HTTP-only MCP** (context7, etc.): starts HTTP server, ignores stdin
 
-- A builder chain with `.withTools()` + `.withMCP([...])` using concrete server config.
-- Safe process behavior (cleanup/disposal assumptions documented for runtime context).
-- A small, testable prompt/task showing MCP tool invocation flow.
+```ts
+{
+  name: "context7",
+  command: "docker",
+  args: ["run", "--rm", "-p", "3000:3000", "ghcr.io/upstash/context7-mcp"],
+  // Framework auto-detects HTTP URL printed to stderr → switches to port-mapped HTTP
+  // Do NOT hardcode transport here — let auto-detection handle it
+}
+```
 
-## Pitfalls to avoid
+### Transport auto-detection
 
-- Enabling MCP without `.withTools()`.
-- Forgetting to dispose long-running agent processes.
-- Running untrusted MCP commands without sandbox constraints.
+When a stdio Docker container prints an HTTP URL to stderr, the MCP client races the stdio connection against HTTP URL detection. HTTP wins → client switches to port-mapped HTTP mode automatically.
+
+Two container phases are created:
+- `rax-probe-<name>-<pid>` — initial stdio probe attempt
+- `rax-mcp-<name>-<pid>` — port-mapped HTTP managed container (if HTTP detected)
+
+PID-based naming prevents conflicts when multiple agents run concurrently.
+
+### Transport field (optional — usually omit)
+
+```ts
+// Auto-inferred rules:
+// command present, no endpoint → "stdio"
+// endpoint ends with /mcp     → "streamable-http"
+// endpoint (other path)       → "sse"
+
+// Only set transport explicitly when overriding detection:
+{ name: "my-server", endpoint: "http://localhost:3000/api", transport: "sse" }
+```
+
+### Non-Docker MCP (local process or remote HTTP)
+
+```ts
+// Local process
+{ name: "my-mcp", command: "node", args: ["./my-mcp-server.js"] }
+
+// Remote Streamable HTTP
+{ name: "remote", endpoint: "https://mcp.example.com/mcp" }
+
+// Remote SSE
+{ name: "remote-sse", endpoint: "https://mcp.example.com/events" }
+```
+
+## Container lifecycle
+
+The framework owns container lifecycle:
+- `docker run` starts the container when the agent is built
+- On agent dispose, `docker rm -f <containerName>` stops it
+
+**Critical:** `docker rm -f` is the only reliable way to stop MCP Docker containers. Killing the `docker run` process leaves the container alive in the Docker daemon.
+
+## MCPServerConfig reference
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `name` | `string` | Yes | Unique identifier for this server |
+| `command` | `string` | For stdio | Executable (`"docker"`, `"node"`, etc.) |
+| `args` | `string[]` | For stdio | Command arguments |
+| `env` | `Record<string, string>` | No | Environment variables |
+| `endpoint` | `string` | For HTTP | URL of the MCP HTTP endpoint |
+| `transport` | `"stdio"\|"streamable-http"\|"sse"` | No | Auto-inferred if omitted |
+
+## Pitfalls
+
+- `subprocess.kill()` does **not** stop Docker containers — only `docker rm -f` works
+- Don't hardcode `transport: "streamable-http"` for HTTP-only Docker servers — let auto-detection handle it
+- Container names are PID-scoped — don't try to reference them manually
+- Each agent creates its own containers — 10 parallel agents = 10 container instances
+- MCP tools are discovered at connection time — if the server isn't ready at build time, tool discovery silently fails
+- `env` values must be strings — use `process.env.VAR ?? ""` pattern, never pass `undefined`

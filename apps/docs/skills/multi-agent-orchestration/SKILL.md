@@ -1,88 +1,159 @@
 ---
 name: multi-agent-orchestration
-description: Design and implement reliable multi-agent workflows using sequential, parallel, pipeline, and map-reduce execution patterns.
-compatibility: Reactive Agents projects using orchestration and agent-as-tool patterns.
+description: Compose multiple agents as callable tools, spawn dynamic sub-agents at runtime, and wire remote A2A agents into a coordinated pipeline.
+compatibility: Reactive Agents TypeScript projects using @reactive-agents/*
 metadata:
   author: reactive-agents
-  version: "1.0"
+  version: "2.0"
+  tier: "capability"
 ---
 
 # Multi-Agent Orchestration
 
-Use this skill for complex tasks that benefit from decomposition and specialization.
-
 ## Agent objective
 
-When building orchestrated systems, produce implementations that:
+Produce a builder with agent tools registered and the orchestration layer enabled so an agent can delegate subtasks to specialized sub-agents and integrate their results.
 
-- Decompose tasks by dependency and specialization boundaries.
-- Use topology choices (sequential/parallel/pipeline/map-reduce) intentionally.
-- Resolve aggregation conflicts deterministically.
+## When to load this skill
 
-## What this skill does
+- Building a lead agent that coordinates specialist sub-agents
+- Splitting complex tasks across research, writing, coding, or review agents
+- Connecting to remote agents via A2A protocol
+- Allowing the agent to dynamically spawn sub-agents at runtime based on task needs
 
-- Splits work into specialized agent roles.
-- Chooses orchestration topology by dependency shape.
-- Aggregates outputs with verification and rollback rules.
+## Implementation baseline
 
-## Workflow
-
-1. Partition task into independent and dependent steps.
-2. Assign each step to a specialist agent/tool chain.
-3. Use parallel execution for independent branches.
-4. Use pipeline/sequential mode for ordered dependencies.
-5. Verify merged output and resolve conflicts deterministically.
-
-## Code Examples
-
-### Sequential Workflow with Multiple Agents
-
-This example demonstrates a multi-agent workflow where tasks are executed in a sequence. The workflow consists of three specialized agents: a researcher, a writer, and a reviewer.
-
-1.  **Researcher**: Gathers information on a topic.
-2.  **Writer**: Uses the researcher's output to draft a summary.
-3.  **Reviewer**: Checks the writer's draft for quality and accuracy.
-
-The example manually orchestrates the flow by iterating through a series of steps, passing the output of one step as the input to the next. This pattern is useful for simple, linear workflows. The `@reactive-agents/orchestration` package provides a `WorkflowEngine` for more complex scenarios, including parallel execution and dependency management.
-
-*Source: [apps/examples/src/multi-agent/09-orchestration.ts](apps/examples/src/multi-agent/09-orchestration.ts)*
-
-```typescript
+```ts
 import { ReactiveAgents } from "@reactive-agents/runtime";
 
-// Build worker agents (researcher, writer, reviewer)
-const researchAgent = await ReactiveAgents.create().withName("researcher").build();
-const writerAgent = await ReactiveAgents.create().withName("writer").build();
-const reviewerAgent = await ReactiveAgents.create().withName("reviewer").build();
-
-// Define workflow steps
-const steps = [
-  { id: "research", name: "Research", task: "Research the topic: AI safety", agent: researchAgent },
-  { id: "draft",    name: "Draft",    task: "Draft a 1-paragraph summary of this research", agent: writerAgent, dependsOn: "research" },
-  { id: "review",   name: "Review",   task: "Review this draft for quality and accuracy", agent: reviewerAgent, dependsOn: "draft" },
-];
-
-// Execute workflow sequentially
-let contextFromPrevious = "";
-for (const step of steps) {
-  const taskInput = contextFromPrevious
-    ? `${step.task}\n\nContext from previous step: ${contextFromPrevious}`
-    : step.task;
-
-  const result = await step.agent.run(taskInput);
-  contextFromPrevious = result.output;
-  console.log(`[${step.name}] ${result.output}`);
-}
+// Lead agent with registered sub-agents as tools
+const agent = await ReactiveAgents.create()
+  .withName("lead")
+  .withProvider("anthropic")
+  .withReasoning({ defaultStrategy: "plan-execute-reflect", maxIterations: 20 })
+  .withOrchestration()
+  .withAgentTool("researcher", {
+    name: "Research Agent",
+    description: "Gathers information, reads web pages, and synthesizes findings",
+    maxIterations: 12,
+    tools: ["web-search", "http-get", "checkpoint"],
+  })
+  .withAgentTool("coder", {
+    name: "Code Agent",
+    description: "Writes, tests, and refactors TypeScript code",
+    maxIterations: 15,
+    strategy: "plan-execute-reflect",
+    tools: ["file-read", "file-write", "code-execute"],
+  })
+  .withAgentTool("reviewer", {
+    name: "Review Agent",
+    description: "Reviews code for correctness, style, and security issues",
+    maxIterations: 8,
+    tools: ["file-read"],
+  })
+  .withTools({ allowedTools: ["researcher", "coder", "reviewer", "checkpoint", "final-answer"] })
+  .withSystemPrompt(`
+    You coordinate a team of specialists. Delegate tasks to the appropriate agent.
+    Always checkpoint results from sub-agents before continuing to the next phase.
+  `)
+  .build();
 ```
 
-## Expected implementation output
+## Key patterns
 
-- Orchestration setup with explicit workflow topology.
-- Specialist role definitions with narrow responsibilities.
-- Merge/verification logic handling contradictory sub-agent outputs.
+### withAgentTool() — register a named sub-agent
 
-## Pitfalls to avoid
+```ts
+.withAgentTool("analyst", {
+  name: "Data Analyst",                        // display name for the agent
+  description: "Analyzes datasets and produces statistics",  // tool description shown to LLM
+  provider: "anthropic",                       // defaults to parent's provider
+  model: "claude-haiku-4-5-20251001",          // use a cheaper model for sub-tasks
+  maxIterations: 10,                           // sub-agent iteration limit
+  strategy: "adaptive",                        // sub-agent reasoning strategy
+  tools: ["file-read", "code-execute"],        // tools available to sub-agent
+})
+```
 
-- Parallelizing steps that require strict ordering.
-- No timeout/cancellation policy for sub-agents.
-- No aggregation validation for contradictory results.
+The sub-agent runs as a tool call — the LLM calls it with a task description and receives the result.
+
+### Dynamic sub-agents (runtime spawning)
+
+```ts
+.withDynamicSubAgents({ maxIterations: 8 })
+// Enables spawning ad-hoc agents at runtime.
+// The agent can dynamically create and call sub-agents based on task needs.
+// Sub-agents inherit the parent's provider and model by default.
+```
+
+### Remote agent via A2A
+
+```ts
+.withRemoteAgent("data-service", "http://data-agent:8000")
+// Connects to a remote A2A agent at the given URL.
+// Remote agent is exposed as a tool — called exactly like a local sub-agent.
+// Remote agent must expose the A2A JSON-RPC interface (see a2a-agent-networking skill).
+```
+
+### Pipeline pattern: research → write → review
+
+```ts
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withReasoning({ defaultStrategy: "plan-execute-reflect", maxIterations: 25 })
+  .withOrchestration()
+  .withAgentTool("researcher", {
+    name: "Researcher",
+    description: "Research a topic and return key findings",
+    tools: ["web-search", "http-get", "checkpoint"],
+  })
+  .withAgentTool("writer", {
+    name: "Writer",
+    description: "Write a document given research findings",
+    tools: ["file-write", "checkpoint"],
+  })
+  .withAgentTool("reviewer", {
+    name: "Reviewer",
+    description: "Review a document and return critique",
+    tools: ["file-read"],
+  })
+  .withTools({ allowedTools: ["researcher", "writer", "reviewer", "final-answer"] })
+  .withSystemPrompt(`
+    1. Call researcher to gather information on the topic.
+    2. Call writer with the research to produce the document.
+    3. Call reviewer with the document path.
+    4. Revise if the reviewer finds critical issues.
+    5. Return final-answer when approved.
+  `)
+  .build();
+```
+
+### withAgentTool() parameters
+
+| Parameter | Type | Notes |
+|-----------|------|-------|
+| `name` | `string` | Human-readable display name |
+| `description` | `string` | Tool description shown to the orchestrating LLM |
+| `provider` | `ProviderName` | Defaults to parent's provider |
+| `model` | `string` | Defaults to parent's model — use cheaper models for sub-agents |
+| `maxIterations` | `number` | Sub-agent iteration cap |
+| `strategy` | `string` | Sub-agent reasoning strategy |
+| `tools` | `string[]` | Tools available to the sub-agent |
+
+## Builder API reference
+
+| Method | Notes |
+|--------|-------|
+| `.withOrchestration()` | Enables the orchestration service layer |
+| `.withAgentTool(name, opts)` | Registers a local sub-agent as a named tool |
+| `.withDynamicSubAgents(opts?)` | Allows the agent to spawn sub-agents at runtime |
+| `.withRemoteAgent(name, url)` | Connects to a remote A2A agent as a named tool |
+
+## Pitfalls
+
+- `.withOrchestration()` must be called alongside `.withAgentTool()` — without it, sub-agent tools are registered but the coordination layer is inactive
+- Sub-agent `tools` are scoped to that sub-agent only — the parent's tool set does not propagate down
+- Each sub-agent runs in an isolated context — it has no access to the parent's conversation history
+- `withDynamicSubAgents` is open-ended — the agent can create arbitrary sub-agents, which can significantly increase costs
+- Remote agents must be up and serving A2A requests at build time — connection failures surface during `.build()`
+- Always include `"final-answer"` in the orchestrator's `allowedTools` or it cannot complete
