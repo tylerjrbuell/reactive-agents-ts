@@ -13,6 +13,7 @@
 import { Effect, Stream, FiberRef, Either } from "effect";
 import { ExecutionError } from "../../../errors/errors.js";
 import { LLMService, selectAdapter } from "@reactive-agents/llm-provider";
+import type { StopReason } from "@reactive-agents/llm-provider";
 import {
   buildSystemPrompt,
   toProviderMessage,
@@ -51,14 +52,24 @@ import {
 } from "../kernel-state.js";
 
 /** Meta-tool names — not counted as "real work" for completion detection. */
-const META_TOOL_SET = new Set(["final-answer", "task-complete", "context-status", "brief", "pulse", "find", "recall"]);
+const META_TOOL_SET = new Set(["final-answer", "task-complete", "context-status", "brief", "pulse", "find", "recall", "checkpoint"]);
+
+/** Per-tier context pressure thresholds — local models get narrowed earlier. */
+export const CONTEXT_PRESSURE_THRESHOLDS: Record<string, number> = {
+  local: 0.80,
+  mid: 0.85,
+  large: 0.90,
+  frontier: 0.95,
+};
 
 /** Returns true when token pressure is critical — only final-answer should be offered. */
 export function shouldNarrowToFinalAnswerOnly(opts: {
   estimatedTokens: number
   maxTokens: number
+  tier?: string
 }): boolean {
-  return opts.estimatedTokens / opts.maxTokens >= 0.95
+  const threshold = CONTEXT_PRESSURE_THRESHOLDS[opts.tier ?? "mid"] ?? 0.85;
+  return opts.estimatedTokens / opts.maxTokens >= threshold
 }
 
 export function handleThinking(
@@ -101,12 +112,13 @@ export function handleThinking(
     ] as readonly ToolSchema[];
 
     // ── Context pressure hard gate ───────────────────────────────────────────
-    // When token budget is 95%+ exhausted, the model has nothing useful to
-    // reason with. Narrow available tools to only final-answer so the model's
-    // next action is a clean exit rather than another fruitless iteration.
+    // When token budget is exhausted beyond the tier-specific threshold, the
+    // model has nothing useful to reason with. Narrow available tools to only
+    // final-answer so the model's next action is a clean exit.
     const pressureCritical = shouldNarrowToFinalAnswerOnly({
       estimatedTokens: state.tokens,
       maxTokens: (input.contextProfile as any)?.maxTokens ?? Number.MAX_SAFE_INTEGER,
+      tier: profile.tier,
     });
 
     const effectiveSchemas: readonly ToolSchema[] = pressureCritical
@@ -377,7 +389,7 @@ export function handleThinking(
     // Build response shape matching original llm.complete() return
     const thoughtResponse = {
       content: accumulatedContent,
-      stopReason: accumulatedStopReason as "end_turn",
+      stopReason: accumulatedStopReason as StopReason,
       usage: accumulatedUsage,
       model: "unknown",
     };

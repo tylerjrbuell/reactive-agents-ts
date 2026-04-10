@@ -25,6 +25,34 @@ import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
 import { makeStep, buildStrategyResult } from "./kernel/utils/step-utils.js";
 import { resolveExecutableToolCapabilities } from "./kernel/utils/tool-capabilities.js";
 
+// ── Tier-Adaptive ToT Limits ─────────────────────────────────────────────────
+
+/** Per-tier limits for tree-of-thought BFS depth and Phase 2 kernel iterations. */
+export interface ToTTierLimit {
+  /** Maximum BFS exploration depth (caps the config `depth`). */
+  readonly maxBfsDepth: number;
+  /** Maximum iterations for Phase 2 ReAct kernel execution. */
+  readonly maxPhase2Iterations: number;
+  /** Number of consecutive stagnant rounds before early BFS exit. */
+  readonly stagnationWindow: number;
+}
+
+export const TOT_TIER_LIMITS: Record<"local" | "mid" | "large" | "frontier", ToTTierLimit> = {
+  local:    { maxBfsDepth: 2, maxPhase2Iterations: 6,  stagnationWindow: 3 },
+  mid:      { maxBfsDepth: 3, maxPhase2Iterations: 8,  stagnationWindow: 3 },
+  large:    { maxBfsDepth: 4, maxPhase2Iterations: 10, stagnationWindow: 3 },
+  frontier: { maxBfsDepth: 5, maxPhase2Iterations: 12, stagnationWindow: 3 },
+};
+
+/** Get the effective BFS depth, capped by tier limits. */
+export function getToTDepthForTier(
+  configDepth: number,
+  tier: "local" | "mid" | "large" | "frontier" | undefined,
+): number {
+  const limits = TOT_TIER_LIMITS[tier ?? "mid"];
+  return Math.min(configDepth, limits.maxBfsDepth);
+}
+
 interface TreeOfThoughtInput {
   readonly taskDescription: string;
   readonly taskType: string;
@@ -53,6 +81,8 @@ interface TreeOfThoughtInput {
   readonly synthesisConfig?: import("../context/synthesis-types.js").SynthesisConfig;
   readonly metaTools?: KernelMetaToolsConfig;
   readonly briefResolvedSkills?: readonly { readonly name: string; readonly purpose: string }[];
+  /** Model tier for tier-adaptive iteration limits. */
+  readonly tier?: "local" | "mid" | "large" | "frontier";
 }
 
 interface ThoughtNode {
@@ -102,8 +132,13 @@ export const executeTreeOfThought = (
 
     steps.push(makeStep("thought", `[TOT] Starting tree exploration: breadth=${breadth}, depth=${depth}, pruningThreshold=${pruningThreshold}`));
 
+    // ── Tier-adaptive depth cap ──
+    const tierLimits = TOT_TIER_LIMITS[input.tier ?? "mid"];
+    const effectiveDepth = Math.min(depth, tierLimits.maxBfsDepth);
+
     // ── BFS expansion ──
-    for (let d = 1; d <= depth; d++) {
+    let bestScorePerDepth: number[] = [];
+    for (let d = 1; d <= effectiveDepth; d++) {
       const nextFrontier: ThoughtNode[] = [];
 
       // Budget guard: abort exploration if cost exceeds limit
@@ -234,6 +269,23 @@ export const executeTreeOfThought = (
         }
       }
 
+      // ── Score stagnation check ──
+      const nodesThisRound = allNodes.filter((n) => n.depth === d);
+      const bestThisRound = nodesThisRound.length > 0
+        ? Math.max(...nodesThisRound.map((n) => n.score))
+        : 0;
+      bestScorePerDepth.push(bestThisRound);
+
+      if (bestScorePerDepth.length >= tierLimits.stagnationWindow) {
+        const window = bestScorePerDepth.slice(-tierLimits.stagnationWindow);
+        const maxInWindow = Math.max(...window);
+        const minInWindow = Math.min(...window);
+        if (maxInWindow - minInWindow < 0.05) {
+          steps.push(makeStep("observation", `[TOT] Score stagnation detected: best scores ${window.map((s) => s.toFixed(2)).join(", ")} over ${tierLimits.stagnationWindow} rounds. Forcing convergence.`));
+          break;
+        }
+      }
+
       // If all paths pruned, try adaptive pruning before giving up
       if (nextFrontier.length === 0) {
         // Adaptive pruning: lower threshold by 0.15 before giving up entirely
@@ -303,7 +355,7 @@ export const executeTreeOfThought = (
       metaTools: input.metaTools,
       briefResolvedSkills: input.briefResolvedSkills,
     }, {
-      maxIterations: input.config.strategies.treeOfThought?.depth ?? 3,
+      maxIterations: tierLimits.maxPhase2Iterations,
       strategy: "tree-of-thought",
       kernelType: "react",
       taskId: input.taskId,

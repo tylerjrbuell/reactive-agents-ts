@@ -83,6 +83,7 @@ const META_TOOL_NAMES = new Set([
   "pulse",
   "find",
   "recall",
+  "checkpoint",
 ]);
 
 /**
@@ -139,7 +140,9 @@ export function buildConversationMessages(
     currentState.messages,
     {
       tier: profile.tier ?? "mid",
-      maxTokens: profile.maxTokens,
+      maxTokens:
+        (input.contextProfile as { maxTokens?: number } | undefined)?.maxTokens ??
+        Number.MAX_SAFE_INTEGER,
       frozenToolResultIds: currentState.frozenToolResultIds,
     },
   );

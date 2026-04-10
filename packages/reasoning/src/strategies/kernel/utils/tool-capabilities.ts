@@ -7,7 +7,10 @@ import {
   makeRecallHandler,
   findTool,
   makeFindHandler,
+  checkpointTool,
+  makeCheckpointHandler,
   scratchpadStoreRef,
+  checkpointStoreRef,
   ragMemoryStore,
   webSearchHandler,
 } from "@reactive-agents/tools";
@@ -90,6 +93,13 @@ export const resolveExecutableToolCapabilities = (input: {
           )
           .pipe(Effect.catchAll(() => Effect.void));
         append(toToolSchema(findTool));
+      }
+
+      if (input.metaTools?.checkpoint) {
+        yield* toolService
+          .register(checkpointTool, makeCheckpointHandler(checkpointStoreRef))
+          .pipe(Effect.catchAll(() => Effect.void));
+        append(toToolSchema(checkpointTool));
       }
     }
 

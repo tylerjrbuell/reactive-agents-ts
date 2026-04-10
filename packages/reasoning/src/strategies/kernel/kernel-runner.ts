@@ -16,6 +16,7 @@ import { Effect } from "effect";
 import { LLMService, DEFAULT_CAPABILITIES } from "@reactive-agents/llm-provider";
 import type { ProviderCapabilities } from "@reactive-agents/llm-provider";
 import { createToolCallResolver } from "@reactive-agents/tools";
+import { checkpointStoreRef } from "@reactive-agents/tools";
 import { CONTEXT_PROFILES } from "../../context/context-profile.js";
 import type { ContextProfile } from "../../context/context-profile.js";
 import { resolveStrategyServices } from "./utils/service-utils.js";
@@ -35,9 +36,18 @@ import { coordinateICS } from "./utils/ics-coordinator.js";
 import { runReactiveObserver } from "./utils/reactive-observer.js";
 import { detectLoop, checkAllToolsCalled } from "./utils/loop-detector.js";
 import { classifyToolRelevance } from "../../structured-output/infer-required-tools.js";
+import { extractOutputFormat, type TaskIntent } from "./utils/task-intent.js";
+import { shouldAutoCheckpoint, autoCheckpoint } from "./utils/auto-checkpoint.js";
+import {
+  validateOutputFormat,
+  buildFinalAnswerCandidate,
+  finalizeOutput,
+  buildSynthesisPrompt,
+  type FinalizedOutput,
+} from "./utils/output-synthesis.js";
 
 /** Meta-tool names — not counted as "real work" for reclassification triggers. */
-const RUNNER_META_TOOLS = new Set(["final-answer", "task-complete", "context-status", "brief", "pulse", "find", "recall"]);
+const RUNNER_META_TOOLS = new Set(["final-answer", "task-complete", "context-status", "brief", "pulse", "find", "recall", "checkpoint"]);
 
 // ── Harness deliverable assembly ──────────────────────────────────────────────
 
@@ -78,6 +88,26 @@ export function assembleDeliverable(state: KernelState): string {
   return lastThought?.content ?? "Task complete.";
 }
 
+// ── Tier-aware guard thresholds ───────────────────────────────────────────────
+
+/** Per-tier thresholds for kernel guards. */
+export interface TierGuardConfig {
+  /** Token delta below which an iteration is considered "low progress". */
+  readonly tokenDeltaThreshold: number;
+  /** Default max same-tool calls before loop detection fires. */
+  readonly maxSameToolDefault: number;
+  /** Number of ignored oracle nudges before force-exit. */
+  readonly oracleNudgeLimit: number;
+}
+
+/** Tier-specific guard thresholds — local is strict, frontier is lenient. */
+export const TIER_GUARD_THRESHOLDS: Record<string, TierGuardConfig> = {
+  local:    { tokenDeltaThreshold: 300,  maxSameToolDefault: 2, oracleNudgeLimit: 1 },
+  mid:      { tokenDeltaThreshold: 500,  maxSameToolDefault: 3, oracleNudgeLimit: 2 },
+  large:    { tokenDeltaThreshold: 700,  maxSameToolDefault: 4, oracleNudgeLimit: 3 },
+  frontier: { tokenDeltaThreshold: 1000, maxSameToolDefault: 5, oracleNudgeLimit: 3 },
+};
+
 // ── Token-delta guard ─────────────────────────────────────────────────────────
 
 /**
@@ -85,33 +115,37 @@ export function assembleDeliverable(state: KernelState): string {
  *
  * Conditions that must ALL be true to trigger early exit:
  * - iteration >= 3 (give the model at least a few steps before judging)
- * - tokenDelta < 500 (this iteration added very few tokens — model is stalling)
+ * - tokenDelta < threshold (tier-specific, defaults to mid=500)
  * - consecutiveLowDeltaCount >= 2 (two consecutive low-delta iterations in a row)
  */
 export function shouldExitOnLowDelta(opts: {
   iteration: number
   tokenDelta: number
   consecutiveLowDeltaCount: number
+  tier?: string
 }): boolean {
-  const { iteration, tokenDelta, consecutiveLowDeltaCount } = opts
-  return iteration >= 3 && tokenDelta < 500 && consecutiveLowDeltaCount >= 2
+  const { iteration, tokenDelta, consecutiveLowDeltaCount, tier } = opts
+  const threshold = (TIER_GUARD_THRESHOLDS[tier ?? "mid"] ?? TIER_GUARD_THRESHOLDS["mid"]).tokenDeltaThreshold;
+  return iteration >= 3 && tokenDelta < threshold && consecutiveLowDeltaCount >= 2
 }
 
 // ── Oracle hard gate ──────────────────────────────────────────────────────────
 
 /**
  * Guard: force exit when the pulse oracle has said readyToAnswer=true but the
- * model has ignored it for 2 consecutive iterations (Stage 2).
+ * model has ignored it for N consecutive iterations (tier-dependent).
  *
- * Stage 1 (nudgeCount < 2): caller should inject a mandatory steering nudge and
+ * Stage 1 (nudgeCount < limit): caller should inject a mandatory steering nudge and
  * increment readyToAnswerNudgeCount.
- * Stage 2 (nudgeCount >= 2): return true → caller terminates with "oracle_forced".
+ * Stage 2 (nudgeCount >= limit): return true → caller terminates with "oracle_forced".
  */
 export function shouldForceOracleExit(opts: {
   oracleReady: boolean
   readyToAnswerNudgeCount: number
+  tier?: string
 }): boolean {
-  return opts.oracleReady && opts.readyToAnswerNudgeCount >= 2
+  const nudgeLimit = (TIER_GUARD_THRESHOLDS[opts.tier ?? "mid"] ?? TIER_GUARD_THRESHOLDS["mid"]).oracleNudgeLimit;
+  return opts.oracleReady && opts.readyToAnswerNudgeCount >= nudgeLimit
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -144,7 +178,12 @@ function getLastErrors(state: KernelState): readonly string[] {
       (s) => s.type === "observation" && s.metadata?.observationResult?.success === false,
     )
     .slice(-2)
-    .map((s) => (s.metadata?.observationResult?.error as string | undefined) ?? "unknown error")
+    .map(
+      (s) =>
+        s.metadata?.observationResult?.displayText ||
+        s.content ||
+        "unknown error",
+    )
 }
 
 // ── Main entry point ──────────────────────────────────────────────────────────
@@ -205,7 +244,10 @@ export function runKernel(
       hooks,
     };
 
-    // ── 5. Create initial state ──────────────────────────────────────────────
+    // ── 5. Extract task intent for output quality gate ─────────────────────
+    const taskIntent = extractOutputFormat(effectiveInput.task);
+
+    // ── 6. Create initial state ──────────────────────────────────────────────
     const baseState = initialKernelState(options);
     // Seed messages from input.initialMessages if provided (e.g. chat history injection)
     let state = effectiveInput.initialMessages?.length
@@ -215,12 +257,13 @@ export function runKernel(
     // Mutable scratchpad mirror — synced from state.scratchpad (ReadonlyMap) after each kernel step.
     const mutableScratchpad = new Map<string, string>(state.scratchpad);
 
-    // ── 6. Main loop ─────────────────────────────────────────────────────────
+    // ── 7. Main loop ─────────────────────────────────────────────────────────
     // Track which tools were used before this iteration to compute per-step tools.
     let prevToolsUsed = new Set<string>();
     let prevStepCount = 0;
     const loopCfg = options.loopDetection;
-    const maxSameTool = loopCfg?.maxSameToolCalls ?? 3;
+    const tierGuards = TIER_GUARD_THRESHOLDS[profile.tier] ?? TIER_GUARD_THRESHOLDS["mid"];
+    const maxSameTool = loopCfg?.maxSameToolCalls ?? tierGuards.maxSameToolDefault;
     const maxRepeatedThought = loopCfg?.maxRepeatedThoughts ?? 3;
     const maxConsecutiveThoughts = loopCfg?.maxConsecutiveThoughts ?? 3;
 
@@ -253,6 +296,9 @@ export function runKernel(
     // When the model has gathered artifacts but stalls, the harness delivers accumulated data.
     let consecutiveStalled = 0;
 
+    // Auto-checkpoint tracking — fires once when context pressure enters the soft zone.
+    let autoCheckpointed = false;
+
     while (
       state.status !== "done" &&
       state.status !== "failed" &&
@@ -262,14 +308,14 @@ export function runKernel(
       state = yield* kernel(state, currentContext);
 
       // ── Token-delta diminishing-returns guard ────────────────────────────
-      // Track consecutive iterations where the model adds fewer than 500 tokens.
-      // After 2 such iterations (starting from iteration 3), exit early to prevent
-      // wasted iterations on a stalled model.
+      // Track consecutive iterations where the model adds fewer than the
+      // tier-specific token threshold. After 2 such iterations (starting from
+      // iteration 3), exit early to prevent wasted iterations on a stalled model.
       // Guard is skipped when no LLM calls have been made (e.g. test/mock kernels
       // that emit 0 tokens) to avoid false positives in non-LLM scenarios.
       const tokenDelta = state.tokens - prevTokens;
       if (state.tokens > 0 || prevTokens > 0) {
-        const lowDelta = tokenDelta < 500;
+        const lowDelta = tokenDelta < tierGuards.tokenDeltaThreshold;
         const newConsecutiveLowDelta = lowDelta ? (state.consecutiveLowDeltaCount ?? 0) + 1 : 0;
         state = transitionState(state, { consecutiveLowDeltaCount: newConsecutiveLowDelta });
 
@@ -280,14 +326,33 @@ export function runKernel(
           hasRemainingIterations &&
           state.status !== "done" &&
           state.status !== "failed" &&
-          shouldExitOnLowDelta({ iteration: state.iteration, tokenDelta, consecutiveLowDeltaCount: newConsecutiveLowDelta })
+          shouldExitOnLowDelta({ iteration: state.iteration, tokenDelta, consecutiveLowDeltaCount: newConsecutiveLowDelta, tier: profile.tier })
         ) {
-          yield* Effect.log(`[token-delta-guard] Early exit: 2 consecutive iterations with <500 token delta (delta=${tokenDelta}, iter=${state.iteration})`);
+          yield* Effect.log(`[token-delta-guard] Early exit: 2 consecutive iterations with <${tierGuards.tokenDeltaThreshold} token delta (delta=${tokenDelta}, iter=${state.iteration})`);
           state = transitionState(state, {
             status: "done",
             meta: { ...state.meta, terminatedBy: "low_delta_guard" },
           });
           break;
+        }
+      }
+
+      // ── Auto-checkpoint before context pressure gate ────────────────────
+      // When approaching the hard pressure gate (within 5%), auto-save best
+      // observations to the checkpoint store so they survive compaction.
+      if (
+        !autoCheckpointed &&
+        shouldAutoCheckpoint({
+          estimatedTokens: state.tokens,
+          maxTokens: (effectiveInput.contextProfile as any)?.maxTokens ?? Number.MAX_SAFE_INTEGER,
+          tier: profile.tier,
+          alreadyCheckpointed: autoCheckpointed,
+        })
+      ) {
+        const saved = yield* autoCheckpoint(checkpointStoreRef, state.steps);
+        if (saved) {
+          autoCheckpointed = true;
+          yield* Effect.log(`[auto-checkpoint] Saved best observations before context pressure gate (tokens=${state.tokens})`);
         }
       }
 
@@ -450,12 +515,12 @@ export function runKernel(
       // When the pulse tool has reported readyToAnswer=true but the model
       // has not called final-answer, escalate in two stages:
       //   Stage 1: inject a mandatory steering nudge, increment nudge count.
-      //   Stage 2: after 2 ignored nudges, force-exit with "oracle_forced".
+      //   Stage 2: after N ignored nudges (tier-dependent), force-exit with "oracle_forced".
       if (state.status !== "done" && state.status !== "failed") {
         const oracleReady = getLastPulseReadyToAnswer(state);
         const nudgeCount = state.readyToAnswerNudgeCount ?? 0;
 
-        if (shouldForceOracleExit({ oracleReady, readyToAnswerNudgeCount: nudgeCount })) {
+        if (shouldForceOracleExit({ oracleReady, readyToAnswerNudgeCount: nudgeCount, tier: profile.tier })) {
           // Stage 2: force exit — model has been nudged twice and still hasn't called final-answer
           yield* Effect.log(`[oracle-gate] Forcing exit after ${nudgeCount} ignored readyToAnswer signals`);
           const forcedOutput = state.output ?? state.steps.filter((s) => s.type === "thought").slice(-1)[0]?.content ?? "Task complete.";
@@ -651,7 +716,7 @@ export function runKernel(
       }
     }
 
-    // ── 7. Post-loop required tools check ───────────────────────────────────
+    // ── 8. Post-loop required tools check ───────────────────────────────────
     // Final safety net: if the loop exited with "done" (e.g. via bare tool call
     // guard or max iterations) but required tools still haven't been called, fail.
     // Exception: harness_deliverable exits are deliberate — the harness determined
@@ -669,14 +734,98 @@ export function runKernel(
       }
     }
 
-    // ── 8. Terminal hooks ────────────────────────────────────────────────────
+    // ── 9. Output quality gate ────────────────────────────────────────────
+    // Route all successful outputs through the canonical finalization pipeline.
+    // Validates format, optionally synthesizes when LLM is available.
+    // Harness-assembled output (raw tool artifacts) always attempts synthesis.
+    if (state.status === "done" && state.output) {
+      const terminationSource = (state.meta.terminatedBy === "oracle_forced" ? "oracle"
+        : state.meta.terminatedBy === "harness_deliverable" || state.meta.terminatedBy === "low_delta_guard" ? "harness"
+        : "model") as "model" | "harness" | "oracle" | "fallback";
+      const candidate = buildFinalAnswerCandidate(
+        state.output,
+        terminationSource,
+        taskIntent,
+      );
+      const finalized = yield* finalizeOutput(candidate, taskIntent, effectiveInput.task);
+
+      // Determine if synthesis is needed:
+      // 1. Explicit format requested but validation failed
+      // 2. Harness/oracle source — raw tool artifacts need professional formatting
+      const needsSynthesis = !finalized.formatValidated &&
+        (taskIntent.format || terminationSource === "harness" || terminationSource === "oracle");
+
+      if (needsSynthesis) {
+        const llmOpt = yield* Effect.serviceOption(LLMService);
+        if (llmOpt._tag === "Some") {
+          // Use detected format, or fallback to "prose" for harness output without format cues
+          const synthesisFormat = taskIntent.format ?? "prose";
+          const synthesisPrompt = buildSynthesisPrompt(state.output, synthesisFormat, effectiveInput.task);
+          const synthesized = yield* llmOpt.value.complete({
+            messages: [{ role: "user", content: synthesisPrompt }],
+            maxTokens: 1500,
+            temperature: 0.2,
+          }).pipe(Effect.catchAll(() => Effect.succeed({ content: "" })));
+
+          if (synthesized.content && synthesized.content.length > 0) {
+            if (taskIntent.format) {
+              const revalidation = validateOutputFormat(synthesized.content, taskIntent.format);
+              if (revalidation.valid) {
+                state = transitionState(state, {
+                  output: synthesized.content,
+                  meta: { ...state.meta, outputSynthesized: true, outputFormatValidated: true },
+                });
+                yield* Effect.log(`[output-gate] Synthesized output to match requested format: ${taskIntent.format}`);
+              } else {
+                // Synthesis failed to produce valid format — use synthesized anyway if from harness
+                // (it's still better than raw tool artifacts)
+                if (terminationSource === "harness" || terminationSource === "oracle") {
+                  state = transitionState(state, {
+                    output: synthesized.content,
+                    meta: { ...state.meta, outputSynthesized: true, outputFormatValidated: false, outputFormatReason: revalidation.reason },
+                  });
+                  yield* Effect.log(`[output-gate] Synthesis format imperfect but using over raw artifacts: ${revalidation.reason}`);
+                } else {
+                  state = transitionState(state, {
+                    meta: { ...state.meta, outputFormatValidated: false, outputFormatReason: finalized.validationReason },
+                  });
+                  yield* Effect.log(`[output-gate] Synthesis attempted but format still invalid: ${revalidation.reason}`);
+                }
+              }
+            } else {
+              // No format — harness synthesis for coherent prose
+              state = transitionState(state, {
+                output: synthesized.content,
+                meta: { ...state.meta, outputSynthesized: true },
+              });
+              yield* Effect.log(`[output-gate] Synthesized harness output into coherent response`);
+            }
+          } else {
+            state = transitionState(state, {
+              meta: { ...state.meta, outputFormatValidated: false, outputFormatReason: finalized.validationReason },
+            });
+          }
+        } else {
+          state = transitionState(state, {
+            meta: { ...state.meta, outputFormatValidated: false, outputFormatReason: finalized.validationReason },
+          });
+        }
+      } else if (taskIntent.format) {
+        // Format was requested and validated successfully
+        state = transitionState(state, {
+          meta: { ...state.meta, outputFormatValidated: true },
+        });
+      }
+    }
+
+    // ── 10. Terminal hooks ────────────────────────────────────────────────────
     if (state.status === "done") {
       yield* hooks.onDone(state);
     } else if (state.status === "failed") {
       yield* hooks.onError(state, state.error ?? "unknown error");
     }
 
-    // ── 9. Return final state ────────────────────────────────────────────────
+    // ── 11. Return final state ────────────────────────────────────────────────
     return state;
   });
 }

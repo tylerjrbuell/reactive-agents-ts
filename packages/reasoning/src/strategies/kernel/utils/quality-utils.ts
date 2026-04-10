@@ -122,6 +122,9 @@ export function sanitizeAgentOutput(text: string): string {
   // Strip internal step markers: [STEP 1/3], [EXEC s1], [SYNTHESIS], [REFLECT 1], [SKIP s1], [PATCH]
   result = result.replace(/^\[(?:STEP \d+\/\d+|EXEC s\d+|SYNTHESIS|REFLECT \d+|SKIP s\d+|PATCH)\]\s*/gim, "");
 
+  // Strip [TOT] prefixes: [TOT], [TOT d=N], tree-of-thought metadata lines
+  result = result.replace(/^\[TOT(?:\s+d=\d+)?\].*$/gim, "");
+
   // Strip "Thought:" / "Action:" / "Action Input:" / "Observation:" protocol prefixes at line start
   result = result.replace(/^(?:Thought|Action|Action Input|Observation):\s*/gim, "");
 

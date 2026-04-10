@@ -161,7 +161,7 @@ export function handleActing(
           continue;
         }
 
-        const META_TOOL_NAMES = new Set(["final-answer", "task-complete", "context-status", "brief", "pulse", "find", "recall"]);
+        const META_TOOL_NAMES = new Set(["final-answer", "task-complete", "context-status", "brief", "pulse", "find", "recall", "checkpoint"]);
 
         // ── Check meta-tool registry first (brief, pulse) ─────────────────────
         const metaHandler = metaToolRegistry.get(tc.name);
@@ -192,7 +192,7 @@ export function handleActing(
 
         // ── FINAL-ANSWER HARD GATE (FC) ───────────────────────────────────────
         if (tc.name === "final-answer") {
-          const META_TOOLS = new Set(["final-answer", "task-complete", "context-status", "brief", "pulse", "find", "recall"]);
+          const META_TOOLS = new Set(["final-answer", "task-complete", "context-status", "brief", "pulse", "find", "recall", "checkpoint"]);
           const hasNonMetaToolCalled = [...newToolsUsed].some((t) => !META_TOOLS.has(t));
           const requiredTools = input.requiredTools ?? [];
           const allRequiredMet = requiredTools.every((t) => newToolsUsed.has(t));

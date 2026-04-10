@@ -26,11 +26,11 @@ export type Guard = (
 
 const META_TOOL_NAMES = new Set([
   "final-answer", "task-complete", "context-status",
-  "brief", "pulse", "find", "recall",
+  "brief", "pulse", "find", "recall", "checkpoint",
 ]);
 
 /** Meta-introspection tools subject to dedup spam detection. */
-export const META_TOOL_SET = new Set(["brief", "pulse", "find", "recall"]);
+export const META_TOOL_SET = new Set(["brief", "pulse", "find", "recall", "checkpoint"]);
 
 // ─── Individual Guards ────────────────────────────────────────────────────────
 

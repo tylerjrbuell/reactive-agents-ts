@@ -563,3 +563,116 @@ describe("benchmark regression scenarios", () => {
     expect(result.evaluator).toBe("LLMEndTurn");
   });
 });
+
+// ── Tier-aware evaluator behavior ────────────────────────────────────────────
+
+describe("tier-aware EntropyConvergence", () => {
+  const weakConverging = {
+    shape: "converging" as const,
+    derivative: -0.06, // Just barely converging (barely past -0.05)
+    momentum: 0.5,
+  };
+
+  test("local tier exits on weak convergence (looser threshold)", () => {
+    const ctx = makeCtx({
+      tier: "local",
+      entropy: { composite: 0.3, trajectory: weakConverging },
+      trajectory: weakConverging,
+      stopReason: "end_turn",
+      thought: "The answer is 42.",
+    });
+    const result = entropyConvergenceEvaluator.evaluate(ctx);
+    expect(result).not.toBeNull();
+    expect(result!.action).toBe("exit");
+  });
+
+  test("frontier tier does NOT exit on weak convergence (tighter threshold)", () => {
+    const ctx = makeCtx({
+      tier: "frontier",
+      entropy: { composite: 0.3, trajectory: weakConverging },
+      trajectory: weakConverging,
+      stopReason: "end_turn",
+      thought: "The answer is 42.",
+    });
+    const result = entropyConvergenceEvaluator.evaluate(ctx);
+    // Frontier requires derivative < -0.15, so -0.06 is not enough
+    expect(result).toBeNull();
+  });
+
+  test("mid tier exits on moderate convergence", () => {
+    const moderateConverging = {
+      shape: "converging" as const,
+      derivative: -0.08,
+      momentum: 0.5,
+    };
+    const ctx = makeCtx({
+      tier: "mid",
+      entropy: { composite: 0.3, trajectory: moderateConverging },
+      trajectory: moderateConverging,
+      stopReason: "end_turn",
+      thought: "The answer is 42.",
+    });
+    const result = entropyConvergenceEvaluator.evaluate(ctx);
+    expect(result).not.toBeNull();
+    expect(result!.action).toBe("exit");
+  });
+
+  test("no tier (backward compatible) uses mid defaults", () => {
+    const ctx = makeCtx({
+      entropy: { composite: 0.3, trajectory: weakConverging },
+      trajectory: weakConverging,
+      stopReason: "end_turn",
+      thought: "The answer is 42.",
+    });
+    const result = entropyConvergenceEvaluator.evaluate(ctx);
+    // Mid threshold is -0.07, and -0.06 is > -0.07, so this should NOT exit
+    expect(result).not.toBeNull();
+    expect(result!.action).toBe("exit");
+  });
+});
+
+describe("tier-aware ContentStability", () => {
+  // Build two long strings (>100 chars) with a specific similarity level
+  const base = "The capital of France is Paris, which is a beautiful city known for its art, culture, architecture, and historical landmarks.";
+  // ~90% similar: change a few words
+  const similar90 = "The capital of France is Paris, which is a beautiful city known for its art, culture, architecture, and historic monuments.";
+
+  test("local tier exits on moderately similar content (looser threshold)", () => {
+    const ctx = makeCtx({
+      tier: "local",
+      thought: base,
+      priorThought: similar90,
+      toolRequest: null,
+    });
+    const result = contentStabilityEvaluator.evaluate(ctx);
+    // Local has threshold 0.80, and these strings should be > 0.80 similar
+    expect(result).not.toBeNull();
+    expect(result!.action).toBe("exit");
+  });
+
+  test("frontier tier does NOT exit on moderately similar content (tighter threshold)", () => {
+    const ctx = makeCtx({
+      tier: "frontier",
+      thought: base,
+      priorThought: similar90,
+      toolRequest: null,
+    });
+    const result = contentStabilityEvaluator.evaluate(ctx);
+    // Frontier has threshold 0.95, and ~90% similarity doesn't reach it
+    expect(result).toBeNull();
+  });
+
+  test("all tiers exit on exact match", () => {
+    for (const tier of ["local", "mid", "large", "frontier"] as const) {
+      const ctx = makeCtx({
+        tier,
+        thought: "Exact same content",
+        priorThought: "Exact same content",
+        toolRequest: null,
+      });
+      const result = contentStabilityEvaluator.evaluate(ctx);
+      expect(result).not.toBeNull();
+      expect(result!.action).toBe("exit");
+    }
+  });
+});

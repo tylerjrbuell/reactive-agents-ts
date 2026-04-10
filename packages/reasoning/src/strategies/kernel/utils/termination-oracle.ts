@@ -47,6 +47,7 @@ export interface TerminationContext {
   readonly stopReason: string;
   readonly toolRequest: ToolRequest | null;
   readonly iteration: number;
+  readonly tier?: "local" | "mid" | "large" | "frontier";
   readonly steps: readonly ReasoningStep[];
   readonly priorThought?: string;
   readonly entropy?: EntropyScoreLike;
@@ -166,6 +167,24 @@ export function normalizedLevenshtein(a: string, b: string): number {
   return 1 - matrix[a.length]![b.length]! / maxLen;
 }
 
+// ── Tier-aware threshold tables ────────────────────────────────────────────
+
+/** Entropy derivative thresholds per tier (more negative = stricter). */
+const ENTROPY_CONVERGENCE_THRESHOLDS: Record<string, number> = {
+  local: -0.03,
+  mid: -0.05,
+  large: -0.07,
+  frontier: -0.15,
+};
+
+/** Content similarity thresholds per tier (higher = stricter). */
+const CONTENT_STABILITY_THRESHOLDS: Record<string, number> = {
+  local: 0.80,
+  mid: 0.85,
+  large: 0.90,
+  frontier: 0.95,
+};
+
 // ── Built-in Signal Evaluators ──────────────────────────────────────────────
 
 export const pendingToolCallEvaluator: TerminationSignalEvaluator = {
@@ -191,7 +210,8 @@ export const entropyConvergenceEvaluator: TerminationSignalEvaluator = {
     if (!ctx.entropy || !ctx.trajectory) return null;
     if (ctx.stopReason !== "end_turn") return null;
 
-    const converging = ctx.trajectory.shape === "converging" && ctx.trajectory.derivative < -0.05;
+    const threshold = ENTROPY_CONVERGENCE_THRESHOLDS[ctx.tier ?? "mid"] ?? -0.05;
+    const converging = ctx.trajectory.shape === "converging" && ctx.trajectory.derivative < threshold;
     if (converging && ctx.thought.trim().length > 0) {
       return { action: "exit", confidence: "high", reason: "entropy_converged", output: ctx.thought.trim() };
     }
@@ -222,7 +242,8 @@ export const contentStabilityEvaluator: TerminationSignalEvaluator = {
     }
     // Fuzzy match only for substantive content (>= 100 chars) to avoid
     // false positives on short incrementing outputs like "Step 1..." / "Step 2..."
-    if (current.length >= 100 && normalizedLevenshtein(current, prior) > 0.85) {
+    const stabilityThreshold = CONTENT_STABILITY_THRESHOLDS[ctx.tier ?? "mid"] ?? 0.85;
+    if (current.length >= 100 && normalizedLevenshtein(current, prior) > stabilityThreshold) {
       return { action: "exit", confidence: "medium", reason: "content_stable", output: current };
     }
     return null;

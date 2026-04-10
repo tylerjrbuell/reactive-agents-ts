@@ -27,6 +27,43 @@ describe("CONTEXT_PROFILES", () => {
     expect(f.toolResultMaxChars).toBeGreaterThan(CONTEXT_PROFILES.large.toolResultMaxChars);
     expect(f.rulesComplexity).toBe("detailed");
   });
+
+  it("large tier is tuned for efficiency (tighter than raw capability)", () => {
+    const l = CONTEXT_PROFILES.large;
+    expect(l.temperature).toBe(0.5);
+    expect(l.maxIterations).toBe(10);
+    expect(l.compactAfterSteps).toBe(6);
+  });
+
+  it("frontier tier is tuned for efficiency (tighter than default)", () => {
+    const f = CONTEXT_PROFILES.frontier;
+    expect(f.temperature).toBe(0.6);
+    expect(f.maxIterations).toBe(12);
+  });
+
+  it("temperature increases monotonically from local to frontier", () => {
+    const temps = [
+      CONTEXT_PROFILES.local.temperature!,
+      CONTEXT_PROFILES.mid.temperature!,
+      CONTEXT_PROFILES.large.temperature!,
+      CONTEXT_PROFILES.frontier.temperature!,
+    ];
+    for (let i = 1; i < temps.length; i++) {
+      expect(temps[i]).toBeGreaterThanOrEqual(temps[i - 1]);
+    }
+  });
+
+  it("maxIterations increases monotonically from local to frontier", () => {
+    const iters = [
+      CONTEXT_PROFILES.local.maxIterations!,
+      CONTEXT_PROFILES.mid.maxIterations!,
+      CONTEXT_PROFILES.large.maxIterations!,
+      CONTEXT_PROFILES.frontier.maxIterations!,
+    ];
+    for (let i = 1; i < iters.length; i++) {
+      expect(iters[i]).toBeGreaterThanOrEqual(iters[i - 1]);
+    }
+  });
 });
 
 describe("mergeProfile", () => {
@@ -106,5 +143,69 @@ describe("resolveProfile", () => {
     expect(profile.tier).toBe("local");
     expect(profile.toolResultMaxChars).toBe(600);
     expect(profile.compactAfterSteps).toBe(5);
+  });
+});
+
+describe("resolveProfile — provider-scoped tier resolution", () => {
+  it("gemini: routes gemini-2.5-flash to large (not mid via global 'flash' pattern)", () => {
+    expect(resolveProfile("gemini-2.5-flash", undefined, "gemini").tier).toBe("large");
+    expect(resolveProfile("gemini-2.5-flash-preview", undefined, "gemini").tier).toBe("large");
+    expect(resolveProfile("gemini-2.5-flash-lite", undefined, "gemini").tier).toBe("large");
+  });
+
+  it("gemini: routes gemini-2.5-pro to frontier", () => {
+    expect(resolveProfile("gemini-2.5-pro", undefined, "gemini").tier).toBe("frontier");
+    expect(resolveProfile("gemini-2.5-pro-preview", undefined, "gemini").tier).toBe("frontier");
+  });
+
+  it("gemini: routes gemini-2.0-flash to mid", () => {
+    expect(resolveProfile("gemini-2.0-flash", undefined, "gemini").tier).toBe("mid");
+    expect(resolveProfile("gemini-2.0-flash-lite", undefined, "gemini").tier).toBe("mid");
+  });
+
+  it("gemini: routes gemini-1.5-pro to large and 1.5-flash to mid", () => {
+    expect(resolveProfile("gemini-1.5-pro", undefined, "gemini").tier).toBe("large");
+    expect(resolveProfile("gemini-1.5-flash", undefined, "gemini").tier).toBe("mid");
+  });
+
+  it("anthropic: correctly routes sonnet and haiku with provider", () => {
+    expect(resolveProfile("claude-sonnet-4-20250514", undefined, "anthropic").tier).toBe("large");
+    expect(resolveProfile("claude-3-5-haiku-20241022", undefined, "anthropic").tier).toBe("mid");
+    expect(resolveProfile("claude-opus-4-20250514", undefined, "anthropic").tier).toBe("frontier");
+  });
+
+  it("openai: routes gpt-4o-mini to mid (not large via 'gpt-4o' substring)", () => {
+    expect(resolveProfile("gpt-4o-mini", undefined, "openai").tier).toBe("mid");
+    expect(resolveProfile("gpt-4o", undefined, "openai").tier).toBe("large");
+    expect(resolveProfile("gpt-4o-audio-preview", undefined, "openai").tier).toBe("large");
+  });
+
+  it("openai: routes o1 and o3 to frontier", () => {
+    expect(resolveProfile("o1", undefined, "openai").tier).toBe("frontier");
+    expect(resolveProfile("o3-mini", undefined, "openai").tier).toBe("frontier");
+    expect(resolveProfile("o4-mini", undefined, "openai").tier).toBe("frontier");
+  });
+
+  it("ollama: always routes to mid regardless of substrings like 'flash' or 'mini'", () => {
+    expect(resolveProfile("cogito:14b", undefined, "ollama").tier).toBe("mid");
+    expect(resolveProfile("gemma4:e4b", undefined, "ollama").tier).toBe("mid");
+    expect(resolveProfile("llama-flash-mini", undefined, "ollama").tier).toBe("mid");
+  });
+
+  it("ollama: routes small models (<=3B) to local", () => {
+    expect(resolveProfile("tinyllama:1b", undefined, "ollama").tier).toBe("local");
+    expect(resolveProfile("qwen:2b", undefined, "ollama").tier).toBe("local");
+    expect(resolveProfile("qwen:3b", undefined, "ollama").tier).toBe("local");
+  });
+
+  it("unknown provider falls through to global patterns unchanged", () => {
+    expect(resolveProfile("gemini-2.0-flash", undefined, "litellm").tier).toBe("mid");
+    expect(resolveProfile("claude-opus-4-20250514", undefined, "litellm").tier).toBe("frontier");
+  });
+
+  it("no-provider path still works (backward compatibility)", () => {
+    expect(resolveProfile("gpt-4o-mini").tier).toBe("mid");
+    expect(resolveProfile("claude-sonnet-4-20250514").tier).toBe("large");
+    expect(resolveProfile("gemini-2.0-flash").tier).toBe("mid");
   });
 });

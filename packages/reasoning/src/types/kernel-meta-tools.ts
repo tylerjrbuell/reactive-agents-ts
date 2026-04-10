@@ -30,6 +30,7 @@ export const KernelMetaToolsSchema = Schema.Struct({
   find: Schema.optional(Schema.Boolean),
   pulse: Schema.optional(Schema.Boolean),
   recall: Schema.optional(Schema.Boolean),
+  checkpoint: Schema.optional(Schema.Boolean),
   staticBriefInfo: Schema.optional(StaticBriefInfoSchema),
   harnessContent: Schema.optional(Schema.String),
 });

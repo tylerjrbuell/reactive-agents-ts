@@ -89,17 +89,46 @@ export function runReactiveObserver(
       const entropyHistory = ((s.meta as any).entropy?.entropyHistory ?? []) as readonly any[];
       if (entropyHistory.length > 0) {
         const latestScore = entropyHistory[entropyHistory.length - 1];
+
+        // ── Load calibration from EntropySensorService (not hardcoded) ──
+        const modelId = (s.meta as any).entropy?.modelId ?? currentOptions.modelId ?? "unknown";
+        let calibration: {
+          readonly highEntropyThreshold: number;
+          readonly convergenceThreshold: number;
+          readonly calibrated: boolean;
+          readonly sampleCount: number;
+        } = { highEntropyThreshold: 0.8, convergenceThreshold: 0.4, calibrated: false, sampleCount: 0 };
+
+        if (services.entropySensor._tag === "Some") {
+          const cal = yield* services.entropySensor.value.getCalibration(modelId).pipe(
+            Effect.catchAll(() => Effect.succeed(calibration)),
+          );
+          calibration = {
+            highEntropyThreshold: cal.highEntropyThreshold,
+            convergenceThreshold: cal.convergenceThreshold,
+            calibrated: cal.calibrated,
+            sampleCount: cal.sampleCount,
+          };
+
+          // ── Emit CalibrationDrift event when drift is detected ──
+          if ((cal as any).driftDetected && eventBus._tag === "Some") {
+            yield* eventBus.value.publish({
+              _tag: "CalibrationDrift",
+              taskId: s.taskId,
+              modelId,
+              expectedMean: (cal as any).expectedMean ?? 0,
+              observedMean: (cal as any).observedMean ?? 0,
+              deviationSigma: (cal as any).deviationSigma ?? 0,
+            }).pipe(Effect.catchAll(() => Effect.void));
+          }
+        }
+
         const decisions = yield* services.reactiveController.value.evaluate({
           entropyHistory,
           iteration: s.iteration,
           maxIterations: currentOptions.maxIterations,
           strategy: s.strategy,
-          calibration: {
-            highEntropyThreshold: 0.8,
-            convergenceThreshold: 0.4,
-            calibrated: false,
-            sampleCount: 0,
-          },
+          calibration,
           config: (s.meta as any).entropy?.controllerConfig ?? {
             earlyStop: true,
             contextCompression: true,

@@ -612,6 +612,7 @@ function isParallelBatchSafeTool(name: string): boolean {
     "pulse",
     "find",
     "recall",
+    "checkpoint",
   ]);
   if (LOCAL_META_TOOLS.has(name)) return false;
   if (lowered.includes("final-answer")) return false;
