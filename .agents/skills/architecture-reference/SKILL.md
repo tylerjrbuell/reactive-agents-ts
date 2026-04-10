@@ -79,17 +79,86 @@ Phase 10: COMPLETE         EventBus.publish("AgentCompleted") + DebriefSynthesiz
 
 ## Kernel Architecture (Reasoning)
 
-All 5 strategies delegate to `runKernel(reactKernel, input, options)`:
+All 5 strategies delegate to `runKernel(reactKernel, input, options)` in `packages/reasoning/src/strategies/kernel/`.
+
+### Composable Phase Pipeline
 
 ```
-runKernel() loop:
-  1. kernel(state, ctx)       ← reactKernel: Think → Parse → Execute Tool → Observe
-  2. Entropy scoring          ← EntropySensorService.score() [if withReactiveIntelligence()]
-  3. Early exit check         ← exitOnAllToolsCalled [composite steps]
-  4. Iteration progress       ← ReasoningIterationProgress event
-  5. Loop detection           ← 3 patterns: repeated tools, repeated thoughts, consecutive thoughts
-  6. Strategy switching       ← fallback dispatch on loop detection [if enableStrategySwitching]
+makeKernel({ phases?: Phase[] })
+  ↓
+kernel-runner.ts: runKernel() loop
+  ↓ per turn:
+  1. context-builder.ts  — buildSystemPrompt, toProviderMessage, buildConversationMessages, buildToolSchemas (pure data, no LLM)
+  2. think.ts            — LLM stream, FC parsing, fast-path, loop detection, oracle hard gate
+  3. guard.ts            — Guard[] pipeline, checkToolCall(guards), defaultGuards[]
+  4. act.ts              — MetaToolHandler registry, final-answer gate, tool dispatch
 ```
+
+### Key Files
+
+```
+packages/reasoning/src/strategies/kernel/
+  kernel-state.ts      — KernelState, Phase type, KernelContext, ThoughtKernel
+  kernel-runner.ts     — the loop: runKernel() — DO NOT add per-turn logic here directly
+  kernel-hooks.ts      — KernelHooks lifecycle hooks
+  react-kernel.ts      — makeKernel() factory + reactKernel + executeReActKernel
+  phases/
+    context-builder.ts — pure data: builds what the LLM sees this turn
+    think.ts           — LLM decision: stream, FC parsing, loop detection
+    guard.ts           — Guard[] pipeline: is this tool call allowed?
+    act.ts             — MetaToolHandler registry: what happens when tools run?
+  utils/
+    ics-coordinator.ts, reactive-observer.ts, loop-detector.ts
+    tool-utils.ts, tool-execution.ts, termination-oracle.ts, strategy-evaluator.ts
+    stream-parser.ts, context-utils.ts, quality-utils.ts, service-utils.ts, step-utils.ts
+```
+
+### Two Independent State Records
+
+```
+state.messages[]  ← What the LLM sees (multi-turn FC conversation thread)
+state.steps[]     ← What systems observe (entropy, metrics, debrief)
+```
+
+Do NOT conflate these. Debugging LLM behavior → inspect `messages[]`. Debugging metrics/entropy → inspect `steps[]`.
+
+### Extending the Kernel
+
+- **New phase**: create `phases/<name>.ts`, insert into `makeKernel({ phases: [...] })`
+- **New guard**: add `Guard` fn to `guard.ts`, add to `defaultGuards[]`
+- **New inline meta-tool**: add one entry to `metaToolRegistry` in `act.ts`
+- **Custom kernel**: `makeKernel({ phases: [myThink, act] })`
+
+See `.agents/skills/kernel-extension/SKILL.md` for full patterns.
+
+### Dead Code — Do Not Touch
+
+- `buildDynamicContext` / `buildStaticContext` in `context-engine.ts` — disabled behind flag (~560 LOC)
+- `context-engine.ts` dead text-assembly functions (~690 LOC total)
+- These areas are preserved for reference. Do not re-enable, modify, or "clean up."
+
+## MCP Client Architecture
+
+Location: `packages/tools/src/mcp/mcp-client.ts`
+
+### Two Docker Patterns
+
+| Pattern | Examples | Behavior |
+|---------|---------|----------|
+| stdio MCP | GitHub MCP, filesystem | Container reads JSON-RPC from stdin |
+| HTTP-only | mcp/context7 | Container starts HTTP server, ignores stdin |
+
+Both handled transparently via auto-detection.
+
+### Critical Rules
+
+- **`docker rm -f <containerName>` is the ONLY reliable container stop.** `subprocess.kill()` leaves the container alive in the Docker daemon.
+- **Two-phase container naming**: `rax-probe-<name>-<pid>` (initial stdio probe) → `rax-mcp-<name>-<pid>` (port-mapped HTTP if HTTP detected)
+- **PID in name** prevents conflicts between concurrent agents running the same MCP server
+- **Transport auto-inferred**: `command` → `"stdio"`, endpoint `/mcp` → `"streamable-http"`, other endpoint → `"sse"`
+- `transport` field is optional in `MCPServerConfig` — auto-inferred at runtime
+
+See `.agents/skills/mcp-integration/SKILL.md` for full patterns.
 
 ## Technology Stack
 
@@ -116,3 +185,8 @@ runKernel() loop:
 | Memory/SQLite patterns | `.agents/skills/memory-patterns/SKILL.md` |
 | Spec documents | `spec/docs/` |
 | Build commands | `AGENTS.md` (Build & Test Cycle) and `README.md` (quickstart/dev commands) |
+| Extending the kernel | `.agents/skills/kernel-extension/SKILL.md` |
+| Debugging agent behavior | `.agents/skills/kernel-debug/SKILL.md` |
+| Provider streaming patterns | `.agents/skills/provider-streaming/SKILL.md` |
+| MCP client patterns | `.agents/skills/mcp-integration/SKILL.md` |
+| Full feature workflow | `.agents/skills/reactive-feature-dev/SKILL.md` |
