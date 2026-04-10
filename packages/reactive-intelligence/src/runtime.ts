@@ -26,7 +26,7 @@ export const createReactiveIntelligenceLayer = (
   const merged = { ...defaultReactiveIntelligenceConfig, ...config };
 
   // Shared calibration store — used by both sensor and learning engine
-  const calStore = new CalibrationStore();
+  const calStore = new CalibrationStore(merged.calibrationDbPath);
   const banditStore = new BanditStore();
 
   const entropyLayer = EntropySensorServiceLive(merged, calStore);

@@ -160,6 +160,8 @@ export type ReactiveIntelligenceConfig = {
     readonly endpoint?: string;
   };
   readonly models?: Record<string, ModelRegistryEntry>;
+  /** Path to a persistent SQLite file for calibration data. Defaults to `:memory:`. */
+  readonly calibrationDbPath?: string;
 };
 
 // ─── Controller Types (Phase 2) ───
