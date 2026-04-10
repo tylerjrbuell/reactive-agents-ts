@@ -109,11 +109,39 @@ The script:
 
 To run all probes with live output captured:
 
-Run:
-
 ```bash
 bun run scripts/harness-probe.ts 2>&1 | tee harness-reports/probe-run-$(date +%Y%m%d-%H%M).txt
 ```
+
+### Adapting the probe script for better output
+
+The 5 default probes are a starting baseline. Whenever the default probes don't exercise the specific behavior you're investigating, edit `scripts/harness-probe.ts` directly. The script is a first-class artifact — updating it is expected and required to get actionable results.
+
+**When to adapt:**
+- A weakness from the report isn't exercised by any default probe — add a probe that directly triggers it
+- A probe's task is too easy/hard for the current model — adjust the task or `maxIterations`
+- You want to re-run a single probe after a fix — comment out the others or add a `--probe` CLI flag
+- The default tasks don't represent your actual workload — replace with domain-specific tasks
+
+**Targeted single-probe run** (fastest feedback loop after a fix):
+
+```typescript
+// In harness-probe.ts: temporarily filter PROBES to run just the failing one
+const PROBES: ProbeConfig[] = [
+  // comment out others, or:
+].filter((p) => p.id === "termination-quality");
+```
+
+Or add a quick CLI filter at the bottom of `main()`:
+
+```typescript
+const targetId = process.argv[2]; // bun run scripts/harness-probe.ts termination-quality
+const toRun = targetId ? PROBES.filter((p) => p.id === targetId) : PROBES;
+```
+
+**Improving task specificity:** if a probe's `expectation` field doesn't match what you're testing, change it — the expectation is what you paste into the report's "Expected behavior" field. A mismatched expectation produces a misleading report.
+
+**After adapting:** run the modified script, confirm live output matches the new expectation, then restore any removed probes before the next full-pass run.
 
 ---
 
@@ -371,4 +399,4 @@ Do not implement fixes within this skill. Analysis and implementation are separa
 - **Do not skip trivial-1step.** Kernel regressions appear here first.
 - **Do not write vague improvement candidates.** "Improve termination" is not a candidate. "Add early-exit in termination-oracle.ts when qualityScore ≥ 0.90 before maxIterations" is.
 - **Do not delete carry-forward rows.** Accumulation is the point.
-- **Do not add new probes mid-pass.** Log them under Next Pass Focus and run them next time.
+- **Do not add new probes mid-pass.** Once you've started filling the report for a pass, finish it with the same probe set. Log additions under Next Pass Focus and run them next time. Adapting the probe script between passes is expected — adapting it while writing the current report corrupts the baseline.

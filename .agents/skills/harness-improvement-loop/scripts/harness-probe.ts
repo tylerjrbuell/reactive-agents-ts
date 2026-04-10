@@ -10,7 +10,7 @@
 //   PROBE_MODEL=cogito:8b bun run scripts/harness-probe.ts
 
 import { ReactiveAgents } from "@reactive-agents/runtime";
-import { writeFileSync, mkdirSync } from "fs";
+import { writeFileSync, mkdirSync, readFileSync } from "fs";
 
 const PROBE_MODEL = "qwen2.5:7b";
 
@@ -30,7 +30,7 @@ interface ProbeResult {
   success: boolean;
   outputLength: number;
   durationMs: number;
-  costUsd: number | null;
+  costUsd: number;
   qualityScore: number | null;
   contextPeakRatio: number | null;
   duplicateToolCalls: number;
@@ -111,11 +111,11 @@ async function runProbe(probe: ProbeConfig): Promise<ProbeResult> {
     id: probe.id,
     strategy: probe.strategy,
     maxIterationsAllowed: probe.maxIterations,
-    iterationsUsed: result.metadata?.iterations ?? metrics.iterations,
+    iterationsUsed: result.metadata.stepsCount ?? metrics.iterations,
     success: result.success,
     outputLength: result.output.length,
     durationMs,
-    costUsd: result.cost?.total ?? null,
+    costUsd: result.metadata.cost,
     qualityScore: metrics.finalQualityScore,
     contextPeakRatio: metrics.contextPeakRatio,
     duplicateToolCalls: metrics.duplicateToolCalls,
@@ -133,7 +133,7 @@ async function runProbe(probe: ProbeConfig): Promise<ProbeResult> {
   );
   console.log(`Quality score:    ${probeResult.qualityScore ?? "?"}`);
   console.log(`Duration:         ${(durationMs / 1000).toFixed(1)}s`);
-  console.log(`Cost:             $${probeResult.costUsd?.toFixed(4) ?? "?"}`);
+  console.log(`Cost:             $${probeResult.costUsd.toFixed(4)}`);
   console.log(`\nOutput preview:\n${probeResult.outputPreview}`);
 
   return probeResult;
@@ -147,13 +147,15 @@ function extractMetricsFromJsonl(path: string): {
   wastedIterations: number;
 } {
   try {
-    const lines = Bun.file(path).toString().trim().split("\n").filter(Boolean);
-    const events = lines.map((l) => JSON.parse(l));
+    const lines = readFileSync(path, "utf-8").trim().split("\n").filter(Boolean);
+    const events = lines.map((l) => JSON.parse(l) as Record<string, unknown>);
 
     const qualityEvents = events.filter((e) => e.qualityScore != null);
-    const finalQualityScore = qualityEvents.at(-1)?.qualityScore ?? null;
+    const finalQualityScore = (qualityEvents.at(-1)?.qualityScore as number | undefined) ?? null;
 
-    const contextRatios = events.filter((e) => e.contextRatio != null).map((e) => e.contextRatio);
+    const contextRatios = events
+      .filter((e) => e.contextRatio != null)
+      .map((e) => e.contextRatio as number);
     const contextPeakRatio = contextRatios.length > 0 ? Math.max(...contextRatios) : null;
 
     const iterations = events.filter((e) => e.event === "ThinkStart" || e.phase === "think").length || null;
