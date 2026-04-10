@@ -11,9 +11,9 @@ export interface DetectionResult {
 
 // Common prompt injection patterns
 const INJECTION_PATTERNS: Array<{ pattern: RegExp; severity: Severity; description: string }> = [
-  { pattern: /ignore\s+(all\s+)?previous\s+(instructions|prompts)/i, severity: "critical", description: "Instruction override attempt" },
-  { pattern: /disregard\s+(all\s+)?previous/i, severity: "critical", description: "Instruction disregard attempt" },
-  { pattern: /forget\s+(all\s+)?(your\s+)?previous/i, severity: "high", description: "Memory reset attempt" },
+  { pattern: /(?:ignore|override|bypass|circumvent|overrule)\s+(all\s+)?(?:previous|prior|above|my|your|the)\s+(?:instructions|prompts|rules|guidelines|directives)/i, severity: "critical", description: "Instruction override attempt" },
+  { pattern: /disregard\s+(all\s+)?(?:previous|prior|above)/i, severity: "critical", description: "Instruction disregard attempt" },
+  { pattern: /forget\s+(all\s+)?(your\s+)?(?:previous|prior)/i, severity: "high", description: "Memory reset attempt" },
   { pattern: /you\s+are\s+now\s+a/i, severity: "high", description: "Role reassignment attempt" },
   { pattern: /act\s+as\s+(if\s+)?(you\s+are|a)\s/i, severity: "medium", description: "Role play injection" },
   { pattern: /system\s*:\s*you\s+are/i, severity: "critical", description: "System prompt injection" },
@@ -23,6 +23,8 @@ const INJECTION_PATTERNS: Array<{ pattern: RegExp; severity: Severity; descripti
   { pattern: /pretend\s+(that\s+)?you\s+(don't|do\s+not)\s+have/i, severity: "high", description: "Capability override attempt" },
   { pattern: /\bDAN\b.*\bmode\b/i, severity: "critical", description: "DAN jailbreak attempt" },
   { pattern: /jailbreak/i, severity: "critical", description: "Explicit jailbreak reference" },
+  { pattern: /(?:output|reveal|show|display|print|leak)\s+(?:your\s+)?(?:system\s+prompt|internal\s+(?:instructions|prompt|config)|secret\s+(?:config|key|parameter))/i, severity: "critical", description: "System prompt extraction attempt" },
+  { pattern: /i\s+am\s+(?:the\s+)?(?:admin|administrator|developer|root|owner)\b/i, severity: "high", description: "Authority impersonation attempt" },
 ];
 
 export const detectInjection = (text: string): Effect.Effect<DetectionResult, never> =>

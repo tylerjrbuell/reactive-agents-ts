@@ -110,6 +110,23 @@ export const defaultAdapter: ProviderAdapter = {
       : "";
     return `You must still call: ${toolList}. Call the next required tool now.${urgency}`;
   },
+
+  synthesisPrompt({ missingOutputTools }) {
+    if (missingOutputTools.length === 0) return undefined;
+    return `Research phase complete. Call ${missingOutputTools[0]} now to produce the deliverable.`;
+  },
+
+  qualityCheck({ task, toolsUsed }) {
+    // Frontier/large models: lightweight check when tools were used.
+    // Ensures the model echoes actual tool output instead of paraphrasing.
+    if (toolsUsed.size === 0) return undefined;
+    return (
+      `Before giving your final answer, verify: (1) your response directly addresses the task ` +
+      `"${task.slice(0, 100)}", (2) key data from tool results is included verbatim where appropriate, ` +
+      `not just paraphrased, and (3) the output format matches what the user requested. ` +
+      `If anything is missing, fix it now.`
+    );
+  },
 };
 
 // ─── Local model adapter ──────────────────────────────────────────────────────
@@ -213,6 +230,15 @@ export const midModelAdapter: ProviderAdapter = {
   synthesisPrompt({ missingOutputTools, tier }) {
     if (tier !== "mid" || missingOutputTools.length === 0) return undefined;
     return `Research complete. Now call ${missingOutputTools[0]} to produce the output.`;
+  },
+
+  qualityCheck({ task, toolsUsed, tier }) {
+    if (tier !== "mid" || toolsUsed.size === 0) return undefined;
+    return (
+      `Review your answer: does it fully address "${task.slice(0, 100)}"? ` +
+      `Include exact data from tool results — do not summarize or paraphrase numbers, URLs, or key facts. ` +
+      `Ensure the output format matches what was requested.`
+    );
   },
 };
 

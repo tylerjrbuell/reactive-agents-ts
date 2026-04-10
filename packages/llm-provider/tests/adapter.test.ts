@@ -140,5 +140,81 @@ describe("ProviderAdapter", () => {
     it("has no systemPromptPatch", () => {
       expect(defaultAdapter.systemPromptPatch).toBeUndefined();
     });
+
+    it("qualityCheck fires when tools were used", () => {
+      const qc = defaultAdapter.qualityCheck!({
+        task: "Get BTC price and create a markdown table",
+        requiredTools: ["web-search"],
+        toolsUsed: new Set(["web-search"]),
+        tier: "frontier",
+      });
+      expect(qc).toBeDefined();
+      expect(qc).toContain("tool results");
+      expect(qc).toContain("format matches");
+    });
+
+    it("qualityCheck returns undefined when no tools used", () => {
+      const qc = defaultAdapter.qualityCheck!({
+        task: "What is 2+2?",
+        requiredTools: [],
+        toolsUsed: new Set(),
+        tier: "frontier",
+      });
+      expect(qc).toBeUndefined();
+    });
+
+    it("synthesisPrompt fires when output tools remain", () => {
+      const sp = defaultAdapter.synthesisPrompt!({
+        toolsUsed: new Set(["web-search"]),
+        missingOutputTools: ["file-write"],
+        observationCount: 3,
+        tier: "frontier",
+      });
+      expect(sp).toBeDefined();
+      expect(sp).toContain("file-write");
+    });
+
+    it("synthesisPrompt returns undefined when no output tools missing", () => {
+      const sp = defaultAdapter.synthesisPrompt!({
+        toolsUsed: new Set(["web-search", "file-write"]),
+        missingOutputTools: [],
+        observationCount: 3,
+        tier: "frontier",
+      });
+      expect(sp).toBeUndefined();
+    });
+  });
+
+  describe("midModelAdapter.qualityCheck", () => {
+    it("fires when tools were used for mid tier", () => {
+      const qc = midModelAdapter.qualityCheck!({
+        task: "Search for crypto prices",
+        requiredTools: ["web-search"],
+        toolsUsed: new Set(["web-search"]),
+        tier: "mid",
+      });
+      expect(qc).toBeDefined();
+      expect(qc).toContain("exact data");
+    });
+
+    it("returns undefined for non-mid tier", () => {
+      const qc = midModelAdapter.qualityCheck!({
+        task: "task",
+        requiredTools: [],
+        toolsUsed: new Set(["web-search"]),
+        tier: "frontier",
+      });
+      expect(qc).toBeUndefined();
+    });
+
+    it("returns undefined when no tools used", () => {
+      const qc = midModelAdapter.qualityCheck!({
+        task: "task",
+        requiredTools: [],
+        toolsUsed: new Set(),
+        tier: "mid",
+      });
+      expect(qc).toBeUndefined();
+    });
   });
 });
