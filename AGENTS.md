@@ -455,6 +455,8 @@ Canonical project skills live in `.agents/skills/`:
 5. Full model I/O observability with `logModelIO` and raw response capture for FC threads
 6. Adaptive strategy reporting now surfaces selected sub-strategy in result metadata (`strategyUsed`, `selectedStrategy`)
 7. Web integration hooks packages: `@reactive-agents/react`, `@reactive-agents/vue`, `@reactive-agents/svelte`
+8. **Terminal execution tool** — safe shell-execute with allowlist (git, ls, cat, grep, find, node, bun, npm, python, curl, echo, mkdir, cp, mv, wc, head, tail, sort, jq); integrated via `.withTerminalTools()` builder method
+9. **Calibration drift detection** — automatic entropy distribution analysis, drift event emission on significant model behavior changes
 
 ### Documentation Cross-Reference Rules
 

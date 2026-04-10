@@ -2,7 +2,7 @@
 name: update-docs
 description: Synchronize all documentation (Starlight docs, README, AGENTS, skills, memory) after code changes. Use after completing a feature, fixing bugs, or changing public APIs.
 disable-model-invocation: true
-argument-hint: [optional: package-name or "release X.Y.Z"]
+argument-hint: package-name or "release X.Y.Z"
 ---
 
 # Update Documentation After Code Changes
@@ -31,14 +31,15 @@ bun test 2>&1 | tail -5
 ```
 
 Categorize changes:
-- [ ] New package created?
-- [ ] New/changed builder methods?
-- [ ] New CLI commands?
-- [ ] New reasoning strategies?
-- [ ] New LLM providers?
-- [ ] Test count changed?
-- [ ] API signatures changed?
-- [ ] New features needing docs pages?
+
+-   [ ] New package created?
+-   [ ] New/changed builder methods?
+-   [ ] New CLI commands?
+-   [ ] New reasoning strategies?
+-   [ ] New LLM providers?
+-   [ ] Test count changed?
+-   [ ] API signatures changed?
+-   [ ] New features needing docs pages?
 
 ## Step 2: Update AGENTS.md (Canonical)
 
@@ -63,9 +64,10 @@ Check and update:
 7. **Code examples** — verify they use actual API
 
 Cross-check against latest release notes (`CHANGELOG.md`) for:
-- Native function-calling behavior and tool-call fallback details
-- Required-tools gating, dynamic stopping, and per-tool call budgets
-- Builder/API additions (meta-tools, skills, composition, dynamic tools, pricing)
+
+-   Native function-calling behavior and tool-call fallback details
+-   Required-tools gating, dynamic stopping, and per-tool call budgets
+-   Builder/API additions (meta-tools, skills, composition, dynamic tools, pricing)
 
 ## Step 4: Update CHANGELOG.md
 
@@ -75,16 +77,20 @@ If this is a release (`$ARGUMENTS` starts with "release"):
 ## [X.Y.Z] — YYYY-MM-DD
 
 ### Added
-- List each new feature with package scope in parentheses
+
+-   List each new feature with package scope in parentheses
 
 ### Changed
-- List package version bumps: `pkg` X.Y.Z → A.B.C: description
+
+-   List package version bumps: `pkg` X.Y.Z → A.B.C: description
 
 ### Fixed
-- List bug fixes with root cause context
+
+-   List bug fixes with root cause context
 
 ### Stats
-- N tests across M files (was P/Q)
+
+-   N tests across M files (was P/Q)
 ```
 
 ## Step 5: Update Starlight Docs Site
@@ -92,30 +98,32 @@ If this is a release (`$ARGUMENTS` starts with "release"):
 ### Check if pages need updating
 
 Search docs for references to changed APIs:
+
 ```bash
 grep -r "oldMethodName\|oldPackageName" apps/docs/src/content/docs/
 ```
 
 ### Pages to check by change type
 
-| Changed | Check These Pages |
-|---------|-------------------|
-| Builder API | `reference/builder-api.md`, `guides/quickstart.md`, `guides/your-first-agent.md` |
-| CLI | `reference/cli.md` |
-| Reasoning | `guides/reasoning.md`, `features/llm-providers.md` |
-| Tools | `guides/tools.md` |
-| Memory | `guides/memory.md` |
-| Providers | `features/llm-providers.md` |
-| Architecture | `concepts/architecture.md`, `concepts/layer-system.md` |
-| New feature | Create new page in `features/` or `guides/` |
+| Changed      | Check These Pages                                                                |
+| ------------ | -------------------------------------------------------------------------------- |
+| Builder API  | `reference/builder-api.md`, `guides/quickstart.md`, `guides/your-first-agent.md` |
+| CLI          | `reference/cli.md`                                                               |
+| Reasoning    | `guides/reasoning.md`, `features/llm-providers.md`                               |
+| Tools        | `guides/tools.md`                                                                |
+| Memory       | `guides/memory.md`                                                               |
+| Providers    | `features/llm-providers.md`                                                      |
+| Architecture | `concepts/architecture.md`, `concepts/layer-system.md`                           |
+| New feature  | Create new page in `features/` or `guides/`                                      |
 
 Required audit pages for framework-level changes:
-- `apps/docs/src/content/docs/reference/builder-api.md`
-- `apps/docs/src/content/docs/reference/configuration.md`
-- `apps/docs/src/content/docs/guides/reasoning.md`
-- `apps/docs/src/content/docs/guides/tools.md`
-- `apps/docs/src/content/docs/guides/contributing.md`
-- `apps/docs/src/content/docs/features/llm-providers.md`
+
+-   `apps/docs/src/content/docs/reference/builder-api.md`
+-   `apps/docs/src/content/docs/reference/configuration.md`
+-   `apps/docs/src/content/docs/guides/reasoning.md`
+-   `apps/docs/src/content/docs/guides/tools.md`
+-   `apps/docs/src/content/docs/guides/contributing.md`
+-   `apps/docs/src/content/docs/features/llm-providers.md`
 
 ### If new docs page needed
 
@@ -137,35 +145,36 @@ Sidebar is auto-generated from directory structure. Use `sidebar: { order: N }` 
 The `.agents/skills/` directory contains skills used by agents to build with this framework. These must stay accurate — stale code examples or wrong API signatures directly cause agent errors.
 
 ### Always check after:
-- Builder method signatures change (`.withReasoning()`, `.withTools()`, `.withMemory()`, etc.)
-- New builder methods are added (`.withFallbacks()`, `.withLogging()`, `.withHealthCheck()`, etc.)
-- New stream event types are added (`IterationProgress`, `StreamCancelled`, etc.)
-- New conversational APIs added (`agent.chat()`, `agent.session()`)
-- Config field names change (e.g., `resultCompression` field names)
-- New strategy options added (`enableStrategySwitching`, etc.)
+
+-   Builder method signatures change (`.withReasoning()`, `.withTools()`, `.withMemory()`, etc.)
+-   New builder methods are added (`.withFallbacks()`, `.withLogging()`, `.withHealthCheck()`, etc.)
+-   New stream event types are added (`IterationProgress`, `StreamCancelled`, etc.)
+-   New conversational APIs added (`agent.chat()`, `agent.session()`)
+-   Config field names change (e.g., `resultCompression` field names)
+-   New strategy options added (`enableStrategySwitching`, etc.)
 
 ### Skills index (all project skills)
 
-| Skill file | What to check |
-|---|---|
-| `architecture-reference/SKILL.md` | Dependency graph, build order, canonical docs pointers |
-| `build-coordinator/SKILL.md` | Multi-agent coordination flow, parallelization assumptions |
-| `build-package/SKILL.md` | Add-new-package scaffolding; canonical references (AGENTS, not CLAUDE) |
-| `kernel-extension/SKILL.md` | Composable kernel phases, guards, meta-tools |
-| `agent-tdd/SKILL.md` | Effect-TS TDD, timeouts, Effect.flip, server teardown |
-| `kernel-debug/SKILL.md` | Symptom-to-phase debugging map |
-| `provider-streaming/SKILL.md` | Provider streaming and adapter hooks |
-| `mcp-integration/SKILL.md` | MCP client, Docker lifecycle, transport inference |
-| `reactive-feature-dev/SKILL.md` | End-to-end feature workflow routing |
-| `prepare-release/SKILL.md` | Release checklist, changeset, changelog template |
-| `effect-ts-patterns/SKILL.md` | Core Effect-TS constraints and anti-patterns |
-| `implement-service/SKILL.md` | Service scaffolding patterns and exports |
-| `implement-test/SKILL.md` | Test harness usage and timeout guidance |
-| `llm-api-contract/SKILL.md` | `complete()/stream()/embed()` signatures and tool-call contracts |
-| `memory-patterns/SKILL.md` | SQLite/WAL/FTS5/vector memory patterns |
-| `review-patterns/SKILL.md` | 9-category compliance checks (incl. kernel extension) |
-| `update-docs/SKILL.md` | This workflow, docs + memory synchronization |
-| `validate-build/SKILL.md` | Build/test/review quality gates |
+| Skill file                        | What to check                                                          |
+| --------------------------------- | ---------------------------------------------------------------------- |
+| `architecture-reference/SKILL.md` | Dependency graph, build order, canonical docs pointers                 |
+| `build-coordinator/SKILL.md`      | Multi-agent coordination flow, parallelization assumptions             |
+| `build-package/SKILL.md`          | Add-new-package scaffolding; canonical references (AGENTS, not CLAUDE) |
+| `kernel-extension/SKILL.md`       | Composable kernel phases, guards, meta-tools                           |
+| `agent-tdd/SKILL.md`              | Effect-TS TDD, timeouts, Effect.flip, server teardown                  |
+| `kernel-debug/SKILL.md`           | Symptom-to-phase debugging map                                         |
+| `provider-streaming/SKILL.md`     | Provider streaming and adapter hooks                                   |
+| `mcp-integration/SKILL.md`        | MCP client, Docker lifecycle, transport inference                      |
+| `reactive-feature-dev/SKILL.md`   | End-to-end feature workflow routing                                    |
+| `prepare-release/SKILL.md`        | Release checklist, changeset, changelog template                       |
+| `effect-ts-patterns/SKILL.md`     | Core Effect-TS constraints and anti-patterns                           |
+| `implement-service/SKILL.md`      | Service scaffolding patterns and exports                               |
+| `implement-test/SKILL.md`         | Test harness usage and timeout guidance                                |
+| `llm-api-contract/SKILL.md`       | `complete()/stream()/embed()` signatures and tool-call contracts       |
+| `memory-patterns/SKILL.md`        | SQLite/WAL/FTS5/vector memory patterns                                 |
+| `review-patterns/SKILL.md`        | 9-category compliance checks (incl. kernel extension)                  |
+| `update-docs/SKILL.md`            | This workflow, docs + memory synchronization                           |
+| `validate-build/SKILL.md`         | Build/test/review quality gates                                        |
 
 ### How to update
 
@@ -187,16 +196,17 @@ When docs or workflow guidance changes, update memory artifacts so future agents
 
 After any significant feature or architecture change:
 
-- Update `.agents/MEMORY.md` with new capabilities, patterns, or status
-- Update Claude project memory at `~/.claude/projects/*/memory/` if session-level context has changed
-- These two files keep future agents oriented without re-discovering project state
+-   Update `.agents/MEMORY.md` with new capabilities, patterns, or status
+-   Update Claude project memory at `~/.claude/projects/*/memory/` if session-level context has changed
+-   These two files keep future agents oriented without re-discovering project state
 
 ## Step 8: Update ROADMAP.md
 
 If a milestone shipped:
-- Move items from "target" to "✅ Released" with actual date
-- Update the "Current State" section
-- Update the Competitive Positioning table
+
+-   Move items from "target" to "✅ Released" with actual date
+-   Update the "Current State" section
+-   Update the Competitive Positioning table
 
 ## Step 9: Verify
 
@@ -215,6 +225,7 @@ Ensure `CLAUDE.md` remains a short compatibility pointer to `AGENTS.md` and does
 ## Quick Reference: Current Stats
 
 Update these numbers when they change:
-- Test count: check with `bun test 2>&1 | tail -3`
-- Package count: `ls packages/ | wc -l`
-- Doc pages: `ls apps/docs/src/content/docs/**/*.md | wc -l`
+
+-   Test count: check with `bun test 2>&1 | tail -3`
+-   Package count: `ls packages/ | wc -l`
+-   Doc pages: `ls apps/docs/src/content/docs/**/*.md | wc -l`
