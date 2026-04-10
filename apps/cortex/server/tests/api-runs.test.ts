@@ -12,6 +12,7 @@ const mockRunnerLayer = Layer.succeed(CortexRunnerService, {
   start: () =>
     Effect.succeed({ agentId: "test-runner-agent", runId: "01HZTEST000000000000000000" }),
   pause: () => Effect.void,
+  resume: () => Effect.void,
   stop: () => Effect.void,
   getActive: () => Effect.succeed(new Map()),
 });
@@ -24,6 +25,7 @@ function captureRunnerLayer(captured: { params: LaunchParams | null }) {
       return Effect.succeed({ agentId: "cap-agent", runId: "cap-run" });
     },
     pause: () => Effect.void,
+    resume: () => Effect.void,
     stop: () => Effect.void,
     getActive: () => Effect.succeed(new Map()),
   });
@@ -322,6 +324,70 @@ describe("POST /api/runs — expanded launch params", () => {
     );
 
     expect(captured.params?.verificationStep).toBe("reflect");
+  });
+
+  it("passes runtimeVerification and terminalTools to runner", async () => {
+    const captured = { params: null as LaunchParams | null };
+    const db = new Database(":memory:");
+    const app = makeCapApp(db, captured);
+
+    await app.handle(
+      new Request("http://localhost/api/runs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: "Go",
+          runtimeVerification: true,
+          terminalTools: true,
+        }),
+      }),
+    );
+
+    expect(captured.params?.runtimeVerification).toBe(true);
+    expect(captured.params?.terminalTools).toBe(true);
+  });
+
+  it("passes additionalToolNames to runner", async () => {
+    const captured = { params: null as LaunchParams | null };
+    const db = new Database(":memory:");
+    const app = makeCapApp(db, captured);
+
+    await app.handle(
+      new Request("http://localhost/api/runs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: "Go",
+          tools: ["web-search"],
+          additionalToolNames: "  lab-widget, http-get  ",
+        }),
+      }),
+    );
+
+    expect(captured.params?.tools).toEqual(["web-search"]);
+    expect(captured.params?.additionalToolNames).toBe("lab-widget, http-get");
+  });
+
+  it("passes terminal shell command lists to runner", async () => {
+    const captured = { params: null as LaunchParams | null };
+    const db = new Database(":memory:");
+    const app = makeCapApp(db, captured);
+
+    await app.handle(
+      new Request("http://localhost/api/runs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: "Go",
+          terminalTools: true,
+          terminalShellAdditionalCommands: "bun, gh",
+          terminalShellAllowedCommands: "  git, ls  ",
+        }),
+      }),
+    );
+
+    expect(captured.params?.terminalShellAdditionalCommands).toBe("bun, gh");
+    expect(captured.params?.terminalShellAllowedCommands).toBe("git, ls");
   });
 });
 

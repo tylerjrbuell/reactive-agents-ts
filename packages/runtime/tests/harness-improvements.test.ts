@@ -399,6 +399,30 @@ describe("withTaskContext", () => {
     expect(result).toBeDefined();
   });
 
+  it("direct-LLM execution injects taskContext into the system prompt (no ReasoningService)", async () => {
+    let systemContent = "";
+    const llm = Layer.succeed(LLMTag, {
+      complete: (req: unknown) => {
+        const r = req as { messages?: ReadonlyArray<{ role?: string; content?: string }> };
+        const first = r.messages?.[0];
+        if (first?.role === "system") systemContent = first.content ?? "";
+        return Effect.succeed({
+          content: "ack",
+          stopReason: "end_turn" as const,
+          usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2, estimatedCost: 0 },
+          model: "test",
+        });
+      },
+    });
+    const config = defaultReactiveAgentsConfig("task-ctx-direct-llm", {
+      maxIterations: 3,
+      taskContext: { cortexPriorRun: "RUN_CONTEXT_INJECTION_MARKER" },
+    });
+    await runTask(config, llm, "hello");
+    expect(systemContent).toContain("RUN_CONTEXT_INJECTION_MARKER");
+    expect(systemContent).toContain("Task / session grounding");
+  });
+
   it("accepts empty task context without error", async () => {
     const builder = ReactiveAgents.create()
       .withName("empty-context-test")

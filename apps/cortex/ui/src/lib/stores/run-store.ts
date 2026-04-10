@@ -169,6 +169,11 @@ function updateVitals(v: RunVitals, msg: CortexLiveMsg, runStartMs: number): Run
 }
 
 function deriveStatus(current: RunStatus, msg: CortexLiveMsg): RunStatus {
+  if (msg.type === "AgentPaused") return "paused";
+  if (msg.type === "AgentResumed") {
+    if (current === "completed" || current === "failed") return current;
+    return "live";
+  }
   if (msg.type === "AgentCompleted") return pSuccess(msg.payload) ? "completed" : "failed";
   if (msg.type === "TaskFailed") return "failed";
   // Debrief may fire before or after AgentCompleted; never promote a known failure back to completed.
@@ -278,7 +283,13 @@ export function createRunStore(runId: string, options?: CreateRunStoreOptions) {
       };
       runStartMs = typeof run.startedAt === "number" ? run.startedAt : Date.now();
       const mapped: RunStatus =
-        run.status === "live" ? "live" : run.status === "failed" ? "failed" : "completed";
+        run.status === "live"
+          ? "live"
+          : run.status === "failed"
+            ? "failed"
+            : run.status === "paused"
+              ? "paused"
+              : "completed";
 
       // Parse debrief from DB (stored as JSON string)
       let parsedDebrief: unknown = null;
@@ -351,7 +362,21 @@ export function createRunStore(runId: string, options?: CreateRunStoreOptions) {
       });
       state.update((s) => ({ ...s, status: "paused" }));
     } catch {
-      /* API may not exist yet */
+      /* network / server error */
+    }
+  }
+
+  async function resume() {
+    try {
+      await fetchFn(`${CORTEX_SERVER_URL}/api/runs/${encodeURIComponent(runId)}/resume`, {
+        method: "POST",
+      });
+      state.update((s) => {
+        if (s.status === "completed" || s.status === "failed") return s;
+        return { ...s, status: "live" };
+      });
+    } catch {
+      /* network / server error */
     }
   }
 
@@ -361,7 +386,7 @@ export function createRunStore(runId: string, options?: CreateRunStoreOptions) {
         method: "POST",
       });
     } catch {
-      /* API may not exist yet */
+      /* network / server error */
     }
   }
 
@@ -379,6 +404,7 @@ export function createRunStore(runId: string, options?: CreateRunStoreOptions) {
   return {
     subscribe: state.subscribe,
     pause,
+    resume,
     stop,
     deleteRun,
     destroy: () => {

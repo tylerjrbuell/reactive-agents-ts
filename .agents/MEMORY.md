@@ -13,6 +13,7 @@
 - [Composable Reasoning Phases](project_composable_phases.md) — ✅ SHIPPED Apr 3, 2026: `strategies/kernel/` composable phase architecture merged to main
 
 ## Current Status (Apr 10, 2026)
+- **Cortex Lab parity** — Builder wires **runtime verification** (`withVerification`) and **host shell** (`terminalTools` → `shell-execute` + `terminal: true`) with explicit UI + docs disclaimers; config parity test + POST `/api/runs` + gateway normalized config updated
 - **Harness Reliability Engineering Complete** — all phases from plan.md implemented: tier classification, expert strategy efficiency, output quality gates, checkpoint meta-tool, tier-adaptive kernel guards, terminal execution, calibration drift detection
 - **Terminal execution tool integrated** — `.withTerminalTools()` builder method + shell-execute registered with security allowlist/blocklist
 - **Calibration drift infrastructure wired** — `subscribeCalibrationUpdates()` initialized in runtime layer, emits CalibrationDrift events via EventBus when model entropy behavior shifts

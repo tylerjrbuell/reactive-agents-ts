@@ -10,6 +10,7 @@
  * applies Cortex-specific fields that have no AgentConfig representation.
  */
 import type { TestTurn } from "@reactive-agents/llm-provider";
+import type { ShellExecuteConfig } from "@reactive-agents/tools";
 import {
   agentConfigToBuilder,
   ReactiveAgents,
@@ -19,6 +20,8 @@ import type { ReasoningOptions } from "@reactive-agents/runtime";
 import { ensureParentDirForFile } from "./ensure-log-path.js";
 import {
   mergeCortexAllowedTools,
+  mergeCortexUiToolNames,
+  splitCortexListInput,
   type CortexAgentToolEntry,
   type CortexDynamicSubAgentsConfig,
   type CortexMetaToolsConfig,
@@ -48,6 +51,8 @@ export interface BuildCortexAgentParams {
   /** Resolved MCP server configs (caller resolves IDs → configs before calling). */
   readonly mcpConfigs?: MCPServerConfig[];
   readonly tools?: string[];
+  /** Comma or newline separated tool IDs merged into {@link tools} for `allowedTools` (e.g. Lab custom tools). */
+  readonly additionalToolNames?: string;
   readonly agentTools?: CortexAgentToolEntry[];
   readonly dynamicSubAgents?: CortexDynamicSubAgentsConfig;
   readonly metaTools?: CortexMetaToolsConfig;
@@ -57,6 +62,23 @@ export interface BuildCortexAgentParams {
   readonly progressCheckpoint?: number;
   readonly fallbacks?: { enabled?: boolean; providers?: string[]; errorThreshold?: number };
   readonly verificationStep?: string;
+  /** Enables `@reactive-agents/verification` (semantic checks, etc.). Separate from `verificationStep: "reflect"`. */
+  readonly runtimeVerification?: boolean;
+  /**
+   * Registers host `shell-execute` with framework defaults (allowlist/blocklist). Caller assumes risk.
+   * When true, `shell-execute` is merged into allowed tools if not already listed.
+   */
+  readonly terminalTools?: boolean;
+  /**
+   * First executable token names added to shell-execute via `ShellExecuteConfig.additionalCommands`
+   * (e.g. `node`, `bun`, `gh`). Only applied when host shell is active.
+   */
+  readonly terminalShellAdditionalCommands?: string;
+  /**
+   * When non-empty, sets `ShellExecuteConfig.allowedCommands` to this list only (replaces framework defaults).
+   * Use with care — omit helpers like `echo` if you replace the whole list.
+   */
+  readonly terminalShellAllowedCommands?: string;
   readonly observabilityVerbosity?: "off" | "minimal" | "normal" | "verbose";
   /** When true, enables automatic strategy switching on loop detection. */
   readonly strategySwitching?: boolean;
@@ -173,16 +195,49 @@ export async function buildCortexAgent(
     spawnAgent: params.dynamicSubAgents?.enabled === true,
     agentToolNames: params.agentTools?.map((t) => t.toolName) ?? [],
   };
-  const userTools = params.tools ?? [];
+  const shellRequested =
+    params.terminalTools === true ||
+    mergeCortexUiToolNames(params.tools, params.additionalToolNames).includes("shell-execute");
+  let userTools = mergeCortexUiToolNames(params.tools, params.additionalToolNames);
+  if (shellRequested && !userTools.includes("shell-execute")) {
+    userTools.push("shell-execute");
+  }
   const mergedAllowed = mergeCortexAllowedTools(userTools, params.metaTools, allowExtras);
   const needsToolLayer =
     (params.mcpConfigs?.length ?? 0) > 0 ||
     (params.agentTools && params.agentTools.length > 0) ||
     params.dynamicSubAgents?.enabled === true ||
-    (params.tools && params.tools.length > 0) ||
-    params.metaTools?.enabled === true;
+    userTools.length > 0 ||
+    params.metaTools?.enabled === true ||
+    shellRequested;
   if (needsToolLayer) {
+    // Register allowedTools first; apply shell **only** via `withTerminalTools()` so
+    // `ShellExecuteConfig` (additionalCommands / allowedCommands) is merged on
+    // `_toolsOptions.terminal` reliably. Passing a config object through a second
+    // `withTools({ terminal: {...} })` merge can lose nested config in some chains.
     b = b.withTools({ allowedTools: mergedAllowed });
+    if (shellRequested) {
+      const addl = splitCortexListInput(params.terminalShellAdditionalCommands);
+      const allowOnly = splitCortexListInput(params.terminalShellAllowedCommands);
+      if (allowOnly.length === 0 && addl.length === 0) {
+        b = b.withTerminalTools();
+      } else {
+        b = b.withTerminalTools({
+          ...(allowOnly.length > 0 ? { allowedCommands: allowOnly } : {}),
+          ...(addl.length > 0 ? { additionalCommands: addl } : {}),
+        } as ShellExecuteConfig);
+      }
+    }
+  } else if (shellRequested) {
+    const addl = splitCortexListInput(params.terminalShellAdditionalCommands);
+    const allowOnly = splitCortexListInput(params.terminalShellAllowedCommands);
+    b =
+      allowOnly.length === 0 && addl.length === 0
+        ? b.withTerminalTools()
+        : b.withTerminalTools({
+            ...(allowOnly.length > 0 ? { allowedCommands: allowOnly } : {}),
+            ...(addl.length > 0 ? { additionalCommands: addl } : {}),
+          } as ShellExecuteConfig);
   }
 
   const tc = params.taskContext;
@@ -201,6 +256,10 @@ export async function buildCortexAgent(
   }
   if (params.verificationStep === "reflect") b = b.withVerificationStep({ mode: "reflect" });
 
+  if (params.runtimeVerification === true) {
+    b = b.withVerification();
+  }
+
   if (params.metaTools?.enabled) {
     b = b.withMetaTools({
       brief: params.metaTools.brief ?? false,
@@ -214,6 +273,9 @@ export async function buildCortexAgent(
   if (params.streaming === true) {
     b = b.withStreaming();
   }
+
+  // Desk / runner pause, resume, and stop call ReactiveAgent.pause|resume|stop (KillSwitchService).
+  b = b.withKillSwitch();
 
   return b.build();
 }

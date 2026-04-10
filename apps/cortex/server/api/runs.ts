@@ -20,6 +20,9 @@ export const runsRouter = (
             ...(b.provider         ? { provider:         b.provider }         : {}),
             ...(b.model            ? { model:            b.model }            : {}),
             ...(b.tools            ? { tools:            b.tools }            : {}),
+            ...(typeof b.additionalToolNames === "string" && b.additionalToolNames.trim() !== ""
+              ? { additionalToolNames: b.additionalToolNames.trim() }
+              : {}),
             ...(b.mcpServerIds?.length ? { mcpServerIds: b.mcpServerIds } : {}),
             ...(b.agentTools?.length ? { agentTools: b.agentTools } : {}),
             ...(b.dynamicSubAgents ? { dynamicSubAgents: b.dynamicSubAgents } : {}),
@@ -37,6 +40,16 @@ export const runsRouter = (
             ...(b.fallbacks        ? { fallbacks:        b.fallbacks }        : {}),
             ...(b.metaTools        ? { metaTools:        b.metaTools }        : {}),
             ...(b.verificationStep ? { verificationStep: b.verificationStep } : {}),
+            ...(b.runtimeVerification === true ? { runtimeVerification: true as const } : {}),
+            ...(b.terminalTools === true ? { terminalTools: true as const } : {}),
+            ...(typeof b.terminalShellAdditionalCommands === "string" &&
+            b.terminalShellAdditionalCommands.trim() !== ""
+              ? { terminalShellAdditionalCommands: b.terminalShellAdditionalCommands.trim() }
+              : {}),
+            ...(typeof b.terminalShellAllowedCommands === "string" &&
+            b.terminalShellAllowedCommands.trim() !== ""
+              ? { terminalShellAllowedCommands: b.terminalShellAllowedCommands.trim() }
+              : {}),
             ...(b.observabilityVerbosity ? { observabilityVerbosity: b.observabilityVerbosity } : {}),
             ...(b.taskContext && typeof b.taskContext === "object" && !Array.isArray(b.taskContext) && Object.keys(b.taskContext).length > 0
               ? { taskContext: b.taskContext as Record<string, string> }
@@ -63,6 +76,7 @@ export const runsRouter = (
           provider:           t.Optional(t.String()),
           model:              t.Optional(t.String()),
           tools:              t.Optional(t.Array(t.String())),
+          additionalToolNames: t.Optional(t.String()),
           strategy:           t.Optional(t.String()),
           temperature:        t.Optional(t.Number()),
           maxIterations:      t.Optional(t.Number()),
@@ -77,6 +91,10 @@ export const runsRouter = (
           fallbacks:          t.Optional(t.Object({ enabled: t.Optional(t.Boolean()), providers: t.Optional(t.Array(t.String())), errorThreshold: t.Optional(t.Number()) })),
           metaTools:          t.Optional(t.Object({ enabled: t.Optional(t.Boolean()), brief: t.Optional(t.Boolean()), find: t.Optional(t.Boolean()), pulse: t.Optional(t.Boolean()), recall: t.Optional(t.Boolean()), harnessSkill: t.Optional(t.Boolean()) })),
           verificationStep:   t.Optional(t.String()),
+          runtimeVerification: t.Optional(t.Boolean()),
+          terminalTools: t.Optional(t.Boolean()),
+          terminalShellAdditionalCommands: t.Optional(t.String()),
+          terminalShellAllowedCommands: t.Optional(t.String()),
           observabilityVerbosity: t.Optional(t.Union([t.Literal("off"), t.Literal("minimal"), t.Literal("normal"), t.Literal("verbose")])),
           mcpServerIds: t.Optional(t.Array(t.String())),
           agentTools: t.Optional(t.Array(t.Unknown())),
@@ -125,6 +143,19 @@ export const runsRouter = (
       const program = Effect.gen(function* () {
         const runner = yield* CortexRunnerService;
         yield* runner.stop(params.runId as RunId);
+        return { ok: true as const };
+      });
+      try {
+        return await Effect.runPromise(program.pipe(Effect.provide(runnerLayer)));
+      } catch (e) {
+        set.status = 500;
+        return { error: String(e) };
+      }
+    })
+    .post("/:runId/resume", async ({ params, set }) => {
+      const program = Effect.gen(function* () {
+        const runner = yield* CortexRunnerService;
+        yield* runner.resume(params.runId as RunId);
         return { ok: true as const };
       });
       try {

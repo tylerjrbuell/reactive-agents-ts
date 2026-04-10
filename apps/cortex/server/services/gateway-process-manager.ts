@@ -196,6 +196,10 @@ export class GatewayProcessManager {
       );
 
       const tools = config.tools as string[] | undefined;
+      const additionalToolNames =
+        typeof config.additionalToolNames === "string" && config.additionalToolNames.trim() !== ""
+          ? config.additionalToolNames.trim()
+          : undefined;
       const metaToolsCfg = config.metaTools as CortexMetaToolsConfig | undefined;
       const mcpIds = (config.mcpServerIds as string[] | undefined)?.filter((x) => typeof x === "string" && x.length > 0) ?? [];
       const mcpRows = mcpIds.length > 0 ? getMcpServersByIds(this.db, mcpIds) : [];
@@ -229,6 +233,18 @@ export class GatewayProcessManager {
       const _cacheTimeout = typeof config.cacheTimeout === "number" && config.cacheTimeout > 0 ? config.cacheTimeout : undefined;
       const _progressCheckpoint = typeof config.progressCheckpoint === "number" && config.progressCheckpoint > 0 ? config.progressCheckpoint : undefined;
       const _verificationStep = config.verificationStep as string | undefined;
+      const _runtimeVerification = config.runtimeVerification === true;
+      const _terminalTools = config.terminalTools === true;
+      const _terminalShellAdditional =
+        typeof config.terminalShellAdditionalCommands === "string" &&
+        config.terminalShellAdditionalCommands.trim() !== ""
+          ? config.terminalShellAdditionalCommands.trim()
+          : undefined;
+      const _terminalShellAllowed =
+        typeof config.terminalShellAllowedCommands === "string" &&
+        config.terminalShellAllowedCommands.trim() !== ""
+          ? config.terminalShellAllowedCommands.trim()
+          : undefined;
       const _observabilityVerbosity = config.observabilityVerbosity as "off" | "minimal" | "normal" | "verbose" | undefined;
       const _memory = config.memory as { working?: boolean; episodic?: boolean; semantic?: boolean } | undefined;
       const _contextSynthesis = config.contextSynthesis as "auto" | "template" | "llm" | "none" | undefined;
@@ -251,6 +267,7 @@ export class GatewayProcessManager {
         ...(_skills ? { skills: _skills } : {}),
         mcpConfigs,
         ...(tools ? { tools } : {}),
+        ...(additionalToolNames ? { additionalToolNames } : {}),
         ...(agentTools ? { agentTools } : {}),
         ...(dynamicSub ? { dynamicSubAgents: dynamicSub } : {}),
         ...(metaToolsCfg ? { metaTools: metaToolsCfg } : {}),
@@ -260,6 +277,10 @@ export class GatewayProcessManager {
         ...(_progressCheckpoint != null ? { progressCheckpoint: _progressCheckpoint } : {}),
         ...(fallbacksCfg ? { fallbacks: fallbacksCfg } : {}),
         ...(_verificationStep ? { verificationStep: _verificationStep } : {}),
+        ...(_runtimeVerification ? { runtimeVerification: true as const } : {}),
+        ...(_terminalTools ? { terminalTools: true as const } : {}),
+        ...(_terminalShellAdditional ? { terminalShellAdditionalCommands: _terminalShellAdditional } : {}),
+        ...(_terminalShellAllowed ? { terminalShellAllowedCommands: _terminalShellAllowed } : {}),
         ...(_observabilityVerbosity ? { observabilityVerbosity: _observabilityVerbosity } : {}),
         strategySwitching: config.strategySwitching === true,
         ...(_memory ? { memory: _memory } : {}),

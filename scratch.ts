@@ -36,15 +36,19 @@ const agent = await ReactiveAgents.create()
     //     },
     // })
     .withReasoning({ defaultStrategy: 'reactive' })
-    .withTools()
+    .withTools({
+        terminal: {
+            additionalCommands: ['gh', 'rax'],
+        },
+    })
     // .withDynamicSubAgents()
     .withMemory()
-    .withTerminalTools()
     .withObservability({ verbosity: 'debug', live: true })
+    .withVerification()
     .build()
 
 const result = await agent.run(
-    'Use the github cli "gh" to Fetch and summarize the 5 last commits to the tylerjrbuell/reactive-agents-ts repo. Then render a markdown table with columns for commit message, author, and date.'
+    'What is the Reactive Agents TypeScript framework?'
 )
 
 console.log('\n--- Result ---')

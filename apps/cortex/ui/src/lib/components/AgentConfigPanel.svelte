@@ -38,7 +38,7 @@
   let { config = $bindable(defaultConfig() as PanelAgentConfig), compact = false }: Props = $props();
 
   // Section expand state
-  let openSections = $state(new Set(["inference", "strategy"]));
+  let openSections = $state(new Set(["inference", "strategy", "tools"]));
   function toggle(s: string) {
     const n = new Set(openSections);
     if (n.has(s)) n.delete(s); else n.add(s);
@@ -79,9 +79,12 @@
       persona: { label: "Persona", keywords: "role tone traits response style behaviour face" },
       strategy: {
         label: "Reasoning",
-        keywords: "strategy react plan execute tot tree reflexion adaptive iterations min max verification reflect",
+        keywords: "strategy react plan execute tot tree reflexion adaptive iterations min max verification reflect runtime semantic entropy quality",
       },
-      tools: { label: "Tools", keywords: "web search file read write code mcp registry spawn dynamic sub agent construction" },
+      tools: {
+        label: "Tools",
+        keywords: "web search file read write code mcp registry spawn dynamic sub agent construction shell terminal host execute risk allowlist",
+      },
       subagents: { label: "Sub-agents", keywords: "local remote a2a url hub delegation researcher" },
       skills: { label: "Skills", keywords: "living skill.md evolution path directory agentskills auto awesome" },
       memory: { label: "Memory", keywords: "working episodic semantic context synthesis ics account tree" },
@@ -202,12 +205,14 @@
   const PROVIDERS = ["anthropic", "openai", "gemini", "ollama", "litellm", "test"] as const;
 
   const AVAILABLE_TOOLS = [
-    { id: "web-search",   label: "Web Search",  icon: "search" },
-    { id: "file-read",    label: "File Read",   icon: "folder_open" },
-    { id: "file-write",   label: "File Write",  icon: "edit_document" },
-    { id: "code-execute", label: "Code Execute",icon: "terminal" },
-    { id: "recall",       label: "Recall",      icon: "psychology" },
-    { id: "find",         label: "Find",        icon: "manage_search" },
+    { id: "web-search",   label: "Web Search",   icon: "search" },
+    { id: "http-get",     label: "HTTP GET",     icon: "link" },
+    { id: "file-read",    label: "File Read",    icon: "folder_open" },
+    { id: "file-write",   label: "File Write",   icon: "edit_document" },
+    { id: "code-execute", label: "Code Execute", icon: "terminal" },
+    { id: "checkpoint",   label: "Checkpoint",   icon: "bookmark_added" },
+    { id: "recall",       label: "Recall",       icon: "psychology" },
+    { id: "find",         label: "Find",         icon: "manage_search" },
   ];
 
   const STRATEGIES = [
@@ -288,6 +293,13 @@
       : [...config.tools, id];
     config = { ...config, tools };
   }
+
+  /** Host shell opt-in adds `shell-execute` at run time even if not in `config.tools`. */
+  const toolCountForBadges = $derived.by(() => {
+    const names = new Set(config.tools);
+    if (config.terminalTools) names.add("shell-execute");
+    return names.size;
+  });
 
   type McpCatalogRow = {
     serverId: string;
@@ -409,7 +421,7 @@
           <span class="acp-chip font-mono text-[10px]" title="Provider">{config.provider}</span>
           <span class="acp-chip acp-chip--cyan font-mono text-[10px] max-w-[200px] truncate" title="Model">{config.model?.trim() || "—"}</span>
           <span class="acp-chip font-mono text-[10px]" title="Reasoning strategy">{acpStrategyLabel}</span>
-          <span class="acp-chip font-mono text-[10px]" title="Built-in + MCP tool names">{config.tools.length} tool{config.tools.length === 1 ? "" : "s"}</span>
+          <span class="acp-chip font-mono text-[10px]" title="Built-in + MCP tool names (host shell counts as shell-execute)">{toolCountForBadges} tool{toolCountForBadges === 1 ? "" : "s"}</span>
         </div>
       </div>
       <div class="flex flex-wrap items-center justify-end gap-1 shrink-0">
@@ -727,7 +739,17 @@
             <option value="none">None — trust first answer</option>
             <option value="reflect">Reflect — LLM self-review pass</option>
           </select>
+          <p class="mt-1 font-mono text-[8px] text-[var(--cortex-text-muted)] leading-relaxed">
+            Reflect runs one extra LLM pass on the draft answer. It is not the same as the framework verification layer below.
+          </p>
         </div>
+        <label class="flex cursor-pointer items-start gap-2.5 rounded-lg border border-[color-mix(in_srgb,var(--ra-amber)_35%,var(--cortex-border))] bg-[color-mix(in_srgb,var(--ra-amber)_8%,transparent)] p-2.5">
+          <input type="checkbox" bind:checked={config.runtimeVerification} class="accent-primary mt-0.5 shrink-0" />
+          <span class="font-mono text-[9px] text-[var(--cortex-text)] leading-snug">
+            <span class="font-semibold text-tertiary">Runtime verification layer</span>
+            — enables the <code class="text-[8px]">@reactive-agents/verification</code> package (semantic entropy and related checks). Adds latency and provider calls; use when you want automated confidence signals, not only a reflect pass.
+          </span>
+        </label>
       </div>
     {/if}
   </div>
@@ -744,11 +766,56 @@
       onclick={() => toggle("tools")}>
       <span class="material-symbols-outlined text-[15px] text-tertiary/90 shrink-0" aria-hidden="true">construction</span>
       <span class="font-display text-[12px] font-semibold text-[var(--cortex-text)] tracking-tight">Tools</span>
-      <span class="ml-2 rounded-md bg-[color-mix(in_srgb,var(--ra-amber)_16%,transparent)] px-1.5 py-0.5 text-[9px] font-mono text-tertiary">{config.tools.length} active</span>
+      <span class="ml-2 rounded-md bg-[color-mix(in_srgb,var(--ra-amber)_16%,transparent)] px-1.5 py-0.5 text-[9px] font-mono text-tertiary">{toolCountForBadges} active</span>
       <span class="ml-auto material-symbols-outlined text-[14px] text-[var(--cortex-text-muted)] transition-transform duration-200 {openSections.has('tools') ? '' : '-rotate-90'}" aria-hidden="true">expand_more</span>
     </button>
     {#if openSections.has("tools")}
       <div id="acp-panel-tools" class="acp-section-body px-3 py-3 border-t border-[var(--cortex-border)]" role="region" aria-labelledby="acp-head-tools">
+        <div
+          class="mb-3 rounded-lg border border-[color-mix(in_srgb,var(--ra-amber)_40%,var(--cortex-border))] bg-[color-mix(in_srgb,var(--ra-amber)_10%,transparent)] px-2.5 py-2 space-y-2"
+        >
+          <p class="font-mono text-[8px] font-semibold uppercase tracking-wide text-tertiary">Host shell — use at your own risk</p>
+          <p class="font-mono text-[8px] text-[var(--cortex-text-muted)] leading-relaxed">
+            The <code class="text-[7px]">shell-execute</code> tool runs allowlisted commands on <strong>this machine</strong> (not an isolated container). Allowed commands are defined by the framework defaults; risky patterns are blocklisted, but no sandbox is perfect.
+            Only enable for trusted projects and accounts. For stronger isolation, use code from your app with Docker sandboxing — see
+            <a class="text-primary underline decoration-primary/40" href="https://docs.reactiveagents.dev/" target="_blank" rel="noreferrer">docs</a>
+            (shell execution / sandbox).
+          </p>
+          <label class="flex cursor-pointer items-center gap-2">
+            <input type="checkbox" bind:checked={config.terminalTools} class="accent-primary shrink-0" />
+            <span class="font-mono text-[9px] text-[var(--cortex-text)]">Enable host shell (<code class="text-[8px]">shell-execute</code>)</span>
+          </label>
+          {#if config.terminalTools || config.tools.includes("shell-execute")}
+            <div class="mt-2 space-y-2 border-t border-[color-mix(in_srgb,var(--ra-amber)_25%,transparent)] pt-2">
+              <div class="space-y-1">
+                <label for="acp-shell-additional-commands" class="config-label mb-0 text-[9px]">Extra allowed commands</label>
+                <textarea
+                  id="acp-shell-additional-commands"
+                  rows={2}
+                  bind:value={config.terminalShellAdditionalCommands}
+                  placeholder="e.g. node, bun, gh, stripe (comma or newline — merged onto framework defaults)"
+                  class="config-input font-mono text-[9px] min-h-[2.25rem] resize-y"
+                ></textarea>
+                <p class="font-mono text-[7px] text-outline/50 leading-relaxed">
+                  Opt-in CLIs like <code class="text-[7px]">node</code>/<code class="text-[7px]">curl</code> are not in the base list; add them here only if you accept the risk.
+                </p>
+              </div>
+              <div class="space-y-1">
+                <label for="acp-shell-allowed-commands" class="config-label mb-0 text-[9px]">Replace default allowlist <span class="text-outline/40 font-normal">(advanced)</span></label>
+                <textarea
+                  id="acp-shell-allowed-commands"
+                  rows={2}
+                  bind:value={config.terminalShellAllowedCommands}
+                  placeholder="Leave empty. If set, this list becomes the only allowed executables (plus “Extra” above)."
+                  class="config-input font-mono text-[9px] min-h-[2.25rem] resize-y border-[color-mix(in_srgb,var(--ra-amber)_30%,var(--cortex-border))]"
+                ></textarea>
+              </div>
+            </div>
+          {/if}
+        </div>
+        <p class="mb-2 font-mono text-[8px] text-[var(--cortex-text-muted)] leading-relaxed">
+          Quick picks toggle framework tool IDs in <code class="text-[7px]">allowedTools</code>. Conductor meta-tools (brief, find, …) are configured separately below in <strong>Meta tools</strong>.
+        </p>
         <div class="grid grid-cols-2 gap-1.5">
           {#each AVAILABLE_TOOLS as tool}
             {@const active = config.tools.includes(tool.id)}
@@ -759,6 +826,19 @@
               {tool.label}
             </button>
           {/each}
+        </div>
+        <div class="mt-3 space-y-1.5">
+          <label for="acp-additional-tool-names" class="config-label mb-0">Additional allowed tools</label>
+          <textarea
+            id="acp-additional-tool-names"
+            rows={2}
+            bind:value={config.additionalToolNames}
+            placeholder="e.g. my-lab-tool, server/http_get (comma or newline)"
+            class="config-input font-mono text-[9px] min-h-[2.5rem] resize-y"
+          ></textarea>
+          <p class="font-mono text-[8px] text-outline/45 leading-relaxed">
+            Merged with the toggles above at run time. Use exact tool registration names (see Lab → Tools for MCP and custom tools).
+          </p>
         </div>
         <div class="mt-4 pt-3 border-t border-outline-variant/10 space-y-2">
           <div class="flex items-center justify-between gap-2">

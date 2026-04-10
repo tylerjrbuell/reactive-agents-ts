@@ -151,6 +151,63 @@ describe("synthesizeDebrief", () => {
     expect(debrief.toolsUsed[0]?.name).toBe("web-search");
     expect(debrief.toolsUsed[0]?.successRate).toBeCloseTo(0.75);
   });
+
+  it("handles missing finalAnswerCapture when finalOutputText is substantive", async () => {
+    const llmLayer = createTestLLMServiceLayer([
+      {
+        content: JSON.stringify({
+          summary: "Provided a repository description from fetched README content.",
+          keyFindings: ["README content summarized"],
+          errorsEncountered: [],
+          lessonsLearned: [],
+          caveats: "",
+        }),
+        stopReason: "end_turn" as const,
+      },
+    ]);
+
+    const input: DebriefInput = {
+      ...baseInput,
+      finalAnswerCapture: undefined,
+      finalOutputText:
+        "# reactive-agents-ts\n\nEffect-TS agent framework with layered runtime and tools.",
+    };
+
+    const debrief = await Effect.runPromise(
+      synthesizeDebrief(input).pipe(Effect.provide(llmLayer)),
+    );
+
+    expect(debrief.outcome).toBe("success");
+    expect(debrief.confidence).toBe("high");
+    expect(debrief.summary).toContain("repository");
+  });
+
+  it("truncates very long finalOutputText without throwing", async () => {
+    const longBody = "x".repeat(20_000);
+    const llmLayer = createTestLLMServiceLayer([
+      {
+        content: JSON.stringify({
+          summary: "ok",
+          keyFindings: [],
+          errorsEncountered: [],
+          lessonsLearned: [],
+          caveats: "",
+        }),
+        stopReason: "end_turn" as const,
+      },
+    ]);
+
+    const debrief = await Effect.runPromise(
+      synthesizeDebrief({
+        ...baseInput,
+        finalAnswerCapture: undefined,
+        finalOutputText: longBody,
+      }).pipe(Effect.provide(llmLayer)),
+    );
+
+    expect(debrief.summary).toBe("ok");
+    expect(debrief.markdown.length).toBeGreaterThan(0);
+  });
 });
 
 describe("formatDebriefMarkdown", () => {

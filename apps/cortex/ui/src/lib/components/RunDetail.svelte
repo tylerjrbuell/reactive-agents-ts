@@ -567,6 +567,19 @@
                  rounded-md bg-error/5 cursor-pointer hover:bg-error/10 transition-colors"
           onclick={() => void runStore.stop()}
         >Stop</button>
+      {:else if $runStore.status === "paused"}
+        <button
+          type="button"
+          class="px-3 py-1.5 border border-secondary/40 text-secondary font-mono text-[10px] uppercase
+                 rounded-md bg-secondary/5 cursor-pointer hover:bg-secondary/12 transition-colors"
+          onclick={() => void runStore.resume()}
+        >Resume</button>
+        <button
+          type="button"
+          class="px-3 py-1.5 border border-error/40 text-error font-mono text-[10px] uppercase
+                 rounded-md bg-error/5 cursor-pointer hover:bg-error/10 transition-colors"
+          onclick={() => void runStore.stop()}
+        >Stop</button>
       {/if}
       <button
         type="button"

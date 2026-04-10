@@ -33,6 +33,7 @@ import { TelemetryClient as TelemetryClientImpl, classifyTaskCategory as classif
 import { recommendStrategyForTier } from "@reactive-agents/llm-provider";
 import { buildTrajectoryFingerprint, abstractifyToolName, firstConvergenceIteration, peakContextPressure, deriveTaskComplexity, deriveFailurePattern, deriveThoughtToActionRatio } from "./telemetry-enrichment.js";
 import { resolveSynthesisConfigForStrategy } from "./synthesis-resolve.js";
+import { formatTaskContextForChat } from "./chat.js";
 
 // ─── Narrow service types for optional deps ───
 
@@ -2066,6 +2067,19 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                             config.systemPrompt ??
                             "You are a helpful AI assistant.";
 
+                          // Match agent.chat() direct-LLM path: static taskContext must reach the model
+                          // even when ReasoningService is off (Cortex run-tab chat, streaming runStream, etc.).
+                          const taskCtxBlock = formatTaskContextForChat(
+                            config.taskContext as Record<string, string> | undefined,
+                          ).trim();
+                          const semanticMem = String(
+                            (c.memoryContext as any)?.semanticContext ?? "",
+                          ).trim();
+                          const directLlmMemoryContext =
+                            taskCtxBlock && semanticMem
+                              ? `${taskCtxBlock}\n\n${semanticMem}`
+                              : taskCtxBlock || semanticMem || undefined;
+
                           // Phase 1.1: Use buildContext() properly when available
                           let messagesToSend: readonly unknown[];
                           if (contextManagerOpt._tag === "Some") {
@@ -2073,9 +2087,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                               .buildContext({
                                 systemPrompt: defaultPrompt,
                                 messages: c.messages,
-                                memoryContext: String(
-                                  (c.memoryContext as any)?.semanticContext ?? "",
-                                ) || undefined,
+                                memoryContext: directLlmMemoryContext,
                                 maxTokens: 100_000,
                                 reserveOutputTokens: 4096,
                               })
@@ -2086,8 +2098,8 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                               );
                           } else {
                             // Fallback: simple system prompt prepend
-                            const systemPrompt = c.memoryContext
-                              ? `${String((c.memoryContext as any).semanticContext ?? "")}\n\n${defaultPrompt}`
+                            const systemPrompt = directLlmMemoryContext
+                              ? `${directLlmMemoryContext}\n\n${defaultPrompt}`
                               : defaultPrompt;
                             messagesToSend = [
                               { role: "system", content: systemPrompt },
@@ -3366,6 +3378,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   taskId: ctx.taskId,
                   terminatedBy: terminatedByRaw,
                   finalAnswerCapture: rr?.metadata?.finalAnswerCapture as any,
+                  finalOutputText: hasSubstantiveOutput ? outputForSuccess : undefined,
                   toolCallHistory,
                   errorsFromLoop,
                   metrics: {

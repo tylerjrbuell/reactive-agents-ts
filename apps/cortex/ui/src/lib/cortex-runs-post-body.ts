@@ -4,6 +4,10 @@
  */
 import type { AgentConfig } from "./types/agent-config.js";
 
+function shellExecuteActive(cfg: AgentConfig): boolean {
+  return cfg.terminalTools === true || cfg.tools.includes("shell-execute");
+}
+
 /** Build the object passed to `JSON.stringify` for Cortex run creation. */
 export function cortexRunsPostBody(prompt: string, cfg: AgentConfig): Record<string, unknown> {
   return {
@@ -25,6 +29,17 @@ export function cortexRunsPostBody(prompt: string, cfg: AgentConfig): Record<str
     fallbacks: cfg.fallbacks.enabled ? cfg.fallbacks : undefined,
     metaTools: cfg.metaTools.enabled ? cfg.metaTools : undefined,
     verificationStep: cfg.verificationStep !== "none" ? cfg.verificationStep : undefined,
+    ...(cfg.runtimeVerification ? { runtimeVerification: true as const } : {}),
+    ...(cfg.terminalTools ? { terminalTools: true as const } : {}),
+    ...(shellExecuteActive(cfg) && cfg.terminalShellAdditionalCommands.trim() !== ""
+      ? { terminalShellAdditionalCommands: cfg.terminalShellAdditionalCommands.trim() }
+      : {}),
+    ...(shellExecuteActive(cfg) && cfg.terminalShellAllowedCommands.trim() !== ""
+      ? { terminalShellAllowedCommands: cfg.terminalShellAllowedCommands.trim() }
+      : {}),
+    ...(cfg.additionalToolNames.trim() !== ""
+      ? { additionalToolNames: cfg.additionalToolNames.trim() }
+      : {}),
     observabilityVerbosity: cfg.observabilityVerbosity,
     mcpServerIds: cfg.mcpServerIds?.length ? cfg.mcpServerIds : undefined,
     agentTools: cfg.agentTools?.length ? cfg.agentTools : undefined,

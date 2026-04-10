@@ -41,6 +41,28 @@ export interface DebriefInput {
   errorsFromLoop: string[];
   /** Quantitative execution metrics */
   metrics: { tokens: number; duration: number; iterations: number; cost: number };
+  /**
+   * User-facing task output (what the user sees as the answer), when available.
+   * The debrief model must treat this as authoritative when judging completeness
+   * versus `taskPrompt`, especially when `finalAnswerCapture` is missing or has
+   * no summary.
+   */
+  readonly finalOutputText?: string;
+}
+
+/** Max characters of combined final output included in the debrief user prompt (token safety). */
+const MAX_DEBRIEF_FINAL_OUTPUT_CHARS = 12_000;
+
+function truncateForDebriefPrompt(text: string): string {
+  const t = text.trim();
+  if (t.length <= MAX_DEBRIEF_FINAL_OUTPUT_CHARS) return t;
+  return `${t.slice(0, MAX_DEBRIEF_FINAL_OUTPUT_CHARS)}\n… [truncated ${t.length - MAX_DEBRIEF_FINAL_OUTPUT_CHARS} more characters]`;
+}
+
+function briefOutputFallback(text: string | undefined): string | undefined {
+  const t = text?.trim();
+  if (!t) return undefined;
+  return t.length <= 400 ? t : `${t.slice(0, 400)}…`;
 }
 
 /**
@@ -111,7 +133,10 @@ Return ONLY a JSON object — no prose, no markdown fences — with exactly thes
   "errorsEncountered": ["error description if any"],
   "lessonsLearned": ["actionable lesson for future runs"],
   "caveats": "anything uncertain, incomplete, or worth flagging (empty string if none)"
-}`;
+}
+
+The user message may include a "Final output" section. That text is what the user actually received as the task answer.
+You MUST align your summary with it: if it substantively answers the task (relative to the stated task), say so clearly and do NOT claim that no answer or summary was produced. Multiple tool calls are not evidence of failure by themselves.`;
 
 export function synthesizeDebrief(
   input: DebriefInput,
@@ -125,9 +150,27 @@ export function synthesizeDebrief(
         .map((t) => `- ${t.name}: ${t.calls} call(s), ${t.errors} error(s), avg ${t.avgDurationMs}ms`)
         .join("\n") || "No tools called";
 
+    const summaryFromCapture = input.finalAnswerCapture?.summary?.trim();
+    const captureOutput =
+      typeof input.finalAnswerCapture?.output === "string"
+        ? input.finalAnswerCapture.output.trim()
+        : "";
+    const finalShown = (input.finalOutputText ?? "").trim();
+    const authoritativeOutput = truncateForDebriefPrompt(finalShown || captureOutput);
+
+    const agentSelfReport =
+      summaryFromCapture && summaryFromCapture.length > 0
+        ? summaryFromCapture
+        : captureOutput.length > 0
+          ? `No summary field on final-answer capture; opening of final-answer output:\n${truncateForDebriefPrompt(captureOutput)}`
+          : finalShown.length > 0
+            ? "No final-answer tool metadata; user-facing output is in the Final output section below."
+            : "No self-report or final output was recorded.";
+
     const userPrompt = [
       `Task: ${input.taskPrompt}`,
-      `Agent self-report: ${input.finalAnswerCapture?.summary ?? "No self-report provided"}`,
+      `Agent self-report (from final-answer metadata when present): ${agentSelfReport}`,
+      `Final output (authoritative — what the user received as the task answer):\n${authoritativeOutput || "(none — empty)"}`,
       `Terminated by: ${input.terminatedBy}`,
       `Tools used:\n${toolSummary}`,
       `Errors from loop: ${input.errorsFromLoop.join("; ") || "none"}`,
@@ -146,7 +189,10 @@ export function synthesizeDebrief(
         Effect.catchAll(() =>
           Effect.succeed({
             content: JSON.stringify({
-              summary: input.finalAnswerCapture?.summary ?? "Task completed.",
+              summary:
+                input.finalAnswerCapture?.summary ??
+                briefOutputFallback(input.finalOutputText) ??
+                "Task completed.",
               keyFindings: [],
               errorsEncountered: input.errorsFromLoop,
               lessonsLearned: [],
@@ -177,7 +223,10 @@ export function synthesizeDebrief(
     } catch {
       // Fallback: use agent self-report when LLM returns non-parseable output
       parsed = {
-        summary: input.finalAnswerCapture?.summary ?? "Task completed.",
+        summary:
+          input.finalAnswerCapture?.summary ??
+          briefOutputFallback(input.finalOutputText) ??
+          "Task completed.",
         keyFindings: [],
         errorsEncountered: input.errorsFromLoop,
         lessonsLearned: [],
@@ -193,14 +242,20 @@ export function synthesizeDebrief(
 
     const debrief: Omit<AgentDebrief, "markdown"> = {
       outcome,
-      summary: parsed.summary ?? input.finalAnswerCapture?.summary ?? "Task completed.",
+      summary:
+        parsed.summary ??
+        input.finalAnswerCapture?.summary ??
+        briefOutputFallback(input.finalOutputText) ??
+        "Task completed.",
       keyFindings: Array.isArray(parsed.keyFindings) ? parsed.keyFindings : [],
       errorsEncountered: [
         ...(Array.isArray(parsed.errorsEncountered) ? parsed.errorsEncountered : []),
         ...input.errorsFromLoop,
       ].filter((e, i, arr) => arr.indexOf(e) === i), // deduplicate
       lessonsLearned: Array.isArray(parsed.lessonsLearned) ? parsed.lessonsLearned : [],
-      confidence: (input.finalAnswerCapture?.confidence as AgentDebrief["confidence"]) ?? "medium",
+      confidence:
+        (input.finalAnswerCapture?.confidence as AgentDebrief["confidence"]) ??
+        (input.finalOutputText?.trim().length ? "high" : "medium"),
       caveats: parsed.caveats || undefined,
       toolsUsed,
       metrics: input.metrics,

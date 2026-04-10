@@ -177,6 +177,7 @@ The UI depends on **`@reactive-agents/svelte`** (via `framework.ts` and package 
 
 | Change | Update |
 |--------|--------|
+| New Lab builder flags wired to `buildCortexAgent` | `server/tests/config-parity.test.ts` (`FULL_CONFIG_BODY` + assertions), `ui/src/lib/cortex-runs-post-body.ts`, `server/api/runs.ts` body schema, `runner-service` `LaunchParams`, `gateway-process-manager`, `normalizeCortexAgentConfig`, docs `features/cortex.md` if user-facing. |
 | New script or env var | `README.md`, and this file if agent-facing. |
 | New WS route or payload | This file + any UI `constants` / store comments. |
 | New primary route or nav entry | This file **Routes** table + `+layout.svelte` nav / `CommandPalette` if applicable. |

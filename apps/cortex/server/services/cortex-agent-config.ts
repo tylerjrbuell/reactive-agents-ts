@@ -135,6 +135,18 @@ export function normalizeCortexAgentConfig(raw: Record<string, unknown>): Record
   const tools = asStringArray(raw.tools);
   if (tools !== undefined) out.tools = tools;
 
+  const addlTools = asNonEmptyString(raw.additionalToolNames);
+  if (addlTools !== undefined) out.additionalToolNames = addlTools;
+  else delete out.additionalToolNames;
+
+  const shellAdd = asNonEmptyString(raw.terminalShellAdditionalCommands);
+  if (shellAdd !== undefined) out.terminalShellAdditionalCommands = shellAdd;
+  else delete out.terminalShellAdditionalCommands;
+
+  const shellAllow = asNonEmptyString(raw.terminalShellAllowedCommands);
+  if (shellAllow !== undefined) out.terminalShellAllowedCommands = shellAllow;
+  else delete out.terminalShellAllowedCommands;
+
   const rp = raw.retryPolicy;
   if (rp && typeof rp === "object" && !Array.isArray(rp)) {
     const o = rp as Record<string, unknown>;
@@ -180,6 +192,12 @@ export function normalizeCortexAgentConfig(raw: Record<string, unknown>): Record
   } else if (typeof vs === "string") {
     out.verificationStep = vs === "reflect" ? "reflect" : "none";
   }
+
+  if (raw.runtimeVerification === true) out.runtimeVerification = true;
+  else delete out.runtimeVerification;
+
+  if (raw.terminalTools === true) out.terminalTools = true;
+  else delete out.terminalTools;
 
   const mids = raw.mcpServerIds;
   if (Array.isArray(mids)) {
@@ -309,6 +327,37 @@ function parseAgentToolEntry(x: unknown): CortexAgentToolEntry | null {
     };
   }
   return null;
+}
+
+/** Splits comma- or newline-separated Cortex builder list fields into trimmed tokens. */
+export function splitCortexListInput(raw: string | undefined): string[] {
+  if (!raw || typeof raw !== "string") return [];
+  const out: string[] = [];
+  for (const part of raw.split(/[\n,]+/)) {
+    const s = part.trim();
+    if (s.length > 0) out.push(s);
+  }
+  return out;
+}
+
+/**
+ * Merges the Builder “quick pick” `tools[]` with optional comma/newline-separated
+ * extra names (Lab custom tools, uncommon builtins, typos you fix manually).
+ * Used by {@link buildCortexAgent} so gateway + POST runs behave the same as the UI.
+ */
+export function mergeCortexUiToolNames(
+  tools: readonly string[] | undefined,
+  additional: string | undefined,
+): string[] {
+  const names = new Set<string>();
+  for (const t of tools ?? []) {
+    const s = typeof t === "string" ? t.trim() : "";
+    if (s.length > 0) names.add(s);
+  }
+  for (const s of splitCortexListInput(additional)) {
+    names.add(s);
+  }
+  return [...names];
 }
 
 /** Conductor / kernel tools that must stay callable when `allowedTools` filtering is on. */

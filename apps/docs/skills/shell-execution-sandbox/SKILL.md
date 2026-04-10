@@ -10,6 +10,8 @@ metadata:
 
 # Shell Execution Sandbox
 
+> **Disclaimer — your machine, your risk.** `shell-execute` runs real processes on the host (or in an optional Docker sandbox you configure). Allowlists and blocklists reduce accidents but are not a guarantee. Only enable for trusted codebases and accounts; review allowed command names and working-directory rules before production use. Cortex exposes this as an **explicit opt-in** in the Lab builder with the same warning.
+
 ## Agent objective
 
 Produce a builder with shell execution enabled, the correct allowlist for the task, and appropriate safety config — without exposing destructive commands.
@@ -29,6 +31,7 @@ const agent = await ReactiveAgents.create()
   .withReasoning({ defaultStrategy: "plan-execute-reflect", maxIterations: 15 })
   .withTools({
     allowedTools: ["shell-execute", "file-read", "checkpoint"],
+    terminal: true, // registers shell-execute handler (or use .withTerminalTools())
   })
   .withSystemPrompt(`
     You have access to a shell. Use it to explore the codebase and run commands.

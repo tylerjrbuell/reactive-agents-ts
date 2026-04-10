@@ -36,7 +36,32 @@ export interface AgentConfig {
   minIterations: number;
   strategySwitching: boolean;
   verificationStep: "none" | "reflect";
+  /**
+   * When true, enables the framework **verification** package (semantic entropy, etc.) on the agent.
+   * Distinct from {@link verificationStep} “reflect”, which is a single post-answer LLM review pass.
+   */
+  runtimeVerification: boolean;
   tools: string[];
+  /**
+   * Registers `shell-execute` with default allowlist/blocklist on the host (**not** Docker-isolated).
+   * You are responsible for risk; only enable on trusted machines and with awareness of allowed commands.
+   */
+  terminalTools: boolean;
+  /**
+   * Extra first-token command names for `shell-execute` (`ShellExecuteConfig.additionalCommands`), e.g. `node`, `bun`, `gh`.
+   * Only applied when {@link terminalTools} is true (or `shell-execute` is in the tool list). Comma or newline separated.
+   */
+  terminalShellAdditionalCommands: string;
+  /**
+   * When non-empty, replaces the framework default shell allowlist (`ShellExecuteConfig.allowedCommands`).
+   * Advanced — you must list every executable you want the agent to run. Leave empty to use defaults + extras above.
+   */
+  terminalShellAllowedCommands: string;
+  /**
+   * Extra tool IDs merged into {@link tools} when launching (comma or newline separated).
+   * Use for Lab custom tools, `http-get`, or any registered name not shown as a quick pick.
+   */
+  additionalToolNames: string;
   /** MCP servers (Cortex Tools tab) to connect at run time — tool names use `name/tool` form in `tools`. */
   mcpServerIds: string[];
   agentTools: CortexAgentToolConfig[];
@@ -90,7 +115,12 @@ export function defaultConfig(): AgentConfig {
     minIterations: 0,
     strategySwitching: false,
     verificationStep: "none",
+    runtimeVerification: false,
     tools: ["web-search"],
+    terminalTools: false,
+    terminalShellAdditionalCommands: "",
+    terminalShellAllowedCommands: "",
+    additionalToolNames: "",
     mcpServerIds: [],
     agentTools: [],
     dynamicSubAgents: { enabled: false, maxIterations: 8 },

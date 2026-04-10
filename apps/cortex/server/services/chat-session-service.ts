@@ -115,46 +115,11 @@ export class ChatSessionService {
     if (!row) throw new Error(`Chat session ${sessionId} not found`);
 
     const cfg = row.agentConfig;
-    const enableTools = cfg.enableTools === true;
-
-    const provider = (cfg.provider as string | undefined) ?? "anthropic";
-    const agentName = `chat-${sessionId.slice(0, 8)}`;
     const stableAgentId = row.stableAgentId;
 
-    // Build agent for streaming (not using AgentSession, just raw agent)
-    const agent = await buildCortexAgent({
-      agentName,
-      provider,
-      ...(stableAgentId ? { agentId: stableAgentId } : {}),
-      memory: { episodic: true },
-      streaming: true,
-      ...(typeof cfg.model === "string" && cfg.model.trim()
-        ? { model: cfg.model.trim() }
-        : {}),
-      ...(typeof cfg.systemPrompt === "string" && cfg.systemPrompt.trim()
-        ? { systemPrompt: cfg.systemPrompt.trim() }
-        : {}),
-      ...(typeof cfg.temperature === "number" ? { temperature: cfg.temperature } : {}),
-      ...(typeof cfg.maxTokens === "number" && cfg.maxTokens > 0
-        ? { maxTokens: cfg.maxTokens }
-        : {}),
-      ...(enableTools
-        ? {
-            tools: mergeCortexAllowedTools(
-              Array.isArray(cfg.tools)
-                ? (cfg.tools as unknown[]).filter((x): x is string => typeof x === "string" && x.length > 0)
-                : [],
-              undefined,
-              {},
-            ),
-            strategy: "reactive",
-            maxIterations:
-              typeof cfg.maxIterations === "number" && cfg.maxIterations > 0
-                ? cfg.maxIterations
-                : 12,
-          }
-        : {}),
-    });
+    /** Must mirror {@link buildSession} so run-linked desk chat keeps debrief + event context over SSE. */
+    const params = this.buildChatAgentParams(sessionId, cfg, stableAgentId, { streaming: true });
+    const agent = await buildCortexAgent(params);
 
     appendChatTurn(this.db, { sessionId, role: "user", content: message, tokensUsed: 0 });
 
@@ -169,27 +134,31 @@ export class ChatSessionService {
           replyText += event.text;
         } else if (event._tag === "StreamCompleted") {
           tokensUsed = event.metadata.tokensUsed ?? 0;
-          steps = event.metadata.iterations ?? 0;
+          steps = event.metadata.stepsCount ?? 0;
           // Collect tool names from toolSummary if available
           if (event.toolSummary && event.toolSummary.length > 0) {
             toolsUsed = event.toolSummary.map((t) => t.name);
           }
+          // Final-answer / some paths emit full text on StreamCompleted only (no TextDeltas)
+          const out = typeof event.output === "string" ? event.output.trim() : "";
+          if (!replyText.trim() && out.length > 0) {
+            replyText = out;
+          }
         }
         yield event;
       }
-    } catch (e) {
-      throw e;
+    } finally {
+      // SSE handler closes the stream right after StreamCompleted, which aborts this generator
+      // before code after the loop would run — `finally` still runs on generator return/cleanup.
+      appendChatTurn(this.db, {
+        sessionId,
+        role: "assistant",
+        content: replyText,
+        tokensUsed,
+        ...(toolsUsed && toolsUsed.length > 0 ? { toolsUsed } : {}),
+      });
+      updateSessionLastUsed(this.db, sessionId);
     }
-
-    // Append assistant turn to database
-    appendChatTurn(this.db, {
-      sessionId,
-      role: "assistant",
-      content: replyText,
-      tokensUsed,
-      ...(toolsUsed && toolsUsed.length > 0 ? { toolsUsed } : {}),
-    });
-    updateSessionLastUsed(this.db, sessionId);
   }
 
   private async buildSession(
@@ -197,6 +166,28 @@ export class ChatSessionService {
     agentConfig: Record<string, unknown>,
     stableAgentId?: string,
   ): Promise<AgentSession> {
+    const params = this.buildChatAgentParams(sessionId, agentConfig, stableAgentId, { streaming: false });
+    const agent = await buildCortexAgent(params);
+    const turns = getChatTurns(this.db, sessionId);
+    const initialHistory = turnsToChatMessages(turns);
+    return new AgentSession(
+      (msg, hist, opts) => agent.chat(msg, opts, hist, sessionId),
+      undefined,
+      undefined,
+      initialHistory.length > 0 ? initialHistory : undefined,
+    );
+  }
+
+  /**
+   * Single source of truth for desk chat agent wiring (non-stream and SSE).
+   * Keeps run-linked `taskContext` (`buildRunTaskContext`) aligned with `chatStream`.
+   */
+  private buildChatAgentParams(
+    sessionId: string,
+    agentConfig: Record<string, unknown>,
+    stableAgentId: string | undefined,
+    opts: { readonly streaming: boolean },
+  ): BuildCortexAgentParams {
     const provider = (agentConfig.provider as string | undefined) ?? "test";
     const enableTools = agentConfig.enableTools === true;
 
@@ -222,11 +213,12 @@ export class ChatSessionService {
     const customTestScenario =
       Array.isArray(rawScenario) && rawScenario.length > 0 ? (rawScenario as TestTurn[]) : undefined;
 
-    const params: BuildCortexAgentParams = {
+    return {
       agentName: `chat-${sessionId.slice(0, 8)}`,
       provider,
       ...(stableAgentId ? { agentId: stableAgentId } : {}),
       memory: { episodic: true },
+      ...(opts.streaming ? { streaming: true } : {}),
       ...(typeof agentConfig.model === "string" && agentConfig.model.trim()
         ? { model: agentConfig.model.trim() }
         : {}),
@@ -254,15 +246,5 @@ export class ChatSessionService {
           ? { testScenario: [{ text: "Cortex chat test reply." }] }
           : {}),
     };
-
-    const agent = await buildCortexAgent(params);
-    const turns = getChatTurns(this.db, sessionId);
-    const initialHistory = turnsToChatMessages(turns);
-    return new AgentSession(
-      (msg, hist, opts) => agent.chat(msg, opts, hist, sessionId),
-      undefined,
-      undefined,
-      initialHistory.length > 0 ? initialHistory : undefined,
-    );
   }
 }

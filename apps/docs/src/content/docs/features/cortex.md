@@ -155,6 +155,25 @@ The Lab view is the **workshop** for configuring and launching agents directly f
 
 ---
 
+## Verification and host shell (Lab builder)
+
+Cortex’s Lab **Builder** tab tracks the framework, but two options deserve a clear split:
+
+| Control | What it does |
+| ------- | ------------ |
+| **Verification step → Reflect** | One extra LLM pass that reviews the draft answer (`withVerificationStep({ mode: "reflect" })`). Fast, no separate verification package. |
+| **Runtime verification layer** | Enables `@reactive-agents/verification` (`withVerification`) — semantic entropy and related checks. Heavier than reflect; use when you want structured confidence signals. |
+
+**Allowed tools** are chosen in the Lab Builder **Tools** section: quick toggles for common builtins, MCP tools from your saved servers, plus an **Additional allowed tools** field for exact IDs (Lab custom tools, less common builtins). Optional `additionalToolNames` is merged with the toggle list at run time.
+
+**Host shell (`shell-execute`)** is **off by default**. When you enable it in **Tools**, Cortex registers the framework terminal tool with default allowlist/blocklist on **this machine** — not an isolated Docker sandbox unless you build that in your own code. You can add **extra allowed command names** (e.g. `node`, `gh`) or, for advanced setups, **replace the entire allowlist** from the same Tools panel — both map to `ShellExecuteConfig` in the framework.
+
+<Aside type="caution">
+**Use host shell only at your own risk.** Allowlists limit which executables may run; blocklists catch many dangerous patterns, but this is still real command execution on your host. Prefer `code-execute` or a Docker sandbox from your application when exposing agents to untrusted prompts. See [Security hardening](/guides/security-hardening/) and the shell execution docs / consumer skill for configuration details.
+</Aside>
+
+---
+
 ### Settings
 
 Configure global Cortex defaults:

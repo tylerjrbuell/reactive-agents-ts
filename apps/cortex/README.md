@@ -44,6 +44,10 @@ This runs:
 
 SQLite path comes from `defaultCortexConfig` in `server/types.ts` (default `.cortex/cortex.db` under the current working directory — usually `apps/cortex`).
 
+## Security note (Lab — host shell)
+
+The Lab builder can opt in to **`shell-execute`**, which runs allowlisted terminal commands on the **same machine** as the Cortex server. It is disabled by default; enabling it is **at your own risk**. When enabled, you can add **extra allowed command names** or (advanced) **replace the default allowlist** in the Tools section; defaults and opt-in lists match `ShellExecuteConfig` in `@reactive-agents/tools`. Use only on trusted accounts and codebases, and read the framework docs on blocklists and Docker sandboxing for stronger isolation.
+
 ## Production-style UI (single port)
 
 Build the static UI and let Cortex serve it from `ui/build`:

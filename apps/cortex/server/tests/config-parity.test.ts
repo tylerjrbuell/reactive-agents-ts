@@ -11,6 +11,7 @@
  *   3. apps/cortex/server/services/gateway-process-manager.ts  (fireAgent builder)
  *   4. apps/cortex/server/api/runs.ts                  (POST body schema)
  *   5. apps/cortex/ui/src/routes/lab/+page.svelte      (builder run() call + AgentConfig types)
+ *   `additionalToolNames` → merge in `build-cortex-agent.ts` (`mergeCortexUiToolNames`) into `allowedTools`
  *   Phase 1: taskContext, healthCheck → withTaskContext / withHealthCheck
  *   Phase 2: skills → withSkills({ paths, evolution })
  *   MCP / sub-agents also wire through gateway `fireAgent` + `normalizeCortexAgentConfig`.
@@ -32,6 +33,7 @@ function captureRunnerLayer(captured: { params: LaunchParams | null }) {
   return Layer.succeed(CortexRunnerService, {
     start: (params) => { captured.params = params; return Effect.succeed({ agentId: "x", runId: "y" }); },
     pause: () => Effect.void,
+    resume: () => Effect.void,
     stop: () => Effect.void,
     getActive: () => Effect.succeed(new Map()),
   });
@@ -51,7 +53,11 @@ const FULL_CONFIG_BODY = {
   maxIterations:      8,
   minIterations:      2,
   verificationStep:   "reflect",
+  runtimeVerification: true,
+  terminalTools:      true,
+  terminalShellAdditionalCommands: "bun, gh",
   tools:              ["web-search"],
+  additionalToolNames: "http-get, my-lab-tool",
   systemPrompt:       "You are helpful",
   agentName:          "parity-agent",
   timeout:            30000,
@@ -107,9 +113,14 @@ describe("AgentConfig → LaunchParams parity", () => {
     expect(p.maxIterations).toBe(8);
     expect(p.minIterations).toBe(2);
     expect(p.verificationStep).toBe("reflect");
+    expect(p.runtimeVerification).toBe(true);
+    expect(p.terminalTools).toBe(true);
+    expect(p.terminalShellAdditionalCommands).toBe("bun, gh");
+    expect(p.terminalShellAllowedCommands).toBeUndefined();
 
     // ── Tools / system prompt ─────────────────────────────────────────────
     expect(p.tools).toEqual(["web-search"]);
+    expect(p.additionalToolNames).toBe("http-get, my-lab-tool");
     expect(p.systemPrompt).toBe("You are helpful");
     expect(p.agentName).toBe("parity-agent");
 

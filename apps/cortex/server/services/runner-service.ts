@@ -17,12 +17,15 @@ import type {
   CortexSkillsConfig,
 } from "./cortex-agent-config.js";
 import { buildCortexAgent } from "./build-cortex-agent.js";
+import type { ReactiveAgent } from "@reactive-agents/runtime";
 
 export interface LaunchParams {
   readonly prompt: string;
   readonly provider?: string;
   readonly model?: string;
   readonly tools?: string[];
+  /** Merged with {@link tools} when building `allowedTools`. */
+  readonly additionalToolNames?: string;
   /** Saved MCP server rows to connect with {@link ReactiveAgents.withMCP}. */
   readonly mcpServerIds?: string[];
   readonly agentTools?: CortexAgentToolEntry[];
@@ -41,6 +44,14 @@ export interface LaunchParams {
   readonly fallbacks?: { enabled?: boolean; providers?: string[]; errorThreshold?: number };
   readonly metaTools?: { enabled?: boolean; brief?: boolean; find?: boolean; pulse?: boolean; recall?: boolean; harnessSkill?: boolean };
   readonly verificationStep?: string;
+  /** Framework verification package (`withVerification`). */
+  readonly runtimeVerification?: boolean;
+  /** Host shell-execute tool (`withTerminalTools` / `terminal: true`). */
+  readonly terminalTools?: boolean;
+  /** Passed to `ShellExecuteConfig.additionalCommands` when host shell is on. */
+  readonly terminalShellAdditionalCommands?: string;
+  /** Passed to `ShellExecuteConfig.allowedCommands` when non-empty (replaces defaults). */
+  readonly terminalShellAllowedCommands?: string;
   readonly observabilityVerbosity?: "off" | "minimal" | "normal" | "verbose";
   /** Injected into reasoning via builder `withTaskContext`. */
   readonly taskContext?: Record<string, string>;
@@ -60,8 +71,11 @@ export interface LaunchParams {
   readonly persona?: { enabled?: boolean; role?: string; tone?: string; traits?: string; responseStyle?: string };
 }
 
+/** Active desk run: keyed by framework task id (`runId`), same id passed to `agent.run(..., { taskId })`. */
 type ActiveEntry = {
   readonly agentId: string;
+  readonly runId: string;
+  readonly agent: ReactiveAgent;
   readonly startedAt: number;
 };
 
@@ -73,6 +87,7 @@ export class CortexRunnerService extends Context.Tag("CortexRunnerService")<
       CortexError
     >;
     readonly pause: (runId: RunId) => Effect.Effect<void, CortexError>;
+    readonly resume: (runId: RunId) => Effect.Effect<void, CortexError>;
     readonly stop: (runId: RunId) => Effect.Effect<void, CortexError>;
     readonly getActive: () => Effect.Effect<ReadonlyMap<string, ActiveEntry>, never>;
   }
@@ -118,6 +133,9 @@ export const CortexRunnerServiceLive = Layer.effect(
                 ...(params.skills ? { skills: params.skills } : {}),
                 mcpConfigs,
                 ...(params.tools ? { tools: params.tools } : {}),
+                ...(params.additionalToolNames?.trim()
+                  ? { additionalToolNames: params.additionalToolNames.trim() }
+                  : {}),
                 ...(params.agentTools ? { agentTools: params.agentTools } : {}),
                 ...(params.dynamicSubAgents ? { dynamicSubAgents: params.dynamicSubAgents } : {}),
                 ...(params.metaTools ? { metaTools: params.metaTools } : {}),
@@ -127,6 +145,14 @@ export const CortexRunnerServiceLive = Layer.effect(
                 ...(params.progressCheckpoint != null ? { progressCheckpoint: params.progressCheckpoint } : {}),
                 ...(params.fallbacks ? { fallbacks: params.fallbacks } : {}),
                 ...(params.verificationStep ? { verificationStep: params.verificationStep } : {}),
+                ...(params.runtimeVerification === true ? { runtimeVerification: true as const } : {}),
+                ...(params.terminalTools === true ? { terminalTools: true as const } : {}),
+                ...(params.terminalShellAdditionalCommands?.trim()
+                  ? { terminalShellAdditionalCommands: params.terminalShellAdditionalCommands.trim() }
+                  : {}),
+                ...(params.terminalShellAllowedCommands?.trim()
+                  ? { terminalShellAllowedCommands: params.terminalShellAllowedCommands.trim() }
+                  : {}),
                 ...(params.observabilityVerbosity ? { observabilityVerbosity: params.observabilityVerbosity } : {}),
                 ...(params.strategySwitching != null ? { strategySwitching: params.strategySwitching } : {}),
                 ...(params.memory ? { memory: params.memory } : {}),
@@ -142,7 +168,9 @@ export const CortexRunnerServiceLive = Layer.effect(
           const startedAt = Date.now();
 
           yield* store.ensureRunRow(agentId, runId);
-          yield* Ref.update(activeRef, (m) => new Map(m).set(agentId, { agentId, startedAt }));
+          yield* Ref.update(activeRef, (m) =>
+            new Map(m).set(runId, { agentId, runId, agent, startedAt }),
+          );
           let forwardedEvents = 0;
 
           const unsubscribe = yield* Effect.tryPromise({
@@ -256,7 +284,7 @@ export const CortexRunnerServiceLive = Layer.effect(
               void Effect.runPromise(
                 Ref.update(activeRef, (m) => {
                   const copy = new Map(m);
-                  copy.delete(agentId);
+                  copy.delete(runId);
                   return copy;
                 }),
               );
@@ -266,16 +294,38 @@ export const CortexRunnerServiceLive = Layer.effect(
         }),
 
       pause: (runId) =>
-        Effect.log(`Pause requested for run ${runId} (not yet wired to execution engine)`),
+        Effect.gen(function* () {
+          const m = yield* Ref.get(activeRef);
+          const entry = m.get(String(runId));
+          if (!entry) {
+            cortexLog("debug", "runner", "pause: run not active (already finished?)", { runId });
+            return;
+          }
+          yield* Effect.promise(() => entry.agent.pause()).pipe(Effect.catchAll(() => Effect.void));
+        }),
+
+      resume: (runId) =>
+        Effect.gen(function* () {
+          const m = yield* Ref.get(activeRef);
+          const entry = m.get(String(runId));
+          if (!entry) {
+            cortexLog("debug", "runner", "resume: run not active", { runId });
+            return;
+          }
+          yield* Effect.promise(() => entry.agent.resume()).pipe(Effect.catchAll(() => Effect.void));
+        }),
 
       stop: (runId) =>
         Effect.gen(function* () {
-          yield* Ref.update(activeRef, (m) => {
-            const copy = new Map(m);
-            copy.delete(String(runId));
-            return copy;
-          });
-          yield* Effect.log(`Stop recorded for ${runId} (abort/dispose wiring is limited in this MVP)`);
+          const m = yield* Ref.get(activeRef);
+          const entry = m.get(String(runId));
+          if (!entry) {
+            cortexLog("debug", "runner", "stop: run not active", { runId });
+            return;
+          }
+          yield* Effect.promise(() => entry.agent.stop("Cortex UI stop")).pipe(
+            Effect.catchAll(() => Effect.void),
+          );
         }),
 
       getActive: () => Ref.get(activeRef),

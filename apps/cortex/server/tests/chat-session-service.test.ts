@@ -66,6 +66,23 @@ describe("ChatSessionService", () => {
     expect(result.reply.length).toBeGreaterThan(0);
   });
 
+  it("chatStream includes persisted run wiring like non-stream chat (regression: run-linked SSE must build same agent params)", async () => {
+    upsertRun(db, "agent-sse-run", "run-sse-linked");
+    updateRunStats(db, "run-sse-linked", {
+      status: "completed",
+      debrief: JSON.stringify({ summary: "SSE-linked run debrief." }),
+    });
+    const id = await svc.createSession({
+      name: "Run tab SSE",
+      agentConfig: { provider: "test", model: "test-model", runId: "run-sse-linked" },
+    });
+    let completed = false;
+    for await (const ev of svc.chatStream(id, "ping")) {
+      if (ev._tag === "StreamCompleted") completed = true;
+    }
+    expect(completed).toBe(true);
+  });
+
   it("session has a stable_agent_id stored in DB after creation", async () => {
     const { getChatSession } = await import("../db/chat-queries.js");
     const id = await svc.createSession({
@@ -120,6 +137,24 @@ describe("ChatSessionService", () => {
     expect(turns.length).toBeGreaterThanOrEqual(2); // user + assistant
     expect(turns[0]!.role).toBe("user");
     expect(turns[1]!.role).toBe("assistant");
+  });
+
+  it("chatStream persists assistant when consumer stops right after StreamCompleted (matches SSE route)", async () => {
+    const id = await svc.createSession({
+      name: "SSE early close",
+      agentConfig: { provider: "test", model: "test-model" },
+    });
+    for await (const event of svc.chatStream(id, "hello")) {
+      if (event._tag === "StreamCompleted") {
+        break;
+      }
+    }
+    const { getChatTurns } = await import("../db/chat-queries.js");
+    const turns = getChatTurns(db, id);
+    expect(turns.length).toBeGreaterThanOrEqual(2);
+    expect(turns[0]!.role).toBe("user");
+    expect(turns[1]!.role).toBe("assistant");
+    expect(turns[1]!.content.trim().length).toBeGreaterThan(0);
   });
 
   it("chatStream collects tokens and tool metadata", async () => {

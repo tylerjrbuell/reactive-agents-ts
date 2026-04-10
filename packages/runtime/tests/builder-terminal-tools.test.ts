@@ -82,6 +82,27 @@ describe("builder terminal tools integration", () => {
     }
   }, 15000);
 
+  it("should pass additionalCommands when using withTools(allowedTools) then withTerminalTools (Cortex wiring)", async () => {
+    const agent = await ReactiveAgents.create()
+      .withProvider("test")
+      .withReasoning({ defaultStrategy: "reactive" })
+      .withTestScenario([
+        { toolCall: { name: "shell-execute", args: { command: "env" } } },
+        { text: "done" },
+      ])
+      .withTools({ allowedTools: ["shell-execute", "web-search"] })
+      .withTerminalTools({ additionalCommands: ["env"] })
+      .build();
+
+    try {
+      const result = await agent.run("Run env");
+      expect(result.success).toBe(true);
+      expect(String(result.output)).toContain("done");
+    } finally {
+      await agent.dispose();
+    }
+  }, 15000);
+
   it("should not overwrite custom shell-execute when terminal is also enabled", async () => {
     let customCalled = false;
 
