@@ -24,25 +24,37 @@ Produce a builder with MCP servers correctly configured — right transport, Doc
 ## Implementation baseline
 
 ```ts
+import { ReactiveAgents } from "@reactive-agents/runtime";
+
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withReasoning({ defaultStrategy: "adaptive" })
-  .withTools({
-    mcpServers: [
-      {
-        name: "filesystem",
-        command: "docker",
-        args: [
-          "run", "--rm", "-i",
-          "-v", `${process.cwd()}:/workspace`,
-          "mcp/filesystem", "/workspace",
-        ],
-        // transport auto-inferred as "stdio" (command present, no endpoint)
-      },
-    ],
-  })
+  .withMCP([
+    {
+      name: "github",
+      command: "docker",
+      args: [
+        "run", "--rm", "-i",
+        "-e", "GITHUB_PERSONAL_ACCESS_TOKEN",
+        "ghcr.io/github/github-mcp-server",
+      ],
+      env: { GITHUB_PERSONAL_ACCESS_TOKEN: process.env.GITHUB_TOKEN ?? "" },
+    },
+    {
+      name: "filesystem",
+      command: "docker",
+      args: [
+        "run", "--rm", "-i",
+        "-v", `${process.cwd()}:/workspace`,
+        "mcp/filesystem", "/workspace",
+      ],
+      // transport auto-inferred as "stdio" (command present, no endpoint)
+    },
+  ])
   .build();
 ```
+
+`.withMCP()` implicitly enables the tools layer — `.withTools()` is not required before it.
 
 ## Key patterns
 
@@ -51,25 +63,25 @@ const agent = await ReactiveAgents.create()
 **Pattern A — stdio MCP** (GitHub MCP, filesystem MCP): reads JSON-RPC from stdin
 
 ```ts
-{
+.withMCP({
   name: "github",
   command: "docker",
   args: ["run", "--rm", "-i", "ghcr.io/github/github-mcp-server"],
-  env: { GITHUB_TOKEN: process.env.GITHUB_TOKEN ?? "" },
-  // transport: inferred as "stdio"
-}
+  env: { GITHUB_PERSONAL_ACCESS_TOKEN: process.env.GITHUB_TOKEN ?? "" },
+  // transport: inferred as "stdio" — "-i" keeps stdin open for JSON-RPC
+})
 ```
 
 **Pattern B — HTTP-only MCP** (context7, etc.): starts HTTP server, ignores stdin
 
 ```ts
-{
+.withMCP({
   name: "context7",
   command: "docker",
   args: ["run", "--rm", "-p", "3000:3000", "ghcr.io/upstash/context7-mcp"],
   // Framework auto-detects HTTP URL printed to stderr → switches to port-mapped HTTP
   // Do NOT hardcode transport here — let auto-detection handle it
-}
+})
 ```
 
 ### Transport auto-detection
@@ -91,20 +103,23 @@ PID-based naming prevents conflicts when multiple agents run concurrently.
 // endpoint (other path)       → "sse"
 
 // Only set transport explicitly when overriding detection:
-{ name: "my-server", endpoint: "http://localhost:3000/api", transport: "sse" }
+.withMCP({ name: "my-server", endpoint: "http://localhost:3000/api", transport: "sse" })
 ```
 
 ### Non-Docker MCP (local process or remote HTTP)
 
 ```ts
 // Local process
-{ name: "my-mcp", command: "node", args: ["./my-mcp-server.js"] }
+.withMCP({ name: "my-mcp", command: "node", args: ["./my-mcp-server.js"] })
+
+// npx
+.withMCP({ name: "fs", command: "npx", args: ["-y", "@modelcontextprotocol/server-filesystem", "/workspace"] })
 
 // Remote Streamable HTTP
-{ name: "remote", endpoint: "https://mcp.example.com/mcp" }
+.withMCP({ name: "remote", endpoint: "https://mcp.example.com/mcp" })
 
-// Remote SSE
-{ name: "remote-sse", endpoint: "https://mcp.example.com/events" }
+// Remote SSE with auth header
+.withMCP({ name: "secure", endpoint: "https://mcp.example.com/sse", headers: { Authorization: `Bearer ${process.env.API_KEY}` } })
 ```
 
 ## Container lifecycle
@@ -120,10 +135,12 @@ The framework owns container lifecycle:
 | Field | Type | Required | Notes |
 |-------|------|----------|-------|
 | `name` | `string` | Yes | Unique identifier for this server |
-| `command` | `string` | For stdio | Executable (`"docker"`, `"node"`, etc.) |
+| `command` | `string` | For stdio | Executable (`"docker"`, `"node"`, `"npx"`, etc.) |
 | `args` | `string[]` | For stdio | Command arguments |
-| `env` | `Record<string, string>` | No | Environment variables |
+| `env` | `Record<string, string>` | No | Environment variables merged over process.env |
+| `cwd` | `string` | No | Working directory for the subprocess |
 | `endpoint` | `string` | For HTTP | URL of the MCP HTTP endpoint |
+| `headers` | `Record<string, string>` | No | HTTP auth headers for remote endpoints |
 | `transport` | `"stdio"\|"streamable-http"\|"sse"` | No | Auto-inferred if omitted |
 
 ## Pitfalls
@@ -134,3 +151,4 @@ The framework owns container lifecycle:
 - Each agent creates its own containers — 10 parallel agents = 10 container instances
 - MCP tools are discovered at connection time — if the server isn't ready at build time, tool discovery silently fails
 - `env` values must be strings — use `process.env.VAR ?? ""` pattern, never pass `undefined`
+- stdio Pattern A requires `-i` in the docker args to keep stdin open; HTTP Pattern B requires `-p PORT:PORT` for host access
