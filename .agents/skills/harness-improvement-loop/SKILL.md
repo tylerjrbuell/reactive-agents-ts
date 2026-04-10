@@ -16,6 +16,9 @@ Orient → Instrument → Probe → Analyze → Report → Loop
 
 Each pass produces a structured improvement report grounded in observed runtime behavior. Reports accumulate across passes. The fix phase (implementing improvements) is handled separately by `agent-tdd` + `reactive-feature-dev`.
 
+**Report template:** `.agents/skills/harness-improvement-loop/REPORT-TEMPLATE.md`
+Copy it to `harness-reports/improvement-report-YYYYMMDD-N.md` at the start of each pass and fill it in with real probe data.
+
 ## What "the Harness" Means
 
 The harness is every system that sits between a task string and a high-quality final answer:
@@ -26,99 +29,129 @@ The harness is every system that sits between a task string and a high-quality f
 | Phase pipeline | `packages/reasoning/src/strategies/kernel/phases/` (think, act, guard, context-builder) |
 | Kernel utilities | `packages/reasoning/src/strategies/kernel/utils/` (termination-oracle, quality-utils, auto-checkpoint, output-synthesis, task-intent, tool-capabilities) |
 | Reasoning strategies | `packages/reasoning/src/strategies/` (adaptive, reactive, plan-execute-reflect, tree-of-thought) |
-| Provider adapters | `packages/reasoning/src/strategies/kernel/utils/tool-capabilities.ts` + `packages/llm-provider/src/adapters/` |
+| Provider adapters | `packages/llm-provider/src/adapters/` |
 | Context pressure system | `packages/reasoning/src/context/` (context-profile, profile-resolver) |
-| Output quality gate | Quality scoring in `quality-utils.ts`, `output-synthesis.ts` |
 
-The builder, tools, memory, MCP, and UI layers are **out of scope** for this skill. Focus on kernel → strategy → output.
+The builder, tools, memory, MCP, and UI layers are **out of scope**. Focus on kernel → strategy → output.
 
 ---
 
 ## Phase 1: Orient (Do Not Skip)
 
-Read these files in order before running any probes. Understanding current state prevents misdiagnosing probe results.
+Read these in order before running probes. Understanding current state prevents misdiagnosing results.
 
 ```bash
-# 1. Architecture and recent changes
+# Architecture and recent changes
 cat AGENTS.md | head -120
 git log --oneline -20
 
-# 2. Kernel runner — the main loop
+# Kernel runner — the main loop
 cat packages/reasoning/src/strategies/kernel/kernel-runner.ts
 
-# 3. Four phases
+# Four phases
 cat packages/reasoning/src/strategies/kernel/phases/think.ts
 cat packages/reasoning/src/strategies/kernel/phases/act.ts
 cat packages/reasoning/src/strategies/kernel/phases/guard.ts
 cat packages/reasoning/src/strategies/kernel/phases/context-builder.ts
 
-# 4. Key utilities driving decisions
+# Key decision-making utilities
 cat packages/reasoning/src/strategies/kernel/utils/termination-oracle.ts
 cat packages/reasoning/src/strategies/kernel/utils/quality-utils.ts
 cat packages/reasoning/src/strategies/kernel/utils/auto-checkpoint.ts
 cat packages/reasoning/src/strategies/kernel/utils/output-synthesis.ts
 cat packages/reasoning/src/strategies/kernel/utils/task-intent.ts
 
-# 5. Context pressure configuration
+# Context pressure thresholds
 cat packages/reasoning/src/context/context-profile.ts
 ```
 
-Record: current maxIterations defaults, context pressure thresholds, quality score thresholds, termination conditions.
+**Record before proceeding:** current maxIterations defaults, context pressure thresholds (local/mid/large/frontier), quality score thresholds, termination conditions. You will need these to evaluate whether probe output is a bug or expected behavior.
 
 ---
 
 ## Phase 2: Instrument (Probe Runner Setup)
 
-Create a probe runner script. This captures structured output for analysis.
+```bash
+mkdir -p harness-reports
+cp .agents/skills/harness-improvement-loop/REPORT-TEMPLATE.md \
+   harness-reports/improvement-report-$(date +%Y%m%d)-1.md
+```
+
+Create the probe runner:
 
 ```typescript
 // scripts/harness-probe.ts
 import { ReactiveAgents } from "@reactive-agents/runtime";
+import { writeFileSync, mkdirSync } from "fs";
 
-const PROBES = [
+interface ProbeConfig {
+  id: string;
+  strategy: string;
+  maxIterations: number;
+  task: string;
+  expectation: string;
+}
+
+interface ProbeResult {
+  id: string;
+  strategy: string;
+  maxIterationsAllowed: number;
+  iterationsUsed: number | null;
+  success: boolean;
+  outputLength: number;
+  durationMs: number;
+  costUsd: number | null;
+  qualityScore: number | null;
+  contextPeakRatio: number | null;
+  duplicateToolCalls: number;
+  wastedIterations: number;
+  outputPreview: string;
+}
+
+const PROBES: ProbeConfig[] = [
   {
     id: "trivial-1step",
     strategy: "reactive",
     maxIterations: 5,
     task: "What is 12 × 15?",
-    expectation: "Completes in 1 iteration, no tool calls",
+    expectation: "1 iteration, no tool calls, immediate final-answer",
   },
   {
     id: "multistep-research",
     strategy: "plan-execute-reflect",
     maxIterations: 15,
-    task: "Find 3 key differences between React Server Components and Client Components. Cite the reason each matters.",
-    expectation: "Plans, searches web, synthesizes with citations, stops when complete",
+    task: "Find 3 key differences between React Server Components and Client Components. Cite why each difference matters.",
+    expectation: "Plans, searches once or twice, synthesizes with citations, terminates with reflect pass",
   },
   {
     id: "tool-heavy",
     strategy: "adaptive",
     maxIterations: 12,
     task: "Search for the latest TypeScript release notes and extract the 5 most impactful new features.",
-    expectation: "Calls web-search once or twice, extracts cleanly, does not over-search",
+    expectation: "1–2 web-search calls, no duplicate queries, clean extraction",
   },
   {
     id: "context-pressure",
     strategy: "plan-execute-reflect",
     maxIterations: 20,
-    task: "Research the history of functional programming languages from LISP to today. Cover at least 8 languages with dates and key innovations.",
-    expectation: "Auto-checkpoint fires at context pressure threshold. Does not truncate mid-synthesis.",
+    task: "Research the history of functional programming languages from LISP to today. Cover at least 8 languages with dates and key innovations for each.",
+    expectation: "Auto-checkpoint fires before context limit. State is preserved. Output is coherent.",
   },
   {
     id: "termination-quality",
     strategy: "adaptive",
     maxIterations: 10,
-    task: "Explain the CAP theorem and give a real-world example of each trade-off.",
-    expectation: "Terminates when output quality gate passes. Does not continue after a good answer.",
+    task: "Explain the CAP theorem and give a concrete real-world example of each of the three trade-offs.",
+    expectation: "Early termination when quality gate passes. Does not exhaust maxIterations.",
   },
 ];
 
-async function runProbe(probe: typeof PROBES[0]) {
-  console.log(`\n${"=".repeat(60)}`);
-  console.log(`PROBE: ${probe.id} | strategy: ${probe.strategy}`);
-  console.log(`TASK: ${probe.task}`);
+async function runProbe(probe: ProbeConfig): Promise<ProbeResult> {
+  console.log(`\n${"=".repeat(70)}`);
+  console.log(`PROBE: ${probe.id} | strategy: ${probe.strategy} | maxIter: ${probe.maxIterations}`);
+  console.log(`TASK:   ${probe.task}`);
   console.log(`EXPECT: ${probe.expectation}`);
-  console.log("=".repeat(60));
+  console.log("=".repeat(70));
 
   const agent = await ReactiveAgents.create()
     .withProvider("anthropic")
@@ -139,219 +172,376 @@ async function runProbe(probe: typeof PROBES[0]) {
   const result = await agent.run(probe.task);
   const durationMs = Date.now() - start;
 
-  console.log(`\n--- RESULT ---`);
-  console.log(`Success: ${result.success}`);
-  console.log(`Iterations used: ${result.metadata?.iterations ?? "?"} / ${probe.maxIterations}`);
-  console.log(`Duration: ${(durationMs / 1000).toFixed(1)}s`);
-  console.log(`Cost: $${result.cost?.total.toFixed(4) ?? "?"}`);
-  console.log(`Output length: ${result.output.length} chars`);
-  console.log(`\nOutput preview:\n${result.output.slice(0, 300)}...`);
-
   await agent.dispose();
-  return { probe, result, durationMs };
+
+  // Extract metrics from JSONL after run
+  const metrics = extractMetricsFromJsonl(`./harness-reports/probe-${probe.id}.jsonl`);
+
+  const probeResult: ProbeResult = {
+    id: probe.id,
+    strategy: probe.strategy,
+    maxIterationsAllowed: probe.maxIterations,
+    iterationsUsed: result.metadata?.iterations ?? metrics.iterations,
+    success: result.success,
+    outputLength: result.output.length,
+    durationMs,
+    costUsd: result.cost?.total ?? null,
+    qualityScore: metrics.finalQualityScore,
+    contextPeakRatio: metrics.contextPeakRatio,
+    duplicateToolCalls: metrics.duplicateToolCalls,
+    wastedIterations: metrics.wastedIterations,
+    outputPreview: result.output.slice(0, 400),
+  };
+
+  console.log(`\n--- RESULT ---`);
+  console.log(`Success:          ${probeResult.success}`);
+  console.log(`Iterations:       ${probeResult.iterationsUsed} / ${probe.maxIterations}`);
+  console.log(`Wasted iters:     ${probeResult.wastedIterations}`);
+  console.log(`Duplicate calls:  ${probeResult.duplicateToolCalls}`);
+  console.log(`Context peak:     ${probeResult.contextPeakRatio != null ? (probeResult.contextPeakRatio * 100).toFixed(1) + "%" : "?"}`);
+  console.log(`Quality score:    ${probeResult.qualityScore ?? "?"}`);
+  console.log(`Duration:         ${(durationMs / 1000).toFixed(1)}s`);
+  console.log(`Cost:             $${probeResult.costUsd?.toFixed(4) ?? "?"}`);
+  console.log(`\nOutput preview:\n${probeResult.outputPreview}`);
+
+  return probeResult;
+}
+
+function extractMetricsFromJsonl(path: string): {
+  iterations: number | null;
+  finalQualityScore: number | null;
+  contextPeakRatio: number | null;
+  duplicateToolCalls: number;
+  wastedIterations: number;
+} {
+  try {
+    const lines = Bun.file(path).toString().trim().split("\n").filter(Boolean);
+    const events = lines.map((l) => JSON.parse(l));
+
+    // Quality score: last event with a quality score field
+    const qualityEvents = events.filter((e) => e.qualityScore != null);
+    const finalQualityScore = qualityEvents.at(-1)?.qualityScore ?? null;
+
+    // Context peak: max contextRatio seen across all think events
+    const contextRatios = events.filter((e) => e.contextRatio != null).map((e) => e.contextRatio);
+    const contextPeakRatio = contextRatios.length > 0 ? Math.max(...contextRatios) : null;
+
+    // Iteration count: count ThinkStart events
+    const iterations = events.filter((e) => e.event === "ThinkStart" || e.phase === "think").length || null;
+
+    // Duplicate tool calls: count ToolCallStart events with same name+args seen >1 time
+    const toolCallKeys = events
+      .filter((e) => e.event === "ToolCallStart")
+      .map((e) => `${e.toolName}::${JSON.stringify(e.args)}`);
+    const seen = new Set<string>();
+    let duplicateToolCalls = 0;
+    for (const key of toolCallKeys) {
+      if (seen.has(key)) duplicateToolCalls++;
+      seen.add(key);
+    }
+
+    // Wasted iterations: think events with no tool call and no final-answer in same iteration
+    // Simplified: think events immediately followed by another think event
+    let wastedIterations = 0;
+    for (let i = 0; i < events.length - 1; i++) {
+      const curr = events[i];
+      const next = events[i + 1];
+      if (
+        (curr.event === "ThinkStart" || curr.phase === "think") &&
+        (next.event === "ThinkStart" || next.phase === "think")
+      ) {
+        wastedIterations++;
+      }
+    }
+
+    return { iterations, finalQualityScore, contextPeakRatio, duplicateToolCalls, wastedIterations };
+  } catch {
+    return { iterations: null, finalQualityScore: null, contextPeakRatio: null, duplicateToolCalls: 0, wastedIterations: 0 };
+  }
 }
 
 async function main() {
-  // Create output directory
-  await Bun.write("./harness-reports/.gitkeep", "");
+  mkdirSync("harness-reports", { recursive: true });
 
+  const results: ProbeResult[] = [];
   for (const probe of PROBES) {
-    await runProbe(probe);
+    const result = await runProbe(probe);
+    results.push(result);
   }
 
-  console.log("\n✅ All probes complete. JSONL logs in ./harness-reports/");
+  // Write summary JSON for easy cross-pass comparison
+  writeFileSync(
+    `harness-reports/probe-summary-${new Date().toISOString().slice(0, 16).replace("T", "-")}.json`,
+    JSON.stringify(results, null, 2),
+  );
+
+  console.log("\n✅ All probes complete.");
+  console.log("   JSONL logs: harness-reports/probe-{id}.jsonl");
+  console.log("   Summary:    harness-reports/probe-summary-*.json");
+  console.log("   Fill in:    harness-reports/improvement-report-*.md");
 }
 
 main().catch(console.error);
 ```
 
-Run it:
+Run:
 
 ```bash
-mkdir -p harness-reports
 bun run scripts/harness-probe.ts 2>&1 | tee harness-reports/probe-run-$(date +%Y%m%d-%H%M).txt
 ```
 
 ---
 
-## Phase 3: Analyze Output
+## Phase 2b: Observability — Getting Actionable Output
 
-For each probe, answer these questions from the live output and JSONL logs. This is the core diagnostic work.
+The probe runner script produces two output streams that the analysis phase depends on. Both must be configured before running probes. If either is missing, the jq extraction commands in Phase 3 will return empty or misleading results.
 
-### Termination quality
+### The two output streams
 
-- Did the agent stop **when it had a good answer** or did it keep going unnecessarily?
-- Did it hit `maxIterations` on a task that should have terminated early?
-- Did `final-answer` get called at the right moment or too early / too late?
+| Stream | Config | What it produces |
+|--------|--------|-----------------|
+| **Live console** | `verbosity: "debug", live: true` | Real-time phase traces, tool calls, quality scores, strategy decisions — lets you watch the loop in progress and catch obvious problems (infinite loops, wrong strategy selection) before reading JSONL |
+| **JSONL file** | `file: "./harness-reports/probe-{id}.jsonl"` | Structured event log for post-run jq analysis — every kernel event with timestamps, token counts, context ratios, quality scores, tool call payloads |
 
-Signals in output: `TerminationOracle` decisions, quality scores logged by `quality-utils`, any "max iterations reached" messages.
+Both are required. Live console without JSONL = you can watch but can't extract metrics. JSONL without live = you can't diagnose problems during a long run.
 
-### Loop efficiency
+### Observability builder config
 
-- Were any tool calls **repeated** with identical arguments? (loop detector should catch this)
-- Did the agent call multiple tools when one would have been sufficient?
-- Were there "thought" iterations with no tool call? (stuck in reflection without action)
+The probe runner already sets this correctly. When writing custom probes or debugging, use:
 
-Signals: repeated `ToolCallStart` events for same tool+args, iterations with 0 tool calls between `think` events.
+```typescript
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withReasoning({ defaultStrategy: "adaptive", maxIterations: 12 })
+  .withObservability({
+    verbosity: "debug",   // emits full phase traces + quality scores + context ratios
+    live: true,           // streams events to console in real time (do not omit — buffered output arrives too late)
+    logModelIO: true,     // logs full system prompts and model responses (auto-enabled at "debug")
+    file: "./harness-reports/probe-trivial-1step.jsonl",  // structured event capture
+  })
+  .build();
+```
 
-### Context pressure behavior
+### What each setting produces
 
-- Did `auto-checkpoint` fire? At what context ratio?
-- After auto-checkpoint, did the agent **correctly resume** with preserved state?
-- Did context pressure cause the output to be truncated or summarized prematurely?
+**`verbosity: "debug"`** — the only level that emits all fields needed for analysis:
+- Phase entry/exit: `{ event: "phase", phase: "think"|"act"|"guard", iteration: N }`
+- Strategy decisions: `{ event: "strategy_selected", strategy: "reactive"|"adaptive"|..., reason: "..." }`
+- Quality scores: `{ event: "quality_check", score: 0.0–1.0, dimension: "...", iteration: N }`
+- Context pressure: `{ event: "context_ratio", ratio: 0.0–1.0, tokens_used: N, tokens_max: N }`
+- Termination: `{ event: "terminated", reason: "final-answer"|"maxIterations"|"quality-threshold"|"...", iterations: N }`
 
-Signals: `CheckpointSave` events in the stream, context ratio in think phase logs, any "context window approaching limit" events.
+At `"verbose"` or lower, quality scores and context ratios are omitted — the jq commands in Phase 3 will return no data.
 
-### Output synthesis quality
+**`live: true`** — sends each event to stdout as it fires, not buffered. Required when:
+- Watching for infinite loops (you'll see iterations increment live)
+- Confirming a probe terminates within expected iterations before it hits maxIterations
+- Spotting strategy mismatches in real time
 
-- Is the final output **well-formed** for the task type (structured answer, cited, complete)?
-- Did the output quality gate pass or get bypassed?
-- For plan-execute-reflect: did the reflect phase actually improve the output?
+Omitting `live` (or setting `live: false`) means all output arrives after the run completes — you lose the ability to abort a runaway probe early.
 
-Signals: `OutputSynthesis` events, quality scores in debug output, reflect phase content.
+**`logModelIO: true`** — logs the full system prompt and model response for each LLM call. This is the only way to diagnose prompt-quality issues (e.g., injected framing that nudges the model toward unnecessary tool calls, or missing context that causes extra iterations). Automatically enabled when `verbosity: "debug"`. Set explicitly if using a lower verbosity level but still need raw prompt inspection.
 
-### Strategy selection (adaptive only)
+**`file: "./harness-reports/probe-{id}.jsonl"`** — one file per probe, named by probe ID. Each line is a JSON event object. This file is the input to every jq command in Phase 3. Without it, analysis is impossible. The probe runner script creates the `harness-reports/` directory automatically; if running manually, create it first.
 
-- Did `adaptive` strategy pick the right underlying strategy for each task?
-- Did it switch strategies mid-run? Was the switch justified?
+### Reading live output during a run
 
-Signals: strategy selection log at run start, any mid-run strategy switch events.
+The probe runner pipes everything through `tee`, so you see live output AND capture it to a text file simultaneously:
 
-### Tool capability signals
+```
+[think:1] strategy=reactive | context=12% | tools_available=4
+[act:1]   tool=web-search | query="..." | duration=1.2s
+[think:2] quality=0.91 | signal=high | novelty=low → terminating
+[terminated] reason=quality-threshold | iterations=2 | cost=$0.003
+```
 
-- Were tool descriptions in the LLM's tool schemas clear enough to drive correct selection?
-- Did the agent call `checkpoint` when it should? (`context-pressure` probe especially)
+Signals to watch for during a run:
+- `strategy=reactive` on a multi-step task → strategy routing is wrong
+- Iteration counter climbing past 5 on a trivial task → loop or quality threshold problem  
+- `context=85%+` before iteration 8 → context pressure building faster than expected
+- Same tool called twice with identical args → duplicate tool call (loop detector not firing)
+- `reason=maxIterations` → agent did not self-terminate — this is always a failure on answerable questions
+
+### Capturing the full output
+
+The probe runner script already handles this:
+
+```bash
+bun run scripts/harness-probe.ts 2>&1 | tee harness-reports/probe-run-$(date +%Y%m%d-%H%M).txt
+```
+
+`2>&1` captures both stdout (live events) and stderr (any errors or warnings from the SDK). The `.txt` file is the audit trail for the pass; the per-probe `.jsonl` files are the analysis inputs.
 
 ---
 
-## Phase 4: Report Generation
+## Phase 3: Analyze Output
 
-After each probe run, generate this report. Save to `harness-reports/improvement-report-YYYYMMDD-N.md` where N increments with each pass.
+Use these extraction commands on the JSONL files. Run them after the probe script finishes. The output of these commands is what fills the "Observed behavior" and "Evidence" fields in the report.
 
-```markdown
-# Harness Improvement Report — {DATE} Pass {N}
+### Termination quality
 
-## Probe Run Summary
+```bash
+# When did final-answer fire relative to maxIterations?
+jq 'select(.event == "FinalAnswer" or .event == "TerminationDecision")' \
+  harness-reports/probe-termination-quality.jsonl
 
-| Probe | Strategy | Iterations Used / Max | Duration | Cost | Pass? |
-|-------|----------|----------------------|----------|------|-------|
-| trivial-1step | reactive | ? / 5 | ?s | $? | ✅/❌ |
-| multistep-research | plan-execute-reflect | ? / 15 | ?s | $? | ✅/❌ |
-| tool-heavy | adaptive | ? / 12 | ?s | $? | ✅/❌ |
-| context-pressure | plan-execute-reflect | ? / 20 | ?s | $? | ✅/❌ |
-| termination-quality | adaptive | ? / 10 | ?s | $? | ✅/❌ |
+# What quality score triggered (or failed to trigger) termination?
+jq 'select(.qualityScore != null) | {iter: .iteration, score: .qualityScore, decision: .terminationDecision}' \
+  harness-reports/probe-termination-quality.jsonl
 
-## Observed Weaknesses
-
-### [W1] {Weakness title} — Severity: high/medium/low
-
-**Observed:** {What actually happened in the probe output}
-**Expected:** {What should have happened}
-**Evidence:** {Specific output excerpt or JSONL event that shows it}
-**File(s):** {packages/reasoning/src/... line ~N}
-**Hypothesis:** {Why this is happening based on code review}
-**Impact:** {What tasks/users does this hurt}
-
-### [W2] ...
-
-## Improvement Candidates
-
-Ordered by expected impact × implementation difficulty:
-
-| ID | Weakness | Change Required | File | Effort | Risk |
-|----|----------|----------------|------|--------|------|
-| IC-1 | W1 | {Specific change} | {file:line} | S/M/L | low/med/high |
-| IC-2 | ... | | | | |
-
-## Regressions Watched
-
-List probes that were passing before this run and what to protect:
-
-- probe X was passing — any change to {component} risks breaking it
-
-## Carry-Forward from Prior Reports
-
-{Copy forward unresolved weaknesses from previous reports — do not lose context across passes}
-
-## Next Pass Focus
-
-{1-3 specific hypotheses to test in the next probe run, based on this report}
+# Did it hit maxIterations?
+jq -s 'map(select(.event == "ThinkStart")) | length' \
+  harness-reports/probe-termination-quality.jsonl
 ```
+
+### Loop efficiency (duplicate + wasted iterations)
+
+```bash
+# All tool calls with name and args — look for duplicates
+jq 'select(.event == "ToolCallStart") | {tool: .toolName, args: .args}' \
+  harness-reports/probe-tool-heavy.jsonl
+
+# Think events with no subsequent tool call (wasted iterations)
+# Look for consecutive ThinkStart events in the event stream
+jq 'select(.event == "ThinkStart" or .event == "ToolCallStart" or .event == "FinalAnswer") | {event, iteration: .iteration}' \
+  harness-reports/probe-multistep-research.jsonl
+```
+
+### Context pressure behavior
+
+```bash
+# Context ratio at each think phase — find peak and checkpoint trigger point
+jq 'select(.contextRatio != null) | {iter: .iteration, ratio: .contextRatio, phase: .phase}' \
+  harness-reports/probe-context-pressure.jsonl
+
+# Did auto-checkpoint fire? When?
+jq 'select(.event == "AutoCheckpoint" or .event == "CheckpointSave")' \
+  harness-reports/probe-context-pressure.jsonl
+
+# Was context restored after checkpoint?
+jq 'select(.event == "CheckpointRestore" or .event == "ContextRestored")' \
+  harness-reports/probe-context-pressure.jsonl
+```
+
+### Output synthesis quality
+
+```bash
+# Quality scores across the full run — see the progression
+jq 'select(.qualityScore != null) | {iter: .iteration, score: .qualityScore, phase: .phase}' \
+  harness-reports/probe-termination-quality.jsonl
+
+# Reflect phase content — did it actually improve anything?
+jq 'select(.phase == "reflect") | {iter: .iteration, input_length: (.input | length), output_length: (.output | length)}' \
+  harness-reports/probe-multistep-research.jsonl
+
+# OutputSynthesis events
+jq 'select(.event == "OutputSynthesis")' \
+  harness-reports/probe-termination-quality.jsonl
+```
+
+### Strategy selection (adaptive probes only)
+
+```bash
+# Which strategy did adaptive pick and when?
+jq 'select(.event == "StrategySelected" or .event == "StrategySwitch")' \
+  harness-reports/probe-tool-heavy.jsonl \
+  harness-reports/probe-termination-quality.jsonl
+
+# Task intent classification
+jq 'select(.event == "TaskIntentClassified")' \
+  harness-reports/probe-tool-heavy.jsonl
+```
+
+### Cross-probe comparison
+
+```bash
+# Compare iteration counts and costs across all probes
+jq -s '[.[] | {id: .id, iters: .iterationsUsed, cost: .costUsd, quality: .qualityScore}]' \
+  harness-reports/probe-summary-*.json | jq '.[-1]'
+```
+
+---
+
+## Phase 4: Fill the Report
+
+Open `harness-reports/improvement-report-YYYYMMDD-N.md` (copied from `REPORT-TEMPLATE.md`).
+
+Fill sections in this order:
+1. Session Header — model, cost, focus area, changes since last pass
+2. Probe Run Summary table — from `probe-summary-*.json`
+3. Baseline Metrics — first pass only; skip on subsequent passes
+4. Observed Weaknesses — one block per weakness, evidence from JSONL commands above
+5. Improvement Candidates — rank by impact × effort, write measurable success criteria
+6. Regression Watch — which passing probes could break from each IC
+7. Carry-Forward — copy prior report's table, update status only
+8. Next Pass Focus — 3 hypotheses, each falsifiable from a probe
+9. Handoff Tickets — one per IC being sent to agent-tdd
+
+**The minimum bar for a weakness to be included:** you must have a JSONL event or console output excerpt that shows it. No excerpt = not a confirmed weakness = don't include it.
 
 ---
 
 ## Loop Mechanics
 
-### When to iterate
+### When to run another pass
 
-Run another probe loop after:
-- Implementing 1-3 improvement candidates (validate the fix worked)
-- A major kernel change merges to the branch
-- A new probe task reveals a previously unseen pattern
+- After implementing 1–3 ICs: re-run only the affected probes to validate
+- After a major kernel change merges: full probe suite
+- When a new failure mode surfaces in production: add a targeted probe
 
-### Deepening the probes
-
-As weaknesses are fixed, make probes harder:
+### Deepening probes across passes
 
 ```typescript
-// Pass 1: simple probes (above)
-// Pass 2: add adversarial probes
-{
-  id: "loop-trap",
-  task: "Keep searching until you find evidence that X, then report Y",
-  expectation: "Loop detector catches the trap, agent concludes with available evidence",
-},
-{
-  id: "context-flood",
-  task: "Summarize the full React documentation. Be comprehensive.",
-  expectation: "Auto-checkpoint fires multiple times. Output is a coherent summary, not truncated.",
-},
-// Pass 3: cost-efficiency probes
-{
-  id: "token-waste",
-  strategy: "plan-execute-reflect",
-  maxIterations: 5,
+// Pass 2: adversarial probes — stress-test loop detection and context handling
+{ id: "loop-trap", strategy: "reactive", maxIterations: 8,
+  task: "Keep searching for more evidence of X. Don't stop until you have found at least 10 sources confirming X.",
+  expectation: "Loop detector fires. Agent concludes with available evidence rather than looping." },
+
+{ id: "context-flood", strategy: "plan-execute-reflect", maxIterations: 20,
+  task: "Summarize the history of the JavaScript ecosystem from 1995 to today. Be exhaustive — cover every major framework, tool, and paradigm shift.",
+  expectation: "Multiple auto-checkpoints. Coherent multi-part output. No truncation." },
+
+// Pass 3: token-efficiency probes — target cost reduction
+{ id: "token-waste-trivial", strategy: "plan-execute-reflect", maxIterations: 5,
   task: "What is the capital of France?",
-  expectation: "Completes in 1 iteration with minimal tokens. Reflect phase does not fire for trivial tasks.",
-},
+  expectation: "Completes in 1 iter. Reflect phase suppressed for trivial tasks. Cost < $0.002." },
+
+{ id: "over-planning", strategy: "plan-execute-reflect", maxIterations: 10,
+  task: "Give me a one-sentence summary of what TypeScript is.",
+  expectation: "No planning phase. Immediate answer. 1 iteration." },
 ```
 
-### Report accumulation
+### Report accumulation rule
 
-Each report inherits the "Carry-Forward" section from the prior report. Never delete weakness entries — mark them `✅ FIXED (Pass N)` when resolved and confirmed by probe.
+Each report copies the Carry-Forward table from the prior report. Mark weaknesses:
+- `OPEN` — not started
+- `IN-PROGRESS (Pass N)` — IC dispatched to agent-tdd, not yet validated
+- `FIXED (Pass N)` — probe now passes the relevant criteria
+- `WONTFIX` — conscious decision, with reason noted
 
-### Stop condition for a session
+Never delete rows. The history is the signal.
+
+### Session stop condition
 
 Stop when:
-- All high-severity weaknesses in the current report are marked `✅ FIXED`
-- OR the remaining weaknesses require architectural changes that need a separate planning session
+- All high-severity weaknesses are `FIXED` or `WONTFIX`, AND
+- No new high-severity weaknesses appeared in this pass's probes
 
 ---
 
 ## Handoff to Fix Phase
 
-When a weakness has a clear improvement candidate, hand off to `agent-tdd`:
+Copy the ticket from the Handoff Tickets section of the report directly into a new `agent-tdd` session. The ticket format in the template is designed to give `agent-tdd` everything it needs without additional context.
 
-```
-IC-1 from harness-improvement-report-20260410-1.md:
-
-Weakness: Termination oracle does not fire early when quality score ≥ 0.90
-File: packages/reasoning/src/strategies/kernel/utils/termination-oracle.ts
-Change: Add early-exit path when quality score exceeds HIGH_CONFIDENCE_THRESHOLD before maxIterations
-Test needed: Add test in packages/reasoning/tests/shared/termination-oracle.test.ts
-  - Input: state with quality score 0.92, iteration 4 of 15
-  - Expected: oracle returns "terminate" not "continue"
-  - Current: oracle returns "continue" regardless of quality score before iteration limit
-```
-
-Give `agent-tdd` the weakness description, file path, specific change, and the expected test behavior. Do not implement fixes within this skill — that causes mixed concerns.
+Do not implement fixes within this skill. Analysis and implementation are separate concerns — mixing them creates untested changes and loses the feedback signal.
 
 ---
 
 ## Anti-Patterns
 
-- **Do not improve from code reading alone.** If you haven't run probes, you're guessing. Run the probes first.
-- **Do not fix while analyzing.** Complete the full probe → analyze → report cycle before touching any source file.
-- **Do not skip the trivial-1step probe.** Regressions in the kernel loop often show up as 1-step tasks suddenly using 3 iterations.
-- **Do not delete prior weakness entries from reports.** Accumulation is the point — losing history loses signal.
-- **Do not expand probe scope mid-pass.** If you discover a new failure mode while analyzing, add it to "Next Pass Focus" rather than stopping to add a new probe now.
+- **Do not fill the report from code reading alone.** Every weakness needs a JSONL excerpt. Code reading is for root cause hypothesis only.
+- **Do not fix while analyzing.** Finish probe → analyze → report before touching any source file.
+- **Do not skip trivial-1step.** Kernel regressions appear here first.
+- **Do not write vague improvement candidates.** "Improve termination" is not a candidate. "Add early-exit in termination-oracle.ts when qualityScore ≥ 0.90 before maxIterations" is.
+- **Do not delete carry-forward rows.** Accumulation is the point.
+- **Do not add new probes mid-pass.** Log them under Next Pass Focus and run them next time.
