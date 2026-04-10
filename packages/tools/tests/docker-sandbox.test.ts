@@ -25,8 +25,8 @@ describe("DockerSandbox — configuration", () => {
 
   it("RUNNER_IMAGES contains all three languages", () => {
     expect(RUNNER_IMAGES.bun).toBe("oven/bun:1-alpine");
-    expect(RUNNER_IMAGES.node).toBe("node:22-alpine");
-    expect(RUNNER_IMAGES.python).toBe("python:3.12-alpine");
+    expect(RUNNER_IMAGES.node).toBe("node:22-alpine3.22");
+    expect(RUNNER_IMAGES.python).toBe("python:3.12-alpine3.22");
   });
 
   it("config override merges with defaults", () => {

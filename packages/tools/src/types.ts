@@ -132,12 +132,13 @@ export const ToolDefinitionSchema = Schema.Struct({
    * - `"code"` — Code execution, transpilation, analysis
    * - `"http"` — HTTP requests, REST/GraphQL API calls
    * - `"data"` — Data transformation, parsing, formatting
+   * - `"system"` — Shell execution, OS-level operations
    * - `"custom"` — Application-specific tools
    *
    * @default undefined
    */
   category: Schema.optional(
-    Schema.Literal("search", "file", "code", "http", "data", "custom"),
+    Schema.Literal("search", "file", "code", "http", "data", "system", "custom"),
   ),
   /**
    * Risk level of the tool — controls approval requirements and guardrail behavior.

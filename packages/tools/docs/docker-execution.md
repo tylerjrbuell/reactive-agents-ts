@@ -7,8 +7,8 @@ The `docker-execute` tool runs code in isolated Docker containers with strict re
 | Language | Image | Command |
 |----------|-------|---------|
 | `bun` (default) | `oven/bun:1-alpine` | `bun --eval <code>` |
-| `node` | `node:22-alpine` | `node --eval <code>` |
-| `python` | `python:3.12-alpine` | `python3 -c <code>` |
+| `node` | `node:22-alpine3.22` | `node --eval <code>` |
+| `python` | `python:3.12-alpine3.22` | `python3 -c <code>` |
 
 ## Security Constraints
 
@@ -30,8 +30,8 @@ All containers run with:
 
 ```bash
 docker pull oven/bun:1-alpine
-docker pull node:22-alpine
-docker pull python:3.12-alpine
+docker pull node:22-alpine3.22
+docker pull python:3.12-alpine3.22
 ```
 
 ## Usage

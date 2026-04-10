@@ -62,6 +62,8 @@ export const makeDockerExecuteHandler = (
             stderr: err.message,
             exitCode: 1,
             durationMs: 0,
+            truncated: false,
+            image: "unavailable",
           }),
         ),
       );
@@ -73,6 +75,8 @@ export const makeDockerExecuteHandler = (
           output: result.output || "(no output)",
           exitCode: result.exitCode,
           durationMs: result.durationMs,
+          image: result.image,
+          truncated: result.truncated,
         };
       }
 
@@ -90,6 +94,8 @@ export const makeDockerExecuteHandler = (
         output: result.output || "(no output)",
         exitCode: result.exitCode,
         durationMs: result.durationMs,
+        image: result.image,
+        truncated: result.truncated,
       };
     });
 };

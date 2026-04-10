@@ -1,0 +1,90 @@
+{
+  "defaultAction": "SCMP_ACT_ERRNO",
+  "defaultErrnoRet": 1,
+  "archMap": [
+    { "architecture": "SCMP_ARCH_X86_64", "subArchitectures": ["SCMP_ARCH_X86", "SCMP_ARCH_X32"] },
+    { "architecture": "SCMP_ARCH_AARCH64", "subArchitectures": ["SCMP_ARCH_ARM"] }
+  ],
+  "syscalls": [
+    {
+      "comment": "Basic I/O and process lifecycle — minimum required for bun/node/python",
+      "names": [
+        "read", "write", "close", "fstat", "lstat", "stat", "lseek",
+        "mmap", "mprotect", "munmap", "brk",
+        "pread64", "pwrite64", "readv", "writev",
+        "access", "openat", "newfstatat", "open",
+        "dup", "dup2", "dup3",
+        "fcntl", "ioctl",
+        "exit", "exit_group",
+        "futex", "nanosleep", "clock_nanosleep",
+        "clock_gettime", "clock_getres", "gettimeofday",
+        "getpid", "gettid", "getuid", "getgid", "geteuid", "getegid",
+        "getppid", "getpgrp", "getgroups",
+        "rt_sigaction", "rt_sigprocmask", "rt_sigreturn",
+        "sigaltstack",
+        "set_tid_address", "set_robust_list",
+        "epoll_create1", "epoll_ctl", "epoll_wait", "epoll_pwait",
+        "timerfd_create", "timerfd_settime", "timerfd_gettime",
+        "poll", "ppoll", "select", "pselect6",
+        "eventfd2", "pipe", "pipe2",
+        "getrandom",
+        "madvise", "mremap",
+        "sched_yield", "sched_getaffinity",
+        "arch_prctl", "prctl",
+        "rseq",
+        "clone", "clone3", "fork", "vfork", "wait4", "waitid",
+        "execve", "execveat",
+        "getcwd", "readlink", "readlinkat",
+        "getdents64",
+        "mkdir", "mkdirat",
+        "unlink", "unlinkat", "rename", "renameat", "renameat2",
+        "symlink", "symlinkat",
+        "chmod", "fchmod", "fchmodat",
+        "chdir", "fchdir",
+        "uname",
+        "umask",
+        "statx", "statfs", "fstatfs",
+        "memfd_create",
+        "prlimit64",
+        "sysinfo"
+      ],
+      "action": "SCMP_ACT_ALLOW"
+    },
+    {
+      "comment": "Networking — blocked. Sandbox is --network none but defense-in-depth.",
+      "names": [
+        "socket", "connect", "accept", "accept4",
+        "bind", "listen",
+        "sendto", "recvfrom", "sendmsg", "recvmsg",
+        "getsockname", "getpeername", "getsockopt", "setsockopt",
+        "socketpair"
+      ],
+      "action": "SCMP_ACT_ERRNO",
+      "errnoRet": 13
+    },
+    {
+      "comment": "Dangerous syscalls — always blocked",
+      "names": [
+        "mount", "umount2",
+        "ptrace",
+        "reboot",
+        "sethostname", "setdomainname",
+        "init_module", "finit_module", "delete_module",
+        "kexec_load", "kexec_file_load",
+        "bpf",
+        "userfaultfd",
+        "perf_event_open",
+        "pivot_root",
+        "chroot",
+        "acct",
+        "settimeofday", "adjtimex",
+        "swapon", "swapoff",
+        "nfsservctl",
+        "personality",
+        "keyctl", "request_key", "add_key"
+      ],
+      "action": "SCMP_ACT_ERRNO",
+      "errnoRet": 1
+    }
+  ]
+}

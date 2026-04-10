@@ -1,0 +1,29 @@
+# rax-sandbox:python — Hardened Python code execution sandbox
+# Same security model as Dockerfile.bun — minimal Alpine + non-root.
+
+FROM python:3.12-alpine3.22 AS build
+RUN python3 --version
+
+# ── Runtime stage ────────────────────────────────────────────────────────────
+FROM alpine:3.22 AS runtime
+
+# Python needs more libs than bun/node
+COPY --from=build /usr/local/bin/python3 /usr/local/bin/python3
+COPY --from=build /usr/local/lib/python3.12/ /usr/local/lib/python3.12/
+COPY --from=build /usr/local/lib/libpython3.12.so.1.0 /usr/local/lib/libpython3.12.so.1.0
+
+# Alpine already has nobody:nobody at uid/gid 65534 — use it directly
+RUN apk add --no-cache libgcc libstdc++ libffi && \
+    ln -s /usr/local/lib/libpython3.12.so.1.0 /usr/local/lib/libpython3.12.so && \
+    ldconfig /usr/local/lib 2>/dev/null || true && \
+    mkdir -p /workspace /tmp && \
+    chown 65534:65534 /workspace /tmp && \
+    chmod 1777 /tmp && \
+    chmod 700 /workspace && \
+    rm -rf /var/cache/apk /etc/apk /usr/share/apk /sbin/apk && \
+    rm -f /bin/sh /bin/ash /bin/busybox
+
+USER 65534:65534
+WORKDIR /workspace
+
+ENTRYPOINT ["/usr/local/bin/python3"]

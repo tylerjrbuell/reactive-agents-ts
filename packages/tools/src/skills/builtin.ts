@@ -25,8 +25,17 @@ import {
 } from "./rag-search.js";
 import { recallTool, makeRecallHandler, type RecallConfig } from "./recall.js";
 import { findTool, makeFindHandler, type FindConfig, type FindState } from "./find.js";
+import { checkpointTool, makeCheckpointHandler, type CheckpointConfig } from "./checkpoint.js";
 import { briefTool, buildBriefResponse, computeEntropyGrade, type BriefInput } from "./brief.js";
 import { pulseTool, buildPulseResponse, type PulseInput } from "./pulse.js";
+import {
+  shellExecuteTool,
+  shellExecuteHandler,
+  DEFAULT_ALLOWED_COMMANDS,
+  OPT_IN_COMMANDS,
+  type ShellExecuteConfig,
+  type ShellAuditEntry,
+} from "./shell-execution.js";
 
 // Re-export meta-tool factories and types so callers can wire up dynamic state
 export {
@@ -75,6 +84,11 @@ export {
   type FindState,
 } from "./find.js";
 export {
+  checkpointTool,
+  makeCheckpointHandler,
+  type CheckpointConfig,
+} from "./checkpoint.js";
+export {
   briefTool,
   buildBriefResponse,
   computeEntropyGrade,
@@ -85,10 +99,25 @@ export {
   buildPulseResponse,
   type PulseInput,
 } from "./pulse.js";
+export {
+  shellExecuteTool,
+  shellExecuteHandler,
+  DEFAULT_ALLOWED_COMMANDS,
+  OPT_IN_COMMANDS,
+  isCommandAllowed,
+  isCommandBlocked,
+  sanitizeCommand,
+  type ShellExecuteConfig,
+  type ShellAuditEntry,
+} from "./shell-execution.js";
 
 // Shared scratchpad store — one per tool service instance (reset per agent run).
 // Exported so the reasoning kernel can sync scratchpad state after tool execution.
 export const scratchpadStoreRef = Ref.unsafeMake(new Map<string, string>());
+
+// Shared checkpoint store — separate from scratchpad/recall to survive context compaction.
+// Exported so the reasoning kernel can auto-checkpoint before compaction.
+export const checkpointStoreRef = Ref.unsafeMake(new Map<string, string>());
 
 // Shared RAG in-memory store — one per tool service instance (reset per agent run).
 // Exported so that the runtime builder can pre-populate it via .withDocuments() / agent.ingest().
@@ -128,4 +157,5 @@ export const metaToolDefinitions: ReadonlyArray<ToolDefinition> = [
   findTool,
   pulseTool,
   recallTool,
+  checkpointTool,
 ];

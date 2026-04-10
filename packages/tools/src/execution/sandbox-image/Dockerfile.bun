@@ -1,0 +1,41 @@
+# rax-sandbox:bun — Hardened code execution sandbox
+# Minimal attack surface for agent-generated code execution.
+#
+# Security layers:
+#   1. Alpine minimal base (5 MB)
+#   2. Non-root user (sandbox:sandbox, uid 65534)
+#   3. No package manager at runtime (apk removed)
+#   4. Read-only root filesystem (enforced by docker run --read-only)
+#   5. /tmp writable tmpfs only — no persistent writes
+#   6. No network (enforced by docker run --network none)
+#   7. All Linux capabilities dropped (--cap-drop ALL)
+#   8. No new privilege escalation (--security-opt no-new-privileges)
+#   9. PID limit (--pids-limit 50)
+#  10. Memory + CPU quotas (--memory, --cpus)
+
+FROM oven/bun:1-alpine AS build
+
+# Verify bun is functional
+RUN bun --version
+
+# ── Runtime stage ────────────────────────────────────────────────────────────
+FROM alpine:3.22 AS runtime
+
+# Install only the bun binary + required shared libs
+COPY --from=build /usr/local/bin/bun /usr/local/bin/bun
+
+# Minimal shared libs for bun (musl libc already in alpine)
+# Alpine already has nobody:nobody at uid/gid 65534 — use it directly
+RUN apk add --no-cache libgcc libstdc++ && \
+    mkdir -p /workspace /tmp && \
+    chown 65534:65534 /workspace /tmp && \
+    chmod 1777 /tmp && \
+    chmod 700 /workspace && \
+    rm -rf /var/cache/apk /etc/apk /usr/share/apk /sbin/apk && \
+    rm -f /bin/sh /bin/ash /bin/busybox
+
+USER 65534:65534
+WORKDIR /workspace
+
+# Bun entrypoint — evaluates code passed via --eval
+ENTRYPOINT ["/usr/local/bin/bun"]

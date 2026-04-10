@@ -53,8 +53,11 @@ export {
 export { makeSandbox } from "./execution/sandbox.js";
 export {
   makeDockerSandbox,
+  buildSandboxImage,
   DEFAULT_DOCKER_CONFIG,
   RUNNER_IMAGES,
+  SANDBOX_IMAGES,
+  SECCOMP_PROFILE_PATH,
 } from "./execution/docker-sandbox.js";
 export type {
   DockerSandboxConfig,
@@ -72,6 +75,7 @@ export {
   metaToolDefinitions,
   ragMemoryStore,
   scratchpadStoreRef,
+  checkpointStoreRef,
 } from "./skills/builtin.js";
 export { webSearchTool, webSearchHandler } from "./skills/web-search.js";
 export {
@@ -89,6 +93,18 @@ export {
   dockerExecuteTool,
   makeDockerExecuteHandler,
 } from "./skills/docker-execution.js";
+export {
+  shellExecuteTool,
+  shellExecuteHandler,
+  DEFAULT_ALLOWED_COMMANDS,
+  DEFAULT_BLOCKED_PATTERNS,
+  OPT_IN_COMMANDS,
+  isCommandAllowed,
+  isCommandBlocked,
+  sanitizeCommand,
+  type ShellExecuteConfig,
+  type ShellAuditEntry,
+} from "./skills/shell-execution.js";
 
 export {
   scratchpadWriteTool,
@@ -207,6 +223,11 @@ export {
   type FindConfig,
   type FindState,
 } from "./skills/find.js";
+export {
+  checkpointTool,
+  makeCheckpointHandler,
+  type CheckpointConfig,
+} from "./skills/checkpoint.js";
 export {
   briefTool,
   buildBriefResponse,
