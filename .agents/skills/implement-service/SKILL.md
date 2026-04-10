@@ -152,3 +152,5 @@ describe("ServiceName", () => {
 3. **Wrapping `LLMService.complete()` in `Effect.tryPromise`** — it already returns Effect
 4. **Using `let` for state** — always use `Ref`
 5. **Missing `readonly` on service method types** — all methods must be `readonly`
+6. **Calling `LLMService.complete()` inside `Effect.tryPromise`** — LLMService methods already return `Effect`. Wrapping them in `Effect.tryPromise` creates a double-wrapped Effect that will never resolve correctly.
+7. **Not adding kernel-specific services as phases** — if your new service needs to intercept per-turn reasoning, implement it as a `Phase` in the composable kernel rather than a standalone service. See `kernel-extension` skill.

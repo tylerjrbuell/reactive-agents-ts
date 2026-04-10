@@ -150,14 +150,20 @@ The `.agents/skills/` directory contains skills used by agents to build with thi
 |---|---|
 | `architecture-reference/SKILL.md` | Dependency graph, build order, canonical docs pointers |
 | `build-coordinator/SKILL.md` | Multi-agent coordination flow, parallelization assumptions |
-| `build-package/SKILL.md` | Spec mapping and canonical references (AGENTS, not CLAUDE) |
-| `codebase-to-course/SKILL.md` | Prompt quality, output structure, teaching flow |
+| `build-package/SKILL.md` | Add-new-package scaffolding; canonical references (AGENTS, not CLAUDE) |
+| `kernel-extension/SKILL.md` | Composable kernel phases, guards, meta-tools |
+| `agent-tdd/SKILL.md` | Effect-TS TDD, timeouts, Effect.flip, server teardown |
+| `kernel-debug/SKILL.md` | Symptom-to-phase debugging map |
+| `provider-streaming/SKILL.md` | Provider streaming and adapter hooks |
+| `mcp-integration/SKILL.md` | MCP client, Docker lifecycle, transport inference |
+| `reactive-feature-dev/SKILL.md` | End-to-end feature workflow routing |
+| `prepare-release/SKILL.md` | Release checklist, changeset, changelog template |
 | `effect-ts-patterns/SKILL.md` | Core Effect-TS constraints and anti-patterns |
 | `implement-service/SKILL.md` | Service scaffolding patterns and exports |
 | `implement-test/SKILL.md` | Test harness usage and timeout guidance |
 | `llm-api-contract/SKILL.md` | `complete()/stream()/embed()` signatures and tool-call contracts |
 | `memory-patterns/SKILL.md` | SQLite/WAL/FTS5/vector memory patterns |
-| `review-patterns/SKILL.md` | 8-category compliance checks |
+| `review-patterns/SKILL.md` | 9-category compliance checks (incl. kernel extension) |
 | `update-docs/SKILL.md` | This workflow, docs + memory synchronization |
 | `validate-build/SKILL.md` | Build/test/review quality gates |
 
@@ -176,6 +182,14 @@ When docs or workflow guidance changes, update memory artifacts so future agents
 1. Update `.agents/MEMORY.md` with a concise entry under current status and shipped changes.
 2. Update repository memory notes in `/memories/repo/` when conventions or canonical doc locations change.
 3. Keep memory entries terse and factual (what changed, why it matters, where to look).
+
+### Update Agent Memory Files
+
+After any significant feature or architecture change:
+
+- Update `.agents/MEMORY.md` with new capabilities, patterns, or status
+- Update Claude project memory at `~/.claude/projects/*/memory/` if session-level context has changed
+- These two files keep future agents oriented without re-discovering project state
 
 ## Step 8: Update ROADMAP.md
 

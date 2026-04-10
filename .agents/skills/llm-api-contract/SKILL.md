@@ -38,15 +38,18 @@ export class LLMService extends Context.Tag("LLMService")<
 ## CompletionRequest — What You Send
 
 ```typescript
-interface CompletionRequest {
-  readonly messages: readonly LLMMessage[]; // REQUIRED — array of messages
-  readonly systemPrompt?: string; // Optional system prompt
-  readonly maxTokens?: number; // Optional max output tokens
-  readonly temperature?: number; // Optional temperature
-  readonly model?: ModelConfig; // Optional model override
-  readonly tools?: readonly ToolDefinition[]; // Optional tool definitions
-  readonly stopSequences?: readonly string[]; // Optional stop sequences
-}
+// Matches packages/llm-provider/src/types.ts — keep in sync
+export type CompletionRequest = {
+  readonly messages: readonly LLMMessage[];
+  readonly model?: ModelConfig;
+  readonly maxTokens?: number;
+  readonly temperature?: number;
+  readonly stopSequences?: readonly string[];
+  readonly tools?: readonly ToolDefinition[];
+  readonly systemPrompt?: string;
+  readonly logprobs?: boolean;
+  readonly topLogprobs?: number;
+};
 ```
 
 ### CORRECT usage:

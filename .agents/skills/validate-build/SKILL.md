@@ -51,7 +51,32 @@ grep -rn "Layer.effect\|Layer.scoped" packages/$ARGUMENTS/src/ && echo "✅ Uses
 grep -rn "Ref.make\|Ref.get\|Ref.update" packages/$ARGUMENTS/src/ && echo "✅ Uses Ref for state"
 ```
 
-## 4. Service Verification
+## 4. Kernel Extension Compliance (if package touches reasoning/kernel)
+
+If changes are in `packages/reasoning/src/strategies/kernel/`, run:
+
+```bash
+# Phases must follow the exact type signature — no extra arguments
+grep -n "export const.*Phase" packages/reasoning/src/strategies/kernel/phases/ -r
+# Guards must return GuardOutcome — not boolean, not void
+grep -n "export const.*Guard\b" packages/reasoning/src/strategies/kernel/phases/guard.ts
+# MetaTool registry entries must be in act.ts only
+grep -n "metaToolRegistry" packages/reasoning/src/strategies/kernel/ -r
+```
+
+**FAIL if:**
+
+- A new phase function has a signature other than `(state: KernelState, context: KernelContext) => Effect<KernelState, never, LLMService>`
+- A guard returns anything other than `{ allow: true }` or `{ block: true; reason: string }`
+- `kernel-runner.ts` main loop was modified to add per-turn logic (use phases instead)
+- `context-engine.ts` dead sections (`buildDynamicContext`, `buildStaticContext`) were modified or re-enabled
+
+**Dead code areas — never touch:**
+
+- `buildDynamicContext` / `buildStaticContext` in `context-engine.ts` (~560 LOC, disabled behind flag)
+- `context-engine.ts` dead text-assembly functions (~690 LOC total)
+
+## 5. Service Verification
 
 For every service in the package, verify:
 
@@ -62,7 +87,7 @@ For every service in the package, verify:
 - [ ] Live layer uses `Layer.effect(Tag, Effect.gen(...))`
 - [ ] Dependencies resolved with `yield* OtherService`
 
-## 5. Runtime Factory Check
+## 6. Runtime Factory Check
 
 Verify `src/runtime.ts`:
 
@@ -71,7 +96,7 @@ Verify `src/runtime.ts`:
 - [ ] Uses `Layer.provide()` to wire dependencies
 - [ ] Takes configuration parameters if needed by the spec
 
-## 6. Index.ts Exports
+## 7. Index.ts Exports
 
 Verify `src/index.ts` exports:
 
@@ -82,7 +107,7 @@ Verify `src/index.ts` exports:
 - [ ] The `createXxxLayer()` factory function
 - [ ] No internal/private implementation details
 
-## 7. Test Coverage
+## 8. Test Coverage
 
 Verify tests exist and pass:
 
@@ -98,7 +123,7 @@ Check:
 - [ ] Tests use mock layers for dependencies where appropriate
 - [ ] All tests pass
 
-## 8. TypeScript Compilation & Build
+## 9. TypeScript Compilation & Build
 
 ```bash
 # Type checking
@@ -110,7 +135,7 @@ cd packages/$ARGUMENTS && bun run build
 
 Both must complete with zero errors.
 
-## 9. Dist Output Verification
+## 10. Dist Output Verification
 
 After building, verify that `dist/` contains the expected output:
 
@@ -125,7 +150,7 @@ Check:
 - [ ] `index.d.ts` (type declarations) is present
 - [ ] No unexpected files or stale artifacts
 
-## 10. Spec Fidelity
+## 11. Spec Fidelity
 
 Read through the spec one final time and verify:
 
@@ -136,7 +161,7 @@ Read through the spec one final time and verify:
 - [ ] The build order was followed (files created in correct sequence)
 - [ ] Any spec-specific notes or caveats are addressed
 
-## 11. Integration Points
+## 12. Integration Points
 
 If this package is consumed by others:
 
