@@ -701,4 +701,183 @@ describe("runKernel — required tools guard", () => {
     expect(result.error).toContain("Task incomplete");
     expect(result.error).toContain("send_message");
   });
+
+  it("fails fast when required tools are not available", async () => {
+    let callCount = 0;
+    const neverCalledKernel: ThoughtKernel = (state, _ctx) => {
+      callCount++;
+      return Effect.succeed(state);
+    };
+
+    const result = await Effect.runPromise(
+      runKernel(neverCalledKernel, {
+        task: "test",
+        requiredTools: ["shell-execute"],
+        availableToolSchemas: [
+          {
+            name: "web-search",
+            description: "search web",
+            parameters: [],
+          },
+        ],
+      }, {
+        maxIterations: 5,
+        strategy: "test",
+        kernelType: "test",
+      }).pipe(Effect.provide(testLayer)),
+    );
+
+    expect(result.status).toBe("failed");
+    expect(result.error).toContain("missing_required_tool");
+    expect(result.error).toContain("shell-execute");
+    expect(callCount).toBe(0);
+  });
+
+  it("fails instead of delivering harness output when required tools were not called", async () => {
+    const stalledKernel: ThoughtKernel = (state, _ctx) => {
+      const nextIter = state.iteration + 1;
+      if (nextIter === 1) {
+        const tools = new Set(state.toolsUsed);
+        tools.add("web-search");
+        return Effect.succeed(
+          transitionState(state, {
+            status: "thinking",
+            iteration: nextIter,
+            toolsUsed: tools,
+            steps: [
+              ...state.steps,
+              makeStep("action", "web-search"),
+              makeStep("observation", "artifact-data"),
+            ],
+          }),
+        );
+      }
+      return Effect.succeed(
+        transitionState(state, {
+          status: "thinking",
+          iteration: nextIter,
+          steps: [...state.steps, makeStep("thought", "stall")],
+        }),
+      );
+    };
+
+    const result = await Effect.runPromise(
+      runKernel(stalledKernel, {
+        task: "test",
+        requiredTools: ["shell-execute"],
+        availableToolSchemas: [
+          { name: "web-search", description: "", parameters: [] },
+          { name: "shell-execute", description: "", parameters: [] },
+        ],
+      }, {
+        maxIterations: 6,
+        strategy: "test",
+        kernelType: "test",
+      }).pipe(Effect.provide(testLayer)),
+    );
+
+    expect(result.status).toBe("failed");
+    expect(result.error).toContain("missing_required_tool");
+    expect(result.error).toContain("terminatedBy=harness_deliverable");
+  });
+
+  it("nudges alternate tool paths before harness deliverable after a failed tool path", async () => {
+    let callCount = 0;
+    const recoveryKernel: ThoughtKernel = (state, _ctx) => {
+      callCount++;
+      const nextIter = state.iteration + 1;
+
+      if (callCount === 1) {
+        const tools = new Set(state.toolsUsed);
+        tools.add("shell-execute");
+        return Effect.succeed(
+          transitionState(state, {
+            status: "thinking",
+            iteration: nextIter,
+            toolsUsed: tools,
+            steps: [
+              ...state.steps,
+              makeStep("action", "shell-execute"),
+              makeStep("observation", "[Tool error: auth required]", {
+                observationResult: {
+                  success: false,
+                  toolName: "shell-execute",
+                  displayText: "[Tool error: auth required]",
+                  category: "error",
+                  resultKind: "error",
+                  preserveOnCompaction: true,
+                },
+              }),
+            ],
+          }),
+        );
+      }
+
+      if (callCount === 2 || callCount === 3) {
+        return Effect.succeed(
+          transitionState(state, {
+            status: "thinking",
+            iteration: nextIter,
+            steps: [...state.steps, makeStep("thought", "stalled")],
+          }),
+        );
+      }
+
+      if (callCount === 4 && typeof state.steeringNudge === "string" && state.steeringNudge.includes("alternate path")) {
+        const tools = new Set(state.toolsUsed);
+        tools.add("http-get");
+        return Effect.succeed(
+          transitionState(state, {
+            status: "thinking",
+            iteration: nextIter,
+            toolsUsed: tools,
+            steps: [
+              ...state.steps,
+              makeStep("action", "http-get"),
+              makeStep("observation", "fetched commit data", {
+                observationResult: {
+                  success: true,
+                  toolName: "http-get",
+                  displayText: "fetched commit data",
+                  category: "lookup",
+                  resultKind: "info",
+                  preserveOnCompaction: false,
+                },
+              }),
+            ],
+          }),
+        );
+      }
+
+      return Effect.succeed(
+        transitionState(state, {
+          status: "done",
+          output: "Recovered via alternate path",
+          iteration: nextIter,
+        }),
+      );
+    };
+
+    const result = await Effect.runPromise(
+      runKernel(recoveryKernel, {
+        task: "get commit data and summarize",
+        availableToolSchemas: [
+          { name: "shell-execute", description: "shell", parameters: [] },
+          { name: "http-get", description: "http", parameters: [] },
+        ],
+      }, {
+        maxIterations: 10,
+        strategy: "test",
+        kernelType: "test",
+        loopDetection: { maxConsecutiveThoughts: 999, maxRepeatedThoughts: 999, maxSameToolCalls: 999 },
+      }).pipe(Effect.provide(testLayer)),
+    );
+
+    expect(result.status).toBe("done");
+    expect(result.output).toBe("Recovered via alternate path");
+    expect(result.meta.terminatedBy).not.toBe("harness_deliverable");
+    expect(result.toolsUsed.has("http-get")).toBe(true);
+    const recoveryNudge = result.steps.find((s) => s.content.includes("Recovery required:"));
+    expect(recoveryNudge).toBeDefined();
+  });
 });

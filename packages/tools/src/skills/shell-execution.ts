@@ -2,6 +2,7 @@ import { Effect } from "effect";
 import { mkdirSync, existsSync } from "node:fs";
 import { join, resolve, isAbsolute } from "node:path";
 import { randomUUID } from "node:crypto";
+import { spawnSync } from "node:child_process";
 
 import type { ToolDefinition } from "../types.js";
 import { ToolExecutionError } from "../errors.js";
@@ -209,9 +210,48 @@ export function isCommandAllowed(
   const trimmed = command.trim();
   if (!trimmed) return false;
 
-  // Split on chaining operators (&&, ||, ;) and pipes (|).
-  // Each segment is a standalone command that must be validated.
-  const segments = trimmed.split(/\s*(?:&&|\|\||;|\|)\s*/);
+  // Split on chaining operators (&&, ||, ;) and pipes (|), but only when
+  // they appear outside quoted strings so jq filters like '.[] | .field'
+  // do not get treated as shell command separators.
+  const segments: string[] = [];
+  let current = "";
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+
+  for (let i = 0; i < trimmed.length; i++) {
+    const ch = trimmed[i]!;
+    const next = i + 1 < trimmed.length ? trimmed[i + 1] : "";
+
+    if (ch === "'" && !inDoubleQuote) {
+      inSingleQuote = !inSingleQuote;
+      current += ch;
+      continue;
+    }
+    if (ch === '"' && !inSingleQuote) {
+      inDoubleQuote = !inDoubleQuote;
+      current += ch;
+      continue;
+    }
+
+    const outsideQuotes = !inSingleQuote && !inDoubleQuote;
+    if (outsideQuotes) {
+      if (ch === ";" || ch === "|") {
+        segments.push(current.trim());
+        current = "";
+        continue;
+      }
+      if ((ch === "&" && next === "&") || (ch === "|" && next === "|")) {
+        segments.push(current.trim());
+        current = "";
+        i += 1; // consume second operator char
+        continue;
+      }
+    }
+
+    current += ch;
+  }
+  segments.push(current.trim());
+
   let hasCommand = false;
 
   for (const segment of segments) {
@@ -309,6 +349,81 @@ export interface ShellAuditEntry {
   readonly timestamp: number;
 }
 
+/**
+ * Higher-level command-access presets for shell-execute.
+ *
+ * This is an additive abstraction over raw `additionalCommands` and is meant
+ * to make common CLI enablement simpler and safer to reason about.
+ */
+export interface ShellCommandAccessConfig {
+  /**
+   * Capability groups that map to one or more concrete commands.
+   *
+   * - `github`: gh
+   * - `web`: curl
+   * - `javascript`: node, bun, npm, npx
+   * - `python`: python, python3
+   * - `archive`: tar
+   * - `environment`: env, xargs
+   */
+  readonly capabilities?: ReadonlyArray<
+    "github" | "web" | "javascript" | "python" | "archive" | "environment"
+  >;
+  /** Additional explicit command names to add on top of capabilities. */
+  readonly commands?: ReadonlyArray<string>;
+}
+
+const COMMAND_CAPABILITY_MAP: Readonly<Record<string, ReadonlyArray<string>>> = {
+  github: ["gh"],
+  web: ["curl"],
+  javascript: ["node", "bun", "npm", "npx"],
+  python: ["python", "python3"],
+  archive: ["tar"],
+  environment: ["env", "xargs"],
+};
+
+function resolveCommandAccess(config?: ShellCommandAccessConfig): ReadonlyArray<string> {
+  if (!config) return [];
+  const fromCapabilities = (config.capabilities ?? []).flatMap(
+    (capability) => COMMAND_CAPABILITY_MAP[capability] ?? [],
+  );
+  const fromCommands = config.commands ?? [];
+  return [...new Set([...fromCapabilities, ...fromCommands])];
+}
+
+/**
+ * Resolve host PATH directories for explicitly opted-in commands.
+ *
+ * This keeps the default shell PATH strict while allowing developers to opt
+ * in specific CLIs that are installed in user-local global bin directories
+ * (for example, ~/.bun/bin or npm global bin paths).
+ */
+function resolveCommandDirectories(commands: ReadonlyArray<string>): ReadonlyArray<string> {
+  const hostPath = process.env.PATH;
+  if (!hostPath || commands.length === 0) return [];
+
+  const safeCommandName = /^[A-Za-z0-9._-]+$/;
+  const dirs = new Set<string>();
+
+  for (const commandName of commands) {
+    if (!safeCommandName.test(commandName)) continue;
+    const lookup = spawnSync("sh", ["-c", "command -v \"$1\"", "sh", commandName], {
+      encoding: "utf8",
+      env: { PATH: hostPath },
+    });
+
+    if (lookup.status !== 0) continue;
+    const binaryPath = lookup.stdout.trim().split("\n")[0]?.trim();
+    if (!binaryPath || !binaryPath.startsWith("/")) continue;
+
+    const lastSlash = binaryPath.lastIndexOf("/");
+    if (lastSlash <= 0) continue;
+    dirs.add(binaryPath.slice(0, lastSlash));
+  }
+
+  return [...dirs];
+}
+
 /** Configuration for the shell-execute handler factory. */
 export interface ShellExecuteConfig {
   /** Working directory. Must be under /tmp unless `allowUnsafeCwd` is true. */
@@ -331,6 +446,12 @@ export interface ShellExecuteConfig {
    * **The developer takes ownership and liability for any command granted here.**
    */
   readonly additionalCommands?: ReadonlyArray<string>;
+  /**
+   * Higher-level command-access abstraction for common command groups.
+   *
+   * This merges with `additionalCommands` and is purely additive.
+   */
+  readonly commandAccess?: ShellCommandAccessConfig;
   /** If true, allows `cwd` outside /tmp. Use with extreme caution. */
   readonly allowUnsafeCwd?: boolean;
   /**
@@ -387,7 +508,7 @@ export const shellExecuteTool: ToolDefinition = {
     },
   ],
   returnType:
-    "{ executed: true, output: string, stderr: string, exitCode: number, truncated: boolean } | " +
+    "{ executed: true, output: string, stderr: string, exitCode: number, truncated: boolean, fullOutput?: string, fullStderr?: string } | " +
     "{ executed: false, error: string }",
   category: "system",
   riskLevel: "high",
@@ -419,8 +540,18 @@ export function shellExecuteHandler(
   const maxOutputChars = config?.maxOutputChars ?? 4000;
   const timeoutMs = config?.timeoutMs ?? 30_000;
   const baseCommands = config?.allowedCommands ?? DEFAULT_ALLOWED_COMMANDS;
-  const additional = config?.additionalCommands ?? [];
+  const additional = [
+    ...(config?.additionalCommands ?? []),
+    ...resolveCommandAccess(config?.commandAccess),
+  ];
   const allowedCommands = [...baseCommands, ...additional];
+  const resolvedCommandDirs = resolveCommandDirectories(additional);
+  const executionPath = [
+    "/usr/local/bin",
+    "/usr/bin",
+    "/bin",
+    ...resolvedCommandDirs,
+  ].join(":");
   const blockedPatterns = config?.blockedPatterns ?? DEFAULT_BLOCKED_PATTERNS;
   const allowUnsafeCwd = config?.allowUnsafeCwd ?? false;
   const onAudit = config?.onAudit;
@@ -610,15 +741,48 @@ export function shellExecuteHandler(
         }
 
         // ── 6. Execute via Bun.spawn ──
+        // Build a minimal environment. HOME always points at the sandbox so
+        // that shell variable expansion ($HOME, ~) cannot escape to the real
+        // home directory.  Only explicit token env vars are forwarded — never
+        // HOME, XDG dirs, or any other path that could let the subprocess read
+        // real user files.
+        //
+        // For authenticated CLIs (gh, stripe, etc.) that store credentials
+        // under $HOME/.config/<app>, we resolve the real config path once here
+        // and inject it as the vendor-specific override variable (GH_CONFIG_DIR).
+        // This gives the CLI access to its own credential store without
+        // exposing $HOME to shell expansion.
+        const inheritedEnv: Record<string, string> = {};
+
+        // Pass auth tokens directly — these are scalars with no path-traversal risk.
+        for (const key of ["GH_TOKEN", "GITHUB_TOKEN", "GH_HOST"] as const) {
+          const val = process.env[key];
+          if (val !== undefined) inheritedEnv[key] = val;
+        }
+
+        // Resolve the real gh config dir and inject it as GH_CONFIG_DIR so the
+        // CLI can read stored credentials while HOME stays confined to the sandbox.
+        if (!process.env.GH_TOKEN && !process.env.GITHUB_TOKEN) {
+          const realGhConfigDir =
+            process.env.GH_CONFIG_DIR ??
+            (process.env.XDG_CONFIG_HOME ? `${process.env.XDG_CONFIG_HOME}/gh` : null) ??
+            (process.env.HOME ? `${process.env.HOME}/.config/gh` : null);
+          if (realGhConfigDir) {
+            inheritedEnv["GH_CONFIG_DIR"] = realGhConfigDir;
+          }
+        }
+
         const proc = Bun.spawn(["sh", "-c", command], {
           stdout: "pipe",
           stderr: "pipe",
           cwd: sandboxDir,
           env: {
-            PATH: "/usr/local/bin:/usr/bin:/bin",
+            PATH: executionPath,
+            // HOME stays confined to the sandbox — never the real home dir.
             HOME: sandboxDir,
             TMPDIR: sandboxDir,
             LANG: "C.UTF-8",
+            ...inheritedEnv,
           },
         });
 
@@ -638,14 +802,17 @@ export function shellExecuteHandler(
         clearTimeout(timeoutId);
 
         // ── 8. Truncation (stdout + stderr) ──
-        let output = stdoutText;
+        const fullOutput = stdoutText;
+        const fullStderr = stderrText;
+
+        let output = fullOutput;
         let truncated = false;
         if (output.length > maxOutputChars) {
           output = output.slice(0, maxOutputChars);
           truncated = true;
         }
 
-        let stderr = stderrText;
+        let stderr = fullStderr;
         let stderrTruncated = false;
         if (stderr.length > maxOutputChars) {
           stderr = stderr.slice(0, maxOutputChars);
@@ -658,7 +825,9 @@ export function shellExecuteHandler(
         return {
           executed: true,
           output,
+          ...(truncated ? { fullOutput } : {}),
           stderr,
+          ...(stderrTruncated ? { fullStderr } : {}),
           exitCode,
           truncated,
           stderrTruncated,

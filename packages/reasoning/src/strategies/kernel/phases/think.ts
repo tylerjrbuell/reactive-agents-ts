@@ -199,7 +199,7 @@ export function handleThinking(
           fullResult.length <= AUTO_FORWARD_BUDGET
             ? fullResult
             : fullResult.slice(0, AUTO_FORWARD_BUDGET) +
-              `\n[...${fullResult.length - AUTO_FORWARD_BUDGET} chars truncated — use recall("${storedKey}") for full content]`;
+              `\n[...${fullResult.length - AUTO_FORWARD_BUDGET} chars truncated — full content is stored. Use recall("${storedKey}", start: 0, maxChars: 1200), recall("${storedKey}", lineStart: 0, lineCount: 40), or recall("${storedKey}", arrayStart: 0, arrayCount: 20) for targeted retrieval.]`;
         autoForwardSection = `[Auto-forwarded full result for ${storedKey}]:\n${injected}`;
       }
     }

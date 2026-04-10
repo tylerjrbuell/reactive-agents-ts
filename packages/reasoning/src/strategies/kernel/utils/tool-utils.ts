@@ -448,6 +448,57 @@ export function compressToolResult(
     const parsed = JSON.parse(result) as unknown;
 
     if (Array.isArray(parsed)) {
+      const looksLikeGitHubCommitArray = (value: unknown): value is Array<Record<string, unknown>> => {
+        if (!Array.isArray(value) || value.length === 0) return false;
+        const first = value[0];
+        if (!first || typeof first !== "object") return false;
+        const commit = (first as Record<string, unknown>).commit;
+        if (!commit || typeof commit !== "object") return false;
+        const author = (commit as Record<string, unknown>).author;
+        const message = (commit as Record<string, unknown>).message;
+        const date =
+          author && typeof author === "object"
+            ? (author as Record<string, unknown>).date
+            : undefined;
+        return typeof message === "string" && typeof date === "string";
+      };
+
+      if (looksLikeGitHubCommitArray(parsed)) {
+        const items = parsed
+          .slice(0, previewItems)
+          .map((item, i) => {
+            const commit = item.commit as Record<string, unknown>;
+            const authorObj = commit.author as Record<string, unknown>;
+            const rawMessage = String(commit.message ?? "");
+            const message = rawMessage
+              .split("\n")[0]
+              .replace(/\s+/g, " ")
+              .trim()
+              .slice(0, 140);
+            const author = String(authorObj.name ?? "").trim();
+            const date = String(authorObj.date ?? "").trim();
+            return `  [${i}] message=${message} | author=${author} | date=${date}`;
+          })
+          .join("\n");
+
+        const shownCount = Math.min(previewItems, parsed.length);
+        const remaining = parsed.length - shownCount;
+        const moreStr = remaining > 0 ? `\n  ...${remaining} more` : "";
+        const coverageHint =
+          remaining === 0
+            ? `\n  ✓ Preview includes all commits with exact message/author/date values.`
+            : `\n  — full data is stored. Use recall("${key}", arrayStart: ${shownCount}, arrayCount: ${previewItems}) for remaining commits.`;
+        const content =
+          `[STORED: ${key} | ${toolName}]\n` +
+          `Type: Array(${parsed.length}) | Schema: commit.message, commit.author.name, commit.author.date\n` +
+          `Preview (first ${shownCount}):\n` +
+          items +
+          moreStr +
+          coverageHint;
+
+        return { content, stored: { key, value: result } };
+      }
+
       // Schema: inspect first item keys, flatten one level of nesting
       const first = parsed[0] as Record<string, unknown> | undefined;
       const schema = first
@@ -487,7 +538,7 @@ export function compressToolResult(
       // without a recall — avoids wasting an iteration.
       const coverageHint = remaining <= 2
         ? `\n  ✓ Preview covers ${remaining === 0 ? "all" : "nearly all"} items — you can use this data directly.`
-        : `\n  — use recall("${key}") ONLY if you need items beyond the preview.`;
+        : `\n  — full data is stored. Use segmented recall if needed: recall("${key}", arrayStart: ${shownCount}, arrayCount: ${previewItems}) or recall("${key}", start: 0, maxChars: 1200).`;
       const content =
         `[STORED: ${key} | ${toolName}]\n` +
         `Type: Array(${parsed.length}) | Schema: ${schema}\n` +
@@ -521,7 +572,7 @@ export function compressToolResult(
         `[STORED: ${key} | ${toolName}]\n` +
         `Type: Object(${totalKeys} keys)\n` +
         entries +
-        `\n  — use recall("${key}") or | transform: to access full data`;
+        `\n  — full object is stored. Use recall("${key}", start: 0, maxChars: 1200), recall("${key}", query: "keyword"), or | transform: for focused extraction.`;
 
       return { content, stored: { key, value: result } };
     }
@@ -529,21 +580,74 @@ export function compressToolResult(
     // Not JSON — plain text preview
   }
 
-  // Plain text: first N lines, each line truncated to 120 chars
+  // Plain text: skip box-drawing banners (common in CLIs) and prefer Usage/flags lines
   const lines = result.split("\n");
-  const preview = lines
-    .slice(0, previewItems)
-    .map((l) => (l.length > 120 ? `${l.slice(0, 120)}…` : l))
-    .join("\n");
-  const remaining = lines.length - previewItems;
+  const { previewStart, previewText, bannerLinesSkipped } = buildPlainTextToolPreview(
+    lines,
+    previewItems,
+  );
+  const shownLineCount = Math.min(previewItems, Math.max(0, lines.length - previewStart));
+  const remaining = lines.length - previewStart - shownLineCount;
+  const bannerNote =
+    bannerLinesSkipped > 0
+      ? `(${bannerLinesSkipped} decorative/banner line(s) omitted from preview — substantive text is in storage)\n`
+      : "";
   const moreStr = remaining > 0 ? `\n  ...${remaining} more lines` : "";
   const content =
     `[STORED: ${key} | ${toolName}]\n` +
-    preview +
+    bannerNote +
+    previewText +
     moreStr +
-    `\n  — use recall("${key}") to access full text`;
+    `\n  — full text is stored. For terminal/CLI output use recall("${key}", full: true) first; ` +
+    `or segmented recall("${key}", lineStart: ${previewStart + shownLineCount}, lineCount: 40) or recall("${key}", start: 0, maxChars: 1200).`;
 
   return { content, stored: { key, value: result } };
+}
+
+/** Box-drawing and block characters used in CLI banners / tables */
+const BANNER_CHAR_RE = /[\u2500-\u257F\u2550-\u256C]/g;
+
+function isMostlyBannerLine(line: string): boolean {
+  const trimmed = line.trim();
+  if (trimmed.length === 0) return true;
+  const nonSpace = trimmed.replace(/\s/g, "");
+  if (nonSpace.length === 0) return true;
+  const boxMatches = trimmed.match(BANNER_CHAR_RE)?.length ?? 0;
+  if (boxMatches / nonSpace.length >= 0.35) return true;
+  if (/^[-=─━_|/\\*\s]{4,}$/.test(trimmed)) return true;
+  return false;
+}
+
+function looksLikeCliHelpLine(line: string): boolean {
+  const t = line.trim();
+  if (/^usage:/i.test(t)) return true;
+  if (/\s--[\w][\w-]*/.test(t)) return true;
+  if (/^(options|flags|commands|subcommands|examples?|arguments?):?\s*$/i.test(t)) return true;
+  return false;
+}
+
+/**
+ * Pick a preview window for large plain-text tool output so previews are not only ASCII art.
+ */
+function buildPlainTextToolPreview(
+  lines: readonly string[],
+  previewItems: number,
+): { previewStart: number; previewText: string; bannerLinesSkipped: number } {
+  let i = 0;
+  while (i < lines.length && isMostlyBannerLine(lines[i]!)) {
+    i++;
+  }
+  let previewStart = i;
+  const scanEnd = Math.min(lines.length, i + 100);
+  for (let j = i; j < scanEnd; j++) {
+    if (looksLikeCliHelpLine(lines[j]!)) {
+      previewStart = j;
+      break;
+    }
+  }
+  const slice = lines.slice(previewStart, previewStart + previewItems);
+  const previewText = slice.map((l) => (l.length > 120 ? `${l.slice(0, 120)}…` : l)).join("\n");
+  return { previewStart, previewText, bannerLinesSkipped: previewStart };
 }
 
 /**

@@ -42,6 +42,11 @@ import type { StrategyServices } from "./kernel/utils/service-utils.js";
 import { makeStep, buildStrategyResult } from "./kernel/utils/step-utils.js";
 import { isSatisfied } from "./kernel/utils/quality-utils.js";
 import { stripThinking } from "./kernel/utils/stream-parser.js";
+import { extractOutputFormat } from "./kernel/utils/task-intent.js";
+import {
+  validateOutputFormat,
+  buildSynthesisPrompt,
+} from "./kernel/utils/output-synthesis.js";
 import type { ToolSchema } from "./kernel/utils/tool-utils.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 
@@ -605,6 +610,17 @@ export const executePlanExecute = (
         String(steps[steps.length - 1]?.content ?? "");
     }
 
+    if (finalOutput) {
+      const gated = yield* enforceOutputQualityGate({
+        llm,
+        taskDescription: input.taskDescription,
+        output: finalOutput,
+      });
+      finalOutput = gated.output;
+      totalTokens += gated.tokens;
+      totalCost += gated.cost;
+    }
+
     return buildStrategyResult({
       strategy: "plan-execute-reflect",
       steps,
@@ -623,6 +639,61 @@ interface StepExecResult {
   tokens: number;
   cost: number;
   success: boolean;
+}
+
+function enforceOutputQualityGate(input: {
+  llm: LLMService["Type"];
+  taskDescription: string;
+  output: string;
+}): Effect.Effect<
+  { output: string; tokens: number; cost: number },
+  never,
+  never
+> {
+  const intent = extractOutputFormat(input.taskDescription);
+  if (!intent.format) {
+    return Effect.succeed({ output: input.output, tokens: 0, cost: 0 });
+  }
+
+  const validation = validateOutputFormat(input.output, intent.format);
+  if (validation.valid) {
+    return Effect.succeed({ output: input.output, tokens: 0, cost: 0 });
+  }
+
+  const synthesisPrompt = buildSynthesisPrompt(
+    input.output,
+    intent.format,
+    input.taskDescription,
+  );
+
+  return input.llm
+    .complete({
+      messages: [{ role: "user", content: synthesisPrompt }],
+      maxTokens: 1500,
+      temperature: 0.2,
+    })
+    .pipe(
+      Effect.map((response) => {
+        const candidate = stripThinking(response.content).trim();
+        if (!candidate) {
+          return {
+            output: input.output,
+            tokens: response.usage.totalTokens,
+            cost: response.usage.estimatedCost,
+          };
+        }
+
+        const revalidation = validateOutputFormat(candidate, intent.format);
+        return {
+          output: revalidation.valid ? candidate : input.output,
+          tokens: response.usage.totalTokens,
+          cost: response.usage.estimatedCost,
+        };
+      }),
+      Effect.catchAll(() =>
+        Effect.succeed({ output: input.output, tokens: 0, cost: 0 })
+      ),
+    );
 }
 
 /**
@@ -928,6 +999,53 @@ function sanitizeToolOutput(
   rawOutput: string,
   args: Record<string, unknown>,
 ): string {
+  // shell-execute wraps command output in metadata; prefer the full untruncated
+  // command payload so downstream synthesis can parse complete results.
+  if (toolName.includes("shell-execute")) {
+    const extractText = (value: unknown): string | null => {
+      if (typeof value === "string" && value.trim().length > 0) return value;
+      return null;
+    };
+
+    const parseUnknown = (value: unknown): unknown => {
+      if (typeof value !== "string") return value;
+      try {
+        return JSON.parse(value);
+      } catch {
+        return value;
+      }
+    };
+
+    // Some integrations return shell payloads as nested objects or as
+    // stringified JSON at one or more levels. Normalize to inspect safely.
+    const parsed = parseUnknown(rawOutput);
+    const normalized =
+      parsed && typeof parsed === "object" && "result" in parsed
+        ? parseUnknown((parsed as { result?: unknown }).result)
+        : parsed;
+
+    if (normalized && typeof normalized === "object") {
+      const payload = normalized as {
+        fullOutput?: unknown;
+        output?: unknown;
+        fullStderr?: unknown;
+        stderr?: unknown;
+      };
+
+      const output =
+        extractText(payload.fullOutput) ??
+        extractText(payload.output) ??
+        "";
+      const stderr =
+        extractText(payload.fullStderr) ??
+        extractText(payload.stderr) ??
+        "";
+
+      if (output.trim().length > 0) return output;
+      if (stderr.trim().length > 0) return stderr;
+    }
+  }
+
   // If tool name indicates a data-fetching operation, keep full output
   if (!ACTION_TOOL_PATTERNS.test(toolName)) {
     return rawOutput;

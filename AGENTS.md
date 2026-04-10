@@ -424,6 +424,7 @@ Canonical project skills live in `.agents/skills/`:
 -   `review-patterns` — 9-category compliance review (incl. kernel extension)
 -   `update-docs` — documentation + skills + memory synchronization workflow
 -   `validate-build` — quality gate checklist for build/test/review
+-   `effect-abstraction-audit` — architectural analysis for abstraction opportunities, composability gaps, and Effect-TS engineering quality
 
 ---
 

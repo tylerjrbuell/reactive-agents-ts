@@ -49,6 +49,7 @@ export const ReasoningConfigSchema = Schema.Struct({
 export const ToolsConfigSchema = Schema.Struct({
   allowedTools: Schema.optional(Schema.Array(Schema.String)),
   adaptive: Schema.optional(Schema.Boolean),
+  terminal: Schema.optional(Schema.Boolean),
 });
 
 export const GuardrailsConfigSchema = Schema.Struct({
@@ -365,6 +366,7 @@ export async function agentConfigToBuilder(config: AgentConfig): Promise<Reactiv
     const opts = {
       ...(t?.allowedTools ? { allowedTools: t.allowedTools } : {}),
       ...(t?.adaptive !== undefined ? { adaptive: t.adaptive } : {}),
+      ...(t?.terminal !== undefined ? { terminal: t.terminal } : {}),
     };
     builder = builder.withTools(Object.keys(opts).length > 0 ? opts : undefined);
   }
@@ -590,7 +592,10 @@ export function builderToConfig(state: {
     const to = state._toolsOptions as any;
     if (to?.allowedTools) t["allowedTools"] = [...to.allowedTools];
     if (to?.adaptive !== undefined) t["adaptive"] = to.adaptive;
-    if (to?.terminal !== undefined) t["terminal"] = to.terminal;
+    if (to?.terminal !== undefined) {
+      t["terminal"] =
+        typeof to.terminal === "boolean" ? to.terminal : true;
+    }
     config["tools"] = t;
   }
 
@@ -657,6 +662,7 @@ export function builderToConfig(state: {
     if (vo?.hallucinationThreshold !== undefined) v["hallucinationThreshold"] = vo.hallucinationThreshold;
     if (vo?.passThreshold !== undefined) v["passThreshold"] = vo.passThreshold;
     if (vo?.riskThreshold !== undefined) v["riskThreshold"] = vo.riskThreshold;
+    if (vo?.useLLMTier !== undefined) v["useLLMTier"] = vo.useLLMTier;
     config["verification"] = v;
   }
 

@@ -49,6 +49,26 @@ import {
 /** Meta-tool names — not counted as "real work" for reclassification triggers. */
 const RUNNER_META_TOOLS = new Set(["final-answer", "task-complete", "context-status", "brief", "pulse", "find", "recall", "checkpoint"]);
 
+/** Keys embedded in compressed tool observations (`[STORED: _tool_result_N | tool]`) */
+const STORED_TOOL_KEY_RE = /\[STORED:\s*(_tool_result_\d+)\s*\|/g;
+
+/**
+ * When an observation is a compressed preview, replace it with full text from the kernel
+ * scratchpad so harness / output-gate paths do not hallucinate from ASCII banners only.
+ */
+function resolveStoredToolObservation(
+  content: string,
+  scratchpad: ReadonlyMap<string, string>,
+): string {
+  const keys = [...new Set([...content.matchAll(STORED_TOOL_KEY_RE)].map((m) => m[1]!))];
+  if (keys.length === 0) return content;
+  const payloads = keys
+    .map((k) => scratchpad.get(k))
+    .filter((v): v is string => typeof v === "string" && v.length > 0);
+  if (payloads.length === 0) return content;
+  return payloads.join("\n\n---\n\n");
+}
+
 // ── Harness deliverable assembly ──────────────────────────────────────────────
 
 /**
@@ -73,9 +93,10 @@ export function assembleDeliverable(state: KernelState): string {
     if (!r?.success || !r.toolName) continue;
     if (RUNNER_META_TOOLS.has(r.toolName)) continue;
     if (!state.toolsUsed.has(r.toolName)) continue;
-    const content = (step.content ?? "").trim();
+    const raw = (step.content ?? "").trim();
     // Skip guard-block observations that leaked through as success=true
-    if (content.startsWith("\u26A0\uFE0F") || content.includes("[Already done")) continue;
+    if (raw.startsWith("\u26A0\uFE0F") || raw.includes("[Already done")) continue;
+    const content = resolveStoredToolObservation(raw, state.scratchpad);
     if (content.length > 20) artifacts.push(content);
   }
 
@@ -186,6 +207,65 @@ function getLastErrors(state: KernelState): readonly string[] {
     )
 }
 
+type ToolFailureRecovery = {
+  readonly failedUnresolved: readonly string[];
+  readonly alternativeCandidates: readonly string[];
+};
+
+/**
+ * Identify whether failed tool paths still have viable alternatives.
+ *
+ * A tool is "failed unresolved" when we saw at least one failed observation and
+ * no successful observation for that same tool yet.
+ */
+function getToolFailureRecovery(
+  state: KernelState,
+  input: KernelInput,
+): ToolFailureRecovery {
+  const successful = new Set<string>();
+  const failed = new Set<string>();
+
+  for (const step of state.steps) {
+    if (step.type !== "observation") continue;
+    const result = step.metadata?.observationResult as
+      | { readonly success?: boolean; readonly toolName?: string }
+      | undefined;
+    const toolName = result?.toolName;
+    if (!toolName || RUNNER_META_TOOLS.has(toolName)) continue;
+
+    if (result.success === true) {
+      successful.add(toolName);
+      failed.delete(toolName);
+      continue;
+    }
+
+    if (result.success === false && !successful.has(toolName)) {
+      failed.add(toolName);
+    }
+  }
+
+  const required = input.requiredTools ?? [];
+  const relevant = input.relevantTools ?? [];
+  const available = (input.availableToolSchemas ?? []).map((t) => t.name);
+
+  const candidatePool = [...new Set([...required, ...relevant, ...available])]
+    .filter((name) => !RUNNER_META_TOOLS.has(name));
+
+  const failedUnresolved = [...failed].filter((name) => !successful.has(name));
+  if (failedUnresolved.length === 0) {
+    return { failedUnresolved: [], alternativeCandidates: [] };
+  }
+
+  const alternativeCandidates = candidatePool.filter(
+    (name) => !successful.has(name) && !failedUnresolved.includes(name),
+  );
+
+  return {
+    failedUnresolved,
+    alternativeCandidates,
+  };
+}
+
 // ── Main entry point ──────────────────────────────────────────────────────────
 
 /**
@@ -272,6 +352,26 @@ export function runKernel(
     const maxRequiredToolRetries = effectiveInput.maxRequiredToolRetries ?? 2;
     let requiredToolRedirects = 0;
 
+    // Required-tools availability guard (pre-loop)
+    // If required tools are declared but not available in this run's tool schemas,
+    // fail immediately instead of allowing synthesis/fallback to fabricate completion.
+    if (requiredTools.length > 0) {
+      const visibleTools = (effectiveInput.availableToolSchemas ?? []).map((t) => t.name);
+      const allKnownTools = (effectiveInput.allToolSchemas ?? effectiveInput.availableToolSchemas ?? []).map((t) => t.name);
+      const knownToolSet = new Set(allKnownTools);
+      const unavailableRequired = requiredTools.filter((t) => !knownToolSet.has(t));
+      if (allKnownTools.length > 0 && unavailableRequired.length > 0) {
+        state = transitionState(state, {
+          status: "failed",
+          error:
+            `Task incomplete — missing_required_tool: required tool(s) unavailable: ${unavailableRequired.join(", ")}.\n` +
+            `required=[${requiredTools.join(", ")}]\n` +
+            `available=[${allKnownTools.join(", ")}]\n` +
+            `visible=[${visibleTools.join(", ")}]`,
+        });
+      }
+    }
+
     // Strategy switching state
     let switchCount = 0;
     const triedStrategies: string[] = [options.strategy ?? "reactive"];
@@ -295,6 +395,11 @@ export function runKernel(
     // Harness stall tracking — counts consecutive iterations with no new non-meta tool results.
     // When the model has gathered artifacts but stalls, the harness delivers accumulated data.
     let consecutiveStalled = 0;
+
+    // Failure recovery redirects — when a tool path fails and alternatives exist,
+    // force at least a small number of alternate attempts before harness delivery.
+    let failureRecoveryRedirects = 0;
+    const maxFailureRecoveryRedirects = Math.max(2, maxRequiredToolRetries);
 
     // Auto-checkpoint tracking — fires once when context pressure enters the soft zone.
     let autoCheckpointed = false;
@@ -387,6 +492,33 @@ export function runKernel(
         state.status !== "done" &&
         state.status !== "failed"
       ) {
+        const recovery = getToolFailureRecovery(state, currentInput);
+        const shouldNudgeRecovery =
+          recovery.failedUnresolved.length > 0 &&
+          failureRecoveryRedirects < maxFailureRecoveryRedirects;
+
+        if (shouldNudgeRecovery) {
+          failureRecoveryRedirects++;
+          const nextPath = recovery.alternativeCandidates[0] ?? recovery.failedUnresolved[0] ?? "an available tool";
+          const guidance =
+            recovery.alternativeCandidates.length > 0
+              ? `Recovery required: prior tool path failed (${recovery.failedUnresolved.join(", ")}). Try an alternate path now: ${nextPath}. Do not finalize yet. (${failureRecoveryRedirects}/${maxFailureRecoveryRedirects})`
+              : `Recovery required: prior tool path failed (${recovery.failedUnresolved.join(", ")}). Retry ${nextPath} with corrected arguments/evidence. Do not finalize yet. (${failureRecoveryRedirects}/${maxFailureRecoveryRedirects})`;
+
+          state = transitionState(state, {
+            status: "thinking",
+            steps: [...state.steps, makeStep("observation", `⚠️ ${guidance}`)],
+            steeringNudge: guidance,
+            meta: {
+              ...state.meta,
+              recoveryPending: true,
+              recoveryFailedTools: recovery.failedUnresolved,
+              recoveryAlternativeCandidates: recovery.alternativeCandidates,
+            },
+          });
+          continue;
+        }
+
         yield* Effect.log(
           `[harness-deliverable] Assembling output from ${totalArtifacts} tool artifacts after ${consecutiveStalled} stalled iterations`,
         );
@@ -496,6 +628,7 @@ export function runKernel(
             };
             currentContext = { ...currentContext, input: currentInput };
             reclassifyCount++;
+            failureRecoveryRedirects = 0;
 
             // Clear gateBlockedTools since we've incorporated the feedback
             state = transitionState(state, {
@@ -650,6 +783,7 @@ export function runKernel(
               noProgressIterations = 0;
               reclassifyCount = 0;
               consecutiveStalled = 0;
+              failureRecoveryRedirects = 0;
 
               // Continue the outer while loop with fresh state
               continue;
@@ -660,6 +794,27 @@ export function runKernel(
           // Loops with data → deliver. Loops without data → fail.
           const loopArtifactCount = [...state.toolsUsed].filter((t) => !RUNNER_META_TOOLS.has(t)).length;
           if (loopArtifactCount > 0) {
+            const recovery = getToolFailureRecovery(state, currentInput);
+            const shouldNudgeRecovery =
+              recovery.failedUnresolved.length > 0 &&
+              failureRecoveryRedirects < maxFailureRecoveryRedirects;
+
+            if (shouldNudgeRecovery) {
+              failureRecoveryRedirects++;
+              const nextPath = recovery.alternativeCandidates[0] ?? recovery.failedUnresolved[0] ?? "an available tool";
+              const guidance =
+                recovery.alternativeCandidates.length > 0
+                  ? `Recovery required: loop detected after failed tool path (${recovery.failedUnresolved.join(", ")}). Try alternate path ${nextPath} before completion. (${failureRecoveryRedirects}/${maxFailureRecoveryRedirects})`
+                  : `Recovery required: loop detected after failed tool path (${recovery.failedUnresolved.join(", ")}). Retry ${nextPath} with corrected arguments before completion. (${failureRecoveryRedirects}/${maxFailureRecoveryRedirects})`;
+              state = transitionState(state, {
+                status: "thinking",
+                steps: [...state.steps, makeStep("observation", `⚠️ ${guidance}`)],
+                steeringNudge: guidance,
+                error: null,
+              });
+              continue;
+            }
+
             yield* Effect.log(
               `[harness-deliverable] Loop detected but ${loopArtifactCount} artifacts gathered — delivering instead of failing`,
             );
@@ -721,15 +876,22 @@ export function runKernel(
     // guard or max iterations) but required tools still haven't been called, fail.
     // Exception: harness_deliverable exits are deliberate — the harness determined
     // enough data was gathered despite some tools not being called.
-    if (state.status === "done" && requiredTools.length > 0 && state.meta.terminatedBy !== "harness_deliverable") {
+    if (state.status === "done" && requiredTools.length > 0) {
       const missingTools = requiredTools.filter((t) => !state.toolsUsed.has(t));
       if (missingTools.length > 0) {
+        const visibleTools = (currentInput.availableToolSchemas ?? []).map((t) => t.name);
+        const allKnownTools = (currentInput.allToolSchemas ?? currentInput.availableToolSchemas ?? []).map((t) => t.name);
+        const calledTools = [...state.toolsUsed];
+        const terminatedBy = String(state.meta.terminatedBy ?? "unknown");
         state = transitionState(state, {
           status: "failed",
-          error: `Task incomplete — required tool(s) never called: ${missingTools.join(", ")}.\n` +
-            `Fix: Make the task description clearly specify the deliverable ` +
-            `(e.g. "write results to ./output.md"), or add a persona instruction ` +
-            `explicitly requiring the tool call.`,
+          error:
+            `Task incomplete — missing_required_tool: required tool(s) not called: ${missingTools.join(", ")}.\n` +
+            `required=[${requiredTools.join(", ")}]\n` +
+            `called=[${calledTools.join(", ")}]\n` +
+            `available=[${allKnownTools.join(", ")}]\n` +
+            `visible=[${visibleTools.join(", ")}]\n` +
+            `terminatedBy=${terminatedBy}`,
         });
       }
     }

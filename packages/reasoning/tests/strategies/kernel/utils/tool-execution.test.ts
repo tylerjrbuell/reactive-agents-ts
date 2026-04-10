@@ -1,12 +1,14 @@
 import { describe, it, expect } from "bun:test";
-import { Effect } from "effect";
+import { Effect, Ref } from "effect";
 import {
   makeObservationResult,
   truncateForDisplay,
   executeToolCall,
+  executeNativeToolCall,
   type ToolExecutionResult,
 } from "../../../../src/strategies/kernel/utils/tool-execution.js";
 import type { MaybeService, ToolServiceInstance } from "../../../../src/strategies/kernel/kernel-state.js";
+import { scratchpadStoreRef, makeRecallHandler } from "@reactive-agents/tools";
 
 // ── makeObservationResult ────────────────────────────────────────────────────
 
@@ -285,5 +287,111 @@ describe("executeToolCall", () => {
     );
     expect(capturedAgentId).toBe("reasoning-agent");
     expect(capturedSessionId).toBe("reasoning-session");
+  });
+
+  it("uses shell-execute fullOutput for compression and stored recall key", async () => {
+    const commits = Array.from({ length: 5 }, (_, i) => ({
+      sha: `sha-${i}`,
+      commit: { author: { name: `author-${i}`, date: `2026-03-${10 + i}` }, message: `msg-${i}` },
+    }));
+    const fullJson = JSON.stringify(commits);
+    const scratchpad = new Map<string, string>();
+
+    const mockToolService: MaybeService<ToolServiceInstance> = {
+      _tag: "Some",
+      value: {
+        execute: (_input) =>
+          Effect.succeed({
+            success: true,
+            result: {
+              executed: true,
+              output: fullJson.slice(0, 120),
+              fullOutput: fullJson,
+              truncated: true,
+              exitCode: 0,
+            },
+          }),
+        getTool: (_name) =>
+          Effect.succeed({
+            parameters: [{ name: "command", type: "string", required: true }],
+          }),
+      },
+    };
+
+    const result = await Effect.runPromise(
+      executeToolCall(
+        mockToolService,
+        { tool: "shell-execute", input: '{"command":"gh api repos/x/y/commits?per_page=5"}' },
+        {
+          compression: { budget: 120, previewItems: 5, autoStore: true },
+          scratchpad,
+        },
+      ),
+    );
+
+    expect(result.storedKey).toBeDefined();
+    expect(result.content).toContain("Array(5)");
+    expect(result.content).toContain("[4]");
+    expect(scratchpad.has(result.storedKey!)).toBe(true);
+    expect(scratchpad.get(result.storedKey!)!).toContain('"sha":"sha-4"');
+  });
+});
+
+// ── executeNativeToolCall + scratchpadStoreRef (same Map as recall tool) ─────
+
+describe("executeNativeToolCall recall store alignment", () => {
+  it("stores overflow in scratchpadStoreRef so recall retrieves _tool_result keys", async () => {
+    await Effect.runPromise(Ref.set(scratchpadStoreRef, new Map()));
+    const recall = makeRecallHandler(scratchpadStoreRef);
+
+    const commits = Array.from({ length: 5 }, (_, i) => ({
+      sha: `sha-${i}`,
+      commit: { author: { name: `author-${i}`, date: `2026-03-${10 + i}` }, message: `msg-${i}` },
+    }));
+    const fullJson = JSON.stringify(commits);
+
+    const mockToolService: ToolServiceInstance = {
+      execute: (_input) =>
+        Effect.succeed({
+          success: true,
+          result: {
+            executed: true,
+            output: fullJson.slice(0, 120),
+            fullOutput: fullJson,
+            truncated: true,
+            exitCode: 0,
+          },
+        }),
+      getTool: (_name) =>
+        Effect.succeed({
+          parameters: [{ name: "command", type: "string", required: true }],
+        }),
+    };
+
+    const toolCall = {
+      id: "call-1",
+      name: "shell-execute",
+      arguments: { command: "gh api repos/x/y/commits?per_page=5" },
+    };
+
+    const execResult = await Effect.runPromise(
+      Effect.gen(function* () {
+        const shared = yield* Ref.get(scratchpadStoreRef);
+        return yield* executeNativeToolCall(
+          mockToolService,
+          toolCall,
+          "reasoning-agent",
+          "reasoning-session",
+          { compression: { budget: 120, previewItems: 5, autoStore: true }, scratchpad: shared },
+        );
+      }),
+    );
+
+    expect(execResult.storedKey).toBeDefined();
+    const readBack = await Effect.runPromise(
+      recall({ key: execResult.storedKey!, full: true } as Record<string, unknown>),
+    );
+    expect(readBack).not.toEqual(expect.objectContaining({ found: false }));
+    expect((readBack as { content?: string }).content).toContain('"sha":"sha-4"');
   });
 });

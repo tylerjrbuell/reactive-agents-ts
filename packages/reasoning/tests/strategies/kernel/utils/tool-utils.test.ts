@@ -3,6 +3,7 @@ import {
   hasFinalAnswer,
   extractFinalAnswer,
   evaluateTransform,
+  compressToolResult,
   formatToolSchemas,
   formatToolSchemaCompact,
   formatToolSchemaMicro,
@@ -270,5 +271,51 @@ describe("planNextMoveBatches", () => {
     expect(batches[0]?.map((c) => c.name)).toEqual(["web-search", "http-get", "file-read"]);
     expect(batches[1]?.map((c) => c.name)).toEqual(["file-write"]);
     expect(batches[2]?.map((c) => c.name)).toEqual(["web-search"]);
+  });
+});
+
+describe("compressToolResult", () => {
+  it("formats GitHub commit arrays with explicit message/author/date preview", () => {
+    const commits = [
+      {
+        sha: "a1",
+        commit: {
+          message: "fix: repair required tool guard\\n\\nextra details",
+          author: { name: "Tyler", date: "2026-04-10T12:00:00Z" },
+        },
+      },
+      {
+        sha: "a2",
+        commit: {
+          message: "feat: improve shell registration",
+          author: { name: "Alex", date: "2026-04-09T09:30:00Z" },
+        },
+      },
+    ];
+
+    const compressed = compressToolResult(
+      JSON.stringify(commits),
+      "shell-execute",
+      40,
+      5,
+    );
+
+    expect(compressed.content).toContain("Schema: commit.message, commit.author.name, commit.author.date");
+    expect(compressed.content).toContain("message=fix: repair required tool guard");
+    expect(compressed.content).toContain("author=Tyler");
+    expect(compressed.content).toContain("date=2026-04-10T12:00:00Z");
+    expect(compressed.stored?.value).toContain('"sha":"a2"');
+  });
+
+  it("skips box-drawing CLI banner and surfaces Usage/help lines in plain-text preview", () => {
+    const banner = "╔══════════════════╗\n║     rax logo     ║\n╚══════════════════╝\n";
+    const help =
+      "Some filler line\nUsage: rax [options] <command>\n  --help    Show help\n  agent     Manage agents";
+    const text = banner + help;
+    const compressed = compressToolResult(text, "shell-execute", 90, 4);
+    expect(compressed.stored).toBeDefined();
+    expect(compressed.content).toContain("Usage: rax");
+    expect(compressed.content).toContain("full: true");
+    expect(compressed.content).not.toContain("╔══════════════════");
   });
 });

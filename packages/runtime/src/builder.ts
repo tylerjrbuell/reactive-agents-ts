@@ -16,6 +16,7 @@ import type { StrategySynthesisFields } from "./reasoning-synthesis-fields.js";
 import type {
   ToolDefinition,
   ResultCompressionConfig,
+  ShellExecuteConfig,
 } from "@reactive-agents/tools";
 import { shellExecuteTool, shellExecuteHandler } from "@reactive-agents/tools";
 import type { RemoteAgentClient } from "@reactive-agents/tools";
@@ -159,7 +160,7 @@ export interface ToolsOptions {
    */
   readonly adaptive?: boolean;
   /**
-   * Enable the shell-execute tool for terminal/CLI command execution.
+   * Enable/configure the shell-execute tool for terminal/CLI command execution.
    *
    * When true, the agent gains access to controlled shell command execution with:
    * - Allowlist of safe commands (git, ls, cat, grep, find, node, bun, npm, python, curl, echo, mkdir, cp, mv, wc, head, tail, sort, jq)
@@ -169,14 +170,23 @@ export interface ToolsOptions {
    *
    * Useful for agents that need to inspect files, run build commands, or execute scripts safely.
    *
-   * @example
-   * ```typescript
-   * agent.withTools({ terminal: true })
-   * ```
+  * Use `true` for defaults or pass a config object for custom behavior
+  * (for example, `additionalCommands: ["gh"]`).
+  *
+  * @example
+  * ```typescript
+  * agent.withTools({ terminal: true })
+  *
+  * agent.withTools({
+  *   terminal: {
+  *     additionalCommands: ["gh"],
+  *   },
+  * })
+  * ```
    *
    * Default: false (shell-execute not available)
    */
-  readonly terminal?: boolean;
+  readonly terminal?: boolean | ShellExecuteConfig;
 }
 
 /**
@@ -278,6 +288,12 @@ export interface GuardrailsOptions {
  *
  * All strategies default to their framework defaults when verification is enabled.
  *
+ * @remarks
+ * By default (`useLLMTier` unset or true), the runtime wires `VerificationService` to the same
+ * `LLMService` as the agent so tier-2 checks (semantic entropy, fact decomposition, etc.) can call
+ * the model. Set `useLLMTier: false` for heuristic-only verification (faster, weaker signal).
+ * Use `verbosity: "normal"` or higher to see `◉ [verify]` lines with score / passed / recommendation.
+ *
  * @example
  * ```typescript
  * agent.withVerification({ hallucinationDetection: true, passThreshold: 0.8 })
@@ -302,6 +318,11 @@ export interface VerificationOptions {
   readonly passThreshold?: number;
   /** Risk threshold below which outputs are flagged (0-1). Default: 0.5 */
   readonly riskThreshold?: number;
+  /**
+   * When true (default), use the runtime `LLMService` for LLM-backed verification layers.
+   * When false, only tier-1 heuristics run (no extra model calls from verification).
+   */
+  readonly useLLMTier?: boolean;
 }
 
 /**
@@ -1330,7 +1351,16 @@ export class ReactiveAgentBuilder {
    */
   withTools(options?: ToolsOptions): this {
     this._enableTools = true;
-    if (options) this._toolsOptions = options;
+    if (options) {
+      const previous = this._toolsOptions;
+      this._toolsOptions = {
+        ...previous,
+        ...options,
+        tools: options.tools
+          ? [...(previous?.tools ?? []), ...options.tools]
+          : previous?.tools,
+      };
+    }
     if (options?.resultCompression) {
       this._resultCompression = options.resultCompression;
     }
@@ -1338,7 +1368,7 @@ export class ReactiveAgentBuilder {
   }
 
   /**
-   * Enable the shell-execute tool for safe terminal command execution.
+   * Enable/configure the shell-execute tool for safe terminal command execution.
    *
    * Registers the shell-execute tool which allows controlled CLI command execution with:
    * - Allowlisted safe commands (git, ls, cat, grep, find, node, bun, npm, python, curl, echo, mkdir, cp, mv, wc, head, tail, sort, jq)
@@ -1346,7 +1376,7 @@ export class ReactiveAgentBuilder {
    * - Working directory constraint to project root or sandbox
    * - 30s timeout and 4000 char output truncation per command
    *
-   * Equivalent to calling `.withTools({ terminal: true })`.
+  * Equivalent to calling `.withTools({ terminal: options ?? true })`.
    *
    * @returns `this` for chaining
    * @example
@@ -1357,9 +1387,12 @@ export class ReactiveAgentBuilder {
    *   .build();
    * ```
    */
-  withTerminalTools(): this {
+  withTerminalTools(options?: ShellExecuteConfig): this {
     this._enableTools = true;
-    this._toolsOptions = { ...this._toolsOptions, terminal: true };
+    this._toolsOptions = {
+      ...this._toolsOptions,
+      terminal: options ?? true,
+    };
     return this;
   }
 
@@ -2621,7 +2654,8 @@ export class ReactiveAgentBuilder {
         agentTools.length > 0 ||
         allowDynamicSubAgents ||
         mcpServers.length > 0 ||
-        (toolsOptions?.tools?.length ?? 0) > 0
+        (toolsOptions?.tools?.length ?? 0) > 0 ||
+        toolsOptions?.terminal !== undefined
       ) {
         const toolsMod = yield* Effect.promise(
           () => import("@reactive-agents/tools"),
@@ -3095,8 +3129,21 @@ export class ReactiveAgentBuilder {
             }
           }
           // Register terminal tool if enabled
-          if ((toolsOptions as any)?.terminal) {
-            yield* (ts as any).register(shellExecuteTool, shellExecuteHandler);
+          const terminalOptions = (toolsOptions as any)?.terminal as
+            | boolean
+            | ShellExecuteConfig
+            | undefined;
+          const hasCustomShellExecute =
+            (toolsOptions?.tools ?? []).some(
+              (tool) => tool.definition.name === shellExecuteTool.name,
+            );
+          if (terminalOptions && !hasCustomShellExecute) {
+            const terminalConfig =
+              terminalOptions === true ? undefined : terminalOptions;
+            yield* (ts as any).register(
+              shellExecuteTool,
+              shellExecuteHandler(terminalConfig),
+            );
           }
           // Capture parent ToolService ref so spawn-agent can proxy MCP tools
           parentToolServiceRef = ts;

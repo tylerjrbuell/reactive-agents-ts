@@ -12,12 +12,18 @@ beforeEach(() => Effect.runSync(Effect.gen(function* () {
 
 describe("recall tool definition", () => {
   it("has name 'recall'", () => expect(recallTool.name).toBe("recall"));
-  it("has all four parameters", () => {
+  it("has retrieval and segmentation parameters", () => {
     const names = recallTool.parameters.map(p => p.name);
     expect(names).toContain("key");
     expect(names).toContain("content");
     expect(names).toContain("query");
     expect(names).toContain("full");
+    expect(names).toContain("start");
+    expect(names).toContain("maxChars");
+    expect(names).toContain("lineStart");
+    expect(names).toContain("lineCount");
+    expect(names).toContain("arrayStart");
+    expect(names).toContain("arrayCount");
   });
 });
 
@@ -94,5 +100,61 @@ describe("recall search mode", () => {
     await Effect.runPromise(handler({ key: "data", content: "apples oranges" }));
     const result = await Effect.runPromise(handler({ query: "quantum neutron" })) as any;
     expect(result.totalMatches).toBe(0);
+  });
+
+  it("supports in-entry search when key + query are provided", async () => {
+    const text = [
+      "alpha line",
+      "beta match line",
+      "gamma",
+      "delta match line",
+    ].join("\n");
+    await Effect.runPromise(handler({ key: "notes", content: text }));
+    const result = await Effect.runPromise(handler({ key: "notes", query: "match" })) as any;
+    expect(result.mode).toBe("in-entry-search");
+    expect(result.totalMatches).toBe(2);
+    expect(result.matches[0].line).toContain("match");
+  });
+});
+
+describe("recall segmented retrieval", () => {
+  it("supports char-range retrieval with nextStart", async () => {
+    const big = "x".repeat(300);
+    await Effect.runPromise(handler({ key: "blob", content: big }));
+    const result = await Effect.runPromise(
+      handler({ key: "blob", start: 50, maxChars: 80 }),
+    ) as any;
+    expect(result.mode).toBe("chars");
+    expect(result.content.length).toBe(80);
+    expect(result.start).toBe(50);
+    expect(result.nextStart).toBe(130);
+    expect(result.hasMore).toBe(true);
+  });
+
+  it("supports line-range retrieval", async () => {
+    const lines = Array.from({ length: 120 }, (_, i) => `line-${i}`);
+    await Effect.runPromise(handler({ key: "log", content: lines.join("\n") }));
+    const result = await Effect.runPromise(
+      handler({ key: "log", lineStart: 10, lineCount: 5 }),
+    ) as any;
+    expect(result.mode).toBe("lines");
+    expect(result.content).toContain("line-10");
+    expect(result.content).toContain("line-14");
+    expect(result.totalLines).toBe(120);
+    expect(result.nextLineStart).toBe(15);
+  });
+
+  it("supports JSON array slicing", async () => {
+    const arr = Array.from({ length: 30 }, (_, i) => ({ id: i }));
+    await Effect.runPromise(handler({ key: "arr", content: JSON.stringify(arr) }));
+    const result = await Effect.runPromise(
+      handler({ key: "arr", arrayStart: 5, arrayCount: 4 }),
+    ) as any;
+    expect(result.mode).toBe("array");
+    expect(result.items.length).toBe(4);
+    expect(result.items[0].id).toBe(5);
+    expect(result.items[3].id).toBe(8);
+    expect(result.totalItems).toBe(30);
+    expect(result.nextArrayStart).toBe(9);
   });
 });

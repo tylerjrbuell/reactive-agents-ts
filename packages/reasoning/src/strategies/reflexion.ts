@@ -26,6 +26,11 @@ import {
 import { makeStep, buildStrategyResult } from "./kernel/utils/step-utils.js";
 import { isSatisfied, isCritiqueStagnant } from "./kernel/utils/quality-utils.js";
 import { extractThinking } from "./kernel/utils/stream-parser.js";
+import { extractOutputFormat } from "./kernel/utils/task-intent.js";
+import {
+  validateOutputFormat,
+  buildSynthesisPrompt,
+} from "./kernel/utils/output-synthesis.js";
 import type { ToolSchema } from "./kernel/utils/tool-utils.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
@@ -232,10 +237,17 @@ export const executeReflexion = (
 
       // ── Stagnation check: exit early if critique isn't changing ──
       if (isCritiqueStagnant(previousCritiques, critique)) {
+        const gated = yield* enforceOutputQualityGate({
+          llm,
+          taskDescription: input.taskDescription,
+          output: currentResponse,
+        });
+        totalTokens += gated.tokens;
+        totalCost += gated.cost;
         return buildStrategyResult({
           strategy: "reflexion",
           steps,
-          output: currentResponse,
+          output: gated.output,
           status: "partial",
           start,
           totalTokens,
@@ -246,11 +258,18 @@ export const executeReflexion = (
 
       // ── Check if satisfied ──
       if (isSatisfied(critique)) {
+        const gated = yield* enforceOutputQualityGate({
+          llm,
+          taskDescription: input.taskDescription,
+          output: currentResponse,
+        });
+        totalTokens += gated.tokens;
+        totalCost += gated.cost;
         yield* publishReasoningStep(ebOpt, {
           _tag: "FinalAnswerProduced",
           taskId: input.taskId ?? "reflexion",
           strategy: "reflexion",
-          answer: currentResponse,
+          answer: gated.output,
           iteration: attempt,
           totalTokens,
           kernelPass: `reflexion:improve-${attempt}`,
@@ -258,7 +277,7 @@ export const executeReflexion = (
         return buildStrategyResult({
           strategy: "reflexion",
           steps,
-          output: currentResponse,
+          output: gated.output,
           status: "completed",
           start,
           totalTokens,
@@ -351,10 +370,17 @@ export const executeReflexion = (
     }
 
     // Max retries reached — return the best response so far
+    const gated = yield* enforceOutputQualityGate({
+      llm,
+      taskDescription: input.taskDescription,
+      output: currentResponse,
+    });
+    totalTokens += gated.tokens;
+    totalCost += gated.cost;
     return buildStrategyResult({
       strategy: "reflexion",
       steps,
-      output: currentResponse,
+      output: gated.output,
       status: "partial",
       start,
       totalTokens,
@@ -376,6 +402,61 @@ function buildSystemPrompt(taskDescription: string): string {
     `- Produce output directly — no offers, no "would you like me to...".\n\n` +
     `Task: ${taskDescription}`
   );
+}
+
+function enforceOutputQualityGate(input: {
+  llm: LLMService["Type"];
+  taskDescription: string;
+  output: string;
+}): Effect.Effect<
+  { output: string; tokens: number; cost: number },
+  never,
+  never
+> {
+  const intent = extractOutputFormat(input.taskDescription);
+  if (!intent.format) {
+    return Effect.succeed({ output: input.output, tokens: 0, cost: 0 });
+  }
+
+  const validation = validateOutputFormat(input.output, intent.format);
+  if (validation.valid) {
+    return Effect.succeed({ output: input.output, tokens: 0, cost: 0 });
+  }
+
+  const synthesisPrompt = buildSynthesisPrompt(
+    input.output,
+    intent.format,
+    input.taskDescription,
+  );
+
+  return input.llm
+    .complete({
+      messages: [{ role: "user", content: synthesisPrompt }],
+      maxTokens: 1500,
+      temperature: 0.2,
+    })
+    .pipe(
+      Effect.map((response) => {
+        const candidate = response.content.trim();
+        if (!candidate) {
+          return {
+            output: input.output,
+            tokens: response.usage.totalTokens,
+            cost: response.usage.estimatedCost,
+          };
+        }
+
+        const revalidation = validateOutputFormat(candidate, intent.format);
+        return {
+          output: revalidation.valid ? candidate : input.output,
+          tokens: response.usage.totalTokens,
+          cost: response.usage.estimatedCost,
+        };
+      }),
+      Effect.catchAll(() =>
+        Effect.succeed({ output: input.output, tokens: 0, cost: 0 })
+      ),
+    );
 }
 
 function buildGenerationPrompt(

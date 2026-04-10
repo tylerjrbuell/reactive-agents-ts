@@ -42,6 +42,16 @@ UNSATISFIED: The response is missing key details about the feature.`;
 UNSATISFIED: Needs more detail.`;
     expect(isSatisfied(critique)).toBe(false);
   });
+
+  it("returns false when SATISFIED appears before an explicit UNSATISFIED verdict", () => {
+    const critique = "SATISFIED preliminary check. UNSATISFIED: required table format missing.";
+    expect(isSatisfied(critique)).toBe(false);
+  });
+
+  it("returns false for contradictory status lines where first explicit verdict is UNSATISFIED", () => {
+    const critique = "Status: UNSATISFIED: missing required actions.\nStatus: SATISFIED: all done.";
+    expect(isSatisfied(critique)).toBe(false);
+  });
 });
 
 describe("isCritiqueStagnant", () => {

@@ -18,7 +18,10 @@ import type { MemoryLLM } from "@reactive-agents/memory";
 
 // Optional package imports
 import { createGuardrailsLayer } from "@reactive-agents/guardrails";
-import { createVerificationLayer } from "@reactive-agents/verification";
+import {
+  createVerificationLayer,
+  createVerificationLayerWithRuntimeLlm,
+} from "@reactive-agents/verification";
 import { createCostLayer } from "@reactive-agents/cost";
 import {
   createReasoningLayer,
@@ -1146,20 +1149,27 @@ export const createRuntime = (options: RuntimeOptions) => {
 
   if (options.enableVerification) {
     const vc = options.verificationOptions;
-    const verificationConfig = vc
-      ? {
-          enableSemanticEntropy: vc.semanticEntropy ?? true,
-          enableFactDecomposition: vc.factDecomposition ?? true,
-          enableMultiSource: vc.multiSource ?? false,
-          enableSelfConsistency: vc.selfConsistency ?? true,
-          enableNli: vc.nli ?? true,
-          enableHallucinationDetection: vc.hallucinationDetection,
-          hallucinationThreshold: vc.hallucinationThreshold,
-          passThreshold: vc.passThreshold ?? 0.7,
-          riskThreshold: vc.riskThreshold ?? 0.5,
-        }
-      : undefined;
-    runtime = Layer.merge(runtime, createVerificationLayer(verificationConfig)) as any;
+    const verificationConfig = {
+      enableSemanticEntropy: vc?.semanticEntropy ?? true,
+      enableFactDecomposition: vc?.factDecomposition ?? true,
+      enableMultiSource: vc?.multiSource ?? false,
+      enableSelfConsistency: vc?.selfConsistency ?? true,
+      enableNli: vc?.nli ?? true,
+      enableHallucinationDetection: vc?.hallucinationDetection,
+      hallucinationThreshold: vc?.hallucinationThreshold,
+      passThreshold: vc?.passThreshold ?? 0.7,
+      riskThreshold: vc?.riskThreshold ?? 0.5,
+      useLLMTier: vc?.useLLMTier !== false,
+    };
+    const verificationLayer =
+      verificationConfig.useLLMTier === true
+        ? createVerificationLayerWithRuntimeLlm(verificationConfig).pipe(
+            // Same pattern as memoryLayer: satisfy LLM here so merge order does not
+            // leave VerificationService construction without LLMService.
+            Layer.provide(rateLimitedLlmLayer as Layer.Layer<LLMService>),
+          )
+        : createVerificationLayer({ ...verificationConfig, useLLMTier: false });
+    runtime = Layer.merge(runtime, verificationLayer) as any;
   }
 
   if (options.enableCostTracking) {

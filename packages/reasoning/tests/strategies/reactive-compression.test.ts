@@ -68,8 +68,8 @@ describe("compressToolResult", () => {
     }));
     const result = compressToolResult(JSON.stringify(commits), "github/list_commits", 100, 3);
     expect(result.content).toContain("Array(10)");
-    expect(result.content).toContain("sha");
     expect(result.content).toContain("feat: change 0");
+    expect(result.content).toContain("Schema: commit.message");
     expect(result.content).toContain("...7 more");
     expect(result.stored).toBeDefined();
     expect(result.stored!.key).toMatch(/^_tool_result_/);

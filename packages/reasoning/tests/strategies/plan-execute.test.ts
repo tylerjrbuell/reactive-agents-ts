@@ -313,6 +313,160 @@ describe("PlanExecuteStrategy (Structured Plan Engine)", () => {
     expect(execSteps[0]!.content).toContain("Deep analysis");
   });
 
+  it("should unwrap shell-execute fullOutput in direct tool_call steps", async () => {
+    const mockToolService = {
+      execute: (_input: {
+        toolName: string;
+        arguments: Record<string, unknown>;
+        agentId: string;
+        sessionId: string;
+      }) =>
+        Effect.succeed({
+          success: true,
+          result: {
+            executed: true,
+            output: "[{\"sha\":\"only-first\"",
+            fullOutput:
+              '[{"sha":"a1","commit":{"message":"m1"}},{"sha":"a2","commit":{"message":"m2"}}]',
+            truncated: true,
+            exitCode: 0,
+          },
+        }),
+      getTool: (name: string) =>
+        Effect.succeed({
+          name,
+          description: "test",
+          parameters: [{ name: "command", type: "string", required: true }],
+        }),
+      register: () => Effect.void,
+      listTools: () => Effect.succeed([]),
+      deregister: () => Effect.void,
+    };
+
+    const toolLayer = Layer.succeed(
+      ToolService,
+      ToolService.of(mockToolService),
+    );
+
+    const shellPlan = makePlanJson([
+      {
+        title: "Fetch commits",
+        instruction: "Get commits",
+        type: "tool_call",
+        toolName: "shell-execute",
+        toolArgs: { command: "gh api repos/x/y/commits?per_page=5" },
+      },
+    ]);
+
+    const llmLayer = TestLLMServiceLayer([
+      { match: "planning agent", text: shellPlan },
+      { match: "GOAL:", text: "SATISFIED: Step completed." },
+      { match: "Synthesize", text: "Synthesized from full shell output." },
+    ]);
+
+    const result = await Effect.runPromise(
+      executePlanExecute({
+        taskDescription: "Fetch commits",
+        taskType: "research",
+        memoryContext: "",
+        availableTools: ["shell-execute"],
+        availableToolSchemas: [
+          {
+            name: "shell-execute",
+            description: "Run shell command",
+            parameters: [
+              { name: "command", type: "string", description: "command", required: true },
+            ],
+          },
+        ],
+        config: defaultReasoningConfig,
+      }).pipe(Effect.provide(Layer.merge(llmLayer, toolLayer))),
+    );
+
+    const execStep = result.steps.find((s) => s.content.startsWith("[EXEC s1]"));
+    expect(execStep).toBeDefined();
+    // Ensure the unwrapped fullOutput is carried, not just the truncated output wrapper.
+    expect(execStep!.content).toContain('"sha":"a2"');
+    expect(execStep!.content).toContain('"message":"m2"');
+    expect(execStep!.content).not.toContain('only-first');
+  });
+
+  it("should unwrap nested stringified shell output for namespaced shell tool names", async () => {
+    const mockToolService = {
+      execute: (_input: {
+        toolName: string;
+        arguments: Record<string, unknown>;
+        agentId: string;
+        sessionId: string;
+      }) =>
+        Effect.succeed({
+          success: true,
+          result: JSON.stringify({
+            result: {
+              output: "[{\"sha\":\"truncated\"",
+              fullOutput:
+                '[{"sha":"b1","commit":{"message":"full-1"}},{"sha":"b2","commit":{"message":"full-2"}}]',
+              truncated: true,
+            },
+          }),
+        }),
+      getTool: (name: string) =>
+        Effect.succeed({
+          name,
+          description: "test",
+          parameters: [{ name: "command", type: "string", required: true }],
+        }),
+      register: () => Effect.void,
+      listTools: () => Effect.succeed([]),
+      deregister: () => Effect.void,
+    };
+
+    const toolLayer = Layer.succeed(
+      ToolService,
+      ToolService.of(mockToolService),
+    );
+
+    const shellPlan = makePlanJson([
+      {
+        title: "Fetch commits",
+        instruction: "Get commits",
+        type: "tool_call",
+        toolName: "github/shell-execute",
+        toolArgs: { command: "gh api repos/x/y/commits?per_page=5" },
+      },
+    ]);
+
+    const llmLayer = TestLLMServiceLayer([
+      { match: "planning agent", text: shellPlan },
+      { match: "GOAL:", text: "SATISFIED: Step completed." },
+      { match: "Synthesize", text: "Synthesized from full shell output." },
+    ]);
+
+    const result = await Effect.runPromise(
+      executePlanExecute({
+        taskDescription: "Fetch commits",
+        taskType: "research",
+        memoryContext: "",
+        availableTools: ["github/shell-execute"],
+        availableToolSchemas: [
+          {
+            name: "github/shell-execute",
+            description: "Run shell command",
+            parameters: [
+              { name: "command", type: "string", description: "command", required: true },
+            ],
+          },
+        ],
+        config: defaultReasoningConfig,
+      }).pipe(Effect.provide(Layer.merge(llmLayer, toolLayer))),
+    );
+
+    const execStep = result.steps.find((s) => s.content.startsWith("[EXEC s1]"));
+    expect(execStep).toBeDefined();
+    expect(execStep!.content).toContain('"message":"full-2"');
+    expect(execStep!.content).not.toContain('truncated');
+  });
+
   it("should resolve step references in tool_call args ({{from_step:s1}})", async () => {
     let toolCalls: Array<{ toolName: string; args: Record<string, unknown> }> =
       [];
@@ -439,5 +593,42 @@ describe("PlanExecuteStrategy (Structured Plan Engine)", () => {
     );
     expect(synthStep).toBeDefined();
     expect(synthStep!.content).toContain("Quantum computing");
+  });
+
+  it("should enforce markdown table output format when task requests one", async () => {
+    const layer = TestLLMServiceLayer([
+      {
+        match: "planning agent",
+        text: makePlanJson([
+          {
+            title: "Summarize commit data",
+            instruction: "Summarize commit data",
+            type: "analysis",
+          },
+        ]),
+      },
+      { match: "OVERALL GOAL", text: "This is plain prose and not a markdown table." },
+      { match: "GOAL:", text: "SATISFIED: Task complete." },
+      { match: "Synthesize", text: "Still prose and not a table." },
+      {
+        match: "They requested the output as: markdown",
+        text: "| Commit Message | Author | Date |\n|---|---|---|\n| fix: test | Tyler | 2026-03-29 |",
+      },
+    ]);
+
+    const result = await Effect.runPromise(
+      executePlanExecute({
+        taskDescription:
+          "Render a markdown table with columns Commit Message, Author, Date from the commit data.",
+        taskType: "analysis",
+        memoryContext: "",
+        availableTools: [],
+        config: defaultReasoningConfig,
+      }).pipe(Effect.provide(layer)),
+    );
+
+    expect(result.status).toBe("completed");
+    expect(String(result.output)).toContain("| Commit Message | Author | Date |");
+    expect(String(result.output)).toContain("|---|---|---|");
   });
 });

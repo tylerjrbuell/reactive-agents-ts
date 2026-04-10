@@ -44,6 +44,42 @@ export const recallTool: ToolDefinition = {
       required: false,
       default: false,
     },
+    {
+      name: "start",
+      type: "number",
+      description: "Character offset for segmented read (0-based).",
+      required: false,
+    },
+    {
+      name: "maxChars",
+      type: "number",
+      description: "Max characters to return for segmented read (default: previewLength).",
+      required: false,
+    },
+    {
+      name: "lineStart",
+      type: "number",
+      description: "Line offset for segmented line read (0-based).",
+      required: false,
+    },
+    {
+      name: "lineCount",
+      type: "number",
+      description: "Number of lines to return for segmented line read (default: 40).",
+      required: false,
+    },
+    {
+      name: "arrayStart",
+      type: "number",
+      description: "Start index for JSON array slice retrieval (0-based).",
+      required: false,
+    },
+    {
+      name: "arrayCount",
+      type: "number",
+      description: "Number of JSON array items to return (default: 20).",
+      required: false,
+    },
   ],
   returnType: "object",
   riskLevel: "low",
@@ -64,6 +100,17 @@ export const makeRecallHandler =
       const content = args.content as string | undefined;
       const query = args.query as string | undefined;
       const full = args.full as boolean | undefined;
+      const start = typeof args.start === "number" ? Math.max(0, Math.floor(args.start)) : undefined;
+      const maxChars =
+        typeof args.maxChars === "number" ? Math.max(1, Math.floor(args.maxChars)) : previewLength;
+      const lineStart =
+        typeof args.lineStart === "number" ? Math.max(0, Math.floor(args.lineStart)) : undefined;
+      const lineCount =
+        typeof args.lineCount === "number" ? Math.max(1, Math.floor(args.lineCount)) : 40;
+      const arrayStart =
+        typeof args.arrayStart === "number" ? Math.max(0, Math.floor(args.arrayStart)) : undefined;
+      const arrayCount =
+        typeof args.arrayCount === "number" ? Math.max(1, Math.floor(args.arrayCount)) : 20;
 
       // ── Write mode
       if (key !== undefined && content !== undefined) {
@@ -83,7 +130,7 @@ export const makeRecallHandler =
       const store = yield* Ref.get(storeRef);
 
       // ── Search mode
-      if (query !== undefined) {
+      if (query !== undefined && key === undefined) {
         const terms = query.toLowerCase().split(/\s+/).filter((t) => t.length > 2);
         if (terms.length === 0) return { query, matches: [], totalMatches: 0 };
 
@@ -108,6 +155,88 @@ export const makeRecallHandler =
       if (key !== undefined) {
         const value = store.get(key);
         if (value === undefined) return { found: false, key };
+
+        // JSON array slice mode for large structured payloads
+        if (arrayStart !== undefined) {
+          try {
+            const parsed = JSON.parse(value) as unknown;
+            if (!Array.isArray(parsed)) {
+              return { found: true, key, mode: "array", error: "Stored value is not a JSON array" };
+            }
+            const items = parsed.slice(arrayStart, arrayStart + arrayCount);
+            const totalItems = parsed.length;
+            const nextArrayStart = arrayStart + items.length;
+            return {
+              found: true,
+              key,
+              mode: "array",
+              items,
+              totalItems,
+              arrayStart,
+              arrayCount: items.length,
+              hasMore: nextArrayStart < totalItems,
+              nextArrayStart,
+            };
+          } catch {
+            return { found: true, key, mode: "array", error: "Stored value is not valid JSON" };
+          }
+        }
+
+        // Line-range mode for large text payloads
+        if (lineStart !== undefined) {
+          const lines = value.split("\n");
+          const segmentLines = lines.slice(lineStart, lineStart + lineCount);
+          const nextLineStart = lineStart + segmentLines.length;
+          return {
+            found: true,
+            key,
+            mode: "lines",
+            content: segmentLines.join("\n"),
+            totalLines: lines.length,
+            lineStart,
+            lineCount: segmentLines.length,
+            hasMore: nextLineStart < lines.length,
+            nextLineStart,
+          };
+        }
+
+        // Character-range mode for large binary-ish / dense text payloads
+        if (start !== undefined) {
+          const segment = value.slice(start, start + maxChars);
+          const nextStart = start + segment.length;
+          return {
+            found: true,
+            key,
+            mode: "chars",
+            content: segment,
+            totalChars: value.length,
+            start,
+            maxChars: segment.length,
+            hasMore: nextStart < value.length,
+            nextStart,
+          };
+        }
+
+        // In-entry keyword search mode (key + query)
+        if (query !== undefined) {
+          const q = query.toLowerCase().trim();
+          if (!q) return { found: true, key, mode: "in-entry-search", matches: [], totalMatches: 0 };
+          const lines = value.split("\n");
+          const matches = lines
+            .map((line, idx) => ({ lineNumber: idx, line }))
+            .filter((m) => m.line.toLowerCase().includes(q));
+          const limited = matches.slice(0, 50);
+          return {
+            found: true,
+            key,
+            mode: "in-entry-search",
+            query,
+            matches: limited,
+            totalMatches: matches.length,
+            truncated: matches.length > limited.length,
+          };
+        }
+
         const returnFull = full || value.length <= autoFullThreshold;
         if (returnFull) return { key, content: value, bytes: value.length, truncated: false };
         return { key, preview: value.slice(0, previewLength), bytes: value.length, truncated: true };

@@ -225,6 +225,40 @@ function normalizeObservation(toolName: string, result: string): string {
       return parsed.content;
     }
 
+    if (toolName === "shell-execute" && typeof parsed === "object" && parsed !== null) {
+      const shell = parsed as {
+        output?: unknown;
+        fullOutput?: unknown;
+        stderr?: unknown;
+        fullStderr?: unknown;
+        exitCode?: unknown;
+      };
+
+      const mainOutput =
+        typeof shell.fullOutput === "string"
+          ? shell.fullOutput
+          : typeof shell.output === "string"
+            ? shell.output
+            : "";
+      const errOutput =
+        typeof shell.fullStderr === "string"
+          ? shell.fullStderr
+          : typeof shell.stderr === "string"
+            ? shell.stderr
+            : "";
+      const exitCode =
+        typeof shell.exitCode === "number" ? shell.exitCode : undefined;
+
+      if (mainOutput.trim().length > 0) {
+        if (exitCode !== undefined && exitCode !== 0 && errOutput.trim().length > 0) {
+          return `${mainOutput}\n\n[stderr]\n${errOutput}`;
+        }
+        return mainOutput;
+      }
+
+      if (errOutput.trim().length > 0) return errOutput;
+    }
+
     if (typeof parsed.subAgentName === "string" && typeof parsed.summary === "string") {
       const icon = parsed.success ? "✓" : "✗";
       const name = parsed.subAgentName;

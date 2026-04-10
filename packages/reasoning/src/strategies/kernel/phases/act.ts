@@ -31,6 +31,17 @@ import {
 import { planNextMoveBatches } from "../utils/tool-utils.js";
 import { checkToolCall, defaultGuards, META_TOOL_SET } from "./guard.js";
 
+/** Observation is a compressed preview that points at scratchpad storage — model must recall before synthesizing. */
+function observationReferencesStoredOverflow(content: string): boolean {
+  return (
+    content.includes("[STORED:") &&
+    content.includes("_tool_result_") &&
+    (content.includes("full text is stored") ||
+      content.includes("full data is stored") ||
+      content.includes("full object is stored"))
+  );
+}
+
 // ─── Meta-Tool Registry ───────────────────────────────────────────────────────
 
 type MetaToolResult = { readonly content: string; readonly success: boolean };
@@ -138,6 +149,14 @@ export function handleActing(
       // Meta-tool dedup tracking — updated per tool call, written to state at the end.
       let lastMetaToolCall: string | undefined = state.lastMetaToolCall;
       let consecutiveMetaToolCount: number = state.consecutiveMetaToolCount ?? 0;
+
+      // `recall` reads scratchpadStoreRef (see tool-capabilities registration). Large tool
+      // results are auto-stored under `_tool_result_*` during compression — they must land in
+      // that same Map, not only KernelState.scratchpad, or recall(key) returns found:false.
+      const sharedScratchpad = yield* Ref.get(scratchpadStoreRef);
+      for (const [k, v] of state.scratchpad) {
+        sharedScratchpad.set(k, v);
+      }
 
       const plannedBatches = planNextMoveBatches(
         pendingNativeCalls,
@@ -370,7 +389,7 @@ export function handleActing(
                   batchCall,
                   input.agentId ?? "reasoning-agent",
                   input.sessionId ?? "reasoning-session",
-                  { compression, scratchpad: state.scratchpad as Map<string, string> },
+                  { compression, scratchpad: sharedScratchpad },
                 );
                 const durationMs = Date.now() - startMs;
                 return {
@@ -484,7 +503,7 @@ export function handleActing(
           tc,
           input.agentId ?? "reasoning-agent",
           input.sessionId ?? "reasoning-session",
-          { compression, scratchpad: state.scratchpad as Map<string, string> },
+          { compression, scratchpad: sharedScratchpad },
         );
         const toolDurationMs = Date.now() - toolStartMs;
 
@@ -618,12 +637,19 @@ export function handleActing(
           return [...prior, assistantMsg, ...toolResultMessages, progressMsg];
         }
 
-        // All required tools called — tell model to finish
+        // All required tools called — tell model to finish (but not while previews still hide data behind recall)
         if (reqTools.length > 0) {
-          const finishMsg: KernelMessage = {
-            role: "user",
-            content: "All required tools have been called. Synthesize the results and provide your final answer.",
-          };
+          const overflowPreview = toolResultMessages.some(
+            (m) => typeof m.content === "string" && observationReferencesStoredOverflow(m.content),
+          );
+          const recallAvailable = (input.allToolSchemas ?? input.availableToolSchemas ?? []).some(
+            (s) => s.name === "recall",
+          );
+          const finishText =
+            overflowPreview && recallAvailable
+              ? "Required tool calls are satisfied. The observations above are compressed previews; the real command output is stored under keys like _tool_result_1. Before summarizing, call recall(\"<that-key>\", full: true) for each key shown in the [STORED: …] header. Do not invent CLI flags, subcommands, or options — only report text you retrieved via recall."
+              : "All required tools have been called. Synthesize the results and provide your final answer.";
+          const finishMsg: KernelMessage = { role: "user", content: finishText };
           return [...prior, assistantMsg, ...toolResultMessages, finishMsg];
         }
 

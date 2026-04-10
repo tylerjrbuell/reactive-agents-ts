@@ -30,7 +30,11 @@ export { checkNli } from "./layers/nli.js";
 export { checkHallucination, checkHallucinationLLM, extractClaims } from "./layers/hallucination-detection.js";
 
 // ─── Service ───
-export { VerificationService, VerificationServiceLive } from "./verification-service.js";
+export {
+  VerificationService,
+  VerificationServiceLive,
+  makeVerificationService,
+} from "./verification-service.js";
 
 // ─── Runtime ───
-export { createVerificationLayer } from "./runtime.js";
+export { createVerificationLayer, createVerificationLayerWithRuntimeLlm } from "./runtime.js";

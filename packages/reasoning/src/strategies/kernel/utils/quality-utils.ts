@@ -13,14 +13,15 @@
  */
 export function isSatisfied(text: string): boolean {
   const trimmed = text.trim();
-  // Direct match: "SATISFIED:" or "SATISFIED " at line start (case-insensitive)
-  if (/^satisfied[:\s]/im.test(trimmed)) return true;
-  // Common LLM patterns: "Status: Satisfied", "\nSatisfied:", "Result: SATISFIED"
-  if (/(?:^|\n)\s*(?:status|result|verdict|assessment)?\s*:?\s*satisfied[:\s]/im.test(trimmed)) return true;
-  // Thinking-model fallback: verdict may be buried after analysis. Scan full text
-  // for "SATISFIED:" that is NOT preceded by "UN" on the same word boundary.
-  // Must NOT match "UNSATISFIED".
-  if (/(?<![a-z])satisfied\s*:/im.test(trimmed) && !/unsatisfied/im.test(trimmed)) return true;
+  // Strict guard: if explicit UNSATISFIED appears anywhere, do not accept SATISFIED.
+  if (/\bunsatisfied\b/im.test(trimmed)) return false;
+
+  // Prefer explicit verdict labels.
+  const verdictPattern = /(?:^|\n)\s*(?:status|result|verdict|assessment)?\s*:?\s*satisfied\b[:\s]/gim;
+  if (verdictPattern.test(trimmed)) return true;
+
+  // Legacy fallback: tolerate buried "SATISFIED:" after analysis blocks.
+  if (/(?<![a-z])satisfied\s*:/im.test(trimmed)) return true;
   return false;
 }
 

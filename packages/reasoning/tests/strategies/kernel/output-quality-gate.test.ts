@@ -4,6 +4,7 @@ import { Effect, Layer } from "effect";
 import { LLMService, TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 import { runKernel, assembleDeliverable } from "../../../src/strategies/kernel/kernel-runner.js";
 import {
+  initialKernelState,
   transitionState,
   type KernelState,
   type ThoughtKernel,
@@ -152,5 +153,29 @@ describe("output quality gate", () => {
     expect(state.meta.terminatedBy).toBe("harness_deliverable");
     // The harness should have assembled the tool artifacts
     expect(state.output).toContain("BTC price");
+  });
+
+  it("assembleDeliverable resolves STORED previews via scratchpad for harness output", () => {
+    const key = "_tool_result_1";
+    const fullText = "Usage: rax agent create\n  --name string    Agent display name";
+    const preview = `[STORED: ${key} | shell-execute]\n(banner omitted)\n...`;
+    const obs = makeStep("observation", preview, {
+      observationResult: {
+        success: true,
+        toolName: "shell-execute",
+        displayText: "preview",
+        category: "shell-execute" as const,
+        resultKind: "data" as const,
+        preserveOnCompaction: false,
+      },
+    });
+    const base = initialKernelState({ ...defaultOptions, taskId: "t1" });
+    const st = transitionState(base, {
+      steps: [obs],
+      toolsUsed: new Set(["shell-execute"]),
+      scratchpad: new Map([[key, fullText]]),
+    });
+    expect(assembleDeliverable(st)).toContain("Usage: rax agent create");
+    expect(assembleDeliverable(st)).toContain("--name string");
   });
 });
