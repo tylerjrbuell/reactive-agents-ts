@@ -44,6 +44,9 @@ export class ReasoningService extends Context.Tag("ReasoningService")<
       readonly strategy?: ReasoningStrategy;
       /** Context profile for model-adaptive context engineering */
       readonly contextProfile?: Partial<ContextProfile>;
+      /** LLM provider name (e.g. "ollama", "anthropic") — used to auto-derive default
+       *  context profile tier when no explicit contextProfile.tier is set. */
+      readonly providerName?: string;
       /** Custom system prompt for steering agent behavior */
       readonly systemPrompt?: string;
       readonly taskId?: string;

@@ -415,6 +415,12 @@ export function handleActing(
               }
             }
 
+            if (result.execResult.success) {
+              for (const delegatedTool of result.execResult.delegatedToolsUsed ?? []) {
+                newToolsUsed.add(delegatedTool);
+              }
+            }
+
             let obsContent = result.execResult.content;
             if (!result.execResult.success) {
               const recovery = adapter.errorRecovery?.({
@@ -429,7 +435,10 @@ export function handleActing(
             }
 
             const obsStep = makeStep("observation", obsContent, {
-              observationResult: makeObservationResult(result.toolName, result.execResult.success, obsContent),
+              storedKey: result.execResult.storedKey,
+              observationResult: makeObservationResult(result.toolName, result.execResult.success, obsContent, {
+                delegatedToolsUsed: result.execResult.delegatedToolsUsed,
+              }),
             });
 
             yield* hooks.onObservation(
@@ -447,7 +456,12 @@ export function handleActing(
 
         // ── Guard pipeline (blocked / duplicate / side-effect / repetition / meta-dedup) ──
         const guardCheck = checkToolCall(defaultGuards);
-        const guardOutcome = guardCheck(tc, transitionState(state, { steps: allSteps, lastMetaToolCall, consecutiveMetaToolCount }), input);
+        const guardOutcome = guardCheck(tc, transitionState(state, {
+          steps: allSteps,
+          toolsUsed: newToolsUsed,
+          lastMetaToolCall,
+          consecutiveMetaToolCount,
+        }), input);
         if (!guardOutcome.pass) {
           const actionStep = makeStep("action", `${tc.name}(${JSON.stringify(tc.arguments)})`, {
             toolCall: { id: tc.id, name: tc.name, arguments: tc.arguments },
@@ -517,6 +531,12 @@ export function handleActing(
           };
         }
 
+        if (execResult.success) {
+          for (const delegatedTool of execResult.delegatedToolsUsed ?? []) {
+            newToolsUsed.add(delegatedTool);
+          }
+        }
+
         // errorRecovery hook — inject guidance when a tool fails (404, timeout, etc.)
         let obsContent = execResult.content;
         if (!execResult.success) {
@@ -532,7 +552,10 @@ export function handleActing(
         }
 
         const obsStep = makeStep("observation", obsContent, {
-          observationResult: makeObservationResult(tc.name, execResult.success, obsContent),
+          storedKey: execResult.storedKey,
+          observationResult: makeObservationResult(tc.name, execResult.success, obsContent, {
+            delegatedToolsUsed: execResult.delegatedToolsUsed,
+          }),
         });
 
         yield* hooks.onObservation(

@@ -91,7 +91,7 @@ export function detectLoop(
     let consecutiveThoughts = 0;
     for (let i = steps.length - 1; i >= 0; i--) {
       if (steps[i]!.type === "thought") consecutiveThoughts++;
-      else break; // any non-thought (action/observation) resets the streak
+      else if (steps[i]!.type === "action") break; // only a real tool call resets the streak
     }
     if (consecutiveThoughts >= maxConsecutiveThoughts) {
       loopMsg = `Loop detected: ${consecutiveThoughts} consecutive thinking steps with no tool calls.\n` +

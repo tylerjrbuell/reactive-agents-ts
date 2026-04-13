@@ -51,6 +51,8 @@ const RUNNER_META_TOOLS = new Set(["final-answer", "task-complete", "context-sta
 
 /** Keys embedded in compressed tool observations (`[STORED: _tool_result_N | tool]`) */
 const STORED_TOOL_KEY_RE = /\[STORED:\s*(_tool_result_\d+)\s*\|/g;
+/** Keys referenced by compression hints (e.g. `recall("_tool_result_5", ...)`). */
+const RECALL_TOOL_KEY_RE = /recall\("(_tool_result_\d+)"/g;
 
 /**
  * When an observation is a compressed preview, replace it with full text from the kernel
@@ -59,8 +61,13 @@ const STORED_TOOL_KEY_RE = /\[STORED:\s*(_tool_result_\d+)\s*\|/g;
 function resolveStoredToolObservation(
   content: string,
   scratchpad: ReadonlyMap<string, string>,
+  preferredKey?: string,
 ): string {
-  const keys = [...new Set([...content.matchAll(STORED_TOOL_KEY_RE)].map((m) => m[1]!))];
+  const keys = [...new Set([
+    ...(preferredKey ? [preferredKey] : []),
+    ...[...content.matchAll(STORED_TOOL_KEY_RE)].map((m) => m[1]!),
+    ...[...content.matchAll(RECALL_TOOL_KEY_RE)].map((m) => m[1]!),
+  ])];
   if (keys.length === 0) return content;
   const payloads = keys
     .map((k) => scratchpad.get(k))
@@ -85,21 +92,7 @@ function resolveStoredToolObservation(
  * guard-block text patterns.
  */
 export function assembleDeliverable(state: KernelState): string {
-  const artifacts: string[] = [];
-  for (const step of state.steps) {
-    if (step.type !== "observation") continue;
-    const r = step.metadata?.observationResult as
-      { success?: boolean; toolName?: string } | undefined;
-    if (!r?.success || !r.toolName) continue;
-    if (RUNNER_META_TOOLS.has(r.toolName)) continue;
-    if (!state.toolsUsed.has(r.toolName)) continue;
-    const raw = (step.content ?? "").trim();
-    // Skip guard-block observations that leaked through as success=true
-    if (raw.startsWith("\u26A0\uFE0F") || raw.includes("[Already done")) continue;
-    const content = resolveStoredToolObservation(raw, state.scratchpad);
-    if (content.length > 20) artifacts.push(content);
-  }
-
+  const artifacts = collectDeliverableArtifacts(state);
   if (artifacts.length > 0) return artifacts.join("\n\n");
 
   // Fallback: use the last substantive thought
@@ -107,6 +100,70 @@ export function assembleDeliverable(state: KernelState): string {
     .reverse()
     .find((s) => s.type === "thought" && (s.content ?? "").length > 20);
   return lastThought?.content ?? "Task complete.";
+}
+
+function collectDeliverableArtifacts(state: KernelState): string[] {
+  const artifacts: string[] = [];
+  for (const step of state.steps) {
+    const content = getDeliverableObservationContent(state, step);
+    if (content) artifacts.push(content);
+  }
+
+  return artifacts;
+}
+
+function countDeliverableCandidates(state: KernelState): number {
+  let count = 0;
+  for (const step of state.steps) {
+    if (getDeliverableObservationContent(state, step) !== null) count++;
+  }
+
+  return count;
+}
+
+function getDeliverableObservationContent(
+  state: KernelState,
+  step: KernelState["steps"][number],
+): string | null {
+  if (step.type !== "observation") return null;
+
+  const raw = (step.content ?? "").trim();
+  if (raw.length === 0) return null;
+  if (raw.startsWith("\u26A0\uFE0F") || raw.includes("[Already done")) return null;
+
+  const observationResult = step.metadata?.observationResult as
+    | { success?: boolean; toolName?: string }
+    | undefined;
+
+  if (observationResult) {
+    if (observationResult.success !== true) return null;
+    if (observationResult.toolName && RUNNER_META_TOOLS.has(observationResult.toolName)) return null;
+    if (observationResult.toolName && !state.toolsUsed.has(observationResult.toolName)) return null;
+  } else {
+    const hasRealUsedTool = [...state.toolsUsed].some((toolName) => !RUNNER_META_TOOLS.has(toolName));
+    if (!hasRealUsedTool) return null;
+  }
+
+  const storedKey = typeof step.metadata?.storedKey === "string" ? step.metadata.storedKey : undefined;
+  return resolveStoredToolObservation(raw, state.scratchpad, storedKey);
+}
+
+function buildEffectiveToolsUsed(state: KernelState): Set<string> {
+  const effective = new Set(state.toolsUsed);
+  for (const step of state.steps) {
+    if (step.type !== "observation") continue;
+    const observationResult = step.metadata?.observationResult as {
+      success?: boolean;
+      delegatedToolsUsed?: readonly string[];
+    } | undefined;
+    if (observationResult?.success !== true || !Array.isArray(observationResult.delegatedToolsUsed)) continue;
+    for (const toolName of observationResult.delegatedToolsUsed) {
+      if (typeof toolName === "string" && toolName.length > 0) {
+        effective.add(toolName);
+      }
+    }
+  }
+  return effective;
 }
 
 // ── Tier-aware guard thresholds ───────────────────────────────────────────────
@@ -303,9 +360,15 @@ export function runKernel(
     }
 
     // ── 2. Build profile ─────────────────────────────────────────────────────
+    // Ollama providers default to "local" tier (maxSameTool=2) unless an
+    // explicit contextProfile.tier has been set by the caller.
+    const defaultTier =
+      effectiveInput.providerName === "ollama" && !effectiveInput.contextProfile?.tier
+        ? "local"
+        : "mid";
     const profile: ContextProfile = effectiveInput.contextProfile
-      ? ({ ...CONTEXT_PROFILES["mid"], ...effectiveInput.contextProfile } as ContextProfile)
-      : CONTEXT_PROFILES["mid"];
+      ? ({ ...CONTEXT_PROFILES[defaultTier], ...effectiveInput.contextProfile } as ContextProfile)
+      : CONTEXT_PROFILES[defaultTier];
 
     // ── 3. Build hooks ───────────────────────────────────────────────────────
     const hooks = buildKernelHooks(eventBus);
@@ -395,6 +458,7 @@ export function runKernel(
     // Harness stall tracking — counts consecutive iterations with no new non-meta tool results.
     // When the model has gathered artifacts but stalls, the harness delivers accumulated data.
     let consecutiveStalled = 0;
+    let prevArtifactCount = 0;
 
     // Failure recovery redirects — when a tool path fails and alternatives exist,
     // force at least a small number of alternate attempts before harness delivery.
@@ -478,15 +542,15 @@ export function runKernel(
       prevToolsUsed = new Set(state.toolsUsed);
 
       // ── Harness artifact stall tracking ─────────────────────────────────
-      // Track whether this iteration produced new non-meta tool results.
+      // Track whether this iteration produced new non-meta tool observations.
       // The harness owns completion: when the model stalls but has gathered
       // useful data, it assembles and delivers the accumulated artifacts.
-      const nonMetaGains = toolsThisStep.filter((t) => !RUNNER_META_TOOLS.has(t));
-      consecutiveStalled = nonMetaGains.length > 0 ? 0 : consecutiveStalled + 1;
+      const totalArtifacts = countDeliverableCandidates(state);
+      const artifactDelta = Math.max(0, totalArtifacts - prevArtifactCount);
+      consecutiveStalled = artifactDelta > 0 ? 0 : consecutiveStalled + 1;
+      prevArtifactCount = totalArtifacts;
 
-      const totalArtifacts = [...state.toolsUsed].filter((t) => !RUNNER_META_TOOLS.has(t)).length;
       if (
-        totalArtifacts > 0 &&
         consecutiveStalled >= 2 &&
         state.iteration >= 2 &&
         state.status !== "done" &&
@@ -519,23 +583,26 @@ export function runKernel(
           continue;
         }
 
-        yield* Effect.log(
-          `[harness-deliverable] Assembling output from ${totalArtifacts} tool artifacts after ${consecutiveStalled} stalled iterations`,
-        );
-        state = transitionState(state, {
-          status: "done",
-          output: assembleDeliverable(state),
-          meta: { ...state.meta, terminatedBy: "harness_deliverable" },
-        });
-        break;
+        if (totalArtifacts > 0) {
+          yield* Effect.log(
+            `[harness-deliverable] Assembling output from ${totalArtifacts} tool artifacts after ${consecutiveStalled} stalled iterations`,
+          );
+          state = transitionState(state, {
+            status: "done",
+            output: assembleDeliverable(state),
+            meta: { ...state.meta, terminatedBy: "harness_deliverable" },
+          });
+          break;
+        }
       }
 
       // ── Intelligent Context Synthesis (before thinking step) ──
       // Produces a steering nudge appended to the FC thread — never replaces it.
+      const effectiveToolsUsed = buildEffectiveToolsUsed(state);
       const icsResult = yield* coordinateICS(state, {
         task: currentInput.task,
         requiredTools: currentInput.requiredTools ?? [],
-        toolsUsed: state.toolsUsed,
+        toolsUsed: effectiveToolsUsed,
         availableTools: (currentInput.availableToolSchemas ?? []) as readonly { name: string; description: string; parameters: unknown[] }[],
         tier: profile.tier ?? "mid",
         iteration: state.iteration,
@@ -573,7 +640,7 @@ export function runKernel(
 
         if (shouldReclassify) {
           // Build enriched task description with current execution context
-          const toolsSoFar = [...state.toolsUsed].filter((t) => !RUNNER_META_TOOLS.has(t));
+          const toolsSoFar = [...effectiveToolsUsed].filter((t) => !RUNNER_META_TOOLS.has(t));
           const recentObs = state.steps
             .filter((s) => s.type === "observation")
             .slice(-3)
@@ -783,6 +850,7 @@ export function runKernel(
               noProgressIterations = 0;
               reclassifyCount = 0;
               consecutiveStalled = 0;
+              prevArtifactCount = 0;
               failureRecoveryRedirects = 0;
 
               // Continue the outer while loop with fresh state
@@ -792,29 +860,29 @@ export function runKernel(
 
           // Before failing: if the model has gathered artifacts, succeed with them.
           // Loops with data → deliver. Loops without data → fail.
-          const loopArtifactCount = [...state.toolsUsed].filter((t) => !RUNNER_META_TOOLS.has(t)).length;
+          const recovery = getToolFailureRecovery(state, currentInput);
+          const shouldNudgeRecovery =
+            recovery.failedUnresolved.length > 0 &&
+            failureRecoveryRedirects < maxFailureRecoveryRedirects;
+
+          if (shouldNudgeRecovery) {
+            failureRecoveryRedirects++;
+            const nextPath = recovery.alternativeCandidates[0] ?? recovery.failedUnresolved[0] ?? "an available tool";
+            const guidance =
+              recovery.alternativeCandidates.length > 0
+                ? `Recovery required: loop detected after failed tool path (${recovery.failedUnresolved.join(", ")}). Try alternate path ${nextPath} before completion. (${failureRecoveryRedirects}/${maxFailureRecoveryRedirects})`
+                : `Recovery required: loop detected after failed tool path (${recovery.failedUnresolved.join(", ")}). Retry ${nextPath} with corrected arguments before completion. (${failureRecoveryRedirects}/${maxFailureRecoveryRedirects})`;
+            state = transitionState(state, {
+              status: "thinking",
+              steps: [...state.steps, makeStep("observation", `⚠️ ${guidance}`)],
+              steeringNudge: guidance,
+              error: null,
+            });
+            continue;
+          }
+
+          const loopArtifactCount = countDeliverableCandidates(state);
           if (loopArtifactCount > 0) {
-            const recovery = getToolFailureRecovery(state, currentInput);
-            const shouldNudgeRecovery =
-              recovery.failedUnresolved.length > 0 &&
-              failureRecoveryRedirects < maxFailureRecoveryRedirects;
-
-            if (shouldNudgeRecovery) {
-              failureRecoveryRedirects++;
-              const nextPath = recovery.alternativeCandidates[0] ?? recovery.failedUnresolved[0] ?? "an available tool";
-              const guidance =
-                recovery.alternativeCandidates.length > 0
-                  ? `Recovery required: loop detected after failed tool path (${recovery.failedUnresolved.join(", ")}). Try alternate path ${nextPath} before completion. (${failureRecoveryRedirects}/${maxFailureRecoveryRedirects})`
-                  : `Recovery required: loop detected after failed tool path (${recovery.failedUnresolved.join(", ")}). Retry ${nextPath} with corrected arguments before completion. (${failureRecoveryRedirects}/${maxFailureRecoveryRedirects})`;
-              state = transitionState(state, {
-                status: "thinking",
-                steps: [...state.steps, makeStep("observation", `⚠️ ${guidance}`)],
-                steeringNudge: guidance,
-                error: null,
-              });
-              continue;
-            }
-
             yield* Effect.log(
               `[harness-deliverable] Loop detected but ${loopArtifactCount} artifacts gathered — delivering instead of failing`,
             );
@@ -839,7 +907,7 @@ export function runKernel(
       // When the kernel declares "done" but required tools haven't been called,
       // redirect back to "thinking" with a feedback step — up to the retry limit.
       if (state.status === "done" && requiredTools.length > 0) {
-        const missingTools = requiredTools.filter((t) => !state.toolsUsed.has(t));
+        const missingTools = requiredTools.filter((t) => !buildEffectiveToolsUsed(state).has(t));
         if (missingTools.length > 0) {
           requiredToolRedirects++;
           if (requiredToolRedirects > maxRequiredToolRetries) {
@@ -877,11 +945,12 @@ export function runKernel(
     // Exception: harness_deliverable exits are deliberate — the harness determined
     // enough data was gathered despite some tools not being called.
     if (state.status === "done" && requiredTools.length > 0) {
-      const missingTools = requiredTools.filter((t) => !state.toolsUsed.has(t));
+      const effectiveToolsUsed = buildEffectiveToolsUsed(state);
+      const missingTools = requiredTools.filter((t) => !effectiveToolsUsed.has(t));
       if (missingTools.length > 0) {
         const visibleTools = (currentInput.availableToolSchemas ?? []).map((t) => t.name);
         const allKnownTools = (currentInput.allToolSchemas ?? currentInput.availableToolSchemas ?? []).map((t) => t.name);
-        const calledTools = [...state.toolsUsed];
+        const calledTools = [...effectiveToolsUsed];
         const terminatedBy = String(state.meta.terminatedBy ?? "unknown");
         state = transitionState(state, {
           status: "failed",

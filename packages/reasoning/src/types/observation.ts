@@ -30,6 +30,7 @@ export const ObservationResultSchema = Schema.Struct({
   category: ObservationCategory,
   resultKind: ResultKind,
   preserveOnCompaction: Schema.Boolean,
+  delegatedToolsUsed: Schema.optional(Schema.Array(Schema.String)),
 });
 export type ObservationResult = typeof ObservationResultSchema.Type;
 

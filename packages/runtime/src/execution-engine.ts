@@ -1138,6 +1138,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       allToolSchemas?: readonly { name: string; description: string; parameters: readonly { name: string; type: string; description: string; required: boolean }[] }[];
                       strategy?: string;
                       contextProfile?: Partial<ContextProfile>;
+                      providerName?: string;
                       systemPrompt?: string;
                       taskId?: string;
                       resultCompression?: { budget?: number; previewItems?: number; autoStore?: boolean; codeTransform?: boolean };
@@ -1203,6 +1204,19 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
 
                   // Snapshot the full unfiltered schemas for the completion guard
                   const allToolSchemas = [...availableToolSchemas];
+
+                  // ── allowedTools prompt filtering (IC-6) ──
+                  // When allowedTools is specified, restrict the schemas shown in the prompt
+                  // to only those tools. Without this, ALL registered tools (including meta-tools
+                  // like find/brief/recall) appear in the system prompt even when the caller
+                  // narrowed the allowlist — the model then attempts to call them and receives
+                  // guard rejections, inflating iteration counts.
+                  // allToolSchemas above retains the full set for the completion guard.
+                  if (effectiveAllowedTools.length > 0) {
+                    availableToolSchemas = availableToolSchemas.filter(ts =>
+                      effectiveAllowedTools.includes(ts.name)
+                    );
+                  }
 
                   // ── Adaptive tool filtering ──
                   // When LLM classification produced relevant tools, use those.
@@ -1410,6 +1424,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         allToolSchemas,
                         strategy: effectiveStrategy,
                         contextProfile: config.contextProfile,
+                        providerName: String(config.provider ?? ""),
                         systemPrompt: config.systemPrompt,
                         taskId: c.taskId,
                         resultCompression: config.resultCompression,
@@ -1521,6 +1536,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                           allToolSchemas,
                           strategy: ctx.selectedStrategy ?? "reactive",
                           contextProfile: config.contextProfile,
+                          providerName: String(config.provider ?? ""),
                           systemPrompt: config.systemPrompt,
                           taskId: ctx.taskId,
                           resultCompression: config.resultCompression,
@@ -1578,6 +1594,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                           allToolSchemas,
                           strategy: ctx.selectedStrategy ?? "reactive",
                           contextProfile: config.contextProfile,
+                          providerName: String(config.provider ?? ""),
                           systemPrompt: config.systemPrompt,
                           taskId: ctx.taskId,
                           resultCompression: config.resultCompression,
@@ -1639,6 +1656,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                           availableTools: [],
                           strategy: "reactive",
                           contextProfile: config.contextProfile,
+                          providerName: String(config.provider ?? ""),
                           systemPrompt: undefined,
                           taskId: ctx.taskId,
                           agentId: config.agentId,
@@ -1684,6 +1702,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                           allToolSchemas,
                           strategy: ctx.selectedStrategy ?? "reactive",
                           contextProfile: config.contextProfile,
+                          providerName: String(config.provider ?? ""),
                           systemPrompt: config.systemPrompt,
                           taskId: ctx.taskId,
                           resultCompression: config.resultCompression,
@@ -3851,13 +3870,47 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
             // Subscribe to ReasoningIterationProgress events — push them as IterationProgress stream events
             if (eb) {
               yield* eb.on("ReasoningIterationProgress", (event) =>
-                Queue.offer(queue, {
-                  _tag: "IterationProgress",
-                  iteration: event.iteration,
-                  maxIterations: event.maxIterations,
-                  toolsCalledThisStep: event.toolsThisStep,
-                  status: `iteration ${event.iteration}/${event.maxIterations}`,
-                } as AgentStreamEvent).pipe(Effect.catchAll(() => Effect.void)),
+                Effect.gen(function* () {
+                  const eventTaskId = String((event as { taskId?: string }).taskId ?? "");
+                  if (eventTaskId !== String(task.id)) {
+                    return;
+                  }
+                  yield* Queue.offer(queue, {
+                    _tag: "IterationProgress",
+                    iteration: event.iteration,
+                    maxIterations: event.maxIterations,
+                    toolsCalledThisStep: event.toolsThisStep,
+                    status: `iteration ${event.iteration}/${event.maxIterations}`,
+                  } as AgentStreamEvent).pipe(Effect.catchAll(() => Effect.void));
+                }),
+              ).pipe(Effect.catchAll(() => Effect.void));
+            }
+
+            // Full density: emit live thought text for each reasoning step.
+            if (eb && density === "full") {
+              yield* eb.on("ReasoningStepCompleted", (event) =>
+                Effect.gen(function* () {
+                  const eventTaskId = String((event as { taskId?: string }).taskId ?? "");
+                  if (eventTaskId !== String(task.id)) {
+                    return;
+                  }
+                  const thought =
+                    typeof (event as { thought?: unknown }).thought === "string"
+                      ? ((event as { thought?: string }).thought ?? "").trim()
+                      : "";
+                  if (thought.length === 0) {
+                    return;
+                  }
+                  const iteration =
+                    typeof (event as { step?: unknown }).step === "number"
+                      ? ((event as { step?: number }).step ?? 0)
+                      : 0;
+                  yield* Queue.offer(queue, {
+                    _tag: "ThoughtEmitted",
+                    content: thought,
+                    iteration,
+                  } as AgentStreamEvent).pipe(Effect.catchAll(() => Effect.void));
+                }),
               ).pipe(Effect.catchAll(() => Effect.void));
             }
 

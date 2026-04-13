@@ -30,6 +30,7 @@ import type { ToolCallSpec } from "@reactive-agents/tools";
 export interface ToolExecutionResult {
   readonly content: string;
   readonly observationResult: ObservationResult;
+  readonly delegatedToolsUsed?: readonly string[];
   /**
    * When the tool result was compressed and auto-stored in the scratchpad,
    * this is the key under which the full result was saved (e.g. "_tool_result_1").
@@ -58,11 +59,32 @@ export function makeObservationResult(
   toolName: string,
   success: boolean,
   displayText: string,
+  options?: { readonly delegatedToolsUsed?: readonly string[] },
 ): ObservationResult {
   const category = categorizeToolName(toolName);
   const resultKind = deriveResultKind(category, success);
   const preserveOnCompaction = !success || category === "error";
-  return { success, toolName, displayText, category, resultKind, preserveOnCompaction };
+  return {
+    success,
+    toolName,
+    displayText,
+    category,
+    resultKind,
+    preserveOnCompaction,
+    ...(options?.delegatedToolsUsed && options.delegatedToolsUsed.length > 0
+      ? { delegatedToolsUsed: [...new Set(options.delegatedToolsUsed)] }
+      : {}),
+  };
+}
+
+function extractDelegatedToolsUsed(result: unknown): readonly string[] | undefined {
+  if (typeof result !== "object" || result === null || Array.isArray(result)) return undefined;
+  const delegated = (result as { delegatedToolsUsed?: unknown }).delegatedToolsUsed;
+  if (!Array.isArray(delegated)) return undefined;
+  const toolNames = delegated.filter((toolName): toolName is string =>
+    typeof toolName === "string" && toolName.length > 0,
+  );
+  return toolNames.length > 0 ? [...new Set(toolNames)] : undefined;
 }
 
 /**
@@ -388,6 +410,7 @@ export function executeToolCall(
       })
       .pipe(
         Effect.map((r) => {
+          const delegatedToolsUsed = extractDelegatedToolsUsed(r.result);
           const raw = typeof r.result === "string" ? r.result : JSON.stringify(r.result);
           const normalized = normalizeObservation(toolRequest.tool, raw);
 
@@ -407,7 +430,10 @@ export function executeToolCall(
             const isSuccess = !transformed.startsWith("[Transform error:");
             return {
               content: transformed,
-              observationResult: makeObservationResult(toolRequest.tool, isSuccess, transformed),
+              observationResult: makeObservationResult(toolRequest.tool, isSuccess, transformed, {
+                delegatedToolsUsed,
+              }),
+              delegatedToolsUsed,
             } satisfies ToolExecutionResult;
           }
 
@@ -422,7 +448,10 @@ export function executeToolCall(
           const content = compressed.content;
           return {
             content,
-            observationResult: makeObservationResult(toolRequest.tool, r.success !== false, content),
+            observationResult: makeObservationResult(toolRequest.tool, r.success !== false, content, {
+              delegatedToolsUsed,
+            }),
+            delegatedToolsUsed,
             storedKey: compressed.stored?.key,
           } satisfies ToolExecutionResult;
         }),
@@ -487,7 +516,7 @@ export function executeNativeToolCall(
   agentId: string,
   sessionId: string,
   config?: { compression?: ResultCompressionConfig; scratchpad?: Map<string, string> },
-): Effect.Effect<{ content: string; success: boolean; storedKey?: string }, never> {
+): Effect.Effect<{ content: string; success: boolean; storedKey?: string; delegatedToolsUsed?: readonly string[] }, never> {
   return toolService
     .execute({
       toolName: toolCall.name,
@@ -497,6 +526,7 @@ export function executeNativeToolCall(
     })
     .pipe(
       Effect.map((r) => {
+        const delegatedToolsUsed = extractDelegatedToolsUsed(r.result);
         let content = typeof r.result === "string" ? r.result : JSON.stringify(r.result);
         const success = r.success !== false;
 
@@ -528,7 +558,7 @@ export function executeNativeToolCall(
             .trim();
         }
 
-        return { content, success, storedKey };
+        return { content, success, storedKey, delegatedToolsUsed };
       }),
       Effect.catchAll((e) =>
         Effect.succeed({

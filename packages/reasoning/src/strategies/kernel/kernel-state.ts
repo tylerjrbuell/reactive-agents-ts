@@ -138,6 +138,10 @@ export interface KernelInput {
   readonly temperature?: number;
   readonly agentId?: string;
   readonly sessionId?: string;
+  /** LLM provider name (e.g. "ollama", "anthropic"). Used to derive the default
+   *  context profile tier when no explicit contextProfile.tier is provided.
+   *  Ollama providers default to "local" tier (maxSameTool=2) instead of "mid" (3). */
+  readonly providerName?: string;
   readonly blockedTools?: readonly string[];
   /**
    * Tools that MUST be called before the agent can declare success.

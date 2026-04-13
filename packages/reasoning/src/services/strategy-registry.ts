@@ -34,6 +34,9 @@ export type StrategyFn = (input: {
   readonly taskId?: string;
   readonly resultCompression?: ResultCompressionConfig;
   readonly contextProfile?: Partial<ContextProfile>;
+  /** LLM provider name (e.g. "ollama", "anthropic") — used to auto-derive default
+   *  context profile tier when no explicit contextProfile.tier is set. */
+  readonly providerName?: string;
   readonly agentId?: string;
   readonly sessionId?: string;
   /** Tools that MUST be called before the agent can declare success */

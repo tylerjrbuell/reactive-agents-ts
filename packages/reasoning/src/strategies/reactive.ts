@@ -40,6 +40,9 @@ interface ReactiveInput {
   readonly config: ReasoningConfig;
   /** Model context profile — controls compaction thresholds, verbosity, tool result sizes. */
   readonly contextProfile?: Partial<ContextProfile>;
+  /** LLM provider name (e.g. "ollama", "anthropic") — used to auto-derive default
+   *  context profile tier when no explicit contextProfile.tier is set. */
+  readonly providerName?: string;
   /** Custom system prompt for steering agent behavior */
   readonly systemPrompt?: string;
   /** Task ID for event correlation */
@@ -136,6 +139,7 @@ export const executeReactive = (
       allToolSchemas: capabilitySnapshot.allToolSchemas,
       priorContext,
       contextProfile: input.contextProfile,
+      providerName: input.providerName,
       resultCompression: input.resultCompression,
       temperature:
         input.contextProfile?.temperature ??
