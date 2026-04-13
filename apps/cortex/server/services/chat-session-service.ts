@@ -11,13 +11,35 @@ import {
   getChatTurns,
   updateSessionLastUsed,
   renameSession as renameChatSessionInDb,
+  updateSessionAgentConfig,
   type ChatSessionRow,
   type ChatTurnRow,
 } from "../db/chat-queries.js";
-import { mergeCortexAllowedTools, coerceTaskContextRecord } from "./cortex-agent-config.js";
+import {
+  mergeCortexAllowedTools,
+  coerceTaskContextRecord,
+  normalizeCortexAgentConfig,
+} from "./cortex-agent-config.js";
 import { buildCortexAgent } from "./build-cortex-agent.js";
 import type { BuildCortexAgentParams } from "./build-cortex-agent.js";
 import { buildRunTaskContext } from "./chat-run-context.js";
+
+const VALID_REASONING_STRATEGIES = new Set([
+  "reactive",
+  "plan-execute-reflect",
+  "tree-of-thought",
+  "reflexion",
+  "adaptive",
+]);
+
+const DEFAULT_TOOL_CHAT_PERSONA: NonNullable<BuildCortexAgentParams["persona"]> = {
+  enabled: true,
+  role: "Tool-first problem solver",
+  tone: "technical",
+  traits:
+    "Think step-by-step, then call tools immediately when needed. Avoid repeating the same thought without acting. Prefer clear tool calls with exact schema parameter names.",
+  responseStyle: "structured",
+};
 
 function turnsToChatMessages(turns: ChatTurnRow[]): ChatMessage[] {
   return turns.map((t) => ({
@@ -46,7 +68,8 @@ export class ChatSessionService {
 
   async createSession(opts: { name?: string; agentConfig: Record<string, unknown> }): Promise<string> {
     const stableAgentId = generateTaskId();
-    return createChatSession(this.db, { ...opts, stableAgentId });
+    const normalizedAgentConfig = normalizeCortexAgentConfig(opts.agentConfig);
+    return createChatSession(this.db, { ...opts, agentConfig: normalizedAgentConfig, stableAgentId });
   }
 
   listSessions(): ChatSessionRow[] {
@@ -69,11 +92,24 @@ export class ChatSessionService {
     renameChatSessionInDb(this.db, sessionId, name);
   }
 
+  updateSessionConfig(sessionId: string, configPatch: Record<string, unknown>): void {
+    const row = getChatSession(this.db, sessionId);
+    if (!row) throw new Error(`Chat session ${sessionId} not found`);
+
+    const merged = { ...row.agentConfig, ...configPatch };
+    const normalized = normalizeCortexAgentConfig(merged);
+    const updated = updateSessionAgentConfig(this.db, sessionId, normalized);
+    if (!updated) throw new Error(`Chat session ${sessionId} not found`);
+
+    // Force next turn to rebuild AgentSession with updated config.
+    this.sessions.delete(sessionId);
+  }
+
   async chat(sessionId: string, message: string): Promise<CortexChatResult> {
     const row = getChatSession(this.db, sessionId);
     if (!row) throw new Error(`Chat session ${sessionId} not found`);
 
-    const cfg = row.agentConfig;
+    const cfg = normalizeCortexAgentConfig(row.agentConfig);
     const enableTools = cfg.enableTools === true;
 
     let agentSession = this.sessions.get(sessionId);
@@ -114,8 +150,70 @@ export class ChatSessionService {
     const row = getChatSession(this.db, sessionId);
     if (!row) throw new Error(`Chat session ${sessionId} not found`);
 
-    const cfg = row.agentConfig;
+    const cfg = normalizeCortexAgentConfig(row.agentConfig);
     const stableAgentId = row.stableAgentId;
+    const enableTools = cfg.enableTools === true;
+    const streamReasoningSteps = cfg.streamReasoningSteps === true;
+
+    // Direct conversational path: preserve full session history + run grounding even when tools are off.
+    // We still expose SSE shape so Run Chat and main Chat panel behave consistently.
+    if (!enableTools && !streamReasoningSteps) {
+      let agentSession = this.sessions.get(sessionId);
+      if (!agentSession) {
+        agentSession = await this.buildSession(sessionId, cfg, stableAgentId);
+        this.sessions.set(sessionId, agentSession);
+      }
+
+      appendChatTurn(this.db, { sessionId, role: "user", content: message, tokensUsed: 0 });
+
+      let replyText = "";
+      let tokensUsed = 0;
+      let steps = 0;
+      let toolsUsed: string[] = [];
+      let cost = 0;
+
+      try {
+        const chatReply = await agentSession.chat(message, { useTools: false });
+        replyText = chatReply.message;
+        tokensUsed = chatReply.tokens ?? 0;
+        steps = chatReply.steps ?? 0;
+        toolsUsed = chatReply.toolsUsed ?? [];
+        cost = chatReply.cost ?? 0;
+
+        if (replyText.length > 0) {
+          yield { _tag: "TextDelta", text: replyText };
+        }
+
+        const completedEvent: AgentStreamEvent = {
+          _tag: "StreamCompleted",
+          output: replyText,
+          metadata: {
+            tokensUsed,
+            cost,
+            stepsCount: steps,
+            iterations: steps,
+          } as Record<string, unknown>,
+        };
+        if (toolsUsed.length > 0) {
+          completedEvent.toolSummary = toolsUsed.map((name) => ({ name, calls: 1, avgMs: 0 }));
+        }
+        yield completedEvent;
+      } catch (e) {
+        const cause = e instanceof Error ? e.message : String(e);
+        yield { _tag: "StreamError", cause };
+      } finally {
+        appendChatTurn(this.db, {
+          sessionId,
+          role: "assistant",
+          content: replyText,
+          tokensUsed,
+          ...(toolsUsed && toolsUsed.length > 0 ? { toolsUsed } : {}),
+        });
+        updateSessionLastUsed(this.db, sessionId);
+      }
+
+      return;
+    }
 
     /** Must mirror {@link buildSession} so run-linked desk chat keeps debrief + event context over SSE. */
     const params = this.buildChatAgentParams(sessionId, cfg, stableAgentId, { streaming: true });
@@ -129,7 +227,7 @@ export class ChatSessionService {
     let replyText = "";
 
     try {
-      for await (const event of agent.runStream(message, { density: "tokens" })) {
+      for await (const event of agent.runStream(message, { density: streamReasoningSteps ? "full" : "tokens" })) {
         if (event._tag === "TextDelta") {
           replyText += event.text;
         } else if (event._tag === "StreamCompleted") {
@@ -139,9 +237,10 @@ export class ChatSessionService {
           if (event.toolSummary && event.toolSummary.length > 0) {
             toolsUsed = event.toolSummary.map((t) => t.name);
           }
-          // Final-answer / some paths emit full text on StreamCompleted only (no TextDeltas)
+          // StreamCompleted.output is the authoritative final answer after post-processing
+          // (verification, retries, synthesis). Always prefer it when present.
           const out = typeof event.output === "string" ? event.output.trim() : "";
-          if (!replyText.trim() && out.length > 0) {
+          if (out.length > 0) {
             replyText = out;
           }
         }
@@ -191,6 +290,90 @@ export class ChatSessionService {
     const provider = (agentConfig.provider as string | undefined) ?? "test";
     const enableTools = agentConfig.enableTools === true;
 
+    const rawStrategy = typeof agentConfig.strategy === "string" ? agentConfig.strategy.trim() : "";
+    const configuredStrategy =
+      rawStrategy.length > 0 && VALID_REASONING_STRATEGIES.has(rawStrategy)
+        ? rawStrategy
+        : undefined;
+    const effectiveStrategy = enableTools
+      ? configuredStrategy ?? "plan-execute-reflect"
+      : configuredStrategy;
+
+    const strategySwitchingExplicit =
+      typeof agentConfig.strategySwitching === "boolean" ? agentConfig.strategySwitching : undefined;
+    const runtimeVerificationExplicit =
+      typeof agentConfig.runtimeVerification === "boolean" ? agentConfig.runtimeVerification : undefined;
+    const verificationStepRaw =
+      agentConfig.verificationStep === "reflect" || agentConfig.verificationStep === "none"
+        ? (agentConfig.verificationStep as "reflect" | "none")
+        : undefined;
+    const effectiveVerificationStep = enableTools ? verificationStepRaw ?? "reflect" : verificationStepRaw;
+
+    const personaRaw =
+      agentConfig.persona && typeof agentConfig.persona === "object" && !Array.isArray(agentConfig.persona)
+        ? (agentConfig.persona as Record<string, unknown>)
+        : undefined;
+    const personaRole = typeof personaRaw?.role === "string" ? personaRaw.role.trim() : "";
+    const personaTone = typeof personaRaw?.tone === "string" ? personaRaw.tone.trim() : "";
+    const personaTraits =
+      typeof personaRaw?.traits === "string"
+        ? personaRaw.traits.trim()
+        : typeof personaRaw?.instructions === "string"
+          ? personaRaw.instructions.trim()
+          : "";
+    const personaResponseStyle =
+      typeof personaRaw?.responseStyle === "string" ? personaRaw.responseStyle.trim() : "";
+    const personaEnabled = personaRaw?.enabled !== false;
+    const hasPersonaContent =
+      personaRole.length > 0 ||
+      personaTone.length > 0 ||
+      personaTraits.length > 0 ||
+      personaResponseStyle.length > 0;
+    const personaConfigured = personaRaw !== undefined;
+    const persona =
+      personaConfigured && personaEnabled && hasPersonaContent
+        ? {
+            enabled: true,
+            ...(personaRole.length > 0 ? { role: personaRole } : {}),
+            ...(personaTone.length > 0 ? { tone: personaTone } : {}),
+            ...(personaTraits.length > 0 ? { traits: personaTraits } : {}),
+            ...(personaResponseStyle.length > 0 ? { responseStyle: personaResponseStyle } : {}),
+          }
+        : !personaConfigured && enableTools
+          ? { ...DEFAULT_TOOL_CHAT_PERSONA }
+          : undefined;
+
+    const contextSynthesisRaw = typeof agentConfig.contextSynthesis === "string"
+      ? agentConfig.contextSynthesis.trim()
+      : "";
+    const contextSynthesis =
+      contextSynthesisRaw === "auto" ||
+      contextSynthesisRaw === "template" ||
+      contextSynthesisRaw === "llm" ||
+      contextSynthesisRaw === "none"
+        ? contextSynthesisRaw
+        : undefined;
+
+    const guardrailsRaw =
+      agentConfig.guardrails && typeof agentConfig.guardrails === "object" && !Array.isArray(agentConfig.guardrails)
+        ? (agentConfig.guardrails as Record<string, unknown>)
+        : undefined;
+    const guardrails =
+      guardrailsRaw && guardrailsRaw.enabled === true
+        ? {
+            enabled: true,
+            ...(typeof guardrailsRaw.injectionThreshold === "number"
+              ? { injectionThreshold: guardrailsRaw.injectionThreshold }
+              : {}),
+            ...(typeof guardrailsRaw.piiThreshold === "number"
+              ? { piiThreshold: guardrailsRaw.piiThreshold }
+              : {}),
+            ...(typeof guardrailsRaw.toxicityThreshold === "number"
+              ? { toxicityThreshold: guardrailsRaw.toxicityThreshold }
+              : {}),
+          }
+        : undefined;
+
     const runId =
       typeof agentConfig.runId === "string" && agentConfig.runId.trim().length > 0
         ? agentConfig.runId.trim()
@@ -208,6 +391,15 @@ export class ChatSessionService {
       ? (agentConfig.tools as unknown[]).filter((x): x is string => typeof x === "string" && x.length > 0)
       : [];
     const mergedTools = enableTools ? mergeCortexAllowedTools(toolPick, undefined, {}) : [];
+
+    const addl =
+      typeof agentConfig.terminalShellAdditionalCommands === "string"
+        ? agentConfig.terminalShellAdditionalCommands.trim()
+        : "";
+    const allowOnly =
+      typeof agentConfig.terminalShellAllowedCommands === "string"
+        ? agentConfig.terminalShellAllowedCommands.trim()
+        : "";
 
     const rawScenario = agentConfig.testScenario;
     const customTestScenario =
@@ -232,13 +424,29 @@ export class ChatSessionService {
       ...(enableTools
         ? {
             tools: mergedTools,
-            strategy: "reactive",
+            strategy: effectiveStrategy,
             maxIterations:
               typeof agentConfig.maxIterations === "number" && agentConfig.maxIterations > 0
                 ? agentConfig.maxIterations
-                : 12,
+                : 16,
           }
         : {}),
+      ...(effectiveVerificationStep ? { verificationStep: effectiveVerificationStep } : {}),
+      ...((enableTools ? strategySwitchingExplicit ?? true : strategySwitchingExplicit) === true
+        ? { strategySwitching: true }
+        : {}),
+      ...((enableTools ? runtimeVerificationExplicit ?? true : runtimeVerificationExplicit) === true
+        ? { runtimeVerification: true }
+        : {}),
+      ...(contextSynthesis ? { contextSynthesis } : {}),
+      ...(guardrails ? { guardrails } : {}),
+      ...(persona ? { persona } : {}),
+      ...(agentConfig.terminalTools === true ? { terminalTools: true as const } : {}),
+      // Forward shell CLI config whenever tools are on and the session stored values — do not
+      // gate on `shellInToolPick` alone so `buildCortexAgent` can still apply `terminalShell*`
+      // when `hasShellTerminalConfig` forces `shellRequested` (see build-cortex-agent).
+      ...(enableTools && addl.length > 0 ? { terminalShellAdditionalCommands: addl } : {}),
+      ...(enableTools && allowOnly.length > 0 ? { terminalShellAllowedCommands: allowOnly } : {}),
       ...(Object.keys(taskContext).length > 0 ? { taskContext } : {}),
       ...(customTestScenario && provider === "test"
         ? { testScenario: customTestScenario }

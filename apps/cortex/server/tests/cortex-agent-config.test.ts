@@ -80,6 +80,28 @@ describe("normalizeCortexAgentConfig", () => {
     expect((out.agentTools as Array<{ kind: string }>)[0]!.kind).toBe("local");
     expect(out.dynamicSubAgents).toEqual({ enabled: true, maxIterations: 3 });
   });
+
+  test("preserves strategySwitching only when explicitly provided", () => {
+    const absent = normalizeCortexAgentConfig({ provider: "test" });
+    expect(absent.strategySwitching).toBeUndefined();
+
+    const on = normalizeCortexAgentConfig({ strategySwitching: true });
+    expect(on.strategySwitching).toBe(true);
+
+    const off = normalizeCortexAgentConfig({ strategySwitching: false });
+    expect(off.strategySwitching).toBe(false);
+  });
+
+  test("preserves streamReasoningSteps only when explicitly provided", () => {
+    const absent = normalizeCortexAgentConfig({ provider: "test" });
+    expect(absent.streamReasoningSteps).toBeUndefined();
+
+    const on = normalizeCortexAgentConfig({ streamReasoningSteps: true });
+    expect(on.streamReasoningSteps).toBe(true);
+
+    const off = normalizeCortexAgentConfig({ streamReasoningSteps: false });
+    expect(off.streamReasoningSteps).toBe(false);
+  });
 });
 
 describe("parseCortexSkillsConfig", () => {

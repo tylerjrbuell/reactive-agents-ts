@@ -2,6 +2,46 @@ import { Elysia, t } from "elysia";
 import type { ChatSessionService } from "../services/chat-session-service.js";
 import type { AgentStreamEvent } from "@reactive-agents/runtime";
 
+const ChatSessionConfigBody = t.Object({
+  name: t.Optional(t.String()),
+  provider: t.Optional(t.String()),
+  model: t.Optional(t.String()),
+  systemPrompt: t.Optional(t.String()),
+  temperature: t.Optional(t.Number()),
+  maxTokens: t.Optional(t.Number()),
+  tools: t.Optional(t.Array(t.String())),
+  runId: t.Optional(t.String()),
+  enableTools: t.Optional(t.Boolean()),
+  streamReasoningSteps: t.Optional(t.Boolean()),
+  maxIterations: t.Optional(t.Number()),
+  strategy: t.Optional(t.String()),
+  strategySwitching: t.Optional(t.Boolean()),
+  runtimeVerification: t.Optional(t.Boolean()),
+  verificationStep: t.Optional(t.Union([t.Literal("none"), t.Literal("reflect")])),
+  contextSynthesis: t.Optional(
+    t.Union([t.Literal("auto"), t.Literal("template"), t.Literal("llm"), t.Literal("none")]),
+  ),
+  guardrails: t.Optional(
+    t.Object({
+      enabled: t.Optional(t.Boolean()),
+      injectionThreshold: t.Optional(t.Number()),
+      piiThreshold: t.Optional(t.Number()),
+      toxicityThreshold: t.Optional(t.Number()),
+    }),
+  ),
+  persona: t.Optional(
+    t.Object({
+      enabled: t.Optional(t.Boolean()),
+      role: t.Optional(t.String()),
+      tone: t.Optional(t.String()),
+      traits: t.Optional(t.String()),
+      responseStyle: t.Optional(t.String()),
+    }),
+  ),
+  terminalShellAdditionalCommands: t.Optional(t.String()),
+  terminalShellAllowedCommands: t.Optional(t.String()),
+});
+
 export const chatRouter = (svc: ChatSessionService) =>
   new Elysia({ prefix: "/api/chat" })
     .get("/sessions", () => svc.listSessions())
@@ -20,8 +60,26 @@ export const chatRouter = (svc: ChatSessionService) =>
               ...(body.tools?.length ? { tools: body.tools } : {}),
               ...(body.runId !== undefined && body.runId !== "" ? { runId: body.runId } : {}),
               ...(body.enableTools === true ? { enableTools: true } : {}),
+              ...(body.streamReasoningSteps === true ? { streamReasoningSteps: true } : {}),
               ...(body.maxIterations != null && body.maxIterations > 0
                 ? { maxIterations: body.maxIterations }
+                : {}),
+              ...(typeof body.strategy === "string" && body.strategy.trim() !== ""
+                ? { strategy: body.strategy.trim() }
+                : {}),
+              ...(body.strategySwitching != null ? { strategySwitching: body.strategySwitching } : {}),
+              ...(body.runtimeVerification != null ? { runtimeVerification: body.runtimeVerification } : {}),
+              ...(body.verificationStep ? { verificationStep: body.verificationStep } : {}),
+              ...(body.contextSynthesis ? { contextSynthesis: body.contextSynthesis } : {}),
+              ...(body.guardrails ? { guardrails: body.guardrails } : {}),
+              ...(body.persona ? { persona: body.persona } : {}),
+              ...(typeof body.terminalShellAdditionalCommands === "string" &&
+              body.terminalShellAdditionalCommands.trim() !== ""
+                ? { terminalShellAdditionalCommands: body.terminalShellAdditionalCommands.trim() }
+                : {}),
+              ...(typeof body.terminalShellAllowedCommands === "string" &&
+              body.terminalShellAllowedCommands.trim() !== ""
+                ? { terminalShellAllowedCommands: body.terminalShellAllowedCommands.trim() }
                 : {}),
             },
           });
@@ -32,18 +90,7 @@ export const chatRouter = (svc: ChatSessionService) =>
         }
       },
       {
-        body: t.Object({
-          name: t.Optional(t.String()),
-          provider: t.Optional(t.String()),
-          model: t.Optional(t.String()),
-          systemPrompt: t.Optional(t.String()),
-          temperature: t.Optional(t.Number()),
-          maxTokens: t.Optional(t.Number()),
-          tools: t.Optional(t.Array(t.String())),
-          runId: t.Optional(t.String()),
-          enableTools: t.Optional(t.Boolean()),
-          maxIterations: t.Optional(t.Number()),
-        }),
+        body: ChatSessionConfigBody,
       },
     )
     .get("/sessions/:sessionId", ({ params, set }) => {
@@ -73,6 +120,52 @@ export const chatRouter = (svc: ChatSessionService) =>
         return { ok: true };
       },
       { body: t.Object({ name: t.String() }) },
+    )
+    .patch(
+      "/sessions/:sessionId/config",
+      ({ params, body, set }) => {
+        try {
+          svc.updateSessionConfig(params.sessionId, {
+            ...(body.provider !== undefined ? { provider: body.provider } : {}),
+            ...(body.model !== undefined ? { model: body.model } : {}),
+            ...(body.systemPrompt !== undefined ? { systemPrompt: body.systemPrompt } : {}),
+            ...(body.temperature !== undefined ? { temperature: body.temperature } : {}),
+            ...(body.maxTokens !== undefined ? { maxTokens: body.maxTokens } : {}),
+            ...(body.tools !== undefined ? { tools: body.tools } : {}),
+            ...(body.runId !== undefined ? { runId: body.runId } : {}),
+            ...(body.enableTools !== undefined ? { enableTools: body.enableTools } : {}),
+            ...(body.streamReasoningSteps !== undefined
+              ? { streamReasoningSteps: body.streamReasoningSteps }
+              : {}),
+            ...(body.maxIterations !== undefined ? { maxIterations: body.maxIterations } : {}),
+            ...(body.strategy !== undefined ? { strategy: body.strategy } : {}),
+            ...(body.strategySwitching !== undefined
+              ? { strategySwitching: body.strategySwitching }
+              : {}),
+            ...(body.runtimeVerification !== undefined
+              ? { runtimeVerification: body.runtimeVerification }
+              : {}),
+            ...(body.verificationStep !== undefined ? { verificationStep: body.verificationStep } : {}),
+            ...(body.contextSynthesis !== undefined ? { contextSynthesis: body.contextSynthesis } : {}),
+            ...(body.guardrails !== undefined ? { guardrails: body.guardrails } : {}),
+            ...(body.persona !== undefined ? { persona: body.persona } : {}),
+            ...(body.terminalShellAdditionalCommands !== undefined
+              ? { terminalShellAdditionalCommands: body.terminalShellAdditionalCommands }
+              : {}),
+            ...(body.terminalShellAllowedCommands !== undefined
+              ? { terminalShellAllowedCommands: body.terminalShellAllowedCommands }
+              : {}),
+          });
+          return { ok: true };
+        } catch (e) {
+          const msg = String(e);
+          set.status = msg.includes("not found") ? 404 : 500;
+          return { error: msg };
+        }
+      },
+      {
+        body: ChatSessionConfigBody,
+      },
     )
     .post(
       "/sessions/:sessionId/chat",

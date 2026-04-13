@@ -215,6 +215,27 @@ describe("buildCortexAgent round-trip", () => {
       await agent.dispose();
     }
   }, 20000);
+
+  it("enables shell when only terminalShellAdditionalCommands is set (no terminalTools, no shell-execute in tools)", async () => {
+    const agent = await buildCortexAgent({
+      provider: "test",
+      strategy: "reactive",
+      maxIterations: 4,
+      tools: ["web-search"],
+      terminalShellAdditionalCommands: "env",
+      testScenario: [
+        { toolCall: { name: "shell-execute", args: { command: "env" } } },
+        { text: "done" },
+      ],
+    });
+    try {
+      const result = await agent.run("Invoke shell-execute with env");
+      expect(result.success).toBe(true);
+      expect(String(result.output)).toContain("done");
+    } finally {
+      await agent.dispose();
+    }
+  }, 20000);
 });
 
 describe("cortexParamsToAgentConfig schema validation", () => {

@@ -62,7 +62,7 @@
   async function copyAllConversation() {
     try {
       const formatted = turns
-        .map((turn) => {
+        .map((turn: ChatTurn) => {
           const speaker = turn.role === "user" ? "You" : "Assistant";
           return `**${speaker}**: ${turn.content}`;
         })
@@ -175,7 +175,18 @@
                           {#each turn.reasoningSteps as step (step.iteration)}
                             <div class="flex items-start gap-2 text-[9px] font-mono text-[var(--cortex-text-muted)]">
                               <span class="shrink-0 tabular-nums text-secondary/60">#{step.iteration}</span>
-                              {#if step.toolsCalledThisStep && step.toolsCalledThisStep.length > 0}
+                              {#if step.thought && step.thought.trim().length > 0}
+                                <div class="space-y-1">
+                                  <p class="whitespace-pre-wrap text-[10px] leading-relaxed text-[var(--cortex-text)]">{step.thought}</p>
+                                  {#if step.toolsCalledThisStep && step.toolsCalledThisStep.length > 0}
+                                    <div class="flex flex-wrap gap-1">
+                                      {#each step.toolsCalledThisStep as tool (tool)}
+                                        <span class="rounded bg-[var(--cortex-surface-mid)] px-1 py-0.5 text-[var(--cortex-text)]">{tool}</span>
+                                      {/each}
+                                    </div>
+                                  {/if}
+                                </div>
+                              {:else if step.toolsCalledThisStep && step.toolsCalledThisStep.length > 0}
                                 <div class="flex flex-wrap gap-1">
                                   {#each step.toolsCalledThisStep as tool (tool)}
                                     <span class="rounded bg-[var(--cortex-surface-mid)] px-1 py-0.5 text-[var(--cortex-text)]">{tool}</span>
@@ -199,7 +210,9 @@
                       Thinking<span class="inline-block w-1.5 h-2.5 ml-0.5 bg-secondary/60 animate-pulse rounded-sm align-middle"></span>
                     </p>
                   {/if}
-                  {#if turn.streaming && !turn.content}
+                  {#if turn.streaming && turn.reasoningSteps && turn.reasoningSteps.length > 0}
+                    <p class="text-[10px] italic text-[var(--cortex-text-muted)]">Drafting final response…</p>
+                  {:else if turn.streaming && !turn.content}
                     <!-- content not yet started -->
                   {:else if turn.streaming}
                     <p class="whitespace-pre-wrap text-[11px] leading-relaxed m-0">{turn.content}<span class="inline-block w-1.5 h-3.5 ml-0.5 bg-secondary/80 animate-pulse rounded-sm align-middle"></span></p>

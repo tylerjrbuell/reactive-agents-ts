@@ -195,9 +195,14 @@ export async function buildCortexAgent(
     spawnAgent: params.dynamicSubAgents?.enabled === true,
     agentToolNames: params.agentTools?.map((t) => t.toolName) ?? [],
   };
+  /** Host shell config counts as shell intent even if `shell-execute` is missing from `tools` (e.g. stale client JSON). */
+  const hasShellTerminalConfig =
+    splitCortexListInput(params.terminalShellAdditionalCommands).length > 0 ||
+    splitCortexListInput(params.terminalShellAllowedCommands).length > 0;
   const shellRequested =
     params.terminalTools === true ||
-    mergeCortexUiToolNames(params.tools, params.additionalToolNames).includes("shell-execute");
+    mergeCortexUiToolNames(params.tools, params.additionalToolNames).includes("shell-execute") ||
+    hasShellTerminalConfig;
   let userTools = mergeCortexUiToolNames(params.tools, params.additionalToolNames);
   if (shellRequested && !userTools.includes("shell-execute")) {
     userTools.push("shell-execute");

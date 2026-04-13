@@ -12,6 +12,7 @@ export const CHAT_TOOL_PRESETS = [
   { id: "file-read", label: "File Read", icon: "folder_open" },
   { id: "file-write", label: "File Write", icon: "edit_document" },
   { id: "code-execute", label: "Code Execute", icon: "terminal" },
+  { id: "shell-execute", label: "Host Shell", icon: "computer" },
   { id: "recall", label: "Recall", icon: "psychology" },
   { id: "find", label: "Find", icon: "manage_search" },
 ] as const;

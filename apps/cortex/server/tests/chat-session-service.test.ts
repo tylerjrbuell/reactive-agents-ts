@@ -28,6 +28,38 @@ describe("ChatSessionService", () => {
     expect(id.length).toBeGreaterThan(0);
   });
 
+  it("persists terminalShellAdditionalCommands on session agentConfig (round-trip)", async () => {
+    const { getChatSession } = await import("../db/chat-queries.js");
+    const id = await svc.createSession({
+      name: "Shell cfg",
+      agentConfig: {
+        provider: "test",
+        model: "test-model",
+        enableTools: true,
+        tools: ["shell-execute"],
+        terminalShellAdditionalCommands: "gh, node",
+        maxIterations: 4,
+      },
+    });
+    const row = getChatSession(db, id);
+    expect(row?.agentConfig.terminalShellAdditionalCommands).toBe("gh, node");
+  });
+
+  it("persists streamReasoningSteps on session agentConfig (round-trip)", async () => {
+    const { getChatSession } = await import("../db/chat-queries.js");
+    const id = await svc.createSession({
+      name: "Reasoning stream",
+      agentConfig: {
+        provider: "test",
+        model: "test-model",
+        enableTools: true,
+        streamReasoningSteps: true,
+      },
+    });
+    const row = getChatSession(db, id);
+    expect(row?.agentConfig.streamReasoningSteps).toBe(true);
+  });
+
   it("sends a message and returns a reply", async () => {
     const id = await svc.createSession({
       name: "Echo",
@@ -66,6 +98,56 @@ describe("ChatSessionService", () => {
     expect(result.reply.length).toBeGreaterThan(0);
   });
 
+  it("injects run context into chat params with and without tools", async () => {
+    upsertRun(db, "agent-linked-both", "run-linked-both");
+    updateRunStats(db, "run-linked-both", {
+      status: "completed",
+      debrief: JSON.stringify({ summary: "Debrief context for both modes." }),
+    });
+
+    const idNoTools = await svc.createSession({
+      name: "Run context no tools",
+      agentConfig: { provider: "test", model: "test-model", runId: "run-linked-both", enableTools: false },
+    });
+    const idTools = await svc.createSession({
+      name: "Run context tools",
+      agentConfig: {
+        provider: "test",
+        model: "test-model",
+        runId: "run-linked-both",
+        enableTools: true,
+        strategy: "plan-execute-reflect",
+      },
+    });
+
+    const { getChatSession } = await import("../db/chat-queries.js");
+    const rowNoTools = getChatSession(db, idNoTools)!;
+    const rowTools = getChatSession(db, idTools)!;
+
+    const noToolsParams = (svc as unknown as {
+      buildChatAgentParams: (
+        sessionId: string,
+        agentConfig: Record<string, unknown>,
+        stableAgentId: string | undefined,
+        opts: { readonly streaming: boolean },
+      ) => { taskContext?: Record<string, string> };
+    }).buildChatAgentParams(idNoTools, rowNoTools.agentConfig, rowNoTools.stableAgentId, { streaming: false });
+
+    const toolsParams = (svc as unknown as {
+      buildChatAgentParams: (
+        sessionId: string,
+        agentConfig: Record<string, unknown>,
+        stableAgentId: string | undefined,
+        opts: { readonly streaming: boolean },
+      ) => { taskContext?: Record<string, string> };
+    }).buildChatAgentParams(idTools, rowTools.agentConfig, rowTools.stableAgentId, { streaming: true });
+
+    expect(noToolsParams.taskContext?.cortexRunId).toBe("run-linked-both");
+    expect(toolsParams.taskContext?.cortexRunId).toBe("run-linked-both");
+    expect(noToolsParams.taskContext?.cortexPriorRun).toContain("Debrief context for both modes");
+    expect(toolsParams.taskContext?.cortexPriorRun).toContain("Debrief context for both modes");
+  });
+
   it("chatStream includes persisted run wiring like non-stream chat (regression: run-linked SSE must build same agent params)", async () => {
     upsertRun(db, "agent-sse-run", "run-sse-linked");
     updateRunStats(db, "run-sse-linked", {
@@ -81,6 +163,52 @@ describe("ChatSessionService", () => {
       if (ev._tag === "StreamCompleted") completed = true;
     }
     expect(completed).toBe(true);
+  });
+
+  it("chatStream without tools uses direct conversational path (no reasoning progress events)", async () => {
+    const id = await svc.createSession({
+      name: "No tools SSE",
+      agentConfig: {
+        provider: "test",
+        model: "test-model",
+        enableTools: false,
+      },
+    });
+
+    const tags: string[] = [];
+    for await (const ev of svc.chatStream(id, "hello without tools")) {
+      tags.push(ev._tag);
+    }
+
+    expect(tags).toContain("TextDelta");
+    expect(tags).toContain("StreamCompleted");
+    expect(tags).not.toContain("IterationProgress");
+  });
+
+  it("updates session config and invalidates in-memory session cache", async () => {
+    const id = await svc.createSession({
+      name: "Config update",
+      agentConfig: { provider: "test", model: "test-model" },
+    });
+    await svc.chat(id, "first turn");
+    const sessionsMap = (svc as unknown as { sessions: Map<string, unknown> }).sessions;
+    expect(sessionsMap.has(id)).toBe(true);
+
+    svc.updateSessionConfig(id, {
+      provider: "test",
+      model: "updated-model",
+      enableTools: true,
+      strategy: "plan-execute-reflect",
+      strategySwitching: true,
+      runtimeVerification: true,
+    });
+
+    expect(sessionsMap.has(id)).toBe(false);
+    const { getChatSession } = await import("../db/chat-queries.js");
+    const row = getChatSession(db, id);
+    expect(row?.agentConfig.model).toBe("updated-model");
+    expect(row?.agentConfig.enableTools).toBe(true);
+    expect(row?.agentConfig.strategy).toBe("plan-execute-reflect");
   });
 
   it("session has a stable_agent_id stored in DB after creation", async () => {

@@ -6,6 +6,7 @@ import {
   getChatSession,
   listChatSessions,
   deleteChatSession,
+  updateSessionAgentConfig,
   appendChatTurn,
   getChatTurns,
   updateSessionLastUsed,
@@ -52,6 +53,24 @@ describe("chat sessions", () => {
     deleteChatSession(db, id);
     expect(getChatSession(db, id)).toBeNull();
     expect(getChatTurns(db, id)).toHaveLength(0);
+  });
+
+  it("updates session agent config JSON", () => {
+    const id = createChatSession(db, {
+      name: "Config update",
+      agentConfig: { provider: "test", model: "test-model" },
+    });
+    const ok = updateSessionAgentConfig(db, id, {
+      provider: "test",
+      model: "updated-model",
+      enableTools: true,
+      strategy: "plan-execute-reflect",
+    });
+    expect(ok).toBe(true);
+    const session = getChatSession(db, id);
+    expect(session?.agentConfig.model).toBe("updated-model");
+    expect(session?.agentConfig.enableTools).toBe(true);
+    expect(session?.agentConfig.strategy).toBe("plan-execute-reflect");
   });
 });
 

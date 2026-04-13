@@ -168,3 +168,14 @@ export function updateSessionLastUsed(db: Database, sessionId: string): void {
 export function renameSession(db: Database, sessionId: string, name: string): void {
   db.prepare(`UPDATE cortex_chat_sessions SET name = ? WHERE session_id = ?`).run(name.trim(), sessionId);
 }
+
+export function updateSessionAgentConfig(
+  db: Database,
+  sessionId: string,
+  agentConfig: Record<string, unknown>,
+): boolean {
+  const result = db
+    .prepare(`UPDATE cortex_chat_sessions SET agent_config = ? WHERE session_id = ?`)
+    .run(JSON.stringify(agentConfig), sessionId);
+  return result.changes > 0;
+}

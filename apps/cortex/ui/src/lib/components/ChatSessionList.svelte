@@ -6,6 +6,7 @@
   import { CORTEX_SERVER_URL } from "$lib/constants.js";
   import { fetchModelsForProvider, type UiModelOption } from "$lib/framework-models.js";
   import { CHAT_PROVIDERS, CHAT_TOOL_PRESETS, type ChatProviderId } from "$lib/inference-presets.js";
+  import ChatShellToolDisclaimer from "$lib/components/ChatShellToolDisclaimer.svelte";
 
   interface Props {
     sessions: ChatSession[];
@@ -23,8 +24,26 @@
   let newSystemPrompt = $state("");
   let creating = $state(false);
   let enableTools = $state(false);
+  let streamReasoningSteps = $state(false);
   let selectedTools = $state<string[]>([]);
   let maxChatIterations = $state(12);
+  let reasoningStrategy = $state("plan-execute-reflect");
+  let strategySwitching = $state(true);
+  let runtimeVerification = $state(true);
+  let verificationStepReflect = $state(true);
+  let contextSynthesis = $state<"auto" | "template" | "llm" | "none">("auto");
+  let personaTraits = $state(
+    "Think step-by-step, then call tools immediately when needed. Avoid repeating the same thought without acting.",
+  );
+  let terminalShellAdditionalCommands = $state("");
+  let terminalShellAllowedCommands = $state("");
+
+  const shellExecuteSelected = $derived(enableTools && selectedTools.includes("shell-execute"));
+  const activeSession = $derived(
+    activeSessionId
+      ? sessions.find((s: ChatSession) => s.sessionId === activeSessionId) ?? null
+      : null,
+  );
 
   let runs = $state<RunOption[]>([]);
   let selectedRunId = $state("");
@@ -57,9 +76,93 @@
     if (providerModelOptions[0]) newModel = providerModelOptions[0].value;
   }
 
+  function hydrateFormFromSessionConfig(config: Record<string, unknown>) {
+    newProvider = typeof config.provider === "string" && config.provider.trim() ? config.provider : newProvider;
+    newModel = typeof config.model === "string" ? config.model : "";
+    newSystemPrompt = typeof config.systemPrompt === "string" ? config.systemPrompt : "";
+    enableTools = config.enableTools === true;
+    streamReasoningSteps = config.streamReasoningSteps === true;
+    selectedTools = Array.isArray(config.tools)
+      ? config.tools.filter((t): t is string => typeof t === "string" && t.length > 0)
+      : [];
+    maxChatIterations =
+      typeof config.maxIterations === "number" && config.maxIterations > 0 ? config.maxIterations : 16;
+    reasoningStrategy =
+      typeof config.strategy === "string" && config.strategy.trim()
+        ? config.strategy.trim()
+        : "plan-execute-reflect";
+    strategySwitching = config.strategySwitching !== false;
+    runtimeVerification = config.runtimeVerification !== false;
+    verificationStepReflect = config.verificationStep !== "none";
+    contextSynthesis =
+      config.contextSynthesis === "auto" ||
+      config.contextSynthesis === "template" ||
+      config.contextSynthesis === "llm" ||
+      config.contextSynthesis === "none"
+        ? config.contextSynthesis
+        : "auto";
+    const persona =
+      config.persona && typeof config.persona === "object" && !Array.isArray(config.persona)
+        ? (config.persona as Record<string, unknown>)
+        : undefined;
+    if (persona && typeof persona.traits === "string") {
+      personaTraits = persona.traits;
+    } else {
+      personaTraits =
+        "Think step-by-step, then call tools immediately when needed. Avoid repeating the same thought without acting.";
+    }
+    terminalShellAdditionalCommands =
+      typeof config.terminalShellAdditionalCommands === "string"
+        ? config.terminalShellAdditionalCommands
+        : "";
+    terminalShellAllowedCommands =
+      typeof config.terminalShellAllowedCommands === "string" ? config.terminalShellAllowedCommands : "";
+  }
+
+  function currentConfigPayload() {
+    const verificationStep: "reflect" | "none" = verificationStepReflect ? "reflect" : "none";
+
+    return {
+      provider: newProvider,
+      ...(newModel.trim() ? { model: newModel.trim() } : {}),
+      ...(newSystemPrompt.trim() ? { systemPrompt: newSystemPrompt.trim() } : {}),
+      ...(selectedRunId ? { runId: selectedRunId } : {}),
+      enableTools,
+      streamReasoningSteps: enableTools ? streamReasoningSteps : false,
+      ...(enableTools && selectedTools.length > 0 ? { tools: [...selectedTools] } : {}),
+      ...(enableTools && maxChatIterations > 0 ? { maxIterations: maxChatIterations } : {}),
+      ...(enableTools ? { strategy: reasoningStrategy } : {}),
+      ...(enableTools ? { strategySwitching } : {}),
+      ...(enableTools ? { runtimeVerification } : {}),
+      ...(enableTools ? { verificationStep } : {}),
+      ...(enableTools ? { contextSynthesis } : {}),
+      ...(enableTools && personaTraits.trim().length > 0
+        ? {
+            persona: {
+              enabled: true,
+              role: "Tool-first problem solver",
+              tone: "technical",
+              traits: personaTraits.trim(),
+              responseStyle: "structured",
+            },
+          }
+        : {}),
+      ...(shellExecuteSelected && terminalShellAdditionalCommands.trim() !== ""
+        ? { terminalShellAdditionalCommands: terminalShellAdditionalCommands.trim() }
+        : {}),
+      ...(shellExecuteSelected && terminalShellAllowedCommands.trim() !== ""
+        ? { terminalShellAllowedCommands: terminalShellAllowedCommands.trim() }
+        : {}),
+    };
+  }
+
   function toggleTool(id: string) {
     if (selectedTools.includes(id)) {
       selectedTools = selectedTools.filter((t) => t !== id);
+      if (id === "shell-execute") {
+        terminalShellAdditionalCommands = "";
+        terminalShellAllowedCommands = "";
+      }
     } else {
       selectedTools = [...selectedTools, id];
     }
@@ -114,13 +217,7 @@
     try {
       await chatStore.createSession({
         name: newName || undefined,
-        provider: newProvider,
-        ...(newModel.trim() ? { model: newModel.trim() } : {}),
-        ...(newSystemPrompt.trim() ? { systemPrompt: newSystemPrompt.trim() } : {}),
-        ...(selectedRunId ? { runId: selectedRunId } : {}),
-        enableTools,
-        ...(enableTools && selectedTools.length > 0 ? { tools: [...selectedTools] } : {}),
-        ...(enableTools && maxChatIterations > 0 ? { maxIterations: maxChatIterations } : {}),
+        ...currentConfigPayload(),
       });
       showNewForm = false;
       newName = "";
@@ -131,6 +228,28 @@
     } finally {
       creating = false;
     }
+  }
+
+  async function saveActiveConfig() {
+    if (!activeSessionId) return;
+    try {
+      await chatStore.updateSessionConfig(activeSessionId, currentConfigPayload());
+      toast.success("Config updated", "New model and reasoning settings apply on next turn");
+    } catch (e) {
+      toast.error("Failed to update config: " + String(e));
+    }
+  }
+
+  function editSessionConfig(e: MouseEvent, session: ChatSession) {
+    e.stopPropagation();
+    showNewForm = true;
+    selectedRunId =
+      typeof session.agentConfig.runId === "string" && session.agentConfig.runId.trim().length > 0
+        ? session.agentConfig.runId.trim()
+        : "";
+    hydrateFormFromSessionConfig(session.agentConfig);
+    onSelectSession(session.sessionId);
+    void loadChatModelOptions(newProvider);
   }
 
   async function del(e: MouseEvent, sessionId: string) {
@@ -192,6 +311,11 @@
 
   {#if showNewForm}
     <div class="flex max-h-[min(70vh,520px)] flex-shrink-0 flex-col gap-2 overflow-y-auto border-b border-[color:var(--cortex-border)] p-3">
+      {#if activeSession}
+        <div class="rounded-md border border-secondary/25 bg-secondary/10 px-2 py-1.5 font-mono text-[10px] text-secondary">
+          Editing session config: {activeSession.name}
+        </div>
+      {/if}
       <div>
         <label class={label} for="chat-new-name">Name</label>
         <input id="chat-new-name" class={field} placeholder="Session name" bind:value={newName} />
@@ -285,6 +409,15 @@
               </button>
             {/each}
           </div>
+          {#if shellExecuteSelected}
+            <div class="mt-2">
+              <ChatShellToolDisclaimer
+                idSuffix="desk-chat"
+                bind:additionalCommands={terminalShellAdditionalCommands}
+                bind:allowedCommands={terminalShellAllowedCommands}
+              />
+            </div>
+          {/if}
         </div>
         <div>
           <label class={label} for="chat-max-it">Max ReAct iterations</label>
@@ -297,11 +430,75 @@
             bind:value={maxChatIterations}
           />
         </div>
+        <div>
+          <label class={label} for="chat-reasoning-strategy">Reasoning strategy</label>
+          <select id="chat-reasoning-strategy" class={field} bind:value={reasoningStrategy}>
+            <option value="plan-execute-reflect">plan-execute-reflect</option>
+            <option value="reactive">reactive</option>
+            <option value="adaptive">adaptive</option>
+            <option value="tree-of-thought">tree-of-thought</option>
+            <option value="reflexion">reflexion</option>
+          </select>
+        </div>
+        <label class="flex cursor-pointer items-center gap-2 font-mono text-[10px] text-[var(--cortex-text)]">
+          <input type="checkbox" bind:checked={streamReasoningSteps} class="accent-primary" />
+          Stream reasoning steps live
+        </label>
+        <div>
+          <label class={label} for="chat-context-synthesis">Context synthesis</label>
+          <select id="chat-context-synthesis" class={field} bind:value={contextSynthesis}>
+            <option value="auto">auto</option>
+            <option value="template">template</option>
+            <option value="llm">llm</option>
+            <option value="none">none</option>
+          </select>
+        </div>
+        <label class="flex cursor-pointer items-center gap-2 font-mono text-[10px] text-[var(--cortex-text)]">
+          <input type="checkbox" bind:checked={strategySwitching} class="accent-primary" />
+          Enable strategy switching on loop risk
+        </label>
+        <label class="flex cursor-pointer items-center gap-2 font-mono text-[10px] text-[var(--cortex-text)]">
+          <input type="checkbox" bind:checked={runtimeVerification} class="accent-primary" />
+          Enable runtime verification layer
+        </label>
+        <label class="flex cursor-pointer items-center gap-2 font-mono text-[10px] text-[var(--cortex-text)]">
+          <input type="checkbox" bind:checked={verificationStepReflect} class="accent-primary" />
+          Final reflect verification step
+        </label>
+        <div>
+          <label class={label} for="chat-persona-traits">Tool-use persona instructions</label>
+          <textarea
+            id="chat-persona-traits"
+            class="{field} resize-none"
+            rows="3"
+            bind:value={personaTraits}
+            placeholder="Think step-by-step then call tools immediately..."
+          ></textarea>
+        </div>
       {/if}
 
       <button type="button" disabled={creating} class={btnPrimary} onclick={create}>
         {creating ? "Creating…" : "Create"}
       </button>
+      {#if activeSessionId}
+        <button
+          type="button"
+          class="w-full rounded-md border border-secondary/35 bg-secondary/10 px-3 py-1.5 font-mono text-[10px] uppercase text-secondary hover:bg-secondary/20"
+          onclick={() => void saveActiveConfig()}
+        >
+          Save To Active Session
+        </button>
+      {/if}
+
+      {#if activeSession}
+        <button
+          type="button"
+          class="w-full rounded-md border border-[color:var(--cortex-border)] bg-[var(--cortex-surface)] px-3 py-1.5 font-mono text-[10px] uppercase text-[var(--cortex-text-muted)] hover:text-[var(--cortex-text)]"
+          onclick={() => hydrateFormFromSessionConfig(activeSession.agentConfig)}
+        >
+          Load Active Config
+        </button>
+      {/if}
     </div>
   {/if}
 
@@ -327,7 +524,6 @@
                   cancelRename();
                 }
               }}
-              autofocus
             />
             <div class="flex gap-2">
               <button
@@ -370,6 +566,12 @@
               </div>
             </div>
             <div class="flex items-center gap-1 flex-shrink-0">
+              <button
+                type="button"
+                class="material-symbols-outlined cursor-pointer border-0 bg-transparent text-[13px] text-[var(--cortex-text-muted)] hover:text-secondary"
+                onclick={(e) => editSessionConfig(e, session)}
+                title="Edit session config"
+              >tune</button>
               <button
                 type="button"
                 class="material-symbols-outlined cursor-pointer border-0 bg-transparent text-[13px] text-[var(--cortex-text-muted)] hover:text-primary"

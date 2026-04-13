@@ -196,6 +196,10 @@ export function normalizeCortexAgentConfig(raw: Record<string, unknown>): Record
   if (raw.runtimeVerification === true) out.runtimeVerification = true;
   else delete out.runtimeVerification;
 
+  if (raw.streamReasoningSteps === true) out.streamReasoningSteps = true;
+  else if (raw.streamReasoningSteps === false) out.streamReasoningSteps = false;
+  else delete out.streamReasoningSteps;
+
   if (raw.terminalTools === true) out.terminalTools = true;
   else delete out.terminalTools;
 
@@ -232,7 +236,9 @@ export function normalizeCortexAgentConfig(raw: Record<string, unknown>): Record
 
   // ── Five previously dead-end fields ─────────────────────────────────────
 
-  out.strategySwitching = raw.strategySwitching === true;
+  if (raw.strategySwitching === true) out.strategySwitching = true;
+  else if (raw.strategySwitching === false) out.strategySwitching = false;
+  else delete out.strategySwitching;
 
   const mem = raw.memory;
   if (mem && typeof mem === "object" && !Array.isArray(mem)) {

@@ -6,6 +6,7 @@ export type AgentStreamEvent =
   | { _tag: "StreamCompleted"; output: string; metadata: Record<string, unknown>; toolSummary?: Array<{ name: string; calls: number; avgMs: number }> }
   | { _tag: "StreamError"; cause: string }
   | { _tag: "IterationProgress"; iteration: number; maxIterations: number; status: string }
+  | { _tag: "ThoughtEmitted"; content: string; iteration: number }
   | { _tag: "StreamCancelled"; reason: string; iterationsCompleted: number }
   | Record<string, unknown>; // for other event types
 
@@ -13,6 +14,7 @@ export type ReasoningStep = {
   iteration: number;
   maxIterations: number;
   toolsCalledThisStep?: string[];
+  thought?: string;
 };
 
 export type ChatTurn = {
@@ -46,6 +48,57 @@ type ChatState = {
   error: string | null;
 };
 
+type ChatSessionConfigInput = {
+  provider?: string;
+  model?: string;
+  systemPrompt?: string;
+  temperature?: number;
+  maxTokens?: number;
+  tools?: string[];
+  runId?: string;
+  enableTools?: boolean;
+  streamReasoningSteps?: boolean;
+  maxIterations?: number;
+  strategy?: string;
+  strategySwitching?: boolean;
+  runtimeVerification?: boolean;
+  verificationStep?: "none" | "reflect";
+  contextSynthesis?: "auto" | "template" | "llm" | "none";
+  guardrails?: {
+    enabled?: boolean;
+    injectionThreshold?: number;
+    piiThreshold?: number;
+    toxicityThreshold?: number;
+  };
+  persona?: {
+    enabled?: boolean;
+    role?: string;
+    tone?: string;
+    traits?: string;
+    responseStyle?: string;
+  };
+  /** Merged onto default shell allowlist when `shell-execute` is allowed. */
+  terminalShellAdditionalCommands?: string;
+  /** Replaces default shell allowlist when non-empty (advanced). */
+  terminalShellAllowedCommands?: string;
+};
+
+function mergeThoughtText(previous: string | undefined, incoming: string): string {
+  const prev = (previous ?? "").trim();
+  const next = incoming.trim();
+
+  if (!prev) return next;
+  if (!next) return prev;
+  if (next.startsWith(prev) || prev === next) return next;
+  if (prev.endsWith(next)) return prev;
+
+  return `${prev}\n${next}`;
+}
+
+function appendThoughtDelta(previous: string | undefined, delta: string): string {
+  return `${previous ?? ""}${delta}`;
+}
+
 function createChatStore() {
   const { subscribe, update } = writable<ChatState>({
     sessions: [],
@@ -74,18 +127,7 @@ function createChatStore() {
     update((s) => ({ ...s, activeTurns: session.turns, loadingSession: false }));
   }
 
-  async function createSession(opts: {
-    name?: string;
-    provider?: string;
-    model?: string;
-    systemPrompt?: string;
-    temperature?: number;
-    maxTokens?: number;
-    tools?: string[];
-    runId?: string;
-    enableTools?: boolean;
-    maxIterations?: number;
-  }): Promise<string> {
+  async function createSession(opts: { name?: string } & ChatSessionConfigInput): Promise<string> {
     const res = await fetch(`${CORTEX_SERVER_URL}/api/chat/sessions`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -95,6 +137,25 @@ function createChatStore() {
     await loadSessions();
     await selectSession(sessionId);
     return sessionId;
+  }
+
+  async function updateSessionConfig(sessionId: string, config: ChatSessionConfigInput): Promise<void> {
+    const res = await fetch(
+      `${CORTEX_SERVER_URL}/api/chat/sessions/${encodeURIComponent(sessionId)}/config`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(config),
+      },
+    );
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({ error: "Failed to update session config" }))) as {
+        error?: string;
+      };
+      throw new Error(body.error ?? "Failed to update session config");
+    }
+    await loadSessions();
+    await selectSession(sessionId);
   }
 
   async function deleteSession(sessionId: string) {
@@ -302,7 +363,44 @@ function createChatStore() {
                   update((s) => ({
                     ...s,
                     activeTurns: s.activeTurns.map((t) =>
-                      t.id === assistantTurnId ? { ...t, content: t.content + event.text } : t,
+                      t.id === assistantTurnId
+                        ? (() => {
+                            const existing = t.reasoningSteps ?? [];
+                            if (existing.length === 0) {
+                              return { ...t, content: t.content + event.text };
+                            }
+
+                            const currentIteration =
+                              t.streamProgress?.iteration ??
+                              existing[existing.length - 1]?.iteration ??
+                              1;
+                            const idx = existing.findIndex((r) => r.iteration === currentIteration);
+
+                            if (idx >= 0) {
+                              const prev = existing[idx]!;
+                              const next: ReasoningStep = {
+                                ...prev,
+                                thought: appendThoughtDelta(prev.thought, event.text),
+                              };
+                              return {
+                                ...t,
+                                reasoningSteps: existing.map((r, i) => (i === idx ? next : r)),
+                              };
+                            }
+
+                            return {
+                              ...t,
+                              reasoningSteps: [
+                                ...existing,
+                                {
+                                  iteration: currentIteration,
+                                  maxIterations: t.streamProgress?.maxIterations ?? 0,
+                                  thought: appendThoughtDelta(undefined, event.text),
+                                },
+                              ],
+                            };
+                          })()
+                        : t,
                     ),
                   }));
                 } else if (event._tag === "IterationProgress") {
@@ -321,32 +419,63 @@ function createChatStore() {
                       const existing = t.reasoningSteps ?? [];
                       const idx = existing.findIndex((r) => r.iteration === iter);
                       const steps = idx >= 0
-                        ? existing.map((r, i) => (i === idx ? step : r))
+                        ? existing.map((r, i) =>
+                            i === idx
+                              ? {
+                                  ...step,
+                                  ...(r.thought && r.thought.trim().length > 0 ? { thought: r.thought } : {}),
+                                }
+                              : r,
+                          )
                         : [...existing, step];
                       return { ...t, streamProgress: { iteration: iter, maxIterations: max }, reasoningSteps: steps };
                     }),
                   }));
+                } else if (event._tag === "ThoughtEmitted") {
+                  const iter = (event as any).iteration as number;
+                  const thought = (event as any).content as string;
+                  update((s) => ({
+                    ...s,
+                    activeTurns: s.activeTurns.map((t) => {
+                      if (t.id !== assistantTurnId) return t;
+                      const existing = t.reasoningSteps ?? [];
+                      const idx = existing.findIndex((r) => r.iteration === iter);
+                      if (idx >= 0) {
+                        const prev = existing[idx]!;
+                        const next: ReasoningStep = {
+                          ...prev,
+                          thought: mergeThoughtText(prev.thought, thought),
+                        };
+                        return {
+                          ...t,
+                          reasoningSteps: existing.map((r, i) => (i === idx ? next : r)),
+                        };
+                      }
+                      return {
+                        ...t,
+                        reasoningSteps: [...existing, { iteration: iter, maxIterations: 0, thought }],
+                      };
+                    }),
+                  }));
                 } else if (event._tag === "StreamCompleted") {
                   tokensUsed = (event.metadata?.tokensUsed as number) ?? 0;
-                  steps = (event.metadata?.iterations as number) ?? 0;
+                  steps =
+                    (event.metadata?.iterations as number | undefined) ??
+                    (event.metadata?.stepsCount as number | undefined) ??
+                    0;
                   if (event.toolSummary && event.toolSummary.length > 0) {
                     toolsUsed = event.toolSummary.map((t) => t.name);
                   }
-                  // Fallback: if no TextDelta events arrived (final-answer meta-tool path),
-                  // use the output from StreamCompleted directly.
+                  // StreamCompleted.output is authoritative final output after verification/retries.
                   const output = (event as any).output as string | undefined;
                   if (output?.trim()) {
                     update((s) => {
-                      const turn = s.activeTurns.find((t) => t.id === assistantTurnId);
-                      if (turn && !turn.content.trim()) {
-                        return {
-                          ...s,
-                          activeTurns: s.activeTurns.map((t) =>
-                            t.id === assistantTurnId ? { ...t, content: output } : t,
-                          ),
-                        };
-                      }
-                      return s;
+                      return {
+                        ...s,
+                        activeTurns: s.activeTurns.map((t) =>
+                          t.id === assistantTurnId ? { ...t, content: output } : t,
+                        ),
+                      };
                     });
                   }
                 } else if (event._tag === "StreamError") {
@@ -399,6 +528,7 @@ function createChatStore() {
     loadSessions,
     selectSession,
     createSession,
+    updateSessionConfig,
     deleteSession,
     renameSession,
     sendMessage,
