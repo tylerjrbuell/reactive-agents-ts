@@ -29,8 +29,8 @@ const agent = await ReactiveAgents.create()
     .build()
 
 const result = await agent.run(
-    'Fetch the current USD price for each of these 4 cryptocurrencies: XRP, XLM, ETH, Bitcoin. ' +
-        'Then render a markdown table with columns: Currency | Price.'
+    'Fetch the current USD price for: XRP, XLM, ETH, Bitcoin. ' +
+        'Then render a markdown table with columns: Currency | Price | Source.'
 )
 
 console.log('\n--- Result ---')
