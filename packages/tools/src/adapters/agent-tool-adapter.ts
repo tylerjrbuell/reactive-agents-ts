@@ -9,11 +9,12 @@ export const MAX_RECURSION_DEPTH = 3;
 export const MAX_PARENT_CONTEXT_CHARS = 2000;
 
 /**
- * Tools that are always included in every sub-agent's tool scope regardless of
- * what the parent configured. Sub-agents need recall access to store/read
- * intermediate results during reasoning.
+ * Optional tools to force into every sub-agent scope.
+ *
+ * This is empty by default because light runtimes used by delegated sub-agents
+ * do not register memory meta-tools like recall.
  */
-export const ALWAYS_INCLUDE_TOOLS = ["recall"] as const;
+export const ALWAYS_INCLUDE_TOOLS: readonly string[] = [];
 
 /** Maximum characters per individual tool result summary. */
 const MAX_TOOL_RESULT_CHARS = 200;
@@ -107,6 +108,8 @@ export interface SubAgentResult {
   readonly summary: string;
   readonly tokensUsed: number;
   readonly stepsCompleted?: number;
+  /** Successful non-meta tools the sub-agent used while completing the task. */
+  readonly delegatedToolsUsed?: readonly string[];
   /** Scratchpad keys forwarded to the parent with a `sub:<agentName>:` prefix */
   readonly forwardedScratchpadKeys?: readonly string[];
 }
@@ -147,6 +150,7 @@ export const createSubAgentExecutor = (
     success: boolean;
     tokensUsed: number;
     stepsCompleted?: number;
+    delegatedToolsUsed?: readonly string[];
     /** Scratchpad entries written by the sub-agent during execution */
     scratchpadEntries?: ReadonlyMap<string, string> | Map<string, string>;
   }>,
@@ -192,8 +196,6 @@ export const createSubAgentExecutor = (
       if (config.systemPrompt) parts.push(config.systemPrompt);
       const composedSystemPrompt = parts.join("\n\n");
 
-      // Fix 1: Always include recall tool in sub-agent tool scope so
-      // sub-agents can store/retrieve intermediate results during reasoning.
       const baseTools = config.tools;
       const effectiveTools: readonly string[] = baseTools !== undefined
         ? [...new Set([...baseTools, ...ALWAYS_INCLUDE_TOOLS])]
@@ -271,6 +273,7 @@ export const createSubAgentExecutor = (
         summary,
         tokensUsed: result.tokensUsed,
         stepsCompleted: result.stepsCompleted,
+        delegatedToolsUsed: result.delegatedToolsUsed,
         forwardedScratchpadKeys: forwardedKeys.length > 0 ? forwardedKeys : undefined,
       };
     } catch (error) {
@@ -407,6 +410,67 @@ export const createSpawnAgentTool = (): ToolDefinition => ({
   category: "custom" as const,
   riskLevel: "medium" as const,
   timeoutMs: 120_000,
+  requiresApproval: false,
+  source: "function" as const,
+});
+
+/**
+ * Create the `spawn-agents` tool definition used when `.withDynamicSubAgents()`
+ * is enabled. Dispatches N sub-agents in parallel with a single tool call.
+ * The handler is registered by the builder alongside `spawn-agent`.
+ */
+export const createSpawnAgentsTool = (): ToolDefinition => ({
+  name: "spawn-agents",
+  description:
+    "Dispatch multiple sub-agents in parallel with a single tool call. Each sub-agent " +
+    "runs independently and simultaneously — use this when tasks have NO dependencies " +
+    "on each other's results. " +
+    "\n\nUse `spawn-agent` (singular) instead when: " +
+    "(1) spawning exactly one sub-agent, or " +
+    "(2) tasks are sequential — task B needs task A's output as input. " +
+    "\n\nEach task description must be fully self-contained. Sub-agents start with a " +
+    "fresh context window and zero knowledge of your conversation. Include all specific " +
+    "values: URLs, IDs, file paths, usernames, dates, phone numbers. Never say 'the repo' " +
+    "— say 'github.com/owner/repo'. Never say 'the user' — say 'user@example.com'. " +
+    "\n\nSet `failFast: true` for all-or-nothing workflows (e.g., deployment steps). " +
+    "Set `maxConcurrency` when tasks call rate-limited APIs (e.g., 3 for GitHub API).",
+  parameters: [
+    {
+      name: "tasks",
+      type: "array" as const,
+      description:
+        "Array of sub-agent task descriptors to run in parallel. Each element: " +
+        "{ task: string (required, fully self-contained), " +
+        "name: string (required, kebab-case, e.g. 'commit-summarizer'), " +
+        "role?: string (e.g. 'researcher'), " +
+        "instructions?: string (behavioral guidance), " +
+        "tone?: string (e.g. 'concise'), " +
+        "tools?: string[] (whitelist of tool names — omit for all parent tools) }",
+      required: true,
+    },
+    {
+      name: "failFast",
+      type: "boolean" as const,
+      description:
+        "When true: abort all remaining agents on first failure (all-or-nothing). " +
+        "When false (default): run all agents to completion and return partial results " +
+        "— succeeded agents return output, failed agents return error message.",
+      required: false,
+      default: false,
+    },
+    {
+      name: "maxConcurrency",
+      type: "number" as const,
+      description:
+        "Maximum number of agents running simultaneously. Default: all tasks run at once. " +
+        "Cap this when tasks call rate-limited APIs — e.g., set to 3 for GitHub API tasks.",
+      required: false,
+    },
+  ],
+  returnType: "object" as const,
+  category: "custom" as const,
+  riskLevel: "medium" as const,
+  timeoutMs: 300_000, // 5 min — N agents in parallel; multiply spawn-agent's 2 min by headroom
   requiresApproval: false,
   source: "function" as const,
 });

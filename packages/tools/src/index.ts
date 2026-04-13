@@ -126,6 +126,7 @@ export {
   createAgentTool,
   createRemoteAgentTool,
   createSpawnAgentTool,
+  createSpawnAgentsTool,
   executeAgentTool,
   executeRemoteAgentTool,
   createSubAgentExecutor,

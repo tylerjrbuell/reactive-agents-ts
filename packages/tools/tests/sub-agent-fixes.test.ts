@@ -1,6 +1,6 @@
 // File: tests/sub-agent-fixes.test.ts
 // Tests for the three sub-agent fixes:
-// 1. Auto-include recall tool
+// 1. Preserve explicit tool scope
 // 2. Cap maxIterations to 4
 // 3. Forward scratchpad keys with sub: prefix
 import { describe, it, expect } from "bun:test";
@@ -10,14 +10,14 @@ import {
 } from "../src/adapters/agent-tool-adapter.js";
 import type { SubAgentConfig } from "../src/adapters/agent-tool-adapter.js";
 
-// ─── Fix 1: Auto-include recall tool ───
+// ─── Fix 1: Preserve explicit tool scope ───
 
-describe("Fix 1: auto-include scratchpad tools", () => {
-  it("exports ALWAYS_INCLUDE_TOOLS containing recall", () => {
-    expect(ALWAYS_INCLUDE_TOOLS).toContain("recall");
+describe("Fix 1: preserve explicit tool scope", () => {
+  it("exports no always-included tools by default", () => {
+    expect(ALWAYS_INCLUDE_TOOLS).toEqual([]);
   });
 
-  it("auto-includes recall tool in sub-agent tool list even when not specified", async () => {
+  it("preserves the configured tool list without injecting recall", async () => {
     let capturedOpts: any;
     const executor = createSubAgentExecutor(
       { name: "no-tools-agent", tools: ["web-search"] },
@@ -28,12 +28,10 @@ describe("Fix 1: auto-include scratchpad tools", () => {
       0,
     );
     await executor("test");
-    expect(capturedOpts.allowedTools).toContain("recall");
-    // Original tool should still be present
-    expect(capturedOpts.allowedTools).toContain("web-search");
+    expect(capturedOpts.allowedTools).toEqual(["web-search"]);
   });
 
-  it("does not duplicate recall when already in tool list", async () => {
+  it("preserves recall when the caller explicitly includes it", async () => {
     let capturedOpts: any;
     const executor = createSubAgentExecutor(
       { name: "dup-test-agent", tools: ["recall", "file-write"] },
@@ -44,10 +42,7 @@ describe("Fix 1: auto-include scratchpad tools", () => {
       0,
     );
     await executor("test");
-    const recallCount = capturedOpts.allowedTools.filter(
-      (t: string) => t === "recall"
-    ).length;
-    expect(recallCount).toBe(1);
+    expect(capturedOpts.allowedTools).toEqual(["recall", "file-write"]);
   });
 
   it("passes undefined allowedTools when config.tools is undefined (all tools allowed)", async () => {
@@ -65,7 +60,7 @@ describe("Fix 1: auto-include scratchpad tools", () => {
     expect(capturedOpts.allowedTools).toBeUndefined();
   });
 
-  it("adds recall tool to a restricted single-tool list", async () => {
+  it("does not expand a restricted single-tool list", async () => {
     let capturedOpts: any;
     const executor = createSubAgentExecutor(
       { name: "single-tool-agent", tools: ["file-read"] },
@@ -76,9 +71,7 @@ describe("Fix 1: auto-include scratchpad tools", () => {
       0,
     );
     await executor("test");
-    expect(capturedOpts.allowedTools).toHaveLength(2); // file-read + recall
-    expect(capturedOpts.allowedTools).toContain("file-read");
-    expect(capturedOpts.allowedTools).toContain("recall");
+    expect(capturedOpts.allowedTools).toEqual(["file-read"]);
   });
 });
 

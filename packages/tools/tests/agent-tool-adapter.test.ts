@@ -4,6 +4,7 @@ import { describe, it, expect, beforeEach } from "bun:test";
 import {
   createAgentTool,
   createRemoteAgentTool,
+  createSpawnAgentsTool,
   executeAgentTool,
   executeRemoteAgentTool,
   MAX_RECURSION_DEPTH,
@@ -216,6 +217,52 @@ describe("Agent Tool Adapter", () => {
   describe("MAX_RECURSION_DEPTH", () => {
     it("should be 3", () => {
       expect(MAX_RECURSION_DEPTH).toBe(3);
+    });
+  });
+
+  describe("createSpawnAgentsTool", () => {
+    it("has name spawn-agents", () => {
+      expect(createSpawnAgentsTool().name).toBe("spawn-agents");
+    });
+
+    it("has required tasks array parameter", () => {
+      const tool = createSpawnAgentsTool();
+      const param = tool.parameters.find((p) => p.name === "tasks");
+      expect(param).toBeDefined();
+      expect(param!.required).toBe(true);
+      expect(param!.type).toBe("array");
+    });
+
+    it("has optional failFast boolean defaulting to false", () => {
+      const tool = createSpawnAgentsTool();
+      const param = tool.parameters.find((p) => p.name === "failFast");
+      expect(param).toBeDefined();
+      expect(param!.required).toBe(false);
+      expect(param!.default).toBe(false);
+    });
+
+    it("has optional maxConcurrency number parameter", () => {
+      const tool = createSpawnAgentsTool();
+      const param = tool.parameters.find((p) => p.name === "maxConcurrency");
+      expect(param).toBeDefined();
+      expect(param!.required).toBe(false);
+      expect(param!.type).toBe("number");
+    });
+
+    it("description explains when to use vs spawn-agent", () => {
+      const tool = createSpawnAgentsTool();
+      expect(tool.description).toContain("independent");
+      expect(tool.description).toContain("spawn-agent");
+    });
+
+    it("has 300s timeout to cover N parallel agents", () => {
+      expect(createSpawnAgentsTool().timeoutMs).toBe(300_000);
+    });
+
+    it("has medium riskLevel and no approval required", () => {
+      const tool = createSpawnAgentsTool();
+      expect(tool.riskLevel).toBe("medium");
+      expect(tool.requiresApproval).toBe(false);
     });
   });
 });
