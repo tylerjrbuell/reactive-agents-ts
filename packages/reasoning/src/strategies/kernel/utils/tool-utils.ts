@@ -706,7 +706,16 @@ function describeToolBehavior(name: string): readonly string[] {
   ];
 }
 
-function isParallelBatchSafeTool(name: string): boolean {
+export function isParallelBatchSafeTool(name: string): boolean {
+  // Explicitly safe tools — dispatching multiple in parallel is always correct.
+  const PARALLEL_SAFE_TOOLS = new Set([
+    "spawn-agent",   // single subagent dispatch
+    "spawn-agents",  // parallel subagent dispatch
+    "recall",        // scratchpad read — pure, no side effect
+    "find",          // index lookup — pure, no side effect
+  ]);
+  if (PARALLEL_SAFE_TOOLS.has(name)) return true;
+
   const lowered = name.toLowerCase();
   const LOCAL_META_TOOLS = new Set([
     "final-answer",
@@ -714,8 +723,6 @@ function isParallelBatchSafeTool(name: string): boolean {
     "context-status",
     "brief",
     "pulse",
-    "find",
-    "recall",
     "checkpoint",
   ]);
   if (LOCAL_META_TOOLS.has(name)) return false;

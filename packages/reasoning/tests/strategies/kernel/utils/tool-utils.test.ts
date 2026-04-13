@@ -272,6 +272,104 @@ describe("planNextMoveBatches", () => {
     expect(batches[1]?.map((c) => c.name)).toEqual(["file-write"]);
     expect(batches[2]?.map((c) => c.name)).toEqual(["web-search"]);
   });
+
+  it("batches multiple spawn-agent calls together as parallel-safe", () => {
+    const calls = [
+      { id: "1", name: "spawn-agent" },
+      { id: "2", name: "spawn-agent" },
+      { id: "3", name: "spawn-agent" },
+    ];
+    const batches = planNextMoveBatches(calls, { enabled: true, maxBatchSize: 5 });
+    expect(batches.length).toBe(1);
+    expect(batches[0]!.length).toBe(3);
+  });
+});
+
+describe("planNextMoveBatches — safe-tool batching", () => {
+  const cfg = { enabled: true, maxBatchSize: 4, allowParallelBatching: true };
+
+  function makeCalls(names: string[]) {
+    return names.map((name, i) => ({ id: `id-${i}`, name, arguments: {} }));
+  }
+
+  it("batches two spawn-agents calls together", () => {
+    const batches = planNextMoveBatches(makeCalls(["spawn-agents", "spawn-agents"]), cfg);
+    expect(batches).toHaveLength(1);
+    expect(batches[0]).toHaveLength(2);
+  });
+
+  it("batches two recall calls together", () => {
+    const batches = planNextMoveBatches(makeCalls(["recall", "recall"]), cfg);
+    expect(batches).toHaveLength(1);
+    expect(batches[0]).toHaveLength(2);
+  });
+
+  it("batches two find calls together", () => {
+    const batches = planNextMoveBatches(makeCalls(["find", "find"]), cfg);
+    expect(batches).toHaveLength(1);
+    expect(batches[0]).toHaveLength(2);
+  });
+
+  it("does NOT batch file-write with itself", () => {
+    const batches = planNextMoveBatches(makeCalls(["file-write", "file-write"]), cfg);
+    expect(batches).toHaveLength(2);
+    expect(batches[0]).toHaveLength(1);
+  });
+
+  it("does NOT batch final-answer", () => {
+    const batches = planNextMoveBatches(makeCalls(["final-answer", "web-search"]), cfg);
+    // final-answer is unsafe; web-search lands in its own batch
+    expect(batches).toHaveLength(2);
+  });
+
+  it("splits unsafe tool between two safe batches", () => {
+    const calls = makeCalls(["web-search", "file-write", "web-search"]);
+    const batches = planNextMoveBatches(calls, cfg);
+    // web-search | file-write | web-search → 3 batches
+    expect(batches).toHaveLength(3);
+    expect(batches[0]![0]!.name).toBe("web-search");
+    expect(batches[1]![0]!.name).toBe("file-write");
+    expect(batches[2]![0]!.name).toBe("web-search");
+  });
+});
+
+describe("planNextMoveBatches — default-enabled behavior", () => {
+  it("batches safe tools when called with enabled config", () => {
+    const defaultCfg = { enabled: true, maxBatchSize: 4, allowParallelBatching: true };
+    const calls = [
+      { id: "a", name: "web-search", arguments: {} },
+      { id: "b", name: "web-search", arguments: {} },
+      { id: "c", name: "web-search", arguments: {} },
+    ];
+    const batches = planNextMoveBatches(calls, defaultCfg);
+    expect(batches).toHaveLength(1);
+    expect(batches[0]).toHaveLength(3);
+  });
+
+  it("returns singletons when batching is explicitly disabled", () => {
+    const disabledCfg = { enabled: false };
+    const calls = [
+      { id: "a", name: "web-search", arguments: {} },
+      { id: "b", name: "web-search", arguments: {} },
+    ];
+    const batches = planNextMoveBatches(calls, disabledCfg);
+    expect(batches).toHaveLength(2);
+    expect(batches[0]).toHaveLength(1);
+    expect(batches[1]).toHaveLength(1);
+  });
+
+  it("respects maxBatchSize cap", () => {
+    const cfg = { enabled: true, maxBatchSize: 2, allowParallelBatching: true };
+    const calls = [
+      { id: "a", name: "web-search", arguments: {} },
+      { id: "b", name: "web-search", arguments: {} },
+      { id: "c", name: "web-search", arguments: {} },
+    ];
+    const batches = planNextMoveBatches(calls, cfg);
+    expect(batches).toHaveLength(2); // [2-call batch, 1-call batch]
+    expect(batches[0]).toHaveLength(2);
+    expect(batches[1]).toHaveLength(1);
+  });
 });
 
 describe("compressToolResult", () => {
