@@ -700,7 +700,7 @@ export function handleActing(
           const finishText =
             overflowPreview && recallAvailable
               ? "Required tool calls are satisfied. The observations above are compressed previews; the real command output is stored under keys like _tool_result_1. Before summarizing, call recall(\"<that-key>\", full: true) for each key shown in the [STORED: …] header. Do not invent CLI flags, subcommands, or options — only report text you retrieved via recall."
-              : "All required tools have been called. Synthesize the results and provide your final answer.";
+              : "Required tool calls are satisfied. If you have all the data needed to answer the task, give your FINAL ANSWER now. If any data is still missing, gather it first — then give your FINAL ANSWER.";
           const finishMsg: KernelMessage = { role: "user", content: finishText };
           return [...prior, assistantMsg, ...toolResultMessages, finishMsg];
         }

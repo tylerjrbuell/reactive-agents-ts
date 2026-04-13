@@ -203,7 +203,7 @@ Respond with JSON:
 }
 
 Rules:
-- "required" = tools that MUST be called. For each required tool, set "minCalls" to how many times it must be called (e.g. fetching prices for 4 currencies → http-get with minCalls: 4). Default minCalls to 1 when uncertain.
+- "required" = tools that MUST be called. For each required tool, set "minCalls" to how many times it must be called. Count N distinct entities/items in the task and set minCalls = N when each needs a separate lookup (e.g. 4 currencies → minCalls: 4, regardless of whether the tool is http-get or web-search). Default minCalls to 1 only when a single call covers the whole task.
 - "relevant" = tools that could assist the agent (e.g. tools from the same service namespace as required tools, or tools whose capabilities match the task context). Always include recall.
 - If the task mentions a service name (e.g. "Signal", "GitHub"), include the SPECIFIC action tools needed, not all tools from that namespace.
 - An empty required list is valid for simple questions that need no tools.
