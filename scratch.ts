@@ -1,54 +1,41 @@
 /**
- * Test: context7 MCP via docker — pure stdio
+ * Test: parallel tool call batching in the ReAct kernel
  *
- * mcp/context7 is a stdio MCP server. `docker run -i --rm` pipes
- * stdin/stdout directly to the container; no port mapping needed.
- * The HTTP server it starts on :8080 is for Docker Gateway multi-client
- * scenarios only — direct clients use stdio.
+ * Gives the agent 4 independent HTTP price lookups. With parallel batching
+ * enabled by default (nextMovesPlanning.enabled=true), the LLM should return
+ * all 4 http-get calls in a single response, and act.ts executes them with
+ * Effect.all({ concurrency: N }).
+ *
+ * What to look for in output (parallel batch working):
+ *   [action] http-get(url: "https://...xrp...")
+ *   [action] http-get(url: "https://...xlm...")
+ *   [action] http-get(url: "https://...eth...")
+ *   [action] http-get(url: "https://...btc...")
+ *   [observation] {...}
+ *   [observation] {...}
+ *   ...
+ *
+ * If you see action→observation→action→observation, the LLM is only returning
+ * one tool call per response (batching not firing at the model level).
  */
 import { ReactiveAgents } from 'reactive-agents'
 
 const agent = await ReactiveAgents.create()
     .withProvider('ollama')
-    .withModel({ model: 'gemma4:e4b', temperature: 0.2, maxTokens: 10000 })
-    .withCortex()
-    // .withMCP({
-    //     name: 'context7',
-    //     transport: 'stdio',
-    //     command: 'docker',
-    //     args: ['run', '-i', '--rm', 'mcp/context7:latest'],
-    // })
-    // .withMCP({
-    //     name: 'github',
-    //     transport: 'stdio',
-    //     command: 'docker',
-    //     args: [
-    //         'run',
-    //         '-i',
-    //         '--rm',
-    //         '-e',
-    //         'GITHUB_PERSONAL_ACCESS_TOKEN',
-    //         'ghcr.io/github/github-mcp-server',
-    //     ],
-    //     env: {
-    //         GITHUB_PERSONAL_ACCESS_TOKEN:
-    //             process.env.GITHUB_PERSONAL_ACCESS_TOKEN ?? '',
-    //     },
-    // })
+    .withModel({ model: 'gemma4:e4b', temperature: 0.2, maxTokens: 8000 })
     .withReasoning({ defaultStrategy: 'reactive' })
-    .withTools({
-        terminal: {
-            additionalCommands: ['gh', 'rax'],
-        },
-    })
-    // .withDynamicSubAgents()
-    .withMemory()
+    .withTools()
     .withObservability({ verbosity: 'debug', live: true })
-    .withVerification()
     .build()
 
 const result = await agent.run(
-    'What is the Reactive Agents TypeScript framework?'
+    'Fetch the current USD price for each of these 4 cryptocurrencies: XRP, XLM, ETH, Bitcoin. ' +
+        'Use http-get for each: https://api.coinbase.com/v2/prices/XRP-USD/spot, ' +
+        'https://api.coinbase.com/v2/prices/XLM-USD/spot, ' +
+        'https://api.coinbase.com/v2/prices/ETH-USD/spot, ' +
+        'https://api.coinbase.com/v2/prices/BTC-USD/spot. ' +
+        'Call all 4 in the same response since they are independent. ' +
+        'Then render a markdown table with columns: Currency | Price.'
 )
 
 console.log('\n--- Result ---')
