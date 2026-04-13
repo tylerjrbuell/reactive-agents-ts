@@ -1069,7 +1069,11 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     effectiveRequiredTools = [...classifyResult.required];
                     effectiveRequiredToolQuantities = classifyResult.requiredToolQuantities;
                     if (obs && isNormal) {
-                      yield* obs.info(`◉ [classify]   required: ${classifyResult.required.join(", ")}`)
+                      const qHint = Object.entries(effectiveRequiredToolQuantities)
+                        .filter(([, n]) => n > 1)
+                        .map(([t, n]) => `${t}×${n}`)
+                        .join(", ");
+                      yield* obs.info(`◉ [classify]   required: ${classifyResult.required.join(", ")}${qHint ? ` (${qHint})` : ""}`)
                         .pipe(Effect.catchAll(() => Effect.void));
                     }
                   }

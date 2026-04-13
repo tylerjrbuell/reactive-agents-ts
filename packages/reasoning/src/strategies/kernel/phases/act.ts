@@ -31,6 +31,8 @@ import {
 import { planNextMoveBatches } from "../utils/tool-utils.js";
 import { checkToolCall, defaultGuards, META_TOOL_SET } from "./guard.js";
 
+const REQUIRED_TOOLS_SATISFIED_PREFIX = "Required tool calls are satisfied";
+
 /** Observation is a compressed preview that points at scratchpad storage — model must recall before synthesizing. */
 function observationReferencesStoredOverflow(content: string): boolean {
   return (
@@ -689,20 +691,40 @@ export function handleActing(
           return [...prior, assistantMsg, ...toolResultMessages, progressMsg];
         }
 
-        // All required tools called — tell model to finish (but not while previews still hide data behind recall)
+        // All required tools called — tell model to finish (but not while previews still hide data behind recall).
+        // Only send this nudge ONCE per run to avoid contradictory repeated messages.
         if (reqTools.length > 0) {
-          const overflowPreview = toolResultMessages.some(
-            (m) => typeof m.content === "string" && observationReferencesStoredOverflow(m.content),
+          const alreadySentCompletion = prior.some(
+            (m) => m.role === "user" && typeof m.content === "string" &&
+              m.content.startsWith(REQUIRED_TOOLS_SATISFIED_PREFIX),
           );
-          const recallAvailable = (input.allToolSchemas ?? input.availableToolSchemas ?? []).some(
-            (s) => s.name === "recall",
+          if (!alreadySentCompletion) {
+            const overflowPreview = toolResultMessages.some(
+              (m) => typeof m.content === "string" && observationReferencesStoredOverflow(m.content),
+            );
+            const recallAvailable = (input.allToolSchemas ?? input.availableToolSchemas ?? []).some(
+              (s) => s.name === "recall",
+            );
+            const finishText =
+              overflowPreview && recallAvailable
+                ? `${REQUIRED_TOOLS_SATISFIED_PREFIX}. The observations above are compressed previews; the real command output is stored under keys like _tool_result_1. Before summarizing, call recall("<that-key>", full: true) for each key shown in the [STORED: …] header. Do not invent CLI flags, subcommands, or options — only report text you retrieved via recall.`
+                : `${REQUIRED_TOOLS_SATISFIED_PREFIX}. If you have all the data needed to answer the task, give your FINAL ANSWER now. If any data is still missing, gather it first — then give your FINAL ANSWER.`;
+            const finishMsg: KernelMessage = { role: "user", content: finishText };
+            return [...prior, assistantMsg, ...toolResultMessages, finishMsg];
+          }
+
+          // Completion gate already sent but this turn had errors — nudge to retry or finish.
+          const thisRoundHadErrors = newStepsThisTurn.some(
+            (s) => s.type === "observation" &&
+              (s.metadata?.observationResult as { success?: boolean } | undefined)?.success === false,
           );
-          const finishText =
-            overflowPreview && recallAvailable
-              ? "Required tool calls are satisfied. The observations above are compressed previews; the real command output is stored under keys like _tool_result_1. Before summarizing, call recall(\"<that-key>\", full: true) for each key shown in the [STORED: …] header. Do not invent CLI flags, subcommands, or options — only report text you retrieved via recall."
-              : "Required tool calls are satisfied. If you have all the data needed to answer the task, give your FINAL ANSWER now. If any data is still missing, gather it first — then give your FINAL ANSWER.";
-          const finishMsg: KernelMessage = { role: "user", content: finishText };
-          return [...prior, assistantMsg, ...toolResultMessages, finishMsg];
+          if (thisRoundHadErrors) {
+            const retryMsg: KernelMessage = {
+              role: "user",
+              content: "One or more tool calls above failed. If you used a wrong tool name, retry with the correct tool name shown in the system prompt. If you have enough data, give your FINAL ANSWER now.",
+            };
+            return [...prior, assistantMsg, ...toolResultMessages, retryMsg];
+          }
         }
 
         return [...prior, assistantMsg, ...toolResultMessages];

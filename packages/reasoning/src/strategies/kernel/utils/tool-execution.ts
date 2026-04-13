@@ -19,6 +19,7 @@ import { Effect } from "effect";
 import type { ObservationResult } from "../../../types/observation.js";
 import { categorizeToolName, deriveResultKind } from "../../../types/observation.js";
 import type { ContextProfile } from "../../../context/context-profile.js";
+import { ToolNotFoundError } from "@reactive-agents/tools";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import { evaluateTransform, compressToolResult, nextToolResultKey } from "./tool-utils.js";
 import type { MaybeService, ToolServiceInstance } from "../kernel-state.js";
@@ -560,11 +561,26 @@ export function executeNativeToolCall(
 
         return { content, success, storedKey, delegatedToolsUsed };
       }),
-      Effect.catchAll((e) =>
-        Effect.succeed({
-          content: `[Tool error: ${e instanceof Error ? e.message : String(e)}]`,
+      Effect.catchAll((e) => {
+        const msg = e instanceof Error ? e.message : String(e);
+        // ToolNotFoundError carries availableTools — surface them so the model can self-correct.
+        const available = e instanceof ToolNotFoundError ? e.availableTools : undefined;
+        if (available && available.length > 0 && msg.includes("not found")) {
+          const searchLike = available.filter((n) =>
+            n.includes("search") || n.includes("fetch") || n.includes("get") || n.includes("browse"),
+          );
+          const suggestion = searchLike.length > 0
+            ? `For search/fetch tasks use: ${searchLike.slice(0, 4).join(", ")}.`
+            : `Available tools include: ${available.slice(0, 5).join(", ")}.`;
+          return Effect.succeed({
+            content: `[Tool error: ${msg}. ${suggestion} Use EXACT tool names from the system prompt.]`,
+            success: false,
+          });
+        }
+        return Effect.succeed({
+          content: `[Tool error: ${msg}]`,
           success: false,
-        }),
-      ),
+        });
+      }),
     );
 }
