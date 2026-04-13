@@ -1,0 +1,122 @@
+{
+  "probeId": "trivial-1step",
+  "file": "harness-reports/probe-trivial-1step.jsonl",
+  "analyzedAt": "2026-04-13T01:11:36.907Z",
+  "iterations": 1,
+  "kernelSteps": 13,
+  "kernelStepsByStrategy": {
+    "structured-output": 2,
+    "classify-tool-relevance": 2,
+    "reactive": 9
+  },
+  "kernelStepsByKernelPass": {
+    "unknown": 4,
+    "reactive:main": 9
+  },
+  "entropyTimeline": [
+    {
+      "iteration": 0,
+      "composite": 0.15,
+      "shape": "flat",
+      "confidence": "high"
+    },
+    {
+      "iteration": 1,
+      "composite": 0.15,
+      "shape": "flat",
+      "confidence": "high"
+    },
+    {
+      "iteration": 2,
+      "composite": 0.15,
+      "shape": "flat",
+      "confidence": "high"
+    },
+    {
+      "iteration": 4,
+      "composite": 0.5601515151515152,
+      "shape": "flat",
+      "confidence": "low"
+    },
+    {
+      "iteration": 9,
+      "composite": 0.5667592592592593,
+      "shape": "oscillating",
+      "confidence": "low"
+    }
+  ],
+  "finalEntropy": 0.5667592592592593,
+  "meanEntropy": 0.3153821548821549,
+  "convergenceIteration": null,
+  "entropyShape": "oscillating",
+  "phaseCounts": {
+    "bootstrap": 2,
+    "strategy-select": 2,
+    "think": 2,
+    "complete": 2,
+    "act": 1,
+    "observe": 1,
+    "memory-flush": 1
+  },
+  "actPhaseCount": 1,
+  "thinkPhaseCount": 2,
+  "observePhaseCount": 1,
+  "phaseDurationMs": {
+    "bootstrap": 16.17378599999995,
+    "strategy-select": 2.2197649999999953,
+    "think": 3170.255634000001,
+    "complete": 1.7401200000003882,
+    "act": 0.8498099999997066,
+    "observe": 0.7086820000004082,
+    "memory-flush": 592.2471130000013
+  },
+  "tokensUsed": 1650,
+  "totalDurationMs": 4821,
+  "model": "cogito:8b",
+  "provider": "ollama",
+  "loopSignals": [],
+  "strategySignals": [],
+  "requiredToolSignals": [],
+  "exceeded10Iterations": false,
+  "hadLoopSignal": false,
+  "hadStrategySwitch": false,
+  "hadICSNudge": false,
+  "hasActPhase": true,
+  "discoveredMetricNames": [
+    "agent.completions",
+    "agent.duration_ms",
+    "agent.iterations",
+    "agent.total_tokens",
+    "entropy.composite",
+    "execution.iteration",
+    "execution.model_name",
+    "execution.phase.count",
+    "execution.phase.duration_ms",
+    "execution.phase_duration_ms",
+    "execution.tokens_used",
+    "execution.tool.execution",
+    "execution.total_duration",
+    "reasoning.answer_iteration",
+    "reasoning.final_answers",
+    "reasoning.steps",
+    "span.execution.phase.act.completed",
+    "span.execution.phase.bootstrap.completed",
+    "span.execution.phase.complete.completed",
+    "span.execution.phase.memory-flush.completed",
+    "span.execution.phase.observe.completed",
+    "span.execution.phase.strategy-select.completed",
+    "span.execution.phase.think.completed",
+    "span.execution.run.completed",
+    "span.phase.act.metrics.completed",
+    "span.phase.bootstrap.metrics.completed",
+    "span.phase.complete.metrics.completed",
+    "span.phase.memory-flush.metrics.completed",
+    "span.phase.observe.metrics.completed",
+    "span.phase.strategy-select.metrics.completed",
+    "span.phase.think.metrics.completed"
+  ],
+  "totalRecords": 149,
+  "metricRecords": 101,
+  "logRecords": 24,
+  "spanRecords": 24
+}

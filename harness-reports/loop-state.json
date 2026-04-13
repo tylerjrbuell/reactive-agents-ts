@@ -1,0 +1,775 @@
+{
+  "version": 1,
+  "lastUpdated": "2026-04-13T01:11:37.037Z",
+  "passes": [
+    {
+      "id": "20260411-1",
+      "date": "2026-04-11",
+      "scripts": [
+        "scripts/harness-probe.ts"
+      ],
+      "models": [
+        "cogito:8b"
+      ],
+      "probeCount": 5,
+      "passCount": 3,
+      "failCount": 2,
+      "weaknessIds": [
+        "W1",
+        "W2",
+        "W3",
+        "W4",
+        "W5"
+      ],
+      "newWeaknessIds": [
+        "W1",
+        "W2",
+        "W3",
+        "W4",
+        "W5"
+      ],
+      "fixedWeaknessIds": []
+    }
+  ],
+  "knownWeaknesses": [
+    {
+      "id": "W1",
+      "title": "cogito:8b generates text-format tool calls instead of native FC",
+      "severity": "high",
+      "status": "open",
+      "probeId": "tool-heavy",
+      "confirmedInPasses": [
+        "20260411-1"
+      ],
+      "targetFiles": [
+        "packages/reasoning/src/strategies/kernel/utils/stream-parser.ts"
+      ],
+      "ic": "IC-3",
+      "regressionRisk": "Any model upgrade that restores native FC would mask this — keep cogito:8b probe for isolation"
+    },
+    {
+      "id": "W2",
+      "title": "ICS observation nudges reset loop-detector consecutive-thought counter to zero",
+      "severity": "high",
+      "status": "open",
+      "probeId": "tool-heavy",
+      "confirmedInPasses": [
+        "20260411-1"
+      ],
+      "targetFiles": [
+        "packages/reasoning/src/strategies/kernel/utils/loop-detector.ts"
+      ],
+      "ic": "IC-1",
+      "regressionRisk": "Fix must not break the case where a real observation (tool result) correctly resets the counter"
+    },
+    {
+      "id": "W3",
+      "title": "JSONL metric extraction in harness scripts looked for wrong event field names",
+      "severity": "medium",
+      "status": "fixed",
+      "fixedInPass": "20260412-1",
+      "probeId": "all",
+      "confirmedInPasses": [
+        "20260411-1"
+      ],
+      "targetFiles": [
+        "scripts/harness-probe.ts",
+        "scripts/harness-probe-confirm.ts",
+        "scripts/harness-probe-wide.ts",
+        "scripts/harness-probe-analyze.ts"
+      ],
+      "ic": "IC-4",
+      "regressionRisk": "New probe scripts now use real schema — regression means someone added a harness script with the old broken extraction pattern"
+    },
+    {
+      "id": "W4",
+      "title": "withReasoning({ maxIterations }) ignored — maxIterations stored in wrong builder field",
+      "severity": "medium",
+      "status": "open",
+      "probeId": "tool-heavy",
+      "confirmedInPasses": [
+        "20260411-1"
+      ],
+      "targetFiles": [
+        "packages/runtime/src/builder.ts"
+      ],
+      "ic": "IC-2",
+      "regressionRisk": "Fix: add `if (options.maxIterations !== undefined) this._maxIterations = options.maxIterations;` inside withReasoning()"
+    },
+    {
+      "id": "W5",
+      "title": "Tree-of-thought candidate LLM calls inflate execution.iteration counter",
+      "severity": "low",
+      "status": "open",
+      "probeId": "termination-quality",
+      "confirmedInPasses": [
+        "20260411-1"
+      ],
+      "targetFiles": [
+        "packages/reasoning/src/strategies/tree-of-thought.ts",
+        "packages/reasoning/src/strategies/kernel/kernel-runner.ts"
+      ],
+      "ic": "IC-5",
+      "regressionRisk": "execution.iteration is a global LLM call counter — ToT candidate calls are correctly counted; the issue is this makes iteration counts misleading for ToT probes"
+    }
+  ],
+  "regressionBaselines": [
+    {
+      "probeId": "trivial-1step",
+      "metric": "iterations",
+      "expected": 1,
+      "tolerance": 0,
+      "direction": "exactly"
+    },
+    {
+      "probeId": "trivial-1step",
+      "metric": "actPhaseCount",
+      "expected": 0,
+      "tolerance": 0,
+      "direction": "exactly"
+    },
+    {
+      "probeId": "trivial-1step",
+      "metric": "kernelSteps",
+      "expected": 4,
+      "tolerance": 2,
+      "direction": "at-most"
+    }
+  ],
+  "metricRegistry": [
+    {
+      "name": "agent.completions",
+      "type": "counter",
+      "description": "Number of LLM completion calls made by the agent",
+      "discoveredAt": "2026-04-11",
+      "labelsObserved": []
+    },
+    {
+      "name": "agent.duration_ms",
+      "type": "histogram",
+      "description": "Total agent wall-clock duration in milliseconds",
+      "discoveredAt": "2026-04-11",
+      "labelsObserved": []
+    },
+    {
+      "name": "agent.iterations",
+      "type": "counter",
+      "description": "Alias for total iteration count (same as execution.iteration)",
+      "discoveredAt": "2026-04-11",
+      "labelsObserved": []
+    },
+    {
+      "name": "agent.total_tokens",
+      "type": "counter",
+      "description": "Total tokens consumed across all LLM calls",
+      "discoveredAt": "2026-04-11",
+      "labelsObserved": []
+    },
+    {
+      "name": "entropy.composite",
+      "type": "gauge",
+      "description": "Per-iteration output quality/entropy score (0=low entropy/high quality, 1=high entropy/low quality). Fires once per iteration. Use labels.iteration for ordering.",
+      "discoveredAt": "2026-04-11",
+      "labelsObserved": [
+        "taskId",
+        "iteration",
+        "shape",
+        "confidence"
+      ]
+    },
+    {
+      "name": "execution.iteration",
+      "type": "gauge",
+      "description": "Final total iteration count — emitted ONCE at end of run. Not per-iteration.",
+      "discoveredAt": "2026-04-11",
+      "labelsObserved": [
+        "taskId"
+      ]
+    },
+    {
+      "name": "execution.model_name",
+      "type": "counter",
+      "description": "Model and provider used for the run (value=0, info is in labels)",
+      "discoveredAt": "2026-04-11",
+      "labelsObserved": [
+        "model",
+        "provider",
+        "taskId"
+      ]
+    },
+    {
+      "name": "execution.phase_duration_ms",
+      "type": "unknown",
+      "description": "",
+      "discoveredAt": "2026-04-12T18:19:55.156Z",
+      "labelsObserved": []
+    },
+    {
+      "name": "execution.phase.count",
+      "type": "counter",
+      "description": "Count of executions of each phase. phases: bootstrap, strategy-select, think, act, observe, memory-flush, complete",
+      "discoveredAt": "2026-04-11",
+      "labelsObserved": [
+        "phase"
+      ]
+    },
+    {
+      "name": "execution.phase.duration_ms",
+      "type": "histogram",
+      "description": "Wall-clock duration of each phase execution in milliseconds",
+      "discoveredAt": "2026-04-11",
+      "labelsObserved": [
+        "phase"
+      ]
+    },
+    {
+      "name": "execution.tokens_used",
+      "type": "gauge",
+      "description": "Total tokens consumed — emitted once at end",
+      "discoveredAt": "2026-04-11",
+      "labelsObserved": [
+        "taskId"
+      ]
+    },
+    {
+      "name": "execution.tool.execution",
+      "type": "counter",
+      "description": "Count of tool executions — fires when a tool call completes",
+      "discoveredAt": "2026-04-11",
+      "labelsObserved": []
+    },
+    {
+      "name": "execution.total_duration",
+      "type": "gauge",
+      "description": "Total execution duration in milliseconds — emitted once at end",
+      "discoveredAt": "2026-04-11",
+      "labelsObserved": [
+        "taskId"
+      ]
+    },
+    {
+      "name": "llm.cost_usd",
+      "type": "unknown",
+      "description": "",
+      "discoveredAt": "2026-04-12T18:19:55.156Z",
+      "labelsObserved": []
+    },
+    {
+      "name": "llm.latency_ms",
+      "type": "unknown",
+      "description": "",
+      "discoveredAt": "2026-04-12T18:19:55.156Z",
+      "labelsObserved": []
+    },
+    {
+      "name": "llm.request.duration_ms",
+      "type": "unknown",
+      "description": "",
+      "discoveredAt": "2026-04-12T18:19:55.156Z",
+      "labelsObserved": []
+    },
+    {
+      "name": "llm.requests",
+      "type": "unknown",
+      "description": "",
+      "discoveredAt": "2026-04-12T18:19:55.156Z",
+      "labelsObserved": []
+    },
+    {
+      "name": "llm.tokens_used",
+      "type": "unknown",
+      "description": "",
+      "discoveredAt": "2026-04-12T18:19:55.156Z",
+      "labelsObserved": []
+    },
+    {
+      "name": "reasoning.answer_iteration",
+      "type": "gauge",
+      "description": "Iteration number at which the final answer was produced",
+      "discoveredAt": "2026-04-11",
+      "labelsObserved": []
+    },
+    {
+      "name": "reasoning.final_answers",
+      "type": "counter",
+      "description": "Count of final-answer events produced during the run",
+      "discoveredAt": "2026-04-11",
+      "labelsObserved": []
+    },
+    {
+      "name": "reasoning.steps",
+      "type": "counter",
+      "description": "Fires once per kernel step (value always 1). Count of records = total kernel steps. Use labels.kernelPass to distinguish reactive:main from adaptive:heuristic etc.",
+      "discoveredAt": "2026-04-11",
+      "labelsObserved": [
+        "strategy",
+        "kernelPass"
+      ]
+    },
+    {
+      "name": "span.execution.phase.act.completed",
+      "type": "unknown",
+      "description": "",
+      "discoveredAt": "2026-04-12T18:19:55.156Z",
+      "labelsObserved": []
+    },
+    {
+      "name": "span.execution.phase.bootstrap.completed",
+      "type": "unknown",
+      "description": "",
+      "discoveredAt": "2026-04-12T18:19:55.156Z",
+      "labelsObserved": []
+    },
+    {
+      "name": "span.execution.phase.complete.completed",
+      "type": "unknown",
+      "description": "",
+      "discoveredAt": "2026-04-12T18:19:55.156Z",
+      "labelsObserved": []
+    },
+    {
+      "name": "span.execution.phase.memory-flush.completed",
+      "type": "unknown",
+      "description": "",
+      "discoveredAt": "2026-04-12T18:19:55.156Z",
+      "labelsObserved": []
+    },
+    {
+      "name": "span.execution.phase.observe.completed",
+      "type": "unknown",
+      "description": "",
+      "discoveredAt": "2026-04-12T18:19:55.156Z",
+      "labelsObserved": []
+    },
+    {
+      "name": "span.execution.phase.strategy-select.completed",
+      "type": "unknown",
+      "description": "",
+      "discoveredAt": "2026-04-12T18:19:55.156Z",
+      "labelsObserved": []
+    },
+    {
+      "name": "span.execution.phase.think.completed",
+      "type": "unknown",
+      "description": "",
+      "discoveredAt": "2026-04-12T18:19:55.156Z",
+      "labelsObserved": []
+    },
+    {
+      "name": "span.execution.run.completed",
+      "type": "unknown",
+      "description": "",
+      "discoveredAt": "2026-04-12T18:19:55.156Z",
+      "labelsObserved": []
+    },
+    {
+      "name": "span.phase.act.metrics.completed",
+      "type": "unknown",
+      "description": "",
+      "discoveredAt": "2026-04-12T18:19:55.156Z",
+      "labelsObserved": []
+    },
+    {
+      "name": "span.phase.bootstrap.metrics.completed",
+      "type": "unknown",
+      "description": "",
+      "discoveredAt": "2026-04-12T18:19:55.156Z",
+      "labelsObserved": []
+    },
+    {
+      "name": "span.phase.complete.metrics.completed",
+      "type": "unknown",
+      "description": "",
+      "discoveredAt": "2026-04-12T18:19:55.156Z",
+      "labelsObserved": []
+    },
+    {
+      "name": "span.phase.memory-flush.metrics.completed",
+      "type": "unknown",
+      "description": "",
+      "discoveredAt": "2026-04-12T18:19:55.156Z",
+      "labelsObserved": []
+    },
+    {
+      "name": "span.phase.observe.metrics.completed",
+      "type": "unknown",
+      "description": "",
+      "discoveredAt": "2026-04-12T18:19:55.156Z",
+      "labelsObserved": []
+    },
+    {
+      "name": "span.phase.strategy-select.metrics.completed",
+      "type": "unknown",
+      "description": "",
+      "discoveredAt": "2026-04-12T18:19:55.156Z",
+      "labelsObserved": []
+    },
+    {
+      "name": "span.phase.think.metrics.completed",
+      "type": "unknown",
+      "description": "",
+      "discoveredAt": "2026-04-12T18:19:55.156Z",
+      "labelsObserved": []
+    }
+  ],
+  "probeHistory": [
+    {
+      "probeId": "confirm-w1-cogito-fc-basic",
+      "passCount": 2,
+      "failCount": 0,
+      "confirmedBug": false,
+      "graduated": false,
+      "lastResult": {
+        "passId": "2026-04-13-01:11",
+        "passed": true,
+        "iterations": 6,
+        "actPhaseCount": 1,
+        "hadLoopSignal": false
+      }
+    },
+    {
+      "probeId": "confirm-w1-cogito-no-tools",
+      "passCount": 2,
+      "failCount": 0,
+      "confirmedBug": false,
+      "graduated": false,
+      "lastResult": {
+        "passId": "2026-04-13-01:11",
+        "passed": true,
+        "iterations": 20,
+        "actPhaseCount": 1,
+        "hadLoopSignal": false
+      }
+    },
+    {
+      "probeId": "confirm-w2-ics-required-tool",
+      "passCount": 2,
+      "failCount": 0,
+      "confirmedBug": false,
+      "graduated": false,
+      "lastResult": {
+        "passId": "2026-04-13-01:11",
+        "passed": true,
+        "iterations": 6,
+        "actPhaseCount": 1,
+        "hadLoopSignal": false
+      }
+    },
+    {
+      "probeId": "confirm-w2-no-ics-baseline",
+      "passCount": 0,
+      "failCount": 2,
+      "confirmedBug": true,
+      "graduated": false,
+      "lastResult": {
+        "passId": "2026-04-13-01:11",
+        "passed": false,
+        "iterations": 9,
+        "actPhaseCount": 1,
+        "hadLoopSignal": false
+      }
+    },
+    {
+      "probeId": "confirm-w4-direct-maxiter",
+      "passCount": 2,
+      "failCount": 0,
+      "confirmedBug": false,
+      "graduated": false,
+      "lastResult": {
+        "passId": "2026-04-13-01:11",
+        "passed": true,
+        "iterations": 1,
+        "actPhaseCount": 0,
+        "hadLoopSignal": false
+      }
+    },
+    {
+      "probeId": "confirm-w4-reasoning-opt-maxiter",
+      "passCount": 0,
+      "failCount": 2,
+      "confirmedBug": true,
+      "graduated": false,
+      "lastResult": {
+        "passId": "2026-04-13-01:11",
+        "passed": false,
+        "iterations": 16,
+        "actPhaseCount": 1,
+        "hadLoopSignal": false
+      }
+    },
+    {
+      "probeId": "context-pressure",
+      "passCount": 2,
+      "failCount": 0,
+      "confirmedBug": false,
+      "graduated": false,
+      "lastResult": {
+        "passId": "2026-04-13-01:11",
+        "passed": true,
+        "iterations": 6,
+        "actPhaseCount": 0,
+        "hadLoopSignal": true
+      }
+    },
+    {
+      "probeId": "multistep-research",
+      "passCount": 2,
+      "failCount": 0,
+      "confirmedBug": false,
+      "graduated": false,
+      "lastResult": {
+        "passId": "2026-04-13-01:11",
+        "passed": true,
+        "iterations": 5,
+        "actPhaseCount": 0,
+        "hadLoopSignal": false
+      }
+    },
+    {
+      "probeId": "termination-quality",
+      "passCount": 0,
+      "failCount": 2,
+      "confirmedBug": true,
+      "graduated": false,
+      "lastResult": {
+        "passId": "2026-04-13-01:11",
+        "passed": false,
+        "iterations": 41,
+        "actPhaseCount": 2,
+        "hadLoopSignal": false
+      }
+    },
+    {
+      "probeId": "tool-heavy",
+      "passCount": 0,
+      "failCount": 2,
+      "confirmedBug": true,
+      "graduated": false,
+      "lastResult": {
+        "passId": "2026-04-13-01:11",
+        "passed": false,
+        "iterations": 21,
+        "actPhaseCount": 0,
+        "hadLoopSignal": false
+      }
+    },
+    {
+      "probeId": "trivial-1step",
+      "passCount": 1,
+      "failCount": 1,
+      "confirmedBug": true,
+      "graduated": false,
+      "lastResult": {
+        "passId": "2026-04-13-01:11",
+        "passed": false,
+        "iterations": 1,
+        "actPhaseCount": 1,
+        "hadLoopSignal": false
+      }
+    },
+    {
+      "probeId": "wide-adaptive-complex-routes-plan",
+      "passCount": 2,
+      "failCount": 0,
+      "confirmedBug": false,
+      "graduated": false,
+      "lastResult": {
+        "passId": "2026-04-13-01:11",
+        "passed": true,
+        "iterations": 6,
+        "actPhaseCount": 0,
+        "hadLoopSignal": false
+      }
+    },
+    {
+      "probeId": "wide-adaptive-simple-routes-reactive",
+      "passCount": 2,
+      "failCount": 0,
+      "confirmedBug": false,
+      "graduated": false,
+      "lastResult": {
+        "passId": "2026-04-13-01:11",
+        "passed": true,
+        "iterations": 11,
+        "actPhaseCount": 1,
+        "hadLoopSignal": false
+      }
+    },
+    {
+      "probeId": "wide-context-compaction",
+      "passCount": 2,
+      "failCount": 0,
+      "confirmedBug": false,
+      "graduated": false,
+      "lastResult": {
+        "passId": "2026-04-13-01:11",
+        "passed": true,
+        "iterations": 4,
+        "actPhaseCount": 0,
+        "hadLoopSignal": false
+      }
+    },
+    {
+      "probeId": "wide-direct-answer-efficiency",
+      "passCount": 0,
+      "failCount": 2,
+      "confirmedBug": true,
+      "graduated": false,
+      "lastResult": {
+        "passId": "2026-04-13-01:11",
+        "passed": false,
+        "iterations": 6,
+        "actPhaseCount": 1,
+        "hadLoopSignal": false
+      }
+    },
+    {
+      "probeId": "wide-duplicate-tool-guard",
+      "passCount": 2,
+      "failCount": 0,
+      "confirmedBug": false,
+      "graduated": false,
+      "lastResult": {
+        "passId": "2026-04-13-01:11",
+        "passed": true,
+        "iterations": 6,
+        "actPhaseCount": 1,
+        "hadLoopSignal": false
+      }
+    },
+    {
+      "probeId": "wide-output-format-json",
+      "passCount": 2,
+      "failCount": 0,
+      "confirmedBug": false,
+      "graduated": false,
+      "lastResult": {
+        "passId": "2026-04-13-01:11",
+        "passed": true,
+        "iterations": 1,
+        "actPhaseCount": 0,
+        "hadLoopSignal": false
+      }
+    },
+    {
+      "probeId": "wide-plan-decomposition",
+      "passCount": 2,
+      "failCount": 0,
+      "confirmedBug": false,
+      "graduated": false,
+      "lastResult": {
+        "passId": "2026-04-13-01:11",
+        "passed": true,
+        "iterations": 6,
+        "actPhaseCount": 0,
+        "hadLoopSignal": false
+      }
+    },
+    {
+      "probeId": "wide-quality-early-exit",
+      "passCount": 2,
+      "failCount": 0,
+      "confirmedBug": false,
+      "graduated": false,
+      "lastResult": {
+        "passId": "2026-04-13-01:11",
+        "passed": true,
+        "iterations": 5,
+        "actPhaseCount": 0,
+        "hadLoopSignal": false
+      }
+    },
+    {
+      "probeId": "wide-reflexion-critique",
+      "passCount": 2,
+      "failCount": 0,
+      "confirmedBug": false,
+      "graduated": false,
+      "lastResult": {
+        "passId": "2026-04-13-01:11",
+        "passed": true,
+        "iterations": 2,
+        "actPhaseCount": 0,
+        "hadLoopSignal": false
+      }
+    },
+    {
+      "probeId": "wide-reflexion-no-repeat-sideeffects",
+      "passCount": 2,
+      "failCount": 0,
+      "confirmedBug": false,
+      "graduated": false,
+      "lastResult": {
+        "passId": "2026-04-13-01:11",
+        "passed": true,
+        "iterations": 2,
+        "actPhaseCount": 0,
+        "hadLoopSignal": false
+      }
+    },
+    {
+      "probeId": "wide-required-tools-satisfied",
+      "passCount": 2,
+      "failCount": 0,
+      "confirmedBug": false,
+      "graduated": false,
+      "lastResult": {
+        "passId": "2026-04-13-01:11",
+        "passed": true,
+        "iterations": 6,
+        "actPhaseCount": 1,
+        "hadLoopSignal": false
+      }
+    },
+    {
+      "probeId": "wide-strategy-switch-on-loop",
+      "passCount": 2,
+      "failCount": 0,
+      "confirmedBug": false,
+      "graduated": false,
+      "lastResult": {
+        "passId": "2026-04-13-01:11",
+        "passed": true,
+        "iterations": 15,
+        "actPhaseCount": 1,
+        "hadLoopSignal": false
+      }
+    }
+  ],
+  "nextPassFocus": [
+    "drill-down: confirm-w2-no-ics-baseline",
+    "drill-down: confirm-w4-reasoning-opt-maxiter",
+    "drill-down: termination-quality",
+    "drill-down: tool-heavy",
+    "drill-down: wide-direct-answer-efficiency",
+    "new coverage: context-pressure-narrowing",
+    "new coverage: tree-of-thought"
+  ],
+  "coverageMap": {
+    "reactive-strategy": "covered",
+    "plan-execute-reflect": "covered",
+    "reflexion": "partial",
+    "tree-of-thought": "uncovered",
+    "adaptive-routing": "partial",
+    "loop-detector": "partial",
+    "ics-coordinator": "partial",
+    "termination-oracle": "partial",
+    "context-compaction": "partial",
+    "auto-checkpoint": "partial",
+    "output-synthesis": "partial",
+    "task-intent": "partial",
+    "guard-duplicate-tool": "partial",
+    "guard-required-tools": "partial",
+    "native-fc-parsing": "covered",
+    "text-fc-fallback": "covered",
+    "strategy-switching": "partial",
+    "max-iterations-wiring": "partial",
+    "context-pressure-narrowing": "uncovered",
+    "quality-early-exit": "partial",
+    "ollama-native-fc": "covered",
+    "anthropic-streaming": "uncovered",
+    "builder-tools-config": "covered",
+    "builder-observability": "covered",
+    "builder-reasoning-options": "partial"
+  }
+}

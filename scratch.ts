@@ -30,11 +30,6 @@ const agent = await ReactiveAgents.create()
 
 const result = await agent.run(
     'Fetch the current USD price for each of these 4 cryptocurrencies: XRP, XLM, ETH, Bitcoin. ' +
-        'Use http-get for each: https://api.coinbase.com/v2/prices/XRP-USD/spot, ' +
-        'https://api.coinbase.com/v2/prices/XLM-USD/spot, ' +
-        'https://api.coinbase.com/v2/prices/ETH-USD/spot, ' +
-        'https://api.coinbase.com/v2/prices/BTC-USD/spot. ' +
-        'Call all 4 in the same response since they are independent. ' +
         'Then render a markdown table with columns: Currency | Price.'
 )
 

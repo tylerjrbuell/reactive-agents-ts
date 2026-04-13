@@ -1,0 +1,144 @@
+{
+  "probeId": "wide-adaptive-simple-routes-reactive",
+  "file": "harness-reports/probe-wide-adaptive-simple-routes-reactive.jsonl",
+  "analyzedAt": "2026-04-12T17:23:21.676Z",
+  "iterations": 11,
+  "kernelSteps": 19,
+  "kernelStepsByStrategy": {
+    "structured-output": 6,
+    "classify-tool-relevance": 3,
+    "adaptive": 1,
+    "reactive": 9
+  },
+  "kernelStepsByKernelPass": {
+    "unknown": 9,
+    "adaptive:heuristic": 1,
+    "reactive:main": 9
+  },
+  "entropyTimeline": [
+    {
+      "iteration": 0,
+      "composite": 0.15,
+      "shape": "flat",
+      "confidence": "high"
+    },
+    {
+      "iteration": 1,
+      "composite": 0.15,
+      "shape": "flat",
+      "confidence": "high"
+    },
+    {
+      "iteration": 2,
+      "composite": 0.15,
+      "shape": "flat",
+      "confidence": "high"
+    },
+    {
+      "iteration": 3,
+      "composite": 0.21999999999999997,
+      "shape": "flat",
+      "confidence": "low"
+    },
+    {
+      "iteration": 4,
+      "composite": 0.34111658456486044,
+      "shape": "diverging",
+      "confidence": "low"
+    },
+    {
+      "iteration": 5,
+      "composite": 0.33140642303433004,
+      "shape": "flat",
+      "confidence": "low"
+    },
+    {
+      "iteration": 8,
+      "composite": 0.5661165845648604,
+      "shape": "flat",
+      "confidence": "low"
+    },
+    {
+      "iteration": 10,
+      "composite": 0.55640642303433,
+      "shape": "diverging",
+      "confidence": "low"
+    }
+  ],
+  "finalEntropy": 0.55640642303433,
+  "meanEntropy": 0.3081307518997976,
+  "convergenceIteration": null,
+  "entropyShape": "diverging",
+  "phaseCounts": {
+    "bootstrap": 1,
+    "strategy-select": 1,
+    "think": 1,
+    "act": 1,
+    "observe": 1,
+    "memory-flush": 1,
+    "complete": 1
+  },
+  "actPhaseCount": 1,
+  "thinkPhaseCount": 1,
+  "observePhaseCount": 1,
+  "phaseDurationMs": {
+    "bootstrap": 20.20174700001371,
+    "strategy-select": 0.6763820000051055,
+    "think": 131293.58663200002,
+    "act": 1.0250979999545962,
+    "observe": 0.7903700000024401,
+    "memory-flush": 13401.38300000003,
+    "complete": 0.8707500000018626
+  },
+  "tokensUsed": 9771,
+  "totalDurationMs": 163575,
+  "model": "qwen3:14b",
+  "provider": "ollama",
+  "loopSignals": [],
+  "strategySignals": [],
+  "requiredToolSignals": [
+    "  ┄ [obs]      ⚠️ Cannot finalize yet. Still need to call: required tools"
+  ],
+  "exceeded10Iterations": true,
+  "hadLoopSignal": false,
+  "hadStrategySwitch": false,
+  "hadICSNudge": true,
+  "hasActPhase": true,
+  "discoveredMetricNames": [
+    "agent.completions",
+    "agent.duration_ms",
+    "agent.iterations",
+    "agent.total_tokens",
+    "entropy.composite",
+    "execution.iteration",
+    "execution.model_name",
+    "execution.phase.count",
+    "execution.phase.duration_ms",
+    "execution.phase_duration_ms",
+    "execution.tokens_used",
+    "execution.tool.execution",
+    "execution.total_duration",
+    "reasoning.answer_iteration",
+    "reasoning.final_answers",
+    "reasoning.steps",
+    "span.execution.phase.act.completed",
+    "span.execution.phase.bootstrap.completed",
+    "span.execution.phase.complete.completed",
+    "span.execution.phase.memory-flush.completed",
+    "span.execution.phase.observe.completed",
+    "span.execution.phase.strategy-select.completed",
+    "span.execution.phase.think.completed",
+    "span.execution.run.completed",
+    "span.phase.act.metrics.completed",
+    "span.phase.bootstrap.metrics.completed",
+    "span.phase.complete.metrics.completed",
+    "span.phase.memory-flush.metrics.completed",
+    "span.phase.observe.metrics.completed",
+    "span.phase.strategy-select.metrics.completed",
+    "span.phase.think.metrics.completed"
+  ],
+  "totalRecords": 110,
+  "metricRecords": 76,
+  "logRecords": 19,
+  "spanRecords": 15
+}

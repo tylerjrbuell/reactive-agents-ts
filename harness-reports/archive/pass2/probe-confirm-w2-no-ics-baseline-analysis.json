@@ -1,0 +1,110 @@
+{
+  "probeId": "confirm-w2-no-ics-baseline",
+  "file": "harness-reports/probe-confirm-w2-no-ics-baseline.jsonl",
+  "analyzedAt": "2026-04-12T17:23:19.468Z",
+  "iterations": 9,
+  "kernelSteps": 13,
+  "kernelStepsByStrategy": {
+    "structured-output": 2,
+    "classify-tool-relevance": 2,
+    "reactive": 9
+  },
+  "kernelStepsByKernelPass": {
+    "unknown": 4,
+    "reactive:main": 9
+  },
+  "entropyTimeline": [
+    {
+      "iteration": 0,
+      "composite": 0.15,
+      "shape": "flat",
+      "confidence": "high"
+    },
+    {
+      "iteration": 1,
+      "composite": 0.15,
+      "shape": "flat",
+      "confidence": "high"
+    },
+    {
+      "iteration": 2,
+      "composite": 0.15,
+      "shape": "flat",
+      "confidence": "high"
+    }
+  ],
+  "finalEntropy": 0.15,
+  "meanEntropy": 0.15,
+  "convergenceIteration": null,
+  "entropyShape": "flat",
+  "phaseCounts": {
+    "bootstrap": 1,
+    "strategy-select": 1,
+    "think": 1,
+    "act": 1,
+    "observe": 1,
+    "memory-flush": 1,
+    "complete": 1
+  },
+  "actPhaseCount": 1,
+  "thinkPhaseCount": 1,
+  "observePhaseCount": 1,
+  "phaseDurationMs": {
+    "bootstrap": 18.624245999992127,
+    "strategy-select": 0.5789630000072066,
+    "think": 39048.67725200002,
+    "act": 0.8244899999699555,
+    "observe": 0.5665529999532737,
+    "memory-flush": 10910.741284999996,
+    "complete": 0.6011929999804124
+  },
+  "tokensUsed": 7591,
+  "totalDurationMs": 68175,
+  "model": "cogito:8b",
+  "provider": "ollama",
+  "loopSignals": [],
+  "strategySignals": [],
+  "requiredToolSignals": [],
+  "exceeded10Iterations": false,
+  "hadLoopSignal": false,
+  "hadStrategySwitch": false,
+  "hadICSNudge": false,
+  "hasActPhase": true,
+  "discoveredMetricNames": [
+    "agent.completions",
+    "agent.duration_ms",
+    "agent.iterations",
+    "agent.total_tokens",
+    "entropy.composite",
+    "execution.iteration",
+    "execution.model_name",
+    "execution.phase.count",
+    "execution.phase.duration_ms",
+    "execution.phase_duration_ms",
+    "execution.tokens_used",
+    "execution.tool.execution",
+    "execution.total_duration",
+    "reasoning.answer_iteration",
+    "reasoning.final_answers",
+    "reasoning.steps",
+    "span.execution.phase.act.completed",
+    "span.execution.phase.bootstrap.completed",
+    "span.execution.phase.complete.completed",
+    "span.execution.phase.memory-flush.completed",
+    "span.execution.phase.observe.completed",
+    "span.execution.phase.strategy-select.completed",
+    "span.execution.phase.think.completed",
+    "span.execution.run.completed",
+    "span.phase.act.metrics.completed",
+    "span.phase.bootstrap.metrics.completed",
+    "span.phase.complete.metrics.completed",
+    "span.phase.memory-flush.metrics.completed",
+    "span.phase.observe.metrics.completed",
+    "span.phase.strategy-select.metrics.completed",
+    "span.phase.think.metrics.completed"
+  ],
+  "totalRecords": 99,
+  "metricRecords": 66,
+  "logRecords": 18,
+  "spanRecords": 15
+}
