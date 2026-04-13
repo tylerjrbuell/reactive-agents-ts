@@ -41,6 +41,8 @@ export type StrategyFn = (input: {
   readonly sessionId?: string;
   /** Tools that MUST be called before the agent can declare success */
   readonly requiredTools?: readonly string[];
+  /** Minimum call counts per required tool — from tool classifier */
+  readonly requiredToolQuantities?: Readonly<Record<string, number>>;
   /** Tools identified as relevant/supplementary (LLM-classified) — allowed through the required-tools gate */
   readonly relevantTools?: readonly string[];
   /** Per-tool call budget enforced by the gate */

@@ -1062,7 +1062,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     systemPrompt: config.systemPrompt,
                   }).pipe(
                     // Degrade gracefully if LLM call fails — empty arrays = no filtering
-                    Effect.catchAll(() => Effect.succeed({ required: [] as readonly string[], relevant: [] as readonly string[] })),
+                    Effect.catchAll(() => Effect.succeed({ required: [] as readonly string[], relevant: [] as readonly string[], requiredToolQuantities: {} as Readonly<Record<string, number>> })),
                   );
 
                   if (classifyResult.required.length > 0 && !config.requiredTools?.tools?.length) {
@@ -1147,6 +1147,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       agentId?: string;
                       sessionId?: string;
                       requiredTools?: readonly string[];
+                      requiredToolQuantities?: Readonly<Record<string, number>>;
                       relevantTools?: readonly string[];
                       maxCallsPerTool?: Readonly<Record<string, number>>;
                       maxRequiredToolRetries?: number;

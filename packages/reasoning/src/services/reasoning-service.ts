@@ -55,6 +55,8 @@ export class ReasoningService extends Context.Tag("ReasoningService")<
       readonly sessionId?: string;
       /** Tools that MUST be called before the agent can declare success */
       readonly requiredTools?: readonly string[];
+      /** Minimum call counts per required tool — from tool classifier */
+      readonly requiredToolQuantities?: Readonly<Record<string, number>>;
       /** Max redirects when required tools are missing (default: 2) */
       readonly maxRequiredToolRetries?: number;
       /** Dynamic strategy switching configuration */

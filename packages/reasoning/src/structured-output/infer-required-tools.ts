@@ -27,23 +27,15 @@ const InferRequiredToolsResultSchema = Schema.Struct({
 
 // ── Schema for the combined classification result ──
 
-// Each required tool may carry a minCalls count (how many times the task requires it).
-// Defaults to 1 when omitted so old string-array format degrades gracefully.
-const RequiredToolEntrySchema = Schema.Union(
-  Schema.Struct({
-    name: Schema.String,
-    minCalls: Schema.optionalWith(Schema.Number, { default: () => 1 }),
-  }),
-  // backward-compat: bare string treated as { name, minCalls: 1 }
-  Schema.transform(Schema.String, Schema.Struct({ name: Schema.String, minCalls: Schema.Number }), {
-    strict: false,
-    decode: (s) => ({ name: s, minCalls: 1 }),
-    encode: (o) => o.name,
-  }),
-);
-
+// Accepts both { name, minCalls? } objects and bare strings (backward-compat).
+// Normalization to { name, minCalls: number } happens in the processing code below.
 const ToolClassificationResultSchema = Schema.Struct({
-  required: Schema.Array(RequiredToolEntrySchema),
+  required: Schema.Array(
+    Schema.Union(
+      Schema.Struct({ name: Schema.String, minCalls: Schema.optional(Schema.Number) }),
+      Schema.String,
+    ),
+  ),
   relevant: Schema.Array(Schema.String),
 });
 
@@ -226,13 +218,20 @@ Rules:
       maxTokens: 500,
     });
 
-    // Validate tool names against available set
+    // Normalize: collapse string | { name, minCalls? } union to { name, minCalls } objects.
+    // Bare strings are backward-compat from old LLM responses; transform them to struct form.
     const availableNames = new Set(config.availableTools.map((t) => t.name));
-    const requiredEntries = result.data.required.filter((e) => availableNames.has(e.name));
+    const normalized: { name: string; minCalls: number }[] = result.data.required.map(
+      (e): { name: string; minCalls: number } =>
+        typeof e === "string"
+          ? { name: e, minCalls: 1 }
+          : { name: e.name, minCalls: e.minCalls ?? 1 },
+    );
+    const requiredEntries = normalized.filter((e) => availableNames.has(e.name));
     const required = requiredEntries.map((e) => e.name);
     const requiredToolQuantities: Record<string, number> = {};
     for (const e of requiredEntries) {
-      requiredToolQuantities[e.name] = Math.max(1, e.minCalls ?? 1);
+      requiredToolQuantities[e.name] = Math.max(1, e.minCalls);
     }
     const relevant = result.data.relevant.filter((n) => availableNames.has(n));
 
