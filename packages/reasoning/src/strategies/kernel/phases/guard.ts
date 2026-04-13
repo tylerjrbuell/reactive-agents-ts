@@ -124,17 +124,34 @@ export const repetitionGuard: Guard = (tc, state, input) => {
     return (stepTc?.name ?? "") === tc.name;
   }).length;
 
-  // Parallel-safe tools may be called up to maxBatchSize times (e.g. 4 independent http-get calls).
-  // Sequential-only tools are limited to 2 calls before nudging.
+  // Threshold priority: (1) requiredToolQuantities[tool] — ground truth from classifier,
+  // (2) maxBatchSize for parallel-safe tools, (3) 2 for sequential-only tools.
+  const quantityLimit = input.requiredToolQuantities?.[tc.name];
   const maxBatchSize = input.nextMovesPlanning?.maxBatchSize ?? 4;
-  const threshold = isParallelBatchSafeTool(tc.name) ? maxBatchSize : 2;
+  const threshold = quantityLimit ?? (isParallelBatchSafeTool(tc.name) ? maxBatchSize : 2);
   if (priorCallsOfSameTool < threshold) return { pass: true };
 
-  // Include missing required tools in the nudge so the model knows what to do next
+  // Build missing-tools hint with N/M count progress when quantities are known
   const reqTools = input.requiredTools ?? [];
-  const missingRequired = reqTools.filter((t) => !state.toolsUsed.has(t));
+  const quantities = input.requiredToolQuantities ?? {};
+  const missingRequired = reqTools.filter((t) => {
+    const needed = quantities[t] ?? 1;
+    const actual = state.steps.filter((s) => {
+      if (s.type !== "action") return false;
+      return (s.metadata?.toolCall as { name?: string } | undefined)?.name === t;
+    }).length;
+    return actual < needed;
+  });
   const missingHint = missingRequired.length > 0
-    ? ` You still need to call: ${missingRequired.join(", ")}. Do that now instead of repeating ${tc.name}.`
+    ? ` You still need to call: ${missingRequired.map((t) => {
+        const needed = quantities[t];
+        if (!needed || needed <= 1) return t;
+        const actual = state.steps.filter((s) => {
+          if (s.type !== "action") return false;
+          return (s.metadata?.toolCall as { name?: string } | undefined)?.name === t;
+        }).length;
+        return `${t} (${actual}/${needed} calls done)`;
+      }).join(", ")}. Do that now instead of repeating ${tc.name}.`
     : " Use final-answer to respond now.";
   const nudge = `⚠️ You have already called ${tc.name} ${priorCallsOfSameTool} times. Stop repeating this tool.${missingHint}`;
 

@@ -55,6 +55,8 @@ interface ReactiveInput {
   readonly sessionId?: string;
   /** Tools that MUST be called before the agent can declare success */
   readonly requiredTools?: readonly string[];
+  /** Minimum call counts per required tool — from tool classifier */
+  readonly requiredToolQuantities?: Readonly<Record<string, number>>;
   /** Tools identified as relevant/supplementary (LLM-classified) — allowed through the required-tools gate */
   readonly relevantTools?: readonly string[];
   /** Per-tool call budget — gate blocks calls that exceed their limit (e.g. `{ "web-search": 3 }`) */
@@ -147,6 +149,7 @@ export const executeReactive = (
       agentId: input.agentId,
       sessionId: input.sessionId,
       requiredTools: input.requiredTools,
+      requiredToolQuantities: input.requiredToolQuantities,
       relevantTools: input.relevantTools,
       maxCallsPerTool: input.maxCallsPerTool,
       maxRequiredToolRetries: input.maxRequiredToolRetries,

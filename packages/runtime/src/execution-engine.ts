@@ -1041,6 +1041,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 // Single structured-output call replaces both heuristic required-tools
                 // inference and adaptive tool filtering. Semantic understanding > keywords.
                 let effectiveRequiredTools = config.requiredTools?.tools;
+                let effectiveRequiredToolQuantities: Readonly<Record<string, number>> | undefined;
                 let classifiedRelevantTools: readonly string[] | undefined;
                 const needsClassification =
                   (config.requiredTools?.adaptive && !config.requiredTools?.tools?.length) ||
@@ -1066,6 +1067,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
 
                   if (classifyResult.required.length > 0 && !config.requiredTools?.tools?.length) {
                     effectiveRequiredTools = [...classifyResult.required];
+                    effectiveRequiredToolQuantities = classifyResult.requiredToolQuantities;
                     if (obs && isNormal) {
                       yield* obs.info(`◉ [classify]   required: ${classifyResult.required.join(", ")}`)
                         .pipe(Effect.catchAll(() => Effect.void));
@@ -1431,6 +1433,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         agentId: config.agentId,
                         sessionId: c.taskId,
                         requiredTools: effectiveRequiredTools,
+                        requiredToolQuantities: effectiveRequiredToolQuantities,
                         relevantTools: classifiedRelevantTools,
                         maxCallsPerTool: Object.keys(autoMaxCallsPerTool).length > 0 ? autoMaxCallsPerTool : undefined,
                         maxRequiredToolRetries: config.requiredTools?.maxRetries,
@@ -1543,6 +1546,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                           agentId: config.agentId,
                           sessionId: ctx.taskId,
                           requiredTools: effectiveRequiredTools,
+                          requiredToolQuantities: effectiveRequiredToolQuantities,
                           modelId: String(config.defaultModel ?? ""),
                           taskCategory,
                           metaTools: config.metaTools,
@@ -1601,6 +1605,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                           agentId: config.agentId,
                           sessionId: ctx.taskId,
                           requiredTools: effectiveRequiredTools,
+                          requiredToolQuantities: effectiveRequiredToolQuantities,
                           modelId: String(config.defaultModel ?? ""),
                           taskCategory,
                           metaTools: config.metaTools,
@@ -1709,6 +1714,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                           agentId: config.agentId,
                           sessionId: ctx.taskId,
                           requiredTools: effectiveRequiredTools,
+                          requiredToolQuantities: effectiveRequiredToolQuantities,
                           modelId: String(config.defaultModel ?? ""),
                           taskCategory,
                           metaTools: config.metaTools,

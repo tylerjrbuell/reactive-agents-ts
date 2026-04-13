@@ -1,8 +1,9 @@
 import { describe, it, expect } from "bun:test"
 import { readFileSync } from "fs"
+import { join } from "path"
 
 const src = readFileSync(
-  "packages/reasoning/src/strategies/kernel/phases/think.ts",
+  join(import.meta.dir, "../../../../src/strategies/kernel/phases/think.ts"),
   "utf8"
 )
 

@@ -214,7 +214,17 @@ export function handleActing(
           const META_TOOLS = new Set(["final-answer", "task-complete", "context-status", "brief", "pulse", "find", "recall", "checkpoint"]);
           const hasNonMetaToolCalled = [...newToolsUsed].some((t) => !META_TOOLS.has(t));
           const requiredTools = input.requiredTools ?? [];
-          const allRequiredMet = requiredTools.every((t) => newToolsUsed.has(t));
+          const quantities = input.requiredToolQuantities ?? {};
+          const allRequiredMet = requiredTools.every((t) => {
+            if (!newToolsUsed.has(t)) return false;
+            const needed = quantities[t] ?? 1;
+            if (needed <= 1) return true;
+            const actual = allSteps.filter((s) => {
+              if (s.type !== "action") return false;
+              return (s.metadata?.toolCall as { name?: string } | undefined)?.name === t;
+            }).length;
+            return actual >= needed;
+          });
           let canComplete = allRequiredMet && (hasNonMetaToolCalled || requiredTools.length === 0);
 
           // ── Dynamic task completion guard (FC) ──────────────────────────────
@@ -633,7 +643,17 @@ export function handleActing(
         // next steps from conversation structure alone.
         const reqTools = input.requiredTools ?? [];
         const usedSoFar = [...newToolsUsed];
-        const missing = reqTools.filter((t) => !newToolsUsed.has(t));
+        const reqQuantities = input.requiredToolQuantities ?? {};
+        const missing = reqTools.filter((t) => {
+          if (!newToolsUsed.has(t)) return true;
+          const needed = reqQuantities[t] ?? 1;
+          if (needed <= 1) return false;
+          const actual = allSteps.filter((s) => {
+            if (s.type !== "action") return false;
+            return (s.metadata?.toolCall as { name?: string } | undefined)?.name === t;
+          }).length;
+          return actual < needed;
+        });
 
         if (missing.length > 0) {
           // Check if this is a research->produce transition: all search-type tools
@@ -653,8 +673,17 @@ export function handleActing(
               })
             : undefined;
 
+          const missingWithCounts = missing.map((t) => {
+            const needed = reqQuantities[t];
+            if (!needed || needed <= 1) return t;
+            const actual = allSteps.filter((s) => {
+              if (s.type !== "action") return false;
+              return (s.metadata?.toolCall as { name?: string } | undefined)?.name === t;
+            }).length;
+            return `${t} (${actual}/${needed} calls done)`;
+          });
           const progressContent = synthesisMsg
-            ?? `You must still call: ${missing.join(", ")}. Call ${missing[0]} now with the appropriate arguments.`;
+            ?? `You must still call: ${missingWithCounts.join(", ")}. Call ${missing[0]} now with the appropriate arguments.`;
 
           const progressMsg: KernelMessage = { role: "user", content: progressContent };
           return [...prior, assistantMsg, ...toolResultMessages, progressMsg];

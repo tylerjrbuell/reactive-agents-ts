@@ -151,6 +151,14 @@ export interface KernelInput {
    */
   readonly requiredTools?: readonly string[];
   /**
+   * Minimum number of times each required tool must be called before the task is
+   * considered complete. Populated by the tool classifier from its per-tool minCalls
+   * field. The repetition guard and final-answer gate use this instead of hardcoded
+   * thresholds — e.g. `{ "http-get": 4 }` means the agent must call http-get at
+   * least 4 times (once per currency) before final-answer is accepted.
+   */
+  readonly requiredToolQuantities?: Readonly<Record<string, number>>;
+  /**
    * Tools identified as relevant/supplementary for the task (LLM-classified).
    * These are allowed through the required-tools gate even when required tools
    * are still pending — they provide supplementary research without blocking progress.
@@ -530,6 +538,8 @@ export interface ReActKernelInput {
    * it will be redirected up to `maxRequiredToolRetries` times before failing.
    */
   requiredTools?: readonly string[];
+  /** Minimum call counts per required tool — populated by tool classifier. */
+  requiredToolQuantities?: Readonly<Record<string, number>>;
   /** Max redirects when required tools are missing (default: 2) */
   maxRequiredToolRetries?: number;
   /** Enforce strict required-tool dependency chain before exploratory calls. */

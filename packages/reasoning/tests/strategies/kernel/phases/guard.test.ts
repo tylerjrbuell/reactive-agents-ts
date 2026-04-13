@@ -200,3 +200,59 @@ describe("checkToolCall", () => {
     expect(check(makeTc("forbidden"), makeState(), baseInput).pass).toBe(false);
   });
 });
+
+// ── repetitionGuard — requiredToolQuantities ──────────────────────────────────
+
+describe("repetitionGuard — requiredToolQuantities threshold", () => {
+  function makeActions(name: string, count: number) {
+    return Array.from({ length: count }, (_, i) => ({
+      id: `s${i}`,
+      type: "action" as const,
+      content: `${name}({})`,
+      metadata: { toolCall: { name, arguments: {} } },
+      timestamp: new Date(),
+    }));
+  }
+
+  it("allows calls up to minCalls when requiredToolQuantities specifies 4", () => {
+    const inputWith4 = {
+      ...baseInput,
+      requiredToolQuantities: { "http-get": 4 },
+      nextMovesPlanning: { enabled: true, maxBatchSize: 4, allowParallelBatching: true },
+    };
+    // 3 prior calls → should still pass (3 < 4)
+    const state = makeState({ steps: makeActions("http-get", 3) as any });
+    expect(repetitionGuard(makeTc("http-get"), state, inputWith4).pass).toBe(true);
+  });
+
+  it("blocks when prior calls reach minCalls from requiredToolQuantities", () => {
+    const inputWith4 = {
+      ...baseInput,
+      requiredToolQuantities: { "http-get": 4 },
+      nextMovesPlanning: { enabled: true, maxBatchSize: 4, allowParallelBatching: true },
+    };
+    // 4 prior calls → block the 5th
+    const state = makeState({ steps: makeActions("http-get", 4) as any });
+    const result = repetitionGuard(makeTc("http-get"), state, inputWith4);
+    expect(result.pass).toBe(false);
+  });
+
+  it("missing-tools hint shows N/M call progress when requiredToolQuantities is set", () => {
+    const inputWith4 = {
+      ...baseInput,
+      requiredTools: ["http-get"],
+      requiredToolQuantities: { "http-get": 4 },
+      nextMovesPlanning: { enabled: true, maxBatchSize: 4, allowParallelBatching: true },
+    };
+    // 2 of 4 calls done — guard on a file-write (different tool) triggers the nudge path
+    const state = makeState({ steps: makeActions("http-get", 2) as any });
+    // Trigger repetitionGuard on file-write (which has 5 prior calls, exceeds threshold 2)
+    const fileWriteState = makeState({ steps: makeActions("file-write", 5) as any });
+    const result = repetitionGuard(makeTc("file-write"), fileWriteState, inputWith4);
+    if (!result.pass) {
+      // The observation should mention http-get with count progress
+      expect(result.observation).toContain("http-get");
+      expect(result.observation).toMatch(/\d+\/\d+/); // e.g. "0/4" or "2/4"
+    }
+  });
+});

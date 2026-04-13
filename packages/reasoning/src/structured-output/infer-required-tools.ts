@@ -27,8 +27,23 @@ const InferRequiredToolsResultSchema = Schema.Struct({
 
 // ── Schema for the combined classification result ──
 
+// Each required tool may carry a minCalls count (how many times the task requires it).
+// Defaults to 1 when omitted so old string-array format degrades gracefully.
+const RequiredToolEntrySchema = Schema.Union(
+  Schema.Struct({
+    name: Schema.String,
+    minCalls: Schema.optionalWith(Schema.Number, { default: () => 1 }),
+  }),
+  // backward-compat: bare string treated as { name, minCalls: 1 }
+  Schema.transform(Schema.String, Schema.Struct({ name: Schema.String, minCalls: Schema.Number }), {
+    strict: false,
+    decode: (s) => ({ name: s, minCalls: 1 }),
+    encode: (o) => o.name,
+  }),
+);
+
 const ToolClassificationResultSchema = Schema.Struct({
-  required: Schema.Array(Schema.String),
+  required: Schema.Array(RequiredToolEntrySchema),
   relevant: Schema.Array(Schema.String),
 });
 
@@ -146,10 +161,16 @@ Respond with JSON matching this schema:
 // ── Combined tool classification result ──
 
 export interface ToolClassificationResult {
-  /** Tools that MUST be called for the task to succeed */
+  /** Tools that MUST be called for the task to succeed (names only, backward-compat) */
   readonly required: readonly string[];
   /** Tools that are relevant and should be shown to the agent (includes required) */
   readonly relevant: readonly string[];
+  /**
+   * Minimum number of times each required tool must be called before the task is complete.
+   * Derived from the classifier's per-tool minCalls field. Defaults to 1 for all required tools.
+   * Used by the repetition guard and final-answer gate for count-based enforcement.
+   */
+  readonly requiredToolQuantities: Readonly<Record<string, number>>;
 }
 
 /**
@@ -168,7 +189,7 @@ export const classifyToolRelevance = (
 ): Effect.Effect<ToolClassificationResult, Error, LLMService> =>
   Effect.gen(function* () {
     if (config.availableTools.length === 0) {
-      return { required: [], relevant: [] };
+      return { required: [], relevant: [], requiredToolQuantities: {} };
     }
 
     // Build compact tool list — name + truncated description only (no params, saves tokens)
@@ -185,12 +206,12 @@ ${toolLines}
 
 Respond with JSON:
 {
-  "required": ["tools the task CANNOT succeed without"],
+  "required": [{ "name": "tool-name", "minCalls": 1 }],
   "relevant": ["tools that MAY help but aren't strictly required"]
 }
 
 Rules:
-- "required" = tools that MUST be called. The task explicitly asks for an action that only this tool can perform (e.g. "send a Signal message" → signal/send_message_to_user). Be strict — typically 1-3 tools.
+- "required" = tools that MUST be called. For each required tool, set "minCalls" to how many times it must be called (e.g. fetching prices for 4 currencies → http-get with minCalls: 4). Default minCalls to 1 when uncertain.
 - "relevant" = tools that could assist the agent (e.g. tools from the same service namespace as required tools, or tools whose capabilities match the task context). Always include recall.
 - If the task mentions a service name (e.g. "Signal", "GitHub"), include the SPECIFIC action tools needed, not all tools from that namespace.
 - An empty required list is valid for simple questions that need no tools.
@@ -207,7 +228,12 @@ Rules:
 
     // Validate tool names against available set
     const availableNames = new Set(config.availableTools.map((t) => t.name));
-    const required = result.data.required.filter((n) => availableNames.has(n));
+    const requiredEntries = result.data.required.filter((e) => availableNames.has(e.name));
+    const required = requiredEntries.map((e) => e.name);
+    const requiredToolQuantities: Record<string, number> = {};
+    for (const e of requiredEntries) {
+      requiredToolQuantities[e.name] = Math.max(1, e.minCalls ?? 1);
+    }
     const relevant = result.data.relevant.filter((n) => availableNames.has(n));
 
     // Emit EventBus event for observability
@@ -229,5 +255,5 @@ Rules:
       Effect.catchAll(() => Effect.void),
     );
 
-    return { required, relevant };
+    return { required, relevant, requiredToolQuantities };
   });
