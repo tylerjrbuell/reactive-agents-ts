@@ -45,6 +45,8 @@ export const ReasoningOptionsJsonSchema = Schema.Struct({
   maxStrategySwitches: Schema.optional(Schema.Number),
   fallbackStrategy: Schema.optional(Schema.String),
   maxIterations: Schema.optional(Schema.Number),
+  /** When false, tool calls from a single LLM response execute sequentially (debug/correctness mode). Default: true. */
+  parallelToolCalls: Schema.optional(Schema.Boolean),
   synthesis: Schema.optional(Schema.Literal("auto", "fast", "deep", "custom", "off")),
   synthesisModel: Schema.optional(Schema.String),
   synthesisProvider: Schema.optional(Schema.String),

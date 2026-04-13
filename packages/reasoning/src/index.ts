@@ -133,7 +133,7 @@ export { KernelMetaToolsSchema, StaticBriefInfoSchema } from "./types/kernel-met
 export type { KernelMetaToolsConfig } from "./types/kernel-meta-tools.js";
 
 // ─── Shared Utilities ───
-export { filterToolsByRelevance } from "./strategies/kernel/utils/tool-utils.js";
+export { filterToolsByRelevance, planNextMoveBatches } from "./strategies/kernel/utils/tool-utils.js";
 export type { ToolSchema, ToolParamSchema } from "./strategies/kernel/utils/tool-utils.js";
 export type { KernelMessage } from "./strategies/kernel/kernel-state.js";
 

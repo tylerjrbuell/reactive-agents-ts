@@ -589,7 +589,7 @@ export interface RuntimeOptions {
    * All tools remain callable by exact name even if not shown.
    *
    * Uses heuristic keyword + description matching to identify relevant tools.
-   * Tools in `ALWAYS_INCLUDE_TOOLS` (from `@reactive-agents/tools`, currently `recall` for sub-agent delegation) are always merged into the filtered set.
+    * Any tools listed in `ALWAYS_INCLUDE_TOOLS` (from `@reactive-agents/tools`) are always merged into the filtered set.
    *
    * @example
    * ```typescript
@@ -1290,6 +1290,9 @@ export const createRuntime = (options: RuntimeOptions) => {
             reactive: {
               ...defaultReasoningConfig.strategies.reactive,
               ...withoutStrategyIcsOverrides(options.reasoningOptions.strategies?.reactive),
+              ...(options.reasoningOptions.parallelToolCalls === false
+                ? { nextMovesPlanning: { ...defaultReasoningConfig.strategies.reactive.nextMovesPlanning, enabled: false } }
+                : {}),
             },
             planExecute: {
               ...defaultReasoningConfig.strategies.planExecute,
@@ -1793,6 +1796,9 @@ export const createLightRuntime = (options: LightRuntimeOptions) => {
             reactive: {
               ...defaultReasoningConfig.strategies.reactive,
               ...withoutStrategyIcsOverrides(options.reasoningOptions.strategies?.reactive),
+              ...(options.reasoningOptions.parallelToolCalls === false
+                ? { nextMovesPlanning: { ...defaultReasoningConfig.strategies.reactive.nextMovesPlanning, enabled: false } }
+                : {}),
             },
             planExecute: {
               ...defaultReasoningConfig.strategies.planExecute,
