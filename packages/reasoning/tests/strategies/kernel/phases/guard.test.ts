@@ -108,17 +108,28 @@ describe("repetitionGuard", () => {
     expect(result.pass).toBe(true);
   });
 
-  it("blocks when tool has been called 2 or more times", () => {
+  it("blocks sequential-only tool (file-write) when called 2 or more times", () => {
     const makeAction = (id: string) => ({
-      id, type: "action" as const, content: "web-search({})",
-      metadata: { toolCall: { name: "web-search", arguments: {} } }, timestamp: new Date(),
+      id, type: "action" as const, content: "file-write({})",
+      metadata: { toolCall: { name: "file-write", arguments: {} } }, timestamp: new Date(),
     });
     const state = makeState({ steps: [makeAction("s1"), makeAction("s2")] as any });
-    const result = repetitionGuard(makeTc("web-search"), state, baseInput);
+    const result = repetitionGuard(makeTc("file-write"), state, baseInput);
     expect(result.pass).toBe(false);
     if (!result.pass) {
       expect(result.observation).toContain("Stop repeating this tool");
     }
+  });
+
+  it("allows parallel-safe tool (web-search) to be called up to maxBatchSize times", () => {
+    const makeAction = (id: string) => ({
+      id, type: "action" as const, content: "web-search({})",
+      metadata: { toolCall: { name: "web-search", arguments: {} } }, timestamp: new Date(),
+    });
+    const threeCallState = makeState({ steps: [makeAction("s1"), makeAction("s2"), makeAction("s3")] as any });
+    const result = repetitionGuard(makeTc("web-search"), threeCallState, baseInput);
+    // web-search is parallel-safe; threshold is maxBatchSize (4) not 2
+    expect(result.pass).toBe(true);
   });
 
   it("passes for meta-tools regardless of call count", () => {
@@ -128,6 +139,36 @@ describe("repetitionGuard", () => {
     });
     const state = makeState({ steps: [makeAction("s1"), makeAction("s2"), makeAction("s3")] as any });
     const result = repetitionGuard(makeTc("brief"), state, baseInput);
+    expect(result.pass).toBe(true);
+  });
+
+  it("passes for spawn-agent when delegating multiple subtasks", () => {
+    const makeAction = (id: string, task: string) => ({
+      id,
+      type: "action" as const,
+      content: `spawn-agent(${task})`,
+      metadata: { toolCall: { name: "spawn-agent", arguments: { task } } },
+      timestamp: new Date(),
+    });
+    const state = makeState({
+      steps: [makeAction("s1", "find XRP price"), makeAction("s2", "find XLM price")] as any,
+    });
+    const result = repetitionGuard(makeTc("spawn-agent", { task: "find ETH price" }), state, baseInput);
+    expect(result.pass).toBe(true);
+  });
+
+  it("passes for named agent tools when delegating multiple subtasks", () => {
+    const makeAction = (id: string, task: string) => ({
+      id,
+      type: "action" as const,
+      content: `agent-researcher(${task})`,
+      metadata: { toolCall: { name: "agent-researcher", arguments: { task } } },
+      timestamp: new Date(),
+    });
+    const state = makeState({
+      steps: [makeAction("s1", "find XRP price"), makeAction("s2", "find XLM price")] as any,
+    });
+    const result = repetitionGuard(makeTc("agent-researcher", { task: "find ETH price" }), state, baseInput);
     expect(result.pass).toBe(true);
   });
 });

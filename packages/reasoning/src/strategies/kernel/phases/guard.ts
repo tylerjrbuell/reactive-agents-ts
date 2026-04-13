@@ -9,6 +9,7 @@
  */
 import type { KernelState, ReActKernelInput } from "../kernel-state.js";
 import type { ToolCallSpec } from "@reactive-agents/tools";
+import { isParallelBatchSafeTool } from "../utils/tool-utils.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -28,6 +29,9 @@ const META_TOOL_NAMES = new Set([
   "final-answer", "task-complete", "context-status",
   "brief", "pulse", "find", "recall", "checkpoint",
 ]);
+
+const isDelegationTool = (toolName: string): boolean =>
+  toolName === "spawn-agent" || toolName.startsWith("agent-");
 
 /** Meta-introspection tools subject to dedup spam detection. */
 export const META_TOOL_SET = new Set(["brief", "pulse", "find", "recall", "checkpoint"]);
@@ -107,9 +111,12 @@ export const sideEffectGuard: Guard = (tc, state, _input) => {
   };
 };
 
-/** Nudges the LLM when it calls the same non-meta tool 2+ times. */
+/** Nudges the LLM when it calls the same non-meta tool too many times.
+ *  Parallel-safe tools (http-get, web-search, etc.) allow up to maxBatchSize
+ *  calls before triggering; sequential-only tools are limited to 2. */
 export const repetitionGuard: Guard = (tc, state, input) => {
   if (META_TOOL_NAMES.has(tc.name)) return { pass: true };
+  if (isDelegationTool(tc.name)) return { pass: true };
 
   const priorCallsOfSameTool = state.steps.filter((s) => {
     if (s.type !== "action") return false;
@@ -117,7 +124,11 @@ export const repetitionGuard: Guard = (tc, state, input) => {
     return (stepTc?.name ?? "") === tc.name;
   }).length;
 
-  if (priorCallsOfSameTool < 2) return { pass: true };
+  // Parallel-safe tools may be called up to maxBatchSize times (e.g. 4 independent http-get calls).
+  // Sequential-only tools are limited to 2 calls before nudging.
+  const maxBatchSize = input.nextMovesPlanning?.maxBatchSize ?? 4;
+  const threshold = isParallelBatchSafeTool(tc.name) ? maxBatchSize : 2;
+  if (priorCallsOfSameTool < threshold) return { pass: true };
 
   // Include missing required tools in the nudge so the model knows what to do next
   const reqTools = input.requiredTools ?? [];
