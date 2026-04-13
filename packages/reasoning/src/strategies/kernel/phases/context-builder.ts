@@ -32,11 +32,13 @@ export function buildSystemPrompt(
   if (t === "local") {
     return "You are a helpful assistant. Use the provided tools when needed to complete tasks.";
   }
+  const PARALLEL_HINT = " When a task requires multiple independent lookups or actions, issue all tool calls in the same response — they execute in parallel.";
+
   if (t === "frontier" || t === "large") {
-    return "You are an expert reasoning agent. Think step by step. Use tools precisely and efficiently. Prefer concise, direct answers once you have sufficient information.";
+    return `You are an expert reasoning agent. Think step by step. Use tools precisely and efficiently. Prefer concise, direct answers once you have sufficient information.${PARALLEL_HINT}`;
   }
   // mid tier
-  return "You are a reasoning agent. Think step by step and use available tools when needed.";
+  return `You are a reasoning agent. Think step by step and use available tools when needed.${PARALLEL_HINT}`;
 }
 
 // ── toProviderMessage ─────────────────────────────────────────────────────────
