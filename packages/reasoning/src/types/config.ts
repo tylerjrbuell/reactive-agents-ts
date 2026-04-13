@@ -76,7 +76,7 @@ export const defaultReasoningConfig: ReasoningConfig = {
       maxIterations: 10,
       temperature: 0.7,
       toolElaboration: { enabled: false, maxHintsPerTool: 2 },
-      nextMovesPlanning: { enabled: false, maxBatchSize: 3, allowParallelBatching: true },
+      nextMovesPlanning: { enabled: true, maxBatchSize: 4, allowParallelBatching: true },
     },
     planExecute: { maxRefinements: 2, reflectionDepth: "deep" },
     treeOfThought: { breadth: 3, depth: 3, pruningThreshold: 0.5 },
