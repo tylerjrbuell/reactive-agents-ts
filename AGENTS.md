@@ -425,6 +425,7 @@ Canonical project skills live in `.agents/skills/`:
 -   `update-docs` — documentation + skills + memory synchronization workflow
 -   `validate-build` — quality gate checklist for build/test/review
 -   `effect-abstraction-audit` — architectural analysis for abstraction opportunities, composability gaps, and Effect-TS engineering quality
+-   `architecture-audit` — system-level architecture health check: dead code, layer violations, over-abstraction, documentation drift, and simplification opportunities
 
 ---
 
