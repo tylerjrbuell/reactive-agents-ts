@@ -16,6 +16,7 @@
  *   - resolveToolArgs(toolService, toolRequest) — resolve raw ACTION args
  */
 import { Effect } from "effect";
+import { LLMService } from "@reactive-agents/llm-provider";
 import type { ObservationResult } from "../../../types/observation.js";
 import { categorizeToolName, deriveResultKind } from "../../../types/observation.js";
 import type { ContextProfile } from "../../../context/context-profile.js";
@@ -438,9 +439,9 @@ export function executeToolCall(
             } satisfies ToolExecutionResult;
           }
 
-          // Structured compression / auto-preview
+          // Structured compression / auto-preview (tier-adaptive)
           const budget = compressionConfig?.budget ?? profile?.toolResultMaxChars ?? 800;
-          const previewItems = compressionConfig?.previewItems ?? 3;
+          const previewItems = compressionConfig?.previewItems ?? profile?.toolResultPreviewItems ?? 3;
           const autoStore = compressionConfig?.autoStore ?? true;
           const compressed = compressToolResult(normalized, toolRequest.tool, budget, previewItems);
           if (autoStore && compressed.stored && scratchpadStore) {
@@ -547,9 +548,9 @@ export function executeNativeToolCall(
           }
 
           // In FC mode, clean up the compressed content for native message format:
-          // - Replace [STORED: _tool_result_N | tool] with a clean header
-          // - Replace recall("_tool_result_N") hints with plain language
-          // Local models get confused by _tool_result_N keys (try to file-read them)
+          // - Replace verbose [STORED: ...] header with a clean preview header
+          // - Strip verbose recall hints but keep one concise retrieval line
+          //   so the model knows it CAN recall the full data when needed
           content = content
             .replace(/^\[STORED: [^\]]+\]\n?/m, `[${toolCall.name} result — compressed preview]\n`)
             .replace(/— use recall\("[^"]+",? ?(?:full: ?true)?\)[^\n]*/g, "")
@@ -557,6 +558,10 @@ export function executeNativeToolCall(
             .replace(/✓ Preview covers[^\n]*/g, "")
             .replace(/\n{3,}/g, "\n\n")
             .trim();
+
+          if (storedKey) {
+            content += `\n  — full text is stored. For terminal/CLI output use recall("${storedKey}", full: true) first; or segmented recall("${storedKey}", lineStart: 5, lineCount: 40) or recall("${storedKey}", start: 0, maxChars: 1200).`;
+          }
         }
 
         return { content, success, storedKey, delegatedToolsUsed };
@@ -583,4 +588,61 @@ export function executeNativeToolCall(
         });
       }),
     );
+}
+
+// ── LLM-based observation fact extraction ─────────────────────────────────────
+
+const META_TOOL_NAMES = new Set([
+  "brief", "pulse", "recall", "find", "final-answer",
+]);
+
+const EXTRACTION_INPUT_LIMIT = 2000;
+
+/**
+ * Run a lightweight LLM pass to extract key facts from a raw tool result.
+ * Returns the extracted bullet-list string, or undefined if extraction fails
+ * or is skipped. Skips meta-tools whose output is already compact.
+ */
+export function extractObservationFacts(
+  toolName: string,
+  rawResult: string,
+  args: Record<string, unknown>,
+  compressionBudget: number,
+): Effect.Effect<string | undefined, never, LLMService> {
+  if (META_TOOL_NAMES.has(toolName)) return Effect.succeed(undefined);
+  if (rawResult.length <= compressionBudget) return Effect.succeed(undefined);
+
+  const truncatedInput = rawResult.length > EXTRACTION_INPUT_LIMIT
+    ? rawResult.slice(0, EXTRACTION_INPUT_LIMIT) + `\n[...${rawResult.length - EXTRACTION_INPUT_LIMIT} chars truncated]`
+    : rawResult;
+
+  const argsStr = Object.entries(args)
+    .map(([k, v]) => `${k}: ${typeof v === "string" ? v : JSON.stringify(v)}`)
+    .join(", ");
+
+  return Effect.gen(function* () {
+    const llm = yield* LLMService;
+    const response = yield* llm.complete({
+      messages: [{
+        role: "user",
+        content: [
+          `Extract the key data points from this tool result. Return ONLY a concise bullet list of facts (numbers, names, prices, dates, URLs). No commentary or explanation.`,
+          ``,
+          `Tool: ${toolName}(${argsStr})`,
+          `Result:`,
+          truncatedInput,
+        ].join("\n"),
+      }],
+      temperature: 0,
+      maxTokens: 200,
+    });
+
+    const extracted = typeof response.content === "string"
+      ? response.content.trim()
+      : "";
+
+    return extracted.length > 0 ? extracted : undefined;
+  }).pipe(
+    Effect.catchAll(() => Effect.succeed(undefined)),
+  );
 }

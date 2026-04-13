@@ -3,6 +3,7 @@ import { describe, test, expect } from "bun:test";
 import {
   scoreContextItem,
   allocateContextBudget,
+  buildRules,
   type ContextItem,
   type ScoringContext,
 } from "../../src/context/context-engine.js";
@@ -153,6 +154,28 @@ describe("allocateContextBudget", () => {
     const result = allocateContextBudget(items, profile, ctx);
     const total = result.pinned.length + result.recent.length + result.scored.length;
     expect(total).toBe(items.length);
+  });
+});
+
+describe("buildRules", () => {
+  test("omits MCP prefix guidance when no namespaced tools exist", () => {
+    const rules = buildRules(
+      [{ name: "web-search", description: "", parameters: [] }],
+      ["web-search"],
+      "mid",
+    );
+    expect(rules).not.toContain("context7/get-library-docs");
+    expect(rules).toContain("Do not invent prefixes or namespaces");
+  });
+
+  test("includes MCP prefix guidance when namespaced tools exist", () => {
+    const rules = buildRules(
+      [{ name: "context7/get-library-docs", description: "", parameters: [] }],
+      ["context7/get-library-docs"],
+      "mid",
+    );
+    expect(rules).toContain("MCP tools require the full listed prefix");
+    expect(rules).toContain("google:search");
   });
 });
 

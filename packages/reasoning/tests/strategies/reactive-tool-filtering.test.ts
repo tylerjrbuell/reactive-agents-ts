@@ -124,6 +124,7 @@ describe("Instruction-aware tool filtering", () => {
           compactAfterSteps: 4,
           fullDetailSteps: 2,
           toolResultMaxChars: 400,
+          toolResultPreviewItems: 5,
           contextBudgetPercent: 70,
           toolSchemaDetail: "names-only",
         },

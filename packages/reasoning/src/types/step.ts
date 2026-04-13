@@ -37,6 +37,8 @@ export const StepMetadataSchema = Schema.Struct({
   })),
   /** Scratchpad key for auto-stored compressed tool results */
   storedKey: Schema.optional(Schema.String),
+  /** Links an observation step back to its originating tool call for parallel batch matching */
+  toolCallId: Schema.optional(Schema.String),
 });
 export type StepMetadata = typeof StepMetadataSchema.Type;
 

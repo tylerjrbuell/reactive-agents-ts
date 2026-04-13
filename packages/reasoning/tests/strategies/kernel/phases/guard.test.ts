@@ -1,6 +1,7 @@
 import { describe, it, expect } from "bun:test";
 import {
   blockedGuard,
+  availableToolGuard,
   duplicateGuard,
   sideEffectGuard,
   repetitionGuard,
@@ -60,6 +61,36 @@ describe("blockedGuard", () => {
   it("passes when blockedTools is undefined", () => {
     const result = blockedGuard(makeTc("web-search"), makeState(), { ...baseInput, blockedTools: undefined });
     expect(result.pass).toBe(true);
+  });
+});
+
+describe("availableToolGuard", () => {
+  it("passes when tool exists in availableToolSchemas", () => {
+    const result = availableToolGuard(
+      makeTc("web-search"),
+      makeState(),
+      {
+        ...baseInput,
+        availableToolSchemas: [{ name: "web-search" }],
+      },
+    );
+    expect(result.pass).toBe(true);
+  });
+
+  it("blocks unknown tools and suggests available alternatives", () => {
+    const result = availableToolGuard(
+      makeTc("google:search"),
+      makeState(),
+      {
+        ...baseInput,
+        availableToolSchemas: [{ name: "web-search" }, { name: "http-get" }],
+      },
+    );
+    expect(result.pass).toBe(false);
+    if (!result.pass) {
+      expect(result.observation).toContain("google:search");
+      expect(result.observation).toContain("web-search");
+    }
   });
 });
 
@@ -178,7 +209,11 @@ describe("repetitionGuard", () => {
 describe("checkToolCall", () => {
   it("passes when all guards pass", () => {
     const check = checkToolCall(defaultGuards);
-    const result = check(makeTc("web-search"), makeState(), baseInput);
+    const result = check(
+      makeTc("web-search"),
+      makeState(),
+      { ...baseInput, availableToolSchemas: [{ name: "web-search" }] },
+    );
     expect(result.pass).toBe(true);
   });
 

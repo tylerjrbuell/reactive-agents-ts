@@ -73,14 +73,16 @@ const REFERENCE_PLAN = makePlanJson([
 
 describe("PlanExecuteStrategy (Structured Plan Engine)", () => {
   it("should generate a structured plan, execute steps, and return completed result", async () => {
-    // Pattern matching:
-    // 1. "planning agent" matches the system prompt for plan generation (extractStructuredOutput adds "Respond with ONLY valid JSON")
-    // 2. "OVERALL GOAL" matches the step execution prompt from buildStepExecutionPrompt
-    // 3. "GOAL:" matches the reflection prompt from buildReflectionPrompt
-    // 4. "Synthesize" matches the synthesis prompt
+    // Turn sequence with 2 analysis steps:
+    // 1. Plan generation → TWO_STEP_ANALYSIS_PLAN
+    // 2. Step 1 execution (analysis via kernel) → FINAL ANSWER
+    // 3. Step 2 execution (analysis via kernel) → FINAL ANSWER
+    // 4. Reflection → SATISFIED
+    // 5. Synthesis → final answer text
     const layer = TestLLMServiceLayer([
       { match: "planning agent", text: TWO_STEP_ANALYSIS_PLAN },
       { match: "OVERALL GOAL", text: "FINAL ANSWER: Step analysis completed successfully." },
+      { match: "OVERALL GOAL", text: "FINAL ANSWER: Summary written." },
       { match: "GOAL:", text: "SATISFIED: All steps completed and the task is fully addressed." },
       { match: "Synthesize", text: "The topic has been thoroughly researched and summarized with key findings." },
     ]);
@@ -570,6 +572,7 @@ describe("PlanExecuteStrategy (Structured Plan Engine)", () => {
         },
       ]) },
       { match: "OVERALL GOAL", text: "FINAL ANSWER: Research findings are detailed." },
+      { match: "OVERALL GOAL", text: "FINAL ANSWER: Summary written." },
       { match: "GOAL:", text: "SATISFIED: Task complete." },
       { match: "Synthesize", text: "The final synthesized answer: Quantum computing is advancing rapidly with key breakthroughs." },
     ]);
@@ -593,6 +596,176 @@ describe("PlanExecuteStrategy (Structured Plan Engine)", () => {
     );
     expect(synthStep).toBeDefined();
     expect(synthStep!.content).toContain("Quantum computing");
+  });
+
+  it("should respect UNSATISFIED verdict even when all steps completed", async () => {
+    // First reflection returns UNSATISFIED, augment prompt generates a supplementary step,
+    // second reflection returns SATISFIED.
+    const augmentPlan = makePlanJson([
+      {
+        title: "Search for missing ETH price",
+        instruction: "Search the web for ETH price",
+        type: "tool_call",
+        toolName: "web-search",
+        toolArgs: { query: "ETH price" },
+      },
+    ]);
+
+    let toolCalls: string[] = [];
+    const mockToolService = {
+      execute: (input: {
+        toolName: string;
+        arguments: Record<string, unknown>;
+        agentId: string;
+        sessionId: string;
+      }) => {
+        toolCalls.push(input.toolName);
+        return Effect.succeed({
+          result: `Results for ${input.toolName}: ${JSON.stringify(input.arguments)}`,
+          success: true,
+        });
+      },
+      getTool: (name: string) =>
+        Effect.succeed({ name, description: "test", parameters: [] }),
+      register: () => Effect.void,
+      listTools: () => Effect.succeed([]),
+      deregister: () => Effect.void,
+    };
+
+    const toolLayer = Layer.succeed(
+      ToolService,
+      ToolService.of(mockToolService),
+    );
+
+    let reflectionCount = 0;
+    const llmLayer = TestLLMServiceLayer([
+      {
+        match: "planning agent",
+        text: makePlanJson([
+          {
+            title: "Search XRP price",
+            instruction: "Search for XRP price",
+            type: "tool_call",
+            toolName: "web-search",
+            toolArgs: { query: "XRP price" },
+          },
+        ]),
+      },
+      {
+        match: "GOAL:",
+        text: "UNSATISFIED: Missing ETH price. Only XRP was found.",
+      },
+      {
+        match: "supplementary",
+        text: augmentPlan,
+      },
+      {
+        match: "GOAL:",
+        text: "SATISFIED: All prices found.",
+      },
+      {
+        match: "Synthesize",
+        text: "XRP: $0.52, ETH: $3200.",
+      },
+    ]);
+
+    const result = await Effect.runPromise(
+      executePlanExecute({
+        taskDescription: "Get prices of XRP and ETH",
+        taskType: "research",
+        memoryContext: "",
+        availableTools: ["web-search"],
+        availableToolSchemas: [
+          {
+            name: "web-search",
+            description: "Search the web",
+            parameters: [
+              { name: "query", type: "string", description: "Query", required: true },
+            ],
+          },
+        ],
+        config: defaultReasoningConfig,
+      }).pipe(Effect.provide(Layer.merge(llmLayer, toolLayer))),
+    );
+
+    expect(result.status).toBe("completed");
+    // Should have executed 2 tool calls: original + augmented
+    expect(toolCalls.length).toBe(2);
+    expect(toolCalls).toEqual(["web-search", "web-search"]);
+    // Should have AUGMENT step
+    const augmentStep = result.steps.find((s) => s.content.includes("[AUGMENT]"));
+    expect(augmentStep).toBeDefined();
+  });
+
+  it("should inject synthetic steps when requiredToolQuantities deficit exists", async () => {
+    let toolCalls: Array<{ toolName: string; args: Record<string, unknown> }> = [];
+    const mockToolService = {
+      execute: (input: {
+        toolName: string;
+        arguments: Record<string, unknown>;
+        agentId: string;
+        sessionId: string;
+      }) => {
+        toolCalls.push({ toolName: input.toolName, args: input.arguments });
+        return Effect.succeed({
+          result: `Price data for ${JSON.stringify(input.arguments)}`,
+          success: true,
+        });
+      },
+      getTool: (name: string) =>
+        Effect.succeed({ name, description: "test", parameters: [] }),
+      register: () => Effect.void,
+      listTools: () => Effect.succeed([]),
+      deregister: () => Effect.void,
+    };
+
+    const toolLayer = Layer.succeed(
+      ToolService,
+      ToolService.of(mockToolService),
+    );
+
+    // Plan only has 1 web-search step, but quantities require 3
+    const llmLayer = TestLLMServiceLayer([
+      {
+        match: "planning agent",
+        text: makePlanJson([
+          {
+            title: "Search all prices",
+            instruction: "Search for all crypto prices",
+            type: "tool_call",
+            toolName: "web-search",
+            toolArgs: { query: "all crypto prices" },
+          },
+        ]),
+      },
+      { match: "GOAL:", text: "SATISFIED: All found." },
+      { match: "Synthesize", text: "Prices: XRP, ETH, BTC." },
+    ]);
+
+    const result = await Effect.runPromise(
+      executePlanExecute({
+        taskDescription: "Get prices of XRP, ETH, and BTC",
+        taskType: "research",
+        memoryContext: "",
+        availableTools: ["web-search"],
+        availableToolSchemas: [
+          {
+            name: "web-search",
+            description: "Search the web",
+            parameters: [
+              { name: "query", type: "string", description: "Query", required: true },
+            ],
+          },
+        ],
+        requiredToolQuantities: { "web-search": 3 },
+        config: defaultReasoningConfig,
+      }).pipe(Effect.provide(Layer.merge(llmLayer, toolLayer))),
+    );
+
+    expect(result.status).toBe("completed");
+    // Plan had 1 step + 2 injected synthetic = 3 web-search calls
+    expect(toolCalls.length).toBeGreaterThanOrEqual(3);
+    expect(toolCalls.filter((c) => c.toolName === "web-search").length).toBeGreaterThanOrEqual(3);
   });
 
   it("should enforce markdown table output format when task requests one", async () => {

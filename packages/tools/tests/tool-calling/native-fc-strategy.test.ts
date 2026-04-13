@@ -41,6 +41,40 @@ describe("NativeFCStrategy", () => {
     }
   });
 
+  it("normalizes native unknown search namespace to available web-search", () => {
+    const input: ResolverInput = {
+      toolCalls: [
+        {
+          id: "tc1",
+          name: "google:search",
+          input: { queries: ["current price of BTC", "current price of ETH"] },
+        },
+      ],
+    };
+    const result = run(strategy.resolve(input, [{ name: "web-search" }]));
+    expect(result._tag).toBe("tool_calls");
+    if (result._tag === "tool_calls") {
+      expect(result.calls).toHaveLength(1);
+      expect(result.calls[0].name).toBe("web-search");
+      expect(result.calls[0].arguments).toEqual({
+        query: "current price of BTC OR current price of ETH",
+      });
+    }
+  });
+
+  it("returns thinking with hint when native call names cannot be resolved", () => {
+    const input: ResolverInput = {
+      toolCalls: [{ id: "tc1", name: "totally-unknown-tool", input: {} }],
+      stopReason: "tool_use",
+    };
+    const result = run(strategy.resolve(input, [{ name: "file-write" }]));
+    expect(result._tag).toBe("thinking");
+    if (result._tag === "thinking") {
+      expect(result.content).toContain("unavailable name");
+      expect(result.content).toContain("file-write");
+    }
+  });
+
   it("returns final_answer when no tool calls and end_turn", () => {
     const input: ResolverInput = {
       content: "The answer is 42.",

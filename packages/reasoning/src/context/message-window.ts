@@ -167,9 +167,10 @@ export function applyMessageWindowWithCompact(
 
       const content = (msg as any).content as string
       if (content.length > 200) {
+        const recallKey = (msg as any).storedKey ?? id;
         ;(mutable[idx] as any) = {
           ...msg,
-          content: `[${content.length} chars — use recall("${id}") to retrieve]`,
+          content: `[${content.length} chars — use recall("${recallKey}") to retrieve]`,
         }
         newlyFrozenIds.add(id)
       }

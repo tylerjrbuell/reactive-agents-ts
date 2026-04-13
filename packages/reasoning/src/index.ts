@@ -136,6 +136,7 @@ export type { KernelMetaToolsConfig } from "./types/kernel-meta-tools.js";
 export { filterToolsByRelevance, planNextMoveBatches } from "./strategies/kernel/utils/tool-utils.js";
 export type { ToolSchema, ToolParamSchema } from "./strategies/kernel/utils/tool-utils.js";
 export type { KernelMessage } from "./strategies/kernel/kernel-state.js";
+export { META_TOOLS, INTROSPECTION_META_TOOLS } from "./strategies/kernel/kernel-constants.js";
 
 // ─── Structured Output ───
 export { inferRequiredTools, classifyToolRelevance } from "./structured-output/infer-required-tools.js";

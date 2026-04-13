@@ -47,6 +47,13 @@ export const ReasoningOptionsJsonSchema = Schema.Struct({
   maxIterations: Schema.optional(Schema.Number),
   /** When false, tool calls from a single LLM response execute sequentially (debug/correctness mode). Default: true. */
   parallelToolCalls: Schema.optional(Schema.Boolean),
+  /**
+   * LLM-based observation fact extraction for large tool results.
+   * - `true`: always extract for results exceeding compression budget
+   * - `false`: never extract (default)
+   * - `"auto"`: extract only for local/mid tiers when results exceed budget
+   */
+  observationSummary: Schema.optional(Schema.Union(Schema.Boolean, Schema.Literal("auto"))),
   synthesis: Schema.optional(Schema.Literal("auto", "fast", "deep", "custom", "off")),
   synthesisModel: Schema.optional(Schema.String),
   synthesisProvider: Schema.optional(Schema.String),

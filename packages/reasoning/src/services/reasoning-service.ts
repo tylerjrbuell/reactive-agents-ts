@@ -80,6 +80,8 @@ export class ReasoningService extends Context.Tag("ReasoningService")<
       /** Initial messages to seed the kernel conversation thread (e.g. task as user message). */
       readonly initialMessages?: readonly { readonly role: "user" | "assistant"; readonly content: string }[];
       readonly synthesisConfig?: SynthesisConfig;
+      /** LLM-based observation extraction: true=always, false=never, "auto"=local/mid tiers only */
+      readonly observationSummary?: boolean | "auto";
     }) => Effect.Effect<ReasoningResult, ReasoningErrors>;
 
     /** Register a custom strategy function. */

@@ -10,6 +10,11 @@
 import type { KernelState, ReActKernelInput } from "../kernel-state.js";
 import type { ToolCallSpec } from "@reactive-agents/tools";
 import { isParallelBatchSafeTool } from "../utils/tool-utils.js";
+import {
+  buildSuccessfulToolCallCounts,
+  getMissingRequiredToolsByCount,
+} from "../utils/requirement-state.js";
+import { META_TOOLS as META_TOOL_NAMES, INTROSPECTION_META_TOOLS, isDelegationTool } from "../kernel-constants.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -23,18 +28,19 @@ export type Guard = (
   input: ReActKernelInput,
 ) => GuardOutcome;
 
-// ─── Shared Constants ─────────────────────────────────────────────────────────
+function buildActionToolCallCounts(state: KernelState): Readonly<Record<string, number>> {
+  const counts: Record<string, number> = {};
+  for (const step of state.steps) {
+    if (step.type !== "action") continue;
+    const toolName = (step.metadata?.toolCall as { name?: string } | undefined)?.name;
+    if (!toolName) continue;
+    counts[toolName] = (counts[toolName] ?? 0) + 1;
+  }
+  return counts;
+}
 
-const META_TOOL_NAMES = new Set([
-  "final-answer", "task-complete", "context-status",
-  "brief", "pulse", "find", "recall", "checkpoint",
-]);
-
-const isDelegationTool = (toolName: string): boolean =>
-  toolName === "spawn-agent" || toolName.startsWith("agent-");
-
-/** Meta-introspection tools subject to dedup spam detection. */
-export const META_TOOL_SET = new Set(["brief", "pulse", "find", "recall", "checkpoint"]);
+/** Re-export for backward compatibility. */
+export const META_TOOL_SET = INTROSPECTION_META_TOOLS;
 
 // ─── Individual Guards ────────────────────────────────────────────────────────
 
@@ -48,6 +54,28 @@ export const blockedGuard: Guard = (tc, _state, input) => {
     };
   }
   return { pass: true };
+};
+
+/** Blocks calls to tools not present in the current tool schema set. */
+export const availableToolGuard: Guard = (tc, _state, input) => {
+  if (META_TOOL_NAMES.has(tc.name) || isDelegationTool(tc.name)) return { pass: true };
+
+  const knownToolNames = new Set(
+    (input.allToolSchemas ?? input.availableToolSchemas ?? []).map((schema) => schema.name),
+  );
+  if (knownToolNames.has(tc.name)) return { pass: true };
+
+  const searchLike = [...knownToolNames].filter((name) =>
+    name.includes("search") || name.includes("fetch") || name.includes("get") || name.includes("browse"),
+  );
+  const suggestion = searchLike.length > 0
+    ? `For search/fetch tasks use: ${searchLike.slice(0, 4).join(", ")}.`
+    : `Available tools include: ${[...knownToolNames].slice(0, 5).join(", ")}.`;
+
+  return {
+    pass: false,
+    observation: `Tool "${tc.name}" is not available in this run. ${suggestion} Use EXACT tool names from the tool list.`,
+  };
 };
 
 /** Blocks the exact same tool+arguments pair if it already succeeded. */
@@ -75,7 +103,11 @@ export const duplicateGuard: Guard = (tc, state, input) => {
   });
   const priorObsContent = priorSuccessIdx >= 0 ? state.steps[priorSuccessIdx + 1]?.content ?? "" : "";
   const reqTools = input.requiredTools ?? [];
-  const missingReq = reqTools.filter((t) => !state.toolsUsed.has(t));
+  const missingReq = getMissingRequiredToolsByCount(
+    buildSuccessfulToolCallCounts(state.steps),
+    reqTools,
+    input.requiredToolQuantities,
+  );
   const nextHint = missingReq.length > 0
     ? `You still need to call: ${missingReq.join(", ")}. Do that now.`
     : "Give FINAL ANSWER if all steps are complete.";
@@ -118,11 +150,8 @@ export const repetitionGuard: Guard = (tc, state, input) => {
   if (META_TOOL_NAMES.has(tc.name)) return { pass: true };
   if (isDelegationTool(tc.name)) return { pass: true };
 
-  const priorCallsOfSameTool = state.steps.filter((s) => {
-    if (s.type !== "action") return false;
-    const stepTc = s.metadata?.toolCall as { name: string } | undefined;
-    return (stepTc?.name ?? "") === tc.name;
-  }).length;
+  const actionCounts = buildActionToolCallCounts(state);
+  const priorCallsOfSameTool = actionCounts[tc.name] ?? 0;
 
   // requiredToolQuantities[tool] is a FLOOR (min calls required by the task).
   // The repetition-guard threshold is a CEILING (max before nudging).
@@ -139,22 +168,17 @@ export const repetitionGuard: Guard = (tc, state, input) => {
   // Build missing-tools hint with N/M count progress when quantities are known
   const reqTools = input.requiredTools ?? [];
   const quantities = input.requiredToolQuantities ?? {};
-  const missingRequired = reqTools.filter((t) => {
-    const needed = quantities[t] ?? 1;
-    const actual = state.steps.filter((s) => {
-      if (s.type !== "action") return false;
-      return (s.metadata?.toolCall as { name?: string } | undefined)?.name === t;
-    }).length;
-    return actual < needed;
-  });
+  const successfulCounts = buildSuccessfulToolCallCounts(state.steps);
+  const missingRequired = getMissingRequiredToolsByCount(
+    successfulCounts,
+    reqTools,
+    quantities,
+  );
   const missingHint = missingRequired.length > 0
     ? ` You still need to call: ${missingRequired.map((t) => {
         const needed = quantities[t];
         if (!needed || needed <= 1) return t;
-        const actual = state.steps.filter((s) => {
-          if (s.type !== "action") return false;
-          return (s.metadata?.toolCall as { name?: string } | undefined)?.name === t;
-        }).length;
+        const actual = successfulCounts[t] ?? 0;
         return `${t} (${actual}/${needed} calls done)`;
       }).join(", ")}. Do that now instead of repeating ${tc.name}.`
     : " Use final-answer to respond now.";
@@ -205,6 +229,7 @@ export const metaToolDedupGuard: Guard = (tc, state) => {
 /** Default guard chain used by the standard ReAct kernel. */
 export const defaultGuards: Guard[] = [
   blockedGuard,
+  availableToolGuard,
   duplicateGuard,
   sideEffectGuard,
   repetitionGuard,

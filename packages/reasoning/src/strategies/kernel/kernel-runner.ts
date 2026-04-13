@@ -29,13 +29,21 @@ import {
   type KernelContext,
   type KernelInput,
   type KernelRunOptions,
+  type ReActKernelInput,
   type ThoughtKernel,
 } from "./kernel-state.js";
 import { evaluateStrategySwitch, buildHandoff } from "./utils/strategy-evaluator.js";
 import { coordinateICS } from "./utils/ics-coordinator.js";
 import { runReactiveObserver } from "./utils/reactive-observer.js";
 import { detectLoop, checkAllToolsCalled } from "./utils/loop-detector.js";
-import { classifyToolRelevance } from "../../structured-output/infer-required-tools.js";
+import {
+  buildSuccessfulToolCallCounts,
+  getMissingRequiredToolsByCount,
+} from "./utils/requirement-state.js";
+import {
+  decideExecutionLane,
+  shouldInjectOracleNudge,
+} from "./utils/lane-controller.js";
 import { extractOutputFormat, type TaskIntent } from "./utils/task-intent.js";
 import { shouldAutoCheckpoint, autoCheckpoint } from "./utils/auto-checkpoint.js";
 import {
@@ -46,13 +54,23 @@ import {
   type FinalizedOutput,
 } from "./utils/output-synthesis.js";
 
-/** Meta-tool names — not counted as "real work" for reclassification triggers. */
-const RUNNER_META_TOOLS = new Set(["final-answer", "task-complete", "context-status", "brief", "pulse", "find", "recall", "checkpoint"]);
+import { META_TOOLS as RUNNER_META_TOOLS } from "./kernel-constants.js";
 
 /** Keys embedded in compressed tool observations (`[STORED: _tool_result_N | tool]`) */
 const STORED_TOOL_KEY_RE = /\[STORED:\s*(_tool_result_\d+)\s*\|/g;
 /** Keys referenced by compression hints (e.g. `recall("_tool_result_5", ...)`). */
 const RECALL_TOOL_KEY_RE = /recall\("(_tool_result_\d+)"/g;
+
+function missingRequiredToolsForInput(
+  steps: KernelState["steps"],
+  input: KernelInput,
+): readonly string[] {
+  return getMissingRequiredToolsByCount(
+    buildSuccessfulToolCallCounts(steps),
+    input.requiredTools ?? [],
+    input.requiredToolQuantities,
+  );
+}
 
 /**
  * When an observation is a compressed preview, replace it with full text from the kernel
@@ -269,6 +287,41 @@ type ToolFailureRecovery = {
   readonly alternativeCandidates: readonly string[];
 };
 
+type RecoverySteeringKind = "stall" | "loop";
+
+function buildRecoverySteeringGuidance(
+  recovery: ToolFailureRecovery,
+  failureRecoveryRedirects: number,
+  maxFailureRecoveryRedirects: number,
+  kind: RecoverySteeringKind,
+): string {
+  const nextPath =
+    recovery.alternativeCandidates[0] ??
+    recovery.failedUnresolved[0] ??
+    "an available tool";
+  const failedList = recovery.failedUnresolved.join(", ");
+  const progress = `(${failureRecoveryRedirects}/${maxFailureRecoveryRedirects})`;
+
+  if (recovery.alternativeCandidates.length > 0) {
+    if (kind === "stall") {
+      return (
+        `Recovery required: prior tool path failed (${failedList}). Try an alternate path now: ${nextPath}. Do not finalize yet. ${progress}`
+      );
+    }
+    return (
+      `Recovery required: loop detected after failed tool path (${failedList}). Try alternate path ${nextPath} before completion. ${progress}`
+    );
+  }
+  if (kind === "stall") {
+    return (
+      `Recovery required: prior tool path failed (${failedList}). Retry ${nextPath} with corrected arguments/evidence. Do not finalize yet. ${progress}`
+    );
+  }
+  return (
+    `Recovery required: loop detected after failed tool path (${failedList}). Retry ${nextPath} with corrected arguments before completion. ${progress}`
+  );
+}
+
 /**
  * Identify whether failed tool paths still have viable alternatives.
  *
@@ -279,7 +332,8 @@ function getToolFailureRecovery(
   state: KernelState,
   input: KernelInput,
 ): ToolFailureRecovery {
-  const successful = new Set<string>();
+  const successCounts = buildSuccessfulToolCallCounts(state.steps);
+  const successful = new Set<string>(Object.keys(successCounts));
   const failed = new Set<string>();
 
   for (const step of state.steps) {
@@ -290,22 +344,21 @@ function getToolFailureRecovery(
     const toolName = result?.toolName;
     if (!toolName || RUNNER_META_TOOLS.has(toolName)) continue;
 
-    if (result.success === true) {
-      successful.add(toolName);
-      failed.delete(toolName);
-      continue;
-    }
-
-    if (result.success === false && !successful.has(toolName)) {
+    if (result.success === false && (successCounts[toolName] ?? 0) === 0) {
       failed.add(toolName);
     }
   }
 
   const required = input.requiredTools ?? [];
+  const requiredStillNeeded = getMissingRequiredToolsByCount(
+    successCounts,
+    required,
+    input.requiredToolQuantities,
+  );
   const relevant = input.relevantTools ?? [];
   const available = (input.availableToolSchemas ?? []).map((t) => t.name);
 
-  const candidatePool = [...new Set([...required, ...relevant, ...available])]
+  const candidatePool = [...new Set([...requiredStillNeeded, ...required, ...relevant, ...available])]
     .filter((name) => !RUNNER_META_TOOLS.has(name));
 
   const failedUnresolved = [...failed].filter((name) => !successful.has(name));
@@ -313,9 +366,12 @@ function getToolFailureRecovery(
     return { failedUnresolved: [], alternativeCandidates: [] };
   }
 
-  const alternativeCandidates = candidatePool.filter(
-    (name) => !successful.has(name) && !failedUnresolved.includes(name),
-  );
+  const failedUnresolvedSet = new Set(failedUnresolved);
+  const requiredStillNeededSet = new Set(requiredStillNeeded);
+  const alternativeCandidates = candidatePool.filter((name) => {
+    if (failedUnresolvedSet.has(name)) return false;
+    return requiredStillNeededSet.has(name) || !successful.has(name);
+  });
 
   return {
     failedUnresolved,
@@ -346,7 +402,7 @@ export function runKernel(
     // When the provider supports native FC, create a resolver and inject it
     // into the kernel input so handleThinking uses native function calling.
     let effectiveInput = input;
-    if (!(input as any).toolCallResolver) {
+    if (!(input as ReActKernelInput).toolCallResolver) {
       const llmOpt = yield* Effect.serviceOption(LLMService);
       if (llmOpt._tag === "Some" && typeof llmOpt.value.capabilities === "function") {
         const caps = yield* llmOpt.value.capabilities().pipe(
@@ -379,7 +435,7 @@ export function runKernel(
       profile,
       compression: effectiveInput.resultCompression ?? {
         budget: profile.toolResultMaxChars ?? 800,
-        previewItems: 5,
+        previewItems: profile.toolResultPreviewItems ?? 5,
         autoStore: true,
         codeTransform: true,
       },
@@ -415,6 +471,13 @@ export function runKernel(
     const maxRequiredToolRetries = effectiveInput.maxRequiredToolRetries ?? 2;
     let requiredToolRedirects = 0;
 
+    // Unified nudge budget — caps the total number of "missing required tool"
+    // nudges injected by stall detection and loop detection paths combined.
+    // Without this, the stall and loop paths can compound nudges indefinitely
+    // when the model refuses to (or cannot) satisfy the required tool quota.
+    let requiredToolNudgeCount = 0;
+    const maxRequiredToolNudges = maxRequiredToolRetries + 2;
+
     // Required-tools availability guard (pre-loop)
     // If required tools are declared but not available in this run's tool schemas,
     // fail immediately instead of allowing synthesis/fallback to fabricate completion.
@@ -444,15 +507,6 @@ export function runKernel(
     let currentInput: KernelInput = effectiveInput;
     // currentContext tracks the KernelContext (rebuilt when input changes on switch)
 
-    // Dynamic tool reclassification state
-    // When the model is stuck (gate-blocked tools, no progress), re-classify
-    // which tools are required/relevant based on what the agent has learned so far.
-    let reclassifyCount = 0;
-    const maxReclassifications = 2;
-    let noProgressIterations = 0;
-    const hasInitialClassification =
-      (effectiveInput.requiredTools?.length ?? 0) > 0 ||
-      (effectiveInput.relevantTools?.length ?? 0) > 0;
     let currentContext: KernelContext = context;
 
     // Harness stall tracking — counts consecutive iterations with no new non-meta tool results.
@@ -491,8 +545,10 @@ export function runKernel(
         // Only fire the guard when there are remaining iterations to save
         // (if we're already at the last iteration, the loop exits naturally).
         const hasRemainingIterations = state.iteration < currentOptions.maxIterations - 1;
+        const missingRequiredForLowDelta = missingRequiredToolsForInput(state.steps, currentInput);
         if (
           hasRemainingIterations &&
+          missingRequiredForLowDelta.length === 0 &&
           state.status !== "done" &&
           state.status !== "failed" &&
           shouldExitOnLowDelta({ iteration: state.iteration, tokenDelta, consecutiveLowDeltaCount: newConsecutiveLowDelta, tier: profile.tier })
@@ -541,6 +597,20 @@ export function runKernel(
       yield* hooks.onIterationProgress(state, toolsThisStep);
       prevToolsUsed = new Set(state.toolsUsed);
 
+      // ── Lane controller (gather vs synthesize) ───────────────────────────
+      const laneDecision = decideExecutionLane({
+        requiredTools: currentInput.requiredTools ?? [],
+        requiredToolQuantities: currentInput.requiredToolQuantities,
+        successfulToolCounts: buildSuccessfulToolCallCounts(state.steps),
+      });
+      state = transitionState(state, {
+        meta: {
+          ...state.meta,
+          executionLane: laneDecision.lane,
+          missingRequiredTools: laneDecision.missingRequiredTools,
+        },
+      });
+
       // ── Harness artifact stall tracking ─────────────────────────────────
       // Track whether this iteration produced new non-meta tool observations.
       // The harness owns completion: when the model stalls but has gathered
@@ -553,9 +623,40 @@ export function runKernel(
       if (
         consecutiveStalled >= 2 &&
         state.iteration >= 2 &&
-        state.status !== "done" &&
-        state.status !== "failed"
+        state.status === "thinking"
       ) {
+        const missingRequiredByCount = laneDecision.missingRequiredTools;
+        if (missingRequiredByCount.length > 0) {
+          requiredToolNudgeCount++;
+          if (requiredToolNudgeCount > maxRequiredToolNudges) {
+            if (totalArtifacts > 0) {
+              yield* Effect.log(
+                `[harness-deliverable] Required-tool nudge budget exhausted (${maxRequiredToolNudges}) — delivering ${totalArtifacts} artifacts`,
+              );
+              state = transitionState(state, {
+                status: "done",
+                output: assembleDeliverable(state),
+                meta: { ...state.meta, terminatedBy: "harness_deliverable" },
+              });
+              break;
+            }
+            state = transitionState(state, {
+              status: "failed",
+              error: `Required tool quota not met after ${maxRequiredToolNudges} nudge attempts: ${missingRequiredByCount.join(", ")}`,
+            });
+            break;
+          }
+          const guidance =
+            `Required tool quota not met: ${missingRequiredByCount.join(", ")}. ` +
+            `Continue calling the missing required tool(s) before attempting completion.`;
+          state = transitionState(state, {
+            status: "thinking",
+            steps: [...state.steps, makeStep("observation", `⚠️ ${guidance}`)],
+            steeringNudge: guidance,
+          });
+          continue;
+        }
+
         const recovery = getToolFailureRecovery(state, currentInput);
         const shouldNudgeRecovery =
           recovery.failedUnresolved.length > 0 &&
@@ -563,11 +664,12 @@ export function runKernel(
 
         if (shouldNudgeRecovery) {
           failureRecoveryRedirects++;
-          const nextPath = recovery.alternativeCandidates[0] ?? recovery.failedUnresolved[0] ?? "an available tool";
-          const guidance =
-            recovery.alternativeCandidates.length > 0
-              ? `Recovery required: prior tool path failed (${recovery.failedUnresolved.join(", ")}). Try an alternate path now: ${nextPath}. Do not finalize yet. (${failureRecoveryRedirects}/${maxFailureRecoveryRedirects})`
-              : `Recovery required: prior tool path failed (${recovery.failedUnresolved.join(", ")}). Retry ${nextPath} with corrected arguments/evidence. Do not finalize yet. (${failureRecoveryRedirects}/${maxFailureRecoveryRedirects})`;
+          const guidance = buildRecoverySteeringGuidance(
+            recovery,
+            failureRecoveryRedirects,
+            maxFailureRecoveryRedirects,
+            "stall",
+          );
 
           state = transitionState(state, {
             status: "thinking",
@@ -598,116 +700,25 @@ export function runKernel(
 
       // ── Intelligent Context Synthesis (before thinking step) ──
       // Produces a steering nudge appended to the FC thread — never replaces it.
+      // Skip when status is "acting" — tool calls are pending but haven't executed
+      // yet, so toolsUsed is stale and any nudge would be contradictory.
+      const oracleReady = getLastPulseReadyToAnswer(state);
+      const shouldAllowIcsNudge =
+        state.status === "thinking" && (!oracleReady || laneDecision.lane === "gather");
       const effectiveToolsUsed = buildEffectiveToolsUsed(state);
-      const icsResult = yield* coordinateICS(state, {
-        task: currentInput.task,
-        requiredTools: currentInput.requiredTools ?? [],
-        toolsUsed: effectiveToolsUsed,
-        availableTools: (currentInput.availableToolSchemas ?? []) as readonly { name: string; description: string; parameters: unknown[] }[],
-        tier: profile.tier ?? "mid",
-        iteration: state.iteration,
-        maxIterations: (state.meta.maxIterations as number) ?? 10,
-        lastErrors: getLastErrors(state),
-      });
-      if (icsResult.steeringNudge) {
-        state = transitionState(state, { steeringNudge: icsResult.steeringNudge });
-      }
-
-      // ── Dynamic tool reclassification ──────────────────────────────────
-      // When the model is struggling with the current tool set (gate-blocked
-      // attempts, or no new non-meta tools used for 2+ iterations), re-run
-      // classification with enriched context — the original task PLUS what
-      // the model has learned, attempted, and been blocked from doing.
-      // This allows the visible tool set to evolve with the agent's
-      // exploration instead of being locked to the initial classification.
-      // Guard: only reclassify when there are enough tools to warrant it
-      // (>3 non-meta tools); trivial tool sets don't benefit from reclassification.
-      const availableSchemaCount = currentInput.availableToolSchemas?.length ?? 0;
-      if (
-        state.status !== "done" &&
-        state.status !== "failed" &&
-        reclassifyCount < maxReclassifications &&
-        hasInitialClassification &&
-        availableSchemaCount > 3 &&
-        state.iteration >= 1
-      ) {
-        const newNonMetaTools = toolsThisStep.filter((t) => !RUNNER_META_TOOLS.has(t));
-        noProgressIterations = newNonMetaTools.length === 0 ? noProgressIterations + 1 : 0;
-
-        const gateBlocked = (state.meta.gateBlockedTools as readonly string[] | undefined) ?? [];
-        const shouldReclassify =
-          gateBlocked.length > 0 || noProgressIterations >= 2;
-
-        if (shouldReclassify) {
-          // Build enriched task description with current execution context
-          const toolsSoFar = [...effectiveToolsUsed].filter((t) => !RUNNER_META_TOOLS.has(t));
-          const recentObs = state.steps
-            .filter((s) => s.type === "observation")
-            .slice(-3)
-            .map((s) => (s.content ?? "").slice(0, 200))
-            .join("\n");
-          const lastThought = (state.meta.lastThought as string) ?? "";
-
-          const enrichedTask = [
-            `Original task: ${currentInput.task}`,
-            toolsSoFar.length > 0 ? `Tools already used successfully: ${toolsSoFar.join(", ")}` : "",
-            gateBlocked.length > 0 ? `Model attempted tools that were blocked: ${gateBlocked.join(", ")}` : "",
-            recentObs ? `Recent observations:\n${recentObs}` : "",
-            lastThought ? `Model's current reasoning: ${lastThought.slice(0, 300)}` : "",
-          ]
-            .filter(Boolean)
-            .join("\n");
-
-          const toolSummaries = (currentInput.availableToolSchemas ?? []).map((t) => ({
-            name: t.name,
-            description: t.description ?? "",
-            parameters: (t.parameters ?? []).map((p) => ({
-              name: p.name,
-              type: p.type ?? "string",
-              description: p.description ?? "",
-              required: Boolean(p.required),
-            })),
-          }));
-
-          const reclassResult = yield* classifyToolRelevance({
-            taskDescription: enrichedTask,
-            availableTools: toolSummaries,
-            systemPrompt: currentInput.systemPrompt,
-          }).pipe(
-            Effect.catchAllCause(() =>
-              Effect.succeed({ required: [] as readonly string[], relevant: [] as readonly string[] }),
-            ),
-          );
-
-          if (reclassResult.required.length > 0 || reclassResult.relevant.length > 0) {
-            // Merge: preserve original required tools, union with new classification
-            const prevRequired = currentInput.requiredTools ?? [];
-            const newRequired = [...new Set([...prevRequired, ...reclassResult.required])];
-            const newRelevant = [...new Set([
-              ...reclassResult.relevant,
-              ...(currentInput.relevantTools ?? []),
-            ])];
-
-            currentInput = {
-              ...currentInput,
-              requiredTools: newRequired,
-              relevantTools: newRelevant,
-            };
-            currentContext = { ...currentContext, input: currentInput };
-            reclassifyCount++;
-            failureRecoveryRedirects = 0;
-
-            // Clear gateBlockedTools since we've incorporated the feedback
-            state = transitionState(state, {
-              meta: { ...state.meta, gateBlockedTools: undefined },
-            });
-            noProgressIterations = 0;
-
-            yield* Effect.log(
-              `[reclassify] Updated tool classification (attempt ${reclassifyCount}/${maxReclassifications}): ` +
-                `required=[${newRequired.join(", ")}], relevant=[${newRelevant.join(", ")}]`,
-            );
-          }
+      if (shouldAllowIcsNudge) {
+        const icsResult = yield* coordinateICS(state, {
+          task: currentInput.task,
+          requiredTools: currentInput.requiredTools ?? [],
+          toolsUsed: effectiveToolsUsed,
+          availableTools: (currentInput.availableToolSchemas ?? []) as readonly { name: string; description: string; parameters: unknown[] }[],
+          tier: profile.tier ?? "mid",
+          iteration: state.iteration,
+          maxIterations: (state.meta.maxIterations as number) ?? 10,
+          lastErrors: getLastErrors(state),
+        });
+        if (icsResult.steeringNudge) {
+          state = transitionState(state, { steeringNudge: icsResult.steeringNudge });
         }
       }
 
@@ -717,10 +728,16 @@ export function runKernel(
       //   Stage 1: inject a mandatory steering nudge, increment nudge count.
       //   Stage 2: after N ignored nudges (tier-dependent), force-exit with "oracle_forced".
       if (state.status !== "done" && state.status !== "failed") {
-        const oracleReady = getLastPulseReadyToAnswer(state);
         const nudgeCount = state.readyToAnswerNudgeCount ?? 0;
+        const shouldNudgeForOracle = shouldInjectOracleNudge({
+          lane: laneDecision.lane,
+          oracleReady,
+        });
 
-        if (shouldForceOracleExit({ oracleReady, readyToAnswerNudgeCount: nudgeCount, tier: profile.tier })) {
+        if (
+          shouldNudgeForOracle &&
+          shouldForceOracleExit({ oracleReady, readyToAnswerNudgeCount: nudgeCount, tier: profile.tier })
+        ) {
           // Stage 2: force exit — model has been nudged twice and still hasn't called final-answer
           yield* Effect.log(`[oracle-gate] Forcing exit after ${nudgeCount} ignored readyToAnswer signals`);
           const forcedOutput = state.output ?? state.steps.filter((s) => s.type === "thought").slice(-1)[0]?.content ?? "Task complete.";
@@ -729,7 +746,7 @@ export function runKernel(
             output: forcedOutput,
             meta: { ...state.meta, terminatedBy: "oracle_forced" },
           });
-        } else if (oracleReady) {
+        } else if (shouldNudgeForOracle) {
           // Stage 1: inject mandatory steering nudge, increment count
           const mandatoryNudge = "You are ready to answer. Call `final-answer` now with your complete response. This is mandatory.";
           state = transitionState(state, {
@@ -738,7 +755,8 @@ export function runKernel(
           });
           yield* Effect.log(`[oracle-gate] Stage 1 nudge injected (nudgeCount now ${nudgeCount + 1})`);
         } else if (nudgeCount > 0) {
-          // Oracle no longer ready — reset nudge count
+          // Oracle no longer eligible for synthesis nudges — reset count.
+          // This includes both "oracle not ready" and gather-lane runs.
           state = transitionState(state, { readyToAnswerNudgeCount: 0 });
         }
       }
@@ -847,8 +865,6 @@ export function runKernel(
               // Reset per-loop tracking
               prevToolsUsed = new Set<string>();
               requiredToolRedirects = 0;
-              noProgressIterations = 0;
-              reclassifyCount = 0;
               consecutiveStalled = 0;
               prevArtifactCount = 0;
               failureRecoveryRedirects = 0;
@@ -867,11 +883,12 @@ export function runKernel(
 
           if (shouldNudgeRecovery) {
             failureRecoveryRedirects++;
-            const nextPath = recovery.alternativeCandidates[0] ?? recovery.failedUnresolved[0] ?? "an available tool";
-            const guidance =
-              recovery.alternativeCandidates.length > 0
-                ? `Recovery required: loop detected after failed tool path (${recovery.failedUnresolved.join(", ")}). Try alternate path ${nextPath} before completion. (${failureRecoveryRedirects}/${maxFailureRecoveryRedirects})`
-                : `Recovery required: loop detected after failed tool path (${recovery.failedUnresolved.join(", ")}). Retry ${nextPath} with corrected arguments before completion. (${failureRecoveryRedirects}/${maxFailureRecoveryRedirects})`;
+            const guidance = buildRecoverySteeringGuidance(
+              recovery,
+              failureRecoveryRedirects,
+              maxFailureRecoveryRedirects,
+              "loop",
+            );
             state = transitionState(state, {
               status: "thinking",
               steps: [...state.steps, makeStep("observation", `⚠️ ${guidance}`)],
@@ -883,6 +900,32 @@ export function runKernel(
 
           const loopArtifactCount = countDeliverableCandidates(state);
           if (loopArtifactCount > 0) {
+            const missingRequiredByCount = missingRequiredToolsForInput(state.steps, currentInput);
+            if (missingRequiredByCount.length > 0) {
+              requiredToolNudgeCount++;
+              if (requiredToolNudgeCount > maxRequiredToolNudges) {
+                yield* Effect.log(
+                  `[harness-deliverable] Required-tool nudge budget exhausted in loop detection (${maxRequiredToolNudges}) — delivering ${loopArtifactCount} artifacts`,
+                );
+                state = transitionState(state, {
+                  status: "done",
+                  output: assembleDeliverable(state),
+                  meta: { ...state.meta, terminatedBy: "harness_deliverable" },
+                });
+                break;
+              }
+              const guidance =
+                `Loop detected but required tool quota is still missing: ${missingRequiredByCount.join(", ")}. ` +
+                `Call the missing required tool(s) now instead of finalizing.`;
+              state = transitionState(state, {
+                status: "thinking",
+                steps: [...state.steps, makeStep("observation", `⚠️ ${guidance}`)],
+                steeringNudge: guidance,
+                error: null,
+              });
+              continue;
+            }
+
             yield* Effect.log(
               `[harness-deliverable] Loop detected but ${loopArtifactCount} artifacts gathered — delivering instead of failing`,
             );
@@ -907,7 +950,7 @@ export function runKernel(
       // When the kernel declares "done" but required tools haven't been called,
       // redirect back to "thinking" with a feedback step — up to the retry limit.
       if (state.status === "done" && requiredTools.length > 0) {
-        const missingTools = requiredTools.filter((t) => !buildEffectiveToolsUsed(state).has(t));
+        const missingTools = missingRequiredToolsForInput(state.steps, currentInput);
         if (missingTools.length > 0) {
           requiredToolRedirects++;
           if (requiredToolRedirects > maxRequiredToolRetries) {
@@ -940,18 +983,20 @@ export function runKernel(
     }
 
     // ── 8. Post-loop required tools check ───────────────────────────────────
-    // Final safety net: if the loop exited with "done" (e.g. via bare tool call
-    // guard or max iterations) but required tools still haven't been called, fail.
-    // Exception: harness_deliverable exits are deliberate — the harness determined
-    // enough data was gathered despite some tools not being called.
-    if (state.status === "done" && requiredTools.length > 0) {
+    // Final safety net: if the loop exited without failure but required quotas
+    // are still missing, fail with a deterministic missing_required_tool error.
+    // This applies uniformly across all non-failed exits.
+    if (state.status !== "failed" && requiredTools.length > 0) {
       const effectiveToolsUsed = buildEffectiveToolsUsed(state);
-      const missingTools = requiredTools.filter((t) => !effectiveToolsUsed.has(t));
+      const missingTools = missingRequiredToolsForInput(state.steps, currentInput);
       if (missingTools.length > 0) {
         const visibleTools = (currentInput.availableToolSchemas ?? []).map((t) => t.name);
         const allKnownTools = (currentInput.allToolSchemas ?? currentInput.availableToolSchemas ?? []).map((t) => t.name);
         const calledTools = [...effectiveToolsUsed];
-        const terminatedBy = String(state.meta.terminatedBy ?? "unknown");
+        const terminatedBy = String(
+          state.meta.terminatedBy ??
+            (state.iteration >= currentOptions.maxIterations ? "max_iterations" : "unknown"),
+        );
         state = transitionState(state, {
           status: "failed",
           error:

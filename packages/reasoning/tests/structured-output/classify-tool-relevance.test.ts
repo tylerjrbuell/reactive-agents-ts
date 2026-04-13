@@ -62,6 +62,22 @@ describe("classifyToolRelevance — requiredToolQuantities", () => {
     expect(result.requiredToolQuantities).toEqual({ "http-get": 4 });
   });
 
+  it("applies entity-count floor for lookup tools when classifier underestimates minCalls", async () => {
+    const json = JSON.stringify({
+      required: [
+        { name: "web-search", minCalls: 1 },
+      ],
+      relevant: ["recall"],
+    });
+    const result = await classifyToolRelevance({
+      taskDescription:
+        "Fetch the current USD price for: XRP, XLM, ETH, Bitcoin. Then render a markdown table.",
+      availableTools: tools,
+    }).pipe(Effect.provide(layer(json)), Effect.runPromise);
+
+    expect(result.requiredToolQuantities).toEqual({ "web-search": 4 });
+  });
+
   it("supports multiple required tools each with their own minCalls", async () => {
     const json = JSON.stringify({
       required: [

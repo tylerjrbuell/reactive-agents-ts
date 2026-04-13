@@ -445,7 +445,7 @@ Canonical project skills live in `.agents/skills/`:
 ## Current Framework Snapshot (v0.9.0)
 
 -   Monorepo scale: **25 packages + 2 apps**
--   Verified quality: **3,472 tests across 409 files**
+-   Verified quality: **3,901 tests across 431 files**
 -   Public facade: `reactive-agents` built on Effect-TS layered runtime
 
 ### Recently Shipped Highlights (cross-checked with `CHANGELOG.md`)

@@ -5,6 +5,8 @@
  * across reasoning strategies. All functions are pure (no Effect dependencies).
  */
 
+import { META_TOOLS as META_TOOLS_SET } from "../kernel-constants.js";
+
 // ── Tool Parsing ──────────────────────────────────────────────────────────────
 
 /** Expanded regex matching FINAL ANSWER with optional markdown bold and various colon forms. */
@@ -274,9 +276,9 @@ export function formatToolSchemaCompact(tool: ToolSchema): string {
  * Used for collapsed/inactive tools in tier-compressed system prompts.
  */
 export function formatToolSchemaMicro(tool: ToolSchema): string {
-  const desc = tool.description ?? ""
-  const truncated = desc.length > 80 ? `${desc.slice(0, 77)}...` : desc
-  return `${tool.name}: ${truncated}`
+  const desc = tool.description ?? "";
+  const truncated = desc.length > 80 ? `${desc.slice(0, 77)}...` : desc;
+  return `${tool.name}: ${truncated}`;
 }
 
 export interface FilteredTools {
@@ -302,6 +304,20 @@ const TASK_KEYWORD_MAP: Record<string, readonly string[]> = {
   "analyze": ["search", "read", "get", "code"],
   "repository": ["repo", "repository", "github", "branch"],
 };
+
+/** Slug tokens too generic to use alone for namespaced-tool primary classification. */
+const GENERIC_SLUG_TOKENS = new Set([
+  "list", "get", "create", "update", "delete", "add", "set", "check",
+  "find", "fetch", "read", "write", "send", "push", "pull", "from",
+  "make", "edit", "open", "close", "move", "copy", "show", "view",
+  "repo", "repository", "file", "files", "branch", "branches",
+  "content", "contents", "data", "info", "item", "items",
+  "name", "path", "type", "user", "users", "team", "org",
+  "message", "messages", "comment", "comments", "release", "releases",
+  "latest", "label", "labels", "status", "result", "results",
+  "request", "review", "search", "code", "tags", "group",
+  "pending", "reply", "issue", "issues",
+]);
 
 /**
  * Split tool schemas into primary (mentioned in task) and secondary (other).
@@ -350,25 +366,6 @@ export function filterToolsByRelevance(
       // namespace just because the task mentions the namespace (e.g. "GitHub").
       const rawTaskWords = new Set(taskWords);
       const allSlugParts = localSlugSpaced.split(/\s+/);
-      // Strip generic tokens (CRUD verbs + context nouns) that appear in most tool
-      // names and/or task text without carrying discriminative signal.
-      const GENERIC_SLUG_TOKENS = new Set([
-        // Common CRUD / action verbs
-        "list", "get", "create", "update", "delete", "add", "set", "check",
-        "find", "fetch", "read", "write", "send", "push", "pull", "from",
-        "make", "edit", "open", "close", "move", "copy", "show", "view",
-        // Common context nouns that appear in task descriptions but don't uniquely
-        // identify a specific tool action
-        "repo", "repository", "file", "files", "branch", "branches",
-        "content", "contents", "data", "info", "item", "items",
-        "name", "path", "type", "user", "users", "team", "org",
-        // Common words that appear in both tasks and tool slugs without
-        // uniquely identifying a specific tool
-        "message", "messages", "comment", "comments", "release", "releases",
-        "latest", "label", "labels", "status", "result", "results",
-        "request", "review", "search", "code", "tags", "group",
-        "pending", "reply", "issue", "issues",
-      ]);
       const distinctiveParts = allSlugParts.filter(
         (sp) => sp.length > 3 && !GENERIC_SLUG_TOKENS.has(sp),
       );
@@ -676,6 +673,13 @@ export type NextMovesPlanningConfig = {
   readonly allowParallelBatching?: boolean;
 };
 
+export type QuotaBudgetConflict = {
+  readonly toolName: string;
+  readonly requiredMinCalls: number;
+  readonly maxCalls: number;
+  readonly actualCalls: number;
+};
+
 function describeToolBehavior(name: string): readonly string[] {
   const lowered = name.toLowerCase();
   if (lowered.includes("search") || lowered.includes("http") || lowered.includes("fetch") || lowered.includes("get")) {
@@ -717,15 +721,7 @@ export function isParallelBatchSafeTool(name: string): boolean {
   if (PARALLEL_SAFE_TOOLS.has(name)) return true;
 
   const lowered = name.toLowerCase();
-  const LOCAL_META_TOOLS = new Set([
-    "final-answer",
-    "task-complete",
-    "context-status",
-    "brief",
-    "pulse",
-    "checkpoint",
-  ]);
-  if (LOCAL_META_TOOLS.has(name)) return false;
+  if (META_TOOLS_SET.has(name)) return false;
   if (lowered.includes("final-answer")) return false;
   if (lowered.includes("write") || lowered.includes("delete") || lowered.includes("update") || lowered.includes("create")) {
     return false;
@@ -808,7 +804,10 @@ export function planNextMoveBatches<T extends { readonly name: string }>(
  * (e.g. http-get) cannot run while a required tool (e.g. file-write) is still missing.
  *
  * - Pre-filters calls that have exceeded their per-tool budget (`maxCallsPerTool`).
- * - If any call targets a missing required tool → return only the first such call.
+ * - If required minCalls conflict with maxCallsPerTool (or budget already exhausted), return
+ *   an explicit quotaBudgetConflict and block optional calls.
+ * - If calls target missing required tools, return the first safe required batch
+ *   (can contain multiple parallel-safe calls).
  * - If calls are all from {@link relevantTools} or satisfied required → allow through.
  * - If calls omit every missing required tool and aren't relevant:
  *   - strict mode: block batch (`blockedOptionalBatch: true`)
@@ -821,8 +820,18 @@ export function gateNativeToolCallsForRequiredTools<T extends { readonly name: s
   relevantTools?: readonly string[],
   toolCallCounts?: Readonly<Record<string, number>>,
   maxCallsPerTool?: Readonly<Record<string, number>>,
+  requiredToolQuantities?: Readonly<Record<string, number>>,
   strictDependencyChain?: boolean,
-): { readonly effective: readonly T[]; readonly blockedOptionalBatch: boolean } {
+  nextMovesPlanning?: NextMovesPlanningConfig,
+): {
+  readonly effective: readonly T[];
+  readonly blockedOptionalBatch: boolean;
+  readonly quotaBudgetConflict?: readonly QuotaBudgetConflict[];
+} {
+  const enforceSingleStep = nextMovesPlanning?.enabled === false;
+  const applyStepMode = (selected: readonly T[]): readonly T[] =>
+    enforceSingleStep && selected.length > 1 ? [selected[0]!] : selected;
+
   // Layer 3: pre-filter calls that have exhausted their per-tool budget.
   const budgeted =
     maxCallsPerTool && toolCallCounts
@@ -833,23 +842,62 @@ export function gateNativeToolCallsForRequiredTools<T extends { readonly name: s
       : calls;
 
   if (requiredTools.length === 0) {
-    return { effective: budgeted, blockedOptionalBatch: false };
+    return { effective: applyStepMode(budgeted), blockedOptionalBatch: false };
   }
-  const missing = requiredTools.filter((t) => !toolsUsed.has(t));
+  const quantities = requiredToolQuantities ?? {};
+  const getActualCalls = (toolName: string): number =>
+    toolCallCounts?.[toolName] ?? (toolsUsed.has(toolName) ? 1 : 0);
+  const isRequiredSatisfied = (toolName: string): boolean =>
+    getActualCalls(toolName) >= (quantities[toolName] ?? 1);
+
+  const missing = requiredTools.filter((t) => !isRequiredSatisfied(t));
   if (missing.length === 0) {
-    return { effective: budgeted, blockedOptionalBatch: false };
+    return { effective: applyStepMode(budgeted), blockedOptionalBatch: false };
   }
+  const quotaBudgetConflict = missing
+    .map((toolName): QuotaBudgetConflict | null => {
+      const maxCalls = maxCallsPerTool?.[toolName];
+      if (maxCalls === undefined) return null;
+      const requiredMinCalls = quantities[toolName] ?? 1;
+      const actualCalls = getActualCalls(toolName);
+      const impossibleByConfiguration = requiredMinCalls > maxCalls;
+      const exhaustedBudget = actualCalls >= maxCalls && actualCalls < requiredMinCalls;
+      if (!impossibleByConfiguration && !exhaustedBudget) return null;
+      return {
+        toolName,
+        requiredMinCalls,
+        maxCalls,
+        actualCalls,
+      };
+    })
+    .filter((entry): entry is QuotaBudgetConflict => entry !== null);
+  if (quotaBudgetConflict.length > 0) {
+    return {
+      effective: [],
+      blockedOptionalBatch: true,
+      quotaBudgetConflict,
+    };
+  }
+
   const towardMissing = budgeted.filter((c) => missing.includes(c.name));
   if (towardMissing.length > 0) {
-    return { effective: [towardMissing[0]!], blockedOptionalBatch: false };
+    const maxBatchSize = Math.max(1, nextMovesPlanning?.maxBatchSize ?? 4);
+    const requiredBatches = planNextMoveBatches(towardMissing, {
+      enabled: true,
+      maxBatchSize,
+      allowParallelBatching: true,
+    });
+    return { effective: applyStepMode(requiredBatches[0] ?? []), blockedOptionalBatch: false };
   }
   // Allow relevant tools and re-calls of already-satisfied required tools.
-  const satisfiedRequired = new Set(requiredTools.filter((t) => toolsUsed.has(t)));
+  const satisfiedRequired = new Set(
+    requiredTools.filter((t) => isRequiredSatisfied(t)),
+  );
   const allowedSet = new Set([...(relevantTools ?? []), ...satisfiedRequired]);
   if (allowedSet.size > 0) {
     const allowedCalls = budgeted.filter((c) => allowedSet.has(c.name));
     if (allowedCalls.length > 0) {
-      return { effective: allowedCalls, blockedOptionalBatch: false };
+      return { effective: applyStepMode(allowedCalls), blockedOptionalBatch: false };
     }
   }
   // Strict mode enforces required-tool hierarchy before exploratory context gathering.
@@ -859,7 +907,7 @@ export function gateNativeToolCallsForRequiredTools<T extends { readonly name: s
 
   // Non-strict mode keeps progress moving by allowing one exploratory call.
   if (budgeted.length > 0) {
-    return { effective: [budgeted[0]!], blockedOptionalBatch: false };
+    return { effective: applyStepMode([budgeted[0]!]), blockedOptionalBatch: false };
   }
   return { effective: [], blockedOptionalBatch: false };
 }

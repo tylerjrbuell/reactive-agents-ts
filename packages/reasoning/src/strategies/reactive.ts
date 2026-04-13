@@ -85,6 +85,8 @@ interface ReactiveInput {
   readonly initialMessages?: readonly KernelMessage[];
   /** Intelligent Context Synthesis — from .withReasoning({ synthesis: ... }) */
   readonly synthesisConfig?: import("../context/synthesis-types.js").SynthesisConfig;
+  /** LLM-based observation extraction: true=always, false=never, "auto"=local/mid tiers only */
+  readonly observationSummary?: boolean | "auto";
 }
 
 // ── executeReactive ───────────────────────────────────────────────────────────
@@ -160,6 +162,7 @@ export const executeReactive = (
       briefResolvedSkills: input.briefResolvedSkills,
       initialMessages: input.initialMessages,
       synthesisConfig: input.synthesisConfig,
+      observationSummary: input.observationSummary,
     };
 
     const state = yield* runKernel(reactKernel, kernelInput, {

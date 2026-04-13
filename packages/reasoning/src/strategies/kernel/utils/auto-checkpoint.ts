@@ -1,11 +1,6 @@
 import { Effect, Ref } from "effect";
 import { CONTEXT_PRESSURE_THRESHOLDS } from "../phases/think.js";
-
-/** Meta-tool names excluded from auto-checkpoint content. */
-const META_TOOLS = new Set([
-  "final-answer", "task-complete", "context-status",
-  "brief", "pulse", "find", "recall", "checkpoint",
-]);
+import { META_TOOLS } from "../kernel-constants.js";
 
 /**
  * How far below the hard pressure gate the auto-checkpoint fires.

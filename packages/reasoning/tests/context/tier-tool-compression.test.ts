@@ -16,6 +16,7 @@ function makeProfile(tier: string): ContextProfile {
     compactAfterSteps: 4,
     fullDetailSteps: 2,
     toolResultMaxChars: 600,
+    toolResultPreviewItems: 5,
     contextBudgetPercent: 70,
     toolSchemaDetail: "full",
     temperature: 0.7,

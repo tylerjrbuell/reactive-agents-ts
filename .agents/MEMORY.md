@@ -12,6 +12,12 @@
 - [Composable Provider Adapters](project_composable_adapters.md) — V1.1 DONE in v0.8.5: all 7 hooks implemented
 - [Composable Reasoning Phases](project_composable_phases.md) — ✅ SHIPPED Apr 3, 2026: `strategies/kernel/` composable phase architecture merged to main
 
+## Current Status (Apr 13, 2026)
+- **Plan-Execute-Reflect fixes shipped** — planner decomposition, quantity enforcement, reflection augmentation, satisfaction override removal
+- **Observation Quality Pipeline shipped** — FC recall hint preservation, storedKey threading, adaptive auto-forward budget, tier-adaptive compression, optional LLM extraction
+- **Parallel/Sequential tool calling hardened** — infinite loop fix, sequential quantity clamping, softened required-tools nudge in sequential mode
+- **3,901 tests across 431 files** — all passing, 0 regressions, build clean
+
 ## Current Status (Apr 12, 2026)
 - **Pass 2 complete** — 18 probes (6 confirm + 12 wide), 18 pass / 5 fail, 0 regressions
 - W2 + W4 confirmed with JSONL evidence; W6 (recovery nudges compound W2), W7 (ICS over-tool-classifies), W8 (strategy switching unreachable) newly discovered

@@ -31,6 +31,7 @@ import {
   buildPatchPrompt,
   buildStepExecutionPrompt,
   buildReflectionPrompt,
+  buildAugmentPrompt,
 } from "./plan-prompts.js";
 import type { ToolSummary, StepResult } from "./plan-prompts.js";
 import { executeReActKernel } from "./kernel/react-kernel.js";
@@ -70,6 +71,8 @@ interface PlanExecuteInput {
   readonly sessionId?: string;
   /** Tools that MUST be called before the agent can declare success */
   readonly requiredTools?: readonly string[];
+  /** Per-tool minimum call counts from the classifier (e.g. { "web-search": 4 }). */
+  readonly requiredToolQuantities?: Readonly<Record<string, number>>;
   /** Max redirects when required tools are missing (default: 2) */
   readonly maxRequiredToolRetries?: number;
   /** Model identifier for routing/entropy scoring */
@@ -127,6 +130,7 @@ export const executePlanExecute = (
       tools: toolSummaries,
       pastPatterns: [],
       modelTier: "mid",
+      requiredToolQuantities: input.requiredToolQuantities,
     });
 
     const planResult = yield* extractStructuredOutput({
@@ -208,6 +212,35 @@ export const executePlanExecute = (
             toolName: tool,
             toolArgs,
             dependsOn: lastStep ? [lastStep.id] : [],
+            status: "pending",
+            retries: 0,
+            tokensUsed: 0,
+          });
+        }
+      }
+    }
+
+    // ── Quantity enforcement ──────────────────────────────────────────────────
+    // If the classifier specified per-tool minimum call counts, ensure the plan
+    // has enough tool_call steps for each. Inject synthetic steps for any deficit.
+    const quantities = input.requiredToolQuantities ?? {};
+    for (const [toolName, requiredCount] of Object.entries(quantities)) {
+      const existingCount = plan.steps.filter(
+        (s) => s.type === "tool_call" && s.toolName === toolName,
+      ).length;
+      const deficit = requiredCount - existingCount;
+      if (deficit > 0) {
+        for (let i = 0; i < deficit; i++) {
+          const stepNum = plan.steps.length + 1;
+          plan.steps.push({
+            id: `s${stepNum}`,
+            seq: stepNum,
+            title: `${toolName} (additional #${existingCount + i + 1})`,
+            instruction: `Call ${toolName} to fetch additional data needed for the goal. The classifier determined this tool should be called at least ${requiredCount} times to cover all entities.`,
+            type: "tool_call",
+            toolName,
+            toolArgs: {},
+            dependsOn: [],
             status: "pending",
             retries: 0,
             tokensUsed: 0,
@@ -488,9 +521,11 @@ export const executePlanExecute = (
       // Strip <think> blocks from reflection before satisfaction check
       const reflectionContent = stripThinking(reflectResponse.content);
 
-      // Treat as satisfied if: explicit SATISFIED, OR all steps completed successfully
-      // (prevents false-negative refinement loops that re-execute side-effecting steps)
-      const satisfied = isSatisfied(reflectionContent) || allStepsCompleted;
+      // Trust the reflector's verdict — step completion alone does not mean the goal
+      // is met (e.g. a combined search may return incomplete data for each entity).
+      // Re-execution of completed steps is already prevented by computeWaves skipping
+      // them and by the augmentation path generating only NEW supplementary steps.
+      const satisfied = isSatisfied(reflectionContent);
 
       steps.push(
         makeStep(
@@ -556,8 +591,7 @@ export const executePlanExecute = (
         break;
       }
 
-      // ── REFINEMENT: Use patch prompt to rewrite only failed/pending steps ──
-      // Completed steps carry forward — no re-execution of side-effecting actions
+      // ── REFINEMENT: Patch failed steps OR augment with supplementary steps ──
       const hasFailures = plan.steps.some((s) => s.status === "failed");
       if (hasFailures) {
         const patchResult = yield* patchPlan(
@@ -570,12 +604,10 @@ export const executePlanExecute = (
 
         if (patchResult) {
           totalTokens += patchResult.tokens;
-          // Find last completed step index
           const lastCompletedIdx = plan.steps.reduce(
             (acc, s, idx) => (s.status === "completed" ? idx : acc),
             -1,
           );
-          // Replace failed + pending steps, keep completed
           plan.steps.splice(
             lastCompletedIdx + 1,
             plan.steps.length - lastCompletedIdx - 1,
@@ -591,6 +623,35 @@ export const executePlanExecute = (
             totalSteps: maxRefinements + 1,
             thought: `[REFINE] Patched plan — kept ${lastCompletedIdx + 1} completed steps, replaced with: ${patchDetail}`,
             kernelPass: `plan-execute:refine-${refinement + 1}`,
+          });
+        }
+      } else if (allStepsCompleted) {
+        // All steps completed but goal unmet — generate supplementary steps
+        const augmentResult = yield* augmentPlan(
+          plan,
+          goal,
+          reflectionContent,
+          input,
+          llm,
+          totalTokens,
+        ).pipe(Effect.catchAll(() => Effect.succeed(null)));
+
+        if (augmentResult && augmentResult.steps.length > 0) {
+          totalTokens += augmentResult.tokens;
+          plan.steps.push(...augmentResult.steps);
+
+          const augDetail = augmentResult.steps.map((s) => `${s.id}: ${s.title}`).join(", ");
+          steps.push(
+            makeStep("thought", `[AUGMENT] Added ${augmentResult.steps.length} supplementary steps: ${augDetail}`),
+          );
+          yield* publishReasoningStep(eventBus, {
+            _tag: "ReasoningStepCompleted",
+            taskId: input.taskId ?? "plan-execute",
+            strategy: "plan-execute-reflect",
+            step: steps.length,
+            totalSteps: maxRefinements + 1,
+            thought: `[AUGMENT] Goal unmet with all steps completed — added ${augmentResult.steps.length} supplementary steps: ${augDetail}`,
+            kernelPass: `plan-execute:augment-${refinement + 1}`,
           });
         }
       }
@@ -947,6 +1008,77 @@ function patchPlan(
         Math.ceil(result.raw.length / 4) +
         Math.ceil(patchPrompt.length / 4);
       return { steps: patchedSteps, tokens: tokenEst };
+    }),
+    Effect.catchAll(() => Effect.succeed(null)),
+  );
+}
+
+/**
+ * Generate supplementary plan steps when all existing steps completed but the
+ * reflector determined the goal is unmet. Unlike patchPlan (which rewrites
+ * failed steps), this appends NEW steps to fill gaps.
+ */
+function augmentPlan(
+  plan: Plan,
+  goal: string,
+  reflectionFeedback: string,
+  input: PlanExecuteInput,
+  _llm: unknown,
+  _currentTokens: number,
+): Effect.Effect<
+  { steps: PlanStep[]; tokens: number } | null,
+  Error,
+  LLMService
+> {
+  const toolSummaries: ToolSummary[] = (
+    input.availableToolSchemas ?? []
+  ).map((t) => ({
+    name: t.name,
+    signature: `(${t.parameters.map((p) => (p.required ? p.name : `${p.name}?`)).join(", ")})`,
+  }));
+
+  const completedSteps = plan.steps
+    .filter((s) => s.status === "completed")
+    .map((s) => ({
+      stepId: s.id,
+      title: s.title,
+      result: s.result,
+    }));
+
+  const augmentPrompt = buildAugmentPrompt({
+    goal,
+    completedSteps,
+    reflectionFeedback,
+    tools: toolSummaries,
+  });
+
+  const nextSeq = plan.steps.length + 1;
+
+  return extractStructuredOutput({
+    schema: LLMPlanOutputSchema,
+    prompt: augmentPrompt,
+    systemPrompt:
+      "You are a planning agent. Generate supplementary steps to fill gaps in an incomplete plan.",
+    maxRetries: 1,
+    temperature: 0.3,
+    maxTokens: 4096,
+  }).pipe(
+    Effect.map((result) => {
+      const augmentedPlan = hydratePlan(result.data, {
+        taskId: plan.taskId,
+        agentId: plan.agentId,
+        goal: plan.goal,
+        planMode: plan.mode,
+      });
+      const augmentedSteps = augmentedPlan.steps.map((s, idx) => ({
+        ...s,
+        id: `s${nextSeq + idx}`,
+        seq: nextSeq + idx,
+      }));
+      const tokenEst =
+        Math.ceil(result.raw.length / 4) +
+        Math.ceil(augmentPrompt.length / 4);
+      return { steps: augmentedSteps, tokens: tokenEst };
     }),
     Effect.catchAll(() => Effect.succeed(null)),
   );

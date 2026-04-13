@@ -1,6 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import { Effect, Layer } from "effect";
-import { LLMService, TestLLMServiceLayer } from "@reactive-agents/llm-provider";
+import { LLMService, TestLLMService, TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 import { runKernel } from "../../../src/strategies/kernel/kernel-runner.js";
 import {
   initialKernelState,
@@ -442,7 +442,20 @@ describe("runKernel — required tools guard", () => {
             status: "thinking",
             iteration: state.iteration + 1,
             toolsUsed: newTools,
-            steps: [...state.steps, makeStep("action", "send_message")],
+            steps: [
+              ...state.steps,
+              makeStep("action", "send_message"),
+              makeStep("observation", "sent message", {
+                observationResult: {
+                  success: true,
+                  toolName: "send_message",
+                  displayText: "sent message",
+                  category: "action",
+                  resultKind: "info",
+                  preserveOnCompaction: false,
+                } as any,
+              }),
+            ],
           }),
         );
       }
@@ -465,6 +478,36 @@ describe("runKernel — required tools guard", () => {
 
     expect(result.status).toBe("done");
     expect(result.output).toBe("Task complete");
+    expect((result.meta.executionLane as string) ?? "").toBe("synthesize");
+    expect((result.meta.missingRequiredTools as readonly string[] | undefined) ?? []).toEqual([]);
+  });
+
+  it("tracks gather lane metadata when required tools remain missing", async () => {
+    const noProgressKernel: ThoughtKernel = (state, _ctx) =>
+      Effect.succeed(
+        transitionState(state, {
+          status: "thinking",
+          iteration: state.iteration + 1,
+          tokens: state.tokens + 100,
+          steps: [...state.steps, makeStep("thought", "still gathering")],
+        }),
+      );
+
+    const result = await Effect.runPromise(
+      runKernel(noProgressKernel, {
+        task: "must use web-search",
+        requiredTools: ["web-search"],
+      }, {
+        maxIterations: 4,
+        strategy: "test",
+        kernelType: "test",
+        loopDetection: { maxConsecutiveThoughts: 999, maxRepeatedThoughts: 999, maxSameToolCalls: 999 },
+      }).pipe(Effect.provide(testLayer)),
+    );
+
+    expect(result.status).toBe("failed");
+    expect((result.meta.executionLane as string) ?? "").toBe("gather");
+    expect((result.meta.missingRequiredTools as readonly string[] | undefined) ?? []).toEqual(["web-search"]);
   });
 
   it("treats delegated child tool success as satisfying parent required tools", async () => {
@@ -545,7 +588,20 @@ describe("runKernel — required tools guard", () => {
             status: "thinking",
             iteration: state.iteration + 1,
             toolsUsed: newTools,
-            steps: [...state.steps, makeStep("action", "send_message")],
+            steps: [
+              ...state.steps,
+              makeStep("action", "send_message"),
+              makeStep("observation", "sent message", {
+                observationResult: {
+                  success: true,
+                  toolName: "send_message",
+                  displayText: "sent message",
+                  category: "action",
+                  resultKind: "info",
+                  preserveOnCompaction: false,
+                } as any,
+              }),
+            ],
           }),
         );
       }
@@ -649,6 +705,20 @@ describe("runKernel — required tools guard", () => {
             output: "Searched but didn't send",
             iteration: state.iteration + 1,
             toolsUsed: newTools,
+            steps: [
+              ...state.steps,
+              makeStep("action", "search"),
+              makeStep("observation", "search results", {
+                observationResult: {
+                  success: true,
+                  toolName: "search",
+                  displayText: "search results",
+                  category: "lookup",
+                  resultKind: "info",
+                  preserveOnCompaction: false,
+                } as any,
+              }),
+            ],
           }),
         );
       }
@@ -661,7 +731,20 @@ describe("runKernel — required tools guard", () => {
             status: "thinking",
             iteration: state.iteration + 1,
             toolsUsed: newTools,
-            steps: [...state.steps, makeStep("action", "send_message")],
+            steps: [
+              ...state.steps,
+              makeStep("action", "send_message"),
+              makeStep("observation", "sent message", {
+                observationResult: {
+                  success: true,
+                  toolName: "send_message",
+                  displayText: "sent message",
+                  category: "action",
+                  resultKind: "info",
+                  preserveOnCompaction: false,
+                } as any,
+              }),
+            ],
           }),
         );
       }
@@ -786,6 +869,38 @@ describe("runKernel — required tools guard", () => {
     expect(callCount).toBe(0);
   });
 
+  it("does not trigger low-delta early exit while required tools are still missing", async () => {
+    let callCount = 0;
+    const lowDeltaKernel: ThoughtKernel = (state, _ctx) => {
+      callCount++;
+      return Effect.succeed(
+        transitionState(state, {
+          status: "thinking",
+          iteration: state.iteration + 1,
+          tokens: state.tokens + 100,
+          steps: [...state.steps, makeStep("thought", `low-delta-${callCount}`)],
+        }),
+      );
+    };
+
+    const result = await Effect.runPromise(
+      runKernel(lowDeltaKernel, {
+        task: "must call web-search first",
+        requiredTools: ["web-search"],
+      }, {
+        maxIterations: 5,
+        strategy: "test",
+        kernelType: "test",
+        loopDetection: { maxConsecutiveThoughts: 999, maxRepeatedThoughts: 999, maxSameToolCalls: 999 },
+      }).pipe(Effect.provide(testLayer)),
+    );
+
+    expect(result.status).toBe("failed");
+    expect(callCount).toBe(5);
+    expect(result.error).toContain("terminatedBy=max_iterations");
+    expect(result.error).not.toContain("low_delta_guard");
+  });
+
   it("fails instead of delivering harness output when required tools were not called", async () => {
     const stalledKernel: ThoughtKernel = (state, _ctx) => {
       const nextIter = state.iteration + 1;
@@ -831,7 +946,7 @@ describe("runKernel — required tools guard", () => {
 
     expect(result.status).toBe("failed");
     expect(result.error).toContain("missing_required_tool");
-    expect(result.error).toContain("terminatedBy=harness_deliverable");
+    expect(result.error).toContain("terminatedBy=max_iterations");
   });
 
   it("nudges alternate tool paths before harness deliverable after a failed tool path", async () => {
@@ -932,5 +1047,135 @@ describe("runKernel — required tools guard", () => {
     expect(result.toolsUsed.has("http-get")).toBe(true);
     const recoveryNudge = result.steps.find((s) => s.content.includes("Recovery required:"));
     expect(recoveryNudge).toBeDefined();
+  });
+
+  it("does not inject oracle final-answer nudge while required quota is still missing", async () => {
+    let callCount = 0;
+    const pulseReadyKernel: ThoughtKernel = (state, _ctx) => {
+      callCount++;
+      const nextIteration = state.iteration + 1;
+      if (callCount === 1) {
+        return Effect.succeed(
+          transitionState(state, {
+            status: "thinking",
+            iteration: nextIteration,
+            steps: [
+              ...state.steps,
+              makeStep("observation", JSON.stringify({ readyToAnswer: true }), {
+                observationResult: {
+                  success: true,
+                  toolName: "pulse",
+                  displayText: "readyToAnswer=true",
+                  category: "meta",
+                  resultKind: "info",
+                  preserveOnCompaction: false,
+                } as any,
+              }),
+            ],
+          }),
+        );
+      }
+
+      return Effect.succeed(
+        transitionState(state, {
+          status: "done",
+          output: "premature completion",
+          iteration: nextIteration,
+        }),
+      );
+    };
+
+    const result = await Effect.runPromise(
+      runKernel(pulseReadyKernel, {
+        task: "test",
+        requiredTools: ["web-search"],
+        requiredToolQuantities: { "web-search": 1 },
+        maxRequiredToolRetries: 0,
+        availableToolSchemas: [
+          { name: "web-search", description: "search web", parameters: [] },
+          { name: "pulse", description: "meta introspection", parameters: [] },
+        ],
+      }, {
+        maxIterations: 5,
+        strategy: "test",
+        kernelType: "test",
+        loopDetection: { maxConsecutiveThoughts: 999, maxRepeatedThoughts: 999, maxSameToolCalls: 999 },
+      }).pipe(Effect.provide(testLayer)),
+    );
+
+    expect(result.status).toBe("failed");
+    expect(result.error).toContain("web-search");
+    expect(result.steeringNudge ?? "").not.toContain("Call `final-answer` now");
+    expect(result.readyToAnswerNudgeCount ?? 0).toBe(0);
+  });
+});
+
+describe("runKernel — tool classification lifecycle", () => {
+  it("does not reclassify tools during execution after initial classification", async () => {
+    let structuredCalls = 0;
+    const baseService = TestLLMService([
+      {
+        json: {
+          required: [{ name: "web-search", minCalls: 1 }],
+          relevant: ["web-search", "recall"],
+        },
+      },
+    ]);
+    const countingService: typeof LLMService.Service = {
+      ...baseService,
+      completeStructured: <A>(request: {
+        readonly messages: readonly { readonly role: "system" | "user" | "assistant"; readonly content: string }[];
+        readonly systemPrompt?: string;
+        readonly outputSchema: unknown;
+        readonly maxTokens?: number;
+        readonly temperature?: number;
+        readonly maxParseRetries?: number;
+      }) => {
+        structuredCalls++;
+        return baseService.completeStructured(request as never) as never;
+      },
+    };
+    const classificationLayer = Layer.succeed(LLMService, LLMService.of(countingService));
+
+    const stalledKernel: ThoughtKernel = (state, _ctx) => {
+      const nextIteration = state.iteration + 1;
+      if (nextIteration < 4) {
+        return Effect.succeed(
+          transitionState(state, {
+            status: "thinking",
+            iteration: nextIteration,
+            steps: [...state.steps, makeStep("thought", `No progress iteration ${nextIteration}`)],
+          }),
+        );
+      }
+      return Effect.succeed(
+        transitionState(state, {
+          status: "done",
+          output: "Completed without reclassification",
+          iteration: nextIteration,
+        }),
+      );
+    };
+
+    const result = await Effect.runPromise(
+      runKernel(stalledKernel, {
+        task: "finish task with initial tool map only",
+        relevantTools: ["web-search"],
+        availableToolSchemas: [
+          { name: "web-search", description: "Searches the web", parameters: [] },
+          { name: "http-get", description: "Fetches a URL", parameters: [] },
+          { name: "file-write", description: "Writes a file", parameters: [] },
+          { name: "shell-execute", description: "Runs shell commands", parameters: [] },
+        ],
+      }, {
+        maxIterations: 8,
+        strategy: "test",
+        kernelType: "test",
+        loopDetection: { maxConsecutiveThoughts: 999, maxRepeatedThoughts: 999, maxSameToolCalls: 999 },
+      }).pipe(Effect.provide(classificationLayer)),
+    );
+
+    expect(result.status).toBe("done");
+    expect(structuredCalls).toBe(0);
   });
 });

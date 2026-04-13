@@ -14,17 +14,19 @@ describe("CONTEXT_PROFILES", () => {
     expect(CONTEXT_PROFILES.frontier).toBeDefined();
   });
 
-  it("local tier has strictest limits", () => {
+  it("local tier has strictest complexity limits but largest tool result budgets", () => {
     const local = CONTEXT_PROFILES.local;
     expect(local.compactAfterSteps).toBeLessThan(CONTEXT_PROFILES.mid.compactAfterSteps);
-    expect(local.toolResultMaxChars).toBeLessThan(CONTEXT_PROFILES.mid.toolResultMaxChars);
+    // Local models get MORE raw tool data because they struggle with compressed previews
+    expect(local.toolResultMaxChars).toBeGreaterThan(CONTEXT_PROFILES.mid.toolResultMaxChars);
     expect(local.rulesComplexity).toBe("simplified");
   });
 
-  it("frontier tier has most generous limits", () => {
+  it("frontier tier has most generous complexity limits but smallest tool result budgets", () => {
     const f = CONTEXT_PROFILES.frontier;
     expect(f.compactAfterSteps).toBeGreaterThan(CONTEXT_PROFILES.large.compactAfterSteps);
-    expect(f.toolResultMaxChars).toBeGreaterThan(CONTEXT_PROFILES.large.toolResultMaxChars);
+    // Frontier models extract well from minimal context — smaller tool result budgets
+    expect(f.toolResultMaxChars).toBeLessThan(CONTEXT_PROFILES.large.toolResultMaxChars);
     expect(f.rulesComplexity).toBe("detailed");
   });
 
@@ -63,6 +65,29 @@ describe("CONTEXT_PROFILES", () => {
     for (let i = 1; i < iters.length; i++) {
       expect(iters[i]).toBeGreaterThanOrEqual(iters[i - 1]);
     }
+  });
+
+  it("toolResultMaxChars decreases from local to frontier (quality-first ordering)", () => {
+    const budgets = [
+      CONTEXT_PROFILES.local.toolResultMaxChars,
+      CONTEXT_PROFILES.mid.toolResultMaxChars,
+      CONTEXT_PROFILES.large.toolResultMaxChars,
+      CONTEXT_PROFILES.frontier.toolResultMaxChars,
+    ];
+    for (let i = 1; i < budgets.length; i++) {
+      expect(budgets[i]).toBeLessThanOrEqual(budgets[i - 1]);
+    }
+  });
+
+  it("all tiers have toolResultPreviewItems set", () => {
+    for (const tier of ["local", "mid", "large", "frontier"] as const) {
+      expect(CONTEXT_PROFILES[tier].toolResultPreviewItems).toBeGreaterThan(0);
+    }
+  });
+
+  it("local tier has more preview items than frontier", () => {
+    expect(CONTEXT_PROFILES.local.toolResultPreviewItems)
+      .toBeGreaterThanOrEqual(CONTEXT_PROFILES.frontier.toolResultPreviewItems);
   });
 });
 

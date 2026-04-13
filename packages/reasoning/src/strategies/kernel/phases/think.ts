@@ -37,6 +37,10 @@ import {
   computeNoveltyRatio,
   buildToolElaborationInjection,
 } from "../utils/tool-utils.js";
+import {
+  buildSuccessfulToolCallCounts,
+  getMissingRequiredToolsFromSteps,
+} from "../utils/requirement-state.js";
 import { evaluateTermination, defaultEvaluators, type TerminationContext } from "../utils/termination-oracle.js";
 import { assembleOutput } from "../output-assembly.js";
 import { buildStaticContext } from "../../../context/context-engine.js";
@@ -51,8 +55,7 @@ import {
   type ReActKernelInput,
 } from "../kernel-state.js";
 
-/** Meta-tool names — not counted as "real work" for completion detection. */
-const META_TOOL_SET = new Set(["final-answer", "task-complete", "context-status", "brief", "pulse", "find", "recall", "checkpoint"]);
+import { META_TOOLS as META_TOOL_SET } from "../kernel-constants.js";
 
 /** Per-tier context pressure thresholds — local models get narrowed earlier. */
 export const CONTEXT_PRESSURE_THRESHOLDS: Record<string, number> = {
@@ -183,28 +186,49 @@ export function handleThinking(
     );
     const systemPromptText = `${patchedBase}\n\n${staticContext}${toolGuidancePatch ? `\n${toolGuidancePatch}` : ""}${toolElaborationSection ? `\n\n${toolElaborationSection}` : ""}`;
 
-    // ── Auto-forward: inject full stored result from last observation ──────────
-    // When the previous tool result was compressed and auto-stored in the scratchpad
-    // (storedKey on the observation step metadata), inject the full content into this
-    // iteration's context so the model can use it directly without calling recall.
-    // Budget: 2,000 chars. Only the LAST stored result is forwarded.
-    const AUTO_FORWARD_BUDGET = 2_000;
+    // ── Auto-forward: inject full stored results from recent observations ────
+    // When tool results were compressed and auto-stored in the scratchpad
+    // (storedKey on observation step metadata), inject the full content so the
+    // model can use it directly without calling recall. Handles parallel batches
+    // where multiple observations are stored in the same iteration.
+    const AUTO_FORWARD_BASE = 1_500;
+    const AUTO_FORWARD_PER_RESULT = 1_000;
+    const AUTO_FORWARD_MAX = 8_000;
     let autoForwardSection = "";
     if (state.iteration > 0) {
-      const lastObsStep = state.steps.filter((s) => s.type === "observation").pop();
-      const storedKey = lastObsStep?.metadata?.storedKey as string | undefined;
-      if (storedKey && state.scratchpad.has(storedKey)) {
-        const fullResult = state.scratchpad.get(storedKey)!;
-        const injected =
-          fullResult.length <= AUTO_FORWARD_BUDGET
+      const recentObs = state.steps.filter((s) =>
+        s.type === "observation" && s.metadata?.storedKey,
+      );
+      const storedKeys: string[] = [];
+      for (let i = recentObs.length - 1; i >= 0; i--) {
+        const key = recentObs[i].metadata!.storedKey!;
+        if (state.scratchpad.has(key)) {
+          storedKeys.unshift(key);
+        } else {
+          break;
+        }
+      }
+
+      if (storedKeys.length > 0) {
+        const adaptiveBudget = Math.min(
+          AUTO_FORWARD_BASE + AUTO_FORWARD_PER_RESULT * storedKeys.length,
+          AUTO_FORWARD_MAX,
+        );
+        const sections: string[] = [];
+        let remaining = adaptiveBudget;
+        for (const key of storedKeys) {
+          if (remaining <= 0) break;
+          const fullResult = state.scratchpad.get(key)!;
+          const injected = fullResult.length <= remaining
             ? fullResult
-            : fullResult.slice(0, AUTO_FORWARD_BUDGET) +
-              `\n[...${fullResult.length - AUTO_FORWARD_BUDGET} chars truncated — full content is stored. Use recall("${storedKey}", start: 0, maxChars: 1200), recall("${storedKey}", lineStart: 0, lineCount: 40), or recall("${storedKey}", arrayStart: 0, arrayCount: 20) for targeted retrieval.]`;
-        autoForwardSection = `[Auto-forwarded full result for ${storedKey}]:\n${injected}`;
+            : fullResult.slice(0, remaining) +
+              `\n[...${fullResult.length - remaining} chars truncated — use recall("${key}", start: 0, maxChars: 1200) for full content.]`;
+          sections.push(`[Auto-forwarded: ${key}]:\n${injected}`);
+          remaining -= fullResult.length;
+        }
+        autoForwardSection = sections.join("\n\n");
       }
     }
-
-    // autoForwardSection is passed directly to buildConversationMessages
 
     // ── STREAM (with text delta emission) ──────────────────────────────────
     // Token budget adapts to model tier: frontier models get more room for
@@ -556,26 +580,52 @@ export function handleThinking(
       if (resolverResult._tag === "tool_calls") {
         const rawCalls = resolverResult.calls as readonly ToolCallSpec[];
         // Compute per-tool call counts from step history for budget enforcement.
-        const toolCallCounts = state.steps.reduce<Record<string, number>>((acc, s) => {
-          if (s.type === "action") {
-            const name = (s.metadata?.toolCall as { name?: string } | undefined)?.name;
-            if (name) acc[name] = (acc[name] ?? 0) + 1;
-          }
-          return acc;
-        }, {});
+        const toolCallCounts = buildSuccessfulToolCallCounts(state.steps);
 
-        const { effective, blockedOptionalBatch } = gateNativeToolCallsForRequiredTools(
+        const { effective, blockedOptionalBatch, quotaBudgetConflict } = gateNativeToolCallsForRequiredTools(
           rawCalls,
           input.requiredTools ?? [],
           state.toolsUsed,
           input.relevantTools,
           toolCallCounts,
           input.maxCallsPerTool,
+          input.requiredToolQuantities,
           input.strictToolDependencyChain,
+          input.nextMovesPlanning,
         );
 
         if (blockedOptionalBatch) {
-          const missing = (input.requiredTools ?? []).filter((t) => !state.toolsUsed.has(t));
+          if ((quotaBudgetConflict?.length ?? 0) > 0) {
+            const conflictLines = quotaBudgetConflict!.map((entry) =>
+              `${entry.toolName}: required minCalls=${entry.requiredMinCalls}, maxCallsPerTool=${entry.maxCalls}, actualCalls=${entry.actualCalls}`,
+            );
+            const conflictMsg =
+              "Configuration conflict — required tool quotas cannot be satisfied within maxCallsPerTool budget:\n" +
+              conflictLines.map((line) => `• ${line}`).join("\n") +
+              "\nFix either requiredToolQuantities or maxCallsPerTool before retrying this run.";
+            const conflictStep = makeStep("observation", conflictMsg, {
+              observationResult: makeObservationResult("system", false, conflictMsg),
+            });
+            return transitionState(state, {
+              steps: [...newSteps, conflictStep],
+              tokens: newTokens,
+              cost: newCost,
+              status: "failed",
+              error: conflictMsg,
+              iteration: state.iteration + 1,
+              meta: {
+                ...state.meta,
+                lastThought: thought,
+                lastThinking: thinking,
+              },
+            });
+          }
+
+          const missing = getMissingRequiredToolsFromSteps(
+            state.steps,
+            input.requiredTools ?? [],
+            input.requiredToolQuantities,
+          );
           const nextRequired = missing[0] ?? "the missing required tool";
           const attemptedTools = rawCalls.map((tc) => tc.name);
           const writeHint =
@@ -637,23 +687,25 @@ export function handleThinking(
         // Genuine final answer (no tool calls). Check completion gaps first —
         // if required tools haven't been called, redirect instead of accepting.
         const requiredTools = input.requiredTools ?? [];
-        const allRequiredMet = requiredTools.every((t) => state.toolsUsed.has(t));
-        if (!allRequiredMet && state.iteration < (state.meta.maxIterations as number ?? 10) - 1) {
-          const missing = requiredTools.filter((t) => !state.toolsUsed.has(t));
-
+        const missingRequired = getMissingRequiredToolsFromSteps(
+          state.steps,
+          requiredTools,
+          input.requiredToolQuantities,
+        );
+        if (missingRequired.length > 0 && state.iteration < (state.meta.maxIterations as number ?? 10) - 1) {
           // Use adapter hint for targeted guidance, fall back to generic redirect
-          const lastActStep = state.steps.filter(s => s.type === "action").pop();
+          const lastActStep = state.steps.filter((s) => s.type === "action").pop();
           const lastTool = (lastActStep?.metadata?.toolCall as { name?: string } | undefined)?.name;
           const adapterRedirect = adapter.continuationHint?.({
             toolsUsed: state.toolsUsed,
             requiredTools: requiredTools as string[],
-            missingTools: missing,
+            missingTools: missingRequired,
             iteration: state.iteration,
             maxIterations: (state.meta.maxIterations as number) ?? 10,
             lastToolName: lastTool,
           });
           const redirectMsg = adapterRedirect
-            ?? `Not done yet — you still need to call: ${missing.join(", ")}. Do not give a final answer until all required tools have been used.`;
+            ?? `Not done yet — you still need to call: ${missingRequired.join(", ")}. Do not give a final answer until all required tools have been used.`;
 
           const redirectStep = makeStep("observation", redirectMsg, {
             observationResult: makeObservationResult("system", false, redirectMsg),
@@ -751,7 +803,11 @@ export function handleThinking(
       } else if (resolverResult._tag === "thinking") {
         const thinkingContent = resolverResult.content.trim();
         const reqTools = input.requiredTools ?? [];
-        const missingReq = reqTools.filter((t) => !state.toolsUsed.has(t));
+        const missingReq = getMissingRequiredToolsFromSteps(
+          state.steps,
+          reqTools,
+          input.requiredToolQuantities,
+        );
 
         // ── Standard thinking handler ──────────────────────────────────────
         // Note: Even if all required tools are met, we continue the loop to
@@ -773,10 +829,18 @@ export function handleThinking(
 
         let nudgeMessage: string | undefined;
         if (missingReq.length > 0) {
+          const quantities = input.requiredToolQuantities ?? {};
+          const successCounts = buildSuccessfulToolCallCounts(state.steps);
+          const missingWithProgress = missingReq.map((t) => {
+            const needed = quantities[t];
+            if (!needed || needed <= 1) return t;
+            const actual = successCounts[t] ?? 0;
+            return `${t} (${actual}/${needed} calls done)`;
+          });
           const isStuck = consecutiveEmpty >= 2;
           const defaultNudge = isStuck
-            ? `⚠️ ACTION REQUIRED: You have not made progress. You MUST call: ${missingReq.join(", ")} RIGHT NOW. Stop waiting and use the tool immediately.`
-            : `Continue working on the task. You still need to call: ${missingReq.join(", ")}. Use the available tools to complete the task.`;
+            ? `⚠️ ACTION REQUIRED: You have not made progress. You MUST call: ${missingWithProgress.join(", ")} RIGHT NOW. Stop waiting and use the tool immediately.`
+            : `Continue working on the task. You still need to call: ${missingWithProgress.join(", ")}. Use the available tools to complete the task.`;
 
           const lastObsForHint = state.steps.filter((s) => s.type === "observation").pop();
           const lastActionForHint = state.steps.filter((s) => s.type === "action").pop();

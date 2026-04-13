@@ -21,7 +21,7 @@ import {
   type ToolCallSpec,
 } from "@reactive-agents/tools";
 import { makeStep } from "../utils/step-utils.js";
-import { executeNativeToolCall, makeObservationResult } from "../utils/tool-execution.js";
+import { executeNativeToolCall, makeObservationResult, extractObservationFacts } from "../utils/tool-execution.js";
 import {
   transitionState,
   type KernelState,
@@ -29,9 +29,59 @@ import {
   type KernelMessage,
 } from "../kernel-state.js";
 import { planNextMoveBatches } from "../utils/tool-utils.js";
-import { checkToolCall, defaultGuards, META_TOOL_SET } from "./guard.js";
+import {
+  buildSuccessfulToolCallCounts,
+  getMissingRequiredToolsByCount,
+} from "../utils/requirement-state.js";
+import { checkToolCall, defaultGuards } from "./guard.js";
+import { META_TOOLS, INTROSPECTION_META_TOOLS } from "../kernel-constants.js";
 
 const REQUIRED_TOOLS_SATISFIED_PREFIX = "Required tool calls are satisfied";
+
+function isGuardHardFailure(observation: string): boolean {
+  return observation.includes("is not available in this run");
+}
+
+function normalizeToolCallArguments(toolCall: ToolCallSpec): ToolCallSpec {
+  const args = typeof toolCall.arguments === "object" && toolCall.arguments !== null
+    ? { ...(toolCall.arguments as Record<string, unknown>) }
+    : {};
+
+  if (toolCall.name === "web-search") {
+    if (typeof args.query !== "string" || args.query.trim().length === 0) {
+      const rawQueries = args.queries;
+      const queries = Array.isArray(rawQueries)
+        ? rawQueries.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+        : typeof rawQueries === "string" && rawQueries.trim().length > 0
+          ? [rawQueries]
+          : [];
+      if (queries.length > 0) {
+        args.query = queries.join(" OR ");
+      }
+    }
+    delete args.queries;
+  }
+
+  if (toolCall.name === "http-get") {
+    if (typeof args.url !== "string" || args.url.trim().length === 0) {
+      const rawUrls = args.urls;
+      const urls = Array.isArray(rawUrls)
+        ? rawUrls.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+        : typeof rawUrls === "string" && rawUrls.trim().length > 0
+          ? [rawUrls]
+          : [];
+      if (urls.length > 0) {
+        args.url = urls[0]!;
+      }
+    }
+    delete args.urls;
+  }
+
+  return {
+    ...toolCall,
+    arguments: args,
+  };
+}
 
 /** Observation is a compressed preview that points at scratchpad storage — model must recall before synthesizing. */
 function observationReferencesStoredOverflow(content: string): boolean {
@@ -141,11 +191,16 @@ export function handleActing(
     const { input, profile, compression, toolService, hooks } = context;
     const adapter = selectAdapter({ supportsToolCalling: true }, profile.tier);
 
+    const obsMode = input.observationSummary;
+    const shouldExtract = obsMode === true
+      || (obsMode === "auto" && (profile.tier === "local" || profile.tier === "mid"));
+
     // ── NATIVE FC ACTING BRANCH ─────────────────────────────────────────────
     // When the thinking phase stored pendingNativeToolCalls, execute them here
     // using the structured ToolCallSpec (pre-parsed arguments, no regex repair).
     const pendingNativeCalls = state.meta.pendingNativeToolCalls as readonly ToolCallSpec[] | undefined;
     if (pendingNativeCalls && pendingNativeCalls.length > 0) {
+      const normalizedPendingCalls = pendingNativeCalls.map(normalizeToolCallArguments);
       const newToolsUsed = new Set(state.toolsUsed);
       let allSteps = [...state.steps];
       // Meta-tool dedup tracking — updated per tool call, written to state at the end.
@@ -161,7 +216,7 @@ export function handleActing(
       }
 
       const plannedBatches = planNextMoveBatches(
-        pendingNativeCalls,
+        normalizedPendingCalls,
         input.nextMovesPlanning,
       );
       const batchLeaderToCalls = new Map<string, readonly ToolCallSpec[]>();
@@ -176,13 +231,11 @@ export function handleActing(
         }
       }
 
-      for (let idx = 0; idx < pendingNativeCalls.length; idx++) {
-        const tc = pendingNativeCalls[idx]!;
+      for (let idx = 0; idx < normalizedPendingCalls.length; idx++) {
+        const tc = normalizedPendingCalls[idx]!;
         if (batchFollowers.has(tc.id)) {
           continue;
         }
-
-        const META_TOOL_NAMES = new Set(["final-answer", "task-complete", "context-status", "brief", "pulse", "find", "recall", "checkpoint"]);
 
         // ── Check meta-tool registry first (brief, pulse) ─────────────────────
         const metaHandler = metaToolRegistry.get(tc.name);
@@ -195,6 +248,7 @@ export function handleActing(
             toolCall: { id: tc.id, name: tc.name, arguments: tc.arguments },
           });
           const obsStep = makeStep("observation", content, {
+            toolCallId: tc.id,
             observationResult: makeObservationResult(tc.name, success, content),
           });
           yield* hooks.onAction(state, tc.name, JSON.stringify(tc.arguments));
@@ -213,20 +267,15 @@ export function handleActing(
 
         // ── FINAL-ANSWER HARD GATE (FC) ───────────────────────────────────────
         if (tc.name === "final-answer") {
-          const META_TOOLS = new Set(["final-answer", "task-complete", "context-status", "brief", "pulse", "find", "recall", "checkpoint"]);
           const hasNonMetaToolCalled = [...newToolsUsed].some((t) => !META_TOOLS.has(t));
           const requiredTools = input.requiredTools ?? [];
-          const quantities = input.requiredToolQuantities ?? {};
-          const allRequiredMet = requiredTools.every((t) => {
-            if (!newToolsUsed.has(t)) return false;
-            const needed = quantities[t] ?? 1;
-            if (needed <= 1) return true;
-            const actual = allSteps.filter((s) => {
-              if (s.type !== "action") return false;
-              return (s.metadata?.toolCall as { name?: string } | undefined)?.name === t;
-            }).length;
-            return actual >= needed;
-          });
+          const successfulToolCounts = buildSuccessfulToolCallCounts(allSteps);
+          const missingRequired = getMissingRequiredToolsByCount(
+            successfulToolCounts,
+            requiredTools,
+            input.requiredToolQuantities,
+          );
+          const allRequiredMet = missingRequired.length === 0;
           let canComplete = allRequiredMet && (hasNonMetaToolCalled || requiredTools.length === 0);
 
           // ── Dynamic task completion guard (FC) ──────────────────────────────
@@ -260,6 +309,7 @@ export function handleActing(
               toolCall: { id: tc.id, name: tc.name, arguments: tc.arguments },
             });
             const finalObsStep = makeStep("observation", finalObsContent, {
+              toolCallId: tc.id,
               observationResult: makeObservationResult("final-answer", true, finalObsContent),
             });
 
@@ -297,6 +347,7 @@ export function handleActing(
           });
           const rejectObs = `\u26A0\uFE0F ${rejectionMsg}`;
           const rejectObsStep = makeStep("observation", rejectObs, {
+            toolCallId: tc.id,
             observationResult: makeObservationResult("final-answer", false, rejectObs),
           });
 
@@ -328,17 +379,19 @@ export function handleActing(
             );
 
             if (!guardOutcome.pass) {
+              const guardFailed = isGuardHardFailure(guardOutcome.observation);
               const blockedActionStep = makeStep("action", `${batchCall.name}(${JSON.stringify(batchCall.arguments)})`, {
                 toolCall: { id: batchCall.id, name: batchCall.name, arguments: batchCall.arguments },
               });
               const blockedObsStep = makeStep("observation", guardOutcome.observation, {
-                observationResult: makeObservationResult(batchCall.name, true, guardOutcome.observation),
+                toolCallId: batchCall.id,
+                observationResult: makeObservationResult(batchCall.name, !guardFailed, guardOutcome.observation),
               });
               yield* hooks.onAction(state, batchCall.name, JSON.stringify(batchCall.arguments));
               yield* hooks.onObservation(
                 transitionState(state, { steps: [...allSteps, blockedActionStep] }),
                 guardOutcome.observation,
-                true,
+                !guardFailed,
               );
               allSteps = [...allSteps, blockedActionStep, blockedObsStep];
               continue;
@@ -365,6 +418,7 @@ export function handleActing(
               yield* hooks.onAction(state, batchCall.name, JSON.stringify(batchCall.arguments));
               const errContent = `[Tool "${batchCall.name}" requested but ToolService is not available]`;
               const errObsStep = makeStep("observation", errContent, {
+                toolCallId: batchCall.id,
                 observationResult: makeObservationResult(batchCall.name, false, errContent),
               });
               yield* hooks.onObservation(
@@ -435,10 +489,16 @@ export function handleActing(
 
             let obsContent = result.execResult.content;
             if (!result.execResult.success) {
+              const successfulToolCounts = buildSuccessfulToolCallCounts(allSteps);
+              const missingRequiredTools = getMissingRequiredToolsByCount(
+                successfulToolCounts,
+                input.requiredTools ?? [],
+                input.requiredToolQuantities,
+              );
               const recovery = adapter.errorRecovery?.({
                 toolName: result.toolName,
                 errorContent: result.execResult.content,
-                missingTools: (input.requiredTools ?? []).filter((t) => !newToolsUsed.has(t)),
+                missingTools: missingRequiredTools,
                 tier: profile.tier ?? "mid",
               });
               if (recovery) {
@@ -446,15 +506,39 @@ export function handleActing(
               }
             }
 
+            // LLM fact extraction — enrich compressed observation with distilled key facts
+            if (result.execResult.success && shouldExtract) {
+              const batchCall = executableCalls.find((c) => c.id === result.callId);
+              if (batchCall) {
+                const extracted = yield* extractObservationFacts(
+                  result.toolName,
+                  result.execResult.content,
+                  batchCall.arguments as Record<string, unknown>,
+                  compression.budget ?? 800,
+                );
+                if (extracted) {
+                  obsContent = `[${result.toolName} result — key facts extracted]\n${extracted}\n${obsContent}`;
+                }
+              }
+            }
+
             const obsStep = makeStep("observation", obsContent, {
+              toolCallId: result.callId,
               storedKey: result.execResult.storedKey,
               observationResult: makeObservationResult(result.toolName, result.execResult.success, obsContent, {
                 delegatedToolsUsed: result.execResult.delegatedToolsUsed,
               }),
             });
 
+            // Pass state with the action step as the last entry so
+            // onObservation finds toolUsed in metadata and emits ToolCallCompleted.
+            // Without this, parallel results after the first would have an observation
+            // as the last step, causing ToolCallCompleted metrics to be skipped.
+            const stepsForHook = actionIdx !== undefined
+              ? allSteps.slice(0, actionIdx + 1)
+              : allSteps;
             yield* hooks.onObservation(
-              transitionState(state, { steps: allSteps }),
+              transitionState(state, { steps: stepsForHook }),
               obsContent,
               result.execResult.success,
             );
@@ -475,21 +559,23 @@ export function handleActing(
           consecutiveMetaToolCount,
         }), input);
         if (!guardOutcome.pass) {
+          const guardFailed = isGuardHardFailure(guardOutcome.observation);
           const actionStep = makeStep("action", `${tc.name}(${JSON.stringify(tc.arguments)})`, {
             toolCall: { id: tc.id, name: tc.name, arguments: tc.arguments },
           });
           const guardObsStep = makeStep("observation", guardOutcome.observation, {
-            observationResult: makeObservationResult(tc.name, true, guardOutcome.observation),
+            toolCallId: tc.id,
+            observationResult: makeObservationResult(tc.name, !guardFailed, guardOutcome.observation),
           });
           yield* hooks.onAction(state, tc.name, JSON.stringify(tc.arguments));
           yield* hooks.onObservation(
             transitionState(state, { steps: [...allSteps, actionStep] }),
             guardOutcome.observation,
-            true,
+            !guardFailed,
           );
           allSteps = [...allSteps, actionStep, guardObsStep];
           // Update meta-tool dedup tracking even for blocked calls (the call still happened)
-          if (META_TOOL_SET.has(tc.name)) {
+          if (INTROSPECTION_META_TOOLS.has(tc.name)) {
             consecutiveMetaToolCount = tc.name === lastMetaToolCall ? consecutiveMetaToolCount + 1 : 1;
             lastMetaToolCall = tc.name;
           } else {
@@ -512,6 +598,7 @@ export function handleActing(
         if (toolService._tag === "None") {
           const errContent = `[Tool "${tc.name}" requested but ToolService is not available]`;
           const errObsStep = makeStep("observation", errContent, {
+            toolCallId: tc.id,
             observationResult: makeObservationResult(tc.name, false, errContent),
           });
           yield* hooks.onObservation(
@@ -552,10 +639,16 @@ export function handleActing(
         // errorRecovery hook — inject guidance when a tool fails (404, timeout, etc.)
         let obsContent = execResult.content;
         if (!execResult.success) {
+          const successfulToolCounts = buildSuccessfulToolCallCounts(allSteps);
+          const missingRequiredTools = getMissingRequiredToolsByCount(
+            successfulToolCounts,
+            input.requiredTools ?? [],
+            input.requiredToolQuantities,
+          );
           const recovery = adapter.errorRecovery?.({
             toolName: tc.name,
             errorContent: execResult.content,
-            missingTools: (input.requiredTools ?? []).filter((t) => !newToolsUsed.has(t)),
+            missingTools: missingRequiredTools,
             tier: profile.tier ?? "mid",
           });
           if (recovery) {
@@ -563,7 +656,20 @@ export function handleActing(
           }
         }
 
+        if (execResult.success && shouldExtract) {
+          const extracted = yield* extractObservationFacts(
+            tc.name,
+            execResult.content,
+            tc.arguments as Record<string, unknown>,
+            compression.budget ?? 800,
+          );
+          if (extracted) {
+            obsContent = `[${tc.name} result — key facts extracted]\n${extracted}\n${obsContent}`;
+          }
+        }
+
         const obsStep = makeStep("observation", obsContent, {
+          toolCallId: tc.id,
           storedKey: execResult.storedKey,
           observationResult: makeObservationResult(tc.name, execResult.success, obsContent, {
             delegatedToolsUsed: execResult.delegatedToolsUsed,
@@ -577,7 +683,6 @@ export function handleActing(
         );
 
         allSteps = [...allSteps, obsStep];
-        // Normal task tools reset meta-tool dedup tracking
         lastMetaToolCall = undefined;
         consecutiveMetaToolCount = 0;
       }
@@ -603,7 +708,7 @@ export function handleActing(
 
         // Build the assistant message with tool call specs
         const assistantThought = (state.meta.lastThought as string) ?? "";
-        const toolCallsForHistory = pendingNativeCalls
+        const toolCallsForHistory = normalizedPendingCalls
           .filter((tc) => {
             // Only include tool calls that were actually attempted (their action step exists)
             return newStepsThisTurn.some(
@@ -612,21 +717,22 @@ export function handleActing(
           })
           .map((tc) => ({ id: tc.id, name: tc.name, arguments: tc.arguments }));
 
-        // Build tool result messages — one per tool call that has an observation
-        const toolResultMessages: KernelMessage[] = pendingNativeCalls.flatMap((tc) => {
-          // Find the observation step that follows the action step for this tool call
-          const actionIdx = newStepsThisTurn.findIndex(
-            (s) => s.type === "action" && (s.metadata?.toolCall as { id?: string } | undefined)?.id === tc.id,
+        // Build tool result messages — match each tool call to its observation by toolCallId.
+        // Parallel batches layout steps as [a1,a2,a3,o1,o2,o3] so positional +1 adjacency
+        // doesn't work; toolCallId metadata is the stable link.
+        const toolResultMessages: KernelMessage[] = normalizedPendingCalls.flatMap((tc) => {
+          const obsStep = newStepsThisTurn.find(
+            (s) => s.type === "observation" && s.metadata?.toolCallId === tc.id,
           );
-          if (actionIdx < 0) return [];
-          const obsStep = newStepsThisTurn[actionIdx + 1];
-          if (!obsStep || obsStep.type !== "observation") return [];
-          return [{
+          if (!obsStep) return [];
+          const msg: KernelMessage = {
             role: "tool_result" as const,
             toolCallId: tc.id,
             toolName: tc.name,
             content: obsStep.content,
-          }];
+            ...(obsStep.metadata?.storedKey ? { storedKey: obsStep.metadata.storedKey as string } : {}),
+          };
+          return [msg];
         });
 
         if (toolCallsForHistory.length === 0) {
@@ -645,17 +751,13 @@ export function handleActing(
         // next steps from conversation structure alone.
         const reqTools = input.requiredTools ?? [];
         const usedSoFar = [...newToolsUsed];
-        const reqQuantities = input.requiredToolQuantities ?? {};
-        const missing = reqTools.filter((t) => {
-          if (!newToolsUsed.has(t)) return true;
-          const needed = reqQuantities[t] ?? 1;
-          if (needed <= 1) return false;
-          const actual = allSteps.filter((s) => {
-            if (s.type !== "action") return false;
-            return (s.metadata?.toolCall as { name?: string } | undefined)?.name === t;
-          }).length;
-          return actual < needed;
-        });
+        const reqQuantities = input.requiredToolQuantities;
+        const successfulToolCounts = buildSuccessfulToolCallCounts(allSteps);
+        const missing = getMissingRequiredToolsByCount(
+          successfulToolCounts,
+          reqTools,
+          reqQuantities,
+        );
 
         if (missing.length > 0) {
           // Check if this is a research->produce transition: all search-type tools
@@ -676,12 +778,9 @@ export function handleActing(
             : undefined;
 
           const missingWithCounts = missing.map((t) => {
-            const needed = reqQuantities[t];
+            const needed = reqQuantities?.[t];
             if (!needed || needed <= 1) return t;
-            const actual = allSteps.filter((s) => {
-              if (s.type !== "action") return false;
-              return (s.metadata?.toolCall as { name?: string } | undefined)?.name === t;
-            }).length;
+            const actual = successfulToolCounts[t] ?? 0;
             return `${t} (${actual}/${needed} calls done)`;
           });
           const progressContent = synthesisMsg
@@ -693,50 +792,62 @@ export function handleActing(
 
         // All required tools called — tell model to finish (but not while previews still hide data behind recall).
         // Only send this nudge ONCE per run to avoid contradictory repeated messages.
+        //
+        // Sequential mode (all quantities ≤ 1): the "satisfied" condition only means each
+        // tool was called once — a weak signal. Skip the aggressive "FINAL ANSWER" push
+        // and let the model naturally continue researching until it decides it's done.
         if (reqTools.length > 0) {
-          const alreadySentCompletion = prior.some(
-            (m) => m.role === "user" && typeof m.content === "string" &&
-              m.content.startsWith(REQUIRED_TOOLS_SATISFIED_PREFIX),
-          );
-          if (!alreadySentCompletion) {
-            const overflowPreview = toolResultMessages.some(
-              (m) => typeof m.content === "string" && observationReferencesStoredOverflow(m.content),
-            );
-            const recallAvailable = (input.allToolSchemas ?? input.availableToolSchemas ?? []).some(
-              (s) => s.name === "recall",
-            );
-            const finishText =
-              overflowPreview && recallAvailable
-                ? `${REQUIRED_TOOLS_SATISFIED_PREFIX}. The observations above are compressed previews; the real command output is stored under keys like _tool_result_1. Before summarizing, call recall("<that-key>", full: true) for each key shown in the [STORED: …] header. Do not invent CLI flags, subcommands, or options — only report text you retrieved via recall.`
-                : `${REQUIRED_TOOLS_SATISFIED_PREFIX}. If you have all the data needed to answer the task, give your FINAL ANSWER now. If any data is still missing, gather it first — then give your FINAL ANSWER.`;
-            const finishMsg: KernelMessage = { role: "user", content: finishText };
-            return [...prior, assistantMsg, ...toolResultMessages, finishMsg];
-          }
+          const hasMultiQuantity = Object.values(reqQuantities ?? {}).some((n) => n > 1);
 
-          // Completion gate already sent but this turn had errors — nudge to retry or finish.
-          const thisRoundHadErrors = newStepsThisTurn.some(
-            (s) => s.type === "observation" &&
-              (s.metadata?.observationResult as { success?: boolean } | undefined)?.success === false,
-          );
-          if (thisRoundHadErrors) {
-            const retryMsg: KernelMessage = {
-              role: "user",
-              content: "One or more tool calls above failed. If you used a wrong tool name, retry with the correct tool name shown in the system prompt. If you have enough data, give your FINAL ANSWER now.",
-            };
-            return [...prior, assistantMsg, ...toolResultMessages, retryMsg];
+          if (hasMultiQuantity) {
+            const alreadySentCompletion = prior.some(
+              (m) => m.role === "user" && typeof m.content === "string" &&
+                m.content.startsWith(REQUIRED_TOOLS_SATISFIED_PREFIX),
+            );
+            if (!alreadySentCompletion) {
+              const overflowPreview = toolResultMessages.some(
+                (m) => typeof m.content === "string" && observationReferencesStoredOverflow(m.content),
+              );
+              const recallAvailable = (input.allToolSchemas ?? input.availableToolSchemas ?? []).some(
+                (s) => s.name === "recall",
+              );
+              const finishText =
+                overflowPreview && recallAvailable
+                  ? `${REQUIRED_TOOLS_SATISFIED_PREFIX}. The observations above are compressed previews; the real command output is stored under keys like _tool_result_1. Before summarizing, call recall("<that-key>", full: true) for each key shown in the [STORED: …] header. Do not invent CLI flags, subcommands, or options — only report text you retrieved via recall.`
+                  : `${REQUIRED_TOOLS_SATISFIED_PREFIX}. Review ALL of the tool results above carefully — extract the specific data points you need from each one. Then give your FINAL ANSWER using only data from these results.`;
+              const finishMsg: KernelMessage = { role: "user", content: finishText };
+              return [...prior, assistantMsg, ...toolResultMessages, finishMsg];
+            }
+
+            // Completion gate already sent but this turn had errors — nudge to retry or finish.
+            const thisRoundHadErrors = newStepsThisTurn.some(
+              (s) => s.type === "observation" &&
+                (s.metadata?.observationResult as { success?: boolean } | undefined)?.success === false,
+            );
+            if (thisRoundHadErrors) {
+              const retryMsg: KernelMessage = {
+                role: "user",
+                content: "One or more tool calls above failed. If you used a wrong tool name, retry with the correct tool name shown in the system prompt. If you have enough data, give your FINAL ANSWER now.",
+              };
+              return [...prior, assistantMsg, ...toolResultMessages, retryMsg];
+            }
           }
         }
 
         return [...prior, assistantMsg, ...toolResultMessages];
       })();
 
-      // All native tool calls executed — transition back to thinking
+      // All native tool calls executed — transition back to thinking.
+      // Clear steeringNudge to prevent stale nudges from the think→act gap
+      // (ICS may have set one before tools executed) from leaking into the
+      // next think phase's conversation thread.
       return transitionState(state, {
         steps: allSteps,
         toolsUsed: newToolsUsed,
         scratchpad: mergedScratchpad,
         messages: newConversationHistory,
         status: "thinking",
+        steeringNudge: undefined,
         iteration: state.iteration + 1,
         lastMetaToolCall,
         consecutiveMetaToolCount,
@@ -752,6 +863,7 @@ export function handleActing(
     // No pending native tool calls — shouldn't happen, transition back to thinking
     return transitionState(state, {
       status: "thinking",
+      steeringNudge: undefined,
       iteration: state.iteration + 1,
     });
   });

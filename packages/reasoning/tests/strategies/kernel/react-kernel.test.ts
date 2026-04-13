@@ -120,6 +120,7 @@ describe("executeReActKernel", () => {
     expect(observations[0]!.content).toContain("BLOCKED");
     expect(observations[0]!.content).toContain("signal/send_message_to_user");
   });
+
 });
 
 // ── reactKernel ThoughtKernel direct tests ────────────────────────────────────
@@ -198,6 +199,45 @@ describe("reactKernel (ThoughtKernel direct)", () => {
     expect(pending[0]!.name).toBe("web-search");
   });
 
+  it("fails fast on quota-vs-budget conflict before acting", async () => {
+    const layer = TestLLMServiceLayer([
+      { match: "Task:", toolCall: { name: "web-search", args: { query: "btc price" } } },
+    ]);
+
+    const state = initialKernelState({
+      maxIterations: 3,
+      strategy: "react-kernel",
+      kernelType: "react",
+    });
+
+    const resolver = createToolCallResolver({
+      supportsToolCalling: true,
+      supportsStreaming: true,
+      supportsStructuredOutput: false,
+      supportsLogprobs: false,
+    });
+    const context = makeContext({
+      input: {
+        task: "Fetch 4 prices",
+        toolCallResolver: resolver,
+        requiredTools: ["web-search"],
+        requiredToolQuantities: { "web-search": 4 },
+        maxCallsPerTool: { "web-search": 2 },
+        availableToolSchemas: [{ name: "web-search", description: "search", parameters: [] }],
+      } as any,
+    });
+
+    const nextState = await Effect.runPromise(
+      reactKernel(state, context).pipe(Effect.provide(layer)),
+    );
+
+    expect(nextState.status).toBe("failed");
+    expect(nextState.error).toContain("Configuration conflict");
+    expect(nextState.error).toContain("web-search");
+    expect(nextState.error).toContain("required minCalls=4");
+    expect(nextState.error).toContain("maxCallsPerTool=2");
+  });
+
   it("acting transitions back to thinking after tool execution (native FC path)", async () => {
     const layer = TestLLMServiceLayer();
 
@@ -237,12 +277,12 @@ describe("reactKernel (ThoughtKernel direct)", () => {
     const obsSteps = nextState.steps.filter((s) => s.type === "observation");
     expect(actionSteps.length).toBe(1);
     expect(obsSteps.length).toBe(1);
-    // Observation should mention ToolService not available since we provided None
-    expect(obsSteps[0]!.content).toContain("ToolService is not available");
+    // Observation should report unavailable tool guard feedback
+    expect(obsSteps[0]!.content).toContain("is not available in this run");
     // Iteration should have been incremented
     expect(nextState.iteration).toBe(1);
-    // web-search should be in toolsUsed
-    expect(nextState.toolsUsed.has("web-search")).toBe(true);
+    // Guard-blocked tools should not be marked as used
+    expect(nextState.toolsUsed.has("web-search")).toBe(false);
   });
 });
 

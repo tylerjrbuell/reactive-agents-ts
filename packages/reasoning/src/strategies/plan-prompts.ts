@@ -26,6 +26,8 @@ export interface PlanGenerationInput {
   tools: ToolSummary[];
   pastPatterns: string[];
   modelTier: ModelTier;
+  /** Per-tool minimum call counts from the classifier (e.g. { "web-search": 4 }). */
+  requiredToolQuantities?: Readonly<Record<string, number>>;
 }
 
 export interface StepExecutionInput {
@@ -96,10 +98,11 @@ export function buildPlanGenerationPrompt(input: PlanGenerationInput): string {
 
   // Section 1: Role & Goal
   sections.push(
-    `You are a planning agent. Decompose the goal into the MINIMUM number of steps needed.\n\n` +
+    `You are a planning agent. Decompose the goal into a structured plan.\n\n` +
     `PLANNING RULES:\n` +
-    `- Use the FEWEST steps possible. Combine related work into one step.\n` +
     `- Prefer "tool_call" steps — they execute instantly without LLM overhead.\n` +
+    `- When the goal asks for data about MULTIPLE distinct items (e.g. multiple currencies, products, users), create a SEPARATE tool_call step for each item — combined queries lose specificity.\n` +
+    `- Parallel-safe tool_call steps with no data dependencies can execute concurrently — prefer separate steps over combined queries.\n` +
     `- Use at most ONE "analysis" step to do all reasoning/writing/composition work.\n` +
     `- Use {{from_step:sN}} in toolArgs to pass previous step results to tool calls.\n` +
     `- Never split summarizing, formatting, and composing into separate steps — combine them.\n\n` +
@@ -114,6 +117,14 @@ export function buildPlanGenerationPrompt(input: PlanGenerationInput): string {
     sections.push(`AVAILABLE TOOLS:\n${toolLines}`);
   } else {
     sections.push(`AVAILABLE TOOLS:\nNone — use "analysis" type steps only.`);
+  }
+
+  // Section 2b: Tool Call Requirements (from classifier)
+  if (input.requiredToolQuantities && Object.keys(input.requiredToolQuantities).length > 0) {
+    const lines = Object.entries(input.requiredToolQuantities)
+      .map(([tool, qty]) => `- ${tool} must be called at least ${qty} time${qty > 1 ? "s" : ""} (once per entity)`)
+      .join("\n");
+    sections.push(`TOOL CALL REQUIREMENTS:\n${lines}`);
   }
 
   // Section 3: Past Plan Patterns (only if non-empty)
@@ -265,6 +276,57 @@ export function buildReflectionPrompt(goal: string, stepResults: StepResult[]): 
     `SATISFIED: <brief summary>\n` +
     `UNSATISFIED: <what is missing or wrong>\n\n` +
     `Then optionally add details on a new line. The first word MUST be either SATISFIED or UNSATISFIED.`,
+  );
+
+  return sections.join("\n\n");
+}
+
+// ── buildAugmentPrompt ──────────────────────────────────────────────────────
+
+export interface AugmentInput {
+  goal: string;
+  completedSteps: Array<{ stepId: string; title: string; result?: string }>;
+  reflectionFeedback: string;
+  tools: ToolSummary[];
+}
+
+/**
+ * Builds a prompt for generating supplementary plan steps when all existing
+ * steps completed but the reflection phase determined the goal is unmet.
+ *
+ * Unlike patchPlan (which rewrites failed steps), augmentPlan adds NEW steps
+ * to fill gaps identified by the reflector.
+ */
+export function buildAugmentPrompt(input: AugmentInput): string {
+  const sections: string[] = [];
+
+  sections.push(`GOAL: ${input.goal}`);
+
+  const stepLines = input.completedSteps
+    .map((s) => {
+      let line = `\u2705 ${s.stepId} (completed) — ${s.title}`;
+      if (s.result) line += `\n   Result: ${s.result}`;
+      return line;
+    })
+    .join("\n");
+  sections.push(`COMPLETED STEPS AND RESULTS:\n${stepLines}`);
+
+  sections.push(`REFLECTION FEEDBACK:\n${input.reflectionFeedback}`);
+
+  if (input.tools.length > 0) {
+    const toolLines = input.tools
+      .map((t) => `- ${t.name}${t.signature}`)
+      .join("\n");
+    sections.push(`AVAILABLE TOOLS:\n${toolLines}`);
+  }
+
+  sections.push(
+    `Generate ADDITIONAL steps to address the gaps identified in the reflection feedback.\n` +
+    `Do NOT re-execute completed steps. Only add new steps that fill the missing data.\n` +
+    `Reference completed step results with {{from_step:sN}} where applicable.\n` +
+    `Each step must follow this schema:\n${PLAN_STEP_SCHEMA}\n\n` +
+    `Respond with a JSON object containing a "steps" array (only the NEW supplementary steps).\n` +
+    `JSON only, no explanation.`,
   );
 
   return sections.join("\n\n");

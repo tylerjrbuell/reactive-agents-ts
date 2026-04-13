@@ -252,8 +252,8 @@ describe("Sprint 1C: Tool result summarization", () => {
     ]);
 
     const toolsLayer = createToolsLayer();
-    // Generate a result > 800 chars
-    const largeResult = "A".repeat(1000);
+    // Generate a result larger than the mid-tier compression budget (1200 chars)
+    const largeResult = "A".repeat(1500);
 
     const program = Effect.gen(function* () {
       const tools = yield* ToolService;
@@ -485,6 +485,7 @@ describe("Profile overrides for temperature and maxIterations", () => {
           compactAfterSteps: 4,
           fullDetailSteps: 2,
           toolResultMaxChars: 400,
+          toolResultPreviewItems: 5,
           contextBudgetPercent: 70,
           toolSchemaDetail: "names-and-types",
           maxIterations: 8,
@@ -546,6 +547,7 @@ describe("Profile overrides for temperature and maxIterations", () => {
           compactAfterSteps: 4,
           fullDetailSteps: 2,
           toolResultMaxChars: 400,
+          toolResultPreviewItems: 5,
           contextBudgetPercent: 70,
           toolSchemaDetail: "names-and-types",
           maxIterations: 3,
@@ -619,6 +621,7 @@ describe("toolSchemaDetail from context profile", () => {
           compactAfterSteps: 4,
           fullDetailSteps: 2,
           toolResultMaxChars: 400,
+          toolResultPreviewItems: 5,
           contextBudgetPercent: 70,
           toolSchemaDetail: "names-and-types",
         },
@@ -693,6 +696,7 @@ describe("toolSchemaDetail from context profile", () => {
           compactAfterSteps: 4,
           fullDetailSteps: 2,
           toolResultMaxChars: 400,
+          toolResultPreviewItems: 5,
           contextBudgetPercent: 70,
           toolSchemaDetail: "names-only",
         },

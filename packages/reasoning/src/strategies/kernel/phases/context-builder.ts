@@ -10,6 +10,8 @@ import { applyMessageWindowWithCompact } from "../../../context/message-window.j
 import type { ToolSchema } from "../utils/tool-utils.js";
 import type { KernelState, KernelMessage, ReActKernelInput } from "../kernel-state.js";
 import { transitionState } from "../kernel-state.js";
+import { getMissingRequiredToolsFromSteps } from "../utils/requirement-state.js";
+import { META_TOOLS as META_TOOL_NAMES } from "../kernel-constants.js";
 
 // ── buildSystemPrompt ─────────────────────────────────────────────────────────
 
@@ -77,17 +79,6 @@ export function toProviderMessage(msg: KernelMessage): LLMMessage {
 
 // ── buildToolSchemas ──────────────────────────────────────────────────────────
 
-const META_TOOL_NAMES = new Set([
-  "final-answer",
-  "task-complete",
-  "context-status",
-  "brief",
-  "pulse",
-  "find",
-  "recall",
-  "checkpoint",
-]);
-
 /**
  * Filter the available tool schemas based on the gate-blocked tools guard.
  * When required tools haven't been called yet and some tools are gate-blocked,
@@ -105,7 +96,11 @@ export function buildToolSchemas(
 ): readonly ToolSchema[] {
   const effectiveSchemas = schemas ?? ((input.availableToolSchemas ?? []) as ToolSchema[]);
   const gateBlockedTools = (state.meta.gateBlockedTools as readonly string[] | undefined) ?? [];
-  const missingRequired = (input.requiredTools ?? []).filter((t) => !state.toolsUsed.has(t));
+  const missingRequired = getMissingRequiredToolsFromSteps(
+    state.steps,
+    input.requiredTools ?? [],
+    input.requiredToolQuantities,
+  );
 
   if (gateBlockedTools.length > 0 && missingRequired.length > 0) {
     return effectiveSchemas.filter((ts) =>

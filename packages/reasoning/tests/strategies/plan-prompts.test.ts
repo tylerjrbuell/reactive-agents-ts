@@ -4,6 +4,7 @@ import {
   buildPatchPrompt,
   buildStepExecutionPrompt,
   buildReflectionPrompt,
+  buildAugmentPrompt,
 } from "../../src/strategies/plan-prompts.js";
 import type { PlanStep } from "../../src/types/plan.js";
 
@@ -94,5 +95,78 @@ describe("Plan prompts", () => {
     expect(prompt).toContain("SATISFIED");
     expect(prompt).toContain("s1");
     expect(prompt).toContain("10 commits");
+  });
+
+  it("buildPlanGenerationPrompt no longer contains FEWEST or over-combining instruction", () => {
+    const prompt = buildPlanGenerationPrompt({
+      goal: "Get prices of XRP, XLM, ETH, and Bitcoin",
+      tools: [{ name: "web-search", signature: "({ query })" }],
+      pastPatterns: [],
+      modelTier: "mid",
+    });
+
+    expect(prompt).not.toContain("FEWEST");
+    expect(prompt).not.toContain("Combine related work into one step");
+    expect(prompt).toContain("SEPARATE tool_call step for each item");
+    expect(prompt).toContain("Parallel-safe");
+  });
+
+  it("buildPlanGenerationPrompt includes TOOL CALL REQUIREMENTS when requiredToolQuantities provided", () => {
+    const prompt = buildPlanGenerationPrompt({
+      goal: "Get prices of XRP, XLM, ETH, and Bitcoin",
+      tools: [{ name: "web-search", signature: "({ query })" }],
+      pastPatterns: [],
+      modelTier: "mid",
+      requiredToolQuantities: { "web-search": 4 },
+    });
+
+    expect(prompt).toContain("TOOL CALL REQUIREMENTS");
+    expect(prompt).toContain("web-search must be called at least 4 times");
+  });
+
+  it("buildPlanGenerationPrompt omits TOOL CALL REQUIREMENTS when no quantities", () => {
+    const prompt = buildPlanGenerationPrompt({
+      goal: "Simple task",
+      tools: [],
+      pastPatterns: [],
+      modelTier: "mid",
+    });
+
+    expect(prompt).not.toContain("TOOL CALL REQUIREMENTS");
+  });
+
+  it("buildAugmentPrompt includes goal, completed steps, reflection feedback, and tools", () => {
+    const prompt = buildAugmentPrompt({
+      goal: "Get prices of XRP, XLM, ETH, and Bitcoin",
+      completedSteps: [
+        { stepId: "s1", title: "Search XRP price", result: "XRP is $0.52" },
+        { stepId: "s2", title: "Render table", result: "| Currency | Price |..." },
+      ],
+      reflectionFeedback: "The prices for XLM, ETH, and Bitcoin were not found.",
+      tools: [{ name: "web-search", signature: "({ query })" }],
+    });
+
+    expect(prompt).toContain("Get prices of XRP, XLM, ETH, and Bitcoin");
+    expect(prompt).toContain("COMPLETED STEPS AND RESULTS");
+    expect(prompt).toContain("s1 (completed)");
+    expect(prompt).toContain("XRP is $0.52");
+    expect(prompt).toContain("REFLECTION FEEDBACK");
+    expect(prompt).toContain("XLM, ETH, and Bitcoin were not found");
+    expect(prompt).toContain("AVAILABLE TOOLS");
+    expect(prompt).toContain("web-search");
+    expect(prompt).toContain("Do NOT re-execute completed steps");
+    expect(prompt).toContain("JSON only");
+  });
+
+  it("buildAugmentPrompt works without tools", () => {
+    const prompt = buildAugmentPrompt({
+      goal: "Research topic",
+      completedSteps: [{ stepId: "s1", title: "Initial research" }],
+      reflectionFeedback: "Missing coverage of subtopic B.",
+      tools: [],
+    });
+
+    expect(prompt).not.toContain("AVAILABLE TOOLS");
+    expect(prompt).toContain("Missing coverage of subtopic B.");
   });
 });

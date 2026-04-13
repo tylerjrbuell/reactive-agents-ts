@@ -41,6 +41,41 @@ const ToolClassificationResultSchema = Schema.Struct({
 
 type InferRequiredToolsResult = typeof InferRequiredToolsResultSchema.Type;
 
+function extractPrimaryTaskDescription(taskDescription: string): string {
+  const originalTask = taskDescription.match(/^\s*Original task:\s*(.+)$/im)?.[1];
+  return (originalTask ?? taskDescription).trim();
+}
+
+function estimateEntityCount(taskDescription: string): number {
+  const primaryTask = extractPrimaryTaskDescription(taskDescription)
+    .replace(/\bthen\b[\s\S]*$/i, "")
+    .replace(/\bwith columns?\b[\s\S]*$/i, "")
+    .trim();
+
+  const candidate = (primaryTask.match(/\bfor\b\s*:?\s*([^.\n]+)/i)?.[1] ?? primaryTask).trim();
+  if (!candidate.includes(",") && !/\band\b/i.test(candidate)) return 1;
+
+  const entities = candidate
+    .replace(/\band\b/gi, ",")
+    .split(",")
+    .map((segment) => segment.trim())
+    .filter((segment) => segment.length > 0 && /[a-z0-9]/i.test(segment));
+  if (entities.length === 0) return 1;
+
+  const uniqueEntities = new Set(entities.map((segment) => segment.toLowerCase()));
+  return Math.max(1, uniqueEntities.size);
+}
+
+function isPerEntityLookupTool(toolName: string): boolean {
+  const lowered = toolName.toLowerCase();
+  return (
+    lowered.includes("search") ||
+    lowered.includes("http") ||
+    lowered.includes("fetch") ||
+    lowered.includes("get")
+  );
+}
+
 /** Compact tool schema representation for the inference prompt. */
 export interface ToolSummary {
   readonly name: string;
@@ -230,8 +265,13 @@ Rules:
     const requiredEntries = normalized.filter((e) => availableNames.has(e.name));
     const required = requiredEntries.map((e) => e.name);
     const requiredToolQuantities: Record<string, number> = {};
+    const entityCount = estimateEntityCount(config.taskDescription);
     for (const e of requiredEntries) {
-      requiredToolQuantities[e.name] = Math.max(1, e.minCalls);
+      const llmMinCalls = Math.max(1, e.minCalls);
+      const minCalls = isPerEntityLookupTool(e.name) && entityCount > 1
+        ? Math.max(llmMinCalls, entityCount)
+        : llmMinCalls;
+      requiredToolQuantities[e.name] = minCalls;
     }
     const relevant = result.data.relevant.filter((n) => availableNames.has(n));
 
@@ -246,7 +286,10 @@ Rules:
                 strategy: "classify-tool-relevance",
                 step: 1,
                 totalSteps: 1,
-                thought: `Classified tools — required: [${requiredEntries.map((e) => e.minCalls > 1 ? `${e.name}×${e.minCalls}` : e.name).join(", ")}], relevant: [${relevant.join(", ")}]`,
+                thought: `Classified tools — required: [${required.map((toolName) => {
+                  const quantity = requiredToolQuantities[toolName] ?? 1;
+                  return quantity > 1 ? `${toolName}×${quantity}` : toolName;
+                }).join(", ")}], relevant: [${relevant.join(", ")}]`,
               })
               .pipe(Effect.catchAll(() => Effect.void))
           : Effect.void,

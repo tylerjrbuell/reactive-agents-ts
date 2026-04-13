@@ -135,6 +135,40 @@ function extractTaskText(input: unknown): string {
   return JSON.stringify(input);
 }
 
+/**
+ * Derive per-tool call budgets from required tool quantities.
+ *
+ * Behavior:
+ * - parallel mode (`parallelToolCalls !== false`): each required tool gets a
+ *   budget of `minCalls + retryBuffer` where the buffer allows for exploratory
+ *   combined searches, failed attempts, and guard-blocked calls that don't
+ *   count as successful completions. Without this buffer the agent has zero
+ *   room for recovery.
+ * - sequential mode (`parallelToolCalls === false`): no auto per-tool budgets;
+ *   execution follows the historical one-call-at-a-time loop behavior.
+ */
+export function buildAutoMaxCallsPerTool(input: {
+  readonly parallelToolCallsEnabled: boolean;
+  readonly requiredTools?: readonly string[];
+  readonly requiredToolQuantities?: Readonly<Record<string, number>>;
+}): Readonly<Record<string, number>> {
+  if (!input.parallelToolCallsEnabled) {
+    return {};
+  }
+
+  const RETRY_BUFFER = 2;
+  const requiredTools = new Set(input.requiredTools ?? []);
+  const requiredToolQuantities = input.requiredToolQuantities ?? {};
+  const autoMaxCallsPerTool: Record<string, number> = {};
+
+  for (const toolName of requiredTools) {
+    const minCalls = Math.max(1, requiredToolQuantities[toolName] ?? 1);
+    autoMaxCallsPerTool[toolName] = minCalls + RETRY_BUFFER;
+  }
+
+  return autoMaxCallsPerTool;
+}
+
 const VERIFY_EVIDENCE_MAX_CHARS = 14_000;
 
 /**
@@ -1068,6 +1102,22 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   if (classifyResult.required.length > 0 && !config.requiredTools?.tools?.length) {
                     effectiveRequiredTools = [...classifyResult.required];
                     effectiveRequiredToolQuantities = classifyResult.requiredToolQuantities;
+
+                    // Sequential mode: clamp per-tool quantities to 1.
+                    // The classifier may recommend N calls (e.g. web-search×4 for 4 currencies),
+                    // but in sequential mode the model decides one action at a time and may
+                    // combine queries. Enforcing N>1 creates unsatisfiable deadlocks.
+                    // The clamp ensures the tool is called at least once; act.ts skips the
+                    // aggressive "give FINAL ANSWER" push when all quantities are ≤1, letting
+                    // the model naturally continue researching.
+                    if (config.reasoningOptions?.parallelToolCalls === false && effectiveRequiredToolQuantities) {
+                      const clamped: Record<string, number> = {};
+                      for (const [tool, qty] of Object.entries(effectiveRequiredToolQuantities)) {
+                        clamped[tool] = Math.min(qty, 1);
+                      }
+                      effectiveRequiredToolQuantities = clamped;
+                    }
+
                     if (obs && isNormal) {
                       const qHint = Object.entries(effectiveRequiredToolQuantities)
                         .filter(([, n]) => n > 1)
@@ -1086,20 +1136,14 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   }
                 }
 
-                // ── Auto per-tool call budget for research tools ──
-                // When classification ran, automatically cap research-type tools so agents
-                // don't loop indefinitely gathering context. Budget is applied by the gate.
-                // Users can override via explicit requiredTools.maxCallsPerTool config.
-                const RESEARCH_KEYWORDS = ["search", "http", "browse", "scrape", "fetch", "crawl"];
-                const autoMaxCallsPerTool: Record<string, number> = {};
-                for (const toolName of [
-                  ...(effectiveRequiredTools ?? []),
-                  ...(classifiedRelevantTools ?? []),
-                ]) {
-                  if (RESEARCH_KEYWORDS.some((k) => toolName.toLowerCase().includes(k))) {
-                    autoMaxCallsPerTool[toolName] = 3;
-                  }
-                }
+                // ── Auto per-tool budget derived from required quantities ──
+                // Parallel mode: use required minCalls as the budget floor so quotas
+                // are satisfiable. Sequential mode: disable auto per-tool budgets.
+                const autoMaxCallsPerTool = buildAutoMaxCallsPerTool({
+                  parallelToolCallsEnabled: config.reasoningOptions?.parallelToolCalls !== false,
+                  requiredTools: effectiveRequiredTools,
+                  requiredToolQuantities: effectiveRequiredToolQuantities,
+                });
 
                 // ── Semantic cache check (before reasoning) ──
                 let cacheHit = false;
@@ -1175,6 +1219,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       briefResolvedSkills?: readonly { readonly name: string; readonly purpose: string }[];
                       initialMessages?: readonly { readonly role: "user" | "assistant"; readonly content: string }[];
                       synthesisConfig?: import("@reactive-agents/reasoning").SynthesisConfig;
+                      observationSummary?: boolean | "auto";
                     }) => Effect.Effect<{
                       output: unknown;
                       status: string;
@@ -1457,6 +1502,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                           effectiveStrategy,
                           config.synthesisConfig,
                         ),
+                        observationSummary: config.reasoningOptions?.observationSummary,
                       });
                       const strategyOutcome = yield* Effect.exit(strategyEffect);
                       if (strategyOutcome._tag === "Success") {
@@ -1568,6 +1614,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                             ctx.selectedStrategy ?? "reactive",
                             config.synthesisConfig,
                           ),
+                          observationSummary: config.reasoningOptions?.observationSummary,
                         }),
                       );
                       if (retryOutcome._tag === "Success") {
@@ -1627,6 +1674,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                             ctx.selectedStrategy ?? "reactive",
                             config.synthesisConfig,
                           ),
+                          observationSummary: config.reasoningOptions?.observationSummary,
                         }),
                       );
                       if (continuationOutcome._tag === "Success") {
@@ -1736,6 +1784,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                             ctx.selectedStrategy ?? "reactive",
                             config.synthesisConfig,
                           ),
+                          observationSummary: config.reasoningOptions?.observationSummary,
                         }),
                       );
                       if (retryOutcome._tag === "Success") {

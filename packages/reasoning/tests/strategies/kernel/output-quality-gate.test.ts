@@ -111,6 +111,45 @@ function makeRepeatedToolKernel(toolOutputs: readonly string[]): ThoughtKernel {
   };
 }
 
+/** Kernel that completes required web-search quantity before stalling. */
+function makeQuotaSatisfyingSearchKernel(toolOutputs: readonly string[]): ThoughtKernel {
+  return (state, _ctx) => {
+    const nextIter = state.iteration + 1;
+    if (nextIter <= toolOutputs.length) {
+      const output = toolOutputs[nextIter - 1]!;
+      return Effect.succeed(
+        transitionState(state, {
+          status: "thinking",
+          iteration: nextIter,
+          toolsUsed: new Set([...state.toolsUsed, "web-search"]),
+          steps: [
+            ...state.steps,
+            makeStep("thought", `search item ${nextIter}`),
+            makeStep("action", "web-search"),
+            makeStep("observation", output, {
+              observationResult: {
+                success: true,
+                toolName: "web-search",
+                displayText: `search result ${nextIter}`,
+                category: "web-search" as const,
+                resultKind: "data" as const,
+                preserveOnCompaction: false,
+              },
+            }),
+          ],
+        }),
+      );
+    }
+    return Effect.succeed(
+      transitionState(state, {
+        status: "thinking",
+        iteration: nextIter,
+        steps: [...state.steps, makeStep("thought", "stalled after quota completion")],
+      }),
+    );
+  };
+}
+
 const defaultOptions = {
   taskId: "test-task",
   strategy: "reactive",
@@ -195,6 +234,48 @@ describe("output quality gate", () => {
     expect(state.status).toBe("done");
     expect(state.meta.terminatedBy).toBe("harness_deliverable");
     // The harness should have assembled the tool artifacts
+    expect(state.output).toContain("BTC price");
+  });
+
+  it("does not auto-deliver stalled artifacts when required tool quantity is still missing", async () => {
+    const kernel = makeStallAfterToolKernel("XRP price: $1.33.");
+    const state = await runWithTestLLM(
+      runKernel(
+        kernel,
+        {
+          task: "Fetch XRP, XLM, ETH, BTC prices",
+          requiredTools: ["web-search"],
+          requiredToolQuantities: { "web-search": 4 },
+        },
+        { ...defaultOptions, maxIterations: 5 },
+      ),
+    );
+
+    expect(state.meta.terminatedBy).not.toBe("harness_deliverable");
+    expect(state.status).not.toBe("done");
+  });
+
+  it("allows harness-deliverable after required tool quantity is fully satisfied", async () => {
+    const kernel = makeQuotaSatisfyingSearchKernel([
+      "XRP price: $1.33",
+      "XLM price: $0.1558",
+      "ETH price: $3,000",
+      "BTC price: $50,000",
+    ]);
+    const state = await runWithTestLLM(
+      runKernel(
+        kernel,
+        {
+          task: "Fetch XRP, XLM, ETH, BTC prices",
+          requiredTools: ["web-search"],
+          requiredToolQuantities: { "web-search": 4 },
+        },
+        { ...defaultOptions, maxIterations: 8, loopDetection: { maxConsecutiveThoughts: 999, maxRepeatedThoughts: 999, maxSameToolCalls: 999 } },
+      ),
+    );
+
+    expect(state.status).toBe("done");
+    expect(state.meta.terminatedBy).toBe("harness_deliverable");
     expect(state.output).toContain("BTC price");
   });
 

@@ -466,9 +466,22 @@ The `toolHints` field on a `composite` step limits which tools the scoped ReAct 
 | Step fails, retries remain | Retry the same step with the previous error message appended |
 | Step fails, no retries left | Patch: ask the LLM to rewrite only the failed and pending steps via `buildPatchPrompt()` |
 | Patch also fails | The step is marked `"failed"` and execution continues; reflection decides whether to replan |
-| All steps completed | `allStepsCompleted` flag forces `satisfied = true` regardless of reflection text |
+| All steps completed but goal unmet | Augment: generate supplementary steps to fill gaps identified by the reflector |
 
-The `allStepsCompleted` guard is critical: without it, a reflection LLM that returns "needs improvement" can trigger a refinement loop that re-executes completed side-effecting steps (file writes, API calls, emails). The guard prevents this by treating 100% step completion as unconditional success.
+When the reflector returns `UNSATISFIED` but all steps completed successfully (no failures to patch), the engine generates **supplementary steps** via `buildAugmentPrompt()`. These new steps are appended to the plan and executed in the next iteration. This handles the common case where a combined search returns incomplete data — the reflector identifies what's missing and the augmentation path fills the gaps with targeted follow-up steps.
+
+Re-execution of completed steps is prevented by `computeWaves` skipping steps with `status === "completed"`, so side-effecting steps (file writes, API calls) are never re-run.
+
+### Planner Decomposition and Tool Quantity Enforcement
+
+The plan generation prompt instructs the LLM to create **separate `tool_call` steps for each distinct entity** rather than combining them into a single query. For example, "fetch prices for XRP, XLM, ETH, and Bitcoin" produces 4 individual web-search steps instead of one combined search that may miss items.
+
+When the classifier determines per-tool call counts (e.g. `web-search×4`), these quantities are:
+
+1. **Surfaced in the planner prompt** as a `TOOL CALL REQUIREMENTS` section
+2. **Enforced post-generation** — if the plan has fewer `tool_call` steps than required, synthetic steps are injected to cover the deficit
+
+This ensures the plan respects the classifier's analysis of what the task requires.
 
 ### Plan Persistence
 
@@ -512,15 +525,12 @@ This avoids a common failure mode where agents are forced into rigid "one tool o
 
 ### Per-Tool Call Budget (`maxCallsPerTool`)
 
-When tool classification runs (`.withRequiredTools({ adaptive: true })`), the framework automatically caps search-type tools at **3 calls per run** using `maxCallsPerTool`:
+Auto-budgeting now follows **intent mode**, not tool-name heuristics:
 
-```
-web-search: 3 calls max → budget enforced automatically
-http-get:   3 calls max → budget enforced automatically
-file-write: no cap      → output tools are never capped
-```
+- **Parallel mode** (`.withReasoning({ parallelToolCalls: true })`, default): when required tools are classified with `minCalls`, the runtime derives `maxCallsPerTool` from those required quantities plus a retry buffer of 2 (for example, `web-search×4` → `maxCallsPerTool["web-search"] = 6`). The buffer allows for exploratory combined searches, failed attempts, and guard-blocked calls that don't count as successful completions.
+- **Sequential mode** (`.withReasoning({ parallelToolCalls: false })`): the runtime does **not** auto-apply per-tool call budgets, preserving the one-call-at-a-time loop behavior.
 
-Once a tool reaches its budget, further calls are blocked and the agent is nudged toward synthesis. This prevents repeated search loops with no deliverable.
+When a budget exists and a tool reaches it, further calls are blocked and the agent is nudged toward synthesis. This prevents repeated loops while still honoring required-tool quotas.
 
 ### Dynamic Stopping — Novelty Signal
 
@@ -531,7 +541,7 @@ Research context is sufficient (last search: 8% new information — diminishing 
 Do NOT search again. Call file-write now to produce the output.
 ```
 
-This fires automatically — no configuration required. It is one of three dynamic stopping layers alongside the per-tool budget and task-phase transition (when search tools are satisfied and only output tools remain, `synthesisPrompt` fires instead of a generic progress message).
+This fires automatically — no configuration required. It is one of three dynamic stopping layers alongside per-tool budgeting and task-phase transition (when search tools are satisfied and only output tools remain, `synthesisPrompt` fires instead of a generic progress message).
 
 ## Native Function Calling Fallback
 

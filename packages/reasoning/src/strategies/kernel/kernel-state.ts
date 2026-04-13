@@ -27,7 +27,7 @@ export type KernelStatus = "thinking" | "acting" | "observing" | "done" | "faile
 /** Provider-agnostic conversation message for the kernel's native FC conversation history. */
 export type KernelMessage =
   | { readonly role: "assistant"; readonly content: string; readonly toolCalls?: readonly ToolCallSpec[] }
-  | { readonly role: "tool_result"; readonly toolCallId: string; readonly toolName: string; readonly content: string; readonly isError?: boolean }
+  | { readonly role: "tool_result"; readonly toolCallId: string; readonly toolName: string; readonly content: string; readonly isError?: boolean; readonly storedKey?: string }
   | { readonly role: "user"; readonly content: string };
 
 // ── KernelState — Immutable, serializable reasoning state ────────────────────
@@ -207,6 +207,15 @@ export interface KernelInput {
    * `metaTools.staticBriefInfo.availableSkills` — resolved wins on name collision.
    */
   readonly briefResolvedSkills?: readonly { readonly name: string; readonly purpose: string }[];
+  /**
+   * When enabled, runs a lightweight LLM extraction pass on large tool results
+   * to distill key facts before compression. The extracted summary is prepended
+   * to the compressed preview so the model sees both distilled data and recall hints.
+   * - `true`: always extract for results that exceed the compression budget
+   * - `false`: never extract (heuristic compression only)
+   * - `"auto"`: extract only for local/mid tiers when results exceed budget
+   */
+  readonly observationSummary?: boolean | "auto";
 }
 
 // ── Narrow service types ─────────────────────────────────────────────────────
@@ -540,6 +549,10 @@ export interface ReActKernelInput {
   requiredTools?: readonly string[];
   /** Minimum call counts per required tool — populated by tool classifier. */
   requiredToolQuantities?: Readonly<Record<string, number>>;
+  /** Tools identified as relevant/supplementary for this task. */
+  relevantTools?: readonly string[];
+  /** Per-tool call budget — gate blocks calls that exceed these limits. */
+  maxCallsPerTool?: Readonly<Record<string, number>>;
   /** Max redirects when required tools are missing (default: 2) */
   maxRequiredToolRetries?: number;
   /** Enforce strict required-tool dependency chain before exploratory calls. */
@@ -550,6 +563,10 @@ export interface ReActKernelInput {
   exitOnAllToolsCalled?: boolean;
   /** Meta-tool configuration and pre-computed static data for brief/pulse/recall/find. */
   metaTools?: KernelMetaToolsConfig;
+  /** Lightweight tool elaboration injection shown in the system prompt. */
+  toolElaboration?: ToolElaborationInjectionConfig;
+  /** Short-term next-moves planner configuration for optional native batching. */
+  nextMovesPlanning?: NextMovesPlanningConfig;
   /** Pre-built ToolCallResolver instance — injected by the kernel runner when FC is active */
   toolCallResolver?: import("@reactive-agents/tools").ToolCallResolver;
   /** Intelligent Context Synthesis config — threaded from .withReasoning() */

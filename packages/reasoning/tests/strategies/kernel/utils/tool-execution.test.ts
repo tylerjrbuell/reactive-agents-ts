@@ -427,3 +427,111 @@ describe("executeNativeToolCall recall store alignment", () => {
     expect((readBack as { content?: string }).content).toContain('"sha":"sha-4"');
   });
 });
+
+// ── Bug 1: FC path preserves recall hint ──────────────────────────────────────
+
+describe("executeNativeToolCall FC recall hint preservation", () => {
+  it("preserves a recall hint line after compression in FC mode", async () => {
+    await Effect.runPromise(Ref.set(scratchpadStoreRef, new Map()));
+
+    const longResult = "Line " + Array.from({ length: 60 }, (_, i) => `Result line ${i}: data-${i}`).join("\n");
+    const mockToolService = {
+      execute: () => Effect.succeed({ result: longResult, success: true }),
+      getTool: (_name: string) => Effect.succeed({ parameters: [{ name: "query", type: "string", required: true }] }),
+    };
+
+    const toolCall = { id: "call-fc-1", name: "web-search", arguments: { query: "test" } };
+    const execResult = await Effect.runPromise(
+      Effect.gen(function* () {
+        const shared = yield* Ref.get(scratchpadStoreRef);
+        return yield* executeNativeToolCall(
+          mockToolService as unknown as ToolServiceInstance,
+          toolCall,
+          "agent",
+          "session",
+          { compression: { budget: 200, previewItems: 3, autoStore: true }, scratchpad: shared },
+        );
+      }),
+    );
+
+    expect(execResult.storedKey).toBeDefined();
+    // FC path should include a recall hint referencing the stored key
+    expect(execResult.content).toContain("full text is stored");
+    expect(execResult.content).toContain(execResult.storedKey!);
+    expect(execResult.content).toContain("recall");
+  });
+});
+
+// ── extractObservationFacts ─────────────────────────────────────────────────
+
+import { extractObservationFacts } from "../../../../src/strategies/kernel/utils/tool-execution.js";
+import { LLMService } from "@reactive-agents/llm-provider";
+import { Layer } from "effect";
+
+describe("extractObservationFacts", () => {
+  it("returns undefined for meta-tools (brief, pulse, recall, find)", async () => {
+    const mockLLMLayer = Layer.succeed(LLMService, {
+      complete: () => Effect.succeed({ content: "should not be called" }),
+    } as any);
+
+    for (const metaTool of ["brief", "pulse", "recall", "find", "final-answer"]) {
+      const result = await Effect.runPromise(
+        extractObservationFacts(metaTool, "x".repeat(2000), {}, 800).pipe(
+          Effect.provide(mockLLMLayer),
+        ),
+      );
+      expect(result).toBeUndefined();
+    }
+  });
+
+  it("returns undefined for results within compression budget", async () => {
+    const mockLLMLayer = Layer.succeed(LLMService, {
+      complete: () => Effect.succeed({ content: "should not be called" }),
+    } as any);
+
+    const result = await Effect.runPromise(
+      extractObservationFacts("web-search", "short result", { query: "test" }, 800).pipe(
+        Effect.provide(mockLLMLayer),
+      ),
+    );
+    expect(result).toBeUndefined();
+  });
+
+  it("calls LLM and returns extracted facts for large results", async () => {
+    const largeResult = "XRP price is $1.34 according to CoinGecko. " + "x".repeat(1000);
+    let capturedPrompt = "";
+    const mockLLMLayer = Layer.succeed(LLMService, {
+      complete: (params: any) => {
+        capturedPrompt = params.messages[0]?.content ?? "";
+        return Effect.succeed({
+          content: "- XRP: $1.34 (CoinGecko)\n- 24h volume: $1.9B",
+        });
+      },
+    } as any);
+
+    const result = await Effect.runPromise(
+      extractObservationFacts("web-search", largeResult, { query: "XRP price" }, 100).pipe(
+        Effect.provide(mockLLMLayer),
+      ),
+    );
+
+    expect(result).toBeDefined();
+    expect(result).toContain("XRP");
+    expect(result).toContain("$1.34");
+    expect(capturedPrompt).toContain("web-search");
+    expect(capturedPrompt).toContain("XRP price");
+  });
+
+  it("returns undefined when LLM extraction fails", async () => {
+    const mockLLMLayer = Layer.succeed(LLMService, {
+      complete: () => Effect.fail(new Error("LLM unavailable")),
+    } as any);
+
+    const result = await Effect.runPromise(
+      extractObservationFacts("web-search", "x".repeat(1000), { query: "test" }, 100).pipe(
+        Effect.provide(mockLLMLayer),
+      ),
+    );
+    expect(result).toBeUndefined();
+  });
+});

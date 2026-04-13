@@ -109,25 +109,25 @@ describe("formatToolSchemaMicro", () => {
     name: "web-search",
     description: "Search the web for information",
     parameters: [{ name: "query", type: "string", description: "search query", required: true }],
-  }
+  };
 
   it("returns name: description with no parameters shown", () => {
-    const result = formatToolSchemaMicro(schema)
-    expect(result).toBe("web-search: Search the web for information")
-  })
+    const result = formatToolSchemaMicro(schema);
+    expect(result).toBe("web-search: Search the web for information");
+  });
 
   it("truncates long descriptions at 80 chars", () => {
-    const longSchema = { ...schema, description: "A".repeat(100) }
-    const result = formatToolSchemaMicro(longSchema)
-    expect(result).toBe(`web-search: ${"A".repeat(77)}...`)
-  })
+    const longSchema = { ...schema, description: "A".repeat(100) };
+    const result = formatToolSchemaMicro(longSchema);
+    expect(result).toBe(`web-search: ${"A".repeat(77)}...`);
+  });
 
   it("handles undefined description", () => {
-    const noDesc = { ...schema, description: undefined as any }
-    const result = formatToolSchemaMicro(noDesc)
-    expect(result).toBe("web-search: ")
-  })
-})
+    const noDesc = { ...schema, description: undefined as any };
+    const result = formatToolSchemaMicro(noDesc);
+    expect(result).toBe("web-search: ");
+  });
+});
 
 describe("filterToolsByRelevance", () => {
   const allTools = [
@@ -206,6 +206,7 @@ describe("gateNativeToolCallsForRequiredTools", () => {
       undefined,
       undefined,
       undefined,
+      undefined,
       true,
     );
     expect(r.effective.length).toBe(0);
@@ -219,6 +220,109 @@ describe("gateNativeToolCallsForRequiredTools", () => {
       new Set(["web-search"]),
     );
     expect(r.effective).toEqual(calls);
+    expect(r.blockedOptionalBatch).toBe(false);
+  });
+
+  it("keeps required tool missing until quantity floor is reached", () => {
+    const r = gateNativeToolCallsForRequiredTools(
+      calls,
+      ["web-search"],
+      new Set(["web-search"]),
+      undefined,
+      { "web-search": 1 },
+      undefined,
+      { "web-search": 4 },
+    );
+    expect(r.effective.map((c) => c.name)).toEqual(["web-search"]);
+    expect(r.blockedOptionalBatch).toBe(false);
+  });
+
+  it("keeps parallel-safe required calls together while gather lane is active", () => {
+    const r = gateNativeToolCallsForRequiredTools(
+      [
+        { name: "web-search", id: "a", arguments: { query: "btc price" } },
+        { name: "web-search", id: "b", arguments: { query: "eth price" } },
+        { name: "http-get", id: "c", arguments: { url: "https://example.com" } },
+      ],
+      ["web-search"],
+      new Set(),
+      undefined,
+      { "web-search": 0 },
+      undefined,
+      { "web-search": 4 },
+    );
+    expect(r.effective.map((c) => c.name)).toEqual(["web-search", "web-search"]);
+    expect(r.blockedOptionalBatch).toBe(false);
+  });
+
+  it("returns explicit quota-budget conflict when required minimum exceeds maxCallsPerTool", () => {
+    const r = gateNativeToolCallsForRequiredTools(
+      [{ name: "web-search", id: "x", arguments: { query: "btc price" } }],
+      ["web-search"],
+      new Set(),
+      undefined,
+      { "web-search": 0 },
+      { "web-search": 2 },
+      { "web-search": 4 },
+    );
+    expect(r.effective).toEqual([]);
+    expect(r.blockedOptionalBatch).toBe(true);
+    expect(r.quotaBudgetConflict?.[0]).toEqual({
+      toolName: "web-search",
+      requiredMinCalls: 4,
+      maxCalls: 2,
+      actualCalls: 0,
+    });
+  });
+
+  it("allows relevant-tool pass-through while required tools are still missing", () => {
+    const r = gateNativeToolCallsForRequiredTools(
+      [{ name: "http-get", id: "x", arguments: { url: "https://example.com" } }],
+      ["file-write"],
+      new Set(),
+      ["http-get"],
+    );
+    expect(r.effective.map((c) => c.name)).toEqual(["http-get"]);
+    expect(r.blockedOptionalBatch).toBe(false);
+  });
+
+  it("respects nextMovesPlanning maxBatchSize for required-tool gather batches", () => {
+    const r = gateNativeToolCallsForRequiredTools(
+      [
+        { name: "web-search", id: "a", arguments: { query: "q1" } },
+        { name: "web-search", id: "b", arguments: { query: "q2" } },
+        { name: "web-search", id: "c", arguments: { query: "q3" } },
+      ],
+      ["web-search"],
+      new Set(),
+      undefined,
+      { "web-search": 0 },
+      undefined,
+      { "web-search": 4 },
+      undefined,
+      { enabled: true, maxBatchSize: 2, allowParallelBatching: true },
+    );
+    expect(r.effective.map((c) => c.name)).toEqual(["web-search", "web-search"]);
+    expect(r.blockedOptionalBatch).toBe(false);
+  });
+
+  it("enforces one tool call per step when nextMovesPlanning is disabled", () => {
+    const r = gateNativeToolCallsForRequiredTools(
+      [
+        { name: "web-search", id: "a", arguments: { query: "q1" } },
+        { name: "web-search", id: "b", arguments: { query: "q2" } },
+        { name: "web-search", id: "c", arguments: { query: "q3" } },
+      ],
+      ["web-search"],
+      new Set(),
+      undefined,
+      { "web-search": 0 },
+      undefined,
+      { "web-search": 4 },
+      undefined,
+      { enabled: false, maxBatchSize: 4, allowParallelBatching: true },
+    );
+    expect(r.effective.map((c) => c.id)).toEqual(["a"]);
     expect(r.blockedOptionalBatch).toBe(false);
   });
 });

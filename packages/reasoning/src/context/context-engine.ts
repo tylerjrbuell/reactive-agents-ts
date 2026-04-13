@@ -440,11 +440,14 @@ export function buildRules(
   const t = tier ?? "mid";
   const hasSpawnAgent = availableToolSchemas?.some((s) => s.name === "spawn-agent");
   const hasStoredResults = availableToolSchemas?.some((s) => s.name === "recall");
+  const hasNamespacedTools = availableToolSchemas?.some((s) => s.name.includes("/"));
 
   // Core rules — always included, small-model-safe count
   const rules: string[] = [
     "1. When actions are independent, issue multiple tool calls in the same response — they run in parallel. For N separate items (currencies, files, URLs, users), make ONE call per item all in the same response rather than one combined query.",
-    "2. Use EXACT tool names and parameter names from the tool reference. MCP tools require the full prefix (e.g. `context7/get-library-docs`, not `get-library-docs`).",
+    hasNamespacedTools
+      ? "2. Use EXACT tool names and parameter names from the tool reference. MCP tools require the full listed prefix, and you must never invent prefixes or namespaces (for example, do not create `google:search` unless it appears in Available Tools)."
+      : "2. Use EXACT tool names and parameter names from the tool reference. Do not invent prefixes or namespaces (for example, do not create `google:search` unless it appears in Available Tools).",
     "3. Do NOT fabricate data. Only use information from tool results.",
     "4. Do NOT repeat identical calls (same tool + same arguments). New calls with different arguments are fine.",
   ];
