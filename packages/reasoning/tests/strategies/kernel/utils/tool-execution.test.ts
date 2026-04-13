@@ -335,6 +335,38 @@ describe("executeToolCall", () => {
     expect(scratchpad.has(result.storedKey!)).toBe(true);
     expect(scratchpad.get(result.storedKey!)!).toContain('"sha":"sha-4"');
   });
+
+  it("surfaces delegated child tools from spawn-agent results", async () => {
+    const execResult = await Effect.runPromise(
+      executeNativeToolCall(
+        {
+          execute: () =>
+            Effect.succeed({
+              success: true,
+              result: {
+                subAgentName: "price-researcher",
+                success: true,
+                summary: "XRP price is $1.33",
+                tokensUsed: 42,
+                delegatedToolsUsed: ["web-search"],
+              },
+            }),
+          getTool: () => Effect.fail(new Error("not used")),
+        } as ToolServiceInstance,
+        {
+          id: "call-1",
+          name: "spawn-agent",
+          arguments: { task: "Find the XRP price" },
+        },
+        "reasoning-agent",
+        "reasoning-session",
+      ),
+    );
+
+    expect((execResult as ToolExecutionResult & { delegatedToolsUsed?: readonly string[] }).delegatedToolsUsed).toEqual(["web-search"]);
+    expect(execResult.success).toBe(true);
+    expect(execResult.content).toContain('Sub-agent "price-researcher"');
+  });
 });
 
 // ── executeNativeToolCall + scratchpadStoreRef (same Map as recall tool) ─────

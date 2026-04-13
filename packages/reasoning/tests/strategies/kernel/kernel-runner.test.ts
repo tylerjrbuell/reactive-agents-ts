@@ -467,6 +467,59 @@ describe("runKernel — required tools guard", () => {
     expect(result.output).toBe("Task complete");
   });
 
+  it("treats delegated child tool success as satisfying parent required tools", async () => {
+    let callCount = 0;
+    const delegatedKernel: ThoughtKernel = (state, _ctx) => {
+      callCount++;
+      if (callCount === 1) {
+        const tools = new Set(state.toolsUsed);
+        tools.add("spawn-agent");
+        return Effect.succeed(
+          transitionState(state, {
+            status: "thinking",
+            iteration: state.iteration + 1,
+            toolsUsed: tools,
+            steps: [
+              ...state.steps,
+              makeStep("action", "spawn-agent"),
+              makeStep("observation", '✓ Sub-agent "researcher":\nXRP price is $1.33', {
+                observationResult: {
+                  success: true,
+                  toolName: "spawn-agent",
+                  displayText: '✓ Sub-agent "researcher": XRP price is $1.33',
+                  category: "agent-delegate",
+                  resultKind: "data",
+                  preserveOnCompaction: false,
+                  delegatedToolsUsed: ["web-search"],
+                } as any,
+              }),
+            ],
+          }),
+        );
+      }
+
+      return Effect.succeed(
+        transitionState(state, {
+          status: "done",
+          output: "Delegated search complete",
+          iteration: state.iteration + 1,
+        }),
+      );
+    };
+
+    const result = await Effect.runPromise(
+      runKernel(delegatedKernel, { task: "test", requiredTools: ["web-search"] }, {
+        maxIterations: 10,
+        strategy: "test",
+        kernelType: "test",
+      }).pipe(Effect.provide(testLayer)),
+    );
+
+    expect(result.status).toBe("done");
+    expect(result.output).toBe("Delegated search complete");
+    expect(result.steps.some((s) => s.content.includes("Required tools not yet used"))).toBe(false);
+  });
+
   it("redirects agent when required tools missing, then succeeds", async () => {
     // Kernel that declares done first, then after seeing required tools feedback,
     // calls the tool and declares done again

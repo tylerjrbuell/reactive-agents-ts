@@ -320,6 +320,94 @@ describe("Loop detection — onStrategySwitched hook fires", () => {
   });
 });
 
+describe("Ollama provider defaults to local tier — maxSameTool=2 (IC-3)", () => {
+  it("loop fires after 2 identical tool calls when providerName is ollama (no explicit contextProfile)", async () => {
+    // Reproduces the W2-secondary bug: kernel-runner defaults to 'mid' tier
+    // (maxSameTool=3) for all providers. Ollama models are local-tier — they
+    // need maxSameTool=2 or they can loop 3 times before detection fires.
+    //
+    // Fix: KernelInput gets a providerName field; when providerName === "ollama"
+    // and no explicit contextProfile.tier is set, kernel-runner uses "local"
+    // profile (maxSameTool=2).
+    //
+    // Before fix: mid tier (maxSameTool=3), 2 calls don't fire — runs to maxIterations.
+    // After fix:  local tier (maxSameTool=2), 2 calls DO fire — status="failed".
+    const OLLAMA_REPEATED = JSON.stringify({ tool: "web-search", input: '{"query":"ollama-loop"}' });
+    const kernel = makeRepeatingActionKernel(OLLAMA_REPEATED);
+
+    const result = await Effect.runPromise(
+      runKernel(
+        kernel,
+        {
+          task: "ollama loop test",
+          providerName: "ollama",
+          // No explicit contextProfile — must auto-derive "local" from providerName
+        },
+        {
+          maxIterations: 20,
+          strategy: "reactive",
+          kernelType: "react",
+          // No explicit loopDetection — uses tier default (local=2, mid=3)
+        },
+      ).pipe(Effect.provide(testLayer)),
+    );
+
+    // Local tier: maxSameTool=2 → fires after 2 identical calls.
+    expect(result.status).toBe("failed");
+    expect(result.error).toContain("Loop detected");
+    // Must have fired at exactly 2 action steps (not 3 like mid tier)
+    const actionSteps = result.steps.filter((s) => s.type === "action");
+    expect(actionSteps.length).toBe(2);
+  }, 15000);
+});
+
+describe("Stall detection — observation steps do NOT reset consecutive-thought streak (IC-1)", () => {
+  it("loop fires when thoughts are interleaved only with observations, not actions", async () => {
+    // Reproduces the W2/W6 bug: ICS coordinator injects observation nudges between
+    // thought steps. With `else break` (buggy), every observation resets the streak
+    // so it never accumulates to maxConsecutiveThoughts. Fix: only actions reset it.
+    //
+    // Pattern (50 iterations, threshold=3):
+    //   iter 1: thought  → streak = 1
+    //   iter 2: obs      → BUG: streak = 0 | FIX: streak = 1  (obs ignored)
+    //   iter 3: thought  → BUG: streak = 1 | FIX: streak = 2
+    //   iter 4: obs      → BUG: streak = 0 | FIX: streak = 2
+    //   iter 5: thought  → BUG: streak = 1 | FIX: streak = 3 → LOOP FIRES
+    //
+    // With BUG: streak never reaches 3; runs to maxIterations=50; error is NOT about
+    // "consecutive thinking steps" → test fails.
+    // With FIX: loop fires at step 5; error is "consecutive thinking steps" → passes.
+    let callCount = 0;
+    const kernel: ThoughtKernel = (state, _ctx) => {
+      callCount++;
+      const stepType = callCount % 2 === 1
+        ? ("thought" as const)
+        : ("observation" as const);
+      return Effect.succeed(
+        transitionState(state, {
+          status: "thinking",
+          iteration: state.iteration + 1,
+          steps: [...state.steps, makeStep(stepType, `ics-nudge-step-${callCount}`)],
+        }),
+      );
+    };
+
+    const result = await Effect.runPromise(
+      runKernel(kernel, { task: "ics-interleaved stall" }, {
+        maxIterations: 50,
+        strategy: "reactive",
+        kernelType: "react",
+        loopDetection: { maxConsecutiveThoughts: 3 },
+      }).pipe(Effect.provide(testLayer)),
+    );
+
+    // Observations must NOT reset the consecutive-thought streak.
+    // After 3 thoughts (with observations in between), the stall loop must fire.
+    expect(result.status).toBe("failed");
+    expect(result.error).toContain("consecutive thinking steps");
+  }, 15000);
+});
+
 describe("Loop detection — strategy switch when alternatives available", () => {
   it("loop with strategy switching resets state and uses new strategy name", async () => {
     const strategiesSeen: string[] = [];

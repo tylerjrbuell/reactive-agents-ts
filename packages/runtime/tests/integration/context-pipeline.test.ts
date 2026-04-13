@@ -2,7 +2,7 @@
 //
 // Integration tests for the Context Engine pipeline:
 //   1. ExperienceStore record/query cycle
-//   2. ALWAYS_INCLUDE_TOOLS constant includes recall for sub-agents
+//   2. ALWAYS_INCLUDE_TOOLS stays empty by default for sub-agents
 //   3. context-status handler returns accurate snapshot
 //   4. shouldShowTaskComplete visibility gating
 
@@ -84,8 +84,8 @@ describe("ExperienceStore record/query cycle", () => {
 // ─── Test 2: ALWAYS_INCLUDE_TOOLS constant ────────────────────────────────────
 
 describe("ALWAYS_INCLUDE_TOOLS", () => {
-  it("includes recall", () => {
-    expect(ALWAYS_INCLUDE_TOOLS).toContain("recall");
+  it("is empty by default", () => {
+    expect(ALWAYS_INCLUDE_TOOLS).toEqual([]);
   });
 });
 

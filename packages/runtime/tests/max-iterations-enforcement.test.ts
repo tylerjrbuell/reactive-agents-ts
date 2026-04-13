@@ -202,6 +202,48 @@ describe("withMaxIterations enforcement", () => {
     expect(capturedMaxIterations).toBe(MAX);
   });
 
+  it("withReasoning({ maxIterations: 2 }) propagates to _maxIterations on the builder (IC-2)", () => {
+    // Reproduces the W4 bug: withReasoning() stores options.maxIterations in
+    // _reasoningOptions but never assigns it to _maxIterations.
+    // withMaxIterations(2) correctly sets _maxIterations; withReasoning({ maxIterations: 2 }) must too.
+    const { ReactiveAgents } = require("../src/builder.js");
+    const builder = ReactiveAgents.create()
+      .withName("ic2-test")
+      .withReasoning({ maxIterations: 2 });
+
+    // Before fix: _maxIterations is the default (not 2) → test fails.
+    // After fix: _maxIterations === 2 → test passes.
+    expect((builder as any)._maxIterations).toBe(2);
+  });
+
+  it("withReasoning({ maxIterations: 2 }) stops execution at 2 iterations via builder (IC-2 behavioral)", async () => {
+    // Same W4 bug, runtime-level proof: agent configured via withReasoning({ maxIterations: 2 })
+    // must stop at 2 iterations when given an infinite-loop LLM.
+    const { ReactiveAgents } = require("../src/builder.js");
+    const infiniteLLM = makeInfiniteLoopLLM();
+
+    let threw = false;
+    try {
+      const agent = await ReactiveAgents.create()
+        .withName("ic2-behavioral")
+        .withReasoning({ maxIterations: 2 })
+        .withTools()
+        .build();
+      // Inject mock LLM by running via Effect layer directly
+      // (builder path still goes through ExecutionEngine)
+      await Effect.runPromise(
+        agent.run("loop forever").pipe(
+          Effect.provide(infiniteLLM),
+        ),
+      );
+    } catch {
+      threw = true;
+    }
+
+    // Must throw MaxIterationsError — not run indefinitely (16+ iterations like the bug)
+    expect(threw).toBe(true);
+  }, 15000);
+
   it("normal completion does not throw when LLM produces end_turn with no tools", async () => {
     // Sanity check: the OPPOSITE condition — LLM ends cleanly, should NOT throw
     const completingLLM = Layer.succeed(

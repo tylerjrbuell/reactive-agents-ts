@@ -68,6 +68,49 @@ function makeStallAfterToolKernel(toolOutput: string): ThoughtKernel {
   };
 }
 
+/** Kernel that calls the same tool repeatedly before stalling. */
+function makeRepeatedToolKernel(toolOutputs: readonly string[]): ThoughtKernel {
+  return (state, _ctx) => {
+    const nextIter = state.iteration + 1;
+    if (nextIter <= toolOutputs.length) {
+      const toolOutput = toolOutputs[nextIter - 1]!;
+      return Effect.succeed(
+        transitionState(state, {
+          status: "thinking",
+          iteration: nextIter,
+          toolsUsed: new Set([...state.toolsUsed, "spawn-agent"]),
+          steps: [
+            ...state.steps,
+            makeStep("thought", `Delegate subtask ${nextIter}`),
+            makeStep("action", "spawn-agent"),
+            makeStep("observation", toolOutput, {
+              observationResult: {
+                success: true,
+                toolName: "spawn-agent",
+                displayText: `sub-agent result ${nextIter}`,
+                category: "agent-delegate" as const,
+                resultKind: "data" as const,
+                preserveOnCompaction: false,
+              },
+            }),
+          ],
+        }),
+      );
+    }
+
+    return Effect.succeed(
+      transitionState(state, {
+        status: "thinking",
+        iteration: nextIter,
+        steps: [
+          ...state.steps,
+          makeStep("thought", "I need a moment to synthesize these delegated results."),
+        ],
+      }),
+    );
+  };
+}
+
 const defaultOptions = {
   taskId: "test-task",
   strategy: "reactive",
@@ -155,6 +198,34 @@ describe("output quality gate", () => {
     expect(state.output).toContain("BTC price");
   });
 
+  it("does not treat repeated calls to the same tool as stalled progress", async () => {
+    const kernel = makeRepeatedToolKernel([
+      "Delegated result: XRP price is $1.33 in USD.",
+      "Delegated result: XLM price is $0.1558 in USD.",
+    ]);
+
+    const state = await runWithTestLLM(
+      runKernel(
+        kernel,
+        { task: "collect crypto prices via delegated sub-agents" },
+        {
+          ...defaultOptions,
+          maxIterations: 8,
+          loopDetection: {
+            maxSameToolCalls: 10,
+            maxRepeatedThoughts: 10,
+            maxConsecutiveThoughts: 10,
+          },
+        },
+      ),
+    );
+
+    expect(state.status).toBe("done");
+    expect(state.meta.terminatedBy).toBe("harness_deliverable");
+    expect(state.iteration).toBe(4);
+    expect(state.output).toContain("XLM price");
+  });
+
   it("assembleDeliverable resolves STORED previews via scratchpad for harness output", () => {
     const key = "_tool_result_1";
     const fullText = "Usage: rax agent create\n  --name string    Agent display name";
@@ -177,5 +248,78 @@ describe("output quality gate", () => {
     });
     expect(assembleDeliverable(st)).toContain("Usage: rax agent create");
     expect(assembleDeliverable(st)).toContain("--name string");
+  });
+
+  it("assembleDeliverable resolves compressed previews via metadata.storedKey", () => {
+    const key = "_tool_result_5";
+    const fullText = JSON.stringify({
+      summary: { total: 4, succeeded: 4, failed: 0 },
+      results: [
+        { name: "find-xrp-price", output: "$1.32" },
+        { name: "find-xlm-price", output: "$0.1508" },
+      ],
+    });
+    const preview = [
+      "[spawn-agents result — compressed preview]",
+      "Type: Object(2 keys)",
+      "  results: Array(4)",
+      "  summary: {total, succeeded, failed}",
+      "  — full object is stored.",
+    ].join("\n");
+
+    const obs = makeStep("observation", preview, {
+      storedKey: key,
+      observationResult: {
+        success: true,
+        toolName: "spawn-agents",
+        displayText: "preview",
+        category: "agent-delegate" as const,
+        resultKind: "data" as const,
+        preserveOnCompaction: false,
+      },
+    });
+    const base = initialKernelState({ ...defaultOptions, taskId: "t2" });
+    const st = transitionState(base, {
+      steps: [obs],
+      toolsUsed: new Set(["spawn-agents"]),
+      scratchpad: new Map([[key, fullText]]),
+    });
+
+    const assembled = assembleDeliverable(st);
+    expect(assembled).toContain('"find-xrp-price"');
+    expect(assembled).toContain('"succeeded":4');
+  });
+
+  it("assembleDeliverable resolves recall() key hints when STORED header is absent", () => {
+    const key = "_tool_result_7";
+    const fullText = "Bitcoin: 70836.96\nEthereum: 3850.00\nXRP: 1.32\nXLM: 0.1508";
+    const preview = [
+      "[spawn-agents result — compressed preview]",
+      "Type: Object(2 keys)",
+      "  results: Array(4)",
+      "  summary: {total, succeeded, failed}",
+      `  — full object is stored. Use recall(\"${key}\", start: 0, maxChars: 1200).`,
+    ].join("\n");
+
+    const obs = makeStep("observation", preview, {
+      observationResult: {
+        success: true,
+        toolName: "spawn-agents",
+        displayText: "preview",
+        category: "agent-delegate" as const,
+        resultKind: "data" as const,
+        preserveOnCompaction: false,
+      },
+    });
+    const base = initialKernelState({ ...defaultOptions, taskId: "t3" });
+    const st = transitionState(base, {
+      steps: [obs],
+      toolsUsed: new Set(["spawn-agents"]),
+      scratchpad: new Map([[key, fullText]]),
+    });
+
+    const assembled = assembleDeliverable(st);
+    expect(assembled).toContain("Bitcoin: 70836.96");
+    expect(assembled).toContain("XLM: 0.1508");
   });
 });

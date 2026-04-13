@@ -68,6 +68,24 @@ describe("ReactiveAgent.runStream", () => {
     await agent.dispose();
   });
 
+  it("emits ThoughtEmitted events in full density mode", async () => {
+    const agent = await ReactiveAgents.create()
+      .withTestScenario([{ match: "reason", text: "FINAL ANSWER: done" }])
+      .withReasoning()
+      .build();
+
+    const thoughts: string[] = [];
+    for await (const event of agent.runStream("reason", { density: "full" })) {
+      if (event._tag === "ThoughtEmitted") {
+        thoughts.push(event.content);
+      }
+    }
+
+    expect(thoughts.length).toBeGreaterThan(0);
+
+    await agent.dispose();
+  });
+
   it("concurrent streams do not interfere", async () => {
     const agent = await ReactiveAgents.create()
       .withTestScenario([

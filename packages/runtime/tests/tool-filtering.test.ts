@@ -154,10 +154,7 @@ describe("createSubAgentExecutor — allowedTools passthrough", () => {
     await executor("Do something");
 
     expect(capturedOpts).not.toBeNull();
-    // ALWAYS_INCLUDE_TOOLS (recall) are auto-merged
-    expect(capturedOpts.allowedTools).toContain("web-search");
-    expect(capturedOpts.allowedTools).toContain("file-read");
-    expect(capturedOpts.allowedTools).toContain("recall");
+    expect(capturedOpts.allowedTools).toEqual(["web-search", "file-read"]);
   });
 
   it("does not pass allowedTools when config.tools is undefined", async () => {
