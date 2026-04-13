@@ -255,4 +255,26 @@ describe("repetitionGuard — requiredToolQuantities threshold", () => {
       expect(result.observation).toMatch(/\d+\/\d+/); // e.g. "0/4" or "2/4"
     }
   });
+
+  it("low minCalls does NOT shrink the parallel-safe ceiling (floor vs ceiling bug)", () => {
+    // Regression: classifier returns minCalls:1 for web-search (a single-query task).
+    // The agent then calls web-search again for a follow-up query.
+    // The guard must NOT block because web-search is parallel-safe (ceiling = maxBatchSize=4).
+    const inputWithLowMinCalls = {
+      ...baseInput,
+      requiredToolQuantities: { "web-search": 1 },
+      nextMovesPlanning: { enabled: true, maxBatchSize: 4, allowParallelBatching: true },
+    };
+    // 1 prior call — the classifier says minCalls=1 but the ceiling should still be maxBatchSize=4
+    const state = makeState({ steps: makeActions("web-search", 1) as any });
+    expect(repetitionGuard(makeTc("web-search"), state, inputWithLowMinCalls).pass).toBe(true);
+
+    // 3 prior calls — still below the parallel-safe ceiling of 4
+    const state3 = makeState({ steps: makeActions("web-search", 3) as any });
+    expect(repetitionGuard(makeTc("web-search"), state3, inputWithLowMinCalls).pass).toBe(true);
+
+    // 4 prior calls — now we hit the ceiling
+    const state4 = makeState({ steps: makeActions("web-search", 4) as any });
+    expect(repetitionGuard(makeTc("web-search"), state4, inputWithLowMinCalls).pass).toBe(false);
+  });
 });

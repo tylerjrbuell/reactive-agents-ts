@@ -124,11 +124,16 @@ export const repetitionGuard: Guard = (tc, state, input) => {
     return (stepTc?.name ?? "") === tc.name;
   }).length;
 
-  // Threshold priority: (1) requiredToolQuantities[tool] — ground truth from classifier,
-  // (2) maxBatchSize for parallel-safe tools, (3) 2 for sequential-only tools.
-  const quantityLimit = input.requiredToolQuantities?.[tc.name];
+  // requiredToolQuantities[tool] is a FLOOR (min calls required by the task).
+  // The repetition-guard threshold is a CEILING (max before nudging).
+  // For parallel-safe tools the ceiling is always at least maxBatchSize;
+  // for sequential-only tools it's at least 2.
+  // We take max(floor, default-ceiling) so a low minCalls value never
+  // shrinks the allowed call window for parallel-safe tools.
+  const quantityLimit = input.requiredToolQuantities?.[tc.name] ?? 0;
   const maxBatchSize = input.nextMovesPlanning?.maxBatchSize ?? 4;
-  const threshold = quantityLimit ?? (isParallelBatchSafeTool(tc.name) ? maxBatchSize : 2);
+  const defaultCeiling = isParallelBatchSafeTool(tc.name) ? maxBatchSize : 2;
+  const threshold = Math.max(quantityLimit, defaultCeiling);
   if (priorCallsOfSameTool < threshold) return { pass: true };
 
   // Build missing-tools hint with N/M count progress when quantities are known
