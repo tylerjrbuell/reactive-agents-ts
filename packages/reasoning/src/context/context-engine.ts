@@ -443,10 +443,10 @@ export function buildRules(
 
   // Core rules — always included, small-model-safe count
   const rules: string[] = [
-    "1. When actions are independent, issue multiple tool calls in the same response — they run in parallel. For dependent work, wait for results first.",
+    "1. When actions are independent, issue multiple tool calls in the same response — they run in parallel. For N separate items (currencies, files, URLs, users), make ONE call per item all in the same response rather than one combined query.",
     "2. Use EXACT tool names and parameter names from the tool reference. MCP tools require the full prefix (e.g. `context7/get-library-docs`, not `get-library-docs`).",
     "3. Do NOT fabricate data. Only use information from tool results.",
-    "4. Once a tool succeeds, do NOT repeat it.",
+    "4. Do NOT repeat identical calls (same tool + same arguments). New calls with different arguments are fine.",
   ];
 
   let ruleNum = 5;
