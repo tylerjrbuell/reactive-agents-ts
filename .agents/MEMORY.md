@@ -12,6 +12,38 @@
 - [Composable Provider Adapters](project_composable_adapters.md) — V1.1 DONE in v0.8.5: all 7 hooks implemented
 - [Composable Reasoning Phases](project_composable_phases.md) — ✅ SHIPPED Apr 3, 2026: `strategies/kernel/` composable phase architecture merged to main
 
+## Current Status (Apr 12, 2026)
+- **Pass 2 complete** — 18 probes (6 confirm + 12 wide), 18 pass / 5 fail, 0 regressions
+- W2 + W4 confirmed with JSONL evidence; W6 (recovery nudges compound W2), W7 (ICS over-tool-classifies), W8 (strategy switching unreachable) newly discovered
+- IC-1 (loop-detector.ts L94 one-line fix) and IC-2 (builder.ts withReasoning maxIter propagation) ready for agent-tdd handoff
+- Coverage improved: 7 covered / 15 partial / 3 uncovered (was 8 uncovered in Pass 1)
+- Report: `harness-reports/improvement-report-20260412-2.md`
+
+## What Shipped Apr 12, 2026
+
+### Self-Improving Harness Loop (Pass 1 — Apr 12 AM)
+- **`scripts/harness-probe-analyze.ts`** — JSONL analyzer with correct metric schema; safe to import (`import.meta.main` guard); outputs `-analysis.json` per probe
+- **`scripts/harness-evolve.ts`** — evolution engine: evaluates pass criteria, generates drill-down/graduation probe candidates, tracks coverage gaps across 26 feature areas, checks regression baselines; `--dry-run` flag
+- **`harness-reports/loop-state.json`** — persistent state: `knownWeaknesses[]`, `regressionBaselines[]`, `metricRegistry[]` (36 names after Pass 2), `coverageMap{}`, `probeHistory[]`
+- **SKILL.md Phase 5: Evolve** — new section in `.agents/skills/harness-improvement-loop/SKILL.md`
+
+### Pass 2 Probe Results (Apr 12 PM)
+- **W2 confirmed** (loop-detector.ts L94): `else break` resets streak on ANY non-thought step — JSONL shows duplicate web-search calls (same query twice) not triggering detection; `w2-ics-required-tool` ran 6 iters, no loop
+- **W4 confirmed** (builder.ts withReasoning): `w4-reasoning-opt-maxiter` ran 16 iters with configured maxIterations=3; `w4-direct-maxiter` (withMaxIterations) correctly stopped at 2
+- **W2 root cause detail**: default tier is "mid" → `maxSameTool=3` (needs 3 identical calls); Ollama probes without `withContextProfile({ tier: "local" })` never trigger duplicate-tool detection
+- **W6 NEW**: `getToolFailureRecovery()` (4f809a2d) adds `type="observation"` nudges that reset W2 streak — fixed by IC-1
+- **W7 NEW**: ICS over-classifies tools for knowledge tasks — qwen3:14b called tool for "explain a monad" (direct-answer-efficiency: iter=6 expected ≤1)
+- **W8 NEW**: Strategy switching is dead code — W2 prevents loop detection from firing, so `if (loopMsg !== null)` branch never runs; `strategy-switch-on-loop` probe: 15 iters, no switch
+- **IC-1 ticket ready**: loop-detector.ts L94: `else break` → `else if (steps[i]!.type === "action") break` — fixes W2+W6+W8
+- **IC-2 ticket ready**: builder.ts ~L1328: add `if (options?.maxIterations !== undefined) this._maxIterations = options.maxIterations;` in withReasoning()
+
+**Confirmed JSONL metric schema** (use these, never `{event: "ThinkStart"}`):
+- `execution.iteration` — gauge, ONE record at end (not per-iter)
+- `reasoning.steps` — counter, fires per kernel step (value=1); labels: `strategy`, `kernelPass`
+- `entropy.composite` — gauge per iter; labels: `iteration`, `shape`, `confidence`
+- `execution.phase.count` — counter per phase; labels: `phase` (think/act/observe/bootstrap/complete…)
+- `execution.tool.execution` — counter per tool call
+
 ## Current Status (Apr 10, 2026)
 - **Cortex Lab parity** — Builder wires **runtime verification** (`withVerification`) and **host shell** (`terminalTools` → `shell-execute` + `terminal: true`) with explicit UI + docs disclaimers; config parity test + POST `/api/runs` + gateway normalized config updated
 - **Harness Reliability Engineering Complete** — all phases from plan.md implemented: tier classification, expert strategy efficiency, output quality gates, checkpoint meta-tool, tier-adaptive kernel guards, terminal execution, calibration drift detection
@@ -146,8 +178,25 @@ state.steps[]     ← What systems observe (entropy, metrics, debrief)
 - **Anthropic streaming**: Use raw `streamEvent` not helper events (`inputJson` fires before `contentBlock`)
 - **Gemini tool results**: `functionResponse.name` must use `msg.toolName` not hard-coded "tool"
 - **Ollama streaming**: `chunk.message.tool_calls` on `chunk.done`, emit `tool_use_start` + `tool_use_delta`
-- **Loop detection**: `maxConsecutiveThoughts: 3` — nudge observations reset the counter
+- **Loop detection**: `maxConsecutiveThoughts: 3` — only ACTION steps reset the streak (NOT observations — IC-1 fix Apr 12)
 - See [build-patterns.md](build-patterns.md) for tsconfig, package.json, Effect-TS patterns
+
+## What Shipped Apr 12, 2026 — IC-1/IC-2/IC-3 Loop & Builder Fixes
+
+### IC-1 — loop-detector.ts:94 (W2 + W6 + W8 simultaneously)
+- `else break` → `else if (steps[i]!.type === "action") break`
+- Observation steps no longer reset consecutive-thought streak; strategy switching now reachable
+
+### IC-2 — builder.ts withReasoning() (W4)
+- Added `if (options?.maxIterations !== undefined) this._maxIterations = options.maxIterations;`
+- `withReasoning({ maxIterations: N })` now correctly limits execution (was silently ignored)
+
+### IC-3 — Ollama defaults to local tier (W2-secondary)
+- Added `providerName?: string` to `KernelInput`
+- `kernel-runner.ts`: auto-selects "local" profile when `providerName === "ollama"` (maxSameTool=2)
+- `execution-engine.ts` (5 sites): passes `providerName: String(config.provider ?? "")`
+
+**Test coverage:** 3 new behavioral tests in `loop-detection-behavioral.test.ts` + 2 in `max-iterations-enforcement.test.ts`. 1,384 tests total, 0 failures.
 
 ## Architecture Debt (Remaining)
 1. `buildDynamicContext`/`buildStaticContext` still in codebase behind flag (~560 LOC dead)

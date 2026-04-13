@@ -73,7 +73,11 @@ cat packages/reasoning/src/context/context-profile.ts
 
 ### Available scripts
 
-- **`scripts/harness-probe.ts`** — Runs all 5 probes, writes per-probe JSONL and a pass summary JSON. Uses Ollama by default (`qwen2.5:7b`). Override with `PROBE_MODEL=<name>` env var.
+- **`.agents/skills/harness-improvement-loop/scripts/harness-probe.ts`** — Runs all 5 probes, writes per-probe JSONL and a pass summary JSON. Uses Ollama by default (`qwen2.5:7b`). Override with `PROBE_MODEL=<name>` env var.
+- **`.agents/skills/harness-improvement-loop/scripts/harness-probe-analyze.ts`** — Analyzes a JSONL probe file and extracts structured metrics.
+- **`.agents/skills/harness-improvement-loop/scripts/harness-probe-confirm.ts`** — Runs targeted confirmation probes for specific weaknesses.
+- **`.agents/skills/harness-improvement-loop/scripts/harness-probe-wide.ts`** — Runs the full wide-scan probe suite.
+- **`.agents/skills/harness-improvement-loop/scripts/harness-evolve.ts`** — Analyzes all probes, updates loop-state.json, generates next-pass candidates.
 
 ### Setup
 
@@ -85,17 +89,13 @@ cp .agents/skills/harness-improvement-loop/REPORT-TEMPLATE.md \
 
 Create the probe runner:
 
-The probe runner script is bundled at `scripts/harness-probe.ts` in this skill directory. Copy it into your project:
-
-```bash
-cp .agents/skills/harness-improvement-loop/scripts/harness-probe.ts scripts/harness-probe.ts
-```
+The probe runner and all supporting scripts live in `.agents/skills/harness-improvement-loop/scripts/`. Run them directly from the project root:
 
 Key configuration at the top of the file — the only things you should need to change:
 
 ```typescript
 const PROBE_MODEL = "qwen2.5:7b"; // local Ollama model, no API cost
-// Override at runtime: PROBE_MODEL=cogito:8b bun run scripts/harness-probe.ts
+// Override at runtime: PROBE_MODEL=cogito:8b bun run .agents/skills/harness-improvement-loop/scripts/harness-probe.ts
 
 // Each probe: { id, strategy, maxIterations, task, expectation }
 // Edit PROBES[] to add domain-specific tasks or adjust iteration budgets
@@ -110,12 +110,12 @@ The script:
 To run all probes with live output captured:
 
 ```bash
-bun run scripts/harness-probe.ts 2>&1 | tee harness-reports/probe-run-$(date +%Y%m%d-%H%M).txt
+bun run .agents/skills/harness-improvement-loop/scripts/harness-probe.ts 2>&1 | tee harness-reports/probe-run-$(date +%Y%m%d-%H%M).txt
 ```
 
 ### Adapting the probe script for better output
 
-The 5 default probes are a starting baseline. Whenever the default probes don't exercise the specific behavior you're investigating, edit `scripts/harness-probe.ts` directly. The script is a first-class artifact — updating it is expected and required to get actionable results.
+The 5 default probes are a starting baseline. Whenever the default probes don't exercise the specific behavior you're investigating, edit `.agents/skills/harness-improvement-loop/scripts/harness-probe.ts` directly. The script is a first-class artifact — updating it is expected and required to get actionable results.
 
 **When to adapt:**
 - A weakness from the report isn't exercised by any default probe — add a probe that directly triggers it
@@ -135,7 +135,7 @@ const PROBES: ProbeConfig[] = [
 Or add a quick CLI filter at the bottom of `main()`:
 
 ```typescript
-const targetId = process.argv[2]; // bun run scripts/harness-probe.ts termination-quality
+const targetId = process.argv[2]; // bun run .agents/skills/harness-improvement-loop/scripts/harness-probe.ts termination-quality
 const toRun = targetId ? PROBES.filter((p) => p.id === targetId) : PROBES;
 ```
 
@@ -222,7 +222,7 @@ Signals to watch for during a run:
 The probe runner script already handles this:
 
 ```bash
-bun run scripts/harness-probe.ts 2>&1 | tee harness-reports/probe-run-$(date +%Y%m%d-%H%M).txt
+bun run .agents/skills/harness-improvement-loop/scripts/harness-probe.ts 2>&1 | tee harness-reports/probe-run-$(date +%Y%m%d-%H%M).txt
 ```
 
 `2>&1` captures both stdout (live events) and stderr (any errors or warnings from the SDK). The `.txt` file is the audit trail for the pass; the per-probe `.jsonl` files are the analysis inputs.
@@ -381,6 +381,139 @@ Never delete rows. The history is the signal.
 Stop when:
 - All high-severity weaknesses are `FIXED` or `WONTFIX`, AND
 - No new high-severity weaknesses appeared in this pass's probes
+
+---
+
+## Phase 5: Evolve (Self-Improving Loop)
+
+Run this phase **after** Phase 4 (filling the report) and **before** the next pass begins.
+
+### What it does
+
+The evolution engine reads all probe JSONL outputs, compares against known pass criteria, updates the persistent loop state, and generates next-pass probe candidates — automatically.
+
+```bash
+# After each pass, run:
+bun run .agents/skills/harness-improvement-loop/scripts/harness-evolve.ts
+
+# Dry-run (print plan, no writes):
+bun run .agents/skills/harness-improvement-loop/scripts/harness-evolve.ts --dry-run
+
+# Analyze a single JSONL file:
+bun run .agents/skills/harness-improvement-loop/scripts/harness-probe-analyze.ts harness-reports/probe-tool-heavy.jsonl
+
+# Analyze all probes + print metric registry:
+bun run .agents/skills/harness-improvement-loop/scripts/harness-probe-analyze.ts --registry
+```
+
+### What evolves between passes
+
+**1. Failing probes → drill-down variants**
+When a probe fails its pass criteria, the evolution engine generates a targeted drill-down probe that isolates the root cause. Example: `tool-heavy` failing because `actPhaseCount=0` generates a `tool-heavy-fc-drill` probe comparing cogito:8b vs qwen3:14b on the same task to isolate whether the failure is W1 (text-format FC) or a deeper bug.
+
+**2. Consistently-passing probes → graduated variants**
+After a probe passes 2+ passes in a row, the engine marks it as a graduation candidate and generates a harder variant. Example: `trivial-1step` (passes 3×) graduates to `trivial-multistep-math` with multi-step arithmetic. This raises the bar continuously rather than letting the suite go stale.
+
+**3. Coverage gap detection**
+The engine tracks `harness-reports/loop-state.json::coverageMap` — a map of all known framework feature areas to `covered | partial | uncovered`. After each pass it identifies which high-priority areas have no probes yet and surfaces them in the "Next Pass Focus" output.
+
+### Persistent loop state
+
+`harness-reports/loop-state.json` accumulates across passes:
+
+```
+knownWeaknesses[]    — all W{n} across all passes, with status: open|confirmed|fixed|wont-fix
+regressionBaselines[]— metrics that must not regress (e.g. trivial-1step iterations=1 exactly)
+metricRegistry[]     — all JSONL metric names discovered + their schema (labels, type, meaning)
+probeHistory[]       — per-probe pass/fail history, confirmedBug flag, graduated flag
+coverageMap{}        — feature area → coverage status
+nextPassFocus[]      — top 10 focus areas for next pass (auto-computed)
+```
+
+Never edit `loop-state.json` by hand during a pass. The engine writes it atomically after analysis.
+
+### Correct JSONL metric schema
+
+The probe analysis scripts use the real schema discovered from live runs:
+
+| Metric name | Type | When emitted | Key labels |
+|---|---|---|---|
+| `execution.iteration` | gauge | once at end | `taskId` |
+| `reasoning.steps` | counter | per kernel step (value=1) | `strategy`, `kernelPass` |
+| `entropy.composite` | gauge | per iteration | `iteration`, `shape`, `confidence` |
+| `execution.phase.count` | counter | per phase execution | `phase` |
+| `execution.phase.duration_ms` | histogram | per phase | `phase` |
+| `execution.tokens_used` | gauge | once at end | `taskId` |
+| `execution.tool.execution` | counter | per tool call | — |
+
+**Critical**: `execution.iteration` fires **once** at the end (not per-iteration). To get per-iteration data, use `entropy.composite` with `labels.iteration`, or count `reasoning.steps` records. The broken jq commands in Phase 3 above assume a per-event `{event: "ThinkStart"}` schema that does not exist — always use `harness-probe-analyze.ts` instead of raw jq.
+
+### Adding regression baselines
+
+After a probe has passed cleanly for 2+ passes, add a baseline to `loop-state.json::regressionBaselines`:
+
+```json
+{
+  "probeId": "trivial-1step",
+  "metric": "iterations",
+  "expected": 1,
+  "tolerance": 0,
+  "direction": "exactly"
+}
+```
+
+The evolution engine checks all baselines on every run and flags regressions immediately.
+
+### Coverage-driven probe expansion
+
+The `ALL_FEATURE_AREAS` map in `harness-evolve.ts` defines all framework feature areas. The engine automatically surfaces high-priority uncovered areas after each pass. Priority order for coverage:
+
+1. `text-fc-fallback` (W1 — stream-parser.ts text tool call recovery)
+2. `max-iterations-wiring` (W4 — builder.ts withReasoning propagation)
+3. `loop-detector` (W2 — loop-detector.ts ICS masking)
+4. `strategy-switching` (kernel-runner.ts loop-triggered escalation)
+5. `quality-early-exit` (termination-oracle.ts threshold gate)
+6. `reflexion`, `tree-of-thought` (strategy-level features)
+7. `context-pressure-narrowing`, `auto-checkpoint`
+
+---
+
+## Pass Cleanup (After Each Pass)
+
+After the evolution engine has written `loop-state.json` and you have a complete improvement report, trim `harness-reports/` so it stays navigable.
+
+**Keep in `harness-reports/` root:**
+- `loop-state.json` — canonical state; never archive or delete
+- The 5 current baseline probe files: `probe-<id>.jsonl` + `probe-<id>-analysis.json`
+- `probe-summary-<latest-date>.json`
+- `probe-candidates-<latest-date>.ts`
+- The current pass improvement report: `improvement-report-<date>-<N>.md`
+
+**Archive (move to `harness-reports/archive/passN/`):**
+- Wide-scan JSONL and analysis files from the completed pass
+- Confirm JSONL and analysis files from the completed pass
+- Raw `.txt` run logs (`probe-run-*.txt`, `probe-confirm-*.txt`, `probe-wide-*.txt`) — large, redundant with summaries
+- The previous pass improvement reports
+- The superseded `probe-candidates-<older-date>.ts` file
+- Older `probe-summary-*.json` files
+
+```bash
+# Create archive for completed pass N
+mkdir -p harness-reports/archive/passN
+
+# Move pass-specific wide/confirm probes
+mv harness-reports/probe-wide-*.jsonl harness-reports/probe-wide-*-analysis.json harness-reports/archive/passN/ 2>/dev/null || true
+mv harness-reports/probe-confirm-*.jsonl harness-reports/probe-confirm-*-analysis.json harness-reports/archive/passN/ 2>/dev/null || true
+
+# Move raw txt logs
+mv harness-reports/probe-run-*.txt harness-reports/probe-confirm-*.txt harness-reports/probe-wide-*.txt harness-reports/archive/passN/ 2>/dev/null || true
+
+# Move superseded candidates and summaries
+mv harness-reports/probe-candidates-<prev-date>.ts harness-reports/archive/passN/
+mv harness-reports/probe-summary-<prev-date>.json harness-reports/archive/passN/
+```
+
+**Do not archive:** the 5 baseline probe JSONL files (`probe-trivial-1step.jsonl`, etc.) — they carry forward as the regression baselines for the next pass and will be overwritten in-place when re-run.
 
 ---
 

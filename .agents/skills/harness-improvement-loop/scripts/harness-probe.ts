@@ -12,7 +12,7 @@
 import { ReactiveAgents } from "@reactive-agents/runtime";
 import { writeFileSync, mkdirSync, readFileSync } from "fs";
 
-const PROBE_MODEL = "qwen2.5:7b";
+const PROBE_MODEL = "cogito:8b";
 
 interface ProbeConfig {
   id: string;
@@ -148,40 +148,46 @@ function extractMetricsFromJsonl(path: string): {
 } {
   try {
     const lines = readFileSync(path, "utf-8").trim().split("\n").filter(Boolean);
-    const events = lines.map((l) => JSON.parse(l) as Record<string, unknown>);
+    const records = lines.map((l) => JSON.parse(l) as Record<string, unknown>);
+    const metrics = records.filter((r) => r._type === "metric");
 
-    const qualityEvents = events.filter((e) => e.qualityScore != null);
-    const finalQualityScore = (qualityEvents.at(-1)?.qualityScore as number | undefined) ?? null;
+    // execution.iteration — single gauge emitted once at end with the final count
+    const iterRecord = metrics.find((r) => r.name === "execution.iteration");
+    const iterations = iterRecord != null ? (iterRecord.value as number) : null;
 
-    const contextRatios = events
-      .filter((e) => e.contextRatio != null)
-      .map((e) => e.contextRatio as number);
-    const contextPeakRatio = contextRatios.length > 0 ? Math.max(...contextRatios) : null;
+    // entropy.composite — gauge per iteration; use last emitted value as final quality proxy
+    // (lower entropy = higher quality; invert to a 0–1 quality score)
+    const qualityRecords = metrics.filter((r) => r.name === "entropy.composite");
+    const lastEntropy = qualityRecords.length > 0
+      ? (qualityRecords.at(-1)!.value as number)
+      : null;
+    const finalQualityScore = lastEntropy != null ? 1 - lastEntropy : null;
 
-    const iterations = events.filter((e) => e.event === "ThinkStart" || e.phase === "think").length || null;
+    // No context ratio metric in current schema — mark as unavailable
+    const contextPeakRatio = null;
 
-    const toolCallKeys = events
-      .filter((e) => e.event === "ToolCallStart")
-      .map((e) => `${e.toolName}::${JSON.stringify(e.args)}`);
+    // Duplicate tool calls: execution.tool.execution fires per call; detect duplicates
+    // by inspecting log messages for repeated tool names in the same run
+    const toolLogs = records
+      .filter((r) => r._type === "log")
+      .map((r) => (r.message as string | undefined) ?? "")
+      .filter((m) => m.includes("[tool]") || m.includes("tool_call"));
     const seen = new Set<string>();
     let duplicateToolCalls = 0;
-    for (const key of toolCallKeys) {
-      if (seen.has(key)) duplicateToolCalls++;
-      seen.add(key);
+    for (const msg of toolLogs) {
+      if (seen.has(msg)) duplicateToolCalls++;
+      seen.add(msg);
     }
 
-    // Wasted: think event immediately followed by another think (no tool call or answer in between)
-    let wastedIterations = 0;
-    for (let i = 0; i < events.length - 1; i++) {
-      const curr = events[i];
-      const next = events[i + 1];
-      if (
-        (curr.event === "ThinkStart" || curr.phase === "think") &&
-        (next.event === "ThinkStart" || next.phase === "think")
-      ) {
-        wastedIterations++;
-      }
-    }
+    // Wasted iterations: kernel steps with strategy "reactive:main" that fired back-to-back
+    // without an act phase between them (think → think with no act)
+    const stepRecords = metrics.filter((r) => r.name === "reasoning.steps");
+    const actCount = metrics
+      .filter((r) => r.name === "execution.phase.count")
+      .filter((r) => (r.labels as Record<string, string> | undefined)?.phase === "act")
+      .reduce((sum, r) => sum + (r.value as number), 0);
+    // Steps beyond the act count are potentially wasted (no tool was executed)
+    const wastedIterations = Math.max(0, stepRecords.length - actCount - 1);
 
     return { iterations, finalQualityScore, contextPeakRatio, duplicateToolCalls, wastedIterations };
   } catch {
