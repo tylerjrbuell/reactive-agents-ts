@@ -48,6 +48,12 @@ export interface PendingGuidance {
   readonly oracleGuidance?: string;
   /** Recovery hint when tool failures or errors occurred on the previous round. */
   readonly errorRecovery?: string;
+  /** Post-act harness reminder (e.g. "you must still call X", "required tools satisfied"). */
+  readonly actReminder?: string;
+  /** Adapter quality-check hint rendered before accepting a prose final answer. */
+  readonly qualityGateHint?: string;
+  /** Reserved for Task 17 — evidence grounding redirect when claims lack tool support. */
+  readonly evidenceGap?: string;
 }
 
 // ── KernelMeta — typed strategy-specific metadata bag ─────────────────────────
@@ -104,6 +110,8 @@ export interface KernelMeta {
   readonly qualityCheckDone?: boolean;
   readonly gateBlockedTools?: readonly string[];
   readonly outputSynthesized?: boolean;
+  /** True once the "required tools satisfied" completion nudge has been emitted for this run. */
+  readonly completionNudgeSent?: boolean;
   readonly outputFormatValidated?: boolean;
   readonly outputFormatReason?: string;
   readonly evaluator?: string;

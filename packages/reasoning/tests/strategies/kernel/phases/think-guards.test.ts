@@ -121,12 +121,9 @@ describe("guardRequiredToolsBlock", () => {
     expect(result).toBeDefined();
     expect(result!.status).toBe("thinking");
     expect(result!.iteration).toBe(1);
-    // messages should have a user turn with the block message
-    const lastMsg = result!.messages[result!.messages.length - 1];
-    expect(lastMsg.role).toBe("user");
-    expect((lastMsg as { content: string }).content).toContain(
-      "Required tools not yet satisfied",
-    );
+    // Block signal flows through pendingGuidance instead of a USER message.
+    expect(result!.pendingGuidance?.requiredToolsPending).toBeDefined();
+    expect((result!.pendingGuidance?.requiredToolsPending ?? []).length).toBeGreaterThan(0);
     // Tokens + cost carried forward
     expect(result!.tokens).toBe(100);
     expect(result!.cost).toBeCloseTo(0.001);
@@ -187,10 +184,9 @@ describe("guardPrematureFinalAnswer", () => {
 
     // If getMissingRequiredToolsFromSteps uses a different step shape than we
     // provided, the guard may still redirect — accept either behavior as long
-    // as it is consistent (redirect must then include a proper user message).
+    // as it is consistent (redirect must then expose pendingGuidance.requiredToolsPending).
     if (result !== undefined) {
-      const lastMsg = result.messages[result.messages.length - 1];
-      expect(lastMsg.role).toBe("user");
+      expect(result.pendingGuidance?.requiredToolsPending).toBeDefined();
     }
   });
 
@@ -210,12 +206,9 @@ describe("guardPrematureFinalAnswer", () => {
 
     expect(result).toBeDefined();
     expect(result!.iteration).toBe(1);
-    const lastMsg = result!.messages[result!.messages.length - 1];
-    expect(lastMsg.role).toBe("user");
-    expect((lastMsg as { content: string }).content).toContain(
-      "Not done yet",
-    );
-    expect((lastMsg as { content: string }).content).toContain("write_file");
+    // Premature-final-answer redirect flows through pendingGuidance.requiredToolsPending.
+    const pending = result!.pendingGuidance?.requiredToolsPending ?? [];
+    expect(pending).toContain("write_file");
   });
 
   it("returns undefined when iteration budget is exhausted", () => {
@@ -275,11 +268,8 @@ describe("guardCompletionGaps", () => {
       expect(result.iteration).toBe(1);
       expect(result.tokens).toBe(25);
       expect(result.cost).toBeCloseTo(0.0005);
-      const lastMsg = result.messages[result.messages.length - 1];
-      expect(lastMsg.role).toBe("user");
-      expect((lastMsg as { content: string }).content).toContain(
-        "Not done yet",
-      );
+      const oracle = result.pendingGuidance?.oracleGuidance ?? "";
+      expect(oracle).toContain("Not done yet");
     }
   });
 
@@ -366,11 +356,8 @@ describe("guardQualityCheck", () => {
     expect(result!.cost).toBeCloseTo(0.002);
     // Sets qualityCheckDone so it never fires twice
     expect(result!.meta.qualityCheckDone).toBe(true);
-    const lastMsg = result!.messages[result!.messages.length - 1];
-    expect(lastMsg.role).toBe("user");
-    expect((lastMsg as { content: string }).content).toContain(
-      "Review",
-    );
+    // Quality-check hint flows through pendingGuidance.qualityGateHint.
+    expect(result!.pendingGuidance?.qualityGateHint ?? "").toContain("Review");
   });
 
   it("returns undefined when adapter.qualityCheck returns nothing", () => {
@@ -478,10 +465,10 @@ describe("guardDiminishingReturns", () => {
     expect(result!.iteration).toBe(1);
     expect(result!.tokens).toBe(150);
     expect(result!.cost).toBeCloseTo(0.003);
-    const lastMsg = result!.messages[result!.messages.length - 1];
-    expect(lastMsg.role).toBe("user");
-    expect((lastMsg as { content: string }).content).toContain("diminishing returns");
-    expect((lastMsg as { content: string }).content).toContain("write_file");
+    // Diminishing-returns nudge flows through pendingGuidance.oracleGuidance.
+    const oracle = result!.pendingGuidance?.oracleGuidance ?? "";
+    expect(oracle).toContain("diminishing returns");
+    expect(oracle).toContain("write_file");
   });
 
   it("returns undefined when observations are highly novel (> 20%)", () => {

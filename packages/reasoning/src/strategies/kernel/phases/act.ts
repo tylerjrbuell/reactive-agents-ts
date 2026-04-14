@@ -699,7 +699,7 @@ export function handleActing(
       // Append: assistant message (thought + tool_use blocks) + tool_result messages.
       // This gives the next iteration a proper multi-turn conversation history
       // instead of a packed text blob when useNativeFC is active.
-      const newConversationHistory: readonly KernelMessage[] = (() => {
+      const conversationAssembly = (() => {
         const prior = state.messages as readonly KernelMessage[];
 
         // Collect action/observation pairs added by this acting phase.
@@ -738,7 +738,7 @@ export function handleActing(
 
         if (toolCallsForHistory.length === 0) {
           // No tool calls actually appended (all skipped/blocked) — don't add to history
-          return prior;
+          return { messages: prior, actReminder: undefined as string | undefined, errorRecovery: undefined as string | undefined, completionNudgeSent: false };
         }
 
         const assistantMsg: KernelMessage = {
@@ -746,6 +746,7 @@ export function handleActing(
           content: assistantThought,
           toolCalls: toolCallsForHistory,
         };
+        const baseMessages = [...prior, assistantMsg, ...toolResultMessages];
 
         // Append progress summary for reactive strategy: tells the model what it did
         // and what's left. This is critical for local/mid models that don't infer
@@ -787,8 +788,7 @@ export function handleActing(
           const progressContent = synthesisMsg
             ?? `You must still call: ${missingWithCounts.join(", ")}. Call ${missing[0]} now with the appropriate arguments.`;
 
-          const progressMsg: KernelMessage = { role: "user", content: progressContent };
-          return [...prior, assistantMsg, ...toolResultMessages, progressMsg];
+          return { messages: baseMessages, actReminder: progressContent, errorRecovery: undefined, completionNudgeSent: false };
         }
 
         // All required tools called — tell model to finish (but not while previews still hide data behind recall).
@@ -801,10 +801,7 @@ export function handleActing(
           const hasMultiQuantity = Object.values(reqQuantities ?? {}).some((n) => n > 1);
 
           if (hasMultiQuantity) {
-            const alreadySentCompletion = prior.some(
-              (m) => m.role === "user" && typeof m.content === "string" &&
-                m.content.startsWith(REQUIRED_TOOLS_SATISFIED_PREFIX),
-            );
+            const alreadySentCompletion = state.meta.completionNudgeSent === true;
             if (!alreadySentCompletion) {
               const overflowPreview = toolResultMessages.some(
                 (m) => typeof m.content === "string" && observationReferencesStoredOverflow(m.content),
@@ -816,8 +813,7 @@ export function handleActing(
                 overflowPreview && recallAvailable
                   ? `${REQUIRED_TOOLS_SATISFIED_PREFIX}. The observations above are compressed previews; the real command output is stored under keys like _tool_result_1. Before summarizing, call recall("<that-key>", full: true) for each key shown in the [STORED: …] header. Do not invent CLI flags, subcommands, or options — only report text you retrieved via recall.`
                   : `${REQUIRED_TOOLS_SATISFIED_PREFIX}. Review ALL of the tool results above carefully — extract the specific data points you need from each one. Then give your FINAL ANSWER using only data from these results.`;
-              const finishMsg: KernelMessage = { role: "user", content: finishText };
-              return [...prior, assistantMsg, ...toolResultMessages, finishMsg];
+              return { messages: baseMessages, actReminder: finishText, errorRecovery: undefined, completionNudgeSent: true };
             }
 
             // Completion gate already sent but this turn had errors — nudge to retry or finish.
@@ -826,28 +822,31 @@ export function handleActing(
                 (s.metadata?.observationResult as { success?: boolean } | undefined)?.success === false,
             );
             if (thisRoundHadErrors) {
-              const retryMsg: KernelMessage = {
-                role: "user",
-                content: "One or more tool calls above failed. If you used a wrong tool name, retry with the correct tool name shown in the system prompt. If you have enough data, give your FINAL ANSWER now.",
-              };
-              return [...prior, assistantMsg, ...toolResultMessages, retryMsg];
+              const retryText = "One or more tool calls above failed. If you used a wrong tool name, retry with the correct tool name shown in the system prompt. If you have enough data, give your FINAL ANSWER now.";
+              return { messages: baseMessages, actReminder: undefined, errorRecovery: retryText, completionNudgeSent: false };
             }
           }
         }
 
-        return [...prior, assistantMsg, ...toolResultMessages];
+        return { messages: baseMessages, actReminder: undefined, errorRecovery: undefined, completionNudgeSent: false };
       })();
 
+      const newConversationHistory = conversationAssembly.messages;
+      const actGuidance: { actReminder?: string; errorRecovery?: string } = {};
+      if (conversationAssembly.actReminder) actGuidance.actReminder = conversationAssembly.actReminder;
+      if (conversationAssembly.errorRecovery) actGuidance.errorRecovery = conversationAssembly.errorRecovery;
+      const hasActGuidance = actGuidance.actReminder !== undefined || actGuidance.errorRecovery !== undefined;
+
       // All native tool calls executed — transition back to thinking.
-      // Clear pendingGuidance: guidance set before act phase fires is stale
-      // by the time the next think turn begins — think.ts re-builds from state.
+      // Any harness signals raised this round flow via pendingGuidance — think.ts
+      // reads and clears them at the start of the next turn.
       return transitionState(state, {
         steps: allSteps,
         toolsUsed: newToolsUsed,
         scratchpad: mergedScratchpad,
         messages: newConversationHistory,
         status: "thinking",
-        pendingGuidance: undefined,
+        pendingGuidance: hasActGuidance ? actGuidance : undefined,
         iteration: state.iteration + 1,
         lastMetaToolCall,
         consecutiveMetaToolCount,
@@ -856,6 +855,7 @@ export function handleActing(
           pendingNativeToolCalls: undefined,
           lastThought: undefined,
           lastThinking: undefined,
+          ...(conversationAssembly.completionNudgeSent ? { completionNudgeSent: true } : {}),
         },
       });
     }

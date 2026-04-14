@@ -204,6 +204,9 @@ export function handleThinking(
       icsGuidance: pending?.icsGuidance,
       oracleGuidance: pending?.oracleGuidance,
       errorRecovery: pending?.errorRecovery,
+      actReminder: pending?.actReminder,
+      qualityGateHint: pending?.qualityGateHint,
+      evidenceGap: pending?.evidenceGap,
     };
     const guidanceSection = buildGuidanceSection(guidance);
     const systemPromptText = guidanceSection

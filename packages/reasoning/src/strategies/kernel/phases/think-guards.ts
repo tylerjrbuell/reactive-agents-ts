@@ -34,7 +34,6 @@ import {
   transitionState,
   type KernelState,
   type KernelInput,
-  type KernelMessage,
   type KernelHooks,
 } from "../kernel-state.js";
 import type { ReasoningStep } from "../../../types/index.js";
@@ -138,10 +137,6 @@ export function guardRequiredToolsBlock(
   const blockStep = makeStep("observation", blockMsg, {
     observationResult: makeObservationResult("system", false, blockMsg),
   });
-  const blockMessages: readonly KernelMessage[] = [
-    ...(state.messages as readonly KernelMessage[]),
-    { role: "user", content: blockMsg },
-  ];
 
   const prevBlocked =
     (state.meta.gateBlockedTools as readonly string[] | undefined) ?? [];
@@ -149,7 +144,7 @@ export function guardRequiredToolsBlock(
 
   return transitionState(state, {
     steps: [...newSteps, blockStep],
-    messages: blockMessages,
+    pendingGuidance: { requiredToolsPending: missing },
     tokens: newTokens,
     cost: newCost,
     status: "thinking",
@@ -215,15 +210,11 @@ export function guardPrematureFinalAnswer(
     observationResult: makeObservationResult("system", false, redirectMsg),
   });
 
-  // Append redirect to BOTH steps (observability) AND messages (what LLM sees)
-  const redirectMessages = [
-    ...(state.messages as readonly KernelMessage[]),
-    { role: "user" as const, content: redirectMsg },
-  ];
-
+  // Steps[] keeps the observability record; the LLM sees this redirect via
+  // pendingGuidance → the Guidance: section on the next turn, not as a USER turn.
   return transitionState(state, {
     steps: [...newSteps, redirectStep],
-    messages: redirectMessages,
+    pendingGuidance: { requiredToolsPending: missingRequired },
     tokens: newTokens,
     cost: newCost,
     iteration: state.iteration + 1,
@@ -263,13 +254,9 @@ export function guardCompletionGaps(
   const gapStep = makeStep("observation", gapMsg, {
     observationResult: makeObservationResult("system", false, gapMsg),
   });
-  const gapMessages = [
-    ...(state.messages as readonly KernelMessage[]),
-    { role: "user" as const, content: gapMsg },
-  ];
   return transitionState(state, {
     steps: [...newSteps, gapStep],
-    messages: gapMessages,
+    pendingGuidance: { oracleGuidance: gapMsg },
     tokens: newTokens,
     cost: newCost,
     iteration: state.iteration + 1,
@@ -312,13 +299,9 @@ export function guardQualityCheck(
   const qcStep = makeStep("observation", qcMsg, {
     observationResult: makeObservationResult("system", true, qcMsg),
   });
-  const qcMessages = [
-    ...(state.messages as readonly KernelMessage[]),
-    { role: "user" as const, content: qcMsg },
-  ];
   return transitionState(state, {
     steps: [...newSteps, qcStep],
-    messages: qcMessages,
+    pendingGuidance: { qualityGateHint: qcMsg },
     tokens: newTokens,
     cost: newCost,
     iteration: state.iteration + 1,
@@ -393,21 +376,16 @@ export function guardDiminishingReturns(
     }),
   ];
 
-  const updatedMessages = [
-    ...(state.messages as readonly KernelMessage[]),
-    { role: "user" as const, content: nudgeMessage },
-  ];
-
   // Keep adapterOrDefaultNudge referenced so the caller's fallback path is
   // documented — but the novelty override replaces it when this guard fires.
   void adapterOrDefaultNudge;
 
   return transitionState(state, {
     steps: finalSteps,
+    pendingGuidance: { oracleGuidance: nudgeMessage },
     tokens: newTokens,
     cost: newCost,
     iteration: state.iteration + 1,
     priorThought: thinkingContent || state.priorThought,
-    messages: updatedMessages,
   });
 }

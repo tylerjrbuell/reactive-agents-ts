@@ -36,6 +36,12 @@ export interface GuidanceContext {
   readonly oracleGuidance?: string;
   /** Recovery hint when an error occurred on the previous round. */
   readonly errorRecovery?: string;
+  /** Post-act harness reminder surfaced after a tool round (progress / finish cues). */
+  readonly actReminder?: string;
+  /** Adapter quality-check hint rendered before accepting a prose final answer. */
+  readonly qualityGateHint?: string;
+  /** Reserved for Task 17 — evidence grounding redirect when claims lack tool support. */
+  readonly evidenceGap?: string;
 }
 
 /** Output of ContextManager.build() — the only two things the LLM sees. */
@@ -246,6 +252,20 @@ export function buildGuidanceSection(guidance: GuidanceContext): string {
 
   if (guidance.errorRecovery) {
     signals.push(guidance.errorRecovery);
+  }
+
+  if (guidance.actReminder) {
+    signals.push(guidance.actReminder);
+  }
+
+  if (guidance.qualityGateHint) {
+    signals.push(guidance.qualityGateHint);
+  }
+
+  if (guidance.evidenceGap) {
+    signals.push(
+      `Your answer contains claims not supported by tool results: ${guidance.evidenceGap}. Revise using only data from the Observations above.`,
+    );
   }
 
   if (signals.length === 0) return "";
