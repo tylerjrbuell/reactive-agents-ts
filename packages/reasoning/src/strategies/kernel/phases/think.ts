@@ -32,6 +32,7 @@ import {
   guardCompletionGaps,
   guardQualityCheck,
   guardDiminishingReturns,
+  guardEvidenceGrounding,
 } from "./think-guards.js";
 
 import type { ToolSchema } from "../utils/tool-formatting.js";
@@ -595,7 +596,8 @@ export function handleThinking(
         const redirect =
           guardPrematureFinalAnswer(input, state, profile, adapter, newSteps, newTokens, newCost) ??
           guardCompletionGaps(input, state, newSteps, newTokens, newCost) ??
-          guardQualityCheck(input, state, profile, adapter, newSteps, newTokens, newCost);
+          guardQualityCheck(input, state, profile, adapter, newSteps, newTokens, newCost) ??
+          guardEvidenceGrounding(state, resolverResult.content, newSteps, newTokens, newCost);
         if (redirect) return redirect;
 
         // All checks pass — assemble final output

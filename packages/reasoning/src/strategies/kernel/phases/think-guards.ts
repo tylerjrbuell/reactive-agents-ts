@@ -22,6 +22,10 @@ import {
   type ToolCallSpec,
 } from "@reactive-agents/tools";
 import { computeNoveltyRatio } from "../utils/tool-formatting.js";
+import {
+  buildEvidenceCorpusFromSteps,
+  validateOutputGroundedInEvidence,
+} from "../utils/evidence-grounding.js";
 import { gateNativeToolCallsForRequiredTools } from "../utils/tool-gating.js";
 import {
   buildSuccessfulToolCallCounts,
@@ -387,5 +391,70 @@ export function guardDiminishingReturns(
     cost: newCost,
     iteration: state.iteration + 1,
     priorThought: thinkingContent || state.priorThought,
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 6. guardEvidenceGrounding
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Fires on the final-answer path when the model's output contains dollar amounts
+ * that are not present in the tool observation corpus (i.e. potential hallucinations).
+ *
+ * Evidence corpus is built from `extractedFact` fields on step metadata first
+ * (dense, signal-rich values set by extractFactDeterministic in act.ts), then
+ * falls back to raw observation content when extracted facts are sparse.
+ *
+ * Guards:
+ *  - Skips when iteration === 0 (no tool results yet)
+ *  - Skips when `meta.evidenceGroundingDone` is set (fires at most once per run)
+ *  - Skips when the evidence corpus is too thin (< 20 chars)
+ *  - Skips when no dollar amounts appear in the output
+ *
+ * Returns `undefined` when all checks pass — the caller then assembles the final output.
+ */
+export function guardEvidenceGrounding(
+  state: KernelState,
+  thought: string,
+  newSteps: readonly ReasoningStep[],
+  newTokens: number,
+  newCost: number,
+): KernelState | undefined {
+  // Only run once and only when there are prior iterations with real observations.
+  if (state.iteration <= 0) return undefined;
+  if (state.meta.evidenceGroundingDone) return undefined;
+
+  // Prefer extracted facts (compact, signal-rich) over raw observation bodies.
+  const extractedFacts = newSteps
+    .filter((s) => s.type === "observation")
+    .map((s) => (s.metadata?.extractedFact as string | undefined) ?? "")
+    .filter(Boolean)
+    .join("\n");
+
+  const evidenceCorpus =
+    extractedFacts.length >= 20
+      ? extractedFacts
+      : buildEvidenceCorpusFromSteps(newSteps);
+
+  const check = validateOutputGroundedInEvidence(thought, evidenceCorpus);
+  if (check.ok) return undefined;
+
+  const violationsMsg =
+    `Output contains claims not found in tool observations:\n` +
+    check.violations.map((v) => `• ${v}`).join("\n") +
+    `\nRevise your answer to use only figures from the tool results.`;
+
+  const gapStep = makeStep("observation", violationsMsg, {
+    observationResult: makeObservationResult("system", false, violationsMsg),
+  });
+
+  return transitionState(state, {
+    steps: [...newSteps, gapStep],
+    pendingGuidance: { evidenceGap: violationsMsg },
+    tokens: newTokens,
+    cost: newCost,
+    iteration: state.iteration + 1,
+    meta: { ...state.meta, evidenceGroundingDone: true },
   });
 }

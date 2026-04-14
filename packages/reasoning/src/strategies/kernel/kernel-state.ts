@@ -109,6 +109,7 @@ export interface KernelMeta {
 
   // ── Quality / output gates ──
   readonly qualityCheckDone?: boolean;
+  readonly evidenceGroundingDone?: boolean;
   readonly gateBlockedTools?: readonly string[];
   readonly outputSynthesized?: boolean;
   /** True once the "required tools satisfied" completion nudge has been emitted for this run. */
