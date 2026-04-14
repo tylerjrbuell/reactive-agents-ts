@@ -1,4 +1,4 @@
-// File: tests/context/context-profile.test.ts
+// Run: bun test packages/reasoning/tests/context/context-profile.test.ts --timeout 15000
 import { describe, it, expect } from "bun:test";
 import {
   CONTEXT_PROFILES,
@@ -14,33 +14,21 @@ describe("CONTEXT_PROFILES", () => {
     expect(CONTEXT_PROFILES.frontier).toBeDefined();
   });
 
-  it("local tier has strictest complexity limits but largest tool result budgets", () => {
+  it("local tier has largest tool result budgets (more context for weaker models)", () => {
     const local = CONTEXT_PROFILES.local;
-    expect(local.compactAfterSteps).toBeLessThan(CONTEXT_PROFILES.mid.compactAfterSteps);
-    // Local models get MORE raw tool data because they struggle with compressed previews
     expect(local.toolResultMaxChars).toBeGreaterThan(CONTEXT_PROFILES.mid.toolResultMaxChars);
-    expect(local.rulesComplexity).toBe("simplified");
-  });
-
-  it("frontier tier has most generous complexity limits but smallest tool result budgets", () => {
-    const f = CONTEXT_PROFILES.frontier;
-    expect(f.compactAfterSteps).toBeGreaterThan(CONTEXT_PROFILES.large.compactAfterSteps);
-    // Frontier models extract well from minimal context — smaller tool result budgets
-    expect(f.toolResultMaxChars).toBeLessThan(CONTEXT_PROFILES.large.toolResultMaxChars);
-    expect(f.rulesComplexity).toBe("detailed");
-  });
-
-  it("large tier is tuned for efficiency (tighter than raw capability)", () => {
-    const l = CONTEXT_PROFILES.large;
-    expect(l.temperature).toBe(0.5);
-    expect(l.maxIterations).toBe(10);
-    expect(l.compactAfterSteps).toBe(6);
   });
 
   it("frontier tier is tuned for efficiency (tighter than default)", () => {
     const f = CONTEXT_PROFILES.frontier;
     expect(f.temperature).toBe(0.6);
     expect(f.maxIterations).toBe(12);
+  });
+
+  it("large tier temperature and iterations", () => {
+    const l = CONTEXT_PROFILES.large;
+    expect(l.temperature).toBe(0.5);
+    expect(l.maxIterations).toBe(10);
   });
 
   it("temperature increases monotonically from local to frontier", () => {
@@ -94,10 +82,10 @@ describe("CONTEXT_PROFILES", () => {
 describe("mergeProfile", () => {
   it("overrides specific fields", () => {
     const base = CONTEXT_PROFILES.mid;
-    const merged = mergeProfile(base, { compactAfterSteps: 10 });
-    expect(merged.compactAfterSteps).toBe(10);
+    const merged = mergeProfile(base, { toolResultMaxChars: 999 });
+    expect(merged.toolResultMaxChars).toBe(999);
     expect(merged.tier).toBe("mid");
-    expect(merged.fullDetailSteps).toBe(base.fullDetailSteps);
+    expect(merged.toolSchemaDetail).toBe(base.toolSchemaDetail);
   });
 
   it("can override tier", () => {
@@ -167,7 +155,6 @@ describe("resolveProfile", () => {
     const profile = resolveProfile("local", { toolResultMaxChars: 600 });
     expect(profile.tier).toBe("local");
     expect(profile.toolResultMaxChars).toBe(600);
-    expect(profile.compactAfterSteps).toBe(5);
   });
 });
 

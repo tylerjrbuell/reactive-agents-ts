@@ -88,34 +88,25 @@ export { executeTreeOfThought } from "./strategies/tree-of-thought.js";
 export { executeAdaptive } from "./strategies/adaptive.js";
 export type { StrategyOutcome } from "./strategies/adaptive.js";
 
-// ─── Context Profiles & Budgets ───
+// ─── Context Profiles ───
 export {
   ModelTier,
   ContextProfileSchema,
   CONTEXT_PROFILES,
   mergeProfile,
   resolveProfile,
-  ContextBudgetSchema,
-  BudgetSectionSchema,
-  allocateBudget,
-  estimateTokens,
-  wouldExceedBudget,
-  trackUsage,
-  scoreContextItem,
-  allocateContextBudget,
+  buildStaticContext,
+  buildEnvironmentContext,
+  buildRules,
 } from "./context/index.js";
 export type {
   ContextProfile,
-  ContextBudget,
-  BudgetSection,
-  ContextItem,
-  MemoryItem,
-  ScoringContext,
-  BudgetResult,
+  StaticContextInput,
 } from "./context/index.js";
 
 // ─── Message Window Compaction ───
-export { applyMessageWindow } from "./context/message-window.js";
+export { applyMessageWindowWithCompact } from "./context/message-window.js";
+export type { CompactOptions, CompactResult } from "./context/message-window.js";
 
 // ─── Intelligent Context Synthesis (ICS) ───
 export type {

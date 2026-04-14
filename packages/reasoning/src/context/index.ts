@@ -10,36 +10,14 @@ export type { ContextProfile } from "./context-profile.js";
 export { resolveProfile } from "./profile-resolver.js";
 
 export {
-  ContextBudgetSchema,
-  BudgetSectionSchema,
-  allocateBudget,
-  estimateTokens,
-  wouldExceedBudget,
-  trackUsage,
-} from "./context-budget.js";
-export type { ContextBudget, BudgetSection } from "./context-budget.js";
-
-export {
-  formatStepFull,
-  formatStepSummary,
-  shouldPreserve,
-  clearOldToolResults,
-  groupToolSequences,
-  progressiveSummarize,
-} from "./compaction.js";
-
-export {
-  scoreContextItem,
-  allocateContextBudget,
   buildStaticContext,
-  buildDynamicContext,
   buildEnvironmentContext,
+  buildRules,
 } from "./context-engine.js";
-export type {
-  ContextItem,
-  MemoryItem,
-  ScoringContext,
-  BudgetResult,
-  StaticContextInput,
-  DynamicContextInput,
-} from "./context-engine.js";
+export type { StaticContextInput } from "./context-engine.js";
+
+export { applyMessageWindowWithCompact } from "./message-window.js";
+export type { CompactOptions, CompactResult } from "./message-window.js";
+
+export { ContextManager } from "./context-manager.js";
+export type { GuidanceContext, ContextManagerOutput } from "./context-manager.js";
