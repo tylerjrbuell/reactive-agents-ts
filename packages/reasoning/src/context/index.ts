@@ -17,7 +17,6 @@ export {
 export type { StaticContextInput } from "./context-engine.js";
 
 export { applyMessageWindowWithCompact } from "./message-window.js";
-export type { CompactOptions, CompactResult } from "./message-window.js";
 
 export { ContextManager } from "./context-manager.js";
 export type { GuidanceContext, ContextManagerOutput } from "./context-manager.js";

@@ -183,12 +183,6 @@ export interface KernelState {
   readonly pendingGuidance?: PendingGuidance;
 
   /**
-   * Tool result message IDs whose content has been microcompacted.
-   * Content is never re-stripped once frozen — preserves API cache prefix.
-   */
-  readonly frozenToolResultIds: ReadonlySet<string>;
-
-  /**
    * Count of consecutive iterations with token-delta < 500.
    * Used by the token-delta diminishing-returns guard.
    */
@@ -505,7 +499,6 @@ export function initialKernelState(opts: KernelRunOptions): KernelState {
     controllerDecisionLog: [],
     messages: [],
     pendingGuidance: undefined,
-    frozenToolResultIds: new Set<string>(),
     consecutiveLowDeltaCount: 0,
     readyToAnswerNudgeCount: 0,
     lastMetaToolCall: undefined,
@@ -529,7 +522,6 @@ export function transitionState(
     // Preserve non-spreadable collection types — patch wins if present
     toolsUsed: patch.toolsUsed ?? state.toolsUsed,
     scratchpad: patch.scratchpad ?? state.scratchpad,
-    frozenToolResultIds: patch.frozenToolResultIds ?? state.frozenToolResultIds,
   };
 }
 
@@ -537,13 +529,12 @@ export function transitionState(
 
 /** JSON-safe representation of KernelState (Set → array, Map → object) */
 export interface SerializedKernelState
-  extends Omit<KernelState, "toolsUsed" | "scratchpad" | "steps" | "messages" | "frozenToolResultIds"> {
+  extends Omit<KernelState, "toolsUsed" | "scratchpad" | "steps" | "messages"> {
   readonly toolsUsed: readonly string[];
   readonly scratchpad: Readonly<Record<string, string>>;
   readonly steps: readonly ReasoningStep[];
   readonly messages: readonly KernelMessage[];
   readonly controllerDecisionLog: readonly string[];
-  readonly frozenToolResultIds: readonly string[];
 }
 
 /**
@@ -570,7 +561,6 @@ export function serializeKernelState(state: KernelState): SerializedKernelState 
     meta: state.meta,
     controllerDecisionLog: state.controllerDecisionLog,
     pendingGuidance: state.pendingGuidance,
-    frozenToolResultIds: [...state.frozenToolResultIds].sort(),
     consecutiveLowDeltaCount: state.consecutiveLowDeltaCount,
   };
 }
@@ -599,7 +589,6 @@ export function deserializeKernelState(raw: SerializedKernelState): KernelState 
     meta: raw.meta,
     controllerDecisionLog: (raw.controllerDecisionLog as string[]) ?? [],
     pendingGuidance: raw.pendingGuidance,
-    frozenToolResultIds: new Set(raw.frozenToolResultIds ?? []),
     consecutiveLowDeltaCount: raw.consecutiveLowDeltaCount,
   };
 }

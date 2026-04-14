@@ -59,11 +59,6 @@ export interface ContextManagerOutput {
   readonly systemPrompt: string;
   /** The curated conversation message thread for this iteration. */
   readonly messages: LLMMessage[];
-  /**
-   * State updated by message-window compaction (frozenToolResultIds).
-   * Callers should use this in place of the input state for subsequent steps.
-   */
-  readonly updatedState: KernelState;
 }
 
 /** Optional extras for ContextManager.build(). */
@@ -116,17 +111,12 @@ export const ContextManager = {
       options,
     );
     if (adapter) {
-      const { messages, updatedState } = buildConversationMessages(
-        state,
-        input,
-        profile,
-        adapter,
-      );
-      return { systemPrompt, messages, updatedState };
+      const messages = buildConversationMessages(state, input, profile, adapter);
+      return { systemPrompt, messages };
     }
     // Adapter-less path (tests / tools) — plain conversion, no compaction.
     const messages = buildCuratedMessages(state, profile);
-    return { systemPrompt, messages, updatedState: state };
+    return { systemPrompt, messages };
   },
 };
 

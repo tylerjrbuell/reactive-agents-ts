@@ -26,11 +26,6 @@ describe("KernelState new fields", () => {
     expect(state.pendingGuidance).toBeUndefined();
   });
 
-  it("has frozenToolResultIds as empty set by default", () => {
-    const state = initialKernelState(defaultOpts);
-    expect(state.frozenToolResultIds.size).toBe(0);
-  });
-
   it("does not have synthesizedContext field", () => {
     const state = initialKernelState(defaultOpts);
     expect("synthesizedContext" in state).toBe(false);

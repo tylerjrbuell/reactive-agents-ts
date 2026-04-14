@@ -13,7 +13,6 @@ import type { ContextProfile } from "../../../context/context-profile.js";
 import { applyMessageWindowWithCompact } from "../../../context/message-window.js";
 import type { ToolSchema } from "../utils/tool-formatting.js";
 import type { KernelState, KernelMessage, KernelInput } from "../kernel-state.js";
-import { transitionState } from "../kernel-state.js";
 import { getMissingRequiredToolsFromSteps } from "../utils/requirement-state.js";
 import { META_TOOLS as META_TOOL_NAMES } from "../kernel-constants.js";
 
@@ -116,51 +115,36 @@ export function buildToolSchemas(
 
 // ── buildConversationMessages ─────────────────────────────────────────────────
 
-export interface BuildConversationMessagesResult {
-  messages: LLMMessage[];
-  /** The updated state after compaction. */
-  updatedState: KernelState;
-}
-
 /**
  * Build the conversation message list for this LLM turn.
  *
  * Applies the sliding message window + task framing on the first iteration.
- * Guidance signals are now rendered in the system prompt Guidance: section by think.ts
- * via pendingGuidance — not injected as user messages here.
+ * Guidance signals are rendered in the system prompt Guidance: section by
+ * think.ts via pendingGuidance — not injected as user messages here.
  *
  * Tool results are never auto-forwarded here — they live in the message thread
- * as-is. The ContextManager (Phase 3+) will curate what the model sees.
+ * as-is. Distilled facts (observation extractedFact) are surfaced in the
+ * system prompt's Prior work / Observations section, so sliding-window
+ * compaction is safe without recall hints.
  */
 export function buildConversationMessages(
   state: KernelState,
   input: KernelInput,
   profile: ContextProfile,
   adapter: ProviderAdapter,
-): BuildConversationMessagesResult {
-  let currentState = state;
-  const { messages: compactedMessages, newlyFrozenIds } = applyMessageWindowWithCompact(
-    currentState.messages,
-    {
-      tier: profile.tier ?? "mid",
-      maxTokens:
-        (input.contextProfile as { maxTokens?: number } | undefined)?.maxTokens ??
-        Number.MAX_SAFE_INTEGER,
-      frozenToolResultIds: currentState.frozenToolResultIds,
-    },
+): LLMMessage[] {
+  const compactedMessages = applyMessageWindowWithCompact(
+    state.messages,
+    profile.tier ?? "mid",
+    (input.contextProfile as { maxTokens?: number } | undefined)?.maxTokens ??
+      Number.MAX_SAFE_INTEGER,
   );
-  // Persist newly frozen IDs into state
-  if (newlyFrozenIds.size > 0) {
-    currentState = transitionState(currentState, {
-      frozenToolResultIds: new Set([...currentState.frozenToolResultIds, ...newlyFrozenIds]),
-    });
-  }
   let workingMessages = compactedMessages;
 
   // taskFraming hook — on first iteration, let adapter annotate the task message
   // to help local models understand the full sequence of steps required.
   if (
-    currentState.iteration === 0 &&
+    state.iteration === 0 &&
     workingMessages.length === 1 &&
     workingMessages[0]?.role === "user"
   ) {
@@ -174,7 +158,5 @@ export function buildConversationMessages(
     }
   }
 
-  const finalMessages: LLMMessage[] = (workingMessages as readonly KernelMessage[]).map(toProviderMessage);
-
-  return { messages: finalMessages, updatedState: currentState };
+  return (workingMessages as readonly KernelMessage[]).map(toProviderMessage);
 }

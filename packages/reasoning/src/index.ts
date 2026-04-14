@@ -106,7 +106,6 @@ export type {
 
 // ─── Message Window Compaction ───
 export { applyMessageWindowWithCompact } from "./context/message-window.js";
-export type { CompactOptions, CompactResult } from "./context/message-window.js";
 
 // ─── Intelligent Context Synthesis (ICS) ───
 export type {

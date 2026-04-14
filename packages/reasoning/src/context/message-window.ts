@@ -10,34 +10,25 @@ const KEEP_FULL_TURNS_BY_TIER: Record<string, number> = {
   frontier: 8,
 }
 
-export interface CompactOptions {
-  readonly tier: string
-  readonly maxTokens: number
-  readonly frozenToolResultIds: ReadonlySet<string>
-  readonly keepFullTurns?: number
-}
-
-export interface CompactResult {
-  readonly messages: readonly KernelMessage[]
-  readonly newlyFrozenIds: ReadonlySet<string>
-}
-
 /**
- * Two-pass message compaction:
+ * Sliding message window.
  *
- * Pass 1 — Microcompact: strip content of tool_result messages older than
- *           keepFullTurns turns, unless ID is in frozenToolResultIds.
- *           Returns newlyFrozenIds for the caller to persist in state.
+ * Only fires when estimated tokens exceed 75% of maxTokens. When over budget:
+ *   - Keep the first user message (the original task) as the API cache prefix.
+ *   - Keep the most recent N turns in full (N tier-adaptive).
+ *   - Replace older turns with a compact summary: `[Prior: called X → brief]`.
  *
- * Pass 2 — Sliding window: keep first user message (task) + last N turns full.
- *           Older turns get summarized into "[Prior work: called X → snippet]".
- *           Only fires when over budget.
+ * Recall is intentionally off the critical path — the Observations section in
+ * the system prompt (populated from step.metadata.extractedFact) is the safety
+ * net for distilled data from older turns.
  */
 export function applyMessageWindowWithCompact(
   messages: readonly KernelMessage[],
-  opts: CompactOptions,
-): CompactResult {
-  const keepFullTurns = opts.keepFullTurns ?? KEEP_FULL_TURNS_BY_TIER[opts.tier] ?? 3
+  tier: string,
+  maxTokens: number,
+  keepFullTurnsOverride?: number,
+): KernelMessage[] {
+  const keepFullTurns = keepFullTurnsOverride ?? KEEP_FULL_TURNS_BY_TIER[tier] ?? 3
 
   // ── Identify turn groups (assistant+tool_result pairs) ──────────────────
   type TurnGroup = { assistantIdx: number; resultIdxs: number[] }
@@ -55,44 +46,19 @@ export function applyMessageWindowWithCompact(
   }
   if (currentTurn) turns.push(currentTurn)
 
-  // ── Pass 1: Microcompact old turns ──────────────────────────────────────
+  // ── Estimate tokens (1 char ≈ 0.25 tokens) ─────────────────────────────
   const mutable = [...messages] as KernelMessage[]
-  const newlyFrozenIds = new Set<string>()
-  const oldTurns = turns.slice(0, Math.max(0, turns.length - keepFullTurns))
-
-  for (const turn of oldTurns) {
-    for (const idx of turn.resultIdxs) {
-      const msg = mutable[idx]!
-      if (msg.role !== "tool_result") continue
-      const id = msg.toolCallId
-      if (!id) continue
-      if (opts.frozenToolResultIds.has(id)) continue // never re-strip frozen
-
-      const content = msg.content
-      if (content.length > 200) {
-        const recallKey = msg.storedKey ?? id;
-        mutable[idx] = {
-          ...msg,
-          content: `[${content.length} chars — use recall("${recallKey}") to retrieve]`,
-        }
-        newlyFrozenIds.add(id)
-      }
-    }
-  }
-
-  // ── Pass 2: Sliding window (only when over budget) ─────────────────────
-  // Estimate: 1 char ≈ 0.25 tokens
   const estimatedTokens = mutable.reduce((sum, m) => {
     const c = m.content ?? ""
     return sum + Math.ceil((typeof c === "string" ? c : JSON.stringify(c)).length / 4)
   }, 0)
 
-  const budget = Math.floor(opts.maxTokens * 0.75)
+  const budget = Math.floor(maxTokens * 0.75)
   if (estimatedTokens <= budget) {
-    return { messages: mutable, newlyFrozenIds }
+    return mutable
   }
 
-  // Over budget: keep first user message + recent N turns
+  // ── Over budget: keep first user message + recent N turns ──────────────
   const firstUser = mutable.find((m) => m.role === "user")
   const recentTurnIdxs = new Set(
     turns
@@ -100,28 +66,33 @@ export function applyMessageWindowWithCompact(
       .flatMap((t) => [t.assistantIdx, ...t.resultIdxs]),
   )
 
-  const oldSummaryParts = turns.slice(0, Math.max(0, turns.length - keepFullTurns)).map((t) => {
-    const assistantMsg = mutable[t.assistantIdx]!
-    const toolNames = (assistantMsg.role === "assistant" && assistantMsg.toolCalls ? assistantMsg.toolCalls : [])
-      .map((tc) => tc.name)
-      .join(", ")
-    const snippet = t.resultIdxs
-      .map((i) => {
-        const c = mutable[i]?.content ?? ""
-        return typeof c === "string" ? c.slice(0, 60) : ""
-      })
-      .join("; ")
-    return toolNames ? `called ${toolNames} → ${snippet}` : ""
-  }).filter(Boolean)
+  const oldSummaryParts = turns
+    .slice(0, Math.max(0, turns.length - keepFullTurns))
+    .map((t) => {
+      const assistantMsg = mutable[t.assistantIdx]!
+      const toolNames = (assistantMsg.role === "assistant" && assistantMsg.toolCalls
+        ? assistantMsg.toolCalls
+        : [])
+        .map((tc) => tc.name)
+        .join(", ")
+      const snippet = t.resultIdxs
+        .map((i) => {
+          const c = mutable[i]?.content ?? ""
+          return typeof c === "string" ? c.slice(0, 60) : ""
+        })
+        .join("; ")
+      return toolNames ? `called ${toolNames} → ${snippet}` : ""
+    })
+    .filter(Boolean)
 
   const windowed: KernelMessage[] = []
   if (firstUser) windowed.push(firstUser)
   if (oldSummaryParts.length > 0) {
-    windowed.push({ role: "user", content: `[Prior work: ${oldSummaryParts.join(" | ")}]` })
+    windowed.push({ role: "user", content: `[Prior: ${oldSummaryParts.join(" | ")}]` })
   }
   for (let i = 0; i < mutable.length; i++) {
     if (recentTurnIdxs.has(i)) windowed.push(mutable[i]!)
   }
 
-  return { messages: windowed, newlyFrozenIds }
+  return windowed
 }

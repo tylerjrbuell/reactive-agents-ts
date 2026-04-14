@@ -3,94 +3,97 @@ import { describe, it, expect } from "bun:test";
 import { applyMessageWindowWithCompact } from "../../src/context/message-window.js";
 import type { KernelMessage } from "../../src/strategies/kernel/kernel-state.js";
 
-// ── applyMessageWindowWithCompact — storedKey recall hint ─────────────────────
+// ── applyMessageWindowWithCompact — sliding window behavior ──────────────────
 
-describe("applyMessageWindowWithCompact storedKey", () => {
-  it("uses storedKey in recall hint when available on tool_result", () => {
+describe("applyMessageWindowWithCompact", () => {
+  it("returns messages untouched when under budget", () => {
     const messages: KernelMessage[] = [
-      { role: "user", content: "Find XRP price" },
-      {
-        role: "assistant", content: "I will search",
-        toolCalls: [{ id: "call-1", name: "web-search", arguments: { query: "XRP price" } }],
-      } as any,
-      {
-        role: "tool_result", toolCallId: "call-1", toolName: "web-search",
-        content: "A".repeat(300),
-        storedKey: "_tool_result_1",
-      } as any,
-      {
-        role: "assistant", content: "Now let me search more",
-        toolCalls: [{ id: "call-2", name: "web-search", arguments: { query: "BTC price" } }],
-      } as any,
-      {
-        role: "tool_result", toolCallId: "call-2", toolName: "web-search",
-        content: "B".repeat(300),
-        storedKey: "_tool_result_2",
-      } as any,
-      {
-        role: "assistant", content: "Another search",
-        toolCalls: [{ id: "call-3", name: "web-search", arguments: { query: "ETH price" } }],
-      } as any,
-      {
-        role: "tool_result", toolCallId: "call-3", toolName: "web-search",
-        content: "C".repeat(300),
-        storedKey: "_tool_result_3",
-      } as any,
+      { role: "user", content: "task" },
+      { role: "assistant", content: "ok" },
     ];
-
-    const result = applyMessageWindowWithCompact(messages, {
-      tier: "local",
-      maxTokens: 8192,
-      frozenToolResultIds: new Set(),
-      keepFullTurns: 1,
-    });
-
-    // The first tool_result (old turn) should have been micro-compacted
-    // with the correct _tool_result_1 key, not the provider-assigned call-1
-    const compactedMsg = result.messages.find(
-      (m) => m.role === "tool_result" && (m as any).toolCallId === "call-1",
-    );
-    if (compactedMsg) {
-      expect((compactedMsg as any).content).toContain("_tool_result_1");
-      expect((compactedMsg as any).content).not.toContain("call-1");
-    }
+    const out = applyMessageWindowWithCompact(messages, "local", 100000);
+    expect(out.length).toBe(2);
+    expect(out[0]?.content).toBe("task");
   }, 15000);
 
-  it("falls back to toolCallId when storedKey is absent", () => {
+  it("preserves the first user message (task) as API cache prefix", () => {
+    // Build a large conversation that will exceed budget.
+    const BIG = "x".repeat(1000);
     const messages: KernelMessage[] = [
-      { role: "user", content: "Find prices" },
-      {
-        role: "assistant", content: "searching",
-        toolCalls: [{ id: "call-1", name: "web-search", arguments: {} }],
-      } as any,
-      {
-        role: "tool_result", toolCallId: "call-1", toolName: "web-search",
-        content: "X".repeat(300),
-        // No storedKey
-      } as any,
-      {
-        role: "assistant", content: "more searching",
-        toolCalls: [{ id: "call-2", name: "web-search", arguments: {} }],
-      } as any,
-      {
-        role: "tool_result", toolCallId: "call-2", toolName: "web-search",
-        content: "Y".repeat(300),
-      } as any,
+      { role: "user", content: "original task" },
+      { role: "assistant", content: "calling", toolCalls: [{ id: "tc1", name: "web-search", arguments: {} }] } as any,
+      { role: "tool_result", toolCallId: "tc1", toolName: "web-search", content: BIG } as any,
+      { role: "assistant", content: "calling", toolCalls: [{ id: "tc2", name: "web-search", arguments: {} }] } as any,
+      { role: "tool_result", toolCallId: "tc2", toolName: "web-search", content: BIG } as any,
+      { role: "assistant", content: "calling", toolCalls: [{ id: "tc3", name: "web-search", arguments: {} }] } as any,
+      { role: "tool_result", toolCallId: "tc3", toolName: "web-search", content: BIG } as any,
     ];
+    // Force budget to be tiny so sliding window fires.
+    const out = applyMessageWindowWithCompact(messages, "local", 500, 1);
 
-    const result = applyMessageWindowWithCompact(messages, {
-      tier: "local",
-      maxTokens: 8192,
-      frozenToolResultIds: new Set(),
-      keepFullTurns: 1,
-    });
+    // First message must be the original task
+    expect(out[0]?.role).toBe("user");
+    expect(out[0]?.content).toBe("original task");
+  }, 15000);
 
-    const compactedMsg = result.messages.find(
-      (m) => m.role === "tool_result" && (m as any).toolCallId === "call-1",
+  it("summarizes older turns as [Prior: called X → brief] when over budget", () => {
+    const BIG = "x".repeat(1000);
+    const messages: KernelMessage[] = [
+      { role: "user", content: "task" },
+      { role: "assistant", content: "", toolCalls: [{ id: "tc1", name: "web-search", arguments: {} }] } as any,
+      { role: "tool_result", toolCallId: "tc1", toolName: "web-search", content: BIG } as any,
+      { role: "assistant", content: "", toolCalls: [{ id: "tc2", name: "web-search", arguments: {} }] } as any,
+      { role: "tool_result", toolCallId: "tc2", toolName: "web-search", content: BIG } as any,
+      { role: "assistant", content: "", toolCalls: [{ id: "tc3", name: "web-search", arguments: {} }] } as any,
+      { role: "tool_result", toolCallId: "tc3", toolName: "web-search", content: BIG } as any,
+    ];
+    const out = applyMessageWindowWithCompact(messages, "local", 500, 1);
+
+    // Should include a [Prior: ...] summary for older turns
+    const summary = out.find(
+      (m) => m.role === "user" && typeof m.content === "string" && m.content.startsWith("[Prior:"),
     );
-    if (compactedMsg) {
-      // Falls back to toolCallId when no storedKey
-      expect((compactedMsg as any).content).toContain("call-1");
-    }
+    expect(summary).toBeDefined();
+    expect(summary?.content).toContain("called web-search");
+  }, 15000);
+
+  it("never emits 'use recall(...)' hints (recall is off the critical path)", () => {
+    const BIG = "x".repeat(1000);
+    const messages: KernelMessage[] = [
+      { role: "user", content: "task" },
+      { role: "assistant", content: "", toolCalls: [{ id: "tc1", name: "web-search", arguments: {} }] } as any,
+      { role: "tool_result", toolCallId: "tc1", toolName: "web-search", content: BIG, storedKey: "_tool_result_1" } as any,
+      { role: "assistant", content: "", toolCalls: [{ id: "tc2", name: "web-search", arguments: {} }] } as any,
+      { role: "tool_result", toolCallId: "tc2", toolName: "web-search", content: BIG } as any,
+      { role: "assistant", content: "", toolCalls: [{ id: "tc3", name: "web-search", arguments: {} }] } as any,
+      { role: "tool_result", toolCallId: "tc3", toolName: "web-search", content: BIG } as any,
+    ];
+    const out = applyMessageWindowWithCompact(messages, "local", 500, 1);
+
+    const hasRecallHint = out.some(
+      (m) => typeof m.content === "string" && m.content.includes("use recall"),
+    );
+    expect(hasRecallHint).toBe(false);
+  }, 15000);
+
+  it("keeps the most recent N turns in full (tier-adaptive)", () => {
+    const BIG = "x".repeat(1000);
+    const messages: KernelMessage[] = [
+      { role: "user", content: "task" },
+      { role: "assistant", content: "", toolCalls: [{ id: "tc1", name: "web-search", arguments: {} }] } as any,
+      { role: "tool_result", toolCallId: "tc1", toolName: "web-search", content: BIG } as any,
+      { role: "assistant", content: "", toolCalls: [{ id: "tc2", name: "web-search", arguments: {} }] } as any,
+      { role: "tool_result", toolCallId: "tc2", toolName: "web-search", content: BIG } as any,
+      { role: "assistant", content: "last", toolCalls: [{ id: "tc3", name: "web-search", arguments: {} }] } as any,
+      { role: "tool_result", toolCallId: "tc3", toolName: "web-search", content: "fresh content" } as any,
+    ];
+    const out = applyMessageWindowWithCompact(messages, "local", 500, 1);
+
+    // The most recent turn's tool_result should be present with full content
+    const recentResult = out.find(
+      (m) => m.role === "tool_result" && (m as any).toolCallId === "tc3",
+    ) as any;
+    expect(recentResult).toBeDefined();
+    expect(recentResult.content).toBe("fresh content");
   }, 15000);
 });

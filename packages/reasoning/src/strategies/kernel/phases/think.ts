@@ -186,13 +186,11 @@ export function handleThinking(
     const {
       systemPrompt: systemPromptText,
       messages: conversationMessages,
-      updatedState: stateAfterContext,
     } = ContextManager.build(state, input, profile, guidance, adapter, {
       availableTools: promptSchemas,
       systemPromptBody: effectiveSystemPrompt,
       toolElaboration: input.toolElaboration,
     });
-    state = stateAfterContext;
 
     // ── STREAM (with text delta emission) ──────────────────────────────────
     // Token budget adapts to model tier: frontier models get more room for

@@ -31,7 +31,6 @@ function makeState(overrides: Partial<KernelState> = {}): KernelState {
     controllerDecisionLog: [],
     messages: [],
     pendingGuidance: undefined,
-    frozenToolResultIds: new Set<string>(),
     consecutiveLowDeltaCount: 0,
     readyToAnswerNudgeCount: 0,
     lastMetaToolCall: undefined,
@@ -200,7 +199,6 @@ describe("ContextManager.build — messages", () => {
   it("never contains [Auto-forwarded:] USER message injections", () => {
     const stateWithScratchpad = makeState({
       scratchpad: new Map([["_result_1", "some stored data"]]),
-      frozenToolResultIds: new Set(["call-1"]),
       messages: [
         { role: "user", content: "task" },
         {

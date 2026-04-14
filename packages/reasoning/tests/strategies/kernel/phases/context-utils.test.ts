@@ -82,7 +82,7 @@ describe("buildConversationMessages", () => {
     const state = makeBaseState();
     const input = { task: "test task", messages: [{ role: "user", content: "test task" }] } as any;
     const profile = CONTEXT_PROFILES.local;
-    const { messages } = buildConversationMessages(state, input, profile, defaultAdapter);
+    const messages = buildConversationMessages(state, input, profile, defaultAdapter);
     const hasAutoForward = messages.some(
       (m) => typeof m.content === "string" && m.content.includes("[Auto-forwarded:"),
     );
