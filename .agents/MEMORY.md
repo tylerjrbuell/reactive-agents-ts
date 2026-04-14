@@ -13,10 +13,11 @@
 - [Composable Reasoning Phases](project_composable_phases.md) — ✅ SHIPPED Apr 3, 2026: `strategies/kernel/` composable phase architecture merged to main
 
 ## Current Status (Apr 13, 2026)
+- **Context Engineering Overhaul complete** — dead code removed (`compaction.ts`, `context-budget.ts`, `buildDynamicContext`, `autoForwardSection`); `ContextManager` service introduced as deterministic context assembly authority; `steeringNudge` fully migrated to typed `PendingGuidance` → system prompt `Guidance:` section
 - **Plan-Execute-Reflect fixes shipped** — planner decomposition, quantity enforcement, reflection augmentation, satisfaction override removal
-- **Observation Quality Pipeline shipped** — FC recall hint preservation, storedKey threading, adaptive auto-forward budget, tier-adaptive compression, optional LLM extraction
+- **Observation Quality Pipeline shipped** — FC recall hint preservation, storedKey threading, tier-adaptive compression, optional LLM extraction
 - **Parallel/Sequential tool calling hardened** — infinite loop fix, sequential quantity clamping, softened required-tools nudge in sequential mode
-- **3,901 tests across 431 files** — all passing, 0 regressions, build clean
+- **3,879 tests across 430 files** — all passing, 0 regressions, build clean
 
 ## Current Status (Apr 12, 2026)
 - **Pass 2 complete** — 18 probes (6 confirm + 12 wide), 18 pass / 5 fail, 0 regressions
@@ -116,8 +117,8 @@
 
 ### Kernel Composable Phase Architecture
 - `strategies/shared/` renamed to `strategies/kernel/` — name describes what it is, not who uses it
-- `react-kernel.ts` 1,700 → 197 lines; thin orchestrator + `makeKernel({ phases?: Phase[] })` factory
-- `kernel-runner.ts` 612 → 339 lines; ICS, reactive observer, loop detector extracted to `utils/`
+- `react-kernel.ts` 1,700 → 181 lines; thin orchestrator + `makeKernel({ phases?: Phase[] })` factory
+- `kernel-runner.ts` 612 → ~1,107 lines (grew with ICS, tier-adaptive, output synthesis, lane controller, auto-checkpoint)
 - **`kernel/phases/`** — four phase files, each answers one question:
   - `context-builder.ts` — what will the LLM see this turn? (pure data, no LLM calls)
   - `think.ts` — what did the LLM decide to do? (stream, FC parsing, fast-path, loop detection)
@@ -149,18 +150,23 @@
 ```
 strategies/kernel/
   kernel-state.ts      ← KernelState, Phase type, KernelContext, ThoughtKernel
-  kernel-runner.ts     ← the loop (runKernel)
+  kernel-runner.ts     ← the loop (runKernel) — ~1,107 lines
   kernel-hooks.ts      ← KernelHooks lifecycle hooks
-  react-kernel.ts      ← makeKernel() + reactKernel + executeReActKernel
+  kernel-constants.ts  ← META_TOOLS, INTROSPECTION_META_TOOLS
+  react-kernel.ts      ← makeKernel() + reactKernel + executeReActKernel (~181 lines)
+  output-assembly.ts   ← output formatting/synthesis helpers
+  index.ts             ← barrel exports
   phases/
     context-builder.ts ← pure data: buildSystemPrompt, toProviderMessage, buildConversationMessages, buildToolSchemas
-    think.ts           ← LLM stream, FC parsing, loop detection, fast-path
+    think.ts           ← LLM stream, FC parsing, system prompt + guidance assembly, termination oracle
     guard.ts           ← Guard[], defaultGuards, checkToolCall()
     act.ts             ← MetaToolHandler registry, final-answer gate, tool dispatch
-  utils/
+  utils/ (19 files)
     ics-coordinator.ts, reactive-observer.ts, loop-detector.ts
     tool-utils.ts, tool-execution.ts, termination-oracle.ts, strategy-evaluator.ts
-    stream-parser.ts (was thinking-utils), context-utils.ts, quality-utils.ts, service-utils.ts, step-utils.ts
+    stream-parser.ts, context-utils.ts, quality-utils.ts, service-utils.ts, step-utils.ts
+    requirement-state.ts, lane-controller.ts, auto-checkpoint.ts
+    task-intent.ts, tool-capabilities.ts, evidence-grounding.ts
 ```
 
 ### Two Independent Records (unchanged)
@@ -187,6 +193,32 @@ state.steps[]     ← What systems observe (entropy, metrics, debrief)
 - **Loop detection**: `maxConsecutiveThoughts: 3` — only ACTION steps reset the streak (NOT observations — IC-1 fix Apr 12)
 - See [build-patterns.md](build-patterns.md) for tsconfig, package.json, Effect-TS patterns
 
+## What Shipped Apr 13, 2026 — Context Engineering Overhaul
+
+### Phase 1 — Dead Code Removal
+- Deleted `compaction.ts` + `context-budget.ts` (never used on FC kernel path)
+- Stripped `buildDynamicContext`, scoring helpers, and dead fields from `context-engine.ts`
+- Cleaned `context-profile.ts`, `message-window.ts`, `context-utils.ts` — removed dead exports
+
+### Phase 2 — autoForwardSection Removed
+- Deleted entire `autoForwardSection` block from `think.ts`; signature simplified in `context-builder.ts`
+- Tool results no longer double-injected as USER messages into the conversation thread
+
+### Phase 3 — ContextManager Service
+- New `packages/reasoning/src/context/context-manager.ts` — deterministic, pure-function context assembly
+- `ContextManager.build(state, input)` returns `{ systemPrompt, messages }` ready for LLM
+- Exports `GuidanceContext`, `ContextManagerOutput`, `buildGuidanceSection()`
+- 13 TDD tests (all pass on first run)
+
+### Phase 4 — steeringNudge → PendingGuidance
+- `KernelState.steeringNudge` removed; replaced by typed `PendingGuidance` interface + `pendingGuidance?` field
+- All 6 write sites in `kernel-runner.ts` updated to set `pendingGuidance` fields
+- `context-builder.ts` no longer injects steering signals as USER messages
+- `think.ts` reads `state.pendingGuidance`, constructs `GuidanceContext`, appends `Guidance:` section to system prompt, then clears field
+- `extractedFact?: string` added to `StepMetadataSchema` (required for `buildPriorWorkSection`)
+
+**Tests:** 3,879 pass / 22 skip / 0 fail across 430 files. Build clean.
+
 ## What Shipped Apr 12, 2026 — IC-1/IC-2/IC-3 Loop & Builder Fixes
 
 ### IC-1 — loop-detector.ts:94 (W2 + W6 + W8 simultaneously)
@@ -205,11 +237,12 @@ state.steps[]     ← What systems observe (entropy, metrics, debrief)
 **Test coverage:** 3 new behavioral tests in `loop-detection-behavioral.test.ts` + 2 in `max-iterations-enforcement.test.ts`. 1,384 tests total, 0 failures.
 
 ## Architecture Debt (Remaining)
-1. `buildDynamicContext`/`buildStaticContext` still in codebase behind flag (~560 LOC dead)
-2. `context-engine.ts` has ~690 LOC mostly dead text-assembly functions
-3. cogito:14b still inconsistent on reactive strategy (8B works fine, 14B doesn't)
-4. Strategy routing disabled — no clean solution for local model multi-step tasks
-5. Provider adapter: remaining 5 V1.1 composable hooks not yet wired into phases
+1. cogito:14b still inconsistent on reactive strategy (8B works fine, 14B doesn't)
+2. Strategy routing disabled — no clean solution for local model multi-step tasks
+3. `ContextManager` not yet fully wired as primary context builder in `think.ts` (system prompt assembly still partially in `think.ts`); `messages[0]` USER seed removal deferred until full wiring complete — `ContextManager.build()` is dead production code (only tests call it)
+4. Optional: ModelCalibration schema + 6-probe calibration-runner.ts for pre-baked local model profiles
+5. `ReActKernelInput` duplicates ~25 fields from `KernelInput` — phases use `as ReActKernelInput` casts
+6. `state.meta: Record<string, unknown>` accessed via `as any` casts in 34+ locations
 
 ## Show HN Readiness
 - ✅ Kernel composable phase architecture (clean codebase for contributors)

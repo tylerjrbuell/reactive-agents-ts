@@ -165,6 +165,7 @@ The UI depends on **`@reactive-agents/svelte`** (via `framework.ts` and package 
 
 ## Pitfalls (Cortex-Specific)
 
+0. **Rebuild packages before testing Cortex.** Cortex imports `@reactive-agents/*` from `dist/` (compiled output), not `src/`. If you modify framework packages without running `bun run build:packages` (or `bun run build`) from the repo root, Cortex will execute stale code. Always rebuild after package changes: `bun run build:packages && cd apps/cortex && bun start`.
 1. **Live WS `agentId` in the URL must match broadcast keys** — derived from ingest `agentId`, not arbitrary labels.
 2. **Do not double-load run history** — Run view relies on **WS replay** after connect; avoid also replaying the full event list from REST in the same client unless you dedupe.
 3. **`POST /api/runs`** is still **501** by design — UI must handle gracefully (`stage-store` already does).

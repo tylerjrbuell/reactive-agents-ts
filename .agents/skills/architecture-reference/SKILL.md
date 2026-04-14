@@ -131,11 +131,12 @@ Do NOT conflate these. Debugging LLM behavior → inspect `messages[]`. Debuggin
 
 See `.agents/skills/kernel-extension/SKILL.md` for full patterns.
 
-### Dead Code — Do Not Touch
+### Context Assembly — Canonical Path
 
-- `buildDynamicContext` / `buildStaticContext` in `context-engine.ts` — disabled behind flag (~560 LOC)
-- `context-engine.ts` dead text-assembly functions (~690 LOC total)
-- These areas are preserved for reference. Do not re-enable, modify, or "clean up."
+- `context-manager.ts` — `ContextManager.build(state, input)` returns `{ systemPrompt, messages }` (pure, deterministic)
+- `context-builder.ts` — assembles raw conversation messages (`buildConversationMessages`), tool schemas, system prompt base
+- `think.ts` — invokes `buildGuidanceSection(state.pendingGuidance)` and appends `Guidance:` block to system prompt
+- `context-engine.ts` — retains only `buildStaticContext`, `buildEnvironmentContext`, `buildRules`; all dynamic/scoring code removed
 
 ## MCP Client Architecture
 

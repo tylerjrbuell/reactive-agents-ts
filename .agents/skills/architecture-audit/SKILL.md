@@ -11,15 +11,17 @@ user-invocable: true
 System-level health check for Reactive Agents. Like `/simplify` but scoped to architecture: surveys the package topology, kernel internals, and documentation for dead code, over-abstraction, layer violations, and stale claims — then fixes what's safe and flags what needs planning.
 
 **Use when:**
-- `AGENTS.md`, `MEMORY.md`, or inline docs may no longer match the code
-- A package or subsystem has grown unexpectedly complex
-- Cleaning up after a large feature: scaffolding, flags, disabled code wasn't removed
-- Preparing to plan a refactor and need an honest current-state baseline
+
+-   `AGENTS.md`, `MEMORY.md`, or inline docs may no longer match the code
+-   A package or subsystem has grown unexpectedly complex
+-   Cleaning up after a large feature: scaffolding, flags, disabled code wasn't removed
+-   Preparing to plan a refactor and need an honest current-state baseline
 
 **Don't use for:**
-- Effect-TS abstraction candidates specifically → `effect-abstraction-audit`
-- Code-level cleanup of recent changes → `/simplify`
-- Single-file or unit-level concerns
+
+-   Effect-TS abstraction candidates specifically → `effect-abstraction-audit`
+-   Code-level cleanup of recent changes → `/simplify`
+-   Single-file or unit-level concerns
 
 ---
 
@@ -28,12 +30,14 @@ System-level health check for Reactive Agents. Like `/simplify` but scoped to ar
 Before launching agents, orient to current state. Read in this order:
 
 **Authoritative docs:**
+
 ```
 AGENTS.md                                        # canonical architecture + build order
 apps/cortex/AGENTS.md                            # Cortex-specific patterns
 ```
 
 **Kernel internals (highest-churn area):**
+
 ```
 packages/reasoning/src/strategies/kernel/
   kernel-state.ts        # KernelState, Phase type, KernelContext
@@ -106,29 +110,35 @@ For each finding: file path, description of unnecessary complexity, effort estim
 Wait for all three agents. Categorize every finding:
 
 ### Fix Immediately
+
 Safe to fix now without architectural planning:
-- Stale documentation claims in `AGENTS.md`, `MEMORY.md`, inline comments
-- Dead exports (zero callers, confirmed unused)
-- Incorrect or outdated kernel extension instructions
-- Comment cleanup (narrating removed behavior, referencing deleted files)
+
+-   Stale documentation claims in `AGENTS.md`, `MEMORY.md`, inline comments
+-   Dead exports (zero callers, confirmed unused)
+-   Incorrect or outdated kernel extension instructions
+-   Comment cleanup (narrating removed behavior, referencing deleted files)
 
 Rule: fix is < 25 lines and touches ≤ 2 files. Anything larger → Flag for Planning.
 
 ### Flag for Planning
+
 Do NOT implement without a written plan:
-- Dead code removal touching > 2 files (e.g., `context-engine.ts` cleanup)
-- Collapsing parallel systems
-- Restructuring config schemas
-- Untangling layer violations
+
+-   Dead code removal touching > 2 files (e.g., `context-engine.ts` cleanup)
+-   Collapsing parallel systems
+-   Restructuring config schemas
+-   Untangling layer violations
 
 Add each to the **Architecture Debt Register** (see Output below).
 
 ### Escalate to User
+
 Needs explicit decision before any action:
-- Parallel systems where the canonical choice is ambiguous
-- Simplifications that change the public API of `@reactive-agents/*`
-- Findings that would span > 3 packages
-- Anything where fixing reveals a deeper design question
+
+-   Parallel systems where the canonical choice is ambiguous
+-   Simplifications that change the public API of `@reactive-agents/*`
+-   Findings that would span > 3 packages
+-   Anything where fixing reveals a deeper design question
 
 ---
 
@@ -141,9 +151,9 @@ When complete, report:
 3. **Architecture debt register update** — append findings to the debt table in `AGENTS.md` under an `## Architecture Debt` section (create if absent), formatted as:
 
 ```markdown
-| Area | File | Problem | Effort | Impact | Status |
-|------|------|---------|--------|--------|--------|
-| Dead code | context-engine.ts | ~690 LOC dead behind flags | High | High | Open |
+| Area      | File              | Problem                    | Effort | Impact | Status |
+| --------- | ----------------- | -------------------------- | ------ | ------ | ------ |
+| Dead code | context-engine.ts | ~690 LOC dead behind flags | High   | High   | Open   |
 ```
 
 4. **Escalations** — anything requiring explicit user decision
@@ -154,15 +164,15 @@ Keep the summary under 12 lines. The debt register carries the full detail.
 
 ## Architecture Quick Reference
 
-| Pattern | Location | What it IS |
-|---------|----------|------------|
-| `Phase[]` pipeline | `kernel-runner.ts` | Sequential kernel phases; `(state, ctx) => Effect<KernelState>` |
-| `Guard[]` chain | `phases/guard.ts` | Tool-call safety checks; any guard can block |
-| `MetaToolHandler` registry | `phases/act.ts` | Inline meta-tool dispatch; new tools = one registry entry |
-| `makeKernel()` factory | `react-kernel.ts` | Custom kernel configurations; override default phase set |
-| Two independent records | `kernel-state.ts` | `messages[]` (LLM sees) vs `steps[]` (systems observe) |
-| Provider adapter hooks | `provider-adapters/` | 7 lifecycle hooks; only `taskFraming` + `toolGuidance` wired |
-| ExecutionEngine loop | `packages/runtime/` | 10 phases: BOOTSTRAP → GUARDRAIL → STRATEGY-SELECT → THINK → ACT → OBSERVE → MEMORY-FLUSH → VERIFY → AUDIT → COMPLETE |
+| Pattern                    | Location             | What it IS                                                                                                            |
+| -------------------------- | -------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `Phase[]` pipeline         | `kernel-runner.ts`   | Sequential kernel phases; `(state, ctx) => Effect<KernelState>`                                                       |
+| `Guard[]` chain            | `phases/guard.ts`    | Tool-call safety checks; any guard can block                                                                          |
+| `MetaToolHandler` registry | `phases/act.ts`      | Inline meta-tool dispatch; new tools = one registry entry                                                             |
+| `makeKernel()` factory     | `react-kernel.ts`    | Custom kernel configurations; override default phase set                                                              |
+| Two independent records    | `kernel-state.ts`    | `messages[]` (LLM sees) vs `steps[]` (systems observe)                                                                |
+| Provider adapter hooks     | `provider-adapters/` | 7 lifecycle hooks; only `taskFraming` + `toolGuidance` wired                                                          |
+| ExecutionEngine loop       | `packages/runtime/`  | 10 phases: BOOTSTRAP → GUARDRAIL → STRATEGY-SELECT → THINK → ACT → OBSERVE → MEMORY-FLUSH → VERIFY → AUDIT → COMPLETE |
 
 ## Layer Boundary Rules
 
@@ -173,16 +183,16 @@ core → llm-provider / memory / tools / identity / observability / interaction
      → reactive-agents (facade)
 ```
 
-- No upward imports (reasoning must not import runtime)
-- No skip-layer imports (reasoning must not import reactive-agents)
-- `packages/reasoning` may import: core, llm-provider, memory, tools only
+-   No upward imports (reasoning must not import runtime)
+-   No skip-layer imports (reasoning must not import reactive-agents)
+-   `packages/reasoning` may import: core, llm-provider, memory, tools only
 
 ## Anti-Patterns to Flag on Sight
 
-| Anti-pattern | Known location | Signal |
-|-------------|----------------|--------|
-| Dead code behind feature flags | `context-engine.ts` | `buildDynamicContext`, `buildStaticContext` |
-| Untyped meta bag with `as any` | `kernel-state.ts` | `meta: Record<string, unknown>` |
-| Half-built extensibility | `provider-adapters/` | 5/7 hooks defined, never called |
-| Disabled strategy routing | `strategy-registry.ts` | Local model routing commented out |
-| Two-path context building | `context-engine.ts` + `phases/context-builder.ts` | Which is canonical? |
+| Anti-pattern                   | Known location                                    | Signal                                      |
+| ------------------------------ | ------------------------------------------------- | ------------------------------------------- |
+| Dead code behind feature flags | `context-engine.ts`                               | `buildDynamicContext`, `buildStaticContext` |
+| Untyped meta bag with `as any` | `kernel-state.ts`                                 | `meta: Record<string, unknown>`             |
+| Half-built extensibility       | `provider-adapters/`                              | 5/7 hooks defined, never called             |
+| Disabled strategy routing      | `strategy-registry.ts`                            | Local model routing commented out           |
+| Two-path context building      | `context-engine.ts` + `phases/context-builder.ts` | Which is canonical?                         |

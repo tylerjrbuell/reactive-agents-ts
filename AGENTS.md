@@ -74,7 +74,7 @@ Foundation (no reactive-agents deps)
 | `core`          | `src/services/event-bus.ts`             | `EventBus`, `AgentEvent`, `AgentId`, `TaskId`               |
 | `llm-provider`  | `src/runtime.ts`                        | `LLMService`, `createLLMProviderLayer()`                    |
 | `memory`        | `src/runtime.ts`                        | `MemoryService`, `createMemoryLayer()`                      |
-| `reasoning`     | `src/strategy-registry.ts`              | `ReasoningService`, `StrategyRegistry`, `ThoughtKernel`     |
+| `reasoning`     | `src/services/strategy-registry.ts`     | `ReasoningService`, `StrategyRegistry`, `ThoughtKernel`     |
 | `tools`         | `src/services/tool-service.ts`          | `ToolService`, `ToolDefinition`, `defineTool()`             |
 | `guardrails`    | `src/services/guardrail-service.ts`     | `GuardrailService`, `KillSwitchService`                     |
 | `verification`  | `src/services/verification-service.ts`  | `VerificationService`                                       |
@@ -87,16 +87,18 @@ Foundation (no reactive-agents deps)
 
 ### Common Debugging Entry Points
 
-| Symptom                       | Start reading                                                                                                 |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| Agent not calling tools       | `packages/reasoning/src/strategies/reactive.ts` → `packages/reasoning/src/strategies/kernel/kernel-runner.ts` |
-| EventBus events not firing    | `packages/core/src/services/event-bus.ts` → check `ManagedRuntime` is shared                                  |
-| LLM call fails silently       | `packages/llm-provider/src/runtime.ts` → provider-specific file in `src/providers/`                           |
-| Memory not persisting         | `packages/memory/src/runtime.ts` → check `createMemoryLayer()` wiring                                         |
-| Plan-execute loops forever    | `packages/reasoning/src/strategies/plan-execute.ts` → `isSatisfied()` + all-steps-completed guard             |
-| Gateway not starting          | `packages/gateway/src/services/gateway-service.ts` → check `.withGateway()` in builder                        |
-| Metrics dashboard missing     | `packages/observability/src/services/observability-service.ts` → `MetricsCollectorLive` layer                 |
-| Custom kernel not registering | `packages/reasoning/src/strategy-registry.ts` → `registerKernel()` call                                       |
+| Symptom                       | Start reading                                                                                            |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Agent not calling tools       | `packages/reasoning/src/strategies/kernel/kernel-runner.ts` → `phases/think.ts` → `phases/act.ts`        |
+| Context truncated / missing   | `phases/think.ts` (system prompt + guidance) → `phases/context-builder.ts` → `context/message-window.ts` |
+| Tool results lost / recall    | `utils/tool-execution.ts` (compression) → `utils/tool-utils.ts` (compressToolResult) → `phases/think.ts` |
+| EventBus events not firing    | `packages/core/src/services/event-bus.ts` → check `ManagedRuntime` is shared                             |
+| LLM call fails silently       | `packages/llm-provider/src/runtime.ts` → provider-specific file in `src/providers/`                      |
+| Memory not persisting         | `packages/memory/src/runtime.ts` → check `createMemoryLayer()` wiring                                    |
+| Plan-execute loops forever    | `packages/reasoning/src/strategies/plan-execute.ts` → `isSatisfied()` + all-steps-completed guard        |
+| Gateway not starting          | `packages/gateway/src/services/gateway-service.ts` → check `.withGateway()` in builder                   |
+| Metrics dashboard missing     | `packages/observability/src/services/observability-service.ts` → `MetricsCollectorLive` layer            |
+| Custom kernel not registering | `packages/reasoning/src/services/strategy-registry.ts` → `registerKernel()` call                         |
 
 ---
 
@@ -109,7 +111,7 @@ Key references:
 -   `FRAMEWORK_INDEX.md` — comprehensive system map with file-level navigation, data flows, and architecture diagrams
 -   `CODING_STANDARDS.md` — authoritative coding standards (types, services, errors, testing, naming, performance)
 -   `.claude/skills/effect-ts-patterns/SKILL.md` — Effect-TS pattern reference (Schema.Struct, Context.Tag, Layer, Ref)
--   `.claude/skills/review-patterns/SKILL.md` — 8-category compliance checklist for code review
+-   `.claude/skills/review-patterns/SKILL.md` — 9-category compliance checklist for code review
 
 ## Golden Rules
 
@@ -311,7 +313,7 @@ When creating a new package (e.g., `@reactive-agents/a2a`):
 | ------------------ | -------------------------- | ----------------- |
 | Tests pass         | `bun test`                 | 100% green        |
 | Build clean        | `bun run build`            | No errors         |
-| Pattern compliance | `/review-patterns <files>` | 8/8 pass          |
+| Pattern compliance | `/review-patterns <files>` | 9/9 pass          |
 | Docs accurate      | Manual review              | No stale examples |
 
 ### Before Any Release
@@ -429,23 +431,49 @@ Canonical project skills live in `.agents/skills/`:
 
 ---
 
+## Architecture Debt
+
+| Area | File | Problem | Effort | Impact | Status |
+|------|------|---------|--------|--------|--------|
+| Dead code | `context-engine.ts` | `buildDynamicContext`, `scoreContextItem`, `allocateContextBudget` unused (~50% of file vestigial) | Medium | Medium | Fixed (Apr 13) |
+| Dead config | `context-profile.ts` | `promptVerbosity`, `rulesComplexity`, `fewShotExampleCount`, `compactAfterSteps`, `fullDetailSteps` inert | Medium | Medium | Fixed (Apr 13) |
+| Dead config | `kernel-state.ts` | `synthesisConfig` consumed by output synthesis in `kernel-runner.ts`, not by ICS — naming is misleading | Low | Low | Open |
+| Dead API | `message-window.ts` | `applyMessageWindow` + `contextBudgetPercent` unused; only `applyMessageWindowWithCompact` is live | Low | Low | Fixed (Apr 13) |
+| Parallel systems | `think.ts` / `tool-utils.ts` / `act.ts` | Two overlapping result presentations remain: FC tool_result compression and extractObservationFacts | High | High | Partially addressed (auto-forward fully removed Apr 13) |
+| Config duplication | `kernel-runner.ts` / `context-profile.ts` | `toolResultMaxChars`/`toolResultPreviewItems` duplicate `resultCompression.budget`/`previewItems` as profile defaults | Low | Low | Open |
+| Stale docs | `context-engine.ts` | File header says "unified scoring, budgeting, and rendering" | Low | Low | Fixed (Apr 13) |
+| Stale docs | `context-builder.ts` | Header overstates scope — system prompt with guidance/ICS/progress is assembled in `think.ts` | Low | Low | Open |
+| Parallel context | `context-manager.ts` / `context-builder.ts` | Two context assembly paths: `ContextManager.build()` (dead in production) duplicates `context-builder.ts` functions used by `think.ts` | Medium | High | Open |
+| Type duplication | `kernel-state.ts` | `ReActKernelInput` duplicates ~25 fields from `KernelInput`; phases use `as ReActKernelInput` casts to access extra fields | Medium | High | Open |
+| Untyped meta | `kernel-state.ts` | `state.meta: Record<string, unknown>` accessed via `as any` casts in 34+ locations across kernel phases | Medium | High | Open |
+| Layer violation | `service-utils.ts` | `reasoning` imports `@reactive-agents/prompts` — outside its declared dependency boundary (core, llm-provider, memory, tools) | Medium | Medium | Open |
+| Scope creep | `tool-utils.ts` | 944 LOC, 5+ concerns (formatting, parsing, gating, injection, planning) — imported by 16 files | Medium | Medium | Open |
+| Dead production code | `context-manager.ts` | `ContextManager.build()`, `kernelMessageToLLM()`, `buildIdentity()`, `CURATED_TURNS_BY_TIER` never called in production | Medium | Medium | Open |
+| Dead production code | `evidence-grounding.ts` | Zero production callers; only imported by test file | Low | Low | Open |
+| Dead production code | `context-utils.ts` | Zero `src/` imports — only re-exported from barrel and used in tests | Low | Medium | Open |
+| Barrel leak | `kernel/index.ts` | `export *` from 13 modules leaks internal utils (944 LOC tool-utils, etc.) as public API | Medium | Medium | Open |
+| Loop vs switch | `loop-detector.ts`, `kernel-runner.ts` | Loop streak logic can mask duplicate-tool patterns so `strategySwitching` may never trigger (see `.agents/MEMORY.md` W8) | Medium | Medium | Open |
+
+---
+
 ## Common Pitfalls
 
 1. **`serviceOption` returns `Option`** — use `Option.isSome()` + `.value`, not direct access
-2. **`ContextWindowManager.truncate()`** not `buildContext()` — buildContext requires systemPrompt
+2. **`ContextWindowManager.truncate()`** not `buildContext()` — for kernel FC context, use `message-window.ts` (`applyMessageWindowWithCompact`) + `context-builder.ts`
 3. **Gemini SDK is `@google/genai`** not `@google/generative-ai`
 4. **`mock.module()` in Bun** only intercepts ES `import()`, not CJS `require()`
 5. **ReasoningService.execute** takes single params object, not positional args
 6. **Starlight / Astro 6 content config** must be `src/content.config.ts` (Content Layer API); `src/content/config.ts` is legacy and fails the build
 7. **`workspace:*` is fine for internal deps** — `changeset publish` resolves these correctly. Do not manually replace them with pinned versions.
 8. **Never manually bump versions** — `bun run changeset` + the "chore: version packages" PR handles all version bumps and CHANGELOG entries. Manual edits will conflict with changesets.
+9. **`PendingGuidance` replaces `steeringNudge`** — harness signals (required tools pending, loop detected, ICS/oracle guidance) are now accumulated in `state.pendingGuidance` and rendered by `think.ts` into the system prompt's `Guidance:` section each turn. Do NOT inject stray `USER` messages for mid-loop guidance; set `pendingGuidance` fields instead.
 
 ---
 
 ## Current Framework Snapshot (v0.9.0)
 
 -   Monorepo scale: **25 packages + 2 apps**
--   Verified quality: **3,901 tests across 431 files**
+-   Verified quality: **3,879 tests across 430 files**
 -   Public facade: `reactive-agents` built on Effect-TS layered runtime
 
 ### Recently Shipped Highlights (cross-checked with `CHANGELOG.md`)
@@ -477,37 +505,40 @@ Do not maintain feature truth in multiple internal guides. Keep this file operat
 For AI agents using reactive-agents-ts to build agents on behalf of users.
 Served from `apps/docs/skills/`, publicly fetchable at:
 
-- **Discover:** `https://docs.reactiveagents.dev/.well-known/skills/index.json`
-- **Fetch:** `https://docs.reactiveagents.dev/.well-known/skills/{skill-name}/`
+-   **Discover:** `https://docs.reactiveagents.dev/.well-known/skills/index.json`
+-   **Fetch:** `https://docs.reactiveagents.dev/.well-known/skills/{skill-name}/`
 
 > **Directory distinction:** `.agents/skills/` = contributor skills (build the framework). `apps/docs/skills/` = consumer skills (use the framework, publicly fetchable).
 
 ### Tier 1 — Discovery
-- `reactive-agents` — start here: framework orientation, builder API shape, skill routing decision tree
+
+-   `reactive-agents` — start here: framework orientation, builder API shape, skill routing decision tree
 
 ### Tier 2 — Capabilities
-- `builder-api-reference` — complete ReactiveAgentBuilder API, layer composition, Effect layers
-- `reasoning-strategy-selection` — strategy selection, native FC harness, output quality pipeline
-- `context-and-continuity` — context pressure, windowing, checkpoint tool, auto-checkpoint
-- `tool-creation` — defineTool(), ToolRegistry, required-tools gate, maxCallsPerTool
-- `shell-execution-sandbox` — sandboxed shell tool, Docker sandbox, allowlist config
-- `mcp-tool-integration` — Docker lifecycle, two-phase containers, transport inference
-- `memory-patterns` — 4-layer memory, SQLite/FTS5/vec, working/episodic/semantic/procedural
-- `multi-agent-orchestration` — sequential, parallel, pipeline, map-reduce workflows
-- `gateway-persistent-agents` — heartbeats, crons, webhooks, policy engine
-- `identity-and-guardrails` — Ed25519 RBAC, injection/PII/toxicity detection, KillSwitch
-- `observability-instrumentation` — ThoughtTracer, logModelIO, EventBus tracing, MetricsCollector
-- `cost-budget-enforcement` — complexity router, budget enforcer, semantic cache
-- `quality-assurance` — runtime verification, LLM-as-judge eval, EvalStore regression
-- `ui-integration` — React/Vue/Svelte hooks, SSE streaming, real-time UI patterns
-- `interaction-autonomy` — 5 autonomy modes, approval gates, preference learning
-- `a2a-agent-networking` — Agent Cards, JSON-RPC 2.0, SSE streaming, A2A server/client
-- `provider-patterns` — 7 adapter hooks, native FC patterns, per-provider streaming quirks
+
+-   `builder-api-reference` — complete ReactiveAgentBuilder API, layer composition, Effect layers
+-   `reasoning-strategy-selection` — strategy selection, native FC harness, output quality pipeline
+-   `context-and-continuity` — context pressure, windowing, checkpoint tool, auto-checkpoint
+-   `tool-creation` — defineTool(), ToolRegistry, required-tools gate, maxCallsPerTool
+-   `shell-execution-sandbox` — sandboxed shell tool, Docker sandbox, allowlist config
+-   `mcp-tool-integration` — Docker lifecycle, two-phase containers, transport inference
+-   `memory-patterns` — 4-layer memory, SQLite/FTS5/vec, working/episodic/semantic/procedural
+-   `multi-agent-orchestration` — sequential, parallel, pipeline, map-reduce workflows
+-   `gateway-persistent-agents` — heartbeats, crons, webhooks, policy engine
+-   `identity-and-guardrails` — Ed25519 RBAC, injection/PII/toxicity detection, KillSwitch
+-   `observability-instrumentation` — ThoughtTracer, logModelIO, EventBus tracing, MetricsCollector
+-   `cost-budget-enforcement` — complexity router, budget enforcer, semantic cache
+-   `quality-assurance` — runtime verification, LLM-as-judge eval, EvalStore regression
+-   `ui-integration` — React/Vue/Svelte hooks, SSE streaming, real-time UI patterns
+-   `interaction-autonomy` — 5 autonomy modes, approval gates, preference learning
+-   `a2a-agent-networking` — Agent Cards, JSON-RPC 2.0, SSE streaming, A2A server/client
+-   `provider-patterns` — 7 adapter hooks, native FC patterns, per-provider streaming quirks
 
 ### Tier 3 — Recipes
-- `recipe-research-agent` — research/analysis agent with memory + verification
-- `recipe-code-assistant` — code generation + sandboxed execution agent
-- `recipe-persistent-monitor` — always-on monitoring agent via gateway
-- `recipe-orchestrated-workflow` — multi-agent pipeline with lead/builder/tester pattern
-- `recipe-saas-agent` — multi-tenant production agent with identity + cost controls
-- `recipe-embedded-app-agent` — agent embedded in React/Vue/Svelte with streaming UI
+
+-   `recipe-research-agent` — research/analysis agent with memory + verification
+-   `recipe-code-assistant` — code generation + sandboxed execution agent
+-   `recipe-persistent-monitor` — always-on monitoring agent via gateway
+-   `recipe-orchestrated-workflow` — multi-agent pipeline with lead/builder/tester pattern
+-   `recipe-saas-agent` — multi-tenant production agent with identity + cost controls
+-   `recipe-embedded-app-agent` — agent embedded in React/Vue/Svelte with streaming UI
