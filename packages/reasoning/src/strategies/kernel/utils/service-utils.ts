@@ -8,7 +8,6 @@
 import { Context, Effect } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { ToolService } from "@reactive-agents/tools";
-import { PromptService } from "@reactive-agents/prompts";
 import { EventBus, EntropySensorService } from "@reactive-agents/core";
 
 // ── Narrow types — shared types from kernel-state, prompt type local ─────────
@@ -23,6 +22,12 @@ type PromptServiceInstance = {
     options?: { tier?: string },
   ) => Effect.Effect<{ content: string }, unknown>;
 };
+
+/** Local tag for PromptService to avoid coupling with @reactive-agents/prompts */
+class PromptServiceTag extends Context.Tag("PromptService")<
+  PromptServiceTag,
+  PromptServiceInstance
+>() {}
 
 /** Narrow EntropySensorService surface used by kernel runner */
 type EntropySensorInstance = EntropySensorService["Type"];
@@ -98,7 +103,7 @@ export const resolveStrategyServices: Effect.Effect<
   const toolServiceOptRaw = yield* Effect.serviceOption(ToolService);
   const toolService = toolServiceOptRaw as MaybeService<ToolServiceInstance>;
 
-  const promptServiceOptRaw = yield* Effect.serviceOption(PromptService).pipe(
+  const promptServiceOptRaw = yield* Effect.serviceOption(PromptServiceTag).pipe(
     Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
   );
   const promptService = promptServiceOptRaw as MaybeService<PromptServiceInstance>;
