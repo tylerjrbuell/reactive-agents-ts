@@ -1,11 +1,11 @@
 {
-  "modelId": "llama3.2:3b",
-  "calibratedAt": "2026-04-14T20:48:22.490Z",
+  "modelId": "qwen2.5-coder:14b",
+  "calibratedAt": "2026-04-14T20:48:32.186Z",
   "probeVersion": 1,
   "runsAveraged": 3,
   "steeringCompliance": "hybrid",
   "parallelCallCapability": "sequential-only",
-  "observationHandling": "uses-recall",
+  "observationHandling": "needs-inline-facts",
   "systemPromptAttention": "strong",
   "optimalToolResultChars": 2000
 }

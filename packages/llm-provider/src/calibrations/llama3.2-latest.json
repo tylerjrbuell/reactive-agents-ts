@@ -1,5 +1,5 @@
 {
-  "modelId": "llama3.2:3b",
+  "modelId": "llama3.2:latest",
   "calibratedAt": "2026-04-14T20:48:22.490Z",
   "probeVersion": 1,
   "runsAveraged": 3,

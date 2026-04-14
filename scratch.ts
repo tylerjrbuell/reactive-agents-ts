@@ -25,6 +25,7 @@ const agent = await ReactiveAgents.create()
     .withModel({ model: 'gemma4:e4b', temperature: 0.2, maxTokens: 8000 })
     .withReasoning({ defaultStrategy: 'reactive' })
     .withTools()
+    .withRequiredTools({ adaptive: true })
     .withObservability({ verbosity: 'debug', live: true })
     .build()
 

@@ -1,11 +1,11 @@
 {
   "modelId": "gemma4:e4b",
-  "calibratedAt": "2026-04-14T00:00:00Z",
+  "calibratedAt": "2026-04-14T20:47:58.487Z",
   "probeVersion": 1,
-  "runsAveraged": 0,
+  "runsAveraged": 3,
   "steeringCompliance": "hybrid",
-  "parallelCallCapability": "partial",
-  "observationHandling": "needs-inline-facts",
-  "systemPromptAttention": "moderate",
-  "optimalToolResultChars": 1500
+  "parallelCallCapability": "reliable",
+  "observationHandling": "uses-recall",
+  "systemPromptAttention": "strong",
+  "optimalToolResultChars": 2000
 }
