@@ -1,6 +1,6 @@
 # Kernel Architecture Rescue — Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 >
 > **Project skills:** Use `agent-tdd` for TDD patterns, `implement-test` for Effect-TS test templates, `effect-ts-patterns` for coding conventions, `validate-build` for anti-pattern detection, `architecture-reference` for monorepo structure.
 
@@ -26,7 +26,7 @@ Pure type and structural cleanup. Every test must continue passing after each ta
 - Modify: `packages/reasoning/src/strategies/kernel/kernel-state.ts:55-120` (KernelState), `:150-220` (KernelInput), `:426-520` (transitionState)
 - Test: `bun test packages/reasoning/`
 
-- [ ] **Step 1: Define EntropyMeta, ControllerDecision, and KernelMeta interfaces**
+- [x] **Step 1: Define EntropyMeta, ControllerDecision, and KernelMeta interfaces**
 
 Add above `KernelState` in `kernel-state.ts` (before line 55):
 
@@ -72,7 +72,7 @@ export interface KernelMeta {
 }
 ```
 
-- [ ] **Step 2: Change KernelState.meta type**
+- [x] **Step 2: Change KernelState.meta type**
 
 In `kernel-state.ts`, change the `meta` field on `KernelState` (around line 100) from:
 
@@ -94,17 +94,17 @@ meta: {} as KernelMeta,
 
 Update `transitionState` (line ~426) — the spread pattern works unchanged since `KernelMeta` spreads identically.
 
-- [ ] **Step 3: Run build to surface all type errors**
+- [x] **Step 3: Run build to surface all type errors**
 
 Run: `bun run build 2>&1 | grep "error TS" | head -40`
 
 Expected: Multiple type errors where `as any` casts now conflict with typed meta. This is the migration manifest — each error is a cast to fix.
 
-- [ ] **Step 4: Fix reactive-observer.ts (16 casts)**
+- [x] **Step 4: Fix reactive-observer.ts (16 casts)**
 
 In `packages/reasoning/src/strategies/kernel/utils/reactive-observer.ts`, replace all `(state.meta.entropy as any)` with `state.meta.entropy` and `(state.meta as any).entropy` with typed access. The `EntropyMeta` interface matches what reactive-observer writes.
 
-- [ ] **Step 5: Fix think.ts (12 casts)**
+- [x] **Step 5: Fix think.ts (12 casts)**
 
 In `packages/reasoning/src/strategies/kernel/phases/think.ts`, replace:
 - `(state.meta.entropy as any)?.entropyHistory` → `state.meta.entropy?.history`
@@ -113,11 +113,11 @@ In `packages/reasoning/src/strategies/kernel/phases/think.ts`, replace:
 - `(state.meta.maxIterations as number)` → `state.meta.maxIterations`
 - `(input.contextProfile as any)?.maxTokens` → `input.contextProfile?.maxTokens` (after adding `maxTokens` to ContextProfile in Step 7)
 
-- [ ] **Step 6: Fix message-window.ts (8 casts), act.ts (4 casts), kernel-runner.ts (1 cast), loop-detector.ts (1 cast), context-manager.ts (1 cast)**
+- [x] **Step 6: Fix message-window.ts (8 casts), act.ts (4 casts), kernel-runner.ts (1 cast), loop-detector.ts (1 cast), context-manager.ts (1 cast)**
 
 Same pattern — replace `as any` with typed property access on `KernelMeta`.
 
-- [ ] **Step 7: Add maxTokens to ContextProfile**
+- [x] **Step 7: Add maxTokens to ContextProfile**
 
 In `packages/reasoning/src/context/context-profile.ts`, add to the schema:
 
@@ -131,13 +131,13 @@ Add appropriate defaults in `CONTEXT_PROFILES`:
 - large: `maxTokens: 32768`
 - frontier: `maxTokens: 128000`
 
-- [ ] **Step 8: Run full test suite + build**
+- [x] **Step 8: Run full test suite + build**
 
 Run: `bun run build && bun test packages/reasoning/ --timeout 30000`
 
 Expected: Zero TypeScript errors. 836/836 tests pass (or close — update any tests that construct `meta` with `as any`).
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add packages/reasoning/src/strategies/kernel/kernel-state.ts \
@@ -165,7 +165,7 @@ git commit -m "refactor(reasoning): type KernelMeta — eliminate 43 as-any cast
 - Modify: `packages/reasoning/src/strategies/kernel/react-kernel.ts:41-42,98`
 - Test: `bun test packages/reasoning/`
 
-- [ ] **Step 1: Add missing fields to KernelInput**
+- [x] **Step 1: Add missing fields to KernelInput**
 
 In `kernel-state.ts`, add to `KernelInput` interface (around line 220):
 
@@ -179,7 +179,7 @@ In `kernel-state.ts`, add to `KernelInput` interface (around line 220):
 
 Make sure `ToolCallResolver` type is imported at the top of the file.
 
-- [ ] **Step 2: Replace ReActKernelInput interface with type alias**
+- [x] **Step 2: Replace ReActKernelInput interface with type alias**
 
 In `kernel-state.ts`, replace the full `ReActKernelInput` interface (lines 528-601) with:
 
@@ -188,7 +188,7 @@ In `kernel-state.ts`, replace the full `ReActKernelInput` interface (lines 528-6
 export type ReActKernelInput = KernelInput;
 ```
 
-- [ ] **Step 3: Remove all `as ReActKernelInput` casts**
+- [x] **Step 3: Remove all `as ReActKernelInput` casts**
 
 In `think.ts`:
 - Line 376: `(input as ReActKernelInput).toolCallResolver` → `input.toolCallResolver`
@@ -201,13 +201,13 @@ In `kernel-runner.ts`:
 
 In `context-builder.ts`, `guard.ts`: Update function parameter types from `ReActKernelInput` to `KernelInput`.
 
-- [ ] **Step 4: Run full test suite + build**
+- [x] **Step 4: Run full test suite + build**
 
 Run: `bun run build && bun test packages/reasoning/ --timeout 30000`
 
 Expected: All pass. Type alias preserves backward compatibility.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/reasoning/src/strategies/kernel/kernel-state.ts \
@@ -230,7 +230,7 @@ git commit -m "refactor(reasoning): merge ReActKernelInput into KernelInput — 
 - Modify: `packages/reasoning/src/strategies/kernel/index.ts:3`
 - Test: `bun test packages/reasoning/`
 
-- [ ] **Step 1: Remove barrel export**
+- [x] **Step 1: Remove barrel export**
 
 In `packages/reasoning/src/strategies/kernel/index.ts`, delete line 3:
 
@@ -238,20 +238,20 @@ In `packages/reasoning/src/strategies/kernel/index.ts`, delete line 3:
 export * from "./utils/context-utils.js";
 ```
 
-- [ ] **Step 2: Delete the files**
+- [x] **Step 2: Delete the files**
 
 ```bash
 rm packages/reasoning/src/strategies/kernel/utils/context-utils.ts
 rm packages/reasoning/tests/strategies/kernel/context-utils.test.ts
 ```
 
-- [ ] **Step 3: Run full test suite + build**
+- [x] **Step 3: Run full test suite + build**
 
 Run: `bun run build && bun test packages/reasoning/ --timeout 30000`
 
 Expected: All pass. No production code imported these files.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add -A packages/reasoning/src/strategies/kernel/utils/context-utils.ts \
@@ -269,13 +269,13 @@ git commit -m "chore(reasoning): delete dead context-utils.ts — zero productio
 - Modify: `packages/reasoning/src/index.ts`
 - Test: `bun run build` (compiler catches missing exports downstream)
 
-- [ ] **Step 1: Identify public API surface**
+- [x] **Step 1: Identify public API surface**
 
 Run: `grep -rn "from.*@reactive-agents/reasoning" packages/ apps/ --include="*.ts" | grep -v node_modules | grep -v "reasoning/src" | grep -v "reasoning/tests" | head -30`
 
 This shows what external consumers actually import. Only these symbols need to be exported.
 
-- [ ] **Step 2: Replace kernel/index.ts export-star with explicit exports**
+- [x] **Step 2: Replace kernel/index.ts export-star with explicit exports**
 
 Replace all 13 `export *` lines in `packages/reasoning/src/strategies/kernel/index.ts` with explicit named exports based on the public API audit from Step 1. Start with:
 
@@ -314,19 +314,19 @@ export { transitionState, createInitialState } from "./kernel-state.js";
 
 Add any additional exports that the Step 1 audit reveals are needed by external consumers.
 
-- [ ] **Step 3: Run build to find missing exports**
+- [x] **Step 3: Run build to find missing exports**
 
 Run: `bun run build 2>&1 | grep "error TS" | head -30`
 
 Expected: Some errors where runtime or other packages imported internal utils. Fix by adding those specific exports to the barrel, or by updating the consumer to use the correct import path.
 
-- [ ] **Step 4: Fix any broken imports, run full test suite + build**
+- [x] **Step 4: Fix any broken imports, run full test suite + build**
 
 Run: `bun run build && bun test packages/reasoning/ --timeout 30000`
 
 Expected: All pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/reasoning/src/strategies/kernel/index.ts packages/reasoning/src/index.ts
@@ -341,19 +341,19 @@ git commit -m "refactor(reasoning): explicit barrel exports — no internal util
 - Modify: `packages/reasoning/src/strategies/kernel/utils/service-utils.ts:11`
 - Test: `bun run build`
 
-- [ ] **Step 1: Audit the import**
+- [x] **Step 1: Audit the import**
 
 Read `packages/reasoning/src/strategies/kernel/utils/service-utils.ts` line 11 to understand what `PromptService` is used for.
 
-- [ ] **Step 2: Resolve the violation**
+- [x] **Step 2: Resolve the violation**
 
 If the usage is a single function call or type reference, inline it or move the calling code. If the coupling is deeper, add `@reactive-agents/prompts` to `packages/reasoning/package.json` dependencies.
 
-- [ ] **Step 3: Run build + tests**
+- [x] **Step 3: Run build + tests**
 
 Run: `bun run build && bun test packages/reasoning/ --timeout 30000`
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add packages/reasoning/src/strategies/kernel/utils/service-utils.ts
@@ -382,7 +382,7 @@ Mechanical file splits and renames. All logic stays identical — just moves bet
 - Modify: ~16 files that import from tool-utils.ts
 - Test: `bun test packages/reasoning/`
 
-- [ ] **Step 1: Identify function groupings**
+- [x] **Step 1: Identify function groupings**
 
 Read `packages/reasoning/src/strategies/kernel/utils/tool-utils.ts` and categorize every exported function:
 
@@ -392,11 +392,11 @@ Read `packages/reasoning/src/strategies/kernel/utils/tool-utils.ts` and categori
 
 **tool-parsing.ts** (~200 LOC): `parseToolCallFromText`, `extractToolCallJson`, `normalizeToolArguments`, FC cleanup regex helpers, `evaluateTransform`.
 
-- [ ] **Step 2: Create the 3 new files**
+- [x] **Step 2: Create the 3 new files**
 
 Move functions into each file. Preserve all JSDoc comments, section headers, and imports. Each file gets only the imports it needs.
 
-- [ ] **Step 3: Update all 16 import sites**
+- [x] **Step 3: Update all 16 import sites**
 
 Run: `grep -rn "from.*tool-utils" packages/reasoning/src/ --include="*.ts"`
 
@@ -404,25 +404,25 @@ For each importing file, change the import path to the specific new file. Exampl
 - `import { stripPreamble } from "../utils/tool-utils.js"` → `import { stripPreamble } from "../utils/tool-formatting.js"`
 - `import { gateNativeToolCallsForRequiredTools } from "../utils/tool-utils.js"` → `import { gateNativeToolCallsForRequiredTools } from "../utils/tool-gating.js"`
 
-- [ ] **Step 4: Delete tool-utils.ts**
+- [x] **Step 4: Delete tool-utils.ts**
 
 ```bash
 rm packages/reasoning/src/strategies/kernel/utils/tool-utils.ts
 ```
 
-- [ ] **Step 5: Update test imports**
+- [x] **Step 5: Update test imports**
 
 Run: `grep -rn "from.*tool-utils" packages/reasoning/tests/ --include="*.ts"`
 
 Update test imports to point to the new files.
 
-- [ ] **Step 6: Run full test suite + build**
+- [x] **Step 6: Run full test suite + build**
 
 Run: `bun run build && bun test packages/reasoning/ --timeout 30000`
 
 Expected: All pass — pure mechanical move, no logic changes.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add -A packages/reasoning/src/strategies/kernel/utils/tool-utils.ts \
@@ -443,11 +443,11 @@ git commit -m "refactor(reasoning): decompose tool-utils.ts (944 LOC) into 3 foc
 - Modify: All files that import from context-builder
 - Test: `bun test packages/reasoning/`
 
-- [ ] **Step 1: Find all importers**
+- [x] **Step 1: Find all importers**
 
 Run: `grep -rn "context-builder" packages/reasoning/ --include="*.ts"`
 
-- [ ] **Step 2: Rename files**
+- [x] **Step 2: Rename files**
 
 ```bash
 mv packages/reasoning/src/strategies/kernel/phases/context-builder.ts \
@@ -456,15 +456,15 @@ mv packages/reasoning/tests/strategies/kernel/phases/context-builder.test.ts \
    packages/reasoning/tests/strategies/kernel/phases/context-utils.test.ts
 ```
 
-- [ ] **Step 3: Update all import paths**
+- [x] **Step 3: Update all import paths**
 
 Change every `from "...context-builder.js"` to `from "...context-utils.js"` in all files found in Step 1.
 
-- [ ] **Step 4: Run full test suite + build**
+- [x] **Step 4: Run full test suite + build**
 
 Run: `bun run build && bun test packages/reasoning/ --timeout 30000`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -A
@@ -481,7 +481,7 @@ git commit -m "refactor(reasoning): rename context-builder.ts → context-utils.
 - Create: `packages/reasoning/tests/strategies/kernel/phases/think-guards.test.ts`
 - Test: `bun test packages/reasoning/`
 
-- [ ] **Step 1: Write failing tests for guard functions**
+- [x] **Step 1: Write failing tests for guard functions**
 
 Create `packages/reasoning/tests/strategies/kernel/phases/think-guards.test.ts`:
 
@@ -549,13 +549,13 @@ describe("think-guards", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `bun test packages/reasoning/tests/strategies/kernel/phases/think-guards.test.ts`
 
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Create think-guards.ts by extracting from think.ts**
+- [x] **Step 3: Create think-guards.ts by extracting from think.ts**
 
 Extract the guard logic from `think.ts` lines ~600-870 into `packages/reasoning/src/strategies/kernel/phases/think-guards.ts`. Each guard is a pure function:
 
@@ -593,7 +593,7 @@ export function guardRequiredToolsBlock(
 
 Move the exact logic from think.ts into each function. The function bodies are the code currently at think.ts lines 600-870, split by the conditional boundaries.
 
-- [ ] **Step 4: Update think.ts to use guard chain**
+- [x] **Step 4: Update think.ts to use guard chain**
 
 Replace the inline guard logic in think.ts with:
 
@@ -617,23 +617,23 @@ const redirect =
 if (redirect) return redirect;
 ```
 
-- [ ] **Step 5: Run full test suite + build**
+- [x] **Step 5: Run full test suite + build**
 
 Run: `bun run build && bun test packages/reasoning/ --timeout 30000`
 
 Expected: All pass — same logic, just moved to separate file.
 
-- [ ] **Step 6: Flesh out think-guards tests**
+- [x] **Step 6: Flesh out think-guards tests**
 
 Add concrete test cases that verify each guard's `pendingGuidance` writes, using mock state objects. Cover: guard fires when condition met (returns state with guidance), guard passes when condition not met (returns undefined).
 
-- [ ] **Step 7: Run tests**
+- [x] **Step 7: Run tests**
 
 Run: `bun test packages/reasoning/tests/strategies/kernel/phases/think-guards.test.ts`
 
 Expected: All pass.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add packages/reasoning/src/strategies/kernel/phases/think-guards.ts \
@@ -663,7 +663,7 @@ This phase changes how the model receives context and guidance. Test carefully.
 - Modify: `packages/reasoning/src/context/context-manager.ts:28-38` (GuidanceContext)
 - Test: `bun test packages/reasoning/`
 
-- [ ] **Step 1: Expand PendingGuidance with missing fields**
+- [x] **Step 1: Expand PendingGuidance with missing fields**
 
 In `kernel-state.ts`, update `PendingGuidance` (line 40):
 
@@ -695,7 +695,7 @@ export interface GuidanceContext {
 }
 ```
 
-- [ ] **Step 2: Update buildGuidanceSection to render new fields**
+- [x] **Step 2: Update buildGuidanceSection to render new fields**
 
 In `context-manager.ts` `buildGuidanceSection()` (line 224), add rendering for `actReminder`, `qualityGateHint`, and `evidenceGap`:
 
@@ -707,7 +707,7 @@ if (guidance.evidenceGap) signals.push(
 );
 ```
 
-- [ ] **Step 3: Convert think.ts USER injections to pendingGuidance writes**
+- [x] **Step 3: Convert think.ts USER injections to pendingGuidance writes**
 
 For each of the 5 injection sites in think.ts, replace the `{ role: "user", content: X }` message append with a `pendingGuidance` write on the returned state. Each guard function in `think-guards.ts` already returns via `transitionState` — update them to write to `pendingGuidance` instead of appending to `messages`.
 
@@ -728,7 +728,7 @@ return transitionState(state, {
 
 Apply same pattern for all 5 guards.
 
-- [ ] **Step 4: Convert act.ts USER injections to pendingGuidance writes**
+- [x] **Step 4: Convert act.ts USER injections to pendingGuidance writes**
 
 In `act.ts`, the message history assembly IIFE (lines ~780-870):
 
@@ -750,19 +750,19 @@ return [...prior, assistantMsg, ...toolResultMessages];
 
 **retryMsg (line 830):** Write to `pendingGuidance.errorRecovery`.
 
-- [ ] **Step 5: Update tests that assert USER message injection**
+- [x] **Step 5: Update tests that assert USER message injection**
 
 Run: `grep -rn "role.*user.*must still call\|role.*user.*Required tools\|role.*user.*Not done" packages/reasoning/tests/ --include="*.ts"`
 
 Update these tests to assert `pendingGuidance` fields instead of USER messages in the message array.
 
-- [ ] **Step 6: Run full test suite + build**
+- [x] **Step 6: Run full test suite + build**
 
 Run: `bun run build && bun test packages/reasoning/ --timeout 30000`
 
 Expected: All pass after test updates.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add packages/reasoning/src/strategies/kernel/kernel-state.ts \
@@ -784,7 +784,7 @@ git commit -m "feat(reasoning): single-channel guidance — all 8 USER injection
 - Modify: `packages/reasoning/src/strategies/kernel/phases/context-utils.ts` (was context-builder.ts)
 - Test: `bun test packages/reasoning/`
 
-- [ ] **Step 1: Expand ContextManager.build() to include all system prompt sections**
+- [x] **Step 1: Expand ContextManager.build() to include all system prompt sections**
 
 Update `ContextManager.build()` in `context-manager.ts` (line 61) to accept `adapter` parameter and assemble the complete system prompt:
 
@@ -837,7 +837,7 @@ export const ContextManager = {
 
 Import `buildSystemPrompt`, `buildConversationMessages` from `./phases/context-utils.js` and `buildStaticContext` from `./context-engine.js`.
 
-- [ ] **Step 2: Add buildShortGuidanceReminder helper**
+- [x] **Step 2: Add buildShortGuidanceReminder helper**
 
 In `context-manager.ts`, add a private helper that produces a 1-line user message for hybrid delivery:
 
@@ -853,7 +853,7 @@ function buildShortGuidanceReminder(guidance: GuidanceContext): string | undefin
 }
 ```
 
-- [ ] **Step 3: Replace think.ts system prompt assembly with ContextManager.build()**
+- [x] **Step 3: Replace think.ts system prompt assembly with ContextManager.build()**
 
 In `think.ts`, replace lines ~164-206 (the manual system prompt assembly block) with:
 
@@ -881,15 +881,15 @@ const { systemPrompt, messages: curatedMessages } = ContextManager.build(
 
 Remove the old manual calls to `buildStaticContext`, `buildGuidanceSection`, `buildConversationMessages` from think.ts.
 
-- [ ] **Step 4: Diff-test: verify system prompt parity**
+- [x] **Step 4: Diff-test: verify system prompt parity**
 
 Before fully switching, add a temporary assertion that the old and new system prompts produce equivalent content (modulo the new Progress and Observations sections). Remove this assertion after verification.
 
-- [ ] **Step 5: Run full test suite + build**
+- [x] **Step 5: Run full test suite + build**
 
 Run: `bun run build && bun test packages/reasoning/ --timeout 30000`
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add packages/reasoning/src/context/context-manager.ts \
@@ -908,11 +908,11 @@ git commit -m "feat(reasoning): ContextManager.build() is sole context assembly 
 - Modify: `packages/reasoning/src/strategies/kernel/phases/context-utils.ts` (remove frozen ID tracking)
 - Test: `bun test packages/reasoning/tests/context/message-window.test.ts`
 
-- [ ] **Step 1: Remove frozenToolResultIds from KernelState**
+- [x] **Step 1: Remove frozenToolResultIds from KernelState**
 
 In `kernel-state.ts`, remove `frozenToolResultIds` field (line ~412) from state and `initialKernelState`.
 
-- [ ] **Step 2: Remove frozen ID logic from message-window.ts**
+- [x] **Step 2: Remove frozen ID logic from message-window.ts**
 
 In `message-window.ts`, remove the `frozenToolResultIds` parameter from `applyMessageWindowWithCompact`, remove the freeze tracking logic (~30 LOC), and remove recall hints from compacted messages.
 
@@ -926,19 +926,19 @@ export function applyMessageWindowWithCompact(
 ): KernelMessage[]
 ```
 
-- [ ] **Step 3: Remove frozen ID tracking from context-utils.ts**
+- [x] **Step 3: Remove frozen ID tracking from context-utils.ts**
 
 In `phases/context-utils.ts`, remove the `newlyFrozenIds` return value from `buildConversationMessages` and the `transitionState` call that persists frozen IDs.
 
-- [ ] **Step 4: Update tests**
+- [x] **Step 4: Update tests**
 
 Update `packages/reasoning/tests/context/message-window.test.ts` to remove frozen ID test cases and update function signatures.
 
-- [ ] **Step 5: Run full test suite + build**
+- [x] **Step 5: Run full test suite + build**
 
 Run: `bun run build && bun test packages/reasoning/ --timeout 30000`
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add packages/reasoning/src/context/message-window.ts \
@@ -958,7 +958,7 @@ git commit -m "refactor(reasoning): simplify message window — remove frozenToo
 - Create: `packages/reasoning/tests/strategies/kernel/utils/extract-fact.test.ts`
 - Test: `bun test packages/reasoning/`
 
-- [ ] **Step 1: Write failing tests for extractFactDeterministic**
+- [x] **Step 1: Write failing tests for extractFactDeterministic**
 
 Create `packages/reasoning/tests/strategies/kernel/utils/extract-fact.test.ts`:
 
@@ -994,13 +994,13 @@ describe("extractFactDeterministic", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `bun test packages/reasoning/tests/strategies/kernel/utils/extract-fact.test.ts`
 
 Expected: FAIL — function not exported.
 
-- [ ] **Step 3: Implement extractFactDeterministic**
+- [x] **Step 3: Implement extractFactDeterministic**
 
 Add to `packages/reasoning/src/strategies/kernel/utils/tool-execution.ts`:
 
@@ -1038,13 +1038,13 @@ export function extractFactDeterministic(
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `bun test packages/reasoning/tests/strategies/kernel/utils/extract-fact.test.ts`
 
 Expected: All pass.
 
-- [ ] **Step 5: Wire extraction into act.ts**
+- [x] **Step 5: Wire extraction into act.ts**
 
 In `act.ts`, for both parallel batch path and sequential path, change the execution order:
 
@@ -1070,15 +1070,15 @@ const obsStep = makeStep("observation", obsContent, {
 });
 ```
 
-- [ ] **Step 6: Verify buildPriorWorkSection reads extractedFact**
+- [x] **Step 6: Verify buildPriorWorkSection reads extractedFact**
 
 Read `context-manager.ts` `buildPriorWorkSection()` (line ~212) and confirm it reads `step.metadata?.extractedFact`. If it doesn't, update it to do so.
 
-- [ ] **Step 7: Run full test suite + build**
+- [x] **Step 7: Run full test suite + build**
 
 Run: `bun run build && bun test packages/reasoning/ --timeout 30000`
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add packages/reasoning/src/strategies/kernel/utils/tool-execution.ts \
@@ -1104,7 +1104,7 @@ git commit -m "feat(reasoning): wire observation pipeline — extractFactDetermi
 - Create: `packages/llm-provider/tests/calibration.test.ts`
 - Test: `bun test packages/llm-provider/`
 
-- [ ] **Step 1: Write failing test for schema validation**
+- [x] **Step 1: Write failing test for schema validation**
 
 Create `packages/llm-provider/tests/calibration.test.ts`:
 
@@ -1147,13 +1147,13 @@ describe("ModelCalibration schema", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `bun test packages/llm-provider/tests/calibration.test.ts`
 
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Implement calibration.ts**
+- [x] **Step 3: Implement calibration.ts**
 
 Create `packages/llm-provider/src/calibration.ts`:
 
@@ -1206,13 +1206,13 @@ export function loadCalibration(modelId: string): ModelCalibration | undefined {
 }
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `bun test packages/llm-provider/tests/calibration.test.ts`
 
 Expected: All pass.
 
-- [ ] **Step 5: Export from package barrel**
+- [x] **Step 5: Export from package barrel**
 
 Add to `packages/llm-provider/src/index.ts`:
 
@@ -1220,7 +1220,7 @@ Add to `packages/llm-provider/src/index.ts`:
 export { ModelCalibrationSchema, loadCalibration, type ModelCalibration } from "./calibration.js";
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add packages/llm-provider/src/calibration.ts \
@@ -1239,7 +1239,7 @@ git commit -m "feat(llm-provider): ModelCalibration schema + loader"
 - Modify: `packages/llm-provider/tests/adapter.test.ts`
 - Test: `bun test packages/llm-provider/`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Add to `packages/llm-provider/tests/adapter.test.ts`:
 
@@ -1279,7 +1279,7 @@ describe("buildCalibratedAdapter", () => {
 });
 ```
 
-- [ ] **Step 2: Implement buildCalibratedAdapter**
+- [x] **Step 2: Implement buildCalibratedAdapter**
 
 Add to `packages/llm-provider/src/calibration.ts`:
 
@@ -1310,7 +1310,7 @@ export function buildCalibratedAdapter(
 }
 ```
 
-- [ ] **Step 3: Upgrade selectAdapter return type**
+- [x] **Step 3: Upgrade selectAdapter return type**
 
 In `packages/llm-provider/src/adapter.ts` (line 262), change `selectAdapter` to return `{ adapter, profileOverrides? }`:
 
@@ -1332,7 +1332,7 @@ export function selectAdapter(
 }
 ```
 
-- [ ] **Step 4: Update all selectAdapter call sites**
+- [x] **Step 4: Update all selectAdapter call sites**
 
 Run: `grep -rn "selectAdapter(" packages/reasoning/src/ --include="*.ts"`
 
@@ -1347,11 +1347,11 @@ const { adapter, profileOverrides } = selectAdapter(caps, profile.tier, input.mo
 if (profileOverrides) Object.assign(profile, profileOverrides);
 ```
 
-- [ ] **Step 5: Run full build + tests**
+- [x] **Step 5: Run full build + tests**
 
 Run: `bun run build && bun test packages/llm-provider/ --timeout 30000 && bun test packages/reasoning/ --timeout 30000`
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add packages/llm-provider/src/calibration.ts \
@@ -1370,7 +1370,7 @@ git commit -m "feat(llm-provider): buildCalibratedAdapter + selectAdapter calibr
 - Create: `packages/llm-provider/tests/calibration-runner.test.ts`
 - Test: `bun test packages/llm-provider/`
 
-- [ ] **Step 1: Implement probe runner with 5 probes**
+- [x] **Step 1: Implement probe runner with 5 probes**
 
 Create `packages/llm-provider/src/calibration-runner.ts` with:
 
@@ -1421,15 +1421,15 @@ export async function runCalibrationProbes(
 
 Implement each probe function (`probeSteeringChannel`, `probeParallelBatching`, etc.) using direct Ollama HTTP API calls (`fetch("http://localhost:11434/api/chat", ...)`). Each probe is a focused 100-token scenario as described in the spec.
 
-- [ ] **Step 2: Write tests (with mock Ollama responses)**
+- [x] **Step 2: Write tests (with mock Ollama responses)**
 
 The probe tests mock the Ollama HTTP API to verify probe logic without requiring a running model.
 
-- [ ] **Step 3: Run tests**
+- [x] **Step 3: Run tests**
 
 Run: `bun test packages/llm-provider/tests/calibration-runner.test.ts`
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add packages/llm-provider/src/calibration-runner.ts \
@@ -1449,7 +1449,7 @@ git commit -m "feat(llm-provider): calibration probe suite — 5 probes for per-
 - Create: `packages/llm-provider/src/calibrations/qwen2.5-coder-7b.json`
 - Test: `bun run build`
 
-- [ ] **Step 1: Add withCalibration to builder**
+- [x] **Step 1: Add withCalibration to builder**
 
 In `packages/runtime/src/builder.ts`, add:
 
@@ -1460,11 +1460,11 @@ withCalibration(mode: "auto" | "skip" | ModelCalibration) {
 }
 ```
 
-- [ ] **Step 2: Wire calibration through execution-engine to kernel input**
+- [x] **Step 2: Wire calibration through execution-engine to kernel input**
 
 In `packages/runtime/src/execution-engine.ts`, pass calibration data from builder config through to `KernelInput` so it reaches `ContextManager.build()`.
 
-- [ ] **Step 3: Pre-bake calibration JSONs**
+- [x] **Step 3: Pre-bake calibration JSONs**
 
 Create `packages/llm-provider/src/calibrations/` directory. Run the probe suite against each model (requires Ollama running with models pulled) and save results:
 
@@ -1476,11 +1476,11 @@ bun run packages/llm-provider/src/calibration-runner.ts --model qwen2.5-coder:7b
 
 If models aren't available, create reasonable initial JSONs based on known behavior and mark `runsAveraged: 0` to indicate they need empirical validation.
 
-- [ ] **Step 4: Run full build + tests**
+- [x] **Step 4: Run full build + tests**
 
 Run: `bun run build && bun test packages/reasoning/ --timeout 30000`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/runtime/src/builder.ts \
@@ -1507,7 +1507,7 @@ git commit -m "feat(runtime): .withCalibration() builder method + pre-baked cali
 - Create: `packages/reasoning/tests/strategies/kernel/phases/evidence-grounding-guard.test.ts`
 - Test: `bun test packages/reasoning/`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Create `packages/reasoning/tests/strategies/kernel/phases/evidence-grounding-guard.test.ts`:
 
@@ -1546,7 +1546,7 @@ describe("guardEvidenceGrounding", () => {
 });
 ```
 
-- [ ] **Step 2: Refactor evidence-grounding.ts**
+- [x] **Step 2: Refactor evidence-grounding.ts**
 
 Update `packages/reasoning/src/strategies/kernel/utils/evidence-grounding.ts` to work with `extractedFact` data:
 
@@ -1582,7 +1582,7 @@ export function findUngroundedClaims(
 }
 ```
 
-- [ ] **Step 3: Add guardEvidenceGrounding to think-guards.ts**
+- [x] **Step 3: Add guardEvidenceGrounding to think-guards.ts**
 
 ```typescript
 import { findUngroundedClaims } from "../utils/evidence-grounding.js";
@@ -1615,15 +1615,15 @@ export function guardEvidenceGrounding(
 }
 ```
 
-- [ ] **Step 4: Wire into guard chain in think.ts**
+- [x] **Step 4: Wire into guard chain in think.ts**
 
 Ensure `guardEvidenceGrounding` is in the guard chain (already done in Task 8 if the placeholder was included — verify it's imported and called).
 
-- [ ] **Step 5: Run full test suite + build**
+- [x] **Step 5: Run full test suite + build**
 
 Run: `bun run build && bun test packages/reasoning/ --timeout 30000`
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add packages/reasoning/src/strategies/kernel/utils/evidence-grounding.ts \
@@ -1648,25 +1648,25 @@ git commit -m "feat(reasoning): evidence grounding guard — verify output claim
 - Run: `scratch.ts` with `gemma4:e4b`
 - Run: Full monorepo test suite
 
-- [ ] **Step 1: Full monorepo build**
+- [x] **Step 1: Full monorepo build**
 
 Run: `bun run build`
 
 Expected: Zero TypeScript errors across all packages.
 
-- [ ] **Step 2: Full monorepo test suite**
+- [x] **Step 2: Full monorepo test suite**
 
 Run: `bun test --timeout 30000`
 
 Expected: All tests pass across all packages.
 
-- [ ] **Step 3: Reasoning package as-any audit**
+- [x] **Step 3: Reasoning package as-any audit**
 
 Run: `grep -rn "as any" packages/reasoning/src/ --include="*.ts" | grep -v "test" | wc -l`
 
 Expected: 0-2 (SDK type gaps only).
 
-- [ ] **Step 4: Dead code audit**
+- [x] **Step 4: Dead code audit**
 
 Run:
 ```bash
@@ -1677,7 +1677,7 @@ grep -rn "tool-utils" packages/reasoning/src/ --include="*.ts"
 
 Expected: Zero results for both.
 
-- [ ] **Step 5: End-to-end probe with gemma4:e4b**
+- [x] **Step 5: End-to-end probe with gemma4:e4b**
 
 Run `scratch.ts` 3 times. Check:
 1. Clean FC message thread (no synthetic USER messages except `[Harness]:` max_tokens recovery)
@@ -1686,13 +1686,13 @@ Run `scratch.ts` 3 times. Check:
 4. All 4 crypto prices retrieved
 5. Output grounded in session evidence
 
-- [ ] **Step 6: Verify calibration loads**
+- [x] **Step 6: Verify calibration loads**
 
 Run: `bun -e "const { loadCalibration } = require('./packages/llm-provider/src/calibration.js'); console.log(loadCalibration('gemma4:e4b'))"`
 
 Expected: Returns the pre-baked calibration JSON.
 
-- [ ] **Step 7: Final commit with updated docs**
+- [x] **Step 7: Final commit with updated docs**
 
 Update `AGENTS.md` and `.agents/MEMORY.md` to reflect the new architecture. Commit.
 
