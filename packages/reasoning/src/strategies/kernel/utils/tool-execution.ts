@@ -217,6 +217,23 @@ function repairJsonControlChars(json: string): string {
 }
 
 /**
+ * Strip markdown/HTML noise from web page content so the model's snippet
+ * budget is spent on actual data (prices, names, dates) instead of image
+ * tags and navigation chrome.  Zero LLM calls — pure regex.
+ */
+function cleanWebSnippet(text: string): string {
+  return text
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+    .replace(/!\[[^\]]*\]/g, "")
+    .replace(/<img[^>]*>/gi, "")
+    .replace(/<[^>]+>/g, "")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+/**
  * Normalize tool-specific raw output to compact semantic representations.
  */
 function normalizeObservation(toolName: string, result: string): string {
@@ -238,7 +255,7 @@ function normalizeObservation(toolName: string, result: string): string {
         .slice(0, 5)
         .map((r, i) => {
           const header = `${i + 1}. ${r.title ?? "result"}: ${r.url ?? ""}`;
-          const snippet = r.content?.trim();
+          const snippet = cleanWebSnippet(r.content?.trim() ?? "");
           return snippet ? `${header}\n   ${snippet.slice(0, 300)}` : header;
         })
         .join("\n");
@@ -246,7 +263,7 @@ function normalizeObservation(toolName: string, result: string): string {
     }
 
     if (toolName === "http-get" && typeof parsed.content === "string") {
-      return parsed.content;
+      return cleanWebSnippet(parsed.content);
     }
 
     if (toolName === "shell-execute" && typeof parsed === "object" && parsed !== null) {
@@ -549,18 +566,21 @@ export function executeNativeToolCall(
 
           // In FC mode, clean up the compressed content for native message format:
           // - Replace verbose [STORED: ...] header with a clean preview header
-          // - Strip verbose recall hints but keep one concise retrieval line
-          //   so the model knows it CAN recall the full data when needed
+          // - Strip ALL recall/storage hints (covers every compressToolResult variant)
+          // - Append one concise retrieval line if stored
           content = content
             .replace(/^\[STORED: [^\]]+\]\n?/m, `[${toolCall.name} result — compressed preview]\n`)
             .replace(/— use recall\("[^"]+",? ?(?:full: ?true)?\)[^\n]*/g, "")
             .replace(/— call recall[^\n]*/g, "")
-            .replace(/✓ Preview covers[^\n]*/g, "")
+            .replace(/— full text is stored[^\n]*/g, "")
+            .replace(/— full data is stored[^\n]*/g, "")
+            .replace(/— full object is stored[^\n]*/g, "")
+            .replace(/✓ Preview (?:covers|includes)[^\n]*/g, "")
             .replace(/\n{3,}/g, "\n\n")
             .trim();
 
           if (storedKey) {
-            content += `\n  — full text is stored. For terminal/CLI output use recall("${storedKey}", full: true) first; or segmented recall("${storedKey}", lineStart: 5, lineCount: 40) or recall("${storedKey}", start: 0, maxChars: 1200).`;
+            content += `\n  — full text is stored. Use recall("${storedKey}") to retrieve.`;
           }
         }
 

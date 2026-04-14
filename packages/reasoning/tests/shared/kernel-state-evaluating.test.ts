@@ -21,9 +21,9 @@ describe("KernelStatus evaluating", () => {
 });
 
 describe("KernelState new fields", () => {
-  it("has steeringNudge undefined by default", () => {
+  it("has pendingGuidance undefined by default", () => {
     const state = initialKernelState(defaultOpts);
-    expect(state.steeringNudge).toBeUndefined();
+    expect(state.pendingGuidance).toBeUndefined();
   });
 
   it("has frozenToolResultIds as empty set by default", () => {

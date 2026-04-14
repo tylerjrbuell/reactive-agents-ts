@@ -1,6 +1,5 @@
 // File: src/strategies/kernel/context-utils.ts
 import type { ReasoningStep } from "../../../types/index.js";
-import type { ContextProfile } from "../../../context/context-profile.js";
 import { stripThinking } from "./stream-parser.js";
 
 /**
@@ -252,41 +251,3 @@ export function summarizeStepsTriplets(steps: readonly ReasoningStep[]): string[
   return lines;
 }
 
-/**
- * Build a compacted context string from initial context + step history.
- * Keeps the most recent `fullDetailSteps` steps in full detail (ReAct format).
- * Older steps are summarized using decision-preserving triplet grouping
- * to prevent O(n²) token growth while retaining key findings.
- *
- * Thresholds come from the context profile (defaults: compactAfterSteps=6, fullDetailSteps=4).
- */
-export function buildCompactedContext(
-  initialContext: string,
-  steps: readonly ReasoningStep[],
-  profile: Pick<ContextProfile, "compactAfterSteps" | "fullDetailSteps"> | undefined,
-): string {
-  const compactAfterSteps = profile?.compactAfterSteps ?? 6;
-  const fullDetailSteps = profile?.fullDetailSteps ?? 4;
-
-  if (steps.length === 0) return initialContext;
-
-  if (steps.length <= compactAfterSteps) {
-    // Not enough steps to compact — rebuild context from all steps in ReAct format
-    const stepLines = steps.map(formatStepForContext).join("\n");
-    return `${initialContext}\n\n${stepLines}`;
-  }
-
-  // Split into old steps (summarized) and recent steps (full detail)
-  const cutoff = steps.length - fullDetailSteps;
-  const oldSteps = steps.slice(0, cutoff);
-  const recentSteps = steps.slice(cutoff);
-
-  // Summarize old steps using decision-preserving triplet grouping
-  const summaryLines = summarizeStepsTriplets(oldSteps);
-  const summary = `[Earlier steps — ${oldSteps.length} steps]:\n${summaryLines.join("\n")}`;
-
-  // Keep recent steps in full detail in ReAct format
-  const recentLines = recentSteps.map(formatStepForContext).join("\n");
-
-  return `${initialContext}\n\n${summary}\n\n[Recent steps]:\n${recentLines}`;
-}

@@ -246,7 +246,7 @@ describe("runKernel", () => {
     expect(profile.toolResultMaxChars).toBe(1234);
     // Mid default should be present for non-overridden fields
     expect(profile.tier).toBe("mid");
-    expect(profile.promptVerbosity).toBe("standard");
+    expect(profile.toolSchemaDetail).toBe("full");
   });
 
   it("does not fire done hook when max iterations reached with non-done status", async () => {
@@ -991,7 +991,7 @@ describe("runKernel — required tools guard", () => {
         );
       }
 
-      if (callCount === 4 && typeof state.steeringNudge === "string" && state.steeringNudge.includes("alternate path")) {
+      if (callCount === 4 && typeof state.pendingGuidance?.errorRecovery === "string" && state.pendingGuidance.errorRecovery.includes("alternate path")) {
         const tools = new Set(state.toolsUsed);
         tools.add("http-get");
         return Effect.succeed(
@@ -1105,7 +1105,7 @@ describe("runKernel — required tools guard", () => {
 
     expect(result.status).toBe("failed");
     expect(result.error).toContain("web-search");
-    expect(result.steeringNudge ?? "").not.toContain("Call `final-answer` now");
+    expect(result.pendingGuidance?.oracleGuidance ?? "").not.toContain("Call `final-answer` now");
     expect(result.readyToAnswerNudgeCount ?? 0).toBe(0);
   });
 });

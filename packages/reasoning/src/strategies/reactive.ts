@@ -163,6 +163,7 @@ export const executeReactive = (
       initialMessages: input.initialMessages,
       synthesisConfig: input.synthesisConfig,
       observationSummary: input.observationSummary,
+      modelId: input.modelId,
     };
 
     const state = yield* runKernel(reactKernel, kernelInput, {

@@ -1,8 +1,12 @@
 /**
- * Context Builder — prepares everything the LLM sees on this turn.
+ * Context Builder — builds conversation messages, tool schemas, and base system
+ * prompt for each LLM turn.
  *
  * Pure data transformation: no LLM calls, no Effect services.
  * Fully unit-testable in isolation.
+ *
+ * Note: the full system prompt (with guidance, ICS, progress sections) is
+ * assembled by think.ts using buildStaticContext + buildGuidanceSection.
  */
 import type { LLMMessage, ProviderAdapter } from "@reactive-agents/llm-provider";
 import type { ContextProfile } from "../../../context/context-profile.js";
@@ -114,7 +118,7 @@ export function buildToolSchemas(
 
 export interface BuildConversationMessagesResult {
   messages: LLMMessage[];
-  /** The updated state (steeringNudge cleared after consumption). */
+  /** The updated state after compaction. */
   updatedState: KernelState;
 }
 
@@ -122,15 +126,17 @@ export interface BuildConversationMessagesResult {
  * Build the conversation message list for this LLM turn.
  *
  * Applies the sliding message window + task framing on the first iteration.
- * Appends the auto-forward section when present, then consumes any pending
- * steeringNudge by appending it as a final user message and clearing it from state.
+ * Guidance signals are now rendered in the system prompt Guidance: section by think.ts
+ * via pendingGuidance — not injected as user messages here.
+ *
+ * Tool results are never auto-forwarded here — they live in the message thread
+ * as-is. The ContextManager (Phase 3+) will curate what the model sees.
  */
 export function buildConversationMessages(
   state: KernelState,
   input: ReActKernelInput,
   profile: ContextProfile,
   adapter: ProviderAdapter,
-  autoForwardSection: string,
 ): BuildConversationMessagesResult {
   let currentState = state;
   const { messages: compactedMessages, newlyFrozenIds } = applyMessageWindowWithCompact(
@@ -168,18 +174,7 @@ export function buildConversationMessages(
     }
   }
 
-  let finalMessages: LLMMessage[] = (workingMessages as readonly KernelMessage[]).map(toProviderMessage);
+  const finalMessages: LLMMessage[] = (workingMessages as readonly KernelMessage[]).map(toProviderMessage);
 
-  if (autoForwardSection) {
-    finalMessages = [...finalMessages, { role: "user" as const, content: autoForwardSection }];
-  }
-
-  // Consume steeringNudge: append as final user message, then clear from state
-  let updatedState = currentState;
-  if (currentState.steeringNudge) {
-    finalMessages = [...finalMessages, { role: "user" as const, content: currentState.steeringNudge }];
-    updatedState = transitionState(currentState, { steeringNudge: undefined });
-  }
-
-  return { messages: finalMessages, updatedState };
+  return { messages: finalMessages, updatedState: currentState };
 }

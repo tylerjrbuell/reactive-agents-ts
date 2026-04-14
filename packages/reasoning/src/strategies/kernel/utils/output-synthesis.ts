@@ -151,6 +151,47 @@ function validateList(output: string): FormatValidationResult {
   return { valid: false, reason: "No bullet or numbered list structure found" };
 }
 
+// ── Content Completeness Validation ──────────────────────────────────────────
+
+/**
+ * Check whether the output mentions the entities the task explicitly named.
+ *
+ * Only `expectedEntities` (named items like "XRP", "ETH") drive hard validation.
+ * `expectedContent` (column/field hints like "price", "source") is tracked but
+ * does not trigger synthesis on its own — these are generic terms that models
+ * may paraphrase legitimately.
+ */
+export function validateContentCompleteness(
+  output: string,
+  intent: TaskIntent,
+): { complete: boolean; missingEntities: readonly string[]; missingContent: readonly string[] } {
+  const lower = output.toLowerCase();
+
+  const entities = intent.expectedEntities ?? [];
+  const content = intent.expectedContent ?? [];
+
+  const missingEntities = entities.filter((e) => !lower.includes(e));
+  const missingContent = content.filter((c) => !lower.includes(c));
+
+  if (entities.length === 0) {
+    return { complete: true, missingEntities: [], missingContent };
+  }
+
+  const complete = missingEntities.length / entities.length < 0.5;
+  if (!complete) return { complete: false, missingEntities, missingContent };
+
+  const hasNumericalData = /\$[\d,.]+|\d+\.\d{2,}/.test(output);
+  if (!hasNumericalData) {
+    return {
+      complete: false,
+      missingEntities: [],
+      missingContent: ["numerical data values"],
+    };
+  }
+
+  return { complete, missingEntities, missingContent };
+}
+
 // ── Candidate Builder ────────────────────────────────────────────────────────
 
 /**
@@ -177,6 +218,7 @@ export function buildSynthesisPrompt(
   rawOutput: string,
   format: OutputFormat,
   task: string,
+  intent?: TaskIntent,
 ): string {
   const formatInstructions: Record<OutputFormat, string> = {
     markdown: "Format the data using Markdown formatting (headings, tables, lists, bold, code blocks, etc.) as appropriate for the content. If the user asked for a table, produce a proper markdown table with | separators and a header row.",
@@ -188,11 +230,27 @@ export function buildSynthesisPrompt(
     prose: "Write as flowing prose paragraphs.",
   };
 
-  return [
+  const lines = [
     `The user asked: "${task}"`,
     "",
     `They requested the output as: ${format}`,
     `Instruction: ${formatInstructions[format]}`,
+  ];
+
+  if (intent?.expectedEntities && intent.expectedEntities.length > 0) {
+    lines.push(
+      "",
+      `REQUIRED ENTITIES — the output MUST include a data row for each of these: ${intent.expectedEntities.join(", ")}`,
+    );
+  }
+
+  if (intent?.expectedContent && intent.expectedContent.length > 0) {
+    lines.push(
+      `REQUIRED COLUMNS/FIELDS: ${intent.expectedContent.join(", ")}`,
+    );
+  }
+
+  lines.push(
     "",
     "Here is the raw data gathered by tools:",
     "---",
@@ -202,7 +260,9 @@ export function buildSynthesisPrompt(
     "IMPORTANT: Extract the actual data values (numbers, prices, names, dates, etc.) from the raw tool output above.",
     "Produce a professional, well-formatted response that directly answers the user's question.",
     "Produce ONLY the formatted output — no explanation, no preamble, no meta-commentary about the data source.",
-  ].join("\n");
+  );
+
+  return lines.join("\n");
 }
 
 // ── Finalization Pipeline ────────────────────────────────────────────────────
@@ -235,16 +295,6 @@ function finalizeOutputSync(
   intent: TaskIntent,
   _task: string,
 ): FinalizedOutput {
-  // No format requested and model-generated → pass through
-  if (!intent.format && candidate.source === "model") {
-    return {
-      output: candidate.output,
-      formatValidated: true,
-      synthesized: false,
-      source: candidate.source,
-    };
-  }
-
   // Harness/oracle-assembled output is raw tool data — always needs synthesis
   // when a format is requested OR when any format cues were detected.
   if (candidate.source === "harness" || candidate.source === "oracle") {
@@ -257,7 +307,33 @@ function finalizeOutputSync(
     };
   }
 
-  // No format requested (model source, fallback) → pass through
+  // Content completeness check — applies regardless of format.
+  // If the task named specific entities (e.g. "XRP, XLM, ETH, Bitcoin") and
+  // more than half are missing from the output, force synthesis even when the
+  // structural format looks fine.
+  const contentCheck = validateContentCompleteness(candidate.output, intent);
+
+  // No format requested and model-generated → pass through unless content is incomplete
+  if (!intent.format && candidate.source === "model") {
+    if (!contentCheck.complete) {
+      const missing = [...contentCheck.missingEntities, ...contentCheck.missingContent];
+      return {
+        output: candidate.output,
+        formatValidated: false,
+        synthesized: false,
+        source: candidate.source,
+        validationReason: `Output missing expected content: ${missing.join(", ")}`,
+      };
+    }
+    return {
+      output: candidate.output,
+      formatValidated: true,
+      synthesized: false,
+      source: candidate.source,
+    };
+  }
+
+  // No format requested (fallback source) → pass through
   if (!intent.format) {
     return {
       output: candidate.output,
@@ -269,7 +345,9 @@ function finalizeOutputSync(
 
   // Validate against requested format
   const validation = validateOutputFormat(candidate.output, intent.format);
-  if (validation.valid) {
+
+  // Even if format is structurally valid, content must be complete
+  if (validation.valid && contentCheck.complete) {
     return {
       output: candidate.output,
       formatValidated: true,
@@ -278,13 +356,19 @@ function finalizeOutputSync(
     };
   }
 
-  // Format doesn't match — mark as not validated
-  // Synthesis via LLM is handled by the kernel-runner caller when LLMService is available
+  // Format or content doesn't match — mark as not validated
+  const reasons: string[] = [];
+  if (!validation.valid && validation.reason) reasons.push(validation.reason);
+  if (!contentCheck.complete) {
+    const missing = [...contentCheck.missingEntities, ...contentCheck.missingContent];
+    reasons.push(`Missing expected content: ${missing.join(", ")}`);
+  }
+
   return {
     output: candidate.output,
     formatValidated: false,
     synthesized: false,
     source: candidate.source,
-    validationReason: validation.reason,
+    validationReason: reasons.join("; "),
   };
 }

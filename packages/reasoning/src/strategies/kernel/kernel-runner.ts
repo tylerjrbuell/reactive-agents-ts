@@ -48,6 +48,7 @@ import { extractOutputFormat, type TaskIntent } from "./utils/task-intent.js";
 import { shouldAutoCheckpoint, autoCheckpoint } from "./utils/auto-checkpoint.js";
 import {
   validateOutputFormat,
+  validateContentCompleteness,
   buildFinalAnswerCandidate,
   finalizeOutput,
   buildSynthesisPrompt,
@@ -457,8 +458,8 @@ export function runKernel(
     const mutableScratchpad = new Map<string, string>(state.scratchpad);
 
     // ── 7. Main loop ─────────────────────────────────────────────────────────
-    // Track which tools were used before this iteration to compute per-step tools.
-    let prevToolsUsed = new Set<string>();
+    // Track tool calls per iteration by scanning new action steps since last check.
+    let prevActionCount = 0;
     let prevStepCount = 0;
     const loopCfg = options.loopDetection;
     const tierGuards = TIER_GUARD_THRESHOLDS[profile.tier] ?? TIER_GUARD_THRESHOLDS["mid"];
@@ -592,10 +593,19 @@ export function runKernel(
       ));
 
       // ── Iteration progress hook ──────────────────────────────────────────
-      // Compute which tools were called in THIS iteration (new since prev step).
-      const toolsThisStep = [...state.toolsUsed].filter((t) => !prevToolsUsed.has(t));
+      // Compute which tools were called in THIS iteration by scanning new action
+      // steps since prevStepCount. Includes duplicates so parallel batches
+      // (e.g. 4x web-search) report all 4 calls, not just the unique name.
+      const toolsThisStep: string[] = [];
+      for (let i = prevActionCount; i < state.steps.length; i++) {
+        const s = state.steps[i];
+        if (s.type === "action") {
+          const toolName = (s.metadata?.toolUsed ?? (s.metadata?.toolCall && (s.metadata.toolCall as { name?: string }).name)) as string | undefined;
+          if (toolName) toolsThisStep.push(toolName);
+        }
+      }
       yield* hooks.onIterationProgress(state, toolsThisStep);
-      prevToolsUsed = new Set(state.toolsUsed);
+      prevActionCount = state.steps.length;
 
       // ── Lane controller (gather vs synthesize) ───────────────────────────
       const laneDecision = decideExecutionLane({
@@ -652,7 +662,7 @@ export function runKernel(
           state = transitionState(state, {
             status: "thinking",
             steps: [...state.steps, makeStep("observation", `⚠️ ${guidance}`)],
-            steeringNudge: guidance,
+            pendingGuidance: { requiredToolsPending: missingRequiredByCount, errorRecovery: guidance },
           });
           continue;
         }
@@ -674,7 +684,7 @@ export function runKernel(
           state = transitionState(state, {
             status: "thinking",
             steps: [...state.steps, makeStep("observation", `⚠️ ${guidance}`)],
-            steeringNudge: guidance,
+            pendingGuidance: { errorRecovery: guidance },
             meta: {
               ...state.meta,
               recoveryPending: true,
@@ -718,7 +728,7 @@ export function runKernel(
           lastErrors: getLastErrors(state),
         });
         if (icsResult.steeringNudge) {
-          state = transitionState(state, { steeringNudge: icsResult.steeringNudge });
+          state = transitionState(state, { pendingGuidance: { icsGuidance: icsResult.steeringNudge } });
         }
       }
 
@@ -747,11 +757,11 @@ export function runKernel(
             meta: { ...state.meta, terminatedBy: "oracle_forced" },
           });
         } else if (shouldNudgeForOracle) {
-          // Stage 1: inject mandatory steering nudge, increment count
+          // Stage 1: inject mandatory oracle guidance, increment count
           const mandatoryNudge = "You are ready to answer. Call `final-answer` now with your complete response. This is mandatory.";
           state = transitionState(state, {
             readyToAnswerNudgeCount: nudgeCount + 1,
-            steeringNudge: mandatoryNudge,
+            pendingGuidance: { oracleGuidance: mandatoryNudge },
           });
           yield* Effect.log(`[oracle-gate] Stage 1 nudge injected (nudgeCount now ${nudgeCount + 1})`);
         } else if (nudgeCount > 0) {
@@ -863,7 +873,7 @@ export function runKernel(
               };
 
               // Reset per-loop tracking
-              prevToolsUsed = new Set<string>();
+              prevActionCount = 0;
               requiredToolRedirects = 0;
               consecutiveStalled = 0;
               prevArtifactCount = 0;
@@ -892,7 +902,7 @@ export function runKernel(
             state = transitionState(state, {
               status: "thinking",
               steps: [...state.steps, makeStep("observation", `⚠️ ${guidance}`)],
-              steeringNudge: guidance,
+              pendingGuidance: { errorRecovery: guidance },
               error: null,
             });
             continue;
@@ -920,7 +930,7 @@ export function runKernel(
               state = transitionState(state, {
                 status: "thinking",
                 steps: [...state.steps, makeStep("observation", `⚠️ ${guidance}`)],
-                steeringNudge: guidance,
+                pendingGuidance: { loopDetected: true, requiredToolsPending: missingRequiredByCount, errorRecovery: guidance },
                 error: null,
               });
               continue;
@@ -1034,9 +1044,8 @@ export function runKernel(
       if (needsSynthesis) {
         const llmOpt = yield* Effect.serviceOption(LLMService);
         if (llmOpt._tag === "Some") {
-          // Use detected format, or fallback to "prose" for harness output without format cues
           const synthesisFormat = taskIntent.format ?? "prose";
-          const synthesisPrompt = buildSynthesisPrompt(state.output, synthesisFormat, effectiveInput.task);
+          const synthesisPrompt = buildSynthesisPrompt(state.output, synthesisFormat, effectiveInput.task, taskIntent);
           const synthesized = yield* llmOpt.value.complete({
             messages: [{ role: "user", content: synthesisPrompt }],
             maxTokens: 1500,
@@ -1044,37 +1053,28 @@ export function runKernel(
           }).pipe(Effect.catchAll(() => Effect.succeed({ content: "" })));
 
           if (synthesized.content && synthesized.content.length > 0) {
-            if (taskIntent.format) {
-              const revalidation = validateOutputFormat(synthesized.content, taskIntent.format);
-              if (revalidation.valid) {
-                state = transitionState(state, {
-                  output: synthesized.content,
-                  meta: { ...state.meta, outputSynthesized: true, outputFormatValidated: true },
-                });
-                yield* Effect.log(`[output-gate] Synthesized output to match requested format: ${taskIntent.format}`);
-              } else {
-                // Synthesis failed to produce valid format — use synthesized anyway if from harness
-                // (it's still better than raw tool artifacts)
-                if (terminationSource === "harness" || terminationSource === "oracle") {
-                  state = transitionState(state, {
-                    output: synthesized.content,
-                    meta: { ...state.meta, outputSynthesized: true, outputFormatValidated: false, outputFormatReason: revalidation.reason },
-                  });
-                  yield* Effect.log(`[output-gate] Synthesis format imperfect but using over raw artifacts: ${revalidation.reason}`);
-                } else {
-                  state = transitionState(state, {
-                    meta: { ...state.meta, outputFormatValidated: false, outputFormatReason: finalized.validationReason },
-                  });
-                  yield* Effect.log(`[output-gate] Synthesis attempted but format still invalid: ${revalidation.reason}`);
-                }
-              }
-            } else {
-              // No format — harness synthesis for coherent prose
+            const formatOk = taskIntent.format
+              ? validateOutputFormat(synthesized.content, taskIntent.format).valid
+              : true;
+            const contentOk = validateContentCompleteness(synthesized.content, taskIntent).complete;
+
+            if (formatOk && contentOk) {
               state = transitionState(state, {
                 output: synthesized.content,
-                meta: { ...state.meta, outputSynthesized: true },
+                meta: { ...state.meta, outputSynthesized: true, outputFormatValidated: true },
               });
-              yield* Effect.log(`[output-gate] Synthesized harness output into coherent response`);
+              yield* Effect.log(`[output-gate] Synthesized output to match requested format: ${synthesisFormat}`);
+            } else if (terminationSource === "harness" || terminationSource === "oracle") {
+              state = transitionState(state, {
+                output: synthesized.content,
+                meta: { ...state.meta, outputSynthesized: true, outputFormatValidated: formatOk, outputFormatReason: !formatOk ? "Format mismatch after synthesis" : !contentOk ? "Content incomplete after synthesis" : undefined },
+              });
+              yield* Effect.log(`[output-gate] Synthesis imperfect but using over raw artifacts (format=${formatOk}, content=${contentOk})`);
+            } else {
+              state = transitionState(state, {
+                meta: { ...state.meta, outputFormatValidated: false, outputFormatReason: finalized.validationReason },
+              });
+              yield* Effect.log(`[output-gate] Synthesis attempted but validation still failed (format=${formatOk}, content=${contentOk})`);
             }
           } else {
             state = transitionState(state, {

@@ -4,7 +4,7 @@
  * Extracted verbatim from react-kernel.ts. Handles:
  * - Dynamic final-answer tool injection
  * - Harness skill injection
- * - System prompt + context assembly (static/ICS split)
+ * - System prompt + context assembly (static + guidance sections)
  * - LLM stream consumption with text delta emission
  * - Native FC tool call parsing + required-tool gating
  * - Termination oracle evaluation
@@ -33,6 +33,7 @@ import type { ToolSchema } from "../utils/tool-utils.js";
 import {
   hasFinalAnswer,
   extractFinalAnswer,
+  stripPreamble,
   gateNativeToolCallsForRequiredTools,
   computeNoveltyRatio,
   buildToolElaborationInjection,
@@ -54,6 +55,8 @@ import {
   type KernelMessage,
   type ReActKernelInput,
 } from "../kernel-state.js";
+import { buildGuidanceSection } from "../../../context/context-manager.js";
+import type { GuidanceContext } from "../../../context/context-manager.js";
 
 import { META_TOOLS as META_TOOL_SET } from "../kernel-constants.js";
 
@@ -161,7 +164,7 @@ export function handleThinking(
     // Static content (tool schemas, RULES, task) is sent once in the system prompt
     // to avoid repeating ~500-700 tokens of identical content every iteration.
     const baseSystemPrompt = buildSystemPrompt(input.task, effectiveSystemPrompt, profile.tier);
-    const adapter = selectAdapter({ supportsToolCalling: true }, profile.tier);
+    const adapter = selectAdapter({ supportsToolCalling: true }, profile.tier, input.modelId);
     const patchedBase = adapter.systemPromptPatch?.(baseSystemPrompt, profile.tier ?? "mid") ?? baseSystemPrompt;
 
     // toolGuidance hook — append inline required-tool reminder after schema block
@@ -184,51 +187,22 @@ export function handleThinking(
       promptSchemas,
       input.toolElaboration,
     );
-    const systemPromptText = `${patchedBase}\n\n${staticContext}${toolGuidancePatch ? `\n${toolGuidancePatch}` : ""}${toolElaborationSection ? `\n\n${toolElaborationSection}` : ""}`;
+    const baseSystemPromptText = `${patchedBase}\n\n${staticContext}${toolGuidancePatch ? `\n${toolGuidancePatch}` : ""}${toolElaborationSection ? `\n\n${toolElaborationSection}` : ""}`;
 
-    // ── Auto-forward: inject full stored results from recent observations ────
-    // When tool results were compressed and auto-stored in the scratchpad
-    // (storedKey on observation step metadata), inject the full content so the
-    // model can use it directly without calling recall. Handles parallel batches
-    // where multiple observations are stored in the same iteration.
-    const AUTO_FORWARD_BASE = 1_500;
-    const AUTO_FORWARD_PER_RESULT = 1_000;
-    const AUTO_FORWARD_MAX = 8_000;
-    let autoForwardSection = "";
-    if (state.iteration > 0) {
-      const recentObs = state.steps.filter((s) =>
-        s.type === "observation" && s.metadata?.storedKey,
-      );
-      const storedKeys: string[] = [];
-      for (let i = recentObs.length - 1; i >= 0; i--) {
-        const key = recentObs[i].metadata!.storedKey!;
-        if (state.scratchpad.has(key)) {
-          storedKeys.unshift(key);
-        } else {
-          break;
-        }
-      }
-
-      if (storedKeys.length > 0) {
-        const adaptiveBudget = Math.min(
-          AUTO_FORWARD_BASE + AUTO_FORWARD_PER_RESULT * storedKeys.length,
-          AUTO_FORWARD_MAX,
-        );
-        const sections: string[] = [];
-        let remaining = adaptiveBudget;
-        for (const key of storedKeys) {
-          if (remaining <= 0) break;
-          const fullResult = state.scratchpad.get(key)!;
-          const injected = fullResult.length <= remaining
-            ? fullResult
-            : fullResult.slice(0, remaining) +
-              `\n[...${fullResult.length - remaining} chars truncated — use recall("${key}", start: 0, maxChars: 1200) for full content.]`;
-          sections.push(`[Auto-forwarded: ${key}]:\n${injected}`);
-          remaining -= fullResult.length;
-        }
-        autoForwardSection = sections.join("\n\n");
-      }
-    }
+    // ── Guidance: section — read pending signals, clear from state, render ────
+    const pending = state.pendingGuidance;
+    state = transitionState(state, { pendingGuidance: undefined });
+    const guidance: GuidanceContext = {
+      requiredToolsPending: pending?.requiredToolsPending ?? [],
+      loopDetected: pending?.loopDetected ?? false,
+      icsGuidance: pending?.icsGuidance,
+      oracleGuidance: pending?.oracleGuidance,
+      errorRecovery: pending?.errorRecovery,
+    };
+    const guidanceSection = buildGuidanceSection(guidance);
+    const systemPromptText = guidanceSection
+      ? `${baseSystemPromptText}\n\n${guidanceSection}`
+      : baseSystemPromptText;
 
     // ── STREAM (with text delta emission) ──────────────────────────────────
     // Token budget adapts to model tier: frontier models get more room for
@@ -270,9 +244,9 @@ export function handleThinking(
     const wantLogprobs = (state.meta.entropy as any)?.modelId !== undefined;
 
     // ── Build conversation messages ──────────────────────────────────────────
-    // Prefer ICS briefs (set by kernel-runner after tool rounds); otherwise sliding window.
+    // Sliding message window (emergency safety net) + task framing on first iter.
     const { messages: conversationMessages, updatedState: stateAfterMessages } =
-      buildConversationMessages(state, input, profile, adapter, autoForwardSection);
+      buildConversationMessages(state, input, profile, adapter);
     state = stateAfterMessages;
 
     const llmStreamEffect = llm.stream({
@@ -415,7 +389,7 @@ export function handleThinking(
       content: accumulatedContent,
       stopReason: accumulatedStopReason as StopReason,
       usage: accumulatedUsage,
-      model: "unknown",
+      model: input.modelId ?? "unknown",
     };
 
     // Increment LLM call counter
@@ -776,9 +750,11 @@ export function handleThinking(
 
         // All checks pass — assemble final output
         const hasFA = hasFinalAnswer(resolverResult.content);
-        const cleanContentFA = hasFA
-          ? extractFinalAnswer(resolverResult.content)
-          : resolverResult.content;
+        const cleanContentFA = stripPreamble(
+          hasFA
+            ? extractFinalAnswer(resolverResult.content)
+            : resolverResult.content,
+        );
         const terminatedBy = hasFA ? "final_answer" : "end_turn";
 
         const assembled = assembleOutput({

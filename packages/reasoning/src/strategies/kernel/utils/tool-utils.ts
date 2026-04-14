@@ -22,6 +22,37 @@ export function extractFinalAnswer(thought: string): string {
 }
 
 /**
+ * Common "thinking out loud" preamble patterns that local models emit before
+ * the actual content. These are meta-commentary about the task, not the answer.
+ */
+const PREAMBLE_PATTERNS: readonly RegExp[] = [
+  /^The\s+user\s+has\s+(?:provided|asked|requested|given)\b[^]*?\n\n/i,
+  /^I\s+will\s+(?:structure|organize|format|present|analyze|summarize)\b[^]*?\n\n/i,
+  /^(?:Let\s+me|I(?:'ll| will| need to))\s+(?:analyze|review|examine|process|synthesize|extract)\b[^]*?\n\n/i,
+  /^(?:Here(?:'s| is) (?:my|the|a) (?:plan|approach|analysis|breakdown|summary))[^]*?\n\n/i,
+  /^(?:Based on|Looking at|After reviewing|Given)\s+(?:the|all|these)\s+(?:provided|above|tool|data|search)\b[^]*?\n\n/i,
+];
+
+/**
+ * Strip "thinking out loud" preamble from model-generated output.
+ * Only removes recognized meta-commentary prefixes — if no preamble is detected,
+ * the original text is returned unchanged.
+ */
+export function stripPreamble(text: string): string {
+  let result = text;
+  for (const pattern of PREAMBLE_PATTERNS) {
+    const match = result.match(pattern);
+    if (match) {
+      const afterPreamble = result.slice(match[0].length).trim();
+      if (afterPreamble.length > 0) {
+        result = afterPreamble;
+      }
+    }
+  }
+  return result;
+}
+
+/**
  * Safely evaluate a transform expression against a tool result.
  * Only allows property access chains, array methods (slice, filter, map, join, length),
  * and string methods (trim, split, toLowerCase, toUpperCase, includes, startsWith, endsWith).

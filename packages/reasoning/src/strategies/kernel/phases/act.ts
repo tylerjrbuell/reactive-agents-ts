@@ -189,11 +189,11 @@ export function handleActing(
 ): Effect.Effect<KernelState, never, LLMService> {
   return Effect.gen(function* () {
     const { input, profile, compression, toolService, hooks } = context;
-    const adapter = selectAdapter({ supportsToolCalling: true }, profile.tier);
+    const adapter = selectAdapter({ supportsToolCalling: true }, profile.tier, input.modelId);
 
     const obsMode = input.observationSummary;
     const shouldExtract = obsMode === true
-      || (obsMode === "auto" && (profile.tier === "local" || profile.tier === "mid"));
+      || (obsMode !== false && (profile.tier === "local" || profile.tier === "mid"));
 
     // ── NATIVE FC ACTING BRANCH ─────────────────────────────────────────────
     // When the thinking phase stored pendingNativeToolCalls, execute them here
@@ -506,7 +506,8 @@ export function handleActing(
               }
             }
 
-            // LLM fact extraction — enrich compressed observation with distilled key facts
+            // LLM fact extraction — replace noisy compressed content with distilled facts.
+            // The full raw data is already in the scratchpad under _tool_result_N.
             if (result.execResult.success && shouldExtract) {
               const batchCall = executableCalls.find((c) => c.id === result.callId);
               if (batchCall) {
@@ -517,7 +518,7 @@ export function handleActing(
                   compression.budget ?? 800,
                 );
                 if (extracted) {
-                  obsContent = `[${result.toolName} result — key facts extracted]\n${extracted}\n${obsContent}`;
+                  obsContent = `[${result.toolName} result — key facts]\n${extracted}`;
                 }
               }
             }
@@ -664,7 +665,7 @@ export function handleActing(
             compression.budget ?? 800,
           );
           if (extracted) {
-            obsContent = `[${tc.name} result — key facts extracted]\n${extracted}\n${obsContent}`;
+            obsContent = `[${tc.name} result — key facts]\n${extracted}`;
           }
         }
 
@@ -838,16 +839,15 @@ export function handleActing(
       })();
 
       // All native tool calls executed — transition back to thinking.
-      // Clear steeringNudge to prevent stale nudges from the think→act gap
-      // (ICS may have set one before tools executed) from leaking into the
-      // next think phase's conversation thread.
+      // Clear pendingGuidance: guidance set before act phase fires is stale
+      // by the time the next think turn begins — think.ts re-builds from state.
       return transitionState(state, {
         steps: allSteps,
         toolsUsed: newToolsUsed,
         scratchpad: mergedScratchpad,
         messages: newConversationHistory,
         status: "thinking",
-        steeringNudge: undefined,
+        pendingGuidance: undefined,
         iteration: state.iteration + 1,
         lastMetaToolCall,
         consecutiveMetaToolCount,
@@ -863,7 +863,7 @@ export function handleActing(
     // No pending native tool calls — shouldn't happen, transition back to thinking
     return transitionState(state, {
       status: "thinking",
-      steeringNudge: undefined,
+      pendingGuidance: undefined,
       iteration: state.iteration + 1,
     });
   });

@@ -30,6 +30,26 @@ export type KernelMessage =
   | { readonly role: "tool_result"; readonly toolCallId: string; readonly toolName: string; readonly content: string; readonly isError?: boolean; readonly storedKey?: string }
   | { readonly role: "user"; readonly content: string };
 
+// ── PendingGuidance — harness signals for the next think turn ────────────────
+
+/**
+ * Typed harness signals collected during act/guard phases.
+ * Rendered deterministically in the system prompt Guidance: section by think.ts.
+ * All fields are optional so callers only set what applies to the current signal.
+ */
+export interface PendingGuidance {
+  /** Required tool names flagged by a quota-violation escalation (not normal pending state). */
+  readonly requiredToolsPending?: readonly string[];
+  /** True when loop detection fired and the agent is repeating without progress. */
+  readonly loopDetected?: boolean;
+  /** Guidance produced by the ICS coordinator (synthesis/strategy signals). */
+  readonly icsGuidance?: string;
+  /** Guidance from the oracle / quality gate (e.g. readyToAnswer nudge). */
+  readonly oracleGuidance?: string;
+  /** Recovery hint when tool failures or errors occurred on the previous round. */
+  readonly errorRecovery?: string;
+}
+
 // ── KernelState — Immutable, serializable reasoning state ────────────────────
 
 export interface KernelState {
@@ -72,10 +92,11 @@ export interface KernelState {
   readonly messages: readonly KernelMessage[];
 
   /**
-   * Steering nudge injected by ICS coordinator for the next think call.
-   * Appended as a user message to the FC thread. Cleared after consumption.
+   * Pending guidance signals from the harness (ICS, oracle, recovery, loop detection).
+   * Rendered in the Guidance: section of the system prompt by the think phase.
+   * Cleared after each think turn so stale signals don't leak across iterations.
    */
-  readonly steeringNudge?: string;
+  readonly pendingGuidance?: PendingGuidance;
 
   /**
    * Tool result message IDs whose content has been microcompacted.
@@ -216,6 +237,12 @@ export interface KernelInput {
    * - `"auto"`: extract only for local/mid tiers when results exceed budget
    */
   readonly observationSummary?: boolean | "auto";
+  /**
+   * The model identifier (e.g. "gemma4:e4b", "gpt-4o") for this kernel run.
+   * Passed to selectAdapter so calibrated adapters can be looked up by modelId.
+   * Falls back to tier-based adapter selection when absent.
+   */
+  readonly modelId?: string;
 }
 
 // ── Narrow service types ─────────────────────────────────────────────────────
@@ -381,7 +408,7 @@ export function initialKernelState(opts: KernelRunOptions): KernelState {
     },
     controllerDecisionLog: [],
     messages: [],
-    steeringNudge: undefined,
+    pendingGuidance: undefined,
     frozenToolResultIds: new Set<string>(),
     consecutiveLowDeltaCount: 0,
     readyToAnswerNudgeCount: 0,
@@ -446,7 +473,7 @@ export function serializeKernelState(state: KernelState): SerializedKernelState 
     priorThought: state.priorThought,
     meta: state.meta,
     controllerDecisionLog: state.controllerDecisionLog,
-    steeringNudge: state.steeringNudge,
+    pendingGuidance: state.pendingGuidance,
     frozenToolResultIds: [...state.frozenToolResultIds].sort(),
     consecutiveLowDeltaCount: state.consecutiveLowDeltaCount,
   };
@@ -475,7 +502,7 @@ export function deserializeKernelState(raw: SerializedKernelState): KernelState 
     priorThought: raw.priorThought,
     meta: raw.meta,
     controllerDecisionLog: (raw.controllerDecisionLog as string[]) ?? [],
-    steeringNudge: raw.steeringNudge,
+    pendingGuidance: raw.pendingGuidance,
     frozenToolResultIds: new Set(raw.frozenToolResultIds ?? []),
     consecutiveLowDeltaCount: raw.consecutiveLowDeltaCount,
   };
@@ -602,20 +629,10 @@ export interface ReActKernelResult {
  *
  * Composable: custom kernels substitute individual phases via makeKernel({ phases }).
  *
- * Note: KernelContext is used (not PhaseContext) because phases need access to
- * compression, toolService, and other fields that PhaseContext does not expose.
+ * Phases receive the full KernelContext (compression, toolService, hooks, etc.).
  */
 export type Phase = (
   state: KernelState,
   context: KernelContext,
 ) => Effect.Effect<KernelState, never, LLMService>;
 
-/**
- * Immutable per-turn context passed to every phase.
- * Phases read from ctx, write only to returned KernelState.
- */
-export interface PhaseContext {
-  readonly input: ReActKernelInput;
-  readonly profile: ContextProfile;
-  readonly hooks: KernelHooks;
-}

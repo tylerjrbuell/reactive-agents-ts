@@ -39,6 +39,8 @@ export const StepMetadataSchema = Schema.Struct({
   storedKey: Schema.optional(Schema.String),
   /** Links an observation step back to its originating tool call for parallel batch matching */
   toolCallId: Schema.optional(Schema.String),
+  /** Distilled key fact extracted from raw tool results — surfaced in the system prompt Prior work section */
+  extractedFact: Schema.optional(Schema.String),
 });
 export type StepMetadata = typeof StepMetadataSchema.Type;
 

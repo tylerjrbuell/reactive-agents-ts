@@ -1,11 +1,16 @@
+// Run: bun test packages/reasoning/tests/strategies/kernel/phases/context-builder.test.ts --timeout 15000
 import { describe, it, expect } from "bun:test";
 import { readFileSync } from "fs";
 import {
   buildSystemPrompt,
   toProviderMessage,
   buildToolSchemas,
+  buildConversationMessages,
 } from "../../../../src/strategies/kernel/phases/context-builder.js";
+import { defaultAdapter } from "@reactive-agents/llm-provider";
+import { initialKernelState } from "../../../../src/strategies/kernel/kernel-state.js";
 import type { KernelMessage, KernelState } from "../../../../src/strategies/kernel/kernel-state.js";
+import { CONTEXT_PROFILES } from "../../../../src/context/context-profile.js";
 
 // ── Structural checks ─────────────────────────────────────────────────────────
 
@@ -13,17 +18,76 @@ const src = readFileSync(
   new URL("../../../../src/strategies/kernel/phases/context-builder.ts", import.meta.url),
   "utf8"
 );
+const kernelStateSrc = readFileSync(
+  new URL("../../../../src/strategies/kernel/kernel-state.ts", import.meta.url),
+  "utf8"
+);
+const kernelRunnerSrc = readFileSync(
+  new URL("../../../../src/strategies/kernel/kernel-runner.ts", import.meta.url),
+  "utf8"
+);
 
 describe("context-builder.ts structural", () => {
   it("does not reference synthesizedContext", () => {
     expect(src).not.toContain("synthesizedContext");
   });
-  it("consumes steeringNudge from state", () => {
-    expect(src).toContain("steeringNudge");
+  // Phase 4 gate: steeringNudge must NOT be injected as a user message by context-builder
+  it("does not inject steeringNudge as a user message", () => {
+    expect(src).not.toContain("steeringNudge");
   });
   it("does not have thoughtPrompt parameter", () => {
     expect(src).not.toContain("thoughtPrompt");
   });
+  // Phase 2 gate: auto-forward injection must be gone from context-builder
+  it("does not inject auto-forward content", () => {
+    expect(src).not.toContain("autoForwardSection");
+    expect(src).not.toContain("Auto-forwarded:");
+  });
+});
+
+describe("kernel-state.ts structural", () => {
+  // Phase 4 gate: steeringNudge field must be gone from KernelState — replaced by pendingGuidance
+  it("does not have steeringNudge field", () => {
+    expect(kernelStateSrc).not.toContain("steeringNudge");
+  });
+  it("has pendingGuidance field", () => {
+    expect(kernelStateSrc).toContain("pendingGuidance");
+  });
+});
+
+describe("kernel-runner.ts structural", () => {
+  // Phase 4 gate: kernel-runner must route guidance through pendingGuidance, not steeringNudge
+  // Note: icsResult.steeringNudge (the ICS coordinator's return field) is intentionally kept
+  // in the ICS coordinator's interface — the check here is that kernel-runner doesn't SET
+  // steeringNudge on KernelState (which would have the pattern "steeringNudge: ").
+  it("does not set steeringNudge on KernelState", () => {
+    expect(kernelRunnerSrc).not.toContain("steeringNudge: ");
+  });
+  it("writes pendingGuidance to state for harness signals", () => {
+    expect(kernelRunnerSrc).toContain("pendingGuidance");
+  });
+});
+
+// ── buildConversationMessages — no auto-forward injection ────────────────────
+
+describe("buildConversationMessages", () => {
+  function makeBaseState(overrides: Partial<KernelState> = {}): KernelState {
+    return initialKernelState(
+      { task: "test task", messages: [{ role: "user", content: "test task" }] },
+      { taskId: "t1", strategy: "reactive", kernelType: "react" },
+    ) as KernelState & typeof overrides extends never ? KernelState : KernelState & typeof overrides;
+  }
+
+  it("never injects [Auto-forwarded:] content into conversation messages", () => {
+    const state = makeBaseState();
+    const input = { task: "test task", messages: [{ role: "user", content: "test task" }] } as any;
+    const profile = CONTEXT_PROFILES.local;
+    const { messages } = buildConversationMessages(state, input, profile, defaultAdapter);
+    const hasAutoForward = messages.some(
+      (m) => typeof m.content === "string" && m.content.includes("[Auto-forwarded:"),
+    );
+    expect(hasAutoForward).toBe(false);
+  }, 15000);
 });
 
 // ── buildSystemPrompt ─────────────────────────────────────────────────────────
