@@ -12,11 +12,20 @@
 // ad-hoc USER message injection patterns. All harness signals flow through
 // GuidanceContext → rendered in the Guidance: section of the system prompt.
 
-import type { LLMMessage } from "@reactive-agents/llm-provider";
+import type { LLMMessage, ProviderAdapter } from "@reactive-agents/llm-provider";
 import type { KernelState, KernelInput } from "../strategies/kernel/kernel-state.js";
 import type { ContextProfile } from "./context-profile.js";
-import { buildStaticContext, buildEnvironmentContext } from "./context-engine.js";
+import { buildStaticContext } from "./context-engine.js";
 import type { KernelMessage } from "../strategies/kernel/kernel-state.js";
+import type { ToolSchema } from "../strategies/kernel/utils/tool-formatting.js";
+import {
+  buildSystemPrompt,
+  buildConversationMessages,
+} from "../strategies/kernel/phases/context-utils.js";
+import {
+  buildToolElaborationInjection,
+  type ToolElaborationInjectionConfig,
+} from "../strategies/kernel/utils/tool-gating.js";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -50,6 +59,32 @@ export interface ContextManagerOutput {
   readonly systemPrompt: string;
   /** The curated conversation message thread for this iteration. */
   readonly messages: LLMMessage[];
+  /**
+   * State updated by message-window compaction (frozenToolResultIds).
+   * Callers should use this in place of the input state for subsequent steps.
+   */
+  readonly updatedState: KernelState;
+}
+
+/** Optional extras for ContextManager.build(). */
+export interface ContextManagerOptions {
+  /**
+   * When set, tool elaboration hints are appended after the tool schema block.
+   * Mirrors the think-phase call to buildToolElaborationInjection.
+   */
+  readonly toolElaboration?: ToolElaborationInjectionConfig;
+  /**
+   * Pre-filtered tool schemas to render into the static context and
+   * tool elaboration sections. Think.ts supplies the classification-pruned,
+   * context-pressure-narrowed list so the system prompt matches the FC tools.
+   * Falls back to input.availableToolSchemas when omitted.
+   */
+  readonly availableTools?: readonly ToolSchema[];
+  /**
+   * Optional custom/system-prompt body wrapped with harness content.
+   * Falls back to input.systemPrompt when omitted.
+   */
+  readonly systemPromptBody?: string;
 }
 
 // ── ContextManager ────────────────────────────────────────────────────────────
@@ -69,10 +104,29 @@ export const ContextManager = {
     input: KernelInput,
     profile: ContextProfile,
     guidance: GuidanceContext,
+    adapter?: ProviderAdapter,
+    options?: ContextManagerOptions,
   ): ContextManagerOutput {
-    const systemPrompt = buildIterationSystemPrompt(state, input, profile, guidance);
+    const systemPrompt = buildIterationSystemPrompt(
+      state,
+      input,
+      profile,
+      guidance,
+      adapter,
+      options,
+    );
+    if (adapter) {
+      const { messages, updatedState } = buildConversationMessages(
+        state,
+        input,
+        profile,
+        adapter,
+      );
+      return { systemPrompt, messages, updatedState };
+    }
+    // Adapter-less path (tests / tools) — plain conversion, no compaction.
     const messages = buildCuratedMessages(state, profile);
-    return { systemPrompt, messages };
+    return { systemPrompt, messages, updatedState: state };
   },
 };
 
@@ -82,45 +136,76 @@ export const ContextManager = {
  * Assemble the system prompt for a single kernel iteration.
  *
  * Sections (in order):
- *   1. Agent identity (lean, tier-adaptive)
+ *   1. Agent identity (lean, tier-adaptive) — with adapter.systemPromptPatch applied
  *   2. Environment context (date, time, timezone, platform)
  *   3. Task description
  *   4. Available tools + rules
- *   5. Progress: (tool usage summary — what has been called)
- *   6. Prior work: (distilled observation facts if any)
- *   7. Guidance: (harness signals — required tools, loops, ICS, errors)
+ *   5. Adapter toolGuidance (inline reminder after schema block)
+ *   6. Tool elaboration hints (opt-in via options.toolElaboration)
+ *   7. Progress: (tool usage summary — what has been called)
+ *   8. Prior work: (distilled observation facts if any)
+ *   9. Guidance: (harness signals — required tools, loops, ICS, errors)
  */
 function buildIterationSystemPrompt(
   state: KernelState,
   input: KernelInput,
   profile: ContextProfile,
   guidance: GuidanceContext,
+  adapter?: ProviderAdapter,
+  options?: ContextManagerOptions,
 ): string {
   const sections: string[] = [];
 
-  // 1. Agent identity
-  sections.push(buildIdentity(profile.tier));
+  // Tool list: explicit override > input.availableToolSchemas
+  const availableTools: readonly ToolSchema[] =
+    options?.availableTools ??
+    ((input.availableToolSchemas ?? []) as readonly ToolSchema[]);
+
+  // 1. Agent identity. Prefer buildSystemPrompt (honors custom systemPrompt) so
+  //    callers that supply input.systemPrompt keep their identity text.
+  const base = buildSystemPrompt(
+    input.task,
+    options?.systemPromptBody ?? input.systemPrompt,
+    profile.tier,
+  );
+  const patched = adapter?.systemPromptPatch?.(base, profile.tier ?? "mid") ?? base;
+  sections.push(patched);
 
   // 2-4. Static context (environment + tools + task + rules)
+  const staticContext = buildStaticContext({
+    task: input.task,
+    profile,
+    availableToolSchemas: availableTools,
+    requiredTools: input.requiredTools as string[] | undefined,
+    environmentContext: input.environmentContext,
+  });
+
+  // 5. Adapter toolGuidance — appended immediately after the static context
+  //    so the reminder sits adjacent to the tool schema block.
+  const toolGuidancePatch = adapter?.toolGuidance?.({
+    toolNames: availableTools.map((t) => t.name),
+    requiredTools: input.requiredTools ?? [],
+    tier: profile.tier ?? "mid",
+  });
   sections.push(
-    buildStaticContext({
-      task: input.task,
-      profile,
-      availableToolSchemas: input.availableToolSchemas as readonly { name: string; description: string; parameters: readonly { name: string; type: string; required?: boolean; description?: string }[] }[],
-      requiredTools: input.requiredTools as string[] | undefined,
-      environmentContext: input.environmentContext,
-    }),
+    toolGuidancePatch ? `${staticContext}\n${toolGuidancePatch}` : staticContext,
   );
 
-  // 5. Progress section — what tools have been called successfully so far
+  // 6. Tool elaboration hints (optional)
+  const toolElaborationSection = options?.toolElaboration
+    ? buildToolElaborationInjection(availableTools, options.toolElaboration)
+    : "";
+  if (toolElaborationSection) sections.push(toolElaborationSection);
+
+  // 7. Progress section — what tools have been called successfully so far
   const progressSection = buildProgressSection(state, input);
   if (progressSection) sections.push(progressSection);
 
-  // 6. Prior work — distilled observation facts (not raw tool results)
+  // 8. Prior work — distilled observation facts (not raw tool results)
   const priorWorkSection = buildPriorWorkSection(state);
   if (priorWorkSection) sections.push(priorWorkSection);
 
-  // 7. Guidance — harness signals rendered deterministically
+  // 9. Guidance — harness signals rendered deterministically
   const guidanceSection = buildGuidanceSection(guidance);
   if (guidanceSection) sections.push(guidanceSection);
 
@@ -175,16 +260,6 @@ function kernelMessageToLLM(msg: KernelMessage): LLMMessage {
 }
 
 // ── Private builders ──────────────────────────────────────────────────────────
-
-function buildIdentity(tier: string): string {
-  if (tier === "local") {
-    return "You are a helpful assistant. Use the provided tools when needed to complete tasks.";
-  }
-  if (tier === "frontier" || tier === "large") {
-    return "You are an expert reasoning agent. Think step by step. Use tools precisely and efficiently. Prefer concise, direct answers once you have sufficient information. When actions are independent, issue multiple tool calls in the same response — they execute in parallel.";
-  }
-  return "You are a reasoning agent. Think step by step and use available tools when needed. When actions are independent, issue multiple tool calls in the same response — they execute in parallel.";
-}
 
 function buildProgressSection(state: KernelState, input: KernelInput): string {
   if (state.toolsUsed.size === 0 && state.iteration === 0) return "";

@@ -12,12 +12,15 @@ describe("think.ts structural: no hasICS branch", () => {
     expect(src).not.toContain("const hasICS")
     expect(src).not.toContain("if (hasICS)")
   })
-  it("always calls buildStaticContext", () => {
-    expect(src).toContain("buildStaticContext")
+  it("routes context assembly through ContextManager.build()", () => {
+    // Task 10: think.ts no longer calls buildStaticContext directly;
+    // it delegates to ContextManager.build() which renders the static context.
+    expect(src).toContain("ContextManager.build")
   })
-  it("supports tool elaboration injection", () => {
-    expect(src).toContain("buildToolElaborationInjection")
-    expect(src).toContain("toolElaborationSection")
+  it("supports tool elaboration injection via ContextManager options", () => {
+    // Task 10: toolElaboration flows through ContextManager.build() options,
+    // not a direct buildToolElaborationInjection call in think.ts.
+    expect(src).toContain("toolElaboration")
   })
   it("does not call buildDynamicContext", () => {
     expect(src).not.toContain("buildDynamicContext")

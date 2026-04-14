@@ -15,11 +15,10 @@ import { ExecutionError } from "../../../errors/errors.js";
 import { LLMService, selectAdapter } from "@reactive-agents/llm-provider";
 import type { StopReason } from "@reactive-agents/llm-provider";
 import {
-  buildSystemPrompt,
   toProviderMessage,
   buildToolSchemas,
-  buildConversationMessages,
 } from "./context-utils.js";
+import { ContextManager } from "../../../context/context-manager.js";
 import { StreamingTextCallback } from "@reactive-agents/core";
 import {
   finalAnswerTool,
@@ -43,7 +42,6 @@ import {
 } from "../utils/tool-parsing.js";
 import {
   gateNativeToolCallsForRequiredTools,
-  buildToolElaborationInjection,
 } from "../utils/tool-gating.js";
 import {
   buildSuccessfulToolCallCounts,
@@ -51,7 +49,6 @@ import {
 } from "../utils/requirement-state.js";
 import { evaluateTermination, defaultEvaluators, type TerminationContext } from "../utils/termination-oracle.js";
 import { assembleOutput } from "../output-assembly.js";
-import { buildStaticContext } from "../../../context/context-engine.js";
 import { extractThinking, rescueFromThinking } from "../utils/stream-parser.js";
 import { makeStep } from "../utils/step-utils.js";
 import { makeObservationResult } from "../utils/tool-execution.js";
@@ -61,7 +58,6 @@ import {
   type KernelContext,
   type KernelMessage,
 } from "../kernel-state.js";
-import { buildGuidanceSection } from "../../../context/context-manager.js";
 import type { GuidanceContext } from "../../../context/context-manager.js";
 
 import { META_TOOLS as META_TOOL_SET } from "../kernel-constants.js";
@@ -166,36 +162,14 @@ export function handleThinking(
         ? `${harnessContent}\n\n${input.systemPrompt ?? ""}`
         : input.systemPrompt;
 
-    // ── Split context: static in system prompt, dynamic in user message ─────
-    // Static content (tool schemas, RULES, task) is sent once in the system prompt
-    // to avoid repeating ~500-700 tokens of identical content every iteration.
-    const baseSystemPrompt = buildSystemPrompt(input.task, effectiveSystemPrompt, profile.tier);
+    // ── Context assembly: ContextManager.build() is the sole path ────────────
+    // All sections (identity + adapter patch, static context, tool guidance,
+    // tool elaboration, progress, prior work, guidance) are rendered by
+    // ContextManager. Think.ts supplies promptSchemas (classification-pruned)
+    // and the effective system prompt body (harness-skill-wrapped when active).
     const adapter = selectAdapter({ supportsToolCalling: true }, profile.tier, input.modelId);
-    const patchedBase = adapter.systemPromptPatch?.(baseSystemPrompt, profile.tier ?? "mid") ?? baseSystemPrompt;
 
-    // toolGuidance hook — append inline required-tool reminder after schema block
-    const toolGuidancePatch = adapter.toolGuidance?.({
-      toolNames: promptSchemas.map((t) => t.name),
-      requiredTools: input.requiredTools ?? [],
-      tier: profile.tier ?? "mid",
-    });
-
-    // Always use full static context — stable system prompt, never overridden by ICS
-    // Uses promptSchemas (classification-pruned) so the model only sees high-signal tools.
-    const staticContext = buildStaticContext({
-      task: input.task,
-      profile,
-      availableToolSchemas: promptSchemas,
-      requiredTools: input.requiredTools,
-      environmentContext: input.environmentContext,
-    });
-    const toolElaborationSection = buildToolElaborationInjection(
-      promptSchemas,
-      input.toolElaboration,
-    );
-    const baseSystemPromptText = `${patchedBase}\n\n${staticContext}${toolGuidancePatch ? `\n${toolGuidancePatch}` : ""}${toolElaborationSection ? `\n\n${toolElaborationSection}` : ""}`;
-
-    // ── Guidance: section — read pending signals, clear from state, render ────
+    // Read pending guidance signals, clear from state before LLM call.
     const pending = state.pendingGuidance;
     state = transitionState(state, { pendingGuidance: undefined });
     const guidance: GuidanceContext = {
@@ -208,10 +182,17 @@ export function handleThinking(
       qualityGateHint: pending?.qualityGateHint,
       evidenceGap: pending?.evidenceGap,
     };
-    const guidanceSection = buildGuidanceSection(guidance);
-    const systemPromptText = guidanceSection
-      ? `${baseSystemPromptText}\n\n${guidanceSection}`
-      : baseSystemPromptText;
+
+    const {
+      systemPrompt: systemPromptText,
+      messages: conversationMessages,
+      updatedState: stateAfterContext,
+    } = ContextManager.build(state, input, profile, guidance, adapter, {
+      availableTools: promptSchemas,
+      systemPromptBody: effectiveSystemPrompt,
+      toolElaboration: input.toolElaboration,
+    });
+    state = stateAfterContext;
 
     // ── STREAM (with text delta emission) ──────────────────────────────────
     // Token budget adapts to model tier: frontier models get more room for
@@ -251,12 +232,6 @@ export function handleThinking(
 
     // Request logprobs when entropy sensor may be active (modelId present in meta)
     const wantLogprobs = state.meta.entropy?.modelId !== undefined;
-
-    // ── Build conversation messages ──────────────────────────────────────────
-    // Sliding message window (emergency safety net) + task framing on first iter.
-    const { messages: conversationMessages, updatedState: stateAfterMessages } =
-      buildConversationMessages(state, input, profile, adapter);
-    state = stateAfterMessages;
 
     const llmStreamEffect = llm.stream({
       messages: conversationMessages,
