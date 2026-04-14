@@ -12,6 +12,7 @@ import type { ContextProfile } from "../../context/context-profile.js";
 import type { ResultCompressionConfig, ToolCallSpec, FinalAnswerCapture, ToolCallResolver } from "@reactive-agents/tools";
 import type { LLMService } from "@reactive-agents/llm-provider";
 import type { ToolSchema } from "./utils/tool-formatting.js";
+import type { EntropyScoreLike } from "./output-assembly.js";
 import type { KernelMetaToolsConfig } from "../../types/kernel-meta-tools.js";
 import type {
   ToolElaborationInjectionConfig,
@@ -65,7 +66,7 @@ export interface KernelEntropyMeta {
   readonly temperature?: number;
   readonly taskCategory?: string;
   readonly lastLogprobs?: readonly { token: string; logprob: number; topLogprobs?: readonly { token: string; logprob: number }[] }[];
-  readonly entropyHistory?: readonly unknown[];
+  readonly entropyHistory?: readonly EntropyScoreLike[];
   readonly controllerConfig?: {
     readonly earlyStop: boolean;
     readonly contextCompression: boolean;
