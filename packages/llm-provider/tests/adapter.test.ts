@@ -1,3 +1,4 @@
+// Run: bun test packages/llm-provider/tests/adapter.test.ts --timeout 15000
 import { describe, it, expect } from "bun:test";
 import { localModelAdapter, midModelAdapter, defaultAdapter, selectAdapter } from "../src/adapter.js";
 
@@ -21,6 +22,16 @@ describe("ProviderAdapter", () => {
     it("returns defaultAdapter when tier is undefined", () => {
       const adapter = selectAdapter({ supportsToolCalling: true });
       expect(adapter).toBe(defaultAdapter);
+    });
+
+    it("accepts optional modelId and falls back to tier when no calibration exists", () => {
+      expect(selectAdapter({ supportsToolCalling: true }, "local", "gemma4:e4b")).toBe(localModelAdapter);
+      expect(selectAdapter({ supportsToolCalling: true }, "mid", "qwen2.5-coder:7b")).toBe(midModelAdapter);
+      expect(selectAdapter({ supportsToolCalling: true }, "frontier", "gpt-4o")).toBe(defaultAdapter);
+    });
+
+    it("returns same tier adapter when modelId is undefined", () => {
+      expect(selectAdapter({ supportsToolCalling: true }, "local", undefined)).toBe(localModelAdapter);
     });
   });
 

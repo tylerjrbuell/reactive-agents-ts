@@ -6,7 +6,7 @@
  * Frontier models return undefined (no intervention needed).
  * Local/mid models return explicit guidance to improve task completion rates.
  *
- * Hook call sites in react-kernel.ts:
+ * Hook call sites in the kernel phases (think.ts, context-builder.ts, act.ts):
  *   systemPromptPatch  — once, when building the static system prompt
  *   taskFraming        — once, wrapping the initial user task message
  *   toolGuidance       — once, appended to system prompt after tool schema block
@@ -208,8 +208,12 @@ export const localModelAdapter: ProviderAdapter = {
     if (unmet.length > 0) {
       return `Before finishing: you have not yet called ${unmet.join(", ")}. Call ${unmet[0]} now.`;
     }
-    // Quick coherence check for local models that sometimes give empty/truncated answers
-    return `Review your answer: does it fully address the task "${task.slice(0, 120)}"? If yes, give it. If not, complete the missing parts first.`;
+    return (
+      `Review your answer: does it fully address the task "${task.slice(0, 120)}"? ` +
+      `Include EXACT numbers, prices, and data values from the tool results above — ` +
+      `do not say "no data found" if the numbers appear in the results. ` +
+      `If the output format doesn't match what was requested, fix it now.`
+    );
   },
 };
 
@@ -244,10 +248,23 @@ export const midModelAdapter: ProviderAdapter = {
 
 // ─── Adapter selection ────────────────────────────────────────────────────────
 
+/**
+ * Select the appropriate ProviderAdapter for a given model.
+ *
+ * Priority:
+ * 1. modelId-based calibration (Phase 6 — future: loads from calibrations/<modelId>.json)
+ * 2. Tier-based adapter (current default path)
+ *
+ * @param _capabilities - provider capabilities (reserved for future use)
+ * @param tier - model tier ("local" | "mid" | "large" | "frontier")
+ * @param _modelId - specific model identifier (reserved for calibration lookup in Phase 6)
+ */
 export function selectAdapter(
   _capabilities: { supportsToolCalling: boolean },
   tier?: string,
+  _modelId?: string,
 ): ProviderAdapter {
+  // Phase 6: check _modelId against calibration store here
   if (tier === "local") return localModelAdapter;
   if (tier === "mid") return midModelAdapter;
   return defaultAdapter;
