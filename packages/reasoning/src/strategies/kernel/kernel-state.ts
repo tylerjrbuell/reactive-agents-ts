@@ -322,6 +322,14 @@ export interface KernelInput {
    * Falls back to tier-based adapter selection when absent.
    */
   readonly modelId?: string;
+  /**
+   * Optional pre-resolved model calibration. When present, the ContextManager and
+   * adapter selection may use the calibration fields (steeringCompliance,
+   * parallelCallCapability, observationHandling, etc.) to tune per-turn behavior.
+   * When absent, tier-based defaults apply (and `selectAdapter` may still load
+   * a pre-baked calibration by modelId internally).
+   */
+  readonly calibration?: import("@reactive-agents/llm-provider").ModelCalibration;
   /** Maximum iterations before giving up. Default: 10 */
   readonly maxIterations?: number;
   /** Task ID for EventBus correlation */

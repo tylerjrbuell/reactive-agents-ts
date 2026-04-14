@@ -36,7 +36,7 @@ describe("ProviderAdapter", () => {
         selectAdapter({ supportsToolCalling: true }, "local", "totally-unknown:xyz").adapter,
       ).toBe(localModelAdapter);
       expect(
-        selectAdapter({ supportsToolCalling: true }, "mid", "qwen2.5-coder:7b").adapter,
+        selectAdapter({ supportsToolCalling: true }, "mid", "no-calibration-model:7b").adapter,
       ).toBe(midModelAdapter);
       expect(
         selectAdapter({ supportsToolCalling: true }, "frontier", "gpt-4o").adapter,

@@ -12,7 +12,7 @@
 // ad-hoc USER message injection patterns. All harness signals flow through
 // GuidanceContext → rendered in the Guidance: section of the system prompt.
 
-import type { LLMMessage, ProviderAdapter } from "@reactive-agents/llm-provider";
+import type { LLMMessage, ModelCalibration, ProviderAdapter } from "@reactive-agents/llm-provider";
 import type { KernelState, KernelInput } from "../strategies/kernel/kernel-state.js";
 import type { ContextProfile } from "./context-profile.js";
 import { buildStaticContext } from "./context-engine.js";
@@ -102,23 +102,77 @@ export const ContextManager = {
     adapter?: ProviderAdapter,
     options?: ContextManagerOptions,
   ): ContextManagerOutput {
+    // Determine steering channel: calibration wins when present, else tier default.
+    // local/mid tiers prefer "hybrid" (system prompt + user reminder), frontier
+    // relies on system prompt only.
+    const calibration: ModelCalibration | undefined = input.calibration;
+    const steeringChannel: "system-prompt" | "user-message" | "hybrid" =
+      calibration?.steeringCompliance ??
+      (profile.tier === "local" || profile.tier === "mid" ? "hybrid" : "system-prompt");
+
+    // Render guidance in system prompt unless the channel is pure "user-message".
+    const guidanceForSystemPrompt: GuidanceContext =
+      steeringChannel === "user-message" ? emptyGuidance() : guidance;
+
     const systemPrompt = buildIterationSystemPrompt(
       state,
       input,
       profile,
-      guidance,
+      guidanceForSystemPrompt,
       adapter,
       options,
     );
+
+    let messages: LLMMessage[];
     if (adapter) {
-      const messages = buildConversationMessages(state, input, profile, adapter);
-      return { systemPrompt, messages };
+      messages = buildConversationMessages(state, input, profile, adapter);
+    } else {
+      // Adapter-less path (tests / tools) — plain conversion, no compaction.
+      messages = buildCuratedMessages(state, profile);
     }
-    // Adapter-less path (tests / tools) — plain conversion, no compaction.
-    const messages = buildCuratedMessages(state, profile);
+
+    // Append a short user-message reminder when channel is "hybrid" or "user-message".
+    if (steeringChannel === "hybrid" || steeringChannel === "user-message") {
+      const reminder = buildShortGuidanceReminder(guidance);
+      if (reminder) {
+        messages = [...messages, { role: "user", content: reminder }];
+      }
+    }
+
     return { systemPrompt, messages };
   },
 };
+
+function emptyGuidance(): GuidanceContext {
+  return {
+    requiredToolsPending: [],
+    loopDetected: false,
+  };
+}
+
+/**
+ * Build a single-line harness reminder for hybrid/user-message steering channels.
+ * Returns undefined when no guidance signal is active.
+ */
+function buildShortGuidanceReminder(guidance: GuidanceContext): string | undefined {
+  if (guidance.requiredToolsPending.length > 0) {
+    return `[Harness] Required: ${guidance.requiredToolsPending.join(", ")}`;
+  }
+  if (guidance.loopDetected) return "[Harness] Loop detected — change approach.";
+  if (guidance.actReminder) {
+    return `[Harness] ${guidance.actReminder.slice(0, 120)}`;
+  }
+  if (guidance.evidenceGap) {
+    return "[Harness] Output contains ungrounded claims — revise.";
+  }
+  if (guidance.errorRecovery) {
+    return `[Harness] ${guidance.errorRecovery.slice(0, 120)}`;
+  }
+  if (guidance.oracleGuidance) {
+    return `[Harness] ${guidance.oracleGuidance.slice(0, 120)}`;
+  }
+  return undefined;
+}
 
 // ── buildIterationSystemPrompt ────────────────────────────────────────────────
 

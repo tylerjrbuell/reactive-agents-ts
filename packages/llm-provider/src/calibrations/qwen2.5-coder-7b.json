@@ -1,0 +1,11 @@
+{
+  "modelId": "qwen2.5-coder:7b",
+  "calibratedAt": "2026-04-14T00:00:00Z",
+  "probeVersion": 1,
+  "runsAveraged": 0,
+  "steeringCompliance": "system-prompt",
+  "parallelCallCapability": "reliable",
+  "observationHandling": "uses-recall",
+  "systemPromptAttention": "strong",
+  "optimalToolResultChars": 1200
+}

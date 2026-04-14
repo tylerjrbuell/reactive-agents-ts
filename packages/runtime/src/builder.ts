@@ -13,6 +13,7 @@ import type {
   KernelMetaToolsConfig,
 } from "@reactive-agents/reasoning";
 import type { StrategySynthesisFields } from "./reasoning-synthesis-fields.js";
+import type { CalibrationMode } from "./types.js";
 import type {
   ToolDefinition,
   ResultCompressionConfig,
@@ -845,6 +846,31 @@ export class ReactiveAgentBuilder {
   };
   private _riAutonomy?: "full" | "suggest" | "observe";
   private _metaTools?: import("./types.js").MetaToolsConfig | false;
+  private _calibration: CalibrationMode = "skip";
+
+  // ─── Calibration ───
+
+  /**
+   * Configure per-model calibration for this agent.
+   *
+   * - `"skip"` (default): no lookup, pure tier-based adapters.
+   * - `"auto"`: load pre-baked or user-cached calibration for the resolved modelId.
+   * - `ModelCalibration` object: provide calibration data directly (e.g. after running
+   *   the calibration probe suite).
+   *
+   * @example
+   * ```typescript
+   * // Auto-load from pre-baked calibrations (best for supported local models)
+   * builder.withCalibration("auto")
+   *
+   * // Provide custom calibration data
+   * builder.withCalibration({ modelId: "my-model", steeringCompliance: "hybrid", ... })
+   * ```
+   */
+  withCalibration(mode: CalibrationMode): this {
+    this._calibration = mode;
+    return this;
+  }
 
   // ─── Identity ───
 
@@ -2529,6 +2555,7 @@ export class ReactiveAgentBuilder {
         fallbackConfig: self._fallbackConfig,
         pricingRegistry: Object.keys(self._pricingRegistry).length > 0 ? self._pricingRegistry : undefined,
         metaTools: kernelMetaTools,
+        calibration: self._calibration !== "skip" ? self._calibration : undefined,
       });
 
       const hooks = [...self._hooks];

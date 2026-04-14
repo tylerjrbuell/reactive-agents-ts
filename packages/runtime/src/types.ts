@@ -9,6 +9,15 @@ import {
   ReasoningOptionsJsonSchema,
   type ReasoningOptionsEncoded,
 } from "./reasoning-options-schema.js";
+import type { ModelCalibration } from "@reactive-agents/llm-provider";
+
+/**
+ * Calibration mode for `.withCalibration()`:
+ *  - `"skip"` (default): no calibration lookup, use pure tier-based adapters.
+ *  - `"auto"`: load pre-baked or cached calibration for the resolved modelId, if any.
+ *  - `ModelCalibration` object: use the supplied calibration directly.
+ */
+export type CalibrationMode = "auto" | "skip" | ModelCalibration;
 
 /**
  * Lifecycle phases — execution stages an agent goes through to process a task.
@@ -434,6 +443,11 @@ export type ReactiveAgentsConfig = Schema.Schema.Type<typeof ReactiveAgentsConfi
    * the execution engine can warn when a listed name does not match any registered tool.
    */
   readonly allowedTools?: readonly string[];
+  /**
+   * Per-model calibration mode. Resolved to a `ModelCalibration` in execution-engine
+   * and forwarded to the kernel for steering channel selection and context tuning.
+   */
+  readonly calibration?: CalibrationMode;
 };
 
 /**

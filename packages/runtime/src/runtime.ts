@@ -758,6 +758,12 @@ export interface RuntimeOptions {
    * When provided, these tools are injected into the agent's tool registry for the execution.
    */
   metaTools?: KernelMetaToolsConfig;
+  /**
+   * Per-model calibration mode. "auto" loads pre-baked or cached calibration for the
+   * resolved modelId. "skip" (default) uses pure tier-based adapters. A `ModelCalibration`
+   * object bypasses lookup entirely.
+   */
+  calibration?: import("./types.js").CalibrationMode;
 }
 
 /**
@@ -868,6 +874,7 @@ export const createRuntime = (options: RuntimeOptions) => {
     reactiveIntelligenceOptions: options.reactiveIntelligenceOptions,
     reasoningOptions: options.reasoningOptions,
     metaTools: options.metaTools,
+    calibration: options.calibration,
   };
 
   // ── Required layers ──

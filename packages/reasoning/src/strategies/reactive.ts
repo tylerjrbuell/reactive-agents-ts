@@ -88,6 +88,8 @@ interface ReactiveInput {
   readonly synthesisConfig?: import("../context/synthesis-types.js").SynthesisConfig;
   /** LLM-based observation extraction: true=always, false=never, "auto"=local/mid tiers only */
   readonly observationSummary?: boolean | "auto";
+  /** Pre-resolved model calibration — drives steering channel selection in ContextManager. */
+  readonly calibration?: import("@reactive-agents/llm-provider").ModelCalibration;
 }
 
 // ── executeReactive ───────────────────────────────────────────────────────────
@@ -165,6 +167,7 @@ export const executeReactive = (
       synthesisConfig: input.synthesisConfig,
       observationSummary: input.observationSummary,
       modelId: input.modelId,
+      calibration: input.calibration,
     };
 
     const state = yield* runKernel(reactKernel, kernelInput, {

@@ -86,18 +86,19 @@ export function loadCalibration(modelId: string): ModelCalibration | undefined {
   const key = normalizeModelId(modelId);
   if (calibrationCache.has(key)) return calibrationCache.get(key) ?? undefined;
 
-  // Try pre-baked calibrations shipped with framework
-  const prebakedPath = path.join(
-    path.dirname(new URL(import.meta.url).pathname),
-    "calibrations",
-    `${key}.json`,
-  );
+  // Try pre-baked calibrations shipped with framework.
+  // When running from source, import.meta.url resolves to src/calibration.ts → src/calibrations/<key>.json.
+  // When running from dist, it resolves to dist/index.js → dist/calibrations/ (populated by build) or
+  // ../src/calibrations/ as a fallback (for test/dev scenarios where dist was produced without copying).
+  const moduleDir = path.dirname(new URL(import.meta.url).pathname);
+  const prebakedPath = path.join(moduleDir, "calibrations", `${key}.json`);
+  const distFallbackPath = path.join(moduleDir, "..", "src", "calibrations", `${key}.json`);
 
   // Try user cache
   const userHome = process.env.HOME ?? "~";
   const userPath = path.join(userHome, ".reactive-agents", "calibrations", `${key}.json`);
 
-  for (const candidatePath of [prebakedPath, userPath]) {
+  for (const candidatePath of [prebakedPath, distFallbackPath, userPath]) {
     try {
       if (!fs.existsSync(candidatePath)) continue;
       const data = JSON.parse(fs.readFileSync(candidatePath, "utf-8"));

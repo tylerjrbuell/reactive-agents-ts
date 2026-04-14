@@ -30,7 +30,8 @@ import type { AgentEvent, KernelStateLike } from "@reactive-agents/core";
 import { synthesizeDebrief, type DebriefInput, type AgentDebrief } from "./debrief.js";
 import { DebriefStoreService, PlanStoreService, ProceduralMemoryService } from "@reactive-agents/memory";
 import { TelemetryClient as TelemetryClientImpl, classifyTaskCategory as classifyTaskCategoryFn, lookupModel as lookupModelFn, skillFragmentToProceduralEntry } from "@reactive-agents/reactive-intelligence";
-import { recommendStrategyForTier } from "@reactive-agents/llm-provider";
+import { recommendStrategyForTier, loadCalibration } from "@reactive-agents/llm-provider";
+import type { ModelCalibration } from "@reactive-agents/llm-provider";
 import { buildTrajectoryFingerprint, abstractifyToolName, firstConvergenceIteration, peakContextPressure, deriveTaskComplexity, deriveFailurePattern, deriveThoughtToActionRatio } from "./telemetry-enrichment.js";
 import { resolveSynthesisConfigForStrategy } from "./synthesis-resolve.js";
 import { formatTaskContextForChat } from "./chat.js";
@@ -1453,6 +1454,15 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         }
                       }
 
+                      // Resolve CalibrationMode → ModelCalibration | undefined once; shared
+                      // by all three execute() call sites (main, customTermination, minIterations).
+                      const resolvedCalibration: ModelCalibration | undefined = (() => {
+                        const cal = config.calibration;
+                        if (!cal || cal === "skip") return undefined;
+                        if (cal === "auto") return loadCalibration(String(config.defaultModel ?? ""));
+                        return cal as ModelCalibration;
+                      })();
+
                       let result: ExecutionReasoningResult;
                       // Build initial messages — seed the conversation thread with the task
                       const initialMessages: readonly { readonly role: "user" | "assistant"; readonly content: string }[] = [
@@ -1503,6 +1513,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                           config.synthesisConfig,
                         ),
                         observationSummary: config.reasoningOptions?.observationSummary,
+                        calibration: resolvedCalibration,
                       });
                       const strategyOutcome = yield* Effect.exit(strategyEffect);
                       if (strategyOutcome._tag === "Success") {
@@ -1615,6 +1626,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                             config.synthesisConfig,
                           ),
                           observationSummary: config.reasoningOptions?.observationSummary,
+                          calibration: resolvedCalibration,
                         }),
                       );
                       if (retryOutcome._tag === "Success") {
@@ -1675,6 +1687,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                             config.synthesisConfig,
                           ),
                           observationSummary: config.reasoningOptions?.observationSummary,
+                          calibration: resolvedCalibration,
                         }),
                       );
                       if (continuationOutcome._tag === "Success") {

@@ -14,6 +14,7 @@ export type {
   RecallConfig,
   FindConfig,
   PulseConfig,
+  CalibrationMode,
 } from "./types.js";
 
 // ─── Schemas ───

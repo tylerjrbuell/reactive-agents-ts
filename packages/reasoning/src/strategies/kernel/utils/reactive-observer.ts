@@ -53,26 +53,28 @@ export function runReactiveObserver(
             temperature: s.meta.entropy?.temperature ?? 0,
             priorThought,
             logprobs: s.meta.entropy?.lastLogprobs,
-            kernelState: s,
+            kernelState: s as any, // cross-package boundary: KernelStateLike expects index-sig meta
             taskCategory: s.meta.entropy?.taskCategory,
           })
           .pipe(
-            Effect.tap((score: unknown) => {
+            Effect.tap((score) => {
+              // score is the full EntropyScore from reactive-intelligence; cast where needed
+              const richScore = score as any;
               const entropyMeta = s.meta.entropy ?? {};
-              const history = [...(entropyMeta.entropyHistory ?? []), score];
+              const history = [...(entropyMeta.entropyHistory ?? []), score as import("../output-assembly.js").EntropyScoreLike];
               s = transitionState(s, { meta: { ...s.meta, entropy: { ...entropyMeta, entropyHistory: history } } });
 
               if (eventBus._tag === "Some") {
                 return eventBus.value.publish({
                   _tag: "EntropyScored",
                   taskId: s.taskId,
-                  iteration: score.iteration,
-                  composite: score.composite,
-                  sources: score.sources,
-                  trajectory: score.trajectory,
-                  confidence: score.confidence,
-                  modelTier: score.modelTier,
-                  iterationWeight: score.iterationWeight,
+                  iteration: richScore.iteration,
+                  composite: richScore.composite,
+                  sources: richScore.sources,
+                  trajectory: richScore.trajectory,
+                  confidence: richScore.confidence,
+                  modelTier: richScore.modelTier,
+                  iterationWeight: richScore.iterationWeight,
                 });
               }
               return Effect.void;
@@ -85,9 +87,11 @@ export function runReactiveObserver(
 
     // ── Reactive Controller evaluation ──────────────────────────────────
     if (services.reactiveController._tag === "Some") {
-      const entropyHistory = (s.meta.entropy?.entropyHistory ?? []) as readonly Record<string, unknown>[];
+      // entropyHistory holds EntropyScoreLike[] locally, but the full runtime type from
+      // reactive-intelligence has additional fields (sources, contextPressure, etc.).
+      const entropyHistory = (s.meta.entropy?.entropyHistory ?? []) as readonly any[];
       if (entropyHistory.length > 0) {
-        const latestScore = entropyHistory[entropyHistory.length - 1];
+        const latestScore = entropyHistory[entropyHistory.length - 1] as any;
 
         // ── Load calibration from EntropySensorService (not hardcoded) ──
         const modelId = s.meta.entropy?.modelId ?? currentOptions.modelId ?? "unknown";
