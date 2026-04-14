@@ -13,6 +13,20 @@
 import { Schema } from "effect";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import type { ProviderAdapter } from "./adapter.js";
+
+/**
+ * Structural shape for ContextProfile fields that calibration may override.
+ * Kept minimal here to avoid a runtime dependency on @reactive-agents/reasoning.
+ * Downstream callers spread this into their full ContextProfile.
+ */
+export interface ProfileOverrides {
+  toolResultMaxChars?: number;
+  toolResultPreviewItems?: number;
+  maxIterations?: number;
+  temperature?: number;
+  maxTokens?: number;
+}
 
 // ── Schema ────────────────────────────────────────────────────────────────────
 
@@ -104,4 +118,47 @@ export function loadCalibration(modelId: string): ModelCalibration | undefined {
  */
 export function clearCalibrationCache(): void {
   calibrationCache.clear();
+}
+
+// ── Compile calibration to adapter + profile overrides ───────────────────────
+
+/**
+ * Compile a ModelCalibration into a runtime ProviderAdapter + ProfileOverrides.
+ *
+ * The returned adapter overrides default tier behavior with measured behavior:
+ *   - systemPromptAttention "weak"        → adds emphasis suffix to system prompt
+ *   - parallelCallCapability "sequential-only" → nudges model to call tools one at a time
+ *   - parallelCallCapability "partial"    → nudges model to cap batches at 2
+ *   - parallelCallCapability "reliable"   → no toolGuidance override (default batching)
+ *   - systemPromptAttention "strong"      → no systemPromptPatch override
+ *
+ * profileOverrides apply to the runtime ContextProfile (tool result sizing, etc.).
+ *
+ * Note: steeringCompliance and observationHandling are read directly by
+ * ContextManager.build() and the observation pipeline — they do not surface
+ * as adapter hooks here.
+ */
+export function buildCalibratedAdapter(
+  calibration: ModelCalibration,
+): { adapter: ProviderAdapter; profileOverrides: ProfileOverrides } {
+  const adapter: ProviderAdapter = {
+    systemPromptPatch: calibration.systemPromptAttention === "weak"
+      ? (base: string, _tier: string) =>
+          `${base}\n\nIMPORTANT: Follow ALL rules above exactly. Re-read them on each turn.`
+      : undefined,
+
+    toolGuidance: calibration.parallelCallCapability === "sequential-only"
+      ? () =>
+          "Call tools one at a time. Do not batch multiple tool calls in a single turn."
+      : calibration.parallelCallCapability === "partial"
+        ? () =>
+            "You may call up to 2 independent tools at once. Avoid larger batches."
+        : undefined,
+  };
+
+  const profileOverrides: ProfileOverrides = {
+    toolResultMaxChars: calibration.optimalToolResultChars,
+  };
+
+  return { adapter, profileOverrides };
 }

@@ -167,7 +167,9 @@ export function handleThinking(
     // tool elaboration, progress, prior work, guidance) are rendered by
     // ContextManager. Think.ts supplies promptSchemas (classification-pruned)
     // and the effective system prompt body (harness-skill-wrapped when active).
-    const adapter = selectAdapter({ supportsToolCalling: true }, profile.tier, input.modelId);
+    // profileOverrides were already merged into `profile` by kernel-runner;
+    // here we only need the adapter.
+    const { adapter } = selectAdapter({ supportsToolCalling: true }, profile.tier, input.modelId);
 
     // Read pending guidance signals, clear from state before LLM call.
     const pending = state.pendingGuidance;

@@ -13,7 +13,7 @@
  *   6. Terminal hooks: onDone / onError
  */
 import { Effect } from "effect";
-import { LLMService, DEFAULT_CAPABILITIES } from "@reactive-agents/llm-provider";
+import { LLMService, DEFAULT_CAPABILITIES, selectAdapter } from "@reactive-agents/llm-provider";
 import type { ProviderCapabilities } from "@reactive-agents/llm-provider";
 import { createToolCallResolver } from "@reactive-agents/tools";
 import { checkpointStoreRef } from "@reactive-agents/tools";
@@ -422,9 +422,22 @@ export function runKernel(
       effectiveInput.providerName === "ollama" && !effectiveInput.contextProfile?.tier
         ? "local"
         : "mid";
-    const profile: ContextProfile = effectiveInput.contextProfile
+    const baseProfile: ContextProfile = effectiveInput.contextProfile
       ? ({ ...CONTEXT_PROFILES[defaultTier], ...effectiveInput.contextProfile } as ContextProfile)
       : CONTEXT_PROFILES[defaultTier];
+
+    // ── Calibration-aware profile overrides ──────────────────────────────────
+    // selectAdapter may return profileOverrides sourced from a ModelCalibration
+    // (e.g., optimalToolResultChars). Apply these once up-front so every phase
+    // sees calibrated values via KernelContext.profile.
+    const { profileOverrides } = selectAdapter(
+      { supportsToolCalling: true },
+      baseProfile.tier,
+      effectiveInput.modelId,
+    );
+    const profile: ContextProfile = profileOverrides
+      ? ({ ...baseProfile, ...profileOverrides } as ContextProfile)
+      : baseProfile;
 
     // ── 3. Build hooks ───────────────────────────────────────────────────────
     const hooks = buildKernelHooks(eventBus);

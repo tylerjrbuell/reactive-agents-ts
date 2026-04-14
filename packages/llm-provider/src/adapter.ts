@@ -248,26 +248,46 @@ export const midModelAdapter: ProviderAdapter = {
 
 // ─── Adapter selection ────────────────────────────────────────────────────────
 
+import {
+  loadCalibration,
+  buildCalibratedAdapter,
+  type ProfileOverrides,
+} from "./calibration.js";
+
+/**
+ * Result of adapter selection. The adapter always exists; profileOverrides
+ * are populated only when a ModelCalibration was resolved for the modelId.
+ */
+export interface AdapterSelection {
+  adapter: ProviderAdapter;
+  profileOverrides?: ProfileOverrides;
+}
+
 /**
  * Select the appropriate ProviderAdapter for a given model.
  *
  * Priority:
- * 1. modelId-based calibration (Phase 6 — future: loads from calibrations/<modelId>.json)
+ * 1. modelId-based calibration (loads from calibrations/<modelId>.json or user cache)
  * 2. Tier-based adapter (current default path)
  *
  * @param _capabilities - provider capabilities (reserved for future use)
  * @param tier - model tier ("local" | "mid" | "large" | "frontier")
- * @param _modelId - specific model identifier (reserved for calibration lookup in Phase 6)
+ * @param modelId - specific model identifier for calibration lookup
  */
 export function selectAdapter(
   _capabilities: { supportsToolCalling: boolean },
   tier?: string,
-  _modelId?: string,
-): ProviderAdapter {
-  // Phase 6: check _modelId against calibration store here
-  if (tier === "local") return localModelAdapter;
-  if (tier === "mid") return midModelAdapter;
-  return defaultAdapter;
+  modelId?: string,
+): AdapterSelection {
+  // 1. Calibrated adapter wins when available.
+  if (modelId) {
+    const cal = loadCalibration(modelId);
+    if (cal) return buildCalibratedAdapter(cal);
+  }
+  // 2. Fall back to tier-based adapter.
+  if (tier === "local") return { adapter: localModelAdapter };
+  if (tier === "mid") return { adapter: midModelAdapter };
+  return { adapter: defaultAdapter };
 }
 
 export function recommendStrategyForTier(

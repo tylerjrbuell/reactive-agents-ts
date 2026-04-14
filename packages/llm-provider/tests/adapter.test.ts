@@ -1,37 +1,58 @@
 // Run: bun test packages/llm-provider/tests/adapter.test.ts --timeout 15000
 import { describe, it, expect } from "bun:test";
 import { localModelAdapter, midModelAdapter, defaultAdapter, selectAdapter } from "../src/adapter.js";
+import {
+  buildCalibratedAdapter,
+  clearCalibrationCache,
+  type ModelCalibration,
+} from "../src/calibration.js";
 
 describe("ProviderAdapter", () => {
   describe("selectAdapter", () => {
-    it("returns localModelAdapter for local tier", () => {
-      const adapter = selectAdapter({ supportsToolCalling: true }, "local");
-      expect(adapter).toBe(localModelAdapter);
+    it("returns { adapter: localModelAdapter } for local tier", () => {
+      const result = selectAdapter({ supportsToolCalling: true }, "local");
+      expect(result.adapter).toBe(localModelAdapter);
+      expect(result.profileOverrides).toBeUndefined();
     });
 
-    it("returns defaultAdapter for frontier tier", () => {
-      const adapter = selectAdapter({ supportsToolCalling: true }, "frontier");
-      expect(adapter).toBe(defaultAdapter);
+    it("returns { adapter: defaultAdapter } for frontier tier", () => {
+      const result = selectAdapter({ supportsToolCalling: true }, "frontier");
+      expect(result.adapter).toBe(defaultAdapter);
+      expect(result.profileOverrides).toBeUndefined();
     });
 
-    it("returns midModelAdapter for mid tier", () => {
-      const adapter = selectAdapter({ supportsToolCalling: true }, "mid");
-      expect(adapter).toBe(midModelAdapter);
+    it("returns { adapter: midModelAdapter } for mid tier", () => {
+      const result = selectAdapter({ supportsToolCalling: true }, "mid");
+      expect(result.adapter).toBe(midModelAdapter);
     });
 
-    it("returns defaultAdapter when tier is undefined", () => {
-      const adapter = selectAdapter({ supportsToolCalling: true });
-      expect(adapter).toBe(defaultAdapter);
+    it("returns { adapter: defaultAdapter } when tier is undefined", () => {
+      const result = selectAdapter({ supportsToolCalling: true });
+      expect(result.adapter).toBe(defaultAdapter);
     });
 
     it("accepts optional modelId and falls back to tier when no calibration exists", () => {
-      expect(selectAdapter({ supportsToolCalling: true }, "local", "gemma4:e4b")).toBe(localModelAdapter);
-      expect(selectAdapter({ supportsToolCalling: true }, "mid", "qwen2.5-coder:7b")).toBe(midModelAdapter);
-      expect(selectAdapter({ supportsToolCalling: true }, "frontier", "gpt-4o")).toBe(defaultAdapter);
+      expect(
+        selectAdapter({ supportsToolCalling: true }, "local", "totally-unknown:xyz").adapter,
+      ).toBe(localModelAdapter);
+      expect(
+        selectAdapter({ supportsToolCalling: true }, "mid", "qwen2.5-coder:7b").adapter,
+      ).toBe(midModelAdapter);
+      expect(
+        selectAdapter({ supportsToolCalling: true }, "frontier", "gpt-4o").adapter,
+      ).toBe(defaultAdapter);
     });
 
     it("returns same tier adapter when modelId is undefined", () => {
-      expect(selectAdapter({ supportsToolCalling: true }, "local", undefined)).toBe(localModelAdapter);
+      expect(
+        selectAdapter({ supportsToolCalling: true }, "local", undefined).adapter,
+      ).toBe(localModelAdapter);
+    });
+
+    it("returns new shape { adapter, profileOverrides? }", () => {
+      const result = selectAdapter({ supportsToolCalling: true }, "mid");
+      expect(result).toHaveProperty("adapter");
+      // profileOverrides may be undefined when no calibration applies
     });
   });
 
@@ -227,5 +248,118 @@ describe("ProviderAdapter", () => {
       });
       expect(qc).toBeUndefined();
     });
+  });
+});
+
+// ─── buildCalibratedAdapter ──────────────────────────────────────────────────
+
+const baseCalibration: ModelCalibration = {
+  modelId: "test-model",
+  calibratedAt: "2026-04-14T10:00:00Z",
+  probeVersion: 1,
+  runsAveraged: 3,
+  steeringCompliance: "hybrid",
+  parallelCallCapability: "reliable",
+  observationHandling: "needs-inline-facts",
+  systemPromptAttention: "strong",
+  optimalToolResultChars: 1500,
+};
+
+describe("buildCalibratedAdapter", () => {
+  it("sets toolGuidance for sequential-only models", () => {
+    const cal: ModelCalibration = {
+      ...baseCalibration,
+      parallelCallCapability: "sequential-only",
+    };
+    const { adapter } = buildCalibratedAdapter(cal);
+    expect(adapter.toolGuidance).toBeDefined();
+    const guidance = adapter.toolGuidance!({
+      toolNames: [],
+      requiredTools: [],
+      tier: "local",
+    });
+    expect(guidance?.toLowerCase()).toContain("one at a time");
+  });
+
+  it("sets toolGuidance for partial parallel models", () => {
+    const cal: ModelCalibration = {
+      ...baseCalibration,
+      parallelCallCapability: "partial",
+    };
+    const { adapter } = buildCalibratedAdapter(cal);
+    expect(adapter.toolGuidance).toBeDefined();
+    const guidance = adapter.toolGuidance!({
+      toolNames: [],
+      requiredTools: [],
+      tier: "local",
+    });
+    expect(guidance).toContain("2");
+  });
+
+  it("does NOT set toolGuidance for reliable parallel models", () => {
+    const cal: ModelCalibration = {
+      ...baseCalibration,
+      parallelCallCapability: "reliable",
+    };
+    const { adapter } = buildCalibratedAdapter(cal);
+    expect(adapter.toolGuidance).toBeUndefined();
+  });
+
+  it("sets systemPromptPatch for weak attention models", () => {
+    const cal: ModelCalibration = {
+      ...baseCalibration,
+      systemPromptAttention: "weak",
+    };
+    const { adapter } = buildCalibratedAdapter(cal);
+    expect(adapter.systemPromptPatch).toBeDefined();
+    const patched = adapter.systemPromptPatch!("base prompt", "local");
+    expect(patched).toContain("base prompt");
+    expect((patched ?? "").length).toBeGreaterThan("base prompt".length);
+  });
+
+  it("does NOT set systemPromptPatch for strong attention models", () => {
+    const cal: ModelCalibration = {
+      ...baseCalibration,
+      systemPromptAttention: "strong",
+    };
+    const { adapter } = buildCalibratedAdapter(cal);
+    expect(adapter.systemPromptPatch).toBeUndefined();
+  });
+
+  it("sets profileOverrides.toolResultMaxChars from calibration", () => {
+    const cal: ModelCalibration = {
+      ...baseCalibration,
+      optimalToolResultChars: 1500,
+    };
+    const { profileOverrides } = buildCalibratedAdapter(cal);
+    expect(profileOverrides.toolResultMaxChars).toBe(1500);
+  });
+
+  it("compiles moderate systemPromptAttention to no patch", () => {
+    const cal: ModelCalibration = {
+      ...baseCalibration,
+      systemPromptAttention: "moderate",
+    };
+    const { adapter } = buildCalibratedAdapter(cal);
+    expect(adapter.systemPromptPatch).toBeUndefined();
+  });
+});
+
+describe("selectAdapter with calibration", () => {
+  it("falls back to tier adapter when no calibration exists", () => {
+    clearCalibrationCache();
+    const result = selectAdapter(
+      { supportsToolCalling: true },
+      "local",
+      "totally-unknown-model:xyz",
+    );
+    expect(result.adapter).toBe(localModelAdapter);
+    expect(result.profileOverrides).toBeUndefined();
+  });
+
+  it("returns { adapter, profileOverrides? } shape", () => {
+    const result = selectAdapter({ supportsToolCalling: true }, "mid");
+    expect(result).toHaveProperty("adapter");
+    // profileOverrides is optional when no calibration was loaded.
   });
 });

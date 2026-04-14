@@ -137,8 +137,10 @@ export { validateAndRepairMessages } from "./validation.js";
 // ─── Provider Behavior Adapters ───
 export {
   type ProviderAdapter,
+  type AdapterSelection,
   defaultAdapter,
   localModelAdapter,
+  midModelAdapter,
   selectAdapter,
   recommendStrategyForTier,
 } from "./adapter.js";
@@ -149,5 +151,6 @@ export {
   loadCalibration,
   normalizeModelId,
   clearCalibrationCache,
+  buildCalibratedAdapter,
 } from "./calibration.js";
-export type { ModelCalibration } from "./calibration.js";
+export type { ModelCalibration, ProfileOverrides } from "./calibration.js";

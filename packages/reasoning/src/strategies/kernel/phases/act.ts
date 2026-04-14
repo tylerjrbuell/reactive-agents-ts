@@ -189,7 +189,9 @@ export function handleActing(
 ): Effect.Effect<KernelState, never, LLMService> {
   return Effect.gen(function* () {
     const { input, profile, compression, toolService, hooks } = context;
-    const adapter = selectAdapter({ supportsToolCalling: true }, profile.tier, input.modelId);
+    // profileOverrides were already merged into `profile` by kernel-runner;
+    // here we only need the adapter.
+    const { adapter } = selectAdapter({ supportsToolCalling: true }, profile.tier, input.modelId);
 
     const obsMode = input.observationSummary;
     const shouldExtract = obsMode === true
