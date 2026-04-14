@@ -1221,6 +1221,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       initialMessages?: readonly { readonly role: "user" | "assistant"; readonly content: string }[];
                       synthesisConfig?: import("@reactive-agents/reasoning").SynthesisConfig;
                       observationSummary?: boolean | "auto";
+                      calibration?: ModelCalibration;
                     }) => Effect.Effect<{
                       output: unknown;
                       status: string;
@@ -1239,6 +1240,15 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     }>;
                   }>("ReasoningService"),
                 );
+
+                // Resolve CalibrationMode → ModelCalibration | undefined once.
+                // Shared by all three execute() call sites: main, customTermination, minIterations.
+                const resolvedCalibration: ModelCalibration | undefined = (() => {
+                  const cal = config.calibration;
+                  if (!cal || cal === "skip") return undefined;
+                  if (cal === "auto") return loadCalibration(String(config.defaultModel ?? ""));
+                  return cal as ModelCalibration;
+                })();
 
                 if (reasoningOpt._tag === "Some" && !cacheHit) {
                   // ── Full reasoning path ──
@@ -1453,15 +1463,6 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                           }
                         }
                       }
-
-                      // Resolve CalibrationMode → ModelCalibration | undefined once; shared
-                      // by all three execute() call sites (main, customTermination, minIterations).
-                      const resolvedCalibration: ModelCalibration | undefined = (() => {
-                        const cal = config.calibration;
-                        if (!cal || cal === "skip") return undefined;
-                        if (cal === "auto") return loadCalibration(String(config.defaultModel ?? ""));
-                        return cal as ModelCalibration;
-                      })();
 
                       let result: ExecutionReasoningResult;
                       // Build initial messages — seed the conversation thread with the task
