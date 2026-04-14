@@ -29,7 +29,6 @@ import {
   type KernelContext,
   type KernelInput,
   type KernelRunOptions,
-  type ReActKernelInput,
   type ThoughtKernel,
 } from "./kernel-state.js";
 import { evaluateStrategySwitch, buildHandoff } from "./utils/strategy-evaluator.js";
@@ -403,7 +402,7 @@ export function runKernel(
     // When the provider supports native FC, create a resolver and inject it
     // into the kernel input so handleThinking uses native function calling.
     let effectiveInput = input;
-    if (!(input as ReActKernelInput).toolCallResolver) {
+    if (!input.toolCallResolver) {
       const llmOpt = yield* Effect.serviceOption(LLMService);
       if (llmOpt._tag === "Some" && typeof llmOpt.value.capabilities === "function") {
         const caps = yield* llmOpt.value.capabilities().pipe(
@@ -411,7 +410,7 @@ export function runKernel(
         );
         if (caps.supportsToolCalling) {
           const resolver = createToolCallResolver(caps);
-          effectiveInput = { ...input, toolCallResolver: resolver } as KernelInput;
+          effectiveInput = { ...input, toolCallResolver: resolver };
         }
       }
     }

@@ -9,7 +9,7 @@
 import { Effect } from "effect";
 import type { ReasoningStep } from "../../types/index.js";
 import type { ContextProfile } from "../../context/context-profile.js";
-import type { ResultCompressionConfig, ToolCallSpec, FinalAnswerCapture } from "@reactive-agents/tools";
+import type { ResultCompressionConfig, ToolCallSpec, FinalAnswerCapture, ToolCallResolver } from "@reactive-agents/tools";
 import type { LLMService } from "@reactive-agents/llm-provider";
 import type { ToolSchema } from "./utils/tool-utils.js";
 import type { KernelMetaToolsConfig } from "../../types/kernel-meta-tools.js";
@@ -319,6 +319,18 @@ export interface KernelInput {
    * Falls back to tier-based adapter selection when absent.
    */
   readonly modelId?: string;
+  /** Maximum iterations before giving up. Default: 10 */
+  readonly maxIterations?: number;
+  /** Task ID for EventBus correlation */
+  readonly taskId?: string;
+  /** Name of the calling strategy (for event tagging) */
+  readonly parentStrategy?: string;
+  /** Descriptive label for this kernel invocation (e.g. "reflexion:generate", "plan-execute:step-3") */
+  readonly kernelPass?: string;
+  /** Exit kernel loop when all scoped tools have been called successfully */
+  readonly exitOnAllToolsCalled?: boolean;
+  /** Pre-built ToolCallResolver instance — injected by the kernel runner when FC is active */
+  readonly toolCallResolver?: ToolCallResolver;
 }
 
 // ── Narrow service types ─────────────────────────────────────────────────────
@@ -601,80 +613,8 @@ export const noopHooks: KernelHooks = {
 
 // ─── ReAct Kernel Input / Output ─────────────────────────────────────────────
 
-export interface ReActKernelInput {
-  /** The task description to accomplish */
-  task: string;
-  /** Optional custom system prompt for steering behavior */
-  systemPrompt?: string;
-  /** Full tool schemas — passed from execution engine via availableToolSchemas */
-  availableToolSchemas?: readonly ToolSchema[];
-  /**
-   * Optional prior context to inject above the task.
-   * Used by Reflexion (critique text), Plan-Execute (plan context), etc.
-   */
-  priorContext?: string;
-  /** Maximum iterations before giving up. Default: 10 */
-  maxIterations?: number;
-  /** Model context profile controlling compaction thresholds, result sizes, etc. */
-  contextProfile?: Partial<ContextProfile>;
-  /** Tool result compression configuration */
-  resultCompression?: ResultCompressionConfig;
-  /** LLM sampling temperature */
-  temperature?: number;
-  /** Task ID for EventBus correlation */
-  taskId?: string;
-  /** Name of the calling strategy (for event tagging) */
-  parentStrategy?: string;
-  /** Descriptive label for this kernel invocation (e.g. "reflexion:generate", "plan-execute:step-3") */
-  kernelPass?: string;
-  /** Agent ID for tool execution attribution. Falls back to "reasoning-agent". */
-  agentId?: string;
-  /** Session ID for tool execution attribution. Falls back to "reasoning-session". */
-  sessionId?: string;
-  /**
-   * Full unfiltered tool schemas from the registry. Used by the dynamic task
-   * completion guard to detect MCP namespaces referenced in the task, even
-   * when adaptive filtering has hidden some tools from the LLM prompt.
-   */
-  allToolSchemas?: readonly ToolSchema[];
-  /**
-   * Tools that MUST NOT be executed — hard code-level guard.
-   * When the model requests a blocked tool, a synthetic observation is returned
-   * instead of executing. Used by reflexion to prevent re-executing side-effect
-   * tools (send, write, create, etc.) that already succeeded in a prior pass.
-   */
-  blockedTools?: readonly string[];
-  /**
-   * Tools that MUST be called before the agent can declare success.
-   * If the agent attempts to end without using all required tools,
-   * it will be redirected up to `maxRequiredToolRetries` times before failing.
-   */
-  requiredTools?: readonly string[];
-  /** Minimum call counts per required tool — populated by tool classifier. */
-  requiredToolQuantities?: Readonly<Record<string, number>>;
-  /** Tools identified as relevant/supplementary for this task. */
-  relevantTools?: readonly string[];
-  /** Per-tool call budget — gate blocks calls that exceed these limits. */
-  maxCallsPerTool?: Readonly<Record<string, number>>;
-  /** Max redirects when required tools are missing (default: 2) */
-  maxRequiredToolRetries?: number;
-  /** Enforce strict required-tool dependency chain before exploratory calls. */
-  strictToolDependencyChain?: boolean;
-  /** Model identifier for routing/entropy scoring */
-  modelId?: string;
-  /** Exit kernel loop when all scoped tools have been called successfully */
-  exitOnAllToolsCalled?: boolean;
-  /** Meta-tool configuration and pre-computed static data for brief/pulse/recall/find. */
-  metaTools?: KernelMetaToolsConfig;
-  /** Lightweight tool elaboration injection shown in the system prompt. */
-  toolElaboration?: ToolElaborationInjectionConfig;
-  /** Short-term next-moves planner configuration for optional native batching. */
-  nextMovesPlanning?: NextMovesPlanningConfig;
-  /** Pre-built ToolCallResolver instance — injected by the kernel runner when FC is active */
-  toolCallResolver?: import("@reactive-agents/tools").ToolCallResolver;
-  /** Intelligent Context Synthesis config — threaded from .withReasoning() */
-  synthesisConfig?: import("../../context/synthesis-types.js").SynthesisConfig;
-}
+/** @deprecated Use KernelInput directly. Preserved as alias for existing consumers. */
+export type ReActKernelInput = KernelInput;
 
 export interface ReActKernelResult {
   /** Final answer text */

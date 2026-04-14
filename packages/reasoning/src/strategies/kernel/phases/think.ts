@@ -53,7 +53,6 @@ import {
   type KernelState,
   type KernelContext,
   type KernelMessage,
-  type ReActKernelInput,
 } from "../kernel-state.js";
 import { buildGuidanceSection } from "../../../context/context-manager.js";
 import type { GuidanceContext } from "../../../context/context-manager.js";
@@ -373,7 +372,7 @@ export function handleThinking(
         `stopReason=${accumulatedStopReason}. ` +
         `hasRequiredTools=${(input.requiredTools?.length ?? 0) > 0} (${(input.requiredTools ?? []).join(",")}). ` +
         `fast-path-eligible=${fastPathEligible}. ` +
-        `toolCallResolver=${!!(input as ReActKernelInput).toolCallResolver}. ` +
+        `toolCallResolver=${!!input.toolCallResolver}. ` +
         `llmToolsCount=${llmTools.length}.`
       );
     }
@@ -526,8 +525,8 @@ export function handleThinking(
     // ── NATIVE FUNCTION CALLING BRANCH ─────────────────────────────────────
     // The LLM returns structured tool_use blocks instead of text-based ACTION:
     // directives. We resolve them through the ToolCallResolver.
-    if ((input as ReActKernelInput).toolCallResolver) {
-      const resolver = (input as ReActKernelInput).toolCallResolver!;
+    if (input.toolCallResolver) {
+      const resolver = input.toolCallResolver;
 
       // Parse accumulated tool call inputs from JSON strings
       const parsedToolCalls = accumulatedToolCalls.map((tc) => {
@@ -702,7 +701,7 @@ export function handleThinking(
         const gaps = detectCompletionGaps(
           input.task,
           state.toolsUsed,
-          (input as ReActKernelInput).allToolSchemas ?? input.availableToolSchemas ?? [],
+          input.allToolSchemas ?? input.availableToolSchemas ?? [],
           newSteps,
         );
         if (gaps.length > 0 && state.iteration < (state.meta.maxIterations as number ?? 10) - 1) {

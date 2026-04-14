@@ -12,7 +12,7 @@ import type { LLMMessage, ProviderAdapter } from "@reactive-agents/llm-provider"
 import type { ContextProfile } from "../../../context/context-profile.js";
 import { applyMessageWindowWithCompact } from "../../../context/message-window.js";
 import type { ToolSchema } from "../utils/tool-utils.js";
-import type { KernelState, KernelMessage, ReActKernelInput } from "../kernel-state.js";
+import type { KernelState, KernelMessage, KernelInput } from "../kernel-state.js";
 import { transitionState } from "../kernel-state.js";
 import { getMissingRequiredToolsFromSteps } from "../utils/requirement-state.js";
 import { META_TOOLS as META_TOOL_NAMES } from "../kernel-constants.js";
@@ -94,7 +94,7 @@ export function toProviderMessage(msg: KernelMessage): LLMMessage {
  */
 export function buildToolSchemas(
   state: KernelState,
-  input: ReActKernelInput,
+  input: KernelInput,
   _profile: ContextProfile,
   schemas?: readonly ToolSchema[],
 ): readonly ToolSchema[] {
@@ -134,7 +134,7 @@ export interface BuildConversationMessagesResult {
  */
 export function buildConversationMessages(
   state: KernelState,
-  input: ReActKernelInput,
+  input: KernelInput,
   profile: ContextProfile,
   adapter: ProviderAdapter,
 ): BuildConversationMessagesResult {

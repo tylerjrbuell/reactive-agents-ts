@@ -7,7 +7,7 @@
  *
  * Strategies configure their own chain by passing a custom Guard[] to checkToolCall().
  */
-import type { KernelState, ReActKernelInput } from "../kernel-state.js";
+import type { KernelState, KernelInput } from "../kernel-state.js";
 import type { ToolCallSpec } from "@reactive-agents/tools";
 import { isParallelBatchSafeTool } from "../utils/tool-utils.js";
 import {
@@ -25,7 +25,7 @@ export type GuardOutcome =
 export type Guard = (
   tc: ToolCallSpec,
   state: KernelState,
-  input: ReActKernelInput,
+  input: KernelInput,
 ) => GuardOutcome;
 
 function buildActionToolCallCounts(state: KernelState): Readonly<Record<string, number>> {
@@ -250,7 +250,7 @@ export const defaultGuards: Guard[] = [
  * const check = checkToolCall([blockedGuard, duplicateGuard, sideEffectGuard]);
  */
 export function checkToolCall(guards: Guard[]) {
-  return (tc: ToolCallSpec, state: KernelState, input: ReActKernelInput): GuardOutcome => {
+  return (tc: ToolCallSpec, state: KernelState, input: KernelInput): GuardOutcome => {
     for (const guard of guards) {
       const outcome = guard(tc, state, input);
       if (!outcome.pass) return outcome;
