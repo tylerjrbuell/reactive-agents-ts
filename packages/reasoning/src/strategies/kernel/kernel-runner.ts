@@ -244,6 +244,28 @@ export function shouldForceOracleExit(opts: {
   return opts.oracleReady && opts.readyToAnswerNudgeCount >= nudgeLimit
 }
 
+/**
+ * Resolve the effective maxSameTool loop-detection window.
+ *
+ * In parallel mode, adaptive classification may require N calls of the same tool
+ * (e.g. `web-search×4` for four entities). The loop detector fires when the last
+ * `maxSameTool` actions all have identical content — if the window is smaller than N,
+ * it can fire prematurely before the required quota is met.
+ *
+ * This function raises the base tier default to at least the highest required-tool
+ * quantity, capped at 20 as a safety net against runaway same-tool loops.
+ */
+export function resolveMaxSameTool(
+  baseMax: number,
+  requiredToolQuantities?: Readonly<Record<string, number>>,
+): number {
+  if (!requiredToolQuantities) return baseMax;
+  const values = Object.values(requiredToolQuantities);
+  if (values.length === 0) return baseMax;
+  const maxRequired = Math.max(...values);
+  return Math.min(20, Math.max(baseMax, maxRequired));
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /**
@@ -475,7 +497,10 @@ export function runKernel(
     let prevStepCount = 0;
     const loopCfg = options.loopDetection;
     const tierGuards = TIER_GUARD_THRESHOLDS[profile.tier] ?? TIER_GUARD_THRESHOLDS["mid"];
-    const maxSameTool = loopCfg?.maxSameToolCalls ?? tierGuards.maxSameToolDefault;
+    const maxSameTool = resolveMaxSameTool(
+      loopCfg?.maxSameToolCalls ?? tierGuards.maxSameToolDefault,
+      effectiveInput.requiredToolQuantities,
+    );
     const maxRepeatedThought = loopCfg?.maxRepeatedThoughts ?? 3;
     const maxConsecutiveThoughts = loopCfg?.maxConsecutiveThoughts ?? 3;
 

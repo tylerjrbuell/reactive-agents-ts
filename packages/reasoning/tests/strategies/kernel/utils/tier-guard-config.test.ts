@@ -3,6 +3,7 @@ import { describe, it, expect } from "bun:test"
 import {
   shouldExitOnLowDelta,
   shouldForceOracleExit,
+  resolveMaxSameTool,
   TIER_GUARD_THRESHOLDS,
 } from "../../../../src/strategies/kernel/kernel-runner.js"
 
@@ -107,5 +108,39 @@ describe("tier-aware shouldForceOracleExit", () => {
   it("oracle not ready never exits regardless of tier", () => {
     expect(shouldForceOracleExit({ oracleReady: false, readyToAnswerNudgeCount: 5, tier: "local" })).toBe(false)
     expect(shouldForceOracleExit({ oracleReady: false, readyToAnswerNudgeCount: 5, tier: "frontier" })).toBe(false)
+  })
+})
+
+describe("resolveMaxSameTool", () => {
+  it("returns base when no quantities are provided", () => {
+    expect(resolveMaxSameTool(3)).toBe(3)
+    expect(resolveMaxSameTool(3, undefined)).toBe(3)
+    expect(resolveMaxSameTool(3, {})).toBe(3)
+  })
+
+  it("raises base to required quantity when quantity exceeds tier default", () => {
+    // mid tier default is 3; web-search×4 → must be 4
+    expect(resolveMaxSameTool(3, { "web-search": 4 })).toBe(4)
+  })
+
+  it("keeps base when all quantities are within tier default", () => {
+    // local tier default 2; quantity 2 → stays 2
+    expect(resolveMaxSameTool(2, { "web-search": 2 })).toBe(2)
+    // mid tier default 3; quantity 1 → stays 3
+    expect(resolveMaxSameTool(3, { "web-search": 1 })).toBe(3)
+  })
+
+  it("uses the highest quantity across all required tools", () => {
+    // http-get×6 dominates web-search×4
+    expect(resolveMaxSameTool(3, { "web-search": 4, "http-get": 6 })).toBe(6)
+  })
+
+  it("caps at 20 regardless of required quantity", () => {
+    expect(resolveMaxSameTool(3, { "web-search": 25 })).toBe(20)
+  })
+
+  it("respects a user-supplied loopCfg.maxSameToolCalls that is already higher", () => {
+    // User explicitly set 10 via loopDetection config — honour it
+    expect(resolveMaxSameTool(10, { "web-search": 4 })).toBe(10)
   })
 })

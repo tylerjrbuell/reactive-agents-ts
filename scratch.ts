@@ -25,16 +25,12 @@ const agent = await ReactiveAgents.create()
     .withModel({ model: 'gemma4:e4b', temperature: 0.2, maxTokens: 8000 })
     .withReasoning({ defaultStrategy: 'reactive' })
     .withTools()
-    // Keep this probe focused on model-side parallel tool behavior.
-    // Adaptive required-tool classification can infer web-search×4 for this task,
-    // which now conflicts with the default search budget cap (3).
-    .withRequiredTools({ adaptive: false })
     .withObservability({ verbosity: 'debug', live: true })
     .build()
 
 const result = await agent.run(
-    'Fetch the current USD price for each currency: XRP, XLM, ETH, Bitcoin. ' +
-        'Then render a markdown table with columns: Currency | Price | Source.'
+    'Fetch the current approximate USD price for each currency: XRP, XLM, ETH, Bitcoin. ' +
+        'Then render a markdown table with columns: Currency | Price | Source. Properly formated with markdown syntax and dollar signs.'
 )
 
 console.log('\n--- Result ---')
