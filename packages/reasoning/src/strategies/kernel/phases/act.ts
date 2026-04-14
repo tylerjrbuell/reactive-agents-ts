@@ -526,6 +526,7 @@ export function handleActing(
             const obsStep = makeStep("observation", obsContent, {
               toolCallId: result.callId,
               storedKey: result.execResult.storedKey,
+              extractedFact: result.execResult.extractedFact,
               observationResult: makeObservationResult(result.toolName, result.execResult.success, obsContent, {
                 delegatedToolsUsed: result.execResult.delegatedToolsUsed,
               }),
@@ -672,6 +673,7 @@ export function handleActing(
         const obsStep = makeStep("observation", obsContent, {
           toolCallId: tc.id,
           storedKey: execResult.storedKey,
+          extractedFact: execResult.extractedFact,
           observationResult: makeObservationResult(tc.name, execResult.success, obsContent, {
             delegatedToolsUsed: execResult.delegatedToolsUsed,
           }),

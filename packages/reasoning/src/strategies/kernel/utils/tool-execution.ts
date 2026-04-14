@@ -536,7 +536,7 @@ export function executeNativeToolCall(
   agentId: string,
   sessionId: string,
   config?: { compression?: ResultCompressionConfig; scratchpad?: Map<string, string> },
-): Effect.Effect<{ content: string; success: boolean; storedKey?: string; delegatedToolsUsed?: readonly string[] }, never> {
+): Effect.Effect<{ content: string; success: boolean; storedKey?: string; delegatedToolsUsed?: readonly string[]; extractedFact?: string }, never> {
   return toolService
     .execute({
       toolName: toolCall.name,
@@ -552,6 +552,17 @@ export function executeNativeToolCall(
 
         // Apply tool-specific normalization (HTML stripping for http-get, etc.)
         content = normalizeObservation(toolCall.name, content);
+
+        // Deterministic fact extraction on RAW (normalized) content — before compression.
+        // Captures dollar amounts, percentages, and source URLs that would otherwise be
+        // lost when the compressor truncates to ~800 chars.
+        const extractedFact = success
+          ? extractFactDeterministic(
+              toolCall.name,
+              (toolCall.arguments as Record<string, unknown>) ?? {},
+              content,
+            )
+          : undefined;
 
         // Apply result compression for large outputs
         let storedKey: string | undefined;
@@ -585,7 +596,7 @@ export function executeNativeToolCall(
           }
         }
 
-        return { content, success, storedKey, delegatedToolsUsed };
+        return { content, success, storedKey, delegatedToolsUsed, extractedFact };
       }),
       Effect.catchAll((e) => {
         const msg = e instanceof Error ? e.message : String(e);
@@ -609,6 +620,55 @@ export function executeNativeToolCall(
         });
       }),
     );
+}
+
+// ── Deterministic observation fact extraction (zero LLM calls) ───────────────
+
+/**
+ * Deterministic fact extraction from raw tool output.
+ * Runs BEFORE compression. Zero LLM calls.
+ * Extracts: dollar amounts, percentages, URLs (for source attribution).
+ * Returns a one-liner or undefined if no structured data found.
+ */
+export function extractFactDeterministic(
+  toolName: string,
+  args: Record<string, unknown>,
+  rawResult: string,
+): string | undefined {
+  if (!rawResult || !rawResult.trim()) return undefined;
+
+  // Tool context from args
+  const query = String(
+    args.query ?? args.url ?? args.input ?? args.q ?? args.search ?? "",
+  )
+    .slice(0, 60)
+    .trim();
+
+  // Extract dollar amounts (prices, values) — pick first occurrences
+  const dollarMatches = rawResult.match(/\$[\d,]+\.?\d*/g) ?? [];
+
+  // Extract percentages
+  const pctMatches = rawResult.match(/[+-]?\d+\.?\d*%/g) ?? [];
+
+  // Extract first URL for source attribution
+  const urlMatch = rawResult.match(/https?:\/\/([^/\s)\]]+)/);
+  const source = urlMatch ? urlMatch[1] : undefined;
+
+  if (dollarMatches.length === 0 && pctMatches.length === 0) return undefined;
+
+  // Build the fact string
+  const parts: string[] = [];
+  if (dollarMatches.length > 0) {
+    // Include up to 2 dollar amounts to capture things like "price $X, market cap $Y"
+    parts.push(dollarMatches.slice(0, 2).join(", "));
+  }
+  if (pctMatches.length > 0) {
+    parts.push(pctMatches[0]!);
+  }
+
+  const queryPart = query ? `('${query}')` : "";
+  const sourceSuffix = source ? ` (source: ${source})` : "";
+  return `${toolName}${queryPart}: ${parts.join(", ")}${sourceSuffix}`;
 }
 
 // ── LLM-based observation fact extraction ─────────────────────────────────────
