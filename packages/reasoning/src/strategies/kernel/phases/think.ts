@@ -123,7 +123,7 @@ export function handleThinking(
     // final-answer so the model's next action is a clean exit.
     const pressureCritical = shouldNarrowToFinalAnswerOnly({
       estimatedTokens: state.tokens,
-      maxTokens: (input.contextProfile as any)?.maxTokens ?? Number.MAX_SAFE_INTEGER,
+      maxTokens: input.contextProfile?.maxTokens ?? Number.MAX_SAFE_INTEGER,
       tier: profile.tier,
     });
 
@@ -241,7 +241,7 @@ export function handleThinking(
     }));
 
     // Request logprobs when entropy sensor may be active (modelId present in meta)
-    const wantLogprobs = (state.meta.entropy as any)?.modelId !== undefined;
+    const wantLogprobs = state.meta.entropy?.modelId !== undefined;
 
     // ── Build conversation messages ──────────────────────────────────────────
     // Sliding message window (emergency safety net) + task framing on first iter.
@@ -316,8 +316,8 @@ export function handleThinking(
         } else if (event.type === "content_complete") {
           accumulatedContent = event.content;
           // Extract stop reason from content_complete event if present
-          if ("stopReason" in event && typeof (event as any).stopReason === "string") {
-            accumulatedStopReason = (event as any).stopReason;
+          if ("stopReason" in event && typeof (event as Record<string, unknown>).stopReason === "string") {
+            accumulatedStopReason = (event as Record<string, unknown>).stopReason as string;
           }
         } else if (event.type === "usage") {
           accumulatedUsage = event.usage;
@@ -380,8 +380,8 @@ export function handleThinking(
 
     // Store logprobs in entropy meta for the entropy sensor
     if (accumulatedLogprobs.length > 0) {
-      const entropyMeta = (state.meta.entropy as any) ?? {};
-      (state.meta as any).entropy = { ...entropyMeta, lastLogprobs: accumulatedLogprobs };
+      const entropyMeta = state.meta.entropy ?? {};
+      state = transitionState(state, { meta: { ...state.meta, entropy: { ...entropyMeta, lastLogprobs: accumulatedLogprobs } } });
     }
 
     // Build response shape matching original llm.complete() return
@@ -444,7 +444,7 @@ export function handleThinking(
 
     // Strip <think>...</think> blocks before parsing
     const { thinking: extractedThinking, content: cleanContent } = extractThinking(rawThought);
-    const providerThinking = (thoughtResponse as any).thinking as string | undefined;
+    const providerThinking = (thoughtResponse as Record<string, unknown>).thinking as string | undefined;
     const thinking = extractedThinking || providerThinking || null;
     let thought = cleanContent || providerThinking || rawThought;
     // Thinking models (e.g. cogito) may put the full answer in the thinking field
@@ -761,7 +761,7 @@ export function handleThinking(
           steps: newSteps,
           finalAnswer: cleanContentFA,
           terminatedBy: "llm_end_turn",
-          entropyScores: (state.meta.entropy as any)?.entropyHistory,
+          entropyScores: state.meta.entropy?.entropyHistory,
         });
         return transitionState(state, {
           steps: newSteps,
@@ -929,9 +929,9 @@ export function handleThinking(
         iteration: state.iteration,
         steps: state.steps,
         priorThought: state.priorThought,
-        entropy: (state.meta.entropy as any)?.latestScore,
-        trajectory: (state.meta.entropy as any)?.latestTrajectory,
-        controllerDecisions: (state.meta.controllerDecisions as any[]) ?? undefined,
+        entropy: state.meta.entropy?.latestScore as TerminationContext["entropy"],
+        trajectory: state.meta.entropy?.latestTrajectory as TerminationContext["trajectory"],
+        controllerDecisions: state.meta.controllerDecisions as TerminationContext["controllerDecisions"],
         toolsUsed: state.toolsUsed,
         requiredTools: (state.meta.requiredTools as string[]) ?? (input.requiredTools as string[]) ?? [],
         allToolSchemas: input.allToolSchemas ?? input.availableToolSchemas ?? [],
@@ -947,7 +947,7 @@ export function handleThinking(
           steps: state.steps,
           finalAnswer: decision.output,
           terminatedBy: decision.reason,
-          entropyScores: (state.meta.entropy as any)?.entropyHistory,
+          entropyScores: state.meta.entropy?.entropyHistory,
         });
         return transitionState(state, {
           steps: newSteps,

@@ -50,6 +50,82 @@ export interface PendingGuidance {
   readonly errorRecovery?: string;
 }
 
+// ── KernelMeta — typed strategy-specific metadata bag ─────────────────────────
+
+/** Entropy sensor metadata accumulated during kernel execution. */
+export interface KernelEntropyMeta {
+  readonly taskDescription?: string;
+  readonly modelId?: string;
+  readonly temperature?: number;
+  readonly taskCategory?: string;
+  readonly lastLogprobs?: readonly { token: string; logprob: number; topLogprobs?: readonly { token: string; logprob: number }[] }[];
+  readonly entropyHistory?: readonly unknown[];
+  readonly controllerConfig?: {
+    readonly earlyStop: boolean;
+    readonly contextCompression: boolean;
+    readonly strategySwitch: boolean;
+  };
+  /** Latest entropy snapshot for brief/pulse meta-tools. */
+  readonly latest?: { readonly composite: number; readonly shape: string; readonly momentum: number; readonly history?: readonly number[] };
+  /** Latest composite score for termination oracle. */
+  readonly latestScore?: unknown;
+  /** Latest trajectory shape for termination oracle. */
+  readonly latestTrajectory?: unknown;
+}
+
+/** Reactive controller decision stored on meta for oracle consumption. */
+export interface ControllerDecisionLike {
+  readonly decision: string;
+  readonly reason?: string;
+  readonly sections?: readonly string[];
+  readonly skillName?: string;
+}
+
+/** Typed metadata bag for KernelState. Every field is optional. */
+export interface KernelMeta {
+  // ── Entropy / reactive intelligence ──
+  readonly entropy?: KernelEntropyMeta;
+  readonly controllerDecisions?: readonly ControllerDecisionLike[];
+
+  // ── Iteration control ──
+  readonly maxIterations?: number;
+  readonly requiredTools?: readonly string[];
+
+  // ── Termination tracking ──
+  readonly terminatedBy?: string;
+  readonly redirectCount?: number;
+
+  // ── Native FC handoff between think → act ──
+  readonly pendingNativeToolCalls?: readonly ToolCallSpec[];
+  readonly lastThought?: string;
+  readonly lastThinking?: string | null;
+
+  // ── Quality / output gates ──
+  readonly qualityCheckDone?: boolean;
+  readonly gateBlockedTools?: readonly string[];
+  readonly outputSynthesized?: boolean;
+  readonly outputFormatValidated?: boolean;
+  readonly outputFormatReason?: string;
+  readonly evaluator?: string;
+  readonly allVerdicts?: ReadonlyArray<{ evaluator: string; verdict: unknown }>;
+
+  // ── Execution lane ──
+  readonly executionLane?: string;
+  readonly missingRequiredTools?: readonly string[];
+
+  // ── Recovery ──
+  readonly recoveryPending?: boolean;
+  readonly recoveryFailedTools?: readonly string[];
+  readonly recoveryAlternativeCandidates?: readonly string[];
+
+  // ── Kernel identity / pass ──
+  readonly kernelPass?: string;
+
+  // ── Final answer ──
+  readonly finalAnswerCapture?: FinalAnswerCapture;
+
+}
+
 // ── KernelState — Immutable, serializable reasoning state ────────────────────
 
 export interface KernelState {
@@ -78,7 +154,7 @@ export interface KernelState {
   readonly llmCalls: number;
 
   // Strategy-specific
-  readonly meta: Readonly<Record<string, unknown>>;
+  readonly meta: KernelMeta;
 
   /** Accumulated controller decisions this run, formatted as "decision: reason" strings. */
   readonly controllerDecisionLog: readonly string[];

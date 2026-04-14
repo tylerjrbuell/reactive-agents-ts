@@ -100,7 +100,7 @@ function buildIterationSystemPrompt(
     buildStaticContext({
       task: input.task,
       profile,
-      availableToolSchemas: input.availableToolSchemas as any,
+      availableToolSchemas: input.availableToolSchemas as readonly { name: string; description: string; parameters: readonly { name: string; type: string; required?: boolean; description?: string }[] }[],
       requiredTools: input.requiredTools as string[] | undefined,
       environmentContext: input.environmentContext,
     }),

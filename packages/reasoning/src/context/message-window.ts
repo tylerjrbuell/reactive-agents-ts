@@ -46,7 +46,7 @@ export function applyMessageWindowWithCompact(
 
   for (let i = 0; i < messages.length; i++) {
     const msg = messages[i]!
-    if (msg.role === "assistant" && "toolCalls" in msg && (msg as any).toolCalls?.length) {
+    if (msg.role === "assistant" && msg.toolCalls?.length) {
       if (currentTurn) turns.push(currentTurn)
       currentTurn = { assistantIdx: i, resultIdxs: [] }
     } else if (msg.role === "tool_result" && currentTurn) {
@@ -64,14 +64,14 @@ export function applyMessageWindowWithCompact(
     for (const idx of turn.resultIdxs) {
       const msg = mutable[idx]!
       if (msg.role !== "tool_result") continue
-      const id = (msg as any).toolCallId as string | undefined
+      const id = msg.toolCallId
       if (!id) continue
       if (opts.frozenToolResultIds.has(id)) continue // never re-strip frozen
 
-      const content = (msg as any).content as string
+      const content = msg.content
       if (content.length > 200) {
-        const recallKey = (msg as any).storedKey ?? id;
-        ;(mutable[idx] as any) = {
+        const recallKey = msg.storedKey ?? id;
+        mutable[idx] = {
           ...msg,
           content: `[${content.length} chars — use recall("${recallKey}") to retrieve]`,
         }
@@ -83,7 +83,7 @@ export function applyMessageWindowWithCompact(
   // ── Pass 2: Sliding window (only when over budget) ─────────────────────
   // Estimate: 1 char ≈ 0.25 tokens
   const estimatedTokens = mutable.reduce((sum, m) => {
-    const c = (m as any).content ?? ""
+    const c = m.content ?? ""
     return sum + Math.ceil((typeof c === "string" ? c : JSON.stringify(c)).length / 4)
   }, 0)
 
@@ -102,12 +102,12 @@ export function applyMessageWindowWithCompact(
 
   const oldSummaryParts = turns.slice(0, Math.max(0, turns.length - keepFullTurns)).map((t) => {
     const assistantMsg = mutable[t.assistantIdx]!
-    const toolNames = ("toolCalls" in assistantMsg ? (assistantMsg as any).toolCalls ?? [] : [])
-      .map((tc: any) => tc.name)
+    const toolNames = (assistantMsg.role === "assistant" && assistantMsg.toolCalls ? assistantMsg.toolCalls : [])
+      .map((tc) => tc.name)
       .join(", ")
     const snippet = t.resultIdxs
       .map((i) => {
-        const c = (mutable[i] as any)?.content ?? ""
+        const c = mutable[i]?.content ?? ""
         return typeof c === "string" ? c.slice(0, 60) : ""
       })
       .join("; ")

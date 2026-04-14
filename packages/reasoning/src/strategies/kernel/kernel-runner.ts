@@ -570,7 +570,7 @@ export function runKernel(
         !autoCheckpointed &&
         shouldAutoCheckpoint({
           estimatedTokens: state.tokens,
-          maxTokens: (effectiveInput.contextProfile as any)?.maxTokens ?? Number.MAX_SAFE_INTEGER,
+          maxTokens: effectiveInput.contextProfile?.maxTokens ?? Number.MAX_SAFE_INTEGER,
           tier: profile.tier,
           alreadyCheckpointed: autoCheckpointed,
         })

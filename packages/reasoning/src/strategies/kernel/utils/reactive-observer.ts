@@ -45,23 +45,22 @@ export function runReactiveObserver(
         yield* services.entropySensor.value
           .score({
             thought: latestThought.content ?? "",
-            taskDescription: (s.meta.entropy as any)?.taskDescription ?? "",
+            taskDescription: s.meta.entropy?.taskDescription ?? "",
             strategy: s.strategy,
             iteration: s.iteration,
             maxIterations: (s.meta.maxIterations as number) ?? 10,
-            modelId: (s.meta.entropy as any)?.modelId ?? "unknown",
-            temperature: (s.meta.entropy as any)?.temperature ?? 0,
+            modelId: s.meta.entropy?.modelId ?? "unknown",
+            temperature: s.meta.entropy?.temperature ?? 0,
             priorThought,
-            logprobs: (s.meta.entropy as any)?.lastLogprobs,
+            logprobs: s.meta.entropy?.lastLogprobs,
             kernelState: s,
-            taskCategory: (s.meta.entropy as any)?.taskCategory,
+            taskCategory: s.meta.entropy?.taskCategory,
           })
           .pipe(
-            Effect.tap((score: any) => {
-              const entropyMeta = (s.meta as any).entropy ?? {};
-              const history = entropyMeta.entropyHistory ?? [];
-              history.push(score);
-              (s.meta as any).entropy = { ...entropyMeta, entropyHistory: history };
+            Effect.tap((score: unknown) => {
+              const entropyMeta = s.meta.entropy ?? {};
+              const history = [...(entropyMeta.entropyHistory ?? []), score];
+              s = transitionState(s, { meta: { ...s.meta, entropy: { ...entropyMeta, entropyHistory: history } } });
 
               if (eventBus._tag === "Some") {
                 return eventBus.value.publish({
@@ -86,12 +85,12 @@ export function runReactiveObserver(
 
     // ── Reactive Controller evaluation ──────────────────────────────────
     if (services.reactiveController._tag === "Some") {
-      const entropyHistory = ((s.meta as any).entropy?.entropyHistory ?? []) as readonly any[];
+      const entropyHistory = (s.meta.entropy?.entropyHistory ?? []) as readonly Record<string, unknown>[];
       if (entropyHistory.length > 0) {
         const latestScore = entropyHistory[entropyHistory.length - 1];
 
         // ── Load calibration from EntropySensorService (not hardcoded) ──
-        const modelId = (s.meta as any).entropy?.modelId ?? currentOptions.modelId ?? "unknown";
+        const modelId = s.meta.entropy?.modelId ?? currentOptions.modelId ?? "unknown";
         let calibration: {
           readonly highEntropyThreshold: number;
           readonly convergenceThreshold: number;
@@ -111,14 +110,15 @@ export function runReactiveObserver(
           };
 
           // ── Emit CalibrationDrift event when drift is detected ──
-          if ((cal as any).driftDetected && eventBus._tag === "Some") {
+          const calWithDrift = cal as typeof cal & { driftDetected?: boolean; expectedMean?: number; observedMean?: number; deviationSigma?: number };
+          if (calWithDrift.driftDetected && eventBus._tag === "Some") {
             yield* eventBus.value.publish({
               _tag: "CalibrationDrift",
               taskId: s.taskId,
               modelId,
-              expectedMean: (cal as any).expectedMean ?? 0,
-              observedMean: (cal as any).observedMean ?? 0,
-              deviationSigma: (cal as any).deviationSigma ?? 0,
+              expectedMean: calWithDrift.expectedMean ?? 0,
+              observedMean: calWithDrift.observedMean ?? 0,
+              deviationSigma: calWithDrift.deviationSigma ?? 0,
             }).pipe(Effect.catchAll(() => Effect.void));
           }
         }
@@ -129,7 +129,7 @@ export function runReactiveObserver(
           maxIterations: currentOptions.maxIterations,
           strategy: s.strategy,
           calibration,
-          config: (s.meta as any).entropy?.controllerConfig ?? {
+          config: s.meta.entropy?.controllerConfig ?? {
             earlyStop: true,
             contextCompression: true,
             strategySwitch: true,
@@ -145,8 +145,8 @@ export function runReactiveObserver(
               _tag: "ReactiveDecision",
               taskId: s.taskId,
               iteration: s.iteration,
-              decision: (decision as any).decision,
-              reason: (decision as any).reason,
+              decision: (decision as Record<string, unknown>).decision,
+              reason: (decision as Record<string, unknown>).reason,
               entropyBefore: latestScore?.composite ?? 0,
             }).pipe(Effect.catchAll(() => Effect.void));
           }

@@ -131,8 +131,8 @@ function handleBriefTool(
       memoryBootstrap: input.metaTools?.staticBriefInfo?.memoryBootstrap ?? { semanticLines: 0, episodicEntries: 0 },
       recallKeys,
       tokens: state.tokens,
-      tokenBudget: (input.contextProfile as any)?.maxTokens ?? 8000,
-      entropy: ((state.meta as any).entropy?.latest) as { composite: number; shape: string; momentum: number } | undefined,
+      tokenBudget: input.contextProfile?.maxTokens ?? 8000,
+      entropy: state.meta.entropy?.latest,
       controllerDecisionLog: state.controllerDecisionLog,
       iterationCount: state.iteration,
     };
@@ -155,13 +155,13 @@ function handlePulseTool(
     const { input } = context;
     const pulseInput: PulseInput = {
       question: tc.arguments?.question as string | undefined,
-      entropy: ((state.meta as any).entropy?.latest) as { composite: number; shape: string; momentum: number; history?: readonly number[] } | undefined,
+      entropy: state.meta.entropy?.latest as PulseInput["entropy"],
       controllerDecisionLog: state.controllerDecisionLog,
       steps: allSteps as import("../../../types/index.js").ReasoningStep[],
       iteration: state.iteration,
       maxIterations: (state.meta.maxIterations as number | undefined) ?? 10,
       tokens: state.tokens,
-      tokenBudget: (input.contextProfile as any)?.maxTokens ?? 8000,
+      tokenBudget: input.contextProfile?.maxTokens ?? 8000,
       task: input.task,
       allToolSchemas: input.allToolSchemas ?? input.availableToolSchemas ?? [],
       toolsUsed: newToolsUsed,

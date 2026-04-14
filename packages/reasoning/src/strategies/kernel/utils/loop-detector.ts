@@ -141,10 +141,9 @@ export function checkAllToolsCalled(
   if (!allPrimaryCalled) return state;
 
   const lastObs = [...state.steps].reverse().find((s) => s.type === "observation");
-  const next = transitionState(state, {
+  return transitionState(state, {
     status: "done",
     output: lastObs?.content ?? state.output ?? "[All tools executed successfully]",
+    meta: { ...state.meta, terminatedBy: "all_tools_called" },
   });
-  (next.meta as any).terminatedBy = "all_tools_called";
-  return next;
 }

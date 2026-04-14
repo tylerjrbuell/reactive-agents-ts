@@ -20,6 +20,8 @@ export const ContextProfileSchema = Schema.Struct({
   maxIterations: Schema.optional(Schema.Number),
   /** LLM sampling temperature. */
   temperature: Schema.optional(Schema.Number),
+  /** Maximum context window tokens for this tier. Used by pressure gates and message compaction. */
+  maxTokens: Schema.optional(Schema.Number),
 });
 export type ContextProfile = typeof ContextProfileSchema.Type;
 
@@ -33,6 +35,7 @@ export const CONTEXT_PROFILES: Record<ModelTier, ContextProfile> = {
     toolSchemaDetail: "names-and-types",
     maxIterations: 8,
     temperature: 0.3,
+    maxTokens: 4096,
   },
   mid: {
     tier: "mid",
@@ -41,6 +44,7 @@ export const CONTEXT_PROFILES: Record<ModelTier, ContextProfile> = {
     toolSchemaDetail: "full",
     maxIterations: 10,
     temperature: 0.5,
+    maxTokens: 8192,
   },
   large: {
     tier: "large",
@@ -49,6 +53,7 @@ export const CONTEXT_PROFILES: Record<ModelTier, ContextProfile> = {
     toolSchemaDetail: "full",
     maxIterations: 10,
     temperature: 0.5,
+    maxTokens: 32768,
   },
   frontier: {
     tier: "frontier",
@@ -57,6 +62,7 @@ export const CONTEXT_PROFILES: Record<ModelTier, ContextProfile> = {
     toolSchemaDetail: "full",
     maxIterations: 12,
     temperature: 0.6,
+    maxTokens: 128000,
   },
 };
 
