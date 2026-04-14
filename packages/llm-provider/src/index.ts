@@ -154,3 +154,6 @@ export {
   buildCalibratedAdapter,
 } from "./calibration.js";
 export type { ModelCalibration, ProfileOverrides } from "./calibration.js";
+
+// ─── Calibration Runner ───
+export { runCalibrationProbes, majority, median } from "./calibration-runner.js";
