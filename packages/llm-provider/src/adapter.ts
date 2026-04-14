@@ -6,7 +6,7 @@
  * Frontier models return undefined (no intervention needed).
  * Local/mid models return explicit guidance to improve task completion rates.
  *
- * Hook call sites in the kernel phases (think.ts, context-builder.ts, act.ts):
+ * Hook call sites in the kernel phases (think.ts, context-utils.ts, act.ts):
  *   systemPromptPatch  — once, when building the static system prompt
  *   taskFraming        — once, wrapping the initial user task message
  *   toolGuidance       — once, appended to system prompt after tool schema block

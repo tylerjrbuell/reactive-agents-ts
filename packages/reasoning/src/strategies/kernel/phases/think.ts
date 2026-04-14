@@ -19,7 +19,7 @@ import {
   toProviderMessage,
   buildToolSchemas,
   buildConversationMessages,
-} from "./context-builder.js";
+} from "./context-utils.js";
 import { StreamingTextCallback } from "@reactive-agents/core";
 import {
   finalAnswerTool,

@@ -1,4 +1,4 @@
-// Run: bun test packages/reasoning/tests/strategies/kernel/phases/context-builder.test.ts --timeout 15000
+// Run: bun test packages/reasoning/tests/strategies/kernel/phases/context-utils.test.ts --timeout 15000
 import { describe, it, expect } from "bun:test";
 import { readFileSync } from "fs";
 import {
@@ -6,7 +6,7 @@ import {
   toProviderMessage,
   buildToolSchemas,
   buildConversationMessages,
-} from "../../../../src/strategies/kernel/phases/context-builder.js";
+} from "../../../../src/strategies/kernel/phases/context-utils.js";
 import { defaultAdapter } from "@reactive-agents/llm-provider";
 import { initialKernelState } from "../../../../src/strategies/kernel/kernel-state.js";
 import type { KernelMessage, KernelState } from "../../../../src/strategies/kernel/kernel-state.js";
@@ -15,7 +15,7 @@ import { CONTEXT_PROFILES } from "../../../../src/context/context-profile.js";
 // ── Structural checks ─────────────────────────────────────────────────────────
 
 const src = readFileSync(
-  new URL("../../../../src/strategies/kernel/phases/context-builder.ts", import.meta.url),
+  new URL("../../../../src/strategies/kernel/phases/context-utils.ts", import.meta.url),
   "utf8"
 );
 const kernelStateSrc = readFileSync(
@@ -27,18 +27,18 @@ const kernelRunnerSrc = readFileSync(
   "utf8"
 );
 
-describe("context-builder.ts structural", () => {
+describe("context-utils.ts structural", () => {
   it("does not reference synthesizedContext", () => {
     expect(src).not.toContain("synthesizedContext");
   });
-  // Phase 4 gate: steeringNudge must NOT be injected as a user message by context-builder
+  // Phase 4 gate: steeringNudge must NOT be injected as a user message by context-utils
   it("does not inject steeringNudge as a user message", () => {
     expect(src).not.toContain("steeringNudge");
   });
   it("does not have thoughtPrompt parameter", () => {
     expect(src).not.toContain("thoughtPrompt");
   });
-  // Phase 2 gate: auto-forward injection must be gone from context-builder
+  // Phase 2 gate: auto-forward injection must be gone from context-utils
   it("does not inject auto-forward content", () => {
     expect(src).not.toContain("autoForwardSection");
     expect(src).not.toContain("Auto-forwarded:");
