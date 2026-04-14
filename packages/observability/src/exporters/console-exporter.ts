@@ -186,7 +186,7 @@ const generateAlerts = (
   if (stepCount >= 7) {
     alerts.push({
       level: "info",
-      message: `${stepCount} iterations needed (complex reasoning)`,
+      message: `${stepCount} reasoning steps (complex reasoning)`,
     });
   }
 
@@ -194,7 +194,7 @@ const generateAlerts = (
     alerts.push({
       level: "warning",
       message:
-        "High iteration count suggests task complexity or model confusion",
+        "High step count suggests task complexity or model confusion",
     });
   }
 
@@ -357,9 +357,10 @@ export const buildDashboardData = (
           totalPhaseDuration > 0
             ? ((duration / totalPhaseDuration) * 100).toFixed(0)
             : "?";
-        details = `${stepCount} iter, ${percentOfTotal}% of time`;
+        details = `${stepCount} steps, ${percentOfTotal}% of time`;
       } else if (phaseName === "act" && tools.length > 0) {
-        details = `${tools.length} tools`;
+        const totalCalls = tools.reduce((n, t) => n + t.callCount, 0);
+        details = `${totalCalls} calls`;
       }
 
       phases.push({
@@ -665,7 +666,8 @@ export const formatMetricsDashboard = (data: DashboardData): string => {
   // ── Tool Execution ───────────────────────────────────────────────────────
   if (data.tools.length > 0) {
     lines.push("");
-    lines.push(chalk.hex(C_CYAN).bold(`🔧 Tool Execution (${data.tools.length} called)`));
+    const totalToolCalls = data.tools.reduce((n, t) => n + t.callCount, 0);
+    lines.push(chalk.hex(C_CYAN).bold(`🔧 Tool Execution (${totalToolCalls} calls across ${data.tools.length} tools)`));
 
     const maxToolNameLen = Math.max(...data.tools.map((t) => t.name.length), 10);
 
@@ -801,10 +803,16 @@ export const formatMetricsDashboard = (data: DashboardData): string => {
       lines.push(`├─ Sources: ${topSources.join(chalk.hex(C_DIM)(" · "))}`);
     }
 
-    // Per-iteration sparkline
+    // Per-iteration sparkline with gap annotations
     const maxBar = 20;
     for (let i = 0; i < trace.length; i++) {
       const pt = trace[i];
+      const prevIter = i > 0 ? trace[i - 1].iteration : pt.iteration;
+      const gap = pt.iteration - prevIter;
+      if (gap > 1) {
+        const omitted = gap - 1;
+        lines.push(`├─  ${chalk.hex(C_DIM)(`┈┈┈ ${omitted} tool/system step${omitted > 1 ? "s" : ""} (no thought scored) ┈┈┈`)}`);
+      }
       const isLast = i === trace.length - 1;
       const prefix = isLast ? "└─" : "├─";
       const barLen = Math.round(pt.composite * maxBar);

@@ -576,8 +576,8 @@ describe("Task 4: exportMetrics() Dashboard Integration", () => {
       const combined = output.join("\n");
       // Verify alerts show high iteration warnings
       expect(combined).toContain("Alerts & Insights");
-      expect(combined).toContain("9 iterations needed");
-      expect(combined).toContain("High iteration count");
+      expect(combined).toContain("9 reasoning steps");
+      expect(combined).toContain("High step count");
     } finally {
       console.log = origLog;
     }
