@@ -9,7 +9,7 @@ import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { ContextProfile } from "../context/context-profile.js";
-import type { ToolSchema } from "./kernel/utils/tool-utils.js";
+import type { ToolSchema } from "./kernel/utils/tool-formatting.js";
 import { runKernel } from "./kernel/kernel-runner.js";
 import { reactKernel } from "./kernel/react-kernel.js";
 import { buildStrategyResult } from "./kernel/utils/step-utils.js";
@@ -20,8 +20,9 @@ import { resolveExecutableToolCapabilities } from "./kernel/utils/tool-capabilit
 
 // ── Re-exports for backwards compatibility ────────────────────────────────────
 
-export type { CompressResult } from "./kernel/utils/tool-utils.js";
-export { evaluateTransform, compressToolResult } from "./kernel/utils/tool-utils.js";
+export type { CompressResult } from "./kernel/utils/tool-formatting.js";
+export { compressToolResult } from "./kernel/utils/tool-formatting.js";
+export { evaluateTransform } from "./kernel/utils/tool-parsing.js";
 // parseToolRequestWithTransform re-export removed — use parseToolRequest from kernel/tool-utils directly
 export { truncateForDisplay } from "./kernel/utils/tool-execution.js";
 

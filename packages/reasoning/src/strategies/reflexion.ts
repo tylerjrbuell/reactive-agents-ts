@@ -31,7 +31,7 @@ import {
   validateOutputFormat,
   buildSynthesisPrompt,
 } from "./kernel/utils/output-synthesis.js";
-import type { ToolSchema } from "./kernel/utils/tool-utils.js";
+import type { ToolSchema } from "./kernel/utils/tool-formatting.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
 import { resolveExecutableToolCapabilities } from "./kernel/utils/tool-capabilities.js";

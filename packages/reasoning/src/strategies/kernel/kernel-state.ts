@@ -11,12 +11,12 @@ import type { ReasoningStep } from "../../types/index.js";
 import type { ContextProfile } from "../../context/context-profile.js";
 import type { ResultCompressionConfig, ToolCallSpec, FinalAnswerCapture, ToolCallResolver } from "@reactive-agents/tools";
 import type { LLMService } from "@reactive-agents/llm-provider";
-import type { ToolSchema } from "./utils/tool-utils.js";
+import type { ToolSchema } from "./utils/tool-formatting.js";
 import type { KernelMetaToolsConfig } from "../../types/kernel-meta-tools.js";
 import type {
   ToolElaborationInjectionConfig,
   NextMovesPlanningConfig,
-} from "./utils/tool-utils.js";
+} from "./utils/tool-gating.js";
 
 // ── Kernel Status ────────────────────────────────────────────────────────────
 

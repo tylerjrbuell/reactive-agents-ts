@@ -124,8 +124,9 @@ export { KernelMetaToolsSchema, StaticBriefInfoSchema } from "./types/kernel-met
 export type { KernelMetaToolsConfig } from "./types/kernel-meta-tools.js";
 
 // ─── Shared Utilities ───
-export { filterToolsByRelevance, planNextMoveBatches } from "./strategies/kernel/utils/tool-utils.js";
-export type { ToolSchema, ToolParamSchema } from "./strategies/kernel/utils/tool-utils.js";
+export { filterToolsByRelevance } from "./strategies/kernel/utils/tool-formatting.js";
+export { planNextMoveBatches } from "./strategies/kernel/utils/tool-gating.js";
+export type { ToolSchema, ToolParamSchema } from "./strategies/kernel/utils/tool-formatting.js";
 export type { KernelMessage } from "./strategies/kernel/kernel-state.js";
 export { META_TOOLS, INTROSPECTION_META_TOOLS } from "./strategies/kernel/kernel-constants.js";
 

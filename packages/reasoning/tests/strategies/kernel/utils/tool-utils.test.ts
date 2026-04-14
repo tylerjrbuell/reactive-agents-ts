@@ -3,15 +3,19 @@ import {
   hasFinalAnswer,
   extractFinalAnswer,
   evaluateTransform,
+} from "../../../../src/strategies/kernel/utils/tool-parsing.js";
+import {
   compressToolResult,
   formatToolSchemas,
   formatToolSchemaCompact,
   formatToolSchemaMicro,
   filterToolsByRelevance,
+} from "../../../../src/strategies/kernel/utils/tool-formatting.js";
+import {
   gateNativeToolCallsForRequiredTools,
   buildToolElaborationInjection,
   planNextMoveBatches,
-} from "../../../../src/strategies/kernel/utils/tool-utils.js";
+} from "../../../../src/strategies/kernel/utils/tool-gating.js";
 
 describe("hasFinalAnswer", () => {
   it("returns true for FINAL ANSWER: prefix", () => {

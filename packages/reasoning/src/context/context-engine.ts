@@ -5,12 +5,12 @@
 // the system prompt each iteration via buildStaticContext().
 
 import type { ContextProfile } from "./context-profile.js";
-import type { ToolSchema } from "../strategies/kernel/utils/tool-utils.js";
+import type { ToolSchema } from "../strategies/kernel/utils/tool-formatting.js";
 import {
   formatToolSchemas,
   formatToolSchemaCompact,
   formatToolSchemaMicro,
-} from "../strategies/kernel/utils/tool-utils.js";
+} from "../strategies/kernel/utils/tool-formatting.js";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 

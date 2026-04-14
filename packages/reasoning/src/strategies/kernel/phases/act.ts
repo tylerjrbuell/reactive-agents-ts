@@ -28,7 +28,7 @@ import {
   type KernelContext,
   type KernelMessage,
 } from "../kernel-state.js";
-import { planNextMoveBatches } from "../utils/tool-utils.js";
+import { planNextMoveBatches } from "../utils/tool-gating.js";
 import {
   buildSuccessfulToolCallCounts,
   getMissingRequiredToolsByCount,

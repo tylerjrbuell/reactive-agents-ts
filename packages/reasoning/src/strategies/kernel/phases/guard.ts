@@ -9,7 +9,7 @@
  */
 import type { KernelState, KernelInput } from "../kernel-state.js";
 import type { ToolCallSpec } from "@reactive-agents/tools";
-import { isParallelBatchSafeTool } from "../utils/tool-utils.js";
+import { isParallelBatchSafeTool } from "../utils/tool-gating.js";
 import {
   buildSuccessfulToolCallCounts,
   getMissingRequiredToolsByCount,

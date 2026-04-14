@@ -22,7 +22,8 @@ import { categorizeToolName, deriveResultKind } from "../../../types/observation
 import type { ContextProfile } from "../../../context/context-profile.js";
 import { ToolNotFoundError } from "@reactive-agents/tools";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
-import { evaluateTransform, compressToolResult, nextToolResultKey } from "./tool-utils.js";
+import { evaluateTransform } from "./tool-parsing.js";
+import { compressToolResult, nextToolResultKey } from "./tool-formatting.js";
 import type { MaybeService, ToolServiceInstance } from "../kernel-state.js";
 import type { ToolCallSpec } from "@reactive-agents/tools";
 

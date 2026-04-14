@@ -20,7 +20,7 @@ import { executeTreeOfThought } from "./tree-of-thought.js";
 import { resolveStrategyServices, compilePromptOrFallback, publishReasoningStep } from "./kernel/utils/service-utils.js";
 import { makeStep, buildStrategyResult } from "./kernel/utils/step-utils.js";
 import { stripThinking } from "./kernel/utils/stream-parser.js";
-import type { ToolSchema } from "./kernel/utils/tool-utils.js";
+import type { ToolSchema } from "./kernel/utils/tool-formatting.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { ContextProfile } from "../context/context-profile.js";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";

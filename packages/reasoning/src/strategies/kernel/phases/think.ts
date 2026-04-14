@@ -29,15 +29,19 @@ import {
   type ResolverInput,
 } from "@reactive-agents/tools";
 
-import type { ToolSchema } from "../utils/tool-utils.js";
+import type { ToolSchema } from "../utils/tool-formatting.js";
+import {
+  computeNoveltyRatio,
+} from "../utils/tool-formatting.js";
 import {
   hasFinalAnswer,
   extractFinalAnswer,
   stripPreamble,
+} from "../utils/tool-parsing.js";
+import {
   gateNativeToolCallsForRequiredTools,
-  computeNoveltyRatio,
   buildToolElaborationInjection,
-} from "../utils/tool-utils.js";
+} from "../utils/tool-gating.js";
 import {
   buildSuccessfulToolCallCounts,
   getMissingRequiredToolsFromSteps,

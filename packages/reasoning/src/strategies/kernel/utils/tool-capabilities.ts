@@ -15,7 +15,7 @@ import {
   webSearchHandler,
 } from "@reactive-agents/tools";
 import type { KernelMetaToolsConfig } from "../../../types/kernel-meta-tools.js";
-import type { ToolSchema } from "./tool-utils.js";
+import type { ToolSchema } from "./tool-formatting.js";
 
 type ToolCapabilitySnapshot = {
   readonly availableToolSchemas: readonly ToolSchema[];

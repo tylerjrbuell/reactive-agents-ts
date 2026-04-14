@@ -3,7 +3,7 @@
  */
 import type { Effect } from "effect";
 import type { LLMMessage, LLMService } from "@reactive-agents/llm-provider";
-import type { ToolSchema } from "../strategies/kernel/utils/tool-utils.js";
+import type { ToolSchema } from "../strategies/kernel/utils/tool-formatting.js";
 import type { KernelMessage } from "../strategies/kernel/kernel-state.js";
 import type { ModelTier } from "./context-profile.js";
 

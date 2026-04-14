@@ -19,7 +19,7 @@ import { reactKernel } from "./kernel/react-kernel.js";
 import { resolveStrategyServices, compilePromptOrFallback, publishReasoningStep } from "./kernel/utils/service-utils.js";
 import { parseScore } from "./kernel/utils/quality-utils.js";
 import { stripThinking } from "./kernel/utils/stream-parser.js";
-import type { ToolSchema } from "./kernel/utils/tool-utils.js";
+import type { ToolSchema } from "./kernel/utils/tool-formatting.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
 import { makeStep, buildStrategyResult } from "./kernel/utils/step-utils.js";
