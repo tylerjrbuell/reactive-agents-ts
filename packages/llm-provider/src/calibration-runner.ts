@@ -48,39 +48,25 @@ export function median(values: readonly number[]): number {
 
 // ── Ollama HTTP Client ────────────────────────────────────────────────────────
 
-interface ChatMessage {
-  role: "system" | "user" | "assistant" | "tool";
-  content: string;
-  tool_calls?: { function: { name: string; arguments: Record<string, unknown> } }[];
-}
-
-interface OllamaChatResponse {
-  message?: {
-    role: string;
-    content: string;
-    tool_calls?: { function?: { name?: string; arguments?: unknown } }[];
-  };
-  done?: boolean;
+/** Lazy-load the Ollama SDK — same pattern as local.ts provider. */
+async function getOllamaClient() {
+  const { Ollama } = await import("ollama");
+  return new Ollama({ host: OLLAMA_BASE });
 }
 
 async function ollamaChat(
   modelId: string,
-  messages: ChatMessage[],
+  messages: { role: "system" | "user" | "assistant" | "tool"; content: string }[],
   tools?: readonly unknown[],
-): Promise<OllamaChatResponse> {
-  const res = await fetch(`${OLLAMA_BASE}/api/chat`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: modelId,
-      messages,
-      tools,
-      options: { temperature: 0 },
-      stream: false,
-    }),
+) {
+  const client = await getOllamaClient();
+  return client.chat({
+    model: modelId,
+    messages,
+    ...(tools ? { tools: tools as any } : {}),
+    options: { temperature: 0 },
+    stream: false,
   });
-  if (!res.ok) throw new Error(`Ollama chat failed: ${res.status}`);
-  return (await res.json()) as OllamaChatResponse;
 }
 
 // ── Probe 1: Steering Channel ─────────────────────────────────────────────────
@@ -104,7 +90,7 @@ async function probeSteeringChannel(
     { role: "user", content: instruction },
   ]);
 
-  const check = (r: OllamaChatResponse) =>
+  const check = (r: Awaited<ReturnType<typeof ollamaChat>>) =>
     (r.message?.content ?? "").trim().toUpperCase() === "BLUE";
 
   const sysOk = check(sysOnly);
@@ -221,7 +207,7 @@ async function probeSystemPromptDecay(
   const system =
     "You are a helpful assistant. CRITICAL RULE: Always end EVERY response with the exact token [VERIFIED] on a new line.";
 
-  const messages: ChatMessage[] = [{ role: "system", content: system }];
+  const messages: { role: "system" | "user" | "assistant" | "tool"; content: string }[] = [{ role: "system", content: system }];
 
   for (let turn = 1; turn <= 5; turn++) {
     messages.push({ role: "user", content: `Turn ${turn}: Count to ${turn}.` });
