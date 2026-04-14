@@ -394,7 +394,7 @@ export function handleThinking(
         // Stage 2: inject recovery message, continue conversation (no iteration bump)
         const recoveryMessage: KernelMessage = {
           role: "user",
-          content: "Output token limit hit. Resume directly — no apology, no recap of what you were doing. Pick up mid-thought if that is where the cut happened. Break remaining work into smaller pieces.",
+          content: "[Harness] Output token limit hit. Resume directly — no apology, no recap of what you were doing. Pick up mid-thought if that is where the cut happened. Break remaining work into smaller pieces.",
         };
         return transitionState(state, {
           messages: [...state.messages, recoveryMessage],
@@ -705,17 +705,21 @@ export function handleThinking(
           })];
         }
 
-        const updatedMessages = nudgeMessage
-          ? [...(state.messages as readonly KernelMessage[]), { role: "user" as const, content: nudgeMessage }]
-          : state.messages;
-
+        // Route nudge through pendingGuidance instead of injecting a synthetic USER
+        // message into the conversation thread. Rendered in the Guidance: section of
+        // the next system prompt. Keeps the FC thread clean.
         return transitionState(state, {
           steps: thinkingSteps,
           tokens: newTokens,
           cost: newCost,
           iteration: state.iteration + 1,
           priorThought: thinkingContent || state.priorThought,
-          messages: updatedMessages,
+          pendingGuidance: nudgeMessage
+            ? {
+                requiredToolsPending: missingReq,
+                errorRecovery: nudgeMessage,
+              }
+            : undefined,
         });
       }
     }

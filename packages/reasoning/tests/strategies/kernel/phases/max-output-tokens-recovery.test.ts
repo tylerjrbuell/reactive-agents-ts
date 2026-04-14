@@ -287,7 +287,7 @@ describe("max_output_tokens recovery — think phase", () => {
     );
 
     const lastMsg = result.messages[result.messages.length - 1];
-    const expectedText = "Output token limit hit. Resume directly — no apology, no recap of what you were doing. Pick up mid-thought if that is where the cut happened. Break remaining work into smaller pieces.";
+    const expectedText = "[Harness] Output token limit hit. Resume directly — no apology, no recap of what you were doing. Pick up mid-thought if that is where the cut happened. Break remaining work into smaller pieces.";
     expect((lastMsg as any).content).toBe(expectedText);
   });
 });
