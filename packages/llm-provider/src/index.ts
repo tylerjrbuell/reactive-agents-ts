@@ -142,3 +142,12 @@ export {
   selectAdapter,
   recommendStrategyForTier,
 } from "./adapter.js";
+
+// ─── Calibration ───
+export {
+  ModelCalibrationSchema,
+  loadCalibration,
+  normalizeModelId,
+  clearCalibrationCache,
+} from "./calibration.js";
+export type { ModelCalibration } from "./calibration.js";
