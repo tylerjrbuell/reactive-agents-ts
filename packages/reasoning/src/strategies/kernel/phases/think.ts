@@ -24,15 +24,18 @@ import { StreamingTextCallback } from "@reactive-agents/core";
 import {
   finalAnswerTool,
   shouldShowFinalAnswer,
-  detectCompletionGaps,
   type ToolCallSpec,
   type ResolverInput,
 } from "@reactive-agents/tools";
+import {
+  guardRequiredToolsBlock,
+  guardPrematureFinalAnswer,
+  guardCompletionGaps,
+  guardQualityCheck,
+  guardDiminishingReturns,
+} from "./think-guards.js";
 
 import type { ToolSchema } from "../utils/tool-formatting.js";
-import {
-  computeNoveltyRatio,
-} from "../utils/tool-formatting.js";
 import {
   hasFinalAnswer,
   extractFinalAnswer,
@@ -572,73 +575,21 @@ export function handleThinking(
         );
 
         if (blockedOptionalBatch) {
-          if ((quotaBudgetConflict?.length ?? 0) > 0) {
-            const conflictLines = quotaBudgetConflict!.map((entry) =>
-              `${entry.toolName}: required minCalls=${entry.requiredMinCalls}, maxCallsPerTool=${entry.maxCalls}, actualCalls=${entry.actualCalls}`,
-            );
-            const conflictMsg =
-              "Configuration conflict — required tool quotas cannot be satisfied within maxCallsPerTool budget:\n" +
-              conflictLines.map((line) => `• ${line}`).join("\n") +
-              "\nFix either requiredToolQuantities or maxCallsPerTool before retrying this run.";
-            const conflictStep = makeStep("observation", conflictMsg, {
-              observationResult: makeObservationResult("system", false, conflictMsg),
-            });
-            return transitionState(state, {
-              steps: [...newSteps, conflictStep],
-              tokens: newTokens,
-              cost: newCost,
-              status: "failed",
-              error: conflictMsg,
-              iteration: state.iteration + 1,
-              meta: {
-                ...state.meta,
-                lastThought: thought,
-                lastThinking: thinking,
-              },
-            });
-          }
-
-          const missing = getMissingRequiredToolsFromSteps(
-            state.steps,
-            input.requiredTools ?? [],
-            input.requiredToolQuantities,
+          const redirect = guardRequiredToolsBlock(
+            rawCalls,
+            input,
+            state,
+            profile,
+            hooks,
+            newSteps,
+            newTokens,
+            newCost,
+            thought,
+            thinking,
           );
-          const nextRequired = missing[0] ?? "the missing required tool";
-          const attemptedTools = rawCalls.map((tc) => tc.name);
-          const writeHint =
-            nextRequired.includes("write") || nextRequired.includes("file")
-              ? ` Use the ${nextRequired} tool with a path from the task and the full report body as content (markdown).`
-              : "";
-          const blockMsg =
-            `Required tools not yet satisfied: ${missing.join(", ")}. Strict dependency mode blocked this tool batch because it did not include any missing required tool. Call ${nextRequired} now with concrete arguments.${writeHint}`;
-
-          yield* hooks.onThought(state, `[GATE] Model tried: ${attemptedTools.join(", ")} — blocked, need: ${missing.join(", ")}`);
-
-          const blockStep = makeStep("observation", blockMsg, {
-            observationResult: makeObservationResult("system", false, blockMsg),
-          });
-          const blockMessages: readonly KernelMessage[] = [
-            ...(state.messages as readonly KernelMessage[]),
-            { role: "user", content: blockMsg },
-          ];
-
-          const prevBlocked = (state.meta.gateBlockedTools as readonly string[] | undefined) ?? [];
-          const newBlocked = [...new Set([...prevBlocked, ...attemptedTools])];
-
-          return transitionState(state, {
-            steps: [...newSteps, blockStep],
-            messages: blockMessages,
-            tokens: newTokens,
-            cost: newCost,
-            status: "thinking",
-            iteration: state.iteration + 1,
-            meta: {
-              ...state.meta,
-              lastThought: thought,
-              lastThinking: thinking,
-              gateBlockedTools: newBlocked,
-            },
-          });
+          if (redirect) return redirect;
+          // Falls through if the guard decides no redirect is needed (should be unreachable
+          // while blockedOptionalBatch is true — guard always returns a state in that case).
         }
 
         if (effective.length > 0) {
@@ -661,95 +612,13 @@ export function handleThinking(
       }
 
       if (resolverResult._tag === "final_answer") {
-        // Genuine final answer (no tool calls). Check completion gaps first —
-        // if required tools haven't been called, redirect instead of accepting.
-        const requiredTools = input.requiredTools ?? [];
-        const missingRequired = getMissingRequiredToolsFromSteps(
-          state.steps,
-          requiredTools,
-          input.requiredToolQuantities,
-        );
-        if (missingRequired.length > 0 && state.iteration < (state.meta.maxIterations as number ?? 10) - 1) {
-          // Use adapter hint for targeted guidance, fall back to generic redirect
-          const lastActStep = state.steps.filter((s) => s.type === "action").pop();
-          const lastTool = (lastActStep?.metadata?.toolCall as { name?: string } | undefined)?.name;
-          const adapterRedirect = adapter.continuationHint?.({
-            toolsUsed: state.toolsUsed,
-            requiredTools: requiredTools as string[],
-            missingTools: missingRequired,
-            iteration: state.iteration,
-            maxIterations: (state.meta.maxIterations as number) ?? 10,
-            lastToolName: lastTool,
-          });
-          const redirectMsg = adapterRedirect
-            ?? `Not done yet — you still need to call: ${missingRequired.join(", ")}. Do not give a final answer until all required tools have been used.`;
-
-          const redirectStep = makeStep("observation", redirectMsg, {
-            observationResult: makeObservationResult("system", false, redirectMsg),
-          });
-
-          // Append redirect to BOTH steps (observability) AND messages (what LLM sees)
-          const redirectMessages = [...(state.messages as readonly KernelMessage[]),
-            { role: "user" as const, content: redirectMsg }];
-
-          return transitionState(state, {
-            steps: [...newSteps, redirectStep],
-            messages: redirectMessages,
-            tokens: newTokens,
-            cost: newCost,
-            iteration: state.iteration + 1,
-          });
-        }
-
-        // Also check dynamic completion gaps
-        const gaps = detectCompletionGaps(
-          input.task,
-          state.toolsUsed,
-          input.allToolSchemas ?? input.availableToolSchemas ?? [],
-          newSteps,
-        );
-        if (gaps.length > 0 && state.iteration < (state.meta.maxIterations as number ?? 10) - 1) {
-          const gapMsg = `Not done yet — missing steps:\n${gaps.map((g) => `• ${g}`).join("\n")}`;
-          const gapStep = makeStep("observation", gapMsg, {
-            observationResult: makeObservationResult("system", false, gapMsg),
-          });
-          const gapMessages = [...(state.messages as readonly KernelMessage[]),
-            { role: "user" as const, content: gapMsg }];
-          return transitionState(state, {
-            steps: [...newSteps, gapStep],
-            messages: gapMessages,
-            tokens: newTokens,
-            cost: newCost,
-            iteration: state.iteration + 1,
-          });
-        }
-
-        // qualityCheck hook — for local models, do a lightweight self-eval
-        // before accepting the final answer. Only fires once (iteration > 0 prevents loops).
-        if (state.iteration > 0 && !state.meta.qualityCheckDone) {
-          const qcMsg = adapter.qualityCheck?.({
-            task: input.task,
-            requiredTools: input.requiredTools ?? [],
-            toolsUsed: state.toolsUsed,
-            tier: profile.tier ?? "mid",
-          });
-          if (qcMsg) {
-            const qcStep = makeStep("observation", qcMsg, {
-              observationResult: makeObservationResult("system", true, qcMsg),
-            });
-            const qcMessages = [...(state.messages as readonly KernelMessage[]),
-              { role: "user" as const, content: qcMsg }];
-            return transitionState(state, {
-              steps: [...newSteps, qcStep],
-              messages: qcMessages,
-              tokens: newTokens,
-              cost: newCost,
-              iteration: state.iteration + 1,
-              // Prevent quality check from firing again next iteration
-              meta: { ...state.meta, qualityCheckDone: true },
-            });
-          }
-        }
+        // Genuine final answer (no tool calls). Run the guard chain — if any
+        // guard fires, redirect the loop. Otherwise fall through to assembly.
+        const redirect =
+          guardPrematureFinalAnswer(input, state, profile, adapter, newSteps, newTokens, newCost) ??
+          guardCompletionGaps(input, state, newSteps, newTokens, newCost) ??
+          guardQualityCheck(input, state, profile, adapter, newSteps, newTokens, newCost);
+        if (redirect) return redirect;
 
         // All checks pass — assemble final output
         const hasFA = hasFinalAnswer(resolverResult.content);
@@ -837,26 +706,23 @@ export function handleThinking(
           nudgeMessage = adapterNudge ?? defaultNudge;
 
           // Layer 1: Novelty signal — strengthen nudge when recent observations add little new info.
-          // If the model has gathered ≥3 real tool observations and the last one is <20% novel,
-          // it has enough context. Override the nudge to be explicit about stopping research.
-          const realObs = state.steps.filter(
-            (s) => s.type === "observation" &&
-              (s.metadata?.observationResult as { toolName?: string } | undefined)?.toolName !== "system",
+          // Extracted to think-guards.guardDiminishingReturns. When the guard fires it returns the
+          // full thinking-branch redirect state; when it passes through (novelty high, <3 real obs,
+          // or empty observations) we continue with the default/adapter nudge below.
+          const diminishingRedirect = guardDiminishingReturns(
+            state,
+            input,
+            profile,
+            newTokens,
+            newCost,
+            {
+              thinkingContent,
+              thinkingSteps,
+              missingReq,
+              adapterOrDefaultNudge: nudgeMessage,
+            },
           );
-          if (realObs.length >= 3) {
-            const lastObsText = realObs[realObs.length - 1].content;
-            const priorObsText = realObs.slice(0, -1).map((s) => s.content).join(" ");
-            // Safeguard: skip novelty check if either observation is missing or empty
-            if (lastObsText && priorObsText) {
-              const novelty = computeNoveltyRatio(lastObsText, priorObsText);
-              if (novelty < 0.20) {
-                const pct = Math.round(novelty * 100);
-                nudgeMessage =
-                  `Research context is sufficient (last search: ${pct}% new information — diminishing returns). ` +
-                  `Do NOT search again. Call ${missingReq[0]} now to produce the output.`;
-              }
-            }
-          }
+          if (diminishingRedirect) return diminishingRedirect;
 
           thinkingSteps = [...thinkingSteps, makeStep("observation", nudgeMessage, {
             observationResult: makeObservationResult("system", true, nudgeMessage),
