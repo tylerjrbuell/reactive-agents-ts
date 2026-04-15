@@ -22,7 +22,7 @@ import { ReactiveAgents } from 'reactive-agents'
 
 const agent = await ReactiveAgents.create()
     .withProvider('ollama')
-    .withModel({ model: 'gemma4:e4b', temperature: 0.2, maxTokens: 8000 })
+    .withModel({ model: 'cogito', temperature: 0.2, maxTokens: 8000 })
     .withReasoning({ defaultStrategy: 'reactive' })
     .withTools()
     .withRequiredTools({ adaptive: true })

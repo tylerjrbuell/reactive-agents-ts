@@ -124,11 +124,22 @@ export function handleThinking(
     // When token budget is exhausted beyond the tier-specific threshold, the
     // model has nothing useful to reason with. Narrow available tools to only
     // final-answer so the model's next action is a clean exit.
-    const pressureCritical = shouldNarrowToFinalAnswerOnly({
-      estimatedTokens: state.tokens,
-      maxTokens: input.contextProfile?.maxTokens ?? Number.MAX_SAFE_INTEGER,
-      tier: profile.tier,
-    });
+    //
+    // Important: never narrow while required tools are still pending — doing so
+    // hides the very tools the harness is demanding, creating an unsatisfiable
+    // state (model sees only `final-answer` but is told it must call `web-search`).
+    const missingRequiredForPressure = getMissingRequiredToolsFromSteps(
+      state.steps,
+      input.requiredTools ?? [],
+      input.requiredToolQuantities,
+    );
+    const pressureCritical =
+      missingRequiredForPressure.length === 0 &&
+      shouldNarrowToFinalAnswerOnly({
+        estimatedTokens: state.tokens,
+        maxTokens: input.contextProfile?.maxTokens ?? Number.MAX_SAFE_INTEGER,
+        tier: profile.tier,
+      });
 
     const effectiveSchemas: readonly ToolSchema[] = pressureCritical
       ? [{ name: finalAnswerTool.name, description: finalAnswerTool.description, parameters: finalAnswerTool.parameters }]
