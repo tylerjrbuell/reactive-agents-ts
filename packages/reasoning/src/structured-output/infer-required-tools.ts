@@ -246,13 +246,19 @@ Rules:
   run code or save a file to disk.
 - **Factual knowledge questions need NO tools.** If the task asks "what is X?",
   "explain Y", "define Z", "who/when/where", or otherwise requests information the
-  model already knows (history, science facts, definitions, common knowledge), return
-  required: []. The model should answer from its training data.
+  model already knows (history, science facts, definitions, common knowledge) AND
+  the task does NOT explicitly name a tool/agent to use, return required: [].
   Examples that need NO tools:
     - "What is the speed of light?" → required: []
     - "Explain how a linked list works" → required: []
     - "What year was TypeScript released?" → required: []
     - "Capital of France?" → required: []
+- **Explicit tool/agent mentions override the no-tool rule.** If the task says
+  "use X", "ask X", "call X", "delegate to X", or otherwise names a specific
+  tool or agent, that tool IS required regardless of question shape.
+    - "Use your research-assistant to explain linked lists" → required: [research-assistant]
+    - "Search the web for X" → required: [web-search]
+    - "Run code to compute X" → required: [code-execute]
 - "required" minCalls: count distinct named items (each comma-separated name, ticker, URL,
   or entity). Set minCalls to that count when each item needs its own lookup call.
   Single-call tasks (e.g. "what time is it?") → minCalls = 1.

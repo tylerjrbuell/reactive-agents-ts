@@ -1,21 +1,29 @@
 /**
- * Pinpoint probe: cogito convergence failure
+ * Pinpoint probe: cogito static-subagent delegation
  *
- * Test "Converge: no-tool task with tools enabled" — 16 iters / 13,402 tok
- * for a simple knowledge question that should answer in 1-2 iterations.
+ * Cogito previously called the agent-tool with `{"input":{"type":"object"}}`
+ * (copying the schema metadata as the value). With input typed as a required
+ * string, this should resolve to a real natural-language task.
  */
 import { ReactiveAgents } from 'reactive-agents'
 
 const agent = await ReactiveAgents.create()
     .withProvider('ollama')
     .withModel({ model: 'cogito', temperature: 0.2, maxTokens: 8000 })
-    .withReasoning({ defaultStrategy: 'reactive' })
+    .withReasoning()
     .withTools()
+    .withAgentTool('research-assistant', {
+        name: 'research-assistant',
+        systemPrompt: 'You are a research assistant. Answer the question clearly and concisely.',
+        provider: 'ollama',
+        model: 'cogito',
+    })
+    .withMaxIterations(15)
     .withObservability({ verbosity: 'debug', live: true })
     .build()
 
 const result = await agent.run(
-    'What is the speed of light in meters per second? Answer directly from your knowledge.',
+    'Use your research assistant to explain what a linked list is. Provide their answer.',
 )
 
 console.log('\n--- Result ---')

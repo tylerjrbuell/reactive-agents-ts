@@ -305,9 +305,9 @@ const deriveInputSchemaFromCapabilities = (
 
   params.push({
     name: "input",
-    type: "object" as const,
-    description: "Input to pass to the agent. Accepts a string task description or an object with a 'query' field.",
-    required: false,
+    type: "string" as const,
+    description: "The task or question to give the agent — a plain natural-language string. Example: \"Explain how a hash table works\".",
+    required: true,
   });
 
   if (capabilities.some((c) => c.type === "reasoning")) {
@@ -333,9 +333,9 @@ const deriveInputSchemaFromCapabilities = (
   if (params.length === 0) {
     params.push({
       name: "input",
-      type: "object" as const,
-      description: "Agent input data. Accepts a string task description or an object with a 'query' field.",
-      required: false,
+      type: "string" as const,
+      description: "The task or question to give the agent — a plain natural-language string.",
+      required: true,
     });
   }
 
