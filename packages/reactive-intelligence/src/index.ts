@@ -97,3 +97,21 @@ export type { InjectionResult } from "./skills/skill-injection.js";
 // ── Runtime ──
 export { createReactiveIntelligenceLayer } from "./runtime.js";
 export type { SkillLayerConfig } from "./runtime.js";
+
+// ── Calibration: Observations ──
+export {
+  emptyObservations,
+  OBSERVATIONS_SCHEMA_VERSION,
+  OBSERVATIONS_WINDOW,
+  type ModelObservations,
+  type RunObservation,
+} from "./calibration/observations-types.js";
+export {
+  loadObservations,
+  appendObservation,
+  observationsPath,
+  normalizeModelIdForFile,
+  type StoreOptions,
+} from "./calibration/observations-store.js";
+export { mergeObservationsIntoPrior, OVERRIDE_THRESHOLD } from "./calibration/observations-merge.js";
+export { resolveCalibration, type ResolveOptions } from "./calibration/calibration-resolver.js";
