@@ -544,7 +544,10 @@ export function handleThinking(
 
       const resolverResult = yield* resolver.resolve(
         resolverInput,
-        effectiveSchemas.map((ts) => ({ name: ts.name })),
+        effectiveSchemas.map((ts) => ({
+          name: ts.name,
+          paramNames: ts.parameters?.map((p) => p.name) ?? [],
+        })),
       );
 
       if (resolverResult._tag === "tool_calls") {

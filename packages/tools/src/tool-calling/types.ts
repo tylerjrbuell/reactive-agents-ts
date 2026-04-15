@@ -20,10 +20,18 @@ export interface ResolverInput {
   readonly stopReason?: string;
 }
 
+/** Tool hint for resolver — name is required; param names enable shape-match fallback. */
+export interface ResolverToolHint {
+  readonly name: string;
+  /** Optional parameter names — when present, enables parameter-shape matching
+   *  for LLM outputs that emit argument dicts without a `name`/`tool` identifier. */
+  readonly paramNames?: readonly string[];
+}
+
 /** Interface for resolving LLM responses into tool calls */
 export interface ToolCallResolver {
   resolve(
     response: ResolverInput,
-    availableTools: readonly { name: string }[],
+    availableTools: readonly ResolverToolHint[],
   ): Effect.Effect<ToolCallResult, never>;
 }

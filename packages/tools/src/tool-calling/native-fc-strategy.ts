@@ -4,19 +4,20 @@ import type {
     ToolCallResult,
     ToolCallSpec,
     ResolverInput,
+    ResolverToolHint,
 } from './types.js'
 
 export class NativeFCStrategy implements ToolCallResolver {
     resolve(
         response: ResolverInput,
-        availableTools: readonly { name: string }[]
+        availableTools: readonly ResolverToolHint[]
     ): Effect.Effect<ToolCallResult, never> {
         return Effect.succeed(this.extract(response, availableTools))
     }
 
     private extract(
         response: ResolverInput,
-        availableTools: readonly { name: string }[]
+        availableTools: readonly ResolverToolHint[]
     ): ToolCallResult {
         const toolNames = new Set(availableTools.map((t) => t.name))
         const enforceToolNames = toolNames.size > 0
@@ -138,7 +139,7 @@ export class NativeFCStrategy implements ToolCallResolver {
  */
 function extractTextToolCalls(
     content: string,
-    availableTools: readonly { name: string }[]
+    availableTools: readonly ResolverToolHint[]
 ): ToolCallSpec[] {
     const toolNames = new Set(availableTools.map((t) => t.name))
     const results: ToolCallSpec[] = []
@@ -164,13 +165,65 @@ function extractTextToolCalls(
         try {
             const parsed = JSON.parse(candidate) as unknown
             const spec = toToolCallSpec(parsed, toolNames)
-            if (spec) results.push(spec)
+            if (spec) {
+                results.push(spec)
+                continue
+            }
+            // Parameter-shape fallback: when the JSON has no `name`/`tool` field
+            // but its keys uniquely match a single tool's declared parameters,
+            // infer the tool call. Observed with cogito emitting spawn-agent args
+            // inside ```json blocks without naming the tool.
+            const shapeSpec = toToolCallSpecByShape(parsed, availableTools)
+            if (shapeSpec) results.push(shapeSpec)
         } catch {
             // Not valid JSON — skip
         }
     }
 
     return results
+}
+
+/**
+ * Attempt to identify the intended tool by matching the JSON object's keys
+ * against each tool's declared parameter names. Returns a spec only when
+ * exactly one tool's parameter set is a superset of the object's keys AND
+ * at least one declared parameter name appears in the object (to avoid
+ * matching every tool on a sub-empty object).
+ */
+function toToolCallSpecByShape(
+    parsed: unknown,
+    availableTools: readonly ResolverToolHint[]
+): ToolCallSpec | null {
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null
+    const objKeys = Object.keys(parsed as Record<string, unknown>)
+    if (objKeys.length === 0) return null
+
+    const candidates: { tool: ResolverToolHint; overlap: number }[] = []
+    for (const tool of availableTools) {
+        if (!tool.paramNames || tool.paramNames.length === 0) continue
+        const params = new Set(tool.paramNames)
+        // Every object key must correspond to a declared parameter for this tool.
+        const allKeysKnown = objKeys.every((k) => params.has(k))
+        if (!allKeysKnown) continue
+        // At least one real parameter match (not a fully empty overlap).
+        const overlap = objKeys.filter((k) => params.has(k)).length
+        if (overlap === 0) continue
+        candidates.push({ tool, overlap })
+    }
+
+    // Require a unique winner — ambiguous matches stay as thinking to avoid
+    // mis-routing when two tools have similar parameter shapes.
+    if (candidates.length !== 1) return null
+
+    const { tool } = candidates[0]!
+    return {
+        id: `shape_${tool.name}_0`,
+        name: tool.name,
+        arguments: normalizeArgumentsForResolvedTool(
+            tool.name,
+            parsed as Record<string, unknown>,
+        ),
+    }
 }
 
 /**
@@ -183,7 +236,7 @@ function extractTextToolCalls(
  */
 function extractPseudoCodeToolCalls(
     content: string,
-    availableTools: readonly { name: string }[]
+    availableTools: readonly ResolverToolHint[]
 ): ToolCallSpec[] {
     const toolNames = new Set(availableTools.map((t) => t.name))
     if (toolNames.size === 0) return []

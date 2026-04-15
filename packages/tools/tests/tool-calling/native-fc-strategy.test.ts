@@ -353,3 +353,68 @@ describe("NativeFCStrategy — pseudo-code tool call fallback", () => {
     expect(result._tag).toBe("final_answer");
   });
 });
+
+describe("NativeFCStrategy — parameter-shape fallback", () => {
+  const tools = [
+    { name: "spawn-agent", paramNames: ["task", "name", "role", "instructions", "tone", "tools"] },
+    { name: "web-search", paramNames: ["query", "maxResults"] },
+    { name: "file-write", paramNames: ["path", "content", "encoding"] },
+  ];
+
+  it("infers tool from JSON param shape when name field is missing", () => {
+    // Cogito-style output: full spawn-agent args in ```json without a `name: "spawn-agent"` field
+    const input: ResolverInput = {
+      content: [
+        '```json',
+        '{',
+        '  "task": "Calculate 5!",',
+        '  "name": "factorial-calculator",',
+        '  "role": "mathematician",',
+        '  "tools": ["code-execute"]',
+        '}',
+        '```',
+      ].join("\n"),
+      stopReason: "end_turn",
+    };
+    const result = run(strategy.resolve(input, tools));
+    expect(result._tag).toBe("tool_calls");
+    if (result._tag === "tool_calls") {
+      expect(result.calls[0].name).toBe("spawn-agent");
+      expect((result.calls[0].arguments as any).task).toBe("Calculate 5!");
+    }
+  });
+
+  it("rejects ambiguous shape match (overlap with two tools)", () => {
+    const ambiguousTools = [
+      { name: "tool-a", paramNames: ["query"] },
+      { name: "tool-b", paramNames: ["query", "maxResults"] },
+    ];
+    const input: ResolverInput = {
+      content: '```json\n{"query": "test"}\n```',
+      stopReason: "end_turn",
+    };
+    const result = run(strategy.resolve(input, ambiguousTools));
+    // Both tools could accept { query } — reject rather than mis-route
+    expect(result._tag).toBe("final_answer");
+  });
+
+  it("requires all JSON keys to correspond to the tool's declared params", () => {
+    const input: ResolverInput = {
+      content: '```json\n{"task": "x", "unknownField": true}\n```',
+      stopReason: "end_turn",
+    };
+    const result = run(strategy.resolve(input, tools));
+    // unknownField doesn't match spawn-agent's params → reject
+    expect(result._tag).toBe("final_answer");
+  });
+
+  it("does not fire when tools have no paramNames declared", () => {
+    const blindTools = [{ name: "spawn-agent" }]; // no paramNames
+    const input: ResolverInput = {
+      content: '```json\n{"task": "x", "name": "y"}\n```',
+      stopReason: "end_turn",
+    };
+    const result = run(strategy.resolve(input, blindTools));
+    expect(result._tag).toBe("final_answer");
+  });
+});
