@@ -1,0 +1,127 @@
+
+🧪 Reactive Agents Quality & Efficiency Test Suite
+   Provider: ollama | Model: gemma4:e4b
+   Categories: accuracy, reasoning, tools, intelligence, robustness
+   Running 15 of 33 tests...
+
+  ⊙ [accuracy    ] Math reasoning: word problem                  ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+✓ 7.6s (1 iters, 491 tok)
+  ⊙ [accuracy    ] Logic: syllogism                              ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+✓ 2.0s (1 iters, 506 tok)
+  ⊙ [accuracy    ] Code generation: fizzbuzz                     ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+✓ 4.5s (1 iters, 879 tok)
+  ⊙ [accuracy    ] Factual accuracy: no hallucination            ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+✓ 7.9s (4 iters, 1124 tok)
+  ⊙ [reasoning   ] ReAct: multi-step analysis                    ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+✓ 14.7s (1 iters, 2049 tok)
+  ⊙ [reasoning   ] Plan-Execute: structured task                 ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+✓ 34.8s (4 iters, 8712 tok)
+  ⊙ [reasoning   ] Adaptive: let framework choose                ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+✓ 13.0s (2 iters, 1805 tok)
+  ⊙ [tools       ] Recall tool usage                             ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+✓ 15.7s (8 iters, 6479 tok)
+  ⊙ [intelligence] Intelligence: simple task early-stop          ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+✓ 1.2s (1 iters, 379 tok)
+  ⊙ [intelligence] Intelligence: moderate task                   ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+✓ 34.5s (1 iters, 2335 tok)
+  ⊙ [intelligence] Intelligence: with memory + debrief           ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+✓ 16.9s (1 iters, 2010 tok)
+  ⊙ [robustness  ] Empty-ish input handling                      ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+✓ 560ms (1 iters, 287 tok)
+  ⊙ [robustness  ] Instruction following: format constraint      ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+✓ 1.5s (1 iters, 442 tok)
+  ⊙ [robustness  ] Multi-part question                           ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+✓ 1.9s (1 iters, 485 tok)
+  ⊙ [robustness  ] Code with explanation                         ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+✓ 2.1s (1 iters, 515 tok)
+
+┌── COMPOSITION TESTS ──────────────────────────────────────────────────────┐
+│  ⊙ pipe: sequential pipeline                      ✓ Provider: ollama | Model: gemma4:e4b | API key: (not required)
+ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+✓ 0.4s
+│  ⊙ parallel: concurrent agents                    ✓ Provider: ollama | Model: gemma4:e4b | API key: (not required)
+✓ Provider: ollama | Model: gemma4:e4b | API key: (not required)
+ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+✓ 0.4s
+└───────────────────────────────────────────────────────────────────────────┘
+
+
+╔══════════════════════════════════════════════════════════════════════════════════╗
+║                    REACTIVE AGENTS — QUALITY & EFFICIENCY REPORT                ║
+╠══════════════════════════════════════════════════════════════════════════════════╣
+║  Provider : ollama                                                            ║
+║  Model    : gemma4:e4b                                                        ║
+║  Tests    : 17                                                                ║
+║  Date     : 2026-04-15T11:15:08.918Z                                          ║
+╚══════════════════════════════════════════════════════════════════════════════════╝
+
+┌── ACCURACY (4/4 passed) ────────────────────────────────────────────────────┐
+│ ✅ Math reasoning: word problem                1 iters      491 tok     7.6s  $0.0000 [end_turn]
+│ ✅ Logic: syllogism                            1 iters      506 tok     2.0s  $0.0000 [end_turn]
+│ ✅ Code generation: fizzbuzz                   1 iters      879 tok     4.5s  $0.0000 [end_turn]
+│ ✅ Factual accuracy: no hallucination          4 iters    1,124 tok     7.9s  $0.0000 [end_turn]
+└───────────────────────────────────────────────────────────────────────────────┘
+
+┌── REASONING (3/3 passed) ───────────────────────────────────────────────────┐
+│ ✅ ReAct: multi-step analysis                  1 iters    2,049 tok    14.7s  $0.0000 [end_turn]
+│ ✅ Plan-Execute: structured task               4 iters    8,712 tok    34.8s  $0.0000 [end_turn]
+│ ✅ Adaptive: let framework choose              2 iters    1,805 tok    13.0s  $0.0000 [end_turn]
+└───────────────────────────────────────────────────────────────────────────────┘
+
+┌── TOOLS (1/1 passed) ───────────────────────────────────────────────────────┐
+│ ✅ Recall tool usage                           8 iters    6,479 tok    15.7s  $0.0000 [end_turn]
+└───────────────────────────────────────────────────────────────────────────────┘
+
+┌── INTELLIGENCE (3/3 passed) ────────────────────────────────────────────────┐
+│ ✅ Intelligence: simple task early-stop        1 iters      379 tok     1.2s  $0.0000 [end_turn]
+│ ✅ Intelligence: moderate task                 1 iters    2,335 tok    34.5s  $0.0000 [end_turn]
+│ ✅ Intelligence: with memory + debrief         1 iters    2,010 tok    16.9s  $0.0000 [end_turn]
+└───────────────────────────────────────────────────────────────────────────────┘
+
+┌── ROBUSTNESS (4/4 passed) ──────────────────────────────────────────────────┐
+│ ✅ Empty-ish input handling                    1 iters      287 tok    560ms  $0.0000 [end_turn]
+│ ✅ Instruction following: format constraint    1 iters      442 tok     1.5s  $0.0000 [end_turn]
+│ ✅ Multi-part question                         1 iters      485 tok     1.9s  $0.0000 [end_turn]
+│ ✅ Code with explanation                       1 iters      515 tok     2.1s  $0.0000 [end_turn]
+└───────────────────────────────────────────────────────────────────────────────┘
+
+┌── COMPOSITION (2/2 passed) ─────────────────────────────────────────────────┐
+│ ✅ pipe: sequential pipeline                   1 iters      284 tok    399ms  $0.0000
+│ ✅ parallel: concurrent agents                 2 iters      548 tok    406ms  $0.0000
+└───────────────────────────────────────────────────────────────────────────────┘
+
+╔══════════════════════════════════════════════════════════════════════════════════╗
+║                                    SUMMARY                                     ║
+╠══════════════════════════════════════════════════════════════════════════════════╣
+║  Pass Rate         : 17/17 (100%)                                            ║
+║  Total Iterations  : 32                                                      ║
+║  Total Tokens      : 29,330                                                  ║
+║  Total Cost        : $0.0000                                                 ║
+║  Total Duration    : 159.7                                                  s║
+║  Avg Iters/Task    : 1.9                                                     ║
+║  Avg Tokens/Task   : 1,725                                                   ║
+║  Avg Cost/Task     : $0.0000                                                 ║
+╠══════════════════════════════════════════════════════════════════════════════════╣
+║  HEALTH SIGNALS                                                                ║
+╠══════════════════════════════════════════════════════════════════════════════════╣
+║  Iteration Explosions : 0                                                    ║
+║  Hallucinations       : 0                                                    ║
+║  Crashes              : 0                                                    ║
+║  Max Iteration Hits   : 0                                                    ║
+╚══════════════════════════════════════════════════════════════════════════════════╝
+
+┌── EFFICIENCY GRADES ──────────────────────────────────────────────────────────┐
+│  accuracy        : A+   (100% pass, avg 1.8 iters, avg 750 tokens)
+│  reasoning       : A+   (100% pass, avg 2.3 iters, avg 4189 tokens)
+│  tools           : C    (100% pass, avg 8.0 iters, avg 6479 tokens)
+│  intelligence    : A+   (100% pass, avg 1.0 iters, avg 1575 tokens)
+│  robustness      : A+   (100% pass, avg 1.0 iters, avg 432 tokens)
+│  composition     : A+   (100% pass, avg 1.5 iters, avg 416 tokens)
+└───────────────────────────────────────────────────────────────────────────────┘
+
+┌── RECOMMENDATIONS ────────────────────────────────────────────────────────────┐
+│  ✅ All health signals clean — ready for benchmarks!
+└───────────────────────────────────────────────────────────────────────────────┘
+
+📄 Full results saved to ./quality-test-results.json
