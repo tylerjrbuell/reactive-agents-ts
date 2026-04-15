@@ -1,0 +1,29 @@
+[
+  {
+    "model": "gemma4:e4b",
+    "passed": 11,
+    "failed": 0,
+    "total": 11,
+    "durationMs": 77943,
+    "logPath": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/harness-reports/multi-model-2026-04-15T03-26-55-362Z/gemma4-e4b.log",
+    "exitCode": 0
+  },
+  {
+    "model": "cogito",
+    "passed": 10,
+    "failed": 1,
+    "total": 11,
+    "durationMs": 40786,
+    "logPath": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/harness-reports/multi-model-2026-04-15T03-26-55-362Z/cogito.log",
+    "exitCode": 1
+  },
+  {
+    "model": "qwen3:4b",
+    "passed": 10,
+    "failed": 1,
+    "total": 11,
+    "durationMs": 112471,
+    "logPath": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/harness-reports/multi-model-2026-04-15T03-26-55-362Z/qwen3-4b.log",
+    "exitCode": 1
+  }
+]

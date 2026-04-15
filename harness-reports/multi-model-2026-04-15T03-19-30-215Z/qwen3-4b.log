@@ -1,0 +1,103 @@
+
+🧪 Reactive Agents Quality & Efficiency Test Suite
+   Provider: ollama | Model: qwen3:4b
+   Categories: accuracy, reasoning, output
+   Running 9 of 33 tests...
+
+  ⊙ [accuracy    ] Math reasoning: word problem                  ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+✓ 3.7s (1 iters, 575 tok)
+  ⊙ [accuracy    ] Logic: syllogism                              ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+✓ 2.2s (1 iters, 620 tok)
+  ⊙ [accuracy    ] Code generation: fizzbuzz                     ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+✓ 4.0s (1 iters, 960 tok)
+  ⊙ [accuracy    ] Factual accuracy: no hallucination            ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+✗ 1.8s (1 iters, 532 tok)
+    ⚠  MISSING EXPECTED: /2012/ not found in output
+  ⊙ [reasoning   ] ReAct: multi-step analysis                    ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+✓ 6.9s (1 iters, 1368 tok)
+  ⊙ [reasoning   ] Plan-Execute: structured task                 ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+✓ 29.8s (4 iters, 6761 tok)
+  ⊙ [reasoning   ] Adaptive: let framework choose                ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+✓ 7.5s (2 iters, 1417 tok)
+  ⊙ [output      ] Output: code must be complete (not truncated) ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+✓ 9.9s (1 iters, 1420 tok)
+  ⊙ [output      ] Output: structured data must be complete      ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+✓ 2.4s (1 iters, 665 tok)
+
+┌── COMPOSITION TESTS ──────────────────────────────────────────────────────┐
+│  ⊙ pipe: sequential pipeline                      ✓ Provider: ollama | Model: qwen3:4b | API key: (not required)
+ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+✓ 3.5s
+│  ⊙ parallel: concurrent agents                    ✓ Provider: ollama | Model: qwen3:4b | API key: (not required)
+✓ Provider: ollama | Model: qwen3:4b | API key: (not required)
+ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+✓ 2.0s
+└───────────────────────────────────────────────────────────────────────────┘
+
+
+╔══════════════════════════════════════════════════════════════════════════════════╗
+║                    REACTIVE AGENTS — QUALITY & EFFICIENCY REPORT                ║
+╠══════════════════════════════════════════════════════════════════════════════════╣
+║  Provider : ollama                                                            ║
+║  Model    : qwen3:4b                                                          ║
+║  Tests    : 11                                                                ║
+║  Date     : 2026-04-15T03:23:33.459Z                                          ║
+╚══════════════════════════════════════════════════════════════════════════════════╝
+
+┌── ACCURACY (3/4 passed) ────────────────────────────────────────────────────┐
+│ ✅ Math reasoning: word problem                1 iters      575 tok     3.7s  $0.0000 [end_turn]
+│ ✅ Logic: syllogism                            1 iters      620 tok     2.2s  $0.0000 [end_turn]
+│ ✅ Code generation: fizzbuzz                   1 iters      960 tok     4.0s  $0.0000 [end_turn]
+│ ❌ Factual accuracy: no hallucination          1 iters      532 tok     1.8s  $0.0000 [end_turn]
+│    ⚠  MISSING EXPECTED: /2012/ not found in output
+└───────────────────────────────────────────────────────────────────────────────┘
+
+┌── REASONING (3/3 passed) ───────────────────────────────────────────────────┐
+│ ✅ ReAct: multi-step analysis                  1 iters    1,368 tok     6.9s  $0.0000 [end_turn]
+│ ✅ Plan-Execute: structured task               4 iters    6,761 tok    29.8s  $0.0000 [end_turn]
+│ ✅ Adaptive: let framework choose              2 iters    1,417 tok     7.5s  $0.0000 [end_turn]
+└───────────────────────────────────────────────────────────────────────────────┘
+
+┌── OUTPUT (2/2 passed) ──────────────────────────────────────────────────────┐
+│ ✅ Output: code must be complete (not truncated)  1 iters    1,420 tok     9.9s  $0.0000 [end_turn]
+│ ✅ Output: structured data must be complete    1 iters      665 tok     2.4s  $0.0000 [end_turn]
+└───────────────────────────────────────────────────────────────────────────────┘
+
+┌── COMPOSITION (2/2 passed) ─────────────────────────────────────────────────┐
+│ ✅ pipe: sequential pipeline                   1 iters      802 tok     3.5s  $0.0000
+│ ✅ parallel: concurrent agents                 2 iters      811 tok     2.0s  $0.0000
+└───────────────────────────────────────────────────────────────────────────────┘
+
+╔══════════════════════════════════════════════════════════════════════════════════╗
+║                                    SUMMARY                                     ║
+╠══════════════════════════════════════════════════════════════════════════════════╣
+║  Pass Rate         : 10/11 (91%)                                             ║
+║  Total Iterations  : 16                                                      ║
+║  Total Tokens      : 15,931                                                  ║
+║  Total Cost        : $0.0000                                                 ║
+║  Total Duration    : 73.6                                                   s║
+║  Avg Iters/Task    : 1.5                                                     ║
+║  Avg Tokens/Task   : 1,448                                                   ║
+║  Avg Cost/Task     : $0.0000                                                 ║
+╠══════════════════════════════════════════════════════════════════════════════════╣
+║  HEALTH SIGNALS                                                                ║
+╠══════════════════════════════════════════════════════════════════════════════════╣
+║  Iteration Explosions : 0                                                    ║
+║  Hallucinations       : 0                                                    ║
+║  Crashes              : 0                                                    ║
+║  Max Iteration Hits   : 0                                                    ║
+╚══════════════════════════════════════════════════════════════════════════════════╝
+
+┌── EFFICIENCY GRADES ──────────────────────────────────────────────────────────┐
+│  accuracy        : B    (75% pass, avg 1.0 iters, avg 672 tokens)
+│  reasoning       : A+   (100% pass, avg 2.3 iters, avg 3182 tokens)
+│  output          : A+   (100% pass, avg 1.0 iters, avg 1043 tokens)
+│  composition     : A+   (100% pass, avg 1.5 iters, avg 807 tokens)
+└───────────────────────────────────────────────────────────────────────────────┘
+
+┌── RECOMMENDATIONS ────────────────────────────────────────────────────────────┐
+│  ✅ All health signals clean — ready for benchmarks!
+└───────────────────────────────────────────────────────────────────────────────┘
+
+📄 Full results saved to ./quality-test-results.json

@@ -1,0 +1,80 @@
+
+🧪 Reactive Agents Quality & Efficiency Test Suite
+   Provider: ollama | Model: cogito
+   Categories: efficiency
+   Running 5 of 33 tests...
+
+  ⊙ [efficiency  ] Simple math: 2+2                              ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+✓ 4.5s (1 iters, 296 tok)
+  ⊙ [efficiency  ] Simple factual: capital of France             ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+✓ 492ms (1 iters, 286 tok)
+  ⊙ [efficiency  ] Simple factual: no reasoning overhead         ✓ 313ms (2 iters, 91 tok)
+  ⊙ [efficiency  ] Direct answer: one-word response              ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+✓ 1.2s (1 iters, 362 tok)
+  ⊙ [efficiency  ] Short explanation                             ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+✓ 693ms (1 iters, 314 tok)
+
+┌── COMPOSITION TESTS ──────────────────────────────────────────────────────┐
+│  ⊙ pipe: sequential pipeline                      ✓ Provider: ollama | Model: cogito | API key: (not required)
+ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+✓ 0.9s
+│  ⊙ parallel: concurrent agents                    ✓ Provider: ollama | Model: cogito | API key: (not required)
+✓ Provider: ollama | Model: cogito | API key: (not required)
+ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+✓ 0.3s
+└───────────────────────────────────────────────────────────────────────────┘
+
+
+╔══════════════════════════════════════════════════════════════════════════════════╗
+║                    REACTIVE AGENTS — QUALITY & EFFICIENCY REPORT                ║
+╠══════════════════════════════════════════════════════════════════════════════════╣
+║  Provider : ollama                                                            ║
+║  Model    : cogito                                                            ║
+║  Tests    : 7                                                                 ║
+║  Date     : 2026-04-15T03:18:40.899Z                                          ║
+╚══════════════════════════════════════════════════════════════════════════════════╝
+
+┌── EFFICIENCY (5/5 passed) ──────────────────────────────────────────────────┐
+│ ✅ Simple math: 2+2                            1 iters      296 tok     4.5s  $0.0000 [end_turn]
+│ ✅ Simple factual: capital of France           1 iters      286 tok    492ms  $0.0000 [end_turn]
+│ ✅ Simple factual: no reasoning overhead       2 iters       91 tok    313ms  $0.0000 [end_turn]
+│ ✅ Direct answer: one-word response            1 iters      362 tok     1.2s  $0.0000 [end_turn]
+│ ✅ Short explanation                           1 iters      314 tok    693ms  $0.0000 [end_turn]
+└───────────────────────────────────────────────────────────────────────────────┘
+
+┌── COMPOSITION (2/2 passed) ─────────────────────────────────────────────────┐
+│ ✅ pipe: sequential pipeline                   1 iters      332 tok    854ms  $0.0000
+│ ✅ parallel: concurrent agents                 2 iters      524 tok    306ms  $0.0000
+└───────────────────────────────────────────────────────────────────────────────┘
+
+╔══════════════════════════════════════════════════════════════════════════════════╗
+║                                    SUMMARY                                     ║
+╠══════════════════════════════════════════════════════════════════════════════════╣
+║  Pass Rate         : 7/7 (100%)                                              ║
+║  Total Iterations  : 9                                                       ║
+║  Total Tokens      : 2,205                                                   ║
+║  Total Cost        : $0.0000                                                 ║
+║  Total Duration    : 8.4                                                    s║
+║  Avg Iters/Task    : 1.3                                                     ║
+║  Avg Tokens/Task   : 315                                                     ║
+║  Avg Cost/Task     : $0.0000                                                 ║
+╠══════════════════════════════════════════════════════════════════════════════════╣
+║  HEALTH SIGNALS                                                                ║
+╠══════════════════════════════════════════════════════════════════════════════════╣
+║  Iteration Explosions : 0                                                    ║
+║  Hallucinations       : 0                                                    ║
+║  Crashes              : 0                                                    ║
+║  Max Iteration Hits   : 0                                                    ║
+╚══════════════════════════════════════════════════════════════════════════════════╝
+
+┌── EFFICIENCY GRADES ──────────────────────────────────────────────────────────┐
+│  efficiency      : A+   (100% pass, avg 1.2 iters, avg 270 tokens)
+│  composition     : A+   (100% pass, avg 1.5 iters, avg 428 tokens)
+└───────────────────────────────────────────────────────────────────────────────┘
+
+┌── RECOMMENDATIONS ────────────────────────────────────────────────────────────┐
+│  ✅ All health signals clean — ready for benchmarks!
+└───────────────────────────────────────────────────────────────────────────────┘
+
+📄 Full results saved to ./quality-test-results.json

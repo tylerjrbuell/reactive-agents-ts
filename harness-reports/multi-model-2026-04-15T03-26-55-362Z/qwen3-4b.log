@@ -1,0 +1,114 @@
+
+🧪 Reactive Agents Quality & Efficiency Test Suite
+   Provider: ollama | Model: qwen3:4b
+   Categories: convergence, strategy, subagent
+   Running 9 of 33 tests...
+
+  ⊙ [convergence ] Converge: simple math should not loop         ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+✓ 2.6s (1 iters, 378 tok)
+  ⊙ [convergence ] Converge: list task should terminate          ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+✓ 2.5s (1 iters, 635 tok)
+  ⊙ [convergence ] Converge: opinion question                    ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+✓ 2.1s (1 iters, 600 tok)
+  ⊙ [convergence ] Converge: no-tool task with tools enabled     ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+✓ 4.7s (1 iters, 2985 tok)
+  ⊙ [strategy    ] ReAct: concise factual answer                 ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+✓ 994ms (1 iters, 407 tok)
+  ⊙ [strategy    ] Plan-Execute: multi-step synthesis            ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+✓ 19.9s (4 iters, 3469 tok)
+  ⊙ [strategy    ] Adaptive: picks efficient path                ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+✓ 2.0s (2 iters, 567 tok)
+  ⊙ [subagent    ] Static sub-agent: delegation                  
+  [36m┌─ [sub-agent: research-assistant][0m → "{"input":{"query":"explain linked list"}}"
+  [36m└─ [sub-agent: research-assistant][0m [32m✓[0m done | 7696 tok | 10.5s
+
+ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+✗ 38.3s (16 iters, 10336 tok)
+    ⚠  ITERATION EXPLOSION: 16 iterations (max expected: 12)
+  ⊙ [subagent    ] Dynamic sub-agent: spawn and use              
+  [36m┌── sub-agent: [1mfactorial-calculator[22m ──────────────────────────────[0m
+  [36m│[0m  task: "Calculate the factorial of 5 and return the result"
+  [36m└── [32m✓[0m [1mfactorial-calculator[22m[0m  6 steps | 2788 tok | 5.8s
+
+ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+✓ 32.9s (6 iters, 9678 tok)
+
+┌── COMPOSITION TESTS ──────────────────────────────────────────────────────┐
+│  ⊙ pipe: sequential pipeline                      ✓ Provider: ollama | Model: qwen3:4b | API key: (not required)
+ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+✓ 3.2s
+│  ⊙ parallel: concurrent agents                    ✓ Provider: ollama | Model: qwen3:4b | API key: (not required)
+✓ Provider: ollama | Model: qwen3:4b | API key: (not required)
+ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+✓ 2.4s
+└───────────────────────────────────────────────────────────────────────────┘
+
+
+╔══════════════════════════════════════════════════════════════════════════════════╗
+║                    REACTIVE AGENTS — QUALITY & EFFICIENCY REPORT                ║
+╠══════════════════════════════════════════════════════════════════════════════════╣
+║  Provider : ollama                                                            ║
+║  Model    : qwen3:4b                                                          ║
+║  Tests    : 11                                                                ║
+║  Date     : 2026-04-15T03:30:46.544Z                                          ║
+╚══════════════════════════════════════════════════════════════════════════════════╝
+
+┌── CONVERGENCE (4/4 passed) ─────────────────────────────────────────────────┐
+│ ✅ Converge: simple math should not loop       1 iters      378 tok     2.6s  $0.0000 [end_turn]
+│ ✅ Converge: list task should terminate        1 iters      635 tok     2.5s  $0.0000 [end_turn]
+│ ✅ Converge: opinion question                  1 iters      600 tok     2.1s  $0.0000 [end_turn]
+│ ✅ Converge: no-tool task with tools enabled   1 iters    2,985 tok     4.7s  $0.0000 [end_turn]
+└───────────────────────────────────────────────────────────────────────────────┘
+
+┌── STRATEGY (3/3 passed) ────────────────────────────────────────────────────┐
+│ ✅ ReAct: concise factual answer               1 iters      407 tok    994ms  $0.0000 [end_turn]
+│ ✅ Plan-Execute: multi-step synthesis          4 iters    3,469 tok    19.9s  $0.0000 [end_turn]
+│ ✅ Adaptive: picks efficient path              2 iters      567 tok     2.0s  $0.0000 [end_turn]
+└───────────────────────────────────────────────────────────────────────────────┘
+
+┌── SUBAGENT (1/2 passed) ────────────────────────────────────────────────────┐
+│ ❌ Static sub-agent: delegation               16 iters   10,336 tok    38.3s  $0.0000 [end_turn]
+│    ⚠  ITERATION EXPLOSION: 16 iterations (max expected: 12)
+│ ✅ Dynamic sub-agent: spawn and use            6 iters    9,678 tok    32.9s  $0.0000 [end_turn]
+└───────────────────────────────────────────────────────────────────────────────┘
+
+┌── COMPOSITION (2/2 passed) ─────────────────────────────────────────────────┐
+│ ✅ pipe: sequential pipeline                   1 iters      736 tok     3.2s  $0.0000
+│ ✅ parallel: concurrent agents                 2 iters      858 tok     2.4s  $0.0000
+└───────────────────────────────────────────────────────────────────────────────┘
+
+╔══════════════════════════════════════════════════════════════════════════════════╗
+║                                    SUMMARY                                     ║
+╠══════════════════════════════════════════════════════════════════════════════════╣
+║  Pass Rate         : 10/11 (91%)                                             ║
+║  Total Iterations  : 36                                                      ║
+║  Total Tokens      : 30,649                                                  ║
+║  Total Cost        : $0.0000                                                 ║
+║  Total Duration    : 111.5                                                  s║
+║  Avg Iters/Task    : 3.3                                                     ║
+║  Avg Tokens/Task   : 2,786                                                   ║
+║  Avg Cost/Task     : $0.0000                                                 ║
+╠══════════════════════════════════════════════════════════════════════════════════╣
+║  HEALTH SIGNALS                                                                ║
+╠══════════════════════════════════════════════════════════════════════════════════╣
+║  Iteration Explosions : 1                                                    ║
+║  Hallucinations       : 0                                                    ║
+║  Crashes              : 0                                                    ║
+║  Max Iteration Hits   : 0                                                    ║
+╚══════════════════════════════════════════════════════════════════════════════════╝
+
+┌── EFFICIENCY GRADES ──────────────────────────────────────────────────────────┐
+│  convergence     : A+   (100% pass, avg 1.0 iters, avg 1150 tokens)
+│  strategy        : A+   (100% pass, avg 2.3 iters, avg 1481 tokens)
+│  subagent        : C    (50% pass, avg 11.0 iters, avg 10007 tokens)
+│  composition     : A+   (100% pass, avg 1.5 iters, avg 797 tokens)
+└───────────────────────────────────────────────────────────────────────────────┘
+
+┌── RECOMMENDATIONS ────────────────────────────────────────────────────────────┐
+│  🔴 ITERATION EXPLOSION detected on:
+│     - "Static sub-agent: delegation" (16 iterations)
+│     → Check ReAct loop exit conditions and final-answer tool recognition
+└───────────────────────────────────────────────────────────────────────────────┘
+
+📄 Full results saved to ./quality-test-results.json
