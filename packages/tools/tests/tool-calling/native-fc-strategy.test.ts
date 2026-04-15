@@ -247,3 +247,109 @@ describe("NativeFCStrategy — text tool call fallback", () => {
     }
   });
 });
+
+describe("NativeFCStrategy — pseudo-code tool call fallback", () => {
+  const tools = [{ name: "web-search" }, { name: "code-execute" }, { name: "http-get" }];
+
+  it("parses tool-name(key: value) inside fenced javascript block", () => {
+    const input: ResolverInput = {
+      content: '```javascript\nweb-search(query: "XRP USD current price", maxResults: 1)\n```',
+      stopReason: "end_turn",
+    };
+    const result = run(strategy.resolve(input, tools));
+    expect(result._tag).toBe("tool_calls");
+    if (result._tag === "tool_calls") {
+      expect(result.calls).toHaveLength(1);
+      expect(result.calls[0].name).toBe("web-search");
+      expect(result.calls[0].arguments).toEqual({ query: "XRP USD current price", maxResults: 1 });
+    }
+  });
+
+  it("extracts multiple parallel calls from a single fenced block", () => {
+    const input: ResolverInput = {
+      content: [
+        "```javascript",
+        'web-search(query: "XRP price")',
+        'web-search(query: "ETH price")',
+        'web-search(query: "BTC price")',
+        "```",
+      ].join("\n"),
+      stopReason: "end_turn",
+    };
+    const result = run(strategy.resolve(input, tools));
+    expect(result._tag).toBe("tool_calls");
+    if (result._tag === "tool_calls") {
+      expect(result.calls).toHaveLength(3);
+      expect(result.calls.map((c) => (c.arguments as any).query)).toEqual([
+        "XRP price", "ETH price", "BTC price",
+      ]);
+    }
+  });
+
+  it("ignores narrative prose — only matches inside fenced blocks", () => {
+    const input: ResolverInput = {
+      content: 'I will use web-search(query: "XRP") to look this up.',
+      stopReason: "end_turn",
+    };
+    const result = run(strategy.resolve(input, tools));
+    expect(result._tag).toBe("final_answer");
+  });
+
+  it("supports key=value syntax in addition to key: value", () => {
+    const input: ResolverInput = {
+      content: '```bash\nhttp-get(url="https://example.com/api", headers={})\n```',
+      stopReason: "end_turn",
+    };
+    const result = run(strategy.resolve(input, tools));
+    expect(result._tag).toBe("tool_calls");
+    if (result._tag === "tool_calls") {
+      expect(result.calls[0].name).toBe("http-get");
+      expect((result.calls[0].arguments as any).url).toBe("https://example.com/api");
+    }
+  });
+
+  it("handles positional single-argument calls (e.g. template string bodies)", () => {
+    const input: ResolverInput = {
+      content: '```python\ncode-execute(`print("hi")`)\n```',
+      stopReason: "end_turn",
+    };
+    const result = run(strategy.resolve(input, tools));
+    expect(result._tag).toBe("tool_calls");
+    if (result._tag === "tool_calls") {
+      expect(result.calls[0].name).toBe("code-execute");
+      // Single positional value lands under "input"
+      expect((result.calls[0].arguments as any).input).toBe('print("hi")');
+    }
+  });
+
+  it("ignores pseudo-calls when JSON fallback already matched", () => {
+    const input: ResolverInput = {
+      content: [
+        '```json',
+        '{"name":"web-search","arguments":{"query":"real"}}',
+        '```',
+        '',
+        '```javascript',
+        'web-search(query: "also-real-but-ignored")',
+        '```',
+      ].join("\n"),
+      stopReason: "end_turn",
+    };
+    const result = run(strategy.resolve(input, tools));
+    expect(result._tag).toBe("tool_calls");
+    if (result._tag === "tool_calls") {
+      // JSON fallback wins — pseudo-code fallback is only tried when JSON finds nothing
+      expect(result.calls).toHaveLength(1);
+      expect((result.calls[0].arguments as any).query).toBe("real");
+    }
+  });
+
+  it("ignores unknown tool names in pseudo-code", () => {
+    const input: ResolverInput = {
+      content: '```javascript\ndatabase-query(sql: "SELECT 1")\n```',
+      stopReason: "end_turn",
+    };
+    const result = run(strategy.resolve(input, tools));
+    expect(result._tag).toBe("final_answer");
+  });
+});

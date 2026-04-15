@@ -238,9 +238,20 @@ Respond with JSON:
 }
 
 Rules:
-- "required" = tools that MUST be called. For minCalls: first count the distinct named items in the task (each comma-separated name, ticker, URL, or entity is one item). Set minCalls = that count when each item needs its own lookup call. Only set minCalls = 1 when a single call retrieves everything (e.g. "what time is it?" → 1, "prices of XRP, XLM, ETH, Bitcoin" → 4).
-- "relevant" = tools that could assist the agent (e.g. tools from the same service namespace as required tools, or tools whose capabilities match the task context). Always include recall.
-- If the task mentions a service name (e.g. "Signal", "GitHub"), include the SPECIFIC action tools needed, not all tools from that namespace.
+- "required" = tools the agent MUST call or the task literally cannot be completed.
+  Ask: "if I deleted this tool, would the task still be doable?" If yes → NOT required.
+  Prefer a SHORTER required list. When in doubt, put the tool in "relevant" instead.
+  Example: "fetch prices for X, Y, Z then render markdown table" → required: [web-search×3].
+  code-execute, file-write, etc. are NOT required unless the task explicitly asks to
+  run code or save a file to disk.
+- "required" minCalls: count distinct named items (each comma-separated name, ticker, URL,
+  or entity). Set minCalls to that count when each item needs its own lookup call.
+  Single-call tasks (e.g. "what time is it?") → minCalls = 1.
+  Multi-entity lookups (e.g. "prices of XRP, XLM, ETH, BTC") → minCalls = 4.
+- "relevant" = tools that could assist but aren't strictly needed. Include supporting
+  tools like recall, find, and any tool adjacent to the required domain.
+- If the task mentions a service name (e.g. "Signal", "GitHub"), include the SPECIFIC
+  action tools needed, not all tools from that namespace.
 - An empty required list is valid for simple questions that need no tools.
 - Use EXACT tool names from the list above.`;
 
