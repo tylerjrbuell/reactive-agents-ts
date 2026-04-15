@@ -1,22 +1,8 @@
 /**
- * Test: parallel tool call batching in the ReAct kernel
+ * Pinpoint probe: cogito convergence failure
  *
- * Gives the agent 4 independent HTTP price lookups. With parallel batching
- * enabled by default (nextMovesPlanning.enabled=true), the LLM should return
- * all 4 http-get calls in a single response, and act.ts executes them with
- * Effect.all({ concurrency: N }).
- *
- * What to look for in output (parallel batch working):
- *   [action] http-get(url: "https://...xrp...")
- *   [action] http-get(url: "https://...xlm...")
- *   [action] http-get(url: "https://...eth...")
- *   [action] http-get(url: "https://...btc...")
- *   [observation] {...}
- *   [observation] {...}
- *   ...
- *
- * If you see action→observation→action→observation, the LLM is only returning
- * one tool call per response (batching not firing at the model level).
+ * Test "Converge: no-tool task with tools enabled" — 16 iters / 13,402 tok
+ * for a simple knowledge question that should answer in 1-2 iterations.
  */
 import { ReactiveAgents } from 'reactive-agents'
 
@@ -25,16 +11,15 @@ const agent = await ReactiveAgents.create()
     .withModel({ model: 'cogito', temperature: 0.2, maxTokens: 8000 })
     .withReasoning({ defaultStrategy: 'reactive' })
     .withTools()
-    .withRequiredTools({ adaptive: true })
     .withObservability({ verbosity: 'debug', live: true })
     .build()
 
 const result = await agent.run(
-    'Fetch the current approximate USD price for each currency: XRP, XLM, ETH, Bitcoin. ' +
-        'Then render a markdown table with columns: Currency | Price | Source. Properly formated with markdown syntax and dollar signs.'
+    'What is the speed of light in meters per second? Answer directly from your knowledge.',
 )
 
 console.log('\n--- Result ---')
 console.log(result.output)
+console.log(`\nIterations: ${result.metadata?.stepsCount ?? '?'}, Tokens: ${result.metadata?.tokensUsed ?? '?'}`)
 
 await agent.dispose()

@@ -244,6 +244,15 @@ Rules:
   Example: "fetch prices for X, Y, Z then render markdown table" → required: [web-search×3].
   code-execute, file-write, etc. are NOT required unless the task explicitly asks to
   run code or save a file to disk.
+- **Factual knowledge questions need NO tools.** If the task asks "what is X?",
+  "explain Y", "define Z", "who/when/where", or otherwise requests information the
+  model already knows (history, science facts, definitions, common knowledge), return
+  required: []. The model should answer from its training data.
+  Examples that need NO tools:
+    - "What is the speed of light?" → required: []
+    - "Explain how a linked list works" → required: []
+    - "What year was TypeScript released?" → required: []
+    - "Capital of France?" → required: []
 - "required" minCalls: count distinct named items (each comma-separated name, ticker, URL,
   or entity). Set minCalls to that count when each item needs its own lookup call.
   Single-call tasks (e.g. "what time is it?") → minCalls = 1.
@@ -252,7 +261,6 @@ Rules:
   tools like recall, find, and any tool adjacent to the required domain.
 - If the task mentions a service name (e.g. "Signal", "GitHub"), include the SPECIFIC
   action tools needed, not all tools from that namespace.
-- An empty required list is valid for simple questions that need no tools.
 - Use EXACT tool names from the list above.`;
 
     const result = yield* extractStructuredOutput({

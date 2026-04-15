@@ -25,6 +25,18 @@ const PROVIDER = process.env.PROVIDER || ('ollama' as ProviderName)
 const MODEL = process.env.MODEL || 'qwen3:14b'
 const VERBOSE = process.env.VERBOSE === 'true'
 
+/**
+ * Comma-separated category filter (e.g. CATEGORY="efficiency,tools").
+ * Empty/unset → run all tests.
+ */
+const CATEGORY_FILTER = (process.env.CATEGORY ?? '')
+    .split(',')
+    .map((c) => c.trim().toLowerCase())
+    .filter((c) => c.length > 0)
+
+/** Optional cap on number of tests to run (useful for quick smoke runs). */
+const MAX_TESTS = process.env.MAX_TESTS ? parseInt(process.env.MAX_TESTS, 10) : undefined
+
 // Provider-aware time budget multipliers.
 // Cloud providers run at 1×; local inference gets extra headroom.
 const TIME_MULTIPLIER: Record<string, number> = {
@@ -898,13 +910,23 @@ function printReport(results: TestResult[]) {
 // ─── Main ──────────────────────────────────────────────────────────────────
 
 async function main() {
+    const filteredTests =
+        CATEGORY_FILTER.length === 0
+            ? tests
+            : tests.filter((t) => CATEGORY_FILTER.includes(t.category.toLowerCase()))
+    const cappedTests =
+        MAX_TESTS !== undefined ? filteredTests.slice(0, MAX_TESTS) : filteredTests
+
     console.log(`\n🧪 Reactive Agents Quality & Efficiency Test Suite`)
     console.log(`   Provider: ${PROVIDER} | Model: ${MODEL ?? 'default'}`)
-    console.log(`   Running ${tests.length} tests...\n`)
+    if (CATEGORY_FILTER.length > 0) {
+        console.log(`   Categories: ${CATEGORY_FILTER.join(', ')}`)
+    }
+    console.log(`   Running ${cappedTests.length} of ${tests.length} tests...\n`)
 
     const results: TestResult[] = []
 
-    for (const test of tests) {
+    for (const test of cappedTests) {
         process.stdout.write(
             `  ⊙ [${test.category.padEnd(12)}] ${test.name.padEnd(45)} `
         )
