@@ -115,3 +115,8 @@ export {
 } from "./calibration/observations-store.js";
 export { mergeObservationsIntoPrior, OVERRIDE_THRESHOLD } from "./calibration/observations-merge.js";
 export { resolveCalibration, type ResolveOptions } from "./calibration/calibration-resolver.js";
+export {
+  fetchCommunityProfile,
+  resolveDefaultProfileEndpoint,
+  type CommunityProfileClientOptions,
+} from "./calibration/community-profile-client.js";
