@@ -418,3 +418,59 @@ describe("NativeFCStrategy — parameter-shape fallback", () => {
     expect(result._tag).toBe("final_answer");
   });
 });
+
+describe("NativeFCStrategy — dialect reporting via resolveWithDialect", () => {
+  const tools = [{ name: "web-search", paramNames: ["query"] }, { name: "spawn-agent", paramNames: ["task", "name"] }];
+
+  it("reports 'native-fc' when native tool_calls are present and resolve", () => {
+    const input: ResolverInput = {
+      content: "",
+      toolCalls: [{ id: "1", name: "web-search", input: { query: "x" } }],
+      stopReason: "tool_use",
+    };
+    const { result, dialect } = run(strategy.resolveWithDialect(input, tools));
+    expect(dialect).toBe("native-fc");
+    expect(result._tag).toBe("tool_calls");
+  });
+
+  it("reports 'fenced-json' for ```json blocks with a name field", () => {
+    const input: ResolverInput = {
+      content: '```json\n{"name":"web-search","arguments":{"query":"test"}}\n```',
+      stopReason: "end_turn",
+    };
+    const { result, dialect } = run(strategy.resolveWithDialect(input, tools));
+    expect(dialect).toBe("fenced-json");
+    expect(result._tag).toBe("tool_calls");
+  });
+
+  it("reports 'nameless-shape' for JSON matching tool params without a name field", () => {
+    // No "name"/"tool" field — toToolCallSpec returns null, shape-match picks up web-search by params
+    const input: ResolverInput = {
+      content: '```json\n{"query":"latest AI news"}\n```',
+      stopReason: "end_turn",
+    };
+    const { result, dialect } = run(strategy.resolveWithDialect(input, tools));
+    expect(dialect).toBe("nameless-shape");
+    expect(result._tag).toBe("tool_calls");
+  });
+
+  it("reports 'pseudo-code' for tool-name(args) syntax in fenced blocks", () => {
+    const input: ResolverInput = {
+      content: '```javascript\nweb-search(query: "test")\n```',
+      stopReason: "end_turn",
+    };
+    const { result, dialect } = run(strategy.resolveWithDialect(input, tools));
+    expect(dialect).toBe("pseudo-code");
+    expect(result._tag).toBe("tool_calls");
+  });
+
+  it("reports 'none' when no tool call is detected", () => {
+    const input: ResolverInput = {
+      content: "Just a regular answer with no tools.",
+      stopReason: "end_turn",
+    };
+    const { result, dialect } = run(strategy.resolveWithDialect(input, tools));
+    expect(dialect).toBe("none");
+    expect(result._tag).toBe("final_answer");
+  });
+});
