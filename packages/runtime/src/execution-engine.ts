@@ -32,12 +32,13 @@ import { DebriefStoreService, PlanStoreService, ProceduralMemoryService } from "
 import { TelemetryClient as TelemetryClientImpl, classifyTaskCategory as classifyTaskCategoryFn, lookupModel as lookupModelFn, skillFragmentToProceduralEntry } from "@reactive-agents/reactive-intelligence";
 import { recommendStrategyForTier, resolveModelCalibration } from "@reactive-agents/llm-provider";
 import type { ModelCalibration } from "@reactive-agents/llm-provider";
-import { buildTrajectoryFingerprint, abstractifyToolName, firstConvergenceIteration, peakContextPressure, deriveTaskComplexity, deriveFailurePattern, deriveThoughtToActionRatio } from "./telemetry-enrichment.js";
+import { buildTrajectoryFingerprint, abstractifyToolName, firstConvergenceIteration, peakContextPressure, deriveTaskComplexity, deriveFailurePattern, deriveThoughtToActionRatio, entropyVariance, entropyOscillationCount, finalCompositeEntropy, entropyAreaUnderCurve } from "./telemetry-enrichment.js";
 import { resolveSynthesisConfigForStrategy } from "./synthesis-resolve.js";
 import { formatTaskContextForChat } from "./chat.js";
 import {
   persistRunObservation,
   buildRunObservation,
+  countParallelTurnsFromLog,
 } from "./observers/run-observer.js";
 
 // ─── Narrow service types for optional deps ───
@@ -3712,6 +3713,18 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         taskComplexity,
                         failurePattern,
                         thoughtToActionRatio,
+                        // Enhanced entropy features (Task 11)
+                        entropyVariance: entropyVariance(entropyLog),
+                        entropyOscillationCount: entropyOscillationCount(entropyLog),
+                        finalCompositeEntropy: finalCompositeEntropy(entropyLog),
+                        entropyAreaUnderCurve: entropyAreaUnderCurve(entropyLog),
+                        // Parallel turn count (Task 11)
+                        parallelTurnCount: countParallelTurnsFromLog(
+                          toolCallLog.map((t, idx) => ({
+                            turn: idx,
+                            toolName: t.toolName,
+                          })),
+                        ),
                       });
 
                       // After client.send({...}) completes, persist a local observation (best-effort, never blocks).
