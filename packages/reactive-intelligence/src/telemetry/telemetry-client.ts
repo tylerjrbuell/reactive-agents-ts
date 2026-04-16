@@ -3,13 +3,26 @@ import { getOrCreateInstallId } from "./install-id.js";
 import type { RunReport } from "./types.js";
 
 const VERSION = "0.8.0";
-const DEFAULT_ENDPOINT = "https://api.reactiveagents.dev/v1/reports";
+const HARDCODED_DEFAULT = "https://api.reactiveagents.dev/v1/reports";
+
+/**
+ * Resolve the reports endpoint URL.
+ * Precedence: REACTIVE_AGENTS_TELEMETRY_REPORTS_URL > BASE_URL + /v1/reports > hardcoded.
+ * Symmetric with community-profile-client's resolveDefaultProfileEndpoint.
+ */
+export function resolveDefaultReportsEndpoint(): string {
+  const full = process.env["REACTIVE_AGENTS_TELEMETRY_REPORTS_URL"];
+  if (full) return full;
+  const base = process.env["REACTIVE_AGENTS_TELEMETRY_BASE_URL"];
+  if (base) return `${base.replace(/\/$/, "")}/v1/reports`;
+  return HARDCODED_DEFAULT;
+}
 
 export class TelemetryClient {
   private noticePrinted = false;
   private readonly installId: string;
 
-  constructor(private readonly endpoint: string = DEFAULT_ENDPOINT) {
+  constructor(private readonly endpoint: string = resolveDefaultReportsEndpoint()) {
     this.installId = getOrCreateInstallId();
   }
 
