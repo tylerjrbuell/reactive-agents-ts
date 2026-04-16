@@ -7,6 +7,10 @@ import {
   deriveTaskComplexity,
   deriveFailurePattern,
   deriveThoughtToActionRatio,
+  entropyVariance,
+  entropyOscillationCount,
+  finalCompositeEntropy,
+  entropyAreaUnderCurve,
   type EntropyEntry,
 } from "../telemetry-enrichment.js";
 
@@ -271,5 +275,202 @@ describe("deriveThoughtToActionRatio", () => {
 
   test("empty steps with tool calls returns 0", () => {
     expect(deriveThoughtToActionRatio([], 3)).toBe(0);
+  });
+});
+
+// ─── Shared trace fixtures for new entropy features ───
+
+const flatTrace: EntropyEntry[] = [
+  { iteration: 1, composite: 0.5, sources: { token: null, structural: 0.5, semantic: null, behavioral: 0.5, contextPressure: 0.3 }, trajectory: { derivative: 0, shape: "flat", momentum: 0 }, confidence: "high" },
+  { iteration: 2, composite: 0.5, sources: { token: null, structural: 0.5, semantic: null, behavioral: 0.5, contextPressure: 0.3 }, trajectory: { derivative: 0, shape: "flat", momentum: 0 }, confidence: "high" },
+  { iteration: 3, composite: 0.5, sources: { token: null, structural: 0.5, semantic: null, behavioral: 0.5, contextPressure: 0.3 }, trajectory: { derivative: 0, shape: "flat", momentum: 0 }, confidence: "high" },
+];
+
+const oscillatingTrace: EntropyEntry[] = [
+  { iteration: 1, composite: 0.3, sources: { token: null, structural: 0.3, semantic: null, behavioral: 0.3, contextPressure: 0.2 }, trajectory: { derivative: +0.3, shape: "rising", momentum: 0 }, confidence: "medium" },
+  { iteration: 2, composite: 0.6, sources: { token: null, structural: 0.6, semantic: null, behavioral: 0.6, contextPressure: 0.4 }, trajectory: { derivative: -0.3, shape: "falling", momentum: 0 }, confidence: "medium" },
+  { iteration: 3, composite: 0.3, sources: { token: null, structural: 0.3, semantic: null, behavioral: 0.3, contextPressure: 0.2 }, trajectory: { derivative: +0.3, shape: "rising", momentum: 0 }, confidence: "medium" },
+  { iteration: 4, composite: 0.6, sources: { token: null, structural: 0.6, semantic: null, behavioral: 0.6, contextPressure: 0.4 }, trajectory: { derivative: -0.3, shape: "falling", momentum: 0 }, confidence: "medium" },
+];
+
+const singlePointTrace: EntropyEntry[] = [
+  { iteration: 1, composite: 0.7, sources: { token: null, structural: 0.7, semantic: null, behavioral: 0.7, contextPressure: 0.5 }, trajectory: { derivative: 0, shape: "flat", momentum: 0 }, confidence: "high" },
+];
+
+const monotonicDecreasingTrace: EntropyEntry[] = [
+  { iteration: 1, composite: 0.8, sources: { token: null, structural: 0.8, semantic: null, behavioral: 0.8, contextPressure: 0.6 }, trajectory: { derivative: -0.2, shape: "falling", momentum: 0 }, confidence: "medium" },
+  { iteration: 2, composite: 0.6, sources: { token: null, structural: 0.6, semantic: null, behavioral: 0.6, contextPressure: 0.5 }, trajectory: { derivative: -0.2, shape: "falling", momentum: 0 }, confidence: "medium" },
+  { iteration: 3, composite: 0.4, sources: { token: null, structural: 0.4, semantic: null, behavioral: 0.4, contextPressure: 0.4 }, trajectory: { derivative: -0.2, shape: "falling", momentum: 0 }, confidence: "high" },
+  { iteration: 4, composite: 0.2, sources: { token: null, structural: 0.2, semantic: null, behavioral: 0.2, contextPressure: 0.3 }, trajectory: { derivative: -0.2, shape: "falling", momentum: 0 }, confidence: "high" },
+];
+
+// ─── entropyVariance ───
+
+describe("entropyVariance", () => {
+  test("empty trace returns 0", () => {
+    expect(entropyVariance([])).toBe(0);
+  });
+
+  test("flat trace returns 0 (or extremely close)", () => {
+    expect(entropyVariance(flatTrace)).toBeCloseTo(0, 10);
+  });
+
+  test("oscillating trace returns positive value", () => {
+    expect(entropyVariance(oscillatingTrace)).toBeGreaterThan(0);
+  });
+
+  test("single-point trace returns 0", () => {
+    expect(entropyVariance(singlePointTrace)).toBe(0);
+  });
+
+  test("monotonic decreasing trace returns positive value (not zero)", () => {
+    expect(entropyVariance(monotonicDecreasingTrace)).toBeGreaterThan(0);
+  });
+
+  test("result is never NaN or Infinity for any standard trace shape", () => {
+    const traces = [[], flatTrace, oscillatingTrace, singlePointTrace, monotonicDecreasingTrace];
+    for (const trace of traces) {
+      const v = entropyVariance(trace);
+      expect(Number.isFinite(v)).toBe(true);
+    }
+  });
+});
+
+// ─── entropyOscillationCount ───
+
+describe("entropyOscillationCount", () => {
+  test("empty trace returns 0", () => {
+    expect(entropyOscillationCount([])).toBe(0);
+  });
+
+  test("flat trace (all zero derivatives) returns 0", () => {
+    expect(entropyOscillationCount(flatTrace)).toBe(0);
+  });
+
+  test("oscillating trace (+,-,+,-) counts 2 sign flips", () => {
+    // Signs: +0.3, -0.3, +0.3, -0.3 → transitions: (+→-), (-→+), (+→-) = 3 flips
+    // Wait: first non-zero is +, second is -, that's flip 1; then - to +, flip 2; then + to -, flip 3
+    expect(entropyOscillationCount(oscillatingTrace)).toBe(3);
+  });
+
+  test("single point returns 0", () => {
+    expect(entropyOscillationCount(singlePointTrace)).toBe(0);
+  });
+
+  test("monotonic decreasing (all negative) returns 0", () => {
+    expect(entropyOscillationCount(monotonicDecreasingTrace)).toBe(0);
+  });
+
+  test("zeros are ignored: sign flips counted across non-zero derivatives only", () => {
+    const mixedTrace: EntropyEntry[] = [
+      { iteration: 1, composite: 0.5, sources: { token: null, structural: 0.5, semantic: null, behavioral: 0.5, contextPressure: 0.3 }, trajectory: { derivative: +0.2, shape: "rising", momentum: 0 }, confidence: "medium" },
+      { iteration: 2, composite: 0.5, sources: { token: null, structural: 0.5, semantic: null, behavioral: 0.5, contextPressure: 0.3 }, trajectory: { derivative: 0, shape: "flat", momentum: 0 }, confidence: "medium" },
+      { iteration: 3, composite: 0.5, sources: { token: null, structural: 0.5, semantic: null, behavioral: 0.5, contextPressure: 0.3 }, trajectory: { derivative: -0.2, shape: "falling", momentum: 0 }, confidence: "medium" },
+    ];
+    // zero doesn't break the run: +0.2, 0(skip), -0.2 → 1 flip
+    expect(entropyOscillationCount(mixedTrace)).toBe(1);
+  });
+
+  test("result is never NaN or Infinity for any standard trace shape", () => {
+    const traces = [[], flatTrace, oscillatingTrace, singlePointTrace, monotonicDecreasingTrace];
+    for (const trace of traces) {
+      const o = entropyOscillationCount(trace);
+      expect(Number.isFinite(o)).toBe(true);
+    }
+  });
+});
+
+// ─── finalCompositeEntropy ───
+
+describe("finalCompositeEntropy", () => {
+  test("empty trace returns null", () => {
+    expect(finalCompositeEntropy([])).toBeNull();
+  });
+
+  test("flat trace returns last value (0.5)", () => {
+    expect(finalCompositeEntropy(flatTrace)).toBe(0.5);
+  });
+
+  test("oscillating trace returns last value (0.6)", () => {
+    expect(finalCompositeEntropy(oscillatingTrace)).toBe(0.6);
+  });
+
+  test("single-point trace returns its composite value (0.7)", () => {
+    expect(finalCompositeEntropy(singlePointTrace)).toBe(0.7);
+  });
+
+  test("result is never NaN or Infinity when trace is non-empty", () => {
+    const traces = [flatTrace, oscillatingTrace, singlePointTrace, monotonicDecreasingTrace];
+    for (const trace of traces) {
+      const f = finalCompositeEntropy(trace);
+      if (f !== null) expect(Number.isFinite(f)).toBe(true);
+    }
+  });
+});
+
+// ─── entropyAreaUnderCurve ───
+
+describe("entropyAreaUnderCurve", () => {
+  test("empty trace returns 0", () => {
+    expect(entropyAreaUnderCurve([])).toBe(0);
+  });
+
+  test("single-point trace returns 0 (need ≥2 points for trapezoid)", () => {
+    expect(entropyAreaUnderCurve(singlePointTrace)).toBe(0);
+  });
+
+  test("flat trace at 0.5 for 3 iters → AUC ≈ 1.0", () => {
+    // Two trapezoids: [(0.5+0.5)/2 * 1] + [(0.5+0.5)/2 * 1] = 0.5 + 0.5 = 1.0
+    expect(entropyAreaUnderCurve(flatTrace)).toBeCloseTo(1.0, 10);
+  });
+
+  test("oscillating trace computes correct trapezoidal AUC", () => {
+    // Iterations 1→2→3→4, widths all 1
+    // Trapezoids: (0.3+0.6)/2*1 + (0.6+0.3)/2*1 + (0.3+0.6)/2*1 = 0.45 + 0.45 + 0.45 = 1.35
+    expect(entropyAreaUnderCurve(oscillatingTrace)).toBeCloseTo(1.35, 10);
+  });
+
+  test("non-uniform iteration spacing uses iteration delta as width", () => {
+    const nonUniformTrace: EntropyEntry[] = [
+      { iteration: 1, composite: 0.4, sources: { token: null, structural: 0.4, semantic: null, behavioral: 0.4, contextPressure: 0.3 }, trajectory: { derivative: 0, shape: "flat", momentum: 0 }, confidence: "medium" },
+      { iteration: 3, composite: 0.4, sources: { token: null, structural: 0.4, semantic: null, behavioral: 0.4, contextPressure: 0.3 }, trajectory: { derivative: 0, shape: "flat", momentum: 0 }, confidence: "medium" },
+      { iteration: 10, composite: 0.4, sources: { token: null, structural: 0.4, semantic: null, behavioral: 0.4, contextPressure: 0.3 }, trajectory: { derivative: 0, shape: "flat", momentum: 0 }, confidence: "medium" },
+    ];
+    // Trapezoid 1: (0.4+0.4)/2 * (3-1) = 0.4*2 = 0.8
+    // Trapezoid 2: (0.4+0.4)/2 * (10-3) = 0.4*7 = 2.8
+    // Total: 3.6
+    expect(entropyAreaUnderCurve(nonUniformTrace)).toBeCloseTo(3.6, 10);
+  });
+
+  test("monotonic decreasing trace has correct AUC", () => {
+    // Iterations 1→2→3→4, widths 1, values 0.8,0.6,0.4,0.2
+    // (0.8+0.6)/2 + (0.6+0.4)/2 + (0.4+0.2)/2 = 0.7 + 0.5 + 0.3 = 1.5
+    expect(entropyAreaUnderCurve(monotonicDecreasingTrace)).toBeCloseTo(1.5, 10);
+  });
+
+  test("result is never NaN or Infinity for any standard trace shape", () => {
+    const traces = [[], flatTrace, oscillatingTrace, singlePointTrace, monotonicDecreasingTrace];
+    for (const trace of traces) {
+      const a = entropyAreaUnderCurve(trace);
+      expect(Number.isFinite(a)).toBe(true);
+    }
+  });
+});
+
+// ─── entropy feature safety (cross-function) ───
+
+describe("entropy feature safety", () => {
+  test("no feature returns NaN or Infinity for any standard trace shape", () => {
+    const traces = [[], flatTrace, oscillatingTrace, singlePointTrace, monotonicDecreasingTrace];
+    for (const trace of traces) {
+      const v = entropyVariance(trace);
+      const o = entropyOscillationCount(trace);
+      const f = finalCompositeEntropy(trace);
+      const a = entropyAreaUnderCurve(trace);
+      expect(Number.isFinite(v)).toBe(true);
+      expect(Number.isFinite(o)).toBe(true);
+      if (f !== null) expect(Number.isFinite(f)).toBe(true);
+      expect(Number.isFinite(a)).toBe(true);
+    }
   });
 });

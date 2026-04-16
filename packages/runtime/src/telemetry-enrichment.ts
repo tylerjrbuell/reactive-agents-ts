@@ -137,3 +137,58 @@ export function deriveThoughtToActionRatio(
   const thinkCount = reasoningSteps.filter(s => s.type !== "action" && s.type !== "observation").length;
   return thinkCount / totalToolCalls;
 }
+
+/**
+ * Population variance of composite entropy across iterations.
+ * Returns 0 for empty or single-point traces.
+ */
+export function entropyVariance(trace: readonly EntropyEntry[]): number {
+  if (trace.length === 0) return 0;
+  const mean = trace.reduce((sum, e) => sum + e.composite, 0) / trace.length;
+  const sqDiffs = trace.map((e) => (e.composite - mean) ** 2);
+  return sqDiffs.reduce((sum, v) => sum + v, 0) / trace.length;
+}
+
+/**
+ * Count of derivative sign changes — a proxy for trajectory instability.
+ * Zero derivatives are skipped (they don't break a run).
+ * Returns 0 for traces with fewer than 2 points.
+ */
+export function entropyOscillationCount(trace: readonly EntropyEntry[]): number {
+  if (trace.length < 2) return 0;
+  let flips = 0;
+  let prevSign = 0;
+  for (const entry of trace) {
+    const sign = entry.trajectory.derivative > 0 ? 1 : entry.trajectory.derivative < 0 ? -1 : 0;
+    if (sign === 0) continue; // zero derivative doesn't break a run
+    if (prevSign !== 0 && sign !== prevSign) flips++;
+    prevSign = sign;
+  }
+  return flips;
+}
+
+/**
+ * The final composite entropy value — tells us where the run ended up.
+ * Returns null for empty traces.
+ */
+export function finalCompositeEntropy(trace: readonly EntropyEntry[]): number | null {
+  if (trace.length === 0) return null;
+  return trace[trace.length - 1]!.composite;
+}
+
+/**
+ * Trapezoidal area under the composite entropy curve — total uncertainty-iterations.
+ * Width of each trapezoid is the iteration delta (handles non-uniform spacing).
+ * Returns 0 for traces with fewer than 2 points.
+ */
+export function entropyAreaUnderCurve(trace: readonly EntropyEntry[]): number {
+  if (trace.length < 2) return 0;
+  let auc = 0;
+  for (let i = 1; i < trace.length; i++) {
+    const h1 = trace[i - 1]!.composite;
+    const h2 = trace[i]!.composite;
+    const width = trace[i]!.iteration - trace[i - 1]!.iteration;
+    auc += ((h1 + h2) / 2) * width;
+  }
+  return auc;
+}
