@@ -2,6 +2,7 @@ import type { ModelRegistryEntry } from "../types.js";
 
 export const MODEL_REGISTRY: Record<string, ModelRegistryEntry> = {
   // Ollama / local models
+  "gemma4:e4b":    { contextLimit: 32_768, tier: "local", logprobSupport: false },
   "cogito:14b":    { contextLimit: 32_768, tier: "local", logprobSupport: true },
   "qwen3.5:14b":   { contextLimit: 32_768, tier: "local", logprobSupport: true },
   "qwen3:14b":     { contextLimit: 32_768, tier: "local", logprobSupport: true },
