@@ -71,4 +71,20 @@ export type RunReport = {
   readonly learnedSkillsContribution?: boolean;
   readonly taskComplexity?: "trivial" | "moderate" | "complex" | "expert";
   readonly failurePattern?: "loop-detected" | "context-overflow" | "tool-cascade-failure" | "strategy-exhausted" | "guardrail-halt" | "timeout" | "unknown";
+  // ── Adaptive harness signals (2026-04-15) ──
+  readonly toolCallDialectObserved?: "native-fc" | "fenced-json" | "pseudo-code" | "nameless-shape" | "none";
+  readonly classifierFalsePositives?: readonly string[];
+  readonly classifierFalseNegatives?: readonly string[];
+  readonly subagentInvocations?: readonly {
+    readonly delegated: boolean;
+    readonly succeeded: boolean;
+  }[];
+  readonly toolArgValidityRate?: number;
+  /** Turns in which the model emitted ≥2 tool calls in a single response. */
+  readonly parallelTurnCount?: number;
+  // ── Enhanced entropy features ──
+  readonly entropyVariance?: number;
+  readonly entropyOscillationCount?: number;
+  readonly finalCompositeEntropy?: number | null;
+  readonly entropyAreaUnderCurve?: number;
 };
