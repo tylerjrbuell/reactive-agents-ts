@@ -30,7 +30,7 @@ import type { AgentEvent, KernelStateLike } from "@reactive-agents/core";
 import { synthesizeDebrief, type DebriefInput, type AgentDebrief } from "./debrief.js";
 import { DebriefStoreService, PlanStoreService, ProceduralMemoryService } from "@reactive-agents/memory";
 import { TelemetryClient as TelemetryClientImpl, classifyTaskCategory as classifyTaskCategoryFn, lookupModel as lookupModelFn, skillFragmentToProceduralEntry } from "@reactive-agents/reactive-intelligence";
-import { recommendStrategyForTier, resolveModelCalibration } from "@reactive-agents/llm-provider";
+import { recommendStrategyForTier, resolveModelCalibration, resolveModelCalibrationAsync } from "@reactive-agents/llm-provider";
 import type { ModelCalibration } from "@reactive-agents/llm-provider";
 import { buildTrajectoryFingerprint, abstractifyToolName, firstConvergenceIteration, peakContextPressure, deriveTaskComplexity, deriveFailurePattern, deriveThoughtToActionRatio, entropyVariance, entropyOscillationCount, finalCompositeEntropy, entropyAreaUnderCurve } from "./telemetry-enrichment.js";
 import { literalMentionRequired } from "./classifier-bypass.js";
@@ -1084,13 +1084,27 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 // Resolve CalibrationMode → ModelCalibration | undefined once.
                 // Placed here (before classifier gate) so classifierReliability is available.
                 // Also shared by all three execute() call sites below.
-                const resolvedCalibration: ModelCalibration | undefined = (() => {
+                const fetchCommunity = (config.reactiveIntelligenceOptions as any)?.communityCalibration !== false;
+                const resolvedCalibration: ModelCalibration | undefined = yield* (() => {
                   const cal = config.calibration;
-                  if (!cal || cal === "skip") return undefined;
-                  if (cal === "auto") return resolveModelCalibration(String(config.defaultModel ?? ""), {
-                    observationsBaseDir: process.env["REACTIVE_AGENTS_OBSERVATIONS_DIR"],
-                  });
-                  return cal as ModelCalibration;
+                  if (!cal || cal === "skip") return Effect.succeed(undefined);
+                  if (cal === "auto") {
+                    return fetchCommunity
+                      ? Effect.tryPromise(() =>
+                          resolveModelCalibrationAsync(String(config.defaultModel ?? ""), {
+                            observationsBaseDir: process.env["REACTIVE_AGENTS_OBSERVATIONS_DIR"],
+                            fetchCommunity: true,
+                          }),
+                        ).pipe(Effect.catchAll(() => Effect.succeed(
+                          resolveModelCalibration(String(config.defaultModel ?? ""), {
+                            observationsBaseDir: process.env["REACTIVE_AGENTS_OBSERVATIONS_DIR"],
+                          }),
+                        )))
+                      : Effect.succeed(resolveModelCalibration(String(config.defaultModel ?? ""), {
+                          observationsBaseDir: process.env["REACTIVE_AGENTS_OBSERVATIONS_DIR"],
+                        }));
+                  }
+                  return Effect.succeed(cal as ModelCalibration);
                 })();
 
                 // ── LLM-based tool classification (required + relevant) ──

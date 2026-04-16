@@ -14,7 +14,7 @@ import { Schema } from "effect";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import type { ProviderAdapter } from "./adapter.js";
-import { resolveCalibration } from "@reactive-agents/reactive-intelligence";
+import { resolveCalibration, fetchCommunityProfile } from "@reactive-agents/reactive-intelligence";
 
 /**
  * Structural shape for ContextProfile fields that calibration may override.
@@ -178,6 +178,17 @@ export interface ResolveModelCalibrationOptions {
   readonly observationsBaseDir?: string;
 }
 
+export interface ResolveModelCalibrationAsyncOptions extends ResolveModelCalibrationOptions {
+  /** When true, fetch a community profile from the telemetry API. */
+  readonly fetchCommunity?: boolean;
+  /** Override community endpoint URL (for tests). */
+  readonly communityEndpoint?: string;
+  /** Override fetch implementation (for tests). */
+  readonly communityFetchImpl?: typeof fetch;
+  /** Override community cache dir (for tests). */
+  readonly communityCacheDir?: string;
+}
+
 /**
  * Load the shipped prior for the given model and merge it with the community
  * profile (when supplied) and local observations. Returns undefined when no
@@ -206,4 +217,31 @@ export function resolveModelCalibration(
     communityProfile: opts.communityProfile,
     observationsBaseDir: opts.observationsBaseDir,
   });
+}
+
+/**
+ * Async variant of resolveModelCalibration that can fetch the community profile.
+ * When fetchCommunity is false or the fetch fails, falls back to the sync path.
+ *
+ * Uses fetchCommunityProfile from @reactive-agents/reactive-intelligence (already
+ * statically imported). Community fetch failure is non-fatal — falls back to the
+ * shipped prior + local observations tier.
+ */
+export async function resolveModelCalibrationAsync(
+  modelId: string,
+  opts: ResolveModelCalibrationAsyncOptions = {},
+): Promise<ModelCalibration | undefined> {
+  let community = opts.communityProfile;
+  if (!community && opts.fetchCommunity) {
+    try {
+      community = await fetchCommunityProfile(modelId, {
+        endpoint: opts.communityEndpoint,
+        cacheDir: opts.communityCacheDir,
+        fetchImpl: opts.communityFetchImpl,
+      }) ?? undefined;
+    } catch {
+      // Community fetch failure is non-fatal — fall through to sync path
+    }
+  }
+  return resolveModelCalibration(modelId, { ...opts, communityProfile: community });
 }

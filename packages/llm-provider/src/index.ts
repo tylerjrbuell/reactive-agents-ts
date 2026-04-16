@@ -153,8 +153,14 @@ export {
   clearCalibrationCache,
   buildCalibratedAdapter,
   resolveModelCalibration,
+  resolveModelCalibrationAsync,
 } from "./calibration.js";
-export type { ModelCalibration, ProfileOverrides, ResolveModelCalibrationOptions } from "./calibration.js";
+export type {
+  ModelCalibration,
+  ProfileOverrides,
+  ResolveModelCalibrationOptions,
+  ResolveModelCalibrationAsyncOptions,
+} from "./calibration.js";
 
 // ─── Calibration Runner ───
 export { runCalibrationProbes, majority, median } from "./calibration-runner.js";
