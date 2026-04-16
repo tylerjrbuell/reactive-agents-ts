@@ -3664,7 +3664,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       const client = new TelemetryClientImpl(endpoint);
 
                       const modelId = String(ctx.selectedModel ?? config.defaultModel ?? "unknown");
-                      const modelEntry = lookupModelFn(modelId);
+                      const modelEntry = lookupModelFn(modelId, undefined, String(config.provider ?? ""));
                       const taskText = extractTaskText(task.input);
                       const toolsUsed = [...new Set(toolCallLog.map(t => t.toolName))];
                       const strategySwitched = !!(rr?.metadata as any)?.strategyFallback;

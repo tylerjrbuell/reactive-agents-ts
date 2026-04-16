@@ -24,16 +24,28 @@ const DEFAULT_ENTRY: ModelRegistryEntry = {
   logprobSupport: false,
 };
 
+/** Provider → tier mapping for models not in the registry. */
+const PROVIDER_TIER: Record<string, ModelRegistryEntry["tier"]> = {
+  ollama: "local",
+  anthropic: "frontier",
+  openai: "frontier",
+  gemini: "frontier",
+  // litellm proxies many providers — can't infer tier without model metadata.
+  // Defer to "unknown" until the community profile API has enough data.
+};
+
 /**
  * Look up a model by ID. Resolution order:
  * 1. Exact match in built-in registry
  * 2. Prefix match in built-in registry (e.g. "claude-sonnet-4-20250514" matches "claude-sonnet-4")
  * 3. Exact match in overrides
- * 4. Safe defaults
+ * 4. Provider-derived tier (ollama → local, anthropic/openai/gemini → frontier)
+ * 5. Safe defaults (tier: "unknown")
  */
 export function lookupModel(
   id: string,
   overrides?: Record<string, ModelRegistryEntry>,
+  providerName?: string,
 ): ModelRegistryEntry {
   // 1. Exact match
   if (MODEL_REGISTRY[id]) return MODEL_REGISTRY[id]!;
@@ -57,6 +69,12 @@ export function lookupModel(
   // 3. Overrides
   if (overrides?.[id]) return overrides[id]!;
 
-  // 4. Defaults
+  // 4. Provider-derived tier
+  if (providerName) {
+    const tier = PROVIDER_TIER[providerName.toLowerCase()];
+    if (tier) return { ...DEFAULT_ENTRY, tier };
+  }
+
+  // 5. Defaults
   return DEFAULT_ENTRY;
 }

@@ -29,4 +29,35 @@ describe("model registry", () => {
     expect(entry.tier).toBe("local");
     expect(entry.contextLimit).toBe(8192);
   });
+
+  test("provider-derived tier: ollama → local", () => {
+    const entry = lookupModel("some-new-ollama-model:7b", undefined, "ollama");
+    expect(entry.tier).toBe("local");
+  });
+
+  test("provider-derived tier: anthropic → frontier", () => {
+    const entry = lookupModel("claude-future-model", undefined, "anthropic");
+    expect(entry.tier).toBe("frontier");
+  });
+
+  test("provider-derived tier: openai → frontier", () => {
+    const entry = lookupModel("gpt-5-turbo", undefined, "openai");
+    expect(entry.tier).toBe("frontier");
+  });
+
+  test("provider-derived tier: gemini → frontier", () => {
+    const entry = lookupModel("gemini-3-flash", undefined, "gemini");
+    expect(entry.tier).toBe("frontier");
+  });
+
+  test("provider-derived tier: litellm → unknown (deferred)", () => {
+    const entry = lookupModel("litellm-proxy-model", undefined, "litellm");
+    expect(entry.tier).toBe("unknown");
+  });
+
+  test("registry match takes priority over provider fallback", () => {
+    // cogito:14b is in registry as "local" — passing "anthropic" as provider shouldn't change it
+    const entry = lookupModel("cogito:14b", undefined, "anthropic");
+    expect(entry.tier).toBe("local");
+  });
 });
