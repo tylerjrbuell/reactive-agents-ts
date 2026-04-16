@@ -14,6 +14,7 @@ import { Schema } from "effect";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import type { ProviderAdapter } from "./adapter.js";
+import { resolveCalibration } from "@reactive-agents/reactive-intelligence";
 
 /**
  * Structural shape for ContextProfile fields that calibration may override.
@@ -162,4 +163,41 @@ export function buildCalibratedAdapter(
   };
 
   return { adapter, profileOverrides };
+}
+
+// ── Resolver ──────────────────────────────────────────────────────────────────
+
+export interface ResolveModelCalibrationOptions {
+  readonly communityProfile?: Partial<ModelCalibration>;
+  readonly observationsBaseDir?: string;
+}
+
+/**
+ * Load the shipped prior for the given model and merge it with the community
+ * profile (when supplied) and local observations. Returns undefined when no
+ * prior is found AND no override data is available.
+ */
+export function resolveModelCalibration(
+  modelId: string,
+  opts: ResolveModelCalibrationOptions = {},
+): ModelCalibration | undefined {
+  const prior = loadCalibration(modelId);
+  if (!prior && !opts.communityProfile) return undefined;
+
+  const base: ModelCalibration = prior ?? {
+    modelId,
+    calibratedAt: new Date().toISOString(),
+    probeVersion: 0,
+    runsAveraged: 0,
+    steeringCompliance: "hybrid",
+    parallelCallCapability: "partial",
+    observationHandling: "needs-inline-facts",
+    systemPromptAttention: "moderate",
+    optimalToolResultChars: 1200,
+  };
+
+  return resolveCalibration(base, {
+    communityProfile: opts.communityProfile,
+    observationsBaseDir: opts.observationsBaseDir,
+  });
 }

@@ -30,7 +30,7 @@ import type { AgentEvent, KernelStateLike } from "@reactive-agents/core";
 import { synthesizeDebrief, type DebriefInput, type AgentDebrief } from "./debrief.js";
 import { DebriefStoreService, PlanStoreService, ProceduralMemoryService } from "@reactive-agents/memory";
 import { TelemetryClient as TelemetryClientImpl, classifyTaskCategory as classifyTaskCategoryFn, lookupModel as lookupModelFn, skillFragmentToProceduralEntry } from "@reactive-agents/reactive-intelligence";
-import { recommendStrategyForTier, loadCalibration } from "@reactive-agents/llm-provider";
+import { recommendStrategyForTier, resolveModelCalibration } from "@reactive-agents/llm-provider";
 import type { ModelCalibration } from "@reactive-agents/llm-provider";
 import { buildTrajectoryFingerprint, abstractifyToolName, firstConvergenceIteration, peakContextPressure, deriveTaskComplexity, deriveFailurePattern, deriveThoughtToActionRatio } from "./telemetry-enrichment.js";
 import { resolveSynthesisConfigForStrategy } from "./synthesis-resolve.js";
@@ -1250,7 +1250,9 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 const resolvedCalibration: ModelCalibration | undefined = (() => {
                   const cal = config.calibration;
                   if (!cal || cal === "skip") return undefined;
-                  if (cal === "auto") return loadCalibration(String(config.defaultModel ?? ""));
+                  if (cal === "auto") return resolveModelCalibration(String(config.defaultModel ?? ""), {
+                    observationsBaseDir: process.env["REACTIVE_AGENTS_OBSERVATIONS_DIR"],
+                  });
                   return cal as ModelCalibration;
                 })();
 
