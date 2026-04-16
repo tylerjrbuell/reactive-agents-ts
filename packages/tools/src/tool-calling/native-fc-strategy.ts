@@ -7,12 +7,84 @@ import type {
     ResolverToolHint,
 } from './types.js'
 
+export type DialectObserved =
+    | 'native-fc'
+    | 'fenced-json'
+    | 'pseudo-code'
+    | 'nameless-shape'
+    | 'none'
+
 export class NativeFCStrategy implements ToolCallResolver {
     resolve(
         response: ResolverInput,
         availableTools: readonly ResolverToolHint[]
     ): Effect.Effect<ToolCallResult, never> {
         return Effect.succeed(this.extract(response, availableTools))
+    }
+
+    resolveWithDialect(
+        response: ResolverInput,
+        availableTools: readonly ResolverToolHint[],
+    ): Effect.Effect<{ result: ToolCallResult; dialect: DialectObserved }, never> {
+        return Effect.succeed(this.extractWithDialect(response, availableTools))
+    }
+
+    private extractWithDialect(
+        response: ResolverInput,
+        availableTools: readonly ResolverToolHint[],
+    ): { result: ToolCallResult; dialect: DialectObserved } {
+        const toolNames = new Set(availableTools.map((t) => t.name))
+        const enforceToolNames = toolNames.size > 0
+
+        // Tier 1: Native FC tool_calls
+        const calls = response.toolCalls
+        if (calls && calls.length > 0) {
+            const result = this.extract(response, availableTools)
+            if (result._tag === 'tool_calls') {
+                return { result, dialect: 'native-fc' }
+            }
+            // Native calls present but all unresolved → fall through to text fallbacks
+        }
+
+        const content = response.content ?? ''
+        if (content.trim().length > 0) {
+            // Tier 2: Fenced JSON (with name field) or nameless-shape fallback —
+            // both go through extractTextToolCalls; distinguish by spec.id prefix.
+            const textSpecs = extractTextToolCalls(content, availableTools)
+            if (textSpecs.length > 0) {
+                const hasShapeMatch = textSpecs.some((s) =>
+                    s.id.startsWith('shape_')
+                )
+                const dialect: DialectObserved = hasShapeMatch
+                    ? 'nameless-shape'
+                    : 'fenced-json'
+                return {
+                    result: {
+                        _tag: 'tool_calls',
+                        calls: textSpecs,
+                        thinking: undefined,
+                    },
+                    dialect,
+                }
+            }
+
+            // Tier 3: Pseudo-code tool-name(args) syntax
+            const pseudo = extractPseudoCodeToolCalls(content, availableTools)
+            if (pseudo.length > 0) {
+                return {
+                    result: {
+                        _tag: 'tool_calls',
+                        calls: pseudo,
+                        thinking: undefined,
+                    },
+                    dialect: 'pseudo-code',
+                }
+            }
+        }
+
+        // No tool calls detected
+        const baseResult = this.extract(response, availableTools)
+        return { result: baseResult, dialect: 'none' }
     }
 
     private extract(
