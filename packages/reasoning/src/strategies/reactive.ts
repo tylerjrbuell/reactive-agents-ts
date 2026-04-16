@@ -232,6 +232,9 @@ export const executeReactive = (
         ...(state.meta.finalAnswerCapture !== undefined
           ? { finalAnswerCapture: state.meta.finalAnswerCapture }
           : {}),
+        ...(state.meta.lastDialectObserved !== undefined
+          ? { lastDialectObserved: state.meta.lastDialectObserved }
+          : {}),
       },
     });
   });

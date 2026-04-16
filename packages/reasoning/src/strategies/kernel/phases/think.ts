@@ -542,13 +542,31 @@ export function handleThinking(
         stopReason: accumulatedStopReason,
       };
 
-      const resolverResult = yield* resolver.resolve(
-        resolverInput,
-        effectiveSchemas.map((ts) => ({
-          name: ts.name,
-          paramNames: ts.parameters?.map((p) => p.name) ?? [],
-        })),
-      );
+      // Use resolveWithDialect to capture which tier fired (native-fc / fenced-json / pseudo-code / etc.)
+      const resolverWithDialect = (resolver as any).resolveWithDialect
+        ? (resolver as any).resolveWithDialect(
+            resolverInput,
+            effectiveSchemas.map((ts) => ({
+              name: ts.name,
+              paramNames: ts.parameters?.map((p) => p.name) ?? [],
+            })),
+          )
+        : resolver.resolve(
+            resolverInput,
+            effectiveSchemas.map((ts) => ({
+              name: ts.name,
+              paramNames: ts.parameters?.map((p) => p.name) ?? [],
+            })),
+          ).pipe(Effect.map((result) => ({ result, dialect: "none" as const })));
+
+      const { result: resolverResult, dialect: dialectObserved } = yield* resolverWithDialect;
+
+      // Record dialect on state.meta for telemetry
+      if (dialectObserved !== "none") {
+        state = transitionState(state, {
+          meta: { ...state.meta, lastDialectObserved: dialectObserved },
+        });
+      }
 
       if (resolverResult._tag === "tool_calls") {
         const rawCalls = resolverResult.calls as readonly ToolCallSpec[];

@@ -3413,6 +3413,10 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 const terminatedByRaw = (rr?.metadata?.terminatedBy ?? "end_turn") as
                   "final_answer_tool" | "final_answer" | "max_iterations" | "end_turn" | "llm_error";
 
+                // Extract dialect from reasoning metadata (set by Task 13 resolver threading)
+                const dialectObserved = ((rr as any)?.metadata?.lastDialectObserved ?? "none") as
+                  "native-fc" | "fenced-json" | "pseudo-code" | "nameless-shape" | "none";
+
                 // Reactive strategy often reports partial + max_iterations whenever the kernel did not
                 // reach state "done", even if the last LLM turn produced a usable string. Treat
                 // completed, or partial with non-empty output, as success; empty partial as failure.
@@ -3756,6 +3760,8 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         subagentInvocations,
                         // Tool argument validity rate (Task 16)
                         toolArgValidityRate,
+                        // Resolver dialect tier (Task 13)
+                        toolCallDialectObserved: dialectObserved,
                       });
 
                       // After client.send({...}) completes, persist a local observation (best-effort, never blocks).
@@ -3767,7 +3773,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                             toolName: t.toolName,
                           })),
                           totalTurns: ctx.iteration,
-                          dialect: "none", // set by Task 13 once resolver reports which tier fired
+                          dialect: dialectObserved,
                           classifierRequired: effectiveRequiredTools ?? [],
                           classifierActuallyCalled: toolsUsed,
                           subagentInvoked: subagentInvocations.length,

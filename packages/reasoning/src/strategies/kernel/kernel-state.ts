@@ -134,6 +134,10 @@ export interface KernelMeta {
   // ── Final answer ──
   readonly finalAnswerCapture?: FinalAnswerCapture;
 
+  // ── Resolver dialect telemetry ──
+  /** Which resolver dialect tier fired for the most recent tool call (if any). */
+  readonly lastDialectObserved?: string;
+
 }
 
 // ── KernelState — Immutable, serializable reasoning state ────────────────────
