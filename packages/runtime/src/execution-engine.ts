@@ -35,6 +35,10 @@ import type { ModelCalibration } from "@reactive-agents/llm-provider";
 import { buildTrajectoryFingerprint, abstractifyToolName, firstConvergenceIteration, peakContextPressure, deriveTaskComplexity, deriveFailurePattern, deriveThoughtToActionRatio } from "./telemetry-enrichment.js";
 import { resolveSynthesisConfigForStrategy } from "./synthesis-resolve.js";
 import { formatTaskContextForChat } from "./chat.js";
+import {
+  persistRunObservation,
+  buildRunObservation,
+} from "./observers/run-observer.js";
 
 // ─── Narrow service types for optional deps ───
 
@@ -3707,6 +3711,29 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         failurePattern,
                         thoughtToActionRatio,
                       });
+
+                      // After client.send({...}) completes, persist a local observation (best-effort, never blocks).
+                      try {
+                        const observation = buildRunObservation({
+                          modelId,
+                          toolCallLog: toolCallLog.map((t, idx) => ({
+                            turn: idx,
+                            toolName: t.toolName,
+                          })),
+                          totalTurns: ctx.iteration,
+                          dialect: "none", // set by Task 13 once resolver reports which tier fired
+                          classifierRequired: effectiveRequiredTools ?? [],
+                          classifierActuallyCalled: toolsUsed,
+                          subagentInvoked: 0, // set by Task 15
+                          subagentSucceeded: 0, // set by Task 15
+                          argValidityRate: 1.0, // set by Task 16
+                        });
+                        persistRunObservation(modelId, observation, {
+                          baseDir: process.env["REACTIVE_AGENTS_OBSERVATIONS_DIR"],
+                        });
+                      } catch {
+                        // Observer failure must not affect the run
+                      }
                     }
                   } catch {
                     // Telemetry must never affect agent — silent failure
