@@ -58,6 +58,12 @@ export const ModelCalibrationSchema = Schema.Struct({
 
   /** Optimal chars per tool result before hallucination starts */
   optimalToolResultChars: Schema.Number,
+
+  /** Derived from observed classifier false-positive rate. "low" → skip the classifier LLM call. */
+  classifierReliability: Schema.optionalWith(
+    Schema.Literal("high", "low", "skip"),
+    { exact: true },
+  ),
 });
 
 export type ModelCalibration = typeof ModelCalibrationSchema.Type;

@@ -27,6 +27,19 @@ export function mergeObservationsIntoPrior(
     next = { ...next, parallelCallCapability: parallelCapability };
   }
 
+  // ── classifierReliability: derived from false-positive rate across runs ──
+  // A "false positive" run = classifier required a tool that was never called.
+  const falsePositiveRuns = observations.runs.filter((r) => {
+    if (r.classifierRequired.length === 0) return false;
+    const called = new Set(r.classifierActuallyCalled);
+    return r.classifierRequired.some((name) => !called.has(name));
+  }).length;
+  const falsePositiveRate = falsePositiveRuns / observations.runs.length;
+  const reliability: "high" | "low" = falsePositiveRate >= 0.4 ? "low" : "high";
+  if (reliability !== prior.classifierReliability) {
+    next = next === prior ? { ...prior, classifierReliability: reliability } : { ...next, classifierReliability: reliability };
+  }
+
   return next;
 }
 
