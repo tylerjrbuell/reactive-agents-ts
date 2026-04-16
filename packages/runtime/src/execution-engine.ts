@@ -40,6 +40,7 @@ import {
   buildRunObservation,
   countParallelTurnsFromLog,
 } from "./observers/run-observer.js";
+import { diffClassifierAccuracy } from "./classifier-accuracy.js";
 
 // ─── Narrow service types for optional deps ───
 
@@ -3686,6 +3687,11 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       const reasoningStepsForTelemetry = ((ctx.metadata as any)?.reasoningSteps ?? []) as Array<{ type: string }>;
                       const thoughtToActionRatio = deriveThoughtToActionRatio(reasoningStepsForTelemetry, toolCallLog.length);
 
+                      const classifierAcc = diffClassifierAccuracy(
+                        effectiveRequiredTools ?? [],
+                        toolCallLog.map((e) => e.toolName),
+                      );
+
                       client.send({
                         id: ctx.taskId,
                         installId: client.getInstallId(),
@@ -3725,6 +3731,9 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                             toolName: t.toolName,
                           })),
                         ),
+                        // Classifier accuracy diff (Task 14)
+                        classifierFalsePositives: classifierAcc.falsePositives,
+                        classifierFalseNegatives: classifierAcc.falseNegatives,
                       });
 
                       // After client.send({...}) completes, persist a local observation (best-effort, never blocks).
