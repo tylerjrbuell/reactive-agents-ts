@@ -33,6 +33,7 @@ import { TelemetryClient as TelemetryClientImpl, classifyTaskCategory as classif
 import { recommendStrategyForTier, resolveModelCalibration } from "@reactive-agents/llm-provider";
 import type { ModelCalibration } from "@reactive-agents/llm-provider";
 import { buildTrajectoryFingerprint, abstractifyToolName, firstConvergenceIteration, peakContextPressure, deriveTaskComplexity, deriveFailurePattern, deriveThoughtToActionRatio, entropyVariance, entropyOscillationCount, finalCompositeEntropy, entropyAreaUnderCurve } from "./telemetry-enrichment.js";
+import { literalMentionRequired } from "./classifier-bypass.js";
 import { resolveSynthesisConfigForStrategy } from "./synthesis-resolve.js";
 import { formatTaskContextForChat } from "./chat.js";
 import {
@@ -1080,15 +1081,48 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
 
                 // ── Phase 5: AGENT_LOOP ──
 
+                // Resolve CalibrationMode → ModelCalibration | undefined once.
+                // Placed here (before classifier gate) so classifierReliability is available.
+                // Also shared by all three execute() call sites below.
+                const resolvedCalibration: ModelCalibration | undefined = (() => {
+                  const cal = config.calibration;
+                  if (!cal || cal === "skip") return undefined;
+                  if (cal === "auto") return resolveModelCalibration(String(config.defaultModel ?? ""), {
+                    observationsBaseDir: process.env["REACTIVE_AGENTS_OBSERVATIONS_DIR"],
+                  });
+                  return cal as ModelCalibration;
+                })();
+
                 // ── LLM-based tool classification (required + relevant) ──
                 // Single structured-output call replaces both heuristic required-tools
                 // inference and adaptive tool filtering. Semantic understanding > keywords.
                 let effectiveRequiredTools = config.requiredTools?.tools;
                 let effectiveRequiredToolQuantities: Readonly<Record<string, number>> | undefined;
                 let classifiedRelevantTools: readonly string[] | undefined;
-                const needsClassification =
+                const classifierReliability = resolvedCalibration?.classifierReliability;
+                const wantsClassification =
                   (config.requiredTools?.adaptive && !config.requiredTools?.tools?.length) ||
                   config.adaptiveToolFiltering;
+                const needsClassification =
+                  classifierReliability !== "low" && classifierReliability !== "skip" &&
+                  wantsClassification;
+
+                // Heuristic fallback when classifier reliability is "low":
+                // extract literal tool-name mentions from the task text instead of
+                // spending an LLM round-trip on a classifier that has a high false-positive rate.
+                if (!needsClassification && classifierReliability === "low" && wantsClassification) {
+                  const taskText = extractTaskText(task.input);
+                  const allToolNames = (cachedToolDefs ?? []).map((t: any) => t.name as string);
+                  const literalMentions = literalMentionRequired(taskText, allToolNames);
+                  if (literalMentions.length > 0) {
+                    effectiveRequiredTools = [...literalMentions];
+                    if (obs && isNormal) {
+                      yield* obs.info(`◉ [classify]   skipped (reliability=low); literal mentions: ${literalMentions.join(", ")}`)
+                        .pipe(Effect.catchAll(() => Effect.void));
+                    }
+                  }
+                }
+
                 if (needsClassification) {
                   const classifyResult = yield* classifyToolRelevance({
                     taskDescription: extractTaskText(task.input),
@@ -1248,17 +1282,6 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     }>;
                   }>("ReasoningService"),
                 );
-
-                // Resolve CalibrationMode → ModelCalibration | undefined once.
-                // Shared by all three execute() call sites: main, customTermination, minIterations.
-                const resolvedCalibration: ModelCalibration | undefined = (() => {
-                  const cal = config.calibration;
-                  if (!cal || cal === "skip") return undefined;
-                  if (cal === "auto") return resolveModelCalibration(String(config.defaultModel ?? ""), {
-                    observationsBaseDir: process.env["REACTIVE_AGENTS_OBSERVATIONS_DIR"],
-                  });
-                  return cal as ModelCalibration;
-                })();
 
                 if (reasoningOpt._tag === "Some" && !cacheHit) {
                   // ── Full reasoning path ──
