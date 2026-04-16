@@ -41,6 +41,7 @@ import {
   countParallelTurnsFromLog,
 } from "./observers/run-observer.js";
 import { diffClassifierAccuracy } from "./classifier-accuracy.js";
+import { isSubagentCall } from "./subagent-telemetry.js";
 
 // ─── Narrow service types for optional deps ───
 
@@ -3692,6 +3693,13 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         toolCallLog.map((e) => e.toolName),
                       );
 
+                      // Derive subagent invocations from toolCallLog.
+                      // Custom agent tool names come from the builder's agentTools config.
+                      const customAgentToolNames = (config as any).agentToolNames ?? [];
+                      const subagentInvocations = toolCallLog
+                        .filter((e) => isSubagentCall(e.toolName, customAgentToolNames))
+                        .map((e) => ({ delegated: true, succeeded: e.success }));
+
                       client.send({
                         id: ctx.taskId,
                         installId: client.getInstallId(),
@@ -3734,6 +3742,8 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         // Classifier accuracy diff (Task 14)
                         classifierFalsePositives: classifierAcc.falsePositives,
                         classifierFalseNegatives: classifierAcc.falseNegatives,
+                        // Subagent invocation outcomes (Task 15)
+                        subagentInvocations,
                       });
 
                       // After client.send({...}) completes, persist a local observation (best-effort, never blocks).
@@ -3748,8 +3758,8 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                           dialect: "none", // set by Task 13 once resolver reports which tier fired
                           classifierRequired: effectiveRequiredTools ?? [],
                           classifierActuallyCalled: toolsUsed,
-                          subagentInvoked: 0, // set by Task 15
-                          subagentSucceeded: 0, // set by Task 15
+                          subagentInvoked: subagentInvocations.length,
+                          subagentSucceeded: subagentInvocations.filter((x) => x.succeeded).length,
                           argValidityRate: 1.0, // set by Task 16
                         });
                         persistRunObservation(modelId, observation, {
