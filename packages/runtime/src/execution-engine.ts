@@ -42,6 +42,7 @@ import {
 } from "./observers/run-observer.js";
 import { diffClassifierAccuracy } from "./classifier-accuracy.js";
 import { isSubagentCall } from "./subagent-telemetry.js";
+import { computeArgValidityRate } from "./arg-validity.js";
 
 // ─── Narrow service types for optional deps ───
 
@@ -3700,6 +3701,15 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         .filter((e) => isSubagentCall(e.toolName, customAgentToolNames))
                         .map((e) => ({ delegated: true, succeeded: e.success }));
 
+                      // ToolCallCompleted events don't carry arguments — emit 1.0 as safe default.
+                      // TODO: pipe arguments through ToolCallCompleted event to enable real scoring.
+                      const toolArgValidityRate = computeArgValidityRate(
+                        toolCallLog.map((e) => ({
+                          toolName: e.toolName,
+                          arguments: (e as any).arguments ?? {},
+                        })),
+                      );
+
                       client.send({
                         id: ctx.taskId,
                         installId: client.getInstallId(),
@@ -3744,6 +3754,8 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         classifierFalseNegatives: classifierAcc.falseNegatives,
                         // Subagent invocation outcomes (Task 15)
                         subagentInvocations,
+                        // Tool argument validity rate (Task 16)
+                        toolArgValidityRate,
                       });
 
                       // After client.send({...}) completes, persist a local observation (best-effort, never blocks).
@@ -3760,7 +3772,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                           classifierActuallyCalled: toolsUsed,
                           subagentInvoked: subagentInvocations.length,
                           subagentSucceeded: subagentInvocations.filter((x) => x.succeeded).length,
-                          argValidityRate: 1.0, // set by Task 16
+                          argValidityRate: toolArgValidityRate,
                         });
                         persistRunObservation(modelId, observation, {
                           baseDir: process.env["REACTIVE_AGENTS_OBSERVATIONS_DIR"],
