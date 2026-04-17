@@ -7,6 +7,8 @@ export type {
   AgentStateSnapshot,
   ToolMetric,
   ToolMetricStatus,
+  LogEvent,
+  RunSummary,
 } from "./types.js";
 export {
   LogLevel,
@@ -18,6 +20,8 @@ export {
   AgentStateSnapshotSchema,
   ToolMetricSchema,
   ToolMetricStatusSchema,
+  LogEventSchema,
+  RunSummarySchema,
 } from "./types.js";
 
 // ─── Errors ───
@@ -34,6 +38,8 @@ export { createProgressLogger, ProgressLogger } from "./logging/progress-logger.
 export type { IterationProgress } from "./logging/progress-logger.js";
 export { makeLoggerService } from "./logging/logger-service.js";
 export type { LoggerService, LoggingConfig } from "./logging/logger-service.js";
+export { makeObservableLogger, ObservableLogger } from "./logging/observable-logger.js";
+export type { ObservableLogger as ObservableLoggerService } from "./logging/observable-logger.js";
 
 // ─── Metrics ───
 export { makeMetricsCollector, MetricsCollectorTag, MetricsCollectorLive } from "./metrics/metrics-collector.js";
