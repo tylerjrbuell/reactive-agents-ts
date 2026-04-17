@@ -4,6 +4,13 @@ import { ToolExecutionError } from "../errors.js";
 
 const COINGECKO_RETRY_ATTEMPTS = 3;
 const COINGECKO_RETRY_BASE_MS = 2_000;
+const CACHE_TTL_MS = 60_000;
+
+// Module-level price cache — keyed by currency. One bulk fetch populates all coins.
+const priceCache = new Map<string, { data: Record<string, number>; fetchedAt: number }>();
+
+/** Exported for tests only — clears the price cache between test cases. */
+export function clearPriceCache(): void { priceCache.clear(); }
 
 async function geckoFetchWithRetry(url: string): Promise<Response> {
   let last: Response | undefined;
@@ -16,6 +23,37 @@ async function geckoFetchWithRetry(url: string): Promise<Response> {
     }
   }
   return last!;
+}
+
+/**
+ * Fetch prices for ALL known coins in one CoinGecko call and cache them.
+ * Subsequent calls within CACHE_TTL_MS return immediately from cache.
+ */
+async function getPricesFromCache(currency: string): Promise<Record<string, number>> {
+  const cached = priceCache.get(currency);
+  if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) {
+    return cached.data;
+  }
+
+  const allIds = [...new Set(Object.values(COIN_MAP).map((c) => c.id))].join(",");
+  const url = new URL("https://api.coingecko.com/api/v3/simple/price");
+  url.searchParams.set("ids", allIds);
+  url.searchParams.set("vs_currencies", currency);
+
+  const response = await geckoFetchWithRetry(url.toString());
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw new Error(`CoinGecko returned HTTP ${response.status}: ${text.slice(0, 200)}`);
+  }
+
+  const raw = (await response.json()) as Record<string, Record<string, number>>;
+  const flat: Record<string, number> = {};
+  for (const [id, vals] of Object.entries(raw)) {
+    if (typeof vals[currency] === "number") flat[id] = vals[currency];
+  }
+
+  priceCache.set(currency, { data: flat, fetchedAt: Date.now() });
+  return flat;
 }
 
 // CoinGecko IDs for common coins — symbol → { id, name }
@@ -112,30 +150,14 @@ export const cryptoPriceHandler = (
       const known = requested.filter((sym) => sym in COIN_MAP);
       const unknown = requested.filter((sym) => !(sym in COIN_MAP));
 
-      let geckoData: Record<string, Record<string, number>> = {};
-
-      if (known.length > 0) {
-        const ids = [...new Set(known.map((sym) => COIN_MAP[sym]!.id))].join(",");
-        const url = new URL("https://api.coingecko.com/api/v3/simple/price");
-        url.searchParams.set("ids", ids);
-        url.searchParams.set("vs_currencies", currency);
-
-        const response = await geckoFetchWithRetry(url.toString());
-
-        if (!response.ok) {
-          const text = await response.text().catch(() => "");
-          throw new Error(`CoinGecko returned HTTP ${response.status}: ${text.slice(0, 200)}`);
-        }
-
-        geckoData = (await response.json()) as Record<string, Record<string, number>>;
-      }
+      const geckoData = known.length > 0 ? await getPricesFromCache(currency) : {};
 
       const prices: CryptoPriceRow[] = [
         ...requested
           .filter((sym) => sym in COIN_MAP)
           .map((sym) => {
             const info = COIN_MAP[sym]!;
-            const price = geckoData[info.id]?.[currency] ?? null;
+            const price = geckoData[info.id] ?? null;
             return { symbol: sym, name: info.name, price, currency };
           }),
         ...unknown.map((sym) => ({

@@ -1,12 +1,13 @@
 import { describe, it, expect, afterEach } from "bun:test";
 import { Effect } from "effect";
-import { cryptoPriceHandler } from "../../src/skills/crypto-price.js";
+import { cryptoPriceHandler, clearPriceCache } from "../../src/skills/crypto-price.js";
 import { ToolExecutionError } from "../../src/errors.js";
 
 const originalFetch = globalThis.fetch;
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
+  clearPriceCache();
 });
 
 function mockCoinGecko(prices: Record<string, Record<string, number>>, status = 200) {
@@ -73,6 +74,24 @@ describe("cryptoPriceHandler", () => {
     const fake = result.prices.find((p) => p.symbol === "FAKECOIN");
     expect(fake?.price).toBeNull();
     expect(fake?.notFound).toBe(true);
+  });
+
+  it("makes only one CoinGecko request even when called 4 times separately", async () => {
+    let fetchCount = 0;
+    globalThis.fetch = (async () => {
+      fetchCount++;
+      return new Response(
+        JSON.stringify({ bitcoin: { usd: 77000 }, ripple: { usd: 1.5 }, ethereum: { usd: 2300 }, stellar: { usd: 0.1 } }),
+        { status: 200 },
+      );
+    }) as typeof fetch;
+
+    await Effect.runPromise(cryptoPriceHandler({ coins: ["BTC"] }));
+    await Effect.runPromise(cryptoPriceHandler({ coins: ["XRP"] }));
+    await Effect.runPromise(cryptoPriceHandler({ coins: ["ETH"] }));
+    await Effect.runPromise(cryptoPriceHandler({ coins: ["XLM"] }));
+
+    expect(fetchCount).toBe(1);
   });
 
   it("retries on 429 and succeeds on second attempt", async () => {
