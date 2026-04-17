@@ -415,6 +415,48 @@ export const ReactiveAgentsConfigSchema = Schema.Struct({
   synthesisConfig: Schema.optional(SynthesisConfigJsonSchema),
   /** Resolved Conductor's Suite payload for the reasoning kernel (after harness resolution). */
   metaTools: Schema.optional(KernelMetaToolsSchema),
+  /** Logging configuration for execution observability */
+  logging: Schema.optional(
+    Schema.Struct({
+      /**
+       * Stream events in real-time (true) or buffer until end (false).
+       * Default: true
+       */
+      live: Schema.optional(Schema.Boolean),
+
+      /**
+       * Minimum log level to emit: 'debug' | 'info' | 'warn' | 'error'
+       * Default: 'info'
+       */
+      minLevel: Schema.optional(
+        Schema.Union(
+          Schema.Literal("debug"),
+          Schema.Literal("info"),
+          Schema.Literal("warn"),
+          Schema.Literal("error"),
+        ),
+      ),
+
+      /**
+       * Output destinations for logs.
+       * Default: ['console']
+       */
+      destinations: Schema.optional(
+        Schema.Array(
+          Schema.Union(
+            Schema.Literal("console"),
+            Schema.Literal("file"),
+            Schema.Literal("custom"),
+          ),
+        ),
+      ),
+
+      /**
+       * File path if 'file' is in destinations.
+       */
+      filePath: Schema.optional(Schema.String),
+    }),
+  ),
 });
 
 /**
@@ -448,6 +490,33 @@ export type ReactiveAgentsConfig = Schema.Schema.Type<typeof ReactiveAgentsConfi
    * and forwarded to the kernel for steering channel selection and context tuning.
    */
   readonly calibration?: CalibrationMode;
+  /**
+   * Logging configuration for execution observability
+   */
+  readonly logging?: {
+    /**
+     * Stream events in real-time (true) or buffer until end (false).
+     * Default: true
+     */
+    readonly live?: boolean;
+
+    /**
+     * Minimum log level to emit: 'debug' | 'info' | 'warn' | 'error'
+     * Default: 'info'
+     */
+    readonly minLevel?: "debug" | "info" | "warn" | "error";
+
+    /**
+     * Output destinations for logs.
+     * Default: ['console']
+     */
+    readonly destinations?: Array<"console" | "file" | "custom">;
+
+    /**
+     * File path if 'file' is in destinations.
+     */
+    readonly filePath?: string;
+  };
 };
 
 /**
