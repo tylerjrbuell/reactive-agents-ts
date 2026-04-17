@@ -325,9 +325,14 @@ function heuristicClassify(input: AdaptiveInput): SubStrategy | null {
   // Numbered lists (1. ... 2. ... or "steps: ") → plan-execute
   if (/\b\d+\.\s/.test(task) || /steps?:/i.test(task)) return "plan-execute-reflect";
 
-  // Exploration/comparison patterns → tree-of-thought
+  // Knowledge/explanation tasks with "trade-off" language stay reactive —
+  // "explain X with trade-offs" is recall, not exploration.
+  const knowledgePrefix = /^(explain|describe|what (is|are|was|were)|define|how does|tell me about)\b/i;
+  const isKnowledgeTask = knowledgePrefix.test(task.trim()) && !hasTools;
+
+  // Exploration/comparison patterns → tree-of-thought (skip for knowledge tasks)
   const totPatterns = /\b(compare|alternative|explore|brainstorm|creative|different (ways|approach|solution)|pros and cons|trade-?offs?)\b/i;
-  if (totPatterns.test(task)) return "tree-of-thought";
+  if (totPatterns.test(task) && !isKnowledgeTask) return "tree-of-thought";
 
   // Quality/iteration patterns → reflexion
   const reflexionPatterns = /\b(review|critique|improve|refine|iterate|polish|rewrite|fix (and )?check|self-assess)\b/i;

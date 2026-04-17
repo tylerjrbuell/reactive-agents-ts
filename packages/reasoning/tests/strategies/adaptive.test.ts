@@ -70,6 +70,77 @@ describe("AdaptiveStrategy", () => {
     expect(adaptiveStep!.content).toContain("reactive");
   });
 
+  it("routes 'explain X with trade-offs' to reactive, not tree-of-thought", async () => {
+    // "trade-offs" in the task description was matching the ToT heuristic pattern,
+    // causing the adaptive strategy to select tree-of-thought for pure knowledge tasks.
+    // Knowledge/explanation tasks should always route to reactive when no tools are needed.
+    const layer = TestLLMServiceLayer([
+      { match: ".", text: "FINAL ANSWER: The CAP theorem states that a distributed system can only guarantee two of: Consistency, Availability, Partition tolerance." },
+    ]);
+
+    const program = executeAdaptive({
+      taskDescription: "Explain the CAP theorem and give a concrete real-world example of each of the three trade-offs.",
+      taskType: "explanation",
+      memoryContext: "",
+      availableTools: [],
+      config: defaultReasoningConfig,
+    });
+
+    const result = await Effect.runPromise(
+      program.pipe(Effect.provide(layer)),
+    );
+
+    const adaptiveStep = result.steps.find((s) => s.content.includes("[ADAPTIVE]"));
+    expect(adaptiveStep?.content).toContain("reactive");
+    expect(result.status).toBe("completed");
+  });
+
+  it("routes 'describe X with pros and cons' to reactive when task begins with knowledge keyword", async () => {
+    const layer = TestLLMServiceLayer([
+      { match: ".", text: "FINAL ANSWER: React pros: fast, component-based. Cons: complex state management." },
+    ]);
+
+    const program = executeAdaptive({
+      taskDescription: "Describe React and list the pros and cons of using it.",
+      taskType: "explanation",
+      memoryContext: "",
+      availableTools: [],
+      config: defaultReasoningConfig,
+    });
+
+    const result = await Effect.runPromise(
+      program.pipe(Effect.provide(layer)),
+    );
+
+    const adaptiveStep = result.steps.find((s) => s.content.includes("[ADAPTIVE]"));
+    expect(adaptiveStep?.content).toContain("reactive");
+    expect(result.status).toBe("completed");
+  });
+
+  it("still routes genuine exploration tasks to tree-of-thought", async () => {
+    // "compare alternatives" without explanation prefix should still go to ToT
+    const layer = TestLLMServiceLayer([
+      { match: ".", text: "FINAL ANSWER: Option A is better." },
+    ]);
+
+    const program = executeAdaptive({
+      taskDescription: "Compare alternative approaches to state management in React: Redux vs Zustand vs Context API. Explore the trade-offs.",
+      taskType: "analysis",
+      memoryContext: "",
+      availableTools: [],
+      config: defaultReasoningConfig,
+    });
+
+    const result = await Effect.runPromise(
+      program.pipe(Effect.provide(layer)),
+    );
+
+    const adaptiveStep = result.steps.find((s) => s.content.includes("[ADAPTIVE]"));
+    // "compare" + "alternative" + "trade-offs" → tree-of-thought
+    expect(adaptiveStep?.content).toContain("tree-of-thought");
+    expect(result.status).toBe("completed");
+  });
+
   it("should include past experience in analysis when provided", async () => {
     // We capture the LLM request to verify past experience is included in the prompt
     let capturedPrompt = "";

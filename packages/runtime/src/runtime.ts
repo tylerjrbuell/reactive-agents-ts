@@ -1297,6 +1297,9 @@ export const createRuntime = (options: RuntimeOptions) => {
             reactive: {
               ...defaultReasoningConfig.strategies.reactive,
               ...withoutStrategyIcsOverrides(options.reasoningOptions.strategies?.reactive),
+              ...(options.maxIterations !== undefined
+                ? { maxIterations: options.maxIterations }
+                : {}),
               ...(options.reasoningOptions.parallelToolCalls === false
                 ? { nextMovesPlanning: { ...defaultReasoningConfig.strategies.reactive.nextMovesPlanning, enabled: false } }
                 : {}),
@@ -1803,6 +1806,9 @@ export const createLightRuntime = (options: LightRuntimeOptions) => {
             reactive: {
               ...defaultReasoningConfig.strategies.reactive,
               ...withoutStrategyIcsOverrides(options.reasoningOptions.strategies?.reactive),
+              ...(options.maxIterations !== undefined
+                ? { maxIterations: options.maxIterations }
+                : {}),
               ...(options.reasoningOptions.parallelToolCalls === false
                 ? { nextMovesPlanning: { ...defaultReasoningConfig.strategies.reactive.nextMovesPlanning, enabled: false } }
                 : {}),
