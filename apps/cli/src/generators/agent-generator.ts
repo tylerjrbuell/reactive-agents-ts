@@ -7,23 +7,26 @@ interface AgentConfig {
   name: string;
   recipe: AgentRecipe;
   targetDir: string;
+  /** Detected from env vars at init time — defaults to "ollama". */
+  provider?: string;
 }
 
-const RECIPE_TEMPLATES: Record<AgentRecipe, (name: string) => string> = {
-  basic: (name) => `import { ReactiveAgents } from "reactive-agents";
+function makeRecipeTemplates(provider: string): Record<AgentRecipe, (name: string) => string> {
+  return {
+    basic: (name) => `import { ReactiveAgents } from "reactive-agents";
 
 export const ${toCamelCase(name)} = () =>
   ReactiveAgents.create()
-    .withProvider("anthropic")
+    .withProvider("${provider}")
     .withName("${name}")
     .build();
 `,
 
-  researcher: (name) => `import { ReactiveAgents } from "reactive-agents";
+    researcher: (name) => `import { ReactiveAgents } from "reactive-agents";
 
 export const ${toCamelCase(name)} = () =>
   ReactiveAgents.create()
-    .withProvider("anthropic")
+    .withProvider("${provider}")
     .withName("${name}")
     .withSystemPrompt("You are a research assistant. Gather information, synthesize findings, and provide well-sourced answers.")
     .withMemory()
@@ -32,11 +35,11 @@ export const ${toCamelCase(name)} = () =>
     .build();
 `,
 
-  coder: (name) => `import { ReactiveAgents } from "reactive-agents";
+    coder: (name) => `import { ReactiveAgents } from "reactive-agents";
 
 export const ${toCamelCase(name)} = () =>
   ReactiveAgents.create()
-    .withProvider("anthropic")
+    .withProvider("${provider}")
     .withName("${name}")
     .withSystemPrompt("You are a coding assistant. Write clean, well-tested code and explain your decisions.")
     .withReasoning()
@@ -44,11 +47,11 @@ export const ${toCamelCase(name)} = () =>
     .build();
 `,
 
-  orchestrator: (name) => `import { ReactiveAgents } from "reactive-agents";
+    orchestrator: (name) => `import { ReactiveAgents } from "reactive-agents";
 
 export const ${toCamelCase(name)} = () =>
   ReactiveAgents.create()
-    .withProvider("anthropic")
+    .withProvider("${provider}")
     .withName("${name}")
     .withSystemPrompt("You are an orchestrator agent. Decompose complex tasks and coordinate sub-agents.")
     .withMemory()
@@ -56,10 +59,11 @@ export const ${toCamelCase(name)} = () =>
     .withTools()
     .build();
 `,
-};
+  };
+}
 
 export function generateAgent(config: AgentConfig): { filePath: string } {
-  const { name, recipe, targetDir } = config;
+  const { name, recipe, targetDir, provider = "ollama" } = config;
   const fileName = `${toKebabCase(name)}.ts`;
   const filePath = join(targetDir, "src", "agents", fileName);
 
@@ -68,6 +72,7 @@ export function generateAgent(config: AgentConfig): { filePath: string } {
     mkdirSync(dir, { recursive: true });
   }
 
+  const RECIPE_TEMPLATES = makeRecipeTemplates(provider);
   const template = RECIPE_TEMPLATES[recipe];
   writeFileSync(filePath, template(name));
 

@@ -23,10 +23,18 @@ export function runInit(args: string[]): void {
   }
 
   const targetDir = join(process.cwd(), name);
-  banner("rax init", `Creating "${name}" with template "${template}"`);
-  console.log(info(`Creating project "${name}" with template "${template}"...`));
 
-  const result = generateProject({ name, template, targetDir });
+  // Detect provider from environment so generated code works out of the box
+  const detectedProvider =
+    process.env.ANTHROPIC_API_KEY ? "anthropic" :
+    process.env.OPENAI_API_KEY ? "openai" :
+    (process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY) ? "gemini" :
+    "ollama";
+
+  banner("rax init", `Creating "${name}" with template "${template}"`);
+  console.log(info(`Creating project "${name}" with template "${template}" (provider: ${detectedProvider})...`));
+
+  const result = generateProject({ name, template, targetDir, provider: detectedProvider });
 
   console.log(success(`Created ${result.files.length} files:`));
   for (const file of result.files) {

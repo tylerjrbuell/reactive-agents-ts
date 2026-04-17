@@ -7,10 +7,12 @@ interface ProjectConfig {
   name: string;
   template: ProjectTemplate;
   targetDir: string;
+  /** Detected from env vars at init time — defaults to "ollama" (no API key needed). */
+  provider?: string;
 }
 
 export function generateProject(config: ProjectConfig): { files: string[] } {
-  const { name, template, targetDir } = config;
+  const { name, template, targetDir, provider = "ollama" } = config;
   const files: string[] = [];
 
   const dirs = [targetDir, join(targetDir, "src")];
@@ -54,7 +56,7 @@ export function generateProject(config: ProjectConfig): { files: string[] } {
   files.push(tscPath);
 
   const entryPath = join(targetDir, "src", "index.ts");
-  writeFileSync(entryPath, generateEntryPoint(template));
+  writeFileSync(entryPath, generateEntryPoint(template, provider));
   files.push(entryPath);
 
   const envPath = join(targetDir, ".env.example");
@@ -77,13 +79,15 @@ export function generateProject(config: ProjectConfig): { files: string[] } {
   return { files };
 }
 
-function generateEntryPoint(template: ProjectTemplate): string {
+function generateEntryPoint(template: ProjectTemplate, provider: string): string {
+  const providerLine = `  .withProvider("${provider}")`;
+
   if (template === "minimal") {
     return [
       'import { ReactiveAgents } from "reactive-agents";',
       "",
       "const agent = await ReactiveAgents.create()",
-      '  .withProvider("anthropic") // or "openai", "ollama", "gemini"',
+      providerLine,
       "  .build();",
       "",
       'const result = await agent.run("Explain the difference between TCP and UDP in one paragraph.");',
@@ -97,7 +101,7 @@ function generateEntryPoint(template: ProjectTemplate): string {
       'import { ReactiveAgents } from "reactive-agents";',
       "",
       "const agent = await ReactiveAgents.create()",
-      '  .withProvider("anthropic") // or "openai", "ollama", "gemini"',
+      providerLine,
       '  .withReasoning({ defaultStrategy: "adaptive" })',
       "  .withTools()",
       '  .withObservability({ verbosity: "normal", live: true })',
@@ -119,7 +123,7 @@ function generateEntryPoint(template: ProjectTemplate): string {
     'import { ReactiveAgents } from "reactive-agents";',
     "",
     "const agent = await ReactiveAgents.create()",
-    '  .withProvider("anthropic") // or "openai", "ollama", "gemini"',
+    providerLine,
     '  .withName("production-agent")',
     "  .withReasoning({",
     '    defaultStrategy: "adaptive",',
