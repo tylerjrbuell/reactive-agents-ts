@@ -16,6 +16,40 @@
 - [Composable Provider Adapters](project_composable_adapters.md) — V1.1 DONE in v0.8.5: all 7 hooks implemented
 - [Composable Reasoning Phases](project_composable_phases.md) — ✅ SHIPPED Apr 3, 2026: `strategies/kernel/` composable phase architecture merged to main
 
+## V1.0 Readiness Audit (Apr 17, 2026)
+
+Full 4-agent audit run. Architecture solid; gaps are wiring, DX, and trust. First-run UX: **6.5/10**.
+
+### CRITICAL blockers
+1. **Bun-only, zero docs** — `bun:sqlite`/`Bun.*` in published packages, no `engines` field. Node users: `ReferenceError: Bun is not defined`. Fix: add `"engines": {"bun":">=1.0"}` + prominent docs.
+2. **`rax demo` is fake** — scripted responses, hardcoded token count (314), fake sleep padding. CLI says "live demo." Fix: use real provider or clearly label as example output.
+3. **Sub-agent `maxIterations` silently capped at 3** — `agent-tool-adapter.ts:214-217`: `Math.min(userValue, 3)`. Builder docs say `.withDynamicSubAgents({ maxIterations: 8 })` works — it doesn't.
+4. **`MAX_RECURSION_DEPTH = 3` not configurable** — `agent-tool-adapter.ts:6`. Deep agent hierarchies silently fail.
+5. **Calibration defaults to `:memory:`** — `reactive-intelligence/types.ts:164`. Learning lost every restart. Should default to `.reactive-agents/calibration.db`.
+6. **Observability OFF by default** — requires `.withObservability()`. Should be on by default.
+
+### HIGH friction
+- `rax init` hardcodes Anthropic — OpenAI/Ollama users fail on first `bun run dev`
+- `FRAMEWORK_INDEX.md` ALL paths broken — `strategies/shared/*` → `strategies/kernel/*` (dir renamed Apr 3)
+- `concepts/composable-kernel.md` — same stale paths, still describes pre-refactor architecture
+- ~20 undocumented env vars (only 6 of 26 in README): `LLM_MAX_RETRIES`, `LLM_TIMEOUT_MS`, `TAVILY_API_KEY`, `CORTEX_URL`, `LITELLM_BASE_URL`, `OLLAMA_ENDPOINT` vs `OLLAMA_BASE` (duplicate)
+- `effect` in `dependencies` not `peerDependencies` — dual-copy risk; move to peer
+- Provider SDKs not declared as peer deps — `Cannot find module '@anthropic-ai/sdk'` with no hint
+- `StatusRenderer` replaces Effect `Logger` with `Logger.none` on TTY — logs vanish silently
+- Ollama default model `cogito:14b` — most users get silent 404; change to `llama3.2`
+- Duplicate `AgentConfig` type (core skeletal vs runtime full) — autocomplete confusion
+- `rax demo` circular dep — imports `reactive-agents` but not in CLI package.json deps
+
+### Stale docs priority (5/5 = worst)
+- `FRAMEWORK_INDEX.md` 5/5 — all kernel paths broken
+- `concepts/composable-kernel.md` 5/5 — old import paths
+- `ROADMAP.md` 5/5 — last updated Mar 11, lists shipped features as future
+- `CONTRIBUTING.md` 5/5 — claims 15 packages / 283 tests
+- `packages/reactive-agents/README.md` 5/5 — 14 packages, deprecated `withMemory("1")`
+
+### Repo cleanup needed
+Delete before v1.0: `test.ts` (46KB!), `main.ts`, `scratch.ts`, `scratch/`, `output.txt`, `harness-reports/`
+
 ## Current Status (Apr 13, 2026)
 - **Context Engineering Overhaul complete** — dead code removed (`compaction.ts`, `context-budget.ts`, `buildDynamicContext`, `autoForwardSection`); `ContextManager` service introduced as deterministic context assembly authority; `steeringNudge` fully migrated to typed `PendingGuidance` → system prompt `Guidance:` section
 - **Plan-Execute-Reflect fixes shipped** — planner decomposition, quantity enforcement, reflection augmentation, satisfaction override removal

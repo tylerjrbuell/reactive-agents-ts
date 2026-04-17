@@ -19,6 +19,16 @@ apps/cortex/.cortex/
 # Git worktrees
 .worktrees/
 
+# Harness probe artifacts (dev-only run outputs)
+harness-reports/*.jsonl
+harness-reports/*.txt
+harness-reports/*.json
+harness-reports/improvement-report-*.md
+
+# Scratch files
+output.txt
+scratch.ts
+
 # Messaging secrets
 signal-data/
 .env.telegram

@@ -132,7 +132,8 @@ Every aspect of Reactive Agents is configurable through the builder API. This pa
 | `ANTHROPIC_API_KEY` | Anthropic provider | — | Anthropic API key |
 | `OPENAI_API_KEY` | OpenAI/LiteLLM provider | — | OpenAI API key |
 | `GOOGLE_API_KEY` | Gemini provider | — | Google AI API key |
-| `TAVILY_API_KEY` | Web search tool | — | Tavily search API key |
+| `TAVILY_API_KEY` | Web search tool (primary) | — | Tavily search API key |
+| `BRAVE_SEARCH_API_KEY` | Web search tool (secondary) | — | Brave Search API key (`X-Subscription-Token`); alias: `BRAVE_API_KEY` |
 | `EMBEDDING_PROVIDER` | Enhanced memory tier | `"openai"` | Embedding provider |
 | `EMBEDDING_MODEL` | Enhanced memory tier | `"text-embedding-3-small"` | Embedding model name |
 | `LLM_DEFAULT_MODEL` | All providers | Provider default | Override default model |
