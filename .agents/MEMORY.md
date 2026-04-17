@@ -6,6 +6,9 @@
 - [Keep .agents/MEMORY.md in sync](feedback_agents_memory_sync.md) — update both Claude memory AND `.agents/MEMORY.md` so other AI agents have context
 - [Skip plans for content/skill writing](feedback_skip_plans_for_content.md) — don't write formal implementation plans for SKILL.md or doc writing tasks; implement directly
 
+## Adaptive Calibration (Apr 2026)
+- [Adaptive Harness Framework](project_adaptive_harness.md) — three-tier calibration, 24-task plan shipped on feat/adaptive-harness-framework
+
 ## Projects
 - [Project Dispatch](project_dispatch.md) — NL automation builder product, separate repo, Elysia + Svelte + SQLite
 - [Composable Strategy Architecture](project_composable_strategies.md) — V1.1: strategies as composable capabilities, not exclusive modes
@@ -243,6 +246,28 @@ state.steps[]     ← What systems observe (entropy, metrics, debrief)
 4. Optional: ModelCalibration schema + 6-probe calibration-runner.ts for pre-baked local model profiles
 5. `ReActKernelInput` duplicates ~25 fields from `KernelInput` — phases use `as ReActKernelInput` casts
 6. `state.meta: Record<string, unknown>` accessed via `as any` casts in 34+ locations
+
+## Safety & Security Gaps (Apr 16, 2026 Audit)
+Identified during Zeus integration report — honest audit of what's implemented vs. what's missing.
+
+### Working but limited
+- **Guardrails (injection/PII/toxicity)**: All regex-based pattern matching, no ML classifiers. Catches known attacks; novel/obfuscated attacks can bypass.
+- **Behavioral contracts**: Runtime-enforced tool blocks and iteration limits work. Denied-topic detection is substring `includes()` — can be rephrased around.
+- **Kill switch**: Phase-boundary halt only. Cannot interrupt an in-flight LLM call or tool execution mid-operation.
+- **Budget enforcement**: Hard stop works, but costs are estimated locally from token counts × model pricing — not synced with actual provider billing. Overage possible on final call before check triggers.
+- **Loop detection**: Iteration counter only, not semantic. Can't detect oscillation between same states — just counts turns.
+
+### Ephemeral / not persisted
+- **Identity (Ed25519 certs)**: Implemented but in-memory only. Process restart loses all certificates, roles, delegations.
+- **RBAC (roles/permissions)**: Implemented but in-memory only. No automatic tool-name-to-resource mapping.
+- **Audit logging**: Records all actions but stored in-memory by default. No persistence without explicit JSONL export via observability layer.
+
+### Missing entirely
+- **ML-powered content filtering**: No semantic jailbreak detection, no embedding-based PII detection.
+- **MCP container resource limits**: MCP Docker containers have no `--memory`/`--cpus` caps. HTTP MCP servers run with default networking (not `--network none` like code sandbox).
+- **Mid-operation abort**: No way to forcibly interrupt a long-running LLM call or tool execution.
+- **Real-time provider cost sync**: No integration with provider billing APIs for actual spend tracking.
+- **Tool approval enforcement at runtime**: Risk levels and `requiresApproval` flags are defined on tools but approval gate wiring to InteractionManager not fully visible in execution engine.
 
 ## Show HN Readiness
 - ✅ Kernel composable phase architecture (clean codebase for contributors)
