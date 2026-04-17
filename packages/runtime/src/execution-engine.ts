@@ -4100,6 +4100,17 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
             // but they will be satisfied by Effect.provide(runtime) in the builder.
             const executeCoreWithLogger = executeCore().pipe(
               Effect.provideService(ObservableLogger, logger),
+              Effect.tapError((err) => {
+                const asRecord = err as Record<string, unknown>;
+                const message = typeof asRecord["message"] === "string" ? asRecord["message"] : String(err);
+                const cause = asRecord["cause"] instanceof Error ? asRecord["cause"] : undefined;
+                return logger.emit({
+                  _tag: "error",
+                  message,
+                  error: cause ? { name: cause.name, message: cause.message, stack: cause.stack } : undefined,
+                  timestamp: new Date(),
+                }).pipe(Effect.catchAll(() => Effect.void));
+              }),
             );
             if (obs) {
               const taskResult = yield* obs.withSpan(
