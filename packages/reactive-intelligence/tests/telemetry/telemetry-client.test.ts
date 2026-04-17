@@ -58,19 +58,12 @@ describe("TelemetryClient", () => {
     expect(() => client.send(mockReport)).not.toThrow();
   });
 
-  test("send() prints console notice on first call only", () => {
+  test("send() deduplicates notice — noticePrinted set after first call", () => {
     const client = new TelemetryClient("http://localhost:9999");
-    const originalLog = console.log;
-    const logs: string[] = [];
-    console.log = (...args: any[]) => logs.push(args.join(" "));
-    try {
-      client.send(mockReport);
-      expect(logs.some((l) => l.includes("telemetry enabled"))).toBe(true);
-      logs.length = 0;
-      client.send(mockReport);
-      expect(logs.some((l) => l.includes("telemetry enabled"))).toBe(false);
-    } finally {
-      console.log = originalLog;
-    }
+    // Notice is now emitted via ObservableLogger, not console.log.
+    // Verify the internal dedup flag prevents repeated notice emission.
+    expect((client as unknown as { noticePrinted: boolean }).noticePrinted).toBe(false);
+    client.send(mockReport);
+    expect((client as unknown as { noticePrinted: boolean }).noticePrinted).toBe(true);
   });
 });

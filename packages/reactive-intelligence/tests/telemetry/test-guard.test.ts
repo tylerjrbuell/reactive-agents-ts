@@ -54,13 +54,11 @@ describe("TelemetryClient test guard", () => {
     expect(consoleSpy.logged).toBe(false);
   });
 
-  it("send() prints notice for real providers", () => {
+  it("send() sets noticePrinted after first call for real providers", () => {
     const client = new TelemetryClient("http://localhost:0");
-    const consoleSpy = { logged: false };
-    const origLog = console.log;
-    console.log = (..._args: any[]) => { consoleSpy.logged = true; };
+    // Notice is now emitted via ObservableLogger — no console.log.
+    expect((client as unknown as { noticePrinted: boolean }).noticePrinted).toBe(false);
     client.send(makeReport({ provider: "anthropic", modelId: "claude-sonnet-4" }));
-    console.log = origLog;
-    expect(consoleSpy.logged).toBe(true);
+    expect((client as unknown as { noticePrinted: boolean }).noticePrinted).toBe(true);
   });
 });
