@@ -4101,9 +4101,10 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
             const executeCoreWithLogger = executeCore().pipe(
               Effect.provideService(ObservableLogger, logger),
               Effect.tapError((err) => {
-                const asRecord = err as Record<string, unknown>;
-                const message = typeof asRecord["message"] === "string" ? asRecord["message"] : String(err);
-                const cause = asRecord["cause"] instanceof Error ? asRecord["cause"] : undefined;
+                // All RuntimeErrors extend Data.TaggedError which extends Error
+                const asErr = err as unknown as Error & { cause?: Error };
+                const message = asErr.message ?? String(err);
+                const cause = asErr.cause instanceof Error ? asErr.cause : undefined;
                 return logger.emit({
                   _tag: "error",
                   message,
