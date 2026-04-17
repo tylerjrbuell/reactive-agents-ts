@@ -424,6 +424,8 @@ export const ReactiveAgentsConfigSchema = Schema.Struct({
        */
       live: Schema.optional(Schema.Boolean),
 
+      mode: Schema.optional(Schema.Union(Schema.Literal("stream"), Schema.Literal("status"))),
+
       /**
        * Minimum log level to emit: 'debug' | 'info' | 'warn' | 'error'
        * Default: 'info'
@@ -499,6 +501,12 @@ export type ReactiveAgentsConfig = Schema.Schema.Type<typeof ReactiveAgentsConfi
      * Default: true
      */
     readonly live?: boolean;
+
+    /**
+     * Output mode: 'stream' emits events live, 'status' shows a single updating TUI line.
+     * Auto-detected from process.stdout.isTTY when not set.
+     */
+    readonly mode?: "stream" | "status";
 
     /**
      * Minimum log level to emit: 'debug' | 'info' | 'warn' | 'error'
