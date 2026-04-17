@@ -1,4 +1,4 @@
-import { Effect, Context, Stream as EStream } from "effect";
+import { Effect, Context, Stream as EStream, Ref, Chunk } from "effect";
 import type { LogEvent, RunSummary } from "../types.js";
 
 /**
@@ -68,3 +68,222 @@ export class ObservableLogger extends Context.Tag("ObservableLogger")<
   ObservableLogger,
   ObservableLogger
 >() {}
+
+// ─── Implementation ───
+
+/**
+ * Create an ObservableLogger instance.
+ * Config controls live vs buffered behavior.
+ */
+export function makeObservableLogger(config: {
+  live: boolean;
+}): Effect.Effect<ObservableLogger> {
+  return Effect.gen(function* () {
+    const bufferRef = yield* Ref.make<LogEvent[]>([]);
+    const subscribersRef = yield* Ref.make<
+      Array<(event: LogEvent, formatted: string) => Effect.Effect<void, never>>
+    >([]);
+
+    const formatter = makeEventFormatter();
+
+    const emit = (event: LogEvent): Effect.Effect<void, never> =>
+      Effect.gen(function* () {
+        const formatted = formatter.format(event);
+        const subscribers = yield* Ref.get(subscribersRef);
+
+        // Buffer always
+        yield* Ref.update(bufferRef, (buf) => [...buf, event]);
+
+        // Notify subscribers
+        for (const sub of subscribers) {
+          yield* sub(event, formatted).pipe(Effect.catchAll(() => Effect.void));
+        }
+
+        // If live, print to console
+        if (config.live) {
+          yield* Effect.sync(() => {
+            console.log(formatted);
+          });
+        }
+      });
+
+    const subscribe = (
+      handler: (event: LogEvent, formatted: string) => Effect.Effect<void, never>,
+    ): Effect.Effect<() => void, never> =>
+      Effect.gen(function* () {
+        yield* Ref.update(subscribersRef, (subs) => [...subs, handler]);
+
+        // Return unsubscribe function
+        return () =>
+          Ref.update(subscribersRef, (subs) =>
+            subs.filter((s) => s !== handler),
+          ).pipe(Effect.runPromise) as any;
+      });
+
+    const toStream = (): EStream.Stream<
+      { event: LogEvent; formatted: string },
+      never
+    > =>
+      EStream.flatten(
+        EStream.fromEffect(
+          Effect.gen(function* () {
+            const buffer = yield* Ref.get(bufferRef);
+            return EStream.fromIterable(
+              buffer.map((event) => ({
+                event,
+                formatted: formatter.format(event),
+              })),
+            );
+          }),
+        ),
+      );
+
+    const getBuffer = (): Effect.Effect<readonly LogEvent[], never> =>
+      Ref.get(bufferRef);
+
+    const format = (event: LogEvent): string => formatter.format(event);
+
+    const flush = (): Effect.Effect<RunSummary, never> =>
+      Effect.gen(function* () {
+        const buffer = yield* Ref.get(bufferRef);
+        return assembleSummary(buffer);
+      });
+
+    const reset = (): Effect.Effect<void, never> =>
+      Effect.gen(function* () {
+        yield* Ref.set(bufferRef, []);
+        yield* Ref.set(subscribersRef, []);
+      });
+
+    return {
+      emit,
+      subscribe,
+      toStream,
+      getBuffer,
+      format,
+      flush,
+      reset,
+    } satisfies ObservableLogger;
+  });
+}
+
+/**
+ * Event formatter — converts LogEvent to human-readable [tag:value] strings.
+ * Stub version (will be replaced when event-formatter.ts is created in Task 4).
+ */
+function makeEventFormatter() {
+  return {
+    format: (event: LogEvent): string => {
+      // Stub formatter - will be replaced in Task 4
+      switch (event._tag) {
+        case "phase_started":
+          return `→ [phase:${event.phase}]`;
+        case "phase_complete":
+          return `✓ [phase:${event.phase}] ${(event.duration / 1000).toFixed(1)}s`;
+        case "tool_call":
+          return `  → [tool:${event.tool}]`;
+        case "tool_result":
+          return `  ${event.status === "success" ? "✓" : "✗"} [tool:${event.tool}] ${(event.duration / 1000).toFixed(2)}s`;
+        case "metric":
+          return `  📊 ${event.name}: ${event.value}${event.unit ? " " + event.unit : ""}`;
+        case "warning":
+          return `⚠️  [warning] ${event.message}`;
+        case "error":
+          return `✗ [error] ${event.message}`;
+        case "iteration":
+          return `  [iter:${event.iteration}] ${event.phase}: ${event.summary || ""}`;
+        case "completion":
+          return `${event.success ? "✓" : "✗"} [completion] ${event.summary}`;
+        case "notice":
+          return `${event.level === "info" ? "ℹ️" : "💡"} ${event.title}`;
+      }
+    },
+  };
+}
+
+/**
+ * Assemble RunSummary from buffered events.
+ */
+function assembleSummary(buffer: readonly LogEvent[]): RunSummary {
+  let status: "success" | "error" | "partial" = "partial";
+  let duration = 0;
+  let totalTokens = 0;
+  const phaseMetrics: Record<string, { duration: number; status: string }> = {};
+  const toolMetrics: Record<string, { calls: number; successes: number; failures: number }> = {};
+  const warnings: string[] = [];
+  const errors: string[] = [];
+
+  let startTime: Date | undefined;
+  let endTime: Date | undefined;
+
+  for (const event of buffer) {
+    switch (event._tag) {
+      case "phase_started":
+        if (!startTime) startTime = event.timestamp;
+        break;
+
+      case "phase_complete":
+        phaseMetrics[event.phase] = {
+          duration: event.duration,
+          status: event.status,
+        };
+        break;
+
+      case "metric":
+        if (event.name === "tokens_used") {
+          totalTokens = event.value;
+        }
+        break;
+
+      case "tool_call":
+        if (!toolMetrics[event.tool]) {
+          toolMetrics[event.tool] = { calls: 0, successes: 0, failures: 0 };
+        }
+        toolMetrics[event.tool].calls++;
+        break;
+
+      case "tool_result":
+        if (!toolMetrics[event.tool]) {
+          toolMetrics[event.tool] = { calls: 0, successes: 0, failures: 0 };
+        }
+        if (event.status === "success") {
+          toolMetrics[event.tool].successes++;
+        } else {
+          toolMetrics[event.tool].failures++;
+        }
+        break;
+
+      case "warning":
+        warnings.push(event.message);
+        break;
+
+      case "error":
+        errors.push(event.message);
+        break;
+
+      case "completion":
+        status = event.success ? "success" : "error";
+        endTime = event.timestamp;
+        break;
+
+      case "notice":
+      case "iteration":
+        // These events don't affect the summary
+        break;
+    }
+  }
+
+  if (startTime && endTime) {
+    duration = endTime.getTime() - startTime.getTime();
+  }
+
+  return {
+    status,
+    duration,
+    totalTokens,
+    phaseMetrics,
+    toolMetrics,
+    warnings,
+    errors,
+  };
+}
