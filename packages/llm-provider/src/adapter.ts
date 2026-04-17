@@ -249,7 +249,7 @@ export const midModelAdapter: ProviderAdapter = {
 // ─── Adapter selection ────────────────────────────────────────────────────────
 
 import {
-  resolveModelCalibration,
+  loadCalibration,
   buildCalibratedAdapter,
   type ProfileOverrides,
 } from "./calibration.js";
@@ -281,7 +281,7 @@ export function selectAdapter(
 ): AdapterSelection {
   // 1. Calibrated adapter wins when available.
   if (modelId) {
-    const cal = resolveModelCalibration(modelId);
+    const cal = loadCalibration(modelId);
     if (cal) return buildCalibratedAdapter(cal);
   }
   // 2. Fall back to tier-based adapter.

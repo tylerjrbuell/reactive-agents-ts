@@ -21,7 +21,7 @@ import type { TaskError } from "@reactive-agents/core";
 import type { ContextProfile } from "@reactive-agents/reasoning";
 import { inferRequiredTools, classifyToolRelevance, filterToolsByRelevance } from "@reactive-agents/reasoning";
 import { ToolService } from "@reactive-agents/tools";
-import { ObservabilityService, createProgressLogger, renderCalibrationProvenance } from "@reactive-agents/observability";
+import { ObservabilityService, createProgressLogger, renderCalibrationProvenance, ObservableLogger, makeObservableLogger } from "@reactive-agents/observability";
 import { GuardrailService, KillSwitchService, BehavioralContractService } from "@reactive-agents/guardrails";
 import { VerificationService } from "@reactive-agents/verification";
 import { CostService } from "@reactive-agents/cost";
@@ -30,7 +30,8 @@ import type { AgentEvent, KernelStateLike } from "@reactive-agents/core";
 import { synthesizeDebrief, type DebriefInput, type AgentDebrief } from "./debrief.js";
 import { DebriefStoreService, PlanStoreService, ProceduralMemoryService } from "@reactive-agents/memory";
 import { TelemetryClient as TelemetryClientImpl, classifyTaskCategory as classifyTaskCategoryFn, lookupModel as lookupModelFn, skillFragmentToProceduralEntry, loadObservations } from "@reactive-agents/reactive-intelligence";
-import { recommendStrategyForTier, resolveModelCalibration, resolveModelCalibrationAsync } from "@reactive-agents/llm-provider";
+import { recommendStrategyForTier } from "@reactive-agents/llm-provider";
+import { resolveModelCalibration, resolveModelCalibrationAsync } from "./calibration-resolver.js";
 import type { ModelCalibration } from "@reactive-agents/llm-provider";
 import { buildTrajectoryFingerprint, abstractifyToolName, firstConvergenceIteration, peakContextPressure, deriveTaskComplexity, deriveFailurePattern, deriveThoughtToActionRatio, entropyVariance, entropyOscillationCount, finalCompositeEntropy, entropyAreaUnderCurve } from "./telemetry-enrichment.js";
 import { literalMentionRequired } from "./classifier-bypass.js";
@@ -662,6 +663,21 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 // Register context as running
                 yield* Ref.update(runningContexts, (m) =>
                   new Map(m).set(task.id, ctx),
+                );
+
+                // Emit execution started event
+                yield* Effect.serviceOption(ObservableLogger).pipe(
+                  Effect.tap((loggerOpt) => {
+                    if (loggerOpt._tag === "Some") {
+                      return loggerOpt.value.emit({
+                        _tag: "phase_started",
+                        phase: "execution",
+                        timestamp: new Date(),
+                      });
+                    }
+                    return Effect.void;
+                  }),
+                  Effect.catchAll(() => Effect.void),
                 );
 
                 // ── Lifecycle guard helper ──
@@ -3986,23 +4002,76 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   (result.metadata as any).entropyTrace = entropyLog;
                 }
 
+                // Emit completion event
+                const executionDuration = Date.now() - executionStartMs;
+                yield* Effect.serviceOption(ObservableLogger).pipe(
+                  Effect.tap((loggerOpt) => {
+                    if (loggerOpt._tag === "Some") {
+                      return loggerOpt.value.emit({
+                        _tag: "completion",
+                        success: result.success,
+                        summary: `Task ${result.success ? "completed" : "failed"} in ${(executionDuration / 1000).toFixed(1)}s with ${result.metadata.tokensUsed} tokens`,
+                        timestamp: new Date(),
+                      });
+                    }
+                    return Effect.void;
+                  }),
+                  Effect.catchAll(() => Effect.void),
+                );
+
+                // Handle non-live mode output
+                const loggerConfig = config.logging ?? { live: true };
+                if (!loggerConfig.live) {
+                  yield* Effect.serviceOption(ObservableLogger).pipe(
+                    Effect.tap((loggerOpt) => {
+                      if (loggerOpt._tag === "Some") {
+                        return loggerOpt.value.flush().pipe(
+                          Effect.tap((summary) =>
+                            Effect.gen(function* () {
+                              console.log("\n═══ Run Summary ═══");
+                              console.log(`Status: ${summary.status}`);
+                              console.log(`Duration: ${(summary.duration / 1000).toFixed(1)}s`);
+                              console.log(`Tokens: ${summary.totalTokens}`);
+                              if (summary.warnings.length > 0) {
+                                console.log(`Warnings: ${summary.warnings.length}`);
+                              }
+                              if (summary.errors.length > 0) {
+                                console.log(`Errors: ${summary.errors.length}`);
+                              }
+                            }),
+                          ),
+                        );
+                      }
+                      return Effect.void;
+                    }),
+                    Effect.catchAll(() => Effect.void),
+                  );
+                }
+
                 return result;
               });
+
+            // Initialize ObservableLogger
+            const loggerConfig = config.logging ?? { live: true };
+            const logger = yield* makeObservableLogger(loggerConfig);
 
             // Wrap in root observability span for the full execution trace
             // The cast is required because executeCore has service requirements from Effect.gen,
             // but they will be satisfied by Effect.provide(runtime) in the builder.
+            const executeCoreWithLogger = executeCore().pipe(
+              Effect.provideService(ObservableLogger, logger),
+            );
             if (obs) {
               const taskResult = yield* obs.withSpan(
                 "execution.run",
-                executeCore() as unknown as Effect.Effect<TaskResult, RuntimeErrors>,
+                executeCoreWithLogger as unknown as Effect.Effect<TaskResult, RuntimeErrors>,
                 { taskId: task.id, agentId: task.agentId },
               );
               // Flush after the root span closes so spans are fully recorded
               yield* obs.flush().pipe(Effect.catchAll(() => Effect.void));
               return taskResult;
             }
-            return yield* executeCore();
+            return yield* executeCoreWithLogger;
           }) as Effect.Effect<TaskResult, RuntimeErrors, any>
         ).pipe(
           // Always clean up running context

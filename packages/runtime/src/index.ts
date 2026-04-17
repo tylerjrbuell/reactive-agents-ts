@@ -133,3 +133,11 @@ export {
   type ChatOptions,
   type SessionOptions,
 } from "./chat.js";
+
+// ─── Calibration Resolver ───
+export {
+  resolveModelCalibration,
+  resolveModelCalibrationAsync,
+  type ResolveModelCalibrationOptions,
+  type ResolveModelCalibrationAsyncOptions,
+} from "./calibration-resolver.js";

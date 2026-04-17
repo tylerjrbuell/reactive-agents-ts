@@ -152,14 +152,10 @@ export {
   normalizeModelId,
   clearCalibrationCache,
   buildCalibratedAdapter,
-  resolveModelCalibration,
-  resolveModelCalibrationAsync,
 } from "./calibration.js";
 export type {
   ModelCalibration,
   ProfileOverrides,
-  ResolveModelCalibrationOptions,
-  ResolveModelCalibrationAsyncOptions,
 } from "./calibration.js";
 
 // ─── Calibration Runner ───
