@@ -4157,9 +4157,13 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
               Effect.ensuring(Effect.sync(() => { renderer?.stop(); })),
             );
 
-            // In status mode, silence Effect's built-in logger (suppresses INFO ◉ lines)
-            const executeCoreWithLogger = isStatusMode
-              ? executeCoreRaw.pipe(Effect.provide(Logger.replace(Logger.defaultLogger, Logger.none)))
+            // In status mode: pipe think-stream chunks into the renderer and silence Effect's built-in logger
+            const executeCoreWithLogger = isStatusMode && renderer
+              ? Effect.locally(
+                  executeCoreRaw.pipe(Effect.provide(Logger.replace(Logger.defaultLogger, Logger.none))),
+                  StreamingTextCallback,
+                  (text: string) => Effect.sync(() => renderer.pushThinkChunk(text)),
+                )
               : executeCoreRaw;
             if (obs) {
               const taskResult = yield* obs.withSpan(

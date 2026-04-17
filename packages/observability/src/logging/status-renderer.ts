@@ -3,11 +3,13 @@ import type { ObservableLoggerService } from "./observable-logger.js";
 import type { LogEvent } from "../types.js";
 
 const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;
+const THINK_PREVIEW_LEN = 55;
 
 interface RendererState {
   phase: string;
   iteration: number;
   tool: string | null;
+  thinkText: string;
   tokens: number;
   costUsd: number;
   toolCallCount: number;
@@ -21,6 +23,8 @@ interface RendererState {
 export interface StatusRenderer {
   readonly start: () => Effect.Effect<void, never>;
   readonly stop: () => void;
+  /** Push a streaming think chunk — called per LLM text delta. */
+  readonly pushThinkChunk: (text: string) => void;
 }
 
 export function makeStatusRenderer(
@@ -33,6 +37,7 @@ export function makeStatusRenderer(
     phase: "starting",
     iteration: 0,
     tool: null,
+    thinkText: "",
     tokens: 0,
     costUsd: 0,
     toolCallCount: 0,
@@ -52,6 +57,13 @@ export function makeStatusRenderer(
     return `${Math.floor(sec / 60)}m${Math.round(sec % 60)}s`;
   }
 
+  function thinkPreview(): string {
+    const text = s.thinkText.replace(/\s+/g, " ").trimStart();
+    if (text.length === 0) return "Thinking...";
+    const tail = text.length > THINK_PREVIEW_LEN ? "…" + text.slice(-THINK_PREVIEW_LEN) : text;
+    return `"${tail}"`;
+  }
+
   function statusLine(): string {
     const spin = SPINNER[s.spinnerIdx % SPINNER.length]!;
 
@@ -59,7 +71,7 @@ export function makeStatusRenderer(
     if (s.tool) {
       action = `Calling ${s.tool}...`;
     } else if (s.phase === "think") {
-      action = "Thinking...";
+      action = thinkPreview();
     } else if (s.phase === "act") {
       action = "Acting...";
     } else if (s.phase === "execution" || s.phase === "starting") {
@@ -98,20 +110,30 @@ export function makeStatusRenderer(
     switch (event._tag) {
       case "phase_started":
         s.phase = event.phase;
+        if (event.phase !== "think") s.thinkText = "";
         if (event.phase !== "execution") s.tool = null;
         redraw();
         break;
       case "tool_call":
+        s.thinkText = "";
         s.tool = event.tool;
-        redraw();
+        printLine(`→  ${event.tool}`);
         break;
-      case "tool_result":
+      case "tool_result": {
         s.toolCallCount++;
+        const durationStr = `${(event.duration / 1000).toFixed(1)}s`;
+        if (event.status === "success") {
+          printLine(`   ✓ ${event.tool} (${durationStr})`);
+        } else {
+          const errStr = event.error ? ` — ${event.error}` : "";
+          printLine(`   ✗ ${event.tool} (${durationStr})${errStr}`);
+        }
         s.tool = null;
-        redraw();
         break;
+      }
       case "iteration":
         s.iteration = event.iteration;
+        s.thinkText = "";
         s.tool = null;
         redraw();
         break;
@@ -187,6 +209,11 @@ export function makeStatusRenderer(
       if (timer) { clearInterval(timer); timer = null; }
       if (unsub) { unsub(); unsub = null; }
       if (isTTY) out.write("\r\x1b[2K");
+    },
+
+    pushThinkChunk: (text: string): void => {
+      s.thinkText += text;
+      redraw();
     },
   };
 }

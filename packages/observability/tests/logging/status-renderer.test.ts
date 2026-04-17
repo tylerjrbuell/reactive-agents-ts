@@ -98,7 +98,7 @@ describe("makeStatusRenderer", () => {
     }));
     renderer.stop();
 
-    const completionLine = out.lines.find((l) => l.startsWith("✓"));
+    const completionLine = out.lines.find((l) => l.startsWith("✓") && l.includes("Done"));
     expect(completionLine).toBeDefined();
     expect(completionLine).toContain("5,000 tok");
     expect(completionLine).toContain("$0.0012");
