@@ -155,9 +155,26 @@ describe("fileWriteHandler — error cases", () => {
 // ═══════════════════════════════════════════════════════════════════════
 
 describe("webSearchHandler — error cases", () => {
-  it("should throw error when no API key is set", async () => {
-    const original = process.env.TAVILY_API_KEY;
+  const originalFetch = globalThis.fetch;
+
+  it("should fail when no keys and DuckDuckGo returns no results", async () => {
+    const origTavily = process.env.TAVILY_API_KEY;
+    const origBrave = process.env.BRAVE_SEARCH_API_KEY;
+    const origBraveAlt = process.env.BRAVE_API_KEY;
     delete process.env.TAVILY_API_KEY;
+    delete process.env.BRAVE_SEARCH_API_KEY;
+    delete process.env.BRAVE_API_KEY;
+
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const href = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (href.includes("api.duckduckgo.com")) {
+        return new Response(JSON.stringify({}), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return originalFetch(input);
+    }) as typeof fetch;
 
     try {
       const result = await Effect.runPromise(
@@ -165,23 +182,45 @@ describe("webSearchHandler — error cases", () => {
       );
       expect(result).toBeInstanceOf(ToolExecutionError);
       expect(result.message).toContain("TAVILY_API_KEY");
+      expect(result.message).toContain("BRAVE_SEARCH_API_KEY");
     } finally {
-      if (original) process.env.TAVILY_API_KEY = original;
+      globalThis.fetch = originalFetch;
+      if (origTavily) process.env.TAVILY_API_KEY = origTavily;
+      if (origBrave) process.env.BRAVE_SEARCH_API_KEY = origBrave;
+      if (origBraveAlt) process.env.BRAVE_API_KEY = origBraveAlt;
     }
   });
 
-  it("should throw error even with maxResults parameter when no API key", async () => {
-    const original = process.env.TAVILY_API_KEY;
+  it("should fail with maxResults when no keys and DDG empty", async () => {
+    const origTavily = process.env.TAVILY_API_KEY;
+    const origBrave = process.env.BRAVE_SEARCH_API_KEY;
+    const origBraveAlt = process.env.BRAVE_API_KEY;
     delete process.env.TAVILY_API_KEY;
+    delete process.env.BRAVE_SEARCH_API_KEY;
+    delete process.env.BRAVE_API_KEY;
+
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const href = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (href.includes("api.duckduckgo.com")) {
+        return new Response(JSON.stringify({ RelatedTopics: [] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return originalFetch(input);
+    }) as typeof fetch;
 
     try {
       const result = await Effect.runPromise(
         webSearchHandler({ query: "test", maxResults: 3 }).pipe(Effect.flip),
       );
       expect(result).toBeInstanceOf(ToolExecutionError);
-      expect(result.message).toContain("TAVILY_API_KEY");
+      expect(result.message).toContain("http-get");
     } finally {
-      if (original) process.env.TAVILY_API_KEY = original;
+      globalThis.fetch = originalFetch;
+      if (origTavily) process.env.TAVILY_API_KEY = origTavily;
+      if (origBrave) process.env.BRAVE_SEARCH_API_KEY = origBrave;
+      if (origBraveAlt) process.env.BRAVE_API_KEY = origBraveAlt;
     }
   });
 });

@@ -16,6 +16,7 @@ import type { ReasoningResult, ReasoningStep } from "../types/index.js";
 import { ExecutionError } from "../errors/errors.js";
 import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
+import { ObservableLogger, type LogEvent } from "@reactive-agents/observability";
 import { runKernel } from "./kernel/kernel-runner.js";
 import { reactKernel } from "./kernel/react-kernel.js";
 import {
@@ -87,6 +88,15 @@ export const executeReflexion = (
     const { llm, promptService: promptServiceOpt, eventBus: ebOpt } =
       yield* resolveStrategyServices;
 
+    const emitLog = (event: LogEvent): Effect.Effect<void, never> =>
+      Effect.serviceOption(ObservableLogger).pipe(
+        Effect.flatMap((opt) =>
+          opt._tag === "Some"
+            ? opt.value.emit(event).pipe(Effect.catchAll(() => Effect.void))
+            : Effect.void
+        )
+      );
+
     const { maxRetries, selfCritiqueDepth } = input.config.strategies.reflexion;
     const steps: ReasoningStep[] = [];
     const start = Date.now();
@@ -100,6 +110,8 @@ export const executeReflexion = (
       availableToolSchemas: input.availableToolSchemas,
       metaTools: input.metaTools,
     });
+
+    yield* emitLog({ _tag: "phase_started", phase: "reflexion:generate", timestamp: new Date() });
 
     // ── STEP 1: Initial generation (tool-aware via ReAct kernel) ──
     const genDefaultFallback = input.systemPrompt
@@ -153,6 +165,21 @@ export const executeReflexion = (
     totalTokens += genState.tokens;
     totalCost += genState.cost;
 
+    yield* emitLog({
+      _tag: "phase_complete",
+      phase: "reflexion:generate",
+      duration: Date.now() - start,
+      status: "success",
+    });
+
+    yield* emitLog({
+      _tag: "metric",
+      name: "tokens_used",
+      value: totalTokens,
+      unit: "tokens",
+      timestamp: new Date(),
+    });
+
     steps.push(makeStep("thought", `[ATTEMPT 1] ${currentResponse}`));
 
     yield* publishReasoningStep(ebOpt, {
@@ -168,6 +195,16 @@ export const executeReflexion = (
     // ── LOOP: Reflect → Improve ──
     while (attempt < maxRetries) {
       attempt++;
+
+      yield* emitLog({
+        _tag: "iteration",
+        iteration: attempt,
+        phase: "thought",
+        summary: `Reflexion attempt ${attempt}`,
+        timestamp: new Date(),
+      });
+
+      yield* emitLog({ _tag: "phase_started", phase: "reflexion:critique", timestamp: new Date() });
 
       // ── Reflect: self-critique the current response (pure LLM — no tools) ──
       const critiqueDefaultFallback = input.systemPrompt
@@ -223,6 +260,21 @@ export const executeReflexion = (
       totalTokens += critiqueResponse.usage.totalTokens;
       totalCost += critiqueResponse.usage.estimatedCost;
 
+      yield* emitLog({
+        _tag: "phase_complete",
+        phase: "reflexion:critique",
+        duration: Date.now() - start,
+        status: "success",
+      });
+
+      yield* emitLog({
+        _tag: "metric",
+        name: "tokens_used",
+        value: totalTokens,
+        unit: "tokens",
+        timestamp: new Date(),
+      });
+
       steps.push(makeStep("observation", `[CRITIQUE ${attempt}] ${critique}`));
 
       yield* publishReasoningStep(ebOpt, {
@@ -237,6 +289,12 @@ export const executeReflexion = (
 
       // ── Stagnation check: exit early if critique isn't changing ──
       if (isCritiqueStagnant(previousCritiques, critique)) {
+        yield* emitLog({
+          _tag: "warning",
+          message: `Critique stagnant after ${attempt} attempts, exiting early`,
+          context: "reflexion",
+          timestamp: new Date(),
+        });
         const gated = yield* enforceOutputQualityGate({
           llm,
           taskDescription: input.taskDescription,
@@ -265,6 +323,14 @@ export const executeReflexion = (
         });
         totalTokens += gated.tokens;
         totalCost += gated.cost;
+
+        yield* emitLog({
+          _tag: "completion",
+          success: true,
+          summary: `Reflexion completed successfully after ${attempt} attempts`,
+          timestamp: new Date(),
+        });
+
         yield* publishReasoningStep(ebOpt, {
           _tag: "FinalAnswerProduced",
           taskId: input.taskId ?? "reflexion",
@@ -290,6 +356,8 @@ export const executeReflexion = (
       }
 
       previousCritiques.push(critique);
+
+      yield* emitLog({ _tag: "phase_started", phase: "reflexion:improve", timestamp: new Date() });
 
       // ── Improve: generate a refined response (tool-aware via ReAct kernel) ──
       const improveDefaultFallback = input.systemPrompt
@@ -356,6 +424,21 @@ export const executeReflexion = (
       totalTokens += improveState.tokens;
       totalCost += improveState.cost;
 
+      yield* emitLog({
+        _tag: "phase_complete",
+        phase: "reflexion:improve",
+        duration: Date.now() - start,
+        status: "success",
+      });
+
+      yield* emitLog({
+        _tag: "metric",
+        name: "tokens_used",
+        value: totalTokens,
+        unit: "tokens",
+        timestamp: new Date(),
+      });
+
       steps.push(makeStep("thought", `[ATTEMPT ${attempt + 1}] ${currentResponse}`));
 
       yield* publishReasoningStep(ebOpt, {
@@ -377,6 +460,14 @@ export const executeReflexion = (
     });
     totalTokens += gated.tokens;
     totalCost += gated.cost;
+
+    yield* emitLog({
+      _tag: "completion",
+      success: false,
+      summary: `Reflexion reached max retries (${maxRetries}) without full satisfaction`,
+      timestamp: new Date(),
+    });
+
     return buildStrategyResult({
       strategy: "reflexion",
       steps,

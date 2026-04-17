@@ -7,6 +7,7 @@ import type { ReasoningResult } from "../types/index.js";
 import { ExecutionError, IterationLimitError } from "../errors/errors.js";
 import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
+import { ObservableLogger, type LogEvent } from "@reactive-agents/observability";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { ContextProfile } from "../context/context-profile.js";
 import type { ToolSchema } from "./kernel/utils/tool-formatting.js";
@@ -111,6 +112,17 @@ export const executeReactive = (
   Effect.gen(function* () {
     const start = Date.now();
 
+    const emitLog = (event: LogEvent): Effect.Effect<void, never> =>
+      Effect.serviceOption(ObservableLogger).pipe(
+        Effect.flatMap((opt) =>
+          opt._tag === "Some"
+            ? opt.value.emit(event).pipe(Effect.catchAll(() => Effect.void))
+            : Effect.void
+        )
+      );
+
+    yield* emitLog({ _tag: "phase_started", phase: "reactive:kernel", timestamp: new Date() });
+
     const maxIter =
       input.contextProfile?.maxIterations ??
       input.config.strategies.reactive.maxIterations;
@@ -212,6 +224,20 @@ export const executeReactive = (
               : state.status === "done"
                 ? "final_answer"
                 : "max_iterations";
+
+    yield* emitLog({
+      _tag: "phase_complete",
+      phase: "reactive:kernel",
+      duration: Date.now() - start,
+      status: state.status === "failed" ? "error" : "success",
+    });
+
+    yield* emitLog({
+      _tag: "completion",
+      success: state.status === "done",
+      summary: `Reactive strategy terminated: ${terminatedBy}`,
+      timestamp: new Date(),
+    });
 
     return buildStrategyResult({
       strategy: "reactive",

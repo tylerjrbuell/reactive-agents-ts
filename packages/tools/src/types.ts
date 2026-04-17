@@ -224,7 +224,7 @@ export const ToolDefinitionSchema = Schema.Struct({
  * ```typescript
  * const toolDef: ToolDefinition = {
  *   name: "web-search",
- *   description: "Search the web using Tavily",
+ *   description: "Search the web (Tavily, Brave, or DuckDuckGo fallback)",
  *   parameters: [
  *     { name: "query", type: "string", description: "Search query", required: true },
  *     { name: "maxResults", type: "number", description: "Max results (1-10)", required: false },

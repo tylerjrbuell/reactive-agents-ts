@@ -17,6 +17,7 @@ import type { ReasoningResult, ReasoningStep } from "../types/index.js";
 import { ExecutionError, IterationLimitError } from "../errors/errors.js";
 import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
+import { ObservableLogger, type LogEvent } from "@reactive-agents/observability";
 import { PlanStoreService } from "@reactive-agents/memory";
 import {
   LLMPlanOutputSchema,
@@ -93,6 +94,15 @@ export const executePlanExecute = (
     const services = yield* resolveStrategyServices;
     const { llm, toolService, eventBus } = services;
 
+    const emitLog = (event: LogEvent): Effect.Effect<void, never> =>
+      Effect.serviceOption(ObservableLogger).pipe(
+        Effect.flatMap((opt) =>
+          opt._tag === "Some"
+            ? opt.value.emit(event).pipe(Effect.catchAll(() => Effect.void))
+            : Effect.void
+        )
+      );
+
     // Optional PlanStore for persistence (available when memory layer is enabled)
     const planStoreOpt = yield* Effect.serviceOption(PlanStoreService).pipe(
       Effect.catchAll(() => Effect.succeed(Option.none<PlanStoreService["Type"]>())),
@@ -123,6 +133,8 @@ export const executePlanExecute = (
       name: t.name,
       signature: `(${t.parameters.map((p) => (p.required ? p.name : `${p.name}?`)).join(", ")})`,
     }));
+
+    yield* emitLog({ _tag: "phase_started", phase: "plan-execute:plan", timestamp: new Date() });
 
     // ── PLAN: Generate initial structured plan ──
     const planPrompt = buildPlanGenerationPrompt({
@@ -158,6 +170,21 @@ export const executePlanExecute = (
       Math.ceil(planResult.raw.length / 4) +
       Math.ceil(planPrompt.length / 4);
     totalTokens += planTokenEst;
+
+    yield* emitLog({
+      _tag: "phase_complete",
+      phase: "plan-execute:plan",
+      duration: Date.now() - start,
+      status: "success",
+    });
+
+    yield* emitLog({
+      _tag: "metric",
+      name: "tokens_used",
+      value: totalTokens,
+      unit: "tokens",
+      timestamp: new Date(),
+    });
 
     let plan: Plan = hydratePlan(planResult.data, {
       taskId: input.taskId ?? "plan-execute",
@@ -260,6 +287,16 @@ export const executePlanExecute = (
     let completedSteps: PlanStep[] = [];
 
     while (refinement <= maxRefinements) {
+      yield* emitLog({
+        _tag: "iteration",
+        iteration: refinement + 1,
+        phase: "action",
+        summary: `Plan refinement ${refinement + 1} of ${maxRefinements + 1}`,
+        timestamp: new Date(),
+      });
+
+      yield* emitLog({ _tag: "phase_started", phase: "plan-execute:execute", timestamp: new Date() });
+
       steps.push(
         makeStep(
           "thought",
@@ -356,6 +393,7 @@ export const executePlanExecute = (
                   services,
                   stepKernelMaxIterations,
                   attempt > 0 ? lastError : undefined,
+                  emitLog,
                 ),
               );
 
@@ -479,6 +517,23 @@ export const executePlanExecute = (
         }
       }
 
+      yield* emitLog({
+        _tag: "phase_complete",
+        phase: "plan-execute:execute",
+        duration: Date.now() - start,
+        status: "success",
+      });
+
+      yield* emitLog({
+        _tag: "metric",
+        name: "tokens_used",
+        value: totalTokens,
+        unit: "tokens",
+        timestamp: new Date(),
+      });
+
+      yield* emitLog({ _tag: "phase_started", phase: "plan-execute:reflect", timestamp: new Date() });
+
       // ── REFLECT: Evaluate execution quality ──
       const stepResults: StepResult[] = plan.steps.map((s) => ({
         stepId: s.id,
@@ -520,6 +575,21 @@ export const executePlanExecute = (
 
       // Strip <think> blocks from reflection before satisfaction check
       const reflectionContent = stripThinking(reflectResponse.content);
+
+      yield* emitLog({
+        _tag: "phase_complete",
+        phase: "plan-execute:reflect",
+        duration: Date.now() - start,
+        status: "success",
+      });
+
+      yield* emitLog({
+        _tag: "metric",
+        name: "tokens_used",
+        value: totalTokens,
+        unit: "tokens",
+        timestamp: new Date(),
+      });
 
       // Trust the reflector's verdict — step completion alone does not mean the goal
       // is met (e.g. a combined search may return incomplete data for each entity).
@@ -682,6 +752,13 @@ export const executePlanExecute = (
       totalCost += gated.cost;
     }
 
+    yield* emitLog({
+      _tag: "completion",
+      success: !!finalOutput,
+      summary: finalOutput ? `Plan execution completed successfully` : `Plan execution failed to produce output`,
+      timestamp: new Date(),
+    });
+
     return buildStrategyResult({
       strategy: "plan-execute-reflect",
       steps,
@@ -772,7 +849,8 @@ function executeStep(
   toolSummaries: ToolSummary[],
   services: StrategyServices,
   maxKernelIter: number,
-  retryErrorContext?: string,
+  retryErrorContext: string | undefined,
+  emitLog: (event: LogEvent) => Effect.Effect<void, never>,
 ): Effect.Effect<StepExecResult, ExecutionError, LLMService> {
   const { toolService } = services;
 
@@ -794,6 +872,14 @@ function executeStep(
       }
 
       const toolStart = Date.now();
+
+      yield* emitLog({
+        _tag: "tool_call",
+        tool: step.toolName!,
+        iteration: stepIndex + 1,
+        timestamp: new Date(),
+      });
+
       const toolResult = yield* toolService.value
         .execute({
           toolName: step.toolName!,
@@ -802,6 +888,19 @@ function executeStep(
           sessionId: input.sessionId ?? "reasoning-session",
         })
         .pipe(
+          Effect.tapError(
+            (e) => {
+              const toolDurationMs = Date.now() - toolStart;
+              return emitLog({
+                _tag: "tool_result",
+                tool: step.toolName!,
+                duration: toolDurationMs,
+                status: "error",
+                error: String(e),
+                timestamp: new Date(),
+              });
+            }
+          ),
           Effect.mapError(
             (e) =>
               new ExecutionError({
@@ -813,6 +912,14 @@ function executeStep(
           ),
         );
       const toolDurationMs = Date.now() - toolStart;
+
+      yield* emitLog({
+        _tag: "tool_result",
+        tool: step.toolName!,
+        duration: toolDurationMs,
+        status: "success",
+        timestamp: new Date(),
+      });
 
       // Publish ToolCallCompleted so MetricsCollector tracks tool execution
       yield* publishReasoningStep(services.eventBus, {

@@ -14,6 +14,7 @@ import type { ReasoningResult, ReasoningStep } from "../types/index.js";
 import { ExecutionError } from "../errors/errors.js";
 import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
+import { ObservableLogger, type LogEvent } from "@reactive-agents/observability";
 import { runKernel } from "./kernel/kernel-runner.js";
 import { reactKernel } from "./kernel/react-kernel.js";
 import { resolveStrategyServices, compilePromptOrFallback, publishReasoningStep } from "./kernel/utils/service-utils.js";
@@ -104,6 +105,15 @@ export const executeTreeOfThought = (
     const services = yield* resolveStrategyServices;
     const { llm, promptService, eventBus } = services;
 
+    const emitLog = (event: LogEvent): Effect.Effect<void, never> =>
+      Effect.serviceOption(ObservableLogger).pipe(
+        Effect.flatMap((opt) =>
+          opt._tag === "Some"
+            ? opt.value.emit(event).pipe(Effect.catchAll(() => Effect.void))
+            : Effect.void
+        )
+      );
+
     const { breadth, depth, pruningThreshold } =
       input.config.strategies.treeOfThought;
     const capabilitySnapshot = yield* resolveExecutableToolCapabilities({
@@ -129,6 +139,8 @@ export const executeTreeOfThought = (
         parentId: null,
       },
     ];
+
+    yield* emitLog({ _tag: "phase_started", phase: "tree-of-thought:explore", timestamp: new Date() });
 
     steps.push(makeStep("thought", `[TOT] Starting tree exploration: breadth=${breadth}, depth=${depth}, pruningThreshold=${pruningThreshold}`));
 
@@ -335,6 +347,23 @@ export const executeTreeOfThought = (
 
     steps.push(makeStep("observation", `[TOT] Best path (score=${bestLeaf.score.toFixed(2)}): ${bestPath.join(" -> ")}`));
 
+    yield* emitLog({
+      _tag: "phase_complete",
+      phase: "tree-of-thought:explore",
+      duration: Date.now() - start,
+      status: "success",
+    });
+
+    yield* emitLog({
+      _tag: "metric",
+      name: "tokens_used",
+      value: totalTokens,
+      unit: "tokens",
+      timestamp: new Date(),
+    });
+
+    yield* emitLog({ _tag: "phase_started", phase: "tree-of-thought:execute", timestamp: new Date() });
+
     // ── Phase 2: Execute best path using ReAct kernel ──
     const bestPathSummary = bestPath.join("\n→ ");
     const execState = yield* runKernel(reactKernel, {
@@ -371,6 +400,20 @@ export const executeTreeOfThought = (
     const finalOutput = execState.output
       ?? [...execState.steps].filter((s) => s.type === "thought").pop()?.content
       ?? null;
+
+    yield* emitLog({
+      _tag: "phase_complete",
+      phase: "tree-of-thought:execute",
+      duration: Date.now() - start,
+      status: "success",
+    });
+
+    yield* emitLog({
+      _tag: "completion",
+      success: !!finalOutput,
+      summary: finalOutput ? "Tree-of-thought completed successfully" : "Tree-of-thought failed to produce output",
+      timestamp: new Date(),
+    });
 
     return buildStrategyResult({
       strategy: "tree-of-thought",

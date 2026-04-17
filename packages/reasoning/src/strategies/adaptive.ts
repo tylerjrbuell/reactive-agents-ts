@@ -13,6 +13,7 @@ import type { ReasoningResult, ReasoningStep } from "../types/index.js";
 import { ExecutionError, IterationLimitError } from "../errors/errors.js";
 import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
+import { ObservableLogger, type LogEvent } from "@reactive-agents/observability";
 import { executeReactive } from "./reactive.js";
 import { executeReflexion } from "./reflexion.js";
 import { executePlanExecute } from "./plan-execute.js";
@@ -89,8 +90,20 @@ export const executeAdaptive = (
   Effect.gen(function* () {
     const { llm, promptService: promptServiceOpt, eventBus: ebOpt } =
       yield* resolveStrategyServices;
+
+    const emitLog = (event: LogEvent): Effect.Effect<void, never> =>
+      Effect.serviceOption(ObservableLogger).pipe(
+        Effect.flatMap((opt) =>
+          opt._tag === "Some"
+            ? opt.value.emit(event).pipe(Effect.catchAll(() => Effect.void))
+            : Effect.void
+        )
+      );
+
     const steps: ReasoningStep[] = [];
     const start = Date.now();
+
+    yield* emitLog({ _tag: "phase_started", phase: "adaptive:select", timestamp: new Date() });
 
     // ── Heuristic pre-classifier ──
     // Avoid an LLM call for obvious cases. Only consult the LLM for ambiguous tasks.
@@ -176,6 +189,15 @@ export const executeAdaptive = (
     });
     } // end else (LLM classification path)
 
+    yield* emitLog({
+      _tag: "phase_complete",
+      phase: "adaptive:select",
+      duration: Date.now() - start,
+      status: "success",
+    });
+
+    yield* emitLog({ _tag: "phase_started", phase: "adaptive:dispatch", timestamp: new Date() });
+
     // ── Dispatch to selected strategy ──
     const subResult = yield* dispatchStrategy(selectedStrategy, input);
 
@@ -212,10 +234,24 @@ export const executeAdaptive = (
     // ── Combine results ──
     const allSteps = [...steps, ...finalSubResult.steps];
 
+    yield* emitLog({
+      _tag: "phase_complete",
+      phase: "adaptive:dispatch",
+      duration: Date.now() - start,
+      status: "success",
+    });
+
     // strategy: "adaptive" preserved for API consumers.
     // selectedStrategy in metadata surfaces what actually ran (e.g. "reactive")
     // so strategyUsed in AgentResult shows the effective sub-strategy.
     const activeStrategy = fallbackOccurred ? "reactive" : selectedStrategy;
+
+    yield* emitLog({
+      _tag: "completion",
+      success: finalSubResult.status === "completed",
+      summary: `Adaptive selected ${activeStrategy}${fallbackOccurred ? " (fallback)" : ""}`,
+      timestamp: new Date(),
+    });
 
     return buildStrategyResult({
       strategy: "adaptive",

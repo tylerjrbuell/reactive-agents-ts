@@ -77,7 +77,13 @@ export {
   scratchpadStoreRef,
   checkpointStoreRef,
 } from "./skills/builtin.js";
-export { webSearchTool, webSearchHandler } from "./skills/web-search.js";
+export {
+  webSearchTool,
+  webSearchHandler,
+  type WebSearchHandlerResult,
+  type WebSearchProvider,
+  type WebSearchResultRow,
+} from "./skills/web-search.js";
 export {
   fileReadTool,
   fileReadHandler,

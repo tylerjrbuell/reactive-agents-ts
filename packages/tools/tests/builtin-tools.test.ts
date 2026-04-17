@@ -87,10 +87,25 @@ describe("Built-in Tool Handlers", () => {
     expect(contents).toBe("written by test");
   });
 
-  it("webSearchHandler throws error when no API key", async () => {
-    // Ensure no API key is set
+  it("webSearchHandler fails when no keys and DuckDuckGo has no instant answer", async () => {
+    const originalFetch = globalThis.fetch;
     const original = process.env.TAVILY_API_KEY;
+    const origBrave = process.env.BRAVE_SEARCH_API_KEY;
+    const origBraveAlt = process.env.BRAVE_API_KEY;
     delete process.env.TAVILY_API_KEY;
+    delete process.env.BRAVE_SEARCH_API_KEY;
+    delete process.env.BRAVE_API_KEY;
+
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const href = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (href.includes("api.duckduckgo.com")) {
+        return new Response(JSON.stringify({}), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return originalFetch(input);
+    }) as typeof fetch;
 
     try {
       const result = await Effect.runPromise(
@@ -100,7 +115,10 @@ describe("Built-in Tool Handlers", () => {
       expect(result).toBeInstanceOf(ToolExecutionError);
       expect(result.message).toContain("TAVILY_API_KEY");
     } finally {
+      globalThis.fetch = originalFetch;
       if (original) process.env.TAVILY_API_KEY = original;
+      if (origBrave) process.env.BRAVE_SEARCH_API_KEY = origBrave;
+      if (origBraveAlt) process.env.BRAVE_API_KEY = origBraveAlt;
     }
   });
 
