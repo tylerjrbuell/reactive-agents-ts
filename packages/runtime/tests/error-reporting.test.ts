@@ -121,3 +121,17 @@ describe("Error reporting chain", () => {
     await agent.dispose();
   });
 });
+
+describe("metadata instrumentation", () => {
+  it("result.metadata.llmCalls reflects actual LLM API calls made", async () => {
+    const agent = await ReactiveAgents.create()
+      .withName("llm-calls-test")
+      .withTestScenario([{ text: "The answer is 42." }])
+      .withReasoning({ defaultStrategy: "reactive", maxIterations: 5 })
+      .build();
+
+    const result = await agent.run("What is the answer?");
+    expect((result.metadata as any).llmCalls).toBeGreaterThan(0);
+    await agent.dispose();
+  });
+});

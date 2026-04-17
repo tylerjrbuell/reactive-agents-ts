@@ -50,10 +50,10 @@
 |------|---------|-----------|
 | Understand agent execution flow | `runtime` | `src/execution-engine.ts` (10-phase loop) |
 | Add/change builder methods | `runtime` | `src/builder.ts` |
-| Fix tool calling behavior | `reasoning` | `src/strategies/shared/react-kernel.ts` |
+| Fix tool calling behavior | `reasoning` | `src/strategies/kernel/react-kernel.ts` |
 | Fix strategy selection | `reasoning` | `src/strategies/adaptive.ts` |
 | Fix plan-execute loops | `reasoning` | `src/strategies/plan-execute.ts` |
-| Fix loop detection | `reasoning` | `src/strategies/shared/kernel-runner.ts` |
+| Fix loop detection | `reasoning` | `src/strategies/kernel/kernel-runner.ts` |
 | Change entropy scoring | `reactive-intelligence` | `src/sensor/entropy-sensor-service.ts` |
 | Add model to registry | `reactive-intelligence` | `src/calibration/model-registry.ts` |
 | Fix LLM provider behavior | `llm-provider` | `src/providers/{name}.ts` |
@@ -105,11 +105,11 @@ The reasoning layer is the most complex subsystem. All 5 strategies share a comm
 
 | # | File | What It Does |
 |---|------|-------------|
-| 1 | `reasoning/src/strategies/shared/kernel-state.ts` | `KernelState`, `KernelInput`, `KernelContext`, `ThoughtKernel` type, `transitionState()` |
-| 2 | `reasoning/src/strategies/shared/react-kernel.ts` | `reactKernel` — single-step Think→Parse→Execute→Observe |
-| 3 | `reasoning/src/strategies/shared/kernel-runner.ts` | `runKernel()` — iteration loop, entropy, loop detection |
-| 4 | `reasoning/src/strategies/shared/tool-utils.ts` | Tool parsing, ACTION extraction, compression, LLM-based filtering |
-| 5 | `reasoning/src/strategies/shared/tool-execution.ts` | `executeToolCall()`, observation result construction |
+| 1 | `reasoning/src/strategies/kernel/kernel-state.ts` | `KernelState`, `KernelInput`, `KernelContext`, `ThoughtKernel` type, `transitionState()` |
+| 2 | `reasoning/src/strategies/kernel/react-kernel.ts` | `reactKernel` — single-step Think→Parse→Execute→Observe |
+| 3 | `reasoning/src/strategies/kernel/kernel-runner.ts` | `runKernel()` — iteration loop, entropy, loop detection |
+| 4 | `reasoning/src/strategies/kernel/utils/tool-utils.ts` | Tool parsing, ACTION extraction, compression, LLM-based filtering |
+| 5 | `reasoning/src/strategies/kernel/utils/tool-execution.ts` | `executeToolCall()`, observation result construction |
 | 6 | `reasoning/src/strategies/reactive.ts` | Thin wrapper: `runKernel(reactKernel, input, opts)` → `ReasoningResult` |
 | 7 | `reasoning/src/strategies/plan-execute.ts` | Structured Plan Engine with step patching and composite steps |
 
@@ -152,7 +152,7 @@ LLM generates: Thought + ACTION: tool_name({args})  │
 
 | Tool | File | Purpose |
 |------|------|---------|
-| `web-search` | `tools/src/skills/web-search.ts` | Tavily-powered web search |
+| `web-search` | `tools/src/skills/web-search.ts` | Web search: Tavily → Brave → DuckDuckGo instant (no key) |
 | `http-get` | `tools/src/skills/http-client.ts` | Fetch URL content |
 | `file-read` | `tools/src/skills/file-operations.ts` | Read file content |
 | `file-write` | `tools/src/skills/file-operations.ts` | Write file content |

@@ -307,6 +307,8 @@ function normalizeReasoningResult(
         ? md.strategyFallback
         : undefined,
       confidence: typeof md.confidence === "number" ? md.confidence : undefined,
+      llmCalls: typeof md.llmCalls === "number" ? md.llmCalls : undefined,
+      terminatedBy: typeof md.terminatedBy === "string" ? md.terminatedBy : undefined,
     },
   };
 }
@@ -4157,14 +4159,20 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
               Effect.ensuring(Effect.sync(() => { renderer?.stop(); })),
             );
 
-            // In status mode: pipe think-stream chunks into the renderer and silence Effect's built-in logger
+            // Always silence Effect's built-in logger — ObservableLogger owns all output.
+            // Silencing only in TTY caused divergence where Effect.log* calls appeared in CI but not terminal.
+            const executeCoreQuiet = executeCoreRaw.pipe(
+              Effect.provide(Logger.replace(Logger.defaultLogger, Logger.none)),
+            );
+
+            // In status mode: additionally pipe think-stream chunks into the renderer
             const executeCoreWithLogger = isStatusMode && renderer
               ? Effect.locally(
-                  executeCoreRaw.pipe(Effect.provide(Logger.replace(Logger.defaultLogger, Logger.none))),
+                  executeCoreQuiet,
                   StreamingTextCallback,
                   (text: string) => Effect.sync(() => renderer.pushThinkChunk(text)),
                 )
-              : executeCoreRaw;
+              : executeCoreQuiet;
             if (obs) {
               const taskResult = yield* obs.withSpan(
                 "execution.run",
