@@ -2555,7 +2555,12 @@ export class ReactiveAgentBuilder {
         fallbackConfig: self._fallbackConfig,
         pricingRegistry: Object.keys(self._pricingRegistry).length > 0 ? self._pricingRegistry : undefined,
         metaTools: kernelMetaTools,
-        calibration: self._calibration !== "skip" ? self._calibration : undefined,
+        // Auto-enable calibration when reasoning is active and user hasn't explicitly skipped.
+        // This ensures per-model adaptation (steering channel, parallel capability, classifier
+        // reliability) works by default — users only need .withCalibration("skip") to opt out.
+        calibration: self._calibration !== "skip"
+          ? self._calibration
+          : (self._enableReasoning ? "auto" : undefined),
       });
 
       const hooks = [...self._hooks];
