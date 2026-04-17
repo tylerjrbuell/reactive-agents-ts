@@ -642,7 +642,7 @@ export function runKernel(
         const saved = yield* autoCheckpoint(checkpointStoreRef, state.steps);
         if (saved) {
           autoCheckpointed = true;
-          yield* Effect.log(`[auto-checkpoint] Saved best observations before context pressure gate (tokens=${state.tokens})`);
+          yield* emitLog({ _tag: "warning", message: `[auto-checkpoint] Saved best observations before context pressure gate (tokens=${state.tokens})`, timestamp: new Date() });
         }
       }
 
@@ -704,9 +704,7 @@ export function runKernel(
           requiredToolNudgeCount++;
           if (requiredToolNudgeCount > maxRequiredToolNudges) {
             if (totalArtifacts > 0) {
-              yield* Effect.log(
-                `[harness-deliverable] Required-tool nudge budget exhausted (${maxRequiredToolNudges}) — delivering ${totalArtifacts} artifacts`,
-              );
+              yield* emitLog({ _tag: "warning", message: `[harness-deliverable] Required-tool nudge budget exhausted (${maxRequiredToolNudges}) — delivering ${totalArtifacts} artifacts`, timestamp: new Date() });
               state = transitionState(state, {
                 status: "done",
                 output: assembleDeliverable(state),
@@ -760,9 +758,7 @@ export function runKernel(
         }
 
         if (totalArtifacts > 0) {
-          yield* Effect.log(
-            `[harness-deliverable] Assembling output from ${totalArtifacts} tool artifacts after ${consecutiveStalled} stalled iterations`,
-          );
+          yield* emitLog({ _tag: "warning", message: `[harness-deliverable] Assembling output from ${totalArtifacts} tool artifacts after ${consecutiveStalled} stalled iterations`, timestamp: new Date() });
           state = transitionState(state, {
             status: "done",
             output: assembleDeliverable(state),
@@ -813,7 +809,7 @@ export function runKernel(
           shouldForceOracleExit({ oracleReady, readyToAnswerNudgeCount: nudgeCount, tier: profile.tier })
         ) {
           // Stage 2: force exit — model has been nudged twice and still hasn't called final-answer
-          yield* Effect.log(`[oracle-gate] Forcing exit after ${nudgeCount} ignored readyToAnswer signals`);
+          yield* emitLog({ _tag: "warning", message: `[oracle-gate] Forcing exit after ${nudgeCount} ignored readyToAnswer signals`, timestamp: new Date() });
           const forcedOutput = state.output ?? state.steps.filter((s) => s.type === "thought").slice(-1)[0]?.content ?? "Task complete.";
           state = transitionState(state, {
             status: "done",
@@ -827,7 +823,7 @@ export function runKernel(
             readyToAnswerNudgeCount: nudgeCount + 1,
             pendingGuidance: { oracleGuidance: mandatoryNudge },
           });
-          yield* Effect.log(`[oracle-gate] Stage 1 nudge injected (nudgeCount now ${nudgeCount + 1})`);
+          yield* emitLog({ _tag: "warning", message: `[oracle-gate] Stage 1 nudge injected (nudgeCount now ${nudgeCount + 1})`, timestamp: new Date() });
         } else if (nudgeCount > 0) {
           // Oracle no longer eligible for synthesis nudges — reset count.
           // This includes both "oracle not ready" and gather-lane runs.
@@ -978,9 +974,7 @@ export function runKernel(
             if (missingRequiredByCount.length > 0) {
               requiredToolNudgeCount++;
               if (requiredToolNudgeCount > maxRequiredToolNudges) {
-                yield* Effect.log(
-                  `[harness-deliverable] Required-tool nudge budget exhausted in loop detection (${maxRequiredToolNudges}) — delivering ${loopArtifactCount} artifacts`,
-                );
+                yield* emitLog({ _tag: "warning", message: `[harness-deliverable] Required-tool nudge budget exhausted in loop detection (${maxRequiredToolNudges}) — delivering ${loopArtifactCount} artifacts`, timestamp: new Date() });
                 state = transitionState(state, {
                   status: "done",
                   output: assembleDeliverable(state),
@@ -1000,9 +994,7 @@ export function runKernel(
               continue;
             }
 
-            yield* Effect.log(
-              `[harness-deliverable] Loop detected but ${loopArtifactCount} artifacts gathered — delivering instead of failing`,
-            );
+            yield* emitLog({ _tag: "warning", message: `[harness-deliverable] Loop detected but ${loopArtifactCount} artifacts gathered — delivering instead of failing`, timestamp: new Date() });
             state = transitionState(state, {
               status: "done",
               output: assembleDeliverable(state),
@@ -1127,18 +1119,18 @@ export function runKernel(
                 output: synthesized.content,
                 meta: { ...state.meta, outputSynthesized: true, outputFormatValidated: true },
               });
-              yield* Effect.log(`[output-gate] Synthesized output to match requested format: ${synthesisFormat}`);
+              yield* emitLog({ _tag: "warning", message: `[output-gate] Synthesized output to match requested format: ${synthesisFormat}`, timestamp: new Date() });
             } else if (terminationSource === "harness" || terminationSource === "oracle") {
               state = transitionState(state, {
                 output: synthesized.content,
                 meta: { ...state.meta, outputSynthesized: true, outputFormatValidated: formatOk, outputFormatReason: !formatOk ? "Format mismatch after synthesis" : !contentOk ? "Content incomplete after synthesis" : undefined },
               });
-              yield* Effect.log(`[output-gate] Synthesis imperfect but using over raw artifacts (format=${formatOk}, content=${contentOk})`);
+              yield* emitLog({ _tag: "warning", message: `[output-gate] Synthesis imperfect but using over raw artifacts (format=${formatOk}, content=${contentOk})`, timestamp: new Date() });
             } else {
               state = transitionState(state, {
                 meta: { ...state.meta, outputFormatValidated: false, outputFormatReason: finalized.validationReason },
               });
-              yield* Effect.log(`[output-gate] Synthesis attempted but validation still failed (format=${formatOk}, content=${contentOk})`);
+              yield* emitLog({ _tag: "warning", message: `[output-gate] Synthesis attempted but validation still failed (format=${formatOk}, content=${contentOk})`, timestamp: new Date() });
             }
           } else {
             state = transitionState(state, {

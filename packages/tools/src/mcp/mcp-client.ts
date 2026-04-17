@@ -33,6 +33,10 @@ import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import type { MCPServer } from "../types.js";
 import { MCPConnectionError, ToolExecutionError } from "../errors.js";
 
+const mcpDebug = (...args: unknown[]): void => {
+  if (process.env["RAX_DEBUG"]) console.log(...args);
+};
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 type ConnectConfig = Omit<
@@ -111,12 +115,12 @@ export function cleanupMcpTransport(serverName: string): void {
   if (conn.dockerContainerName) {
     // Must use `docker rm -f` — killing the docker run process is not enough
     // because the Docker daemon keeps the container alive independently.
-    console.log(`[MCP cleanup] stopping container "${conn.dockerContainerName}"`);
+    mcpDebug(`[MCP cleanup] stopping container "${conn.dockerContainerName}"`);
     dockerRmForce(conn.dockerContainerName);
   }
   try { void conn.transport.close(); } catch { /* already gone */ }
   activeConnections.delete(serverName);
-  console.log(`[MCP cleanup] "${serverName}" transport closed`);
+  mcpDebug(`[MCP cleanup] "${serverName}" transport closed`);
 }
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
@@ -275,7 +279,7 @@ async function reconnectViaHttp(
   // Stop the probe container before checking/spawning the port-mapped one.
   // This is the only reliable way — killing the docker run process does not stop the container.
   if (probeContainerName) {
-    console.log(`[MCP http-mode] "${config.name}" — stopping probe container "${probeContainerName}"`);
+    mcpDebug(`[MCP http-mode] "${config.name}" — stopping probe container "${probeContainerName}"`);
     dockerRmForce(probeContainerName);
     // Brief settle for docker networking to release the container's internal resources
     await new Promise<void>((r) => setTimeout(r, 800));
@@ -287,7 +291,7 @@ async function reconnectViaHttp(
   let dockerContainerName: string | undefined;
 
   if (alreadyUp) {
-    console.log(`[MCP http-mode] "${config.name}" — endpoint already up at ${resolvedUrl}; reusing`);
+    mcpDebug(`[MCP http-mode] "${config.name}" — endpoint already up at ${resolvedUrl}; reusing`);
   } else {
     // Spawn a port-mapped container with a unique name: rax-mcp-<server>-<pid>
     // The name includes the process PID so multiple agents running the same server don't conflict.
@@ -305,7 +309,7 @@ async function reconnectViaHttp(
       : argsWithRm;
     const portMappedArgs = addDockerPortMapping(namedArgs, port);
 
-    console.log(`[MCP http-mode] "${config.name}" — spawning "${dockerContainerName}" with -p ${port}:${port}`);
+    mcpDebug(`[MCP http-mode] "${config.name}" — spawning "${dockerContainerName}" with -p ${port}:${port}`);
 
     const spawnEnv = config.env ? { ...process.env, ...config.env } : { ...process.env };
     const subprocess = nodeSpawn(config.command!, portMappedArgs, {
@@ -320,12 +324,12 @@ async function reconnectViaHttp(
       if (trimmed) process.stderr.write(`[MCP ${config.name}] ${trimmed}\n`);
     });
 
-    console.log(`[MCP http-mode] "${config.name}" — waiting for ${resolvedUrl} to be healthy…`);
+    mcpDebug(`[MCP http-mode] "${config.name}" — waiting for ${resolvedUrl} to be healthy…`);
     await waitForHttpEndpoint(resolvedUrl, 60_000).catch((e) => {
       dockerRmForce(dockerContainerName!);
       throw e;
     });
-    console.log(`[MCP http-mode] "${config.name}" — endpoint healthy`);
+    mcpDebug(`[MCP http-mode] "${config.name}" — endpoint healthy`);
   }
 
   // Try streamable-http first, fall back to SSE
@@ -345,9 +349,9 @@ async function reconnectViaHttp(
 
     const sdkClient = new Client({ name: "reactive-agents", version: "1.0.0" }, { capabilities: {} });
     try {
-      console.log(`[MCP http-mode] "${config.name}" — trying ${candidate.type} at ${candidate.url}`);
+      mcpDebug(`[MCP http-mode] "${config.name}" — trying ${candidate.type} at ${candidate.url}`);
       await sdkClient.connect(httpTransport);
-      console.log(`[MCP init] "${config.name}" — connected via ${candidate.type}`);
+      mcpDebug(`[MCP init] "${config.name}" — connected via ${candidate.type}`);
       return {
         client: sdkClient,
         transport: httpTransport,
@@ -383,7 +387,7 @@ async function buildMCPServer(
   const tools = toolsResult.tools ?? [];
   const toolNames = tools.map((t) => t.name);
 
-  console.log(
+  mcpDebug(
     `[MCP tools] "${name}" — ${toolNames.length} tool(s)` +
     (toolNames.length > 0
       ? `: ${toolNames.slice(0, 5).join(", ")}${toolNames.length > 5 ? ` … +${toolNames.length - 5} more` : ""}`
@@ -448,7 +452,7 @@ async function connectInternal(config: ConnectConfig): Promise<ActiveConnection>
       });
     }
 
-    console.log(
+    mcpDebug(
       `[MCP spawn] "${config.name}" — ${config.command} ${(probeArgs ?? config.args ?? []).join(" ")}` +
       (config.cwd ? ` (cwd: ${config.cwd})` : ""),
     );
@@ -470,7 +474,7 @@ async function connectInternal(config: ConnectConfig): Promise<ActiveConnection>
     const winner = await Promise.race([connectRace, httpRace]);
 
     if (winner.type === "http") {
-      console.log(`[MCP auto-detect] "${config.name}" — HTTP server detected; switching to HTTP mode`);
+      mcpDebug(`[MCP auto-detect] "${config.name}" — HTTP server detected; switching to HTTP mode`);
       void transport.close().catch(() => {});
       return reconnectViaHttp(config, winner.url, probeContainerName);
     }
@@ -481,7 +485,7 @@ async function connectInternal(config: ConnectConfig): Promise<ActiveConnection>
         new Promise<undefined>((r) => setTimeout(() => r(undefined), 200)),
       ]);
       if (httpUrl) {
-        console.log(`[MCP auto-detect] "${config.name}" — stdio error + HTTP URL seen; switching to HTTP`);
+        mcpDebug(`[MCP auto-detect] "${config.name}" — stdio error + HTTP URL seen; switching to HTTP`);
         void transport.close().catch(() => {});
         return reconnectViaHttp(config, httpUrl, probeContainerName);
       }
@@ -492,7 +496,7 @@ async function connectInternal(config: ConnectConfig): Promise<ActiveConnection>
     }
 
     // stdio MCP server — connected normally
-    console.log(`[MCP init] "${config.name}" — connected via stdio`);
+    mcpDebug(`[MCP init] "${config.name}" — connected via stdio`);
     const server = await buildMCPServer(config.name, "stdio", undefined, config, sdkClient);
     return { client: sdkClient, transport, server };
   }
@@ -501,7 +505,7 @@ async function connectInternal(config: ConnectConfig): Promise<ActiveConnection>
   const transport = createTransport(config);
   const sdkClient = new Client({ name: "reactive-agents", version: "1.0.0" }, { capabilities: {} });
   await sdkClient.connect(transport);
-  console.log(`[MCP init] "${config.name}" — connected via ${effectiveTransport}`);
+  mcpDebug(`[MCP init] "${config.name}" — connected via ${effectiveTransport}`);
   const server = await buildMCPServer(config.name, effectiveTransport, config.endpoint, config, sdkClient);
   return { client: sdkClient, transport, server };
 }
@@ -576,7 +580,7 @@ export const makeMCPClient = Effect.gen(function* () {
         const conn = activeConnections.get(serverName);
         if (conn) {
           if (conn.dockerContainerName) {
-            console.log(`[MCP disconnect] stopping container "${conn.dockerContainerName}"`);
+            mcpDebug(`[MCP disconnect] stopping container "${conn.dockerContainerName}"`);
             dockerRmForce(conn.dockerContainerName);
           }
           try { await conn.transport.close(); } catch { /* already gone */ }
