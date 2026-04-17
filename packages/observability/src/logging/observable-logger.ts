@@ -15,7 +15,7 @@ import { formatEvent } from "./event-formatter.js";
  *   const logger = yield* Effect.service(ObservableLogger);
  *   yield* logger.emit({ _tag: 'phase_started', phase: 'think', timestamp: new Date() });
  */
-export interface ObservableLogger {
+export interface ObservableLoggerService {
   /**
    * Emit a structured event.
    * If live=true, immediately formats and notifies subscribers.
@@ -67,7 +67,7 @@ export interface ObservableLogger {
 
 export class ObservableLogger extends Context.Tag("ObservableLogger")<
   ObservableLogger,
-  ObservableLogger
+  ObservableLoggerService
 >() {}
 
 // ─── Implementation ───
@@ -78,7 +78,7 @@ export class ObservableLogger extends Context.Tag("ObservableLogger")<
  */
 export function makeObservableLogger(config: {
   live: boolean;
-}): Effect.Effect<ObservableLogger, never, never> {
+}): Effect.Effect<ObservableLoggerService, never, never> {
   return Effect.gen(function* () {
     const bufferRef = yield* Ref.make<LogEvent[]>([]);
     const subscribersRef = yield* Ref.make<
@@ -163,7 +163,7 @@ export function makeObservableLogger(config: {
       format,
       flush,
       reset,
-    } satisfies ObservableLogger;
+    } satisfies ObservableLoggerService;
   });
 }
 

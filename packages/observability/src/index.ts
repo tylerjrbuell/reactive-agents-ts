@@ -39,6 +39,7 @@ export type { IterationProgress } from "./logging/progress-logger.js";
 export { makeLoggerService } from "./logging/logger-service.js";
 export type { LoggerService, LoggingConfig } from "./logging/logger-service.js";
 export { makeObservableLogger, ObservableLogger } from "./logging/observable-logger.js";
+export type { ObservableLoggerService } from "./logging/observable-logger.js";
 export { formatEvent } from "./logging/event-formatter.js";
 export { makeNoticesManager, NOTICE_IDS } from "./logging/notices-manager.js";
 export type { NoticesManager } from "./logging/notices-manager.js";
