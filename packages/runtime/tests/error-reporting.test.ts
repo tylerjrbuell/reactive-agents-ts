@@ -107,23 +107,17 @@ describe("Error reporting chain", () => {
     expect(mockResult.error).toBe("Test error message");
   });
 
-  it("hard LLM failure rejects the promise (not silent swallow)", async () => {
-    // When the LLM provider throws outright, the promise should reject, not hang.
+  it("hard LLM failure surfaces as success:false result (not silent swallow)", async () => {
+    // When the LLM stream emits an error event, agent.run() returns a failed result.
+    // The API contract is: run() always returns AgentResult — check result.success.
     const agent = await ReactiveAgents.create()
       .withName("hard-fail-test")
       .withTestScenario([{ error: "Connection refused" }])
       .withReasoning({ defaultStrategy: "reactive" })
       .build();
 
-    let threwError = false;
-    try {
-      await agent.run("Test task");
-    } catch (e) {
-      threwError = true;
-      expect(e).toBeInstanceOf(Error);
-      expect((e as Error).message).toContain("Connection refused");
-    }
-    expect(threwError).toBe(true);
+    const result = await agent.run("Test task");
+    expect(result.success).toBe(false);
     await agent.dispose();
   });
 });

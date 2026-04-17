@@ -763,8 +763,8 @@ export class ReactiveAgentBuilder {
     maxRetries?: number;
   };
   private _enableIdentity: boolean = false;
-  private _enableObservability: boolean = false;
-  private _observabilityOptions?: ObservabilityOptions;
+  private _enableObservability: boolean = true;
+  private _observabilityOptions: ObservabilityOptions = { verbosity: "minimal" };
   private _cortexUrl: string | null = null;
   private _enableInteraction: boolean = false;
   private _enablePrompts: boolean = false;

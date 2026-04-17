@@ -329,6 +329,8 @@ export function handleThinking(
           if (currentTC) {
             currentTC.input += event.input;
           }
+        } else if (event.type === "error") {
+          streamConsumeError = event.error;
         }
       }),
     ).pipe(
