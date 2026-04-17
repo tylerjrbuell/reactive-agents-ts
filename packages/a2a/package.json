@@ -11,17 +11,18 @@
     "test:watch": "bun test --watch"
   },
   "dependencies": {
-    "effect": "^3.10.0",
     "@reactive-agents/core": "0.9.0",
     "@reactive-agents/tools": "0.9.0"
   },
   "devDependencies": {
     "typescript": "^5.7.0",
     "bun-types": "latest",
-    "@reactive-agents/identity": "0.9.0"
+    "@reactive-agents/identity": "0.9.0",
+    "effect": "^3.10.0"
   },
   "peerDependencies": {
-    "@reactive-agents/identity": ">=0.7.0"
+    "@reactive-agents/identity": ">=0.7.0",
+    "effect": "^3.10.0"
   },
   "peerDependenciesMeta": {
     "@reactive-agents/identity": {

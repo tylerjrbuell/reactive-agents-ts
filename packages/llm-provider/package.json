@@ -11,8 +11,7 @@
     "test:watch": "bun test --watch"
   },
   "dependencies": {
-    "@reactive-agents/core": "0.9.0",
-    "effect": "^3.10.0"
+    "@reactive-agents/core": "0.9.0"
   },
   "optionalDependencies": {
     "@anthropic-ai/sdk": "^0.30.0",
@@ -24,7 +23,8 @@
     "@google/genai": "^1.42.0",
     "ollama": "^0.6.3",
     "bun-types": "latest",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "effect": "^3.10.0"
   },
   "license": "MIT",
   "repository": {
@@ -48,9 +48,12 @@
       "default": "./dist/index.js"
     }
   },
-  "description": "LLM provider adapters for Reactive Agents — Anthropic, OpenAI, Ollama, and test providers",
+  "description": "LLM provider adapters for Reactive Agents \u2014 Anthropic, OpenAI, Ollama, and test providers",
   "homepage": "https://docs.reactiveagents.dev/",
   "bugs": {
     "url": "https://github.com/tylerjrbuell/reactive-agents-ts/issues"
+  },
+  "peerDependencies": {
+    "effect": "^3.10.0"
   }
 }

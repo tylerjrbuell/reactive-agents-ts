@@ -11,13 +11,13 @@
     "test:watch": "bun test --watch"
   },
   "dependencies": {
-    "effect": "^3.10.0",
     "@reactive-agents/core": "0.9.0",
     "@noble/ed25519": "^2.0.0"
   },
   "devDependencies": {
     "typescript": "^5.7.0",
-    "bun-types": "latest"
+    "bun-types": "latest",
+    "effect": "^3.10.0"
   },
   "license": "MIT",
   "repository": {
@@ -40,9 +40,12 @@
       "default": "./dist/index.js"
     }
   },
-  "description": "Identity and access control for Reactive Agents — agent certificates and RBAC",
+  "description": "Identity and access control for Reactive Agents \u2014 agent certificates and RBAC",
   "homepage": "https://docs.reactiveagents.dev/",
   "bugs": {
     "url": "https://github.com/tylerjrbuell/reactive-agents-ts/issues"
+  },
+  "peerDependencies": {
+    "effect": "^3.10.0"
   }
 }

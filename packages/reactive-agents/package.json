@@ -8,7 +8,7 @@
     "rax": "bin/rax.js",
     "reactive-agents": "bin/rax.js"
   },
-  "description": "The composable AI agent framework built on Effect-TS — install everything with one package",
+  "description": "The composable AI agent framework built on Effect-TS \u2014 install everything with one package",
   "keywords": [
     "ai",
     "agents",
@@ -48,7 +48,6 @@
     "LICENSE"
   ],
   "dependencies": {
-    "effect": "^3.10.0",
     "@reactive-agents/core": "0.9.0",
     "@reactive-agents/runtime": "0.9.0",
     "@reactive-agents/llm-provider": "0.9.0",
@@ -69,7 +68,8 @@
   },
   "devDependencies": {
     "typescript": "^5.7.0",
-    "bun-types": "latest"
+    "bun-types": "latest",
+    "effect": "^3.10.0"
   },
   "exports": {
     ".": {
@@ -151,5 +151,8 @@
   "homepage": "https://docs.reactiveagents.dev/",
   "bugs": {
     "url": "https://github.com/tylerjrbuell/reactive-agents-ts/issues"
+  },
+  "peerDependencies": {
+    "effect": "^3.10.0"
   }
 }

@@ -13,12 +13,12 @@
   "dependencies": {
     "@reactive-agents/core": "0.9.0",
     "@reactive-agents/llm-provider": "0.9.0",
-    "@reactive-agents/tools": "0.9.0",
-    "effect": "^3.10.0"
+    "@reactive-agents/tools": "0.9.0"
   },
   "devDependencies": {
     "typescript": "^5.7.0",
-    "bun-types": "latest"
+    "bun-types": "latest",
+    "effect": "^3.10.0"
   },
   "exports": {
     ".": {
@@ -44,5 +44,8 @@
   },
   "publishConfig": {
     "access": "public"
+  },
+  "peerDependencies": {
+    "effect": "^3.10.0"
   }
 }

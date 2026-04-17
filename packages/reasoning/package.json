@@ -11,7 +11,6 @@
     "test:watch": "bun test --watch"
   },
   "dependencies": {
-    "effect": "^3.10.0",
     "@reactive-agents/core": "0.9.0",
     "@reactive-agents/llm-provider": "0.9.0",
     "@reactive-agents/tools": "0.9.0",
@@ -22,7 +21,8 @@
   },
   "devDependencies": {
     "typescript": "^5.7.0",
-    "bun-types": "latest"
+    "bun-types": "latest",
+    "effect": "^3.10.0"
   },
   "license": "MIT",
   "repository": {
@@ -45,9 +45,12 @@
       "default": "./dist/index.js"
     }
   },
-  "description": "Reasoning strategies for Reactive Agents — ReAct, Plan-Execute, and Tree-of-Thought",
+  "description": "Reasoning strategies for Reactive Agents \u2014 ReAct, Plan-Execute, and Tree-of-Thought",
   "homepage": "https://docs.reactiveagents.dev/",
   "bugs": {
     "url": "https://github.com/tylerjrbuell/reactive-agents-ts/issues"
+  },
+  "peerDependencies": {
+    "effect": "^3.10.0"
   }
 }

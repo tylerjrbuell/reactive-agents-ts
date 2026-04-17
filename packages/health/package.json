@@ -1,44 +1,45 @@
 {
-    "name": "@reactive-agents/health",
-    "version": "0.9.0",
-    "type": "module",
-    "main": "./dist/index.js",
-    "types": "./dist/index.d.ts",
-    "scripts": {
-        "build": "tsup --config ../../tsup.config.base.ts",
-        "typecheck": "tsc --noEmit",
-        "test": "bun test"
-    },
-    "dependencies": {
-        "effect": "^3.10.0"
-    },
-    "devDependencies": {
-        "typescript": "^5.7.0",
-        "bun-types": "latest"
-    },
-    "exports": {
-        ".": {
-            "types": "./dist/index.d.ts",
-            "import": "./dist/index.js",
-            "default": "./dist/index.js"
-        }
-    },
-    "files": [
-        "dist",
-        "README.md",
-        "LICENSE"
-    ],
-    "license": "MIT",
-    "repository": {
-        "type": "git",
-        "url": "https://github.com/tylerjrbuell/reactive-agents-ts.git",
-        "directory": "packages/health"
-    },
-    "homepage": "https://docs.reactiveagents.dev/",
-    "bugs": {
-        "url": "https://github.com/tylerjrbuell/reactive-agents-ts/issues"
-    },
-    "publishConfig": {
-        "access": "public"
+  "name": "@reactive-agents/health",
+  "version": "0.9.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsup --config ../../tsup.config.base.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "bun-types": "latest",
+    "effect": "^3.10.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
     }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tylerjrbuell/reactive-agents-ts.git",
+    "directory": "packages/health"
+  },
+  "homepage": "https://docs.reactiveagents.dev/",
+  "bugs": {
+    "url": "https://github.com/tylerjrbuell/reactive-agents-ts/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "effect": "^3.10.0"
+  }
 }

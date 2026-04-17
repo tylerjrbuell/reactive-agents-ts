@@ -11,12 +11,12 @@
     "test:watch": "bun test --watch"
   },
   "dependencies": {
-    "effect": "^3.10.0",
     "ulid": "^2.3.0"
   },
   "devDependencies": {
     "typescript": "^5.7.0",
-    "bun-types": "latest"
+    "bun-types": "latest",
+    "effect": "^3.10.0"
   },
   "license": "MIT",
   "repository": {
@@ -39,9 +39,12 @@
       "default": "./dist/index.js"
     }
   },
-  "description": "Core services for Reactive Agents — EventBus, AgentService, TaskService, and shared types",
+  "description": "Core services for Reactive Agents \u2014 EventBus, AgentService, TaskService, and shared types",
   "homepage": "https://docs.reactiveagents.dev/",
   "bugs": {
     "url": "https://github.com/tylerjrbuell/reactive-agents-ts/issues"
+  },
+  "peerDependencies": {
+    "effect": "^3.10.0"
   }
 }
