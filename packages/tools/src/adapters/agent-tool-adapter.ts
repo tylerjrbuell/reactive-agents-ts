@@ -201,8 +201,6 @@ export const createSubAgentExecutor = (
         ? [...new Set([...baseTools, ...ALWAYS_INCLUDE_TOOLS])]
         : undefined as unknown as readonly string[];
 
-      // Tighter sub-agent defaults — prevents spin-out and reduces overhead.
-      // Sub-agents should complete focused tasks quickly (1-3 steps typical).
       const subAgentDefaults = {
         maxIterations: 3,
         enableMemory: false,
@@ -210,11 +208,8 @@ export const createSubAgentExecutor = (
         enableReactiveIntelligence: true,
       };
 
-      // User-configured SubAgentConfig values override defaults.
-      const effectiveMaxIter = Math.min(
-        config.maxIterations ?? subAgentDefaults.maxIterations,
-        subAgentDefaults.maxIterations,
-      );
+      // Honor user-configured maxIterations; fall back to default of 3.
+      const effectiveMaxIter = config.maxIterations ?? subAgentDefaults.maxIterations;
 
       const result = await executeFn({
         agentId: `sub-${config.name}-${Date.now()}`,

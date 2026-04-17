@@ -5,6 +5,7 @@ import {
   createAgentTool,
   createRemoteAgentTool,
   createSpawnAgentsTool,
+  createSubAgentExecutor,
   executeAgentTool,
   executeRemoteAgentTool,
   MAX_RECURSION_DEPTH,
@@ -264,5 +265,42 @@ describe("Agent Tool Adapter", () => {
       expect(tool.riskLevel).toBe("medium");
       expect(tool.requiresApproval).toBe(false);
     });
+  });
+});
+
+describe("createSubAgentExecutor — maxIterations respected", () => {
+  it("passes user-configured maxIterations to executeFn, not silently capping at 3", async () => {
+    // Bug: Math.min(config.maxIterations ?? 3, 3) silently discards any value > 3.
+    // The builder advertises maxIterations: 8 but the adapter was capping it to 3.
+    let capturedMaxIter: number | undefined;
+
+    const executor = createSubAgentExecutor(
+      { name: "researcher", maxIterations: 8 },
+      async (opts) => {
+        capturedMaxIter = opts.maxIterations;
+        return { output: "done", success: true, tokensUsed: 10 };
+      },
+    );
+
+    await executor("research task");
+
+    // RED: without fix, capturedMaxIter === 3 (silently capped)
+    expect(capturedMaxIter).toBe(8);
+  });
+
+  it("defaults to 3 iterations when maxIterations not specified", async () => {
+    let capturedMaxIter: number | undefined;
+
+    const executor = createSubAgentExecutor(
+      { name: "simple" },
+      async (opts) => {
+        capturedMaxIter = opts.maxIterations;
+        return { output: "done", success: true, tokensUsed: 5 };
+      },
+    );
+
+    await executor("simple task");
+
+    expect(capturedMaxIter).toBe(3);
   });
 });
