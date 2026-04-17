@@ -91,3 +91,136 @@ export const ToolMetricSchema = Schema.Struct({
   timestamp: Schema.DateFromSelf,
 });
 export type ToolMetric = typeof ToolMetricSchema.Type;
+
+// ─── Log Event (for ObservableLogger) ───
+
+export const PhaseStartedSchema = Schema.Struct({
+  _tag: Schema.Literal("phase_started"),
+  phase: Schema.String,
+  timestamp: Schema.DateFromSelf,
+});
+export type PhaseStarted = typeof PhaseStartedSchema.Type;
+
+export const PhaseCompleteSchema = Schema.Struct({
+  _tag: Schema.Literal("phase_complete"),
+  phase: Schema.String,
+  duration: Schema.Number,
+  status: Schema.Literal("success", "error", "warning"),
+  details: Schema.optional(Schema.String),
+});
+export type PhaseComplete = typeof PhaseCompleteSchema.Type;
+
+export const ToolCallSchema = Schema.Struct({
+  _tag: Schema.Literal("tool_call"),
+  tool: Schema.String,
+  iteration: Schema.Number,
+  timestamp: Schema.DateFromSelf,
+});
+export type ToolCall = typeof ToolCallSchema.Type;
+
+export const ToolResultSchema = Schema.Struct({
+  _tag: Schema.Literal("tool_result"),
+  tool: Schema.String,
+  duration: Schema.Number,
+  status: Schema.Literal("success", "error"),
+  error: Schema.optional(Schema.String),
+  timestamp: Schema.DateFromSelf,
+});
+export type ToolResult = typeof ToolResultSchema.Type;
+
+export const MetricEventSchema = Schema.Struct({
+  _tag: Schema.Literal("metric"),
+  name: Schema.String,
+  value: Schema.Number,
+  unit: Schema.optional(Schema.String),
+  timestamp: Schema.DateFromSelf,
+});
+export type MetricEvent = typeof MetricEventSchema.Type;
+
+export const WarningSchema = Schema.Struct({
+  _tag: Schema.Literal("warning"),
+  message: Schema.String,
+  context: Schema.optional(Schema.String),
+  timestamp: Schema.DateFromSelf,
+});
+export type Warning = typeof WarningSchema.Type;
+
+export const ErrorEventSchema = Schema.Struct({
+  _tag: Schema.Literal("error"),
+  message: Schema.String,
+  error: Schema.optional(Schema.Struct({
+    name: Schema.String,
+    message: Schema.String,
+    stack: Schema.optional(Schema.String),
+  })),
+  timestamp: Schema.DateFromSelf,
+});
+export type ErrorEvent = typeof ErrorEventSchema.Type;
+
+export const IterationSchema = Schema.Struct({
+  _tag: Schema.Literal("iteration"),
+  iteration: Schema.Number,
+  phase: Schema.Literal("thought", "action"),
+  summary: Schema.optional(Schema.String),
+  timestamp: Schema.DateFromSelf,
+});
+export type Iteration = typeof IterationSchema.Type;
+
+export const CompletionSchema = Schema.Struct({
+  _tag: Schema.Literal("completion"),
+  success: Schema.Boolean,
+  summary: Schema.String,
+  timestamp: Schema.DateFromSelf,
+});
+export type Completion = typeof CompletionSchema.Type;
+
+export const NoticeSchema = Schema.Struct({
+  _tag: Schema.Literal("notice"),
+  level: Schema.Literal("info", "hint"),
+  title: Schema.String,
+  message: Schema.String,
+  docsLink: Schema.optional(Schema.String),
+  dismissible: Schema.Boolean,
+  timestamp: Schema.DateFromSelf,
+});
+export type Notice = typeof NoticeSchema.Type;
+
+export const LogEventSchema = Schema.Union(
+  PhaseStartedSchema,
+  PhaseCompleteSchema,
+  ToolCallSchema,
+  ToolResultSchema,
+  MetricEventSchema,
+  WarningSchema,
+  ErrorEventSchema,
+  IterationSchema,
+  CompletionSchema,
+  NoticeSchema,
+);
+export type LogEvent = typeof LogEventSchema.Type;
+
+// ─── Run Summary ───
+
+export const RunSummarySchema = Schema.Struct({
+  status: Schema.Literal("success", "error", "partial"),
+  duration: Schema.Number,
+  totalTokens: Schema.Number,
+  phaseMetrics: Schema.Record({
+    key: Schema.String,
+    value: Schema.Struct({
+      duration: Schema.Number,
+      status: Schema.String,
+    }),
+  }),
+  toolMetrics: Schema.Record({
+    key: Schema.String,
+    value: Schema.Struct({
+      calls: Schema.Number,
+      successes: Schema.Number,
+      failures: Schema.Number,
+    }),
+  }),
+  warnings: Schema.Array(Schema.String),
+  errors: Schema.Array(Schema.String),
+});
+export type RunSummary = typeof RunSummarySchema.Type;
