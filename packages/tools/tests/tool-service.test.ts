@@ -250,8 +250,8 @@ describe("ToolService", () => {
       );
 
       const all = yield* tools.listTools();
-      // 5 capability built-ins (web-search, http-get, file-read, file-write, code-execute) + 2 registered = 7
-      expect(all).toHaveLength(7);
+      // 6 capability built-ins (web-search, crypto-price, http-get, file-read, file-write, code-execute) + 2 registered = 8
+      expect(all).toHaveLength(8);
 
       const searchOnly = yield* tools.listTools({ category: "search" });
       // built-in web-search + tool-a

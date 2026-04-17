@@ -4,6 +4,7 @@ import type { ToolDefinition } from "../types.js";
 import { ToolExecutionError } from "../errors.js";
 
 import { webSearchTool, webSearchHandler } from "./web-search.js";
+import { cryptoPriceTool, cryptoPriceHandler } from "./crypto-price.js";
 import { httpGetTool, httpGetHandler } from "./http-client.js";
 import { fileReadTool, fileReadHandler } from "./file-operations.js";
 import { fileWriteTool, fileWriteHandler } from "./file-operations.js";
@@ -139,6 +140,7 @@ export const builtinTools: ReadonlyArray<{
   handler: (args: Record<string, unknown>) => Effect.Effect<unknown, ToolExecutionError>;
 }> = [
   { definition: webSearchTool, handler: webSearchHandler },
+  { definition: cryptoPriceTool, handler: cryptoPriceHandler },
   { definition: httpGetTool, handler: httpGetHandler },
   { definition: fileReadTool, handler: fileReadHandler },
   { definition: fileWriteTool, handler: fileWriteHandler },
