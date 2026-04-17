@@ -22,6 +22,7 @@ import type { ContextProfile } from "@reactive-agents/reasoning";
 import { inferRequiredTools, classifyToolRelevance, filterToolsByRelevance } from "@reactive-agents/reasoning";
 import { ToolService } from "@reactive-agents/tools";
 import { ObservabilityService, createProgressLogger, renderCalibrationProvenance, ObservableLogger, makeObservableLogger } from "@reactive-agents/observability";
+import type { RunSummary } from "@reactive-agents/observability";
 import { GuardrailService, KillSwitchService, BehavioralContractService } from "@reactive-agents/guardrails";
 import { VerificationService } from "@reactive-agents/verification";
 import { CostService } from "@reactive-agents/cost";
@@ -4009,7 +4010,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     if (loggerOpt._tag === "Some") {
                       return loggerOpt.value.emit({
                         _tag: "completion",
-                        success: result.success,
+                        success: result.success === true,
                         summary: `Task ${result.success ? "completed" : "failed"} in ${(executionDuration / 1000).toFixed(1)}s with ${result.metadata.tokensUsed} tokens`,
                         timestamp: new Date(),
                       });
@@ -4026,12 +4027,12 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     Effect.tap((loggerOpt) => {
                       if (loggerOpt._tag === "Some") {
                         return loggerOpt.value.flush().pipe(
-                          Effect.tap((summary) =>
+                          Effect.tap((summary: RunSummary) =>
                             Effect.gen(function* () {
                               console.log("\n═══ Run Summary ═══");
-                              console.log(`Status: ${summary.status}`);
+                              console.log(`Status:   ${summary.status}`);
                               console.log(`Duration: ${(summary.duration / 1000).toFixed(1)}s`);
-                              console.log(`Tokens: ${summary.totalTokens}`);
+                              console.log(`Tokens:   ${summary.totalTokens}`);
                               if (summary.warnings.length > 0) {
                                 console.log(`Warnings: ${summary.warnings.length}`);
                               }
@@ -4052,7 +4053,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
               });
 
             // Initialize ObservableLogger
-            const loggerConfig = config.logging ?? { live: true };
+            const loggerConfig = { live: config.logging?.live ?? true };
             const logger = yield* makeObservableLogger(loggerConfig);
 
             // Wrap in root observability span for the full execution trace
