@@ -16,6 +16,8 @@
  *   - resolveToolArgs(toolService, toolRequest) — resolve raw ACTION args
  */
 import { Effect } from "effect";
+import { ObservableLogger } from "@reactive-agents/observability";
+import type { LogEvent } from "@reactive-agents/observability";
 import { LLMService } from "@reactive-agents/llm-provider";
 import type { ObservationResult } from "../../../types/observation.js";
 import { categorizeToolName, deriveResultKind } from "../../../types/observation.js";
@@ -418,8 +420,20 @@ export function executeToolCall(
 
   const toolService = toolServiceOpt.value;
 
+  const emitLog = (event: LogEvent): Effect.Effect<void, never> =>
+    Effect.serviceOption(ObservableLogger).pipe(
+      Effect.flatMap((opt) =>
+        opt._tag === "Some"
+          ? opt.value.emit(event).pipe(Effect.catchAll(() => Effect.void))
+          : Effect.void
+      )
+    );
+
   return Effect.gen(function* () {
     const args = yield* resolveToolArgs(toolService, toolRequest);
+
+    const toolStart = Date.now();
+    yield* emitLog({ _tag: "tool_call", tool: toolRequest.tool, iteration: 0, timestamp: new Date() });
 
     const result = yield* toolService
       .execute({
@@ -504,6 +518,15 @@ export function executeToolCall(
           );
         }),
       );
+
+    yield* emitLog({
+      _tag: "tool_result",
+      tool: toolRequest.tool,
+      duration: Date.now() - toolStart,
+      status: result.observationResult.success ? "success" : "error",
+      error: result.observationResult.success ? undefined : result.observationResult.displayText.slice(0, 120),
+      timestamp: new Date(),
+    });
 
     return result;
   }).pipe(
