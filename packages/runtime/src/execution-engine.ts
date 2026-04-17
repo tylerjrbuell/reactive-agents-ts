@@ -4092,7 +4092,10 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
               });
 
             // Initialize ObservableLogger
-            const loggerConfig = { live: config.logging?.live ?? true };
+            const loggerConfig = {
+              live: config.logging?.live ?? true,
+              minLevel: config.logging?.minLevel,
+            };
             const logger = yield* makeObservableLogger(loggerConfig);
 
             // Wrap in root observability span for the full execution trace

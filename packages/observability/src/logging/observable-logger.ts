@@ -70,7 +70,30 @@ export class ObservableLogger extends Context.Tag("ObservableLogger")<
   ObservableLoggerService
 >() {}
 
-// ─── Implementation ───
+// ─── Level filtering ──────────────────────────────────────────────────────────
+
+type LogLevel = "debug" | "info" | "warn" | "error";
+const LEVEL_RANK: Record<LogLevel, number> = { debug: 0, info: 1, warn: 2, error: 3 };
+
+function eventLevel(event: LogEvent): LogLevel {
+  switch (event._tag) {
+    case "iteration":
+    case "metric":
+      return "debug";
+    case "warning":
+      return "warn";
+    case "error":
+      return "error";
+    default:
+      return "info";
+  }
+}
+
+function passesLevel(event: LogEvent, minLevel: LogLevel): boolean {
+  return LEVEL_RANK[eventLevel(event)] >= LEVEL_RANK[minLevel];
+}
+
+// ─── Implementation ───────────────────────────────────────────────────────────
 
 /**
  * Create an ObservableLogger instance.
@@ -78,7 +101,9 @@ export class ObservableLogger extends Context.Tag("ObservableLogger")<
  */
 export function makeObservableLogger(config: {
   live: boolean;
+  minLevel?: LogLevel;
 }): Effect.Effect<ObservableLoggerService, never, never> {
+  const minLevel: LogLevel = config.minLevel ?? "debug";
   return Effect.gen(function* () {
     const bufferRef = yield* Ref.make<LogEvent[]>([]);
     const subscribersRef = yield* Ref.make<
@@ -87,6 +112,7 @@ export function makeObservableLogger(config: {
 
     const emit = (event: LogEvent): Effect.Effect<void, never> =>
       Effect.gen(function* () {
+        if (!passesLevel(event, minLevel)) return;
         const formatted = formatEvent(event);
         const subscribers = yield* Ref.get(subscribersRef);
 

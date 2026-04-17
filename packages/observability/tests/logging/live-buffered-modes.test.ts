@@ -103,4 +103,44 @@ describe("ObservableLogger — live vs buffered modes", () => {
 
     expect(consoleSpy).toHaveBeenCalledTimes(3);
   });
+
+  it("minLevel:warn suppresses debug and info events", async () => {
+    const logger = await Effect.runPromise(makeObservableLogger({ live: false, minLevel: "warn" }));
+
+    await Effect.runPromise(logger.emit({ _tag: "metric", name: "entropy", value: 0.5, unit: "composite", timestamp: new Date() }));     // debug — suppressed
+    await Effect.runPromise(logger.emit({ _tag: "iteration", iteration: 1, phase: "thought", timestamp: new Date() }));                  // debug — suppressed
+    await Effect.runPromise(logger.emit({ _tag: "phase_started", phase: "think", timestamp: new Date() }));                             // info — suppressed
+    await Effect.runPromise(logger.emit({ _tag: "warning", message: "High entropy", timestamp: new Date() }));                          // warn — passes
+    await Effect.runPromise(logger.emit({ _tag: "error", message: "Failure", timestamp: new Date() }));                                 // error — passes
+
+    const buffer = await Effect.runPromise(logger.getBuffer());
+    expect(buffer).toHaveLength(2);
+    expect(buffer[0]?._tag).toBe("warning");
+    expect(buffer[1]?._tag).toBe("error");
+  });
+
+  it("minLevel:info passes info,warn,error but suppresses debug", async () => {
+    const logger = await Effect.runPromise(makeObservableLogger({ live: false, minLevel: "info" }));
+
+    await Effect.runPromise(logger.emit({ _tag: "metric", name: "tokens", value: 100, unit: "tokens", timestamp: new Date() }));        // debug — suppressed
+    await Effect.runPromise(logger.emit({ _tag: "completion", success: true, summary: "Done", timestamp: new Date() }));                // info — passes
+    await Effect.runPromise(logger.emit({ _tag: "warning", message: "High latency", timestamp: new Date() }));                         // warn — passes
+
+    const buffer = await Effect.runPromise(logger.getBuffer());
+    expect(buffer).toHaveLength(2);
+    expect(buffer[0]?._tag).toBe("completion");
+    expect(buffer[1]?._tag).toBe("warning");
+  });
+
+  it("default minLevel:debug passes all events", async () => {
+    const logger = await Effect.runPromise(makeObservableLogger({ live: false }));
+
+    await Effect.runPromise(logger.emit({ _tag: "metric", name: "entropy", value: 0.3, unit: "composite", timestamp: new Date() }));
+    await Effect.runPromise(logger.emit({ _tag: "phase_started", phase: "think", timestamp: new Date() }));
+    await Effect.runPromise(logger.emit({ _tag: "warning", message: "warn", timestamp: new Date() }));
+    await Effect.runPromise(logger.emit({ _tag: "error", message: "err", timestamp: new Date() }));
+
+    const buffer = await Effect.runPromise(logger.getBuffer());
+    expect(buffer).toHaveLength(4);
+  });
 });
