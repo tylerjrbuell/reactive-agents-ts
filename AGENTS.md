@@ -85,6 +85,20 @@ Foundation (no reactive-agents deps)
 | `eval`          | `src/services/eval-service.ts`          | `EvalService`, `EvalStore`, `EvalSuite`                     |
 | `runtime`       | `src/builder.ts`                        | `ReactiveAgents`, `ReactiveAgentBuilder`, `createRuntime()` |
 
+### Adaptive Calibration (Live Learning)
+
+Three-tier calibration resolves per-model behavior at runtime:
+
+1. **Shipped prior** — pre-baked probe results in `packages/llm-provider/src/calibrations/`
+2. **Community prior** — fetched from `GET /v1/profiles/:modelId` (daily-aggregated from all opt-in users)
+3. **Local posterior** — observations stored at `~/.reactive-agents/observations/<model>.json`
+
+After 5+ runs, empirical observations override shipped priors for `parallelCallCapability` and `classifierReliability`. When classifier reliability is `"low"`, the LLM classifier call is skipped entirely (saves a round-trip).
+
+**Env vars for self-hosted deployments:**
+- `REACTIVE_AGENTS_TELEMETRY_BASE_URL` — configures both read (`/v1/profiles`) and write (`/v1/reports`) endpoints
+- `REACTIVE_AGENTS_TELEMETRY_PROFILES_URL` / `REACTIVE_AGENTS_TELEMETRY_REPORTS_URL` — per-endpoint overrides
+
 ### Common Debugging Entry Points
 
 | Symptom                       | Start reading                                                                                            |

@@ -354,6 +354,7 @@ An honest inventory of what's built, what's in progress, and what's planned:
 | Composable kernel SDK (custom reasoning algorithms) | **Shipped** | v0.7 |
 | Professional metrics dashboard (EventBus-driven) | **Shipped** | v0.6 |
 | Cross-agent experience learning (ExperienceStore) | **Shipped** | v0.7 |
+| Live calibration (prior + community + local posterior) | **Shipped** | v0.9 |
 | Memory consolidation + background decay | **Shipped** | v0.7 |
 | Hallucination detection (semantic entropy, fact decomposition) | **Shipped** | v0.5 |
 | CLI (`rax init`, `rax run`, `rax create`) | **Shipped** | v0.4 |
