@@ -116,7 +116,23 @@ describe("makeStatusRenderer", () => {
     }));
     renderer.stop();
 
-    expect(out.lines.some((l) => l.startsWith("✗"))).toBe(true);
+    expect(out.lines.some((l) => l.startsWith("✗") && l.includes("Failed"))).toBe(true);
+  });
+
+  it("completion: always shows cost even when $0.0000 (local models)", async () => {
+    const logger = await Effect.runPromise(makeObservableLogger({ live: false }));
+    const out = makeMockStream();
+    const renderer = makeStatusRenderer(logger, out as unknown as NodeJS.WriteStream);
+
+    await Effect.runPromise(renderer.start());
+    await Effect.runPromise(logger.emit({
+      _tag: "completion", success: true, summary: "Done", timestamp: new Date(),
+    }));
+    renderer.stop();
+
+    const doneLine = out.lines.find((l) => l.startsWith("✓") && l.includes("Done"));
+    expect(doneLine).toBeDefined();
+    expect(doneLine).toContain("$0.0000");
   });
 
   it("non-TTY: writes plain lines without ANSI overwrite sequences", async () => {
