@@ -14,7 +14,9 @@ import { Schema } from "effect";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import type { ProviderAdapter } from "./adapter.js";
-import { resolveCalibration, fetchCommunityProfile } from "@reactive-agents/reactive-intelligence";
+// NOTE: reactive-intelligence depends on llm-provider → circular dep at the package level.
+// Use lazy require() / dynamic import() to break the cycle for DTS builds.
+// At runtime (Bun), the dependency is resolved because both packages are loaded by then.
 
 /**
  * Structural shape for ContextProfile fields that calibration may override.
@@ -213,6 +215,10 @@ export function resolveModelCalibration(
     optimalToolResultChars: 1200,
   };
 
+  // Lazy require to avoid circular dep with reactive-intelligence at DTS build time
+  const { resolveCalibration } = require("@reactive-agents/reactive-intelligence") as {
+    resolveCalibration: (prior: ModelCalibration, opts: { communityProfile?: Partial<ModelCalibration>; observationsBaseDir?: string }) => ModelCalibration;
+  };
   return resolveCalibration(base, {
     communityProfile: opts.communityProfile,
     observationsBaseDir: opts.observationsBaseDir,
@@ -234,6 +240,11 @@ export async function resolveModelCalibrationAsync(
   let community = opts.communityProfile;
   if (!community && opts.fetchCommunity) {
     try {
+      // Dynamic import to avoid circular dep with reactive-intelligence
+      const ri = await import("@reactive-agents/reactive-intelligence") as unknown as {
+        fetchCommunityProfile: (modelId: string, opts?: { endpoint?: string; cacheDir?: string; fetchImpl?: typeof fetch }) => Promise<Partial<ModelCalibration> | undefined>;
+      };
+      const { fetchCommunityProfile } = ri;
       community = await fetchCommunityProfile(modelId, {
         endpoint: opts.communityEndpoint,
         cacheDir: opts.communityCacheDir,
