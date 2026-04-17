@@ -7,7 +7,7 @@
 export const PROVIDER_DEFAULT_MODELS: Record<string, string> = {
     anthropic: 'claude-sonnet-4-20250514',
     openai: 'gpt-4o',
-    ollama: 'cogito:14b',
+    ollama: 'llama3.2',
     gemini: 'gemini-2.5-flash',
     litellm: 'gpt-4o',
     test: 'test-model',
