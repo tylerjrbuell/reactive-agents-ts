@@ -5,6 +5,7 @@
 - [Commit before branching](feedback_commit_before_branch.md) — always commit/stash exploratory changes before creating feature branches
 - [Keep .agents/MEMORY.md in sync](feedback_agents_memory_sync.md) — update both Claude memory AND `.agents/MEMORY.md` so other AI agents have context
 - [Skip plans for content/skill writing](feedback_skip_plans_for_content.md) — don't write formal implementation plans for SKILL.md or doc writing tasks; implement directly
+- [Clean types, no any](feedback_clean_types.md) — strict TypeScript required; no `any` casts, use `unknown` + guards or proper types
 
 ## Adaptive Calibration (Apr 2026)
 - [Adaptive Harness Framework](project_adaptive_harness.md) — three-tier calibration, 24-task plan shipped on feat/adaptive-harness-framework

@@ -78,7 +78,7 @@ export class ObservableLogger extends Context.Tag("ObservableLogger")<
  */
 export function makeObservableLogger(config: {
   live: boolean;
-}): Effect.Effect<ObservableLogger> {
+}): Effect.Effect<ObservableLogger, never, never> {
   return Effect.gen(function* () {
     const bufferRef = yield* Ref.make<LogEvent[]>([]);
     const subscribersRef = yield* Ref.make<
@@ -112,11 +112,12 @@ export function makeObservableLogger(config: {
       Effect.gen(function* () {
         yield* Ref.update(subscribersRef, (subs) => [...subs, handler]);
 
-        // Return unsubscribe function
-        return () =>
-          Ref.update(subscribersRef, (subs) =>
-            subs.filter((s) => s !== handler),
-          ).pipe(Effect.runPromise) as any;
+        // Return unsubscribe function (fire-and-forget removal)
+        return (): void => {
+          void Effect.runPromise(
+            Ref.update(subscribersRef, (subs) => subs.filter((s) => s !== handler)),
+          );
+        };
       });
 
     const toStream = (): EStream.Stream<
@@ -173,7 +174,7 @@ function assembleSummary(buffer: readonly LogEvent[]): RunSummary {
   let status: "success" | "error" | "partial" = "partial";
   let duration = 0;
   let totalTokens = 0;
-  const phaseMetrics: Record<string, { duration: number; status: string }> = {};
+  const phaseMetrics: Record<string, { duration: number; status: "error" | "success" | "warning" }> = {};
   const toolMetrics: Record<string, { calls: number; successes: number; failures: number }> = {};
   const warnings: string[] = [];
   const errors: string[] = [];
@@ -190,7 +191,7 @@ function assembleSummary(buffer: readonly LogEvent[]): RunSummary {
       case "phase_complete":
         phaseMetrics[event.phase] = {
           duration: event.duration,
-          status: event.status,
+          status: event.status as "error" | "success" | "warning",
         };
         break;
 
