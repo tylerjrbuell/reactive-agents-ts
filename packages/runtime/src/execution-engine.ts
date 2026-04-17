@@ -4042,6 +4042,32 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   (result.metadata as any).entropyTrace = entropyLog;
                 }
 
+                // Emit token and cost metrics for status renderer
+                yield* Effect.serviceOption(ObservableLogger).pipe(
+                  Effect.tap((loggerOpt) => {
+                    if (loggerOpt._tag === "Some") {
+                      return Effect.all([
+                        loggerOpt.value.emit({
+                          _tag: "metric",
+                          name: "tokens_used",
+                          value: result.metadata.tokensUsed ?? 0,
+                          unit: "tokens",
+                          timestamp: new Date(),
+                        }),
+                        loggerOpt.value.emit({
+                          _tag: "metric",
+                          name: "cost_usd",
+                          value: result.metadata.cost ?? 0,
+                          unit: "usd",
+                          timestamp: new Date(),
+                        }),
+                      ], { concurrency: "unbounded" }).pipe(Effect.asVoid);
+                    }
+                    return Effect.void;
+                  }),
+                  Effect.catchAll(() => Effect.void),
+                );
+
                 // Emit completion event
                 const executionDuration = Date.now() - executionStartMs;
                 yield* Effect.serviceOption(ObservableLogger).pipe(
