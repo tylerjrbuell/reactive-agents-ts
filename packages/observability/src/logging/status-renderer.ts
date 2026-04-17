@@ -42,7 +42,7 @@ export function makeStatusRenderer(
     iteration: 0,
     tool: null,
     thinkText: "",
-    thinkExpanded: false,
+    thinkExpanded: true,
     drawnLines: 0,
     tokens: 0,
     costUsd: 0,
@@ -106,8 +106,10 @@ export function makeStatusRenderer(
     if (s.tokens > 0) parts.push(`${s.tokens.toLocaleString()} tok`);
     if (s.costUsd > 0) parts.push(`$${s.costUsd.toFixed(4)}`);
     if (s.entropy !== null && !s.tool) parts.push(`entropy ${s.entropy.toFixed(2)}${s.entropyTrend}`);
-    // Hint to expand when collapsed and thinking
-    if (isTTY && !s.thinkExpanded && s.thinkText && s.phase === "think") parts.push("[t]");
+    // Keyboard hint
+    if (isTTY && s.thinkText && s.phase === "think") {
+      parts.push(s.thinkExpanded ? "[t: collapse]" : "[t: expand]");
+    }
     return parts.join("  ·  ");
   }
 
@@ -241,16 +243,16 @@ export function makeStatusRenderer(
         s.thinkText = "";
         if (s.drawnLines > 0) collapsePanel();
         s.tool = event.tool;
-        printLine(`→  ${event.tool}`);
+        redraw();
         break;
 
       case "tool_result": {
         s.toolCallCount++;
         const dur = `${(event.duration / 1000).toFixed(1)}s`;
         if (event.status === "success") {
-          printLine(`   ✓ ${event.tool} (${dur})`);
+          printLine(`→  ${event.tool}  ✓ ${dur}`);
         } else {
-          printLine(`   ✗ ${event.tool} (${dur})${event.error ? ` — ${event.error}` : ""}`);
+          printLine(`→  ${event.tool}  ✗ ${dur}${event.error ? ` — ${event.error}` : ""}`);
         }
         s.tool = null;
         break;

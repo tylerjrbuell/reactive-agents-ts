@@ -8,6 +8,8 @@
  */
 import { Effect, Ref } from "effect";
 import { LLMService, selectAdapter } from "@reactive-agents/llm-provider";
+import { ObservableLogger } from "@reactive-agents/observability";
+import type { LogEvent } from "@reactive-agents/observability";
 import {
   makeFinalAnswerHandler,
   scratchpadStoreRef,
@@ -37,6 +39,15 @@ import { checkToolCall, defaultGuards } from "./guard.js";
 import { META_TOOLS, INTROSPECTION_META_TOOLS } from "../kernel-constants.js";
 
 const REQUIRED_TOOLS_SATISFIED_PREFIX = "Required tool calls are satisfied";
+
+const emitLog = (event: LogEvent): Effect.Effect<void, never> =>
+  Effect.serviceOption(ObservableLogger).pipe(
+    Effect.flatMap((opt) =>
+      opt._tag === "Some"
+        ? opt.value.emit(event).pipe(Effect.catchAll(() => Effect.void))
+        : Effect.void,
+    ),
+  );
 
 function isGuardHardFailure(observation: string): boolean {
   return observation.includes("is not available in this run");
@@ -451,6 +462,7 @@ export function handleActing(
           const executionResults = yield* Effect.all(
             executableCalls.map((batchCall) =>
               Effect.gen(function* () {
+                yield* emitLog({ _tag: "tool_call", tool: batchCall.name, iteration: state.iteration, timestamp: new Date() });
                 const startMs = Date.now();
                 const execResult = yield* executeNativeToolCall(
                   toolService.value,
@@ -460,6 +472,13 @@ export function handleActing(
                   { compression, scratchpad: sharedScratchpad },
                 );
                 const durationMs = Date.now() - startMs;
+                yield* emitLog({
+                  _tag: "tool_result",
+                  tool: batchCall.name,
+                  duration: durationMs,
+                  status: execResult.success ? "success" : "error",
+                  timestamp: new Date(),
+                });
                 return {
                   callId: batchCall.id,
                   toolName: batchCall.name,
