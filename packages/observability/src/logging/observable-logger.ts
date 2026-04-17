@@ -1,5 +1,6 @@
 import { Effect, Context, Stream as EStream, Ref, Chunk } from "effect";
 import type { LogEvent, RunSummary } from "../types.js";
+import { formatEvent } from "./event-formatter.js";
 
 /**
  * ObservableLogger — Unified logging service for Reactive Agents
@@ -84,11 +85,9 @@ export function makeObservableLogger(config: {
       Array<(event: LogEvent, formatted: string) => Effect.Effect<void, never>>
     >([]);
 
-    const formatter = makeEventFormatter();
-
     const emit = (event: LogEvent): Effect.Effect<void, never> =>
       Effect.gen(function* () {
-        const formatted = formatter.format(event);
+        const formatted = formatEvent(event);
         const subscribers = yield* Ref.get(subscribersRef);
 
         // Buffer always
@@ -131,7 +130,7 @@ export function makeObservableLogger(config: {
             return EStream.fromIterable(
               buffer.map((event) => ({
                 event,
-                formatted: formatter.format(event),
+                formatted: formatEvent(event),
               })),
             );
           }),
@@ -141,7 +140,7 @@ export function makeObservableLogger(config: {
     const getBuffer = (): Effect.Effect<readonly LogEvent[], never> =>
       Ref.get(bufferRef);
 
-    const format = (event: LogEvent): string => formatter.format(event);
+    const format = (event: LogEvent): string => formatEvent(event);
 
     const flush = (): Effect.Effect<RunSummary, never> =>
       Effect.gen(function* () {
@@ -165,40 +164,6 @@ export function makeObservableLogger(config: {
       reset,
     } satisfies ObservableLogger;
   });
-}
-
-/**
- * Event formatter — converts LogEvent to human-readable [tag:value] strings.
- * Stub version (will be replaced when event-formatter.ts is created in Task 4).
- */
-function makeEventFormatter() {
-  return {
-    format: (event: LogEvent): string => {
-      // Stub formatter - will be replaced in Task 4
-      switch (event._tag) {
-        case "phase_started":
-          return `→ [phase:${event.phase}]`;
-        case "phase_complete":
-          return `✓ [phase:${event.phase}] ${(event.duration / 1000).toFixed(1)}s`;
-        case "tool_call":
-          return `  → [tool:${event.tool}]`;
-        case "tool_result":
-          return `  ${event.status === "success" ? "✓" : "✗"} [tool:${event.tool}] ${(event.duration / 1000).toFixed(2)}s`;
-        case "metric":
-          return `  📊 ${event.name}: ${event.value}${event.unit ? " " + event.unit : ""}`;
-        case "warning":
-          return `⚠️  [warning] ${event.message}`;
-        case "error":
-          return `✗ [error] ${event.message}`;
-        case "iteration":
-          return `  [iter:${event.iteration}] ${event.phase}: ${event.summary || ""}`;
-        case "completion":
-          return `${event.success ? "✓" : "✗"} [completion] ${event.summary}`;
-        case "notice":
-          return `${event.level === "info" ? "ℹ️" : "💡"} ${event.title}`;
-      }
-    },
-  };
 }
 
 /**

@@ -40,6 +40,7 @@ export { makeLoggerService } from "./logging/logger-service.js";
 export type { LoggerService, LoggingConfig } from "./logging/logger-service.js";
 export { makeObservableLogger, ObservableLogger } from "./logging/observable-logger.js";
 export type { ObservableLogger as ObservableLoggerService } from "./logging/observable-logger.js";
+export { formatEvent } from "./logging/event-formatter.js";
 
 // ─── Metrics ───
 export { makeMetricsCollector, MetricsCollectorTag, MetricsCollectorLive } from "./metrics/metrics-collector.js";
