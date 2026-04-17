@@ -94,6 +94,10 @@ export type ToolMetric = typeof ToolMetricSchema.Type;
 
 // ─── Log Event (for ObservableLogger) ───
 
+/**
+ * Fired when a kernel phase begins execution (context-builder, think, guard, act, etc).
+ * Always precedes corresponding PhaseComplete with duration.
+ */
 export const PhaseStartedSchema = Schema.Struct({
   _tag: Schema.Literal("phase_started"),
   phase: Schema.String,
@@ -101,6 +105,10 @@ export const PhaseStartedSchema = Schema.Struct({
 });
 export type PhaseStarted = typeof PhaseStartedSchema.Type;
 
+/**
+ * Fired when a kernel phase completes execution.
+ * Contains duration and outcome status (success, error, or warning if partial).
+ */
 export const PhaseCompleteSchema = Schema.Struct({
   _tag: Schema.Literal("phase_complete"),
   phase: Schema.String,
@@ -110,6 +118,10 @@ export const PhaseCompleteSchema = Schema.Struct({
 });
 export type PhaseComplete = typeof PhaseCompleteSchema.Type;
 
+/**
+ * Fired when a tool is invoked by the agent.
+ * Records which tool is called and which iteration it occurred in.
+ */
 export const ToolCallSchema = Schema.Struct({
   _tag: Schema.Literal("tool_call"),
   tool: Schema.String,
@@ -118,6 +130,10 @@ export const ToolCallSchema = Schema.Struct({
 });
 export type ToolCall = typeof ToolCallSchema.Type;
 
+/**
+ * Fired when a tool execution completes with result or error.
+ * Always follows a ToolCall event with the tool's execution outcome.
+ */
 export const ToolResultSchema = Schema.Struct({
   _tag: Schema.Literal("tool_result"),
   tool: Schema.String,
@@ -128,6 +144,10 @@ export const ToolResultSchema = Schema.Struct({
 });
 export type ToolResult = typeof ToolResultSchema.Type;
 
+/**
+ * Fired to record numeric measurements: token counts, latency, memory, etc.
+ * Can be emitted at any point during execution.
+ */
 export const MetricEventSchema = Schema.Struct({
   _tag: Schema.Literal("metric"),
   name: Schema.String,
@@ -137,6 +157,10 @@ export const MetricEventSchema = Schema.Struct({
 });
 export type MetricEvent = typeof MetricEventSchema.Type;
 
+/**
+ * Fired to report non-fatal issues (e.g., low confidence, retry attempts, fallback behavior).
+ * Does not stop execution but may influence RunSummary status to "partial".
+ */
 export const WarningSchema = Schema.Struct({
   _tag: Schema.Literal("warning"),
   message: Schema.String,
@@ -145,6 +169,10 @@ export const WarningSchema = Schema.Struct({
 });
 export type Warning = typeof WarningSchema.Type;
 
+/**
+ * Fired when an error or exception occurs during execution.
+ * May or may not stop execution depending on error handler strategy.
+ */
 export const ErrorEventSchema = Schema.Struct({
   _tag: Schema.Literal("error"),
   message: Schema.String,
@@ -157,6 +185,10 @@ export const ErrorEventSchema = Schema.Struct({
 });
 export type ErrorEvent = typeof ErrorEventSchema.Type;
 
+/**
+ * Fired at the start of each think/action loop iteration.
+ * Tracks progress through the agent's reasoning and acting cycles.
+ */
 export const IterationSchema = Schema.Struct({
   _tag: Schema.Literal("iteration"),
   iteration: Schema.Number,
@@ -166,6 +198,10 @@ export const IterationSchema = Schema.Struct({
 });
 export type Iteration = typeof IterationSchema.Type;
 
+/**
+ * Fired when the agent reaches a terminal state (success or final failure).
+ * Signals the end of execution.
+ */
 export const CompletionSchema = Schema.Struct({
   _tag: Schema.Literal("completion"),
   success: Schema.Boolean,
@@ -174,6 +210,10 @@ export const CompletionSchema = Schema.Struct({
 });
 export type Completion = typeof CompletionSchema.Type;
 
+/**
+ * Fired to deliver user-facing informational messages (hints, tips, contextual guidance).
+ * Can be dismissed by the user in interactive environments.
+ */
 export const NoticeSchema = Schema.Struct({
   _tag: Schema.Literal("notice"),
   level: Schema.Literal("info", "hint"),
@@ -201,6 +241,14 @@ export type LogEvent = typeof LogEventSchema.Type;
 
 // ─── Run Summary ───
 
+/**
+ * Final execution summary computed from all events.
+ *
+ * Status meanings:
+ * - "success": All phases completed successfully
+ * - "error": One or more phases failed with errors
+ * - "partial": One or more phases completed with warnings but no errors
+ */
 export const RunSummarySchema = Schema.Struct({
   status: Schema.Literal("success", "error", "partial"),
   duration: Schema.Number,
@@ -209,7 +257,7 @@ export const RunSummarySchema = Schema.Struct({
     key: Schema.String,
     value: Schema.Struct({
       duration: Schema.Number,
-      status: Schema.String,
+      status: Schema.Literal("success", "error", "warning"),
     }),
   }),
   toolMetrics: Schema.Record({
