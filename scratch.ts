@@ -1,27 +1,25 @@
 /**
- * Pass 2 probe: cogito Dynamic subagent (spawn-agent)
+ * Demo: Claude-Code-style status renderer
  *
- * Previously: 16 iters / 11,171 tok / didn't compute 120 (factorial of 5).
- * Likely: cogito doesn't invoke spawn-agent at all and thrashes without tools.
+ * Runs with status mode auto-detected (isTTY=true in terminal).
+ * Run with `| cat` to see stream mode fallback.
  */
 import { ReactiveAgents } from 'reactive-agents'
 
 const agent = await ReactiveAgents.create()
-    .withProvider('ollama')
-    .withModel({ model: 'cogito', temperature: 0.2, maxTokens: 8000 })
-    .withReasoning()
-    .withTools()
-    .withDynamicSubAgents({ maxIterations: 8 })
-    .withMaxIterations(15)
-    .withObservability({ verbosity: 'debug', live: true })
-    .build()
+  .withProvider('ollama')
+  .withModel({ model: 'gemma4:e4b' })
+  .withReasoning({ defaultStrategy: 'reactive' })
+  .withTools()
+  .withObservability({ verbosity: 'silent', live: false })
+  .build()
 
 const result = await agent.run(
-    'Spawn a sub-agent to calculate the factorial of 5 and report back the result.',
+  'Fetch the current USD price for each of the following currencies: XRP, XLM, ETH, Bitcoin. ' +
+  'Then render a markdown table with columns: Currency | Price | Source.'
 )
 
 console.log('\n--- Result ---')
-console.log(result.output?.slice(0, 400))
-console.log(`\nIterations: ${result.metadata?.stepsCount ?? '?'}, Tokens: ${result.metadata?.tokensUsed ?? '?'}`)
+console.log(result.output)
 
 await agent.dispose()
