@@ -81,6 +81,10 @@ export {
   CortexReporterError,
 } from "./cortex/cortex-reporter.js";
 
+// ─── Renderers ───
+export { renderCalibrationProvenance } from "./renderers/calibration-provenance.js";
+export type { CalibrationProvenance } from "./renderers/calibration-provenance.js";
+
 // ─── Telemetry ───
 export {
   TelemetryRecordSchema,

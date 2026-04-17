@@ -21,7 +21,7 @@ import type { TaskError } from "@reactive-agents/core";
 import type { ContextProfile } from "@reactive-agents/reasoning";
 import { inferRequiredTools, classifyToolRelevance, filterToolsByRelevance } from "@reactive-agents/reasoning";
 import { ToolService } from "@reactive-agents/tools";
-import { ObservabilityService, createProgressLogger } from "@reactive-agents/observability";
+import { ObservabilityService, createProgressLogger, renderCalibrationProvenance } from "@reactive-agents/observability";
 import { GuardrailService, KillSwitchService, BehavioralContractService } from "@reactive-agents/guardrails";
 import { VerificationService } from "@reactive-agents/verification";
 import { CostService } from "@reactive-agents/cost";
@@ -29,7 +29,7 @@ import { EventBus, EntropySensorService } from "@reactive-agents/core";
 import type { AgentEvent, KernelStateLike } from "@reactive-agents/core";
 import { synthesizeDebrief, type DebriefInput, type AgentDebrief } from "./debrief.js";
 import { DebriefStoreService, PlanStoreService, ProceduralMemoryService } from "@reactive-agents/memory";
-import { TelemetryClient as TelemetryClientImpl, classifyTaskCategory as classifyTaskCategoryFn, lookupModel as lookupModelFn, skillFragmentToProceduralEntry } from "@reactive-agents/reactive-intelligence";
+import { TelemetryClient as TelemetryClientImpl, classifyTaskCategory as classifyTaskCategoryFn, lookupModel as lookupModelFn, skillFragmentToProceduralEntry, loadObservations } from "@reactive-agents/reactive-intelligence";
 import { recommendStrategyForTier, resolveModelCalibration, resolveModelCalibrationAsync } from "@reactive-agents/llm-provider";
 import type { ModelCalibration } from "@reactive-agents/llm-provider";
 import { buildTrajectoryFingerprint, abstractifyToolName, firstConvergenceIteration, peakContextPressure, deriveTaskComplexity, deriveFailurePattern, deriveThoughtToActionRatio, entropyVariance, entropyOscillationCount, finalCompositeEntropy, entropyAreaUnderCurve } from "./telemetry-enrichment.js";
@@ -3656,6 +3656,30 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   yield* obs.info(
                     `◉ [complete]   ✓ ${task.id} | ${toks} tok | ${costStr} | ${durationSec}s`,
                   ).pipe(Effect.catchAll(() => Effect.void));
+                }
+
+                // Calibration provenance (Task 21)
+                if (obs && resolvedCalibration) {
+                  try {
+                    const modelId = String(ctx.selectedModel ?? config.defaultModel ?? "unknown");
+                    const localObs = loadObservations(modelId, {
+                      baseDir: process.env["REACTIVE_AGENTS_OBSERVATIONS_DIR"],
+                    });
+                    const sources: ("prior" | "community" | "local")[] = ["prior"];
+                    if (localObs.sampleCount > 0) sources.push("local");
+                    const provenance = renderCalibrationProvenance({
+                      modelId,
+                      sources,
+                      localSamples: localObs.sampleCount,
+                      summary: {
+                        parallelCallCapability: resolvedCalibration.parallelCallCapability,
+                        classifierReliability: resolvedCalibration.classifierReliability,
+                      },
+                    });
+                    yield* obs.info(`◉ [calibration] ${provenance}`).pipe(Effect.catchAll(() => Effect.void));
+                  } catch {
+                    // Provenance rendering is best-effort
+                  }
                 }
 
                 // Record final metrics for dashboard
