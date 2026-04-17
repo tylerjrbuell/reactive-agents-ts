@@ -13,6 +13,8 @@
  *   6. Terminal hooks: onDone / onError
  */
 import { Effect } from "effect";
+import { ObservableLogger } from "@reactive-agents/observability";
+import type { LogEvent } from "@reactive-agents/observability";
 import { LLMService, DEFAULT_CAPABILITIES, selectAdapter } from "@reactive-agents/llm-provider";
 import type { ProviderCapabilities } from "@reactive-agents/llm-provider";
 import { createToolCallResolver } from "@reactive-agents/tools";
@@ -560,13 +562,38 @@ export function runKernel(
     // Auto-checkpoint tracking — fires once when context pressure enters the soft zone.
     let autoCheckpointed = false;
 
+    const emitLog = (event: LogEvent): Effect.Effect<void, never> =>
+      Effect.serviceOption(ObservableLogger).pipe(
+        Effect.flatMap((opt) =>
+          opt._tag === "Some"
+            ? opt.value.emit(event).pipe(Effect.catchAll(() => Effect.void))
+            : Effect.void
+        )
+      );
+
     while (
       state.status !== "done" &&
       state.status !== "failed" &&
       state.iteration < currentOptions.maxIterations
     ) {
       const prevTokens = state.tokens;
+
+      yield* emitLog({
+        _tag: "iteration",
+        iteration: state.iteration,
+        phase: "thought",
+        timestamp: new Date(),
+      });
+
+      const kernelPhaseStart = Date.now();
+      yield* emitLog({ _tag: "phase_started", phase: "think", timestamp: new Date() });
       state = yield* kernel(state, currentContext);
+      yield* emitLog({
+        _tag: "phase_complete",
+        phase: "think",
+        duration: Date.now() - kernelPhaseStart,
+        status: state.status === "failed" ? "error" : "success",
+      });
 
       // ── Token-delta diminishing-returns guard ────────────────────────────
       // Track consecutive iterations where the model adds fewer than the
