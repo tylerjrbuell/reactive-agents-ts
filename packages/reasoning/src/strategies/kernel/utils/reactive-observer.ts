@@ -8,9 +8,12 @@
  * Extracted from kernel-runner.ts to keep the main loop focused on iteration logic.
  */
 import { Effect } from "effect";
+import { ObservableLogger } from "@reactive-agents/observability";
+import type { LogEvent } from "@reactive-agents/observability";
 import { transitionState } from "../kernel-state.js";
 import type { KernelState, KernelRunOptions, MaybeService, EventBusInstance } from "../kernel-state.js";
 import type { StrategyServices } from "./service-utils.js";
+import type { EntropyScoreLike } from "../output-assembly.js";
 
 /**
  * Score entropy and evaluate reactive controller for one kernel iteration.
@@ -58,26 +61,47 @@ export function runReactiveObserver(
           })
           .pipe(
             Effect.tap((score) => {
-              // score is the full EntropyScore from reactive-intelligence; cast where needed
-              const richScore = score as any;
+              const entropyScore = score as EntropyScoreLike;
               const entropyMeta = s.meta.entropy ?? {};
-              const history = [...(entropyMeta.entropyHistory ?? []), score as import("../output-assembly.js").EntropyScoreLike];
+              const history = [...(entropyMeta.entropyHistory ?? []), entropyScore];
               s = transitionState(s, { meta: { ...s.meta, entropy: { ...entropyMeta, entropyHistory: history } } });
 
+              const emitLog = (event: LogEvent): Effect.Effect<void, never> =>
+                Effect.serviceOption(ObservableLogger).pipe(
+                  Effect.flatMap((opt) =>
+                    opt._tag === "Some"
+                      ? opt.value.emit(event).pipe(Effect.catchAll(() => Effect.void))
+                      : Effect.void
+                  )
+                );
+
+              const logEntropy = emitLog({
+                _tag: "metric",
+                name: "entropy",
+                value: entropyScore.composite,
+                unit: "composite",
+                timestamp: new Date(),
+              });
+
               if (eventBus._tag === "Some") {
-                return eventBus.value.publish({
-                  _tag: "EntropyScored",
-                  taskId: s.taskId,
-                  iteration: richScore.iteration,
-                  composite: richScore.composite,
-                  sources: richScore.sources,
-                  trajectory: richScore.trajectory,
-                  confidence: richScore.confidence,
-                  modelTier: richScore.modelTier,
-                  iterationWeight: richScore.iterationWeight,
-                });
+                // score may have richer fields from reactive-intelligence beyond EntropyScoreLike
+                const richScore = score as Record<string, unknown>;
+                return Effect.all([
+                  eventBus.value.publish({
+                    _tag: "EntropyScored",
+                    taskId: s.taskId,
+                    iteration: typeof richScore["iteration"] === "number" ? richScore["iteration"] : s.iteration,
+                    composite: entropyScore.composite,
+                    sources: richScore["sources"],
+                    trajectory: richScore["trajectory"],
+                    confidence: richScore["confidence"],
+                    modelTier: richScore["modelTier"],
+                    iterationWeight: richScore["iterationWeight"],
+                  }),
+                  logEntropy,
+                ], { concurrency: "unbounded" }).pipe(Effect.asVoid);
               }
-              return Effect.void;
+              return logEntropy;
             }),
             Effect.catchAll(() => Effect.void),
           );

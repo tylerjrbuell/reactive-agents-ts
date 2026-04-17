@@ -621,8 +621,6 @@ export interface AgentResult {
  * @param agentName - Name of the agent (for logging/reference, not included in output)
  * @returns A formatted system prompt string with persona sections
  */
-/** Printed once per process when the first non-test agent with RI telemetry is built. */
-let _riTelemetryNoticePrinted = false;
 
 function composePersonaToSystemPrompt(
   persona: AgentPersona,
@@ -2306,20 +2304,6 @@ export class ReactiveAgentBuilder {
     }
 
     logBuildInfo(this._provider, validation.resolvedModel);
-
-    // Print the RI telemetry notice once per process at build time (not mid-run)
-    if (this._enableReactiveIntelligence && this._provider !== "test" && !_riTelemetryNoticePrinted) {
-      const riOpts = this._reactiveIntelligenceOptions as Record<string, unknown> | undefined;
-      const telemetryCfg = riOpts?.telemetry;
-      const telemetryEnabled = telemetryCfg === undefined || telemetryCfg === true ||
-        (typeof telemetryCfg === "object" && telemetryCfg !== null && (telemetryCfg as any).enabled !== false);
-      if (telemetryEnabled) {
-        console.log(
-          "ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with .withReactiveIntelligence({ telemetry: false })"
-        );
-        _riTelemetryNoticePrinted = true;
-      }
-    }
 
     return Effect.runPromise(this.buildEffect()).catch((e) => {
       throw unwrapError(e);

@@ -47,9 +47,8 @@ export class TelemetryClient {
     if (this.isTestRun(report)) return;
 
     if (!this.noticePrinted) {
-      console.log(
-        "ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }"
-      );
+      // Notice is now shown via ObservableLogger as a structured 'notice' event.
+      // See execution-engine.ts for the NoticesManager integration.
       this.noticePrinted = true;
     }
     try {

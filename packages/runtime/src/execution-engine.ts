@@ -183,6 +183,9 @@ export function buildAutoMaxCallsPerTool(input: {
 
 const VERIFY_EVIDENCE_MAX_CHARS = 14_000;
 
+// Deduplicates RI telemetry notice across runs within the same process
+let _riTelemetryNoticeEmitted = false;
+
 /**
  * Task text plus compact tool / observation evidence so NLI and overlap checks can ground
  * on retrieved facts, not only the user prompt.
@@ -525,10 +528,17 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
             const eb: EbLike | null = ebOpt._tag === "Some" ? ebOpt.value : null;
 
             // ── Collect ToolCallCompleted events for debrief ──
-            const toolCallLog: { toolName: string; durationMs: number; success: boolean }[] = [];
+            // Track the current kernel iteration so parallel tool calls in the same
+            // turn share the same `iteration` value. ReasoningStepCompleted fires per
+            // iteration and carries `event.step` — we read it via a mutable counter.
+            let _currentKernelIteration = 0;
+            const toolCallLog: { toolName: string; durationMs: number; success: boolean; iteration: number }[] = [];
             if (eb) {
+              yield* eb.on("ReasoningStepCompleted", (event) =>
+                Effect.sync(() => { _currentKernelIteration = event.step ?? _currentKernelIteration; }),
+              );
               yield* eb.on("ToolCallCompleted", (event) =>
-                Effect.sync(() => { toolCallLog.push({ toolName: event.toolName, durationMs: event.durationMs, success: event.success }); }),
+                Effect.sync(() => { toolCallLog.push({ toolName: event.toolName, durationMs: event.durationMs, success: event.success, iteration: _currentKernelIteration }); }),
               );
             }
 
@@ -680,6 +690,35 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   }),
                   Effect.catchAll(() => Effect.void),
                 );
+
+                // Emit RI telemetry notice once per process via structured log
+                if (config.enableReactiveIntelligence && !_riTelemetryNoticeEmitted) {
+                  const riOpts = config.reactiveIntelligenceOptions as Record<string, unknown> | undefined;
+                  const telemetryCfg = riOpts?.telemetry;
+                  const telemetryEnabled = telemetryCfg === undefined || telemetryCfg === true ||
+                    (typeof telemetryCfg === "object" && telemetryCfg !== null &&
+                      (telemetryCfg as Record<string, unknown>)["enabled"] !== false);
+                  if (telemetryEnabled) {
+                    _riTelemetryNoticeEmitted = true;
+                    yield* Effect.serviceOption(ObservableLogger).pipe(
+                      Effect.tap((loggerOpt) => {
+                        if (loggerOpt._tag === "Some") {
+                          return loggerOpt.value.emit({
+                            _tag: "notice",
+                            level: "info",
+                            title: "Reactive Intelligence",
+                            message: "Anonymous entropy data helps improve the framework. Disable with .withReactiveIntelligence({ telemetry: false })",
+                            docsLink: "https://docs.reactiveagents.dev/telemetry",
+                            dismissible: true,
+                            timestamp: new Date(),
+                          });
+                        }
+                        return Effect.void;
+                      }),
+                      Effect.catchAll(() => Effect.void),
+                    );
+                  }
+                }
 
                 // ── Lifecycle guard helper ──
                 const checkLifecycle = (taskId: string): Effect.Effect<void, RuntimeErrors> =>
@@ -3824,10 +3863,10 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         entropyOscillationCount: entropyOscillationCount(entropyLog),
                         finalCompositeEntropy: finalCompositeEntropy(entropyLog),
                         entropyAreaUnderCurve: entropyAreaUnderCurve(entropyLog),
-                        // Parallel turn count (Task 11)
+                        // Parallel turn count — uses real kernel iteration from ToolCallCompleted events
                         parallelTurnCount: countParallelTurnsFromLog(
-                          toolCallLog.map((t, idx) => ({
-                            turn: idx,
+                          toolCallLog.map((t) => ({
+                            turn: t.iteration,
                             toolName: t.toolName,
                           })),
                         ),
@@ -3846,8 +3885,8 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       try {
                         const observation = buildRunObservation({
                           modelId,
-                          toolCallLog: toolCallLog.map((t, idx) => ({
-                            turn: idx,
+                          toolCallLog: toolCallLog.map((t) => ({
+                            turn: t.iteration,
                             toolName: t.toolName,
                           })),
                           totalTurns: ctx.iteration,
