@@ -273,7 +273,7 @@ type ExecutionReasoningResult = {
   status: string;
   strategy?: string;
   steps?: readonly { id: string; type: string; content: string; metadata?: { toolUsed?: string; duration?: number } }[];
-  metadata: { cost: number; tokensUsed: number; stepsCount: number; strategyFallback?: boolean; confidence?: number };
+  metadata: { cost: number; tokensUsed: number; stepsCount: number; strategyFallback?: boolean; confidence?: number; llmCalls?: number; terminatedBy?: string };
 };
 
 function normalizeReasoningResult(
