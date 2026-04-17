@@ -1,4 +1,4 @@
-import { Effect, Context, Layer, Ref, Option, Queue, Stream as EStream, Duration, FiberRef } from "effect";
+import { Effect, Context, Layer, Ref, Option, Queue, Stream as EStream, Duration, FiberRef, Logger } from "effect";
 import type { ExecutionContext, ReactiveAgentsConfig } from "./types.js";
 import {
   ExecutionError,
@@ -21,7 +21,7 @@ import type { TaskError } from "@reactive-agents/core";
 import type { ContextProfile } from "@reactive-agents/reasoning";
 import { inferRequiredTools, classifyToolRelevance, filterToolsByRelevance } from "@reactive-agents/reasoning";
 import { ToolService } from "@reactive-agents/tools";
-import { ObservabilityService, createProgressLogger, renderCalibrationProvenance, ObservableLogger, makeObservableLogger } from "@reactive-agents/observability";
+import { ObservabilityService, createProgressLogger, renderCalibrationProvenance, ObservableLogger, makeObservableLogger, makeStatusRenderer } from "@reactive-agents/observability";
 import type { RunSummary } from "@reactive-agents/observability";
 import { GuardrailService, KillSwitchService, BehavioralContractService } from "@reactive-agents/guardrails";
 import { VerificationService } from "@reactive-agents/verification";
@@ -4118,16 +4118,29 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
               });
 
             // Initialize ObservableLogger
+            const isStatusMode =
+              config.logging?.mode === "status" ||
+              (config.logging?.mode !== "stream" && Boolean(process.stdout.isTTY));
+
             const loggerConfig = {
-              live: config.logging?.live ?? true,
+              // In status mode the renderer owns all output; logger stays buffered
+              live: isStatusMode ? false : (config.logging?.live ?? true),
               minLevel: config.logging?.minLevel,
             };
             const logger = yield* makeObservableLogger(loggerConfig);
 
+            // Create renderer (no-op when not in status mode)
+            const renderer = isStatusMode
+              ? makeStatusRenderer(logger)
+              : null;
+
+            // Start status renderer before events flow
+            if (renderer) yield* renderer.start();
+
             // Wrap in root observability span for the full execution trace
             // The cast is required because executeCore has service requirements from Effect.gen,
             // but they will be satisfied by Effect.provide(runtime) in the builder.
-            const executeCoreWithLogger = executeCore().pipe(
+            const executeCoreRaw = executeCore().pipe(
               Effect.provideService(ObservableLogger, logger),
               Effect.tapError((err) => {
                 // All RuntimeErrors extend Data.TaggedError which extends Error
@@ -4141,7 +4154,13 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   timestamp: new Date(),
                 }).pipe(Effect.catchAll(() => Effect.void));
               }),
+              Effect.ensuring(Effect.sync(() => { renderer?.stop(); })),
             );
+
+            // In status mode, silence Effect's built-in logger (suppresses INFO ◉ lines)
+            const executeCoreWithLogger = isStatusMode
+              ? executeCoreRaw.pipe(Effect.provide(Logger.replace(Logger.defaultLogger, Logger.none)))
+              : executeCoreRaw;
             if (obs) {
               const taskResult = yield* obs.withSpan(
                 "execution.run",
