@@ -127,6 +127,12 @@ Key references:
 -   `.claude/skills/effect-ts-patterns/SKILL.md` — Effect-TS pattern reference (Schema.Struct, Context.Tag, Layer, Ref)
 -   `.claude/skills/review-patterns/SKILL.md` — 9-category compliance checklist for code review
 
+## Runtime Policy
+
+**Required runtime: Bun ≥1.0.0.** The framework uses `bun:sqlite`, `Bun.spawn`, and `Bun.serve` in core packages. Node.js support is planned — see `docs/superpowers/plans/2026-04-17-nodejs-support.md` for the migration plan.
+
+**Do not introduce new Bun-specific APIs in new code.** When adding features, prefer `node:` built-ins (`node:crypto`, `node:fs/promises`, `node:child_process`) over Bun globals — Bun supports all `node:` modules natively, and using them keeps each file one import-swap away from Node compatibility. Reserve `bun:sqlite`, `Bun.serve`, and `Bun.spawn` only for files already using them.
+
 ## Golden Rules
 
 1. **Read before writing.** Always read existing files before editing. Understand patterns before introducing new code.

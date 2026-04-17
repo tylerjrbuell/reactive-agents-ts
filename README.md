@@ -25,7 +25,7 @@ Works on local Ollama models (8B+) through frontier APIs — same code, same fea
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7+-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Effect-TS](https://img.shields.io/badge/Effect--TS-3.x-7C3AED)](https://effect.website)
-[![Bun](https://img.shields.io/badge/Bun-compatible-FBF0DF?logo=bun&logoColor=000000)](https://bun.sh)
+[![Bun](https://img.shields.io/badge/Bun-%E2%89%A51.0%20required-FBF0DF?logo=bun&logoColor=000000)](https://bun.sh)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/tylerjrbuell/reactive-agents-ts/pulls)
 
 [Documentation](https://docs.reactiveagents.dev/) · [Discord](https://discord.gg/498xEG5A) · [Quick Start](#quick-start) · [Features](#features) · [Comparison](#comparison) · [Architecture](#architecture) · [Packages](#packages)
@@ -101,6 +101,8 @@ A full-featured local studio for live debugging — start it with `.withCortex()
 ## Quick Start
 
 Install and run your first TypeScript AI agent in under 60 seconds.
+
+> **Requires [Bun](https://bun.sh) ≥1.0.0** — the framework uses Bun's native SQLite, subprocess, and HTTP APIs. Node.js support is [planned for a future release](docs/superpowers/plans/2026-04-17-nodejs-support.md). Install Bun in one command: `curl -fsSL https://bun.sh/install | bash`
 
 ```bash
 bun add reactive-agents
