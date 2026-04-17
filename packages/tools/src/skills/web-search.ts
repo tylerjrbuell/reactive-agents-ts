@@ -35,6 +35,29 @@ const LIMIT_OR_TRANSIENT_HTTP = new Set([
   400, 401, 402, 403, 408, 413, 422, 429, 432, 433, 500, 502, 503, 504,
 ]);
 
+/** Statuses that are transient and worth retrying on the same provider (rate limits, server hiccups). */
+const RETRYABLE_HTTP = new Set([429, 408, 500, 502, 503, 504]);
+
+const RETRY_MAX_ATTEMPTS = 3;
+const RETRY_BASE_DELAY_MS = 1_000;
+
+async function fetchWithRetry(
+  request: () => Promise<Response>,
+  maxAttempts = RETRY_MAX_ATTEMPTS,
+  baseDelayMs = RETRY_BASE_DELAY_MS,
+): Promise<Response> {
+  let lastResponse: Response | undefined;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const response = await request();
+    if (!RETRYABLE_HTTP.has(response.status)) return response;
+    lastResponse = response;
+    if (attempt < maxAttempts - 1) {
+      await new Promise<void>((resolve) => setTimeout(resolve, baseDelayMs * Math.pow(2, attempt)));
+    }
+  }
+  return lastResponse!;
+}
+
 async function readJsonBody(response: Response): Promise<unknown> {
   const text = await response.text();
   if (!text.trim()) return {};
@@ -90,15 +113,13 @@ async function searchTavily(
   maxResults: number,
   apiKey: string,
 ): Promise<ReadonlyArray<WebSearchResultRow>> {
-  const response = await fetch("https://api.tavily.com/search", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      query,
-      max_results: maxResults,
-      api_key: apiKey,
-    }),
-  });
+  const response = await fetchWithRetry(() =>
+    fetch("https://api.tavily.com/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query, max_results: maxResults, api_key: apiKey }),
+    })
+  );
 
   const body = await readJsonBody(response);
 
@@ -143,13 +164,12 @@ async function searchBrave(
   url.searchParams.set("q", query);
   url.searchParams.set("count", String(maxResults));
 
-  const response = await fetch(url.toString(), {
-    method: "GET",
-    headers: {
-      Accept: "application/json",
-      "X-Subscription-Token": apiKey,
-    },
-  });
+  const response = await fetchWithRetry(() =>
+    fetch(url.toString(), {
+      method: "GET",
+      headers: { Accept: "application/json", "X-Subscription-Token": apiKey },
+    })
+  );
 
   const body = await readJsonBody(response);
 
@@ -192,14 +212,13 @@ async function searchSerper(
   maxResults: number,
   apiKey: string,
 ): Promise<ReadonlyArray<WebSearchResultRow>> {
-  const response = await fetch("https://google.serper.dev/search", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-API-KEY": apiKey,
-    },
-    body: JSON.stringify({ q: query, num: maxResults }),
-  });
+  const response = await fetchWithRetry(() =>
+    fetch("https://google.serper.dev/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-API-KEY": apiKey },
+      body: JSON.stringify({ q: query, num: maxResults }),
+    })
+  );
 
   const body = await readJsonBody(response);
 
@@ -266,10 +285,9 @@ async function searchDuckDuckGoInstant(
   url.searchParams.set("no_html", "1");
   url.searchParams.set("no_redirect", "1");
 
-  const response = await fetch(url.toString(), {
-    method: "GET",
-    headers: { Accept: "application/json" },
-  });
+  const response = await fetchWithRetry(() =>
+    fetch(url.toString(), { method: "GET", headers: { Accept: "application/json" } })
+  );
 
   const body = await readJsonBody(response);
 

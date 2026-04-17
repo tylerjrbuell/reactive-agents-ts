@@ -224,6 +224,74 @@ describe("webSearchHandler — provider chain", () => {
     expect(result.results.length).toBeGreaterThan(0);
   });
 
+  it("retries Brave on 429 and succeeds on second attempt", async () => {
+    stashEnv("TAVILY_API_KEY");
+    stashEnv("BRAVE_SEARCH_API_KEY");
+    stashEnv("BRAVE_API_KEY");
+    stashEnv("SERPER_API_KEY");
+    delete process.env.TAVILY_API_KEY;
+    process.env.BRAVE_SEARCH_API_KEY = "brave-key";
+    delete process.env.SERPER_API_KEY;
+
+    let braveAttempts = 0;
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const href = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (href.includes("api.search.brave.com")) {
+        braveAttempts++;
+        if (braveAttempts < 2) {
+          return new Response("{}", { status: 429 });
+        }
+        return new Response(
+          JSON.stringify({
+            web: { results: [{ title: "Brave retry hit", url: "https://brave.example/r", description: "ok" }] },
+          }),
+          { status: 200 },
+        );
+      }
+      throw new Error(`unexpected fetch: ${href}`);
+    }) as typeof fetch;
+
+    const result = await Effect.runPromise(webSearchHandler({ query: "retry-test" }));
+    expect(result.provider).toBe("brave");
+    expect(braveAttempts).toBe(2);
+    expect(result.results[0]?.title).toBe("Brave retry hit");
+  });
+
+  it("skips to next provider on quota (432) without retrying", async () => {
+    stashEnv("TAVILY_API_KEY");
+    stashEnv("BRAVE_SEARCH_API_KEY");
+    stashEnv("BRAVE_API_KEY");
+    stashEnv("SERPER_API_KEY");
+    process.env.TAVILY_API_KEY = "tv-key";
+    delete process.env.BRAVE_SEARCH_API_KEY;
+    delete process.env.BRAVE_API_KEY;
+    process.env.SERPER_API_KEY = "serper-key";
+
+    let tavilyAttempts = 0;
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const href = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (href.includes("api.tavily.com")) {
+        tavilyAttempts++;
+        return new Response(
+          JSON.stringify({ detail: { error: "plan limit exceeded" } }),
+          { status: 432 },
+        );
+      }
+      if (href.includes("google.serper.dev")) {
+        return new Response(
+          JSON.stringify({ organic: [{ title: "Serper", link: "https://s.example", snippet: "s" }] }),
+          { status: 200 },
+        );
+      }
+      throw new Error(`unexpected fetch: ${href}`);
+    }) as typeof fetch;
+
+    const result = await Effect.runPromise(webSearchHandler({ query: "quota-skip" }));
+    expect(result.provider).toBe("serper");
+    // Quota (432) must not be retried — only one Tavily attempt allowed
+    expect(tavilyAttempts).toBe(1);
+  });
+
   it("returns ToolExecutionError when all providers yield nothing", async () => {
     stashEnv("TAVILY_API_KEY");
     stashEnv("BRAVE_SEARCH_API_KEY");
