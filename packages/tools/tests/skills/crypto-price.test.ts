@@ -75,6 +75,19 @@ describe("cryptoPriceHandler", () => {
     expect(fake?.notFound).toBe(true);
   });
 
+  it("retries on 429 and succeeds on second attempt", async () => {
+    let attempts = 0;
+    globalThis.fetch = (async () => {
+      attempts++;
+      if (attempts < 2) return new Response("{}", { status: 429 });
+      return new Response(JSON.stringify({ bitcoin: { usd: 77000 } }), { status: 200 });
+    }) as typeof fetch;
+
+    const result = await Effect.runPromise(cryptoPriceHandler({ coins: ["BTC"] }));
+    expect(result.prices[0]?.price).toBe(77000);
+    expect(attempts).toBe(2);
+  });
+
   it("returns ToolExecutionError on network failure", async () => {
     globalThis.fetch = (async () => { throw new Error("network down"); }) as typeof fetch;
 
@@ -85,7 +98,7 @@ describe("cryptoPriceHandler", () => {
   });
 
   it("returns ToolExecutionError on non-200 response", async () => {
-    mockCoinGecko({}, 429);
+    mockCoinGecko({}, 500);
 
     const err = await Effect.runPromise(
       cryptoPriceHandler({ coins: ["BTC"] }).pipe(Effect.flip),

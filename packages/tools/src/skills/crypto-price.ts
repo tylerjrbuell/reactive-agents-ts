@@ -2,6 +2,22 @@ import { Effect } from "effect";
 import type { ToolDefinition } from "../types.js";
 import { ToolExecutionError } from "../errors.js";
 
+const COINGECKO_RETRY_ATTEMPTS = 3;
+const COINGECKO_RETRY_BASE_MS = 2_000;
+
+async function geckoFetchWithRetry(url: string): Promise<Response> {
+  let last: Response | undefined;
+  for (let attempt = 0; attempt < COINGECKO_RETRY_ATTEMPTS; attempt++) {
+    const response = await fetch(url, { headers: { Accept: "application/json" } });
+    if (response.status !== 429) return response;
+    last = response;
+    if (attempt < COINGECKO_RETRY_ATTEMPTS - 1) {
+      await new Promise<void>((r) => setTimeout(r, COINGECKO_RETRY_BASE_MS * Math.pow(2, attempt)));
+    }
+  }
+  return last!;
+}
+
 // CoinGecko IDs for common coins — symbol → { id, name }
 const COIN_MAP: Record<string, { id: string; name: string }> = {
   BTC: { id: "bitcoin", name: "Bitcoin" },
@@ -54,29 +70,29 @@ export const cryptoPriceTool: ToolDefinition = {
   name: "crypto-price",
   description:
     "Get current cryptocurrency prices from CoinGecko's free public API. No API key required. " +
-    "Supports major coins by symbol (BTC, ETH, XRP, XLM, SOL, ADA, DOGE, DOT, AVAX, MATIC, LINK, LTC, " +
-    "BCH, UNI, ATOM, NEAR, ARB, OP, SUI, APT, TRX, TON, SHIB, FIL, ICP, VET, ALGO, HBAR) and more. " +
-    "Returns current price, coin name, and symbol for each requested coin. " +
-    "Use this instead of web-search when you only need crypto prices.",
+    "IMPORTANT: Pass ALL coins you need in ONE call — do not call this tool multiple times for different coins. " +
+    "Supported symbols: BTC, ETH, XRP, XLM, SOL, ADA, DOGE, DOT, AVAX, MATIC, LINK, LTC, " +
+    "BCH, UNI, ATOM, NEAR, ARB, OP, SUI, APT, TRX, TON, SHIB, FIL, ICP, VET, ALGO, HBAR. " +
+    "Use this instead of web-search when you need crypto prices.",
   parameters: [
     {
       name: "coins",
       type: "array",
       description:
-        "List of coin symbols to look up (e.g. [\"BTC\", \"ETH\", \"XRP\"]). " +
-        "Case-insensitive. Unknown symbols are returned with price: null.",
+        "Array of coin symbols to fetch in one request, e.g. [\"BTC\", \"ETH\", \"XRP\", \"XLM\"]. " +
+        "Always batch multiple coins into a single call. Case-insensitive.",
       required: true,
     },
     {
       name: "currency",
       type: "string",
-      description: "Quote currency for prices. Default: \"usd\". Also supports: eur, gbp, jpy, btc, eth.",
+      description: "Quote currency. Default: \"usd\". Also supports: eur, gbp, jpy, btc, eth.",
       required: false,
       default: "usd",
     },
   ],
   returnType:
-    "{ prices: Array<{ symbol: string, name: string, price: number | null, currency: string, notFound?: true }>, currency: string, source: \"coingecko\" }",
+    "{ prices: Array<{ symbol: string, name: string, price: number | null }> }",
   category: "data",
   riskLevel: "low",
   timeoutMs: 10_000,
@@ -104,9 +120,7 @@ export const cryptoPriceHandler = (
         url.searchParams.set("ids", ids);
         url.searchParams.set("vs_currencies", currency);
 
-        const response = await fetch(url.toString(), {
-          headers: { Accept: "application/json" },
-        });
+        const response = await geckoFetchWithRetry(url.toString());
 
         if (!response.ok) {
           const text = await response.text().catch(() => "");
