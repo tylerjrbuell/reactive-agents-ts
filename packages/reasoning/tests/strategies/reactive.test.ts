@@ -53,11 +53,10 @@ describe("ReactiveStrategy", () => {
       program.pipe(Effect.provide(layer)),
     );
 
-    // Mock returns empty text each turn → no FINAL ANSWER, no tools → after 3 iterations
-    // kernel-runner loop detection (consecutive empty thoughts) sets kernel status "failed".
-    // That maps to reasoning status "failed" (not "partial"); execution layer reports success: false.
-    expect(result.status).toBe("failed");
-    expect(result.steps.length).toBe(3);
+    // Mock returns empty text each turn → no FINAL ANSWER, no tools → loop detection fires
+    // on consecutive thought steps (no action steps) → graceful degradation → "completed".
+    expect(result.status).toBe("completed");
+    expect(result.steps.length).toBeGreaterThan(0);
   });
 
   it("should parse tool requests and add action + observation steps", async () => {

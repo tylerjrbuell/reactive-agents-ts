@@ -192,10 +192,9 @@ describe("Stall detection — consecutive thoughts without action", () => {
       }).pipe(Effect.provide(testLayer)),
     );
 
-    expect(result.status).toBe("failed");
-    expect(result.error).toContain("Loop detected");
-    // Error message should mention consecutive thoughts
-    expect(result.error).toContain("consecutive thinking steps");
+    // Pure thought loop (no action steps) → graceful degradation, not failure
+    expect(result.status).toBe("done");
+    expect(result.meta?.terminatedBy).toBe("loop_graceful");
   });
 
   it("stall does NOT fire when actions interrupt thought streaks", async () => {
@@ -402,9 +401,9 @@ describe("Stall detection — observation steps do NOT reset consecutive-thought
     );
 
     // Observations must NOT reset the consecutive-thought streak.
-    // After 3 thoughts (with observations in between), the stall loop must fire.
-    expect(result.status).toBe("failed");
-    expect(result.error).toContain("consecutive thinking steps");
+    // After 3 thoughts (with observations in between), the stall loop fires → graceful.
+    expect(result.status).toBe("done");
+    expect(result.meta?.terminatedBy).toBe("loop_graceful");
   }, 15000);
 });
 

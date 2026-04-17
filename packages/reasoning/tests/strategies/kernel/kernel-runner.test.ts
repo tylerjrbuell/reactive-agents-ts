@@ -322,7 +322,8 @@ describe("runKernel", () => {
     expect(callCount).toBe(3);
   });
 
-  it("detects repeated identical thoughts and aborts", async () => {
+  it("detects repeated identical thoughts and stops gracefully", async () => {
+    const REPEATED_THOUGHT = "I need to think about this more";
     let callCount = 0;
 
     const repeatedThoughtKernel: ThoughtKernel = (state, _ctx) => {
@@ -333,7 +334,7 @@ describe("runKernel", () => {
           iteration: state.iteration + 1,
           steps: [
             ...state.steps,
-            makeStep("thought", "I need to think about this more"),
+            makeStep("thought", REPEATED_THOUGHT),
           ],
         }),
       );
@@ -348,9 +349,10 @@ describe("runKernel", () => {
       }).pipe(Effect.provide(testLayer)),
     );
 
-    expect(result.status).toBe("failed");
-    expect(result.error).toContain("Loop detected");
-    expect(result.error).toContain("repeated the same thought");
+    // Loop detected — stops after threshold, delivers last thought gracefully
+    expect(result.status).toBe("done");
+    expect(result.output).toContain(REPEATED_THOUGHT);
+    expect(result.meta?.terminatedBy).toBe("loop_graceful");
     expect(callCount).toBe(3);
   });
 
@@ -1177,5 +1179,78 @@ describe("runKernel — tool classification lifecycle", () => {
 
     expect(result.status).toBe("done");
     expect(structuredCalls).toBe(0);
+  });
+});
+
+describe("llmCalls ceiling — maxIterations as hard LLM-call cap", () => {
+  it("does not exceed maxIterations llm calls even when ICS-style continue paths skip iteration increments", async () => {
+    // Simulates ICS re-entrancy: every other kernel call increments llmCalls
+    // but NOT iteration (as if a stall-detection 'continue' fired). Without
+    // the llmCalls guard in the while condition, the loop runs until
+    // state.iteration >= maxIterations — which takes 2x more LLM calls.
+    const maxIter = 3;
+    const icsReentrantKernel: ThoughtKernel = (state, _ctx) => {
+      const newLlmCalls = (state.llmCalls ?? 0) + 1;
+      // Even-numbered calls skip the iteration increment (ICS re-entrancy)
+      const skipIteration = newLlmCalls % 2 === 0;
+      return Effect.succeed(
+        transitionState(state, {
+          status: "thinking",
+          llmCalls: newLlmCalls,
+          iteration: skipIteration ? state.iteration : state.iteration + 1,
+          steps: [
+            ...state.steps,
+            makeStep("thought", `LLM call ${newLlmCalls} (iter ${state.iteration})`),
+          ],
+        }),
+      );
+    };
+
+    const result = await Effect.runPromise(
+      runKernel(icsReentrantKernel, { task: "test" }, {
+        maxIterations: maxIter,
+        strategy: "test",
+        kernelType: "test",
+        // Disable loop detection so it can't interfere
+        loopDetection: { maxConsecutiveThoughts: 999, maxRepeatedThoughts: 999, maxSameToolCalls: 999 },
+      }).pipe(Effect.provide(TestLLMServiceLayer())),
+    );
+
+    // RED: without llmCalls guard, the loop runs until iteration=3,
+    // requiring 5 llmCalls (iterations: 0→1, skip, 1→2, skip, 2→3).
+    // With the fix: exits when llmCalls >= maxIterations, so llmCalls ≤ 3.
+    expect(result.llmCalls ?? 0).toBeLessThanOrEqual(maxIter);
+  });
+});
+
+describe("loop detector graceful degradation — no artifacts path", () => {
+  it("delivers last thought as output instead of failing when loop fires with no tool artifacts", async () => {
+    // A kernel that emits the same thought content on every call — triggers
+    // maxConsecutiveThoughts loop detection. Without the graceful-degradation
+    // fix, the runner sets status="failed" and error contains "Loop detected".
+    const STUCK_THOUGHT = "I am stuck thinking the same thing over and over";
+    const repeatedThoughtKernel: ThoughtKernel = (state, _ctx) =>
+      Effect.succeed(
+        transitionState(state, {
+          status: "thinking",
+          llmCalls: (state.llmCalls ?? 0) + 1,
+          iteration: state.iteration + 1,
+          steps: [...state.steps, makeStep("thought", STUCK_THOUGHT)],
+        }),
+      );
+
+    const result = await Effect.runPromise(
+      runKernel(repeatedThoughtKernel, { task: "test" }, {
+        maxIterations: 20,
+        strategy: "test",
+        kernelType: "test",
+        loopDetection: { maxConsecutiveThoughts: 3, maxRepeatedThoughts: 3, maxSameToolCalls: 999 },
+      }).pipe(Effect.provide(TestLLMServiceLayer())),
+    );
+
+    // RED: without fix, status="failed" and error/output contains "Loop detected"
+    expect(result.status).not.toBe("failed");
+    expect(result.output).not.toMatch(/Loop detected/i);
+    expect(result.output).toContain(STUCK_THOUGHT);
   });
 });

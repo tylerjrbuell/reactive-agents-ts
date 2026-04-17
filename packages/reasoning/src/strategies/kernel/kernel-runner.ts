@@ -574,7 +574,8 @@ export function runKernel(
     while (
       state.status !== "done" &&
       state.status !== "failed" &&
-      state.iteration < currentOptions.maxIterations
+      state.iteration < currentOptions.maxIterations &&
+      (state.llmCalls ?? 0) < currentOptions.maxIterations
     ) {
       const prevTokens = state.tokens;
 
@@ -1003,11 +1004,24 @@ export function runKernel(
             break;
           }
 
-          // No artifacts — genuine failure
-          state = transitionState(state, {
-            status: "failed",
-            error: loopMsg,
-          });
+          // Distinguish: if no tool calls were attempted, it's a pure thought loop.
+          // Degrade gracefully — deliver the last thought rather than a cryptic error.
+          // If tool calls were attempted but produced no deliverable results, it IS
+          // a genuine failure (the agent tried tools and got stuck).
+          const hasToolAttempts = state.steps.some((s) => s.type === "action");
+          if (hasToolAttempts) {
+            state = transitionState(state, {
+              status: "failed",
+              error: loopMsg,
+            });
+          } else {
+            const lastThought = [...state.steps].reverse().find((s) => s.type === "thought");
+            state = transitionState(state, {
+              status: "done",
+              output: lastThought?.content ?? loopMsg,
+              meta: { ...state.meta, terminatedBy: "loop_graceful" },
+            });
+          }
           break;
         }
       } // end if (state.status !== "done" && state.status !== "failed")

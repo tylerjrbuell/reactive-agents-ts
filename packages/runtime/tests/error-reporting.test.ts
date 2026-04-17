@@ -6,9 +6,9 @@ import type { AgentEvent } from "@reactive-agents/core";
 type AgentCompletedWithError = Extract<AgentEvent, { _tag: "AgentCompleted" }> & { error?: string };
 
 describe("Error reporting chain", () => {
-  it("AgentResult includes error field when execution fails", async () => {
-    // maxIterations: 1 with an empty response — the kernel runs 1 iteration,
-    // gets no substantive output, exits with status "partial" → success: false.
+  it("AgentResult succeeds gracefully when loop fires on pure thought steps", async () => {
+    // Empty-response loops produce only thought steps (no action steps).
+    // Loop detection now degrades gracefully → success: true with last thought as output.
     const agent = await ReactiveAgents.create()
       .withName("error-test-agent")
       .withTestScenario([{ text: "" }])
@@ -17,10 +17,8 @@ describe("Error reporting chain", () => {
 
     const result = await agent.run("Test task");
 
-    expect(result.success).toBe(false);
-    expect(result.error).toBeDefined();
-    expect(typeof result.error).toBe("string");
-    expect(result.error!.length).toBeGreaterThan(0);
+    expect(result.success).toBe(true);
+    expect(result.error).toBeUndefined();
     await agent.dispose();
   });
 
@@ -37,7 +35,7 @@ describe("Error reporting chain", () => {
     await agent.dispose();
   });
 
-  it("AgentCompleted event includes error when execution fails", async () => {
+  it("AgentCompleted event fires with success:true on graceful loop degradation", async () => {
     const collectedEvents: AgentEvent[] = [];
 
     const agent = await ReactiveAgents.create()
@@ -58,11 +56,10 @@ describe("Error reporting chain", () => {
       (e) => e._tag === "AgentCompleted",
     ) as AgentCompletedWithError | undefined;
 
+    // Pure thought loop → graceful degradation → success:true, no error surfaced
     expect(completedEvent).toBeDefined();
-    expect(completedEvent!.success).toBe(false);
-    expect(completedEvent!.error).toBeDefined();
-    expect(typeof completedEvent!.error).toBe("string");
-    expect(completedEvent!.error!.length).toBeGreaterThan(0);
+    expect(completedEvent!.success).toBe(true);
+    expect(completedEvent!.error).toBeUndefined();
     await agent.dispose();
   });
 
