@@ -88,6 +88,9 @@ When you enable `.withTools()`, these tools are automatically registered and ava
 | `file-read` | file | Read file contents (path-traversal protected) | — |
 | `file-write` | file | Write file contents (requires approval) | — |
 | `code-execute` | code | Execute code in a subprocess (`Bun.spawn`, `cwd: "/tmp"`, minimal env) | — |
+| `git-cli` | vcs | Run any `git` subcommand (e.g. `status`, `log`, `diff`) | `git` in `$PATH` |
+| `gh-cli` | vcs | Run any `gh` subcommand via the GitHub CLI | `gh` in `$PATH` |
+| `gws-cli` | productivity | Run any `gws` subcommand via the Google Workspace CLI | `gws` in `$PATH` |
 
 Ad-hoc note builtins were removed from the default tool list. Use the **`recall`** meta-tool (Conductor's Suite) for working-memory writes, reads, search, and listing. If you use **`.withDocuments()`**, ingestion uses **`rag-ingest`** and retrieval is typically routed through **`find`** rather than a standalone `rag-search` builtin.
 

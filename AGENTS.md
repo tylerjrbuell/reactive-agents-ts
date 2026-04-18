@@ -21,7 +21,7 @@ Foundation (no reactive-agents deps)
 ├── @reactive-agents/reasoning     — 5 strategies + ThoughtKernel, KernelRunner, Structured Plan Engine
 │   └── depends on: core, llm-provider, memory (PlanStoreService), tools (ToolService)
 │
-├── @reactive-agents/tools         — ToolService, ToolRegistry, 8 built-in tools, MCP client, sandbox
+├── @reactive-agents/tools         — ToolService, ToolRegistry, 11 built-in tools, MCP client, sandbox
 │   └── depends on: core, llm-provider
 │
 ├── @reactive-agents/guardrails    — Injection/PII/toxicity detection, KillSwitch, BehavioralContracts

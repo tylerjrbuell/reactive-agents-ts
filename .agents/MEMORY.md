@@ -50,6 +50,13 @@ Full 4-agent audit run. Architecture solid; gaps are wiring, DX, and trust. Firs
 ### Repo cleanup needed
 Delete before v1.0: `test.ts` (46KB!), `main.ts`, `scratch.ts`, `scratch/`, `output.txt`, `harness-reports/`
 
+## Current Status (Apr 17–18, 2026)
+- **3 CLI built-in tools shipped** — `git-cli`, `gh-cli`, `gws-cli` in `@reactive-agents/tools`; injectable `CliRunner` type for testability; `ENOENT` produces human-readable error; tool count 8 → 11
+- **Permanently-failed required tools fix** — `getEffectiveMissingRequiredTools()` excludes tools that were attempted but never succeeded; prevents loop-until-maxIterations on ENOENT/unavailable tools; fixes act.ts, guard.ts, kernel-runner.ts, lane-controller.ts
+- **Tool pruning guard** — `PRUNE_MIN_TOOLS = 15` in think.ts; classification-based pruning only activates above 15 tools, preventing git-cli/etc. from being hidden on small tool sets
+- **Sub-agent maxIterations un-capped** — removed `Math.min(userValue, 3)` from agent-tool-adapter.ts; user config honored
+- **4,153 tests across 461 files** — 852/852 reasoning, 656/656 tools, all passing
+
 ## Current Status (Apr 13, 2026)
 - **Context Engineering Overhaul complete** — dead code removed (`compaction.ts`, `context-budget.ts`, `buildDynamicContext`, `autoForwardSection`); `ContextManager` service introduced as deterministic context assembly authority; `steeringNudge` fully migrated to typed `PendingGuidance` → system prompt `Guidance:` section
 - **Plan-Execute-Reflect fixes shipped** — planner decomposition, quantity enforcement, reflection augmentation, satisfaction override removal

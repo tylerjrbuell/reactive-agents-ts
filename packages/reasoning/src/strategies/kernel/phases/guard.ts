@@ -13,6 +13,7 @@ import { isParallelBatchSafeTool } from "../utils/tool-gating.js";
 import {
   buildSuccessfulToolCallCounts,
   getMissingRequiredToolsByCount,
+  getEffectiveMissingRequiredTools,
 } from "../utils/requirement-state.js";
 import { META_TOOLS as META_TOOL_NAMES, INTROSPECTION_META_TOOLS, isDelegationTool } from "../kernel-constants.js";
 
@@ -103,8 +104,8 @@ export const duplicateGuard: Guard = (tc, state, input) => {
   });
   const priorObsContent = priorSuccessIdx >= 0 ? state.steps[priorSuccessIdx + 1]?.content ?? "" : "";
   const reqTools = input.requiredTools ?? [];
-  const missingReq = getMissingRequiredToolsByCount(
-    buildSuccessfulToolCallCounts(state.steps),
+  const missingReq = getEffectiveMissingRequiredTools(
+    state.steps,
     reqTools,
     input.requiredToolQuantities,
   );
@@ -169,8 +170,8 @@ export const repetitionGuard: Guard = (tc, state, input) => {
   const reqTools = input.requiredTools ?? [];
   const quantities = input.requiredToolQuantities ?? {};
   const successfulCounts = buildSuccessfulToolCallCounts(state.steps);
-  const missingRequired = getMissingRequiredToolsByCount(
-    successfulCounts,
+  const missingRequired = getEffectiveMissingRequiredTools(
+    state.steps,
     reqTools,
     quantities,
   );

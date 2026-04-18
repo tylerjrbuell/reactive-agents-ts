@@ -1,4 +1,5 @@
-import { getMissingRequiredToolsByCount } from "./requirement-state.js";
+import type { ReasoningStep } from "../../../types/index.js";
+import { getEffectiveMissingRequiredTools } from "./requirement-state.js";
 
 export type ExecutionLane = "gather" | "synthesize";
 
@@ -11,10 +12,10 @@ export interface LaneDecision {
 export function decideExecutionLane(input: {
   readonly requiredTools: readonly string[];
   readonly requiredToolQuantities?: Readonly<Record<string, number>>;
-  readonly successfulToolCounts: Readonly<Record<string, number>>;
+  readonly steps: readonly ReasoningStep[];
 }): LaneDecision {
-  const missingRequiredTools = getMissingRequiredToolsByCount(
-    input.successfulToolCounts,
+  const missingRequiredTools = getEffectiveMissingRequiredTools(
+    input.steps,
     input.requiredTools,
     input.requiredToolQuantities,
   );

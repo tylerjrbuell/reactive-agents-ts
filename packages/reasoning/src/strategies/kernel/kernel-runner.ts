@@ -40,6 +40,7 @@ import { detectLoop, checkAllToolsCalled } from "./utils/loop-detector.js";
 import {
   buildSuccessfulToolCallCounts,
   getMissingRequiredToolsByCount,
+  getEffectiveMissingRequiredTools,
 } from "./utils/requirement-state.js";
 import {
   decideExecutionLane,
@@ -67,8 +68,8 @@ function missingRequiredToolsForInput(
   steps: KernelState["steps"],
   input: KernelInput,
 ): readonly string[] {
-  return getMissingRequiredToolsByCount(
-    buildSuccessfulToolCallCounts(steps),
+  return getEffectiveMissingRequiredTools(
+    steps,
     input.requiredTools ?? [],
     input.requiredToolQuantities,
   );
@@ -374,8 +375,8 @@ function getToolFailureRecovery(
   }
 
   const required = input.requiredTools ?? [];
-  const requiredStillNeeded = getMissingRequiredToolsByCount(
-    successCounts,
+  const requiredStillNeeded = getEffectiveMissingRequiredTools(
+    state.steps,
     required,
     input.requiredToolQuantities,
   );
@@ -676,7 +677,7 @@ export function runKernel(
       const laneDecision = decideExecutionLane({
         requiredTools: currentInput.requiredTools ?? [],
         requiredToolQuantities: currentInput.requiredToolQuantities,
-        successfulToolCounts: buildSuccessfulToolCallCounts(state.steps),
+        steps: state.steps,
       });
       state = transitionState(state, {
         meta: {

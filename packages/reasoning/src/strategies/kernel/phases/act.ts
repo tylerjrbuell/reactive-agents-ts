@@ -34,6 +34,7 @@ import { planNextMoveBatches } from "../utils/tool-gating.js";
 import {
   buildSuccessfulToolCallCounts,
   getMissingRequiredToolsByCount,
+  getEffectiveMissingRequiredTools,
 } from "../utils/requirement-state.js";
 import { checkToolCall, defaultGuards } from "./guard.js";
 import { META_TOOLS, INTROSPECTION_META_TOOLS } from "../kernel-constants.js";
@@ -282,9 +283,8 @@ export function handleActing(
         if (tc.name === "final-answer") {
           const hasNonMetaToolCalled = [...newToolsUsed].some((t) => !META_TOOLS.has(t));
           const requiredTools = input.requiredTools ?? [];
-          const successfulToolCounts = buildSuccessfulToolCallCounts(allSteps);
-          const missingRequired = getMissingRequiredToolsByCount(
-            successfulToolCounts,
+          const missingRequired = getEffectiveMissingRequiredTools(
+            allSteps,
             requiredTools,
             input.requiredToolQuantities,
           );
@@ -510,9 +510,8 @@ export function handleActing(
 
             let obsContent = result.execResult.content;
             if (!result.execResult.success) {
-              const successfulToolCounts = buildSuccessfulToolCallCounts(allSteps);
-              const missingRequiredTools = getMissingRequiredToolsByCount(
-                successfulToolCounts,
+              const missingRequiredTools = getEffectiveMissingRequiredTools(
+                allSteps,
                 input.requiredTools ?? [],
                 input.requiredToolQuantities,
               );
@@ -671,9 +670,8 @@ export function handleActing(
         // errorRecovery hook — inject guidance when a tool fails (404, timeout, etc.)
         let obsContent = execResult.content;
         if (!execResult.success) {
-          const successfulToolCounts = buildSuccessfulToolCallCounts(allSteps);
-          const missingRequiredTools = getMissingRequiredToolsByCount(
-            successfulToolCounts,
+          const missingRequiredTools = getEffectiveMissingRequiredTools(
+            allSteps,
             input.requiredTools ?? [],
             input.requiredToolQuantities,
           );
@@ -787,8 +785,8 @@ export function handleActing(
         const usedSoFar = [...newToolsUsed];
         const reqQuantities = input.requiredToolQuantities;
         const successfulToolCounts = buildSuccessfulToolCallCounts(allSteps);
-        const missing = getMissingRequiredToolsByCount(
-          successfulToolCounts,
+        const missing = getEffectiveMissingRequiredTools(
+          allSteps,
           reqTools,
           reqQuantities,
         );
