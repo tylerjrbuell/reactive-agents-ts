@@ -5,9 +5,7 @@
     "tsconfig.json",
     "bun.lock",
     ".env.example",
-    "package.json",
-    "packages/*/src/**",
-    "apps/*/src/**"
+    "package.json"
   ],
   "globalEnv": ["CLEAN"],
   "cacheDir": ".turbo",
