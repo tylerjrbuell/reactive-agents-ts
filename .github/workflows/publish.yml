@@ -21,6 +21,10 @@ jobs:
           # Full history needed for changesets to detect changed packages
           fetch-depth: 0
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
