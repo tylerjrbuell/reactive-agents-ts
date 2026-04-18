@@ -633,6 +633,7 @@ export function handleActing(
           continue;
         }
 
+        yield* emitLog({ _tag: "tool_call", tool: tc.name, iteration: state.iteration, timestamp: new Date() });
         const toolStartMs = Date.now();
         const execResult = yield* executeNativeToolCall(
           toolService.value,
@@ -642,6 +643,14 @@ export function handleActing(
           { compression, scratchpad: sharedScratchpad },
         );
         const toolDurationMs = Date.now() - toolStartMs;
+        yield* emitLog({
+          _tag: "tool_result",
+          tool: tc.name,
+          duration: toolDurationMs,
+          status: execResult.success ? "success" : "error",
+          error: execResult.success ? undefined : execResult.content,
+          timestamp: new Date(),
+        });
 
         // Update action step with duration
         const lastActionIdx = allSteps.length - 1;

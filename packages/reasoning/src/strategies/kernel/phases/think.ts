@@ -151,17 +151,22 @@ export function handleThinking(
     // This dramatically reduces attention load for local/mid models
     // (e.g. 38 GitHub MCP tools → 3 classified tools), preventing the model
     // from hallucinating tool names or losing track of the correct ones.
+    //
+    // Only prune when the full set is large (> 15). For small capability-only
+    // tool sets the classifier output is incomplete and pruning hides valid tools.
+    const PRUNE_MIN_TOOLS = 15;
     const classifiedRequired = input.requiredTools ?? [];
     const classifiedRelevant = input.relevantTools ?? [];
     const hasClassification = classifiedRequired.length > 0 || classifiedRelevant.length > 0;
 
-    const promptSchemas: readonly ToolSchema[] = hasClassification && !pressureCritical
-      ? effectiveSchemas.filter((ts) =>
-          classifiedRequired.includes(ts.name) ||
-          classifiedRelevant.includes(ts.name) ||
-          META_TOOL_SET.has(ts.name),
-        )
-      : effectiveSchemas;
+    const promptSchemas: readonly ToolSchema[] =
+      hasClassification && !pressureCritical && effectiveSchemas.length > PRUNE_MIN_TOOLS
+        ? effectiveSchemas.filter((ts) =>
+            classifiedRequired.includes(ts.name) ||
+            classifiedRelevant.includes(ts.name) ||
+            META_TOOL_SET.has(ts.name),
+          )
+        : effectiveSchemas;
 
     // ── Harness skill injection ──────────────────────────────────────────────
     const harnessContent = input.metaTools?.harnessContent;
