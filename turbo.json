@@ -41,6 +41,18 @@
     "dev": {
       "cache": false,
       "persistent": true
+    },
+    "@reactive-agents/docs#build": {
+      "dependsOn": [],
+      "inputs": [
+        "src/**",
+        "public/**",
+        "skills/**",
+        "astro.config.mjs",
+        "tsconfig.json",
+        "package.json"
+      ],
+      "outputs": ["dist/**"]
     }
   }
 }
