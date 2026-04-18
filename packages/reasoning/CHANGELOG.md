@@ -1,5 +1,17 @@
 # @reactive-agents/reasoning
 
+## 0.9.1
+
+### Patch Changes
+
+-   Updated dependencies [004e1e2]
+    -   @reactive-agents/tools@0.9.1
+    -   @reactive-agents/core@0.9.1
+    -   @reactive-agents/llm-provider@0.9.1
+    -   @reactive-agents/memory@0.9.1
+    -   @reactive-agents/observability@0.9.1
+    -   @reactive-agents/prompts@0.9.1
+
 ## 0.9.0
 
 ### Minor Changes

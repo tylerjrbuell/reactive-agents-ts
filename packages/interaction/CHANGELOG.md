@@ -1,5 +1,13 @@
 # @reactive-agents/interaction
 
+## 0.9.1
+
+### Patch Changes
+
+-   @reactive-agents/reasoning@0.9.1
+-   @reactive-agents/core@0.9.1
+-   @reactive-agents/observability@0.9.1
+
 ## 0.9.0
 
 ### Patch Changes

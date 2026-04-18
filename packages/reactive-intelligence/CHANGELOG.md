@@ -1,5 +1,13 @@
 # @reactive-agents/reactive-intelligence
 
+## 0.9.1
+
+### Patch Changes
+
+-   35eba7d: Export `parseSKILLmdContent` and `parseSkillMarkdownLoose`; add optional `declaredFields` on `InstalledSkill` for agentskills.io frontmatter. Used by Cortex Lab SKILL.md preview.
+    -   @reactive-agents/core@0.9.1
+    -   @reactive-agents/llm-provider@0.9.1
+
 ## 0.9.0
 
 ### Minor Changes
