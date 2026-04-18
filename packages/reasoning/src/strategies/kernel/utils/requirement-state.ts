@@ -87,3 +87,58 @@ export function getMissingRequiredToolsFromSteps(
     requiredToolQuantities,
   );
 }
+
+/**
+ * Count all tool call attempts from observation metadata, regardless of success.
+ * Used to detect tools that have been tried but never succeeded.
+ */
+export function buildAttemptedToolCallCounts(
+  steps: readonly ReasoningStep[],
+): Readonly<Record<string, number>> {
+  const counts: Record<string, number> = {};
+
+  for (const step of steps) {
+    if (step.type !== "observation") continue;
+    const result = step.metadata?.observationResult as ObservationResultLike | undefined;
+    if (typeof result?.toolName !== "string" || result.toolName.length === 0) continue;
+    if (!isCountableToolName(result.toolName)) continue;
+    counts[result.toolName] = (counts[result.toolName] ?? 0) + 1;
+  }
+
+  return counts;
+}
+
+/**
+ * Returns required tools that were attempted at least once but never succeeded.
+ * These are "permanently failed" from the harness perspective — nudging the model
+ * to retry them will only cause loops.
+ */
+export function getPermanentlyFailedRequiredTools(
+  steps: readonly ReasoningStep[],
+  requiredTools: readonly string[],
+): readonly string[] {
+  const successfulCounts = buildSuccessfulToolCallCounts(steps);
+  const attemptedCounts = buildAttemptedToolCallCounts(steps);
+  return requiredTools.filter(
+    (toolName) =>
+      (attemptedCounts[toolName] ?? 0) > 0 &&
+      (successfulCounts[toolName] ?? 0) === 0,
+  );
+}
+
+/**
+ * Like getMissingRequiredToolsFromSteps but excludes permanently-failed tools.
+ *
+ * Use this for nudge messages and completion guards — if a tool was attempted
+ * and always failed, the model already knows and repeating the nudge causes loops.
+ * Tools that were never attempted remain in the list (genuinely missing).
+ */
+export function getEffectiveMissingRequiredTools(
+  steps: readonly ReasoningStep[],
+  requiredTools: readonly string[],
+  requiredToolQuantities?: Readonly<Record<string, number>>,
+): readonly string[] {
+  const missing = getMissingRequiredToolsFromSteps(steps, requiredTools, requiredToolQuantities);
+  const permanentlyFailed = new Set(getPermanentlyFailedRequiredTools(steps, requiredTools));
+  return missing.filter((toolName) => !permanentlyFailed.has(toolName));
+}
