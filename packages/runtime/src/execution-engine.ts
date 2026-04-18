@@ -768,6 +768,12 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 }
 
                 if (eb) {
+                  const deskName =
+                    typeof config.name === "string" && config.name.trim().length > 0
+                      ? config.name.trim()
+                      : "";
+                  const agentDisplayName =
+                    deskName.length > 0 && !/^cortex-desk-\d+$/.test(deskName) ? deskName : undefined;
                   yield* eb.publish({
                     _tag: "AgentStarted",
                     taskId: ctx.taskId,
@@ -778,6 +784,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     ...(task.metadata?.context?.["parentAgentId"]
                       ? { parentAgentId: String(task.metadata.context["parentAgentId"]) }
                       : {}),
+                    ...(agentDisplayName ? { agentDisplayName } : {}),
                   }).pipe(Effect.catchAll(() => Effect.void));
                 }
 

@@ -25,7 +25,11 @@ export class CortexStoreService extends Context.Tag("CortexStoreService")<
     readonly getRun: (runId: string) => Effect.Effect<Option.Option<RunSummary>, CortexError>;
     readonly getRunDetail: (runId: string) => Effect.Effect<Option.Option<RunSummary & { debrief: string | null }>, CortexError>;
     /** Insert run row before first ingest (matches framework task id used by CortexReporter). */
-    readonly ensureRunRow: (agentId: string, runId: string) => Effect.Effect<void, CortexError>;
+    readonly ensureRunRow: (
+      agentId: string,
+      runId: string,
+      opts?: { displayName?: string },
+    ) => Effect.Effect<void, CortexError>;
     readonly deleteRun: (runId: string) => Effect.Effect<boolean, CortexError>;
     readonly pruneRuns: (
       olderThanMs: number,
@@ -69,9 +73,9 @@ export const CortexStoreServiceLive = (db: Database) =>
         Effect.catchAll((e) => Effect.fail(new CortexError({ message: String(e), cause: e }))),
       ),
 
-    ensureRunRow: (agentId, runId) =>
+    ensureRunRow: (agentId, runId, opts) =>
       Effect.sync(() => {
-        upsertRun(db, agentId, runId);
+        upsertRun(db, agentId, runId, opts?.displayName);
       }).pipe(
         Effect.catchAll((e) => Effect.fail(new CortexError({ message: String(e), cause: e }))),
       ),

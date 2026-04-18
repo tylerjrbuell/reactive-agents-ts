@@ -1,5 +1,7 @@
 <script lang="ts">
   import type { AgentNode } from "$lib/stores/agent-store.js";
+  import { agentRunDeskTooltipText } from "$lib/stores/agent-store.js";
+  import Tooltip from "$lib/components/Tooltip.svelte";
   import { goto } from "$app/navigation";
   import { toast } from "$lib/stores/toast-store.js";
 
@@ -46,8 +48,11 @@
       toast.success("Copied", agent.runId),
     );
   }
+
+  const runTooltip = $derived(agentRunDeskTooltipText(agent));
 </script>
 
+<Tooltip text={runTooltip} placement="top" class="inline-flex flex-col items-center">
 <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 <div
   class="beacon-node flex flex-col items-center gap-2 cursor-pointer group select-none outline-none"
@@ -57,7 +62,6 @@
   tabindex="0"
   onclick={handleClick}
   onkeydown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleClick(); } }}
-  title="Open run {agent.runId}"
   style="--sv-color: {sv.color}; --sv-glow: {sv.glow}; --sv-color-light: {stateColorLight[agent.state] ?? stateColorLight.idle};"
 >
   <!-- Icon box -->
@@ -78,7 +82,7 @@
 
   <!-- Labels -->
   <div class="text-center w-[120px]">
-    <p class="node-name font-mono text-[8px] uppercase tracking-[0.17em] leading-tight truncate">
+    <p class="node-name font-display text-[11px] font-semibold leading-snug tracking-tight truncate px-0.5">
       {agent.name}
     </p>
     <p class="node-status font-mono text-[7px] uppercase tracking-[0.12em] mt-0.5 leading-tight">
@@ -119,6 +123,7 @@
     title="Click to copy run ID"
   >{runIdShort}</button>
 </div>
+</Tooltip>
 
 <style>
   /* ── Node box surface — adaptive light/dark ── */

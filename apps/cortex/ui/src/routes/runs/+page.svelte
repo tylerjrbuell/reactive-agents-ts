@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
-  import { goto } from "$app/navigation";
   import { CORTEX_SERVER_URL } from "$lib/constants.js";
   import ConfirmModal from "$lib/components/ConfirmModal.svelte";
   import CortexDeskShell from "$lib/components/CortexDeskShell.svelte";
@@ -35,13 +34,6 @@
   let selected = $state(new Set<string>());
   let showBulkDeleteConfirm = $state(false);
   let bulkDeleting = $state(false);
-
-  function toggleSelect(runId: string, e: MouseEvent) {
-    e.stopPropagation();
-    const next = new Set(selected);
-    if (next.has(runId)) next.delete(runId); else next.add(runId);
-    selected = next;
-  }
 
   function toggleSelectAll() {
     if (selected.size === filtered.length) {
@@ -78,7 +70,7 @@
     } catch { pinned = new Set(); }
   }
 
-  function togglePin(runId: string, e: MouseEvent) {
+  function togglePin(runId: string, e: MouseEvent | KeyboardEvent) {
     e.stopPropagation();
     const next = new Set(pinned);
     if (next.has(runId)) next.delete(runId); else next.add(runId);
@@ -306,6 +298,93 @@
   const allFilteredSelected = $derived(
     filtered.length > 0 && filtered.every((r) => selected.has(r.runId)),
   );
+
+  const someFilteredSelected = $derived(
+    filtered.length > 0 && selected.size > 0 && !allFilteredSelected,
+  );
+
+  type SortKey = "started-desc" | "started-asc" | "tokens-desc" | "cost-desc";
+  let sortBy = $state<SortKey>("started-desc");
+
+  const sortedFiltered = $derived.by(() => {
+    const rows = [...filtered];
+    const pinRank = (r: RunRow) => (pinned.has(r.runId) ? 1 : 0);
+    const byPinned = (a: RunRow, b: RunRow) => pinRank(b) - pinRank(a);
+    switch (sortBy) {
+      case "started-asc":
+        rows.sort((a, b) => {
+          const p = byPinned(a, b);
+          return p !== 0 ? p : a.startedAt - b.startedAt;
+        });
+        break;
+      case "tokens-desc":
+        rows.sort((a, b) => {
+          const p = byPinned(a, b);
+          return p !== 0 ? p : b.tokensUsed - a.tokensUsed || b.startedAt - a.startedAt;
+        });
+        break;
+      case "cost-desc":
+        rows.sort((a, b) => {
+          const p = byPinned(a, b);
+          return p !== 0 ? p : (b.cost ?? 0) - (a.cost ?? 0) || b.startedAt - a.startedAt;
+        });
+        break;
+      default:
+        rows.sort((a, b) => {
+          const p = byPinned(a, b);
+          return p !== 0 ? p : b.startedAt - a.startedAt;
+        });
+        break;
+    }
+    return rows;
+  });
+
+  let selectAllRef = $state<HTMLInputElement | null>(null);
+
+  $effect(() => {
+    const el = selectAllRef;
+    if (!el) return;
+    el.indeterminate = someFilteredSelected;
+  });
+
+  async function refetchRuns() {
+    error = null;
+    loading = true;
+    try {
+      const res = await fetch(`${CORTEX_SERVER_URL}/api/runs?limit=100`);
+      if (!res.ok) throw new Error(`Server returned ${res.status}`);
+      runs = await res.json();
+    } catch (e) {
+      error = String(e);
+    } finally {
+      loading = false;
+    }
+  }
+
+  function rowSurfaceClass(run: RunRow, isSelected: boolean, isPinned: boolean): string {
+    if (isSelected) {
+      return "border-primary/35 bg-violet-50/95 shadow-[inset_0_0_0_1px_rgba(124,58,237,0.12)] dark:border-primary/28 dark:bg-primary/[0.11] dark:shadow-[inset_0_0_0_1px_rgba(139,92,246,0.2)]";
+    }
+    if (run.status === "failed") {
+      return isPinned
+        ? "border-[var(--cortex-border)] bg-white/88 dark:bg-surface-container-low/55 border-l-[3px] border-l-error/55 hover:border-error/35 dark:hover:bg-surface-container-low/75"
+        : "border-[var(--cortex-border)] bg-white/80 dark:bg-surface-container-low/45 border-l-[3px] border-l-error/40 hover:bg-rose-50/50 dark:hover:bg-surface-container-low/70";
+    }
+    if (run.status === "live") {
+      return isPinned
+        ? "border-primary/30 bg-white/92 dark:bg-surface-container-low/60 shadow-[0_0_0_1px_rgba(6,182,212,0.12)] dark:shadow-[0_0_0_1px_rgba(6,182,212,0.14)]"
+        : "border-[var(--cortex-border)] bg-white/82 dark:bg-surface-container-low/48 shadow-[0_0_12px_-4px_rgba(6,182,212,0.25)] dark:shadow-[0_0_14px_-4px_rgba(6,182,212,0.2)] hover:border-secondary/35";
+    }
+    if (run.status === "completed") {
+      return isPinned
+        ? "border-[var(--cortex-border)] bg-white/90 dark:bg-surface-container-low/55 border-l-[3px] border-l-emerald-500/45"
+        : "border-[var(--cortex-border)] bg-white/78 dark:bg-surface-container-low/45 border-l-[3px] border-l-emerald-500/30 hover:bg-emerald-50/40 dark:hover:bg-surface-container-low/70";
+    }
+    if (isPinned) {
+      return "border-primary/28 bg-white/92 dark:bg-primary/[0.07] hover:border-primary/40";
+    }
+    return "border-[var(--cortex-border)] bg-white/78 dark:bg-surface-container-low/45 hover:bg-white dark:hover:bg-surface-container-low/72 hover:border-primary/22";
+  }
 </script>
 
 <svelte:head>
@@ -315,177 +394,312 @@
 <CortexDeskShell>
 <div class="relative z-10 flex h-full min-h-0 flex-col gap-4 overflow-hidden p-4 sm:p-6">
   <!-- Header -->
-  <div class="flex flex-shrink-0 items-center justify-between">
+  <div class="flex flex-shrink-0 flex-wrap items-start justify-between gap-3">
     <div>
-      <h1 class="font-display text-2xl font-light tracking-tight text-on-surface">
+      <h1 class="font-display text-2xl font-light tracking-tight text-slate-900 dark:text-on-surface">
         Execution <span class="font-semibold text-primary">Trace</span>
       </h1>
-      {#if !loading && !error}
-        <p class="font-mono text-[10px] text-outline mt-0.5">
-          {stats.total} runs · {stats.completed} done · {stats.failed} failed
-          {#if stats.live > 0}· <span class="text-primary">{stats.live} live</span>{/if}
-          · {stats.totalTokens.toLocaleString()} tok · ${stats.totalCost.toFixed(4)}
-        </p>
-      {/if}
+      <p class="font-mono text-[10px] uppercase tracking-[0.12em] text-slate-500 dark:text-on-surface-variant/85 mt-1">
+        Live list · bulk delete · pins stay on top
+      </p>
     </div>
-    <a href="/" class="flex items-center gap-1 font-mono text-[11px] text-cyan-700 no-underline transition-colors hover:text-primary dark:text-secondary">
-      <span class="material-symbols-outlined text-sm">arrow_back</span> Beacon
-    </a>
+    <div class="flex items-center gap-2">
+      <button
+        type="button"
+        onclick={() => void refetchRuns()}
+        disabled={loading}
+        class="inline-flex items-center gap-1.5 rounded-md border border-[var(--cortex-border)] bg-white/90 px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-[0.1em] text-slate-700 shadow-sm transition-colors hover:border-secondary hover:text-secondary disabled:opacity-40 dark:bg-surface-container-low/55 dark:text-on-surface-variant dark:hover:text-secondary"
+        title="Reload runs from server"
+      >
+        <span class="material-symbols-outlined text-[16px]" class:animate-spin={loading}>refresh</span>
+        Sync
+      </button>
+      <a
+        href="/"
+        class="flex items-center gap-1 font-mono text-[11px] text-cyan-700 no-underline transition-colors hover:text-primary dark:text-secondary"
+      >
+        <span class="material-symbols-outlined text-sm">arrow_back</span> Beacon
+      </a>
+    </div>
   </div>
 
-  <!-- Filter bar -->
-  <div class="flex flex-shrink-0 items-center gap-3">
+  {#if !loading && !error}
     <div
-      class="flex flex-1 items-center gap-2 rounded-lg border border-primary/18 bg-surface-container-low/90 px-3 py-2 shadow-sm backdrop-blur-sm dark:border-outline-variant/15 dark:bg-surface-container-low/70"
+      class="gradient-border flex flex-shrink-0 flex-wrap gap-3 rounded-lg px-4 py-3 shadow-sm backdrop-blur-sm sm:gap-4 dark:shadow-[0_0_0_1px_rgba(139,92,246,0.08)]"
     >
-      <span class="material-symbols-outlined text-sm text-outline/50">search</span>
-      <input type="text" bind:value={searchText} placeholder="Search run ID, agent, provider, model…"
-        class="flex-1 bg-transparent border-none outline-none text-sm font-mono text-on-surface placeholder:text-outline/40" />
+      <div class="min-w-[4.5rem]">
+        <div class="font-mono text-[9px] uppercase tracking-widest text-slate-500 dark:text-outline">Total</div>
+        <div class="font-mono text-sm tabular-nums text-slate-900 dark:text-on-surface">{stats.total}</div>
+      </div>
+      <div class="h-8 w-px self-center bg-[var(--cortex-border)]" aria-hidden="true"></div>
+      <div class="min-w-[4.5rem]">
+        <div class="font-mono text-[9px] uppercase tracking-widest text-emerald-700 dark:text-emerald-400/90">Done</div>
+        <div class="font-mono text-sm tabular-nums text-emerald-800 dark:text-emerald-300/90">{stats.completed}</div>
+      </div>
+      <div class="min-w-[4.5rem]">
+        <div class="font-mono text-[9px] uppercase tracking-widest text-error">Failed</div>
+        <div class="font-mono text-sm tabular-nums text-error">{stats.failed}</div>
+      </div>
+      <div class="min-w-[4.5rem]">
+        <div class="font-mono text-[9px] uppercase tracking-widest text-primary">Live</div>
+        <div class="font-mono text-sm tabular-nums text-primary">{stats.live}</div>
+      </div>
+      <div class="min-w-[5.5rem]">
+        <div class="font-mono text-[9px] uppercase tracking-widest text-slate-500 dark:text-outline">Tokens</div>
+        <div class="font-mono text-sm tabular-nums text-slate-900 dark:text-on-surface">
+          {stats.totalTokens.toLocaleString()}
+        </div>
+      </div>
+      <div class="min-w-[4.5rem]">
+        <div class="font-mono text-[9px] uppercase tracking-widest text-secondary">Cost</div>
+        <div class="font-mono text-sm tabular-nums text-cyan-800 dark:text-secondary">${stats.totalCost.toFixed(4)}</div>
+      </div>
+    </div>
+  {/if}
+
+  <!-- Filter + sort -->
+  <div class="flex flex-shrink-0 flex-col gap-3 sm:flex-row sm:items-center">
+    <div
+      class="gradient-border flex flex-1 items-center gap-2 rounded-lg px-3 py-2 shadow-sm backdrop-blur-sm dark:shadow-[0_0_0_1px_rgba(139,92,246,0.08)]"
+    >
+      <span class="material-symbols-outlined text-sm text-slate-400 dark:text-outline/55">search</span>
+      <input
+        type="text"
+        bind:value={searchText}
+        placeholder="Run ID, agent, provider, model…"
+        class="flex-1 border-none bg-transparent font-mono text-sm text-slate-900 outline-none placeholder:text-slate-400 dark:text-on-surface dark:placeholder:text-outline/45"
+      />
       {#if searchText}
-        <button type="button" onclick={() => (searchText = "")}
-          class="material-symbols-outlined text-sm text-outline hover:text-primary bg-transparent border-0 cursor-pointer">
-          close</button>
+        <button
+          type="button"
+          onclick={() => (searchText = "")}
+          class="material-symbols-outlined cursor-pointer border-0 bg-transparent text-sm text-slate-500 hover:text-primary dark:text-outline dark:hover:text-primary"
+        >
+          close
+        </button>
       {/if}
     </div>
-    <div class="flex gap-1">
-      {#each [["all","All"],["live","Live"],["completed","Done"],["failed","Failed"]] as [val, label]}
-        <button type="button"
-          class="rounded border px-3 py-1.5 font-mono text-[10px] transition-colors
-                 {statusFilter === val
-            ? 'border-primary/35 bg-violet-100/90 text-violet-900 shadow-sm dark:bg-primary/10 dark:text-primary'
-            : 'border-outline-variant/25 text-outline hover:border-primary/25 hover:text-primary dark:border-outline-variant/20'}"
-          onclick={() => (statusFilter = val as typeof statusFilter)}>
-          {label}</button>
-      {/each}
+    <div class="flex flex-wrap items-center gap-2">
+      <label for="trace-sort" class="sr-only">Sort runs</label>
+      <select
+        id="trace-sort"
+        bind:value={sortBy}
+        class="rounded-md border border-[var(--cortex-border)] bg-white/95 px-2 py-1.5 font-mono text-[11px] text-slate-800 outline-none transition-colors focus:border-secondary dark:bg-surface-container-low/70 dark:text-on-surface"
+      >
+        <option value="started-desc">Newest first</option>
+        <option value="started-asc">Oldest first</option>
+        <option value="tokens-desc">Most tokens</option>
+        <option value="cost-desc">Highest cost</option>
+      </select>
+      <div
+        class="inline-flex items-center gap-0.5 rounded-lg border border-[var(--cortex-border)] bg-white/85 p-0.5 shadow-sm backdrop-blur-sm dark:bg-surface-container-low/45"
+      >
+        {#each [["all", "All"], ["live", "Live"], ["completed", "Done"], ["failed", "Failed"]] as [val, label]}
+          <button
+            type="button"
+            class="rounded-md px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-[0.08em] transition-colors duration-150
+              {statusFilter === val
+              ? 'bg-violet-100/95 text-violet-900 shadow-[inset_0_0_0_1px_rgba(124,58,237,0.2)] dark:bg-primary/14 dark:text-primary dark:shadow-[inset_0_0_0_1px_rgba(139,92,246,0.25)]'
+              : 'text-slate-600 hover:bg-slate-100/90 hover:text-slate-900 dark:text-on-surface-variant dark:hover:bg-surface-container-high/80 dark:hover:text-on-surface'}"
+            onclick={() => (statusFilter = val as typeof statusFilter)}
+          >
+            {label}
+          </button>
+        {/each}
+      </div>
     </div>
   </div>
 
-  <!-- Run list with select-all header -->
-  <div class="flex-1 overflow-y-auto min-h-0 space-y-0.5">
+  <!-- Run list -->
+  <div class="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden">
     {#if loading}
-      <div class="flex items-center justify-center h-32">
-        <span class="material-symbols-outlined text-primary animate-spin text-2xl">progress_activity</span>
+      <div class="flex h-32 items-center justify-center">
+        <span class="material-symbols-outlined animate-spin text-2xl text-primary">progress_activity</span>
       </div>
     {:else if error}
-      <div class="text-center mt-8">
+      <div class="mt-8 text-center">
         <p class="font-mono text-sm text-error">{error}</p>
+        <button
+          type="button"
+          onclick={() => void refetchRuns()}
+          class="mt-3 inline-flex items-center gap-1 rounded-md border border-[var(--cortex-border)] bg-white/90 px-3 py-1.5 font-mono text-[11px] text-slate-700 dark:bg-surface-container-low/60 dark:text-on-surface-variant"
+        >
+          Retry
+        </button>
       </div>
     {:else if filtered.length === 0}
-      <p class="font-mono text-xs text-outline text-center mt-8">
+      <p class="mt-8 text-center font-mono text-xs text-slate-500 dark:text-outline">
         {searchText || statusFilter !== "all" ? "No runs match the filter." : "No runs yet."}
       </p>
     {:else}
-      <!-- Select-all header (visible when any run is selected or on hover) -->
-      {#if selected.size > 0}
-        <div class="flex items-center gap-3 px-4 py-2 bg-primary/5 border border-primary/15 rounded-lg mb-1 text-[10px] font-mono">
-          <input type="checkbox" checked={allFilteredSelected} onchange={toggleSelectAll}
-            class="accent-primary w-3.5 h-3.5 cursor-pointer" />
-          <span class="text-primary">{selected.size} selected</span>
-          <div class="flex-1"></div>
-          <button type="button" onclick={() => (showBulkDeleteConfirm = true)} disabled={bulkDeleting}
-            class="flex items-center gap-1.5 px-3 py-1 border border-error/30 text-error rounded
-                   hover:bg-error/10 transition-colors bg-transparent cursor-pointer disabled:opacity-40">
-            <span class="material-symbols-outlined text-sm">delete_sweep</span>
-            Delete {selected.size}
-          </button>
-          <button type="button" onclick={() => (selected = new Set())}
-            class="text-outline hover:text-primary bg-transparent border-0 cursor-pointer">
-            Clear</button>
-        </div>
-      {/if}
-
-      {#each filtered as run (run.runId)}
-        {@const isPinned = pinned.has(run.runId)}
-        {@const isSelected = selected.has(run.runId)}
-        <button
-          type="button"
-          class="group flex w-full cursor-pointer items-center gap-3 rounded-lg border bg-transparent px-4 py-3 text-left transition-all backdrop-blur-[2px]
-                 {isSelected
-                   ? 'border-primary/30 bg-violet-100/80 dark:bg-primary/8 dark:border-primary/25'
-                   : isPinned
-                     ? 'border-primary/20 bg-surface-container-low/85 hover:border-primary/30 dark:bg-surface-container-low/60'
-                     : 'border-outline-variant/15 bg-surface-container-low/70 hover:border-primary/22 hover:bg-surface-container-low/90 dark:border-outline-variant/10 dark:bg-surface-container-low/40 dark:hover:bg-surface-container-low/70'}"
-          onclick={() => goto(`/run/${run.runId}`)}
-        >
-          <!-- Checkbox col — span with role=button to avoid nested button -->
-          <span role="button" tabindex="0"
-            class="flex-shrink-0 w-5 flex items-center justify-center cursor-pointer"
-            onclick={(e) => toggleSelect(run.runId, e)}
-            onkeydown={(e) => e.key === "Enter" && toggleSelect(run.runId, e as any)}>
-            {#if isSelected || selected.size > 0}
-              <input type="checkbox" checked={isSelected} onchange={() => {}}
-                class="accent-primary w-3.5 h-3.5 cursor-pointer" />
+      <!-- Always-visible run management: select all + actions -->
+      <div
+        class="gradient-border flex flex-shrink-0 flex-wrap items-center gap-3 rounded-lg px-3 py-2.5 shadow-sm backdrop-blur-sm dark:shadow-[0_0_0_1px_rgba(139,92,246,0.08)]"
+      >
+        <div class="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+          <input
+            bind:this={selectAllRef}
+            type="checkbox"
+            checked={allFilteredSelected}
+            onchange={toggleSelectAll}
+            class="h-3.5 w-3.5 shrink-0 cursor-pointer accent-primary"
+            title={allFilteredSelected ? "Deselect all in view" : "Select all in view"}
+            aria-label="Select all runs matching the current filter"
+          />
+          <span class="font-mono text-[10px] uppercase tracking-[0.1em] text-slate-600 dark:text-on-surface-variant">
+            {#if selected.size === 0}
+              <span class="text-slate-800 dark:text-on-surface">Select all</span>
+              <span class="text-slate-400 dark:text-outline/60"> · {filtered.length} in view</span>
             {:else}
-              <span class="material-symbols-outlined text-sm text-outline/0 group-hover:text-outline/40 transition-colors"
-                style="font-variation-settings: 'FILL' 1;">
-                {statusIcon(run.status)}</span>
+              <span class="text-primary">{selected.size}</span>
+              <span class="text-slate-400 dark:text-outline/60"> / {filtered.length} selected</span>
             {/if}
           </span>
-
-          <!-- Status icon (when no checkbox) -->
-          {#if !isSelected && selected.size === 0}
-            <span class="material-symbols-outlined text-base flex-shrink-0 {statusClass(run.status)}"
-              style="font-variation-settings: 'FILL' {run.status === 'live' ? '0' : '1'};"
-              title={run.status}>
-              {statusIcon(run.status)}</span>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          {#if selected.size > 0}
+            <button
+              type="button"
+              onclick={() => (showBulkDeleteConfirm = true)}
+              disabled={bulkDeleting}
+              class="inline-flex cursor-pointer items-center gap-1 rounded-md border border-error/35 bg-rose-50/80 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.08em] text-error transition-colors hover:bg-error/10 disabled:opacity-40 dark:bg-error/[0.08] dark:hover:bg-error/15"
+            >
+              <span class="material-symbols-outlined text-[15px]">delete_sweep</span>
+              Delete ({selected.size})
+            </button>
+            <button
+              type="button"
+              onclick={() => (selected = new Set())}
+              class="cursor-pointer border-0 bg-transparent font-mono text-[10px] uppercase tracking-[0.1em] text-slate-500 underline-offset-2 hover:text-primary dark:text-outline dark:hover:text-primary"
+            >
+              Clear selection
+            </button>
           {/if}
+        </div>
+      </div>
 
-          <!-- Run info -->
-          <div class="flex-1 min-w-0">
-            <div class="flex items-center gap-2">
-              {#if isPinned}
-                <span class="material-symbols-outlined text-[11px] text-primary/60"
-                  style="font-variation-settings: 'FILL' 1;">push_pin</span>
-              {/if}
-              <span class="font-mono text-[11px] text-on-surface/80 truncate" title={run.runId}>
-                {run.runId.slice(0, 12)}…</span>
-              {#if run.hasDebrief}
-                <span class="text-[9px] font-mono text-secondary/60 bg-secondary/10 px-1 rounded">debrief</span>
-              {/if}
-              {#if run.status === "live"}
-                <span class="text-[9px] font-mono text-primary animate-pulse">● LIVE</span>
-              {:else if run.status === "paused"}
-                <span class="text-[9px] font-mono text-amber-700 dark:text-amber-500">● PAUSED</span>
-              {/if}
+      <div class="min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-0.5">
+        {#each sortedFiltered as run (run.runId)}
+          {@const isPinned = pinned.has(run.runId)}
+          {@const isSelected = selected.has(run.runId)}
+          <div
+            class="group flex w-full items-center gap-2.5 rounded-lg border px-3 py-2.5 transition-all duration-150 sm:gap-3 sm:px-4 sm:py-3 {rowSurfaceClass(
+              run,
+              isSelected,
+              isPinned,
+            )}"
+          >
+            <!-- Clicks on the checkbox hit target must not follow the row link -->
+            <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+            <div class="flex w-7 shrink-0 items-center justify-center" onclick={(e) => e.stopPropagation()}>
+              <input
+                type="checkbox"
+                checked={isSelected}
+                onclick={(e) => e.stopPropagation()}
+                onchange={() => {
+                  const next = new Set(selected);
+                  if (next.has(run.runId)) next.delete(run.runId);
+                  else next.add(run.runId);
+                  selected = next;
+                }}
+                class="h-3.5 w-3.5 cursor-pointer accent-primary"
+                aria-label={`Select run ${run.runId}`}
+              />
             </div>
-            <div class="flex items-center gap-2 mt-0.5">
-              <span class="font-mono text-[9px] text-outline/40 truncate" title={run.agentId}>{run.agentId}</span>
-              {#if run.provider}
-                <span class="font-mono text-[9px] text-outline/30">·</span>
-                <span class="font-mono text-[9px] text-primary/50">{run.provider}</span>
-              {/if}
-              {#if run.model}
-                <span class="font-mono text-[9px] text-outline/30">·</span>
-                <span class="font-mono text-[9px] text-primary/40 truncate max-w-[120px]">{run.model}</span>
-              {/if}
-            </div>
-          </div>
 
-          <!-- Metrics -->
-          <div class="hidden md:flex items-center gap-4 font-mono text-[10px] text-outline/60 flex-shrink-0">
-            <span>{run.iterationCount} iter</span>
-            <span>{run.tokensUsed.toLocaleString()}t</span>
-            <span>${(run.cost ?? 0).toFixed(4)}</span>
-            <span class="w-12 text-right">{durationStr(run)}</span>
-          </div>
+            <a
+              href={`/run/${run.runId}`}
+              data-sveltekit-preload-data="hover"
+              class="flex min-w-0 flex-1 items-center gap-2.5 no-underline outline-none transition-colors visited:text-inherit focus-visible:ring-2 focus-visible:ring-secondary focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--cortex-bg)] sm:gap-3 text-inherit"
+            >
+              <span
+                class="material-symbols-outlined flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-[var(--cortex-border)] bg-white/60 text-[18px] dark:bg-surface-container/50 {statusClass(
+                  run.status,
+                )}"
+                style="font-variation-settings: 'FILL' {run.status === 'live' ? '0' : '1'};"
+                title={run.status}
+              >
+                {statusIcon(run.status)}
+              </span>
 
-          <!-- Time + pin + arrow -->
-          <div class="flex items-center gap-2 flex-shrink-0">
-            <span class="font-mono text-[10px] text-outline/40 w-16 text-right">{relativeTime(run.startedAt)}</span>
-            <!-- Pin toggle — span/role=button (nested button not allowed) -->
-            <span role="button" tabindex="0"
-              class="material-symbols-outlined text-sm transition-colors cursor-pointer
-                     {isPinned ? 'text-primary/60 hover:text-primary' : 'text-outline/0 group-hover:text-outline/30 hover:text-primary'}"
+              <div class="min-w-0 flex-1">
+                <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                  {#if isPinned}
+                    <span
+                      class="material-symbols-outlined text-[11px] text-primary/70"
+                      style="font-variation-settings: 'FILL' 1;">push_pin</span>
+                  {/if}
+                  <span
+                    class="truncate font-mono text-[11px] text-slate-900 dark:text-on-surface/95"
+                    title={run.runId}>{run.runId.slice(0, 12)}…</span>
+                  {#if run.hasDebrief}
+                    <span
+                      class="rounded bg-cyan-50/90 px-1 font-mono text-[9px] text-cyan-800 dark:bg-secondary/10 dark:text-secondary/80"
+                      >debrief</span>
+                  {/if}
+                  {#if run.status === "live"}
+                    <span class="animate-pulse font-mono text-[9px] text-primary">● LIVE</span>
+                  {:else if run.status === "paused"}
+                    <span class="font-mono text-[9px] text-amber-800 dark:text-amber-400">● PAUSED</span>
+                  {/if}
+                  {#if run.strategy}
+                    <span
+                      class="hidden font-mono text-[9px] text-slate-500 sm:inline dark:text-outline/70"
+                      title="Kernel / strategy">{run.strategy}</span>
+                  {/if}
+                </div>
+                <div class="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                  <span
+                    class="truncate font-mono text-[9px] text-slate-500 dark:text-on-surface-variant/75"
+                    title={run.agentId}>{run.agentId}</span>
+                  {#if run.provider}
+                    <span class="font-mono text-[9px] text-slate-300 dark:text-outline/35">·</span>
+                    <span class="font-mono text-[9px] text-violet-700 dark:text-primary/70">{run.provider}</span>
+                  {/if}
+                  {#if run.model}
+                    <span class="font-mono text-[9px] text-slate-300 dark:text-outline/35">·</span>
+                    <span
+                      class="max-w-[140px] truncate font-mono text-[9px] text-cyan-800 dark:text-secondary/75"
+                      >{run.model}</span>
+                  {/if}
+                </div>
+              </div>
+
+              <div
+                class="hidden shrink-0 items-center gap-4 font-mono text-[10px] text-slate-500 tabular-nums md:flex dark:text-on-surface-variant/65"
+              >
+                <span>{run.iterationCount} iter</span>
+                <span>{run.tokensUsed.toLocaleString()}t</span>
+                <span>${(run.cost ?? 0).toFixed(4)}</span>
+                <span class="w-12 text-right">{durationStr(run)}</span>
+              </div>
+
+              <div class="flex shrink-0 items-center gap-1.5 sm:gap-2">
+                <span
+                  class="w-14 text-right font-mono text-[10px] text-slate-400 tabular-nums dark:text-outline/50 sm:w-16"
+                  >{relativeTime(run.startedAt)}</span>
+                <span
+                  class="material-symbols-outlined text-sm text-slate-300 transition-colors group-hover:text-primary/50 dark:text-outline/25"
+                  >chevron_right</span>
+              </div>
+            </a>
+
+            <button
+              type="button"
+              class="material-symbols-outlined shrink-0 cursor-pointer border-0 bg-transparent p-1 text-sm transition-colors
+                {isPinned
+                ? 'text-primary/70 hover:text-primary'
+                : 'text-slate-300 opacity-0 group-hover:opacity-100 hover:text-primary dark:text-outline/25 dark:group-hover:opacity-100'}"
               style="font-variation-settings: 'FILL' {isPinned ? '1' : '0'};"
-              title={isPinned ? "Unpin" : "Pin"}
+              title={isPinned ? "Unpin run" : "Pin run"}
+              aria-label={isPinned ? "Unpin run" : "Pin run"}
               onclick={(e) => togglePin(run.runId, e)}
-              onkeydown={(e) => e.key === "Enter" && togglePin(run.runId, e as any)}
-            >push_pin</span>
-            <span class="material-symbols-outlined text-sm text-outline/20 group-hover:text-primary/40 transition-colors">
-              chevron_right</span>
+            >
+              push_pin
+            </button>
           </div>
-        </button>
-      {/each}
+        {/each}
+      </div>
     {/if}
   </div>
 </div>

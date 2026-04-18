@@ -24,19 +24,21 @@ export function insertEvent(
   );
 }
 
-export function upsertRun(db: Database, agentId: string, runId: string): void {
+export function upsertRun(db: Database, agentId: string, runId: string, displayName?: string | null): void {
+  const dn = typeof displayName === "string" && displayName.trim() ? displayName.trim() : null;
   db.prepare(
     `
-    INSERT INTO cortex_runs (run_id, agent_id, started_at)
-    VALUES (?, ?, ?)
+    INSERT INTO cortex_runs (run_id, agent_id, started_at, display_name)
+    VALUES (?, ?, ?, ?)
     ON CONFLICT(run_id) DO UPDATE SET
       agent_id = CASE
         WHEN cortex_runs.agent_id = cortex_runs.run_id OR cortex_runs.agent_id = 'unknown'
           THEN excluded.agent_id
         ELSE cortex_runs.agent_id
-      END
+      END,
+      display_name = COALESCE(cortex_runs.display_name, excluded.display_name)
   `,
-  ).run(runId, agentId, Date.now());
+  ).run(runId, agentId, Date.now(), dn);
 }
 
 export function updateRunStats(
@@ -130,9 +132,22 @@ type RunRow = {
   model: string | null;
   strategy: string | null;
   error_message: string | null;
+  display_name: string | null;
+  /** From LEFT JOIN cortex_agents — only present on joined selects */
+  agent_table_name?: string | null;
 };
 
+function resolvedRunDisplayName(row: RunRow): string | undefined {
+  const fromRun = row.display_name?.trim();
+  if (fromRun) return fromRun;
+  const fromAgent = row.agent_table_name?.trim();
+  if (fromAgent) return fromAgent;
+  return undefined;
+}
+
 function rowToRunSummary(row: RunRow): RunSummary {
+  const displayName = resolvedRunDisplayName(row);
+  const agentRecordName = row.agent_table_name?.trim() || undefined;
   const base: RunSummary = {
     runId: row.run_id,
     agentId: row.agent_id,
@@ -142,6 +157,8 @@ function rowToRunSummary(row: RunRow): RunSummary {
     tokensUsed: row.tokens_used,
     cost: row.cost_usd,
     hasDebrief: row.has_debrief === 1,
+    ...(displayName ? { displayName } : {}),
+    ...(agentRecordName ? { agentRecordName } : {}),
     ...(row.provider ? { provider: row.provider } : {}),
     ...(row.model    ? { model:    row.model    } : {}),
     ...(row.strategy ? { strategy: row.strategy } : {}),
@@ -151,16 +168,22 @@ function rowToRunSummary(row: RunRow): RunSummary {
   return base;
 }
 
+const runSelectBase = `
+    r.run_id, r.agent_id, r.started_at, r.completed_at, r.status,
+    r.iteration_count, r.tokens_used, r.cost_usd,
+    (r.debrief IS NOT NULL) AS has_debrief,
+    r.provider, r.model, r.strategy, r.error_message,
+    r.display_name,
+    a.name AS agent_table_name`;
+
 export function getRecentRuns(db: Database, limit = 50): RunSummary[] {
   const rows = db
     .prepare(
       `
-    SELECT run_id, agent_id, started_at, completed_at, status,
-           iteration_count, tokens_used, cost_usd,
-           (debrief IS NOT NULL) AS has_debrief,
-           provider, model, strategy, error_message
-    FROM cortex_runs
-    ORDER BY started_at DESC
+    SELECT ${runSelectBase}
+    FROM cortex_runs r
+    LEFT JOIN cortex_agents a ON a.agent_id = r.agent_id
+    ORDER BY r.started_at DESC
     LIMIT ?
   `,
     )
@@ -172,12 +195,10 @@ export function getRunById(db: Database, runId: string): RunSummary | null {
   const row = db
     .prepare(
       `
-    SELECT run_id, agent_id, started_at, completed_at, status,
-           iteration_count, tokens_used, cost_usd,
-           (debrief IS NOT NULL) AS has_debrief,
-           provider, model, strategy, error_message
-    FROM cortex_runs
-    WHERE run_id = ?
+    SELECT ${runSelectBase}
+    FROM cortex_runs r
+    LEFT JOIN cortex_agents a ON a.agent_id = r.agent_id
+    WHERE r.run_id = ?
   `,
     )
     .get(runId) as RunRow | null;
@@ -199,12 +220,11 @@ export function getRunDetail(
   const row = db
     .prepare(
       `
-    SELECT run_id, agent_id, started_at, completed_at, status,
-           iteration_count, tokens_used, cost_usd,
-           (debrief IS NOT NULL) AS has_debrief,
-           provider, model, strategy, error_message,
-           debrief
-    FROM cortex_runs WHERE run_id = ?
+    SELECT ${runSelectBase},
+           r.debrief
+    FROM cortex_runs r
+    LEFT JOIN cortex_agents a ON a.agent_id = r.agent_id
+    WHERE r.run_id = ?
   `,
     )
     .get(runId) as (RunRow & { debrief: string | null }) | null;

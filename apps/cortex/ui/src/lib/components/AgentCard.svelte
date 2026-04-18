@@ -1,5 +1,7 @@
 <script lang="ts">
   import type { AgentNode } from "$lib/stores/agent-store.js";
+  import { agentRunDeskTooltipText } from "$lib/stores/agent-store.js";
+  import Tooltip from "$lib/components/Tooltip.svelte";
   import { AGENT_STATE_COLORS } from "$lib/constants.js";
   import { goto } from "$app/navigation";
   import { toast } from "$lib/stores/toast-store.js";
@@ -92,8 +94,11 @@
   const runIdShort = $derived(
     agent.runId.length > 10 ? `${agent.runId.slice(0, 6)}…${agent.runId.slice(-4)}` : agent.runId,
   );
+
+  const runTooltip = $derived(agentRunDeskTooltipText(agent));
 </script>
 
+<Tooltip text={runTooltip} placement="top" class="flex h-full min-h-[132px] w-full min-w-0">
 <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 <div
   class="group relative flex h-full min-h-[132px] rounded-lg text-left outline-none transition-all duration-200
@@ -118,7 +123,6 @@
   onkeydown={handleKeydown}
   role="button"
   tabindex="0"
-  title="Open run {agent.runId}"
 >
   <div class="w-1 self-stretch shrink-0 rounded-l-lg {accentBarClass}" aria-hidden="true"></div>
 
@@ -270,3 +274,4 @@
     </div>
   </div>
 </div>
+</Tooltip>

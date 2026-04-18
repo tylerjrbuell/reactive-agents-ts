@@ -61,6 +61,10 @@ export interface RunContext {
 export interface RunSummary {
   readonly runId: string;
   readonly agentId: string;
+  /** Human label: run `display_name`, else linked `cortex_agents.name`, else unset (UI derives). */
+  readonly displayName?: string;
+  /** Linked `cortex_agents.name` when that row exists (may duplicate displayName when run label was resolved from agent). */
+  readonly agentRecordName?: string;
   readonly startedAt: number;
   readonly completedAt?: number;
   readonly status: "live" | "completed" | "failed";

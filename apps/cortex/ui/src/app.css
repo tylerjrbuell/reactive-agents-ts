@@ -410,13 +410,28 @@ html:not(.dark) .bg-\[#12131a\]        { background-color: #ffffff !important; }
 html:not(.dark) .bg-\[#0c0e12\],
 html:not(.dark) .bg-\[#0d0f14\]        { background-color: #e8ecf0 !important; }
 
-/* ── gradient-border-glow panels (Trace, Signal Monitor, etc.) ─ */
-html:not(.dark) .gradient-border-glow,
-html:not(.dark) .gradient-border       { background: #ffffff !important; }
-/* The ::before pseudo gradient border — lighten it slightly */
+/* ── gradient-border-glow panels (Signal Monitor, etc.) ─ */
+html:not(.dark) .gradient-border-glow {
+  background: #ffffff !important;
+}
+/* The ::before pseudo on glow — lighten it slightly in light */
 html:not(.dark) .gradient-border-glow::before {
   opacity: 0.5;
   animation: none;
+}
+
+/* gradient-border: solid inner + gradient only in the 1px ring (no ::before “sheet”) */
+html:not(.dark) .gradient-border {
+  background:
+    linear-gradient(#ffffff, #ffffff) padding-box,
+    linear-gradient(
+      135deg,
+      rgba(139, 92, 246, 0.62) 0%,
+      rgba(6, 182, 212, 0.42) 50%,
+      rgba(139, 92, 246, 0.62) 100%
+    ) border-box !important;
+  background-clip: padding-box, border-box !important;
+  background-origin: border-box !important;
 }
 
 /* ── Inline dark backgrounds used in RunDetail / VitalsStrip ─── */
@@ -506,23 +521,36 @@ html {
   vertical-align: middle;
 }
 
-/* ── Gradient border panel — docs ra-panel treatment ─────────── */
-/* Simple opaque gradient border (no glow, clean) */
+/* ── Gradient border panel — gradient is ONLY the border ring ─── */
 .gradient-border {
   position: relative;
-  background: var(--ra-surface-panel);
-  background-clip: padding-box;
   border: 1px solid transparent;
+  background:
+    linear-gradient(var(--ra-surface-panel), var(--ra-surface-panel)) padding-box,
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--ra-violet) 58%, transparent) 0%,
+      color-mix(in srgb, var(--ra-cyan) 38%, transparent) 50%,
+      color-mix(in srgb, var(--ra-violet) 58%, transparent) 100%
+    ) border-box;
+  background-clip: padding-box, border-box;
+  background-origin: border-box;
 }
 
-.gradient-border::before {
-  content: "";
-  position: absolute;
-  top: 0; right: 0; bottom: 0; left: 0;
-  z-index: -1;
-  margin: -1px;
-  border-radius: inherit;
-  background: linear-gradient(135deg, rgba(139,92,246,0.6) 0%, rgba(6,182,212,0.3) 50%, rgba(139,92,246,0.6) 100%);
+html.dark .gradient-border {
+  background:
+    linear-gradient(
+      color-mix(in srgb, var(--cortex-surface-low) 88%, var(--cortex-surface) 12%),
+      color-mix(in srgb, var(--cortex-surface-low) 88%, var(--cortex-surface) 12%)
+    ) padding-box,
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--ra-violet) 52%, transparent) 0%,
+      color-mix(in srgb, var(--ra-cyan) 36%, transparent) 50%,
+      color-mix(in srgb, var(--ra-violet) 52%, transparent) 100%
+    ) border-box;
+  background-clip: padding-box, border-box;
+  background-origin: border-box;
 }
 
 /* Animated breathing glow variant — for active panels */

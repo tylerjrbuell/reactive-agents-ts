@@ -23,7 +23,7 @@ export default {
         "surface-container-highest":"#545861", // --sl-color-gray-4
         "surface-bright":          "#545861",
         "on-surface":              "#eceef2",  // --sl-color-gray-1
-        "on-surface-variant":      "#c0c2c7",  // --sl-color-gray-2
+        "on-surface-variant":      "#c0c2c7",  // --sl-color-gray-2 (muted; use secondary/primary for accents)
         outline:                   "#888b96",  // --sl-color-gray-3
         "outline-variant":         "#353841",
 

@@ -10,7 +10,7 @@
   import { toast } from "$lib/stores/toast-store.js";
   import { settings, type CortexSettings } from "$lib/stores/settings.js";
   import { createWsClient } from "$lib/stores/ws-client.js";
-  import { createAgentStore } from "$lib/stores/agent-store.js";
+  import { createAgentStore, beaconDeskRunLabel } from "$lib/stores/agent-store.js";
   import { createStageStore } from "$lib/stores/stage-store.js";
   import type { AgentStore } from "$lib/stores/agent-store.js";
   import type { StageStore } from "$lib/stores/stage-store.js";
@@ -63,12 +63,19 @@
     const isInput =
       tag === "input" || tag === "textarea" || tag === "select" || (e.target as HTMLElement)?.isContentEditable;
     if (isInput) return;
-    // R — go to Beacon and focus input bar
+    // R — go to Beacon and focus input bar (defer so +page / BottomInputBar can bind)
     if (e.key === "r" || e.key === "R") {
       e.preventDefault();
-      void goto("/");
-      // Broadcast to Beacon page that input should be focused
-      window.dispatchEvent(new CustomEvent("cortex:focus-input"));
+      const fireFocus = () =>
+        window.dispatchEvent(new CustomEvent("cortex:focus-input"));
+      if (get(page).url.pathname !== "/") {
+        void goto("/").then(() => {
+          requestAnimationFrame(() => setTimeout(fireFocus, 50));
+        });
+      } else {
+        // Same route: allow Svelte to flush (e.g. empty beacon) before Beacon focuses input
+        requestAnimationFrame(() => setTimeout(fireFocus, 50));
+      }
     }
   }
 
@@ -117,7 +124,10 @@
             ({
               agentId: msg.agentId!,
               runId: msg.runId!,
-              name: msg.agentId!,
+              name: beaconDeskRunLabel({
+                agentId: msg.agentId!,
+                runId: msg.runId!,
+              }),
               state: "running",
               entropy: 0,
               loopIteration: 0,
@@ -131,7 +141,7 @@
           agents.length,
         );
         toast.connection(
-          `${msg.agentId!.slice(0, 20)} connected`,
+          `${(node?.name ?? msg.agentId!).slice(0, 28)} connected`,
           "Agent is streaming to Cortex",
           { label: "View run", href: `/run/${msg.runId}` },
         );

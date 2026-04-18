@@ -19,6 +19,10 @@ export interface AgentNode {
   readonly agentId: string;
   readonly runId: string;
   readonly name: string;
+  /** Explicit human label from API / WS (not composed with provider·model). */
+  readonly displayName?: string;
+  /** Linked `cortex_agents.name` from REST when present (stable association label). */
+  readonly savedAgentName?: string;
   readonly state: AgentCognitiveState;
   readonly entropy: number;
   /** Outer kernel loop — `ReasoningIterationProgress` */
@@ -51,6 +55,10 @@ export interface AgentStoreState {
 export interface RunSummaryDto {
   readonly runId: string;
   readonly agentId: string;
+  /** Saved label at launch or resolved linked agent name — from server. */
+  readonly displayName?: string;
+  /** Linked saved agent profile name (`cortex_agents.name`) when present. */
+  readonly agentRecordName?: string;
   readonly status: string;
   readonly iterationCount: number;
   readonly tokensUsed: number;
@@ -58,6 +66,76 @@ export interface RunSummaryDto {
   readonly provider?: string;
   readonly model?: string;
   readonly strategy?: string;
+  readonly completedAt?: number;
+}
+
+/** Card / Beacon label: human name, else provider·model, else short “Run …”. */
+export function beaconDeskRunLabel(input: {
+  displayName?: string;
+  /** Linked saved agent name — used when run display label is unset. */
+  savedAgentName?: string;
+  agentId: string;
+  runId: string;
+  provider?: string;
+  model?: string;
+}): string {
+  const dn = input.displayName?.trim();
+  if (dn) return dn;
+  const sn = input.savedAgentName?.trim();
+  if (sn) return sn;
+  const p = input.provider?.trim();
+  const m = input.model?.trim();
+  if (p && m) return `${p} · ${m}`;
+  if (p) return p;
+  if (m) return m;
+  const rid = input.runId;
+  if (rid.length <= 14) return `Run ${rid}`;
+  return `Run ${rid.slice(0, 10)}…${rid.slice(-4)}`;
+}
+
+/** Multi-line tooltip for Beacon desk cards / canvas (respects Settings → tooltips). */
+export function agentRunDeskTooltipText(agent: AgentNode): string {
+  const lines: string[] = [];
+  const p = agent.provider?.trim();
+  const m = agent.model?.trim();
+  if (p && m) lines.push(`Model: ${p} · ${m}`);
+  else if (p) lines.push(`Provider: ${p}`);
+  else if (m) lines.push(`Model: ${m}`);
+  if (agent.strategy?.trim()) lines.push(`Strategy: ${agent.strategy.trim()}`);
+  if (lines.length > 0) lines.push("");
+  lines.push(`Label: ${agent.name}`);
+  lines.push(`Run ID: ${agent.runId}`);
+  lines.push(`Agent ID: ${agent.agentId}`);
+  lines.push(`State: ${agent.state}`);
+  if (agent.parentRunId) lines.push(`Parent run: ${agent.parentRunId}`);
+  if (agent.savedAgentName?.trim()) {
+    const sn = agent.savedAgentName.trim();
+    if (sn !== agent.name.trim()) {
+      lines.push(`Saved agent: ${sn}`);
+    }
+  }
+  if (agent.maxIterations > 0) {
+    lines.push(`Loop: ${agent.loopIteration} / ${agent.maxIterations}`);
+    if (agent.reasoningSteps > 0) lines.push(`Reasoning steps: ${agent.reasoningSteps}`);
+  }
+  if (agent.tokensUsed > 0) lines.push(`Tokens: ${agent.tokensUsed.toLocaleString()}`);
+  if (agent.cost > 0) lines.push(`Cost (USD): $${agent.cost.toFixed(4)}`);
+  if (agent.entropy > 0) lines.push(`Entropy: ${agent.entropy.toFixed(3)}`);
+  if (agent.connectedAt > 0) {
+    lines.push(`Connected: ${new Date(agent.connectedAt).toLocaleString()}`);
+  }
+  if (agent.completedAt != null) {
+    lines.push(`Completed: ${new Date(agent.completedAt).toLocaleString()}`);
+  }
+  if (
+    isLiveCognitiveState(agent.state) &&
+    agent.lastEventAt > 0 &&
+    agent.lastEventAt !== agent.connectedAt
+  ) {
+    lines.push(`Last event: ${new Date(agent.lastEventAt).toLocaleString()}`);
+  }
+  lines.push("", "Click to open this run.");
+  return lines.join("\n");
 }
 
 function isLiveCognitiveState(state: AgentCognitiveState): boolean {
@@ -74,10 +152,24 @@ export function entropyToState(entropy: number, isRunning: boolean): AgentCognit
 function runToSeedNode(run: RunSummaryDto, now: number): AgentNode {
   const state: AgentCognitiveState =
     run.status === "live" ? "running" : run.status === "failed" ? "error" : "completed";
+  const displayName = run.displayName?.trim() || undefined;
+  const savedAgentName = run.agentRecordName?.trim() || undefined;
+  const terminal = state === "completed" || state === "error";
+  const completedAt = terminal && run.completedAt != null ? run.completedAt : undefined;
+  const lastEventAtSeed = terminal ? (run.completedAt ?? 0) : now;
   return {
     agentId: run.agentId,
     runId: run.runId,
-    name: run.agentId,
+    displayName,
+    savedAgentName,
+    name: beaconDeskRunLabel({
+      displayName,
+      savedAgentName,
+      agentId: run.agentId,
+      runId: run.runId,
+      provider: run.provider,
+      model: run.model,
+    }),
     state,
     entropy: 0,
     loopIteration: run.iterationCount,
@@ -86,7 +178,8 @@ function runToSeedNode(run: RunSummaryDto, now: number): AgentNode {
     tokensUsed: run.tokensUsed,
     cost: run.cost,
     connectedAt: 0,
-    lastEventAt: now,
+    completedAt,
+    lastEventAt: lastEventAtSeed,
     provider: run.provider,
     model:    run.model,
     strategy: run.strategy,
@@ -130,36 +223,54 @@ export function createAgentStore(options?: CreateAgentStoreOptions) {
           next.set(
             run.runId,
             existing
-              ? {
-                  ...seeded,
-                  // ── Live-WS fields beat REST/DB during an active run ──────────
-                  // Never let a periodic REST refresh degrade data that live WS
-                  // events have already set more accurately.
-                  //
-                  // Preserve richer live cognitive states only while REST still
-                  // reports the run as live. Once REST reaches a terminal
-                  // state, trust the server snapshot so missed WS completions
-                  // do not leave cards stuck as running.
-                  state:
-                    seeded.state === "completed" || seeded.state === "error"
-                      ? seeded.state
-                      : isLiveCognitiveState(existing.state)
-                        ? existing.state
-                        : seeded.state,
-                  entropy:      existing.entropy,
-                  loopIteration: Math.max(existing.loopIteration, seeded.loopIteration),
-                  reasoningSteps: Math.max(existing.reasoningSteps, seeded.reasoningSteps),
-                  maxIterations: existing.maxIterations || seeded.maxIterations,
-                  tokensUsed:   Math.max(existing.tokensUsed, seeded.tokensUsed),
-                  cost:         Math.max(existing.cost, seeded.cost),
-                  connectedAt:  existing.connectedAt,
-                  lastEventAt:  Math.max(existing.lastEventAt, seeded.lastEventAt),
-                  // Use || not ?? so that empty strings from DB also fall back to
-                  // the live WS value (which has the real value).
-                  provider: seeded.provider || existing.provider,
-                  model:    seeded.model    || existing.model,
-                  strategy: seeded.strategy || existing.strategy,
-                }
+              ? (() => {
+                  const resolvedDisplayName = seeded.displayName ?? existing.displayName;
+                  const resolvedSavedAgentName = seeded.savedAgentName ?? existing.savedAgentName;
+                  const prov = seeded.provider || existing.provider;
+                  const mod = seeded.model || existing.model;
+                  return {
+                    ...seeded,
+                    // ── Live-WS fields beat REST/DB during an active run ──────────
+                    // Never let a periodic REST refresh degrade data that live WS
+                    // events have already set more accurately.
+                    //
+                    // Preserve richer live cognitive states only while REST still
+                    // reports the run as live. Once REST reaches a terminal
+                    // state, trust the server snapshot so missed WS completions
+                    // do not leave cards stuck as running.
+                    state:
+                      seeded.state === "completed" || seeded.state === "error"
+                        ? seeded.state
+                        : isLiveCognitiveState(existing.state)
+                          ? existing.state
+                          : seeded.state,
+                    entropy:      existing.entropy,
+                    loopIteration: Math.max(existing.loopIteration, seeded.loopIteration),
+                    reasoningSteps: Math.max(existing.reasoningSteps, seeded.reasoningSteps),
+                    maxIterations: existing.maxIterations || seeded.maxIterations,
+                    tokensUsed:   Math.max(existing.tokensUsed, seeded.tokensUsed),
+                    cost:         Math.max(existing.cost, seeded.cost),
+                    connectedAt:  existing.connectedAt,
+                    // REST poll must not advance lastEventAt (WS is authoritative; avoids
+                    // "Last event" in tooltips ticking after a run has settled).
+                    lastEventAt: existing.lastEventAt > 0 ? existing.lastEventAt : seeded.lastEventAt,
+                    // Use || not ?? so that empty strings from DB also fall back to
+                    // the live WS value (which has the real value).
+                    provider: prov,
+                    model:    mod,
+                    strategy: seeded.strategy || existing.strategy,
+                    displayName: resolvedDisplayName,
+                    savedAgentName: resolvedSavedAgentName,
+                    name: beaconDeskRunLabel({
+                      displayName: resolvedDisplayName,
+                      savedAgentName: resolvedSavedAgentName,
+                      agentId: run.agentId,
+                      runId: run.runId,
+                      provider: prov,
+                      model: mod,
+                    }),
+                  };
+                })()
               : seeded,
           );
         }
@@ -180,7 +291,7 @@ export function createAgentStore(options?: CreateAgentStoreOptions) {
       const map = new Map(s.agents);
       const existing = map.get(msg.runId);
       type MutablePatch = { -readonly [K in keyof AgentNode]?: AgentNode[K] };
-      const patch: MutablePatch = { lastEventAt: nowFn() };
+      const patch: MutablePatch = {};
 
       switch (msg.type) {
         case "AgentConnected":
@@ -261,10 +372,49 @@ export function createAgentStore(options?: CreateAgentStoreOptions) {
           break;
       }
 
+      const wsDisplayName =
+        typeof msg.payload.agentDisplayName === "string" && msg.payload.agentDisplayName.trim()
+          ? (msg.payload.agentDisplayName as string).trim()
+          : undefined;
+      const mergedProvider =
+        (typeof msg.payload.provider === "string" ? msg.payload.provider : undefined) ??
+        existing?.provider;
+      const mergedModel =
+        (typeof msg.payload.model === "string" ? msg.payload.model : undefined) ?? existing?.model;
+
+      const resolvedDisplayName = wsDisplayName ?? existing?.displayName;
+      const resolvedSavedAgentName = existing?.savedAgentName;
+      const resolvedName = beaconDeskRunLabel({
+        displayName: resolvedDisplayName,
+        savedAgentName: resolvedSavedAgentName,
+        agentId: msg.agentId,
+        runId: msg.runId,
+        provider: mergedProvider,
+        model: mergedModel,
+      });
+
+      const mergedState = (patch.state !== undefined
+        ? patch.state
+        : (existing?.state ?? "running")) as AgentCognitiveState;
+      const prevTerminal =
+        existing?.state === "completed" || existing?.state === "error";
+      const nextTerminal =
+        mergedState === "completed" || mergedState === "error";
+      let nextLastEventAt: number;
+      if (!nextTerminal) {
+        nextLastEventAt = nowFn();
+      } else if (!prevTerminal && nextTerminal) {
+        nextLastEventAt = nowFn();
+      } else {
+        nextLastEventAt = existing?.lastEventAt ?? nowFn();
+      }
+
       const updated: AgentNode = {
         agentId: msg.agentId,
         runId: msg.runId,
-        name: existing?.name ?? msg.agentId,
+        displayName: resolvedDisplayName,
+        savedAgentName: resolvedSavedAgentName,
+        name: resolvedName,
         state: existing?.state ?? "running",
         entropy: existing?.entropy ?? 0,
         loopIteration: existing?.loopIteration ?? 0,
@@ -273,9 +423,12 @@ export function createAgentStore(options?: CreateAgentStoreOptions) {
         tokensUsed: existing?.tokensUsed ?? 0,
         cost: existing?.cost ?? 0,
         connectedAt: existing?.connectedAt ?? nowFn(),
-        lastEventAt: nowFn(),
+        completedAt: existing?.completedAt,
+        lastEventAt: existing?.lastEventAt ?? 0,
         parentRunId: existing?.parentRunId,
         ...patch,
+        lastEventAt: nextLastEventAt,
+        completedAt: patch.completedAt ?? existing?.completedAt,
       };
 
       map.set(msg.runId, updated);

@@ -133,9 +133,5 @@ export { META_TOOLS, INTROSPECTION_META_TOOLS } from "./strategies/kernel/kernel
 export { inferRequiredTools, classifyToolRelevance } from "./structured-output/infer-required-tools.js";
 export type { ToolSummary, InferRequiredToolsConfig, ToolClassificationResult } from "./structured-output/infer-required-tools.js";
 
-// ─── Strategy Switching ───
-export type { StrategyHandoff, StrategyEvaluation } from "./strategies/kernel/utils/strategy-evaluator.js";
-export { buildHandoff, evaluateStrategySwitch } from "./strategies/kernel/utils/strategy-evaluator.js";
-
 // ─── Runtime ───
 export { createReasoningLayer } from "./runtime.js";

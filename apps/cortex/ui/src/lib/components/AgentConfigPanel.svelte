@@ -457,7 +457,7 @@
             id="acp-section-filter"
             type="search"
             bind:value={sectionFilter}
-            placeholder="Filter sections (e.g. guardrails, mcp, timeout)…"
+            placeholder="  Filter sections (e.g. guardrails, mcp, timeout)…"
             autocomplete="off"
             class="config-input acp-filter-input pl-9" />
         </div>
@@ -485,7 +485,7 @@
 
   <!-- ── Section: Inference ────────────────────────────────────────────── -->
   {#if acpSectionVisible("inference")}
-  <div id="acp-section-inference" class="acp-section border border-[var(--cortex-border)] rounded-xl overflow-hidden bg-[color-mix(in_srgb,var(--cortex-surface-low)_55%,transparent)]">
+  <div id="acp-section-inference" class="acp-section acp-section-shell border border-[var(--cortex-border)] rounded-xl overflow-hidden">
     <button type="button"
       id="acp-head-inference"
       class="acp-section-trigger w-full flex items-center gap-2 px-3 py-2.5 border-0 cursor-pointer text-left"
@@ -597,7 +597,7 @@
 
   <!-- ── Section: Persona ────────────────────────────────────────────── -->
   {#if acpSectionVisible("persona")}
-  <div id="acp-section-persona" class="acp-section border border-[var(--cortex-border)] rounded-xl overflow-hidden bg-[color-mix(in_srgb,var(--cortex-surface-low)_55%,transparent)]">
+  <div id="acp-section-persona" class="acp-section acp-section-shell border border-[var(--cortex-border)] rounded-xl overflow-hidden">
     <button type="button"
       id="acp-head-persona"
       class="acp-section-trigger w-full flex items-center gap-2 px-3 py-2.5 border-0 cursor-pointer text-left"
@@ -678,7 +678,7 @@
 
   <!-- ── Section: Strategy ────────────────────────────────────────────── -->
   {#if acpSectionVisible("strategy")}
-  <div id="acp-section-strategy" class="acp-section border border-[var(--cortex-border)] rounded-xl overflow-hidden bg-[color-mix(in_srgb,var(--cortex-surface-low)_55%,transparent)]">
+  <div id="acp-section-strategy" class="acp-section acp-section-shell border border-[var(--cortex-border)] rounded-xl overflow-hidden">
     <button type="button"
       id="acp-head-strategy"
       class="acp-section-trigger w-full flex items-center gap-2 px-3 py-2.5 border-0 cursor-pointer text-left"
@@ -757,7 +757,7 @@
 
   <!-- ── Section: Tools ───────────────────────────────────────────────── -->
   {#if !compact && acpSectionVisible("tools")}
-  <div id="acp-section-tools" class="acp-section border border-[var(--cortex-border)] rounded-xl overflow-hidden bg-[color-mix(in_srgb,var(--cortex-surface-low)_55%,transparent)]">
+  <div id="acp-section-tools" class="acp-section acp-section-shell border border-[var(--cortex-border)] rounded-xl overflow-hidden">
     <button type="button"
       id="acp-head-tools"
       class="acp-section-trigger w-full flex items-center gap-2 px-3 py-2.5 border-0 cursor-pointer text-left"
@@ -910,7 +910,7 @@
 
   <!-- ── Section: Sub-agents (static / remote) ─────────────────────────── -->
   {#if !compact && acpSectionVisible("subagents")}
-  <div id="acp-section-subagents" class="acp-section border border-[var(--cortex-border)] rounded-xl overflow-hidden bg-[color-mix(in_srgb,var(--cortex-surface-low)_55%,transparent)]">
+  <div id="acp-section-subagents" class="acp-section acp-section-shell border border-[var(--cortex-border)] rounded-xl overflow-hidden">
     <button type="button"
       id="acp-head-subagents"
       class="acp-section-trigger w-full flex items-center gap-2 px-3 py-2.5 border-0 cursor-pointer text-left"
@@ -1011,7 +1011,7 @@
 
   <!-- ── Section: Living skills ─────────────────────────────────────── -->
   {#if !compact && acpSectionVisible("skills")}
-  <div id="acp-section-skills" class="acp-section border border-[var(--cortex-border)] rounded-xl overflow-hidden bg-[color-mix(in_srgb,var(--cortex-surface-low)_55%,transparent)]">
+  <div id="acp-section-skills" class="acp-section acp-section-shell border border-[var(--cortex-border)] rounded-xl overflow-hidden">
     <button type="button"
       id="acp-head-skills"
       class="acp-section-trigger w-full flex items-center gap-2 px-3 py-2.5 border-0 cursor-pointer text-left"
@@ -1091,7 +1091,7 @@
 
   <!-- ── Section: Memory ──────────────────────────────────────────────── -->
   {#if acpSectionVisible("memory")}
-  <div id="acp-section-memory" class="acp-section border border-[var(--cortex-border)] rounded-xl overflow-hidden bg-[color-mix(in_srgb,var(--cortex-surface-low)_55%,transparent)]">
+  <div id="acp-section-memory" class="acp-section acp-section-shell border border-[var(--cortex-border)] rounded-xl overflow-hidden">
     <button type="button"
       id="acp-head-memory"
       class="acp-section-trigger w-full flex items-center gap-2 px-3 py-2.5 border-0 cursor-pointer text-left"
@@ -1136,7 +1136,7 @@
 
   <!-- ── Section: Guardrails ──────────────────────────────────────────── -->
   {#if acpSectionVisible("guardrails")}
-  <div id="acp-section-guardrails" class="acp-section border border-[var(--cortex-border)] rounded-xl overflow-hidden bg-[color-mix(in_srgb,var(--cortex-surface-low)_55%,transparent)]">
+  <div id="acp-section-guardrails" class="acp-section acp-section-shell border border-[var(--cortex-border)] rounded-xl overflow-hidden">
     <button type="button"
       id="acp-head-guardrails"
       class="acp-section-trigger w-full flex items-center gap-2 px-3 py-2.5 border-0 cursor-pointer text-left"
@@ -1178,7 +1178,7 @@
   {/if}
   <!-- ── Section: Execution Controls ──────────────────────────────────── -->
   {#if acpSectionVisible("execution")}
-  <div id="acp-section-execution" class="acp-section border border-[var(--cortex-border)] rounded-xl overflow-hidden bg-[color-mix(in_srgb,var(--cortex-surface-low)_55%,transparent)]">
+  <div id="acp-section-execution" class="acp-section acp-section-shell border border-[var(--cortex-border)] rounded-xl overflow-hidden">
     <button type="button"
       id="acp-head-execution"
       class="acp-section-trigger w-full flex items-center gap-2 px-3 py-2.5 border-0 cursor-pointer text-left"
@@ -1252,7 +1252,7 @@
 
   <!-- ── Section: Meta Tools (Conductor's Suite) ───────────────────────── -->
   {#if acpSectionVisible("metatools")}
-  <div id="acp-section-metatools" class="acp-section border border-[var(--cortex-border)] rounded-xl overflow-hidden bg-[color-mix(in_srgb,var(--cortex-surface-low)_55%,transparent)]">
+  <div id="acp-section-metatools" class="acp-section acp-section-shell border border-[var(--cortex-border)] rounded-xl overflow-hidden">
     <button type="button"
       id="acp-head-metatools"
       class="acp-section-trigger w-full flex items-center gap-2 px-3 py-2.5 border-0 cursor-pointer text-left"
@@ -1307,7 +1307,7 @@
 
   <!-- ── Section: Reliability (Fallbacks) ─────────────────────────────── -->
   {#if acpSectionVisible("reliability")}
-  <div id="acp-section-reliability" class="acp-section border border-[var(--cortex-border)] rounded-xl overflow-hidden bg-[color-mix(in_srgb,var(--cortex-surface-low)_55%,transparent)]">
+  <div id="acp-section-reliability" class="acp-section acp-section-shell border border-[var(--cortex-border)] rounded-xl overflow-hidden">
     <button type="button"
       id="acp-head-reliability"
       class="acp-section-trigger w-full flex items-center gap-2 px-3 py-2.5 border-0 cursor-pointer text-left"
@@ -1360,7 +1360,7 @@
 
   <!-- ── Section: Observability ─────────────────────────────────────────── -->
   {#if acpSectionVisible("observability")}
-  <div id="acp-section-observability" class="acp-section border border-[var(--cortex-border)] rounded-xl overflow-hidden bg-[color-mix(in_srgb,var(--cortex-surface-low)_55%,transparent)]">
+  <div id="acp-section-observability" class="acp-section acp-section-shell border border-[var(--cortex-border)] rounded-xl overflow-hidden">
     <button type="button"
       id="acp-head-observability"
       class="acp-section-trigger w-full flex items-center gap-2 px-3 py-2.5 border-0 cursor-pointer text-left"
@@ -1516,6 +1516,18 @@
     scroll-margin-top: 0.75rem;
   }
 
+  .acp-section-shell {
+    background: color-mix(in srgb, var(--cortex-surface-low) 55%, transparent);
+  }
+
+  :global(html.dark) .acp-section-shell {
+    background: color-mix(in srgb, var(--cortex-surface-low) 82%, var(--cortex-surface) 18%);
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--ra-violet) 22%, transparent),
+      0 14px 48px -28px color-mix(in srgb, var(--ra-violet) 38%, transparent),
+      0 0 40px -24px color-mix(in srgb, var(--ra-cyan) 18%, transparent);
+  }
+
   .acp-section-trigger {
     background: linear-gradient(
       180deg,
@@ -1531,6 +1543,22 @@
 
   .acp-section-body {
     background: color-mix(in srgb, var(--cortex-surface) 35%, transparent);
+  }
+
+  :global(html.dark) .acp-section-body {
+    background: color-mix(in srgb, var(--cortex-surface-low) 55%, var(--cortex-surface) 45%);
+  }
+
+  :global(html.dark) .acp-section-trigger {
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--cortex-surface-high) 42%, var(--cortex-surface)) 0%,
+      color-mix(in srgb, var(--cortex-surface-low) 78%, var(--cortex-surface)) 100%
+    );
+  }
+
+  :global(html.dark) .acp-section-trigger:hover {
+    background: color-mix(in srgb, var(--ra-violet) 12%, var(--cortex-surface-low));
   }
 
   .acp-filter-input {
@@ -1571,5 +1599,23 @@
 
   .config-input::placeholder {
     color: color-mix(in srgb, var(--cortex-text-muted) 55%, transparent);
+  }
+
+  :global(html.dark) .config-input {
+    background: color-mix(in srgb, var(--cortex-surface-mid) 72%, var(--cortex-surface-low) 28%);
+    border-color: color-mix(in srgb, white 14%, var(--cortex-border));
+    box-shadow: inset 0 1px 0 color-mix(in srgb, white 5%, transparent);
+  }
+
+  :global(html.dark) .config-input:focus {
+    box-shadow:
+      0 0 0 3px color-mix(in srgb, var(--ra-violet) 28%, transparent),
+      inset 0 1px 0 color-mix(in srgb, white 5%, transparent);
+  }
+
+  :global(html.dark) .acp-chip {
+    color: color-mix(in srgb, var(--cortex-text) 88%, var(--cortex-text-muted) 12%);
+    border-color: color-mix(in srgb, var(--ra-violet) 28%, var(--cortex-border));
+    background: color-mix(in srgb, var(--cortex-surface-low) 88%, transparent);
   }
 </style>

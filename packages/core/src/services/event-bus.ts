@@ -372,6 +372,8 @@ export type AgentEvent =
       readonly timestamp: number;
       /** Agent ID of the parent that spawned this sub-agent (undefined for top-level agents) */
       readonly parentAgentId?: string;
+      /** Human label for UI (e.g. Cortex desk name); omitted for auto-generated desk placeholders */
+      readonly agentDisplayName?: string;
     }
   | {
       /**

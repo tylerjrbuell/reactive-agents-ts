@@ -173,4 +173,77 @@ describe("createAgentStore", () => {
     expect(list[0]?.state).toBe("completed");
     expect(list[0]?.completedAt).toBe(42);
   });
+
+  it("handleLiveMessage uses agentDisplayName from AgentStarted for desk headline", () => {
+    const store = createAgentStore({ loadOnInit: false, now: () => 1 });
+    store.handleLiveMessage({
+      agentId: "agent-1",
+      runId: "run-1",
+      type: "AgentStarted",
+      payload: {
+        agentDisplayName: "Research bot",
+        provider: "anthropic",
+        model: "claude-3-5-sonnet",
+      },
+    });
+    const list = get({ subscribe: store.subscribe });
+    expect(list[0]?.displayName).toBe("Research bot");
+    expect(list[0]?.name).toBe("Research bot");
+  });
+
+  it("REST refresh does not advance lastEventAt for completed runs", async () => {
+    const completedAt = 1_700_000_000_000;
+    const rows: RunSummaryDto[] = [
+      {
+        runId: "r1",
+        agentId: "agent-a",
+        status: "completed",
+        iterationCount: 1,
+        tokensUsed: 10,
+        cost: 0,
+        completedAt,
+        agentRecordName: "Lab agent",
+      },
+    ];
+    let poll = 0;
+    const fetchImpl = async () => {
+      poll += 1;
+      return new Response(JSON.stringify(rows), { status: 200, headers: { "Content-Type": "application/json" } });
+    };
+
+    const store = createAgentStore({
+      loadOnInit: false,
+      fetchImpl,
+      now: () => 1_800_000_000_000 + poll,
+    });
+    await store.refresh();
+    const first = get({ subscribe: store.subscribe })[0]?.lastEventAt;
+    expect(first).toBe(completedAt);
+    await store.refresh();
+    expect(get({ subscribe: store.subscribe })[0]?.lastEventAt).toBe(first);
+  });
+
+  it("loadAgents maps agentRecordName to savedAgentName and prefers run displayName in headline", async () => {
+    const rows: RunSummaryDto[] = [
+      {
+        runId: "r1",
+        agentId: "agent-a",
+        displayName: "Run title",
+        agentRecordName: "My saved agent",
+        status: "completed",
+        iterationCount: 1,
+        tokensUsed: 10,
+        cost: 0,
+        completedAt: 1_700_000_000_000,
+      },
+    ];
+    const fetchImpl = async () =>
+      new Response(JSON.stringify(rows), { status: 200, headers: { "Content-Type": "application/json" } });
+
+    const store = createAgentStore({ loadOnInit: false, fetchImpl, now: () => 1_800_000_000_000 });
+    await store.refresh();
+    const a = get({ subscribe: store.subscribe })[0];
+    expect(a?.savedAgentName).toBe("My saved agent");
+    expect(a?.name).toBe("Run title");
+  });
 });

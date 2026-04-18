@@ -107,6 +107,7 @@
       bind:this={inputEl}
       bind:value
       type="text"
+      data-cortex-beacon-prompt
       {placeholder}
       disabled={loading}
       onkeydown={handleKeydown}

@@ -48,7 +48,7 @@
   >
     <div class="px-6 pt-5 pb-4">
       <h3 id="confirm-modal-title" class="font-headline text-base font-semibold text-on-surface mb-2">{title}</h3>
-      <p class="font-mono text-[11px] text-on-surface-variant leading-relaxed">{message}</p>
+      <p class="whitespace-pre-line font-mono text-[11px] text-on-surface-variant leading-relaxed">{message}</p>
     </div>
     <div class="px-6 pb-5 flex items-center justify-end gap-3">
       <button

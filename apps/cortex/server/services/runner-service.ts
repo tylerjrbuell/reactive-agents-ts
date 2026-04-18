@@ -167,7 +167,9 @@ export const CortexRunnerServiceLive = Layer.effect(
           const runId = generateTaskId();
           const startedAt = Date.now();
 
-          yield* store.ensureRunRow(agentId, runId);
+          yield* store.ensureRunRow(agentId, runId, {
+            displayName: params.agentName?.trim() || undefined,
+          });
           yield* Ref.update(activeRef, (m) =>
             new Map(m).set(runId, { agentId, runId, agent, startedAt }),
           );

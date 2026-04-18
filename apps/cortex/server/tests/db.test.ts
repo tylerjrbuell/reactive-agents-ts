@@ -78,6 +78,38 @@ describe("CortexDB schema + queries", () => {
     expect(runs[0]?.hasDebrief).toBe(false);
   });
 
+  it("getRunById includes displayName from display_name column", () => {
+    upsertRun(db, "a", "r-lbl", "My beacon run");
+    const s = getRunById(db, "r-lbl");
+    expect(s?.displayName).toBe("My beacon run");
+  });
+
+  it("getRunById resolves displayName from cortex_agents when display_name empty", () => {
+    db.prepare("INSERT INTO cortex_agents (agent_id, name, config, status) VALUES (?, ?, ?, ?)").run(
+      "ag-join",
+      "Saved agent title",
+      "{}",
+      "active",
+    );
+    upsertRun(db, "ag-join", "r-join");
+    const s = getRunById(db, "r-join");
+    expect(s?.displayName).toBe("Saved agent title");
+    expect(s?.agentRecordName).toBe("Saved agent title");
+  });
+
+  it("getRunById returns agentRecordName from join when run has its own display_name", () => {
+    db.prepare("INSERT INTO cortex_agents (agent_id, name, config, status) VALUES (?, ?, ?, ?)").run(
+      "ag-dual",
+      "Saved profile",
+      "{}",
+      "active",
+    );
+    upsertRun(db, "ag-dual", "r-dual", "Launch label");
+    const s = getRunById(db, "r-dual");
+    expect(s?.displayName).toBe("Launch label");
+    expect(s?.agentRecordName).toBe("Saved profile");
+  });
+
   it("updateRunStats is a no-op when patch is empty", () => {
     upsertRun(db, "a", "r1");
     updateRunStats(db, "r1", {});

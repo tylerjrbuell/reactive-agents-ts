@@ -572,27 +572,27 @@
 </script>
 
 <div
-  class="flex flex-col gap-3 flex-1 min-h-0 overflow-y-auto overflow-x-hidden rounded-xl border border-outline-variant/20 bg-surface-container-low/15 p-4"
+  class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overflow-x-hidden rounded-xl border border-[var(--cortex-border)] bg-white/85 p-4 shadow-sm dark:bg-surface-container-low/45 dark:shadow-[0_0_0_1px_rgba(139,92,246,0.15),0_12px_40px_-24px_rgba(0,0,0,0.55)]"
 >
-  <div class="flex items-center justify-between gap-2 flex-shrink-0 flex-wrap">
+  <div class="flex flex-shrink-0 flex-wrap items-center justify-between gap-2">
     <div>
-      <h3 class="font-headline text-sm font-semibold text-on-surface">Tools</h3>
-      <p class="font-mono text-[9px] text-outline/50 mt-0.5">
-        One catalog: built-in, meta, MCP, and lab tools. <strong class="text-on-surface/60">Create tool</strong> adds custom or MCP-backed entries.
+      <h3 class="font-headline text-sm font-semibold text-slate-900 dark:text-on-surface">Tools</h3>
+      <p class="mt-0.5 font-mono text-[9px] text-slate-600 dark:text-on-surface-variant/80">
+        One catalog: built-in, meta, MCP, and lab tools. <strong class="text-slate-800 dark:text-on-surface/85">Create tool</strong> adds custom or MCP-backed entries.
       </p>
     </div>
     <div class="flex items-center gap-2">
       <button
         type="button"
         onclick={() => openCreate("mcp")}
-        class="text-[10px] font-mono px-3 py-1.5 rounded border border-primary/35 text-primary hover:bg-primary/10 cursor-pointer bg-transparent"
+        class="cursor-pointer rounded border border-primary/40 bg-primary/[0.08] px-3 py-1.5 font-mono text-[10px] text-primary transition-colors hover:bg-primary/15 dark:border-primary/50 dark:bg-primary/[0.14] dark:hover:bg-primary/[0.22]"
       >
         + Create tool
       </button>
       <button
         type="button"
         onclick={() => loadCatalog()}
-        class="text-[10px] font-mono px-3 py-1.5 rounded border border-outline-variant/25 text-outline hover:text-primary cursor-pointer bg-transparent"
+        class="cursor-pointer rounded border border-[var(--cortex-border)] bg-transparent px-3 py-1.5 font-mono text-[10px] text-slate-600 transition-colors hover:border-primary/35 hover:text-primary dark:border-white/10 dark:text-on-surface-variant dark:hover:text-secondary"
       >
         ↻ Reload catalog
       </button>
@@ -601,23 +601,23 @@
 
   {#if showCreate}
     <div
-      class="rounded-lg border border-primary/25 bg-surface-container-low/60 p-4 space-y-4 flex-shrink-0 shadow-[0_0_24px_-8px_rgba(139,92,246,0.35)]"
+      class="gradient-border flex-shrink-0 space-y-4 rounded-lg border border-primary/30 p-4 shadow-lg dark:border-primary/35 dark:shadow-[0_0_40px_-12px_rgba(139,92,246,0.35)]"
     >
-      <div class="flex items-center justify-between gap-2 flex-wrap">
-        <span class="text-[10px] font-mono text-outline/70 uppercase tracking-widest">Create tool</span>
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <span class="font-mono text-[10px] uppercase tracking-widest text-slate-600 dark:text-on-surface-variant/85">Create tool</span>
         <button
           type="button"
           onclick={closeCreate}
-          class="material-symbols-outlined text-outline hover:text-on-surface text-lg bg-transparent border-0 cursor-pointer p-0 leading-none"
+          class="material-symbols-outlined cursor-pointer border-0 bg-transparent p-0 text-lg leading-none text-slate-500 hover:text-primary dark:text-on-surface-variant dark:hover:text-on-surface"
           aria-label="Close">close</button>
       </div>
 
-      <p class="font-mono text-[9px] text-outline/55 leading-relaxed">
-        Choose how this tool appears in the catalog. <span class="text-on-surface/65">Custom</span> = lab echo (prototype). <span class="text-on-surface/65">MCP server</span> = connect a process or URL; then
-        <strong class="text-on-surface/75">Refresh tools</strong> to list its tools. Built-in and meta tools ship with the framework and show up automatically — allowlist them under Builder → Tools.
+      <p class="font-mono text-[9px] leading-relaxed text-slate-600 dark:text-on-surface-variant/75">
+        Choose how this tool appears in the catalog. <span class="text-slate-800 dark:text-on-surface/85">Custom</span> = lab echo (prototype). <span class="text-slate-800 dark:text-on-surface/85">MCP server</span> = connect a process or URL; then
+        <strong class="text-slate-900 dark:text-on-surface/90">Refresh tools</strong> to list its tools. Built-in and meta tools ship with the framework and show up automatically — allowlist them under Builder → Tools.
       </p>
 
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+      <div class="grid grid-cols-1 gap-2 md:grid-cols-2">
         <button
           type="button"
           onclick={() => {
@@ -626,11 +626,11 @@
           }}
           class="rounded-lg border p-3 text-left transition-colors
                  {createKind === 'mcp'
-            ? 'border-primary/45 bg-primary/10'
-            : 'border-outline-variant/20 bg-surface-container-low/35 hover:border-primary/25'}"
+            ? 'border-primary/45 bg-violet-50/95 dark:border-primary/50 dark:bg-primary/[0.18]'
+            : 'border-[var(--cortex-border)] bg-white/90 hover:border-primary/30 dark:border-white/10 dark:bg-surface-container-high/40 dark:hover:border-primary/40'}"
         >
-          <div class="font-mono text-[10px] uppercase tracking-wider text-primary/90">MCP-backed tool</div>
-          <p class="mt-1 font-mono text-[9px] text-outline/65 leading-relaxed">
+          <div class="font-mono text-[10px] uppercase tracking-wider text-violet-800 dark:text-primary/90">MCP-backed tool</div>
+          <p class="mt-1 font-mono text-[9px] leading-relaxed text-slate-600 dark:text-on-surface-variant/75">
             Connect via stdio or endpoint, refresh discovered tools, then invoke from the same test panel.
           </p>
         </button>
@@ -642,11 +642,11 @@
           }}
           class="rounded-lg border p-3 text-left transition-colors
                  {createKind === 'custom'
-            ? 'border-primary/45 bg-primary/10'
-            : 'border-outline-variant/20 bg-surface-container-low/35 hover:border-primary/25'}"
+            ? 'border-primary/45 bg-violet-50/95 dark:border-primary/50 dark:bg-primary/[0.18]'
+            : 'border-[var(--cortex-border)] bg-white/90 hover:border-primary/30 dark:border-white/10 dark:bg-surface-container-high/40 dark:hover:border-primary/40'}"
         >
-          <div class="font-mono text-[10px] uppercase tracking-wider text-primary/90">Custom tool</div>
-          <p class="mt-1 font-mono text-[9px] text-outline/65 leading-relaxed">
+          <div class="font-mono text-[10px] uppercase tracking-wider text-violet-800 dark:text-primary/90">Custom tool</div>
+          <p class="mt-1 font-mono text-[9px] leading-relaxed text-slate-600 dark:text-on-surface-variant/75">
             Fast prototype in Lab catalog. Define params, then execute with request JSON.
           </p>
         </button>

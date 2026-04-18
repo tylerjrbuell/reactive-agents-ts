@@ -46,6 +46,7 @@ export function applySchema(db: Database): void {
       strategy        TEXT,
       debrief         TEXT,
       error_message   TEXT,
+      display_name    TEXT,
       created_at      INTEGER NOT NULL DEFAULT (unixepoch('now','subsec') * 1000)
     );
 
@@ -136,6 +137,7 @@ export function applySchema(db: Database): void {
   if (!runCols.includes("model"))    db.exec("ALTER TABLE cortex_runs ADD COLUMN model    TEXT");
   if (!runCols.includes("strategy")) db.exec("ALTER TABLE cortex_runs ADD COLUMN strategy TEXT");
   if (!runCols.includes("error_message")) db.exec("ALTER TABLE cortex_runs ADD COLUMN error_message TEXT");
+  if (!runCols.includes("display_name")) db.exec("ALTER TABLE cortex_runs ADD COLUMN display_name TEXT");
 
   const agentCols = (db.prepare("PRAGMA table_info(cortex_agents)").all() as Array<{ name: string }>)
     .map((c) => c.name);

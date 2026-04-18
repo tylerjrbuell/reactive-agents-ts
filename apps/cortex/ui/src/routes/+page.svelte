@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { getContext, onMount, onDestroy } from "svelte";
+  import { getContext, onMount, onDestroy, tick } from "svelte";
   import BeaconCanvas from "$lib/components/BeaconCanvas.svelte";
   import BottomInputBar from "$lib/components/BottomInputBar.svelte";
   import CortexDeskShell from "$lib/components/CortexDeskShell.svelte";
@@ -42,8 +42,16 @@
     window.localStorage.setItem(STATUS_FILTER_STORAGE_KEY, statusFilter);
   });
 
-  // Handle R shortcut from layout
-  function handleFocusInput() { inputBarRef?.focus(); }
+  // Handle R shortcut from layout (after tick so bind:this / input exist — empty beacon included)
+  async function handleFocusInput() {
+    await tick();
+    const api = inputBarRef as { focus?: () => void } | undefined;
+    if (typeof api?.focus === "function") {
+      api.focus();
+      return;
+    }
+    document.querySelector<HTMLInputElement>("[data-cortex-beacon-prompt]")?.focus();
+  }
   onMount(() => {
     window.addEventListener("cortex:focus-input", handleFocusInput);
 
