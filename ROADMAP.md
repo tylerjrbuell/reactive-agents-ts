@@ -21,9 +21,9 @@ The roadmap below is about two things: **closing the gaps** that currently block
 
 ---
 
-## Current State — v0.8.0 (unreleased) / v0.6.3 (npm) — Mar 10, 2026
+## Current State — v0.9.0 (published) / Unreleased on main — Apr 18, 2026
 
-**20 packages, 1,773 tests across 217 files. v0.7.0 and v0.8.0 are complete on main/feature branch and pending npm publish.**
+**25 packages, ~4,150 tests across ~460 files. v0.9.0 is published on npm. An `Unreleased` block on main contains: Agent-as-Data (`AgentConfig`), `agentFn`/`pipe`/`parallel`/`race` composition, dynamic tool registration, Living Intelligence Skills, Conductor's Suite meta-tools, web framework packages (`@reactive-agents/react`, `vue`, `svelte`), dynamic pricing, and CLI hardening — pending the next changeset release.**
 
 ### v0.6.3 → v0.7.0 (Shipped on main, pending npm)
 
@@ -70,7 +70,7 @@ The roadmap below is about two things: **closing the gaps** that currently block
 
 - ✅ 10-phase execution engine fully wired — all phases call their respective services
 - ✅ 5 reasoning strategies: ReAct, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive
-- ✅ **5 LLM providers**: Anthropic, OpenAI, Gemini, Ollama, **LiteLLM** (40+ models via proxy)
+- ✅ **6 LLM providers**: Anthropic, OpenAI, Gemini, Ollama, **LiteLLM** (40+ models via proxy), Test (deterministic mock)
 - ✅ Full memory system (Working/Semantic/Episodic/Procedural, FTS5, Zettelkasten)
 - ✅ Guardrails, verification, cost tracking, identity, interaction, orchestration
 - ✅ MCP stdio + SSE + **WebSocket** transports, Tavily web search, built-in tools
@@ -151,9 +151,11 @@ See `spec/docs/14-v0.5-comprehensive-plan.md` for the full plan. All items shipp
 
 ---
 
-## v0.9.0 — Benchmarks, Docker Sandbox & Adoption Push
+## v0.9.0 — Native FC Harness, Skills System, Cortex Studio ✅ Released (Apr 2026)
 
-**Focus: prove the framework works, make it easy to adopt.**
+**What shipped:** Native function-calling harness across all providers, provider adapter hooks (7/7), Living Skills system with SKILL.md compatibility, Conductor's Suite meta-tools, Cortex local studio (Beacon view, Run details, debrief UI), Cortex Lab skill authoring, `@reactive-agents/react`/`vue`/`svelte` web hook packages, Agent-as-Data config, adaptive calibration with drift detection, agent.chat()/session() with SQLite persistence.
+
+**Remaining original v0.9.0 targets (moved to v1.0.0 or later):**
 
 ### Published Benchmarks
 
@@ -195,7 +197,10 @@ See `spec/docs/14-v0.5-comprehensive-plan.md` for the full plan. All items shipp
 - Migration guides from LangChain and Vercel AI SDK
 - Community growth targets: 1K GitHub stars, 500 npm weekly downloads
 
-### `@reactive-agents/react` — UI Framework Integration
+### `@reactive-agents/react` — UI Framework Integration ✅ Shipped in v0.8.5
+
+**Already shipped — see `packages/react/`, `packages/vue/`, `packages/svelte/`. Listed here for historical roadmap context.**
+
 
 ```tsx
 import { useAgent, useAgentStream } from "@reactive-agents/react";
@@ -308,11 +313,12 @@ Keeping this intentional:
 | v0.5.6 ✅ | **Agent Gateway: heartbeats, crons, webhooks, policy engine**                          | **Persistent autonomous agents with deterministic infrastructure** |
 | v0.7.0 ✅ | Required tools guard, circuit breaker, benchmarks, Docker sandbox, ContextEngine, ExperienceStore | Cross-agent learning + adaptive tool inference |
 | v0.8.0 ✅ | Final-answer hard gate, structured debriefs, agent.chat() + agent.session()           | Self-reporting agents with conversational Q&A |
-| v0.9.0    | Published benchmarks, programmatic tool calling, Docker sandbox (full)                 | 30-50% token reduction, proven public results               |
+| v0.9.0 ✅ | Native FC harness, Skills system, Cortex Studio, react/vue/svelte hooks                | 7/7 adapter hooks + live agent canvas in a local studio     |
+| v1.0.0*   | Published benchmarks, programmatic tool calling, Docker sandbox (full)                 | 30-50% token reduction, proven public results               |
 | v1.0.0    | Stable API, migration guides, React hooks                                              | Production-grade with UI integration                        |
 | v1.1.0+   | Strategy evolution, local model optimization, plugin marketplace                       | Self-improving agents + community ecosystem                 |
 
 ---
 
-_Last updated: March 11, 2026 — v0.8.0 complete (1773 tests, 20 packages, debrief + chat shipped), v0.7.0 + v0.8.0 pending npm publish_
+_Last updated: April 18, 2026 — v0.9.0 published on npm; 25 packages, ~4,150 tests across ~460 files; Unreleased block on main includes Living Skills, Conductor's Suite, Agent-as-Data, web framework hooks_
 _Grounded in: `spec/docs/12-market-validation-feb-2026.md`, `spec/docs/14-v0.5-comprehensive-plan.md`_

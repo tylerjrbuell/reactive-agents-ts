@@ -17,7 +17,7 @@ Strategy (policy: when to run, how many times, what config)
 
 **Before this architecture:** Each strategy owned its own execution loop. `reactive.ts` was 905 lines. Tool call handling, EventBus wiring, and observation formatting were duplicated across 5 files.
 
-**After:** `reactive.ts` is 128 lines. All strategies call `runKernel(reactKernel, ...)`. Tool handling lives once in `tool-execution.ts`.
+**After:** `reactive.ts` is 266 lines (down from 905). All strategies call `runKernel(reactKernel, ...)`. Tool handling lives once in `tool-execution.ts`.
 
 ## ThoughtKernel
 
@@ -157,8 +157,8 @@ The runner handles nine steps internally:
 The built-in `reactKernel` implements the Think → Act → Observe loop and is the default kernel used by all five strategies:
 
 ```typescript
-import { runKernel } from "./strategies/shared/kernel-runner.js";
-import { reactKernel } from "./strategies/shared/react-kernel.js";
+import { runKernel } from "./strategies/kernel/kernel-runner.js";
+import { reactKernel } from "./strategies/kernel/react-kernel.js";
 
 const finalState = yield* runKernel(
   reactKernel,
@@ -178,7 +178,7 @@ const finalState = yield* runKernel(
 For backwards compatibility, a wrapped form is also available:
 
 ```typescript
-import { executeReActKernel } from "./strategies/shared/react-kernel.js";
+import { executeReActKernel } from "./strategies/kernel/react-kernel.js";
 
 const result: ReActKernelResult = yield* executeReActKernel({
   task: "Summarize the latest release notes",
@@ -220,7 +220,7 @@ When no EventBus is present, `buildKernelHooks()` returns hooks that silently no
 For tests and simple runs, `noopHooks` is exported from `kernel-state.ts`:
 
 ```typescript
-import { noopHooks } from "./strategies/shared/kernel-state.js";
+import { noopHooks } from "./strategies/kernel/kernel-state.js";
 // All five hook methods are Effect.void — safe, no EventBus required
 ```
 
@@ -304,7 +304,7 @@ const program = Effect.gen(function* () {
 
 | Before | After |
 |---|---|
-| `reactive.ts` — 905 lines | `reactive.ts` — 128 lines |
+| `reactive.ts` — 905 lines | `reactive.ts` — 266 lines |
 | Tool execution duplicated ×5 | `tool-execution.ts` — shared once |
 | EventBus wiring scattered across 5 strategy files | `kernel-hooks.ts` — single source |
 | Double `ToolCallCompleted` metrics in MetricsCollector | Fixed — `KernelHooks.onObservation` is the only publisher |

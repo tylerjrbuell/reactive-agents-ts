@@ -19,32 +19,44 @@ bun install
 ## Project Structure
 
 ```
-packages/          # 15 publishable packages
-  core/            # EventBus, AgentService, TaskService
-  runtime/         # ExecutionEngine, ReactiveAgentBuilder
-  llm-provider/    # Anthropic, OpenAI, Ollama adapters
-  memory/          # bun:sqlite memory system
-  reasoning/       # ReAct, Plan-Execute, ToT
-  tools/           # Tool registry and MCP client
-  guardrails/      # Safety filters
-  verification/    # Output verification
-  cost/            # Cost routing and budgets
-  identity/        # RBAC and certificates
-  observability/   # Tracing and metrics
-  interaction/     # 5 interaction modes
-  orchestration/   # Multi-agent workflows
-  prompts/         # Template engine
-  reactive-agents/ # Meta-package (bundles all above)
+packages/                  # 25 packages (24 publishable + 1 private: benchmarks)
+  core/                    # EventBus, AgentService, TaskService, shared types
+  runtime/                 # ExecutionEngine, ReactiveAgentBuilder, createRuntime()
+  llm-provider/            # 6 providers: Anthropic, OpenAI, Gemini, Ollama, LiteLLM, Test
+  memory/                  # 4-layer memory (Working/Semantic/Episodic/Procedural) via bun:sqlite + FTS5 + sqlite-vec
+  reasoning/               # 5 strategies + composable ThoughtKernel + KernelRunner
+  tools/                   # ToolService, 9 capability tools, 8 meta-tools, MCP client, sandbox
+  guardrails/              # Injection/PII/toxicity, KillSwitch, behavioral contracts
+  verification/            # Semantic entropy, fact decomposition, NLI, hallucination detection
+  cost/                    # Complexity router, budget enforcer, semantic cache
+  identity/                # Ed25519 certs, RBAC, delegation, audit trail
+  observability/           # Distributed tracing, metrics, structured logging
+  interaction/             # 5 autonomy modes, checkpoints, preference learning
+  orchestration/           # Multi-agent workflows (sequential, parallel, pipeline, map-reduce)
+  prompts/                 # Template engine, version control, tier-adaptive variants
+  eval/                    # LLM-as-judge, EvalStore, 5 scoring dimensions
+  a2a/                     # Agent Cards, JSON-RPC 2.0, SSE streaming
+  gateway/                 # Persistent harness: heartbeats, crons, webhooks, policy engine
+  health/                  # Health checks, readiness probes
+  testing/                 # Mock LLMService, mock ToolService, assertion helpers
+  reactive-intelligence/   # Entropy sensor, reactive controller, learning engine, telemetry
+  benchmarks/              # Private: 20-task benchmark suite (not published)
+  react/                   # React hooks: useAgent, useAgentStream
+  vue/                     # Vue composables
+  svelte/                  # Svelte stores
+  reactive-agents/         # Public facade — bundles the publishable packages
 apps/
-  cli/             # rax CLI
-  docs/            # Starlight documentation site
-  examples/        # Example agent scripts
+  cli/                     # rax CLI
+  cortex/                  # Bun/Elysia desk server + SvelteKit UI (Stage/Run)
+  docs/                    # Starlight documentation site
+  examples/                # Example agent scripts
+  meta-agent/              # Meta-agent app
 ```
 
 ## Development Workflow
 
 ```bash
-bun test              # Run all 283 tests
+bun test              # Run all ~4,150 tests across ~460 files
 bun run build         # Typecheck all packages
 bun run docs:dev      # Start docs dev server
 bun run rax --help    # Test the CLI

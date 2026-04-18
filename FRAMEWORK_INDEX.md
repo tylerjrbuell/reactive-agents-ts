@@ -22,7 +22,7 @@
                │          │         │       │       │          │           │
           ┌────▼───┐ ┌────▼───┐ ┌───▼──┐ ┌──▼──┐ ┌──▼───┐ ┌───▼────┐ ┌───▼────┐
           │Reasoning│ │ Tools  │ │Memory│ │Guard│ │Verify│ │  Cost  │ │Identity│
-          │5 strats │ │8 built │ │4-tier│ │rails│ │halluc│ │ router │ │Ed25519 │
+          │5 strats │ │9 cap +8│ │4-tier│ │rails│ │halluc│ │ router │ │Ed25519 │
           │ kernel  │ │ +MCP   │ │sqlite│ │ PII │ │NLI   │ │ cache  │ │ RBAC   │
           └────┬───┘ └───┬────┘ └──────┘ └─────┘ └──────┘ └────────┘ └────────┘
                │         │
@@ -108,7 +108,7 @@ The reasoning layer is the most complex subsystem. All 5 strategies share a comm
 | 1 | `reasoning/src/strategies/kernel/kernel-state.ts` | `KernelState`, `KernelInput`, `KernelContext`, `ThoughtKernel` type, `transitionState()` |
 | 2 | `reasoning/src/strategies/kernel/react-kernel.ts` | `reactKernel` — single-step Think→Parse→Execute→Observe |
 | 3 | `reasoning/src/strategies/kernel/kernel-runner.ts` | `runKernel()` — iteration loop, entropy, loop detection |
-| 4 | `reasoning/src/strategies/kernel/utils/tool-utils.ts` | Tool parsing, ACTION extraction, compression, LLM-based filtering |
+| 4 | `reasoning/src/strategies/kernel/utils/tool-formatting.ts`, `tool-parsing.ts`, `tool-gating.ts`, `tool-capabilities.ts` | Tool schema shaping, FC parsing, gating, classification (split from original `tool-utils.ts`) |
 | 5 | `reasoning/src/strategies/kernel/utils/tool-execution.ts` | `executeToolCall()`, observation result construction |
 | 6 | `reasoning/src/strategies/reactive.ts` | Thin wrapper: `runKernel(reactKernel, input, opts)` → `ReasoningResult` |
 | 7 | `reasoning/src/strategies/plan-execute.ts` | Structured Plan Engine with step patching and composite steps |
@@ -148,18 +148,34 @@ LLM generates: Thought + ACTION: tool_name({args})  │
                                          └─────────────────────┘
 ```
 
-### Built-in Tools (8)
+### Built-in Tools — 9 capability + 8 meta-tools
 
-| Tool | File | Purpose |
-|------|------|---------|
-| `web-search` | `tools/src/skills/web-search.ts` | Web search: Tavily → Brave → DuckDuckGo instant (no key) |
-| `http-get` | `tools/src/skills/http-client.ts` | Fetch URL content |
-| `file-read` | `tools/src/skills/file-operations.ts` | Read file content |
-| `file-write` | `tools/src/skills/file-operations.ts` | Write file content |
-| `code-execute` | `tools/src/skills/code-execution.ts` | Run JS in subprocess |
-| `scratchpad-write` | `tools/src/skills/scratchpad.ts` | Persist notes across steps |
-| `scratchpad-read` | `tools/src/skills/scratchpad.ts` | Retrieve notes |
-| `final-answer` | `tools/src/skills/final-answer.ts` | Hard exit gate for ReAct loop |
+**9 capability tools** (registered by ToolServiceLive — see `packages/tools/src/skills/builtin.ts`):
+
+| Tool | Purpose |
+|------|---------|
+| `web-search` | Tavily / Brave / Serper / DuckDuckGo chain with quota-aware fallback |
+| `crypto-price` | CoinGecko free API — batched spot prices, no key required |
+| `http-get` | Fetch URL content |
+| `file-read` | Read file content |
+| `file-write` | Write file content |
+| `code-execute` | Run JS in sandboxed subprocess or Docker container |
+| `git-cli` | Safe git subcommand runner (CliRunner-backed) |
+| `gh-cli` | Safe gh (GitHub CLI) subcommand runner |
+| `gws-cli` | Google Workspace CLI runner (requires `gws` installed) |
+
+**8 meta-tools** (wired by kernel with live state — see `packages/tools/src/skills/builtin.ts` `metaToolDefinitions`):
+
+| Tool | Purpose |
+|------|---------|
+| `context-status` | Always-on context-window introspection |
+| `task-complete` | Visibility-gated completion signal |
+| `final-answer` | Hard exit gate for the reasoning loop |
+| `brief` | Compact task/progress summary |
+| `find` | Unified search/routing tool |
+| `pulse` | Emit controller decision log line |
+| `recall` | Working-memory retrieval (replaces scratchpad) |
+| `checkpoint` | Resumable execution checkpoint |
 
 ---
 
@@ -318,15 +334,15 @@ Execution completes
 
 ---
 
-## 22 Packages — Complete Inventory
+## 25 Packages — Complete Inventory
 
 | # | Package | Purpose | Tests | Key Export |
 |---|---------|---------|-------|-----------|
 | 1 | `core` | EventBus, Agent/Task services, shared types | ~100 | `EventBus`, `AgentEvent` |
 | 2 | `llm-provider` | 6 LLM adapters, streaming, fallback | ~120 | `LLMService`, `CompletionResponse` |
 | 3 | `memory` | 4-tier SQLite memory, FTS5, sqlite-vec | ~140 | `MemoryService`, `SessionStoreService` |
-| 4 | `reasoning` | 5 strategies, kernel runner, plan engine | ~485 | `ReasoningService`, `StrategyRegistry` |
-| 5 | `tools` | 8 built-in tools, MCP, sandbox, ToolBuilder | ~180 | `ToolService`, `ToolBuilder` |
+| 4 | `reasoning` | 5 strategies, kernel runner, plan engine | ~850 | `ReasoningService`, `StrategyRegistry` |
+| 5 | `tools` | 9 capability + 8 meta-tools, MCP, sandbox, ToolBuilder | ~650 | `ToolService`, `ToolBuilder` |
 | 6 | `guardrails` | Injection/PII/toxicity, KillSwitch | ~60 | `GuardrailService`, `KillSwitchService` |
 | 7 | `verification` | Semantic entropy, NLI, hallucination | ~70 | `VerificationService` |
 | 8 | `cost` | Complexity routing, budget, semantic cache | ~50 | `CostService` |
@@ -344,8 +360,11 @@ Execution completes
 | 20 | `reactive-intelligence` | Entropy sensor, reactive controller, learning engine, telemetry | ~120 | `EntropySensorService`, `ReactiveControllerService`, `LearningEngineService` |
 | 21 | `runtime` | ExecutionEngine, Builder, createRuntime() | ~200 | `ReactiveAgents`, `ExecutionEngine` |
 | 22 | `reactive-agents` (facade) | Public API re-export | — | `ReactiveAgents` |
+| 23 | `react` | React hooks: `useAgent`, `useAgentStream` | — | `useAgent`, `useAgentStream` |
+| 24 | `vue` | Vue composables for agent streaming | — | `useAgent`, `useAgentStream` |
+| 25 | `svelte` | Svelte stores for agent streaming | — | `createAgent`, `createAgentStream` |
 
-**Total: 2,194 tests across 288 files**
+**Total: ~4,150 tests across ~460 files**
 
 ---
 

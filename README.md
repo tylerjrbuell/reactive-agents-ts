@@ -15,7 +15,7 @@ Works on local Ollama models (8B+) through frontier APIs — same code, same fea
 | **25 composable packages**  | Enable exactly what you need, no hidden coupling              |
 | **6 LLM providers**         | Anthropic, OpenAI, Gemini, Ollama (local), LiteLLM 40+, Test  |
 | **5 reasoning strategies**  | ReAct · Reflexion · Plan-Execute · Tree-of-Thought · Adaptive |
-| **3,879 tests · 430 files** | Production-grade confidence                                   |
+| **~4,150 tests · ~460 files** | Production-grade confidence                                   |
 | **Cortex Studio**           | Live agent canvas, entropy charts, debrief UI, agent builder  |
 | **Effect-TS end to end**    | Compile-time type safety, zero `any`, explicit tagged errors  |
 
@@ -96,7 +96,7 @@ A full-featured local studio for live debugging — start it with `.withCortex()
 -   **Lightweight composition** -- `agentFn()` lazy agent primitives, `pipe()` sequential chains, `parallel()` concurrent fan-out, `race()` first-to-complete — all composable
 -   **Dynamic tool registration** -- `agent.registerTool()` / `agent.unregisterTool()` for runtime tool management on live agents
 -   **Web framework integration** — `@reactive-agents/react` (`useAgentStream`, `useAgent`), `@reactive-agents/vue` composables, `@reactive-agents/svelte` stores — consume `AgentStream.toSSE()` from Next.js, SvelteKit, Nuxt, or any SSE-capable server
--   **3,879 tests** across 430 files
+-   **~4,150 tests** across ~460 files
 
 ## Quick Start
 
@@ -358,7 +358,7 @@ How Reactive Agents compares to other TypeScript agent frameworks on shipped, wo
 | Agent-as-data config          |       Yes       |      --      |      --       |   --    |
 | Functional composition        |       Yes       |     Yes      |      --       |   --    |
 | Dynamic tool registration     |       Yes       |     Yes      |      --       |   --    |
-| Test suite                    |   3,879 tests   |      --      |      --       |   --    |
+| Test suite                    |  ~4,150 tests   |      --      |      --       |   --    |
 
 ## Use Cases
 
@@ -720,7 +720,7 @@ Reactive Agents supports 6 providers: Anthropic, OpenAI, Google Gemini, Ollama (
 
 ### Is this framework production-ready?
 
-Yes -- it includes guardrails, budget controls, auditability, observability, Ed25519 identity, and composable service layers for testable deployments. 3,879 tests across 430 files.
+Yes -- it includes guardrails, budget controls, auditability, observability, Ed25519 identity, and composable service layers for testable deployments. ~4,150 tests across ~460 files.
 
 ### Can I run fully local agents?
 
@@ -734,7 +734,7 @@ See the [comparison table](#comparison). The key differences are: full Effect-TS
 
 ```bash
 bun install              # Install dependencies
-bun test                 # Run full test suite (3,879 tests, 430 files)
+bun test                 # Run full test suite (~4,150 tests, ~460 files)
 bun run build            # Build all packages (25 packages, ESM + DTS)
 ```
 

@@ -8,7 +8,7 @@ Type-safe from prompt to production.
 [![npm](https://img.shields.io/badge/npm-%40reactive--agents-CB3837?logo=npm)](https://www.npmjs.com/org/reactive-agents)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-This is the **meta-package** — it re-exports everything from the 14 individual `@reactive-agents/*` packages so you can get started with a single install.
+This is the **meta-package** — it re-exports everything from the 24 individual `@reactive-agents/*` packages so you can get started with a single install.
 
 ## Installation
 
@@ -24,8 +24,8 @@ import { ReactiveAgents } from "reactive-agents";
 const agent = await ReactiveAgents.create()
   .withName("research-assistant")
   .withProvider("anthropic")
-  .withModel("claude-sonnet-4-20250514")
-  .withMemory("1")
+  .withModel("claude-sonnet-4-6")
+  .withMemory()
   .withReasoning()
   .withGuardrails()
   .build();
@@ -58,6 +58,15 @@ ANTHROPIC_API_KEY=sk-ant-...   # or OPENAI_API_KEY for OpenAI
 | `@reactive-agents/interaction`   | `createInteractionLayer`          |
 | `@reactive-agents/orchestration` | `createOrchestrationLayer`        |
 | `@reactive-agents/prompts`       | `createPromptsLayer`              |
+| `@reactive-agents/eval`          | `createEvalLayer`                 |
+| `@reactive-agents/a2a`           | `A2AServer`, `A2AClient`          |
+| `@reactive-agents/gateway`       | `createGatewayLayer`              |
+| `@reactive-agents/testing`       | `makeMockLLM`, assertion helpers  |
+| `@reactive-agents/health`        | `createHealthLayer`               |
+| `@reactive-agents/reactive-intelligence` | `createReactiveIntelligenceLayer` |
+| `@reactive-agents/react`         | `useAgent`, `useAgentStream`      |
+| `@reactive-agents/vue`           | `useAgent`, `useAgentStream`      |
+| `@reactive-agents/svelte`        | `createAgent`, `createAgentStream`|
 
 ## Modular Install
 
