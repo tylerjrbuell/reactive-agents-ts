@@ -188,15 +188,18 @@ Before you add or modify code, confirm:
 
 ### Build & Test Cycle
 
+Builds are orchestrated by **Turborepo** (`turbo.json` at repo root). Task order derives from each package's `dependencies`; no manual script chaining required. Outputs are cached in `.turbo/`; a no-op rebuild completes in under a second.
+
 ```bash
 bun install                   # Install dependencies
-bun test                      # Run full suite (must pass before any PR)
+bun test                      # Run full suite via turbo (respects cache)
 bun test --watch              # Watch tests during development
 bun run typecheck             # Workspace-wide TypeScript checks (no implicit any)
-bun run build                 # Build all packages and apps (ESM + DTS)
-bun run build:packages        # Build all workspace packages
-bun run build:apps            # Build CLI and app bundles
-bun run clean                 # Remove all dist outputs
+bun run build                 # Build all packages and apps via turbo (ESM + DTS)
+bun run build:packages        # Build workspace packages only
+bun run build:apps            # Build apps only (CLI, cortex UI)
+bun run build:clean           # Force rebuild, bypassing cache
+bun run clean                 # Remove dist outputs and turbo cache
 bun run rax -- <args>         # Run the local `rax` CLI entrypoint
 bun run docs:dev              # Start docs dev server
 bun run docs:build            # Build docs for production
@@ -314,7 +317,7 @@ When creating a new package (e.g., `@reactive-agents/a2a`):
 7. [ ] Create `src/index.ts` with all public exports
 8. [ ] Write tests in `tests/`
 9. [ ] Add to root `package.json` workspaces if needed
-10. [ ] Add to root build script order
+10. [ ] Declare cross-package deps in `packages/<name>/package.json` — turbo derives build order from this; no manual script edit needed
 11. [ ] Run `bun install` to link workspace
 12. [ ] Run `bun test packages/<name>` — all pass
 13. [ ] Run `bun run build` — workspace compiles clean
@@ -453,25 +456,27 @@ Canonical project skills live in `.agents/skills/`:
 
 ## Architecture Debt
 
+> Last audited: 2026-04-18. Status column reflects current code reality.
+
 | Area | File | Problem | Effort | Impact | Status |
 |------|------|---------|--------|--------|--------|
 | Dead code | `context-engine.ts` | `buildDynamicContext`, `scoreContextItem`, `allocateContextBudget` unused (~50% of file vestigial) | Medium | Medium | Fixed (Apr 13) |
 | Dead config | `context-profile.ts` | `promptVerbosity`, `rulesComplexity`, `fewShotExampleCount`, `compactAfterSteps`, `fullDetailSteps` inert | Medium | Medium | Fixed (Apr 13) |
 | Dead config | `kernel-state.ts` | `synthesisConfig` consumed by output synthesis in `kernel-runner.ts`, not by ICS — naming is misleading | Low | Low | Open |
 | Dead API | `message-window.ts` | `applyMessageWindow` + `contextBudgetPercent` unused; only `applyMessageWindowWithCompact` is live | Low | Low | Fixed (Apr 13) |
-| Parallel systems | `think.ts` / `tool-utils.ts` / `act.ts` | Two overlapping result presentations remain: FC tool_result compression and extractObservationFacts | High | High | Partially addressed (auto-forward fully removed Apr 13) |
+| Parallel systems | `think.ts` / `tool-execution.ts` / `tool-formatting.ts` / `act.ts` | Two overlapping result presentations remain: FC tool_result compression and extractObservationFacts | High | High | Partially addressed (auto-forward fully removed Apr 13; `tool-utils.ts` split Apr 2026) |
 | Config duplication | `kernel-runner.ts` / `context-profile.ts` | `toolResultMaxChars`/`toolResultPreviewItems` duplicate `resultCompression.budget`/`previewItems` as profile defaults | Low | Low | Open |
 | Stale docs | `context-engine.ts` | File header says "unified scoring, budgeting, and rendering" | Low | Low | Fixed (Apr 13) |
 | Stale docs | `context-builder.ts` | Header overstates scope — system prompt with guidance/ICS/progress is assembled in `think.ts` | Low | Low | Open |
-| Parallel context | `context-manager.ts` / `context-builder.ts` | Two context assembly paths: `ContextManager.build()` (dead in production) duplicates `context-builder.ts` functions used by `think.ts` | Medium | High | Open |
-| Type duplication | `kernel-state.ts` | `ReActKernelInput` duplicates ~25 fields from `KernelInput`; phases use `as ReActKernelInput` casts to access extra fields | Medium | High | Open |
-| Untyped meta | `kernel-state.ts` | `state.meta: Record<string, unknown>` accessed via `as any` casts in 34+ locations across kernel phases | Medium | High | Open |
-| Layer violation | `service-utils.ts` | `reasoning` imports `@reactive-agents/prompts` — outside its declared dependency boundary (core, llm-provider, memory, tools) | Medium | Medium | Open |
-| Scope creep | `tool-utils.ts` | 944 LOC, 5+ concerns (formatting, parsing, gating, injection, planning) — imported by 16 files | Medium | Medium | Open |
-| Dead production code | `context-manager.ts` | `ContextManager.build()`, `kernelMessageToLLM()`, `buildIdentity()`, `CURATED_TURNS_BY_TIER` never called in production | Medium | Medium | Open |
-| Dead production code | `evidence-grounding.ts` | Zero production callers; only imported by test file | Low | Low | Open |
-| Dead production code | `context-utils.ts` | Zero `src/` imports — only re-exported from barrel and used in tests | Low | Medium | Open |
-| Barrel leak | `kernel/index.ts` | `export *` from 13 modules leaks internal utils (944 LOC tool-utils, etc.) as public API | Medium | Medium | Open |
+| Parallel context | `context-manager.ts` / `context-builder.ts` | `ContextManager.build()` is now the sole live path — `think.ts:208` calls it; see note at `phases/think.ts:182` | Medium | High | Fixed (Apr 2026) — context-manager.ts is canonical |
+| Type duplication | `kernel-state.ts` | `ReActKernelInput` duplicates ~25 fields from `KernelInput` — zero `as ReActKernelInput` casts remain in `packages/reasoning/src` | Medium | High | Fixed (Apr 2026) |
+| Untyped meta | `kernel-state.ts` | `state.meta: Record<string, unknown>` accessed via `as any` casts — now only 4 occurrences in 2 files (`reactive-observer.ts`, `think.ts`) | Medium | High | Partially fixed (Apr 2026) |
+| Layer violation | `service-utils.ts` | `reasoning` imported `@reactive-agents/prompts` — zero matches remain in `packages/reasoning/src` for `@reactive-agents/(runtime\|prompts\|reactive-agents)` imports | Medium | Medium | Fixed (Apr 2026) |
+| Scope creep | `tool-utils.ts` | Originally 944 LOC, 5+ concerns — split into `tool-execution.ts` (752), `tool-formatting.ts` (448), `tool-gating.ts` (263), `tool-parsing.ts`, `tool-capabilities.ts` | Medium | Medium | Fixed (Apr 2026) — split into 5 files |
+| Dead production code | `context-manager.ts` | Now actively used — `ContextManager.build()` called from `think.ts:208` | Medium | Medium | Fixed (Apr 2026) |
+| Dead production code | `evidence-grounding.ts` | Moved to `packages/reasoning/src/strategies/kernel/utils/evidence-grounding.ts`, imported by `think-guards.ts:28` | Low | Low | Fixed (Apr 2026) |
+| Dead production code | `context-utils.ts` | Now imported by `think.ts:20` AND `context-manager.ts:24` | Low | Medium | Fixed (Apr 2026) |
+| Barrel leak | `kernel/index.ts` | `export *` from 13 modules leaks internal utils like `tool-execution.ts`, `tool-formatting.ts` as public API | Medium | Medium | Open |
 | Loop vs switch | `loop-detector.ts`, `kernel-runner.ts` | Loop streak logic can mask duplicate-tool patterns so `strategySwitching` may never trigger (see `.agents/MEMORY.md` W8) | Medium | Medium | Open |
 
 ---
@@ -492,9 +497,10 @@ Canonical project skills live in `.agents/skills/`:
 
 ## Current Framework Snapshot (v0.9.0)
 
--   Monorepo scale: **25 packages + 2 apps**
--   Verified quality: **3,879 tests across 430 files**
+-   Monorepo scale: **25 packages + 5 apps** (cli, cortex, docs, examples, meta-agent)
+-   Verified quality: **~4,150 tests across ~460 test files** (414 in packages/, 46 in apps/) — run `bun test` for the authoritative count before release
 -   Public facade: `reactive-agents` built on Effect-TS layered runtime
+-   Built-in tools: **9 capability tools** (web-search, crypto-price, http-get, file-read, file-write, code-execute, git-cli, gh-cli, gws-cli) + **8 meta-tools** (context-status, task-complete, final-answer, brief, find, pulse, recall, checkpoint)
 
 ### Recently Shipped Highlights (cross-checked with `CHANGELOG.md`)
 

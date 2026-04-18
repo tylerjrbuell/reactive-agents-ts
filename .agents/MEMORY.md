@@ -51,10 +51,12 @@ Full 4-agent audit run. Architecture solid; gaps are wiring, DX, and trust. Firs
 Delete before v1.0: `test.ts` (46KB!), `main.ts`, `scratch.ts`, `scratch/`, `output.txt`, `harness-reports/`
 
 ## Current Status (Apr 17–18, 2026)
-- **3 CLI built-in tools shipped** — `git-cli`, `gh-cli`, `gws-cli` in `@reactive-agents/tools`; injectable `CliRunner` type for testability; `ENOENT` produces human-readable error; tool count 8 → 11
+- **3 CLI built-in tools shipped** — `git-cli`, `gh-cli`, `gws-cli` in `@reactive-agents/tools`; brings capability tool count to **9** (webSearch, cryptoPrice, httpGet, fileRead, fileWrite, codeExecute, git-cli, gh-cli, gws-cli) alongside 8 meta-tools; injectable `CliRunner` type for testability; `ENOENT` produces human-readable error
 - **Permanently-failed required tools fix** — `getEffectiveMissingRequiredTools()` excludes tools that were attempted but never succeeded; prevents loop-until-maxIterations on ENOENT/unavailable tools; fixes act.ts, guard.ts, kernel-runner.ts, lane-controller.ts
 - **Tool pruning guard** — `PRUNE_MIN_TOOLS = 15` in think.ts; classification-based pruning only activates above 15 tools, preventing git-cli/etc. from being hidden on small tool sets
 - **Sub-agent maxIterations un-capped** — removed `Math.min(userValue, 3)` from agent-tool-adapter.ts; user config honored
+- **Turborepo integrated (Apr 18)** — serial `bun run --filter ... build` chain replaced with `turbo run build`; cold build 34s, warm rebuild **0.18s** (FULL TURBO, 28/28 cached). Root `turbo.json` + `apps/cortex/ui/turbo.json` override (SvelteKit outputs to `build/` + `.svelte-kit/`). Task order derived from package.json `dependencies` — no manual script chain to maintain.
+- **False circular deps removed (Apr 18)** — turbo surfaced a cycle between `@reactive-agents/a2a` ↔ `@reactive-agents/tools`. Neither package's `src/` imports the other; the old serial chain masked it because tsup builds each package standalone. Removed `@reactive-agents/tools` from a2a's deps and `@reactive-agents/a2a` from tools' deps. **Publishing-behavior change**: consumers who installed either package no longer get the other auto-installed transitively. Needs a changeset before the next release (patch-level: declarations were wrong, no runtime behavior changed).
 - **4,153 tests across 461 files** — 852/852 reasoning, 656/656 tools, all passing
 
 ## Current Status (Apr 13, 2026)
@@ -282,12 +284,19 @@ state.steps[]     ← What systems observe (entropy, metrics, debrief)
 **Test coverage:** 3 new behavioral tests in `loop-detection-behavioral.test.ts` + 2 in `max-iterations-enforcement.test.ts`. 1,384 tests total, 0 failures.
 
 ## Architecture Debt (Remaining)
+> Last reconciled with code: 2026-04-18. See `AGENTS.md` "Architecture Debt" table for the full audited register.
+
 1. cogito:14b still inconsistent on reactive strategy (8B works fine, 14B doesn't)
 2. Strategy routing disabled — no clean solution for local model multi-step tasks
-3. `ContextManager` not yet fully wired as primary context builder in `think.ts` (system prompt assembly still partially in `think.ts`); `messages[0]` USER seed removal deferred until full wiring complete — `ContextManager.build()` is dead production code (only tests call it)
-4. Optional: ModelCalibration schema + 6-probe calibration-runner.ts for pre-baked local model profiles
-5. `ReActKernelInput` duplicates ~25 fields from `KernelInput` — phases use `as ReActKernelInput` casts
-6. `state.meta: Record<string, unknown>` accessed via `as any` casts in 34+ locations
+3. Optional: ModelCalibration schema + 6-probe calibration-runner.ts for pre-baked local model profiles
+4. Barrel leak in `packages/reasoning/src/strategies/kernel/index.ts` — `export *` leaks internal utils as public API
+5. Loop detector streak logic in `loop-detector.ts` / `kernel-runner.ts` can mask duplicate-tool patterns so strategy-switching may never trigger (W8)
+6. `synthesisConfig` dead pass-through on `KernelState` / `KernelInput` — naming is misleading; not consumed by ICS
+
+**Fixed (Apr 2026) — removed from this list:**
+- `ContextManager.build()` is now the sole live context-assembly path (`phases/think.ts:208`)
+- `ReActKernelInput` duplicate fields resolved — zero `as ReActKernelInput` casts remain
+- `state.meta` `as any` reduced from 34+ to 4 occurrences in 2 files (mostly resolved)
 
 ## Safety & Security Gaps (Apr 16, 2026 Audit)
 Identified during Zeus integration report — honest audit of what's implemented vs. what's missing.

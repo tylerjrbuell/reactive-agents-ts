@@ -6,6 +6,9 @@ bun.lockb
 .reactive-agents/
 *.tsbuildinfo
 
+# Turborepo cache
+.turbo/
+
 # Astro generated type cache
 .astro/
 

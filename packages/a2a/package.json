@@ -11,8 +11,7 @@
     "test:watch": "bun test --watch"
   },
   "dependencies": {
-    "@reactive-agents/core": "0.9.0",
-    "@reactive-agents/tools": "0.9.0"
+    "@reactive-agents/core": "0.9.0"
   },
   "devDependencies": {
     "typescript": "^5.7.0",
