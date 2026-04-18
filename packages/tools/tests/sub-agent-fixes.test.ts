@@ -1,7 +1,7 @@
 // File: tests/sub-agent-fixes.test.ts
 // Tests for the three sub-agent fixes:
 // 1. Preserve explicit tool scope
-// 2. Cap maxIterations to 4
+// 2. Honor user-configured maxIterations (silent cap removed)
 // 3. Forward scratchpad keys with sub: prefix
 import { describe, it, expect } from "bun:test";
 import {
@@ -75,10 +75,10 @@ describe("Fix 1: preserve explicit tool scope", () => {
   });
 });
 
-// ─── Fix 2: Cap maxIterations to 3 ───
+// ─── Fix 2: Honor user-configured maxIterations (cap removed) ───
 
-describe("Fix 2: cap sub-agent maxIterations to 3", () => {
-  it("caps sub-agent maxIterations to 3 even when parent has higher max", async () => {
+describe("Fix 2: honor user-configured maxIterations", () => {
+  it("honors user-specified maxIterations above the default", async () => {
     let capturedOpts: any;
     const executor = createSubAgentExecutor(
       { name: "high-iter-agent", maxIterations: 20 },
@@ -89,7 +89,7 @@ describe("Fix 2: cap sub-agent maxIterations to 3", () => {
       0,
     );
     await executor("test");
-    expect(capturedOpts.maxIterations).toBe(3);
+    expect(capturedOpts.maxIterations).toBe(20);
   });
 
   it("uses 3 as the default maxIterations", async () => {
@@ -134,7 +134,7 @@ describe("Fix 2: cap sub-agent maxIterations to 3", () => {
     expect(capturedOpts.maxIterations).toBe(3);
   });
 
-  it("caps maxIterations=100 down to 3", async () => {
+  it("honors maxIterations=100 without capping", async () => {
     let capturedOpts: any;
     const executor = createSubAgentExecutor(
       { name: "huge-iter-agent", maxIterations: 100 },
@@ -145,7 +145,7 @@ describe("Fix 2: cap sub-agent maxIterations to 3", () => {
       0,
     );
     await executor("test");
-    expect(capturedOpts.maxIterations).toBe(3);
+    expect(capturedOpts.maxIterations).toBe(100);
   });
 });
 

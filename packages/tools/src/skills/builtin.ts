@@ -9,6 +9,9 @@ import { httpGetTool, httpGetHandler } from "./http-client.js";
 import { fileReadTool, fileReadHandler } from "./file-operations.js";
 import { fileWriteTool, fileWriteHandler } from "./file-operations.js";
 import { codeExecuteTool, codeExecuteHandler } from "./code-execution.js";
+import { gitCliTool, gitCliHandler } from "./cli/git-cli.js";
+import { ghCliTool, ghCliHandler } from "./cli/gh-cli.js";
+import { gwsCliTool, gwsCliHandler } from "./cli/gws-cli.js";
 import {
   scratchpadWriteTool,
   scratchpadReadTool,
@@ -145,6 +148,9 @@ export const builtinTools: ReadonlyArray<{
   { definition: fileReadTool, handler: fileReadHandler },
   { definition: fileWriteTool, handler: fileWriteHandler },
   { definition: codeExecuteTool, handler: codeExecuteHandler },
+  { definition: gitCliTool, handler: gitCliHandler },
+  { definition: ghCliTool, handler: ghCliHandler },
+  { definition: gwsCliTool, handler: gwsCliHandler },
 ];
 
 /**

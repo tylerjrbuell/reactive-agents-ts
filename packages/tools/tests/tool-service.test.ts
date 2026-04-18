@@ -206,7 +206,7 @@ describe("ToolService", () => {
       );
 
       const fcTools = yield* tools.toFunctionCallingFormat();
-      // 5 built-in tools + 1 registered
+      // 9 built-in tools + 1 registered
       expect(fcTools.length).toBeGreaterThanOrEqual(1);
       const searchTool = fcTools.find((t) => t.name === "search");
       expect(searchTool).toBeDefined();
@@ -250,8 +250,8 @@ describe("ToolService", () => {
       );
 
       const all = yield* tools.listTools();
-      // 6 capability built-ins (web-search, crypto-price, http-get, file-read, file-write, code-execute) + 2 registered = 8
-      expect(all).toHaveLength(8);
+      // 9 capability built-ins (web-search, crypto-price, http-get, file-read, file-write, code-execute, git-cli, gh-cli, gws-cli) + 2 registered = 11
+      expect(all).toHaveLength(11);
 
       const searchOnly = yield* tools.listTools({ category: "search" });
       // built-in web-search + tool-a
@@ -344,17 +344,17 @@ describe("ToolService", () => {
       const all = yield* tools.listTools();
       const names = all.map((t) => t.name);
 
-      // All 5 built-in tools should be registered
+      // All built-in tools should be registered
       expect(names).toContain("web-search");
       expect(names).toContain("http-get");
       expect(names).toContain("file-read");
       expect(names).toContain("file-write");
       expect(names).toContain("code-execute");
-      expect(all.length).toBeGreaterThanOrEqual(5);
+      expect(all.length).toBeGreaterThanOrEqual(9);
 
       // Verify they have correct source
       const builtins = all.filter((t) => t.source === "builtin");
-      expect(builtins.length).toBeGreaterThanOrEqual(5);
+      expect(builtins.length).toBeGreaterThanOrEqual(9);
     });
 
     await Effect.runPromise(program.pipe(Effect.provide(TestToolLayer)));
