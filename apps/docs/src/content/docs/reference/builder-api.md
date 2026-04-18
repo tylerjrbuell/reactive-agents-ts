@@ -9,6 +9,24 @@ The `ReactiveAgentBuilder` is the primary entry point for creating agents. It pr
 For copy-paste **recipe chains** (minimal LLM, ReAct + tools, memory, streaming, serialization), see [Common builder stacks](/cookbook/builder-stacks/). For defaults and env vars in one table, see [Configuration](/reference/configuration/).
 :::
 
+## Jump to section
+
+| Category | Methods |
+| -------- | ------- |
+| [ReactiveAgents factory](#reactiveagents-factory) | `create`, `fromConfig`, `fromJSON` |
+| [Core Identity](#identity--prompts) | `withName`, `withPersona`, `withSystemPrompt`, `withEnvironment` |
+| [Model & Provider](#model--provider) | `withModel`, `withProvider` |
+| [Reasoning & Context](#execution) | `withReasoning`, `withMemory`, `withContextProfile`, `withMaxIterations`, `withMinIterations` |
+| [Tools & MCP](#optional-features) | `withTools`, `withRequiredTools`, `withMCP`, `withMetaTools`, `withSkills`, `withAgentTool`, `withDynamicSubAgents`, `withRemoteAgent` |
+| [Observability & Telemetry](#optional-features) | `withObservability`, `withTelemetry`, `withCortex`, `withStreaming`, `withLogging`, `withEvents` |
+| [Safety & Resilience](#optional-features) | `withGuardrails`, `withKillSwitch`, `withBehavioralContracts`, `withVerification`, `withCircuitBreaker`, `withRateLimiting`, `withIdentity` |
+| [Cost & Performance](#optional-features) | `withCostTracking`, `withModelPricing`, `withDynamicPricing`, `withCacheTimeout`, `withRetryPolicy`, `withTimeout` |
+| [Lifecycle & Hooks](#lifecycle) | `withHook`, `withHealthCheck`, `withErrorHandler`, `withFallbacks`, `withAudit` |
+| [Advanced](#advanced) | `withOrchestration`, `withA2A`, `withGateway`, `withReactiveIntelligence`, `withPrompts`, `withInteraction`, `withDocuments`, `withTaskContext`, `withLayers` |
+| [Building & Running](#build-methods) | `build`, `buildEffect`, `runOnce` |
+| [Agent Methods](#reactiveagent) | `run`, `runStream`, `chat`, `session`, `health`, `cancel`, `pause`, `resume`, `dispose` |
+| [Result Reference](#agentresult) | `AgentResult`, `AgentDebrief`, stream event types |
+
 ## `ReactiveAgents` factory
 
 | API                                 | Description                                                                      |
@@ -146,7 +164,7 @@ See [Context Engineering](/guides/context-engineering/) for full tier defaults.
 | `withDocuments(docs)`                | Chunk + index `DocumentSpec[]` for RAG (`rag-search`). Enables tools if needed                                                                                                                                                                                                                                                                                                                               |
 | `withRequiredTools(config)`          | Tools that must run before success — `{ tools?, adaptive?, maxRetries? }`. When `adaptive: true`, the framework also auto-sets a per-tool call budget of 3 for search-type tools to prevent infinite research loops.                                                                                                                                                                                         |
 | `withIdentity()`                     | Ed25519 identity + RBAC                                                                                                                                                                                                                                                                                                                                                                                      |
-| `withObservability(options?)`        | Metrics dashboard, tracing, verbosity. Options: `verbosity` (`"minimal"\|"normal"\|"verbose"\|"debug"`), `live` (stream phase events), `file` (JSONL path), `logPrefix`, `logModelIO` (when `true` or when `verbosity: "debug"`, logs the complete FC conversation thread with role labels `[USER]`/`[ASSISTANT]`/`[TOOL]` and raw LLM response for every iteration — essential for debugging prompt issues) |
+| `withObservability(options?)`        | Metrics dashboard, tracing, verbosity. Options: `verbosity` (`"minimal"\|"normal"\|"verbose"\|"debug"`), `live` (stream phase events), `file` (JSONL path), `logPrefix`, `logModelIO` (when `true` or when `verbosity: "debug"`, logs the complete FC conversation thread with role labels `[USER]`/`[ASSISTANT]`/`[TOOL]` and raw LLM response for every iteration — essential for debugging prompt issues). **Note:** observability is enabled at `"normal"` verbosity by default — you only need `.withObservability()` to customize the verbosity level or output format. |
 | `withCortex(url?)`                   | Enable best-effort Cortex reporting. Streams all EventBus events to the [Cortex local studio](/features/cortex/) over WebSocket (`/ws/ingest`). URL priority: explicit `url` arg → `CORTEX_URL` env → `http://localhost:4321`. Connection is non-blocking — if Cortex is unreachable the agent continues normally. See [Cortex Studio](/features/cortex/) for the full feature reference.                    |
 | `withStreaming(options?)`            | Default density for `agent.runStream()`: `{ density?: "tokens" \| "full" }`                                                                                                                                                                                                                                                                                                                                  |
 | `withTelemetry(config?)`             | Opt-in run telemetry / privacy modes (`@reactive-agents/observability` `TelemetryConfig`; default mode `isolated` if omitted)                                                                                                                                                                                                                                                                                |
@@ -780,10 +798,12 @@ interface AgentResult {
     // Enriched fields (present when reasoning is enabled)
     format?: 'text' | 'json' | 'markdown' | 'csv' | 'html' // Output format declared by agent
     terminatedBy?:
-        | 'final_answer_tool'
-        | 'final_answer'
-        | 'max_iterations'
-        | 'end_turn'
+        | 'final_answer_tool' // Exited via the final-answer tool call
+        | 'final_answer'      // Exited via inline FINAL ANSWER: text
+        | 'max_iterations'    // Hit the iteration/llmCalls ceiling
+        | 'end_turn'          // LLM stopped generating (no tool call, no final answer)
+        | 'llm_error'         // LLM request or stream failed (provider error, network, etc.)
+    llmCalls?: number // Number of LLM calls made during the kernel loop (available when reasoning is enabled)
 
     // Debrief (present when .withMemory() + .withReasoning() are enabled)
     debrief?: AgentDebrief

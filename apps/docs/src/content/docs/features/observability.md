@@ -7,14 +7,11 @@ sidebar:
 
 The observability layer gives you full visibility into agent behavior. Every execution phase emits spans, every LLM call records metrics, and every decision is logged with structured context.
 
-## Quick Start
+:::note[On by default]
+Observability is enabled automatically at `"minimal"` verbosity — no `.withObservability()` call required. At `"minimal"`, only the start and completion lines are printed. Call `.withObservability({ verbosity: "normal" | "verbose" | "debug", live: true })` to increase output or stream logs in real time.
+:::
 
-```typescript
-const agent = await ReactiveAgents.create()
-  .withProvider("anthropic")
-  .withObservability()   // Enable tracing + metrics + logging
-  .build();
-```
+## Quick Start
 
 For real-time visibility while the agent runs, pass verbosity and live options:
 
@@ -41,8 +38,8 @@ const agent = await ReactiveAgents.create()
 
 | Level | Output |
 |-------|--------|
-| `"minimal"` | Start + complete lines only |
-| `"normal"` (default) | Phase transitions + tool names + final stats |
+| `"minimal"` (default) | Start + complete lines only |
+| `"normal"` | Phase transitions + tool names + final stats |
 | `"verbose"` | + reasoning steps + LLM call summary + memory stats |
 | `"debug"` | + full prompt content + full tool I/O (no truncation) |
 
@@ -205,7 +202,7 @@ When observability is enabled, the execution engine automatically:
 4. Logs audit entries at Phase 9 with full task summary
 5. Includes task metadata (iterations, tokens, cost, strategy, duration) in audit logs
 
-No manual instrumentation needed — just enable `.withObservability()` and everything is traced.
+No manual instrumentation needed — observability is active by default, and everything is traced.
 
 ## Telemetry System
 

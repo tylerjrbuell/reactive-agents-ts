@@ -89,7 +89,7 @@ export interface SubAgentConfig {
   readonly model?: string;
   /** Subset of parent's tools this sub-agent can access */
   readonly tools?: readonly string[];
-  /** Max reasoning iterations (default: 5, lower than parent) */
+  /** Max reasoning iterations (default: 3 when not set; user-configured value is fully honored) */
   readonly maxIterations?: number;
   /** Focused system prompt for this sub-agent */
   readonly systemPrompt?: string;

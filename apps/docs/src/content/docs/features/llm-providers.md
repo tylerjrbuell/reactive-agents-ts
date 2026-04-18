@@ -48,7 +48,7 @@ const agent = await ReactiveAgents.create()
 // Ollama (local)
 const agent = await ReactiveAgents.create()
   .withProvider("ollama")
-  .withModel("cogito:14b")
+  .withModel("cogito")
   .build();
 
 // LiteLLM proxy (100+ models)
@@ -67,12 +67,51 @@ GOOGLE_API_KEY=...
 OLLAMA_ENDPOINT=http://localhost:11434   # defaults to this
 LITELLM_BASE_URL=http://localhost:4000   # LiteLLM proxy endpoint
 
-TAVILY_API_KEY=tvly-...                  # enables built-in web search
+TAVILY_API_KEY=tvly-...                  # web search — Tavily (primary)
+BRAVE_SEARCH_API_KEY=BSA...              # web search — Brave (fallback)
+SERPER_API_KEY=...                       # web search — Serper/Google (fallback)
 
 LLM_DEFAULT_MODEL=claude-sonnet-4-20250514
 LLM_DEFAULT_TEMPERATURE=0.7
 LLM_MAX_RETRIES=3
 LLM_TIMEOUT_MS=30000
+```
+
+## Web Search Providers
+
+The built-in `web-search` tool supports four providers that are tried in priority order. The first provider that returns usable results wins; the rest are skipped. No configuration is required to use DuckDuckGo (the no-key fallback).
+
+| Provider       | Env var                                       | API key required | Notes                                          |
+| -------------- | --------------------------------------------- | :--------------: | ---------------------------------------------- |
+| **Tavily**     | `TAVILY_API_KEY`                              | Yes              | High-quality results; primary recommended provider |
+| **Brave**      | `BRAVE_SEARCH_API_KEY` or `BRAVE_API_KEY`     | Yes              | Full-web coverage; good Tavily fallback        |
+| **Serper**     | `SERPER_API_KEY`                              | Yes              | Google-backed results; 2,500 free queries/month, low-cost plans |
+| **DuckDuckGo** | *(none)*                                      | No               | Instant answers only; limited coverage but always available |
+
+### Provider chain
+
+```
+Tavily → Brave → Serper → DuckDuckGo
+```
+
+Each provider is skipped automatically if its API key is not set. If a provider returns an error or no usable rows, the chain continues to the next one.
+
+### Enabling Serper
+
+Serper proxies Google Search results and is a good option when Tavily quota is exhausted or when you want low-cost, high-volume search. Sign up at [serper.dev](https://serper.dev) to get an API key.
+
+```bash
+SERPER_API_KEY=your-serper-api-key
+```
+
+```typescript
+// No code changes needed — set the env var and web-search uses Serper automatically
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withTools(["web-search"])
+  .build();
+
+// The agent will now use Tavily → Brave → Serper → DuckDuckGo as its search chain
 ```
 
 ## Model Presets

@@ -8,14 +8,7 @@ description: How to install and configure Reactive Agents.
 The easiest way to get started is with the `reactive-agents` meta-package, which bundles everything:
 
 ```bash
-# Bun (recommended)
 bun add reactive-agents
-
-# npm
-npm install reactive-agents
-
-# pnpm
-pnpm add reactive-agents
 ```
 
 :::note[Effect dependency]

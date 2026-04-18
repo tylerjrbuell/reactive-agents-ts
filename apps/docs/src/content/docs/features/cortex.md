@@ -23,8 +23,8 @@ Start Cortex with one command, then connect any agent with one line:
 ```bash
 # Terminal 1 — start Cortex studio
 rax cortex --dev
-# → API on http://localhost:4321
-# → UI  on http://localhost:5173
+# → API on http://localhost:4321  (development only)
+# → UI  on http://localhost:5173  (development only — opens in your browser automatically)
 
 # Terminal 2 — run an agent that streams to Cortex
 
@@ -38,7 +38,7 @@ rax run "Research the top 5 TypeScript testing frameworks" \
   </TabItem>
   <TabItem label="From apps/cortex">
 ```bash
-# from apps/cortex (also starts UI on :5173)
+# from apps/cortex — starts the dev server (UI on :5173, API on :4321, local only)
 cd apps/cortex && bun start
 ````
 
@@ -60,7 +60,7 @@ await agent.run('Research AI agent frameworks')
   </TabItem>
 </Tabs>
 
-Open **http://localhost:5173** — Cortex opens automatically as soon as your agent starts.
+When running `rax cortex --dev` locally, Cortex opens your browser at `http://localhost:5173` automatically as soon as your agent starts.
 
 ---
 
@@ -305,7 +305,7 @@ ReactiveAgentBuilder                 server/index.ts
                                        ├── /ws/live/:agentId  ← fans out to UI
                                        │         ▲
                                        │         └── Browser (SvelteKit UI)
-                                       │                http://localhost:5173
+                                       │                http://localhost:5173  ← dev server URL
                                        └── /api/runs   ← REST history
 ```
 

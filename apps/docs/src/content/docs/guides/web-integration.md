@@ -94,7 +94,6 @@ Install the package:
 
 ```bash
 bun add @reactive-agents/react
-# or: npm install @reactive-agents/react
 ```
 
 ### `useAgentStream` — Token-by-token streaming
@@ -201,7 +200,6 @@ Install the package:
 
 ```bash
 bun add @reactive-agents/vue
-# or: npm install @reactive-agents/vue
 ```
 
 ### `useAgentStream`
@@ -264,7 +262,6 @@ Install the package:
 
 ```bash
 bun add @reactive-agents/svelte
-# or: npm install @reactive-agents/svelte
 ```
 
 ### `createAgentStream`

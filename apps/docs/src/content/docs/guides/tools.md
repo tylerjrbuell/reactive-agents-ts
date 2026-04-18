@@ -88,11 +88,107 @@ When you enable `.withTools()`, these tools are automatically registered and ava
 | `file-read` | file | Read file contents (path-traversal protected) | — |
 | `file-write` | file | Write file contents (requires approval) | — |
 | `code-execute` | code | Execute code in a subprocess (`Bun.spawn`, `cwd: "/tmp"`, minimal env) | — |
+| `crypto-price` | data | Get current prices for 30+ cryptocurrencies via CoinGecko's free public API | — |
 | `git-cli` | vcs | Run any `git` subcommand (e.g. `status`, `log`, `diff`) | `git` in `$PATH` |
 | `gh-cli` | vcs | Run any `gh` subcommand via the GitHub CLI | `gh` in `$PATH` |
 | `gws-cli` | productivity | Run any `gws` subcommand via the Google Workspace CLI | `gws` in `$PATH` |
 
 Ad-hoc note builtins were removed from the default tool list. Use the **`recall`** meta-tool (Conductor's Suite) for working-memory writes, reads, search, and listing. If you use **`.withDocuments()`**, ingestion uses **`rag-ingest`** and retrieval is typically routed through **`find`** rather than a standalone `rag-search` builtin.
+
+### crypto-price
+
+Fetches current cryptocurrency prices from [CoinGecko's free public API](https://www.coingecko.com/en/api). No API key or account required.
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `coins` | `string[]` | yes | Array of coin symbols, e.g. `["BTC", "ETH", "SOL"]`. Case-insensitive. Always batch multiple coins into a single call. |
+| `currency` | `string` | no | Quote currency. Default: `"usd"`. Also accepts: `eur`, `gbp`, `jpy`, `btc`, `eth`. |
+
+**Supported symbols:** BTC, ETH, XRP, XLM, SOL, ADA, DOGE, DOT, AVAX, MATIC/POL, LINK, LTC, BCH, UNI, ATOM, NEAR, ARB, OP, SUI, APT, TRX, TON, SHIB, PEPE, FIL, ICP, VET, ALGO, HBAR.
+
+Prices are cached for 60 seconds — rapid repeated calls within a session return immediately without hitting the network. Responses include a `notFound: true` flag for any unrecognized symbol rather than failing the whole call.
+
+```typescript
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withTools({ include: ["crypto-price"] })
+  .withReasoning()
+  .build();
+
+const result = await agent.run("What are the current prices of BTC, ETH, and SOL in USD?");
+```
+
+The model is instructed to batch all needed coins into one call. The tool returns `{ prices: [{ symbol, name, price, currency }], currency, source: "coingecko" }`.
+
+### git-cli
+
+Runs any `git` subcommand in the agent's current working directory. Requires `git` to be installed and in `$PATH`.
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `command` | `string` | yes | The git subcommand plus any flags — **without** the leading `git` keyword. E.g. `"log --oneline -10"`, `"diff HEAD~1"`, `"branch -a"`. |
+
+Output longer than 32 KB is truncated and the model is told how many bytes were cut. Non-zero exit codes surface as errors so the model knows the command failed.
+
+The tool uses `execFile` (no shell expansion), so shell operators like `|` and `>` are not available. For pipelines, use `code-execute` or `shell-execute`.
+
+```typescript
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withTools({ include: ["git-cli"] })
+  .withReasoning()
+  .build();
+
+const result = await agent.run("Summarize the last 10 commits in this repo.");
+```
+
+### gh-cli
+
+Runs any [GitHub CLI](https://cli.github.com/) (`gh`) command. Requires `gh` to be installed, in `$PATH`, and authenticated (`gh auth login`).
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `command` | `string` | yes | The gh subcommand plus flags — **without** the leading `gh` keyword. E.g. `"pr list --state open"`, `"issue view 42"`, `"run list --limit 5"`. |
+
+Adding `--json <fields>` to the command returns machine-readable JSON, which the model can process directly. Output longer than 32 KB is truncated.
+
+```typescript
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withTools({ include: ["gh-cli"] })
+  .withReasoning()
+  .build();
+
+const result = await agent.run("List open PRs and summarize what each one changes.");
+```
+
+### gws-cli
+
+Runs any [Google Workspace CLI](https://github.com/nicholasgasior/gws) (`gws`) command, providing access to Gmail, Google Calendar, Google Drive, and other Workspace services. Requires `gws` to be installed, in `$PATH`, and authenticated (`gws auth login`).
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `command` | `string` | yes | The gws subcommand plus flags — **without** the leading `gws` keyword. E.g. `"calendar events list"`, `"gmail messages list --query unread"`, `"drive files list"`. |
+
+If `gws` is not installed, the tool returns a clear error immediately — the model is instructed not to retry and to report the missing binary instead.
+
+```typescript
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withTools({ include: ["gws-cli"] })
+  .withReasoning()
+  .build();
+
+const result = await agent.run("What meetings do I have today?");
+```
 
 ### Kernel meta-tools (reasoning loop)
 

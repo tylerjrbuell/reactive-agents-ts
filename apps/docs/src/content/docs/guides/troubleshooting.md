@@ -117,6 +117,110 @@ const result = await ReactiveAgents.create()
 - Prefer cheaper models for simple tasks.
 - Reduce `maxIterations` for low-complexity workflows.
 
+### Ollama model tag not found
+
+**Symptom**
+- `Model "cogito:14b" not found` or similar error when using a specific Ollama model tag.
+
+**Root cause**
+- The exact model tag (e.g. `cogito:14b`) has not been pulled locally, or the tag name differs from what Ollama has registered.
+
+**Fix**
+```bash
+# List all locally available models and their exact tags
+ollama list
+
+# Pull the model you need (tag must match exactly)
+ollama pull cogito
+# or with a specific tag:
+ollama pull cogito:14b
+```
+
+Then reference the exact tag in your builder chain:
+
+```typescript
+.withProvider("ollama")
+.withModel("cogito:14b")
+```
+
+If the tag still fails after pulling, run `ollama list` again to confirm the registered name — tags may be normalized by Ollama (e.g. `:14b` → `:latest`).
+
+### Double observability output
+
+**Symptom**
+- Console shows duplicate reasoning traces, events, or cost summaries on every run.
+
+**Root cause**
+- `.withObservability()` is on by default. Calling it explicitly a second time registers a second observer, producing duplicate output.
+
+**Fix**
+Remove the explicit `.withObservability()` call — the default configuration is already active:
+
+```typescript
+// ❌ Causes duplicate output
+const agent = await ReactiveAgents.create()
+  .withObservability({ verbosity: "debug", live: true })
+  .withObservability() // ← redundant; adds a second observer
+  .build()
+
+// ✅ Correct — call it once, or rely on the default
+const agent = await ReactiveAgents.create()
+  .withObservability({ verbosity: "debug", live: true })
+  .build()
+```
+
+Only call `.withObservability()` when you need to override the default verbosity or enable live streaming. Calling it with no arguments when you already have the default active is the most common source of duplicate output.
+
+### CLI tool ENOENT (git-cli / gh-cli / gws-cli)
+
+**Symptom**
+- Tool call returns `spawn git ENOENT` or `command not found: gh`.
+
+**Root cause**
+- The built-in CLI tools (`git-cli`, `gh-cli`, `gws-cli`) are thin wrappers that invoke the corresponding system binary (`git`, `gh`, `gws`). If that binary is not on `PATH`, the tool fails immediately with ENOENT.
+
+**Fix**
+Install the missing binary and ensure it is on your `PATH`:
+
+```bash
+# Verify the binary is reachable
+which git   # should print a path
+which gh    # GitHub CLI — https://cli.github.com
+
+# If not found, install via your package manager, then verify again
+```
+
+On systems where the binary exists but is not on the agent process's `PATH` (e.g. inside a Docker container or a restricted shell), set `PATH` explicitly before starting the agent or pass the full binary path via the tool's `executablePath` option.
+
+### Sub-agent stops before reaching maxIterations
+
+**Symptom**
+- A sub-agent configured with `maxIterations: 10` (or any value > 3) stops after only 3 iterations.
+
+**Root cause**
+- This was a bug in earlier releases where the agent-tool adapter capped sub-agent `maxIterations` to 3, ignoring any higher user-supplied value.
+
+**Fix**
+Update to the current version — the cap has been removed and the user-supplied `maxIterations` is now honored:
+
+```bash
+# Check your installed version
+rax --version
+
+# Update to the latest release
+pnpm update reactive-agents
+```
+
+If you are on a current version and still see the cap, verify that `maxIterations` is being set on the sub-agent's own builder chain, not on the parent agent:
+
+```typescript
+// ✅ Correct — maxIterations set on the sub-agent builder
+const subAgent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withMaxIterations(10)
+  .build()
+```
+
 ## Diagnostics by Layer
 
 | Layer | What to check |

@@ -17,7 +17,7 @@ hero:
           variant: secondary
 ---
 
-import { Card, CardGrid, Tabs, TabItem } from '@astrojs/starlight/components'
+import { Card, CardGrid, LinkCard, Tabs, TabItem } from '@astrojs/starlight/components'
 import HeroInteraction from '../../components/HeroInteraction.astro'
 import TerminalReplay from '../../components/TerminalReplay.astro'
 import FeatureCarousel from '../../components/FeatureCarousel.astro'
@@ -48,6 +48,34 @@ import FeatureCarousel from '../../components/FeatureCarousel.astro'
 </div>
 
 <FeatureCarousel />
+
+<div class="ra-section-card ra-panel">
+  <div class="ra-panel-inner">
+
+## Start Here
+
+Not sure where to begin? Pick the path that matches where you are.
+
+<CardGrid>
+    <LinkCard
+        title="Build something fast"
+        description="Go from zero to working agent in 5 minutes"
+        href="guides/quickstart/"
+    />
+    <LinkCard
+        title="Migrating from LangChain"
+        description="Side-by-side mapping of LangChain concepts to Reactive Agents"
+        href="guides/migrating-from-langchain/"
+    />
+    <LinkCard
+        title="Deploy to production"
+        description="Observability, cost controls, guardrails, and the full checklist"
+        href="guides/production-checklist/"
+    />
+</CardGrid>
+
+  </div>
+</div>
 
 <div class="ra-section-card ra-panel">
   <div class="ra-panel-inner">

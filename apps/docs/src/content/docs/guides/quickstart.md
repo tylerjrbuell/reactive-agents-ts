@@ -5,7 +5,7 @@ description: Build your first Reactive Agent in 5 minutes.
 
 ## Prerequisites
 
-- [Bun](https://bun.sh) v1.1+ (or Node.js 20+)
+- [Bun](https://bun.sh) v1.1+
 - An API key from [Anthropic](https://console.anthropic.com), [Gemini](https://ai.google.dev/), [LiteLLM](https://www.litellm.ai) or [OpenAI](https://platform.openai.com)
 
 The fastest path through this guide is the `rax` workflow (`Rax` = Reactive Agents Executable).
@@ -50,22 +50,29 @@ Create `src/agent.ts`:
 ```typescript
 import { ReactiveAgents } from "reactive-agents";
 
-async function main() {
-  // await using disposes the agent automatically when the block exits
-  await using agent = await ReactiveAgents.create()
-    .withName("my-first-agent")
-    .withProvider("anthropic")
-    .withModel("claude-sonnet-4-20250514")
-    .build();
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .build();
 
-  const result = await agent.run("What are the three laws of thermodynamics?");
+const result = await agent.run("What are the three laws of thermodynamics?");
+console.log(result.output);
+```
 
-  console.log("Output:", result.output);
-  console.log("Duration:", result.metadata.duration, "ms");
-  console.log("Steps:", result.metadata.stepsCount);
-}
+That's the minimum. `.withProvider()` picks the default model for the provider automatically (`claude-sonnet-4-20250514` for Anthropic). Set `ANTHROPIC_API_KEY` in your environment before running.
 
-main();
+To pin a specific model or add a name:
+
+```typescript
+const agent = await ReactiveAgents.create()
+  .withName("my-first-agent")
+  .withProvider("anthropic")
+  .withModel("claude-sonnet-4-20250514")
+  .build();
+
+const result = await agent.run("What are the three laws of thermodynamics?");
+console.log("Output:", result.output);
+console.log("Duration:", result.metadata.duration, "ms");
+console.log("Steps:", result.metadata.stepsCount);
 ```
 
 :::tip[Resource cleanup]

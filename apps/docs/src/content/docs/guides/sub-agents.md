@@ -160,7 +160,7 @@ Sub-agent delegation adds overhead. Understand the costs before adopting this pa
 
 - **Delegation overhead** — delegate mode runs approximately 4x more expensive than a solo agent for simple tasks. Each delegation involves additional LLM calls for spawning and a full sub-agent execution cycle.
 - **Small model limitations** — models smaller than ~8B parameters often struggle with sub-agent tasks. They tend to hallucinate results or fail tool calls when operating as a sub-agent. Use capable models (7B+ instruction-tuned, or hosted providers) for sub-agent roles.
-- **Recommended `maxIterations` for sub-agents** — set this to 3–7. Sub-agent tasks should be narrow and focused. A high iteration cap on a sub-agent signals the task scope is too broad.
+- **`maxIterations` for sub-agents** — defaults to `3` when not set; the configured value is fully honored with no internal cap. Recommended range is 3–7: sub-agent tasks should be narrow and focused. A high iteration count on a sub-agent signals the task scope is too broad.
 - **When not to use sub-agents**:
   - Single-step lookups (one tool call is sufficient)
   - Tasks where the parent already has all required context
