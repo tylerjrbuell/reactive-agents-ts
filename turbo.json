@@ -41,6 +41,9 @@
     "dev": {
       "cache": false,
       "persistent": true
+    },
+    "@reactive-agents/docs#build": {
+      "cache": false
     }
   }
 }

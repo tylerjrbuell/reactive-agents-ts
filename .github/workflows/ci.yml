@@ -16,7 +16,8 @@ jobs:
         with:
           bun-version: latest
       - run: bun install --frozen-lockfile
-      - run: rm -rf .turbo && bun run build
+      - run: rm -rf .turbo && bun run build --filter='!@reactive-agents/docs'
+      - run: cd apps/docs && bun run build
 
   test:
     name: Test
@@ -27,7 +28,8 @@ jobs:
         with:
           bun-version: latest
       - run: bun install --frozen-lockfile
-      - run: rm -rf .turbo && bun run build
+      - run: rm -rf .turbo && bun run build --filter='!@reactive-agents/docs'
+      - run: cd apps/docs && bun run build
       - run: bun test
 
   docs-links:
