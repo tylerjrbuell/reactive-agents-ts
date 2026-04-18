@@ -4,9 +4,13 @@
     "tsup.config.base.ts",
     "tsconfig.json",
     "bun.lock",
-    ".env.example"
+    ".env.example",
+    "package.json",
+    "packages/*/src/**",
+    "apps/*/src/**"
   ],
   "globalEnv": ["CLEAN"],
+  "cacheDir": ".turbo",
   "tasks": {
     "build": {
       "dependsOn": ["^build"],

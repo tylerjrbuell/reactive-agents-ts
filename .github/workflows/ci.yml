@@ -16,7 +16,7 @@ jobs:
         with:
           bun-version: latest
       - run: bun install --frozen-lockfile
-      - run: bun run build --force
+      - run: rm -rf .turbo && bun run build
 
   test:
     name: Test
@@ -27,7 +27,7 @@ jobs:
         with:
           bun-version: latest
       - run: bun install --frozen-lockfile
-      - run: bun run build --force
+      - run: rm -rf .turbo && bun run build
       - run: bun test
 
   docs-links:
