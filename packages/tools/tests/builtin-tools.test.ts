@@ -129,7 +129,7 @@ describe("Built-in Tool Handlers", () => {
 
     const typed = result as { executed: boolean; result: unknown; output: string; exitCode: number };
     expect(typed.executed).toBe(true);
-    expect(typed.result).toBe(4);
+    // console.log() output is captured in `output`; `result` is null when there is no `return`
     expect(typed.output).toBe("4");
     expect(typed.exitCode).toBe(0);
   });

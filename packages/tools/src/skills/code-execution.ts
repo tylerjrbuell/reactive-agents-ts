@@ -1,3 +1,7 @@
+import { writeFileSync, unlinkSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { Effect } from "effect";
 
 import type { ToolDefinition } from "../types.js";
@@ -6,16 +10,16 @@ import { ToolExecutionError } from "../errors.js";
 export const codeExecuteTool: ToolDefinition = {
   name: "code-execute",
   description:
-    "Execute JavaScript code in an isolated Bun subprocess and return the result. " +
+    "Execute JavaScript/TypeScript code in an isolated Bun subprocess and return the result. " +
     "Best for: math, string transforms, JSON parsing, sorting, regex extraction, data processing. " +
     "IMPORTANT: The code runs in a separate process with NO access to stored results, tool outputs, " +
     "or agent state — variables like _tool_result_N do NOT exist in the code environment. " +
     "To process stored data, first retrieve it with recall(key, full: true), then inline the text in code. " +
-    "ENVIRONMENT LIMITS: No DOMParser, no fetch, no require() for npm packages, no browser APIs. " +
-    "Available: Bun globals, built-in Node.js modules (Buffer, URL, crypto), String/Array/JSON methods. " +
+    "ENVIRONMENT: require() for built-in Node.js modules is available (e.g. require('os'), require('path')). " +
+    "Dynamic import() is also supported. No browser APIs (DOMParser, fetch). " +
     "For HTML text already retrieved: use regex or string methods — NOT DOMParser. " +
     "Example: const text = htmlString.replace(/<[^>]+>/g, ' ').replace(/\\s+/g, ' ').trim(); " +
-    "Use console.log() to produce output. The last expression is NOT auto-returned. " +
+    "Use return <value> to return a result, or console.log() to produce output. " +
     "Returns { executed: true, result, output, exitCode } on success.",
   parameters: [
     {
@@ -51,9 +55,14 @@ export const codeExecuteTool: ToolDefinition = {
 /**
  * Execute code in an isolated Bun subprocess.
  *
- * Uses `Bun.spawn(["bun", "--eval", code])` — the code runs in a separate
- * process with no access to the agent's memory, services, or state.
- * Stdout/stderr are captured; a timeout kills the process if exceeded.
+ * Writes the user code to a temp `.ts` file wrapped in an async IIFE so that
+ * `return` statements work and `require()` is available via `createRequire`.
+ * The wrapper always emits a final JSON line `{ ok, result, error }` on stdout;
+ * any lines before that are user-produced console.log output.
+ *
+ * This avoids two `bun --eval` limitations:
+ *   1. `eval()` does not allow `return` in ESM strict mode.
+ *   2. `require` is not defined in an ESM `--eval` context.
  */
 export const codeExecuteHandler = (
   args: Record<string, unknown>,
@@ -73,38 +82,53 @@ export const codeExecuteHandler = (
         };
       }
 
-      // Wrap code to auto-capture the last expression's return value via eval().
-      // eval() returns the value of the last expression in the code string.
-      // If the code already uses console.log, stdout is captured normally;
-      // the eval result is only printed if nothing was logged and there's a value.
-      const code = `
-const __origLog = console.log;
-let __logged = false;
-console.log = (...a) => { __logged = true; __origLog(...a); };
-const __result = eval(${JSON.stringify(rawCode)});
-if (!__logged && __result !== undefined) __origLog(typeof __result === "object" ? JSON.stringify(__result) : __result);
+      // Wrap user code in an async IIFE so `return` works, and inject
+      // `createRequire` so CJS `require()` calls succeed in ESM context.
+      // The wrapper always prints a JSON sentinel as the last stdout line.
+      const wrapped = `
+import { createRequire } from "node:module";
+const require = createRequire(import.meta.url);
+const __fn = async () => { ${rawCode} };
+__fn()
+  .then((r) => console.log(JSON.stringify({ ok: true, result: r ?? null })))
+  .catch((e) => console.log(JSON.stringify({ ok: false, error: String(e) })));
 `;
 
-      const proc = Bun.spawn(["bun", "--eval", code], {
-        stdout: "pipe",
-        stderr: "pipe",
-        // Run in /tmp to prevent Bun from auto-loading .env files from the project.
-        cwd: "/tmp",
-        // Minimal env: only PATH for executable resolution, HOME for bun internals.
-        // No API keys, secrets, or application env vars are passed.
-        env: {
-          PATH: process.env.PATH ?? "/usr/bin:/bin",
-          HOME: process.env.HOME ?? "/tmp",
-        },
-      });
+      const tmpFile = join(tmpdir(), `code-exec-${Date.now()}-${Math.random().toString(36).slice(2)}.ts`);
+      try {
+        writeFileSync(tmpFile, wrapped);
+      } catch (e) {
+        return {
+          executed: false,
+          error: `Failed to write temp file: ${e instanceof Error ? e.message : String(e)}`,
+        };
+      }
+
+      let proc: ReturnType<typeof Bun.spawn>;
+      try {
+        proc = Bun.spawn(["bun", "run", tmpFile], {
+          stdout: "pipe",
+          stderr: "pipe",
+          // Run in /tmp to prevent Bun from auto-loading .env files from the project.
+          cwd: "/tmp",
+          // Minimal env: only PATH for executable resolution, HOME for bun internals.
+          // No API keys, secrets, or application env vars are passed.
+          env: {
+            PATH: process.env.PATH ?? "/usr/bin:/bin",
+            HOME: process.env.HOME ?? "/tmp",
+          },
+        });
+      } catch (e) {
+        try { unlinkSync(tmpFile); } catch { /* best-effort cleanup */ }
+        return {
+          executed: false,
+          error: `Failed to spawn subprocess: ${e instanceof Error ? e.message : String(e)}`,
+        };
+      }
 
       // Set up timeout
       const timeoutId = setTimeout(() => {
-        try {
-          proc.kill();
-        } catch {
-          // Process may already be gone
-        }
+        try { proc.kill(); } catch { /* Process may already be gone */ }
       }, timeoutMs);
 
       // Read stdout and stderr
@@ -113,30 +137,53 @@ if (!__logged && __result !== undefined) __origLog(typeof __result === "object" 
       const exitCode = await proc.exited;
 
       clearTimeout(timeoutId);
+      try { unlinkSync(tmpFile); } catch { /* best-effort cleanup */ }
 
-      const output = stdoutText.trim();
       const errorOutput = stderrText.trim();
 
       if (exitCode !== 0) {
+        // Strip Bun's file path from the error output to avoid leaking temp paths
+        const cleanError = errorOutput.replace(/\S*code-exec-[^\s]*/g, "<code>");
         return {
           executed: false,
-          error: errorOutput || `Process exited with code ${exitCode}`,
+          error: cleanError || `Process exited with code ${exitCode}`,
+          output: "(no output)",
+          exitCode,
+        };
+      }
+
+      // The wrapper always emits a JSON sentinel as the last line of stdout.
+      // Any lines before it are user console.log output.
+      const lines = stdoutText.trimEnd().split("\n");
+      const sentinelLine = lines[lines.length - 1] ?? "";
+      const userOutputLines = lines.slice(0, -1);
+      const output = userOutputLines.join("\n").trim();
+
+      let sentinel: { ok: boolean; result?: unknown; error?: string };
+      try {
+        sentinel = JSON.parse(sentinelLine) as typeof sentinel;
+      } catch {
+        // Shouldn't happen unless the process was killed mid-write
+        return {
+          executed: false,
+          error: `Unexpected output format (missing sentinel). stderr: ${errorOutput || "(none)"}`,
           output: output || "(no output)",
           exitCode,
         };
       }
 
-      // Try to parse the output as JSON for structured results
-      let result: unknown = output;
-      try {
-        result = JSON.parse(output);
-      } catch {
-        // Keep as string
+      if (!sentinel.ok) {
+        return {
+          executed: false,
+          error: sentinel.error ?? "Unknown runtime error",
+          output: output || "(no output)",
+          exitCode,
+        };
       }
 
       return {
         executed: true,
-        result: result ?? null,
+        result: sentinel.result ?? null,
         output: output || "(no output)",
         exitCode,
       };

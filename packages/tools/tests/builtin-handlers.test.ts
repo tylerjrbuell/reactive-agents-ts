@@ -241,7 +241,7 @@ describe("codeExecuteHandler — subprocess isolation", () => {
       exitCode: number;
     };
     expect(typed.executed).toBe(true);
-    expect(typed.result).toBe(42);
+    // console.log() output is captured in `output`; `result` is null when there is no `return`
     expect(typed.output).toBe("42");
     expect(typed.exitCode).toBe(0);
   });
@@ -262,18 +262,22 @@ describe("codeExecuteHandler — subprocess isolation", () => {
     );
     const typed = result as { executed: boolean; error?: string; exitCode: number };
     expect(typed.executed).toBe(false);
-    expect(typed.exitCode).not.toBe(0);
+    // The async wrapper catches thrown errors and reports them; exitCode is 0
+    // because the process itself exits cleanly after printing the error JSON.
+    expect(typeof typed.error).toBe("string");
+    expect(typed.error).toContain("boom");
   });
 
   it("runs in isolated env with no leaked secrets", async () => {
     const result = await Effect.runPromise(
       codeExecuteHandler({ code: "console.log(JSON.stringify(Object.keys(process.env)))" }),
     );
-    const typed = result as { executed: boolean; result: unknown };
+    const typed = result as { executed: boolean; output: string };
     expect(typed.executed).toBe(true);
+    // console.log output is captured in `output` as a string; parse it to inspect keys.
     // Subprocess gets minimal env (PATH + HOME only); Bun may add internal vars,
     // but no application secrets should leak through.
-    const envKeys = typed.result as string[];
+    const envKeys = JSON.parse(typed.output) as string[];
     expect(envKeys).not.toContain("ANTHROPIC_API_KEY");
     expect(envKeys).not.toContain("OPENAI_API_KEY");
     expect(envKeys).not.toContain("TAVILY_API_KEY");
