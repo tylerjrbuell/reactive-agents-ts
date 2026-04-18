@@ -23,12 +23,15 @@ export type CliRunner = (
 export const defaultCliRunner: CliRunner = (cmd, args, timeoutMs) =>
   new Promise((resolve, reject) => {
     execFile(cmd, args, { timeout: timeoutMs, maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
-      if (err && err.code !== undefined && typeof err.code === "number") {
-        resolve({ stdout: stdout ?? "", stderr: stderr ?? err.message, exitCode: err.code });
-      } else if (err) {
-        reject(err);
-      } else {
+      if (!err) {
         resolve({ stdout, stderr, exitCode: 0 });
+      } else if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+        // Binary not found — produce a clear error so the model stops immediately
+        reject(new Error(`Executable not found in $PATH: "${cmd}". Install it before using this tool.`));
+      } else if (typeof (err as NodeJS.ErrnoException).code === "number") {
+        resolve({ stdout: stdout ?? "", stderr: stderr ?? err.message, exitCode: (err as NodeJS.ErrnoException).code as number });
+      } else {
+        reject(err);
       }
     });
   });

@@ -15,9 +15,10 @@ export type GwsCliResult = {
 export const gwsCliTool: ToolDefinition = {
   name: "gws-cli",
   description:
-    "Run any Google Workspace CLI (`gws`) command. Requires the `gws` binary installed " +
-    "and authenticated via `gws auth login`. Provides access to Gmail, Google Calendar, " +
-    "Google Drive, and other Workspace services. " +
+    "Run any Google Workspace CLI (`gws`) command. " +
+    "PREREQUISITE: the `gws` binary must be installed and authenticated via `gws auth login`. " +
+    "If it is not installed, this tool will return an error — do NOT retry, just report the error. " +
+    "Provides access to Gmail, Google Calendar, Google Drive, and other Workspace services. " +
     "Pass the subcommand + flags as `command`, e.g. `calendar events list`, " +
     "`gmail messages list --query unread`, `drive files list`. " +
     "Do NOT include the leading `gws` keyword. " +
