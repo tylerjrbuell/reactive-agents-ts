@@ -769,8 +769,8 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
 
                 if (eb) {
                   const deskName =
-                    typeof config.name === "string" && config.name.trim().length > 0
-                      ? config.name.trim()
+                    typeof config.agentId === "string" && config.agentId.trim().length > 0
+                      ? config.agentId.trim()
                       : "";
                   const agentDisplayName =
                     deskName.length > 0 && !/^cortex-desk-\d+$/.test(deskName) ? deskName : undefined;
