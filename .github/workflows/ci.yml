@@ -74,6 +74,7 @@ jobs:
             --exclude "^https://huggingface\.co/datasets/"
             --exclude "^https://console\.anthropic\.com"
             --exclude "^https://my\.telegram\.org/"
+            --exclude "^http://localhost"
             "apps/docs/dist/**/*.html"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
