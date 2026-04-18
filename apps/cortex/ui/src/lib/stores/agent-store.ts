@@ -423,12 +423,10 @@ export function createAgentStore(options?: CreateAgentStoreOptions) {
         tokensUsed: existing?.tokensUsed ?? 0,
         cost: existing?.cost ?? 0,
         connectedAt: existing?.connectedAt ?? nowFn(),
-        completedAt: existing?.completedAt,
-        lastEventAt: existing?.lastEventAt ?? 0,
         parentRunId: existing?.parentRunId,
         ...patch,
         lastEventAt: nextLastEventAt,
-        completedAt: patch.completedAt ?? existing?.completedAt,
+        completedAt: patch["completedAt"] ?? existing?.completedAt,
       };
 
       map.set(msg.runId, updated);

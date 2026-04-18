@@ -18,8 +18,8 @@ export const createEventMergingPolicy = (
     options?.mergeKey ??
     ((event: GatewayEvent): string => {
       const category =
-        typeof event.metadata.category === "string"
-          ? event.metadata.category
+        typeof event.metadata["category"] === "string"
+          ? event.metadata["category"]
           : "default";
       return `${event.source}:${category}`;
     });

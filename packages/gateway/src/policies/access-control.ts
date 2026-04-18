@@ -25,7 +25,7 @@ export const createAccessControlPolicy = (
     Effect.sync(() => {
       if (event.source !== "channel") return null;
 
-      const sender = String(event.metadata?.sender ?? "");
+      const sender = String(event.metadata?.["sender"] ?? "");
       if (!sender) return null;
 
       switch (config.policy) {

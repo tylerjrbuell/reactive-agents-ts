@@ -184,11 +184,11 @@ export const getDateInTimezone = (
     };
 
     return {
-      minute: parseInt(partMap.minute || "0", 10),
-      hour: parseInt(partMap.hour || "0", 10),
-      day: parseInt(partMap.day || "1", 10),
-      month: parseInt(partMap.month || "1", 10),
-      dayOfWeek: weekdayMap[partMap.weekday] ?? date.getUTCDay(),
+      minute: parseInt(partMap["minute"] || "0", 10),
+      hour: parseInt(partMap["hour"] || "0", 10),
+      day: parseInt(partMap["day"] || "1", 10),
+      month: parseInt(partMap["month"] || "1", 10),
+      dayOfWeek: weekdayMap[partMap["weekday"]] ?? date.getUTCDay(),
     };
   } catch {
     // Fallback to UTC if timezone is invalid

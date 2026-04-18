@@ -275,7 +275,7 @@
                       <button
                         type="button"
                         class="text-primary/40 hover:text-primary/70 transition-colors bg-transparent border-0 cursor-pointer p-1"
-                        onclick={() => copyToClipboard(f.llmThought, `thought-${idx}`)}
+                        onclick={() => copyToClipboard(f.llmThought ?? "", `thought-${idx}`)}
                         aria-label="Copy reasoning text"
                       >
                         <span class="material-symbols-outlined text-sm">{copiedField === `thought-${idx}` ? "check" : "content_copy"}</span>
@@ -300,7 +300,7 @@
                       <button
                         type="button"
                         class="text-amber-700/40 hover:text-amber-700/70 dark:text-amber-600/40 dark:hover:text-amber-600/70 transition-colors bg-transparent border-0 cursor-pointer p-1"
-                        onclick={() => copyToClipboard(f.action, `action-${idx}`)}
+                        onclick={() => copyToClipboard(f.action ?? "", `action-${idx}`)}
                         aria-label="Copy action text"
                       >
                         <span class="material-symbols-outlined text-sm">{copiedField === `action-${idx}` ? "check" : "content_copy"}</span>
@@ -349,7 +349,7 @@
                       <button
                         type="button"
                         class="text-secondary/40 hover:text-secondary/70 transition-colors bg-transparent border-0 cursor-pointer p-1"
-                        onclick={() => copyToClipboard(f.observation, `obs-${idx}`)}
+                        onclick={() => copyToClipboard(f.observation ?? "", `obs-${idx}`)}
                         aria-label="Copy tool result"
                       >
                         <span class="material-symbols-outlined text-sm">{copiedField === `obs-${idx}` ? "check" : "content_copy"}</span>
@@ -378,7 +378,7 @@
                       <button
                         type="button"
                         class="text-outline/40 hover:text-outline/70 transition-colors bg-transparent border-0 cursor-pointer p-1"
-                        onclick={() => copyToClipboard(f.rawResponse, `raw-${idx}`)}
+                        onclick={() => copyToClipboard(f.rawResponse ?? "", `raw-${idx}`)}
                         aria-label="Copy raw LLM response"
                       >
                         <span class="material-symbols-outlined text-sm">{copiedField === `raw-${idx}` ? "check" : "content_copy"}</span>
