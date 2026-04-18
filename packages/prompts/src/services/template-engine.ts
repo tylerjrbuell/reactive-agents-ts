@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import type { PromptTemplate, PromptVariable } from "../types/template.js";
+import type { PromptTemplate } from "../types/template.js";
 import { VariableError } from "../errors/errors.js";
 
 export const interpolate = (
