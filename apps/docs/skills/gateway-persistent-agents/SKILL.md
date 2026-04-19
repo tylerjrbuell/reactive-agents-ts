@@ -125,11 +125,29 @@ policies: {
 }
 ```
 
+### Persistent memory across runs (episodic context across heartbeats/crons)
+
+```ts
+.withGateway({
+  persistMemoryAcrossRuns: true,  // default: false
+  heartbeat: { intervalMs: 60_000, instruction: "Check for new work" },
+  crons: [{ schedule: "0 9 * * *", instruction: "Daily summary" }],
+})
+.withMemory({ tier: "enhanced", dbPath: "./memory.sqlite" })
+```
+
+When `persistMemoryAcrossRuns: true`, the agent reuses the same stable `agentId` across all gateway executions (heartbeats, crons, webhooks). This allows the memory layer to maintain episodic context across runs — the agent "remembers" what it saw in the previous heartbeat when processing the next cron, avoiding repeated work and building narrative continuity.
+
+**Without persistence** (default): Each gateway execution gets a unique `agentId` like `agent-name-heartbeat-1234567890`, so memory is isolated per run. Good for stateless checks.
+
+**With persistence**: All executions share `agent-name`, so memory spans across runs. Good for agents that need to understand history, avoid duplication, or provide narrative context (e.g., digest monitors, status trackers).
+
 ## GatewayOptions reference
 
 | Field | Type | Notes |
 |-------|------|-------|
 | `timezone` | `string` | Default timezone for crons (e.g., `"America/New_York"`) |
+| `persistMemoryAcrossRuns` | `boolean` | Reuse same agent ID across all gateway executions so memory spans heartbeats/crons. Default: false |
 | `heartbeat.intervalMs` | `number` | Default: 60,000ms (1 min) |
 | `heartbeat.policy` | `"always"\|"adaptive"\|"conservative"` | |
 | `heartbeat.instruction` | `string` | Task prompt for each heartbeat |
@@ -158,3 +176,4 @@ policies: {
 - Cron expressions follow standard 5-field format (`min hour dom month dow`) — verify with a cron parser before deploying
 - `policies.dailyTokenBudget` resets at midnight in the `timezone` specified — ensure timezone is set correctly
 - Webhook secrets must match what the external service sends — mismatch causes all webhook events to be rejected silently
+- `persistMemoryAcrossRuns: true` requires `.withMemory()` with a persistent database (e.g., SQLite) to be useful — otherwise memory tiers default to in-memory and still get wiped between runs
