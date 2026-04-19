@@ -32,3 +32,11 @@ export type { ScenarioFixture } from "./fixtures/scenarios.js";
 
 // ─── Trace Assertions ───
 export { expectTrace } from "./harness/expect-trace.js";
+
+// ─── Scenario Runner ───
+export { runScenario, runCounterfactual } from "./harness/scenario.js";
+export type {
+  ScenarioConfig,
+  ScenarioResult,
+  CounterfactualResult,
+} from "./harness/scenario.js";

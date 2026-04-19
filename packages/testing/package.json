@@ -13,6 +13,7 @@
   "dependencies": {
     "@reactive-agents/core": "0.9.0",
     "@reactive-agents/llm-provider": "0.9.0",
+    "@reactive-agents/runtime": "workspace:*",
     "@reactive-agents/tools": "0.9.0",
     "@reactive-agents/trace": "workspace:*"
   },
