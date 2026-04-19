@@ -1,5 +1,12 @@
 # @reactive-agents/meta-agent
 
+## 0.1.5
+
+### Patch Changes
+
+-   reactive-agents@0.9.1
+-   @reactive-agents/health@0.9.1
+
 ## 0.1.4
 
 ### Patch Changes

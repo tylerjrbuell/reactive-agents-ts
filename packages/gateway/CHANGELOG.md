@@ -1,5 +1,11 @@
 # @reactive-agents/gateway
 
+## 0.9.1
+
+### Patch Changes
+
+-   @reactive-agents/core@0.9.1
+
 ## 0.9.0
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/tools",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -11,8 +11,8 @@
     "test:watch": "bun test --watch"
   },
   "dependencies": {
-    "@reactive-agents/core": "0.9.0",
-    "@reactive-agents/llm-provider": "0.9.0",
+    "@reactive-agents/core": "0.9.1",
+    "@reactive-agents/llm-provider": "0.9.1",
     "@modelcontextprotocol/sdk": "^1.28.0"
   },
   "devDependencies": {
@@ -41,7 +41,7 @@
       "default": "./dist/index.js"
     }
   },
-  "description": "Tool system for Reactive Agents \u2014 registry, sandboxed execution, and MCP client",
+  "description": "Tool system for Reactive Agents — registry, sandboxed execution, and MCP client",
   "homepage": "https://docs.reactiveagents.dev/",
   "bugs": {
     "url": "https://github.com/tylerjrbuell/reactive-agents-ts/issues"

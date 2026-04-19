@@ -1,5 +1,13 @@
 # @reactive-agents/tools
 
+## 0.9.1
+
+### Patch Changes
+
+-   004e1e2: Web search: read Tavily and Brave JSON error bodies (including HTTP 432/433 quota responses), treat limit and transient HTTP statuses as recoverable, and continue to the next provider in the chain. Longer default timeout for sequential providers; clearer final error when all providers fail.
+    -   @reactive-agents/core@0.9.1
+    -   @reactive-agents/llm-provider@0.9.1
+
 ## 0.9.0
 
 ### Minor Changes
