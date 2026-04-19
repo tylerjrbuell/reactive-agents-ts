@@ -546,10 +546,27 @@
       "dependencies": {
         "@modelcontextprotocol/sdk": "^1.28.0",
         "@reactive-agents/core": "0.9.0",
+        "@reactive-agents/llm-provider": "0.9.0",
       },
       "devDependencies": {
         "bun-types": "latest",
         "effect": "^3.10.0",
+        "typescript": "^5.7.0",
+      },
+      "peerDependencies": {
+        "effect": "^3.10.0",
+      },
+    },
+    "packages/trace": {
+      "name": "@reactive-agents/trace",
+      "version": "0.10.0",
+      "dependencies": {
+        "@reactive-agents/core": "workspace:*",
+        "effect": "^3.10.0",
+      },
+      "devDependencies": {
+        "bun-types": "latest",
+        "tsup": "*",
         "typescript": "^5.7.0",
       },
       "peerDependencies": {
@@ -932,6 +949,8 @@
     "@reactive-agents/testing": ["@reactive-agents/testing@workspace:packages/testing"],
 
     "@reactive-agents/tools": ["@reactive-agents/tools@workspace:packages/tools"],
+
+    "@reactive-agents/trace": ["@reactive-agents/trace@workspace:packages/trace"],
 
     "@reactive-agents/verification": ["@reactive-agents/verification@workspace:packages/verification"],
 
@@ -2506,6 +2525,8 @@
     "@reactive-agents/testing/bun-types": ["bun-types@1.3.12", "", { "dependencies": { "@types/node": "*" } }, "sha512-HqOLj5PoFajAQciOMRiIZGNoKxDJSr6qigAttOX40vJuSp6DN/CxWp9s3C1Xwm4oH7ybueITwiaOcWXoYVoRkA=="],
 
     "@reactive-agents/tools/bun-types": ["bun-types@1.3.12", "", { "dependencies": { "@types/node": "*" } }, "sha512-HqOLj5PoFajAQciOMRiIZGNoKxDJSr6qigAttOX40vJuSp6DN/CxWp9s3C1Xwm4oH7ybueITwiaOcWXoYVoRkA=="],
+
+    "@reactive-agents/trace/bun-types": ["bun-types@1.3.12", "", { "dependencies": { "@types/node": "*" } }, "sha512-HqOLj5PoFajAQciOMRiIZGNoKxDJSr6qigAttOX40vJuSp6DN/CxWp9s3C1Xwm4oH7ybueITwiaOcWXoYVoRkA=="],
 
     "@reactive-agents/verification/bun-types": ["bun-types@1.3.12", "", { "dependencies": { "@types/node": "*" } }, "sha512-HqOLj5PoFajAQciOMRiIZGNoKxDJSr6qigAttOX40vJuSp6DN/CxWp9s3C1Xwm4oH7ybueITwiaOcWXoYVoRkA=="],
 
