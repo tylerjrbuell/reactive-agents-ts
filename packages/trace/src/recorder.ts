@@ -64,19 +64,20 @@ export function TraceRecorderServiceLive(opts: TraceRecorderOptions): Layer.Laye
       const flush = (runId: string): Effect.Effect<void, never> =>
         Effect.gen(function* () {
           if (opts.dir === null) return
+          const dir = opts.dir
           const m = yield* Ref.get(pending)
           const events = m.get(runId) ?? []
           if (events.length === 0) return
           yield* Effect.tryPromise({
-            try: () => mkdir(opts.dir as string, { recursive: true }),
+            try: () => mkdir(dir, { recursive: true }),
             catch: (e) => new Error(String(e)),
-          }).pipe(Effect.orDie)
-          const path = join(opts.dir as string, `${runId}.jsonl`)
+          }).pipe(Effect.catchAll(() => Effect.void))
+          const path = join(dir, `${runId}.jsonl`)
           const body = events.map((e) => JSON.stringify(e)).join("\n") + "\n"
           yield* Effect.tryPromise({
             try: () => appendFile(path, body),
             catch: (e) => new Error(String(e)),
-          }).pipe(Effect.orDie)
+          }).pipe(Effect.catchAll(() => Effect.void))
           yield* Ref.update(pending, (m) => {
             const next = new Map(m)
             next.set(runId, [])
