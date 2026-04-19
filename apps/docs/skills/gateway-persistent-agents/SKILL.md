@@ -168,6 +168,24 @@ When `persistMemoryAcrossRuns: true`, the agent reuses the same stable `agentId`
 | `heartbeatsFired` | `number` |
 | `cronChecks` | `number` |
 
+## State Tracking (advanced)
+
+The gateway maintains zero-LLM-cost state that powers all policy decisions:
+
+```ts
+type GatewayState = {
+  lastExecutionAt: Date | null           // Enables adaptive skip
+  consecutiveHeartbeatSkips: number      // Forces execute after N skips (safety net)
+  tokensUsedToday: number                // For daily budget enforcement
+  actionsThisHour: number                // For rate limit enforcement
+  pendingEvents: GatewayEvent[]          // Queued work from webhooks
+}
+```
+
+Inspect state at runtime: `const status = await agent.gatewayStatus()`
+
+For a complete guide to state tracking, policy evaluation, and how state drives decisions, see the [Gateway State Tracking Reference](../../../../docs/gateway-state-tracking.md).
+
 ## Pitfalls
 
 - `.withGateway()` alone does nothing — you must call `.start()` on the built agent to begin the loop
@@ -177,3 +195,4 @@ When `persistMemoryAcrossRuns: true`, the agent reuses the same stable `agentId`
 - `policies.dailyTokenBudget` resets at midnight in the `timezone` specified — ensure timezone is set correctly
 - Webhook secrets must match what the external service sends — mismatch causes all webhook events to be rejected silently
 - `persistMemoryAcrossRuns: true` requires `.withMemory()` with a persistent database (e.g., SQLite) to be useful — otherwise memory tiers default to in-memory and still get wiped between runs
+- `consecutiveHeartbeatSkips` is adaptive-mode only — "always" and "conservative" modes don't use it (no skipping to reset)
