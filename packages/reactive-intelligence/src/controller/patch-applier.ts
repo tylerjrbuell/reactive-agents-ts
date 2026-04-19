@@ -87,11 +87,18 @@ function compressMessages(
   messages: Array<{ tokens?: number }>,
   targetTokens: number,
 ): Array<{ tokens?: number }> {
-  let total = messages.reduce((s, m) => s + (m.tokens ?? 0), 0);
+  const total = messages.reduce((s, m) => s + (m.tokens ?? 0), 0);
+  if (total === 0) {
+    // No token annotations present — fall back to count-based: keep last N messages
+    // where N is a rough estimate of how many messages fit in targetTokens (~200 tok/msg).
+    const keepCount = Math.max(1, Math.ceil(targetTokens / 200));
+    return messages.slice(Math.max(0, messages.length - keepCount));
+  }
   const kept = [...messages];
-  while (total > targetTokens && kept.length > 1) {
+  let running = total;
+  while (running > targetTokens && kept.length > 1) {
     const dropped = kept.shift()!;
-    total -= dropped.tokens ?? 0;
+    running -= dropped.tokens ?? 0;
   }
   return kept;
 }
