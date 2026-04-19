@@ -186,6 +186,7 @@ export type { RagSearchCallback, RagSearchResult } from "./skills/rag-search.js"
 export {
   activateSkillTool,
   buildSkillContentXml,
+  activateSkillHandler,
 } from "./skills/activate-skill.js";
 export {
   getSkillSectionTool,

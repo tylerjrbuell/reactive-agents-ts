@@ -1,4 +1,6 @@
+import { Effect } from "effect";
 import type { ToolDefinition } from "../types.js";
+import { ToolExecutionError } from "../errors.js";
 
 export const activateSkillTool: ToolDefinition = {
   name: "activate-skill",
@@ -49,3 +51,29 @@ export function buildSkillContentXml(params: {
   lines.push("</skill_content>");
   return lines.join("\n");
 }
+
+/**
+ * Runtime handler for the activate-skill meta-tool.
+ *
+ * Content injection is handled by the intervention dispatcher via the
+ * inject-skill-content patch. This handler simply acknowledges the request
+ * so the kernel sees a valid tool result and the dispatcher can act.
+ */
+export const activateSkillHandler = (
+  args: Record<string, unknown>,
+): Effect.Effect<unknown, ToolExecutionError> =>
+  Effect.tryPromise({
+    try: async () => {
+      const name = args["name"] as string | undefined
+      if (!name) return { ok: false, error: "name required" }
+      // Acknowledgement only — skill injection is applied by the dispatcher
+      // via the inject-skill-content KernelStatePatch.
+      return { ok: true, skillName: name, status: "queued" }
+    },
+    catch: (e) =>
+      new ToolExecutionError({
+        message: `activate-skill failed: ${e instanceof Error ? e.message : String(e)}`,
+        toolName: "activate-skill",
+        cause: e,
+      }),
+  })

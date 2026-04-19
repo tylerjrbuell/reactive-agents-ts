@@ -20,6 +20,7 @@ export const META_TOOLS = new Set([
   "find",
   "recall",
   "checkpoint",
+  "activate-skill",
 ]) as ReadonlySet<string>;
 
 /**

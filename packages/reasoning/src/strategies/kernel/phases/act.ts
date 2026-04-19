@@ -21,6 +21,7 @@ import {
   buildPulseResponse,
   type PulseInput,
   type ToolCallSpec,
+  activateSkillHandler,
 } from "@reactive-agents/tools";
 import { makeStep } from "../utils/step-utils.js";
 import { executeNativeToolCall, makeObservationResult, extractObservationFacts } from "../utils/tool-execution.js";
@@ -185,12 +186,38 @@ function handlePulseTool(
 }
 
 /**
+ * activate-skill — acknowledge the request inline; the intervention dispatcher
+ * handles the actual inject-skill-content patch on the next controller tick.
+ */
+function handleActivateSkillTool(
+  tc: ToolCallSpec,
+  _state: KernelState,
+  _context: KernelContext,
+  _allSteps: readonly import("../../../types/index.js").ReasoningStep[],
+  _newToolsUsed: Set<string>,
+): Effect.Effect<MetaToolResult, never> {
+  return activateSkillHandler(tc.arguments ?? {}).pipe(
+    Effect.map((result) => {
+      const content = JSON.stringify(result);
+      return { content, success: (result as { ok?: boolean }).ok === true };
+    }),
+    Effect.catchAll(() =>
+      Effect.succeed({
+        content: JSON.stringify({ ok: false, error: "activate-skill handler failed" }),
+        success: false,
+      }),
+    ),
+  );
+}
+
+/**
  * Open registry — new inline meta-tools are a one-line addition.
  * Tools that go through ToolService (recall, find) are NOT in this registry.
  */
 const metaToolRegistry = new Map<string, MetaToolHandler>([
   ["brief", handleBriefTool],
   ["pulse", handlePulseTool],
+  ["activate-skill", handleActivateSkillTool],
 ]);
 
 // ─── Act Phase ────────────────────────────────────────────────────────────────
@@ -251,11 +278,12 @@ export function handleActing(
           continue;
         }
 
-        // ── Check meta-tool registry first (brief, pulse) ─────────────────────
+        // ── Check meta-tool registry first (brief, pulse, activate-skill) ───────
         const metaHandler = metaToolRegistry.get(tc.name);
         if (metaHandler && (
           (tc.name === "brief" && input.metaTools?.brief) ||
-          (tc.name === "pulse" && input.metaTools?.pulse)
+          (tc.name === "pulse" && input.metaTools?.pulse) ||
+          tc.name === "activate-skill"
         )) {
           const { content, success } = yield* metaHandler(tc, state, context, allSteps, newToolsUsed);
           const actionStep = makeStep("action", `${tc.name}(${JSON.stringify(tc.arguments)})`, {
