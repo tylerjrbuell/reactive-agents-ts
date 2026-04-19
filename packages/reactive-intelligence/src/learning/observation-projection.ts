@@ -1,9 +1,3 @@
-// packages/reactive-intelligence/src/learning/observation-projection.ts
-//
-// Projects an ObservationSample from a completed Trace.
-// This is the single authoritative derivation of learning-engine inputs from
-// the trace JSONL — replaces any direct observation file writers.
-
 import type { Trace } from "@reactive-agents/trace"
 import type { ToolCallEvent } from "@reactive-agents/trace"
 
@@ -20,12 +14,7 @@ export interface ObservationSample {
   readonly argValidityRate: number
 }
 
-/**
- * Derive an ObservationSample from a completed run's Trace.
- *
- * Returns null if the trace is missing a run-started or run-completed event
- * (i.e. the run never properly started or was abandoned before finishing).
- */
+/** Returns null if lifecycle events are missing — callers must guard. */
 export function projectObservationFromTrace(trace: Trace): ObservationSample | null {
   const started = trace.events.find((e) => e.kind === "run-started")
   const completed = trace.events.find((e) => e.kind === "run-completed")
