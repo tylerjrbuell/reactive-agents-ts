@@ -772,6 +772,7 @@ export class ReactiveAgentBuilder {
   private _enableOrchestration: boolean = false;
   private _testScenario?: TestTurn[];
   private _extraLayers?: Layer.Layer<any, any, any>;
+  private _tracingConfig: { dir: string } | null = null;
   private _mcpServers: MCPServerConfig[] = [];
   private _systemPrompt?: string;
   private _environmentContext?: Record<string, string>;
@@ -2185,6 +2186,23 @@ export class ReactiveAgentBuilder {
     return this;
   }
 
+  /**
+   * Enable JSONL trace persistence.
+   *
+   * Each run writes a `<runId>.jsonl` file to `dir` containing all trace events
+   * (entropy scores, reactive decisions, strategy switches).
+   *
+   * @param opts.dir - Directory to write JSONL files (default: `.reactive-agents/traces`)
+   * @example
+   * ```typescript
+   * builder.withTracing({ dir: "./traces" })
+   * ```
+   */
+  withTracing(opts: { dir?: string } = {}): this {
+    this._tracingConfig = { dir: opts.dir ?? `.reactive-agents/traces` };
+    return this;
+  }
+
   // ─── Serialization ───
 
   /**
@@ -3385,6 +3403,25 @@ export class ReactiveAgentBuilder {
         fullRuntime = Layer.merge(
           fullRuntime as unknown as Layer.Layer<any>,
           healthServiceLayer,
+        );
+      }
+
+      // Wire tracing layers when .withTracing() was called
+      if (self._tracingConfig !== null) {
+        const { TraceRecorderServiceLive, TraceBridgeLayer } = yield* Effect.promise(
+          () => import("@reactive-agents/trace"),
+        );
+        const recorderLayer = TraceRecorderServiceLive({ dir: self._tracingConfig.dir });
+        const bridgeLayer = TraceBridgeLayer.pipe(
+          Layer.provide(recorderLayer),
+          Layer.provide(fullRuntime as unknown as Layer.Layer<any>),
+        );
+        fullRuntime = Layer.merge(
+          Layer.merge(
+            fullRuntime as unknown as Layer.Layer<any>,
+            recorderLayer as unknown as Layer.Layer<any>,
+          ),
+          bridgeLayer as unknown as Layer.Layer<any>,
         );
       }
 

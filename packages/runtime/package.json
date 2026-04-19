@@ -27,7 +27,8 @@
     "@reactive-agents/gateway": "0.9.0",
     "@reactive-agents/a2a": "0.9.0",
     "@reactive-agents/health": "0.9.0",
-    "@reactive-agents/reactive-intelligence": "0.9.0"
+    "@reactive-agents/reactive-intelligence": "0.9.0",
+    "@reactive-agents/trace": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.7.0",

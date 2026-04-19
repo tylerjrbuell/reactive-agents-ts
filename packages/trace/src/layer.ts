@@ -5,6 +5,8 @@ import type { AgentEvent } from "@reactive-agents/core"
 import { TraceRecorderService } from "./recorder.js"
 import type {
   TraceEvent,
+  RunStartedEvent,
+  RunCompletedEvent,
   EntropyScoredEvent,
   DecisionEvaluatedEvent,
   StrategySwitchedEvent,
@@ -24,6 +26,37 @@ function nextSeq(): number {
 
 function toTraceEvent(raw: AgentEvent): TraceEvent | null {
   switch (raw._tag) {
+    case "AgentStarted": {
+      const ev: RunStartedEvent = {
+        kind: "run-started",
+        runId: raw.taskId,
+        timestamp: raw.timestamp,
+        iter: -1,
+        seq: nextSeq(),
+        task: "",
+        model: raw.model,
+        provider: raw.provider,
+        config: {},
+      }
+      return ev
+    }
+
+    case "AgentCompleted": {
+      const ev: RunCompletedEvent = {
+        kind: "run-completed",
+        runId: raw.taskId,
+        timestamp: Date.now(),
+        iter: -1,
+        seq: nextSeq(),
+        status: raw.success ? "success" : "failure",
+        error: raw.error,
+        totalTokens: raw.totalTokens,
+        totalCostUsd: 0,
+        durationMs: raw.durationMs,
+      }
+      return ev
+    }
+
     case "EntropyScored": {
       const ev: EntropyScoredEvent = {
         kind: "entropy-scored",
@@ -102,6 +135,10 @@ export const TraceBridgeLayer: Layer.Layer<
         const traced = toTraceEvent(event)
         if (traced !== null) {
           yield* recorder.emit(traced)
+        }
+        // Flush pending events to disk when a run ends
+        if (event._tag === "AgentCompleted" || event._tag === "TaskFailed") {
+          yield* recorder.flush(event.taskId)
         }
       })
 
