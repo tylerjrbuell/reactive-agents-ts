@@ -55,7 +55,7 @@ Features shipped to `main` since the v0.9.0 tag, not yet assigned a version numb
 ## v0.5.0 — A2A Protocol + Observability Foundation
 
 - **Full A2A (Agent-to-Agent) protocol** — JSON-RPC 2.0 server, streaming SSE, client, discovery, and capability matching based on Google's A2A spec — see [A2A Protocol](../features/a2a-protocol)
-- **Agent-as-tool pattern** — wrap any local or remote A2A agent as a callable tool with `createAgentTool()` / `createRemoteAgentTool()` — see [Sub-agents](../guides/sub-agents)
+- **Agent-as-tool pattern** — wrap any local or remote A2A agent as a callable tool with `createAgentTool()` / `createRemoteAgentTool()` — see [Sub-agents](./sub-agents)
 - **Live observability streaming** — `withObservability({ live: true, verbosity })` writes structured phase logs to stdout as each step fires — see [Observability](../features/observability)
 - **`rax serve`** — expose any agent as an A2A-compliant HTTP server with a single CLI command — see [CLI](../reference/cli)
 - **EventBus reasoning events** — all 5 strategies publish `ReasoningStepCompleted`; subscribe with `agent.on()` for custom monitoring — see [Observability](../features/observability)
