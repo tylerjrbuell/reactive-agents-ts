@@ -29,3 +29,6 @@ export {
   createMaxIterationsScenario,
 } from "./fixtures/scenarios.js";
 export type { ScenarioFixture } from "./fixtures/scenarios.js";
+
+// ─── Trace Assertions ───
+export { expectTrace } from "./harness/expect-trace.js";

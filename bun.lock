@@ -532,6 +532,7 @@
         "@reactive-agents/core": "0.9.0",
         "@reactive-agents/llm-provider": "0.9.0",
         "@reactive-agents/tools": "0.9.0",
+        "@reactive-agents/trace": "workspace:*",
       },
       "devDependencies": {
         "bun-types": "latest",
