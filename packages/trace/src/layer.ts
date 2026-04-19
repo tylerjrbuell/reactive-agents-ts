@@ -145,9 +145,10 @@ export const TraceBridgeLayer: Layer.Layer<
     const unsubscribe = yield* bus.subscribe(handler)
 
     yield* Effect.addFinalizer(() =>
-      Effect.sync(() => {
-        unsubscribe()
-      })
+      recorder.flushAll().pipe(
+        Effect.catchAll(() => Effect.void),
+        Effect.andThen(Effect.sync(() => unsubscribe())),
+      )
     )
   })
 )

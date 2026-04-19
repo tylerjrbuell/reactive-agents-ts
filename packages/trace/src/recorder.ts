@@ -10,6 +10,7 @@ export interface TraceRecorder {
   readonly emit: (ev: TraceEvent) => Effect.Effect<void, never>
   readonly snapshot: (runId: string) => Effect.Effect<readonly TraceEvent[], never>
   readonly flush: (runId: string) => Effect.Effect<void, never>
+  readonly flushAll: () => Effect.Effect<void, never>
   readonly close: (runId: string) => Effect.Effect<void, never>
 }
 
@@ -85,6 +86,14 @@ export function TraceRecorderServiceLive(opts: TraceRecorderOptions): Layer.Laye
           })
         })
 
+      const flushAll = (): Effect.Effect<void, never> =>
+        Effect.gen(function* () {
+          const m = yield* Ref.get(pending)
+          for (const runId of m.keys()) {
+            yield* flush(runId)
+          }
+        })
+
       const close = (runId: string): Effect.Effect<void, never> =>
         Effect.gen(function* () {
           yield* flush(runId)
@@ -100,7 +109,7 @@ export function TraceRecorderServiceLive(opts: TraceRecorderOptions): Layer.Laye
           })
         })
 
-      return TraceRecorderService.of({ emit, snapshot, flush, close })
+      return TraceRecorderService.of({ emit, snapshot, flush, flushAll, close })
     }),
   )
 }
