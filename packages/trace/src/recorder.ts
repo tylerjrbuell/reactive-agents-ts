@@ -34,7 +34,7 @@ export function TraceRecorderServiceLive(opts: TraceRecorderOptions): Layer.Laye
     Effect.gen(function* () {
       // All events per runId (in-memory buffer)
       const buffers = yield* Ref.make(new Map<string, TraceEvent[]>())
-      // Unflushed events per runId (pending disk write)
+      // Events pending disk write per runId
       const pending = yield* Ref.make(new Map<string, TraceEvent[]>())
 
       const emit = (ev: TraceEvent): Effect.Effect<void, never> =>
