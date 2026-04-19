@@ -23,7 +23,7 @@ test("dispatches a decision to its handler when mode is 'dispatch'", async () =>
   registerHandler(dispatcher, fakeHandler)
   const result = await Effect.runPromise(
     dispatcher.dispatch(
-      [{ type: "early-stop", reason: "loop", confidence: 0.9 } as any],
+      [{ decision: "early-stop", reason: "loop", iterationsSaved: 1 }],
       { currentOptions: {}, messages: [] } as any,
       {
         iteration: 3,
@@ -42,7 +42,7 @@ test("suppresses when composite entropy below threshold", async () => {
   registerHandler(dispatcher, fakeHandler)
   const result = await Effect.runPromise(
     dispatcher.dispatch(
-      [{ type: "early-stop", reason: "x", confidence: 0.9 } as any],
+      [{ decision: "early-stop", reason: "x", iterationsSaved: 1 }],
       { currentOptions: {}, messages: [] } as any,
       {
         iteration: 3,
@@ -63,7 +63,7 @@ test("advisory mode does not apply patches", async () => {
   registerHandler(dispatcher, fakeHandler)
   const result = await Effect.runPromise(
     dispatcher.dispatch(
-      [{ type: "early-stop", reason: "x", confidence: 0.9 } as any],
+      [{ decision: "early-stop", reason: "x", iterationsSaved: 1 }],
       { currentOptions: {}, messages: [] } as any,
       {
         iteration: 3,

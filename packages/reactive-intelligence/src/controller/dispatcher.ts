@@ -24,17 +24,6 @@ export interface Dispatcher {
   readonly config: InterventionConfig
 }
 
-/** Reads the discriminant key from a decision object.
- *
- * `ControllerDecision` uses the `decision` field as the discriminant.
- * In tests, objects may be cast `as any` with only a `type` field — we fall
- * back to `type` so unit tests don't require full `ControllerDecision` shapes.
- */
-function decisionKey(d: ControllerDecision): string {
-  const typed = d as unknown as Record<string, unknown>
-  return (typed["decision"] ?? typed["type"]) as string
-}
-
 export function makeDispatcher(config: InterventionConfig): Dispatcher {
   const handlers = new Map<string, InterventionHandler>()
 
@@ -50,7 +39,7 @@ export function makeDispatcher(config: InterventionConfig): Dispatcher {
       let latencyMs = 0
 
       for (const decision of decisions) {
-        const key = decisionKey(decision)
+        const key = decision.decision
         const mode =
           config.modes[key as ControllerDecision["decision"]] ??
           handlers.get(key)?.defaultMode ??
