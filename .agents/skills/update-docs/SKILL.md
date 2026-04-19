@@ -208,17 +208,37 @@ If a milestone shipped:
 -   Update the "Current State" section
 -   Update the Competitive Positioning table
 
-## Step 9: Verify
+## Step 9: Verify Links Don't Break CI
+
+**Critical**: Starlight/Astro converts relative paths in links, which can cause broken links in CI:
 
 ```bash
-# Docs build
-cd apps/docs && npx astro build
+# Build docs locally to verify no link errors
+cd apps/docs && rm -rf dist && bunx astro build
 
+# For internal links within guides/:
+# ❌ WRONG: ](./sibling-page) — rendered as /guides/whats-new/sibling-page
+# ❌ WRONG: ](../guides/sibling-page) — in docs at /guides/file, becomes /guides/guides/sibling-page
+# ✅ RIGHT: ](/guides/sibling-page) — absolute path works everywhere
+# ✅ RIGHT: ](../features/page) — relative across directories OK (goes up then down)
+
+# When editing files in guides/, use:
+# - Sibling files in guides/: ](/guides/filename)
+# - Files in features/: ](/features/filename)
+# - Files in concepts/: ](/concepts/filename)
+# - Files in reference/: ](/reference/filename)
+```
+
+Link checker will report: `Cannot find file: file:///path/guides/guides/filename`
+
+## Step 10: Verify
+
+```bash
 # Check for stale references
 grep -r "CLAUDE.md.*package map\|CLAUDE.md.*build commands\|withTestResponses\|15 packages\|17 packages\|2194 tests" AGENTS.md README.md apps/docs .agents/skills
 ```
 
-## Step 10: CLAUDE.md Compatibility Check
+## Step 11: CLAUDE.md Compatibility Check
 
 Ensure `CLAUDE.md` remains a short compatibility pointer to `AGENTS.md` and does not become a second source of truth.
 
