@@ -17,11 +17,11 @@ export interface ToolCallSpec {
 }
 
 export type TestTurn =
-  | { text: string; match?: string }
-  | { json: unknown; match?: string }
-  | { toolCall: ToolCallSpec; match?: string }
-  | { toolCalls: ToolCallSpec[]; match?: string }
-  | { error: string; match?: string };
+  | { text: string; match?: string; delayMs?: number }
+  | { json: unknown; match?: string; delayMs?: number }
+  | { toolCall: ToolCallSpec; match?: string; delayMs?: number }
+  | { toolCalls: ToolCallSpec[]; match?: string; delayMs?: number }
+  | { error: string; match?: string; delayMs?: number };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -108,6 +108,11 @@ export const TestLLMService = (
         const searchText = extractSearchText(request.messages, request);
         const { turn, matchedIndex } = resolveTurn(scenario, callIndex, searchText);
 
+        const delayMs = "delayMs" in turn ? (turn.delayMs ?? 0) : 0;
+        if (delayMs > 0) {
+          yield* Effect.sleep(`${delayMs} millis`);
+        }
+
         if ("error" in turn) {
           throw new Error(turn.error);
         }
@@ -145,10 +150,19 @@ export const TestLLMService = (
       const searchText = extractSearchText(request.messages, request);
       const { turn, matchedIndex } = resolveTurn(scenario, callIndex, searchText);
 
+      const delayMs = "delayMs" in turn ? (turn.delayMs ?? 0) : 0;
+      const delayStream: Stream.Stream<never, never> =
+        delayMs > 0
+          ? Stream.drain(Stream.fromEffect(Effect.sleep(`${delayMs} millis`)))
+          : Stream.empty;
+
       if ("error" in turn) {
         return Effect.succeed(
-          Stream.make(
-            { type: "error" as const, error: turn.error } satisfies StreamEvent,
+          Stream.concat(
+            delayStream,
+            Stream.make(
+              { type: "error" as const, error: turn.error } satisfies StreamEvent,
+            ),
           ) as Stream.Stream<StreamEvent, LLMErrors>,
         );
       }
@@ -177,7 +191,10 @@ export const TestLLMService = (
           { type: "usage" as const, usage: fakeUsage(searchText.length, 0) },
         ];
         return Effect.succeed(
-          Stream.fromIterable(events) as Stream.Stream<StreamEvent, LLMErrors>,
+          Stream.concat(
+            delayStream,
+            Stream.fromIterable(events),
+          ) as Stream.Stream<StreamEvent, LLMErrors>,
         );
       }
 
@@ -186,18 +203,21 @@ export const TestLLMService = (
       const outputTokens = Math.ceil(content.length / 4);
 
       return Effect.succeed(
-        Stream.make(
-          { type: "text_delta" as const, text: content } satisfies StreamEvent,
-          { type: "content_complete" as const, content } satisfies StreamEvent,
-          {
-            type: "usage" as const,
-            usage: {
-              inputTokens,
-              outputTokens,
-              totalTokens: inputTokens + outputTokens,
-              estimatedCost: 0,
-            },
-          } satisfies StreamEvent,
+        Stream.concat(
+          delayStream,
+          Stream.make(
+            { type: "text_delta" as const, text: content } satisfies StreamEvent,
+            { type: "content_complete" as const, content } satisfies StreamEvent,
+            {
+              type: "usage" as const,
+              usage: {
+                inputTokens,
+                outputTokens,
+                totalTokens: inputTokens + outputTokens,
+                estimatedCost: 0,
+              },
+            } satisfies StreamEvent,
+          ),
         ) as Stream.Stream<StreamEvent, LLMErrors>,
       );
     },

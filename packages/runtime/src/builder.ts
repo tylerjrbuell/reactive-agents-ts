@@ -1,4 +1,4 @@
-import { Effect, Layer, Schema, ManagedRuntime, Runtime, Stream as EStream, Context } from "effect";
+import { Effect, Layer, Schema, ManagedRuntime, Runtime, Stream as EStream, Context, Fiber, Queue, Option } from "effect";
 import { createRuntime, createLightRuntime } from "./runtime.js";
 import type { MCPServerConfig } from "./runtime.js";
 import { builderToConfig } from "./agent-config.js";
@@ -4020,54 +4020,126 @@ export class ReactiveAgent {
   ): AsyncGenerator<AgentStreamEvent> {
     const signal = options?.signal;
 
-    // If already aborted before we start, yield StreamCancelled immediately
+    // Pre-start guard: if already aborted, emit StreamCancelled immediately.
     if (signal?.aborted) {
       yield { _tag: "StreamCancelled", reason: "Aborted before start", iterationsCompleted: 0 } satisfies AgentStreamEvent;
       return;
     }
 
-    // Set up cancellation tracking
-    let cancelled = false;
-    let iterationsCompleted = 0;
-    const onAbort = (): void => { cancelled = true; };
+    // Pre-set the task description for parent context forwarding.
+    this._setTaskDescription?.(input.slice(0, 500));
+
+    const task: Task = {
+      id: generateTaskId(),
+      agentId: Schema.decodeSync(AgentId)(this.agentId),
+      type: "query" as const,
+      input: { question: input },
+      priority: "medium" as const,
+      status: "pending" as const,
+      metadata: { tags: [] },
+      createdAt: new Date(),
+    };
+
+    const density = options?.density ?? this._defaultStreamDensity ?? "tokens";
+
+    // Post-runPromise guard: re-check signal after async acquisition so that
+    // abort() fired during the await is not silently missed.
+    const stream = await this.runtime.runPromise(
+      this.engine.executeStream(task, { density }),
+    );
+    if (signal?.aborted) {
+      yield { _tag: "StreamCancelled", reason: "Aborted during setup", iterationsCompleted: 0 } satisfies AgentStreamEvent;
+      return;
+    }
+
+    // Fiber-interruption bridge: fork the Effect stream into an interruptible
+    // fiber, push events into a JS queue, and interrupt the fiber when the
+    // AbortSignal fires. This ensures abort() stops the Effect fiber
+    // immediately — not just between yields.
+    type Item =
+      | { done: false; value: AgentStreamEvent }
+      | { done: true; error?: unknown };
+
+    const itemQueue: Item[] = [];
+    let resolve: (() => void) | null = null;
+
+    const push = (item: Item): void => {
+      itemQueue.push(item);
+      const r = resolve;
+      resolve = null;
+      r?.();
+    };
+
+    // Fork the stream consumption as an interruptible Effect fiber.
+    const consumeEffect = EStream.runForEach(stream, (event) =>
+      Effect.sync(() => push({ done: false, value: event })),
+    ).pipe(
+      Effect.andThen(Effect.sync(() => push({ done: true }))),
+      Effect.catchAll((err) =>
+        Effect.sync(() => push({ done: true, error: err })),
+      ),
+    );
+
+    const fiber = this.runtime.runFork(consumeEffect);
+
+    // Interrupt the fiber when the signal fires, and also unblock any waiting
+    // promise so the while loop can observe the abort.
+    const onAbort = (): void => {
+      Effect.runFork(Fiber.interrupt(fiber));
+      const r = resolve;
+      resolve = null;
+      r?.();
+    };
     signal?.addEventListener("abort", onAbort);
 
+    let iterationsCompleted = 0;
+
     try {
-      // Pre-set the task description for parent context forwarding
-      this._setTaskDescription?.(input.slice(0, 500));
+      while (true) {
+        // Wait for the next item if the queue is empty.
+        if (itemQueue.length === 0) {
+          // If the signal is already aborted (fiber interrupted), stop waiting.
+          if (signal?.aborted) break;
+          await new Promise<void>((res) => { resolve = res; });
+          // After waking, check again if abort fired while we were waiting.
+          if (signal?.aborted && itemQueue.length === 0) break;
+        }
 
-      const task: Task = {
-        id: generateTaskId(),
-        agentId: Schema.decodeSync(AgentId)(this.agentId),
-        type: "query" as const,
-        input: { question: input },
-        priority: "medium" as const,
-        status: "pending" as const,
-        metadata: { tags: [] },
-        createdAt: new Date(),
-      };
+        const item = itemQueue.shift();
+        if (item === undefined) continue;
 
-      const density = options?.density ?? this._defaultStreamDensity ?? "tokens";
-      const stream = await this.runtime.runPromise(
-        this.engine.executeStream(task, { density }),
-      );
+        if (item.done) {
+          if (item.error !== undefined) {
+            // The fiber errored — let the stream end (StreamError was already pushed).
+          }
+          break;
+        }
 
-      for await (const event of AgentStream.toAsyncIterable(stream)) {
-        // Track iteration count from IterationProgress events
+        const event = item.value;
+
+        // Track iteration progress.
         if (event._tag === "IterationProgress") {
-          iterationsCompleted = (event as any).iteration ?? iterationsCompleted;
+          iterationsCompleted = (event as { iteration?: number }).iteration ?? iterationsCompleted;
         }
 
         yield event;
 
-        // Check for cancellation after each yield
-        if (cancelled) {
-          yield { _tag: "StreamCancelled", reason: signal?.reason ?? "Cancelled", iterationsCompleted } satisfies AgentStreamEvent;
+        // Check signal after yield returns (covers between-event abort).
+        if (signal?.aborted) {
+          yield { _tag: "StreamCancelled", reason: signal.reason ?? "Cancelled", iterationsCompleted } satisfies AgentStreamEvent;
           return;
         }
       }
+
+      // If the signal is aborted and the fiber was interrupted (no terminal
+      // StreamCompleted/StreamError was pushed), emit StreamCancelled.
+      if (signal?.aborted) {
+        yield { _tag: "StreamCancelled", reason: signal.reason ?? "Cancelled", iterationsCompleted } satisfies AgentStreamEvent;
+      }
     } finally {
       signal?.removeEventListener("abort", onAbort);
+      // Ensure the fiber is interrupted on generator early exit (break/throw/return).
+      Effect.runFork(Fiber.interrupt(fiber));
     }
   }
 
