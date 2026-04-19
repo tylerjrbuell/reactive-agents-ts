@@ -12,6 +12,9 @@ import type {
 
 // ─── Sequence counter ───
 
+// Global monotonic counter — intentionally cross-run so batch-analysis tooling
+// can sort events from multiple runs without per-run clocks. seq is unique within
+// a single process lifetime. For per-run monotonicity, use the runId+seq pair.
 let globalSeq = 0
 function nextSeq(): number {
   return globalSeq++
@@ -41,6 +44,7 @@ function toTraceEvent(raw: AgentEvent): TraceEvent | null {
     }
 
     case "ReactiveDecision": {
+      const hasImprovement = typeof raw.entropyAfter === "number" && typeof raw.entropyBefore === "number" && raw.entropyAfter < raw.entropyBefore
       const ev: DecisionEvaluatedEvent = {
         kind: "decision-evaluated",
         runId: raw.taskId,
@@ -48,7 +52,7 @@ function toTraceEvent(raw: AgentEvent): TraceEvent | null {
         iter: raw.iteration,
         seq: nextSeq(),
         decisionType: raw.decision,
-        confidence: 0,
+        confidence: hasImprovement ? Math.max(0, 1 - (raw.entropyAfter as number) / (raw.entropyBefore as number)) : 0,
         reason: raw.reason,
       }
       return ev
