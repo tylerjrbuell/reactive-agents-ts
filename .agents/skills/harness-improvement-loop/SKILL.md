@@ -31,6 +31,8 @@ The harness is every system that sits between a task string and a high-quality f
 | Reasoning strategies | `packages/reasoning/src/strategies/` (adaptive, reactive, plan-execute-reflect, tree-of-thought) |
 | Provider adapters | `packages/llm-provider/src/adapters/` |
 | Context pressure system | `packages/reasoning/src/context/` (context-profile, profile-resolver) |
+| Trace infrastructure | `packages/trace/src/` (recorder, layer, replay, events) — typed JSONL trace capture |
+| Intervention dispatcher | `packages/reactive-intelligence/src/controller/` (dispatcher, handlers/, patch-applier) |
 
 The builder, tools, memory, MCP, and UI layers are **out of scope**. Focus on kernel → strategy → output.
 
@@ -145,174 +147,176 @@ const toRun = targetId ? PROBES.filter((p) => p.id === targetId) : PROBES;
 
 ---
 
-## Phase 2b: Observability — Getting Actionable Output
+## Phase 2b: Trace-Based Observability
 
-The probe runner script produces two output streams that the analysis phase depends on. Both must be configured before running probes. If either is missing, the jq extraction commands in Phase 3 will return empty or misleading results.
+Probes use `.withTracing()` — the typed `TraceEvent` JSONL pipeline — as the primary observability mechanism. This replaced `.withObservability()` in v0.10. Traces land in `.reactive-agents/traces/<runId>.jsonl` and carry typed events across kernel, entropy, intervention, and run lifecycle.
 
-### The two output streams
-
-| Stream | Config | What it produces |
-|--------|--------|-----------------|
-| **Live console** | `verbosity: "debug", live: true` | Real-time phase traces, tool calls, quality scores, strategy decisions — lets you watch the loop in progress and catch obvious problems (infinite loops, wrong strategy selection) before reading JSONL |
-| **JSONL file** | `file: "./harness-reports/probe-{id}.jsonl"` | Structured event log for post-run jq analysis — every kernel event with timestamps, token counts, context ratios, quality scores, tool call payloads |
-
-Both are required. Live console without JSONL = you can watch but can't extract metrics. JSONL without live = you can't diagnose problems during a long run.
-
-### Observability builder config
-
-The probe runner already sets this correctly. When writing custom probes or debugging, use:
+### Builder config for probes
 
 ```typescript
-// Use local Ollama model — no API cost for harness probing
 const agent = await ReactiveAgents.create()
   .withProvider("ollama")
-  .withModel({ model: "qwen2.5:7b" }) // or PROBE_MODEL from harness-probe.ts
+  .withModel("qwen2.5:7b")
   .withReasoning({ defaultStrategy: "adaptive", maxIterations: 12 })
-  .withObservability({
-    verbosity: "debug",   // emits full phase traces + quality scores + context ratios
-    live: true,           // streams events to console in real time (do not omit — buffered output arrives too late)
-    logModelIO: true,     // logs full system prompts and model responses (auto-enabled at "debug")
-    file: "./harness-reports/probe-trivial-1step.jsonl",  // structured event capture
-  })
-  .build();
+  .withReactiveIntelligence()      // enables intervention dispatcher
+  .withTracing({ dir: ".reactive-agents/traces" })
+  .build()
 ```
 
-### What each setting produces
+The trace dir is created automatically. Each run writes one `<runId>.jsonl` file.
 
-**`verbosity: "debug"`** — the only level that emits all fields needed for analysis:
-- Phase entry/exit: `{ event: "phase", phase: "think"|"act"|"guard", iteration: N }`
-- Strategy decisions: `{ event: "strategy_selected", strategy: "reactive"|"adaptive"|..., reason: "..." }`
-- Quality scores: `{ event: "quality_check", score: 0.0–1.0, dimension: "...", iteration: N }`
-- Context pressure: `{ event: "context_ratio", ratio: 0.0–1.0, tokens_used: N, tokens_max: N }`
-- Termination: `{ event: "terminated", reason: "final-answer"|"maxIterations"|"quality-threshold"|"...", iterations: N }`
+### TraceEvent kinds (what lands in the JSONL)
 
-At `"verbose"` or lower, quality scores and context ratios are omitted — the jq commands in Phase 3 will return no data.
+| kind | When | Key fields |
+|------|------|-----------|
+| `run-started` | run open | `runId`, `model`, `provider` |
+| `run-completed` | run close | `status: "success"\|"failure"`, `totalTokens`, `durationMs` |
+| `entropy-scored` | each iteration | `composite`, `sources.{token,structural,semantic,behavioral,contextPressure}` |
+| `decision-evaluated` | each RI decision | `decisionType`, `confidence`, `reason` |
+| `intervention-dispatched` | handler fires | `decisionType`, `patchKind`, `cost`, `telemetry` |
+| `intervention-suppressed` | suppression gate | `decisionType`, `reason` (below-entropy-threshold / below-iteration-threshold / mode-advisory / ...) |
+| `strategy-switched` | strategy change | `from`, `to`, `reason` |
 
-**`live: true`** — sends each event to stdout as it fires, not buffered. Required when:
-- Watching for infinite loops (you'll see iterations increment live)
-- Confirming a probe terminates within expected iterations before it hits maxIterations
-- Spotting strategy mismatches in real time
+### Reading traces
 
-Omitting `live` (or setting `live: false`) means all output arrives after the run completes — you lose the ability to abort a runaway probe early.
-
-**`logModelIO: true`** — logs the full system prompt and model response for each LLM call. This is the only way to diagnose prompt-quality issues (e.g., injected framing that nudges the model toward unnecessary tool calls, or missing context that causes extra iterations). Automatically enabled when `verbosity: "debug"`. Set explicitly if using a lower verbosity level but still need raw prompt inspection.
-
-**`file: "./harness-reports/probe-{id}.jsonl"`** — one file per probe, named by probe ID. Each line is a JSON event object. This file is the input to every jq command in Phase 3. Without it, analysis is impossible. The probe runner script creates the `harness-reports/` directory automatically; if running manually, create it first.
-
-### Reading live output during a run
-
-The probe runner pipes everything through `tee`, so you see live output AND capture it to a text file simultaneously:
-
-```
-[think:1] strategy=reactive | context=12% | tools_available=4
-[act:1]   tool=web-search | query="..." | duration=1.2s
-[think:2] quality=0.91 | signal=high | novelty=low → terminating
-[terminated] reason=quality-threshold | iterations=2 | cost=$0.003
-```
-
-Signals to watch for during a run:
-- `strategy=reactive` on a multi-step task → strategy routing is wrong
-- Iteration counter climbing past 5 on a trivial task → loop or quality threshold problem  
-- `context=85%+` before iteration 8 → context pressure building faster than expected
-- Same tool called twice with identical args → duplicate tool call (loop detector not firing)
-- `reason=maxIterations` → agent did not self-terminate — this is always a failure on answerable questions
-
-### Capturing the full output
-
-The probe runner script already handles this:
-
+**CLI — human inspection:**
 ```bash
-bun run .agents/skills/harness-improvement-loop/scripts/harness-probe.ts 2>&1 | tee harness-reports/probe-run-$(date +%Y%m%d-%H%M).txt
+# Timeline with entropy, interventions, strategy switches
+rax trace inspect .reactive-agents/traces/<runId>.jsonl
+
+# Side-by-side stats comparison (e.g. RI on vs off)
+rax trace compare .reactive-agents/traces/<run-a>.jsonl .reactive-agents/traces/<run-b>.jsonl
 ```
 
-`2>&1` captures both stdout (live events) and stderr (any errors or warnings from the SDK). The `.txt` file is the audit trail for the pass; the per-probe `.jsonl` files are the analysis inputs.
+**Script — structured analysis:**
+```typescript
+import { loadTrace, traceStats } from "@reactive-agents/trace"
+const trace = await loadTrace(".reactive-agents/traces/<runId>.jsonl")
+const stats = traceStats(trace)
+// stats: { totalEvents, iterations, interventionsDispatched, interventionsSuppressed,
+//           maxEntropy, toolCalls, durationMs, totalTokens }
+```
+
+**Entropy AUC across a corpus:**
+```bash
+bun run scripts/validate-entropy.ts .reactive-agents/traces/
+# Prints AUC (max-entropy → failure), success rate, interpretation guide
+```
+
+### Signals to watch for
+
+- `maxEntropy > 0.7` and `interventionsDispatched = 0` → dispatcher suppression or no-handler gap
+- `status: "failure"` with `iterations = maxIterations` → agent did not self-terminate
+- `strategy-switched` absent when expected → strategy routing not triggering
+- `intervention-suppressed` with `reason: "below-entropy-threshold"` repeatedly → suppression threshold too high for probe model
+- `contextPressure` climbing fast before iter 6 → context pressure building faster than expected
 
 ---
 
 ## Phase 3: Analyze Output
 
-Use these extraction commands on the JSONL files. Run them after the probe script finishes. The output of these commands is what fills the "Observed behavior" and "Evidence" fields in the report.
+Use `rax trace inspect` and `harness-probe-analyze.ts` as the primary analysis tools. The output of these commands fills the "Observed behavior" and "Evidence" fields in the report.
+
+### Primary: trace inspect
+
+```bash
+# Per-run timeline — entropy, interventions, strategy switches
+rax trace inspect .reactive-agents/traces/<runId>.jsonl
+
+# Compare two runs side-by-side (e.g. RI enabled vs disabled)
+rax trace compare .reactive-agents/traces/<run-a>.jsonl .reactive-agents/traces/<run-b>.jsonl
+```
+
+### Primary: probe analysis script
+
+```bash
+# Structured metric extraction (uses real TraceEvent schema)
+bun run .agents/skills/harness-improvement-loop/scripts/harness-probe-analyze.ts \
+  .reactive-agents/traces/<runId>.jsonl
+
+# All probes + metric registry
+bun run .agents/skills/harness-improvement-loop/scripts/harness-probe-analyze.ts --registry
+```
 
 ### Termination quality
 
 ```bash
-# When did final-answer fire relative to maxIterations?
-jq 'select(.event == "FinalAnswer" or .event == "TerminationDecision")' \
-  harness-reports/probe-termination-quality.jsonl
+# Did run hit maxIterations or self-terminate?
+jq 'select(.kind == "run-completed") | {status, totalTokens, durationMs}' \
+  .reactive-agents/traces/<runId>.jsonl
 
-# What quality score triggered (or failed to trigger) termination?
-jq 'select(.qualityScore != null) | {iter: .iteration, score: .qualityScore, decision: .terminationDecision}' \
-  harness-reports/probe-termination-quality.jsonl
-
-# Did it hit maxIterations?
-jq -s 'map(select(.event == "ThinkStart")) | length' \
-  harness-reports/probe-termination-quality.jsonl
+# Entropy progression — was composite rising toward the end?
+jq 'select(.kind == "entropy-scored") | {iter, composite, sources}' \
+  .reactive-agents/traces/<runId>.jsonl
 ```
 
-### Loop efficiency (duplicate + wasted iterations)
+### Intervention dispatcher activity
 
 ```bash
-# All tool calls with name and args — look for duplicates
-jq 'select(.event == "ToolCallStart") | {tool: .toolName, args: .args}' \
-  harness-reports/probe-tool-heavy.jsonl
+# Did the dispatcher fire?
+jq 'select(.kind == "intervention-dispatched") | {iter, decisionType, patchKind}' \
+  .reactive-agents/traces/<runId>.jsonl
 
-# Think events with no subsequent tool call (wasted iterations)
-# Look for consecutive ThinkStart events in the event stream
-jq 'select(.event == "ThinkStart" or .event == "ToolCallStart" or .event == "FinalAnswer") | {event, iteration: .iteration}' \
-  harness-reports/probe-multistep-research.jsonl
+# What was suppressed and why?
+jq 'select(.kind == "intervention-suppressed") | {iter, decisionType, reason}' \
+  .reactive-agents/traces/<runId>.jsonl
 ```
 
-### Context pressure behavior
+### Strategy selection
 
 ```bash
-# Context ratio at each think phase — find peak and checkpoint trigger point
-jq 'select(.contextRatio != null) | {iter: .iteration, ratio: .contextRatio, phase: .phase}' \
-  harness-reports/probe-context-pressure.jsonl
+# Did strategy switch occur?
+jq 'select(.kind == "strategy-switched") | {iter, from, to, reason}' \
+  .reactive-agents/traces/<runId>.jsonl
 
-# Did auto-checkpoint fire? When?
-jq 'select(.event == "AutoCheckpoint" or .event == "CheckpointSave")' \
-  harness-reports/probe-context-pressure.jsonl
-
-# Was context restored after checkpoint?
-jq 'select(.event == "CheckpointRestore" or .event == "ContextRestored")' \
-  harness-reports/probe-context-pressure.jsonl
-```
-
-### Output synthesis quality
-
-```bash
-# Quality scores across the full run — see the progression
-jq 'select(.qualityScore != null) | {iter: .iteration, score: .qualityScore, phase: .phase}' \
-  harness-reports/probe-termination-quality.jsonl
-
-# Reflect phase content — did it actually improve anything?
-jq 'select(.phase == "reflect") | {iter: .iteration, input_length: (.input | length), output_length: (.output | length)}' \
-  harness-reports/probe-multistep-research.jsonl
-
-# OutputSynthesis events
-jq 'select(.event == "OutputSynthesis")' \
-  harness-reports/probe-termination-quality.jsonl
-```
-
-### Strategy selection (adaptive probes only)
-
-```bash
-# Which strategy did adaptive pick and when?
-jq 'select(.event == "StrategySelected" or .event == "StrategySwitch")' \
-  harness-reports/probe-tool-heavy.jsonl \
-  harness-reports/probe-termination-quality.jsonl
-
-# Task intent classification
-jq 'select(.event == "TaskIntentClassified")' \
-  harness-reports/probe-tool-heavy.jsonl
+# Decision types evaluated this run
+jq 'select(.kind == "decision-evaluated") | {iter, decisionType, confidence, reason}' \
+  .reactive-agents/traces/<runId>.jsonl
 ```
 
 ### Cross-probe comparison
 
 ```bash
-# Compare iteration counts and costs across all probes
+# Stats summary across all traces in a dir
+bun run scripts/validate-entropy.ts .reactive-agents/traces/
+# Prints AUC, success rate, per-run entropy vs outcome
+
+# Compare probe summary JSON (still written by harness-probe.ts)
 jq -s '[.[] | {id: .id, iters: .iterationsUsed, cost: .costUsd, quality: .qualityScore}]' \
   harness-reports/probe-summary-*.json | jq '.[-1]'
+```
+
+**Note on legacy jq patterns:** older versions of this skill used event schemas like `{event: "ThinkStart"}`, `{qualityScore: ...}`, `{contextRatio: ...}`. Those fields do not exist in the v0.10 TraceEvent schema. Always use `harness-probe-analyze.ts` or the jq patterns above (keyed on `.kind`) — do not adapt the legacy jq patterns.
+
+---
+
+## Phase 3b: Intervention Dispatcher Verification
+
+When probing with `.withReactiveIntelligence()` enabled, verify the dispatcher is actually firing — not just evaluating decisions in advisory mode.
+
+```bash
+# Quick check: did any intervention get dispatched?
+jq 'select(.kind == "intervention-dispatched")' .reactive-agents/traces/<runId>.jsonl | wc -l
+
+# Full dispatcher activity for a run
+jq 'select(.kind == "intervention-dispatched" or .kind == "intervention-suppressed") | {kind, iter, decisionType, .reason, .patchKind}' \
+  .reactive-agents/traces/<runId>.jsonl
+```
+
+**Expected for a loop-prone probe (iter ≥ 3, composite ≥ 0.55):**
+- At least one `intervention-dispatched` with `decisionType: "early-stop"` or `"temp-adjust"`
+- No `intervention-suppressed` with `reason: "below-entropy-threshold"` on high-entropy runs
+
+**If only suppressed events appear:**
+- `below-entropy-threshold` → model's entropy never crossed 0.55 composite; adjust probe task to be more loop-prone
+- `below-iteration-threshold` → firing before iteration 2; expected on fast-terminating probes
+- `mode-advisory` → decision type is configured advisory-only (expected for `human-escalate`, `prompt-switch`)
+- `no-handler` → handler not registered; check `defaultInterventionRegistry` in `handlers/index.ts`
+
+**Check capability manifest sync:**
+```bash
+bun run scripts/check-capabilities.ts
+# Expected: "Capability manifest in sync (6 dispatched handlers)"
 ```
 
 ---
@@ -400,10 +404,15 @@ bun run .agents/skills/harness-improvement-loop/scripts/harness-evolve.ts
 bun run .agents/skills/harness-improvement-loop/scripts/harness-evolve.ts --dry-run
 
 # Analyze a single JSONL file:
-bun run .agents/skills/harness-improvement-loop/scripts/harness-probe-analyze.ts harness-reports/probe-tool-heavy.jsonl
+bun run .agents/skills/harness-improvement-loop/scripts/harness-probe-analyze.ts .reactive-agents/traces/<runId>.jsonl
 
 # Analyze all probes + print metric registry:
 bun run .agents/skills/harness-improvement-loop/scripts/harness-probe-analyze.ts --registry
+
+# Entropy AUC validation — validates "reactive signal is real" claim across a corpus of traces:
+bun run scripts/validate-entropy.ts .reactive-agents/traces/
+# AUC > 0.7 = entropy is a real signal. 0.5 = noise. < 0.5 = inverted.
+# Run after accumulating ≥10 traces across pass probes.
 ```
 
 ### What evolves between passes
@@ -432,21 +441,23 @@ nextPassFocus[]      — top 10 focus areas for next pass (auto-computed)
 
 Never edit `loop-state.json` by hand during a pass. The engine writes it atomically after analysis.
 
-### Correct JSONL metric schema
+### TraceEvent JSONL schema (v0.10+)
 
-The probe analysis scripts use the real schema discovered from live runs:
+All trace files use the typed `TraceEvent` discriminated union. Every event shares base fields: `kind`, `runId`, `timestamp`, `iter`, `seq`.
 
-| Metric name | Type | When emitted | Key labels |
-|---|---|---|---|
-| `execution.iteration` | gauge | once at end | `taskId` |
-| `reasoning.steps` | counter | per kernel step (value=1) | `strategy`, `kernelPass` |
-| `entropy.composite` | gauge | per iteration | `iteration`, `shape`, `confidence` |
-| `execution.phase.count` | counter | per phase execution | `phase` |
-| `execution.phase.duration_ms` | histogram | per phase | `phase` |
-| `execution.tokens_used` | gauge | once at end | `taskId` |
-| `execution.tool.execution` | counter | per tool call | — |
+| kind | Key fields | Notes |
+|---|---|---|
+| `run-started` | `model`, `provider`, `config` | iter = -1 |
+| `run-completed` | `status`, `totalTokens`, `durationMs` | iter = -1; `status` is `"success"\|"failure"` |
+| `entropy-scored` | `composite`, `sources.{token,structural,semantic,behavioral,contextPressure}` | per iteration |
+| `decision-evaluated` | `decisionType`, `confidence`, `reason` | per RI decision |
+| `intervention-dispatched` | `decisionType`, `patchKind`, `cost`, `telemetry` | handler fired |
+| `intervention-suppressed` | `decisionType`, `reason` | suppression gate hit |
+| `strategy-switched` | `from`, `to`, `reason` | iter = -1 |
 
-**Critical**: `execution.iteration` fires **once** at the end (not per-iteration). To get per-iteration data, use `entropy.composite` with `labels.iteration`, or count `reasoning.steps` records. The broken jq commands in Phase 3 above assume a per-event `{event: "ThinkStart"}` schema that does not exist — always use `harness-probe-analyze.ts` instead of raw jq.
+To get per-iteration data, use `entropy-scored` events (one per iteration, keyed on `iter`). To get intervention activity, use `intervention-dispatched` and `intervention-suppressed`. To check run outcome, use `run-completed.status`.
+
+**Legacy metric names** (`execution.iteration`, `reasoning.steps`, `entropy.composite` with `labels`) are from the pre-v0.10 observability system and no longer apply. Do not use them.
 
 ### Adding regression baselines
 
