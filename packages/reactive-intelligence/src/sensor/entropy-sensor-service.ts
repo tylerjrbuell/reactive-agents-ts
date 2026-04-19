@@ -107,7 +107,7 @@ export const EntropySensorServiceLive = (
             const {
               thought, strategy, iteration, maxIterations,
               modelId, temperature, priorThought, logprobs, kernelState,
-              taskCategory,
+              taskCategory, taskDescription,
             } = params;
 
             const model = lookupModel(modelId, config.models);
@@ -167,13 +167,38 @@ export const EntropySensorServiceLive = (
               ? computeEntropyTrajectory(historyValues, maxIterations)
               : undefined;
 
+            // 5b. Context pressure — derive from kernelState tokens + steps content
+            const stepContentTokens = kernelState.steps.reduce(
+              (sum, s) => sum + Math.ceil((s.content?.length ?? 0) / 4),
+              0,
+            );
+            const currentTokens = kernelState.tokens > 0
+              ? kernelState.tokens
+              : stepContentTokens + Math.ceil((thought.length + taskDescription.length) / 4);
+            const cpResult = computeContextPressure({
+              systemPrompt: "",
+              toolResults: [],
+              history: kernelState.steps
+                .filter((s) => s.type === "observation" || s.type === "thought")
+                .map((s) => s.content ?? ""),
+              taskDescription,
+              contextLimit: model.contextLimit,
+            });
+            const rawContextPressure = model.contextLimit > 0
+              ? Math.max(cpResult.utilizationPct, Math.min(1, currentTokens / model.contextLimit))
+              : cpResult.utilizationPct;
+            // Scale: 0 below 50% utilization, linear 0→1 from 50%→100%
+            const contextPressureValue = rawContextPressure <= 0.5
+              ? 0
+              : (rawContextPressure - 0.5) * 2;
+
             // 6. Composite score
             const score = computeCompositeEntropy({
               token: tokenResult?.sequenceEntropy ?? null,
               structural: meanStructural(structuralResult),
               semantic: semanticTaskAlignment,
               behavioral: meanBehavioral(behavioralResult),
-              contextPressure: 0,
+              contextPressure: contextPressureValue,
               logprobsAvailable: tokenResult !== null,
               iteration,
               maxIterations,

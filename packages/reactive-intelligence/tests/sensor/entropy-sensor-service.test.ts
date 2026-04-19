@@ -118,4 +118,52 @@ describe("EntropySensorService", () => {
     expect(cal.calibrated).toBe(false);
     expect(cal.sampleCount).toBe(0);
   });
+
+  test("score() contextPressure is > 0 when token count exceeds 50% of context window", async () => {
+    // cogito:14b has contextLimit 32_768.
+    // Setting kernelState.tokens = 20_000 => ~61% utilization => above 50% threshold => contextPressure > 0.
+    const program = Effect.gen(function* () {
+      const sensor = yield* EntropySensorService;
+      return yield* sensor.score({
+        thought: "Analyzing results",
+        taskDescription: "Summarize the data",
+        strategy: "reactive",
+        iteration: 5,
+        maxIterations: 10,
+        modelId: "cogito:14b",
+        temperature: 0.3,
+        kernelState: makeKernelState({
+          taskId: "ctx-pressure-test",
+          tokens: 20_000,
+        }),
+      });
+    });
+
+    const result = await Effect.runPromise(program.pipe(Effect.provide(testLayer)));
+    expect(result.sources.contextPressure).toBeGreaterThan(0);
+  });
+
+  test("score() contextPressure is 0 when token count is below 50% of context window", async () => {
+    // cogito:14b has contextLimit 32_768.
+    // Setting kernelState.tokens = 1_000 => ~3% utilization => below 50% threshold => contextPressure = 0.
+    const program = Effect.gen(function* () {
+      const sensor = yield* EntropySensorService;
+      return yield* sensor.score({
+        thought: "Starting task",
+        taskDescription: "Quick lookup",
+        strategy: "reactive",
+        iteration: 1,
+        maxIterations: 10,
+        modelId: "cogito:14b",
+        temperature: 0.3,
+        kernelState: makeKernelState({
+          taskId: "ctx-pressure-low-test",
+          tokens: 1_000,
+        }),
+      });
+    });
+
+    const result = await Effect.runPromise(program.pipe(Effect.provide(testLayer)));
+    expect(result.sources.contextPressure).toBe(0);
+  });
 });
