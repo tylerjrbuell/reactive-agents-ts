@@ -1,0 +1,28 @@
+{
+  "name": "@reactive-agents/scenarios",
+  "version": "0.10.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@reactive-agents/trace": "workspace:*",
+    "@reactive-agents/testing": "workspace:*"
+  },
+  "devDependencies": {
+    "tsup": "*",
+    "typescript": "*",
+    "bun-types": "latest"
+  }
+}
