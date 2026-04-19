@@ -62,6 +62,38 @@ type ReactiveControllerInstance = {
 /** GenericTag for ReactiveControllerService — avoids cross-package dependency */
 const ReactiveControllerTag = Context.GenericTag<ReactiveControllerInstance>("ReactiveControllerService");
 
+/** Narrow InterventionDispatcherService surface — structural type to avoid
+ *  depending on @reactive-agents/reactive-intelligence from the reasoning package. */
+type DispatcherInstance = {
+  readonly dispatch: (
+    decisions: readonly { readonly decision: string; readonly reason: string }[],
+    state: Readonly<Record<string, unknown>>,
+    context: {
+      readonly iteration: number;
+      readonly entropyScore: {
+        readonly composite: number;
+        readonly token: number;
+        readonly structural: number;
+        readonly semantic: number;
+        readonly behavioral: number;
+        readonly contextPressure: number;
+      };
+      readonly recentDecisions: readonly { readonly decision: string; readonly reason: string }[];
+      readonly budget: {
+        readonly tokensSpentOnInterventions: number;
+        readonly interventionsFiredThisRun: number;
+      };
+    },
+  ) => Effect.Effect<{
+    readonly appliedPatches: readonly { readonly kind: string; readonly [k: string]: unknown }[];
+    readonly skipped: readonly { decisionType: string; reason: string }[];
+    readonly totalCost: { tokens: number; latencyMs: number };
+  }>;
+};
+
+/** GenericTag for InterventionDispatcherService — avoids cross-package dependency */
+const InterventionDispatcherTag = Context.GenericTag<DispatcherInstance>("InterventionDispatcherService");
+
 // ── Resolved services bundle ──────────────────────────────────────────────────
 
 export type StrategyServices = {
@@ -77,6 +109,8 @@ export type StrategyServices = {
   entropySensor: MaybeService<EntropySensorInstance>;
   /** Reactive controller — None when reactive intelligence controller is absent */
   reactiveController: MaybeService<ReactiveControllerInstance>;
+  /** Intervention dispatcher — None when reactive intelligence controller is absent */
+  dispatcher: MaybeService<DispatcherInstance>;
 };
 
 /**
@@ -123,7 +157,12 @@ export const resolveStrategyServices: Effect.Effect<
   );
   const reactiveController = reactiveControllerOptRaw as MaybeService<ReactiveControllerInstance>;
 
-  return { llm, toolService, promptService, eventBus, entropySensor, reactiveController };
+  const dispatcherOptRaw = yield* Effect.serviceOption(InterventionDispatcherTag).pipe(
+    Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
+  );
+  const dispatcher = dispatcherOptRaw as MaybeService<DispatcherInstance>;
+
+  return { llm, toolService, promptService, eventBus, entropySensor, reactiveController, dispatcher };
 });
 
 /**

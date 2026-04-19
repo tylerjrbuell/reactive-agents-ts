@@ -201,6 +201,57 @@ export function runReactiveObserver(
           s = transitionState(s, {
             controllerDecisionLog: [...s.controllerDecisionLog, ...formatted],
           });
+
+          // ── Intervention dispatcher ─────────────────────────────────────
+          // Dispatch decisions through the handler registry when the dispatcher
+          // service is available. Patches are folded back into KernelState via
+          // transitionState using only fields that exist on KernelMeta / KernelState.
+          if (services.dispatcher._tag === "Some") {
+            const richLatest = latestScore as {
+              composite?: number; token?: number; structural?: number;
+              semantic?: number; behavioral?: number;
+              sources?: { contextPressure?: number };
+            } | undefined;
+            const dispatchContext = {
+              iteration: s.iteration,
+              entropyScore: {
+                composite: richLatest?.composite ?? 0,
+                token: richLatest?.token ?? 0,
+                structural: richLatest?.structural ?? 0,
+                semantic: richLatest?.semantic ?? 0,
+                behavioral: richLatest?.behavioral ?? 0,
+                contextPressure: richLatest?.sources?.contextPressure ?? 0,
+              },
+              recentDecisions: decisions as readonly { readonly decision: string; readonly reason: string }[],
+              budget: { tokensSpentOnInterventions: 0, interventionsFiredThisRun: 0 },
+            };
+            const dispatchResult = yield* services.dispatcher.value
+              .dispatch(
+                decisions as readonly { readonly decision: string; readonly reason: string }[],
+                s as unknown as Readonly<Record<string, unknown>>,
+                dispatchContext,
+              )
+              .pipe(Effect.catchAll(() => Effect.succeed({ appliedPatches: [], skipped: [], totalCost: { tokens: 0, latencyMs: 0 } })));
+
+            for (const patch of dispatchResult.appliedPatches) {
+              if (patch.kind === "early-stop") {
+                // Mark terminatedBy so the kernel runner exits the loop on the next
+                // iteration check. The termination oracle also sees controllerDecisions
+                // already written above, so this is a belt-and-suspenders path.
+                s = transitionState(s, {
+                  meta: {
+                    ...s.meta,
+                    terminatedBy: typeof patch["reason"] === "string" ? patch["reason"] : "dispatcher-early-stop",
+                  },
+                });
+              }
+              // request-strategy-switch, set-temperature, append-system-nudge,
+              // compress-messages, inject-tool-guidance, inject-skill-content:
+              // No dedicated KernelState/KernelMeta field exists yet for these.
+              // They are already recorded in controllerDecisionLog above for the
+              // pulse tool and future downstream consumers.
+            }
+          }
         }
       }
     }

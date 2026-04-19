@@ -56,6 +56,23 @@ export {
 
 // ── Controller ──
 export { ReactiveControllerService, ReactiveControllerServiceLive } from "./controller/controller-service.js";
+export { InterventionDispatcherService, InterventionDispatcherServiceLive } from "./controller/dispatcher-service.js";
+export type { Dispatcher, DispatchResult } from "./controller/dispatcher.js";
+export {
+  makeDispatcher,
+  registerHandler,
+} from "./controller/dispatcher.js";
+export type {
+  InterventionConfig,
+  InterventionHandler,
+  InterventionContext,
+  InterventionOutcome,
+  KernelStatePatch,
+} from "./controller/intervention.js";
+export { defaultInterventionConfig } from "./controller/intervention.js";
+export { applyPatches } from "./controller/patch-applier.js";
+export { defaultInterventionRegistry } from "./controller/handlers/index.js";
+export { earlyStopHandler } from "./controller/handlers/early-stop.js";
 
 // ── Telemetry ──
 export { getOrCreateInstallId } from "./telemetry/install-id.js";

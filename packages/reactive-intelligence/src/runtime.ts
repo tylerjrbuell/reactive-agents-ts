@@ -3,6 +3,7 @@ import type { ReactiveIntelligenceConfig } from "./types.js";
 import { defaultReactiveIntelligenceConfig } from "./types.js";
 import { EntropySensorServiceLive } from "./sensor/entropy-sensor-service.js";
 import { ReactiveControllerServiceLive } from "./controller/controller-service.js";
+import { InterventionDispatcherServiceLive } from "./controller/dispatcher-service.js";
 import { CalibrationStore } from "./calibration/calibration-store.js";
 import { BanditStore } from "./learning/bandit-store.js";
 import { LearningEngineServiceLive } from "./learning/learning-engine.js";
@@ -44,7 +45,9 @@ export const createReactiveIntelligenceLayer = (
       contextCompression: ctrl?.contextCompression ?? false,
       strategySwitch: ctrl?.strategySwitch ?? false,
     });
+    const dispatcherLayer = InterventionDispatcherServiceLive();
     combined = Layer.merge(combined, controllerLayer) as any;
+    combined = Layer.merge(combined, dispatcherLayer) as any;
   }
 
   // Skill Resolver (optional)
