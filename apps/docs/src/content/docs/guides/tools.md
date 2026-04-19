@@ -170,7 +170,7 @@ const result = await agent.run("List open PRs and summarize what each one change
 
 ### gws-cli
 
-Runs any [Google Workspace CLI](https://github.com/nicholasgasior/gws) (`gws`) command, providing access to Gmail, Google Calendar, Google Drive, and other Workspace services. Requires `gws` to be installed, in `$PATH`, and authenticated (`gws auth login`).
+Runs Google Workspace CLI (`gws`) commands, providing access to Gmail, Google Calendar, Google Drive, and other Workspace services. Requires `gws` to be installed, in `$PATH`, and authenticated (`gws auth login`).
 
 **Parameters:**
 
