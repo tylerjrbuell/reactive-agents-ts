@@ -62,12 +62,10 @@ export function traceStats(trace: Trace): TraceStats {
         break
       case "entropy-scored":
         if (ev.composite > maxEntropy) maxEntropy = ev.composite
+        if (ev.iter > iterations) iterations = ev.iter
         break
       case "tool-call-end":
         toolCalls++
-        break
-      case "iteration-enter":
-        iterations++
         break
       case "run-completed":
         durationMs = ev.durationMs
