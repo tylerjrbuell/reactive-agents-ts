@@ -3491,7 +3491,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   output?: unknown;
                   status?: string;
                   steps?: ReadonlyArray<{ type?: string; content?: string }>;
-                  metadata?: { confidence?: number; strategyFallback?: boolean; terminatedBy?: string; finalAnswerCapture?: unknown };
+                  metadata?: { confidence?: number; strategyFallback?: boolean; terminatedBy?: string; finalAnswerCapture?: unknown; llmCalls?: number };
                 } | undefined;
                 let rawOutput: unknown = ctx.metadata.lastResponse ?? null;
                 if (
@@ -3697,7 +3697,8 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       toolCallLog.length,
                       terminatedByRaw,
                     ),
-                    llmCalls: (rr as any)?.metadata?.llmCalls ?? (ctx.metadata.llmCalls as number | undefined) ?? 0,
+                    // rr.metadata has llmCalls from reasoning path; ctx.metadata from direct-LLM path
+                    llmCalls: rr?.metadata?.llmCalls ?? (ctx.metadata.llmCalls as number | undefined) ?? 0,
                   },
                   completedAt: new Date(),
                   format: "text",
