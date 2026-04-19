@@ -35,27 +35,27 @@ test("dispatcher wiring: early-stop fires when entropy is high and iteration >= 
   expect(result.skipped).toHaveLength(0)
 })
 
-test("dispatcher wiring: early-stop is suppressed when entropy is below threshold", async () => {
+test("dispatcher wiring: early-stop is EXEMPT from entropy floor and fires at low composite", async () => {
   const dispatcher = makeDispatcher(defaultInterventionConfig)
   registerHandler(dispatcher, earlyStopHandler)
 
-  // defaultInterventionConfig.suppression.minEntropyComposite = 0.55
+  // early-stop fires at convergence (composite ≤ 0.4), so the 0.55 floor must not block it.
   const result = await Effect.runPromise(
     dispatcher.dispatch(
       [{ decision: "early-stop", reason: "loop-detected", iterationsSaved: 1, confidence: 0.6 }],
       { messages: [], currentOptions: {} } as unknown as Readonly<Record<string, unknown>>,
       {
         iteration: 3,
-        entropyScore: { ...highEntropyScore, composite: 0.3 }, // below 0.55
+        entropyScore: { ...highEntropyScore, composite: 0.3 }, // below 0.55 — should NOT suppress early-stop
         recentDecisions: [],
         budget: { tokensSpentOnInterventions: 0, interventionsFiredThisRun: 0 },
       },
     ),
   )
 
-  expect(result.appliedPatches).toHaveLength(0)
-  expect(result.skipped).toHaveLength(1)
-  expect(result.skipped[0]!.reason).toBe("below-entropy-threshold")
+  expect(result.appliedPatches).toHaveLength(1)
+  expect(result.appliedPatches[0]!.kind).toBe("early-stop")
+  expect(result.skipped).toHaveLength(0)
 })
 
 test("dispatcher wiring: early-stop is suppressed when iteration is below threshold", async () => {

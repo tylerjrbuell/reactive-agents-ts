@@ -54,6 +54,7 @@ describe("resolveModelCalibrationAsync", () => {
   it("merges community profile when fetchCommunity is true and profile found", async () => {
     const cal = await resolveModelCalibrationAsync("gemma4:e4b", {
       observationsBaseDir: testRoot,
+      communityCacheDir: testRoot,
       fetchCommunity: true,
       communityEndpoint: "http://mock.invalid",
       communityFetchImpl: async () => new Response(
