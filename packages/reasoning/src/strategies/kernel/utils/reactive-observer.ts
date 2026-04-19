@@ -270,7 +270,6 @@ export function runReactiveObserver(
 
               switch (patch.kind) {
                 case "early-stop":
-                  // handled: early-stop terminates the kernel loop
                   // Always use "dispatcher-early-stop" as the sentinel so kernel-runner
                   // can reliably break on this exact value. The evaluator reason is
                   // preserved in the InterventionDispatched trace event.
@@ -278,10 +277,20 @@ export function runReactiveObserver(
                     meta: { ...s.meta, terminatedBy: "dispatcher-early-stop" },
                   });
                   break
+                case "compress-messages": {
+                  // KernelMessage has no token annotations, so use count-based compression:
+                  // keep the last N messages where N ≈ targetTokens / 200 tok-per-msg.
+                  const p = patch as { kind: "compress-messages"; targetTokens: number };
+                  const keepCount = Math.max(1, Math.ceil(p.targetTokens / 200));
+                  const compressed = s.messages.slice(Math.max(0, s.messages.length - keepCount));
+                  s = transitionState(s, { messages: compressed });
+                  break
+                }
                 default:
-                  // Other patch kinds (temp-adjust, compress-messages, etc.) are applied
-                  // by the caller via applyPatches() once kernel state becomes accessible here.
-                  // This is a known gap: Tasks 3.x handlers will need this path.
+                  // set-temperature, request-strategy-switch, inject-tool-guidance,
+                  // inject-skill-content, append-system-nudge: not yet applied here.
+                  // These require kernel-runner.ts to propagate patches into currentOptions
+                  // or the next think pass. Tracked as a follow-up task.
                   break
               }
             }
