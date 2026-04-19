@@ -132,8 +132,8 @@ __fn()
       }, timeoutMs);
 
       // Read stdout and stderr
-      const stdoutText = await new Response(proc.stdout).text();
-      const stderrText = await new Response(proc.stderr).text();
+      const stdoutText = await new Response(proc.stdout as ReadableStream).text();
+      const stderrText = await new Response(proc.stderr as ReadableStream).text();
       const exitCode = await proc.exited;
 
       clearTimeout(timeoutId);
