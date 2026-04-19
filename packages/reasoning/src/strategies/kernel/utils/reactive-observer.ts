@@ -151,6 +151,21 @@ export function runReactiveObserver(
           }
         }
 
+        // Collect available tool names for evaluators that need them (e.g. tool-inject)
+        const availableToolNames: string[] = [];
+        if (services.toolService._tag === "Some") {
+          const toolList = yield* services.toolService.value.listTools().pipe(
+            Effect.catchAll(() => Effect.succeed([] as readonly { readonly name: string }[])),
+          );
+          for (const t of toolList) availableToolNames.push(t.name);
+        }
+
+        // Extract decision types already fired this run for human-escalate evaluator
+        const priorDecisionsThisRun = s.controllerDecisionLog.map((entry) => {
+          const colonIdx = entry.indexOf(":");
+          return colonIdx > 0 ? entry.slice(0, colonIdx).trim() : entry;
+        });
+
         const decisions = yield* services.reactiveController.value.evaluate({
           entropyHistory,
           iteration: s.iteration,
@@ -164,6 +179,9 @@ export function runReactiveObserver(
           },
           contextPressure: latestScore?.sources?.contextPressure ?? 0,
           behavioralLoopScore: latestScore?.sources?.behavioral ?? 0,
+          currentTemperature: currentOptions.temperature ?? s.meta.entropy?.temperature,
+          availableToolNames: availableToolNames.length > 0 ? availableToolNames : undefined,
+          priorDecisionsThisRun: priorDecisionsThisRun.length > 0 ? priorDecisionsThisRun : undefined,
         });
 
         for (const decision of decisions) {
@@ -253,13 +271,11 @@ export function runReactiveObserver(
               switch (patch.kind) {
                 case "early-stop":
                   // handled: early-stop terminates the kernel loop
+                  // Always use "dispatcher-early-stop" as the sentinel so kernel-runner
+                  // can reliably break on this exact value. The evaluator reason is
+                  // preserved in the InterventionDispatched trace event.
                   s = transitionState(s, {
-                    meta: {
-                      ...s.meta,
-                      terminatedBy: typeof (patch as Record<string, unknown>)["reason"] === "string"
-                        ? (patch as Record<string, unknown>)["reason"] as string
-                        : "dispatcher-early-stop",
-                    },
+                    meta: { ...s.meta, terminatedBy: "dispatcher-early-stop" },
                   });
                   break
                 default:

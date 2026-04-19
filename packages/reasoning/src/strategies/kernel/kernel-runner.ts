@@ -658,6 +658,12 @@ export function runKernel(
         state, services, eventBus, prevStepCount, currentOptions,
       ));
 
+      // Honor early-stop dispatched by the intervention dispatcher
+      if (state.meta.terminatedBy === "dispatcher-early-stop") {
+        state = transitionState(state, { status: "done", output: state.output ?? "" });
+        break;
+      }
+
       // ── Iteration progress hook ──────────────────────────────────────────
       // Compute which tools were called in THIS iteration by scanning new action
       // steps since prevStepCount. Includes duplicates so parallel batches
