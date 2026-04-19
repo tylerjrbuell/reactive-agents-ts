@@ -128,16 +128,34 @@ export async function run(opts?: {
     const provider = 'test' as const
 
     const mockHnPosts = [
-        { id: 1, title: 'New AI breakthrough announced', score: 2500, url: 'https://example.com/ai' },
-        { id: 2, title: 'TypeScript 5.5 released', score: 1800, url: 'https://example.com/ts' },
-        { id: 3, title: 'React 19 performance improvements', score: 1600, url: 'https://example.com/react' },
+        {
+            id: 1,
+            title: 'New AI breakthrough announced',
+            score: 2500,
+            url: 'https://example.com/ai',
+        },
+        {
+            id: 2,
+            title: 'TypeScript 5.5 released',
+            score: 1800,
+            url: 'https://example.com/ts',
+        },
+        {
+            id: 3,
+            title: 'React 19 performance improvements',
+            score: 1600,
+            url: 'https://example.com/react',
+        },
     ]
 
     const mockGetHnPostsTool = {
         ...getHnPostsTool,
         handler: (args: Record<string, unknown>) =>
             Effect.succeed(
-                mockHnPosts.slice(0, Math.max(1, Math.min(100, Number(args.count) || 25)))
+                mockHnPosts.slice(
+                    0,
+                    Math.max(1, Math.min(100, Number(args.count) || 25))
+                )
             ),
     }
 
@@ -163,7 +181,7 @@ export async function run(opts?: {
             },
             crons: [
                 {
-                    schedule: '*/1 * * * *',
+                    schedule: '* * * * *',
                     instruction: digestInstruction,
                     priority: 'normal' as const,
                     enabled: true,
@@ -182,7 +200,12 @@ export async function run(opts?: {
         })
         .build()
 
-    let summary: { totalRuns: number; heartbeatsFired: number; cronChecks: number; error?: string }
+    let summary: {
+        totalRuns: number
+        heartbeatsFired: number
+        cronChecks: number
+        error?: string
+    }
     const handle = agent.start()
 
     try {
@@ -260,7 +283,7 @@ async function main(): Promise<void> {
             },
             crons: [
                 {
-                    schedule: '*/5 * * * *',
+                    schedule: '* * * * *',
                     instruction: digestInstruction,
                     priority: 'normal',
                 },
@@ -280,19 +303,46 @@ async function main(): Promise<void> {
     console.log('\n╔═══════════════════════════════════════╗')
     console.log('║    HN Gateway Monitor Started        ║')
     console.log('╚═══════════════════════════════════════╝')
-    console.log(`Provider:    ${provider}${model ? ` (${model})` : ''}`)
-    console.log(`Timezone:    ${timezone}`)
-    console.log(`Memory DB:   ${memoryDb}`)
-    console.log(`Reports:     ${REPORT_DIR}/report-*.md`)
-    console.log(`Cron:        */5 * * * * (every 5 minutes)`)
-    console.log(`Heartbeat:   60s (adaptive policy)\n`)
+    console.log(`Provider:        ${provider}${model ? ` (${model})` : ''}`)
+    console.log(`Timezone:        ${timezone}`)
+    console.log(`Memory DB:       ${memoryDb}`)
+    console.log(`Reports:         ${REPORT_DIR}/report-*.md`)
+    console.log(`Cron:            * * * * * (every minute)`)
+    console.log(`Heartbeat:       60s (adaptive policy, max 8 consecutive skips)`)
+    console.log(`Policy budgets:  200k tokens/day, 60 actions/hour`)
+    console.log('\n◀ State Tracking ▶')
+    console.log('  consecutiveHeartbeatSkips  — resets to 0 on execute, forces run after 8')
+    console.log('  lastExecutionAt            — when agent last ran (enables adaptive skip)')
+    console.log('  tokensUsedToday            — enforces daily budget (200k limit)')
+    console.log('  actionsThisHour            — enforces rate limit (60/hour limit)\n')
     console.log('Listening for heartbeats and cron events...')
     console.log('Press Ctrl+C to gracefully shutdown.\n')
+
+    // Periodic state snapshot for monitoring
+    const stateInterval = setInterval(async () => {
+        try {
+            const status = await agent.gatewayStatus()
+            if (status) {
+                console.log(
+                    `[State] ` +
+                    `hb_fired=${status.stats.heartbeatsFired} ` +
+                    `hb_skipped=${status.stats.heartbeatsSkipped} ` +
+                    `consecutive_skips=${status.state.consecutiveHeartbeatSkips} ` +
+                    `tokens=${status.stats.totalTokensUsed}/${status.state.tokensUsedToday} ` +
+                    `actions_this_hour=${status.state.actionsThisHour} ` +
+                    `last_run=${status.state.lastExecutionAt ? new Date(status.state.lastExecutionAt).toLocaleTimeString() : 'never'}`
+                )
+            }
+        } catch {
+            // Gateway may not be ready yet
+        }
+    }, 15_000)
 
     let shuttingDown = false
     const shutdown = async () => {
         if (shuttingDown) return
         shuttingDown = true
+        clearInterval(stateInterval)
 
         console.log('\n╔═══════════════════════════════════════╗')
         console.log('║    Shutting Down Gateway             ║')
@@ -300,14 +350,52 @@ async function main(): Promise<void> {
 
         try {
             const summary = await handle.stop()
+            const finalStatus = await agent.gatewayStatus()
+
             console.log(
-                `\nFinal Summary:\n  Runs:      ${summary.totalRuns}\n  Heartbeats: ${summary.heartbeatsFired}\n  Cron Checks: ${summary.cronChecks}`
+                `\nFinal Summary (from handle.stop()):`)
+            console.log(
+                `  Total Runs:             ${summary.totalRuns}`
             )
+            console.log(
+                `  Heartbeats Fired:       ${summary.heartbeatsFired}`
+            )
+            console.log(
+                `  Cron Checks:            ${summary.cronChecks}`
+            )
+
+            if (finalStatus) {
+                console.log(
+                    `\nFinal State (from gatewayStatus()):`)
+                console.log(
+                    `  Heartbeats Skipped:     ${finalStatus.stats.heartbeatsSkipped}`
+                )
+                console.log(
+                    `  Crons Executed:         ${finalStatus.stats.cronsExecuted}`
+                )
+                console.log(
+                    `  Actions Suppressed:     ${finalStatus.stats.actionsSuppressed}`
+                )
+                console.log(
+                    `  Total Tokens Used:      ${finalStatus.stats.totalTokensUsed}`
+                )
+                console.log(
+                    `  Tokens Today:           ${finalStatus.state.tokensUsedToday}`
+                )
+                console.log(
+                    `  Actions This Hour:      ${finalStatus.state.actionsThisHour}`
+                )
+            }
+
             if (summary.error) {
                 console.log(`\nError: ${summary.error}`)
             }
         } catch (e) {
-            console.log(`\nShutdown error: ${e instanceof Error ? e.message : String(e)}`)
+            console.log(
+                `\nShutdown error: ${
+                    e instanceof Error ? e.message : String(e)
+                }`
+            )
         } finally {
             await agent.dispose()
             console.log('\nGateway disposed. Exiting.')
@@ -321,7 +409,9 @@ async function main(): Promise<void> {
     try {
         await handle.done
     } catch (e) {
-        console.error(`\nGateway error: ${e instanceof Error ? e.message : String(e)}`)
+        console.error(
+            `\nGateway error: ${e instanceof Error ? e.message : String(e)}`
+        )
         await shutdown()
     }
 }
