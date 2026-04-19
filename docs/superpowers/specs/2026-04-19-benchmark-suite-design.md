@@ -111,30 +111,63 @@ BenchmarkSession config
 
 ## Type System
 
-### Harness variants — 5 canonical layers
+### Harness variants — 9 canonical layers
+
+Three tiers: universal baselines, established frameworks, RA harness.
 
 ```typescript
 // session.ts
 
 export const ABLATION_VARIANTS: ReadonlyArray<HarnessVariant> = [
+  // ── Tier 0: Universal baseline ─────────────────���─────────────────────
   {
     type: "internal",
     id: "bare-llm",
     label: "Bare LLM",
-    config: {},                    // single API call, no tools, no loop
+    config: {},                      // single API call, no tools, no loop
   },
+
+  // ── Tier 1: Build-it-yourself ────────────────────────────────────────
+  {
+    type: "internal",
+    id: "manual-react",
+    label: "Manual ReAct Loop",
+    config: { tools: true },         // raw SDK + while loop + native FC — what every dev writes first
+  },
+
+  // ── Tier 2: Established frameworks (pinned versions) ─────────────────
   {
     type: "competitor",
     id: "langchain-react",
-    label: "LangChain ReAct",
-    framework: "langchain",        // runs via competitors/langchain-runner.ts
+    label: "LangChain JS",           // @langchain/core ^0.3, most recognized globally
+    framework: "langchain",
+  },
+  {
+    type: "competitor",
+    id: "vercel-ai-sdk",
+    label: "Vercel AI SDK",          // ai ^4, most used TypeScript AI library
+    framework: "vercel-ai",
+  },
+  {
+    type: "competitor",
+    id: "openai-agents",
+    label: "OpenAI Agents SDK",      // @openai/agents ^0.x, OpenAI's own framework
+    framework: "openai-agents",
   },
   {
     type: "competitor",
     id: "mastra-agent",
-    label: "Mastra Agent",
-    framework: "mastra",           // runs via competitors/mastra-runner.ts
+    label: "Mastra",                 // @mastra/core ^0.x, TypeScript-native competitor
+    framework: "mastra",
   },
+  {
+    type: "competitor",
+    id: "llamaindex-ts",
+    label: "LlamaIndex TS",          // llamaindex ^0.x, well-known from Python ecosystem
+    framework: "llamaindex",
+  },
+
+  // ── Tier 3: RA harness ───────────────────────────────���───────────────
   {
     type: "internal",
     id: "ra-reasoning",
@@ -144,7 +177,7 @@ export const ABLATION_VARIANTS: ReadonlyArray<HarnessVariant> = [
   {
     type: "internal",
     id: "ra-full",
-    label: "Full Harness",
+    label: "RA Full Harness",
     config: {
       tools: true,
       reasoning: true,
@@ -156,12 +189,14 @@ export const ABLATION_VARIANTS: ReadonlyArray<HarnessVariant> = [
 ]
 ```
 
-Each delta tells a specific story:
-- `bare-llm → langchain-react`: what a battle-tested open-source loop buys over a raw call
-- `langchain-react → mastra-agent`: how two established competitors compare
-- `mastra-agent → ra-reasoning`: what RA's strategy sophistication adds over competitors
-- `ra-reasoning → ra-full`: what reactive intelligence specifically contributes
-- `bare-llm → ra-full`: total harness lift — the headline number
+Each tier tells a specific story:
+- **`bare-llm → manual-react`**: what a tool loop adds over a single call
+- **`manual-react → [competitors]`**: what established frameworks add over rolling your own
+- **`[competitors] → ra-reasoning`**: what RA's strategy sophistication adds over the field
+- **`ra-reasoning → ra-full`**: what reactive intelligence specifically contributes
+- **`bare-llm → ra-full`**: total harness lift — the headline number
+
+Competitor variants run with the same model, same API key, same tools (adapted to each framework's tool format), and the same timeout. The comparison is purely framework contribution, not model or tool access differences. All competitor packages are pinned to specific versions in `package.json` to prevent benchmark drift on framework updates.
 
 ### Variant types
 
@@ -179,7 +214,8 @@ export interface CompetitorVariant {
   readonly type: "competitor"
   readonly id: string
   readonly label: string
-  readonly framework: "langchain" | "mastra"
+  readonly framework: "langchain" | "vercel-ai" | "openai-agents" | "mastra" | "llamaindex"
+  readonly frameworkVersion?: string           // pinned version for reproducibility
   readonly frameworkConfig?: Record<string, unknown>
 }
 
@@ -598,7 +634,7 @@ Drop-off is 40% between signup and dashboard. Fix this.
 
 ## Competitor Runner Interface
 
-LangChain and Mastra runners implement a shared interface so the session runner dispatches them identically to internal variants.
+All competitor runners implement a shared interface. The session runner dispatches them identically to internal variants. Each lives in `competitors/` and is a dev dependency only.
 
 ```typescript
 // competitors/types.ts
@@ -606,6 +642,8 @@ LangChain and Mastra runners implement a shared interface so the session runner 
 export interface CompetitorRunner {
   readonly id: string
   readonly label: string
+  readonly framework: string
+  readonly pinnedVersion: string       // recorded in benchmark report for reproducibility
   run(
     task: BenchmarkTask,
     model: ModelVariant,
@@ -617,34 +655,103 @@ export interface CompetitorRunner {
 
 ```typescript
 // competitors/langchain-runner.ts
-// Uses: @langchain/core, @langchain/openai, @langchain/community (dev deps)
+// Dev deps: @langchain/core, @langchain/openai, @langchain/anthropic, @langchain/community
 
 export const langchainRunner: CompetitorRunner = {
   id: "langchain-react",
-  label: "LangChain ReAct",
+  label: "LangChain JS",
+  framework: "langchain",
+  pinnedVersion: "0.3.x",
   async run(task, model, tmpDir, timeoutMs) {
-    // createReactAgent with same tools mapped to LangChain tool format
-    // same model via ChatOpenAI / ChatAnthropic
-    // run task.prompt, collect output, return TaskResult
+    // createReactAgent(llm, tools, { messageModifier: task.prompt })
+    // tools mapped to DynamicTool format
+    // same model via ChatAnthropic / ChatOpenAI
+  },
+}
+```
+
+```typescript
+// competitors/vercel-ai-runner.ts
+// Dev deps: ai, @ai-sdk/anthropic, @ai-sdk/openai
+
+export const vercelAiRunner: CompetitorRunner = {
+  id: "vercel-ai-sdk",
+  label: "Vercel AI SDK",
+  framework: "vercel-ai",
+  pinnedVersion: "4.x",
+  async run(task, model, tmpDir, timeoutMs) {
+    // generateText with tools in a while loop until no more tool calls
+    // standard pattern from Vercel AI SDK docs
+  },
+}
+```
+
+```typescript
+// competitors/openai-agents-runner.ts
+// Dev deps: @openai/agents
+
+export const openaiAgentsRunner: CompetitorRunner = {
+  id: "openai-agents",
+  label: "OpenAI Agents SDK",
+  framework: "openai-agents",
+  pinnedVersion: "0.x",
+  async run(task, model, tmpDir, timeoutMs) {
+    // Agent with tools, run via Runner.run()
+    // mapped to OpenAI model names where provider is openai; skip for others
   },
 }
 ```
 
 ```typescript
 // competitors/mastra-runner.ts
-// Uses: @mastra/core (dev dep)
+// Dev deps: @mastra/core
 
 export const mastraRunner: CompetitorRunner = {
   id: "mastra-agent",
-  label: "Mastra Agent",
+  label: "Mastra",
+  framework: "mastra",
+  pinnedVersion: "0.x",
   async run(task, model, tmpDir, timeoutMs) {
-    // Mastra Agent with same tools and model
-    // run task.prompt, collect output, return TaskResult
+    // new Agent({ model, tools }) + agent.generate(task.prompt)
   },
 }
 ```
 
-Competitor runners get the same task prompt, same model and API key, same tools (mapped to their framework's tool format), and the same timeout. The comparison is purely about what the framework adds, not model or tool access differences.
+```typescript
+// competitors/llamaindex-runner.ts
+// Dev deps: llamaindex
+
+export const llamaindexRunner: CompetitorRunner = {
+  id: "llamaindex-ts",
+  label: "LlamaIndex TS",
+  framework: "llamaindex",
+  pinnedVersion: "0.x",
+  async run(task, model, tmpDir, timeoutMs) {
+    // OpenAIAgent / AnthropicAgent with tools
+    // agent.chat({ message: task.prompt })
+  },
+}
+```
+
+```typescript
+// competitors/index.ts
+
+export const COMPETITOR_RUNNERS: Record<string, CompetitorRunner> = {
+  langchain:      langchainRunner,
+  "vercel-ai":    vercelAiRunner,
+  "openai-agents": openaiAgentsRunner,
+  mastra:         mastraRunner,
+  llamaindex:     llamaindexRunner,
+}
+```
+
+**Fairness rules** enforced across all competitors:
+- Same model identifier (translated to framework's format where needed)
+- Same API key from environment
+- Same tool set (adapted to each framework's tool registration API)
+- Same task prompt verbatim
+- Same timeout
+- `openai-agents` variant is skipped automatically when provider is not OpenAI/compatible (reported as `"skip"` in results)
 
 ---
 
@@ -807,18 +914,19 @@ export const realWorldFullSession: BenchmarkSession = {
 
 ### `sessions/competitor-comparison.ts`
 
-Head-to-head comparison. Subset of tasks that expose the biggest differentiation points.
+Head-to-head across all 9 variants. Subset of tasks chosen to maximally expose differentiation between tiers. The publishable community comparison.
 
 ```typescript
 export const competitorComparisonSession: BenchmarkSession = {
   id: "competitor-comparison",
-  name: "Competitor Head-to-Head",
+  name: "Framework Landscape Comparison",
   version: "1.0.0",
   taskIds: ["rw-1", "rw-2", "rw-7", "rw-8", "rw-9"],  // research, reasoning, debug, memory, resilience
   models: [
     { id: "claude-haiku", provider: "anthropic", model: "claude-haiku-4-5", contextTier: "standard" },
+    { id: "gpt-4o-mini",  provider: "openai",    model: "gpt-4o-mini",      contextTier: "standard" },
   ],
-  harnessVariants: ABLATION_VARIANTS,  // includes langchain-react and mastra-agent
+  harnessVariants: ABLATION_VARIANTS,  // all 9 variants
   runs: 3,
   traceDir: "benchmark-traces",
   concurrency: 1,
@@ -878,30 +986,41 @@ A spider/radar chart showing mean score per dimension for each variant. Renders 
 ### Harness lift summary card
 
 ```
-┌─ Harness Impact — Real-World Tasks ────────────────────────────────┐
-│  Average accuracy across 10 tasks                                   │
-│                                                                     │
-│  bare-llm       ████░░░░░░░░░░░░░░░  28%                           │
-│  langchain-react ███████░░░░░░░░░░░  46%  +18pp                    │
-│  mastra-agent   ████████░░░░░░░░░░░  51%  +5pp                     │
-│  ra-reasoning   ████████████░░░░░░░  65%  +14pp                    │
-│  ra-full        ████████████████░░░  81%  +16pp                    │
-│                                                                     │
-│  Total RA lift: +53pp over bare-llm · +35pp over best competitor   │
-└─────────────────────────────────────────────────────────────────────┘
+┌─ Framework Landscape — Real-World Tasks (claude-haiku-4-5) ─────────┐
+│  Average accuracy across 10 tasks                                    │
+│                                                                      │
+│  Tier 0 ──────────────────────────────────────────────────────────  │
+│  bare-llm        ████░░░░░░░░░░░░░░░  28%                           │
+│                                                                      │
+│  Tier 1: Build-it-yourself ────────────────────────────────────────  │
+│  manual-react    ██████░░░░░░░░░░░░░  38%  +10pp                    │
+│                                                                      │
+│  Tier 2: Established frameworks ──────────────────────────────────  │
+│  LangChain JS    ████████░░░░░░░░░░░  46%  +8pp                     │
+│  Vercel AI SDK   █████████░░░░░░░░░░  51%  +5pp                     │
+│  OpenAI Agents   █████████░░░░░░░░░░  53%  +2pp                     │
+│  Mastra          █████████░░░░░░░░░░  54%  +1pp                     │
+│  LlamaIndex TS   ████████░░░░░░░░░░░  49%  —                        │
+│                                                                      │
+│  Tier 3: RA Harness ──────────────────────────────────────────────  │
+│  ra-reasoning    █████████████░░░░░░  67%  +13pp over best comp.    │
+│  ra-full         ████████████████░░░  81%  +27pp over best comp.    │
+│                                                                      │
+│  Total RA lift: +53pp over bare-llm · +27pp over best competitor    │
+└──────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Per-task ablation table
 
-Columns: variant scores + reliability (variance) + drift vs baseline.
+Tabs: model tier | view: accuracy | dimensions | reliability | drift.
 
 ```
-Task                    │ bare │ lc  │ ma  │ ra-r │ full │ reli │ lift  │ drift
-────────────────────────┼──────┼─────┼─────┼──────┼──────┼──────┼───────┼──────
-Research synthesis      │ 0.20 │ 0.48│ 0.52│ 0.64 │ 0.82 │ 0.91 │ +0.62 │  —
-Memory under pressure   │ 0.05 │ 0.18│ 0.22│ 0.45 │ 0.88 │ 0.95 │ +0.83 │  ↑
-Adversarial convergence │ 0.10 │ 0.12│ 0.15│ 0.42 │ 0.87 │ 0.89 │ +0.77 │  —
-Resilience under failure│ 0.15 │ 0.40│ 0.45│ 0.62 │ 0.85 │ 0.92 │ +0.70 │  ↓ ⚠
+Task                    │bare│mre│ lc │vai │oai │ma │lla│ra-r│full│reli│lift │drift
+────────────────────────┼────┼───┼────┼────┼────┼───┼───┼────┼────┼────┼─────┼─────
+Research synthesis      │.20 │.32│.46 │.50 │.52 │.53│.47│.65 │.82 │.91 │+.62 │  —
+Memory under pressure   │.05 │.08│.18 │.20 │.22 │.23│.16│.46 │.88 │.95 │+.83 │  ↑
+Adversarial convergence │.10 │.10│.12 │.14 │.15 │.15│.11│.44 │.87 │.89 │+.77 │  —
+Resilience under failure│.15 │.28│.40 │.44 │.46 │.47│.38│.63 │.85 │.92 │+.70 │  ↓ ⚠
 ```
 
 Reliability column: 1.0 = perfectly consistent across 3 runs, 0.0 = random. Drift: `↑` improved, `↓` regressed, `⚠` exceeds threshold.
