@@ -36,6 +36,8 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: rm -rf .turbo && bun run build --filter='!@reactive-agents/docs'
       - run: cd apps/docs && bun run build
+      - name: Check capability manifest
+        run: bun run scripts/check-capabilities.ts
       - run: bun test
 
   docs-links:
