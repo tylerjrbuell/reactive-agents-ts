@@ -17,7 +17,13 @@ export async function loadTrace(path: string): Promise<Trace> {
   const events = text
     .split("\n")
     .filter(Boolean)
-    .map((line) => JSON.parse(line) as TraceEvent)
+    .flatMap((line) => {
+      try {
+        return [JSON.parse(line) as TraceEvent]
+      } catch {
+        return []
+      }
+    })
   const runId = events[0]?.runId ?? "unknown"
   return { runId, events }
 }
@@ -60,12 +66,14 @@ export function traceStats(trace: Trace): TraceStats {
       case "tool-call-end":
         toolCalls++
         break
-      case "iteration-exit":
+      case "iteration-enter":
         iterations++
         break
       case "run-completed":
         durationMs = ev.durationMs
         totalTokens = ev.totalTokens
+        break
+      default:
         break
     }
   }
