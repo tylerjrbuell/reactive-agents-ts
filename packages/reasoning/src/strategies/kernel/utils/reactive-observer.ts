@@ -233,23 +233,61 @@ export function runReactiveObserver(
               )
               .pipe(Effect.catchAll(() => Effect.succeed({ appliedPatches: [], skipped: [], totalCost: { tokens: 0, latencyMs: 0 } })));
 
+            // Emit InterventionDispatched events for applied patches
             for (const patch of dispatchResult.appliedPatches) {
-              if (patch.kind === "early-stop") {
-                // Mark terminatedBy so the kernel runner exits the loop on the next
-                // iteration check. The termination oracle also sees controllerDecisions
-                // already written above, so this is a belt-and-suspenders path.
-                s = transitionState(s, {
-                  meta: {
-                    ...s.meta,
-                    terminatedBy: typeof patch["reason"] === "string" ? patch["reason"] : "dispatcher-early-stop",
+              if (eventBus._tag === "Some") {
+                yield* eventBus.value.publish({
+                  _tag: "InterventionDispatched",
+                  taskId: s.taskId,
+                  iteration: s.iteration,
+                  decisionType: patch.kind,
+                  patchKind: patch.kind,
+                  cost: {
+                    tokensEstimated: dispatchResult.totalCost.tokens,
+                    latencyMsEstimated: dispatchResult.totalCost.latencyMs,
                   },
-                });
+                  telemetry: {},
+                }).pipe(Effect.catchAll(() => Effect.void));
               }
-              // request-strategy-switch, set-temperature, append-system-nudge,
-              // compress-messages, inject-tool-guidance, inject-skill-content:
-              // No dedicated KernelState/KernelMeta field exists yet for these.
-              // They are already recorded in controllerDecisionLog above for the
-              // pulse tool and future downstream consumers.
+
+              switch (patch.kind) {
+                case "early-stop":
+                  // handled: early-stop terminates the kernel loop
+                  s = transitionState(s, {
+                    meta: {
+                      ...s.meta,
+                      terminatedBy: typeof (patch as Record<string, unknown>)["reason"] === "string"
+                        ? (patch as Record<string, unknown>)["reason"] as string
+                        : "dispatcher-early-stop",
+                    },
+                  });
+                  break
+                default:
+                  // Other patch kinds (temp-adjust, compress-messages, etc.) are applied
+                  // by the caller via applyPatches() once kernel state becomes accessible here.
+                  // This is a known gap: Tasks 3.x handlers will need this path.
+                  break
+              }
+            }
+
+            // Emit InterventionSuppressed events for skipped decisions
+            for (const skipped of dispatchResult.skipped) {
+              if (eventBus._tag === "Some") {
+                yield* eventBus.value.publish({
+                  _tag: "InterventionSuppressed",
+                  taskId: s.taskId,
+                  iteration: s.iteration,
+                  decisionType: skipped.decisionType,
+                  reason: skipped.reason as
+                    | "below-entropy-threshold"
+                    | "below-iteration-threshold"
+                    | "over-budget"
+                    | "max-fires-exceeded"
+                    | "mode-advisory"
+                    | "mode-off"
+                    | "no-handler",
+                }).pipe(Effect.catchAll(() => Effect.void));
+              }
             }
           }
         }

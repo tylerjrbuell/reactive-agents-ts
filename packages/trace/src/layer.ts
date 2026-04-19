@@ -10,6 +10,8 @@ import type {
   EntropyScoredEvent,
   DecisionEvaluatedEvent,
   StrategySwitchedEvent,
+  InterventionDispatchedEvent,
+  InterventionSuppressedEvent,
 } from "./events.js"
 
 // ─── Sequence counter ───
@@ -100,6 +102,34 @@ function toTraceEvent(raw: AgentEvent): TraceEvent | null {
         seq: nextSeq(),
         from: raw.from,
         to: raw.to,
+        reason: raw.reason,
+      }
+      return ev
+    }
+
+    case "InterventionDispatched": {
+      const ev: InterventionDispatchedEvent = {
+        kind: "intervention-dispatched",
+        runId: raw.taskId,
+        timestamp: Date.now(),
+        iter: raw.iteration,
+        seq: nextSeq(),
+        decisionType: raw.decisionType,
+        patchKind: raw.patchKind,
+        cost: raw.cost,
+        telemetry: raw.telemetry,
+      }
+      return ev
+    }
+
+    case "InterventionSuppressed": {
+      const ev: InterventionSuppressedEvent = {
+        kind: "intervention-suppressed",
+        runId: raw.taskId,
+        timestamp: Date.now(),
+        iter: raw.iteration,
+        seq: nextSeq(),
+        decisionType: raw.decisionType,
         reason: raw.reason,
       }
       return ev

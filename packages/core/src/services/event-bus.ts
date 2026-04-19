@@ -749,6 +749,50 @@ export type AgentEvent =
     }
   | {
       /**
+       * An intervention handler fired and produced one or more state patches.
+       * Fired from reactive-observer after the dispatcher applies a patch.
+       */
+      readonly _tag: "InterventionDispatched";
+      /** Unique task identifier */
+      readonly taskId: string;
+      /** Kernel iteration at which the intervention fired */
+      readonly iteration: number;
+      /** The ControllerDecision type that triggered the handler (e.g. "early-stop") */
+      readonly decisionType: string;
+      /** The KernelStatePatch kind produced by the handler */
+      readonly patchKind: string;
+      /** Estimated cost of applying the patch */
+      readonly cost: {
+        readonly tokensEstimated: number;
+        readonly latencyMsEstimated: number;
+      };
+      /** Handler-provided telemetry (e.g. compression ratio, strategy names) */
+      readonly telemetry: Record<string, unknown>;
+    }
+  | {
+      /**
+       * A decision was suppressed by the dispatcher gating logic.
+       * Fired from reactive-observer for each entry in DispatchResult.skipped.
+       */
+      readonly _tag: "InterventionSuppressed";
+      /** Unique task identifier */
+      readonly taskId: string;
+      /** Kernel iteration at which suppression occurred */
+      readonly iteration: number;
+      /** The ControllerDecision type that was suppressed */
+      readonly decisionType: string;
+      /** Why it was suppressed */
+      readonly reason:
+        | "below-entropy-threshold"
+        | "below-iteration-threshold"
+        | "over-budget"
+        | "max-fires-exceeded"
+        | "mode-advisory"
+        | "mode-off"
+        | "no-handler";
+    }
+  | {
+      /**
        * Published before an LLM call when Intelligent Context Synthesis produced
        * the messages for this iteration (full observability of model input).
        */
