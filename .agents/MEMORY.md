@@ -61,30 +61,33 @@ Skeptical audit running framework as a new user against real Ollama + frontier A
 ### Architectural (redesign, not patch)
 1. **Intervention dispatcher missing** — `termination-oracle.ts:222-230` is the only consumer of `ControllerDecision`. Need handler registry (like `metaToolRegistry` in `act.ts:191-194`) for `temp-adjust`, `switch-strategy`, `skill-activate`, `prompt-switch`, `tool-inject`, `memory-boost`, `skill-reinject`, `human-escalate`, `context-compress`.
 2. **RI all-or-nothing engagement** — `.withReactiveIntelligence()` fires every turn. Ablation (haiku task): qwen3.5 flipped fail→pass (-38% tokens, -46% wall) but cogito:14b regressed 2.3× and qwen3:4b regressed 3.4× on tasks they solved unassisted. Dispatcher must self-gate on entropy/iteration threshold.
-3. **Dual compression systems** — `tool-execution.ts` always-on tool-result compression vs `context-compressor.ts` advisory `compress` decision. Don't coordinate.
-4. **Config capture without propagation** — `_riHooks` assigned at `builder.ts:2079`, zero read sites. `onEntropyScored`/`onControllerDecision`/`onSkillActivated`/`onSkillRefined`/`onSkillConflict`/`onMidRunAdjustment` all silent no-ops despite being in README.
+3. **Dual compression systems** — ✅ FIXED (Apr 19) — `compress-messages` patch now applied in reactive-observer.ts switch (count-based trimming since KernelMessage has no token annotations). tool-execution.ts per-result compression is complementary, not conflicting.
+4. **Config capture without propagation** — ✅ FIXED (Apr 19) — `build()` now subscribes `onEntropyScored`→`EntropyScored`, `onControllerDecision`→`ReactiveDecision`, `onMidRunAdjustment`→`InterventionDispatched`. Skill hooks deferred (no AgentEvent types yet).
 5. **Tools leak runtime assumptions** — `code-execute` uses CJS `require` in Bun ESM subprocess; every Ollama model fails tool use. Need tier-aware tool substitution via existing `contextProfile` plumbing.
 6. **No doc↔code truthiness enforcement** — README advertises handlers that don't exist. Need capability manifest + CI check that fails build on drift.
 
-### Tactical bugs
-1. `code-execute` `require` ESM mismatch — `packages/tools/src/skills/code-execution.ts:58`. Blocks every local-model tool-use demo.
-2. `entropy-sensor-service.ts:176` — `contextPressure` hard-coded `0`. Claim "5-source" is actually 4/5 active.
-3. `AbortSignal` silent no-op on `runStream()` — signal accepted, 101 chunks consumed past `abort()`.
-4. `result.metadata.llmCalls` always `0` — stale metric never incremented.
-5. `activate_skill` meta-tool has schema + XML builder, no `execute`/`handler`. Not in `metaToolRegistry`. Would fail if model called it.
-6. Quickstart prints telemetry opt-out notice twice.
+### Tactical bugs — updated Apr 19
+1. `code-execute` `require` ESM mismatch — ✅ FIXED (Apr 18)
+2. `contextPressure` hard-coded `0` — ✅ FIXED (Apr 18)
+3. `AbortSignal` silent no-op on `runStream()` — ✅ FIXED (Apr 18)
+4. `result.metadata.llmCalls` always `0` — ✅ FIXED (Apr 18)
+5. `activate_skill` meta-tool had no handler — ✅ FIXED (Apr 18)
+6. 9/10 controller decision types had no handler — ✅ FIXED (Apr 18) — 6 dispatched, 4 advisory by design
+7. Quickstart prints telemetry opt-out notice twice — ❌ OPEN (low priority)
+8. **Reactive observer not generating ControllerDecisions** — ✅ FIXED (Apr 19) — Root cause: `evaluate()` call was missing 3 optional params (`currentTemperature`, `availableToolNames`, `priorDecisionsThisRun`), causing 7/10 evaluators to always short-circuit. Also wired entropy scoring into PER main loop (reflection content scored as "thought" after each refinement). 852 reasoning tests green.
+9. **early-stop not terminating kernel loop** — ✅ FIXED (Apr 19) — `kernel-runner.ts` now breaks when `state.meta.terminatedBy === "dispatcher-early-stop"` after `runReactiveObserver`. `reactive-observer.ts` always uses "dispatcher-early-stop" sentinel. Dispatcher early-stop exempt from minEntropyComposite gate. Limitation: only terminates the current sub-kernel; ToT/PER outer loops need separate wiring.
 
-### Validation gaps (measure before publishing claims)
-- Does composite entropy predict failure? Compute AUC offline over historical pass/fail traces — foundational, never measured.
-- Does local learning engine change future-run behavior? 86 samples persist in `cogito-14b.json`; posterior application unverified.
-- Intervention precision/recall — do dispatched interventions improve outcomes?
-- Per-tier RI cost-benefit — when does RI help vs hurt?
+### Validation gaps — updated Apr 19
+- AUC: does entropy predict failure? — ⚠️ INFRA READY — `scripts/validate-entropy.ts` built. First corpus: 10/10 successes → AUC=0.000 (correct; needs failure-producing runs)
+- Local learning engine verified? — ❌ OPEN
+- Intervention precision/recall counterfactuals — ⚠️ INFRA READY — `runCounterfactual()` in `@reactive-agents/testing`, E2E ablation test gated on OLLAMA_E2E
+- Per-tier RI cost-benefit — ❌ OPEN
 
-### Positioning drift to resolve
-- "10 mid-run decisions" → "1 dispatched + 9 advisory" today, or "N dispatched" after handlers land
-- "5-source entropy sensor" → "4-source" until context-pressure wired
-- "AbortSignal cancellation" → remove claim or fix plumbing
-- "Works on local Ollama — same code, same features" (README:11) — empirically false for tool-using agents until `code-execute` fix
+### Positioning drift — updated Apr 19
+- "10 mid-run decisions" → ✅ FIXED (Apr 19) — README now reads "6 dispatched + 4 advisory via pulse tool"
+- "5-source entropy sensor" → ✅ now accurate (contextPressure wired Apr 18)
+- "AbortSignal cancellation" → ✅ now accurate
+- "Works on local Ollama — same code, same features" → ✅ now accurate for tool-using agents
 
 ### Good news surfaced by audit
 - Provider adapter **7/7 hooks wired** (memory said 2/7 — stale). `taskFraming`, `toolGuidance`, `continuationHint`, `errorRecovery`, `synthesisPrompt`, `qualityCheck`, `systemPromptPatch` all called from kernel phases.
@@ -93,16 +96,17 @@ Skeptical audit running framework as a new user against real Ollama + frontier A
 - Quickstart: **1.6s install + 8.8s first run** — 60s claim defensible.
 - Local learning engine writes real samples per-model to `~/.reactive-agents/observations/` — persistence is live.
 - Kernel composable phase architecture (context-builder → think → guard → act) is clean and extensible.
-- Tests: stress probe (impossible tool name) handled gracefully, no crash.
 
-### Priority sequence pre-v0.10 (in order)
-1. **Intervention dispatcher** (architectural — unblocks central pitch)
-2. **Self-gating RI** (architectural — fixes cogito:14b/qwen3:4b regression)
-3. **`code-execute` require/ESM fix** (tactical — unblocks local-model demos)
-4. **Offline entropy validation** (measure foundation before shipping "reactive" claim)
-5. **Capability manifest + CI check** (prevents future drift)
-
-**Decision: do NOT invest in τ-bench/Terminal-Bench ablation until items 1–4 ship.** A benchmark on half-wired harness would either show interventions doing nothing (most don't exist) or show accidental wins we can't explain (hooks are dead). Both are PR disasters.
+### Priority sequence pre-v0.10 — updated Apr 19
+1. ✅ Intervention dispatcher (architectural — unblocks central pitch)
+2. ✅ Self-gating RI (architectural — fixes cogito:14b/qwen3:4b regression)
+3. ✅ `code-execute` require/ESM fix (tactical — unblocks local-model demos)
+4. ✅ Offline entropy validation infra (measure before shipping "reactive" claim)
+5. ✅ Capability manifest + CI check (prevents future drift)
+6. ✅ Reactive observer param wiring + PER entropy scoring (Apr 19) — `currentTemperature`, `availableToolNames`, `priorDecisionsThisRun` now passed; PER reflection scored per iteration
+7. Dual compression coordination
+8. `_riHooks` callbacks dead
+9. AUC validation with real failure corpus
 
 ## Current Status (Apr 17–18, 2026)
 - **3 CLI built-in tools shipped** — `git-cli`, `gh-cli`, `gws-cli` in `@reactive-agents/tools`; brings capability tool count to **9** (webSearch, cryptoPrice, httpGet, fileRead, fileWrite, codeExecute, git-cli, gh-cli, gws-cli) alongside 8 meta-tools; injectable `CliRunner` type for testability; `ENOENT` produces human-readable error
