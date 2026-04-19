@@ -456,6 +456,11 @@ export interface GatewayOptions {
     readonly mergeWindowMs?: number;
     readonly requireApprovalFor?: readonly string[];
   };
+  /**
+   * When true, heartbeat and cron executions use the stable agent id (same as `agent.run()`)
+   * so memory layers can span gateway ticks. Default false: each gateway run used a unique id.
+   */
+  readonly persistMemoryAcrossRuns?: boolean;
   readonly port?: number;
   /** Channel access control configuration for messaging platforms. */
   readonly channels?: {
@@ -2323,9 +2328,31 @@ export class ReactiveAgentBuilder {
 
     logBuildInfo(this._provider, validation.resolvedModel);
 
-    return Effect.runPromise(this.buildEffect()).catch((e) => {
+    const agent = await Effect.runPromise(this.buildEffect()).catch((e) => {
       throw unwrapError(e);
     });
+
+    // Wire _riHooks to EventBus events so they fire during runs
+    if (this._riHooks) {
+      const hooks = this._riHooks;
+      if (hooks.onEntropyScored) {
+        await agent.subscribe("EntropyScored", (event) =>
+          hooks.onEntropyScored!(event, event.iteration),
+        );
+      }
+      if (hooks.onControllerDecision) {
+        await agent.subscribe("ReactiveDecision", (event) =>
+          hooks.onControllerDecision!(event, { iteration: event.iteration, entropyBefore: event.entropyBefore }),
+        );
+      }
+      if (hooks.onMidRunAdjustment) {
+        await agent.subscribe("InterventionDispatched", (event) =>
+          hooks.onMidRunAdjustment!("intervention", { decisionType: event.decisionType }, { patchKind: event.patchKind }),
+        );
+      }
+    }
+
+    return agent;
   }
 
   /**
@@ -3438,6 +3465,7 @@ export class ReactiveAgentBuilder {
         !!gatewayOptions,
         gatewayOptions?.heartbeat?.intervalMs,
         !!gatewayOptions?.heartbeat?.instruction,
+        gatewayOptions?.persistMemoryAcrossRuns === true,
         streamDensity,
         // Pass a callback so run() can set the task description before execution starts.
         // This ensures sub-agents spawned on the very first iteration have the full user prompt.
@@ -3519,6 +3547,8 @@ export class ReactiveAgent {
     private readonly _gatewayIntervalMs: number = 60_000,
     /** @internal Whether a custom heartbeat instruction was configured. */
     private readonly _hasCustomHeartbeatInstruction: boolean = false,
+    /** @internal When true, gateway runs share the stable agent id for memory continuity. */
+    private readonly _gatewayPersistMemory: boolean = false,
     /** @internal Default stream density set via `.withStreaming()`. */
     private readonly _defaultStreamDensity?: StreamDensity,
     /** @internal Callback to set task description for parent context forwarding. */
@@ -4725,8 +4755,11 @@ export class ReactiveAgent {
         });
         const runStart = Date.now();
         try {
-          // Isolated run: unique agentId per execution prevents memory accumulation
-          const runAgentId = `${self.agentId}-${source}-${Date.now()}`;
+          // Default: unique agentId per gateway execution (no cross-tick memory).
+          // With persistMemoryAcrossRuns, reuse stable id so memory spans heartbeats/crons.
+          const runAgentId = self._gatewayPersistMemory
+            ? self.agentId
+            : `${self.agentId}-${source}-${Date.now()}`;
           const task: Task = {
             id: generateTaskId(),
             agentId: Schema.decodeSync(AgentId)(runAgentId),
