@@ -2516,6 +2516,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                               lastResponse: response.content,
                               pendingToolCalls: response.toolCalls ?? [],
                               isComplete: done,
+                              llmCalls: ((c.metadata.llmCalls as number | undefined) ?? 0) + 1,
                             },
                           };
                         }) as unknown as Effect.Effect<ExecutionContext, never>,
@@ -3696,7 +3697,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       toolCallLog.length,
                       terminatedByRaw,
                     ),
-                    llmCalls: (rr as any)?.metadata?.llmCalls ?? 0,
+                    llmCalls: (rr as any)?.metadata?.llmCalls ?? (ctx.metadata.llmCalls as number | undefined) ?? 0,
                   },
                   completedAt: new Date(),
                   format: "text",
