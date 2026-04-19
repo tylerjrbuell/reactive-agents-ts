@@ -11,6 +11,7 @@ import { runCortexCli } from "./commands/cortex.js";
 import { runServe } from "./commands/serve.js";
 import { runDiscover } from "./commands/discover.js";
 import { runDeploy } from "./commands/deploy/index.js";
+import { runTrace } from "./commands/trace.js";
 import { printBanner, printVersion, VERSION } from "./banner.js";
 import { fail, info } from "./ui.js";
 
@@ -38,6 +39,8 @@ const HELP = `
     deploy status [--target ...]                      Show deployment status (auto-detects target)
     deploy logs [-f] [--target ...]                   Tail deployment logs (auto-detects target)
     deploy init                                       Scaffold deployment files only (legacy alias)
+    trace inspect <path>                              Parse and display a JSONL trace file
+    trace compare <a> <b>                             Compare two trace files side-by-side
     help                                              Show this help
     version                                           Show version
 
@@ -120,6 +123,10 @@ export function main(argv: string[] = process.argv.slice(2)) {
 
     case "demo":
       runAsync(runDemo(argv.slice(1)));
+      break;
+
+    case "trace":
+      runTrace(argv.slice(1));
       break;
 
     case "version":
