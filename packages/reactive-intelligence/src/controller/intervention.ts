@@ -70,15 +70,15 @@ export interface InterventionConfig {
 export const defaultInterventionConfig: InterventionConfig = {
   modes: {
     "early-stop": "dispatch",
-    "temp-adjust": "advisory",
-    "switch-strategy": "advisory",
-    "skill-activate": "advisory",
+    "temp-adjust": "dispatch",
+    "switch-strategy": "dispatch",
+    "skill-activate": "dispatch",
     "prompt-switch": "advisory",
-    "tool-inject": "advisory",
+    "tool-inject": "dispatch",
     "memory-boost": "advisory",
     "skill-reinject": "advisory",
     "human-escalate": "advisory",
-    "compress": "advisory",
+    "compress": "dispatch",
   },
   suppression: {
     minEntropyComposite: 0.55,

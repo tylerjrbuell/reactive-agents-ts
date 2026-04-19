@@ -82,13 +82,13 @@ test("dispatcher wiring: early-stop is suppressed when iteration is below thresh
 })
 
 test("dispatcher wiring: advisory-mode decision is skipped without firing", async () => {
-  // temp-adjust is advisory by default — should always be skipped
+  // human-escalate stays advisory — no handler registered, mode is "advisory"
   const dispatcher = makeDispatcher(defaultInterventionConfig)
   registerHandler(dispatcher, earlyStopHandler)
 
   const result = await Effect.runPromise(
     dispatcher.dispatch(
-      [{ decision: "temp-adjust", reason: "high-entropy", delta: -0.1, newTemperature: 0.5, confidence: 0.7 }],
+      [{ decision: "human-escalate", reason: "high-entropy", confidence: 0.7 }],
       { messages: [], currentOptions: {} } as unknown as Readonly<Record<string, unknown>>,
       {
         iteration: 5,
