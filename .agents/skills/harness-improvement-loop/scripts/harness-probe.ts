@@ -1,18 +1,20 @@
 // harness-probe.ts — Reactive Agents harness improvement loop probe runner
-// Copy to scripts/harness-probe.ts in your project root, then:
-//   bun run scripts/harness-probe.ts 2>&1 | tee harness-reports/probe-run-$(date +%Y%m%d-%H%M).txt
+// Run from project root:
+//   bun run .agents/skills/harness-improvement-loop/scripts/harness-probe.ts
 //
 // Uses Ollama (local) by default — no API cost. Swap PROBE_MODEL for any model
 // available on your Ollama instance. Use a 7B–14B model; smaller models produce
-// noisy quality scores that make analysis harder than it's worth.
+// noisy entropy scores that make analysis harder than it's worth.
 //
 // Override model at runtime:
-//   PROBE_MODEL=cogito:8b bun run scripts/harness-probe.ts
+//   PROBE_MODEL=cogito:8b bun run .agents/skills/harness-improvement-loop/scripts/harness-probe.ts
 
 import { ReactiveAgents } from "@reactive-agents/runtime";
-import { writeFileSync, mkdirSync, readFileSync } from "fs";
+import { loadTrace, traceStats } from "@reactive-agents/trace";
+import { writeFileSync, mkdirSync } from "fs";
 
-const PROBE_MODEL = "cogito:8b";
+const PROBE_MODEL = process.env.PROBE_MODEL ?? "cogito:8b";
+const TRACE_DIR = ".reactive-agents/traces";
 
 interface ProbeConfig {
   id: string;
@@ -31,10 +33,10 @@ interface ProbeResult {
   outputLength: number;
   durationMs: number;
   costUsd: number;
-  qualityScore: number | null;
-  contextPeakRatio: number | null;
-  duplicateToolCalls: number;
-  wastedIterations: number;
+  maxEntropy: number | null;
+  interventionsDispatched: number;
+  interventionsSuppressed: number;
+  totalTokens: number;
   outputPreview: string;
 }
 
@@ -85,124 +87,73 @@ async function runProbe(probe: ProbeConfig): Promise<ProbeResult> {
 
   const agent = await ReactiveAgents.create()
     .withProvider("ollama")
-    .withModel({ model: process.env.PROBE_MODEL ?? PROBE_MODEL })
+    .withModel({ model: PROBE_MODEL })
     .withReasoning({
       defaultStrategy: probe.strategy as any,
       maxIterations: probe.maxIterations,
     })
+    .withReactiveIntelligence()
     .withTools({ allowedTools: ["web-search", "http-get", "checkpoint", "final-answer"] })
-    .withObservability({
-      verbosity: "debug",
-      live: true,
-      logModelIO: true,
-      file: `./harness-reports/probe-${probe.id}.jsonl`,
-    })
+    .withTracing({ dir: TRACE_DIR })
     .build();
 
   const start = Date.now();
   const result = await agent.run(probe.task);
   const durationMs = Date.now() - start;
-
   await agent.dispose();
 
-  const metrics = extractMetricsFromJsonl(`./harness-reports/probe-${probe.id}.jsonl`);
+  // Load typed trace for this run
+  let stats = { iterations: null as number | null, maxEntropy: 0, interventionsDispatched: 0, interventionsSuppressed: 0, totalTokens: 0 };
+  try {
+    const trace = await loadTrace(`${TRACE_DIR}/${result.taskId}.jsonl`);
+    const s = traceStats(trace);
+    stats = {
+      iterations: s.iterations,
+      maxEntropy: s.maxEntropy,
+      interventionsDispatched: s.interventionsDispatched,
+      interventionsSuppressed: s.interventionsSuppressed,
+      totalTokens: s.totalTokens,
+    };
+  } catch {
+    // trace not available (e.g. tracing not wired yet) — fall back to result metadata
+    stats.iterations = result.metadata?.stepsCount ?? null;
+    stats.totalTokens = result.metadata?.totalTokens ?? 0;
+  }
 
   const probeResult: ProbeResult = {
     id: probe.id,
     strategy: probe.strategy,
     maxIterationsAllowed: probe.maxIterations,
-    iterationsUsed: result.metadata.stepsCount ?? metrics.iterations,
+    iterationsUsed: stats.iterations,
     success: result.success,
     outputLength: result.output.length,
     durationMs,
-    costUsd: result.metadata.cost,
-    qualityScore: metrics.finalQualityScore,
-    contextPeakRatio: metrics.contextPeakRatio,
-    duplicateToolCalls: metrics.duplicateToolCalls,
-    wastedIterations: metrics.wastedIterations,
+    costUsd: result.metadata?.cost ?? 0,
+    maxEntropy: stats.maxEntropy,
+    interventionsDispatched: stats.interventionsDispatched,
+    interventionsSuppressed: stats.interventionsSuppressed,
+    totalTokens: stats.totalTokens,
     outputPreview: result.output.slice(0, 400),
   };
 
   console.log(`\n--- RESULT ---`);
-  console.log(`Success:          ${probeResult.success}`);
-  console.log(`Iterations:       ${probeResult.iterationsUsed} / ${probe.maxIterations}`);
-  console.log(`Wasted iters:     ${probeResult.wastedIterations}`);
-  console.log(`Duplicate calls:  ${probeResult.duplicateToolCalls}`);
-  console.log(
-    `Context peak:     ${probeResult.contextPeakRatio != null ? (probeResult.contextPeakRatio * 100).toFixed(1) + "%" : "?"}`,
-  );
-  console.log(`Quality score:    ${probeResult.qualityScore ?? "?"}`);
-  console.log(`Duration:         ${(durationMs / 1000).toFixed(1)}s`);
-  console.log(`Cost:             $${probeResult.costUsd.toFixed(4)}`);
+  console.log(`Success:              ${probeResult.success}`);
+  console.log(`Iterations:           ${probeResult.iterationsUsed} / ${probe.maxIterations}`);
+  console.log(`Max entropy:          ${probeResult.maxEntropy?.toFixed(3) ?? "?"}`);
+  console.log(`Interventions:        ${probeResult.interventionsDispatched} dispatched, ${probeResult.interventionsSuppressed} suppressed`);
+  console.log(`Tokens:               ${probeResult.totalTokens}`);
+  console.log(`Duration:             ${(durationMs / 1000).toFixed(1)}s`);
+  console.log(`Cost:                 $${probeResult.costUsd.toFixed(4)}`);
   console.log(`\nOutput preview:\n${probeResult.outputPreview}`);
+  console.log(`\nTrace: ${TRACE_DIR}/${result.taskId}.jsonl`);
+  console.log(`Inspect: rax trace inspect ${TRACE_DIR}/${result.taskId}.jsonl`);
 
   return probeResult;
 }
 
-function extractMetricsFromJsonl(path: string): {
-  iterations: number | null;
-  finalQualityScore: number | null;
-  contextPeakRatio: number | null;
-  duplicateToolCalls: number;
-  wastedIterations: number;
-} {
-  try {
-    const lines = readFileSync(path, "utf-8").trim().split("\n").filter(Boolean);
-    const records = lines.map((l) => JSON.parse(l) as Record<string, unknown>);
-    const metrics = records.filter((r) => r._type === "metric");
-
-    // execution.iteration — single gauge emitted once at end with the final count
-    const iterRecord = metrics.find((r) => r.name === "execution.iteration");
-    const iterations = iterRecord != null ? (iterRecord.value as number) : null;
-
-    // entropy.composite — gauge per iteration; use last emitted value as final quality proxy
-    // (lower entropy = higher quality; invert to a 0–1 quality score)
-    const qualityRecords = metrics.filter((r) => r.name === "entropy.composite");
-    const lastEntropy = qualityRecords.length > 0
-      ? (qualityRecords.at(-1)!.value as number)
-      : null;
-    const finalQualityScore = lastEntropy != null ? 1 - lastEntropy : null;
-
-    // No context ratio metric in current schema — mark as unavailable
-    const contextPeakRatio = null;
-
-    // Duplicate tool calls: execution.tool.execution fires per call; detect duplicates
-    // by inspecting log messages for repeated tool names in the same run
-    const toolLogs = records
-      .filter((r) => r._type === "log")
-      .map((r) => (r.message as string | undefined) ?? "")
-      .filter((m) => m.includes("[tool]") || m.includes("tool_call"));
-    const seen = new Set<string>();
-    let duplicateToolCalls = 0;
-    for (const msg of toolLogs) {
-      if (seen.has(msg)) duplicateToolCalls++;
-      seen.add(msg);
-    }
-
-    // Wasted iterations: kernel steps with strategy "reactive:main" that fired back-to-back
-    // without an act phase between them (think → think with no act)
-    const stepRecords = metrics.filter((r) => r.name === "reasoning.steps");
-    const actCount = metrics
-      .filter((r) => r.name === "execution.phase.count")
-      .filter((r) => (r.labels as Record<string, string> | undefined)?.phase === "act")
-      .reduce((sum, r) => sum + (r.value as number), 0);
-    // Steps beyond the act count are potentially wasted (no tool was executed)
-    const wastedIterations = Math.max(0, stepRecords.length - actCount - 1);
-
-    return { iterations, finalQualityScore, contextPeakRatio, duplicateToolCalls, wastedIterations };
-  } catch {
-    return {
-      iterations: null,
-      finalQualityScore: null,
-      contextPeakRatio: null,
-      duplicateToolCalls: 0,
-      wastedIterations: 0,
-    };
-  }
-}
-
 async function main() {
   mkdirSync("harness-reports", { recursive: true });
+  mkdirSync(TRACE_DIR, { recursive: true });
 
   const results: ProbeResult[] = [];
   for (const probe of PROBES) {
@@ -210,15 +161,14 @@ async function main() {
     results.push(result);
   }
 
-  writeFileSync(
-    `harness-reports/probe-summary-${new Date().toISOString().slice(0, 16).replace("T", "-")}.json`,
-    JSON.stringify(results, null, 2),
-  );
+  const summaryPath = `harness-reports/probe-summary-${new Date().toISOString().slice(0, 16).replace("T", "-")}.json`;
+  writeFileSync(summaryPath, JSON.stringify(results, null, 2));
 
   console.log("\n✅ All probes complete.");
-  console.log("   JSONL logs: harness-reports/probe-{id}.jsonl");
-  console.log("   Summary:    harness-reports/probe-summary-*.json");
-  console.log("   Fill in:    harness-reports/improvement-report-*.md");
+  console.log(`   Traces:   ${TRACE_DIR}/<runId>.jsonl`);
+  console.log(`   Summary:  ${summaryPath}`);
+  console.log(`   Analyze:  bun run scripts/validate-entropy.ts ${TRACE_DIR}`);
+  console.log(`   Reports:  harness-reports/improvement-report-*.md`);
 }
 
 main().catch(console.error);

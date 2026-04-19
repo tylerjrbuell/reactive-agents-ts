@@ -1,0 +1,111 @@
+
+🧪 Reactive Agents Quality & Efficiency Test Suite
+   Provider: ollama | Model: qwen3:4b
+   Categories: convergence, strategy, subagent
+   Running 9 of 33 tests...
+
+  ⊙ [convergence ] Converge: simple math should not loop         ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+✓ 2.5s (1 iters, 378 tok)
+  ⊙ [convergence ] Converge: list task should terminate          ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+✓ 5.3s (1 iters, 1071 tok)
+  ⊙ [convergence ] Converge: opinion question                    ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+✓ 2.5s (1 iters, 661 tok)
+  ⊙ [convergence ] Converge: no-tool task with tools enabled     ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+✓ 4.2s (1 iters, 2868 tok)
+  ⊙ [strategy    ] ReAct: concise factual answer                 ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+✓ 1.0s (1 iters, 412 tok)
+  ⊙ [strategy    ] Plan-Execute: multi-step synthesis            ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+✓ 16.1s (4 iters, 3011 tok)
+  ⊙ [strategy    ] Adaptive: picks efficient path                ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+✓ 1.9s (2 iters, 559 tok)
+  ⊙ [subagent    ] Static sub-agent: delegation                  
+  [36m┌─ [sub-agent: research-assistant][0m → "Explain what a linked list is."
+  [36m└─ [sub-agent: research-assistant][0m [32m✓[0m done | 7533 tok | 9.2s
+
+timestamp=2026-04-15T11:11:39.240Z level=INFO fiber=#5564 message="[auto-checkpoint] Saved best observations before context pressure gate (tokens=6627)"
+ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+✓ 25.9s (8 iters, 6627 tok)
+  ⊙ [subagent    ] Dynamic sub-agent: spawn and use              
+  [36m┌── sub-agent: [1mfactorial-calc[22m ──────────────────────────────[0m
+  [36m│[0m  task: "Calculate the factorial of 5 and return the result."
+  [36m└── [32m✓[0m [1mfactorial-calc[22m[0m  6 steps | 2644 tok | 5.1s
+
+ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+✓ 30.4s (9 iters, 9832 tok)
+
+┌── COMPOSITION TESTS ──────────────────────────────────────────────────────┐
+│  ⊙ pipe: sequential pipeline                      ✓ Provider: ollama | Model: qwen3:4b | API key: (not required)
+ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+✓ 2.8s
+│  ⊙ parallel: concurrent agents                    ✓ Provider: ollama | Model: qwen3:4b | API key: (not required)
+✓ Provider: ollama | Model: qwen3:4b | API key: (not required)
+ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+ℹ Reactive Intelligence telemetry enabled — anonymous entropy data helps improve the framework. Disable with { telemetry: false }
+✓ 1.8s
+└───────────────────────────────────────────────────────────────────────────┘
+
+
+╔══════════════════════════════════════════════════════════════════════════════════╗
+║                    REACTIVE AGENTS — QUALITY & EFFICIENCY REPORT                ║
+╠══════════════════════════════════════════════════════════════════════════════════╣
+║  Provider : ollama                                                            ║
+║  Model    : qwen3:4b                                                          ║
+║  Tests    : 11                                                                ║
+║  Date     : 2026-04-15T11:12:21.032Z                                          ║
+╚══════════════════════════════════════════════════════════════════════════════════╝
+
+┌── CONVERGENCE (4/4 passed) ─────────────────────────────────────────────────┐
+│ ✅ Converge: simple math should not loop       1 iters      378 tok     2.5s  $0.0000 [end_turn]
+│ ✅ Converge: list task should terminate        1 iters    1,071 tok     5.3s  $0.0000 [end_turn]
+│ ✅ Converge: opinion question                  1 iters      661 tok     2.5s  $0.0000 [end_turn]
+│ ✅ Converge: no-tool task with tools enabled   1 iters    2,868 tok     4.2s  $0.0000 [end_turn]
+└───────────────────────────────────────────────────────────────────────────────┘
+
+┌── STRATEGY (3/3 passed) ────────────────────────────────────────────────────┐
+│ ✅ ReAct: concise factual answer               1 iters      412 tok     1.0s  $0.0000 [end_turn]
+│ ✅ Plan-Execute: multi-step synthesis          4 iters    3,011 tok    16.1s  $0.0000 [end_turn]
+│ ✅ Adaptive: picks efficient path              2 iters      559 tok     1.9s  $0.0000 [end_turn]
+└───────────────────────────────────────────────────────────────────────────────┘
+
+┌── SUBAGENT (2/2 passed) ────────────────────────────────────────────────────┐
+│ ✅ Static sub-agent: delegation                8 iters    6,627 tok    25.9s  $0.0000 [end_turn]
+│ ✅ Dynamic sub-agent: spawn and use            9 iters    9,832 tok    30.4s  $0.0000 [end_turn]
+└───────────────────────────────────────────────────────────────────────────────┘
+
+┌── COMPOSITION (2/2 passed) ─────────────────────────────────────────────────┐
+│ ✅ pipe: sequential pipeline                   1 iters      660 tok     2.8s  $0.0000
+│ ✅ parallel: concurrent agents                 2 iters      772 tok     1.8s  $0.0000
+└───────────────────────────────────────────────────────────────────────────────┘
+
+╔══════════════════════════════════════════════════════════════════════════════════╗
+║                                    SUMMARY                                     ║
+╠══════════════════════════════════════════════════════════════════════════════════╣
+║  Pass Rate         : 11/11 (100%)                                            ║
+║  Total Iterations  : 31                                                      ║
+║  Total Tokens      : 26,851                                                  ║
+║  Total Cost        : $0.0000                                                 ║
+║  Total Duration    : 94.4                                                   s║
+║  Avg Iters/Task    : 2.8                                                     ║
+║  Avg Tokens/Task   : 2,441                                                   ║
+║  Avg Cost/Task     : $0.0000                                                 ║
+╠══════════════════════════════════════════════════════════════════════════════════╣
+║  HEALTH SIGNALS                                                                ║
+╠══════════════════════════════════════════════════════════════════════════════════╣
+║  Iteration Explosions : 0                                                    ║
+║  Hallucinations       : 0                                                    ║
+║  Crashes              : 0                                                    ║
+║  Max Iteration Hits   : 0                                                    ║
+╚══════════════════════════════════════════════════════════════════════════════════╝
+
+┌── EFFICIENCY GRADES ──────────────────────────────────────────────────────────┐
+│  convergence     : A+   (100% pass, avg 1.0 iters, avg 1245 tokens)
+│  strategy        : A+   (100% pass, avg 2.3 iters, avg 1327 tokens)
+│  subagent        : C    (100% pass, avg 8.5 iters, avg 8230 tokens)
+│  composition     : A+   (100% pass, avg 1.5 iters, avg 716 tokens)
+└───────────────────────────────────────────────────────────────────────────────┘
+
+┌── RECOMMENDATIONS ────────────────────────────────────────────────────────────┐
+│  ✅ All health signals clean — ready for benchmarks!
+└───────────────────────────────────────────────────────────────────────────────┘
+
+📄 Full results saved to ./quality-test-results.json
