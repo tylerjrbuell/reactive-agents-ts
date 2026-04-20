@@ -391,3 +391,22 @@ test("parseArgs: --save-baseline and --ci flags parsed", () => {
   const args2 = parseArgs(["--session", "regression-gate", "--ci"])
   expect(args2.ci).toBe(true)
 })
+
+import {
+  runSession, ABLATION_VARIANTS, REAL_WORLD_TASKS,
+  regressionGateSession, realWorldFullSession,
+  competitorComparisonSession, localModelsSession,
+  computeReliability, computeDrift,
+} from "../src/index.js"
+
+test("index.ts exports all v2 public APIs", () => {
+  expect(typeof runSession).toBe("function")
+  expect(ABLATION_VARIANTS).toHaveLength(9)
+  expect(REAL_WORLD_TASKS).toHaveLength(10)
+  expect(regressionGateSession.id).toBe("regression-gate")
+  expect(realWorldFullSession.id).toBe("real-world-full")
+  expect(competitorComparisonSession.id).toBe("competitor-comparison")
+  expect(localModelsSession.id).toBe("local-models")
+  expect(typeof computeReliability).toBe("function")
+  expect(typeof computeDrift).toBe("function")
+})
