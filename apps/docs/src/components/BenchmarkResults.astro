@@ -34,6 +34,29 @@ type Run = {
 
 type MultiModelReport = { generatedAt: string; runs: Run[] };
 
+type QualityDimension = "accuracy" | "reasoning" | "tool-mastery" | "memory-fidelity"
+  | "loop-intelligence" | "resilience" | "efficiency" | "reliability"
+  | "scope-discipline" | "honest-uncertainty"
+
+type DimensionScore = { dimension: QualityDimension; score: number; evidence?: string }
+
+type TaskVariantReport = {
+  taskId: string; modelVariantId: string; variantId: string; variantLabel: string
+  meanScores: DimensionScore[]; variance: number; meanTokens: number; passRate: number
+}
+
+type AblationResult = {
+  taskId: string; taskName: string; modelVariantId: string
+  variants: TaskVariantReport[]; harnessLift: number; bestVariantId: string
+}
+
+type SessionReport = MultiModelReport & {
+  sessionId?: string; sessionVersion?: string; gitSha?: string
+  ablation?: AblationResult[]
+  dimensionSummary?: { dimension: QualityDimension; byVariant: { variantId: string; meanScore: number }[] }[]
+  drift?: { hasRegressions: boolean; regressions: { taskId: string; variantId: string; dimension: string; delta: number }[] }
+}
+
 const isMultiModel = "runs" in rawData && Array.isArray((rawData as any).runs);
 
 // Compute generatedAt: use explicit field if present, otherwise derive from the latest run timestamp
@@ -52,6 +75,29 @@ const report: MultiModelReport = isMultiModel
     };
 
 const { runs } = report;
+const sessionReport = rawData as unknown as SessionReport
+const hasSession = !!(sessionReport.ablation?.length || sessionReport.dimensionSummary?.length)
+const ablation = sessionReport.ablation ?? []
+const dimensionSummary = sessionReport.dimensionSummary ?? []
+
+// Ordered variant IDs for column display
+const variantOrder = [
+  "bare-llm", "manual-react",
+  "langchain-react", "vercel-ai-sdk", "openai-agents", "mastra-agent", "llamaindex-ts",
+  "ra-reasoning", "ra-full",
+]
+const variantLabels: Record<string, string> = {
+  "bare-llm": "Bare", "manual-react": "Manual",
+  "langchain-react": "LC", "vercel-ai-sdk": "Vercel", "openai-agents": "OAI",
+  "mastra-agent": "Mastra", "llamaindex-ts": "LlmIdx",
+  "ra-reasoning": "RA-R", "ra-full": "RA-Full",
+}
+
+function pct(score: number) { return Math.round(score * 100) }
+function scoreClass(score: number) {
+  return score >= 0.8 ? "text-green-400" : score >= 0.5 ? "text-yellow-400" : "text-red-400"
+}
+
 const isMultiRun = runs.length > 1;
 
 // Tiers and descriptions
@@ -109,6 +155,12 @@ function modelLabel(run: Run): string {
 ---
 
 <div class="benchmark-results">
+  {hasSession && sessionReport.drift?.hasRegressions && (
+    <div class="mb-6 p-3 bg-red-900/40 border border-red-700 rounded-lg text-sm text-red-300">
+      ⚠ Regressions detected vs. baseline ({sessionReport.drift.regressions.length} dimensions).
+      Run <code class="font-mono text-red-200">--save-baseline</code> after reviewing.
+    </div>
+  )}
   {/* ── Header / Meta ── */}
   <div class="benchmark-meta">
     <span>
@@ -282,6 +334,105 @@ function modelLabel(run: Run): string {
       ))}
     </tbody>
   </table>
+
+  {hasSession && (
+    <div class="mt-10">
+      <h2 class="text-lg font-semibold text-violet-400 mb-4">Framework Landscape — Harness Lift</h2>
+      {[...new Set(ablation.map(a => a.modelVariantId))].map(modelId => {
+        const variantAvg = variantOrder.map(vid => {
+          const reports = ablation.flatMap(a => a.variants.filter(v => v.variantId === vid && a.modelVariantId === modelId))
+          if (!reports.length) return null
+          const avg = reports.reduce((s, r) => s + (r.meanScores.find(d => d.dimension === "accuracy")?.score ?? 0), 0) / reports.length
+          return { id: vid, label: variantLabels[vid] ?? vid, score: avg }
+        }).filter(Boolean) as { id: string; label: string; score: number }[]
+
+        const baseScore = variantAvg.find(v => v.id === "bare-llm")?.score ?? 0
+        const fullScore = variantAvg.find(v => v.id === "ra-full")?.score ?? 0
+
+        return (
+          <div class="mb-6 p-4 bg-gray-800 rounded-lg border border-gray-700">
+            <div class="text-sm text-gray-400 mb-3 font-mono">{modelId}</div>
+            {variantAvg.map(v => {
+              const barWidth = Math.round(v.score * 100)
+              const delta = v.id !== "bare-llm" ? v.score - baseScore : null
+              return (
+                <div class="flex items-center gap-3 mb-2 text-sm">
+                  <span class="w-20 text-gray-300 font-mono text-xs">{v.label}</span>
+                  <div class="flex-1 bg-gray-700 rounded h-5 overflow-hidden">
+                    <div class={`h-full rounded ${v.id === "ra-full" ? "bg-violet-500" : v.id.startsWith("ra-") ? "bg-violet-700" : "bg-gray-500"}`}
+                         style={`width:${barWidth}%`} />
+                  </div>
+                  <span class={`w-10 text-right font-mono ${scoreClass(v.score)}`}>{pct(v.score)}%</span>
+                  {delta !== null && (
+                    <span class={`w-14 text-right font-mono text-xs ${delta >= 0 ? "text-green-400" : "text-red-400"}`}>
+                      {delta >= 0 ? "+" : ""}{pct(delta)}pp
+                    </span>
+                  )}
+                </div>
+              )
+            })}
+            <div class="mt-3 text-xs text-gray-500">
+              Total RA lift: <span class="text-violet-400 font-mono">+{pct(fullScore - baseScore)}pp</span> over bare LLM
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )}
+
+  {hasSession && ablation.length > 0 && (
+    <div class="mt-10">
+      <h2 class="text-lg font-semibold text-violet-400 mb-4">Per-Task Ablation</h2>
+      <div class="overflow-x-auto">
+        <table class="w-full text-xs font-mono border-collapse">
+          <thead>
+            <tr class="border-b border-gray-600 text-gray-400">
+              <th class="text-left py-2 pr-4 w-48">Task</th>
+              {variantOrder.map(vid => (
+                <th class="text-center px-1 w-12">{variantLabels[vid] ?? vid}</th>
+              ))}
+              <th class="text-center px-1 w-12">Reli.</th>
+              <th class="text-center px-1 w-14">Lift</th>
+            </tr>
+          </thead>
+          <tbody>
+            {ablation.filter(a => a.modelVariantId === (ablation[0]?.modelVariantId ?? "")).map(a => {
+              const byVariant = Object.fromEntries(a.variants.map(v => [
+                v.variantId,
+                {
+                  acc: v.meanScores.find(d => d.dimension === "accuracy")?.score ?? 0,
+                  rel: v.meanScores.find(d => d.dimension === "reliability")?.score ?? 1,
+                }
+              ]))
+              const raFull = byVariant["ra-full"]
+              return (
+                <tr class="border-b border-gray-800 hover:bg-gray-800/40">
+                  <td class="py-1.5 pr-4 text-gray-300 truncate max-w-xs">{a.taskId}</td>
+                  {variantOrder.map(vid => {
+                    const s = byVariant[vid]?.acc
+                    return (
+                      <td class={`text-center px-1 ${s !== undefined ? scoreClass(s) : "text-gray-600"}`}>
+                        {s !== undefined ? pct(s) : "—"}
+                      </td>
+                    )
+                  })}
+                  <td class={`text-center px-1 ${raFull ? scoreClass(raFull.rel) : "text-gray-600"}`}>
+                    {raFull ? pct(raFull.rel) : "—"}
+                  </td>
+                  <td class={`text-center px-1 font-semibold ${a.harnessLift >= 0 ? "text-violet-400" : "text-red-400"}`}>
+                    {a.harnessLift >= 0 ? "+" : ""}{pct(a.harnessLift)}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+      <p class="text-xs text-gray-500 mt-2">
+        All scores 0–100. Reli. = reliability (1 − stddev across 3 runs). Lift = ra-full minus bare-llm on accuracy.
+      </p>
+    </div>
+  )}
 </div>
 
 <style>
