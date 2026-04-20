@@ -9,16 +9,25 @@ import type { ControllerDecision, ControllerEvalParams } from "../types.js";
 export function evaluateStrategySwitch(
   params: ControllerEvalParams,
 ): (ControllerDecision & { decision: "switch-strategy" }) | null {
-  const { entropyHistory, config, strategy } = params;
+  const { entropyHistory, config, strategy, iteration } = params;
   const flatCount = config.flatIterationsBeforeSwitch ?? 3;
 
-  // Need enough history
+  // Need enough history and must be past early exploration phase.
+  // Switching strategy in the first 3 iterations is premature — the model
+  // hasn't had runway to demonstrate the current strategy is actually stuck.
   if (entropyHistory.length < flatCount) return null;
+  if (iteration < 3) return null;
 
   // Check last flatCount entries all have shape "flat"
   const recent = entropyHistory.slice(-flatCount);
   const allFlat = recent.every((e) => e.trajectory.shape === "flat");
   if (!allFlat) return null;
+
+  // Require elevated entropy — flat at 0.15 means the model finished and is
+  // just stalling, not that it's stuck in a bad loop. Only switch strategy
+  // when the model is stuck at a meaningfully high entropy level.
+  const flatEntropy = recent[recent.length - 1]!.composite;
+  if (flatEntropy < 0.35) return null;
 
   // Check behavioral loop score exceeds threshold.
   // 0.45 rather than 0.7: local models accumulate behavioral entropy more slowly
