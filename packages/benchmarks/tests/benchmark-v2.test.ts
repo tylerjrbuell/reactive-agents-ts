@@ -1,5 +1,6 @@
 import { test, expect } from "bun:test"
 import type {
+  BenchmarkTask,
   QualityDimension,
   DimensionScore,
   RunScore,
@@ -48,10 +49,10 @@ test("HarnessVariant discriminated union works", () => {
 })
 
 test("BenchmarkTask accepts real-world tier and v2 optional fields", () => {
-  const task = {
-    id: "rw-1", tier: "real-world" as const, name: "Test", prompt: "Do X",
-    successCriteria: { type: "regex" as const, pattern: "ok" },
-    primaryDimensions: ["accuracy" as const],
+  const task: BenchmarkTask = {
+    id: "rw-1", tier: "real-world", name: "Test", prompt: "Do X",
+    successCriteria: { type: "regex", pattern: "ok" },
+    primaryDimensions: ["accuracy"],
     fixtures: [{ path: "data.csv", content: "a,b\n1,2\n" }],
   }
   expect(task.tier).toBe("real-world")

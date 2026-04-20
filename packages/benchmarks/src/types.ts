@@ -97,130 +97,139 @@ export type QualityDimension =
   | "honest-uncertainty"
 
 export interface DimensionScore {
-  readonly dimension: QualityDimension
-  readonly score: number
-  readonly evidence?: string
+  readonly dimension: QualityDimension;
+  /** Normalized score 0–1 (1.0 = excellent). */
+  readonly score: number;
+  readonly evidence?: string;
 }
 
 export interface RunScore {
-  readonly runIndex: number
-  readonly dimensions: ReadonlyArray<DimensionScore>
-  readonly tokensUsed: number
-  readonly durationMs: number
-  readonly status: "pass" | "fail" | "error"
-  readonly output: string
-  readonly traceId?: string
+  readonly runIndex: number;
+  readonly dimensions: ReadonlyArray<DimensionScore>;
+  readonly tokensUsed: number;
+  readonly durationMs: number;
+  readonly status: "pass" | "fail" | "error";
+  readonly output: string;
+  readonly traceId?: string;
 }
 
 export interface TaskVariantReport {
-  readonly taskId: string
-  readonly modelVariantId: string
-  readonly variantId: string
-  readonly variantLabel: string
-  readonly runs: ReadonlyArray<RunScore>
-  readonly meanScores: ReadonlyArray<DimensionScore>
-  readonly variance: number
-  readonly meanTokens: number
-  readonly meanDurationMs: number
-  readonly passRate: number
+  readonly taskId: string;
+  readonly modelVariantId: string;
+  readonly variantId: string;
+  readonly variantLabel: string;
+  readonly runs: ReadonlyArray<RunScore>;
+  readonly meanScores: ReadonlyArray<DimensionScore>;
+  readonly variance: number;
+  readonly meanTokens: number;
+  readonly meanDurationMs: number;
+  readonly passRate: number;
 }
 
 export interface AblationResult {
-  readonly taskId: string
-  readonly taskName: string
-  readonly modelVariantId: string
-  readonly variants: ReadonlyArray<TaskVariantReport>
-  readonly harnessLift: number
-  readonly perDimensionLift: ReadonlyArray<{ dimension: QualityDimension; lift: number }>
-  readonly bestVariantId: string
-  readonly baselineVariantId: string
+  readonly taskId: string;
+  readonly taskName: string;
+  readonly modelVariantId: string;
+  readonly variants: ReadonlyArray<TaskVariantReport>;
+  readonly harnessLift: number;
+  readonly perDimensionLift: ReadonlyArray<DimensionLift>;
+  readonly bestVariantId: string;
+  readonly baselineVariantId: string;
 }
 
 export interface SessionReport extends MultiModelReport {
-  readonly sessionId: string
-  readonly sessionVersion: string
-  readonly gitSha: string
-  readonly ablation?: ReadonlyArray<AblationResult>
+  readonly sessionId: string;
+  readonly sessionVersion: string;
+  readonly gitSha: string;
+  readonly ablation?: ReadonlyArray<AblationResult>;
   readonly dimensionSummary?: ReadonlyArray<{
-    dimension: QualityDimension
-    byVariant: ReadonlyArray<{ variantId: string; meanScore: number }>
-  }>
-  readonly drift?: DriftReport
+    readonly dimension: QualityDimension;
+    readonly byVariant: ReadonlyArray<{ readonly variantId: string; readonly meanScore: number }>;
+  }>;
+  readonly drift?: DriftReport;
 }
 
 export interface DriftReport {
-  readonly baselineGitSha: string
-  readonly regressions: ReadonlyArray<{
-    taskId: string; variantId: string; dimension: QualityDimension
-    baselineScore: number; currentScore: number; delta: number
-  }>
-  readonly improvements: ReadonlyArray<{
-    taskId: string; variantId: string; dimension: QualityDimension
-    baselineScore: number; currentScore: number; delta: number
-  }>
-  readonly hasRegressions: boolean
-  readonly maxRegressionDelta: number
+  readonly baselineGitSha: string;
+  readonly regressions: ReadonlyArray<ScoreDelta>;
+  readonly improvements: ReadonlyArray<ScoreDelta>;
+  readonly hasRegressions: boolean;
+  readonly maxRegressionDelta: number;
 }
 
 export interface HarnessConfig {
-  readonly tools?: boolean
-  readonly reasoning?: boolean
-  readonly reactiveIntelligence?: boolean
-  readonly adaptiveContext?: boolean
-  readonly memory?: boolean
-  readonly guardrails?: boolean
-  readonly strategy?: "react" | "plan-execute" | "tree-of-thought" | "adaptive"
+  readonly tools?: boolean;
+  readonly reasoning?: boolean;
+  readonly reactiveIntelligence?: boolean;
+  readonly adaptiveContext?: boolean;
+  readonly memory?: boolean;
+  readonly guardrails?: boolean;
+  readonly strategy?: "react" | "plan-execute" | "tree-of-thought" | "adaptive";
 }
 
 export interface InternalVariant {
-  readonly type: "internal"
-  readonly id: string
-  readonly label: string
-  readonly config: HarnessConfig
+  readonly type: "internal";
+  readonly id: string;
+  readonly label: string;
+  readonly config: HarnessConfig;
 }
 
 export interface CompetitorVariant {
-  readonly type: "competitor"
-  readonly id: string
-  readonly label: string
-  readonly framework: "langchain" | "vercel-ai" | "openai-agents" | "mastra" | "llamaindex"
-  readonly frameworkVersion?: string
-  readonly frameworkConfig?: Record<string, unknown>
+  readonly type: "competitor";
+  readonly id: string;
+  readonly label: string;
+  readonly framework: "langchain" | "vercel-ai" | "openai-agents" | "mastra" | "llamaindex";
+  readonly frameworkVersion?: string;
+  readonly frameworkConfig?: Record<string, unknown>;
 }
 
 export type HarnessVariant = InternalVariant | CompetitorVariant
 
 export interface ModelVariant {
-  readonly id: string
-  readonly provider: "anthropic" | "openai" | "gemini" | "ollama" | "litellm"
-  readonly model: string
-  readonly contextTier?: "local" | "standard" | "large" | "frontier"
+  readonly id: string;
+  readonly provider: "anthropic" | "openai" | "gemini" | "ollama" | "litellm";
+  readonly model: string;
+  readonly contextTier?: "local" | "standard" | "large" | "frontier";
 }
 
 export interface BenchmarkSession {
-  readonly id: string
-  readonly name: string
-  readonly version: string
-  readonly taskIds?: ReadonlyArray<string>
-  readonly tiers?: ReadonlyArray<Tier>
-  readonly tags?: ReadonlyArray<string>
-  readonly models: ReadonlyArray<ModelVariant>
-  readonly harnessVariants: ReadonlyArray<HarnessVariant>
-  readonly runs?: number
-  readonly traceDir?: string
-  readonly concurrency?: number
-  readonly timeoutMs?: number
+  readonly id: string;
+  readonly name: string;
+  readonly version: string;
+  readonly taskIds?: ReadonlyArray<string>;
+  readonly tiers?: ReadonlyArray<Tier>;
+  readonly tags?: ReadonlyArray<string>;
+  readonly models: ReadonlyArray<ModelVariant>;
+  readonly harnessVariants: ReadonlyArray<HarnessVariant>;
+  readonly runs?: number;
+  readonly traceDir?: string;
+  readonly concurrency?: number;
+  readonly timeoutMs?: number;
 }
 
 export interface DimensionRubric {
-  readonly dimension: QualityDimension
-  readonly rubric: string
-  readonly weight?: number
+  readonly dimension: QualityDimension;
+  readonly rubric: string;
+  readonly weight?: number;
+}
+
+export interface ScoreDelta {
+  readonly taskId: string;
+  readonly variantId: string;
+  readonly dimension: QualityDimension;
+  readonly baselineScore: number;
+  readonly currentScore: number;
+  readonly delta: number;
+}
+
+export interface DimensionLift {
+  readonly dimension: QualityDimension;
+  readonly lift: number;
 }
 
 export interface TaskFixture {
-  readonly path: string
-  readonly content: string
+  readonly path: string;
+  readonly content: string;
 }
 
 export type SuccessCriteria =
@@ -230,11 +239,11 @@ export type SuccessCriteria =
   | { readonly type: "schema"; readonly schema: Record<string, unknown> }
 
 export interface TaskRunResult {
-  readonly output: string
-  readonly tokensUsed: number
-  readonly durationMs: number
-  readonly iterations: number
-  readonly status: "pass" | "fail" | "error"
-  readonly error?: string
-  readonly traceId?: string
+  readonly output: string;
+  readonly tokensUsed: number;
+  readonly durationMs: number;
+  readonly iterations: number;
+  readonly status: "pass" | "fail" | "error";
+  readonly error?: string;
+  readonly traceId?: string;
 }
