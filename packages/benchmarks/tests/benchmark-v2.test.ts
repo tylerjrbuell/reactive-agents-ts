@@ -259,3 +259,49 @@ test("openai-agents runner skips for non-OpenAI provider", async () => {
   expect(result.status).toBe("error")
   expect(result.error).toContain("OpenAI")
 })
+
+import { computeDrift, exceedsThreshold } from "../src/ci.js"
+import type { TaskVariantReport, DimensionScore, RunScore } from "../src/types.js"
+
+function makeReport(taskId: string, variantId: string, accuracyScore: number): TaskVariantReport {
+  const dim: DimensionScore = { dimension: "accuracy", score: accuracyScore }
+  const run: RunScore = { runIndex: 0, dimensions: [dim], tokensUsed: 100, durationMs: 500, status: accuracyScore >= 0.6 ? "pass" : "fail", output: "" }
+  return {
+    taskId, modelVariantId: "haiku", variantId, variantLabel: variantId,
+    runs: [run], meanScores: [dim], variance: 0,
+    meanTokens: 100, meanDurationMs: 500, passRate: accuracyScore >= 0.6 ? 1 : 0,
+  }
+}
+
+test("computeDrift detects regression when score drops > threshold", () => {
+  const baseline = [makeReport("rw-1", "ra-full", 0.9)]
+  const current  = [makeReport("rw-1", "ra-full", 0.6)]
+  const drift = computeDrift(baseline, current, "abc123", 0.15)
+  expect(drift.hasRegressions).toBe(true)
+  expect(drift.regressions).toHaveLength(1)
+  expect(drift.regressions[0]!.delta).toBeCloseTo(-0.3, 2)
+})
+
+test("computeDrift detects improvement when score rises", () => {
+  const baseline = [makeReport("rw-1", "ra-full", 0.5)]
+  const current  = [makeReport("rw-1", "ra-full", 0.8)]
+  const drift = computeDrift(baseline, current, "abc123", 0.15)
+  expect(drift.hasRegressions).toBe(false)
+  expect(drift.improvements).toHaveLength(1)
+})
+
+test("computeDrift returns no changes when scores are within threshold", () => {
+  const baseline = [makeReport("rw-1", "ra-full", 0.8)]
+  const current  = [makeReport("rw-1", "ra-full", 0.75)]
+  const drift = computeDrift(baseline, current, "abc123", 0.15)
+  expect(drift.hasRegressions).toBe(false)
+  expect(drift.regressions).toHaveLength(0)
+  expect(drift.improvements).toHaveLength(0)
+})
+
+test("exceedsThreshold returns true when maxRegressionDelta > threshold", () => {
+  const baseline = [makeReport("rw-1", "ra-full", 0.9)]
+  const current  = [makeReport("rw-1", "ra-full", 0.5)]
+  const drift = computeDrift(baseline, current, "abc123", 0.15)
+  expect(exceedsThreshold(drift, 0.2)).toBe(true)
+})
