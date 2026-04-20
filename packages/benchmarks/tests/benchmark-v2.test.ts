@@ -366,3 +366,28 @@ test("localModelsSession has only bare-llm and ra-full variants", () => {
   expect(ids).toContain("ra-full")
   expect(ids).not.toContain("langchain-react")
 })
+
+import { parseArgs } from "../src/run.js"
+
+test("parseArgs: existing --provider flag still works", () => {
+  const args = parseArgs(["--provider", "anthropic", "--model", "claude-haiku-4-5"])
+  expect(args.provider).toBe("anthropic")
+  expect(args.model).toBe("claude-haiku-4-5")
+})
+
+test("parseArgs: --session flag parsed", () => {
+  const args = parseArgs(["--session", "local-models"])
+  expect(args.session).toBe("local-models")
+})
+
+test("parseArgs: --runs flag parsed as number", () => {
+  const args = parseArgs(["--session", "local-models", "--runs", "3"])
+  expect(args.runs).toBe(3)
+})
+
+test("parseArgs: --save-baseline and --ci flags parsed", () => {
+  const args = parseArgs(["--session", "regression-gate", "--save-baseline"])
+  expect(args.saveBaseline).toBe(true)
+  const args2 = parseArgs(["--session", "regression-gate", "--ci"])
+  expect(args2.ci).toBe(true)
+})
