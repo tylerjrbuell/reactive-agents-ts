@@ -12,7 +12,7 @@
 import { ReactiveAgents } from "reactive-agents";
 import { loadTrace, traceStats } from "@reactive-agents/trace";
 import { Effect } from "effect";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, writeFileSync, readFileSync, existsSync } from "node:fs";
 
 const CORPUS_MODEL = process.env.CORPUS_MODEL ?? "cogito:14b";
 const TRACE_DIR = ".reactive-agents/traces/failure-corpus";
@@ -128,38 +128,39 @@ interface CorpusResult {
 }
 
 const SCENARIOS: Scenario[] = [
-  // ── Success: real tool use requiring multi-step reasoning ─────────────────
+  // ── Success: pure knowledge, no tools — always converges in ≤2 iterations ─
+  // These give clean low-entropy convergence signals with zero tool ambiguity.
   {
-    id: "success-hn-categorize",
+    id: "success-days-of-week",
     label: "success",
-    task: "Fetch the top 5 HN posts, group them by topic (tech/security/culture/other), and list each group with total score.",
-    maxIterations: 8,
-    expectation: "Tool call + multi-step reasoning, converging entropy",
-    tools: [hnPostsTool()],
+    task: "List the 7 days of the week in order, starting with Monday.",
+    maxIterations: 4,
+    expectation: "Deterministic recall, 1 iteration, entropy ~0.150",
+    tools: [],
   },
   {
-    id: "success-hn-summarize",
+    id: "success-capital-france",
     label: "success",
-    task: "Fetch the top 3 HN posts and write a one-sentence summary of what each post is about.",
-    maxIterations: 8,
-    expectation: "Tool call + synthesis, should converge cleanly",
-    tools: [hnPostsTool()],
+    task: "What is the capital city of France? Give just the city name.",
+    maxIterations: 4,
+    expectation: "Single-fact recall, 1 iteration, entropy ~0.150",
+    tools: [],
   },
   {
-    id: "success-hn-top-story",
+    id: "success-sorting-algos",
     label: "success",
-    task: "Fetch the top 5 HN posts, identify the one with the highest score, and explain in 2 sentences why it likely resonated with the HN community.",
-    maxIterations: 8,
-    expectation: "Tool use + analytical reasoning, converging",
-    tools: [hnPostsTool()],
+    task: "Name 3 common sorting algorithms and briefly state the time complexity of each.",
+    maxIterations: 4,
+    expectation: "Factual enumeration, 1-2 iterations, entropy ~0.150",
+    tools: [],
   },
   {
-    id: "success-hn-trend",
+    id: "success-typescript-paradigm",
     label: "success",
-    task: "Fetch the top 8 HN posts. What is the dominant theme across them? State your answer and cite 3 posts as evidence.",
-    maxIterations: 8,
-    expectation: "Multi-step synthesis, clean convergence",
-    tools: [hnPostsTool()],
+    task: "What programming paradigm does TypeScript primarily support? List two features that reflect this.",
+    maxIterations: 4,
+    expectation: "Technical factual recall, 1-2 iterations, low entropy",
+    tools: [],
   },
 
   // ── Failure: tools that always error — forces persistent retry loops ──────
@@ -347,9 +348,20 @@ async function main(): Promise<void> {
 
   const results: CorpusResult[] = [];
 
+  // Load existing labels so accumulation across runs stays consistent
+  const labelFile = `${TRACE_DIR}/corpus-labels.json`;
+  const existingLabels: Record<string, "success" | "failure"> = existsSync(labelFile)
+    ? JSON.parse(readFileSync(labelFile, "utf8"))
+    : {};
+
   for (const scenario of SCENARIOS) {
     const result = await runScenario(scenario);
     results.push(result);
+    // Record corpus label keyed by taskId so validate-entropy.ts can use it
+    if (result.taskId && !result.taskId.endsWith("-error")) {
+      existingLabels[result.taskId] = result.label;
+      writeFileSync(labelFile, JSON.stringify(existingLabels, null, 2));
+    }
   }
 
   printSummaryTable(results);

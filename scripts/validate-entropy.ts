@@ -1,5 +1,9 @@
 // Usage: bun run scripts/validate-entropy.ts .reactive-agents/traces/
-import { readdir } from "node:fs/promises"
+// When a corpus-labels.json sidecar exists in the directory, its labels take
+// precedence over the agent's self-reported completion status so AUC reflects
+// the *intended* success/failure split rather than model self-assessment.
+import { readdir, readFile } from "node:fs/promises"
+import { existsSync } from "node:fs"
 import { loadTrace, traceStats } from "@reactive-agents/trace"
 
 async function main() {
@@ -12,11 +16,27 @@ async function main() {
     process.exit(0)
   }
 
+  // Load corpus labels if a sidecar exists (written by failure-corpus.ts)
+  const labelFile = `${dir}/corpus-labels.json`
+  const corpusLabels: Record<string, "success" | "failure"> = existsSync(labelFile)
+    ? JSON.parse(await readFile(labelFile, "utf8"))
+    : {}
+  const hasLabels = Object.keys(corpusLabels).length > 0
+  if (hasLabels) {
+    console.log(`Using corpus labels from corpus-labels.json (${Object.keys(corpusLabels).length} entries)`)
+  }
+
   // Build points: (max entropy, success?)
   const points: { maxEntropy: number; success: boolean }[] = []
   for (const f of files) {
     const trace = await loadTrace(`${dir}/${f}`)
     const stats = traceStats(trace)
+    const runId = trace.runId
+    // Prefer corpus label; fall back to agent-reported status
+    if (hasLabels && runId in corpusLabels) {
+      points.push({ maxEntropy: stats.maxEntropy, success: corpusLabels[runId] === "success" })
+      continue
+    }
     const completed = trace.events.find((e) => e.kind === "run-completed")
     if (!completed || completed.kind !== "run-completed") continue
     points.push({ maxEntropy: stats.maxEntropy, success: completed.status === "success" })
