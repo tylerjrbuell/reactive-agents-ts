@@ -16,6 +16,30 @@ import type { StrategyServices } from "./service-utils.js";
 import type { EntropyScoreLike } from "../output-assembly.js";
 
 /**
+ * Compute the adaptive entropy floor for the intervention suppression gate.
+ *
+ * Priority:
+ *  1. calibrated (≥20 samples): relative to the model's own high-entropy mark
+ *  2. tier fallback:  local=0.12  frontier=0.45  unknown=0.25
+ *
+ * Using a relative threshold (highEntropyThreshold × 0.6) means the gate
+ * automatically scales as more run data arrives, without manual tuning per model.
+ */
+function calibratedMinEntropy(
+  calibration: { highEntropyThreshold: number; calibrated: boolean; sampleCount: number },
+  modelTier: string | undefined,
+): number {
+  if (calibration.calibrated && calibration.sampleCount >= 20) {
+    return calibration.highEntropyThreshold * 0.6;
+  }
+  switch (modelTier) {
+    case "local":    return 0.12;
+    case "frontier": return 0.45;
+    default:         return 0.25;
+  }
+}
+
+/**
  * Score entropy and evaluate reactive controller for one kernel iteration.
  *
  * Returns updated state (with controllerDecisions / controllerDecisionLog) and
@@ -230,6 +254,7 @@ export function runReactiveObserver(
               semantic?: number; behavioral?: number;
               sources?: { contextPressure?: number };
             } | undefined;
+            const modelTier = (latestScore as Record<string, unknown>)?.modelTier as string | undefined;
             const dispatchContext = {
               iteration: s.iteration,
               entropyScore: {
@@ -242,6 +267,7 @@ export function runReactiveObserver(
               },
               recentDecisions: decisions as readonly { readonly decision: string; readonly reason: string }[],
               budget: { tokensSpentOnInterventions: 0, interventionsFiredThisRun: 0 },
+              adaptiveMinEntropy: calibratedMinEntropy(calibration, modelTier),
             };
             const dispatchResult = yield* services.dispatcher.value
               .dispatch(

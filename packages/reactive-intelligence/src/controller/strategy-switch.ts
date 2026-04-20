@@ -20,8 +20,10 @@ export function evaluateStrategySwitch(
   const allFlat = recent.every((e) => e.trajectory.shape === "flat");
   if (!allFlat) return null;
 
-  // Check behavioral loop score exceeds threshold
-  if (params.behavioralLoopScore <= 0.7) return null;
+  // Check behavioral loop score exceeds threshold.
+  // 0.45 rather than 0.7: local models accumulate behavioral entropy more slowly
+  // (fewer repeated tool calls before giving up), so a lower bar catches real loops.
+  if (params.behavioralLoopScore <= 0.45) return null;
 
   // Simple alternation: suggest the other strategy
   const to =

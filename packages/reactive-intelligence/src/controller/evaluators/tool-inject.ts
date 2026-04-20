@@ -9,8 +9,10 @@ export function evaluateToolInject(
   if (entropyHistory.length < 2) return null;
 
   const latest = entropyHistory[entropyHistory.length - 1]!;
-  // High composite entropy + flat/diverging trajectory = knowledge gap
-  if (latest.composite < 0.7 || latest.trajectory.shape === "converging") return null;
+  // Moderate-to-high entropy + flat/diverging trajectory = knowledge gap.
+  // 0.5 rather than 0.7: local models without logprobs plateau at ~0.58-0.61
+  // when genuinely stuck and never reach the old ceiling.
+  if (latest.composite < 0.5 || latest.trajectory.shape === "converging") return null;
 
   // Suggest web-search if available, otherwise first available tool
   const toolName = availableToolNames.includes("web-search")

@@ -34,6 +34,7 @@ export interface TraceStats {
   readonly interventionsDispatched: number
   readonly interventionsSuppressed: number
   readonly maxEntropy: number
+  readonly avgEntropy: number
   readonly toolCalls: number
   readonly durationMs: number
   readonly totalTokens: number
@@ -47,8 +48,10 @@ export function traceStats(trace: Trace): TraceStats {
   let interventionsDispatched = 0
   let interventionsSuppressed = 0
   let maxEntropy = 0
+  let entropySum = 0
+  let entropyCount = 0
   let toolCalls = 0
-  let iterations = 0
+  let maxIter = -1
   let durationMs = 0
   let totalTokens = 0
 
@@ -62,7 +65,9 @@ export function traceStats(trace: Trace): TraceStats {
         break
       case "entropy-scored":
         if (ev.composite > maxEntropy) maxEntropy = ev.composite
-        if (ev.iter > iterations) iterations = ev.iter
+        if (ev.iter > maxIter) maxIter = ev.iter
+        entropySum += ev.composite
+        entropyCount++
         break
       case "tool-call-end":
         toolCalls++
@@ -78,10 +83,11 @@ export function traceStats(trace: Trace): TraceStats {
 
   return {
     totalEvents: trace.events.length,
-    iterations,
+    iterations: Math.max(0, maxIter + 1),
     interventionsDispatched,
     interventionsSuppressed,
     maxEntropy,
+    avgEntropy: entropyCount > 0 ? entropySum / entropyCount : 0,
     toolCalls,
     durationMs,
     totalTokens,

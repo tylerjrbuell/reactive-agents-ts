@@ -57,7 +57,8 @@ export function makeDispatcher(config: InterventionConfig): Dispatcher {
         // Suppression gates — checked in priority order
         // early-stop is exempt from the entropy-composite floor: it fires specifically
         // at LOW entropy (convergence), so checking composite >= 0.55 would always block it.
-        if (key !== "early-stop" && context.entropyScore.composite < config.suppression.minEntropyComposite) {
+        const minEntropy = context.adaptiveMinEntropy ?? config.suppression.minEntropyComposite;
+        if (key !== "early-stop" && context.entropyScore.composite < minEntropy) {
           skipped.push({ decisionType: key, reason: "below-entropy-threshold" })
           continue
         }

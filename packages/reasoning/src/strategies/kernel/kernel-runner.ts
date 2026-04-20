@@ -702,8 +702,16 @@ export function runKernel(
       consecutiveStalled = artifactDelta > 0 ? 0 : consecutiveStalled + 1;
       prevArtifactCount = totalArtifacts;
 
+      // When reactive intelligence is active it needs at least iteration 2 before it
+      // can evaluate early-stop. Give it runway by raising the stall threshold to 4
+      // so the RI evaluator always gets a chance to act before the harness fires.
+      // Detection is purely structural — `services.reactiveController._tag === "Some"`
+      // avoids importing anything from the reactive-intelligence package.
+      const riActive = services.reactiveController._tag === "Some";
+      const stallThreshold = riActive ? 4 : 2;
+
       if (
-        consecutiveStalled >= 2 &&
+        consecutiveStalled >= stallThreshold &&
         state.iteration >= 2 &&
         state.status === "thinking"
       ) {

@@ -40,6 +40,19 @@ export interface InterventionContext {
     readonly tokensSpentOnInterventions: number;
     readonly interventionsFiredThisRun: number;
   };
+  /**
+   * Model-adaptive entropy floor derived from calibration data + tier fallback.
+   * When present, overrides `config.suppression.minEntropyComposite` so the
+   * dispatcher threshold scales to the model's actual entropy range rather than
+   * the hardcoded Anthropic-calibrated default (0.55).
+   *
+   * Computed in reactive-observer.ts via calibratedMinEntropy():
+   *   - calibrated (≥20 samples): highEntropyThreshold × 0.6
+   *   - local tier fallback:      0.12  (Ollama — no logprobs, floor ~0.15)
+   *   - frontier tier fallback:   0.45  (Anthropic/OpenAI — with logprobs)
+   *   - unknown fallback:         0.25
+   */
+  readonly adaptiveMinEntropy?: number;
 }
 
 export interface InterventionHandler<

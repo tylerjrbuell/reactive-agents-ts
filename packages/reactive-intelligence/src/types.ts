@@ -234,4 +234,5 @@ export const defaultReactiveIntelligenceConfig: ReactiveIntelligenceConfig = {
     skillSynthesis: true,
   },
   telemetry: false,
+  calibrationDbPath: "~/.reactive-agents/calibration.db",
 };

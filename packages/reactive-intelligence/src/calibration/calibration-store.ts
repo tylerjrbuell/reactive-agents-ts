@@ -1,11 +1,26 @@
 import { Database } from "bun:sqlite";
+import { mkdirSync } from "node:fs";
+import { homedir } from "node:os";
+import { dirname } from "node:path";
 import type { ModelCalibration } from "../types.js";
+
+const DEFAULT_DB_PATH = "~/.reactive-agents/calibration.db";
+
+function expandPath(p: string): string {
+  if (p === ":memory:") return p;
+  if (p.startsWith("~/")) return homedir() + p.slice(1);
+  return p;
+}
 
 export class CalibrationStore {
   private db: Database;
 
-  constructor(dbPath = ":memory:") {
-    this.db = new Database(dbPath, { create: true });
+  constructor(dbPath: string = DEFAULT_DB_PATH) {
+    const resolved = expandPath(dbPath);
+    if (resolved !== ":memory:") {
+      mkdirSync(dirname(resolved), { recursive: true });
+    }
+    this.db = new Database(resolved, { create: true });
     this.db.exec("PRAGMA journal_mode=WAL");
     this.db.exec(`CREATE TABLE IF NOT EXISTS calibrations (
       model_id TEXT PRIMARY KEY,

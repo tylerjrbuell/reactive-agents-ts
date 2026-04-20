@@ -87,6 +87,7 @@ type DispatcherInstance = {
         readonly tokensSpentOnInterventions: number;
         readonly interventionsFiredThisRun: number;
       };
+      readonly adaptiveMinEntropy?: number;
     },
   ) => Effect.Effect<{
     readonly appliedPatches: readonly { readonly kind: string; readonly [k: string]: unknown }[];
