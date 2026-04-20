@@ -226,3 +226,36 @@ test("CompetitorRunner interface is importable", () => {
   }
   expect(mockRunner.id).toBe("test-runner")
 })
+
+import { COMPETITOR_RUNNERS } from "../src/competitors/index.js"
+
+test("COMPETITOR_RUNNERS registry has all 5 frameworks", () => {
+  expect(Object.keys(COMPETITOR_RUNNERS)).toContain("langchain")
+  expect(Object.keys(COMPETITOR_RUNNERS)).toContain("vercel-ai")
+  expect(Object.keys(COMPETITOR_RUNNERS)).toContain("openai-agents")
+  expect(Object.keys(COMPETITOR_RUNNERS)).toContain("mastra")
+  expect(Object.keys(COMPETITOR_RUNNERS)).toContain("llamaindex")
+})
+
+test("each competitor runner has required fields", () => {
+  for (const runner of Object.values(COMPETITOR_RUNNERS)) {
+    expect(typeof runner.id).toBe("string")
+    expect(typeof runner.label).toBe("string")
+    expect(typeof runner.framework).toBe("string")
+    expect(typeof runner.pinnedVersion).toBe("string")
+    expect(typeof runner.run).toBe("function")
+  }
+})
+
+test("openai-agents runner skips for non-OpenAI provider", async () => {
+  const runner = COMPETITOR_RUNNERS["openai-agents"]!
+  const fakeTask = {
+    id: "test", tier: "trivial" as const, name: "Test", prompt: "Say hi",
+  }
+  const fakeModel = {
+    id: "haiku", provider: "anthropic" as const, model: "claude-haiku-4-5",
+  }
+  const result = await runner.run(fakeTask, fakeModel, "/tmp", 5000)
+  expect(result.status).toBe("error")
+  expect(result.error).toContain("OpenAI")
+})
