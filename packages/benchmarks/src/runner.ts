@@ -524,8 +524,8 @@ async function runInternal(
       builder.withReasoning({ defaultStrategy: strategy })
     }
 
-    if (config.memory) {
-      (builder as unknown as { withMemory: () => typeof builder }).withMemory?.()
+    if (config.memory && "withMemory" in builder && typeof (builder as unknown as Record<string, unknown>)["withMemory"] === "function") {
+      ;(builder as unknown as Record<string, () => void>)["withMemory"]!()
     }
 
     const _log = console.log; console.log = () => {}

@@ -120,7 +120,7 @@ test("ABLATION_VARIANTS has 4 internal variants and 5 competitor variants", () =
 test("ABLATION_VARIANTS contains all 5 competitor frameworks", () => {
   const frameworks = ABLATION_VARIANTS
     .filter(v => v.type === "competitor")
-    .map(v => (v as any).framework)
+    .map(v => (v as CompetitorVariant).framework)
   expect(frameworks).toContain("langchain")
   expect(frameworks).toContain("vercel-ai")
   expect(frameworks).toContain("openai-agents")

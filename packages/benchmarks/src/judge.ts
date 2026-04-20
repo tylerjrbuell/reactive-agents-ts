@@ -166,7 +166,8 @@ export async function scoreTask(
         ))
         break
       case "schema":
-        // Validate JSON parseability only; schema shape validation is deferred.
+        // Validates JSON parseability only — shape validation against task.successCriteria.schema
+        // is not yet implemented and will always score 1.0 for any valid JSON output.
         try {
           JSON.parse(output)
           scores.push({ dimension: "accuracy", score: 1.0 })
