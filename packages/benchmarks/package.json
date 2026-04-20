@@ -6,7 +6,7 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": {
-    "build": "tsup --config ../../tsup.config.base.ts",
+    "build": "tsup",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
     "bench": "bun run src/run.ts"
