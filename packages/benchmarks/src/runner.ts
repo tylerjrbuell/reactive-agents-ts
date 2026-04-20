@@ -10,6 +10,19 @@ import { BENCHMARK_TASKS } from "./task-registry.js";
 import { ReactiveAgents } from "@reactive-agents/runtime";
 import { createRuntime } from "@reactive-agents/runtime";
 import type { RuntimeOptions } from "@reactive-agents/runtime";
+import { mkdtempSync, rmSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+import { execSync } from "node:child_process"
+import type {
+  BenchmarkSession, HarnessVariant, ModelVariant,
+  TaskVariantReport, AblationResult, SessionReport, RunScore,
+  DimensionScore, QualityDimension, HarnessConfig, TaskRunResult,
+} from "./types.js"
+import { REAL_WORLD_TASKS } from "./tasks/real-world.js"
+import { COMPETITOR_RUNNERS } from "./competitors/index.js"
+import { resolveTasks, mergeConfigs } from "./session.js"
+import { scoreTask, computeReliability } from "./judge.js"
 
 type ProviderName = NonNullable<RuntimeOptions["provider"]>;
 
@@ -463,5 +476,304 @@ export const runBenchmarks = async (
     summary,
   };
 };
+
+// ── v2: runSession() — multi-variant, multi-model, multi-run session runner ──
+
+const ALL_TASKS = [...BENCHMARK_TASKS, ...REAL_WORLD_TASKS] as const
+
+function getGitSha(): string {
+  try { return execSync("git rev-parse --short HEAD", { encoding: "utf8" }).trim() }
+  catch { return "unknown" }
+}
+
+function writeFixtures(task: BenchmarkTask, dir: string): void {
+  for (const fixture of task.fixtures ?? []) {
+    const dest = join(dir, fixture.path)
+    mkdirSync(join(dir, fixture.path.split("/").slice(0, -1).join("/")), { recursive: true })
+    writeFileSync(dest, fixture.content, "utf8")
+  }
+}
+
+async function runInternal(
+  task: BenchmarkTask,
+  model: ModelVariant,
+  config: HarnessConfig,
+  tmpDir: string,
+  timeoutMs: number,
+): Promise<TaskRunResult> {
+  const start = performance.now()
+  try {
+    const maxIter = task.maxIterations ?? (config.reasoning ? 20 : config.tools ? 15 : 1)
+    const builder = ReactiveAgents.create()
+      .withName(`bench-${task.id}`)
+      .withProvider(model.provider)
+      .withModel(model.model)
+      .withMaxIterations(maxIter)
+
+    if (config.tools) builder.withTools()
+    if (config.guardrails) builder.withGuardrails()
+
+    if (config.reasoning) {
+      const strategyMap = {
+        "react": "reactive" as const,
+        "plan-execute": "plan-execute-reflect" as const,
+        "tree-of-thought": "tree-of-thought" as const,
+        "adaptive": "adaptive" as const,
+      }
+      const strategy = config.strategy ? strategyMap[config.strategy] : "reactive"
+      builder.withReasoning({
+        defaultStrategy: strategy,
+        reactiveIntelligence: config.reactiveIntelligence,
+        adaptiveContext: config.adaptiveContext,
+      } as Parameters<typeof builder.withReasoning>[0])
+    }
+
+    if (config.memory) {
+      (builder as unknown as { withMemory: () => typeof builder }).withMemory?.()
+    }
+
+    const _log = console.log; console.log = () => {}
+    const agent = await builder.build()
+    console.log = _log
+
+    try {
+      const timeoutP = new Promise<never>((_, r) => setTimeout(() => r(new Error("timeout")), timeoutMs))
+      const result = await Promise.race([agent.run(task.prompt), timeoutP])
+      return {
+        output: result.output,
+        tokensUsed: result.metadata.tokensUsed ?? 0,
+        durationMs: performance.now() - start,
+        iterations: result.metadata.stepsCount ?? 0,
+        status: "pass",
+      }
+    } finally {
+      await agent.dispose()
+    }
+  } catch (e) {
+    return {
+      output: "",
+      tokensUsed: 0,
+      durationMs: performance.now() - start,
+      iterations: 0,
+      status: "error",
+      error: e instanceof Error ? e.message : String(e),
+    }
+  }
+}
+
+async function startFlakyPriceServer(): Promise<{ url: string; stop: () => void }> {
+  const fallbackData = {
+    bitcoin:  { usd: 68450.21, usd_24h_change: 2.34,  usd_market_cap: 1_347_000_000_000 },
+    ethereum: { usd: 3512.88,  usd_24h_change: -0.87, usd_market_cap: 422_000_000_000 },
+    solana:   { usd: 172.44,   usd_24h_change: 4.12,  usd_market_cap: 79_000_000_000 },
+  }
+  let callCount = 0
+  const server = Bun.serve({
+    port: 0,
+    fetch() {
+      callCount++
+      if (callCount <= 2) return new Response("Service Unavailable", { status: 503 })
+      return new Response(JSON.stringify(fallbackData), { status: 200,
+        headers: { "Content-Type": "application/json" } })
+    },
+  })
+  return { url: `http://localhost:${server.port}`, stop: () => server.stop() }
+}
+
+async function dispatch(
+  task: BenchmarkTask,
+  model: ModelVariant,
+  variant: HarnessVariant,
+  tmpDir: string,
+  timeoutMs: number,
+): Promise<TaskRunResult> {
+  if (variant.type === "competitor") {
+    const runner = COMPETITOR_RUNNERS[variant.framework]
+    if (!runner) return { output: "", tokensUsed: 0, durationMs: 0, iterations: 0, status: "error", error: `No runner for ${variant.framework}` }
+    return runner.run(task, model, tmpDir, timeoutMs)
+  }
+
+  const effectiveConfig = variant.id === "ra-full" && task.optimalHarnessConfig
+    ? mergeConfigs(variant.config, task.optimalHarnessConfig)
+    : variant.config
+
+  if (task.id === "rw-9") {
+    const { url, stop } = await startFlakyPriceServer()
+    const modifiedTask = { ...task, prompt: task.prompt.replace("INJECT_MOCK_URL", url) }
+    try { return await runInternal(modifiedTask, model, effectiveConfig, tmpDir, timeoutMs) }
+    finally { stop() }
+  }
+
+  return runInternal(task, model, effectiveConfig, tmpDir, timeoutMs)
+}
+
+export function aggregateRuns(
+  taskId: string,
+  modelVariantId: string,
+  variant: HarnessVariant,
+  runs: ReadonlyArray<RunScore>,
+): TaskVariantReport {
+  if (runs.length === 0) {
+    return { taskId, modelVariantId, variantId: variant.id, variantLabel: variant.label,
+      runs: [], meanScores: [], variance: 0, meanTokens: 0, meanDurationMs: 0, passRate: 0 }
+  }
+
+  const dims = [...new Set(runs.flatMap(r => r.dimensions.map(d => d.dimension)))] as QualityDimension[]
+
+  const meanScores: DimensionScore[] = dims.map(dim => {
+    const scores = runs.map(r => r.dimensions.find(d => d.dimension === dim)?.score ?? 0)
+    return { dimension: dim, score: scores.reduce((a, b) => a + b, 0) / scores.length }
+  })
+
+  const accuracyScores = runs.map(r => r.dimensions.find(d => d.dimension === "accuracy")?.score ?? 0)
+  const mean = accuracyScores.reduce((a, b) => a + b, 0) / accuracyScores.length
+  const variance = accuracyScores.reduce((a, b) => a + (b - mean) ** 2, 0) / accuracyScores.length
+  const reliability = computeReliability(runs as RunScore[])
+
+  if (!meanScores.find(s => s.dimension === "reliability")) {
+    meanScores.push({ dimension: "reliability", score: reliability })
+  }
+
+  return {
+    taskId, modelVariantId,
+    variantId: variant.id, variantLabel: variant.label,
+    runs,
+    meanScores,
+    variance: Math.sqrt(variance),
+    meanTokens: Math.round(runs.reduce((a, r) => a + r.tokensUsed, 0) / runs.length),
+    meanDurationMs: Math.round(runs.reduce((a, r) => a + r.durationMs, 0) / runs.length),
+    passRate: runs.filter(r => r.status === "pass").length / runs.length,
+  }
+}
+
+export function computeAllAblation(reports: ReadonlyArray<TaskVariantReport>): ReadonlyArray<AblationResult> {
+  const groups = new Map<string, TaskVariantReport[]>()
+  for (const r of reports) {
+    const key = `${r.taskId}::${r.modelVariantId}`
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key)!.push(r)
+  }
+
+  const results: AblationResult[] = []
+  for (const [key, variants] of groups) {
+    const [taskId, modelVariantId] = key.split("::") as [string, string]
+    const baseline = variants.find(v => v.variantId === "bare-llm")
+    const full = variants.find(v => v.variantId === "ra-full")
+    if (!baseline || !full) continue
+
+    const baseAcc = baseline.meanScores.find(s => s.dimension === "accuracy")?.score ?? 0
+    const fullAcc = full.meanScores.find(s => s.dimension === "accuracy")?.score ?? 0
+
+    const allDims = [...new Set(variants.flatMap(v => v.meanScores.map(s => s.dimension)))] as QualityDimension[]
+    const perDimensionLift = allDims.map(dim => {
+      const baseScore = baseline.meanScores.find(s => s.dimension === dim)?.score ?? 0
+      const fullScore = full.meanScores.find(s => s.dimension === dim)?.score ?? 0
+      return { dimension: dim, lift: fullScore - baseScore }
+    })
+
+    const bestVariant = [...variants].sort((a, b) =>
+      (b.meanScores.find(s => s.dimension === "accuracy")?.score ?? 0) -
+      (a.meanScores.find(s => s.dimension === "accuracy")?.score ?? 0)
+    )[0]!
+
+    const taskName = ALL_TASKS.find(t => t.id === taskId)?.name ?? taskId
+    results.push({
+      taskId, taskName, modelVariantId, variants,
+      harnessLift: fullAcc - baseAcc,
+      perDimensionLift,
+      bestVariantId: bestVariant.variantId,
+      baselineVariantId: "bare-llm",
+    })
+  }
+  return results
+}
+
+export function summarizeDimensions(
+  reports: ReadonlyArray<TaskVariantReport>,
+): SessionReport["dimensionSummary"] {
+  const dims = [...new Set(reports.flatMap(r => r.meanScores.map(s => s.dimension)))] as QualityDimension[]
+  return dims.map(dim => {
+    const variantIds = [...new Set(reports.map(r => r.variantId))]
+    return {
+      dimension: dim,
+      byVariant: variantIds.map(variantId => {
+        const variantReports = reports.filter(r => r.variantId === variantId)
+        const scores = variantReports.map(r => r.meanScores.find(s => s.dimension === dim)?.score ?? 0)
+        return {
+          variantId,
+          meanScore: scores.reduce((a, b) => a + b, 0) / (scores.length || 1),
+        }
+      }),
+    }
+  })
+}
+
+export async function runSession(
+  session: BenchmarkSession,
+  outputPath?: string,
+): Promise<SessionReport> {
+  const tasks = resolveTasks(session, ALL_TASKS)
+  const gitSha = getGitSha()
+  const allVariantReports: TaskVariantReport[] = []
+
+  const runCount = session.runs ?? 1
+  const timeoutMs = session.timeoutMs ?? 120_000
+
+  console.log(`\n  Running session: ${session.name} (${session.id} v${session.version})`)
+  console.log(`  Tasks: ${tasks.length} | Models: ${session.models.length} | Variants: ${session.harnessVariants.length} | Runs: ${runCount}\n`)
+
+  for (const task of tasks) {
+    for (const model of session.models) {
+      for (const variant of session.harnessVariants) {
+        const runScores: RunScore[] = []
+
+        for (let i = 0; i < runCount; i++) {
+          const tmpDir = mkdtempSync(join(tmpdir(), "ra-bench-"))
+          try {
+            writeFixtures(task, tmpDir)
+            const result = await dispatch(task, model, variant, tmpDir, timeoutMs)
+            const dimensions = await scoreTask(result.output, task, tmpDir, result.tokensUsed, result.iterations)
+            runScores.push({
+              runIndex: i,
+              dimensions: dimensions as DimensionScore[],
+              tokensUsed: result.tokensUsed,
+              durationMs: result.durationMs,
+              status: result.status,
+              output: result.output,
+            })
+          } finally {
+            rmSync(tmpDir, { recursive: true, force: true })
+          }
+        }
+
+        allVariantReports.push(aggregateRuns(task.id, model.id, variant, runScores))
+        process.stdout.write(".")
+      }
+    }
+  }
+
+  console.log("\n")
+
+  const ablation = computeAllAblation(allVariantReports)
+  const dimensionSummary = summarizeDimensions(allVariantReports)
+
+  const sessionReport: SessionReport = {
+    generatedAt: new Date().toISOString(),
+    runs: [],
+    sessionId: session.id,
+    sessionVersion: session.version,
+    gitSha,
+    ablation,
+    dimensionSummary,
+  }
+
+  if (outputPath) {
+    let existing: SessionReport = sessionReport
+    try { existing = JSON.parse(readFileSync(outputPath, "utf8")) as SessionReport } catch {}
+    writeFileSync(outputPath, JSON.stringify({ ...existing, ...sessionReport }, null, 2), "utf8")
+  }
+
+  return sessionReport
+}
 
 

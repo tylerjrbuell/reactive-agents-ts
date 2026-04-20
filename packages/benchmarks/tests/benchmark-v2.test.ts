@@ -305,3 +305,33 @@ test("exceedsThreshold returns true when maxRegressionDelta > threshold", () => 
   const drift = computeDrift(baseline, current, "abc123", 0.15)
   expect(exceedsThreshold(drift, 0.2)).toBe(true)
 })
+
+import { aggregateRuns, computeAllAblation, summarizeDimensions } from "../src/runner.js"
+
+test("aggregateRuns computes correct passRate and meanTokens", () => {
+  const runs = [
+    { runIndex: 0, dimensions: [{ dimension: "accuracy" as const, score: 1.0 }], tokensUsed: 100, durationMs: 500, status: "pass" as const, output: "" },
+    { runIndex: 1, dimensions: [{ dimension: "accuracy" as const, score: 0.0 }], tokensUsed: 200, durationMs: 600, status: "fail" as const, output: "" },
+  ]
+  const report = aggregateRuns("rw-1", "haiku", { type: "internal", id: "ra-full", label: "RA Full", config: {} }, runs)
+  expect(report.passRate).toBeCloseTo(0.5, 2)
+  expect(report.meanTokens).toBe(150)
+  expect(report.meanScores[0]!.score).toBeCloseTo(0.5, 2)
+})
+
+test("computeAllAblation computes harnessLift correctly", () => {
+  const baseReport = {
+    taskId: "rw-1", modelVariantId: "haiku",
+    variantId: "bare-llm", variantLabel: "Bare LLM",
+    runs: [], meanScores: [{ dimension: "accuracy" as const, score: 0.3 }],
+    variance: 0, meanTokens: 100, meanDurationMs: 500, passRate: 0.3,
+  }
+  const fullReport = {
+    ...baseReport, variantId: "ra-full", variantLabel: "RA Full",
+    meanScores: [{ dimension: "accuracy" as const, score: 0.9 }],
+    passRate: 0.9,
+  }
+  const ablation = computeAllAblation([baseReport, fullReport])
+  expect(ablation).toHaveLength(1)
+  expect(ablation[0]!.harnessLift).toBeCloseTo(0.6, 2)
+})
