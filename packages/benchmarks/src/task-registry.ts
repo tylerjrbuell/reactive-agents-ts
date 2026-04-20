@@ -1,4 +1,4 @@
-// File: src/tasks.ts
+// File: src/task-registry.ts
 /**
  * Benchmark task suite — 20 tasks across 5 complexity tiers.
  *
