@@ -5,7 +5,7 @@ import { ReactiveAgents } from "@reactive-agents/runtime"
 // ── Pure utility functions (testable without LLM) ────────────────────────────
 
 /**
- * Reliability = 1 - stddev of accuracy scores across runs.
+ * Reliability = 1 - 2*stddev of accuracy scores across runs.
  * 1.0 = perfectly consistent, 0.0 = completely random.
  */
 export function computeReliability(runs: ReadonlyArray<RunScore>): number {
