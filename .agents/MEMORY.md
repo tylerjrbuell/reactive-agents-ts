@@ -57,7 +57,7 @@ Open harness issues tracked across sessions. Fix order: wiring > validation > re
 
 ### Open — Intervention Dispatcher Wiring
 1. **Remaining patches not applied** — `set-temperature`, `request-strategy-switch`, `inject-tool-guidance`, `inject-skill-content`, `append-system-nudge` dispatched but fall through to `default: break` in reactive-observer.ts. Require kernel-runner cooperation for temperature/strategy changes.
-2. **ToT/PER outer loop early-stop propagation** — `terminatedBy === "dispatcher-early-stop"` check only in kernel-runner.ts inner loop. Each ToT branch is a separate sub-kernel; outer ToT and PER loops continue spawning regardless.
+2. **ToT outer loop early-stop propagation** — ✅ PER fixed Apr 19 (`perRIEarlyStop` flag at `plan-execute.ts:715,740`). ToT still open: each branch is a separate sub-kernel; outer ToT loop continues spawning regardless.
 3. **Skill hooks not wired** — `onSkillActivated`, `onSkillRefined`, `onSkillConflict` in `_riHooks` have no AgentEvent types yet.
 
 ### Open — Compression
@@ -279,7 +279,7 @@ Skeptical audit running framework as a new user against real Ollama + frontier A
 ```
 strategies/kernel/
   kernel-state.ts      ← KernelState, Phase type, KernelContext, ThoughtKernel
-  kernel-runner.ts     ← the loop (runKernel) — ~1,107 lines
+  kernel-runner.ts     ← the loop (runKernel) — ~1,184 lines
   kernel-hooks.ts      ← KernelHooks lifecycle hooks
   kernel-constants.ts  ← META_TOOLS, INTROSPECTION_META_TOOLS
   react-kernel.ts      ← makeKernel() + reactKernel + executeReActKernel (~181 lines)
@@ -290,12 +290,12 @@ strategies/kernel/
     think.ts           ← LLM stream, FC parsing, system prompt + guidance assembly, termination oracle
     guard.ts           ← Guard[], defaultGuards, checkToolCall()
     act.ts             ← MetaToolHandler registry, final-answer gate, tool dispatch
-  utils/ (19 files)
+  utils/ (20 files)
     ics-coordinator.ts, reactive-observer.ts, loop-detector.ts
-    tool-utils.ts, tool-execution.ts, termination-oracle.ts, strategy-evaluator.ts
+    tool-execution.ts, tool-formatting.ts, tool-gating.ts, tool-parsing.ts, tool-capabilities.ts
+    termination-oracle.ts, strategy-evaluator.ts, requirement-state.ts, lane-controller.ts
     stream-parser.ts, context-utils.ts, quality-utils.ts, service-utils.ts, step-utils.ts
-    requirement-state.ts, lane-controller.ts, auto-checkpoint.ts
-    task-intent.ts, tool-capabilities.ts, evidence-grounding.ts
+    auto-checkpoint.ts, task-intent.ts, evidence-grounding.ts, output-synthesis.ts
 ```
 
 ### Two Independent Records (unchanged)
@@ -319,7 +319,7 @@ state.steps[]     ← What systems observe (entropy, metrics, debrief)
 - **Anthropic streaming**: Use raw `streamEvent` not helper events (`inputJson` fires before `contentBlock`)
 - **Gemini tool results**: `functionResponse.name` must use `msg.toolName` not hard-coded "tool"
 - **Ollama streaming**: `chunk.message.tool_calls` on `chunk.done`, emit `tool_use_start` + `tool_use_delta`
-- **Loop detection**: `maxConsecutiveThoughts: 3` — only ACTION steps reset the streak (NOT observations — IC-1 fix Apr 12)
+- **Loop detection**: `maxConsecutiveThoughts: 3` — only ACTION steps reset the streak; observations do NOT (IC-1 fix Apr 12, loop-detector.ts:94)
 - See [build-patterns.md](build-patterns.md) for tsconfig, package.json, Effect-TS patterns
 
 ## What Shipped Apr 13, 2026 — Context Engineering Overhaul
@@ -372,7 +372,7 @@ state.steps[]     ← What systems observe (entropy, metrics, debrief)
 2. Strategy routing disabled — no clean solution for local model multi-step tasks
 3. Optional: ModelCalibration schema + 6-probe calibration-runner.ts for pre-baked local model profiles
 4. Barrel leak in `packages/reasoning/src/strategies/kernel/index.ts` — `export *` leaks internal utils as public API
-5. Loop detector streak logic in `loop-detector.ts` / `kernel-runner.ts` can mask duplicate-tool patterns so strategy-switching may never trigger (W8)
+5. ✅ FIXED Apr 12 (IC-1) — Loop detector streak: `else if (steps[i]!.type === "action") break` at `loop-detector.ts:94`. Duplicate-tool patterns now detectable; strategy-switching reachable.
 6. `synthesisConfig` dead pass-through on `KernelState` / `KernelInput` — naming is misleading; not consumed by ICS
 
 **Fixed (Apr 2026) — removed from this list:**
