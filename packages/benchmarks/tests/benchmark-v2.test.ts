@@ -101,3 +101,61 @@ test("rw-7 fixture includes three buggy TypeScript files", () => {
   expect(paths).toContain("src/processor.ts")
   expect(paths).toContain("src/pipeline.ts")
 })
+
+import { ABLATION_VARIANTS, resolveTasks, mergeConfigs } from "../src/session.js"
+import { REAL_WORLD_TASKS } from "../src/tasks/real-world.js"
+import { BENCHMARK_TASKS } from "../src/task-registry.js"
+
+test("ABLATION_VARIANTS has exactly 9 variants", () => {
+  expect(ABLATION_VARIANTS).toHaveLength(9)
+})
+
+test("ABLATION_VARIANTS has 4 internal variants and 5 competitor variants", () => {
+  const internal = ABLATION_VARIANTS.filter(v => v.type === "internal")
+  const competitor = ABLATION_VARIANTS.filter(v => v.type === "competitor")
+  expect(internal).toHaveLength(4)
+  expect(competitor).toHaveLength(5)
+})
+
+test("ABLATION_VARIANTS contains all 5 competitor frameworks", () => {
+  const frameworks = ABLATION_VARIANTS
+    .filter(v => v.type === "competitor")
+    .map(v => (v as any).framework)
+  expect(frameworks).toContain("langchain")
+  expect(frameworks).toContain("vercel-ai")
+  expect(frameworks).toContain("openai-agents")
+  expect(frameworks).toContain("mastra")
+  expect(frameworks).toContain("llamaindex")
+})
+
+test("resolveTasks by taskIds returns matching tasks", () => {
+  const session = {
+    id: "test", name: "test", version: "1.0.0",
+    taskIds: ["rw-1", "rw-2"],
+    models: [], harnessVariants: [],
+  }
+  const tasks = resolveTasks(session, [...BENCHMARK_TASKS, ...REAL_WORLD_TASKS])
+  expect(tasks).toHaveLength(2)
+  expect(tasks.map(t => t.id)).toContain("rw-1")
+})
+
+test("resolveTasks by tier returns tasks of that tier", () => {
+  const session = {
+    id: "test", name: "test", version: "1.0.0",
+    tiers: ["real-world" as const],
+    models: [], harnessVariants: [],
+  }
+  const tasks = resolveTasks(session, [...BENCHMARK_TASKS, ...REAL_WORLD_TASKS])
+  expect(tasks.length).toBe(10)
+  expect(tasks.every(t => t.tier === "real-world")).toBe(true)
+})
+
+test("mergeConfigs combines base and override", () => {
+  const base = { tools: true, reasoning: true }
+  const override = { reactiveIntelligence: true, strategy: "react" as const }
+  const merged = mergeConfigs(base, override)
+  expect(merged.tools).toBe(true)
+  expect(merged.reasoning).toBe(true)
+  expect(merged.reactiveIntelligence).toBe(true)
+  expect(merged.strategy).toBe("react")
+})
