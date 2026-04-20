@@ -103,7 +103,6 @@ test("rw-7 fixture includes three buggy TypeScript files", () => {
 })
 
 import { ABLATION_VARIANTS, resolveTasks, mergeConfigs } from "../src/session.js"
-import { REAL_WORLD_TASKS } from "../src/tasks/real-world.js"
 import { BENCHMARK_TASKS } from "../src/task-registry.js"
 
 test("ABLATION_VARIANTS has exactly 9 variants", () => {
