@@ -335,3 +335,34 @@ test("computeAllAblation computes harnessLift correctly", () => {
   expect(ablation).toHaveLength(1)
   expect(ablation[0]!.harnessLift).toBeCloseTo(0.6, 2)
 })
+
+import { regressionGateSession } from "../src/sessions/regression-gate.js"
+import { realWorldFullSession } from "../src/sessions/real-world-full.js"
+import { competitorComparisonSession } from "../src/sessions/competitor-comparison.js"
+import { localModelsSession } from "../src/sessions/local-models.js"
+
+test("regressionGateSession has ra-full only and 1 run", () => {
+  expect(regressionGateSession.harnessVariants).toHaveLength(1)
+  expect(regressionGateSession.harnessVariants[0]!.id).toBe("ra-full")
+  expect(regressionGateSession.runs).toBe(1)
+})
+
+test("realWorldFullSession has all 9 variants and 3 runs", () => {
+  expect(realWorldFullSession.harnessVariants).toHaveLength(9)
+  expect(realWorldFullSession.runs).toBe(3)
+  expect(realWorldFullSession.tiers).toContain("real-world")
+})
+
+test("competitorComparisonSession has both Anthropic and OpenAI models", () => {
+  const providers = competitorComparisonSession.models.map(m => m.provider)
+  expect(providers).toContain("anthropic")
+  expect(providers).toContain("openai")
+  expect(competitorComparisonSession.harnessVariants).toHaveLength(9)
+})
+
+test("localModelsSession has only bare-llm and ra-full variants", () => {
+  const ids = localModelsSession.harnessVariants.map(v => v.id)
+  expect(ids).toContain("bare-llm")
+  expect(ids).toContain("ra-full")
+  expect(ids).not.toContain("langchain-react")
+})
