@@ -19,6 +19,7 @@ import type {
   DriftReport,
   TaskRunResult,
 } from "../src/types.js"
+import type { CompetitorRunner } from "../src/competitors/types.js"
 
 test("QualityDimension covers all 10 dimensions", () => {
   const dims: QualityDimension[] = [
@@ -210,4 +211,18 @@ test("parsePartialCreditScore: returns 0.0 when all fail", () => {
 
 test("parsePartialCreditScore: returns 0.0 when output is unparseable", () => {
   expect(parsePartialCreditScore("some random output")).toBe(0.0)
+})
+
+test("CompetitorRunner interface is importable", () => {
+  // Type-level check — if this compiles, the interface is correct
+  const mockRunner: CompetitorRunner = {
+    id: "test-runner",
+    label: "Test Runner",
+    framework: "langchain",
+    pinnedVersion: "0.3.0",
+    async run(_task, _model, _tmpDir, _timeoutMs): Promise<TaskRunResult> {
+      return { output: "test", tokensUsed: 0, durationMs: 0, iterations: 0, status: "pass" }
+    },
+  }
+  expect(mockRunner.id).toBe("test-runner")
 })

@@ -20,8 +20,19 @@
     "@reactive-agents/runtime": "workspace:*"
   },
   "devDependencies": {
+    "@ai-sdk/anthropic": "^1.0",
+    "@ai-sdk/openai": "^1.0",
+    "@langchain/anthropic": "^0.3",
+    "@langchain/core": "^0.3",
+    "@langchain/langgraph": "^0.2",
+    "@langchain/openai": "^0.3",
+    "@mastra/core": "^0.5",
+    "@openai/agents": "^0.0",
+    "ai": "^4.0",
+    "bun-types": "latest",
+    "llamaindex": "^0.8",
     "typescript": "^5.7.0",
-    "bun-types": "latest"
+    "zod": "^3.23"
   },
   "license": "MIT"
 }
