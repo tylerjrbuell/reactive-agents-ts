@@ -158,3 +158,56 @@ test("mergeConfigs combines base and override", () => {
   expect(merged.reactiveIntelligence).toBe(true)
   expect(merged.strategy).toBe("react")
 })
+
+import { computeReliability, matchSuccessCriteria, parsePartialCreditScore } from "../src/judge.js"
+
+test("computeReliability returns 1.0 for single run", () => {
+  const runs = [{ dimensions: [{ dimension: "accuracy" as const, score: 0.8 }], tokensUsed: 100, durationMs: 1000, status: "pass" as const, output: "", runIndex: 0 }]
+  expect(computeReliability(runs)).toBe(1)
+})
+
+test("computeReliability returns 1.0 for perfectly consistent runs", () => {
+  const makeRun = (score: number, i: number) => ({
+    runIndex: i, dimensions: [{ dimension: "accuracy" as const, score }],
+    tokensUsed: 100, durationMs: 1000, status: "pass" as const, output: "",
+  })
+  const runs = [makeRun(0.9, 0), makeRun(0.9, 1), makeRun(0.9, 2)]
+  expect(computeReliability(runs)).toBeCloseTo(1.0, 3)
+})
+
+test("computeReliability returns < 0.5 for highly inconsistent runs", () => {
+  const makeRun = (score: number, i: number) => ({
+    runIndex: i, dimensions: [{ dimension: "accuracy" as const, score }],
+    tokensUsed: 100, durationMs: 1000, status: "pass" as const, output: "",
+  })
+  const runs = [makeRun(0.0, 0), makeRun(1.0, 1), makeRun(0.0, 2)]
+  expect(computeReliability(runs)).toBeLessThan(0.5)
+})
+
+test("matchSuccessCriteria regex: matches correctly", () => {
+  expect(matchSuccessCriteria("the answer is 42", { type: "regex", pattern: "42" })).toBe(1.0)
+  expect(matchSuccessCriteria("the answer is 7", { type: "regex", pattern: "42" })).toBe(0.0)
+})
+
+test("matchSuccessCriteria regex: case-insensitive", () => {
+  expect(matchSuccessCriteria("Hello World", { type: "regex", pattern: "hello" })).toBe(1.0)
+})
+
+test("parsePartialCreditScore: extracts pass ratio from bun test output", () => {
+  const output = "3 pass\n1 fail\n"
+  expect(parsePartialCreditScore(output)).toBeCloseTo(0.75, 2)
+})
+
+test("parsePartialCreditScore: returns 1.0 when all pass", () => {
+  const output = "5 pass\n0 fail\n"
+  expect(parsePartialCreditScore(output)).toBe(1.0)
+})
+
+test("parsePartialCreditScore: returns 0.0 when all fail", () => {
+  const output = "0 pass\n3 fail\n"
+  expect(parsePartialCreditScore(output)).toBe(0.0)
+})
+
+test("parsePartialCreditScore: returns 0.0 when output is unparseable", () => {
+  expect(parsePartialCreditScore("some random output")).toBe(0.0)
+})
