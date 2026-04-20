@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs"
 import { dirname } from "node:path"
-import type { DriftReport, TaskVariantReport, QualityDimension } from "./types.js"
+import type { DriftReport, TaskVariantReport, ScoreDelta } from "./types.js"
 
 const DEFAULT_REGRESSION_THRESHOLD = 0.15
 
@@ -14,9 +14,8 @@ export function computeDrift(
   baselineGitSha: string,
   regressionThreshold = DEFAULT_REGRESSION_THRESHOLD,
 ): DriftReport {
-  type Entry = { taskId: string; variantId: string; dimension: QualityDimension; baselineScore: number; currentScore: number; delta: number }
-  const regressions: Entry[] = []
-  const improvements: Entry[] = []
+  const regressions: ScoreDelta[] = []
+  const improvements: ScoreDelta[] = []
 
   for (const cur of current) {
     const base = baseline.find(b => b.taskId === cur.taskId && b.variantId === cur.variantId)
@@ -65,7 +64,8 @@ export function loadBaseline(path: string): { gitSha: string; reports: ReadonlyA
   try {
     const raw = JSON.parse(readFileSync(path, "utf8")) as { gitSha: string; reports: ReadonlyArray<TaskVariantReport> }
     return raw
-  } catch {
-    return null
+  } catch (e) {
+    if (e instanceof Error && "code" in e && (e as NodeJS.ErrnoException).code === "ENOENT") return null
+    throw e
   }
 }
