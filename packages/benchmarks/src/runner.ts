@@ -521,11 +521,7 @@ async function runInternal(
         "adaptive": "adaptive" as const,
       }
       const strategy = config.strategy ? strategyMap[config.strategy] : "reactive"
-      builder.withReasoning({
-        defaultStrategy: strategy,
-        reactiveIntelligence: config.reactiveIntelligence,
-        adaptiveContext: config.adaptiveContext,
-      } as Parameters<typeof builder.withReasoning>[0])
+      builder.withReasoning({ defaultStrategy: strategy })
     }
 
     if (config.memory) {
@@ -628,7 +624,7 @@ export function aggregateRuns(
   const accuracyScores = runs.map(r => r.dimensions.find(d => d.dimension === "accuracy")?.score ?? 0)
   const mean = accuracyScores.reduce((a, b) => a + b, 0) / accuracyScores.length
   const variance = accuracyScores.reduce((a, b) => a + (b - mean) ** 2, 0) / accuracyScores.length
-  const reliability = computeReliability(runs as RunScore[])
+  const reliability = computeReliability(runs)
 
   if (!meanScores.find(s => s.dimension === "reliability")) {
     meanScores.push({ dimension: "reliability", score: reliability })
@@ -735,7 +731,7 @@ export async function runSession(
             const dimensions = await scoreTask(result.output, task, tmpDir, result.tokensUsed, result.iterations)
             runScores.push({
               runIndex: i,
-              dimensions: dimensions as DimensionScore[],
+              dimensions,
               tokensUsed: result.tokensUsed,
               durationMs: result.durationMs,
               status: result.status,
@@ -769,7 +765,9 @@ export async function runSession(
 
   if (outputPath) {
     let existing: SessionReport = sessionReport
-    try { existing = JSON.parse(readFileSync(outputPath, "utf8")) as SessionReport } catch {}
+    try { existing = JSON.parse(readFileSync(outputPath, "utf8")) as SessionReport } catch (e) {
+      if (!(e instanceof Error && "code" in e && (e as NodeJS.ErrnoException).code === "ENOENT")) throw e
+    }
     writeFileSync(outputPath, JSON.stringify({ ...existing, ...sessionReport }, null, 2), "utf8")
   }
 
