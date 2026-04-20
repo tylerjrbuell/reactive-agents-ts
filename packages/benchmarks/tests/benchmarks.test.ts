@@ -1,6 +1,6 @@
 // File: tests/benchmarks.test.ts
 import { describe, it, expect } from "bun:test";
-import { BENCHMARK_TASKS, getTasksByTier } from "../src/tasks.js";
+import { BENCHMARK_TASKS, getTasksByTier } from "../src/task-registry.js";
 import type { Tier, TaskResult } from "../src/types.js";
 
 describe("Benchmark Tasks", () => {

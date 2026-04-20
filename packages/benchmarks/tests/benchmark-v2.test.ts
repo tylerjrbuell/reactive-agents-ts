@@ -57,3 +57,15 @@ test("BenchmarkTask accepts real-world tier and v2 optional fields", () => {
   }
   expect(task.tier).toBe("real-world")
 })
+
+test("task-registry exports BENCHMARK_TASKS with 25 tasks", async () => {
+  const { BENCHMARK_TASKS } = await import("../src/task-registry.js")
+  expect(BENCHMARK_TASKS.length).toBe(25)
+})
+
+test("getTasksByTier returns only tasks of that tier", async () => {
+  const { getTasksByTier } = await import("../src/task-registry.js")
+  const trivial = getTasksByTier("trivial")
+  expect(trivial.every(t => t.tier === "trivial")).toBe(true)
+  expect(trivial.length).toBeGreaterThan(0)
+})

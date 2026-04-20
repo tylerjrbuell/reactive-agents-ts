@@ -6,7 +6,7 @@
  * measuring real-world latency, token usage, cost, and correctness.
  */
 import type { BenchmarkTask, TaskResult, OverheadMeasurement, BenchmarkReport, Tier } from "./types.js";
-import { BENCHMARK_TASKS } from "./tasks.js";
+import { BENCHMARK_TASKS } from "./task-registry.js";
 import { ReactiveAgents } from "@reactive-agents/runtime";
 import { createRuntime } from "@reactive-agents/runtime";
 import type { RuntimeOptions } from "@reactive-agents/runtime";

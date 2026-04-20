@@ -7,6 +7,6 @@ export type {
   MultiModelReport,
   Tier,
 } from "./types.js";
-export { BENCHMARK_TASKS, getTasksByTier } from "./tasks.js";
+export { BENCHMARK_TASKS, getTasksByTier } from "./task-registry.js";
 export { runBenchmarks } from "./runner.js";
 export type { RunnerOptions } from "./runner.js";
