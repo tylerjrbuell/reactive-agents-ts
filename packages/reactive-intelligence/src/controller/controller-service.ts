@@ -10,6 +10,7 @@ import { evaluateToolInject } from "./evaluators/tool-inject.js";
 import { evaluateMemoryBoost } from "./evaluators/memory-boost.js";
 import { evaluateSkillReinject } from "./evaluators/skill-reinject.js";
 import { evaluateHumanEscalate } from "./evaluators/human-escalate.js";
+import { evaluateToolFailureStreak } from "./evaluators/tool-failure-streak.js";
 
 export class ReactiveControllerService extends Context.Tag("ReactiveControllerService")<
   ReactiveControllerService,
@@ -61,6 +62,9 @@ export const ReactiveControllerServiceLive = (
 
         const humanEsc = evaluateHumanEscalate(params);
         if (humanEsc) decisions.push(humanEsc);
+
+        const toolFailure = evaluateToolFailureStreak(params);
+        if (toolFailure) decisions.push(toolFailure);
 
         return decisions;
       }),

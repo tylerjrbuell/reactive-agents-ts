@@ -174,6 +174,7 @@ export type ControllerDecision =
   | { readonly decision: "skill-activate"; readonly skillName: string; readonly trigger: "entropy-match" | "task-match"; readonly confidence: string }
   | { readonly decision: "prompt-switch"; readonly fromVariant: string; readonly toVariant: string; readonly reason: string }
   | { readonly decision: "tool-inject"; readonly toolName: string; readonly reason: string }
+  | { readonly decision: "tool-failure-redirect"; readonly failingTool: string; readonly streakCount: number; readonly reason: string }
   | { readonly decision: "memory-boost"; readonly from: "recent" | "keyword"; readonly to: "semantic"; readonly reason: string }
   | { readonly decision: "skill-reinject"; readonly skillName: string; readonly reason: string }
   | { readonly decision: "human-escalate"; readonly reason: string; readonly decisionsExhausted: readonly string[] };
@@ -213,6 +214,11 @@ export type ControllerEvalParams = {
   readonly activeRetrievalMode?: "recent" | "keyword" | "semantic";
   readonly priorDecisionsThisRun?: readonly string[];
   readonly contextHasSkillContent?: boolean;
+  /** Count of consecutive failures of the same tool at the end of the message history.
+   *  Computed from state.messages role==="tool_result" isError===true streak. */
+  readonly consecutiveToolFailures?: number;
+  /** Name of the tool currently on a failure streak, if any. */
+  readonly failingToolName?: string;
 };
 
 export const defaultReactiveIntelligenceConfig: ReactiveIntelligenceConfig = {

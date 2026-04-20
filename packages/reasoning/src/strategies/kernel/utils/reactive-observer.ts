@@ -190,6 +190,21 @@ export function runReactiveObserver(
           return colonIdx > 0 ? entry.slice(0, colonIdx).trim() : entry;
         });
 
+        // Compute consecutive same-tool failure streak from message history.
+        // Scans backwards through tool_result messages; breaks on first success or tool change.
+        let consecutiveToolFailures = 0;
+        let failingToolName: string | undefined;
+        const toolResultMsgs = s.messages.filter(
+          (m): m is Extract<typeof m, { role: "tool_result" }> => m.role === "tool_result",
+        );
+        for (let i = toolResultMsgs.length - 1; i >= 0; i--) {
+          const m = toolResultMsgs[i]!;
+          if (!m.isError) break;
+          if (!failingToolName) failingToolName = m.toolName;
+          if (m.toolName !== failingToolName) break;
+          consecutiveToolFailures++;
+        }
+
         const decisions = yield* services.reactiveController.value.evaluate({
           entropyHistory,
           iteration: s.iteration,
@@ -206,6 +221,8 @@ export function runReactiveObserver(
           currentTemperature: currentOptions.temperature ?? s.meta.entropy?.temperature,
           availableToolNames: availableToolNames.length > 0 ? availableToolNames : undefined,
           priorDecisionsThisRun: priorDecisionsThisRun.length > 0 ? priorDecisionsThisRun : undefined,
+          consecutiveToolFailures: consecutiveToolFailures > 0 ? consecutiveToolFailures : undefined,
+          failingToolName,
         });
 
         for (const decision of decisions) {

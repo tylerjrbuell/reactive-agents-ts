@@ -4,6 +4,7 @@ import { switchStrategyHandler } from "./switch-strategy.js"
 import { contextCompressHandler } from "./context-compress.js"
 import { toolInjectHandler } from "./tool-inject.js"
 import { skillActivateHandler } from "./skill-activate.js"
+import { toolFailureRedirectHandler } from "./tool-failure-redirect.js"
 import type { InterventionHandler } from "../intervention.js"
 
 // Type cast required: TypeScript's contravariant function params prevent
@@ -16,6 +17,7 @@ export const defaultInterventionRegistry: readonly InterventionHandler[] = [
   contextCompressHandler as unknown as InterventionHandler,
   toolInjectHandler as unknown as InterventionHandler,
   skillActivateHandler as unknown as InterventionHandler,
+  toolFailureRedirectHandler as unknown as InterventionHandler,
 ]
 
-export { earlyStopHandler, tempAdjustHandler, switchStrategyHandler, contextCompressHandler, toolInjectHandler, skillActivateHandler }
+export { earlyStopHandler, tempAdjustHandler, switchStrategyHandler, contextCompressHandler, toolInjectHandler, skillActivateHandler, toolFailureRedirectHandler }

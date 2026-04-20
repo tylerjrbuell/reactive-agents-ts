@@ -13,13 +13,15 @@ import { ReactiveAgents } from "reactive-agents";
 import { loadTrace, traceStats } from "@reactive-agents/trace";
 import { Effect } from "effect";
 import { mkdirSync, writeFileSync, readFileSync, existsSync } from "node:fs";
+import { resolve } from "node:path";
 
 const CORPUS_MODEL = process.env.CORPUS_MODEL ?? "cogito:14b";
-const TRACE_DIR = ".reactive-agents/traces/failure-corpus";
+const TRACE_DIR = resolve(process.cwd(), ".reactive-agents/traces/failure-corpus");
 
 // ── Tool factories ────────────────────────────────────────────────────────────
 
-/** A tool that always errors — forces the model into persistent retry loops. */
+/** A tool that always fails with an Error — marks isError=true in the message history,
+ *  which the tool-failure-streak evaluator counts for consecutive failure detection. */
 function alwaysErrorTool(name: string, description: string, errorMsg: string) {
   return {
     definition: {
@@ -32,7 +34,7 @@ function alwaysErrorTool(name: string, description: string, errorMsg: string) {
       source: "function" as const,
     },
     handler: (_args: Record<string, unknown>) =>
-      Effect.succeed({ error: errorMsg, retryable: true } as unknown),
+      Effect.die(new Error(errorMsg)),
   };
 }
 
@@ -111,7 +113,7 @@ interface Scenario {
   task: string;
   maxIterations: number;
   expectation: string;
-  tools: ReturnType<typeof alwaysErrorTool>[];
+  tools: { definition: ReturnType<typeof alwaysErrorTool>["definition"]; handler: (args: Record<string, unknown>) => Effect.Effect<unknown, never> }[];
 }
 
 interface CorpusResult {
@@ -147,11 +149,11 @@ const SCENARIOS: Scenario[] = [
     tools: [],
   },
   {
-    id: "success-sorting-algos",
+    id: "success-rgb-colors",
     label: "success",
-    task: "Name 3 common sorting algorithms and briefly state the time complexity of each.",
+    task: "What are the three primary colors of light (RGB)? List them.",
     maxIterations: 4,
-    expectation: "Factual enumeration, 1-2 iterations, entropy ~0.150",
+    expectation: "Single-fact recall, 1 iteration, entropy ~0.150",
     tools: [],
   },
   {

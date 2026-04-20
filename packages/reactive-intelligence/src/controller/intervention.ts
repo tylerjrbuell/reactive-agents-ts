@@ -88,6 +88,7 @@ export const defaultInterventionConfig: InterventionConfig = {
     "skill-activate": "dispatch",
     "prompt-switch": "advisory",
     "tool-inject": "dispatch",
+    "tool-failure-redirect": "dispatch",
     "memory-boost": "advisory",
     "skill-reinject": "advisory",
     "human-escalate": "advisory",
