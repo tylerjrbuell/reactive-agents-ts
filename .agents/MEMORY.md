@@ -402,6 +402,19 @@ Identified during Zeus integration report — honest audit of what's implemented
 - **Real-time provider cost sync**: No integration with provider billing APIs for actual spend tracking.
 - **Tool approval enforcement at runtime**: Risk levels and `requiresApproval` flags are defined on tools but approval gate wiring to InteractionManager not fully visible in execution engine.
 
+## Benchmark Suite v2 (Apr 19, 2026)
+**SHIPPED** — 13-task implementation in `packages/benchmarks/`. Plan: `docs/superpowers/plans/2026-04-19-benchmark-suite-v2.md`. 50 tests pass, build clean.
+- **10-quality-dimension scoring** — accuracy, reasoning, tool-mastery, memory-fidelity, loop-intelligence, resilience, efficiency, reliability, scope-discipline, honest-uncertainty
+- **9-variant ablation ladder** — bare-llm, manual-react | langchain, vercel-ai, openai-agents, mastra, llamaindex | ra-reasoning, ra-full
+- **10 real-world tasks** — `packages/benchmarks/src/tasks/real-world.ts` with fixtures, verifiable criteria, LLM judge rubrics
+- **5 competitor runners** — `packages/benchmarks/src/competitors/` (LangChain, Vercel AI, OpenAI Agents, Mastra, LlamaIndex)
+- **4 pre-built sessions** — regression-gate, real-world-full, competitor-comparison, local-models
+- **CI drift gate** — `computeDrift()`, `exceedsThreshold()`, `saveBaseline()`, `loadBaseline()` in `ci.ts`
+- **CLI v2 flags** — `--session`, `--runs`, `--save-baseline`, `--ci` in `run.ts`
+- **Docs display** — harness lift card + ablation table + drift banner in `BenchmarkResults.astro`
+- **Build fix** — `tsup.config.ts` marks competitor packages as external (pgvector transitive dep)
+- Tests: 4,294 pass / 23 skip / 7 fail (7 pre-existing entropy calibration failures) across 483 files
+
 ## Show HN Readiness
 - ✅ Kernel composable phase architecture (clean codebase for contributors)
 - ✅ Text tool call fallback for models that output JSON in text
@@ -411,7 +424,7 @@ Identified during Zeus integration report — honest audit of what's implemented
 - ✅ Actionable failure messages with Fix: suggestions
 - ✅ Provider adapter 7/7 hooks
 - ✅ React/Vue/Svelte web hooks
-- 🔲 Benchmark suite published results
+- ✅ Benchmark suite v2 — 10-dimension scoring, competitor comparison, CI drift gate
 - 🔲 Docs refresh (in progress)
 
 ## Post-v0.8.5 Roadmap
