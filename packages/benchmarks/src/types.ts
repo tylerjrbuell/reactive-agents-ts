@@ -4,7 +4,7 @@
  */
 
 /** Complexity tier for benchmark tasks. */
-export type Tier = "trivial" | "simple" | "moderate" | "complex" | "expert";
+export type Tier = "trivial" | "simple" | "moderate" | "complex" | "expert" | "real-world";
 
 /** A benchmark task definition. */
 export interface BenchmarkTask {
@@ -26,6 +26,13 @@ export interface BenchmarkTask {
   readonly requiresDynamicSubAgents?: boolean;
   /** Override max iterations for this task (default: 30 for strategy tasks, 5 for single-shot). */
   readonly maxIterations?: number;
+  readonly successCriteria?: SuccessCriteria;
+  readonly dimensionRubrics?: ReadonlyArray<DimensionRubric>;
+  readonly fixtures?: ReadonlyArray<TaskFixture>;
+  readonly optimalHarnessConfig?: HarnessConfig;
+  readonly primaryDimensions?: ReadonlyArray<QualityDimension>;
+  readonly domain?: string;
+  readonly tags?: ReadonlyArray<string>;
 }
 
 /** Result of running a single benchmark task. */
@@ -73,4 +80,161 @@ export interface BenchmarkReport {
 export interface MultiModelReport {
   readonly generatedAt: string;
   readonly runs: readonly BenchmarkReport[];
+}
+
+// ── v2: Multi-dimensional scoring + session types ─────────────────────────────
+
+export type QualityDimension =
+  | "accuracy"
+  | "reasoning"
+  | "tool-mastery"
+  | "memory-fidelity"
+  | "loop-intelligence"
+  | "resilience"
+  | "efficiency"
+  | "reliability"
+  | "scope-discipline"
+  | "honest-uncertainty"
+
+export interface DimensionScore {
+  readonly dimension: QualityDimension
+  readonly score: number
+  readonly evidence?: string
+}
+
+export interface RunScore {
+  readonly runIndex: number
+  readonly dimensions: ReadonlyArray<DimensionScore>
+  readonly tokensUsed: number
+  readonly durationMs: number
+  readonly status: "pass" | "fail" | "error"
+  readonly output: string
+  readonly traceId?: string
+}
+
+export interface TaskVariantReport {
+  readonly taskId: string
+  readonly modelVariantId: string
+  readonly variantId: string
+  readonly variantLabel: string
+  readonly runs: ReadonlyArray<RunScore>
+  readonly meanScores: ReadonlyArray<DimensionScore>
+  readonly variance: number
+  readonly meanTokens: number
+  readonly meanDurationMs: number
+  readonly passRate: number
+}
+
+export interface AblationResult {
+  readonly taskId: string
+  readonly taskName: string
+  readonly modelVariantId: string
+  readonly variants: ReadonlyArray<TaskVariantReport>
+  readonly harnessLift: number
+  readonly perDimensionLift: ReadonlyArray<{ dimension: QualityDimension; lift: number }>
+  readonly bestVariantId: string
+  readonly baselineVariantId: string
+}
+
+export interface SessionReport extends MultiModelReport {
+  readonly sessionId: string
+  readonly sessionVersion: string
+  readonly gitSha: string
+  readonly ablation?: ReadonlyArray<AblationResult>
+  readonly dimensionSummary?: ReadonlyArray<{
+    dimension: QualityDimension
+    byVariant: ReadonlyArray<{ variantId: string; meanScore: number }>
+  }>
+  readonly drift?: DriftReport
+}
+
+export interface DriftReport {
+  readonly baselineGitSha: string
+  readonly regressions: ReadonlyArray<{
+    taskId: string; variantId: string; dimension: QualityDimension
+    baselineScore: number; currentScore: number; delta: number
+  }>
+  readonly improvements: ReadonlyArray<{
+    taskId: string; variantId: string; dimension: QualityDimension
+    baselineScore: number; currentScore: number; delta: number
+  }>
+  readonly hasRegressions: boolean
+  readonly maxRegressionDelta: number
+}
+
+export interface HarnessConfig {
+  readonly tools?: boolean
+  readonly reasoning?: boolean
+  readonly reactiveIntelligence?: boolean
+  readonly adaptiveContext?: boolean
+  readonly memory?: boolean
+  readonly guardrails?: boolean
+  readonly strategy?: "react" | "plan-execute" | "tree-of-thought" | "adaptive"
+}
+
+export interface InternalVariant {
+  readonly type: "internal"
+  readonly id: string
+  readonly label: string
+  readonly config: HarnessConfig
+}
+
+export interface CompetitorVariant {
+  readonly type: "competitor"
+  readonly id: string
+  readonly label: string
+  readonly framework: "langchain" | "vercel-ai" | "openai-agents" | "mastra" | "llamaindex"
+  readonly frameworkVersion?: string
+  readonly frameworkConfig?: Record<string, unknown>
+}
+
+export type HarnessVariant = InternalVariant | CompetitorVariant
+
+export interface ModelVariant {
+  readonly id: string
+  readonly provider: "anthropic" | "openai" | "gemini" | "ollama" | "litellm"
+  readonly model: string
+  readonly contextTier?: "local" | "standard" | "large" | "frontier"
+}
+
+export interface BenchmarkSession {
+  readonly id: string
+  readonly name: string
+  readonly version: string
+  readonly taskIds?: ReadonlyArray<string>
+  readonly tiers?: ReadonlyArray<Tier>
+  readonly tags?: ReadonlyArray<string>
+  readonly models: ReadonlyArray<ModelVariant>
+  readonly harnessVariants: ReadonlyArray<HarnessVariant>
+  readonly runs?: number
+  readonly traceDir?: string
+  readonly concurrency?: number
+  readonly timeoutMs?: number
+}
+
+export interface DimensionRubric {
+  readonly dimension: QualityDimension
+  readonly rubric: string
+  readonly weight?: number
+}
+
+export interface TaskFixture {
+  readonly path: string
+  readonly content: string
+}
+
+export type SuccessCriteria =
+  | { readonly type: "regex"; readonly pattern: string }
+  | { readonly type: "verifiable"; readonly command: string; readonly partialCredit?: boolean }
+  | { readonly type: "llm-judge"; readonly rubric: string; readonly passThreshold?: number }
+  | { readonly type: "schema"; readonly schema: Record<string, unknown> }
+
+export interface TaskRunResult {
+  readonly output: string
+  readonly tokensUsed: number
+  readonly durationMs: number
+  readonly iterations: number
+  readonly status: "pass" | "fail" | "error"
+  readonly error?: string
+  readonly traceId?: string
 }
