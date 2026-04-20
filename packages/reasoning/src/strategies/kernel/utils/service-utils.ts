@@ -56,6 +56,10 @@ type ReactiveControllerInstance = {
     };
     readonly contextPressure: number;
     readonly behavioralLoopScore: number;
+    // Optional params for living-intelligence evaluators
+    readonly currentTemperature?: number;
+    readonly availableToolNames?: readonly string[];
+    readonly priorDecisionsThisRun?: readonly string[];
   }) => Effect.Effect<readonly { readonly decision: string; readonly reason: string }[]>;
 };
 

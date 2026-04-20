@@ -84,4 +84,24 @@ describe("ReactiveAgent.start() — gateway loop", () => {
 
     await agent.dispose();
   });
+
+  test("gateway with persistMemoryAcrossRuns still ticks and executes", async () => {
+    const { ReactiveAgents } = await import("../src/builder");
+    const agent = await ReactiveAgents.create()
+      .withName("gw-persist-mem")
+      .withProvider("test")
+      .withTestScenario([{ text: "FINAL ANSWER: ok" }])
+      .withGateway({
+        heartbeat: { intervalMs: 50, instruction: "ping" },
+        persistMemoryAcrossRuns: true,
+        policies: { dailyTokenBudget: 100000 },
+      })
+      .build();
+
+    const handle = agent.start();
+    await new Promise((r) => setTimeout(r, 120));
+    const summary = await handle.stop();
+    expect(summary.totalRuns).toBeGreaterThanOrEqual(1);
+    await agent.dispose();
+  });
 });

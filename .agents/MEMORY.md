@@ -51,6 +51,28 @@ Full 4-agent audit run. Architecture solid; gaps are wiring, DX, and trust. Firs
 ### Repo cleanup needed
 Delete before v1.0: `test.ts` (46KB!), `main.ts`, `scratch.ts`, `scratch/`, `output.txt`, `harness-reports/`
 
+## Running Issues Log (Apr 19, 2026+)
+
+Open harness issues tracked across sessions. Fix order: wiring > validation > regressions.
+
+### Open — Intervention Dispatcher Wiring
+1. **Remaining patches not applied** — `set-temperature`, `request-strategy-switch`, `inject-tool-guidance`, `inject-skill-content`, `append-system-nudge` dispatched but fall through to `default: break` in reactive-observer.ts. Require kernel-runner cooperation for temperature/strategy changes.
+2. **ToT/PER outer loop early-stop propagation** — `terminatedBy === "dispatcher-early-stop"` check only in kernel-runner.ts inner loop. Each ToT branch is a separate sub-kernel; outer ToT and PER loops continue spawning regardless.
+3. **Skill hooks not wired** — `onSkillActivated`, `onSkillRefined`, `onSkillConflict` in `_riHooks` have no AgentEvent types yet.
+
+### Open — Compression
+4. **Dual compression systems uncoordinated** — `tool-execution.ts` always-on + `context-compressor.ts` advisory can both fire on the same run.
+5. **compress-messages count-based fallback** — ~200 tok/msg estimate; no real token counts at kernel state layer.
+
+### Open — Validation
+6. **AUC needs failure corpus** — validate-entropy.ts infra ready; first run was 10/10 success → AUC=0.000. Needs lower maxIterations, harder tasks, weaker models.
+7. **Per-tier RI cost-benefit unmeasured** — no data on RI net-positive vs net-negative by tier.
+8. **Local learning engine unverified E2E** — writes to `~/.reactive-agents/observations/` but influence on behavior unconfirmed.
+
+### Open — Regressions / Low Priority
+9. **cogito:14b 2.3× token regression with RI on** — self-gating should fix but unverified post-Apr-19 changes.
+10. **Quickstart telemetry opt-out printed twice** — cosmetic, low priority.
+
 ## V0.10 Hands-On Audit (Apr 18, 2026)
 
 Skeptical audit running framework as a new user against real Ollama + frontier APIs. Surfaced significant marketing/code drift on the reactive-intelligence layer. Full report + run logs: `/tmp/ra-audit/AUDIT.md`.
@@ -97,16 +119,18 @@ Skeptical audit running framework as a new user against real Ollama + frontier A
 - Local learning engine writes real samples per-model to `~/.reactive-agents/observations/` — persistence is live.
 - Kernel composable phase architecture (context-builder → think → guard → act) is clean and extensible.
 
-### Priority sequence pre-v0.10 — updated Apr 19
+### Priority sequence pre-v0.10 — updated Apr 19 (PM)
 1. ✅ Intervention dispatcher (architectural — unblocks central pitch)
 2. ✅ Self-gating RI (architectural — fixes cogito:14b/qwen3:4b regression)
 3. ✅ `code-execute` require/ESM fix (tactical — unblocks local-model demos)
 4. ✅ Offline entropy validation infra (measure before shipping "reactive" claim)
 5. ✅ Capability manifest + CI check (prevents future drift)
 6. ✅ Reactive observer param wiring + PER entropy scoring (Apr 19) — `currentTemperature`, `availableToolNames`, `priorDecisionsThisRun` now passed; PER reflection scored per iteration
-7. Dual compression coordination
-8. `_riHooks` callbacks dead
-9. AUC validation with real failure corpus
+7. ✅ `_riHooks` 3/6 wired (Apr 19) — `EntropyScored`/`ReactiveDecision`/`InterventionDispatched` subscribed in `builder.ts:2336`. Skill callbacks (3/6) deferred — no AgentEvent types yet
+8. Dual compression coordination
+9. ToT/PER outer-loop early-stop propagation (inner sub-kernel only today)
+10. AUC validation with real failure corpus
+11. Remaining reactive-observer patch handlers (`set-temperature`, `request-strategy-switch`, `inject-tool-guidance`, `inject-skill-content`, `append-system-nudge` still `default: break`)
 
 ## Current Status (Apr 17–18, 2026)
 - **3 CLI built-in tools shipped** — `git-cli`, `gh-cli`, `gws-cli` in `@reactive-agents/tools`; brings capability tool count to **9** (webSearch, cryptoPrice, httpGet, fileRead, fileWrite, codeExecute, git-cli, gh-cli, gws-cli) alongside 8 meta-tools; injectable `CliRunner` type for testability; `ENOENT` produces human-readable error

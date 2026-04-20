@@ -125,7 +125,7 @@ describe("fileWriteHandler — error cases", () => {
     expect(contents).toBe("nested content");
   });
 
-  it("should error when parent directory does not exist", async () => {
+  it("should create missing parent directories and write the file", async () => {
     await setup();
     const filePath = path.join(
       tmpDir,
@@ -135,12 +135,12 @@ describe("fileWriteHandler — error cases", () => {
     );
 
     const result = await Effect.runPromise(
-      fileWriteHandler({ path: filePath, content: "will fail" }).pipe(
-        Effect.flip,
-      ),
+      fileWriteHandler({ path: filePath, content: "created" }),
     );
-    expect(result).toBeInstanceOf(ToolExecutionError);
-    expect(result.message).toContain("File write failed");
+    const typed = result as { written: boolean; path: string };
+    expect(typed.written).toBe(true);
+    const contents = await fs.readFile(filePath, "utf-8");
+    expect(contents).toBe("created");
   });
 
   it("fileWriteTool definition has requiresApproval: true", async () => {

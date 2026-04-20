@@ -91,7 +91,7 @@ export const fileReadHandler = (
 export const fileWriteTool: ToolDefinition = {
   name: "file-write",
   description:
-    "Write text to a file, creating it if it does not exist (overwrites any existing content). " +
+    "Write text to a file, creating parent directories as needed (overwrites any existing content). " +
     "Returns { written: true, path: '...' } on success — once you see this, the file is saved. " +
     "IMPORTANT: the required parameters are 'path' and 'content' — do NOT use 'file', 'filename', or 'filepath'.",
   parameters: [
@@ -153,6 +153,9 @@ export const fileWriteHandler = (
       if (!resolved.startsWith(allowedBase)) {
         throw new Error(`Path traversal detected: ${filePath}`);
       }
+
+      const parent = path.dirname(resolved);
+      await fs.mkdir(parent, { recursive: true });
 
       await fs.writeFile(resolved, content, { encoding });
       return { written: true, path: resolved };

@@ -364,6 +364,11 @@ export type ToolServiceInstance = {
   readonly getTool: (name: string) => Effect.Effect<{
     parameters: Array<{ name: string; type: string; required?: boolean }>;
   }, unknown>;
+  readonly listTools: (filter?: {
+    category?: string;
+    source?: string;
+    riskLevel?: string;
+  }) => Effect.Effect<readonly { readonly name: string }[], never>;
 };
 
 /** Minimal EventBus surface used by kernel hooks (publish only) */

@@ -286,6 +286,13 @@ export const executePlanExecute = (
     // Track completed step results across refinements to avoid re-execution
     let completedSteps: PlanStep[] = [];
 
+    // Entropy history for the PER main loop (plan + reflect iterations)
+    type PEREntropyEntry = {
+      readonly composite: number;
+      readonly trajectory: { readonly shape: string; readonly derivative: number; readonly momentum: number };
+    };
+    let perEntropyHistory: readonly PEREntropyEntry[] = [];
+
     while (refinement <= maxRefinements) {
       yield* emitLog({
         _tag: "iteration",
@@ -590,6 +597,147 @@ export const executePlanExecute = (
         unit: "tokens",
         timestamp: new Date(),
       });
+
+      // ── Entropy scoring + reactive controller for PER reflection iterations ──
+      // Scores the reflection content as the "thought" of this iteration so the
+      // reactive controller can fire interventions (e.g. early-stop, compress).
+      let perRIEarlyStop = false;
+      if (services.entropySensor._tag === "Some") {
+        const syntheticState = {
+          taskId: input.taskId ?? "plan-execute",
+          strategy: "plan-execute-reflect",
+          kernelType: "plan-execute",
+          steps: steps.map((rs) => ({
+            type: rs.type,
+            ...(rs.content != null ? { content: rs.content } : {}),
+          })),
+          toolsUsed: new Set(
+            plan.steps
+              .filter((ps) => ps.status === "completed" && ps.toolName)
+              .map((ps) => ps.toolName!),
+          ),
+          iteration: refinement,
+          tokens: totalTokens,
+          status: "observing",
+          output: null,
+          error: null,
+          meta: {} as Record<string, unknown>,
+        };
+
+        const scoreResult = yield* services.entropySensor.value
+          .score({
+            thought: reflectionContent,
+            taskDescription: input.taskDescription ?? "",
+            strategy: "plan-execute-reflect",
+            iteration: refinement,
+            maxIterations: maxRefinements,
+            modelId: input.modelId ?? "unknown",
+            temperature: input.temperature ?? 0,
+            kernelState: syntheticState,
+          })
+          .pipe(Effect.catchAll(() => Effect.succeed(null)));
+
+        if (scoreResult !== null) {
+          const entry: PEREntropyEntry = {
+            composite: scoreResult.composite,
+            trajectory: scoreResult.trajectory,
+          };
+          perEntropyHistory = [...perEntropyHistory, entry];
+
+          if (services.eventBus._tag === "Some") {
+            const richScore = scoreResult as Record<string, unknown>;
+            yield* services.eventBus.value.publish({
+              _tag: "EntropyScored",
+              taskId: input.taskId ?? "plan-execute",
+              iteration: refinement,
+              composite: scoreResult.composite,
+              sources: richScore["sources"],
+              trajectory: richScore["trajectory"],
+              confidence: richScore["confidence"],
+              modelTier: richScore["modelTier"],
+              iterationWeight: richScore["iterationWeight"],
+            }).pipe(Effect.catchAll(() => Effect.void));
+          }
+
+          if (services.reactiveController._tag === "Some" && perEntropyHistory.length > 0) {
+            const latestScore = scoreResult as Record<string, unknown>;
+            const sources = latestScore["sources"] as Record<string, number> | undefined;
+            const decisions = yield* services.reactiveController.value
+              .evaluate({
+                entropyHistory: perEntropyHistory,
+                iteration: refinement,
+                maxIterations: maxRefinements,
+                strategy: "plan-execute-reflect",
+                calibration: {
+                  highEntropyThreshold: 0.8,
+                  convergenceThreshold: 0.4,
+                  calibrated: false,
+                  sampleCount: 0,
+                },
+                config: { earlyStop: true, contextCompression: true, strategySwitch: false },
+                contextPressure: sources?.["contextPressure"] ?? 0,
+                behavioralLoopScore: sources?.["behavioral"] ?? 0,
+                currentTemperature: input.temperature,
+                availableToolNames: input.availableTools.length > 0 ? input.availableTools : undefined,
+              })
+              .pipe(Effect.catchAll(() => Effect.succeed([])));
+
+            if (decisions.length > 0 && services.dispatcher._tag === "Some") {
+              const dispatchContext = {
+                iteration: refinement,
+                entropyScore: {
+                  composite: scoreResult.composite,
+                  token: 0,
+                  structural: sources?.["structural"] ?? 0,
+                  semantic: sources?.["semantic"] ?? 0,
+                  behavioral: sources?.["behavioral"] ?? 0,
+                  contextPressure: sources?.["contextPressure"] ?? 0,
+                },
+                recentDecisions: decisions as readonly { readonly decision: string; readonly reason: string }[],
+                budget: { tokensSpentOnInterventions: 0, interventionsFiredThisRun: 0 },
+              };
+              const dispatchResult = yield* services.dispatcher.value
+                .dispatch(decisions as readonly { readonly decision: string; readonly reason: string }[], {}, dispatchContext)
+                .pipe(Effect.catchAll(() => Effect.succeed({ appliedPatches: [], skipped: [], totalCost: { tokens: 0, latencyMs: 0 } })));
+
+              for (const patch of dispatchResult.appliedPatches) {
+                if (services.eventBus._tag === "Some") {
+                  yield* services.eventBus.value.publish({
+                    _tag: "InterventionDispatched",
+                    taskId: input.taskId ?? "plan-execute",
+                    iteration: refinement,
+                    decisionType: patch.kind,
+                    patchKind: patch.kind,
+                    cost: { tokensEstimated: dispatchResult.totalCost.tokens, latencyMsEstimated: dispatchResult.totalCost.latencyMs },
+                    telemetry: {},
+                  }).pipe(Effect.catchAll(() => Effect.void));
+                }
+                if (patch.kind === "early-stop") perRIEarlyStop = true;
+              }
+
+              for (const skipped of dispatchResult.skipped) {
+                if (services.eventBus._tag === "Some") {
+                  yield* services.eventBus.value.publish({
+                    _tag: "InterventionSuppressed",
+                    taskId: input.taskId ?? "plan-execute",
+                    iteration: refinement,
+                    decisionType: skipped.decisionType,
+                    reason: skipped.reason as
+                      | "below-entropy-threshold"
+                      | "below-iteration-threshold"
+                      | "over-budget"
+                      | "max-fires-exceeded"
+                      | "mode-advisory"
+                      | "mode-off"
+                      | "no-handler",
+                  }).pipe(Effect.catchAll(() => Effect.void));
+                }
+              }
+            }
+          }
+        }
+      }
+      if (perRIEarlyStop) break;
 
       // Trust the reflector's verdict — step completion alone does not mean the goal
       // is met (e.g. a combined search may return incomplete data for each entity).

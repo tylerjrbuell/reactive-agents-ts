@@ -145,6 +145,7 @@ export const GatewayConfigSchema = Schema.Struct({
       requireApprovalFor: Schema.optional(Schema.Array(Schema.String)),
     }),
   ),
+  persistMemoryAcrossRuns: Schema.optional(Schema.Boolean),
   port: Schema.optional(Schema.Number),
 });
 

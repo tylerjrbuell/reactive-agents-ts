@@ -28,6 +28,9 @@ harness-reports/*.txt
 harness-reports/*.json
 harness-reports/improvement-report-*.md
 
+# HN gateway example output
+hn-gateway-reports/
+
 # Scratch files
 output.txt
 scratch.ts

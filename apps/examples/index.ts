@@ -203,6 +203,13 @@ const EXAMPLES: ExampleMeta[] = [
     requiresKey: false,
     path: "./src/gateway/22-persistent-gateway.ts",
   },
+  {
+    num: "25",
+    label: "hn-gateway-monitor",
+    category: "gateway",
+    requiresKey: false,
+    path: "./src/gateway/25-hn-gateway-monitor.ts",
+  },
   // streaming — offline
   {
     num: "23",
