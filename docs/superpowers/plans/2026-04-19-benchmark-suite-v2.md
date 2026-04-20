@@ -1145,7 +1145,7 @@ test("ABLATION_VARIANTS has exactly 9 variants", () => {
   expect(ABLATION_VARIANTS).toHaveLength(9)
 })
 
-test("ABLATION_VARIANTS has 2 internal tier-0/1, 5 competitor tier-2, 2 internal tier-3", () => {
+test("ABLATION_VARIANTS has 4 internal variants and 5 competitor variants", () => {
   const internal = ABLATION_VARIANTS.filter(v => v.type === "internal")
   const competitor = ABLATION_VARIANTS.filter(v => v.type === "competitor")
   expect(internal).toHaveLength(4)
@@ -1529,9 +1529,8 @@ export async function scoreTask(
   if (task.successCriteria) {
     switch (task.successCriteria.type) {
       case "regex":
-        scores.push(matchSuccessCriteria(output, task.successCriteria)
-          ? { dimension: "accuracy", score: 1.0 }
-          : { dimension: "accuracy", score: 0.0 })
+        // matchSuccessCriteria returns a number (0.0 or 1.0) — use directly
+        scores.push({ dimension: "accuracy", score: matchSuccessCriteria(output, task.successCriteria) })
         break
       case "verifiable":
         scores.push(await scoreVerifiable(
@@ -1546,7 +1545,8 @@ export async function scoreTask(
         ))
         break
       case "schema":
-        // Schema validation: attempt to parse output as JSON and validate
+        // Structural schema validation is deferred — no current task uses this type.
+        // For now, validate JSON parseability only. criteria.schema is intentionally unused.
         try {
           JSON.parse(output)
           scores.push({ dimension: "accuracy", score: 1.0 })
@@ -1674,16 +1674,9 @@ Create `packages/benchmarks/src/competitors/types.ts`:
 ```typescript
 import type { BenchmarkTask, ModelVariant } from "../types.js"
 
-/** Raw result from any runner — internal or competitor. */
-export interface TaskRunResult {
-  readonly output: string
-  readonly tokensUsed: number
-  readonly durationMs: number
-  readonly iterations: number
-  readonly status: "pass" | "fail" | "error"
-  readonly error?: string
-  readonly traceId?: string
-}
+// TaskRunResult is defined in types.ts — re-export here so callers can import from one place
+export type { TaskRunResult } from "../types.js"
+import type { TaskRunResult } from "../types.js"
 
 /** Shared interface implemented by all 5 competitor runners. */
 export interface CompetitorRunner {
@@ -1778,66 +1771,58 @@ cd packages/benchmarks && bun test tests/benchmark-v2.test.ts 2>&1 | grep -i "ca
 Create `packages/benchmarks/src/competitors/langchain-runner.ts`:
 
 ```typescript
+import { readFileSync, writeFileSync } from "node:fs"
+import { join } from "node:path"
 import type { CompetitorRunner, TaskRunResult } from "./types.js"
 import type { BenchmarkTask, ModelVariant } from "../types.js"
-
-// Tools available to all competitors — same set as internal variants
-// Mapped to LangChain DynamicStructuredTool format
-function buildLangChainTools(tmpDir: string) {
-  const { DynamicStructuredTool } = require("@langchain/core/tools")
-  const { z } = require("zod")
-  const { readFileSync, writeFileSync } = require("node:fs")
-  const { join } = require("node:path")
-
-  return [
-    new DynamicStructuredTool({
-      name: "file_read",
-      description: "Read a file from the working directory",
-      schema: z.object({ path: z.string() }),
-      func: async ({ path }: { path: string }) => {
-        try { return readFileSync(join(tmpDir, path), "utf8") }
-        catch (e) { return `Error: ${e}` }
-      },
-    }),
-    new DynamicStructuredTool({
-      name: "file_write",
-      description: "Write content to a file in the working directory",
-      schema: z.object({ path: z.string(), content: z.string() }),
-      func: async ({ path, content }: { path: string; content: string }) => {
-        try { writeFileSync(join(tmpDir, path), content, "utf8"); return "ok" }
-        catch (e) { return `Error: ${e}` }
-      },
-    }),
-  ]
-}
-
-function buildLangChainLLM(model: ModelVariant) {
-  if (model.provider === "anthropic") {
-    const { ChatAnthropic } = require("@langchain/anthropic")
-    return new ChatAnthropic({ model: model.model, temperature: 0 })
-  }
-  if (model.provider === "openai") {
-    const { ChatOpenAI } = require("@langchain/openai")
-    return new ChatOpenAI({ model: model.model, temperature: 0 })
-  }
-  throw new Error(`LangChain runner: unsupported provider ${model.provider}`)
-}
 
 export const langchainRunner: CompetitorRunner = {
   id: "langchain-react",
   label: "LangChain JS",
   framework: "langchain",
-  pinnedVersion: "0.3.x",
+  pinnedVersion: "0.3.x / langgraph 0.2.x",
   async run(task: BenchmarkTask, model: ModelVariant, tmpDir: string, timeoutMs: number): Promise<TaskRunResult> {
     const start = performance.now()
     try {
-      const { createReactAgent } = require("@langchain/langgraph/prebuilt")
-      const { HumanMessage } = require("@langchain/core/messages")
+      // Dynamic ESM imports — avoids hard crash when package is missing
+      const { createReactAgent } = await import("@langchain/langgraph/prebuilt")
+      const { HumanMessage } = await import("@langchain/core/messages")
+      const { DynamicStructuredTool } = await import("@langchain/core/tools")
+      const { z } = await import("zod")
 
-      const llm = buildLangChainLLM(model)
-      const tools = buildLangChainTools(tmpDir)
+      let llm: unknown
+      if (model.provider === "anthropic") {
+        const { ChatAnthropic } = await import("@langchain/anthropic")
+        llm = new ChatAnthropic({ model: model.model, temperature: 0 })
+      } else if (model.provider === "openai") {
+        const { ChatOpenAI } = await import("@langchain/openai")
+        llm = new ChatOpenAI({ model: model.model, temperature: 0 })
+      } else {
+        throw new Error(`LangChain runner: unsupported provider ${model.provider}`)
+      }
+
+      const tools = [
+        new DynamicStructuredTool({
+          name: "file_read",
+          description: "Read a file from the working directory",
+          schema: z.object({ path: z.string() }),
+          func: async ({ path }: { path: string }) => {
+            try { return readFileSync(join(tmpDir, path), "utf8") }
+            catch (e) { return `Error: ${e}` }
+          },
+        }),
+        new DynamicStructuredTool({
+          name: "file_write",
+          description: "Write content to a file in the working directory",
+          schema: z.object({ path: z.string(), content: z.string() }),
+          func: async ({ path, content }: { path: string; content: string }) => {
+            try { writeFileSync(join(tmpDir, path), content, "utf8"); return "ok" }
+            catch (e) { return `Error: ${e}` }
+          },
+        }),
+      ]
+
       const agent = createReactAgent({ llm, tools })
-
       const response = await Promise.race([
         agent.invoke({ messages: [new HumanMessage(task.prompt)] }),
         new Promise<never>((_, r) => setTimeout(() => r(new Error("timeout")), timeoutMs)),
@@ -1850,20 +1835,14 @@ export const langchainRunner: CompetitorRunner = {
 
       return {
         output,
-        tokensUsed: 0, // LangChain doesn't expose token counts easily without callbacks
+        tokensUsed: 0, // LangChain doesn't expose token counts without callbacks
         durationMs: performance.now() - start,
         iterations: response.messages.filter((m: { _getType?: () => string }) => m._getType?.() === "tool").length,
         status: "pass",
       }
     } catch (e) {
-      return {
-        output: "",
-        tokensUsed: 0,
-        durationMs: performance.now() - start,
-        iterations: 0,
-        status: "error",
-        error: e instanceof Error ? e.message : String(e),
-      }
+      return { output: "", tokensUsed: 0, durationMs: performance.now() - start,
+        iterations: 0, status: "error", error: e instanceof Error ? e.message : String(e) }
     }
   },
 }
@@ -1874,45 +1853,10 @@ export const langchainRunner: CompetitorRunner = {
 Create `packages/benchmarks/src/competitors/vercel-ai-runner.ts`:
 
 ```typescript
-import type { CompetitorRunner, TaskRunResult } from "./types.js"
-import type { BenchmarkTask, ModelVariant } from "../types.js"
 import { readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
-
-function buildVercelModel(model: ModelVariant) {
-  if (model.provider === "anthropic") {
-    const { anthropic } = require("@ai-sdk/anthropic")
-    return anthropic(model.model)
-  }
-  if (model.provider === "openai") {
-    const { openai } = require("@ai-sdk/openai")
-    return openai(model.model)
-  }
-  throw new Error(`Vercel AI runner: unsupported provider ${model.provider}`)
-}
-
-function buildVercelTools(tmpDir: string) {
-  const { tool } = require("ai")
-  const { z } = require("zod")
-  return {
-    file_read: tool({
-      description: "Read a file from the working directory",
-      parameters: z.object({ path: z.string() }),
-      execute: async ({ path }: { path: string }) => {
-        try { return readFileSync(join(tmpDir, path), "utf8") }
-        catch (e) { return `Error: ${e}` }
-      },
-    }),
-    file_write: tool({
-      description: "Write content to a file in the working directory",
-      parameters: z.object({ path: z.string(), content: z.string() }),
-      execute: async ({ path, content }: { path: string; content: string }) => {
-        try { writeFileSync(join(tmpDir, path), content, "utf8"); return "ok" }
-        catch (e) { return `Error: ${e}` }
-      },
-    }),
-  }
-}
+import type { CompetitorRunner, TaskRunResult } from "./types.js"
+import type { BenchmarkTask, ModelVariant } from "../types.js"
 
 export const vercelAiRunner: CompetitorRunner = {
   id: "vercel-ai-sdk",
@@ -1922,37 +1866,55 @@ export const vercelAiRunner: CompetitorRunner = {
   async run(task: BenchmarkTask, model: ModelVariant, tmpDir: string, timeoutMs: number): Promise<TaskRunResult> {
     const start = performance.now()
     try {
-      const { generateText } = require("ai")
-      const llmModel = buildVercelModel(model)
-      const tools = buildVercelTools(tmpDir)
+      const { generateText, tool } = await import("ai")
+      const { z } = await import("zod")
+
+      let llmModel: unknown
+      if (model.provider === "anthropic") {
+        const { anthropic } = await import("@ai-sdk/anthropic")
+        llmModel = anthropic(model.model)
+      } else if (model.provider === "openai") {
+        const { openai } = await import("@ai-sdk/openai")
+        llmModel = openai(model.model)
+      } else {
+        throw new Error(`Vercel AI runner: unsupported provider ${model.provider}`)
+      }
+
+      const tools = {
+        file_read: tool({
+          description: "Read a file from the working directory",
+          parameters: z.object({ path: z.string() }),
+          execute: async ({ path }: { path: string }) => {
+            try { return readFileSync(join(tmpDir, path), "utf8") }
+            catch (e) { return `Error: ${e}` }
+          },
+        }),
+        file_write: tool({
+          description: "Write content to a file in the working directory",
+          parameters: z.object({ path: z.string(), content: z.string() }),
+          execute: async ({ path, content }: { path: string; content: string }) => {
+            try { writeFileSync(join(tmpDir, path), content, "utf8"); return "ok" }
+            catch (e) { return `Error: ${e}` }
+          },
+        }),
+      }
 
       const result = await Promise.race([
-        generateText({
-          model: llmModel,
-          prompt: task.prompt,
-          tools,
-          maxSteps: task.maxIterations ?? 15,
-          temperature: 0,
-        }),
+        generateText({ model: llmModel as Parameters<typeof generateText>[0]["model"],
+          prompt: task.prompt, tools, maxSteps: task.maxIterations ?? 15, temperature: 0 }),
         new Promise<never>((_, r) => setTimeout(() => r(new Error("timeout")), timeoutMs)),
       ])
 
       return {
         output: result.text,
-        tokensUsed: (result.usage?.totalTokens ?? 0),
+        tokensUsed: result.usage?.totalTokens ?? 0,
         durationMs: performance.now() - start,
         iterations: result.steps?.length ?? 0,
         status: "pass",
       }
     } catch (e) {
-      return {
-        output: "",
-        tokensUsed: 0,
-        durationMs: performance.now() - start,
-        iterations: 0,
-        status: "error",
-        error: e instanceof Error ? e.message : String(e),
-      }
+      return { output: "", tokensUsed: 0, durationMs: performance.now() - start,
+        iterations: 0, status: "error", error: e instanceof Error ? e.message : String(e) }
     }
   },
 }
@@ -1963,10 +1925,10 @@ export const vercelAiRunner: CompetitorRunner = {
 Create `packages/benchmarks/src/competitors/openai-agents-runner.ts`:
 
 ```typescript
-import type { CompetitorRunner, TaskRunResult } from "./types.js"
-import type { BenchmarkTask, ModelVariant } from "../types.js"
 import { readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
+import type { CompetitorRunner, TaskRunResult } from "./types.js"
+import type { BenchmarkTask, ModelVariant } from "../types.js"
 
 export const openaiAgentsRunner: CompetitorRunner = {
   id: "openai-agents",
@@ -1976,20 +1938,14 @@ export const openaiAgentsRunner: CompetitorRunner = {
   async run(task: BenchmarkTask, model: ModelVariant, tmpDir: string, timeoutMs: number): Promise<TaskRunResult> {
     // OpenAI Agents SDK only supports OpenAI-compatible models
     if (model.provider !== "openai") {
-      return {
-        output: "",
-        tokensUsed: 0,
-        durationMs: 0,
-        iterations: 0,
-        status: "error",
-        error: `OpenAI Agents SDK requires provider=openai, got ${model.provider} — skipped`,
-      }
+      return { output: "", tokensUsed: 0, durationMs: 0, iterations: 0, status: "error",
+        error: `OpenAI Agents SDK requires provider=openai, got ${model.provider} — skipped` }
     }
 
     const start = performance.now()
     try {
-      const { Agent, run } = require("@openai/agents")
-      const { z } = require("zod")
+      const { Agent, run } = await import("@openai/agents")
+      const { z } = await import("zod")
 
       const fileReadTool = {
         name: "file_read",
@@ -2031,14 +1987,8 @@ export const openaiAgentsRunner: CompetitorRunner = {
         status: "pass",
       }
     } catch (e) {
-      return {
-        output: "",
-        tokensUsed: 0,
-        durationMs: performance.now() - start,
-        iterations: 0,
-        status: "error",
-        error: e instanceof Error ? e.message : String(e),
-      }
+      return { output: "", tokensUsed: 0, durationMs: performance.now() - start,
+        iterations: 0, status: "error", error: e instanceof Error ? e.message : String(e) }
     }
   },
 }
@@ -2054,13 +2004,13 @@ import type { BenchmarkTask, ModelVariant } from "../types.js"
 import { readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 
-function buildMastraModel(model: ModelVariant) {
+async function buildMastraModel(model: ModelVariant) {
   if (model.provider === "anthropic") {
-    const { anthropic } = require("@ai-sdk/anthropic")
+    const { anthropic } = await import("@ai-sdk/anthropic")
     return anthropic(model.model)
   }
   if (model.provider === "openai") {
-    const { openai } = require("@ai-sdk/openai")
+    const { openai } = await import("@ai-sdk/openai")
     return openai(model.model)
   }
   throw new Error(`Mastra runner: unsupported provider ${model.provider}`)
@@ -2074,9 +2024,9 @@ export const mastraRunner: CompetitorRunner = {
   async run(task: BenchmarkTask, model: ModelVariant, tmpDir: string, timeoutMs: number): Promise<TaskRunResult> {
     const start = performance.now()
     try {
-      const { Agent } = require("@mastra/core/agent")
-      const { createTool } = require("@mastra/core/tools")
-      const { z } = require("zod")
+      const { Agent } = await import("@mastra/core/agent")
+      const { createTool } = await import("@mastra/core/tools")
+      const { z } = await import("zod")
 
       const tools = {
         fileRead: createTool({
@@ -2161,7 +2111,7 @@ export const llamaindexRunner: CompetitorRunner = {
 
     const start = performance.now()
     try {
-      const { FunctionTool, ReActAgent } = require("llamaindex")
+      const { FunctionTool, ReActAgent } = await import("llamaindex")
 
       const tools = [
         FunctionTool.from(
@@ -2184,10 +2134,10 @@ export const llamaindexRunner: CompetitorRunner = {
 
       let llm: unknown
       if (model.provider === "openai") {
-        const { OpenAI } = require("llamaindex")
+        const { OpenAI } = await import("llamaindex")
         llm = new OpenAI({ model: model.model, temperature: 0 })
       } else {
-        const { Anthropic } = require("llamaindex")
+        const { Anthropic } = await import("llamaindex")
         llm = new Anthropic({ model: model.model, temperature: 0 })
       }
 
@@ -2481,14 +2431,12 @@ test("computeAllAblation computes harnessLift correctly", () => {
 cd packages/benchmarks && bun test tests/benchmark-v2.test.ts 2>&1 | grep -E "pass|fail"
 ```
 
-- [ ] **Step 9.3: Add runSession() and helpers to runner.ts**
+- [ ] **Step 9.3a: Add v2 imports to the TOP of runner.ts**
 
-Append to the end of `packages/benchmarks/src/runner.ts` (after the last line):
+Insert these lines into `packages/benchmarks/src/runner.ts` **after the existing imports block at the top** (after line 14, before the first non-import line):
 
 ```typescript
-// ── v2: runSession() — multi-variant, multi-model, multi-run session runner ──
-
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from "node:fs"
+import { mkdtempSync, rmSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { execSync } from "node:child_process"
@@ -2502,6 +2450,16 @@ import { REAL_WORLD_TASKS } from "./tasks/real-world.js"
 import { COMPETITOR_RUNNERS } from "./competitors/index.js"
 import { resolveTasks, mergeConfigs } from "./session.js"
 import { scoreTask, computeReliability } from "./judge.js"
+```
+
+> **IMPORTANT**: ESM forbids `import` statements anywhere other than the top of the module. These imports MUST be placed at the top of the file with the other imports — never mid-file or inside a function.
+
+- [ ] **Step 9.3b: Append runSession() and helpers to the BOTTOM of runner.ts**
+
+Append to the end of `packages/benchmarks/src/runner.ts` (after the last line):
+
+```typescript
+// ── v2: runSession() — multi-variant, multi-model, multi-run session runner ──
 
 const ALL_TASKS = [...BENCHMARK_TASKS, ...REAL_WORLD_TASKS] as const
 
@@ -2562,24 +2520,18 @@ async function runInternal(
     const agent = await builder.build()
     console.log = _log
 
-    let tokens = 0; let iters = 0
-    const unsub = await agent.subscribe((event) => {
-      if (event._tag === "LLMRequestCompleted") tokens += event.tokensUsed
-      if (event._tag === "ReasoningStepCompleted") iters++
-    })
-
     try {
       const timeoutP = new Promise<never>((_, r) => setTimeout(() => r(new Error("timeout")), timeoutMs))
       const result = await Promise.race([agent.run(task.prompt), timeoutP])
       return {
         output: result.output,
-        tokensUsed: result.metadata.tokensUsed || tokens,
+        tokensUsed: result.metadata.tokensUsed ?? 0,
         durationMs: performance.now() - start,
-        iterations: result.metadata.stepsCount || iters,
+        iterations: result.metadata.stepsCount ?? 0,
         status: "pass",
       }
     } finally {
-      unsub(); await agent.dispose()
+      await agent.dispose()
     }
   } catch (e) {
     return {
@@ -2591,6 +2543,26 @@ async function runInternal(
       error: e instanceof Error ? e.message : String(e),
     }
   }
+}
+
+/** Start a flaky HTTP server that returns 503 twice then static crypto prices. */
+async function startFlakyPriceServer(): Promise<{ url: string; stop: () => void }> {
+  const fallbackData = {
+    bitcoin:  { usd: 68450.21, usd_24h_change: 2.34,  usd_market_cap: 1_347_000_000_000 },
+    ethereum: { usd: 3512.88,  usd_24h_change: -0.87, usd_market_cap: 422_000_000_000 },
+    solana:   { usd: 172.44,   usd_24h_change: 4.12,  usd_market_cap: 79_000_000_000 },
+  }
+  let callCount = 0
+  const server = Bun.serve({
+    port: 0,
+    fetch() {
+      callCount++
+      if (callCount <= 2) return new Response("Service Unavailable", { status: 503 })
+      return new Response(JSON.stringify(fallbackData), { status: 200,
+        headers: { "Content-Type": "application/json" } })
+    },
+  })
+  return { url: `http://localhost:${server.port}`, stop: () => server.stop() }
 }
 
 /** Dispatch a single task run to the right runner — internal or competitor. */
@@ -2612,12 +2584,15 @@ async function dispatch(
     ? mergeConfigs(variant.config, task.optimalHarnessConfig)
     : variant.config
 
-  // Inject mock URL for resilience task rw-9
-  const effectiveTask = task.id === "rw-9"
-    ? { ...task, prompt: task.prompt.replace("INJECT_MOCK_URL", "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana&vs_currencies=usd&include_24hr_change=true&include_market_cap=true") }
-    : task
+  // Inject a real flaky mock server for rw-9 so the agent actually encounters 503s
+  if (task.id === "rw-9") {
+    const { url, stop } = await startFlakyPriceServer()
+    const modifiedTask = { ...task, prompt: task.prompt.replace("INJECT_MOCK_URL", url) }
+    try { return await runInternal(modifiedTask, model, effectiveConfig, tmpDir, timeoutMs) }
+    finally { stop() }
+  }
 
-  return runInternal(effectiveTask, model, effectiveConfig, tmpDir, timeoutMs)
+  return runInternal(task, model, effectiveConfig, tmpDir, timeoutMs)
 }
 
 /** Aggregate N run scores into a TaskVariantReport. */
@@ -2693,8 +2668,9 @@ export function computeAllAblation(reports: ReadonlyArray<TaskVariantReport>): R
       (a.meanScores.find(s => s.dimension === "accuracy")?.score ?? 0)
     )[0]!
 
+    const taskName = ALL_TASKS.find(t => t.id === taskId)?.name ?? taskId
     results.push({
-      taskId, taskName: taskId, modelVariantId, variants,
+      taskId, taskName, modelVariantId, variants,
       harnessLift: fullAcc - baseAcc,
       perDimensionLift,
       bestVariantId: bestVariant.variantId,
@@ -2791,8 +2767,8 @@ export async function runSession(
 
   if (outputPath) {
     let existing: SessionReport = sessionReport
-    try { existing = JSON.parse(require("node:fs").readFileSync(outputPath, "utf8")) as SessionReport } catch {}
-    require("node:fs").writeFileSync(outputPath, JSON.stringify({ ...existing, ...sessionReport }, null, 2), "utf8")
+    try { existing = JSON.parse(readFileSync(outputPath, "utf8")) as SessionReport } catch {}
+    writeFileSync(outputPath, JSON.stringify({ ...existing, ...sessionReport }, null, 2), "utf8")
   }
 
   return sessionReport
@@ -3576,7 +3552,7 @@ rtk git commit -m "feat(docs): extend BenchmarkResults with harness lift card, a
 - `aggregateRuns` accepts `ReadonlyArray<RunScore>` — `RunScore` is from `types.ts`. ✓
 - `computeAllAblation` returns `ReadonlyArray<AblationResult>` — both types consistent across tasks 8 and 9. ✓
 - `getVariant` throws on unknown ID — session files only call it with IDs present in `ABLATION_VARIANTS`. ✓
-- `runner.ts` appends imports at the end — risk of duplicate imports. **Fix:** move all v2 imports to the top of runner.ts during Task 9 step 9.3, not append. The import block shown in Task 9 should be placed at the top of the file, not appended. The rest (functions) appends to the bottom.
+- `runner.ts` import placement: Step 9.3a places v2 imports at the top of the file (ESM requires this); Step 9.3b appends function bodies to the bottom. ✓
 
 **Placeholder scan:** None found.
 
