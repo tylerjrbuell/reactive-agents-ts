@@ -69,3 +69,35 @@ test("getTasksByTier returns only tasks of that tier", async () => {
   expect(trivial.every(t => t.tier === "trivial")).toBe(true)
   expect(trivial.length).toBeGreaterThan(0)
 })
+
+import { REAL_WORLD_TASKS } from "../src/tasks/real-world.js"
+
+test("REAL_WORLD_TASKS exports exactly 10 tasks", () => {
+  expect(REAL_WORLD_TASKS).toHaveLength(10)
+})
+
+test("all real-world tasks have required v2 fields", () => {
+  for (const task of REAL_WORLD_TASKS) {
+    expect(task.tier).toBe("real-world")
+    expect(task.successCriteria).toBeDefined()
+    expect(task.primaryDimensions?.length).toBeGreaterThanOrEqual(2)
+    expect(task.dimensionRubrics?.length).toBeGreaterThanOrEqual(2)
+  }
+})
+
+test("rw-2 fixture includes sales-data.csv with 3 day headers", () => {
+  const task = REAL_WORLD_TASKS.find(t => t.id === "rw-2")!
+  const csv = task.fixtures?.find(f => f.path === "sales-data.csv")
+  expect(csv).toBeDefined()
+  expect(csv!.content).toContain("2025-03-10")
+  expect(csv!.content).toContain("2025-03-11")
+  expect(csv!.content).toContain("ELEC-4K-TV-001")
+})
+
+test("rw-7 fixture includes three buggy TypeScript files", () => {
+  const task = REAL_WORLD_TASKS.find(t => t.id === "rw-7")!
+  const paths = task.fixtures?.map(f => f.path) ?? []
+  expect(paths).toContain("src/validator.ts")
+  expect(paths).toContain("src/processor.ts")
+  expect(paths).toContain("src/pipeline.ts")
+})
