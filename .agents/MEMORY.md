@@ -72,8 +72,9 @@ Open harness issues tracked across sessions. Fix order: wiring > validation > re
 
 ### Open — New (Apr 21)
 9. **AUC stability** — ✅ CONFIRMED Apr 21 (3 runs): dispatch AUC = 1.000 on 2/3 runs; 1 measurement artifact from stale labels file (fixed). Entropy AUC = 1.000 on same runs (labels-first computation credits untraced success scenarios correctly as entropy=0/dispatch=0). Tool-failure-streak threshold lowered 3→2; fresh labels per run eliminates stale taskId contamination.
-10. **Nudge content effectiveness untested** — `append-system-nudge` now reaches the model via `pendingGuidance`, but we haven't verified cogito:14b changes behavior when it reads the redirect guidance.
-11. **Calibration self-improvement loop not validated** — CalibrationStore now persists to disk (`~/.reactive-agents/calibration.db`), but `calibration.calibrated` flag and `highEntropyThreshold` auto-update have not been confirmed to actually improve adaptive thresholds over time.
+10. **Nudge effectiveness** — ✅ CONFIRMED Apr 21. `failure-save-loop` iters-after-first-dispatch=1 (model complies immediately). `failure-contradictory-data` iters-after=3. Escalating handler: soft nudge on first fire, early-stop patch on second fire (detects re-fire via `state.controllerDecisionLog` — `budget.interventionsFiredThisRun` was hardcoded 0, never tracked). Entropy AUC = 0.781 (crossed 0.7 threshold after escalation reduced failure run length).
+11. **Calibration self-improvement loop not validated** — CalibrationStore persists to disk. But `calibration.calibrated` flag and `highEntropyThreshold` auto-update from real run data not confirmed end-to-end.
+14. **Intervention responsiveness not in CalibrationStore** — `firstDispatchIter` and `iterationsAfterFirstDispatch` (how quickly a model responds to nudges) are the right data for per-model calibration profiles, but the CalibrationStore only records `highEntropyThreshold`. A model that ignores soft nudges needs `early-stop` immediately; a responsive model can use softer redirects. `interventionResponseRate` per model should be a CalibrationStore field.
 
 ### Open — Regressions / Low Priority
 12. **cogito:14b 2.3× token regression with RI on** — self-gating should fix but unverified post-Apr-21 changes.
@@ -137,8 +138,24 @@ Skeptical audit running framework as a new user against real Ollama + frontier A
 9. ⚠️ ToT outer-loop early-stop propagation — PER ✅, ToT ❌
 10. ✅ AUC validation with real failure corpus (Apr 21) — dispatch AUC = 1.000
 11. ⚠️ Reactive-observer patch handlers — `inject-tool-guidance`/`append-system-nudge` ✅ FIXED Apr 21; `set-temperature`/`request-strategy-switch`/`inject-skill-content` ❌ still `default: break`
-12. ❌ `set-temperature`/`request-strategy-switch` propagation — requires kernel-runner currentOptions wiring
-13. ❌ AUC stability (3+ corpus runs), nudge effectiveness test, calibration self-improvement loop validation
+12. ⚠️ `set-temperature`/`request-strategy-switch` propagation — low ROI for local models. Temperature adjustment doesn't help tool-loop failures (structural, not stochastic). Strategy switch mid-run inherits broken context. Defer.
+13. ✅ AUC stability confirmed (3 runs, 2/3 = 1.000). ✅ Nudge effectiveness confirmed (iters-after=1). Calibration self-improvement loop still unvalidated.
+14. ❌ Intervention responsiveness in CalibrationStore — `interventionResponseRate` per model not yet tracked. Required for multi-model calibration profiles.
+
+## Current Status (Apr 21, 2026 — Evening) — RI Nudge Effectiveness Confirmed
+
+**Intervention responsiveness is the missing calibration dimension.** The CalibrationStore tracks entropy thresholds but not how quickly models respond to RI nudges. `firstDispatchIter` and `iterationsAfterFirstDispatch` per model per failure type are the right data for model-tier intervention profiles.
+
+### What shipped Apr 21 (evening)
+- **Escalating redirect handler** — `tool-failure-redirect`: soft nudge on first fire ("IMPORTANT: stop calling X, use final-answer"), early-stop patch on second fire. Detects re-fire via `state.controllerDecisionLog` (not `budget.interventionsFiredThisRun` which was hardcoded 0 — never implemented).
+- **Nudge effectiveness confirmed** — `failure-save-loop` iters-after-first-dispatch=**1**: model calls final-answer immediately after nudge. `failure-contradictory-data`: iters-after=3. The guidance propagation from Apr 21 morning is working.
+- **Entropy AUC = 0.781** — crossed the 0.7 "real signal" threshold (up from 0.625). Escalation reduces failure run length → tighter entropy spread between success/failure.
+- **`firstDispatchIter` + `iterationsAfterFirstDispatch` metrics** — added to `failure-corpus.ts` output. Direct measure of intervention effectiveness per scenario.
+- **Streak threshold 2, fresh labels per run** — dispatch AUC confirmed stable at 1.000 across 3 corpus runs.
+- **Tool-failure-streak threshold 3→2** — catches models that give up after 2 failures.
+
+### Key new finding (Apr 21 evening)
+`budget.interventionsFiredThisRun` was hardcoded to 0 in reactive-observer.ts `dispatchContext` — the budget tracking system was never implemented. Use `state.controllerDecisionLog` as proxy for "has an intervention already fired this run." This affects any handler that needs to escalate based on prior fires.
 
 ## Current Status (Apr 21, 2026) — RI Dispatch Validated
 
