@@ -41,6 +41,7 @@ import {
   buildSuccessfulToolCallCounts,
   getMissingRequiredToolsByCount,
   getEffectiveMissingRequiredTools,
+  getPermanentlyFailedRequiredTools,
 } from "./utils/requirement-state.js";
 import {
   decideExecutionLane,
@@ -683,19 +684,43 @@ export function runKernel(
           const fromStrategy = triedStrategies[triedStrategies.length - 1] ?? currentOptions.strategy ?? "unknown";
           const toStrategy = pending.to;
           yield* hooks.onStrategySwitched(state, fromStrategy, toStrategy, pending.reason);
-          const handoff = buildHandoff(state, currentInput.task ?? "", fromStrategy, pending.reason, switchCount + 1);
+          const handoff = buildHandoff(state, currentInput.task ?? "", fromStrategy, pending.reason, switchCount + 1, currentInput.requiredTools ?? []);
           const handoffSummary = [
             `Strategy Switch Handoff (switch #${handoff.switchNumber}):`,
             `Previous strategy: ${handoff.previousStrategy}`,
             `Steps completed: ${handoff.stepsCompleted}`,
             `Failure reason: ${handoff.failureReason}`,
             `Tools called: ${handoff.toolsCalled.join(", ") || "none"}`,
+            handoff.permanentlyFailedTools.length > 0
+              ? `Permanently unavailable tools (do not retry — synthesize without them): ${handoff.permanentlyFailedTools.join(", ")}`
+              : null,
             `Key observations:\n${handoff.keyObservations.join("\n") || "(none)"}`,
-          ].join("\n");
+          ].filter(Boolean).join("\n");
           switchCount++;
           triedStrategies.push(toStrategy);
           currentOptions = { ...options, strategy: toStrategy };
           state = initialKernelState(currentOptions);
+          // Inject synthetic failure observations so the new strategy immediately
+          // knows which required tools are permanently unavailable.
+          if (handoff.permanentlyFailedTools.length > 0) {
+            const failedSteps = handoff.permanentlyFailedTools.map((toolName) =>
+              makeStep(
+                "observation",
+                `[Carried from prior strategy] Tool "${toolName}" is permanently unavailable — every call failed. Do not retry it; synthesize your answer without this data.`,
+                {
+                  observationResult: {
+                    toolName,
+                    success: false,
+                    displayText: `Tool "${toolName}" permanently unavailable (carried from prior strategy)`,
+                    category: "error" as const,
+                    resultKind: "error" as const,
+                    preserveOnCompaction: false,
+                  },
+                },
+              ),
+            );
+            state = transitionState(state, { steps: [...state.steps, ...failedSteps] });
+          }
           const existingPrior = currentInput.priorContext
             ? `${currentInput.priorContext}\n\n${handoffSummary}`
             : handoffSummary;
@@ -958,6 +983,7 @@ export function runKernel(
                 fromStrategy,
                 loopMsg,
                 switchCount + 1,
+                currentInput.requiredTools ?? [],
               );
 
               const handoffSummary = [
@@ -966,8 +992,11 @@ export function runKernel(
                 `Steps completed: ${handoff.stepsCompleted}`,
                 `Failure reason: ${handoff.failureReason}`,
                 `Tools called: ${handoff.toolsCalled.join(", ") || "none"}`,
+                handoff.permanentlyFailedTools.length > 0
+                  ? `Permanently unavailable tools (do not retry — synthesize without them): ${handoff.permanentlyFailedTools.join(", ")}`
+                  : null,
                 `Key observations:\n${handoff.keyObservations.join("\n") || "(none)"}`,
-              ].join("\n");
+              ].filter(Boolean).join("\n");
 
               // Re-init state with the new strategy
               switchCount++;
@@ -980,6 +1009,29 @@ export function runKernel(
 
               // Reset state — fresh iteration count, carry forward toolsUsed
               state = initialKernelState(currentOptions);
+
+              // Inject synthetic failure observations so the new strategy immediately
+              // knows which required tools are permanently unavailable, without having
+              // to rediscover this through wasted retry iterations.
+              if (handoff.permanentlyFailedTools.length > 0) {
+                const failedSteps = handoff.permanentlyFailedTools.map((toolName) =>
+                  makeStep(
+                    "observation",
+                    `[Carried from prior strategy] Tool "${toolName}" is permanently unavailable — every call failed. Do not retry it; synthesize your answer without this data.`,
+                    {
+                  observationResult: {
+                    toolName,
+                    success: false,
+                    displayText: `Tool "${toolName}" permanently unavailable (carried from prior strategy)`,
+                    category: "error" as const,
+                    resultKind: "error" as const,
+                    preserveOnCompaction: false,
+                  },
+                },
+                  ),
+                );
+                state = transitionState(state, { steps: [...state.steps, ...failedSteps] });
+              }
 
               // Build updated input with handoff context
               const existingPrior = currentInput.priorContext

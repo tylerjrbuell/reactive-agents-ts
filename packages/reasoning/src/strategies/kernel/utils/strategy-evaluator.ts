@@ -12,6 +12,7 @@
 import { Effect } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
 import type { KernelState } from "../kernel-state.js";
+import { getPermanentlyFailedRequiredTools } from "./requirement-state.js";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -34,6 +35,9 @@ export interface StrategyHandoff {
   readonly failureReason: string;
   /** Monotonically increasing counter — how many times we've switched in this run */
   readonly switchNumber: number;
+  /** Required tools that were attempted but never succeeded. The new strategy should
+   *  not retry these — they are unavailable. Synthesize without them. */
+  readonly permanentlyFailedTools: readonly string[];
 }
 
 /**
@@ -62,6 +66,7 @@ export function buildHandoff(
   previousStrategy: string,
   failureReason: string,
   switchNumber: number,
+  requiredTools: readonly string[] = [],
 ): StrategyHandoff {
   const observations = state.steps
     .filter((s) => s.type === "observation")
@@ -76,6 +81,7 @@ export function buildHandoff(
     keyObservations: observations,
     failureReason,
     switchNumber,
+    permanentlyFailedTools: getPermanentlyFailedRequiredTools(state.steps, requiredTools),
   };
 }
 
