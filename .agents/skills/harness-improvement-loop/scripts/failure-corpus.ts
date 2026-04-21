@@ -303,17 +303,17 @@ async function main(): Promise<void> {
   console.log(`Scenarios: ${SCENARIOS.length} (${SCENARIOS.filter((s) => s.label === "success").length} success, ${SCENARIOS.filter((s) => s.label === "failure").length} failure)`);
 
   const results: CorpusResult[] = [];
+  // Always start with a fresh label file for this run — stale taskIds from
+  // previous runs contaminate validate-entropy.ts AUC calculations.
   const labelFile = `${TRACE_DIR}/corpus-labels.json`;
-  const existingLabels: Record<string, "success" | "failure"> = existsSync(labelFile)
-    ? JSON.parse(readFileSync(labelFile, "utf8"))
-    : {};
+  const runLabels: Record<string, "success" | "failure"> = {};
 
   for (const scenario of SCENARIOS) {
     const result = await runScenario(scenario);
     results.push(result);
     if (result.taskId && !result.taskId.endsWith("-error")) {
-      existingLabels[result.taskId] = result.label;
-      writeFileSync(labelFile, JSON.stringify(existingLabels, null, 2));
+      runLabels[result.taskId] = result.label;
+      writeFileSync(labelFile, JSON.stringify(runLabels, null, 2));
     }
   }
 

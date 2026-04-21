@@ -11,7 +11,9 @@ export function evaluateToolFailureStreak(
   params: ControllerEvalParams,
 ): (ControllerDecision & { decision: "tool-failure-redirect" }) | null {
   const { consecutiveToolFailures, failingToolName, iteration } = params;
-  if (!consecutiveToolFailures || consecutiveToolFailures < 3) return null;
+  // Threshold 2: one failure might be transient (rate limit, timeout); two in
+  // a row on the same tool signals a genuine stuck loop worth redirecting.
+  if (!consecutiveToolFailures || consecutiveToolFailures < 2) return null;
   if (!failingToolName) return null;
   // Give the model at least 2 iterations before redirecting
   if (iteration < 2) return null;

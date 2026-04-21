@@ -20,15 +20,17 @@ async function main() {
   const dir = resolve(process.cwd(), process.argv[2] ?? ".reactive-agents/traces")
   const files = (await readdir(dir).catch(() => [])).filter((f: string) => f.endsWith(".jsonl"))
 
-  if (files.length === 0) {
+  // Don't exit early if there's a labels file — labeled runs without JSONL are valid data points
+  const labelFile = `${dir}/corpus-labels.json`
+  const hasLabelFile = existsSync(labelFile)
+  if (files.length === 0 && !hasLabelFile) {
     console.log(`No .jsonl trace files found in ${dir}`)
     console.log("Run failure-corpus.ts first to generate traces.")
     process.exit(0)
   }
 
   // Load corpus labels if a sidecar exists (written by failure-corpus.ts)
-  const labelFile = `${dir}/corpus-labels.json`
-  const corpusLabels: Record<string, "success" | "failure"> = existsSync(labelFile)
+  const corpusLabels: Record<string, "success" | "failure"> = hasLabelFile
     ? JSON.parse(await readFile(labelFile, "utf8"))
     : {}
   const hasLabels = Object.keys(corpusLabels).length > 0
@@ -36,27 +38,37 @@ async function main() {
     console.log(`Using corpus labels from corpus-labels.json (${Object.keys(corpusLabels).length} entries)`)
   }
 
-  // Build points: (max entropy, dispatched count, success?)
-  const points: { maxEntropy: number; dispatched: number; success: boolean }[] = []
+  // Build a runId→stats map from JSONL files (some runs may not have files —
+  // short success scenarios complete in 1 iteration and the tracer doesn't flush).
+  const traceStats_: Record<string, { maxEntropy: number; dispatched: number }> = {}
   for (const f of files) {
-    const trace = await loadTrace(`${dir}/${f}`)
-    const stats = traceStats(trace)
-    const runId = trace.runId
-    if (hasLabels && runId in corpusLabels) {
-      points.push({
-        maxEntropy: stats.maxEntropy,
-        dispatched: stats.interventionsDispatched,
-        success: corpusLabels[runId] === "success",
-      })
-      continue
+    try {
+      const trace = await loadTrace(`${dir}/${f}`)
+      const s = traceStats(trace)
+      traceStats_[trace.runId] = { maxEntropy: s.maxEntropy, dispatched: s.interventionsDispatched }
+    } catch { /* skip unreadable files */ }
+  }
+
+  // Build points: prefer corpus labels as ground truth; fall back to agent status.
+  // Labeled runs without a JSONL are included with zero entropy/dispatch — valid
+  // data points (short successful runs that didn't flush a trace file).
+  const points: { maxEntropy: number; dispatched: number; success: boolean }[] = []
+
+  if (hasLabels) {
+    for (const [runId, label] of Object.entries(corpusLabels)) {
+      const stats = traceStats_[runId] ?? { maxEntropy: 0, dispatched: 0 }
+      points.push({ ...stats, success: label === "success" })
     }
-    const completed = trace.events.find((e) => e.kind === "run-completed")
-    if (!completed || completed.kind !== "run-completed") continue
-    points.push({
-      maxEntropy: stats.maxEntropy,
-      dispatched: stats.interventionsDispatched,
-      success: completed.status === "success",
-    })
+  } else {
+    for (const f of files) {
+      try {
+        const trace = await loadTrace(`${dir}/${f}`)
+        const s = traceStats(trace)
+        const completed = trace.events.find((e) => e.kind === "run-completed")
+        if (!completed || completed.kind !== "run-completed") continue
+        points.push({ maxEntropy: s.maxEntropy, dispatched: s.interventionsDispatched, success: completed.status === "success" })
+      } catch { /* skip */ }
+    }
   }
 
   if (points.length === 0) {
