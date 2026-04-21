@@ -3,7 +3,7 @@ import type { ControllerDecision, ControllerEvalParams } from "../types.js";
 /**
  * Evaluate whether the agent should switch reasoning strategy.
  * Fires when entropy trajectory has been "flat" for N consecutive iterations
- * AND the behavioral loop score is high (> 0.7), indicating the current
+ * AND the behavioral loop score is high (> 0.45), indicating the current
  * strategy is stuck in an unproductive loop.
  */
 export function evaluateStrategySwitch(

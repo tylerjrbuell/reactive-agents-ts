@@ -6,11 +6,15 @@ const COINGECKO_RETRY_ATTEMPTS = 3;
 const COINGECKO_RETRY_BASE_MS = 2_000;
 const CACHE_TTL_MS = 60_000;
 
+let retryBaseMs = COINGECKO_RETRY_BASE_MS;
+
 // Module-level price cache — keyed by currency. One bulk fetch populates all coins.
 const priceCache = new Map<string, { data: Record<string, number>; fetchedAt: number }>();
 
 /** Exported for tests only — clears the price cache between test cases. */
 export function clearPriceCache(): void { priceCache.clear(); }
+/** Exported for tests only — override the retry base delay (use 0 to skip waits). */
+export function setRetryBaseMs(ms: number): void { retryBaseMs = ms; }
 
 async function geckoFetchWithRetry(url: string): Promise<Response> {
   let last: Response | undefined;
@@ -19,7 +23,7 @@ async function geckoFetchWithRetry(url: string): Promise<Response> {
     if (response.status !== 429) return response;
     last = response;
     if (attempt < COINGECKO_RETRY_ATTEMPTS - 1) {
-      await new Promise<void>((r) => setTimeout(r, COINGECKO_RETRY_BASE_MS * Math.pow(2, attempt)));
+      await new Promise<void>((r) => setTimeout(r, retryBaseMs * Math.pow(2, attempt)));
     }
   }
   return last!;

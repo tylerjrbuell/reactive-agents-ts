@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from "bun:test";
 import { Effect } from "effect";
-import { cryptoPriceHandler, clearPriceCache } from "../../src/skills/crypto-price.js";
+import { cryptoPriceHandler, clearPriceCache, setRetryBaseMs } from "../../src/skills/crypto-price.js";
 import { ToolExecutionError } from "../../src/errors.js";
 
 const originalFetch = globalThis.fetch;
@@ -8,6 +8,7 @@ const originalFetch = globalThis.fetch;
 afterEach(() => {
   globalThis.fetch = originalFetch;
   clearPriceCache();
+  setRetryBaseMs(2_000);
 });
 
 function mockCoinGecko(prices: Record<string, Record<string, number>>, status = 200) {
@@ -95,6 +96,7 @@ describe("cryptoPriceHandler", () => {
   });
 
   it("retries on 429 and succeeds on second attempt", async () => {
+    setRetryBaseMs(0);
     let attempts = 0;
     globalThis.fetch = (async () => {
       attempts++;

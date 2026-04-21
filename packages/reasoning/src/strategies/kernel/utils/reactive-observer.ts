@@ -352,9 +352,36 @@ export function runReactiveObserver(
                   });
                   break
                 }
+                case "set-temperature": {
+                  const tp = patch as { kind: "set-temperature"; temperature: number };
+                  s = transitionState(s, {
+                    meta: { ...s.meta, dispatchedTemperature: tp.temperature },
+                  });
+                  break
+                }
+                case "inject-skill-content": {
+                  const sp = patch as { kind: "inject-skill-content"; skillId: string; content: string };
+                  const existingRecovery = s.pendingGuidance?.errorRecovery;
+                  const combined = existingRecovery
+                    ? `${existingRecovery}\n${sp.content}`
+                    : sp.content;
+                  s = transitionState(s, {
+                    pendingGuidance: { ...s.pendingGuidance, errorRecovery: combined },
+                  });
+                  break
+                }
+                case "request-strategy-switch": {
+                  const rsp = patch as { kind: "request-strategy-switch"; to: string; reason: string };
+                  s = transitionState(s, {
+                    meta: {
+                      ...s.meta,
+                      terminatedBy: "dispatcher-strategy-switch",
+                      dispatchedStrategySwitch: { to: rsp.to, reason: rsp.reason },
+                    },
+                  });
+                  break
+                }
                 default:
-                  // set-temperature, request-strategy-switch, inject-skill-content:
-                  // require kernel-runner.ts to propagate into currentOptions.
                   break
               }
             }

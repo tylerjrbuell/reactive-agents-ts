@@ -101,6 +101,10 @@ export interface KernelMeta {
   // ── Termination tracking ──
   readonly terminatedBy?: string;
   readonly redirectCount?: number;
+  /** Temperature override dispatched by the intervention dispatcher — kernel-runner applies on next iteration. */
+  readonly dispatchedTemperature?: number;
+  /** Strategy switch requested by the intervention dispatcher — kernel-runner executes the switch. */
+  readonly dispatchedStrategySwitch?: { readonly to: string; readonly reason: string };
 
   // ── Native FC handoff between think → act ──
   readonly pendingNativeToolCalls?: readonly ToolCallSpec[];

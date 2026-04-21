@@ -60,6 +60,8 @@ type ReactiveControllerInstance = {
     readonly currentTemperature?: number;
     readonly availableToolNames?: readonly string[];
     readonly priorDecisionsThisRun?: readonly string[];
+    readonly consecutiveToolFailures?: number;
+    readonly failingToolName?: string;
   }) => Effect.Effect<readonly { readonly decision: string; readonly reason: string }[]>;
 };
 

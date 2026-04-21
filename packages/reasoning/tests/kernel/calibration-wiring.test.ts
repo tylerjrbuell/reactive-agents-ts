@@ -12,6 +12,7 @@ function makeKernelState(overrides: Partial<KernelState> = {}): KernelState {
     taskId: "test-task-1",
     strategy: "reactive",
     kernelType: "react",
+    messages: [],
     steps: [
       { type: "thought", content: "Analyzing the task", metadata: {} },
     ],
@@ -122,6 +123,7 @@ describe("Calibration wiring: reactive-observer → controller", () => {
       eventBus: noneService(),
       entropySensor: someService(mockEntropySensor),
       reactiveController: someService(mockController),
+      dispatcher: noneService(),
     };
 
     const state = makeKernelState();
@@ -195,6 +197,7 @@ describe("Calibration wiring: reactive-observer → controller", () => {
       eventBus: noneService(),
       entropySensor: someService(mockEntropySensor),
       reactiveController: someService(mockController),
+      dispatcher: noneService(),
     };
 
     const state = makeKernelState();
@@ -277,6 +280,7 @@ describe("CalibrationDrift event emission", () => {
       eventBus: someService(mockEventBus),
       entropySensor: someService(mockEntropySensor),
       reactiveController: someService(mockController),
+      dispatcher: noneService(),
     };
 
     const state = makeKernelState();
@@ -355,6 +359,7 @@ describe("CalibrationDrift event emission", () => {
       eventBus: someService(mockEventBus),
       entropySensor: someService(mockEntropySensor),
       reactiveController: someService(mockController),
+      dispatcher: noneService(),
     };
 
     const state = makeKernelState();

@@ -664,6 +664,55 @@ export function runKernel(
         break;
       }
 
+      // Apply temperature override dispatched by the intervention dispatcher
+      if (typeof (state.meta as Record<string, unknown>).dispatchedTemperature === "number") {
+        currentOptions = {
+          ...currentOptions,
+          temperature: (state.meta as Record<string, unknown>).dispatchedTemperature as number,
+        };
+      }
+
+      // Honor dispatcher-requested strategy switch
+      if (state.meta.terminatedBy === "dispatcher-strategy-switch") {
+        const pending = (state.meta as Record<string, unknown>).dispatchedStrategySwitch as
+          | { to: string; reason: string }
+          | undefined;
+        const switchCfg = options.strategySwitching;
+        const maxSwitches = switchCfg?.maxSwitches ?? 1;
+        if (pending && switchCfg?.enabled && switchCount < maxSwitches) {
+          const fromStrategy = triedStrategies[triedStrategies.length - 1] ?? currentOptions.strategy ?? "unknown";
+          const toStrategy = pending.to;
+          yield* hooks.onStrategySwitched(state, fromStrategy, toStrategy, pending.reason);
+          const handoff = buildHandoff(state, currentInput.task ?? "", fromStrategy, pending.reason, switchCount + 1);
+          const handoffSummary = [
+            `Strategy Switch Handoff (switch #${handoff.switchNumber}):`,
+            `Previous strategy: ${handoff.previousStrategy}`,
+            `Steps completed: ${handoff.stepsCompleted}`,
+            `Failure reason: ${handoff.failureReason}`,
+            `Tools called: ${handoff.toolsCalled.join(", ") || "none"}`,
+            `Key observations:\n${handoff.keyObservations.join("\n") || "(none)"}`,
+          ].join("\n");
+          switchCount++;
+          triedStrategies.push(toStrategy);
+          currentOptions = { ...options, strategy: toStrategy };
+          state = initialKernelState(currentOptions);
+          const existingPrior = currentInput.priorContext
+            ? `${currentInput.priorContext}\n\n${handoffSummary}`
+            : handoffSummary;
+          currentInput = { ...currentInput, priorContext: existingPrior };
+          currentContext = { ...context, input: currentInput };
+          prevActionCount = 0;
+          requiredToolRedirects = 0;
+          consecutiveStalled = 0;
+          prevArtifactCount = 0;
+          failureRecoveryRedirects = 0;
+          continue;
+        }
+        // Switching not enabled or exhausted — deliver what we have
+        state = transitionState(state, { status: "done", output: state.output ?? "" });
+        break;
+      }
+
       // ── Iteration progress hook ──────────────────────────────────────────
       // Compute which tools were called in THIS iteration by scanning new action
       // steps since prevStepCount. Includes duplicates so parallel batches

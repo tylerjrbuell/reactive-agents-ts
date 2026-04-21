@@ -31,26 +31,26 @@ describe("evaluateStrategySwitch", () => {
     expect(evaluateStrategySwitch(params)).toBeNull();
   });
 
-  it("returns null when loop score is below 0.7", () => {
+  it("returns null when loop score is below 0.45", () => {
     const params = makeParams({
       entropyHistory: [
         makeEntry(0.5, "flat"),
         makeEntry(0.5, "flat"),
         makeEntry(0.5, "flat"),
       ],
-      behavioralLoopScore: 0.5,
+      behavioralLoopScore: 0.3,
     });
     expect(evaluateStrategySwitch(params)).toBeNull();
   });
 
-  it("returns null when loop score is exactly 0.7 (not above)", () => {
+  it("returns null when loop score is exactly 0.45 (boundary, not above)", () => {
     const params = makeParams({
       entropyHistory: [
         makeEntry(0.5, "flat"),
         makeEntry(0.5, "flat"),
         makeEntry(0.5, "flat"),
       ],
-      behavioralLoopScore: 0.7,
+      behavioralLoopScore: 0.45,
     });
     expect(evaluateStrategySwitch(params)).toBeNull();
   });
