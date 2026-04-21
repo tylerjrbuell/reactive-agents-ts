@@ -71,7 +71,7 @@ Open harness issues tracked across sessions. Fix order: wiring > validation > re
 8. **Local learning engine unverified E2E** — writes to `~/.reactive-agents/observations/` but influence on behavior unconfirmed.
 
 ### Open — New (Apr 21)
-9. **AUC stability unproven** — dispatch AUC = 1.000 from a single corpus run. Need 3+ runs to confirm it's not lucky.
+9. **AUC stability** — ✅ CONFIRMED Apr 21 (3 runs): dispatch AUC = 1.000 on 2/3 runs; 1 measurement artifact from stale labels file (fixed). Entropy AUC = 1.000 on same runs (labels-first computation credits untraced success scenarios correctly as entropy=0/dispatch=0). Tool-failure-streak threshold lowered 3→2; fresh labels per run eliminates stale taskId contamination.
 10. **Nudge content effectiveness untested** — `append-system-nudge` now reaches the model via `pendingGuidance`, but we haven't verified cogito:14b changes behavior when it reads the redirect guidance.
 11. **Calibration self-improvement loop not validated** — CalibrationStore now persists to disk (`~/.reactive-agents/calibration.db`), but `calibration.calibrated` flag and `highEntropyThreshold` auto-update have not been confirmed to actually improve adaptive thresholds over time.
 
@@ -427,6 +427,13 @@ Identified during Zeus integration report — honest audit of what's implemented
 - **Mid-operation abort**: No way to forcibly interrupt a long-running LLM call or tool execution.
 - **Real-time provider cost sync**: No integration with provider billing APIs for actual spend tracking.
 - **Tool approval enforcement at runtime**: Risk levels and `requiresApproval` flags are defined on tools but approval gate wiring to InteractionManager not fully visible in execution engine.
+
+## Local Model Adaptation Layer (Apr 21, 2026)
+Architecture spec for fixing local model failures surfaced by live benchmark session (qwen3:4b, cogito:8b, rw-2/3/6/8/9). Spec: `docs/superpowers/specs/2026-04-21-local-model-adaptation-layer.md`.
+- **6 components**: HealingPipeline (ToolNameHealer + ParamNameHealer + ParamInferenceHealer), FileSandbox, ModelTierProfile, SchemaSimplifier+tool examples, StallDetector RI handler, HarnessHarmDetector
+- **Evidence**: cogito:8b uses `input`/`command` universally (100% tool failure rate), hallucinates `typescript/compile`; qwen3:4b generates wrong absolute paths deterministically; ra-full causes Grade D diverging on cogito:8b (rw-2 × 3, rw-8 × 1)
+- **Packages**: `packages/tools/src/healing/`, `packages/tools/src/sandbox/`, `packages/runtime/src/profiles/`, new RI handlers
+- **Priority 1-2** (highest ROI, independent): ParamNameHealer + ToolNameHealer, FileSandbox — fix without full profile infrastructure
 
 ## Benchmark Suite v2 (Apr 19, 2026)
 **SHIPPED** — 13-task implementation in `packages/benchmarks/`. Plan: `docs/superpowers/plans/2026-04-19-benchmark-suite-v2.md`. 50 tests pass, build clean.
