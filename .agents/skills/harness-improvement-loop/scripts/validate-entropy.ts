@@ -1,7 +1,16 @@
-// Usage: bun run scripts/validate-entropy.ts .reactive-agents/traces/
-// When a corpus-labels.json sidecar exists in the directory, its labels take
-// precedence over the agent's self-reported completion status so AUC reflects
-// the *intended* success/failure split rather than model self-assessment.
+// validate-entropy.ts — Compute entropy+dispatch AUC over a directory of trace files.
+//
+// Usage (from project root):
+//   bun run .agents/skills/harness-improvement-loop/scripts/validate-entropy.ts .reactive-agents/traces/failure-corpus
+//
+// When a corpus-labels.json sidecar exists in the directory (written by failure-corpus.ts),
+// its labels take precedence over the agent's self-reported completion status so AUC
+// reflects the *intended* success/failure split rather than model self-assessment.
+//
+// Metrics:
+//   AUC (max-entropy → failure): does higher entropy predict failure? (imperfect for logprob-less models)
+//   AUC (dispatched → failure):  does RI intervention dispatch predict failure? (target: 1.0)
+
 import { readdir, readFile } from "node:fs/promises"
 import { existsSync } from "node:fs"
 import { resolve } from "node:path"
@@ -13,7 +22,7 @@ async function main() {
 
   if (files.length === 0) {
     console.log(`No .jsonl trace files found in ${dir}`)
-    console.log("Run the agent harness with .withTracing() to generate traces first.")
+    console.log("Run failure-corpus.ts first to generate traces.")
     process.exit(0)
   }
 
@@ -33,7 +42,6 @@ async function main() {
     const trace = await loadTrace(`${dir}/${f}`)
     const stats = traceStats(trace)
     const runId = trace.runId
-    // Prefer corpus label; fall back to agent-reported status
     if (hasLabels && runId in corpusLabels) {
       points.push({
         maxEntropy: stats.maxEntropy,
@@ -57,7 +65,7 @@ async function main() {
   }
 
   function computeAuc(signal: (p: typeof points[number]) => number): number {
-    // Sweep thresholds high → low so fpr goes 0→1 (correct ROC direction)
+    // Sweep thresholds high → low so fpr increases from 0→1 (standard ROC direction)
     const thresholds = Array.from({ length: 21 }, (_: unknown, i: number) => 1 - i * 0.05)
     let auc = 0
     let prevFpr = 0
@@ -69,8 +77,7 @@ async function main() {
       const tn = points.filter((p) => p.success && signal(p) < t).length
       const tpr = tp / Math.max(1, tp + fn)
       const fpr = fp / Math.max(1, fp + tn)
-      // Trapezoid rule
-      auc += (fpr - prevFpr) * (tpr + prevTpr) / 2
+      auc += (fpr - prevFpr) * (tpr + prevTpr) / 2  // trapezoid rule
       prevFpr = fpr
       prevTpr = tpr
     }
@@ -78,23 +85,21 @@ async function main() {
   }
 
   const entropyAuc = computeAuc((p) => p.maxEntropy)
-  // Normalise dispatch count to [0,1] range for threshold sweep
   const maxDispatched = Math.max(...points.map((p) => p.dispatched), 1)
   const dispatchAuc = computeAuc((p) => p.dispatched / maxDispatched)
 
-  const avgEntropySuccess = points.filter(p => p.success).reduce((s, p) => s + p.maxEntropy, 0) / Math.max(1, points.filter(p => p.success).length)
-  const avgEntropyFailure = points.filter(p => !p.success).reduce((s, p) => s + p.maxEntropy, 0) / Math.max(1, points.filter(p => !p.success).length)
-  const avgDispatchSuccess = points.filter(p => p.success).reduce((s, p) => s + p.dispatched, 0) / Math.max(1, points.filter(p => p.success).length)
-  const avgDispatchFailure = points.filter(p => !p.success).reduce((s, p) => s + p.dispatched, 0) / Math.max(1, points.filter(p => !p.success).length)
+  const successPts = points.filter(p => p.success)
+  const failPts = points.filter(p => !p.success)
+  const avg = (arr: number[]) => arr.reduce((s, v) => s + v, 0) / Math.max(1, arr.length)
 
   console.log(`\nEntropy+Dispatch validation over ${points.length} traces`)
   console.log(`─── Entropy signal ───────────────────────────────────────────`)
   console.log(`  AUC (max-entropy → failure): ${entropyAuc.toFixed(3)}   (>0.7 = real signal)`)
-  console.log(`  Avg entropy  success=${avgEntropySuccess.toFixed(3)}  failure=${avgEntropyFailure.toFixed(3)}  gap=${(avgEntropyFailure - avgEntropySuccess).toFixed(3)}`)
+  console.log(`  Avg entropy  success=${avg(successPts.map(p => p.maxEntropy)).toFixed(3)}  failure=${avg(failPts.map(p => p.maxEntropy)).toFixed(3)}  gap=${(avg(failPts.map(p => p.maxEntropy)) - avg(successPts.map(p => p.maxEntropy))).toFixed(3)}`)
   console.log(`─── Dispatch signal ──────────────────────────────────────────`)
-  console.log(`  AUC (dispatched → failure):  ${dispatchAuc.toFixed(3)}   (>0.7 = real signal)`)
-  console.log(`  Avg dispatch success=${avgDispatchSuccess.toFixed(1)}  failure=${avgDispatchFailure.toFixed(1)}`)
-  console.log(`Success rate: ${points.filter((p) => p.success).length}/${points.length}`)
+  console.log(`  AUC (dispatched → failure):  ${dispatchAuc.toFixed(3)}   (target: 1.0)`)
+  console.log(`  Avg dispatch success=${avg(successPts.map(p => p.dispatched)).toFixed(1)}  failure=${avg(failPts.map(p => p.dispatched)).toFixed(1)}`)
+  console.log(`Success rate: ${successPts.length}/${points.length}`)
 }
 
 main().catch(console.error)

@@ -329,11 +329,32 @@ export function runReactiveObserver(
                   s = transitionState(s, { messages: compressed });
                   break
                 }
+                case "append-system-nudge": {
+                  const np = patch as { kind: "append-system-nudge"; text: string };
+                  // Merge into errorRecovery so think.ts renders it in the next Guidance: block
+                  const existingRecovery = s.pendingGuidance?.errorRecovery;
+                  const combined = existingRecovery
+                    ? `${existingRecovery}\n${np.text}`
+                    : np.text;
+                  s = transitionState(s, {
+                    pendingGuidance: { ...s.pendingGuidance, errorRecovery: combined },
+                  });
+                  break
+                }
+                case "inject-tool-guidance": {
+                  const tp = patch as { kind: "inject-tool-guidance"; text: string };
+                  const existingRecovery = s.pendingGuidance?.errorRecovery;
+                  const combined = existingRecovery
+                    ? `${existingRecovery}\n${tp.text}`
+                    : tp.text;
+                  s = transitionState(s, {
+                    pendingGuidance: { ...s.pendingGuidance, errorRecovery: combined },
+                  });
+                  break
+                }
                 default:
-                  // set-temperature, request-strategy-switch, inject-tool-guidance,
-                  // inject-skill-content, append-system-nudge: not yet applied here.
-                  // These require kernel-runner.ts to propagate patches into currentOptions
-                  // or the next think pass. Tracked as a follow-up task.
+                  // set-temperature, request-strategy-switch, inject-skill-content:
+                  // require kernel-runner.ts to propagate into currentOptions.
                   break
               }
             }

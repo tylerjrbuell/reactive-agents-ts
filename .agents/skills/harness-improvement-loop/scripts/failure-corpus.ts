@@ -1,11 +1,15 @@
 // failure-corpus.ts — Generate a labeled success/failure trace corpus for AUC validation
-// of the entropy signal.
+// of the reactive intelligence dispatch signal.
 //
-// Usage:
-//   bun run scripts/failure-corpus.ts
+// Usage (from project root):
+//   bun run .agents/skills/harness-improvement-loop/scripts/failure-corpus.ts
 //
 // After completion, run:
-//   bun run scripts/validate-entropy.ts .reactive-agents/traces/failure-corpus
+//   bun run .agents/skills/harness-improvement-loop/scripts/validate-entropy.ts .reactive-agents/traces/failure-corpus
+//
+// Env vars:
+//   CORPUS_MODEL  — Ollama model to use (default: cogito:14b)
+//   CORPUS_TRACE_DIR — override trace output directory
 //
 // Uses Ollama (local) — no API cost.
 
@@ -16,7 +20,10 @@ import { mkdirSync, writeFileSync, readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 
 const CORPUS_MODEL = process.env.CORPUS_MODEL ?? "cogito:14b";
-const TRACE_DIR = resolve(process.cwd(), ".reactive-agents/traces/failure-corpus");
+const TRACE_DIR = resolve(
+  process.cwd(),
+  process.env.CORPUS_TRACE_DIR ?? ".reactive-agents/traces/failure-corpus",
+);
 
 // ── Tool factories ────────────────────────────────────────────────────────────
 
@@ -70,41 +77,6 @@ function contradictoryPairTools(entity: string) {
   ];
 }
 
-/** A working HN posts tool for success scenarios. */
-function hnPostsTool() {
-  return {
-    definition: {
-      name: "get-hn-posts",
-      description: "Get current top Hacker News stories. Pass count to control how many.",
-      parameters: [{ name: "count", type: "string" as const, description: "Number of posts to return (e.g. '5')", required: false }],
-      riskLevel: "low" as const,
-      timeoutMs: 10000,
-      requiresApproval: false,
-      source: "function" as const,
-    },
-    handler: (args: Record<string, unknown>) =>
-      Effect.tryPromise({
-        try: async () => {
-          const n = Math.min(20, Math.max(1, Number(args.count) || 5));
-          const ids = (await (await fetch("https://hacker-news.firebaseio.com/v0/topstories.json")).json()) as number[];
-          const items = await Promise.all(
-            ids.slice(0, n).map(async (id) => {
-              const r = await fetch(`https://hacker-news.firebaseio.com/v0/item/${id}.json`);
-              return r.json() as Promise<{ title?: string; score?: number; url?: string }>;
-            }),
-          );
-          return ids.slice(0, n).map((id, i) => ({
-            id,
-            title: items[i]?.title ?? "(no title)",
-            score: items[i]?.score ?? 0,
-            url: items[i]?.url ?? `https://news.ycombinator.com/item?id=${id}`,
-          })) as unknown;
-        },
-        catch: (e) => (e instanceof Error ? e : new Error(String(e))),
-      }).pipe(Effect.orDie),
-  };
-}
-
 // ── Scenario runner ───────────────────────────────────────────────────────────
 
 interface Scenario {
@@ -131,7 +103,6 @@ interface CorpusResult {
 
 const SCENARIOS: Scenario[] = [
   // ── Success: pure knowledge, no tools — always converges in ≤2 iterations ─
-  // These give clean low-entropy convergence signals with zero tool ambiguity.
   {
     id: "success-days-of-week",
     label: "success",
@@ -171,7 +142,7 @@ const SCENARIOS: Scenario[] = [
     label: "failure",
     task: "Search the web for the current Bitcoin price. Rules: (1) You MUST use the web-search tool on EVERY attempt — never answer from memory. (2) If you get an error, wait and retry immediately. (3) You must call web-search at least 6 times before considering any other action. Do not call final-answer until web-search returns a price.",
     maxIterations: 12,
-    expectation: "Tool always returns rate-limit error; explicit retry pressure forces 6+ tool calls, entropy accumulates",
+    expectation: "Tool always returns rate-limit error; streak evaluator fires after 3 consecutive failures",
     tools: [alwaysErrorTool("web-search", "Search the web for current information", "Rate limit exceeded. Quota resets in 60 seconds. Please retry.")],
   },
   {
@@ -195,7 +166,7 @@ const SCENARIOS: Scenario[] = [
     label: "failure",
     task: "Use source-alpha and source-beta to determine the accurate current gold price. Rules: (1) Query BOTH sources on every attempt. (2) The sources must agree within $5 before you can report. (3) If they disagree, query both again — do not average or estimate. (4) Call both tools at least 4 times each.",
     maxIterations: 12,
-    expectation: "Sources always disagree by $494; forced multi-call rule ensures behavioral loop score rises, multiple dispatches expected",
+    expectation: "Sources always disagree by $494; forced multi-call rule ensures behavioral loop score rises",
     tools: contradictoryPairTools("gold price"),
   },
 ];
@@ -223,7 +194,6 @@ async function runScenario(scenario: Scenario): Promise<CorpusResult> {
     const durationMs = Date.now() - start;
     await agent.dispose();
 
-    // Load trace for detailed stats
     let maxEntropy = 0;
     let iterations: number | null = null;
     let interventionsDispatched = 0;
@@ -266,7 +236,6 @@ async function runScenario(scenario: Scenario): Promise<CorpusResult> {
     const durationMs = Date.now() - start;
     const message = err instanceof Error ? err.message : String(err);
     console.error(`\nScenario ${scenario.id} threw an error: ${message}`);
-
     return {
       taskId: `${scenario.id}-error`,
       scenarioId: scenario.id,
@@ -283,10 +252,9 @@ async function runScenario(scenario: Scenario): Promise<CorpusResult> {
 }
 
 function printSummaryTable(results: CorpusResult[]): void {
-  console.log("\n");
-  console.log("=".repeat(90));
+  console.log("\n" + "=".repeat(95));
   console.log("FAILURE CORPUS SUMMARY");
-  console.log("=".repeat(90));
+  console.log("=".repeat(95));
 
   const header = [
     "scenarioId".padEnd(30),
@@ -301,7 +269,7 @@ function printSummaryTable(results: CorpusResult[]): void {
   console.log("-".repeat(95));
 
   for (const r of results) {
-    const row = [
+    console.log([
       r.scenarioId.padEnd(30),
       r.label.padEnd(9),
       String(r.success).padEnd(9),
@@ -309,35 +277,21 @@ function printSummaryTable(results: CorpusResult[]): void {
       String(r.iterations ?? "?").padEnd(7),
       String(r.interventionsDispatched).padEnd(10),
       String(r.interventionsSuppressed),
-    ].join(" | ");
-    console.log(row);
+    ].join(" | "));
   }
 
-  console.log("=".repeat(90));
+  console.log("=".repeat(95));
 
-  const successCount = results.filter((r) => r.success).length;
-  const failureCount = results.length - successCount;
-  const labeledSuccess = results.filter((r) => r.label === "success").length;
-  const labeledFailure = results.filter((r) => r.label === "failure").length;
-  const avgEntropySuccess = results
-    .filter((r) => r.label === "success")
-    .reduce((acc, r) => acc + r.maxEntropy, 0) / Math.max(1, labeledSuccess);
-  const avgEntropyFailure = results
-    .filter((r) => r.label === "failure")
-    .reduce((acc, r) => acc + r.maxEntropy, 0) / Math.max(1, labeledFailure);
+  const labeledSuccess = results.filter((r) => r.label === "success");
+  const labeledFailure = results.filter((r) => r.label === "failure");
+  const avgEntropySuccess = labeledSuccess.reduce((a, r) => a + r.maxEntropy, 0) / Math.max(1, labeledSuccess.length);
+  const avgEntropyFailure = labeledFailure.reduce((a, r) => a + r.maxEntropy, 0) / Math.max(1, labeledFailure.length);
+  const avgDispatchFailure = labeledFailure.reduce((a, r) => a + r.interventionsDispatched, 0) / Math.max(1, labeledFailure.length);
 
-  console.log(`\nRuns: ${results.length} total (${labeledSuccess} success scenarios, ${labeledFailure} failure scenarios)`);
-  console.log(`Completed successfully: ${successCount} | Completed as failure/error: ${failureCount}`);
-  console.log(`Avg maxEntropy (success scenarios): ${avgEntropySuccess.toFixed(3)}`);
-  console.log(`Avg maxEntropy (failure scenarios): ${avgEntropyFailure.toFixed(3)}`);
-  console.log(
-    `\nEntropy discrimination gap: ${(avgEntropyFailure - avgEntropySuccess).toFixed(3)}` +
-      ` (positive = entropy is higher on failure runs, as expected)`
-  );
-
-  console.log(`\nNext step:`);
-  console.log(`  bun run scripts/validate-entropy.ts .reactive-agents/traces/failure-corpus`);
-  console.log(`  (AUC > 0.7 = signal is real; ~0.5 = noise; < 0.5 = inverted)`);
+  console.log(`\nRuns: ${results.length} total (${labeledSuccess.length} success, ${labeledFailure.length} failure)`);
+  console.log(`Avg entropy   success=${avgEntropySuccess.toFixed(3)}  failure=${avgEntropyFailure.toFixed(3)}  gap=${(avgEntropyFailure - avgEntropySuccess).toFixed(3)}`);
+  console.log(`Avg dispatch  success=0.0  failure=${avgDispatchFailure.toFixed(1)}`);
+  console.log(`\nNext step: bun run .agents/skills/harness-improvement-loop/scripts/validate-entropy.ts ${TRACE_DIR}`);
 }
 
 async function main(): Promise<void> {
@@ -349,8 +303,6 @@ async function main(): Promise<void> {
   console.log(`Scenarios: ${SCENARIOS.length} (${SCENARIOS.filter((s) => s.label === "success").length} success, ${SCENARIOS.filter((s) => s.label === "failure").length} failure)`);
 
   const results: CorpusResult[] = [];
-
-  // Load existing labels so accumulation across runs stays consistent
   const labelFile = `${TRACE_DIR}/corpus-labels.json`;
   const existingLabels: Record<string, "success" | "failure"> = existsSync(labelFile)
     ? JSON.parse(readFileSync(labelFile, "utf8"))
@@ -359,7 +311,6 @@ async function main(): Promise<void> {
   for (const scenario of SCENARIOS) {
     const result = await runScenario(scenario);
     results.push(result);
-    // Record corpus label keyed by taskId so validate-entropy.ts can use it
     if (result.taskId && !result.taskId.endsWith("-error")) {
       existingLabels[result.taskId] = result.label;
       writeFileSync(labelFile, JSON.stringify(existingLabels, null, 2));
