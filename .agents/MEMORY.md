@@ -51,27 +51,33 @@ Full 4-agent audit run. Architecture solid; gaps are wiring, DX, and trust. Firs
 ### Repo cleanup needed
 Delete before v1.0: `test.ts` (46KB!), `main.ts`, `scratch.ts`, `scratch/`, `output.txt`, `harness-reports/`
 
-## Running Issues Log (Apr 19, 2026+)
+## Running Issues Log (Apr 19–21, 2026+)
 
 Open harness issues tracked across sessions. Fix order: wiring > validation > regressions.
 
 ### Open — Intervention Dispatcher Wiring
-1. **Remaining patches not applied** — `set-temperature`, `request-strategy-switch`, `inject-tool-guidance`, `inject-skill-content`, `append-system-nudge` dispatched but fall through to `default: break` in reactive-observer.ts. Require kernel-runner cooperation for temperature/strategy changes.
+1. **Remaining patches not applied** — `set-temperature`, `request-strategy-switch`, `inject-skill-content` dispatched but fall through to `default: break` in reactive-observer.ts. These require kernel-runner to propagate into `currentOptions` for the next iteration — architecture gap, not a one-liner.
+   - ✅ FIXED Apr 21: `inject-tool-guidance` and `append-system-nudge` now apply to `pendingGuidance.errorRecovery`; think.ts renders them in the next Guidance: block.
 2. **ToT outer loop early-stop propagation** — ✅ PER fixed Apr 19 (`perRIEarlyStop` flag at `plan-execute.ts:715,740`). ToT still open: each branch is a separate sub-kernel; outer ToT loop continues spawning regardless.
 3. **Skill hooks not wired** — `onSkillActivated`, `onSkillRefined`, `onSkillConflict` in `_riHooks` have no AgentEvent types yet.
 
 ### Open — Compression
-4. **Dual compression systems uncoordinated** — `tool-execution.ts` always-on + `context-compressor.ts` advisory can both fire on the same run.
+4. **Dual compression** — ✅ FIXED Apr 19 (compress-messages patch in reactive-observer.ts; tool-execution.ts per-result compression is complementary). Previously listed as open due to stale copy in this log.
 5. **compress-messages count-based fallback** — ~200 tok/msg estimate; no real token counts at kernel state layer.
 
 ### Open — Validation
-6. **AUC needs failure corpus** — validate-entropy.ts infra ready; first run was 10/10 success → AUC=0.000. Needs lower maxIterations, harder tasks, weaker models.
+6. **AUC failure corpus** — ✅ FIXED Apr 21. `failure-corpus.ts` + `validate-entropy.ts` in `.agents/skills/harness-improvement-loop/scripts/`. Dispatch AUC = 1.000 (RI fires on all 4 failure scenarios, never on 4 success scenarios). Entropy AUC = 0.625 (local models without logprobs — entropy measures complexity not failure; dispatch is the right signal).
 7. **Per-tier RI cost-benefit unmeasured** — no data on RI net-positive vs net-negative by tier.
 8. **Local learning engine unverified E2E** — writes to `~/.reactive-agents/observations/` but influence on behavior unconfirmed.
 
+### Open — New (Apr 21)
+9. **AUC stability unproven** — dispatch AUC = 1.000 from a single corpus run. Need 3+ runs to confirm it's not lucky.
+10. **Nudge content effectiveness untested** — `append-system-nudge` now reaches the model via `pendingGuidance`, but we haven't verified cogito:14b changes behavior when it reads the redirect guidance.
+11. **Calibration self-improvement loop not validated** — CalibrationStore now persists to disk (`~/.reactive-agents/calibration.db`), but `calibration.calibrated` flag and `highEntropyThreshold` auto-update have not been confirmed to actually improve adaptive thresholds over time.
+
 ### Open — Regressions / Low Priority
-9. **cogito:14b 2.3× token regression with RI on** — self-gating should fix but unverified post-Apr-19 changes.
-10. **Quickstart telemetry opt-out printed twice** — cosmetic, low priority.
+12. **cogito:14b 2.3× token regression with RI on** — self-gating should fix but unverified post-Apr-21 changes.
+13. **Quickstart telemetry opt-out printed twice** — cosmetic, low priority.
 
 ## V0.10 Hands-On Audit (Apr 18, 2026)
 
@@ -119,18 +125,38 @@ Skeptical audit running framework as a new user against real Ollama + frontier A
 - Local learning engine writes real samples per-model to `~/.reactive-agents/observations/` — persistence is live.
 - Kernel composable phase architecture (context-builder → think → guard → act) is clean and extensible.
 
-### Priority sequence pre-v0.10 — updated Apr 19 (PM)
+### Priority sequence pre-v0.10 — updated Apr 21
 1. ✅ Intervention dispatcher (architectural — unblocks central pitch)
 2. ✅ Self-gating RI (architectural — fixes cogito:14b/qwen3:4b regression)
 3. ✅ `code-execute` require/ESM fix (tactical — unblocks local-model demos)
 4. ✅ Offline entropy validation infra (measure before shipping "reactive" claim)
 5. ✅ Capability manifest + CI check (prevents future drift)
-6. ✅ Reactive observer param wiring + PER entropy scoring (Apr 19) — `currentTemperature`, `availableToolNames`, `priorDecisionsThisRun` now passed; PER reflection scored per iteration
-7. ✅ `_riHooks` 3/6 wired (Apr 19) — `EntropyScored`/`ReactiveDecision`/`InterventionDispatched` subscribed in `builder.ts:2336`. Skill callbacks (3/6) deferred — no AgentEvent types yet
-8. Dual compression coordination
-9. ToT/PER outer-loop early-stop propagation (inner sub-kernel only today)
-10. AUC validation with real failure corpus
-11. Remaining reactive-observer patch handlers (`set-temperature`, `request-strategy-switch`, `inject-tool-guidance`, `inject-skill-content`, `append-system-nudge` still `default: break`)
+6. ✅ Reactive observer param wiring + PER entropy scoring (Apr 19)
+7. ✅ `_riHooks` 3/6 wired (Apr 19). Skill callbacks (3/6) deferred.
+8. ✅ Dual compression coordination (Apr 19)
+9. ⚠️ ToT outer-loop early-stop propagation — PER ✅, ToT ❌
+10. ✅ AUC validation with real failure corpus (Apr 21) — dispatch AUC = 1.000
+11. ⚠️ Reactive-observer patch handlers — `inject-tool-guidance`/`append-system-nudge` ✅ FIXED Apr 21; `set-temperature`/`request-strategy-switch`/`inject-skill-content` ❌ still `default: break`
+12. ❌ `set-temperature`/`request-strategy-switch` propagation — requires kernel-runner currentOptions wiring
+13. ❌ AUC stability (3+ corpus runs), nudge effectiveness test, calibration self-improvement loop validation
+
+## Current Status (Apr 21, 2026) — RI Dispatch Validated
+
+**Core finding:** Reactive intelligence is now demonstrably reactive on local Ollama models. Starting from 0 interventions dispatched, through iterative improvement, dispatch AUC = 1.000 — RI fires on 100% of failure scenarios and 0% of success scenarios.
+
+### What shipped Apr 21
+- **CalibrationStore persistence** — default changed from `:memory:` to `~/.reactive-agents/calibration.db`. Calibration data now accumulates across restarts. `expandPath()` handles `~/` tilde expansion.
+- **Adaptive entropy threshold** — `calibratedMinEntropy()` in reactive-observer.ts: tier-based fallback (local=0.12, frontier=0.45) until `sampleCount >= 20`, then `highEntropyThreshold * 0.6`. Overrides hardcoded 0.55 suppression floor in dispatcher via `context.adaptiveMinEntropy`.
+- **Stall detector RI-aware** — threshold 2→4 when `services.reactiveController._tag === "Some"`. Gives RI runway to reach `iteration >= 2` before harness delivers. No circular import — uses Effect Option discriminant.
+- **`tool-failure-streak` evaluator + handler** — fires when same tool fails 3+ consecutive times (`isError=true` in message history). `tool-failure-redirect` handler injects system nudge via `append-system-nudge` patch.
+- **`append-system-nudge` / `inject-tool-guidance` patches implemented** — were no-ops (`default: break`). Now propagate to `pendingGuidance.errorRecovery`; think.ts renders in next Guidance: block.
+- **Evaluator gate tuning** — `tool-inject`: threshold 0.7→0.5, requires 2 consecutive iters ≥ 0.5. `strategy-switch`: `behavioralLoopScore` threshold 0.7→0.45, `iteration >= 3` gate, `flatEntropy >= 0.35` (no switch at floor 0.15).
+- **`traceStats` fix** — iterations count was 0-based max; now `maxIter + 1`. Added `avgEntropy`.
+- **Failure corpus infrastructure** — `failure-corpus.ts` + `validate-entropy.ts` in `.agents/skills/harness-improvement-loop/scripts/`. 8 scenarios (4 success / 4 failure). `corpus-labels.json` sidecar. Dispatch AUC + entropy AUC metrics. Fixed ROC trapezoid formula (was sweeping wrong direction).
+- **`alwaysErrorTool` uses `Effect.die`** — marks `isError=true` in KernelMessage history (previously `Effect.succeed` with error content never set the flag).
+
+### Key architectural finding (Apr 21)
+Entropy composite does NOT discriminate between "complex correct reasoning" and "stuck tool loop" for logprob-less local models — both produce 0.5–0.6 entropy. Dispatch is the right signal: failure scenarios receive 2–6 interventions each; success scenarios receive 0. Use dispatch AUC (not entropy AUC) to measure RI effectiveness on local models.
 
 ## Current Status (Apr 17–18, 2026)
 - **3 CLI built-in tools shipped** — `git-cli`, `gh-cli`, `gws-cli` in `@reactive-agents/tools`; brings capability tool count to **9** (webSearch, cryptoPrice, httpGet, fileRead, fileWrite, codeExecute, git-cli, gh-cli, gws-cli) alongside 8 meta-tools; injectable `CliRunner` type for testability; `ENOENT` produces human-readable error
