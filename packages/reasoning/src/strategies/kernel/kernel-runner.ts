@@ -724,7 +724,16 @@ export function runKernel(
           const existingPrior = currentInput.priorContext
             ? `${currentInput.priorContext}\n\n${handoffSummary}`
             : handoffSummary;
-          currentInput = { ...currentInput, priorContext: existingPrior };
+          {
+            const failedSet = new Set(handoff.permanentlyFailedTools);
+            currentInput = {
+              ...currentInput,
+              priorContext: existingPrior,
+              requiredTools: failedSet.size > 0
+                ? (currentInput.requiredTools ?? []).filter((t) => !failedSet.has(t))
+                : currentInput.requiredTools,
+            };
+          }
           currentContext = { ...context, input: currentInput };
           prevActionCount = 0;
           requiredToolRedirects = 0;
@@ -1033,15 +1042,24 @@ export function runKernel(
                 state = transitionState(state, { steps: [...state.steps, ...failedSteps] });
               }
 
-              // Build updated input with handoff context
+              // Build updated input with handoff context.
+              // Also drop permanently-failed tools from requiredTools — the lane
+              // controller uses this list to decide whether to nudge, and nudging for
+              // a tool that's known to be broken only causes retry loops.
               const existingPrior = currentInput.priorContext
                 ? `${currentInput.priorContext}\n\n${handoffSummary}`
                 : handoffSummary;
 
-              currentInput = {
-                ...currentInput,
-                priorContext: existingPrior,
-              };
+              {
+                const failedSet = new Set(handoff.permanentlyFailedTools);
+                currentInput = {
+                  ...currentInput,
+                  priorContext: existingPrior,
+                  requiredTools: failedSet.size > 0
+                    ? (currentInput.requiredTools ?? []).filter((t) => !failedSet.has(t))
+                    : currentInput.requiredTools,
+                };
+              }
 
               // Rebuild context with the updated input
               currentContext = {
