@@ -97,6 +97,8 @@ interface CorpusResult {
   iterations: number | null;
   interventionsDispatched: number;
   interventionsSuppressed: number;
+  firstDispatchIter: number | null;
+  iterationsAfterFirstDispatch: number | null;
   durationMs: number;
   error: string | null;
 }
@@ -198,6 +200,8 @@ async function runScenario(scenario: Scenario): Promise<CorpusResult> {
     let iterations: number | null = null;
     let interventionsDispatched = 0;
     let interventionsSuppressed = 0;
+    let firstDispatchIter: number | null = null;
+    let iterationsAfterFirstDispatch: number | null = null;
 
     try {
       const trace = await loadTrace(`${TRACE_DIR}/${result.taskId}.jsonl`);
@@ -206,6 +210,16 @@ async function runScenario(scenario: Scenario): Promise<CorpusResult> {
       iterations = s.iterations;
       interventionsDispatched = s.interventionsDispatched;
       interventionsSuppressed = s.interventionsSuppressed;
+
+      // Nudge effectiveness: how many iterations ran after the first dispatch?
+      const dispatchEvents = trace.events.filter((e) => e.kind === "intervention-dispatched");
+      if (dispatchEvents.length > 0) {
+        const firstDispatch = dispatchEvents.reduce((min, e) => e.iter < min.iter ? e : min);
+        firstDispatchIter = firstDispatch.iter;
+        if (iterations !== null && firstDispatchIter !== null) {
+          iterationsAfterFirstDispatch = iterations - firstDispatchIter;
+        }
+      }
     } catch {
       iterations = result.metadata?.stepsCount ?? null;
     }
@@ -219,6 +233,8 @@ async function runScenario(scenario: Scenario): Promise<CorpusResult> {
       iterations,
       interventionsDispatched,
       interventionsSuppressed,
+      firstDispatchIter,
+      iterationsAfterFirstDispatch,
       durationMs,
       error: null,
     };
@@ -228,6 +244,9 @@ async function runScenario(scenario: Scenario): Promise<CorpusResult> {
     console.log(`Iterations:            ${corpusResult.iterations} / ${scenario.maxIterations}`);
     console.log(`Max entropy:           ${corpusResult.maxEntropy.toFixed(3)}`);
     console.log(`Dispatched:            ${corpusResult.interventionsDispatched}  Suppressed: ${corpusResult.interventionsSuppressed}`);
+    if (firstDispatchIter !== null) {
+      console.log(`First dispatch:        iter=${firstDispatchIter}  iters-after=${iterationsAfterFirstDispatch ?? '?'}  (lower=nudge working)`);
+    }
     console.log(`Duration:              ${(durationMs / 1000).toFixed(1)}s`);
     console.log(`Trace:                 ${TRACE_DIR}/${result.taskId}.jsonl`);
 
@@ -245,6 +264,8 @@ async function runScenario(scenario: Scenario): Promise<CorpusResult> {
       iterations: null,
       interventionsDispatched: 0,
       interventionsSuppressed: 0,
+      firstDispatchIter: null,
+      iterationsAfterFirstDispatch: null,
       durationMs,
       error: message,
     };
