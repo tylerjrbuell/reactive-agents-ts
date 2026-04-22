@@ -31,7 +31,7 @@ export function runHealingPipeline(
   const registeredNames = registeredTools.map((t) => t.name)
   const nameResult = healToolName(currentName, registeredNames, knownToolAliases)
   if (nameResult.resolved === null) {
-    return { call, actions, succeeded: false }
+    return { call, actions: actions as readonly HealingAction[], succeeded: false }
   }
   if (nameResult.action) actions.push(nameResult.action)
   currentName = nameResult.resolved
@@ -59,5 +59,5 @@ export function runHealingPipeline(
   }
 
   const healedCall: ToolCallSpec = { ...call, name: currentName, arguments: currentArgs }
-  return { call: healedCall, actions, succeeded: true }
+  return { call: healedCall, actions: actions as readonly HealingAction[], succeeded: true }
 }
