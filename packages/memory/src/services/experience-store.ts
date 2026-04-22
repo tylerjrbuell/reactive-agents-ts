@@ -4,6 +4,17 @@ import { MemoryDatabase } from "../database.js";
 
 // ─── Types ───
 
+export interface ToolCallObservation {
+  readonly toolNameAttempted: string
+  readonly toolNameResolved: string | null
+  readonly paramsAttempted: Record<string, unknown>
+  readonly paramsResolved: Record<string, unknown>
+  readonly parseMode: "native-fc" | "tier-1" | "tier-2" | "tier-3" | "reprompt"
+  readonly healingApplied: ReadonlyArray<{ readonly stage: string; readonly from: string; readonly to: string }>
+  readonly succeeded: boolean
+  readonly errorText: string | null
+}
+
 export interface ExperienceRecord {
   agentId: string;
   taskDescription: string;
@@ -14,6 +25,7 @@ export interface ExperienceRecord {
   totalTokens: number;
   errors: readonly { tool: string; error: string; recovery?: string }[];
   modelTier: string;
+  toolCallObservations?: readonly ToolCallObservation[];
 }
 
 export interface ToolPattern {

@@ -89,6 +89,7 @@ export {
 } from "./services/experience-store.js";
 export type {
   ExperienceRecord,
+  ToolCallObservation,
   ToolPattern,
   ErrorRecovery,
   ExperienceQueryResult,
