@@ -10,7 +10,7 @@ export interface ToolCallObservation {
   readonly paramsAttempted: Record<string, unknown>
   readonly paramsResolved: Record<string, unknown>
   readonly parseMode: "native-fc" | "tier-1" | "tier-2" | "tier-3" | "reprompt"
-  readonly healingApplied: ReadonlyArray<{ readonly stage: string; readonly from: string; readonly to: string }>
+  readonly healingApplied: ReadonlyArray<{ readonly stage: "tool-name" | "param-name" | "path" | "type-coerce"; readonly from: string; readonly to: string }>
   readonly succeeded: boolean
   readonly errorText: string | null
 }

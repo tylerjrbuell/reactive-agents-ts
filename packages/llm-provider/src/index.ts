@@ -152,10 +152,15 @@ export {
   normalizeModelId,
   clearCalibrationCache,
   buildCalibratedAdapter,
+  ALIAS_FREQUENCY_THRESHOLD,
+  shouldWriteAlias,
+  accumulateAliasObservation,
+  confirmedAliases,
 } from "./calibration.js";
 export type {
   ModelCalibration,
   ProfileOverrides,
+  AliasObservationState,
 } from "./calibration.js";
 
 // ─── Calibration Runner ───

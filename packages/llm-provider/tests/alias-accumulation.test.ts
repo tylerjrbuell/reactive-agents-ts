@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test"
-import { accumulateAliasObservation, shouldWriteAlias } from "../src/calibration.js"
+import { accumulateAliasObservation, confirmedAliases, shouldWriteAlias } from "../src/calibration.js"
 
 describe("shouldWriteAlias", () => {
   it("returns false below frequency threshold", () => {
@@ -26,5 +26,28 @@ describe("accumulateAliasObservation", () => {
     const updated = accumulateAliasObservation({}, "command", "path")
     expect(updated["command"]!.count).toBe(1)
     expect(updated["command"]!.target).toBe("path")
+  })
+})
+
+describe("confirmedAliases", () => {
+  it("excludes entries with count below threshold", () => {
+    const state = {
+      "input": { target: "path", count: 1 },
+      "cmd": { target: "command", count: 2 },
+    }
+    const result = confirmedAliases(state)
+    expect(Object.keys(result)).toHaveLength(0)
+  })
+
+  it("includes entries with count at or above threshold", () => {
+    const state = {
+      "input": { target: "path", count: 3 },
+      "cmd": { target: "command", count: 5 },
+      "low": { target: "other", count: 2 },
+    }
+    const result = confirmedAliases(state)
+    expect(result["input"]).toBe("path")
+    expect(result["cmd"]).toBe("command")
+    expect(result["low"]).toBeUndefined()
   })
 })

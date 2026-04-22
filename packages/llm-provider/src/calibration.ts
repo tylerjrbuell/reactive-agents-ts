@@ -208,16 +208,16 @@ export function buildCalibratedAdapter(
   return { adapter, profileOverrides };
 }
 
-// ─── Alias Accumulation ───
+// ── Alias Accumulation ──────────────────────────────────────────────────────
 
-export const ALIAS_FREQUENCY_THRESHOLD = 3
+export const ALIAS_FREQUENCY_THRESHOLD = 3;
 
 export interface AliasObservationState {
-  [attemptedName: string]: { target: string; count: number }
+  readonly [attemptedName: string]: Readonly<{ target: string; count: number }>;
 }
 
 export function shouldWriteAlias(count: number): boolean {
-  return count >= ALIAS_FREQUENCY_THRESHOLD
+  return count >= ALIAS_FREQUENCY_THRESHOLD;
 }
 
 export function accumulateAliasObservation(
@@ -225,19 +225,19 @@ export function accumulateAliasObservation(
   attempted: string,
   resolved: string,
 ): AliasObservationState {
-  const existing = state[attempted]
+  const existing = state[attempted];
   return {
     ...state,
     [attempted]: { target: resolved, count: (existing?.count ?? 0) + 1 },
-  }
+  };
 }
 
 /** Returns the alias entries that have reached the frequency threshold. */
 export function confirmedAliases(state: AliasObservationState): Record<string, string> {
-  const result: Record<string, string> = {}
+  const result: Record<string, string> = {};
   for (const [attempted, { target, count }] of Object.entries(state)) {
-    if (shouldWriteAlias(count)) result[attempted] = target
+    if (shouldWriteAlias(count)) result[attempted] = target;
   }
-  return result
+  return result;
 }
 
