@@ -1,0 +1,19 @@
+{
+  "modelId": "cogito:8b",
+  "calibratedAt": "2026-04-22T00:00:00.000Z",
+  "probeVersion": 1,
+  "runsAveraged": 3,
+  "steeringCompliance": "hybrid",
+  "parallelCallCapability": "partial",
+  "observationHandling": "needs-inline-facts",
+  "systemPromptAttention": "moderate",
+  "optimalToolResultChars": 1200,
+  "toolCallDialect": "native-fc",
+  "knownParamAliases": {
+    "code-execute": {
+      "input": "code",
+      "command": "code",
+      "script": "code"
+    }
+  }
+}
