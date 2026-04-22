@@ -21,6 +21,7 @@ import {
   type KernelContext,
 } from "../../../../src/strategies/kernel/kernel-state.js";
 import { CONTEXT_PROFILES } from "../../../../src/context/context-profile.js";
+import { TextParseDriver } from "@reactive-agents/tools";
 
 // ── Minimal state factory ─────────────────────────────────────────────────────
 
@@ -64,6 +65,7 @@ function makeContext(overrides: Partial<KernelContext["input"]> = {}): KernelCon
     },
     toolService: { _tag: "None" },
     hooks: noopHooks,
+    toolCallingDriver: new TextParseDriver(),
   };
 }
 

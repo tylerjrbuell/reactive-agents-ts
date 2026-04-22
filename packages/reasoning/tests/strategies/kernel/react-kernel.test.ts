@@ -10,7 +10,7 @@ import {
   type KernelState,
 } from "../../../src/strategies/kernel/kernel-state.js";
 import { CONTEXT_PROFILES } from "../../../src/context/context-profile.js";
-import { createToolCallResolver } from "@reactive-agents/tools";
+import { createToolCallResolver, TextParseDriver } from "@reactive-agents/tools";
 
 describe("executeReActKernel", () => {
   it("produces a final answer for a simple task (no tools)", async () => {
@@ -142,6 +142,7 @@ describe("reactKernel (ThoughtKernel direct)", () => {
       },
       toolService: { _tag: "None" },
       hooks: noopHooks,
+      toolCallingDriver: new TextParseDriver(),
       ...overrides,
     };
   }

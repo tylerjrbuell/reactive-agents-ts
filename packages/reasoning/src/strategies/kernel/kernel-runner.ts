@@ -17,7 +17,7 @@ import { ObservableLogger } from "@reactive-agents/observability";
 import type { LogEvent } from "@reactive-agents/observability";
 import { LLMService, DEFAULT_CAPABILITIES, selectAdapter } from "@reactive-agents/llm-provider";
 import type { ProviderCapabilities } from "@reactive-agents/llm-provider";
-import { createToolCallResolver } from "@reactive-agents/tools";
+import { createToolCallResolver, NativeFCDriver, TextParseDriver } from "@reactive-agents/tools";
 import { checkpointStoreRef } from "@reactive-agents/tools";
 import { CONTEXT_PROFILES } from "../../context/context-profile.js";
 import type { ContextProfile } from "../../context/context-profile.js";
@@ -469,6 +469,13 @@ export function runKernel(
     const hooks = buildKernelHooks(eventBus);
 
     // ── 4. Build KernelContext ────────────────────────────────────────────────
+    // Select tool calling driver from calibration profile (toolCallDialect).
+    // Default to TextParseDriver (safe fallback for uncalibrated models).
+    const toolCallingDriver =
+      effectiveInput.calibration?.toolCallDialect === "native-fc"
+        ? new NativeFCDriver()
+        : new TextParseDriver();
+
     const context: KernelContext = {
       input: effectiveInput,
       profile,
@@ -480,6 +487,7 @@ export function runKernel(
       },
       toolService,
       hooks,
+      toolCallingDriver,
     };
 
     // ── 5. Extract task intent for output quality gate ─────────────────────

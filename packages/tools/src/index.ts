@@ -143,6 +143,11 @@ export {
 } from "./adapters/agent-tool-adapter.js";
 export type { RemoteAgentClient, TaskResult, SubAgentConfig, SubAgentResult, ParentContext, ParentContextItem } from "./adapters/agent-tool-adapter.js";
 
+// ─── Tool Calling Drivers ───
+export { NativeFCDriver } from "./drivers/native-fc-driver.js"
+export { TextParseDriver } from "./drivers/text-parse-driver.js"
+export type { ToolCallingDriver, ExtractedCall, HealingAction, HealingResult, ParseMode, ToolCallObservation } from "./drivers/tool-calling-driver.js"
+
 // ─── Builder ───
 export { ToolBuilder } from "./tool-builder.js";
 

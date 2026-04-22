@@ -9,7 +9,7 @@
 import { Effect } from "effect";
 import type { ReasoningStep } from "../../types/index.js";
 import type { ContextProfile } from "../../context/context-profile.js";
-import type { ResultCompressionConfig, ToolCallSpec, FinalAnswerCapture, ToolCallResolver } from "@reactive-agents/tools";
+import type { ResultCompressionConfig, ToolCallSpec, FinalAnswerCapture, ToolCallResolver, ToolCallingDriver } from "@reactive-agents/tools";
 import type { LLMService } from "@reactive-agents/llm-provider";
 import type { ToolSchema } from "./utils/tool-formatting.js";
 import type { EntropyScoreLike } from "./output-assembly.js";
@@ -423,6 +423,8 @@ export interface KernelContext {
   readonly compression: ResultCompressionConfig;
   readonly toolService: MaybeService<ToolServiceInstance>;
   readonly hooks: KernelHooks;
+  /** Driver selected from calibration toolCallDialect ("native-fc" → NativeFCDriver, else TextParseDriver). */
+  readonly toolCallingDriver: ToolCallingDriver;
 }
 
 // ── ThoughtKernel — The core computation type ────────────────────────────────
