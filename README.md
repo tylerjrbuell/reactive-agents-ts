@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="./assets/logo.png" alt="Reactive Agents" width="280" />
+<img src="./apps/docs/src/assets/logo-light.svg" alt="Reactive Agents" width="280" />
 
 # Reactive Agents — TypeScript AI Agent Framework
 
@@ -357,7 +357,7 @@ How Reactive Agents compares to other TypeScript agent frameworks on shipped, wo
 | Agent-as-data config          |       Yes       |      --      |      --       |   --    |
 | Functional composition        |       Yes       |     Yes      |      --       |   --    |
 | Dynamic tool registration     |       Yes       |     Yes      |      --       |   --    |
-| Test suite                    |  4,349 tests    |      --      |      --       |   --    |
+| Test suite                    |   4,349 tests   |      --      |      --       |   --    |
 
 ## Use Cases
 
