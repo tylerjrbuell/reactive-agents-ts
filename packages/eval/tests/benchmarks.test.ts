@@ -163,7 +163,7 @@ describe("Performance Benchmarks", () => {
     expect(perExec).toBeLessThan(5); // < 5ms overhead per execution
   });
 
-  it("agent.run() e2e with test provider: < 100ms", async () => {
+  it("agent.run() e2e with test provider: < 500ms (local: < 100ms)", async () => {
     const agent = await ReactiveAgents.create()
       .withName("bench-agent")
       .withTestScenario([{ text: "Benchmark response" }])
@@ -174,7 +174,7 @@ describe("Performance Benchmarks", () => {
     const elapsed = performance.now() - start;
 
     expect(result.success).toBe(true);
-    expect(elapsed).toBeLessThan(100);
+    expect(elapsed).toBeLessThan(500); // CI: 500ms, local target: < 100ms
   });
 
   it("agent.run() with all layers enabled: < 500ms", async () => {

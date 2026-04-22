@@ -204,6 +204,8 @@ export interface BenchmarkSession {
   readonly traceDir?: string;
   readonly concurrency?: number;
   readonly timeoutMs?: number;
+  /** Log level: "silent" = no output; "progress" = header + progress only; "verbose" = full details (default: "progress"). */
+  readonly logLevel?: "silent" | "progress" | "verbose";
 }
 
 export interface DimensionRubric {

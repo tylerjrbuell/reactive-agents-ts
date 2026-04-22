@@ -776,9 +776,24 @@ export async function runSession(
 
   const runCount = session.runs ?? 1
   const timeoutMs = session.timeoutMs ?? 120_000
+  const logLevel = session.logLevel ?? "progress"
 
-  console.log(`\n  Running session: ${session.name} (${session.id} v${session.version})`)
-  console.log(`  Tasks: ${tasks.length} | Models: ${session.models.length} | Variants: ${session.harnessVariants.length} | Runs: ${runCount}\n`)
+  // Control cortex logging based on log level
+  const prevCortexLog = process.env.CORTEX_LOG;
+  if (logLevel === "silent") {
+    process.env.CORTEX_LOG = "off";
+  } else if (logLevel === "progress") {
+    process.env.CORTEX_LOG = "error";  // Only show errors, suppress info/debug
+  }
+
+  const log = (...args: any[]) => {
+    if (logLevel !== "silent") {
+      console.log(...args);
+    }
+  };
+
+  log(`\n  Running session: ${session.name} (${session.id} v${session.version})`)
+  log(`  Tasks: ${tasks.length} | Models: ${session.models.length} | Variants: ${session.harnessVariants.length} | Runs: ${runCount}\n`)
 
   for (const task of tasks) {
     for (const model of session.models) {
@@ -789,7 +804,32 @@ export async function runSession(
           const tmpDir = mkdtempSync(join(process.cwd(), ".bench-run-"))
           try {
             writeFixtures(task, tmpDir)
-            const result = await dispatch(task, model, variant, tmpDir, timeoutMs)
+            // Suppress agent output in silent and progress modes
+            let result;
+            if (logLevel !== "verbose") {
+              const consoleLog = console.log;
+              const consoleError = console.error;
+              const consoleWarn = console.warn;
+              const consoleInfo = console.info;
+              const consoleDebug = console.debug;
+              const stdoutWrite = process.stdout.write.bind(process.stdout);
+
+              console.log = console.error = console.warn = console.info = console.debug = () => {};
+              process.stdout.write = (() => true) as any;
+
+              try {
+                result = await dispatch(task, model, variant, tmpDir, timeoutMs)
+              } finally {
+                console.log = consoleLog;
+                console.error = consoleError;
+                console.warn = consoleWarn;
+                console.info = consoleInfo;
+                console.debug = consoleDebug;
+                process.stdout.write = stdoutWrite;
+              }
+            } else {
+              result = await dispatch(task, model, variant, tmpDir, timeoutMs)
+            }
             const dimensions = await scoreTask(result.output, task, tmpDir, result.tokensUsed, result.iterations)
             runScores.push({
               runIndex: i,
@@ -805,12 +845,14 @@ export async function runSession(
         }
 
         allVariantReports.push(aggregateRuns(task.id, model.id, variant, runScores))
-        process.stdout.write(".")
+        if (logLevel !== "silent") {
+          process.stdout.write(".")
+        }
       }
     }
   }
 
-  console.log("\n")
+  log("\n")
 
   const ablation = computeAllAblation(allVariantReports)
   const dimensionSummary = summarizeDimensions(allVariantReports)
@@ -831,6 +873,13 @@ export async function runSession(
       if (!(e instanceof Error && "code" in e && (e as NodeJS.ErrnoException).code === "ENOENT")) throw e
     }
     writeFileSync(outputPath, JSON.stringify({ ...existing, ...sessionReport }, null, 2), "utf8")
+  }
+
+  // Restore previous cortex log level
+  if (prevCortexLog !== undefined) {
+    process.env.CORTEX_LOG = prevCortexLog;
+  } else {
+    delete process.env.CORTEX_LOG;
   }
 
   return sessionReport

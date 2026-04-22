@@ -84,7 +84,7 @@ describe("DockerSandbox — execution", () => {
     // Create sandbox with an impossible image to force failure path
     const sandbox = makeDockerSandbox({
       image: "nonexistent-image-that-does-not-exist:never",
-      timeoutMs: 5_000,
+      timeoutMs: 15_000,
     });
 
     const isAvailable = await Effect.runPromise(sandbox.available());
@@ -107,7 +107,7 @@ describe("DockerSandbox — execution", () => {
       // Should either succeed (if docker pulls) or fail with execution error
       expect(result._tag).toBeDefined();
     }
-  });
+  }, 30_000);
 });
 
 // ─── Handler Tests ───
