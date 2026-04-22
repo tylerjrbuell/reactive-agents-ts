@@ -79,7 +79,7 @@ describe("AgentStreamEvent new variants", () => {
 
 describe("AgentStream adapters", () => {
   it("collect() resolves on StreamCompleted", async () => {
-    const stream = Stream.make<AgentStreamEvent>(
+    const stream = (Stream.make as (...args: AgentStreamEvent[]) => Stream.Stream<AgentStreamEvent, never, never>)(
       { _tag: "TextDelta", text: "hello " },
       { _tag: "TextDelta", text: "world" },
       {
@@ -94,14 +94,14 @@ describe("AgentStream adapters", () => {
   });
 
   it("collect() rejects on StreamError", async () => {
-    const stream = Stream.make<AgentStreamEvent>(
+    const stream = (Stream.make as (...args: AgentStreamEvent[]) => Stream.Stream<AgentStreamEvent, never, never>)(
       { _tag: "StreamError", cause: "test failure" },
     );
     await expect(AgentStream.collect(stream)).rejects.toThrow("test failure");
   });
 
   it("collect() rejects if stream ends without terminal event", async () => {
-    const stream = Stream.make<AgentStreamEvent>(
+    const stream = (Stream.make as (...args: AgentStreamEvent[]) => Stream.Stream<AgentStreamEvent, never, never>)(
       { _tag: "TextDelta", text: "partial" },
     );
     await expect(AgentStream.collect(stream)).rejects.toThrow(

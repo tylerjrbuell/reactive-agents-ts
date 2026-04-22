@@ -15,14 +15,14 @@ export function discoverMcpTools(config: MCPServerConfig): Promise<DiscoveredMcp
       const client = yield* makeMCPClient;
       const server = yield* client.connect({
         name: config.name,
-        transport: config.transport,
-        endpoint: config.endpoint,
-        command: config.command,
-        args: config.args,
-        cwd: config.cwd,
-        env: config.env,
-        headers: config.headers,
-      });
+        ...(config.transport !== undefined ? { transport: config.transport } : {}),
+        ...(config.endpoint !== undefined ? { endpoint: config.endpoint } : {}),
+        ...(config.command !== undefined ? { command: config.command } : {}),
+        ...(config.args !== undefined ? { args: config.args } : {}),
+        ...(config.cwd !== undefined ? { cwd: config.cwd } : {}),
+        ...(config.env !== undefined ? { env: config.env } : {}),
+        ...(config.headers !== undefined ? { headers: config.headers } : {}),
+      } as Parameters<typeof client.connect>[0]);
       const schemas = server.toolSchemas ?? [];
       const out: DiscoveredMcpTool[] = [];
       for (let i = 0; i < server.tools.length; i++) {

@@ -32,14 +32,14 @@ function makeSyncMockBusLayer(): {
 
   return {
     layer: Layer.succeed(EventBus, busImpl),
-    publish: (event) => busImpl.publish(event),
+    publish: (event) => busImpl.publish(event as unknown as Parameters<typeof busImpl.publish>[0]),
   };
 }
 
 const MetricsContext = Context.GenericTag<MetricsCollector>("MetricsContext");
 const TestLayer = Layer.effect(MetricsContext, makeMetricsCollector);
 
-const run = <A>(effect: Effect.Effect<A, any, typeof MetricsContext>) =>
+const run = <A>(effect: Effect.Effect<A, any, MetricsCollector>) =>
   Effect.runPromise(Effect.provide(effect, TestLayer));
 
 describe("MetricsCollector - Tool Tracking", () => {

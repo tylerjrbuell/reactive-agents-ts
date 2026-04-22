@@ -268,6 +268,7 @@ describe("H1: Observability Integration", () => {
         captureSnapshot: (agentId: string, state: any) => Effect.Effect<any, never>;
         getSnapshots: (agentId: string, limit?: number) => Effect.Effect<readonly any[], never>;
         flush: () => Effect.Effect<void, any>;
+        verbosity: () => string;
       }>("ObservabilityService"),
       {
         withSpan: (name, effect) => {

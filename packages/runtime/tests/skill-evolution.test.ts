@@ -175,11 +175,11 @@ describe("skill evolution — recordOutcome", () => {
 
     const program = Effect.gen(function* () {
       const appliedSkillId = SKILL_ID;
-      const outcome = "success";
+      const outcome: "success" | "partial" | "failure" = "success";
 
       const svcOpt = yield* Effect.serviceOption(ProceduralMemoryService);
       if (svcOpt._tag === "Some" && appliedSkillId) {
-        yield* svcOpt.value.recordOutcome(appliedSkillId, outcome !== "failure").pipe(
+        yield* svcOpt.value.recordOutcome(appliedSkillId, (outcome as string) !== "failure").pipe(
           Effect.catchAll(() => Effect.void),
         );
       }
@@ -202,7 +202,7 @@ describe("skill evolution — recordOutcome", () => {
 
       const svcOpt = yield* Effect.serviceOption(ProceduralMemoryService);
       if (svcOpt._tag === "Some" && appliedSkillId) {
-        yield* svcOpt.value.recordOutcome(appliedSkillId, outcome !== "failure").pipe(
+        yield* svcOpt.value.recordOutcome(appliedSkillId, (outcome as string) !== "failure").pipe(
           Effect.catchAll(() => Effect.void),
         );
       }
@@ -220,11 +220,11 @@ describe("skill evolution — recordOutcome", () => {
 
     const program = Effect.gen(function* () {
       const appliedSkillId = SKILL_ID;
-      const outcome = "partial";
+      const outcome: "success" | "partial" | "failure" = "partial";
 
       const svcOpt = yield* Effect.serviceOption(ProceduralMemoryService);
       if (svcOpt._tag === "Some" && appliedSkillId) {
-        yield* svcOpt.value.recordOutcome(appliedSkillId, outcome !== "failure").pipe(
+        yield* svcOpt.value.recordOutcome(appliedSkillId, (outcome as string) !== "failure").pipe(
           Effect.catchAll(() => Effect.void),
         );
       }
@@ -285,7 +285,7 @@ describe("skill evolution — re-store improved fragment", () => {
     const program = Effect.gen(function* () {
       const appliedSkillId = SKILL_ID;
       const appliedSkillMeanEntropy = storedFragment.meanComposite; // 0.38
-      const outcome = "success";
+      const outcome: "success" | "partial" | "failure" = "success";
       const skillSynthesized = true;
       const skillFragment = improvedFragment; // meanComposite 0.22 < 0.38
       const taskCategory = "analysis";
@@ -295,13 +295,13 @@ describe("skill evolution — re-store improved fragment", () => {
       const svcOpt = yield* Effect.serviceOption(ProceduralMemoryService);
       if (svcOpt._tag === "Some" && appliedSkillId) {
         // record outcome
-        yield* svcOpt.value.recordOutcome(appliedSkillId, outcome !== "failure").pipe(
+        yield* svcOpt.value.recordOutcome(appliedSkillId, (outcome as string) !== "failure").pipe(
           Effect.catchAll(() => Effect.void),
         );
 
         // re-store if entropy improved
         if (
-          outcome === "success" &&
+          (outcome as string) === "success" &&
           skillSynthesized &&
           skillFragment != null &&
           skillFragment.meanComposite < appliedSkillMeanEntropy
@@ -334,18 +334,18 @@ describe("skill evolution — re-store improved fragment", () => {
     const program = Effect.gen(function* () {
       const appliedSkillId = SKILL_ID;
       const appliedSkillMeanEntropy = storedFragment.meanComposite; // 0.38
-      const outcome = "success";
+      const outcome: "success" | "partial" | "failure" = "success";
       const skillSynthesized = true;
       const skillFragment = worseFragment; // meanComposite 0.50 > 0.38
 
       const svcOpt = yield* Effect.serviceOption(ProceduralMemoryService);
       if (svcOpt._tag === "Some" && appliedSkillId) {
-        yield* svcOpt.value.recordOutcome(appliedSkillId, outcome !== "failure").pipe(
+        yield* svcOpt.value.recordOutcome(appliedSkillId, (outcome as string) !== "failure").pipe(
           Effect.catchAll(() => Effect.void),
         );
 
         if (
-          outcome === "success" &&
+          (outcome as string) === "success" &&
           skillSynthesized &&
           skillFragment != null &&
           skillFragment.meanComposite < appliedSkillMeanEntropy
@@ -374,18 +374,18 @@ describe("skill evolution — re-store improved fragment", () => {
     const program = Effect.gen(function* () {
       const appliedSkillId = SKILL_ID;
       const appliedSkillMeanEntropy = 0.38;
-      const outcome = "partial"; // not "success"
+      const outcome: "success" | "partial" | "failure" = "partial"; // not "success"
       const skillSynthesized = true;
       const skillFragment = improvedFragment;
 
       const svcOpt = yield* Effect.serviceOption(ProceduralMemoryService);
       if (svcOpt._tag === "Some" && appliedSkillId) {
-        yield* svcOpt.value.recordOutcome(appliedSkillId, outcome !== "failure").pipe(
+        yield* svcOpt.value.recordOutcome(appliedSkillId, (outcome as string) !== "failure").pipe(
           Effect.catchAll(() => Effect.void),
         );
 
         if (
-          outcome === "success" &&
+          (outcome as string) === "success" &&
           skillSynthesized &&
           skillFragment != null &&
           skillFragment.meanComposite < appliedSkillMeanEntropy
@@ -414,18 +414,18 @@ describe("skill evolution — re-store improved fragment", () => {
     const program = Effect.gen(function* () {
       const appliedSkillId = SKILL_ID;
       const appliedSkillMeanEntropy = 0.38;
-      const outcome = "success";
+      const outcome: "success" | "partial" | "failure" = "success";
       const skillSynthesized = false;
       const skillFragment = improvedFragment;
 
       const svcOpt = yield* Effect.serviceOption(ProceduralMemoryService);
       if (svcOpt._tag === "Some" && appliedSkillId) {
-        yield* svcOpt.value.recordOutcome(appliedSkillId, outcome !== "failure").pipe(
+        yield* svcOpt.value.recordOutcome(appliedSkillId, (outcome as string) !== "failure").pipe(
           Effect.catchAll(() => Effect.void),
         );
 
         if (
-          outcome === "success" &&
+          (outcome as string) === "success" &&
           skillSynthesized &&
           skillFragment != null &&
           skillFragment.meanComposite < appliedSkillMeanEntropy
@@ -454,18 +454,18 @@ describe("skill evolution — re-store improved fragment", () => {
     const program = Effect.gen(function* () {
       const appliedSkillId = SKILL_ID;
       const appliedSkillMeanEntropy = 0.38;
-      const outcome = "success";
+      const outcome: "success" | "partial" | "failure" = "success";
       const skillSynthesized = true;
       const skillFragment = null;
 
       const svcOpt = yield* Effect.serviceOption(ProceduralMemoryService);
       if (svcOpt._tag === "Some" && appliedSkillId) {
-        yield* svcOpt.value.recordOutcome(appliedSkillId, outcome !== "failure").pipe(
+        yield* svcOpt.value.recordOutcome(appliedSkillId, (outcome as string) !== "failure").pipe(
           Effect.catchAll(() => Effect.void),
         );
 
         if (
-          outcome === "success" &&
+          (outcome as string) === "success" &&
           skillSynthesized &&
           skillFragment != null &&
           (skillFragment as any).meanComposite < appliedSkillMeanEntropy
@@ -492,18 +492,18 @@ describe("skill evolution — re-store improved fragment", () => {
     const program = Effect.gen(function* () {
       const appliedSkillId = SKILL_ID;
       const appliedSkillMeanEntropy = 0.38;
-      const outcome = "success";
+      const outcome: "success" | "partial" | "failure" = "success";
       const skillSynthesized = true;
       const skillFragment = improvedFragment;
 
       const svcOpt = yield* Effect.serviceOption(ProceduralMemoryService);
       if (svcOpt._tag === "Some" && appliedSkillId) {
-        yield* svcOpt.value.recordOutcome(appliedSkillId, outcome !== "failure").pipe(
+        yield* svcOpt.value.recordOutcome(appliedSkillId, (outcome as string) !== "failure").pipe(
           Effect.catchAll(() => Effect.void),
         );
 
         if (
-          outcome === "success" &&
+          (outcome as string) === "success" &&
           skillSynthesized &&
           skillFragment != null &&
           skillFragment.meanComposite < appliedSkillMeanEntropy

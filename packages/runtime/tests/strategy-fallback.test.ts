@@ -47,7 +47,7 @@ const FailingReasoningServiceLive = Layer.succeed(
   }>("ReasoningService"),
   {
     execute: (_params: unknown) =>
-      Effect.fail(new Error("Strategy configuration error: invalid strategy")),
+      Effect.fail(new Error("Strategy configuration error: invalid strategy")) as any,
   },
 );
 
@@ -154,7 +154,7 @@ describe("Strategy execution fallback (GAP-17)", () => {
 
     expect(result.success).toBe(true);
     expect(result.output).toContain("Strategy completed successfully");
-    const reasoningResult = result.metadata.reasoningResult as any;
+    const reasoningResult = (result.metadata as any).reasoningResult as any;
     expect(reasoningResult?.metadata?.strategyFallback).toBeUndefined();
   });
 });

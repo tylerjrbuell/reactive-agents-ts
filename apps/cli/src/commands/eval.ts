@@ -92,7 +92,7 @@ export async function runEval(args: string[]): Promise<void> {
   });
 
   try {
-    await Effect.runPromise(program.pipe(Effect.provide(fullLayer)));
+    await Effect.runPromise(program.pipe(Effect.provide(fullLayer)) as Effect.Effect<void, any, never>);
   } catch (err) {
     console.error(fail(`Eval error: ${err instanceof Error ? err.message : String(err)}`));
     process.exit(1);

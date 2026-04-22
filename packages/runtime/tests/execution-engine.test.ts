@@ -272,7 +272,7 @@ describe("ExecutionEngine", () => {
         Effect.succeed([
           { name: "file-read", description: "Read a file", parameters: {} },
         ]),
-    });
+    } as any);
 
     // Capture ToolCallCompleted events to verify metrics are recorded via EventBus
     const { EventBus, EventBusLive } = await import("@reactive-agents/core");

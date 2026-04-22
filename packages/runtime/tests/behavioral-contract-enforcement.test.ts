@@ -124,7 +124,6 @@ describe("Behavioral Contract Enforcement", () => {
   it("blocks denied tool at execution time", async () => {
     const { engineLayer } = makeEngineLayer("contract-denied-tool", {
       enableBehavioralContracts: true,
-      enableTools: true,
     });
 
     const contractLayer = BehavioralContractServiceLive({ deniedTools: ["file-write"] });
@@ -156,7 +155,6 @@ describe("Behavioral Contract Enforcement", () => {
   it("blocks when maxToolCalls is 0 and tool call attempted", async () => {
     const { engineLayer } = makeEngineLayer("contract-max-tools", {
       enableBehavioralContracts: true,
-      enableTools: true,
     });
 
     const contractLayer = BehavioralContractServiceLive({ maxToolCalls: 0 });

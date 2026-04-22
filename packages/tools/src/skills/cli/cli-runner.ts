@@ -29,7 +29,7 @@ export const defaultCliRunner: CliRunner = (cmd, args, timeoutMs) =>
         // Binary not found — produce a clear error so the model stops immediately
         reject(new Error(`Executable not found in $PATH: "${cmd}". Install it before using this tool.`));
       } else if (typeof (err as NodeJS.ErrnoException).code === "number") {
-        resolve({ stdout: stdout ?? "", stderr: stderr ?? err.message, exitCode: (err as NodeJS.ErrnoException).code as number });
+        resolve({ stdout: stdout ?? "", stderr: stderr ?? err.message, exitCode: (err as NodeJS.ErrnoException).code as unknown as number });
       } else {
         reject(err);
       }

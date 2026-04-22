@@ -3,7 +3,7 @@ import { stdin as input, stdout as output } from "node:process";
 import { writeFileSync } from "node:fs";
 import chalk from "chalk";
 import { ReactiveAgents } from "reactive-agents";
-import type { AgentDebrief } from "reactive-agents";
+import type { AgentDebrief } from "@reactive-agents/runtime";
 import {
   banner,
   spinner,

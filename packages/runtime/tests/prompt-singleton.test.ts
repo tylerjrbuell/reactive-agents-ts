@@ -30,8 +30,8 @@ describe("PromptLayer singleton", () => {
         // Compile it — this must find the template we just registered
         const compiled = yield* ps.compile("test-singleton", { name: "World" });
         return compiled;
-      }).pipe(Effect.provide(runtime)),
-    );
+      }).pipe(Effect.provide(runtime)) as any,
+    ) as { content: string };
 
     expect(result.content).toBe("Hello World!");
   });
@@ -58,8 +58,8 @@ describe("PromptLayer singleton", () => {
 
         const compiled = yield* ps.compile("standalone-prompt", { user: "Agent" });
         return compiled;
-      }).pipe(Effect.provide(runtime)),
-    );
+      }).pipe(Effect.provide(runtime)) as any,
+    ) as { content: string };
 
     expect(result.content).toBe("Greetings, Agent.");
   });

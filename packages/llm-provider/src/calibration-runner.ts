@@ -309,6 +309,7 @@ export async function runCalibrationProbes(
     observationHandling: majority(results.map((r) => r.observationHandling)),
     systemPromptAttention: majority(results.map((r) => r.systemPromptAttention)),
     optimalToolResultChars: median(results.map((r) => r.optimalToolResultChars)),
+    toolCallDialect: "none" as const,
   };
 }
 

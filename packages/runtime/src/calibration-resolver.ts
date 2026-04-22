@@ -13,7 +13,7 @@ export interface ResolveModelCalibrationAsyncOptions extends ResolveModelCalibra
   /** Override community endpoint URL (for tests). */
   readonly communityEndpoint?: string;
   /** Override fetch implementation (for tests). */
-  readonly communityFetchImpl?: typeof fetch;
+  readonly communityFetchImpl?: (url: string | URL | Request, init?: RequestInit) => Promise<Response>;
   /** Override community cache dir (for tests). */
   readonly communityCacheDir?: string;
 }
@@ -40,6 +40,7 @@ export function resolveModelCalibration(
     observationHandling: "needs-inline-facts",
     systemPromptAttention: "moderate",
     optimalToolResultChars: 1200,
+    toolCallDialect: "none",
   };
 
   return resolveCalibration(base, {

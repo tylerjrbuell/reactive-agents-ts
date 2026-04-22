@@ -13,6 +13,7 @@ const prior: ModelCalibration = {
   observationHandling: "needs-inline-facts",
   systemPromptAttention: "moderate",
   optimalToolResultChars: 1500,
+  toolCallDialect: "none",
 };
 
 function mkRun(hasFalsePositive: boolean): RunObservation {

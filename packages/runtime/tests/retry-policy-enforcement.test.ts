@@ -45,7 +45,7 @@ function makeFlakeyLLM(failCount: number): {
       Effect.fail(
         new LLMError({ message: "not used", provider: "anthropic" }),
       ) as any,
-    embed: (texts) => Effect.succeed(texts.map(() => [] as number[])),
+    embed: (texts: readonly string[]) => Effect.succeed(texts.map(() => [] as number[])),
     countTokens: () => Effect.succeed(0),
     getModelConfig: () =>
       Effect.succeed({ provider: "anthropic" as const, model: "test" }),
@@ -56,7 +56,7 @@ function makeFlakeyLLM(failCount: number): {
         prefillSupport: false,
         grammarConstraints: false,
       }),
-  });
+  } as unknown as LLMService["Type"]);
   const layer = Layer.succeed(LLMService, svc);
   return { layer, svc, getCallCount: () => calls };
 }

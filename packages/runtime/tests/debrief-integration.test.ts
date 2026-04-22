@@ -26,7 +26,7 @@ describe("AgentResult enrichment", () => {
       .withName("debrief-memory-test")
       .withProvider("test")
       .withReasoning({ defaultStrategy: "reactive" })
-      .withMemory({ tier: "basic", dbPath: "/tmp/test-debrief-integration.db" })
+      .withMemory({ tier: "standard", dbPath: "/tmp/test-debrief-integration.db" })
       .build();
 
     const result = await agent.run("Simple memory task");

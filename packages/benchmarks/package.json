@@ -8,7 +8,7 @@
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit",
-    "test": "bun test",
+    "test": "bun test --reporter=dots",
     "bench": "bun run src/run.ts"
   },
   "dependencies": {

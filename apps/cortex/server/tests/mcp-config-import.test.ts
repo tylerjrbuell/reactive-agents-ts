@@ -111,8 +111,8 @@ describe("expandMcpConfigsFromJson", () => {
       args: ["run", "-i", "--rm", "mcp/context7"],
     });
     expect(result).toHaveLength(1);
-    expect(result[0].name).toBe("ctx");
-    expect(result[0].transport).toBe("stdio");
+    expect(result[0]!.name).toBe("ctx");
+    expect(result[0]!.transport).toBe("stdio");
   });
 
   it("expands an array of configs", () => {
@@ -121,8 +121,8 @@ describe("expandMcpConfigsFromJson", () => {
       { name: "b", endpoint: "http://localhost:8080/mcp" },
     ]);
     expect(result).toHaveLength(2);
-    expect(result[0].transport).toBe("stdio");
-    expect(result[1].transport).toBe("streamable-http");
+    expect(result[0]!.transport).toBe("stdio");
+    expect(result[1]!.transport).toBe("streamable-http");
   });
 
   it("expands Cursor-style mcpServers shape", () => {
@@ -148,8 +148,8 @@ describe("expandMcpConfigsFromJson", () => {
       ],
     });
     expect(result).toHaveLength(2);
-    expect(result[0].transport).toBe("stdio");
-    expect(result[1].transport).toBe("sse");
+    expect(result[0]!.transport).toBe("stdio");
+    expect(result[1]!.transport).toBe("sse");
   });
 
   it("skips invalid entries silently", () => {
@@ -159,7 +159,7 @@ describe("expandMcpConfigsFromJson", () => {
       "not an object",
     ]);
     expect(result).toHaveLength(1);
-    expect(result[0].name).toBe("valid");
+    expect(result[0]!.name).toBe("valid");
   });
 
   it("returns empty array for null/undefined", () => {

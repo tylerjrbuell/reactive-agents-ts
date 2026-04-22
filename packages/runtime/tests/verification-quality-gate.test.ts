@@ -58,7 +58,7 @@ describe("Verification Quality Gate", () => {
         }),
     });
 
-    const MockVerification = Layer.succeed(VerificationService, {
+    const MockVerification = Layer.succeed(VerificationService as any, {
       verify: (_response: string, _input: string) =>
         Effect.succeed({
           overallScore: 0.95,
@@ -118,7 +118,7 @@ describe("Verification Quality Gate", () => {
 
     let verifyCallCount = 0;
 
-    const MockVerification = Layer.succeed(VerificationService, {
+    const MockVerification = Layer.succeed(VerificationService as any, {
       verify: (_response: string, _input: string) => {
         verifyCallCount++;
         // First verify rejects, second accepts
@@ -200,7 +200,7 @@ describe("Verification Quality Gate", () => {
     let verifyCallCount = 0;
 
     // Always rejects
-    const MockVerification = Layer.succeed(VerificationService, {
+    const MockVerification = Layer.succeed(VerificationService as any, {
       verify: (_response: string, _input: string) => {
         verifyCallCount++;
         return Effect.succeed({
@@ -269,7 +269,7 @@ describe("Verification Quality Gate", () => {
 
     let verifyCallCount = 0;
 
-    const MockVerification = Layer.succeed(VerificationService, {
+    const MockVerification = Layer.succeed(VerificationService as any, {
       verify: (_response: string, _input: string) => {
         verifyCallCount++;
         return Effect.succeed({
@@ -365,7 +365,7 @@ describe("Verification Quality Gate", () => {
     });
 
     let verifyCallCount = 0;
-    const MockVerification = Layer.succeed(VerificationService, {
+    const MockVerification = Layer.succeed(VerificationService as any, {
       verify: (_response: string, _input: string) => {
         verifyCallCount++;
         if (verifyCallCount === 1) {

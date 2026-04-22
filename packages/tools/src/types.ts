@@ -147,7 +147,7 @@ export const ToolDefinitionSchema = Schema.Struct({
    * @default undefined
    */
   category: Schema.optional(
-    Schema.Literal("search", "file", "code", "http", "data", "system", "custom"),
+    Schema.Literal("search", "file", "code", "http", "data", "system", "custom", "vcs", "productivity"),
   ),
   /**
    * Risk level of the tool — controls approval requirements and guardrail behavior.

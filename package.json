@@ -17,7 +17,7 @@
     "build:apps": "turbo run build --filter='./apps/*'",
     "build:clean": "CLEAN=true turbo run build --force",
     "test": "turbo run test",
-    "test:watch": "bun test --watch",
+    "test:watch": "bun test --reporter=dots --watch",
     "typecheck": "turbo run typecheck",
     "clean": "find packages apps -name 'dist' -type d -exec rm -rf {} + 2>/dev/null || true && rm -rf .turbo && CLEAN=true turbo run build --force",
     "rax": "bun ./apps/cli/src/index.ts",

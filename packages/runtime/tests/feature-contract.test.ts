@@ -349,7 +349,7 @@ describe("Hook contracts — reasoning path (withReasoning)", () => {
 
   it("act hook fires after reasoning when tools were used", async () => {
     let actFired = false;
-    let toolsInActCtx: unknown[] = [];
+    let toolsInActCtx: readonly unknown[] = [];
 
     const { engineLayer } = makeEngine();
     const reasoningLayer = makeMockReasoningService({
@@ -571,7 +571,7 @@ describe("TaskResult shape contracts", () => {
       }).pipe(Effect.provide(testLayer)),
     );
 
-    expect(result.agentId).toBe("my-specific-agent");
+    expect(String(result.agentId)).toBe("my-specific-agent");
   });
 });
 

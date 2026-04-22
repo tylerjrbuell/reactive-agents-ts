@@ -83,7 +83,7 @@ describe("Context Ingestion", () => {
       expect(store.has(filePath)).toBe(true);
       const chunks = store.get(filePath)!;
       expect(chunks.length).toBeGreaterThan(0);
-      expect(chunks.map((c) => c.content).join(" ")).toContain(
+      expect(chunks.map((c: { content: string }) => c.content).join(" ")).toContain(
         "file content from disk",
       );
     } finally {

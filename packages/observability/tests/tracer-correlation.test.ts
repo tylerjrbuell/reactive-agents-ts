@@ -5,7 +5,7 @@ import { makeTracer, type Tracer as TracerType } from "../src/tracing/tracer.js"
 const TracerContext = Context.GenericTag<TracerType>("TracerContext");
 const TestLayer = Layer.effect(TracerContext, makeTracer);
 
-const run = <A>(effect: Effect.Effect<A, any, typeof TracerContext>) =>
+const run = <A>(effect: Effect.Effect<A, any, TracerType>) =>
   Effect.runPromise(Effect.provide(effect, TestLayer));
 
 // ─── Phase 0.4: Correlation IDs ───

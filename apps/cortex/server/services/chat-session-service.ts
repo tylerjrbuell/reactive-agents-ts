@@ -191,12 +191,12 @@ export class ChatSessionService {
             tokensUsed,
             cost,
             stepsCount: steps,
-            iterations: steps,
-          } as Record<string, unknown>,
+            duration: 0,
+          },
+          ...(toolsUsed.length > 0 ? {
+            toolSummary: toolsUsed.map((name) => ({ name, calls: 1, avgMs: 0 })),
+          } : {}),
         };
-        if (toolsUsed.length > 0) {
-          completedEvent.toolSummary = toolsUsed.map((name) => ({ name, calls: 1, avgMs: 0 }));
-        }
         yield completedEvent;
       } catch (e) {
         const cause = e instanceof Error ? e.message : String(e);
@@ -453,6 +453,6 @@ export class ChatSessionService {
         : provider === "test"
           ? { testScenario: [{ text: "Cortex chat test reply." }] }
           : {}),
-    };
+    } as BuildCortexAgentParams;
   }
 }

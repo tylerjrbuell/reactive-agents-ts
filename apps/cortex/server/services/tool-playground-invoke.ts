@@ -103,14 +103,14 @@ export function invokeCatalogTool(
     const tools = yield* ToolService;
     yield* tools.connectMCPServer({
       name: cfg.name,
-      transport: cfg.transport,
-      endpoint: cfg.endpoint,
-      command: cfg.command,
-      args: cfg.args,
-      cwd: cfg.cwd,
-      env: cfg.env,
-      headers: cfg.headers,
-    });
+      ...(cfg.transport !== undefined ? { transport: cfg.transport } : {}),
+      ...(cfg.endpoint !== undefined ? { endpoint: cfg.endpoint } : {}),
+      ...(cfg.command !== undefined ? { command: cfg.command } : {}),
+      ...(cfg.args !== undefined ? { args: cfg.args } : {}),
+      ...(cfg.cwd !== undefined ? { cwd: cfg.cwd } : {}),
+      ...(cfg.env !== undefined ? { env: cfg.env } : {}),
+      ...(cfg.headers !== undefined ? { headers: cfg.headers } : {}),
+    } as any);
     const exec = tools.execute({
       toolName: ref.registryName,
       arguments: args,

@@ -8,7 +8,7 @@ export interface CommunityProfileClientOptions {
   readonly endpoint?: string;
   readonly cacheDir?: string;
   readonly cacheTtlMs?: number;
-  readonly fetchImpl?: typeof fetch;
+  readonly fetchImpl?: (url: string | URL | Request, init?: RequestInit) => Promise<Response>;
   readonly signal?: AbortSignal;
 }
 

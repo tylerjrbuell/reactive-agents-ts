@@ -34,4 +34,8 @@ export interface ToolCallResolver {
     response: ResolverInput,
     availableTools: readonly ResolverToolHint[],
   ): Effect.Effect<ToolCallResult, never>;
+  resolveWithDialect?(
+    response: ResolverInput,
+    availableTools: readonly ResolverToolHint[],
+  ): Effect.Effect<{ result: ToolCallResult; dialect: string }, never>;
 }

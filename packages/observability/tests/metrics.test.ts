@@ -5,7 +5,7 @@ import { makeMetricsCollector, type MetricsCollector } from "../src/metrics/metr
 const MetricsContext = Context.GenericTag<MetricsCollector>("MetricsContext");
 const TestLayer = Layer.effect(MetricsContext, makeMetricsCollector);
 
-const run = <A>(effect: Effect.Effect<A, any, typeof MetricsContext>) =>
+const run = <A>(effect: Effect.Effect<A, any, MetricsCollector>) =>
   Effect.runPromise(Effect.provide(effect, TestLayer));
 
 describe("MetricsCollector", () => {

@@ -110,7 +110,7 @@ describe("KillSwitchService — lifecycle API", () => {
         const ks = yield* KillSwitchService;
         yield* ks.stop("agent-stop", "graceful shutdown");
         const lifecycle = yield* ks.getLifecycle("agent-stop");
-        const status = yield* ks.waitIfPaused("agent-stop");
+        const status = yield* ks.waitIfPaused("agent-stop", "task-1");
         return { lifecycle, status };
       }),
     );
@@ -145,7 +145,7 @@ describe("KillSwitchService — lifecycle API", () => {
           Effect.gen(function* () {
             yield* ks.pause("agent-pause");
             sequence.push("paused");
-            const status = yield* ks.waitIfPaused("agent-pause");
+            const status = yield* ks.waitIfPaused("agent-pause", "task-1");
             sequence.push(`resumed:${status}`);
           }),
         );
@@ -166,7 +166,7 @@ describe("KillSwitchService — lifecycle API", () => {
     const result = await run(
       Effect.gen(function* () {
         const ks = yield* KillSwitchService;
-        return yield* ks.waitIfPaused("agent-not-paused");
+        return yield* ks.waitIfPaused("agent-not-paused", "task-1");
       }),
     );
     expect(result).toBe("ok");

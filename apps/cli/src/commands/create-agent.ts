@@ -45,7 +45,7 @@ export async function runCreateAgent(args: string[]): Promise<void> {
     }
 
     let recipe = await promptUser("Recipe", "basic", VALID_RECIPES);
-    while (!VALID_RECIPES.includes(recipe)) {
+    while (!VALID_RECIPES.includes(recipe as AgentRecipe)) {
       console.log(`Invalid recipe. Choose from: ${VALID_RECIPES.join(", ")}`);
       recipe = await promptUser("Recipe", "basic", VALID_RECIPES);
     }
@@ -77,7 +77,7 @@ export async function runCreateAgent(args: string[]): Promise<void> {
   let recipe: AgentRecipe = "basic";
   const recipeIdx = args.indexOf("--recipe");
   if (recipeIdx !== -1 && args[recipeIdx + 1]) {
-    const r = args[recipeIdx + 1] as AgentRecipe;
+    const r = args[recipeIdx + 1] as unknown as AgentRecipe;
     if (!VALID_RECIPES.includes(r)) {
       console.error(fail(`Invalid recipe: ${r}. Valid options: ${VALID_RECIPES.join(", ")}`));
       process.exit(1);

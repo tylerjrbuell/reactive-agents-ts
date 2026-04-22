@@ -63,6 +63,7 @@ export {
 export type {
   AgentResult,
   AgentResultMetadata,
+  AgentDebrief,
   LifecyclePhase,
   HookTiming,
   AgentState,

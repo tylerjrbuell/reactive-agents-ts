@@ -1,4 +1,4 @@
-import type { ProviderName } from "@reactive-agents/llm-provider";
+type ProviderName = "anthropic" | "openai" | "ollama" | "gemini" | "litellm" | "test" | "custom";
 
 const PROVIDER_API_KEY_MAP: Record<string, string> = {
   anthropic: "ANTHROPIC_API_KEY",

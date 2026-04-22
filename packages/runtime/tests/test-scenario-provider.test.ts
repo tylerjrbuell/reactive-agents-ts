@@ -5,7 +5,6 @@ import type { TestTurn } from "@reactive-agents/llm-provider";
 
 const makeRequest = (content: string) => ({
   messages: [{ role: "user" as const, content }],
-  model: "test-model",
   maxTokens: 1000,
 });
 

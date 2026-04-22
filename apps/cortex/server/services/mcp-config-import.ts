@@ -60,7 +60,7 @@ export function parseConfigBody(body: Record<string, unknown>): MCPServerConfig 
   if (!name || !TRANSPORTS.has(transport)) return null;
   const cfg: MCPServerConfig = {
     name,
-    transport: transport as MCPServerConfig["transport"],
+    transport: transport as "stdio" | "sse" | "websocket" | "streamable-http",
   };
   if (typeof b.command === "string" && b.command.trim()) cfg.command = b.command.trim();
   if (Array.isArray(b.args)) {

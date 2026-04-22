@@ -10,7 +10,7 @@ function makeApp() {
   return { db, app: new Elysia().use(mcpServersRouter(db)) };
 }
 
-async function post(app: Elysia, path: string, body: unknown) {
+async function post(app: { handle: (req: Request) => Promise<Response> }, path: string, body: unknown) {
   return app.handle(
     new Request(`http://localhost${path}`, {
       method: "POST",
@@ -20,7 +20,7 @@ async function post(app: Elysia, path: string, body: unknown) {
   );
 }
 
-async function patch(app: Elysia, path: string, body: unknown) {
+async function patch(app: { handle: (req: Request) => Promise<Response> }, path: string, body: unknown) {
   return app.handle(
     new Request(`http://localhost${path}`, {
       method: "PATCH",

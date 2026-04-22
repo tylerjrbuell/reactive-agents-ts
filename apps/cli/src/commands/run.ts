@@ -1,4 +1,4 @@
-import { ReactiveAgents } from "reactive-agents";
+import { ReactiveAgents, type ReactiveAgent } from "reactive-agents";
 import { existsSync, readFileSync } from "fs";
 import { resolve } from "path";
 import { createSpinner, kv, muted, fail, section, info, hint } from "../ui.js";
@@ -139,7 +139,7 @@ export async function runAgent(args: string[]): Promise<void> {
 
   // Build agent
   const spin = quiet ? null : createSpinner(`Building agent "${name}" with provider: ${provider}`);
-  let agent: { dispose: () => Promise<void>; agentId: string } | null = null;
+  let agent: ReactiveAgent | null = null;
 
   let builder = ReactiveAgents.create()
     .withName(name)
@@ -273,8 +273,8 @@ export async function runAgent(args: string[]): Promise<void> {
         console.log(kv("Duration", `${result.metadata.duration}ms`));
         console.log(kv("Steps", String(result.metadata.stepsCount)));
         console.log(kv("Cost", `$${result.metadata.cost.toFixed(6)}`));
-        if (verbose && result.metadata.strategyUsed) {
-          console.log(kv("Strategy", result.metadata.strategyUsed));
+        if (verbose && (result.metadata as { strategyUsed?: string }).strategyUsed) {
+          console.log(kv("Strategy", (result.metadata as { strategyUsed?: string }).strategyUsed!));
         }
       }
     } else {
