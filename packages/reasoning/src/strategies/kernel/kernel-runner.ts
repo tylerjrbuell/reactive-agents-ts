@@ -469,12 +469,13 @@ export function runKernel(
     const hooks = buildKernelHooks(eventBus);
 
     // ── 4. Build KernelContext ────────────────────────────────────────────────
-    // Select tool calling driver from calibration profile (toolCallDialect).
-    // Default to TextParseDriver (safe fallback for uncalibrated models).
+    // Select tool calling driver from calibration. Default to NativeFCDriver
+    // for uncalibrated ("none") or unknown models — tools must reach the LLM.
+    // Only use TextParseDriver when calibration explicitly says "text-parse".
     const toolCallingDriver =
-      effectiveInput.calibration?.toolCallDialect === "native-fc"
-        ? new NativeFCDriver()
-        : new TextParseDriver();
+      effectiveInput.calibration?.toolCallDialect === "text-parse"
+        ? new TextParseDriver()
+        : new NativeFCDriver();
 
     const context: KernelContext = {
       input: effectiveInput,
