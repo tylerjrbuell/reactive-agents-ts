@@ -10,6 +10,9 @@ This file is the source of truth for what the framework claims to do. CI fails i
 - `compress` — packages/reactive-intelligence/src/controller/handlers/context-compress.ts
 - `tool-inject` — packages/reactive-intelligence/src/controller/handlers/tool-inject.ts
 - `skill-activate` — packages/reactive-intelligence/src/controller/handlers/skill-activate.ts
+- `tool-failure-redirect` — packages/reactive-intelligence/src/controller/handlers/tool-failure-redirect.ts
+- `stall-detect` — packages/reactive-intelligence/src/controller/handlers/stall-detector.ts
+- `harness-harm` — packages/reactive-intelligence/src/controller/handlers/harness-harm-detector.ts
 
 ## Reactive Interventions (advisory only — visible via pulse tool, no dispatch)
 
