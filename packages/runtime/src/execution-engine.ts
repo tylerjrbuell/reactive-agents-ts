@@ -4131,7 +4131,9 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
             // Initialize ObservableLogger
             const isStatusMode =
               config.logging?.mode === "status" ||
-              (config.logging?.mode !== "stream" && Boolean(process.stdout.isTTY));
+              (config.logging?.mode !== "stream" &&
+                Boolean(process.stdout.isTTY) &&
+                process.env.NODE_ENV !== "test");
 
             const loggerConfig = {
               // In status mode the renderer owns all output; logger stays buffered
