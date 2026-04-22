@@ -32,6 +32,9 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Clear turbo cache (ensure fresh builds for NPM)
+        run: rm -rf .turbo
+
       - name: Build & test
         run: |
           bun run build
