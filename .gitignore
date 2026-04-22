@@ -40,3 +40,4 @@ scratch.ts
 signal-data/
 .env.telegram
 apps/meta-agent/.env.production
+.claude/scheduled_tasks.lock
