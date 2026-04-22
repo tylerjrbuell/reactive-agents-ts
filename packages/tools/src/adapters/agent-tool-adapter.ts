@@ -394,6 +394,7 @@ export const createSpawnAgentTool = (): ToolDefinition => ({
     {
       name: "tools",
       type: "array" as const,
+      items: { type: "string" as const },
       description:
         "Optional whitelist of tool names the sub-agent can use. " +
         "When set, only these tools are available — all others are filtered out. " +
@@ -433,6 +434,7 @@ export const createSpawnAgentsTool = (): ToolDefinition => ({
     {
       name: "tasks",
       type: "array" as const,
+      items: { type: "object" as const },
       description:
         "Array of sub-agent task descriptors to run in parallel. Each element: " +
         "{ task: string (required, fully self-contained), " +

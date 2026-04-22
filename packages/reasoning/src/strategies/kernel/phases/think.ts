@@ -238,7 +238,13 @@ export function handleThinking(
         properties: Object.fromEntries(
           (ts.parameters ?? []).map((p) => [
             p.name,
-            { type: p.type ?? "string", description: p.description },
+            {
+              type: p.type ?? "string",
+              description: p.description,
+              // Gemini requires `items` on every array-type parameter
+              ...(p.type === "array" ? { items: p.items ?? { type: "string" } } : {}),
+              ...(p.enum ? { enum: p.enum } : {}),
+            },
           ]),
         ),
         required: (ts.parameters ?? [])

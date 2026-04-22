@@ -47,6 +47,15 @@ export const ToolParameterSchema = Schema.Struct({
    */
   default: Schema.optional(Schema.Unknown),
   /**
+   * Item schema for array-type parameters.
+   *
+   * Required by Gemini when `type: "array"`. Describes the type of each element.
+   * Use `{ type: "string" }` for string arrays, `{ type: "object" }` for object arrays.
+   *
+   * @example `{ type: "string" }`
+   */
+  items: Schema.optional(Schema.Struct({ type: Schema.String })),
+  /**
    * Restricted set of allowed string values (enum constraint).
    *
    * When present, the LLM is instructed to pick one of these values.

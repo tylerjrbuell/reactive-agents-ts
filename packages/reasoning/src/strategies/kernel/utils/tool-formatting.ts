@@ -13,6 +13,9 @@ export interface ToolParamSchema {
   readonly type: string;
   readonly description?: string;
   readonly required?: boolean;
+  /** Required by Gemini for array-type parameters. */
+  readonly items?: { readonly type: string };
+  readonly enum?: readonly string[];
 }
 
 export interface ToolSchema {

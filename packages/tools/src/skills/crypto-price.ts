@@ -120,6 +120,7 @@ export const cryptoPriceTool: ToolDefinition = {
     {
       name: "coins",
       type: "array",
+      items: { type: "string" },
       description:
         "Array of coin symbols to fetch in one request, e.g. [\"BTC\", \"ETH\", \"XRP\", \"XLM\"]. " +
         "Always batch multiple coins into a single call. Case-insensitive.",
