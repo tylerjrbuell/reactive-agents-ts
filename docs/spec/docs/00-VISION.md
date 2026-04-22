@@ -36,14 +36,14 @@ result = await agent.invoke(input)
 
 Whether you're building a production SaaS feature, a research prototype, or a personal automation:
 
--   **Consistent, predictable results** — not random outputs
--   **Full auditability** — explain every decision the agent made
--   **Fine-grained control** — over reasoning, context, tools, and behavior
--   **Observable systems** — see what's happening in real time
--   **Model flexibility** — same framework, any model, optimized per tier
--   **Cost efficiency** — budget controls, token tracking, smart routing
--   **Reliability** — typed errors, circuit breakers, graceful degradation
--   **Great developer experience** — minutes to first agent, not hours
+- **Consistent, predictable results** — not random outputs
+- **Full auditability** — explain every decision the agent made
+- **Fine-grained control** — over reasoning, context, tools, and behavior
+- **Observable systems** — see what's happening in real time
+- **Model flexibility** — same framework, any model, optimized per tier
+- **Cost efficiency** — budget controls, token tracking, smart routing
+- **Reliability** — typed errors, circuit breakers, graceful degradation
+- **Great developer experience** — minutes to first agent, not hours
 
 **Current frameworks don't deliver this.**
 
@@ -251,87 +251,87 @@ const production = await ReactiveAgents.create()
 
 Fine-grained control over every aspect of agent behavior:
 
--   **Reasoning:** 5 strategies (ReAct, Plan-Execute, Tree-of-Thought, Reflexion, Adaptive) — swap at runtime
--   **Context:** Model-adaptive profiles, budget tracking, progressive compaction
--   **Tools:** Selection, filtering, sandboxing, MCP integration, custom tools
--   **Memory:** 4-layer system (working, episodic, semantic, procedural)
--   **Execution:** 10-phase engine with hookable lifecycle events
--   **Quality:** Verification layers, behavioral contracts, completion guards
+- **Reasoning:** 5 strategies (ReAct, Plan-Execute, Tree-of-Thought, Reflexion, Adaptive) — swap at runtime
+- **Context:** Model-adaptive profiles, budget tracking, progressive compaction
+- **Tools:** Selection, filtering, sandboxing, MCP integration, custom tools
+- **Memory:** 4-layer system (working, episodic, semantic, procedural)
+- **Execution:** 10-phase engine with hookable lifecycle events
+- **Quality:** Verification layers, behavioral contracts, completion guards
 
 ### 2. Observability
 
 Complete visibility into agent operations:
 
--   **EventBus:** 15+ event types published automatically (AgentStarted, ToolCallCompleted, FinalAnswerProduced, etc.)
--   **Metrics Dashboard:** Professional CLI output with timing, token usage, cost, and alerts
--   **Structured Logging:** Per-iteration progress with verbosity levels (minimal/normal/verbose/debug)
--   **Real-time Streaming:** Live phase events during execution
--   **Cost Attribution:** Track spending per agent, per task, per tool call
--   **Execution Replay:** Full step history with context at each decision point
+- **EventBus:** 15+ event types published automatically (AgentStarted, ToolCallCompleted, FinalAnswerProduced, etc.)
+- **Metrics Dashboard:** Professional CLI output with timing, token usage, cost, and alerts
+- **Structured Logging:** Per-iteration progress with verbosity levels (minimal/normal/verbose/debug)
+- **Real-time Streaming:** Live phase events during execution
+- **Cost Attribution:** Track spending per agent, per task, per tool call
+- **Execution Replay:** Full step history with context at each decision point
 
 ### 3. Flexibility
 
 Adapt to any use case without fighting the framework:
 
--   **Multiple Reasoning Strategies:** Choose or let the adaptive meta-strategy decide
--   **Pluggable Components:** Swap any layer through Effect-TS service composition
--   **Custom Tools:** Register tools with typed schemas, or connect MCP servers
--   **Kernel SDK:** Register custom reasoning algorithms that integrate with all existing infrastructure
--   **6 LLM Providers:** Anthropic, OpenAI, Google Gemini, Ollama, LiteLLM (40+ models), Test
--   **Model Agnostic:** Same API regardless of provider
+- **Multiple Reasoning Strategies:** Choose or let the adaptive meta-strategy decide
+- **Pluggable Components:** Swap any layer through Effect-TS service composition
+- **Custom Tools:** Register tools with typed schemas, or connect MCP servers
+- **Kernel SDK:** Register custom reasoning algorithms that integrate with all existing infrastructure
+- **6 LLM Providers:** Anthropic, OpenAI, Google Gemini, Ollama, LiteLLM (40+ models), Test
+- **Model Agnostic:** Same API regardless of provider
 
 ### 4. Scalability
 
 Handle production workloads efficiently:
 
--   **Concurrent Execution:** Effect-TS fibers for structured concurrency
--   **Persistent Gateway:** Long-running agents with heartbeats, crons, webhooks, and policy enforcement
--   **Multi-Agent Orchestration:** A2A protocol for typed agent-to-agent communication
--   **Agent-as-Tool:** Delegate sub-tasks to specialized sub-agents
--   **Resource Management:** Token budgets, iteration caps, timeout controls
+- **Concurrent Execution:** Effect-TS fibers for structured concurrency
+- **Persistent Gateway:** Long-running agents with heartbeats, crons, webhooks, and policy enforcement
+- **Multi-Agent Orchestration:** A2A protocol for typed agent-to-agent communication
+- **Agent-as-Tool:** Delegate sub-tasks to specialized sub-agents
+- **Resource Management:** Token budgets, iteration caps, timeout controls
 
 ### 5. Reliability
 
 Graceful handling of failures:
 
--   **Effect-TS:** Every error is typed — no uncaught exceptions, no mystery crashes
--   **Circuit Breakers:** Detect stuck loops and break out automatically
--   **Completion Guards:** Verify task coverage before accepting a final answer
--   **Kill Switch:** Pause, resume, stop, or terminate agents at any time
--   **HITL Escalation:** Human-in-the-loop checkpoints for critical decisions
--   **Behavioral Contracts:** Define what agents can and cannot do
+- **Effect-TS:** Every error is typed — no uncaught exceptions, no mystery crashes
+- **Circuit Breakers:** Detect stuck loops and break out automatically
+- **Completion Guards:** Verify task coverage before accepting a final answer
+- **Kill Switch:** Pause, resume, stop, or terminate agents at any time
+- **HITL Escalation:** Human-in-the-loop checkpoints for critical decisions
+- **Behavioral Contracts:** Define what agents can and cannot do
 
 ### 6. Efficiency
 
 Optimize for performance and cost:
 
--   **Model-Adaptive Context:** Profiles tune prompt density per model tier
--   **Smart Token Budgeting:** Per-iteration tracking with budget enforcement
--   **Tool Result Compression:** Structured previews instead of blind truncation
--   **Semantic Caching:** Avoid redundant LLM calls for similar queries
--   **Context Compaction:** LLM-based summarization when context grows large
--   **Cost Routing:** Complexity analysis routes tasks to appropriate model tiers
+- **Model-Adaptive Context:** Profiles tune prompt density per model tier
+- **Smart Token Budgeting:** Per-iteration tracking with budget enforcement
+- **Tool Result Compression:** Structured previews instead of blind truncation
+- **Semantic Caching:** Avoid redundant LLM calls for similar queries
+- **Context Compaction:** LLM-based summarization when context grows large
+- **Cost Routing:** Complexity analysis routes tasks to appropriate model tiers
 
 ### 7. Security
 
 Production-grade security by default:
 
--   **Agent Identity:** Real Ed25519 cryptographic certificates
--   **Sandboxed Execution:** Subprocess isolation for code execution
--   **Input/Output Sanitization:** Prompt injection detection, PII masking, toxicity filtering
--   **Guardrails:** Configurable safety layers that run before and after each step
--   **Audit Logging:** Full compliance trail via EventBus
--   **Rate Limiting:** Budget enforcement prevents runaway costs
+- **Agent Identity:** Real Ed25519 cryptographic certificates
+- **Sandboxed Execution:** Subprocess isolation for code execution
+- **Input/Output Sanitization:** Prompt injection detection, PII masking, toxicity filtering
+- **Guardrails:** Configurable safety layers that run before and after each step
+- **Audit Logging:** Full compliance trail via EventBus
+- **Rate Limiting:** Budget enforcement prevents runaway costs
 
 ### 8. Speed
 
 Built on modern, fast runtime:
 
--   **Bun Runtime:** Native TypeScript, fast cold starts, built-in test runner
--   **Effect-TS Fibers:** Structured concurrency without callback hell
--   **Real-time Streaming:** Token-by-token output via FiberRef-based TextDelta propagation
--   **SSE in One Line:** `AgentStream.toSSE(agent.runStream(prompt))` — instant HTTP streaming
--   **Parallel Tool Execution:** Multiple tool calls run concurrently when independent
+- **Bun Runtime:** Native TypeScript, fast cold starts, built-in test runner
+- **Effect-TS Fibers:** Structured concurrency without callback hell
+- **Real-time Streaming:** Token-by-token output via FiberRef-based TextDelta propagation
+- **SSE in One Line:** `AgentStream.toSSE(agent.runStream(prompt))` — instant HTTP streaming
+- **Parallel Tool Execution:** Multiple tool calls run concurrently when independent
 
 ---
 
@@ -398,10 +398,10 @@ Our real moat isn't any single feature — it's the **architectural philosophy**
 
 **Anyone who wants to add AI agent capabilities to their applications:**
 
--   Full-stack developers adding AI features
--   Backend engineers building automation
--   Startup teams shipping AI-first products
--   Side project builders and indie hackers
+- Full-stack developers adding AI features
+- Backend engineers building automation
+- Startup teams shipping AI-first products
+- Side project builders and indie hackers
 
 **They need:** Quick setup, clear APIs, good docs, predictable behavior, reasonable costs.
 
@@ -411,10 +411,10 @@ Our real moat isn't any single feature — it's the **architectural philosophy**
 
 **People exploring what agents can do:**
 
--   AI enthusiasts running local models
--   Researchers experimenting with reasoning strategies
--   Open-source contributors
--   Students learning agent architectures
+- AI enthusiasts running local models
+- Researchers experimenting with reasoning strategies
+- Open-source contributors
+- Students learning agent architectures
 
 **They need:** Flexibility, extensibility, local model support, good DX for experimentation.
 
@@ -424,9 +424,9 @@ Our real moat isn't any single feature — it's the **architectural philosophy**
 
 **Teams deploying agents at scale:**
 
--   SaaS companies with AI features
--   Enterprise internal tooling teams
--   DevOps teams automating operations
+- SaaS companies with AI features
+- Enterprise internal tooling teams
+- DevOps teams automating operations
 
 **They need:** Reliability, observability, security, cost controls, compliance.
 
@@ -484,9 +484,9 @@ Each `.with*()` adds one concern. Skip what you don't need. No framework tax.
 
 When something goes wrong, the framework tells you what happened _and_ what to do about it:
 
--   Effect-TS typed errors mean every failure mode is documented at compile time
--   Observability dashboard highlights bottlenecks and suggests optimizations
--   Circuit breakers explain why they tripped, not just that they did
+- Effect-TS typed errors mean every failure mode is documented at compile time
+- Observability dashboard highlights bottlenecks and suggests optimizations
+- Circuit breakers explain why they tripped, not just that they did
 
 ### No Vendor Lock-In
 
@@ -566,27 +566,27 @@ Monetization follows adoption. The priority order is clear:
 
 **Phase 1: Build the community (Now → v1.0)**
 
--   Ship fast, ship often. Get the framework into developers' hands.
--   Polish the 60-second experience. README, examples, `rax init`.
--   Publish benchmarks that demonstrate the model-adaptive advantage.
--   Show HN, Reddit, awesome-list submissions, dev.to articles.
--   Discord community for support and feedback.
+- Ship fast, ship often. Get the framework into developers' hands.
+- Polish the 60-second experience. README, examples, `rax init`.
+- Publish benchmarks that demonstrate the model-adaptive advantage.
+- Show HN, Reddit, awesome-list submissions, dev.to articles.
+- Discord community for support and feedback.
 
 **Phase 2: Prove value (v1.0 → v1.2)**
 
--   1,000+ active developers using the framework.
--   Case studies from real production deployments.
--   Published benchmark results comparing model tiers.
--   Community contributions and ecosystem growth.
+- 1,000+ active developers using the framework.
+- Case studies from real production deployments.
+- Published benchmark results comparing model tiers.
+- Community contributions and ecosystem growth.
 
 **Phase 3: Sustainable revenue (v1.2+)**
 
--   Open-core model: framework stays MIT, commercial layer optional.
--   Hosted observability dashboard and visual debugger.
--   Premium agent templates and production recipes.
--   Cloud deployment (`rax deploy`) for managed agent hosting.
--   Enterprise features (SSO, audit, compliance) when demand exists.
--   Consulting and optimization services.
+- Open-core model: framework stays MIT, commercial layer optional.
+- Hosted observability dashboard and visual debugger.
+- Premium agent templates and production recipes.
+- Cloud deployment (`rax deploy`) for managed agent hosting.
+- Enterprise features (SSO, audit, compliance) when demand exists.
+- Consulting and optimization services.
 
 The framework will always be free and open source. Commercial features serve teams who need more — they don't gate the core experience.
 
@@ -596,31 +596,31 @@ The framework will always be free and open source. Commercial features serve tea
 
 ### Adoption (Year 1)
 
--   **1,000+ GitHub stars**
--   **500+ npm weekly downloads**
--   **50+ production deployments**
--   **20+ community contributors**
--   **Active Discord** with weekly engagement
+- **1,000+ GitHub stars**
+- **500+ npm weekly downloads**
+- **50+ production deployments**
+- **20+ community contributors**
+- **Active Discord** with weekly engagement
 
 ### Technical Performance
 
--   **<100ms** agent creation time
--   **<50ms** per reasoning step overhead
--   **<15 iterations** for standard tasks (shipped: 10 avg)
--   **100% tool success rate** (shipped: 100% after v0.8 fixes)
--   **Competitive benchmark results** across model tiers
+- **<100ms** agent creation time
+- **<50ms** per reasoning step overhead
+- **<15 iterations** for standard tasks (shipped: 10 avg)
+- **100% tool success rate** (shipped: 100% after v0.8 fixes)
+- **Competitive benchmark results** across model tiers
 
 ### Community Health
 
--   **Responsive issue resolution** (<48hr first response)
--   **Regular releases** (bi-weekly cadence)
--   **Growing contributor base**
--   **Positive developer sentiment**
+- **Responsive issue resolution** (<48hr first response)
+- **Regular releases** (bi-weekly cadence)
+- **Growing contributor base**
+- **Positive developer sentiment**
 
 ### Business (When Applicable)
 
--   **$35K MRR** quit-job threshold (12-18 months post-adoption)
--   **Sustainable open-core model** that doesn't compromise the community
+- **$35K MRR** quit-job threshold (12-18 months post-adoption)
+- **Sustainable open-core model** that doesn't compromise the community
 
 ---
 
@@ -628,19 +628,19 @@ The framework will always be free and open source. Commercial features serve tea
 
 ### We ARE
 
--   An open-source, composable agent orchestration framework
--   A TypeScript/Bun library with Effect-TS type safety
--   A production-grade toolkit for building reliable AI agents
--   A model-adaptive system that makes any LLM more capable
--   A community-driven project that ships fast and iterates on feedback
+- An open-source, composable agent orchestration framework
+- A TypeScript/Bun library with Effect-TS type safety
+- A production-grade toolkit for building reliable AI agents
+- A model-adaptive system that makes any LLM more capable
+- A community-driven project that ships fast and iterates on feedback
 
 ### We're NOT
 
--   A black-box "just add API key" magic solution
--   A low-code/no-code platform
--   A replacement for LLM APIs
--   A data pipeline or ML training tool
--   A framework that only works with expensive frontier models
+- A black-box "just add API key" magic solution
+- A low-code/no-code platform
+- A replacement for LLM APIs
+- A data pipeline or ML training tool
+- A framework that only works with expensive frontier models
 
 ---
 
@@ -650,13 +650,13 @@ The framework will always be free and open source. Commercial features serve tea
 
 Not bigger models. Not black boxes. But:
 
--   **Control** over every decision
--   **Observability** into every action
--   **Intelligence** through model-adaptive engineering
--   **Reliability** through type safety and composable architecture
--   **Performance** via modern runtimes
--   **Efficiency** that makes smaller models punch above their weight
--   **DX** that makes building agents genuinely enjoyable
+- **Control** over every decision
+- **Observability** into every action
+- **Intelligence** through model-adaptive engineering
+- **Reliability** through type safety and composable architecture
+- **Performance** via modern runtimes
+- **Efficiency** that makes smaller models punch above their weight
+- **DX** that makes building agents genuinely enjoyable
 
 **Other frameworks:**
 
@@ -714,9 +714,9 @@ _License: MIT_
 
 ## Related Documents
 
--   **Core Pillars:** See `02-CORE-PILLARS.md`
--   **Business Model:** See `REACTIVE_AGENTS_BUSINESS_MODEL.md` _(needs update to match this vision)_
--   **Technical Specs:** See `REACTIVE_AGENTS_TECHNICAL_SPECS.md`
--   **Architecture:** See `architecture-reference` skill
--   **Adoption Strategy:** See `docs/plans/2026-03-05-adoption-strategy.md`
--   **Roadmap:** See `ROADMAP.md`
+- **Core Pillars:** See `02-CORE-PILLARS.md`
+- **Business Model:** See `REACTIVE_AGENTS_BUSINESS_MODEL.md` _(needs update to match this vision)_
+- **Technical Specs:** See `REACTIVE_AGENTS_TECHNICAL_SPECS.md`
+- **Architecture:** See `architecture-reference` skill
+- **Adoption Strategy:** See `docs/plans/2026-03-05-adoption-strategy.md`
+- **Roadmap:** See `ROADMAP.md`
