@@ -177,7 +177,9 @@ export type ControllerDecision =
   | { readonly decision: "tool-failure-redirect"; readonly failingTool: string; readonly streakCount: number; readonly reason: string }
   | { readonly decision: "memory-boost"; readonly from: "recent" | "keyword"; readonly to: "semantic"; readonly reason: string }
   | { readonly decision: "skill-reinject"; readonly skillName: string; readonly reason: string }
-  | { readonly decision: "human-escalate"; readonly reason: string; readonly decisionsExhausted: readonly string[] };
+  | { readonly decision: "human-escalate"; readonly reason: string; readonly decisionsExhausted: readonly string[] }
+  | { readonly decision: "stall-detect"; readonly reason: string; readonly stalledIterations: number }
+  | { readonly decision: "harness-harm"; readonly reason: string; readonly harmLevel: "suspected" | "confirmed" };
 
 export type ReactiveControllerConfig = {
   readonly earlyStop: boolean;

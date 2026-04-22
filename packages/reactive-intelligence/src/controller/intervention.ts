@@ -93,6 +93,8 @@ export const defaultInterventionConfig: InterventionConfig = {
     "skill-reinject": "advisory",
     "human-escalate": "advisory",
     "compress": "dispatch",
+    "stall-detect": "dispatch",
+    "harness-harm": "dispatch",
   },
   suppression: {
     minEntropyComposite: 0.55,
