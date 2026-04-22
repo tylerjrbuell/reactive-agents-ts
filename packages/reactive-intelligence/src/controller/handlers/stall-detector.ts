@@ -39,8 +39,9 @@ export const stallDetectorHandler: InterventionHandler<"stall-detect"> = {
   defaultMode: "dispatch",
   execute: (decision, state, _ctx) => {
     const decisionLog = (state as unknown as { controllerDecisionLog?: readonly string[] }).controllerDecisionLog ?? [];
+    // controllerDecisionLog is pre-populated before dispatch fires, so priorStalls >= 1 on first fire.
     const priorStalls = decisionLog.filter((e) => e.startsWith("stall-detect")).length;
-    const isEscalation = priorStalls >= 1;
+    const isEscalation = priorStalls >= 2;
 
     if (isEscalation) {
       return Effect.succeed({

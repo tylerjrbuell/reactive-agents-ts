@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import type { InterventionHandler } from "../intervention.js";
 
-interface HarmSignals {
+export interface HarmSignals {
   readonly interventionCount: number;
   readonly toolSuccessRate: number;
   readonly taskSucceeded: boolean;
@@ -31,7 +31,8 @@ export const harnessHarmDetectorHandler: InterventionHandler<"harness-harm"> = {
     const decisionLog = (state as unknown as { controllerDecisionLog?: readonly string[] }).controllerDecisionLog ?? [];
     const harmDecisions = decisionLog.filter((e) => e.startsWith("harness-harm")).length;
 
-    if (harmDecisions === 0) {
+    // controllerDecisionLog is pre-populated before dispatch fires, so harmDecisions >= 1 on first fire.
+    if (harmDecisions <= 1) {
       return Effect.succeed({
         applied: true,
         patches: [{
