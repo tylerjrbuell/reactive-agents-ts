@@ -11,7 +11,6 @@ import { ReactiveAgents } from "@reactive-agents/runtime";
 import { createRuntime } from "@reactive-agents/runtime";
 import type { RuntimeOptions } from "@reactive-agents/runtime";
 import { mkdtempSync, rmSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
-import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { execSync } from "node:child_process"
 import type {
@@ -524,6 +523,8 @@ async function runInternal(
       builder.withReasoning({ defaultStrategy: strategy })
     }
 
+    if (config.reactiveIntelligence) builder.withReactiveIntelligence()
+
     if (config.memory && "withMemory" in builder && typeof (builder as unknown as Record<string, unknown>)["withMemory"] === "function") {
       ;(builder as unknown as Record<string, () => void>)["withMemory"]!()
     }
@@ -533,8 +534,11 @@ async function runInternal(
     console.log = _log
 
     try {
+      const prompt = task.fixtures?.length
+        ? `Working directory for this task: ${tmpDir}\n\nAll task files (e.g. ${task.fixtures.map(f => f.path).join(", ")}) are located in that directory. Use the full path when reading files.\n\n${task.prompt}`
+        : task.prompt
       const timeoutP = new Promise<never>((_, r) => setTimeout(() => r(new Error("timeout")), timeoutMs))
-      const result = await Promise.race([agent.run(task.prompt), timeoutP])
+      const result = await Promise.race([agent.run(prompt), timeoutP])
       return {
         output: result.output,
         tokensUsed: result.metadata.tokensUsed ?? 0,
@@ -724,7 +728,7 @@ export async function runSession(
         const runScores: RunScore[] = []
 
         for (let i = 0; i < runCount; i++) {
-          const tmpDir = mkdtempSync(join(tmpdir(), "ra-bench-"))
+          const tmpDir = mkdtempSync(join(process.cwd(), ".bench-run-"))
           try {
             writeFixtures(task, tmpDir)
             const result = await dispatch(task, model, variant, tmpDir, timeoutMs)

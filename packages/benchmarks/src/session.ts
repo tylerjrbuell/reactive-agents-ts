@@ -21,11 +21,11 @@ export const ABLATION_VARIANTS: ReadonlyArray<HarnessVariant> = [
   // Tier 3: RA harness layers
   {
     type: "internal", id: "ra-reasoning", label: "RA Reasoning",
-    config: { tools: true, reasoning: true, adaptiveContext: true },
+    config: { tools: true, reasoning: true },
   },
   {
     type: "internal", id: "ra-full", label: "RA Full Harness",
-    config: { tools: true, reasoning: true, reactiveIntelligence: true, adaptiveContext: true, memory: true },
+    config: { tools: true, reasoning: true, reactiveIntelligence: true, memory: true },
   },
 ]
 

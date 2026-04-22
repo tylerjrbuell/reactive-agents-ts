@@ -56,8 +56,12 @@ Delete before v1.0: `test.ts` (46KB!), `main.ts`, `scratch.ts`, `scratch/`, `out
 Open harness issues tracked across sessions. Fix order: wiring > validation > regressions.
 
 ### Open — Intervention Dispatcher Wiring
-1. **Remaining patches not applied** — `set-temperature`, `request-strategy-switch`, `inject-skill-content` dispatched but fall through to `default: break` in reactive-observer.ts. These require kernel-runner to propagate into `currentOptions` for the next iteration — architecture gap, not a one-liner.
-   - ✅ FIXED Apr 21: `inject-tool-guidance` and `append-system-nudge` now apply to `pendingGuidance.errorRecovery`; think.ts renders them in the next Guidance: block.
+1. **Remaining patches not applied** — ✅ ALL 6 DISPATCHED PATCHES WIRED (Apr 21 late):
+   - `inject-tool-guidance` / `append-system-nudge` → `pendingGuidance.errorRecovery` (think.ts renders in Guidance: block)
+   - `inject-skill-content` → `pendingGuidance.errorRecovery` (same path as inject-tool-guidance)
+   - `set-temperature` → `state.meta.dispatchedTemperature`; kernel-runner reads after `runReactiveObserver` and updates `currentOptions.temperature`
+   - `request-strategy-switch` → `state.meta.terminatedBy="dispatcher-strategy-switch"` + `dispatchedStrategySwitch:{to,reason}`; kernel-runner runs full `buildHandoff`+state-reset+`continue` when strategy switching is enabled
+   - `KernelMeta` extended with `dispatchedTemperature?: number` and `dispatchedStrategySwitch?: {to,reason}`
 2. **ToT outer loop early-stop propagation** — ✅ PER fixed Apr 19 (`perRIEarlyStop` flag at `plan-execute.ts:715,740`). ToT still open: each branch is a separate sub-kernel; outer ToT loop continues spawning regardless.
 3. **Skill hooks not wired** — `onSkillActivated`, `onSkillRefined`, `onSkillConflict` in `_riHooks` have no AgentEvent types yet.
 
@@ -137,16 +141,51 @@ Skeptical audit running framework as a new user against real Ollama + frontier A
 8. ✅ Dual compression coordination (Apr 19)
 9. ⚠️ ToT outer-loop early-stop propagation — PER ✅, ToT ❌
 10. ✅ AUC validation with real failure corpus (Apr 21) — dispatch AUC = 1.000
-11. ⚠️ Reactive-observer patch handlers — `inject-tool-guidance`/`append-system-nudge` ✅ FIXED Apr 21; `set-temperature`/`request-strategy-switch`/`inject-skill-content` ❌ still `default: break`
-12. ⚠️ `set-temperature`/`request-strategy-switch` propagation — low ROI for local models. Temperature adjustment doesn't help tool-loop failures (structural, not stochastic). Strategy switch mid-run inherits broken context. Defer.
+11. ✅ All 6 reactive-observer patches wired (Apr 21 late) — inject-tool-guidance, append-system-nudge, inject-skill-content, set-temperature, request-strategy-switch, compress-messages. All 6 dispatched patches now mutate kernel state.
+12. ✅ Permanently-failed required tools no longer block strategy handoffs (Apr 21 late) — `StrategyHandoff.permanentlyFailedTools` carried forward; `buildHandoff` accepts `requiredTools` param; both switch paths prune `currentInput.requiredTools` + inject synthetic observation steps so new strategy never re-nudges for a tool proven unavailable.
 13. ✅ AUC stability confirmed (3 runs, 2/3 = 1.000). ✅ Nudge effectiveness confirmed (iters-after=1). Calibration self-improvement loop still unvalidated.
 14. ❌ Intervention responsiveness in CalibrationStore — `interventionResponseRate` per model not yet tracked. Required for multi-model calibration profiles.
 
-## Current Status (Apr 21, 2026 — Evening) — RI Nudge Effectiveness Confirmed
+## Current Status (Apr 21, 2026 — Late) — All 6 Dispatcher Patches Wired, Tests Clean
 
-**Intervention responsiveness is the missing calibration dimension.** The CalibrationStore tracks entropy thresholds but not how quickly models respond to RI nudges. `firstDispatchIter` and `iterationsAfterFirstDispatch` per model per failure type are the right data for model-tier intervention profiles.
+**4271 pass / 23 skip / 0 fail** across 483 files (up from 4265/7fail at session start).
 
-### What shipped Apr 21 (evening)
+### What shipped Apr 21 (late session)
+
+#### Test failures resolved (7 → 0)
+- **`evaluateStrategySwitch` threshold tests** — implementation lowered threshold from `> 0.7` to `> 0.45` (Apr 19 evaluator gate fixes) but tests weren't updated; fixed test values and descriptions
+- **Calibration wiring tests (4)** — `StrategyServices.dispatcher` added as required field after these tests were written; caused `undefined._tag` crash at runtime; added `dispatcher: noneService()` + `messages: []` to test helper
+- **`cryptoPriceHandler` retry test** — 2000ms real sleep caused intermittent failure in parallel test suite; exported `setRetryBaseMs()` setter; test zeroes delay
+
+#### All 6 dispatcher patches now live
+- `inject-tool-guidance` / `append-system-nudge` → `pendingGuidance.errorRecovery` ✅ (earlier today)
+- `inject-skill-content` → `pendingGuidance.errorRecovery` ✅
+- `set-temperature` → `state.meta.dispatchedTemperature`; kernel-runner applies to `currentOptions.temperature` next iteration ✅
+- `request-strategy-switch` → `state.meta.terminatedBy="dispatcher-strategy-switch"` + `dispatchedStrategySwitch:{to,reason}`; kernel-runner runs full `buildHandoff`+reset+`continue` ✅
+- `KernelMeta` extended: `dispatchedTemperature?`, `dispatchedStrategySwitch?`
+
+#### Permanently-failed required tools no longer block strategy handoffs
+- `StrategyHandoff` gains `permanentlyFailedTools: readonly string[]`
+- `buildHandoff(state, task, from, reason, n, requiredTools?)` computes them via `getPermanentlyFailedRequiredTools`
+- Both switch paths (loop-detection + dispatcher): (1) inject synthetic observation steps so new kernel `steps[]` immediately shows the tool as attempted-and-failed; (2) prune permanently-failed tools from `currentInput.requiredTools` so the lane controller never nudges the new strategy to retry a dead tool
+- Handoff summary text includes "Permanently unavailable tools: X" so LLM context also knows to synthesize without them
+
+#### Builder API clarifications (from scratch testing)
+- `_riHooks` inside `withReasoning({...})` is **dead** — RI hooks go in `.withReactiveIntelligence({ onEntropyScored, onControllerDecision, onMidRunAdjustment })`
+- `.withReactiveIntelligence()` must be called to inject the reactive controller service; without it, `reactiveController._tag === "None"` and the controller never evaluates
+- Strategy switching uses flat `ReasoningOptions` fields: `enableStrategySwitching: true`, `maxStrategySwitches: 1`, `fallbackStrategy: "plan-execute-reflect"` (NOT `strategySwitching: { enabled: true }`)
+- Custom tool definition format: `{ definition: { name, description, parameters: [{name, type, required, description}] }, handler }` — flat object with all `ObservationResult` fields required
+- `onEntropyScored` second arg is raw `iteration: number` (not a context object); `onControllerDecision` event has `.decision` (not `.decisionType`)
+- Ollama provider: `.withProvider("ollama").withModel("cogito:latest")` — two separate calls; `.withModel({ model, provider })` object form resolves to "test" provider
+
+#### RI end-to-end confirmed with cogito:latest (scratch run)
+- Entropy scoring fires every iteration via `withReactiveIntelligence` ✅
+- `switch-strategy` decision fires at iter=3 with `behavioral=0.667` > 0.45 threshold ✅
+- `request-strategy-switch` patch dispatched → kernel-runner resets state, calls `buildHandoff`, injects synthetic steps, prunes `requiredTools` ✅
+- `inject-tool-guidance` and `compress` decisions fire in second strategy pass ✅
+- No "required-tool nudge budget exhausted" on permanently failing tool ✅
+
+### What shipped Apr 21 (evening — previous entry)
 - **Escalating redirect handler** — `tool-failure-redirect`: soft nudge on first fire ("IMPORTANT: stop calling X, use final-answer"), early-stop patch on second fire. Detects re-fire via `state.controllerDecisionLog` (not `budget.interventionsFiredThisRun` which was hardcoded 0 — never implemented).
 - **Nudge effectiveness confirmed** — `failure-save-loop` iters-after-first-dispatch=**1**: model calls final-answer immediately after nudge. `failure-contradictory-data`: iters-after=3. The guidance propagation from Apr 21 morning is working.
 - **Entropy AUC = 0.781** — crossed the 0.7 "real signal" threshold (up from 0.625). Escalation reduces failure run length → tighter entropy spread between success/failure.

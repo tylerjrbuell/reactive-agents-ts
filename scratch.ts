@@ -1,174 +1,113 @@
 /**
- * Diagnostic: does the reactive intelligence dispatcher actually fire?
+ * Strategy-switch dispatcher test.
  *
- * Instruments the agent with:
- *  - withReactiveIntelligence() + all _riHooks callbacks
- *  - withTracing() to persist JSONL for post-run analysis
+ * Forces the strategy switch by giving qwen3:14b a tool that always returns
+ * "service unavailable". The model loops trying the same tool repeatedly,
+ * producing flat behavioral entropy and high loop score. Once 3 consecutive
+ * flat iterations accumulate with behavioral > 0.45, the strategy-switch
+ * evaluator fires through the dispatcher and kernel-runner hands off to
+ * plan-execute-reflect.
  *
- * After the run, parses the trace and prints a dispatch summary.
- * Compare interventionsDispatched vs interventionsSuppressed to see
- * whether the 4-gate chain is blocking dispatch.
+ * Run: bun scratch.ts
  */
-import { ReactiveAgents } from 'reactive-agents'
-import { loadTrace, traceStats } from '@reactive-agents/trace'
-import { Effect } from 'effect'
-import { mkdirSync } from 'fs'
 
-const TRACE_DIR = '.reactive-agents/traces/scratch'
-mkdirSync(TRACE_DIR, { recursive: true })
+import { Effect } from 'effect'
+import { ReactiveAgents } from '@reactive-agents/runtime'
 
 const agent = await ReactiveAgents.create()
     .withProvider('ollama')
-    .withModel({ model: 'qwen3:14b' })
-    .withReasoning({
-        defaultStrategy: 'reactive',
-        maxIterations: 8,
-    })
-    .withReactiveIntelligence({
-        autonomy: 'full',
-        onEntropyScored: (event, iteration) => {
-            console.log(
-                `[RI] iter=${iteration} entropy=${(event as { composite: number }).composite?.toFixed(3) ?? '?'}`
-            )
-        },
-        onControllerDecision: (event, context) => {
-            const e = event as { decisionType?: string }
-            const c = context as { iteration?: number; entropyBefore?: number }
-            console.log(
-                `[RI] DECISION iter=${c.iteration} type=${e.decisionType} entropyBefore=${c.entropyBefore?.toFixed(3) ?? '?'}`
-            )
-            return 'accept'
-        },
-        onMidRunAdjustment: (type, before, after) => {
-            console.log(
-                `[RI] INTERVENTION type=${type} before=${JSON.stringify(before)} after=${JSON.stringify(after)}`
-            )
-        },
-    })
-    .withObservability({ verbosity: 'verbose', live: true })
-    .withTracing({ dir: TRACE_DIR })
+    .withModel('cogito:latest')
     .withTools({
         tools: [
             {
                 definition: {
-                    name: 'get-hn-posts',
+                    name: 'lookup-salary-data',
                     description:
-                        'Get current top Hacker News front-page stories (official API). Call this tool to get the top N posts.',
+                        'Look up average developer salaries by programming language from our database. ' +
+                        'Required for salary data — do not use web-search as a substitute.',
                     parameters: [
                         {
-                            name: 'count',
-                            type: 'number',
-                            description: 'The number of posts to return',
+                            name: 'language',
+                            type: 'string' as const,
                             required: true,
-                            default: 10,
+                            description:
+                                "The programming language to look up (e.g. 'Python', 'JavaScript')",
+                        },
+                        {
+                            name: 'region',
+                            type: 'string' as const,
+                            required: true,
+                            description:
+                                "Region for the salary data (e.g. 'US', 'EU', 'global')",
                         },
                     ],
                     riskLevel: 'low',
-                    timeoutMs: 10000,
+                    timeoutMs: 10_000,
                     requiresApproval: false,
                     source: 'function',
                 },
-                handler: (args) =>
-                    Effect.tryPromise({
-                        try: async () => {
-                            const n = Math.min(
-                                100,
-                                Math.max(1, Number(args.count) || 10)
-                            )
-                            const listRes = await fetch(
-                                'https://hacker-news.firebaseio.com/v0/topstories.json'
-                            )
-                            if (!listRes.ok)
-                                throw new Error(
-                                    `HN topstories HTTP ${listRes.status}`
-                                )
-                            const ids = (await listRes.json()) as number[]
-                            const items = await Promise.all(
-                                ids.slice(0, n).map(async (id) => {
-                                    const r = await fetch(
-                                        `https://hacker-news.firebaseio.com/v0/item/${id}.json`
-                                    )
-                                    if (!r.ok)
-                                        throw new Error(
-                                            `HN item ${id} HTTP ${r.status}`
-                                        )
-                                    return r.json() as Promise<{
-                                        title?: string
-                                        score?: number
-                                        url?: string
-                                    }>
-                                })
-                            )
-                            return ids
-                                .slice(0, n)
-                                .map((id, i) => ({
-                                    id,
-                                    title: items[i]?.title ?? '(no title)',
-                                    score: items[i]?.score ?? 0,
-                                    url:
-                                        items[i]?.url ??
-                                        `https://news.ycombinator.com/item?id=${id}`,
-                                }))
-                        },
-                        catch: (e) =>
-                            e instanceof Error ? e : new Error(String(e)),
-                    }).pipe(Effect.map((d) => d as unknown), Effect.orDie),
+                handler: (_input: Record<string, unknown>) =>
+                    Effect.succeed({
+                        error: 'Service temporarily unavailable — database is under maintenance. Please retry.',
+                        status: 503,
+                        retryAfter: 60,
+                    }) as Effect.Effect<unknown, never>,
             },
         ],
     })
+    .withReactiveIntelligence({
+        onEntropyScored: (event: any, iteration: any) => {
+            console.log(
+                `[RI] iter=${iteration ?? '?'} ` +
+                    `entropy=${event.composite?.toFixed(3)} ` +
+                    `shape=${event.trajectory?.shape ?? '?'} ` +
+                    `behavioral=${event.sources?.behavioral?.toFixed(3) ?? '?'}`
+            )
+        },
+        onControllerDecision: (event: any, context: any) => {
+            console.log(
+                `[RI] ⚡ DECISION iter=${context.iteration} ` +
+                    `type=${event.decision} ` +
+                    `entropy=${context.entropyBefore?.toFixed(3)}`
+            )
+            if (event.reason) console.log(`[RI]    reason: ${event.reason}`)
+            return 'accept'
+        },
+        // type="intervention", before={decisionType}, after={patchKind}
+        onMidRunAdjustment: (_type: string, before: any, after: any) => {
+            console.log(
+                `[RI] 🔀 INTERVENTION decisionType=${
+                    before?.decisionType ?? '?'
+                } patchKind=${after?.patchKind ?? '?'}`
+            )
+        },
+    })
+    .withReasoning({
+        defaultStrategy: 'reactive',
+        maxIterations: 20,
+        enableStrategySwitching: true,
+        maxStrategySwitches: 1,
+        fallbackStrategy: 'plan-execute-reflect',
+    })
     .build()
 
-// Multi-step task requiring distinct tool calls + reasoning to force 4+ iterations.
-const result = await agent.run(
-    `Research task — complete each step before moving to the next:
-Step 1: Fetch the top 5 HN posts and list them with scores.
-Step 2: For each post, write one sentence explaining why it likely trended.
-Step 3: Identify which single topic dominates HN today and write a 2-sentence argument for that claim.
-Step 4: Predict whether this topic will still dominate tomorrow. Justify with evidence from the scores.
-
-Do not combine steps. Complete and state each step result explicitly before starting the next.`
+console.log('━━━ Strategy-switch dispatcher test ━━━')
+console.log('Model: qwen3:14b | lookup-salary-data always fails → forces loop')
+console.log(
+    'Watching for [RI] entropy → controller decision → dispatcher switch\n'
 )
 
-console.log('\n--- Result ---')
-console.log(result.output)
+const result = await agent.run(
+    'I need the Python developer salary for the US region from our database. ' +
+        "Use the lookup-salary-data tool with language='Python' and region='US'. " +
+        'The database is experiencing intermittent issues — keep retrying the exact ' +
+        'same call until you get a successful result. Do not give up after one failure. ' +
+        'Try at least 10 times before reporting that the data is unavailable.'
+)
 
-await agent.dispose()
-
-// --- Post-run trace analysis ---
-console.log('\n--- Trace Analysis ---')
-try {
-    const tracePath = `${TRACE_DIR}/${result.taskId}.jsonl`
-    const trace = await loadTrace(tracePath)
-    const stats = traceStats(trace)
-
-    console.log(`Trace file: ${tracePath}`)
-    console.log(`Iterations: ${stats.iterations}`)
-    console.log(`Interventions dispatched: ${stats.interventionsDispatched}`)
-    console.log(`Interventions suppressed: ${stats.interventionsSuppressed}`)
-    console.log(
-        `Max entropy: ${stats.maxEntropy != null ? stats.maxEntropy.toFixed(3) : 'n/a'}`
-    )
-    console.log(
-        `Avg entropy: ${stats.avgEntropy != null ? stats.avgEntropy.toFixed(3) : 'n/a'}`
-    )
-
-    if (stats.interventionsSuppressed > 0) {
-        console.log(
-            '\n⚠️  Interventions were suppressed — check thresholds in reactive-intelligence config'
-        )
-    }
-    if (stats.iterations === 0 && stats.maxEntropy === 0) {
-        console.log(
-            '\n❌ No entropy-scored events in trace — RI layer may not be active'
-        )
-    } else if (
-        stats.interventionsDispatched === 0 &&
-        stats.interventionsSuppressed === 0
-    ) {
-        console.log(
-            `\nRI active — entropy scored ${stats.iterations} time(s), max=${stats.maxEntropy.toFixed(3)}, 0 dispatched/suppressed (evaluators returned no decisions)`
-        )
-    }
-} catch (e) {
-    console.error('Failed to load trace:', e)
-}
+console.log('\n━━━ Result ━━━')
+console.log('Success:   ', result.success)
+console.log('Tokens:    ', result.metadata?.tokensUsed ?? '?')
+console.log('Strategy:  ', result.metadata?.strategyUsed ?? 'unknown')
+console.log('\nOutput (first 600 chars):')
+console.log(result.output?.slice(0, 600) ?? '(none)')

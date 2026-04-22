@@ -9,7 +9,47 @@ import { realWorldFullSession } from "./sessions/real-world-full.js"
 import { competitorComparisonSession } from "./sessions/competitor-comparison.js"
 import { localModelsSession } from "./sessions/local-models.js"
 import { saveBaseline, loadBaseline, computeDrift, exceedsThreshold } from "./ci.js"
-import type { BenchmarkSession } from "./types.js"
+import type { BenchmarkSession, SessionReport } from "./types.js"
+
+function printSessionSummary(report: SessionReport): void {
+  const ablation = report.ablation ?? []
+  const tasks = [...new Set(ablation.map(a => a.taskId))]
+  const models = [...new Set(ablation.map(a => a.modelVariantId))]
+  const variants = ablation[0]?.variants.map(v => v.variantId) ?? []
+
+  console.log("\n  ┌─────────────────────────────────────────────────────────────┐")
+  console.log(`  │  Session: ${report.sessionId} v${report.sessionVersion}`)
+  console.log(`  │  SHA: ${report.gitSha}  ·  Tasks: ${tasks.length}  ·  Models: ${models.length}  ·  Variants: ${variants.join(" vs ")}`)
+  console.log("  ├─────────────────────────────────────────────────────────────┤")
+
+  // Per-task harness lift table
+  for (const model of models) {
+    console.log(`\n  Model: ${model}`)
+    console.log(`  ${"Task".padEnd(30)} ${"Bare LLM".padEnd(10)} ${"RA Full".padEnd(10)} Lift`)
+    console.log("  " + "─".repeat(60))
+
+    for (const result of ablation.filter(a => a.modelVariantId === model)) {
+      const base = result.variants.find(v => v.variantId === result.baselineVariantId)
+      const best = result.variants.find(v => v.variantId === result.bestVariantId)
+      const baseScore = base?.meanScores.find(s => s.dimension === "accuracy")?.score ?? 0
+      const bestScore = best?.meanScores.find(s => s.dimension === "accuracy")?.score ?? 0
+      const lift = result.harnessLift
+      const liftStr = lift > 0 ? `+${(lift * 100).toFixed(0)}%` : `${(lift * 100).toFixed(0)}%`
+      console.log(`  ${result.taskName.slice(0, 29).padEnd(30)} ${(baseScore * 100).toFixed(0).padStart(6)}%   ${(bestScore * 100).toFixed(0).padStart(6)}%   ${liftStr}`)
+    }
+  }
+
+  // Dimension summary
+  if (report.dimensionSummary?.length) {
+    console.log("\n  Dimension scores by variant:")
+    for (const dim of report.dimensionSummary) {
+      const scores = dim.byVariant.map(v => `${v.variantId}: ${(v.meanScore * 100).toFixed(0)}%`).join("  ")
+      console.log(`    ${dim.dimension.padEnd(22)} ${scores}`)
+    }
+  }
+
+  console.log("\n  └─────────────────────────────────────────────────────────────┘\n")
+}
 
 const SESSIONS: Record<string, BenchmarkSession> = {
   "regression-gate":       regressionGateSession,
@@ -72,6 +112,7 @@ async function main() {
     const baselinePath = args.baselinePath ?? `benchmark-baselines/${args.session}.json`
 
     const report = await runSession(session, args.output ? outputPath : undefined)
+    printSessionSummary(report)
 
     if (args.saveBaseline) {
       const allVariantReports = report.ablation?.flatMap(a => a.variants) ?? []

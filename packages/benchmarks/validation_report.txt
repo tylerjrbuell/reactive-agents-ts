@@ -1,0 +1,63 @@
+```typescript
+import { validateUser, validateOrder, validateProduct } from './types';
+
+export function validateData(data: any) {
+  const valid = data.every(item => {
+    if (item.type === 'user') return validateUser(item);
+    if (item.type === 'order') return validateOrder(item);
+    if (item.type === 'product') return validateProduct(item);
+    return false;
+  });
+
+  console.log(`Validation results: ${valid ? 'PASS' : 'FAIL'}`);
+  
+  const errors = [];
+  
+  data.forEach((item, index) => {
+    switch(item.type) {
+      case 'user':
+        if (!validateUser(item)) {
+          errors.push({
+            type: 'user',
+            index,
+            message: `Invalid user record at position ${index}`
+          });
+        }
+        break;
+      case 'order':
+        if (!validateOrder(item)) {
+          errors.push({
+            type: 'order',
+            index,
+            message: `Invalid order record at position ${index}`
+          });
+        }
+        break;
+      case 'product':
+        if (!validateProduct(item)) {
+          errors.push({
+            type: 'product',
+            index,
+            message: `Invalid product record at position ${index}`
+          });
+        }
+        break;
+    }
+  });
+
+  return { valid, errors };
+}
+
+export function runValidator(data: any) {
+  const results = validateData(data);
+  
+  if (results.valid) {
+    console.log('All data records validated successfully');
+  } else {
+    console.log(`Validation failed. Errors found:`);
+    results.errors.forEach(err => {
+      console.log(`${err.type} record at position ${err.index}: ${err.message}`);
+    });
+  }
+}
+```

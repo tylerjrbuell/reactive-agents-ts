@@ -295,7 +295,7 @@ Note: some sources you find may have conflicting benchmark data for the same dat
         rubric: "Does the agent explicitly flag conflicting data rather than silently picking one source? Does it acknowledge when a latency figure is an estimate?",
       },
     ],
-    optimalHarnessConfig: { tools: true, reasoning: true, memory: true, adaptiveContext: true, strategy: "plan-execute" },
+    optimalHarnessConfig: { tools: true, reasoning: true, memory: true, strategy: "plan-execute" },
     tags: ["research", "web-search", "json-output"],
   },
 
@@ -395,7 +395,7 @@ Note: some sources you find may have conflicting benchmark data for the same dat
         rubric: "How many http-get calls were made relative to the theoretical minimum (1 for posts + 1 per post for comments, or batched)? Flag anything above 2× the minimum.",
       },
     ],
-    optimalHarnessConfig: { tools: true, reasoning: true, adaptiveContext: true, strategy: "react" },
+    optimalHarnessConfig: { tools: true, reasoning: true, strategy: "react" },
     tags: ["http", "typescript", "api-integration"],
   },
 
@@ -429,7 +429,7 @@ Note: some sources you find may have conflicting benchmark data for the same dat
         rubric: "Are the SQL statements syntactically valid? Are the CREATE POLICY statements correct for PostgreSQL RLS syntax? Are the 5 risks specific to the 8-table schema provided?",
       },
     ],
-    optimalHarnessConfig: { tools: true, reasoning: true, reactiveIntelligence: true, adaptiveContext: true, memory: true, strategy: "tree-of-thought" },
+    optimalHarnessConfig: { tools: true, reasoning: true, reactiveIntelligence: true, memory: true, strategy: "tree-of-thought" },
     tags: ["sql", "postgresql", "planning"],
   },
 
@@ -503,7 +503,7 @@ Note: some sources you find may have conflicting benchmark data for the same dat
         rubric: "Are all 3 bugs found and fixed? Does the validator bug fix correctly handle falsy-but-valid values? Is the off-by-one fixed to >= 10? Is the race condition fixed to sequential awaits?",
       },
     ],
-    optimalHarnessConfig: { tools: true, reasoning: true, reactiveIntelligence: true, adaptiveContext: true, strategy: "react" },
+    optimalHarnessConfig: { tools: true, reasoning: true, reactiveIntelligence: true, strategy: "react" },
     tags: ["debugging", "typescript", "test-writing"],
   },
 
@@ -546,7 +546,7 @@ Phase 5: Run the validator against the generated data and report results`,
         rubric: "Does the validator correctly detect constraint violations? Do the type definitions correctly model the constraints? Does the pipeline run end-to-end without errors?",
       },
     ],
-    optimalHarnessConfig: { tools: true, reasoning: true, adaptiveContext: true, memory: true, strategy: "plan-execute" },
+    optimalHarnessConfig: { tools: true, reasoning: true, memory: true, strategy: "plan-execute" },
     tags: ["memory", "multi-phase", "typescript"],
   },
 

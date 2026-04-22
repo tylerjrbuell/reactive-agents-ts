@@ -161,7 +161,6 @@ export interface HarnessConfig {
   readonly tools?: boolean;
   readonly reasoning?: boolean;
   readonly reactiveIntelligence?: boolean;
-  readonly adaptiveContext?: boolean;
   readonly memory?: boolean;
   readonly guardrails?: boolean;
   readonly strategy?: "react" | "plan-execute" | "tree-of-thought" | "adaptive";
