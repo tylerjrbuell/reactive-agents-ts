@@ -8,6 +8,12 @@
 - [Clean types, no any](feedback_clean_types.md) — strict TypeScript required; no `any` casts, use `unknown` + guards or proper types
 - [Starlight link patterns](feedback_starlight_link_patterns.md) — use absolute paths for internal doc links; relative paths cause CI link-checker failures
 
+## Current Status (Apr 22, 2026)
+- **v0.10.0 release prep complete** — CHANGELOG written, release doc at `docs/releases/v0.10.0.md`, docs updated (27 packages, ~4,350 tests). Changeset step pending. Build ✅ Tests 4353 pass / 0 fail ✅ Typecheck 54/54 ✅
+- **Adaptive Tool Calling System shipped** — ToolCallingDriver (NativeFCDriver + TextParseDriver), HealingPipeline (4 stages), FC calibration probe, ToolCallObservation + alias accumulation, ExperienceSummary, StallDetector, HarnessHarmDetector
+- **RI dispatcher fully wired** — 6 handlers active, all 6 patches applied, escalating redirect + tool-failure-streak live
+- **Local** is 118 commits ahead of origin/main — push required before tagging
+
 ## Adaptive Calibration (Apr 2026)
 - [Adaptive Harness Framework](project_adaptive_harness.md) — three-tier calibration, 24-task plan shipped on feat/adaptive-harness-framework
 

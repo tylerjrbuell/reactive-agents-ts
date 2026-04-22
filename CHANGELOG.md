@@ -6,6 +6,123 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 
 ---
 
+## [0.10.0] — 2026-04-22
+
+### Highlights
+
+v0.10.0 ships the **Adaptive Tool Calling System** — a four-layer closed-loop pipeline that makes local models (Ollama, local LLMs) dramatically more reliable by normalizing how they express tool intent before execution. It adds a full **Reactive Intelligence dispatcher** with 6 intervention handlers, a production-grade **Calibration system** with community profiles and a local observations store, and **Benchmark Suite v2** with 5 competitor runners and a CI drift gate. Cortex Studio received its largest-ever update with Beacon, Mission Control, Lab, and living skills. 27 packages total.
+
+### Breaking Changes
+
+None. All existing `ReactiveAgents.create().with*()` builder chains continue to work unchanged. New fields on `ModelCalibrationSchema` (`toolCallDialect`, `knownToolAliases`, `knownParamAliases`) default to `"none"` / empty on decode — existing calibration files are forward-compatible.
+
+### New Features
+
+#### Adaptive Tool Calling System (`@reactive-agents/tools`, `@reactive-agents/reactive-intelligence`, `@reactive-agents/llm-provider`)
+
+- **`ToolCallingDriver` interface** — `NativeFCDriver` (thin passthrough for FC-capable models) + `TextParseDriver` (3-tier cascading parse pipeline for models that struggle with native FC)
+- **`HealingPipeline`** — 4-stage normalizer that fires on every tool call regardless of driver: `ToolNameHealer` (alias map + edit-distance fuzzy match), `ParamNameHealer` (per-tool alias map + edit-distance), `PathResolver` (relative path → sandbox CWD, `~/` expansion), `TypeCoercer` (string→number/boolean coercion)
+- **FC Calibration probe** — 5-dimension battery (tool name accuracy, param accuracy, type compliance, required param completeness, multi-tool selection) produces `fcCapabilityScore` 0–1; routes model to `NativeFCDriver` (≥0.80) or `TextParseDriver` (<0.80)
+- **`ToolCallObservation` schema** — records per-call: attempted vs resolved names/params, which healing stages fired, parse tier used, success/error
+- **Alias accumulation with frequency gate** — aliases confirmed ≥3 times are promoted to `CalibrationStore`; prevents noise from one-off hallucinations
+- **`ExperienceSummary` materialization** — `toolGuidance` hook now reads concrete patterns ("for `file-read`, use `path` not `input` — confirmed 12 times") instead of generic reminders
+- **`StallDetector`** (`@reactive-agents/reactive-intelligence`) — detects content-level stalls via Jaccard similarity + tier-adaptive iteration window; escalates: nudge → early-stop
+- **`HarnessHarmDetector`** (`@reactive-agents/reactive-intelligence`) — circuit-breaks RI interventions when the harness is net-negative (high intervention count + low tool success rate + task failure); re-evaluates after 10 clean runs
+
+#### Reactive Intelligence Dispatcher (`@reactive-agents/reactive-intelligence`)
+
+- **6 intervention handlers** fully wired and registered: `early-stop`, `temp-adjust`, `switch-strategy`, `context-compress`, `tool-inject`, `skill-activate`
+- **`tool-failure-streak` evaluator** — detects repeated tool call failures; dispatches redirect + nudge
+- **Escalating redirect handler** — soft nudge on first fire, hard redirect on second; tracks nudge effectiveness via `interventionResponseRate`
+- **AUC validation** — `validate-entropy.ts` computes dual-signal AUC (entropy + dispatch count) to confirm entropy discriminates failure
+
+#### Calibration System (`@reactive-agents/reactive-intelligence`, `@reactive-agents/llm-provider`)
+
+- **Community profile HTTP client** — fetches `api.reactiveagents.dev/v1/profiles/:modelId` with 24h TTL cache; returns `undefined` on network failure (non-fatal)
+- **Atomic observations store** — rolling 50-run window per model; `appendObservation()` + `loadObservations()` with file-level locking
+- **Three-tier resolver** — shipped prior → community profile → local observations, each tier refining the previous
+- **`resolveModelCalibrationAsync()`** — async variant with optional community fetch; falls back gracefully
+- **`classifierReliability`** — derived from false-positive rate; `"low"` skips the classifier LLM call entirely
+- **`toolCallDialect`**, **`knownToolAliases`**, **`knownParamAliases`** added to `ModelCalibrationSchema`
+
+#### Benchmark Suite v2 (`@reactive-agents/benchmarks`)
+
+- **10 real-world tasks** with fixture generators (web research, code generation, data transformation, reasoning, multi-step orchestration)
+- **9-variant ablation** (`ABLATION_VARIANTS`) — bare-llm, ra-core, ra-full, ra-memory, ra-guardrails, and per-handler variants
+- **5 competitor runners** — LangChain, Vercel AI SDK, OpenAI Agents, Mastra, LlamaIndex
+- **4 pre-built sessions** — regression-gate, real-world-full, competitor-comparison, local-models
+- **CI drift gate** (`ci.ts`) — baseline management, `--ci` flag fails build on regression
+- **`judge.ts`** — LLM-as-judge scoring with `scoreTask()`, `computeReliability()`, verifiable dimensions
+
+#### Cortex Studio (`@reactive-agents/cortex`)
+
+- **Beacon** (renamed from Mission Control) — live agent canvas with radar-icon navigation
+- **Thalamus** (renamed from Runs) — run history with sub-agent hierarchy visualization
+- **Lab** — tool workshop, MCP registry, agent builder with model catalog and Ollama auto-detection
+- **Skills tab** — bridges SQLite skill catalog with `withSkills()` paths and evolution
+- **Chat workspace** — streaming chat with full strategy/verification/synthesis/persona controls
+- **Persisted chat sessions** — server-side SQLite storage with message history
+- **MCP import/export** — Cursor/Claude Desktop JSON config import, registry CRUD
+- **Memory API** (`GET /api/memory`) — episodic entries, semantic lines, procedural skills
+- **Run messages tab** — renders raw LLM conversation thread per iteration
+- **Sub-agent hierarchy** — visual tree of parent→child agent relationships
+
+#### New Packages
+
+- **`@reactive-agents/scenarios`** — scenario library with 5 pre-built benchmarks; `runScenario()` + `runCounterfactual()` utilities
+- **`@reactive-agents/trace`** — `TraceRecorderService` with JSONL persistence; `TraceBridgeLayer` subscribes EventBus events; `loadTrace()` + `traceStats()` utilities; `expectTrace` assertion DSL for tests
+
+#### Runtime Builder (`@reactive-agents/runtime`)
+
+- **`.withMinIterations(n)`** — minimum iterations before final-answer is allowed
+- **`.withVerificationStep({ mode, prompt })`** — reflect or loop verification after initial answer
+- **`.withProgressCheckpoint({ every, autoResume })`** — persist partial state every N iterations
+- **`.withTaskContext(ctx)`** — inject background key-value pairs into reasoning context
+- **`.withCalibration()`** — loads model calibration and routes `ToolCallingDriver`
+- **`.withTerminalTools()`** — registers shell-execute with framework defaults
+- **`.withCustomTermination()`**, **`.withOutputValidator()`** — post-think hooks
+
+#### Reasoning (`@reactive-agents/reasoning`)
+
+- **Parallel tool batching enabled by default** — `maxBatch: 4` in reactive strategy; parallel-safe tool allowlist expanded
+- **Context pressure hard gate** — narrows available tools to `final-answer` only when token budget >95% exhausted
+- **Tier-aware harness** — context profiles, termination oracle, auto-checkpoint, output synthesis pipeline
+- **Single-channel guidance** — 8 USER message injections converted to `pendingGuidance` (reduces message thread noise)
+- **Quantified required-tool tracking** — classifier emits `minCalls`, gate + gating enforce counts with N/M progress hints
+- **Evidence grounding** (`guardEvidenceGrounding`) — wired into think-guards chain
+
+#### CLI Built-in Tools (`@reactive-agents/tools`)
+
+- **`git-cli`**, **`gh-cli`**, **`gws-cli`** — shell-backed CLI tool skills usable as agent tools
+- **`rax trace inspect`** + **`rax trace compare`** — subcommands for inspecting and diffing trace files
+- **`crypto-price`** — CoinGecko free-tier price skill, no API key required
+- **Serper.dev** added as third web-search provider
+
+#### Testing (`@reactive-agents/testing`)
+
+- **`expectTrace`** assertion DSL — verify span sequences, event presence, and tool call patterns
+- **`runScenario()`** + **`runCounterfactual()`** — structured scenario execution with counterfactual comparison
+
+### Bug Fixes
+
+- Fixed `ToolCallingDriver` routing — uncalibrated models now default to `NativeFCDriver` (not `TextParseDriver`) to prevent silent regressions on calibrated frontier models
+- Fixed permanently-failed required tools blocking strategy handoffs — pruned from `requiredTools` on switch
+- Fixed Gemini compatibility — array-type tool parameters now include `items` field
+- Fixed status renderer firing in test environments (`NODE_ENV=test`) — was causing TTY escape codes in test output
+- Fixed RI escalation gate threshold (`>= 2 / <= 1`) — log is pre-populated before dispatch fires
+- Fixed stall detector edge cases — empty strings return 0 similarity (not 1)
+- Fixed `HealingPipeline` returning mutable actions array — now sealed as `readonly` before return
+- Fixed `allToolSchemas` not being passed to `HealingPipeline` — enables fuzzy match beyond pruned context
+
+### Internal / Architecture
+
+- Turborepo integration — 34s → 0.18s warm build; false circular dependency between `a2a` and `tools` removed
+- `ModelCalibrationSchema` extended with 9 new fields; all backward-compatible via `optionalWith` defaults
+- `ToolCallingDriver` is the sole seam between calibration routing and kernel phases — kernel phases (`think.ts`, `act.ts`, `context-builder.ts`) not modified
+- `ExperienceStore.query()` dead loop closed — results now materialized into `ExperienceSummary` and consumed by `toolGuidance` hook
+
+---
+
 ## [0.8.5] — 2026-03-28
 
 ### Added

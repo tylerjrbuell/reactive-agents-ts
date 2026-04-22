@@ -28,7 +28,7 @@
     "@reactive-agents/a2a": "0.9.0",
     "@reactive-agents/health": "0.9.0",
     "@reactive-agents/reactive-intelligence": "0.9.0",
-    "@reactive-agents/trace": "workspace:*"
+    "@reactive-agents/trace": "0.10.0"
   },
   "devDependencies": {
     "typescript": "^5.7.0",
@@ -56,7 +56,7 @@
       "default": "./dist/index.js"
     }
   },
-  "description": "Runtime for Reactive Agents \u2014 ExecutionEngine, ReactiveAgentBuilder, and createRuntime",
+  "description": "Runtime for Reactive Agents — ExecutionEngine, ReactiveAgentBuilder, and createRuntime",
   "homepage": "https://docs.reactiveagents.dev/",
   "bugs": {
     "url": "https://github.com/tylerjrbuell/reactive-agents-ts/issues"

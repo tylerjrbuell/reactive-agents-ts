@@ -24,8 +24,9 @@ export async function runBench(argv: string[]) {
   const output = getArg("--output");
   const timeoutArg = getArg("--timeout");
   const timeoutMs = timeoutArg ? parseInt(timeoutArg, 10) * 1000 : undefined;
+  const logLevel = (getArg("--log-level") ?? "progress") as "silent" | "progress" | "verbose";
 
-  const report = await runBenchmarks({ provider, model, tiers, timeoutMs });
+  const report = await runBenchmarks({ provider, model, tiers, timeoutMs, logLevel });
 
   if (output) {
     let finalData: any = { runs: [report] };

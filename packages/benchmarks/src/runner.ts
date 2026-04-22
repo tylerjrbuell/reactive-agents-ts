@@ -38,6 +38,8 @@ export interface RunnerOptions {
   readonly concurrency?: number;
   /** Per-task timeout in milliseconds (default: 120_000 — 2 minutes). */
   readonly timeoutMs?: number;
+  /** Log level: "silent" = no output; "progress" = progress bar & results only; "verbose" = all agent details (default: "progress"). */
+  readonly logLevel?: "silent" | "progress" | "verbose";
 }
 
 /** Default model per provider — cost-efficient but capable. */
@@ -69,6 +71,7 @@ const runTask = async (
   provider: ProviderName,
   model: string,
   timeoutMs: number,
+  logLevel: "silent" | "progress" | "verbose",
 ): Promise<TaskResult> => {
   const start = performance.now();
 
@@ -130,7 +133,35 @@ const runTask = async (
           timeoutMs,
         ),
       );
-      agentResult = await Promise.race([agent.run(task.prompt), timeoutPromise]);
+      // Suppress agent output in silent and progress modes; show everything in verbose
+      let agentResult2: Awaited<ReturnType<typeof agent.run>> | undefined;
+      if (logLevel !== "verbose") {
+        // Suppress console and stdout in both silent and progress modes
+        const consoleLog = console.log;
+        const consoleError = console.error;
+        const consoleWarn = console.warn;
+        const consoleInfo = console.info;
+        const consoleDebug = console.debug;
+        const stdoutWrite = process.stdout.write.bind(process.stdout);
+
+        console.log = console.error = console.warn = console.info = console.debug = () => {};
+        process.stdout.write = (() => true) as any;
+
+        try {
+          agentResult2 = await Promise.race([agent.run(task.prompt), timeoutPromise]);
+        } finally {
+          console.log = consoleLog;
+          console.error = consoleError;
+          console.warn = consoleWarn;
+          console.info = consoleInfo;
+          console.debug = consoleDebug;
+          process.stdout.write = stdoutWrite;
+        }
+      } else {
+        // In verbose mode, allow agent to run with full output
+        agentResult2 = await Promise.race([agent.run(task.prompt), timeoutPromise]);
+      }
+      agentResult = agentResult2;
     } catch (error) {
       const durationMs = performance.now() - start;
       await agent.dispose();
@@ -313,6 +344,22 @@ export const runBenchmarks = async (
 
   const resolvedModel = options.model ?? defaultModel[options.provider] ?? "default";
   const timeoutMs = options.timeoutMs ?? 300_000;
+  const logLevel = options.logLevel ?? "progress";
+
+  // Control cortex logging based on log level
+  const prevCortexLog = process.env.CORTEX_LOG;
+  if (logLevel === "silent") {
+    process.env.CORTEX_LOG = "off";
+  } else if (logLevel === "progress") {
+    process.env.CORTEX_LOG = "error";  // Only show errors, suppress info/debug
+  }
+  // For "verbose", leave CORTEX_LOG unchanged (use default or user setting)
+
+  const log = (...args: any[]) => {
+    if (logLevel !== "silent") {
+      console.log(...args);
+    }
+  };
 
   // ── ANSI color codes (violet #8b5cf6, cyan #06b6d4, brand palette) ──
   const V = "\x1b[38;2;139;92;246m";  // Violet
@@ -324,18 +371,18 @@ export const runBenchmarks = async (
   const B = "\x1b[1m";                // Bold
   const X = "\x1b[0m";                // Reset
 
-  console.log(`\n  ${V}╔══════════════════════════════════════════════════════╗${X}`);
-  console.log(`  ${V}║${X}   ${B}${C}Reactive Agents${X} ${D}Benchmark Suite${X}                    ${V}║${X}`);
-  console.log(`  ${V}╠══════════════════════════════════════════════════════╣${X}`);
-  console.log(`  ${V}║${X}  ${D}Provider${X} ${C}${options.provider.padEnd(42)}${X}${V}║${X}`);
-  console.log(`  ${V}║${X}  ${D}Model${X}    ${C}${resolvedModel.padEnd(42)}${X}${V}║${X}`);
-  console.log(`  ${V}║${X}  ${D}Tasks${X}    ${C}${String(tasks.length).padEnd(42)}${X}${V}║${X}`);
-  console.log(`  ${V}║${X}  ${D}Timeout${X}  ${C}${String(timeoutMs / 1000 + "s").padEnd(42)}${X}${V}║${X}`);
-  console.log(`  ${V}╚══════════════════════════════════════════════════════╝${X}\n`);
+  log(`\n  ${V}╔══════════════════════════════════════════════════════╗${X}`);
+  log(`  ${V}║${X}   ${B}${C}Reactive Agents${X} ${D}Benchmark Suite${X}                    ${V}║${X}`);
+  log(`  ${V}╠══════════════════════════════════════════════════════╣${X}`);
+  log(`  ${V}║${X}  ${D}Provider${X} ${C}${options.provider.padEnd(42)}${X}${V}║${X}`);
+  log(`  ${V}║${X}  ${D}Model${X}    ${C}${resolvedModel.padEnd(42)}${X}${V}║${X}`);
+  log(`  ${V}║${X}  ${D}Tasks${X}    ${C}${String(tasks.length).padEnd(42)}${X}${V}║${X}`);
+  log(`  ${V}║${X}  ${D}Timeout${X}  ${C}${String(timeoutMs / 1000 + "s").padEnd(42)}${X}${V}║${X}`);
+  log(`  ${V}╚══════════════════════════════════════════════════════╝${X}\n`);
 
   if (options.provider === "test") {
-    console.log(`  ${Y}!${X}  ${D}Using 'test' provider — no real LLM calls will be made.${X}`);
-    console.log(`  ${Y}!${X}  ${D}For real-world results, use: --provider anthropic --model claude-haiku-4-5${X}\n`);
+    log(`  ${Y}!${X}  ${D}Using 'test' provider — no real LLM calls will be made.${X}`);
+    log(`  ${Y}!${X}  ${D}For real-world results, use: --provider anthropic --model claude-haiku-4-5${X}\n`);
   }
 
   const results: TaskResult[] = [];
@@ -378,6 +425,8 @@ export const runBenchmarks = async (
 
   // Write a progress line that gets overwritten by the next write
   const writeProgress = (done: number, total: number, label?: string) => {
+    if (logLevel === "silent") return;
+    // Show progress in both "progress" and "verbose" modes
     const base = progressLine(done, total);
     const baseLen = visLen(base);
     // Truncate task label to prevent line wrapping
@@ -395,7 +444,7 @@ export const runBenchmarks = async (
     const task = tasks[i];
     writeProgress(i, tasks.length, `${task.tier} · ${task.name}`);
 
-    const result = await runTask(task, options.provider, resolvedModel, timeoutMs);
+    const result = await runTask(task, options.provider, resolvedModel, timeoutMs, logLevel);
     results.push(result);
 
     if (result.status === "pass") passCount++;
@@ -412,23 +461,25 @@ export const runBenchmarks = async (
     const tier = `${tierColor(task.tier)}${task.tier.padEnd(8)}${X}`;
 
     // Clear progress line, print result
-    process.stdout.write(`\x1b[2K\r`);
-    console.log(`  ${statusIcon} ${tier} ${task.name.padEnd(48)} ${D}${latency}${X}${tokenInfo}`);
-    if (result.status === "error") {
-      console.log(`    ${R}↳${X} ${D}${result.error?.slice(0, 100)}${X}`);
-    } else if (result.status === "fail") {
-      console.log(`    ${Y}↳${X} ${D}Expected pattern not found in output${X}`);
+    if (logLevel !== "silent") {
+      process.stdout.write(`\x1b[2K\r`);
+      log(`  ${statusIcon} ${tier} ${task.name.padEnd(48)} ${D}${latency}${X}${tokenInfo}`);
+      if (result.status === "error") {
+        log(`    ${R}↳${X} ${D}${result.error?.slice(0, 100)}${X}`);
+      } else if (result.status === "fail") {
+        log(`    ${Y}↳${X} ${D}Expected pattern not found in output${X}`);
+      }
     }
   }
 
   // Final completed progress bar
-  console.log(`\n${progressLine(tasks.length, tasks.length)}`);
-  console.log(`  ${G}✨${X} ${B}All ${tasks.length} tasks completed in ${((performance.now() - suiteStart) / 1000).toFixed(1)}s${X}`);
+  log(`\n${progressLine(tasks.length, tasks.length)}`);
+  log(`  ${G}✨${X} ${B}All ${tasks.length} tasks completed in ${((performance.now() - suiteStart) / 1000).toFixed(1)}s${X}`);
 
-  console.log(`\n  ${D}Measuring framework overhead...${X}`);
+  log(`\n  ${D}Measuring framework overhead...${X}`);
   const overhead = measureOverhead();
   for (const m of overhead) {
-    console.log(`  ${C}⏱${X}  ${m.label.padEnd(32)} ${D}${m.durationMs.toFixed(3)}ms avg (${m.samples} samples)${X}`);
+    log(`  ${C}⏱${X}  ${m.label.padEnd(32)} ${D}${m.durationMs.toFixed(3)}ms avg (${m.samples} samples)${X}`);
   }
 
   const summary = buildSummary(results);
@@ -440,30 +491,37 @@ export const runBenchmarks = async (
   const filledWidth = Math.round((summary.passed / summary.totalTasks) * barWidth);
   const bar = `${G}${"█".repeat(filledWidth)}${X}${D}${"░".repeat(barWidth - filledWidth)}${X}`;
 
-  console.log(`\n  ${V}┌─────────────────────────────────────────────────────┐${X}`);
-  console.log(`  ${V}│${X}  ${B}${C}Results${X}                                             ${V}│${X}`);
-  console.log(`  ${V}├─────────────────────────────────────────────────────┤${X}`);
-  console.log(`  ${V}│${X}  ${bar} ${passColor}${B}${summary.passed}/${summary.totalTasks}${X} ${D}(${passRate}%)${X}   ${V}│${X}`);
-  console.log(`  ${V}│${X}                                                     ${V}│${X}`);
+  log(`\n  ${V}┌─────────────────────────────────────────────────────┐${X}`);
+  log(`  ${V}│${X}  ${B}${C}Results${X}                                             ${V}│${X}`);
+  log(`  ${V}├─────────────────────────────────────────────────────┤${X}`);
+  log(`  ${V}│${X}  ${bar} ${passColor}${B}${summary.passed}/${summary.totalTasks}${X} ${D}(${passRate}%)${X}   ${V}│${X}`);
+  log(`  ${V}│${X}                                                     ${V}│${X}`);
 
   const durationStr = summary.totalDurationMs >= 1000
     ? `${(summary.totalDurationMs / 1000).toFixed(1)}s total, ${(summary.avgLatencyMs / 1000).toFixed(1)}s avg`
     : `${summary.totalDurationMs.toFixed(0)}ms total`;
-  console.log(`  ${V}│${X}  ${D}Duration${X}  ${C}${durationStr.padEnd(40)}${X} ${V}│${X}`);
-  console.log(`  ${V}│${X}  ${D}Tokens${X}    ${C}${String(summary.totalTokens.toLocaleString()).padEnd(40)}${X} ${V}│${X}`);
-  console.log(`  ${V}│${X}  ${D}Cost${X}      ${C}${"$" + summary.totalCost.toFixed(4)}${X}${" ".repeat(Math.max(0, 39 - ("$" + summary.totalCost.toFixed(4)).length))} ${V}│${X}`);
-  console.log(`  ${V}└─────────────────────────────────────────────────────┘${X}\n`);
+  log(`  ${V}│${X}  ${D}Duration${X}  ${C}${durationStr.padEnd(40)}${X} ${V}│${X}`);
+  log(`  ${V}│${X}  ${D}Tokens${X}    ${C}${String(summary.totalTokens.toLocaleString()).padEnd(40)}${X} ${V}│${X}`);
+  log(`  ${V}│${X}  ${D}Cost${X}      ${C}${"$" + summary.totalCost.toFixed(4)}${X}${" ".repeat(Math.max(0, 39 - ("$" + summary.totalCost.toFixed(4)).length))} ${V}│${X}`);
+  log(`  ${V}└─────────────────────────────────────────────────────┘${X}\n`);
 
   // ── Per-tier breakdown ──
   const tiers: Tier[] = ["trivial", "simple", "moderate", "complex", "expert"];
-  console.log(`  ${D}Per-tier breakdown:${X}`);
+  log(`  ${D}Per-tier breakdown:${X}`);
   for (const tier of tiers) {
     const tierData = summary.byTier[tier];
     if (tierData.total === 0) continue;
     const pct = Math.round((tierData.passed / tierData.total) * 100);
     const avgStr = tierData.avgMs >= 1000 ? `${(tierData.avgMs / 1000).toFixed(1)}s` : `${tierData.avgMs.toFixed(0)}ms`;
     const pctColor = pct >= 80 ? G : pct >= 50 ? Y : R;
-    console.log(`  ${tierColor(tier)}  ${tier.padEnd(10)}${X} ${pctColor}${tierData.passed}/${tierData.total}${X} ${D}(${pct}%)${X}  ${D}avg ${avgStr}${X}`);
+    log(`  ${tierColor(tier)}  ${tier.padEnd(10)}${X} ${pctColor}${tierData.passed}/${tierData.total}${X} ${D}(${pct}%)${X}  ${D}avg ${avgStr}${X}`);
+  }
+
+  // Restore previous cortex log level
+  if (prevCortexLog !== undefined) {
+    process.env.CORTEX_LOG = prevCortexLog;
+  } else {
+    delete process.env.CORTEX_LOG;
   }
 
   return {

@@ -12,10 +12,10 @@ Works on local Ollama models (8B+) through frontier APIs — same code, same fea
 
 |                             |                                                               |
 | --------------------------- | ------------------------------------------------------------- |
-| **25 composable packages**  | Enable exactly what you need, no hidden coupling              |
+| **27 composable packages**  | Enable exactly what you need, no hidden coupling              |
 | **6 LLM providers**         | Anthropic, OpenAI, Gemini, Ollama (local), LiteLLM 40+, Test  |
 | **5 reasoning strategies**  | ReAct · Reflexion · Plan-Execute · Tree-of-Thought · Adaptive |
-| **~4,150 tests · ~460 files** | Production-grade confidence                                   |
+| **~4,350 tests · ~490 files** | Production-grade confidence                                   |
 | **Cortex Studio**           | Live agent canvas, entropy charts, debrief UI, agent builder  |
 | **Effect-TS end to end**    | Compile-time type safety, zero `any`, explicit tagged errors  |
 
@@ -736,7 +736,7 @@ See the [comparison table](#comparison). The key differences are: full Effect-TS
 ```bash
 bun install              # Install dependencies
 bun test                 # Run full test suite (~4,150 tests, ~460 files)
-bun run build            # Build all packages (25 packages, ESM + DTS)
+bun run build            # Build all packages (27 packages, ESM + DTS)
 ```
 
 ## Environment Variables
