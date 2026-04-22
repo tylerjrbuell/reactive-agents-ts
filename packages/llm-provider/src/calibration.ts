@@ -14,6 +14,7 @@ import { Schema } from "effect";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import type { ProviderAdapter } from "./adapter.js";
+import type { ToolCallObservation } from "@reactive-agents/memory";
 
 /**
  * Structural shape for ContextProfile fields that calibration may override.
@@ -243,8 +244,6 @@ export function confirmedAliases(state: AliasObservationState): Record<string, s
 
 // ── Experience Summary ────────────────────────────────────────────────────────
 
-import type { ToolCallObservation } from "@reactive-agents/memory";
-
 export interface ExperienceSummary {
   readonly topWorkingParamPatterns: ReadonlyArray<{
     readonly tool: string;
@@ -286,7 +285,7 @@ export function materializeExperienceSummary(
   const topWorkingParamPatterns = [...successByTool.entries()].map(([tool, params]) => ({
     tool,
     params: params[0] ?? {},
-    successRate: 1,
+    successRate: 1, // always 1.0 — only succeeded observations are stored here
     occurrences: params.length,
   }));
 

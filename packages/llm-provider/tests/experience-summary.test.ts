@@ -36,6 +36,8 @@ describe("materializeExperienceSummary", () => {
     ]
     const summary = materializeExperienceSummary(observations)
     expect(summary.topErrorPatterns.some((e) => e.tool === "file-read")).toBe(true)
+    const errorEntry = summary.topErrorPatterns.find((e) => e.tool === "file-read")
+    expect(errorEntry?.recovery).toContain("path")
   })
 })
 
@@ -47,7 +49,7 @@ describe("formatToolGuidanceFromSummary", () => {
   it("includes concrete param guidance from patterns", () => {
     const summary = {
       topWorkingParamPatterns: [
-        { tool: "file-read", params: { path: "/example.ts" }, successRate: 0.9, occurrences: 5 }
+        { tool: "file-read", params: { path: "/example.ts" }, successRate: 1, occurrences: 5 }
       ],
       topErrorPatterns: [
         { tool: "file-read", error: "Unknown parameter: input", recovery: "Use `path` not `input`", occurrences: 3 }
@@ -57,5 +59,16 @@ describe("formatToolGuidanceFromSummary", () => {
     const guidance = formatToolGuidanceFromSummary(summary, ["file-read"])
     expect(guidance).toContain("path")
     expect(guidance).toContain("file-read")
+  })
+
+  it("returns empty string when tool not in active list", () => {
+    const summary = {
+      topWorkingParamPatterns: [],
+      topErrorPatterns: [
+        { tool: "file-read", error: "err", recovery: "fix", occurrences: 1 }
+      ],
+      lastUpdated: new Date().toISOString(),
+    }
+    expect(formatToolGuidanceFromSummary(summary, ["web-search"])).toBe("")
   })
 })

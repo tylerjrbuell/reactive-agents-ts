@@ -230,6 +230,7 @@ function buildIterationSystemPrompt(
     toolNames: availableTools.map((t) => t.name),
     requiredTools: input.requiredTools ?? [],
     tier: profile.tier ?? "mid",
+    // TODO: wire real ExperienceSummary once ToolCallObservation records are read from store
     experienceSummary: undefined,
   });
   sections.push(
