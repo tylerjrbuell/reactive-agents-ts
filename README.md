@@ -4,18 +4,16 @@
 
 # Reactive Agents — TypeScript AI Agent Framework
 
-**The open-source TypeScript agent framework built for control, not magic.**
-
 Run your first agent in 60 seconds. Scale up by composing layers — add reasoning loops, persistent 4-tier memory, production guardrails, cost routing, and a live local studio one `.with()` call at a time.
 
-Works on local Ollama models (8B+) through frontier APIs — same code, same features. Built on Effect-TS for compile-time type safety at every boundary. No `any`. No hidden magic.
+Works on local Ollama models (8B+) through frontier APIs — same code, same features. Built on Effect-TS for compile-time type safety at every boundary. No `any`.
 
 |                             |                                                               |
 | --------------------------- | ------------------------------------------------------------- |
-| **27 composable packages**  | Enable exactly what you need, no hidden coupling              |
+| **31 composable packages**  | Enable exactly what you need, no hidden coupling              |
 | **6 LLM providers**         | Anthropic, OpenAI, Gemini, Ollama (local), LiteLLM 40+, Test  |
 | **5 reasoning strategies**  | ReAct · Reflexion · Plan-Execute · Tree-of-Thought · Adaptive |
-| **~4,350 tests · ~490 files** | Production-grade confidence                                   |
+| **4,349 tests · 497 files** | Production-grade confidence                                   |
 | **Cortex Studio**           | Live agent canvas, entropy charts, debrief UI, agent builder  |
 | **Effect-TS end to end**    | Compile-time type safety, zero `any`, explicit tagged errors  |
 
@@ -47,7 +45,7 @@ Most AI agent frameworks are dynamically typed, monolithic, and opaque. They ass
 | **Single reasoning mode** | 5 strategies (ReAct, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive)                                            |
 | **Unsafe by default**     | Guardrails block injection/PII/toxicity before the LLM sees input                                                   |
 | **No cost control**       | Complexity router picks the cheapest capable model; budget enforcement at 4 levels                                  |
-| **Poor DX**               | Builder API chains capabilities in one place; great frameworks disappear, ours feels like superpowers               |
+| **Poor DX**               | Builder API chains capabilities in one place                                                                        |
 
 ## Cortex Studio
 
@@ -97,7 +95,7 @@ A full-featured local studio for live debugging — start it with `.withCortex()
 -   **Lightweight composition** -- `agentFn()` lazy agent primitives, `pipe()` sequential chains, `parallel()` concurrent fan-out, `race()` first-to-complete — all composable
 -   **Dynamic tool registration** -- `agent.registerTool()` / `agent.unregisterTool()` for runtime tool management on live agents
 -   **Web framework integration** — `@reactive-agents/react` (`useAgentStream`, `useAgent`), `@reactive-agents/vue` composables, `@reactive-agents/svelte` stores — consume `AgentStream.toSSE()` from Next.js, SvelteKit, Nuxt, or any SSE-capable server
--   **~4,150 tests** across ~460 files
+-   **4,349 tests** across 497 files
 
 ## Quick Start
 
@@ -359,7 +357,7 @@ How Reactive Agents compares to other TypeScript agent frameworks on shipped, wo
 | Agent-as-data config          |       Yes       |      --      |      --       |   --    |
 | Functional composition        |       Yes       |     Yes      |      --       |   --    |
 | Dynamic tool registration     |       Yes       |     Yes      |      --       |   --    |
-| Test suite                    |  ~4,150 tests   |      --      |      --       |   --    |
+| Test suite                    |  4,349 tests    |      --      |      --       |   --    |
 
 ## Use Cases
 
@@ -713,30 +711,12 @@ const budget = createBudgetExhaustedScenario() // agent + prompt that exhausts b
 const maxIter = createMaxIterationsScenario() // agent + prompt that hits max iterations
 ```
 
-## FAQ
-
-### Which models and providers are supported?
-
-Reactive Agents supports 6 providers: Anthropic, OpenAI, Google Gemini, Ollama (local models), LiteLLM (40+ models via proxy), and a Test provider for deterministic offline testing via `withTestScenario()`.
-
-### Is this framework production-ready?
-
-Yes -- it includes guardrails, budget controls, auditability, observability, Ed25519 identity, and composable service layers for testable deployments. ~4,150 tests across ~460 files.
-
-### Can I run fully local agents?
-
-Yes -- use Ollama with local models plus context profiles tuned for local inference. The `"local"` tier optimizes prompts and compaction for small models (<=14b parameters).
-
-### How does this compare to LangChain or Vercel AI SDK?
-
-See the [comparison table](#comparison). The key differences are: full Effect-TS type safety, composable layers instead of a monolithic runtime, 5 reasoning strategies with adaptive selection, and model-adaptive context profiles that help local models perform far beyond naive prompting.
-
 ## Development
 
 ```bash
 bun install              # Install dependencies
-bun test                 # Run full test suite (~4,150 tests, ~460 files)
-bun run build            # Build all packages (27 packages, ESM + DTS)
+bun test                 # Run full test suite (4,349 tests, 497 files)
+bun run build            # Build all packages (31 packages, ESM + DTS)
 ```
 
 ## Environment Variables
