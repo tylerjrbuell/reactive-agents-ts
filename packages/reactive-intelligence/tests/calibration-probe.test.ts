@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test"
-import { scoreFCResponse, computeFCCapabilityScore, selectToolCallDialect } from "../src/calibration-probe.js"
+import { scoreFCResponse, computeFCCapabilityScore, selectToolCallDialect, extractProbeAliases } from "../src/calibration-probe.js"
 
 describe("scoreFCResponse", () => {
   const schema = {
@@ -82,5 +82,17 @@ describe("selectToolCallDialect", () => {
   it("score < 0.8 selects text-parse", () => {
     expect(selectToolCallDialect(0.65)).toBe("text-parse")
     expect(selectToolCallDialect(0.0)).toBe("text-parse")
+  })
+})
+
+describe("extractProbeAliases", () => {
+  it("maps attempted tool name to expected tool name", () => {
+    const result = extractProbeAliases([{
+      attempted: { path: "/foo.ts" },
+      schema: { name: "file-read", description: "", parameters: [{ name: "path", type: "string", required: true }] },
+      toolAttempted: "file_read",
+      toolExpected: "file-read",
+    }])
+    expect(result.toolAliases["file_read"]).toBe("file-read")
   })
 })
