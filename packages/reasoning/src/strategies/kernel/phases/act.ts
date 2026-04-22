@@ -257,11 +257,14 @@ export function handleActing(
     // provider-parsed calls already stored in state.meta.pendingNativeToolCalls.
     const pendingNativeCalls = state.meta.pendingNativeToolCalls as readonly ToolCallSpec[] | undefined;
 
+    // Pruned schemas shown to the model — used for extractCalls() to match model context
     const filteredToolSchemas = (input.availableToolSchemas ?? []) as readonly {
       readonly name: string;
       readonly description: string;
       readonly parameters: readonly { readonly name: string; readonly type: string; readonly description?: string; readonly required?: boolean }[];
     }[];
+    // Full registry — used for HealingPipeline so fuzzy name matching works even when a tool was pruned from context
+    const allHealingSchemas = (input.allToolSchemas ?? input.availableToolSchemas ?? []) as typeof filteredToolSchemas;
 
     let pendingCalls: readonly ToolCallSpec[];
     if (context.toolCallingDriver.mode === "text-parse") {
@@ -321,7 +324,7 @@ export function handleActing(
         // so the guard pipeline can produce a meaningful rejection message.
         const healResult = runHealingPipeline(
           rawTc,
-          filteredToolSchemas.map((s) => ({
+          allHealingSchemas.map((s) => ({
             name: s.name,
             description: s.description,
             parameters: s.parameters.map((p) => ({
