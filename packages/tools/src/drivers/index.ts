@@ -8,4 +8,5 @@ export type {
   ToolSchema,
   ToolParamSchema,
 } from "./tool-calling-driver.js"
-// NativeFCDriver and TextParseDriver will be added in Tasks 3 and 8.
+export { NativeFCDriver } from "./native-fc-driver.js"
+// TextParseDriver will be added in Task 8.
