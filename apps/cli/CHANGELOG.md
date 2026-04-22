@@ -1,5 +1,21 @@
 # @reactive-agents/cli
 
+## 0.10.0
+
+### Minor Changes
+
+-   551477d: v0.10.0: Adaptive Tool Calling System, Reactive Intelligence Dispatcher, Calibration System, Benchmark Suite v2, and major Cortex Studio updates.
+
+### Patch Changes
+
+-   Updated dependencies [551477d]
+    -   @reactive-agents/a2a@0.10.0
+    -   @reactive-agents/core@0.10.0
+    -   @reactive-agents/eval@0.10.0
+    -   @reactive-agents/llm-provider@0.10.0
+    -   @reactive-agents/runtime@0.10.0
+    -   @reactive-agents/trace@0.10.1
+
 ## 0.9.0
 
 ### Patch Changes
