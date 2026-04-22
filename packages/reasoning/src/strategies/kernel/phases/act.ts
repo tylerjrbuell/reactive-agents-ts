@@ -22,6 +22,7 @@ import {
   type PulseInput,
   type ToolCallSpec,
   activateSkillHandler,
+  runHealingPipeline,
 } from "@reactive-agents/tools";
 import { makeStep } from "../utils/step-utils.js";
 import { executeNativeToolCall, makeObservationResult, extractObservationFacts } from "../utils/tool-execution.js";
@@ -41,6 +42,20 @@ import { checkToolCall, defaultGuards } from "./guard.js";
 import { META_TOOLS, INTROSPECTION_META_TOOLS } from "../kernel-constants.js";
 
 const REQUIRED_TOOLS_SATISFIED_PREFIX = "Required tool calls are satisfied";
+
+/** Tool names that operate on the filesystem — HealingPipeline will resolve relative paths. */
+const FILE_TOOL_NAMES = new Set(["file-read", "file-write", "code-execute", "shell-execute"]);
+
+/** Extract the text content of the last assistant message from the conversation history. */
+function getLastAssistantText(messages: readonly KernelMessage[]): string {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i];
+    if (msg && msg.role === "assistant") {
+      return typeof msg.content === "string" ? msg.content : "";
+    }
+  }
+  return "";
+}
 
 const emitLog = (event: LogEvent): Effect.Effect<void, never> =>
   Effect.serviceOption(ObservableLogger).pipe(
@@ -236,12 +251,37 @@ export function handleActing(
     const shouldExtract = obsMode === true
       || (obsMode !== false && (profile.tier === "local" || profile.tier === "mid"));
 
-    // ── NATIVE FC ACTING BRANCH ─────────────────────────────────────────────
-    // When the thinking phase stored pendingNativeToolCalls, execute them here
-    // using the structured ToolCallSpec (pre-parsed arguments, no regex repair).
+    // ── ACTING BRANCH ──────────────────────────────────────────────────────────
+    // For text-parse mode: extract tool calls from the last assistant message text
+    // using the TextParseDriver's parse pipeline. For native-fc mode: use the
+    // provider-parsed calls already stored in state.meta.pendingNativeToolCalls.
     const pendingNativeCalls = state.meta.pendingNativeToolCalls as readonly ToolCallSpec[] | undefined;
-    if (pendingNativeCalls && pendingNativeCalls.length > 0) {
-      const normalizedPendingCalls = pendingNativeCalls.map(normalizeToolCallArguments);
+
+    const filteredToolSchemas = (input.availableToolSchemas ?? []) as readonly {
+      readonly name: string;
+      readonly description: string;
+      readonly parameters: readonly { readonly name: string; readonly type: string; readonly description?: string; readonly required?: boolean }[];
+    }[];
+
+    let pendingCalls: readonly ToolCallSpec[];
+    if (context.toolCallingDriver.mode === "text-parse") {
+      const lastAssistantText = getLastAssistantText(state.messages);
+      const extracted = context.toolCallingDriver.extractCalls(lastAssistantText, filteredToolSchemas);
+      const textParsedCalls: readonly ToolCallSpec[] = extracted.map((e, i) => ({
+        id: `text-parse-${state.iteration}-${i}`,
+        name: e.name,
+        arguments: e.arguments,
+      }));
+      // Fall back to pendingNativeToolCalls when text extraction yields nothing —
+      // this handles cases where think.ts populated native calls (e.g. via resolver)
+      // even though the driver is in text-parse mode.
+      pendingCalls = textParsedCalls.length > 0 ? textParsedCalls : (pendingNativeCalls ?? []);
+    } else {
+      pendingCalls = pendingNativeCalls ?? [];
+    }
+
+    if (pendingCalls.length > 0) {
+      const normalizedPendingCalls = pendingCalls.map(normalizeToolCallArguments);
       const newToolsUsed = new Set(state.toolsUsed);
       let allSteps = [...state.steps];
       // Meta-tool dedup tracking — updated per tool call, written to state at the end.
@@ -273,7 +313,31 @@ export function handleActing(
       }
 
       for (let idx = 0; idx < normalizedPendingCalls.length; idx++) {
-        const tc = normalizedPendingCalls[idx]!;
+        const rawTc = normalizedPendingCalls[idx]!;
+
+        // ── HealingPipeline — runs on every call (native-fc and text-parse) ───
+        // Repairs: fuzzy tool name matching, param name aliases, path resolution,
+        // type coercion. If healing fails (unrecognized tool), use the raw call
+        // so the guard pipeline can produce a meaningful rejection message.
+        const healResult = runHealingPipeline(
+          rawTc,
+          filteredToolSchemas.map((s) => ({
+            name: s.name,
+            description: s.description,
+            parameters: s.parameters.map((p) => ({
+              name: p.name,
+              type: p.type,
+              description: p.description,
+              required: p.required,
+            })),
+          })),
+          FILE_TOOL_NAMES,
+          process.cwd(),
+          {},  // knownToolAliases — populated from CalibrationStore in Task 12
+          {},  // knownParamAliases — populated from CalibrationStore in Task 12
+        );
+        const tc = healResult.succeeded ? healResult.call : rawTc;
+
         if (batchFollowers.has(tc.id)) {
           continue;
         }

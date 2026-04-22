@@ -202,6 +202,15 @@ export function handleThinking(
       evidenceGap: pending?.evidenceGap,
     };
 
+    // ── Native FC: convert tool schemas to LLM ToolDefinition format ──────
+    // When the required-tools gate has blocked a tool, narrow the FC tools
+    // parameter to only required (unsatisfied) + meta tools. This forces models
+    // like cogito:14b (which lack tool_choice support) to select the right tool
+    // instead of stubbornly re-selecting a previously successful one.
+    // Uses promptSchemas (classification-pruned) so FC definitions match the
+    // system prompt — the model can only call tools it can actually see.
+    const filteredToolSchemas = buildToolSchemas(state, input, profile, promptSchemas);
+
     const {
       systemPrompt: systemPromptText,
       messages: conversationMessages,
@@ -210,6 +219,25 @@ export function handleThinking(
       systemPromptBody: effectiveSystemPrompt,
       toolElaboration: input.toolElaboration,
     });
+
+    // ── TextParseDriver: inject format instructions into system prompt ────────
+    // When the driver is in text-parse mode (local models that can't reliably emit
+    // FC JSON), append the driver's format guide so the model knows how to express
+    // tool calls as structured text. For native-fc mode, buildPromptInstructions
+    // returns "" so this is a no-op.
+    //
+    // Skip when toolSchemaDetail is "names-only" or "names-and-types" — the profile
+    // has already decided to suppress full descriptions; injecting them via driver
+    // instructions would contradict the profile's intent and expose descriptions the
+    // model shouldn't see.
+    const canInjectDriverInstructions =
+      profile.toolSchemaDetail !== "names-only" && profile.toolSchemaDetail !== "names-and-types";
+    const driverInstructions = canInjectDriverInstructions
+      ? context.toolCallingDriver.buildPromptInstructions(filteredToolSchemas)
+      : "";
+    const systemPromptWithDriver = driverInstructions
+      ? `${systemPromptText}\n\n${driverInstructions}`
+      : systemPromptText;
 
     // ── STREAM (with text delta emission) ──────────────────────────────────
     // Token budget adapts to model tier: frontier models get more room for
@@ -221,15 +249,6 @@ export function handleThinking(
       frontier: 4000,
     };
     const outputMaxTokens = tierMaxTokens[profile.tier] ?? 1500;
-
-    // ── Native FC: convert tool schemas to LLM ToolDefinition format ──────
-    // When the required-tools gate has blocked a tool, narrow the FC tools
-    // parameter to only required (unsatisfied) + meta tools. This forces models
-    // like cogito:14b (which lack tool_choice support) to select the right tool
-    // instead of stubbornly re-selecting a previously successful one.
-    // Uses promptSchemas (classification-pruned) so FC definitions match the
-    // system prompt — the model can only call tools it can actually see.
-    const filteredToolSchemas = buildToolSchemas(state, input, profile, promptSchemas);
     const llmTools = filteredToolSchemas.map((ts) => ({
       name: ts.name,
       description: ts.description,
@@ -258,10 +277,12 @@ export function handleThinking(
 
     const llmStreamEffect = llm.stream({
       messages: conversationMessages,
-      systemPrompt: systemPromptText,
+      systemPrompt: systemPromptWithDriver,
       maxTokens: state.maxOutputTokensOverride ?? outputMaxTokens,
       temperature: temp,
-      ...(llmTools.length > 0 ? { tools: llmTools } : {}),
+      // TextParseDriver: pass empty tools array — constrained providers (Anthropic/OpenAI)
+      // enforce FC when tools are present, which breaks text-parse mode for local models.
+      ...(llmTools.length > 0 && context.toolCallingDriver.mode !== "text-parse" ? { tools: llmTools } : {}),
       ...(wantLogprobs ? { logprobs: true, topLogprobs: 5 } : {}),
     });
 
@@ -493,7 +514,7 @@ export function handleThinking(
     }));
     const userContent = messagesForTrace.map((m) => m.content).join("\n---\n");
     yield* hooks.onThought(state, thought, {
-      system: systemPromptText,
+      system: systemPromptWithDriver,
       user: userContent,
       messages: messagesForTrace,
       rawResponse: rawThought,
@@ -556,8 +577,8 @@ export function handleThinking(
       };
 
       // Use resolveWithDialect to capture which tier fired (native-fc / fenced-json / pseudo-code / etc.)
-      const resolverWithDialect = (resolver as any).resolveWithDialect
-        ? (resolver as any).resolveWithDialect(
+      const resolverWithDialect = resolver.resolveWithDialect
+        ? resolver.resolveWithDialect(
             resolverInput,
             effectiveSchemas.map((ts) => ({
               name: ts.name,

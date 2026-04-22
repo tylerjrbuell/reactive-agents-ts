@@ -148,6 +148,9 @@ export { NativeFCDriver } from "./drivers/native-fc-driver.js"
 export { TextParseDriver } from "./drivers/text-parse-driver.js"
 export type { ToolCallingDriver, ExtractedCall, HealingAction, HealingResult, ParseMode, ToolCallObservation } from "./drivers/tool-calling-driver.js"
 
+// ─── Healing Pipeline ───
+export { runHealingPipeline } from "./healing/healing-pipeline.js"
+
 // ─── Builder ───
 export { ToolBuilder } from "./tool-builder.js";
 
