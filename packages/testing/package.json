@@ -15,7 +15,7 @@
     "@reactive-agents/llm-provider": "0.9.0",
     "@reactive-agents/runtime": "0.9.0",
     "@reactive-agents/tools": "0.9.0",
-    "@reactive-agents/trace": "0.10.0"
+    "@reactive-agents/trace": "0.9.0"
   },
   "devDependencies": {
     "typescript": "^5.7.0",
