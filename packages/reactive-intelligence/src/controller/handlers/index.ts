@@ -1,12 +1,13 @@
-import { earlyStopHandler } from "./early-stop.js"
-import { tempAdjustHandler } from "./temp-adjust.js"
-import { switchStrategyHandler } from "./switch-strategy.js"
-import { contextCompressHandler } from "./context-compress.js"
-import { toolInjectHandler } from "./tool-inject.js"
-import { skillActivateHandler } from "./skill-activate.js"
-import { toolFailureRedirectHandler } from "./tool-failure-redirect.js"
-import { stallDetectorHandler } from "./stall-detector.js"
-import type { InterventionHandler } from "../intervention.js"
+import { earlyStopHandler } from "./early-stop.js";
+import { tempAdjustHandler } from "./temp-adjust.js";
+import { switchStrategyHandler } from "./switch-strategy.js";
+import { contextCompressHandler } from "./context-compress.js";
+import { toolInjectHandler } from "./tool-inject.js";
+import { skillActivateHandler } from "./skill-activate.js";
+import { toolFailureRedirectHandler } from "./tool-failure-redirect.js";
+import { stallDetectorHandler } from "./stall-detector.js";
+import { harnessHarmDetectorHandler } from "./harness-harm-detector.js";
+import type { InterventionHandler } from "../intervention.js";
 
 // Type cast required: TypeScript's contravariant function params prevent
 // InterventionHandler<"specific"> from assigning to InterventionHandler<fullUnion>.
@@ -20,6 +21,7 @@ export const defaultInterventionRegistry: readonly InterventionHandler[] = [
   skillActivateHandler as unknown as InterventionHandler,
   toolFailureRedirectHandler as unknown as InterventionHandler,
   stallDetectorHandler as unknown as InterventionHandler,
-]
+  harnessHarmDetectorHandler as unknown as InterventionHandler,
+];
 
-export { earlyStopHandler, tempAdjustHandler, switchStrategyHandler, contextCompressHandler, toolInjectHandler, skillActivateHandler, toolFailureRedirectHandler, stallDetectorHandler }
+export { earlyStopHandler, tempAdjustHandler, switchStrategyHandler, contextCompressHandler, toolInjectHandler, skillActivateHandler, toolFailureRedirectHandler, stallDetectorHandler, harnessHarmDetectorHandler };
