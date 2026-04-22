@@ -1,6 +1,6 @@
-# @reactive-agents/meta-agent
+# @reactive-agents/trace
 
-## 0.2.0
+## 0.11.0
 
 ### Minor Changes
 
@@ -11,31 +11,4 @@
 
 -   Updated dependencies [551477d]
 -   Updated dependencies [e7f4df9]
-    -   @reactive-agents/health@0.10.0
-    -   reactive-agents@0.10.0
-
-## 0.1.4
-
-### Patch Changes
-
--   Updated dependencies
-    -   @reactive-agents/health@0.9.0
-    -   reactive-agents@0.9.0
-
-## 0.1.3
-
-### Patch Changes
-
--   reactive-agents@0.8.0
-
-## 0.1.2
-
-### Patch Changes
-
--   reactive-agents@0.7.8
-
-## 0.1.1
-
-### Patch Changes
-
--   reactive-agents@0.7.7
+    -   @reactive-agents/core@0.10.0

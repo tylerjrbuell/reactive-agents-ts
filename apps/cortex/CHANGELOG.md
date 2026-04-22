@@ -1,4 +1,4 @@
-# @reactive-agents/meta-agent
+# @reactive-agents/cortex
 
 ## 0.2.0
 
@@ -11,31 +11,11 @@
 
 -   Updated dependencies [551477d]
 -   Updated dependencies [e7f4df9]
-    -   @reactive-agents/health@0.10.0
-    -   reactive-agents@0.10.0
-
-## 0.1.4
-
-### Patch Changes
-
--   Updated dependencies
-    -   @reactive-agents/health@0.9.0
-    -   reactive-agents@0.9.0
-
-## 0.1.3
-
-### Patch Changes
-
--   reactive-agents@0.8.0
-
-## 0.1.2
-
-### Patch Changes
-
--   reactive-agents@0.7.8
-
-## 0.1.1
-
-### Patch Changes
-
--   reactive-agents@0.7.7
+    -   @reactive-agents/core@0.10.0
+    -   @reactive-agents/gateway@0.10.0
+    -   @reactive-agents/llm-provider@0.10.0
+    -   @reactive-agents/memory@0.10.0
+    -   @reactive-agents/observability@0.10.0
+    -   @reactive-agents/reactive-intelligence@0.10.0
+    -   @reactive-agents/runtime@0.10.0
+    -   @reactive-agents/tools@0.10.0
