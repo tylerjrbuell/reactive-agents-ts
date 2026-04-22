@@ -4,7 +4,7 @@ import type { InterventionHandler } from "../intervention.js";
 export function jaccardSimilarity(a: string, b: string): number {
   const tokensA = new Set(a.toLowerCase().split(/\s+/).filter(Boolean));
   const tokensB = new Set(b.toLowerCase().split(/\s+/).filter(Boolean));
-  if (tokensA.size === 0 && tokensB.size === 0) return 1;
+  if (tokensA.size === 0 && tokensB.size === 0) return 0;
   const intersection = [...tokensA].filter((t) => tokensB.has(t)).length;
   const union = new Set([...tokensA, ...tokensB]).size;
   return union === 0 ? 0 : intersection / union;

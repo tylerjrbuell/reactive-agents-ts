@@ -10,6 +10,14 @@ describe("jaccardSimilarity", () => {
     expect(jaccardSimilarity("cat dog bird", "apple orange mango")).toBe(0)
   })
 
+  it("both empty strings return 0.0", () => {
+    expect(jaccardSimilarity("", "")).toBe(0)
+  })
+
+  it("one empty string returns 0.0", () => {
+    expect(jaccardSimilarity("", "hello")).toBe(0)
+  })
+
   it("partial overlap returns value between 0 and 1", () => {
     const sim = jaccardSimilarity("the quick brown fox", "the slow brown bear")
     expect(sim).toBeGreaterThan(0)
