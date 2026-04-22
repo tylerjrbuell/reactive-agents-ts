@@ -241,3 +241,77 @@ export function confirmedAliases(state: AliasObservationState): Record<string, s
   return result;
 }
 
+// ── Experience Summary ────────────────────────────────────────────────────────
+
+import type { ToolCallObservation } from "@reactive-agents/memory";
+
+export interface ExperienceSummary {
+  readonly topWorkingParamPatterns: ReadonlyArray<{
+    readonly tool: string;
+    readonly params: Record<string, unknown>;
+    readonly successRate: number;
+    readonly occurrences: number;
+  }>;
+  readonly topErrorPatterns: ReadonlyArray<{
+    readonly tool: string;
+    readonly error: string;
+    readonly recovery: string;
+    readonly occurrences: number;
+  }>;
+  readonly lastUpdated: string;
+}
+
+export function materializeExperienceSummary(
+  observations: readonly ToolCallObservation[],
+): ExperienceSummary {
+  const successByTool = new Map<string, Array<Record<string, unknown>>>();
+  const errorByTool = new Map<string, Array<{ error: string; healing: string }>>();
+
+  for (const obs of observations) {
+    const tool = obs.toolNameResolved ?? obs.toolNameAttempted;
+    if (obs.succeeded) {
+      const existing = successByTool.get(tool) ?? [];
+      existing.push(obs.paramsResolved);
+      successByTool.set(tool, existing);
+    } else if (obs.errorText) {
+      const existing = errorByTool.get(tool) ?? [];
+      const healing = obs.healingApplied
+        .map((a) => `Use \`${a.to}\` not \`${a.from}\``)
+        .join("; ");
+      existing.push({ error: obs.errorText, healing });
+      errorByTool.set(tool, existing);
+    }
+  }
+
+  const topWorkingParamPatterns = [...successByTool.entries()].map(([tool, params]) => ({
+    tool,
+    params: params[0] ?? {},
+    successRate: 1,
+    occurrences: params.length,
+  }));
+
+  const topErrorPatterns = [...errorByTool.entries()].flatMap(([tool, errors]) =>
+    errors.map((e) => ({ tool, error: e.error, recovery: e.healing, occurrences: 1 })),
+  );
+
+  return { topWorkingParamPatterns, topErrorPatterns, lastUpdated: new Date().toISOString() };
+}
+
+export function formatToolGuidanceFromSummary(
+  summary: ExperienceSummary | null,
+  activeToolNames: readonly string[],
+): string {
+  if (!summary) return "";
+
+  const relevantErrors = summary.topErrorPatterns.filter(
+    (e) => activeToolNames.includes(e.tool) && e.recovery,
+  );
+  if (relevantErrors.length === 0) return "";
+
+  const lines = ["Observed tool call patterns:"];
+  for (const pattern of relevantErrors.slice(0, 3)) {
+    lines.push(`- ${pattern.tool}: ${pattern.recovery}`);
+  }
+  return lines.join("\n");
+}
+

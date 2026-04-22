@@ -43,6 +43,7 @@ export interface ProviderAdapter {
     toolNames: readonly string[];
     requiredTools: readonly string[];
     tier: string;
+    experienceSummary?: ExperienceSummary | null;
   }): string | undefined;
 
   /**
@@ -148,12 +149,17 @@ export const localModelAdapter: ProviderAdapter = {
     return `${task}\n\nComplete these steps in order:\n${steps}\nDo not stop until all steps are done.`;
   },
 
-  toolGuidance({ requiredTools, tier }) {
-    if (tier !== "local" || requiredTools.length === 0) return undefined;
-    return (
-      `\nRequired tools for this task: ${requiredTools.join(", ")}. ` +
-      `You MUST call all of them before giving a final answer.`
+  toolGuidance({ toolNames, requiredTools, tier, experienceSummary }) {
+    if (tier !== "local") return undefined;
+    const experienceGuidance = formatToolGuidanceFromSummary(
+      experienceSummary ?? null,
+      toolNames,
     );
+    if (requiredTools.length === 0 && !experienceGuidance) return undefined;
+    const requiredText = requiredTools.length > 0
+      ? `\nRequired tools for this task: ${requiredTools.join(", ")}. You MUST call all of them before giving a final answer.`
+      : "";
+    return [requiredText, experienceGuidance].filter(Boolean).join("\n") || undefined;
   },
 
   continuationHint({ toolsUsed, missingTools, iteration, maxIterations, lastToolName }) {
@@ -251,7 +257,9 @@ export const midModelAdapter: ProviderAdapter = {
 import {
   loadCalibration,
   buildCalibratedAdapter,
+  formatToolGuidanceFromSummary,
   type ProfileOverrides,
+  type ExperienceSummary,
 } from "./calibration.js";
 
 /**

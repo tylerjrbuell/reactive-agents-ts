@@ -156,11 +156,14 @@ export {
   shouldWriteAlias,
   accumulateAliasObservation,
   confirmedAliases,
+  materializeExperienceSummary,
+  formatToolGuidanceFromSummary,
 } from "./calibration.js";
 export type {
   ModelCalibration,
   ProfileOverrides,
   AliasObservationState,
+  ExperienceSummary,
 } from "./calibration.js";
 
 // ─── Calibration Runner ───

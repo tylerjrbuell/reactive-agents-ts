@@ -230,6 +230,7 @@ function buildIterationSystemPrompt(
     toolNames: availableTools.map((t) => t.name),
     requiredTools: input.requiredTools ?? [],
     tier: profile.tier ?? "mid",
+    experienceSummary: undefined,
   });
   sections.push(
     toolGuidancePatch ? `${staticContext}\n${toolGuidancePatch}` : staticContext,
