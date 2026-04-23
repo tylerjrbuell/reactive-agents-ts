@@ -75,6 +75,7 @@ export {
 export type { TruncationStrategy } from "./services/context-window-manager.js";
 
 // ─── Errors ───
+// Pre-existing (backward compatible)
 export {
   AgentError,
   AgentNotFoundError,
@@ -82,6 +83,24 @@ export {
   ValidationError,
   RuntimeError,
 } from "./errors/errors.js";
+
+// Framework error taxonomy (Phase 0 S0.1) — retry rules pattern-match on _tag.
+// See packages/core/src/errors/index.ts for namespace docs.
+export {
+  FrameworkError,
+  TransientError,
+  LLMTimeoutError,
+  CapacityError,
+  LLMRateLimitError,
+  CapabilityError,
+  ModelCapabilityError,
+  ContractError,
+  ToolIdempotencyViolation,
+  SecurityError,
+  ToolCapabilityViolation,
+  VerificationFailed,
+  isRetryable,
+} from "./errors/index.js";
 
 // ─── IDs ───
 export { generateAgentId, generateTaskId, generateMessageId } from "./id.js";
