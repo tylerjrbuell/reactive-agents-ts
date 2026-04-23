@@ -150,7 +150,7 @@ export interface ToolsOptions {
         readonly definition: ToolDefinition
         readonly handler: (
             args: Record<string, unknown>
-        ) => Effect.Effect<unknown>
+        ) => Effect.Effect<unknown, any>
     }>
     /** Tool result compression config — controls preview size, overflow key storage (recall/compression), and pipe transforms. */
     readonly resultCompression?: ResultCompressionConfig

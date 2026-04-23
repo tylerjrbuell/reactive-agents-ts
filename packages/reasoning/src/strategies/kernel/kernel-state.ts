@@ -100,6 +100,8 @@ export interface KernelMeta {
 
   // ── Termination tracking ──
   readonly terminatedBy?: string;
+  /** Prior terminatedBy value when the post-loop harness-deliverable promotion overrides it. */
+  readonly previousTerminatedBy?: string;
   readonly redirectCount?: number;
   /** Temperature override dispatched by the intervention dispatcher — kernel-runner applies on next iteration. */
   readonly dispatchedTemperature?: number;

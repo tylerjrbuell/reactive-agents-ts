@@ -30,4 +30,15 @@ describe("checkAllowedToolsMismatch", () => {
     const result = checkAllowedToolsMismatch([], [{ name: "web-search" }])
     expect(result).toEqual([])
   })
+
+  it("tolerates whitespace typos in allowedTools entries", () => {
+    // User may write `['recall', ' get-hn-posts']` (leading space) — the runtime
+    // filter trims entries, so the mismatch check must match that behavior or
+    // users see a false-positive warning about a tool that works fine.
+    const result = checkAllowedToolsMismatch(
+      [" recall", "get-hn-posts  "],
+      [{ name: "recall" }, { name: "get-hn-posts" }],
+    )
+    expect(result).toEqual([])
+  })
 })

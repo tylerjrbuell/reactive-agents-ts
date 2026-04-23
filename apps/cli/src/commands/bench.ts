@@ -38,6 +38,14 @@ export async function runBench(argv: string[]) {
       process.exit(1);
     }
 
+    // Auto-detect local-only sessions and set judge to use local models
+    const isLocalOnlySession = session.models?.every((m: any) => m.provider === "ollama");
+    if (isLocalOnlySession && !process.env.BENCH_JUDGE_PROVIDER) {
+      process.env.BENCH_JUDGE_PROVIDER = "ollama";
+      const defaultLocalModel = session.models?.[0]?.model ?? "cogito:14b";
+      process.env.BENCH_JUDGE_MODEL = defaultLocalModel;
+    }
+
     report = await runSession({ ...session, logLevel }, output);
   } else {
     // V1 API: Run benchmarks with provider/model

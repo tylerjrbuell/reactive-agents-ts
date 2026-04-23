@@ -2,8 +2,42 @@ import { Effect, Layer } from "effect";
 import { describe, it, expect } from "bun:test";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { EventBus, EventBusLive } from "@reactive-agents/core";
-import { inferRequiredTools } from "../src/structured-output/infer-required-tools.js";
+import {
+  inferRequiredTools,
+  estimateEntityCount,
+} from "../src/structured-output/infer-required-tools.js";
 import type { ToolSummary } from "../src/structured-output/infer-required-tools.js";
+
+describe("estimateEntityCount", () => {
+  it("returns 1 for verb conjunctions without commas", () => {
+    // "Fetch and summarize" names one task with two verbs, not two entities.
+    // Prior implementation split on `and` alone and returned 2.
+    expect(
+      estimateEntityCount(
+        "Fetch and summarize the top 15 posts on Hacker News in a markdown report",
+      ),
+    ).toBe(1);
+  });
+
+  it("returns 1 when the candidate has no comma", () => {
+    expect(estimateEntityCount("Produce a markdown digest")).toBe(1);
+    expect(estimateEntityCount("Search the web and render a table")).toBe(1);
+  });
+
+  it("counts comma-separated entities", () => {
+    expect(estimateEntityCount("get prices for: XRP, XLM, ETH, BTC")).toBe(4);
+  });
+
+  it("counts comma + 'and' Oxford lists", () => {
+    expect(estimateEntityCount("prices for XRP, XLM, and ETH")).toBe(3);
+  });
+
+  it("prefers the `for` clause over the full task", () => {
+    expect(
+      estimateEntityCount("fetch data for A, B, C then summarize"),
+    ).toBe(3);
+  });
+});
 
 // ── Mock LLM that returns structured JSON ──
 

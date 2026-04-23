@@ -1254,3 +1254,125 @@ describe("loop detector graceful degradation — no artifacts path", () => {
     expect(result.output).toContain(STUCK_THOUGHT);
   });
 });
+
+describe("non-authoritative termination — harness deliverable promotion", () => {
+  // When the model ends its turn without calling final-answer (e.g. a short
+  // apology or echoed tool error) but useful tool observations are already in
+  // state.steps, the harness should replace state.output with the assembled
+  // deliverable and re-mark terminatedBy as "harness_deliverable".
+  it("swaps state.output for assembled artifacts when model ends turn without final-answer", async () => {
+    const GARBAGE_END_TURN = "Sorry, I could not continue.";
+    const ARTIFACT_PAYLOAD = "[web-search result] Top story: TypeScript 6.0 released";
+
+    const endTurnKernel: ThoughtKernel = (state, _ctx) => {
+      if (state.iteration === 0) {
+        // First pass: emit a successful tool observation → deliverable artifact
+        return Effect.succeed(
+          transitionState(state, {
+            status: "thinking",
+            iteration: 1,
+            toolsUsed: new Set([...state.toolsUsed, "web-search"]),
+            steps: [
+              ...state.steps,
+              makeStep("action", `web-search({"query":"typescript"})`, {
+                toolCall: { id: "tc-1", name: "web-search", arguments: {} },
+              }),
+              makeStep("observation", ARTIFACT_PAYLOAD, {
+                toolCallId: "tc-1",
+                observationResult: {
+                  success: true,
+                  toolName: "web-search",
+                  displayText: ARTIFACT_PAYLOAD,
+                  category: "retrieval",
+                  resultKind: "data",
+                  preserveOnCompaction: true,
+                } as any,
+              }),
+            ],
+          }),
+        );
+      }
+      // Second pass: model ends turn with no final-answer, emits a weak reply
+      return Effect.succeed(
+        transitionState(state, {
+          status: "done",
+          output: GARBAGE_END_TURN,
+          iteration: state.iteration + 1,
+          meta: { ...state.meta, terminatedBy: "end_turn" },
+        }),
+      );
+    };
+
+    const result = await Effect.runPromise(
+      runKernel(endTurnKernel, {
+        task: "summarize TypeScript news",
+        availableToolSchemas: [
+          { name: "web-search", description: "search", parameters: [] },
+        ],
+      }, {
+        maxIterations: 5,
+        strategy: "test",
+        kernelType: "test",
+      }).pipe(Effect.provide(TestLLMServiceLayer())),
+    );
+
+    expect(result.status).toBe("done");
+    expect(result.meta.terminatedBy).toBe("harness_deliverable");
+    expect(result.meta.previousTerminatedBy).toBe("end_turn");
+    expect(result.output).toContain(ARTIFACT_PAYLOAD);
+    expect(result.output).not.toBe(GARBAGE_END_TURN);
+  });
+
+  it("leaves output untouched when terminatedBy is final_answer", async () => {
+    const FINAL = "A proper synthesized answer.";
+    const finalAnswerKernel: ThoughtKernel = (state, _ctx) => {
+      if (state.iteration === 0) {
+        return Effect.succeed(
+          transitionState(state, {
+            status: "thinking",
+            iteration: 1,
+            toolsUsed: new Set([...state.toolsUsed, "web-search"]),
+            steps: [
+              ...state.steps,
+              makeStep("action", `web-search({"query":"x"})`, {
+                toolCall: { id: "tc-1", name: "web-search", arguments: {} },
+              }),
+              makeStep("observation", "raw artifact data", {
+                toolCallId: "tc-1",
+                observationResult: {
+                  success: true,
+                  toolName: "web-search",
+                  displayText: "raw artifact data",
+                  category: "retrieval",
+                  resultKind: "data",
+                  preserveOnCompaction: true,
+                } as any,
+              }),
+            ],
+          }),
+        );
+      }
+      return Effect.succeed(
+        transitionState(state, {
+          status: "done",
+          output: FINAL,
+          iteration: state.iteration + 1,
+          meta: { ...state.meta, terminatedBy: "final_answer" },
+        }),
+      );
+    };
+
+    const result = await Effect.runPromise(
+      runKernel(finalAnswerKernel, { task: "test" }, {
+        maxIterations: 5,
+        strategy: "test",
+        kernelType: "test",
+      }).pipe(Effect.provide(TestLLMServiceLayer())),
+    );
+
+    expect(result.status).toBe("done");
+    expect(result.output).toBe(FINAL);
+    expect(result.meta.terminatedBy).toBe("final_answer");
+    expect(result.meta.previousTerminatedBy).toBeUndefined();
+  });
+});

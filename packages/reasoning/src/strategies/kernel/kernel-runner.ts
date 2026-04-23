@@ -1220,15 +1220,63 @@ export function runKernel(
           state.meta.terminatedBy ??
             (state.iteration >= currentOptions.maxIterations ? "max_iterations" : "unknown"),
         );
+        // Render quantities so the user sees N/M satisfaction rather than a bare
+        // tool name. Without this, a quota of 2 with 1 successful call looks
+        // identical to "tool never called" in the error output.
+        const successCounts = buildSuccessfulToolCallCounts(state.steps);
+        const quantities = currentInput.requiredToolQuantities ?? {};
+        const renderRequirement = (name: string) => {
+          const need = quantities[name] ?? 1;
+          const have = successCounts[name] ?? 0;
+          return need > 1 ? `${name}×${need} (${have}/${need} satisfied)` : name;
+        };
         state = transitionState(state, {
           status: "failed",
           error:
-            `Task incomplete — missing_required_tool: required tool(s) not called: ${missingTools.join(", ")}.\n` +
-            `required=[${requiredTools.join(", ")}]\n` +
+            `Task incomplete — missing_required_tool: required tool(s) not called: ${missingTools.map(renderRequirement).join(", ")}.\n` +
+            `required=[${requiredTools.map(renderRequirement).join(", ")}]\n` +
             `called=[${calledTools.join(", ")}]\n` +
             `available=[${allKnownTools.join(", ")}]\n` +
             `visible=[${visibleTools.join(", ")}]\n` +
             `terminatedBy=${terminatedBy}`,
+        });
+      }
+    }
+
+    // ── 8.5. Non-authoritative termination → harness deliverable ───────────
+    // When the model stopped without explicitly calling `final-answer` (e.g. an
+    // `end_turn` text after a failed tool call, or a dispatcher-forced early
+    // stop) and there are substantive tool artifacts, swap state.output for the
+    // assembled deliverable so the quality gate has real data to synthesize
+    // from. Without this, whatever the model emitted in its last turn — often
+    // an apology, a hallucination, or the raw text of the last observation —
+    // leaks through as the final answer.
+    //
+    // Scoped narrowly to explicit "model ended turn without final-answer"
+    // markers so strategies that deliver their own output without setting
+    // `terminatedBy` keep control of the output.
+    const nonFinalAnswerTerminations = new Set([
+      "end_turn",
+      "llm_end_turn",
+      "dispatcher-early-stop",
+      "low_delta_guard",
+    ]);
+    if (
+      state.status === "done" &&
+      typeof state.meta.terminatedBy === "string" &&
+      nonFinalAnswerTerminations.has(state.meta.terminatedBy)
+    ) {
+      const artifactCount = countDeliverableCandidates(state);
+      if (artifactCount > 0) {
+        const previousTerminatedBy = state.meta.terminatedBy;
+        const deliverable = assembleDeliverable(state);
+        state = transitionState(state, {
+          output: deliverable,
+          meta: {
+            ...state.meta,
+            terminatedBy: "harness_deliverable",
+            previousTerminatedBy,
+          },
         });
       }
     }

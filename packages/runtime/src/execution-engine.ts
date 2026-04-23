@@ -341,7 +341,11 @@ export function checkAllowedToolsMismatch(
   registeredTools: readonly { name: string }[],
 ): string[] {
   const registered = new Set(registeredTools.map((t) => t.name))
-  return allowedTools.filter((name) => !registered.has(name))
+  // Trim each entry before the lookup so whitespace typos (" recall") don't
+  // produce false-positive mismatches. The ToolService filter layer in
+  // runtime.ts normalizes the same way, so what passes the warning here is
+  // exactly what will be accepted at execute() time.
+  return allowedTools.filter((name) => !registered.has(name.trim()))
 }
 
 // ─── Live Implementation ───

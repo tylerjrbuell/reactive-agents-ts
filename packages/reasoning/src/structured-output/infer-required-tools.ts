@@ -46,14 +46,19 @@ function extractPrimaryTaskDescription(taskDescription: string): string {
   return (originalTask ?? taskDescription).trim();
 }
 
-function estimateEntityCount(taskDescription: string): number {
+export function estimateEntityCount(taskDescription: string): number {
   const primaryTask = extractPrimaryTaskDescription(taskDescription)
     .replace(/\bthen\b[\s\S]*$/i, "")
     .replace(/\bwith columns?\b[\s\S]*$/i, "")
     .trim();
 
   const candidate = (primaryTask.match(/\bfor\b\s*:?\s*([^.\n]+)/i)?.[1] ?? primaryTask).trim();
-  if (!candidate.includes(",") && !/\band\b/i.test(candidate)) return 1;
+  // A comma is required to consider the candidate an enumeration. Verb conjunctions
+  // like "Fetch and summarize" contain `and` but name one task, not two entities —
+  // treating them as enumeration wrongly bumps required-tool minCalls. When the LLM
+  // classifier detects a real multi-entity list ("prices of A, B, and C"), commas
+  // are reliably present; we trust the LLM's minCalls otherwise.
+  if (!candidate.includes(",")) return 1;
 
   const entities = candidate
     .replace(/\band\b/gi, ",")

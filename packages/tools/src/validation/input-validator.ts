@@ -16,8 +16,14 @@ export const validateToolInput = (
     // Checking here lets us emit a much more helpful error with the correct signature.
     const knownNamesPre = new Set(definition.parameters.map((p) => p.name));
     const unknownKeysPre = Object.keys(args).filter((k) => !knownNamesPre.has(k));
+    // A required param with a `default` is NOT missing — the default will be applied
+    // in the per-param loop below. Excluding here keeps the "unknown + missing" error
+    // consistent with the per-param behavior.
     const missingRequiredPre = definition.parameters.filter(
-      (p) => p.required && (args[p.name] === undefined || args[p.name] === null),
+      (p) =>
+        p.required &&
+        p.default === undefined &&
+        (args[p.name] === undefined || args[p.name] === null),
     );
     if (unknownKeysPre.length > 0 && missingRequiredPre.length > 0) {
       const validSig = definition.parameters
@@ -38,25 +44,29 @@ export const validateToolInput = (
     for (const param of definition.parameters) {
       const value = args[param.name];
 
-      // Check required
-      if (param.required && (value === undefined || value === null)) {
-        return yield* Effect.fail(
-          new ToolValidationError({
-            message: `Missing required parameter "${param.name}"`,
-            toolName: definition.name,
-            parameter: param.name,
-            expected: param.type,
-            received: "undefined",
-          }),
-        );
-      }
-
-      // Treat null the same as undefined for optional params.
-      // Many LLMs (especially smaller models) emit "param": null for optional fields.
+      // Treat null the same as undefined — many LLMs (especially smaller models)
+      // emit "param": null for fields they intended to omit.
       if (value === undefined || value === null) {
+        // Defaults win over "required": if a default is defined, apply it and
+        // continue. A `required` param that also carries a default is effectively
+        // "has a value" — the caller chose to provide one if the model didn't.
         if (param.default !== undefined) {
           validated[param.name] = param.default;
+          continue;
         }
+
+        if (param.required) {
+          return yield* Effect.fail(
+            new ToolValidationError({
+              message: `Missing required parameter "${param.name}"`,
+              toolName: definition.name,
+              parameter: param.name,
+              expected: param.type,
+              received: "undefined",
+            }),
+          );
+        }
+
         continue;
       }
 

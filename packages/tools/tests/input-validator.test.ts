@@ -101,6 +101,41 @@ describe("validateToolInput", () => {
     expect(result).toEqual({ limit: 10 });
   });
 
+  it("should apply default for required parameters when omitted", async () => {
+    // required:true + default means "must be present; if the model omits it,
+    // fall back to the default". Previously the required check fired before
+    // the default could apply, making the combination contradictory.
+    const def = makeDef([
+      {
+        name: "count",
+        type: "number",
+        description: "Count",
+        required: true,
+        default: 25,
+      },
+    ]);
+
+    const result = await Effect.runPromise(validateToolInput(def, {}));
+    expect(result).toEqual({ count: 25 });
+  });
+
+  it("should apply default for required parameters when null", async () => {
+    const def = makeDef([
+      {
+        name: "count",
+        type: "number",
+        description: "Count",
+        required: true,
+        default: 25,
+      },
+    ]);
+
+    const result = await Effect.runPromise(
+      validateToolInput(def, { count: null }),
+    );
+    expect(result).toEqual({ count: 25 });
+  });
+
   it("should allow optional parameters to be omitted", async () => {
     const def = makeDef([
       {

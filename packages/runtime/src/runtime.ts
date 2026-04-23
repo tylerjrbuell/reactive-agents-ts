@@ -1197,7 +1197,15 @@ export const createRuntime = (options: RuntimeOptions) => {
     // that restricts listTools, getTool, and toFunctionCallingFormat to only
     // the whitelisted tool names. execute() also rejects non-allowed tools.
     if (options.allowedTools && options.allowedTools.length > 0) {
-      const allowed = new Set(options.allowedTools);
+      // Normalize entries: trim whitespace so typos like `" recall"` don't silently
+      // reject the legitimate `recall` tool. Keeping the comparison lenient here is
+      // safer than making users debug invisible whitespace; `checkAllowedToolsMismatch`
+      // at bootstrap surfaces the normalized→registered match for visibility.
+      const allowed = new Set(
+        options.allowedTools
+          .map((name) => name.trim())
+          .filter((name) => name.length > 0),
+      );
       toolsLayer = Layer.effect(
         ToolService,
         Effect.gen(function* () {
@@ -1738,7 +1746,11 @@ export const createLightRuntime = (options: LightRuntimeOptions) => {
   if (options.enableTools) {
     const baseToolsLayer = createToolsLayer().pipe(Layer.provide(eventBusLayer));
     if (options.allowedTools && options.allowedTools.length > 0) {
-      const allowed = new Set(options.allowedTools);
+      const allowed = new Set(
+        options.allowedTools
+          .map((name) => name.trim())
+          .filter((name) => name.length > 0),
+      );
       toolsLayer = Layer.effect(
         ToolService,
         Effect.gen(function* () {

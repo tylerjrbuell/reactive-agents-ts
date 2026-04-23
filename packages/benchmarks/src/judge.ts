@@ -68,10 +68,10 @@ export async function scoreVerifiable(
 
 // ── LLM-as-judge ─────────────────────────────────────────────────────────────
 
-const judgeModel = process.env["BENCH_JUDGE_MODEL"] ?? "claude-haiku-4-5"
-const judgeProvider = (process.env["BENCH_JUDGE_PROVIDER"] ?? "anthropic") as "anthropic" | "openai"
-
 async function callJudge(prompt: string): Promise<string> {
+  const judgeModel = process.env["BENCH_JUDGE_MODEL"] ?? "claude-haiku-4-5"
+  const judgeProvider = (process.env["BENCH_JUDGE_PROVIDER"] ?? "anthropic") as "anthropic" | "openai" | "ollama"
+
   const agent = await ReactiveAgents.create()
     .withName("bench-judge")
     .withProvider(judgeProvider)
@@ -143,7 +143,7 @@ export async function scoreTask(
   task: BenchmarkTask,
   tmpDir: string,
   runTokens: number,
-  runIterations: number,
+  _runIterations: number,
 ): Promise<ReadonlyArray<DimensionScore>> {
   const scores: DimensionScore[] = []
 
