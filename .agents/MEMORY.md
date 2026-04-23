@@ -17,6 +17,22 @@
 ## Adaptive Calibration (Apr 2026)
 - [Adaptive Harness Framework](project_adaptive_harness.md) — three-tier calibration, 24-task plan shipped on feat/adaptive-harness-framework
 
+## Design North Star (Apr 23, 2026) — Canonical Architecture Plan
+- **[Design North Star v2.2](project_north_star_v22.md)** — `docs/spec/docs/15-design-north-star.md` (~1,550 lines). Carve: **1 invariant + 3 ports + 2 disciplines**.
+  - **Invariant:** `AgentConfig × Capability → ResolvedRuntime` pure function. Builder edits config; runtime interprets. W4 fixed by construction.
+  - **Port Capability** (per-model, probed, 12 fields) — backed by existing calibration store. Kills silent `num_ctx=2048` truncation.
+  - **Port AgentMemory** — tool → semantic path wired (dead today); scratchpad collapses into adapter cache; `trustLevel` on Observation for prompt-injection defense.
+  - **Port Verification** (added v2.2) — typed `VerificationResult`, composes with Rules for self-correcting agents via `verifyBeforeFinalize` rule, cross-model verification (cheap verifier + expensive primary).
+  - **Discipline Decision Rules** — terminate/compress/retry/intervene as named `Rule<D>[]` pipelines; every decision emits `DecisionMade`. Typed error taxonomy (§5.3, v2.2) backs retry — 6 top kinds: Transient/Capacity/Capability/Contract/Task/Security.
+  - **Discipline Thin Orchestrator** — extract telemetry/debrief/classifier/skill-loading from 4,404-LOC ExecutionEngine → ~1,500 LOC.
+  - **Fixture recording** (§11.6, v2.2) — record once live, replay deterministically in CI, 100 fixtures/sec, enables regression tests + time-travel debugging.
+  - **Per-tier expectations (v2.1 §11.3):** local tier ≥90% trivial-1step, ≥75% memory, ≥65% multi-step, σ ≤15%, self-learning ≥30% iter-reduction second run.
+  - **Migration:** P0 (1w foundations) → P1 (3w invariant+capability+curator) → P2 (2w rules+reliability+verification+fixtures) → P3 (2w orchestrator+⭐ items) → P4 (gated, skill retrieval).
+  - **Open questions (blocking Phase 0):** Q5 trust-level grandfather, Q6 capability scope enforcement timing, Q7 budget-exceeded default, Q8 priority ordering, Q9 hook granularity, Q10 error-swallowing migration.
+- **[Multi-Agent Orchestration (deferred)](project_multi_agent_orchestration.md)** — agent teams, A2A, gateway patterns. Separate spec `16-multi-agent-orchestration.md` after v1.0. Depends on all 5 north-star pivots landing first. ~4-6 weeks scope.
+- **[Agent Sessions / Conversation Lifecycle (deferred)](project_agent_sessions.md)** — multi-turn conversations, session-scoped memory, persistent agents. Separate spec `17-agent-sessions.md` after v1.0. Current `AgentMemory` port is ~90% of plumbing needed. ~3-4 weeks scope.
+- **[North Star Sprint Plan (Apr 23)](project_north_star_sprint_plan.md)** — 6 files under `docs/superpowers/plans/2026-04-23-north-star-sprint-plan-*.md`. 10 sprints / 5 phases / 57 stories. TDD-focused (RED → GREEN → REFACTOR → INTEGRATION). Phase 0 (1w, 7 stories) = foundations (typed errors seed, ErrorSwallowed event, log redactor, CI probes, microbench baseline, MEMORY.md reconciliation, debrief-quality spike). Phase 1 (3w, 17 stories) = Invariant + Capability + Curator + Task + Phase 4a. Phase 2 (2w, 12 stories) = Rules + Verification + Claim/Evidence + Skill + Fixtures + zero-catchAll migration. Phase 3 (2w, 13 stories) = ExecutionEngine extraction (4404→1800 LOC) + Budget<T> + Invariant + CI lint rules. **v1.0 cut at end of P3.** Phase 4 (2w, 8 stories, conditional on S0.7 spike) = active skill retrieval → v1.1. Critical-path stories: S0.1 error taxonomy, P1.S1 Invariant, P1.S2 Capability. Open Q5-Q14 defaults recommended in overview; need user answers before Phase 0 start. Quality gates: bun test + bun run build + bun run typecheck + /review-patterns 9/9 + changesets per PR. NO LLM-mock tests during P0-P3.
+
 ## Projects
 - [Project Dispatch](project_dispatch.md) — NL automation builder product, separate repo, Elysia + Svelte + SQLite
 - [Composable Strategy Architecture](project_composable_strategies.md) — V1.1: strategies as composable capabilities, not exclusive modes
