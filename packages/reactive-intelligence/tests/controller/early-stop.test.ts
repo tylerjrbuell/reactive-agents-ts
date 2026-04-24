@@ -94,4 +94,72 @@ describe("evaluateEarlyStop", () => {
     });
     expect(evaluateEarlyStop(params)).toBeNull();
   });
+
+  // Overflow guard tests
+  it("overflow fires at exactly iteration === maxIterations - iterationsBeforeMax (default: 2)", () => {
+    // iteration=8, maxIterations=10 → 8 >= 10 - 2 → fires
+    const params = makeParams({
+      entropyHistory: [makeEntry(0.6, "flat"), makeEntry(0.6, "flat")],
+      iteration: 8,
+      maxIterations: 10,
+    });
+    const result = evaluateEarlyStop(params);
+    expect(result).not.toBeNull();
+    expect(result!.decision).toBe("early-stop");
+    expect(result!.reason).toContain("Approaching maxIterations");
+    expect(result!.reason).toContain("iter=8");
+    expect(result!.reason).toContain("max=10");
+    expect(result!.iterationsSaved).toBe(2);
+  });
+
+  it("overflow does NOT fire at iteration === maxIterations - iterationsBeforeMax - 1 (one below boundary)", () => {
+    // iteration=7, maxIterations=10 → 7 < 10 - 2 → does NOT fire
+    const params = makeParams({
+      entropyHistory: [makeEntry(0.6, "flat"), makeEntry(0.6, "flat")],
+      iteration: 7,
+      maxIterations: 10,
+    });
+    expect(evaluateEarlyStop(params)).toBeNull();
+  });
+
+  it("overflow does NOT fire when maxIterations === 0", () => {
+    const params = makeParams({
+      entropyHistory: [makeEntry(0.6, "flat"), makeEntry(0.6, "flat")],
+      iteration: 5,
+      maxIterations: 0,
+    });
+    expect(evaluateEarlyStop(params)).toBeNull();
+  });
+
+  it("respects custom earlyStopIterationsBeforeMax: 3 (fires at maxIterations - 3)", () => {
+    // iteration=7, maxIterations=10, iterationsBeforeMax=3 → 7 >= 10 - 3 → fires
+    const params = makeParams({
+      entropyHistory: [makeEntry(0.6, "flat"), makeEntry(0.6, "flat")],
+      iteration: 7,
+      maxIterations: 10,
+      config: { earlyStop: true, contextCompression: false, strategySwitch: false, earlyStopIterationsBeforeMax: 3 },
+    });
+    const result = evaluateEarlyStop(params);
+    expect(result).not.toBeNull();
+    expect(result!.reason).toContain("Approaching maxIterations");
+  });
+
+  it("convergence wins over overflow when both conditions are simultaneously true", () => {
+    // Both: converging for 2 iterations AND iteration >= maxIterations - 2
+    // iteration=8, maxIterations=10 → overflow fires, BUT convergence fires first
+    const params = makeParams({
+      entropyHistory: [
+        makeEntry(0.4, "flat"),
+        makeEntry(0.25, "converging"),
+        makeEntry(0.2, "converging"),
+      ],
+      iteration: 8,
+      maxIterations: 10,
+    });
+    const result = evaluateEarlyStop(params);
+    expect(result).not.toBeNull();
+    expect(result!.decision).toBe("early-stop");
+    // Convergence wins: reason should contain "Entropy converging", not "Approaching maxIterations"
+    expect(result!.reason).toContain("Entropy converging");
+  });
 });
