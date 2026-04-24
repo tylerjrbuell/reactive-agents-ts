@@ -138,6 +138,24 @@ export class LLMConfig extends Context.Tag("LLMConfig")<
     readonly defaultTemperature: number;
 
     /**
+     * Default context window size (in tokens) for local providers.
+     *
+     * Wired into Ollama's `options.num_ctx` on every chat request. Without
+     * this, Ollama silently caps context at its built-in default of 2048
+     * tokens, causing silent truncation of long conversations and tool
+     * results. Setting to 8192 or higher is strongly recommended for any
+     * non-trivial task on a local model.
+     *
+     * Cloud providers (Anthropic, OpenAI, Gemini, etc.) ignore this — their
+     * context size is derived from the model ID.
+     *
+     * Per-request override: `CompletionRequest.numCtx`.
+     *
+     * @default undefined (defer to provider default — for Ollama, that's 2048)
+     */
+    readonly defaultNumCtx?: number;
+
+    /**
      * LLM request/response observability verbosity.
      * Determines what data is captured in LLMRequestEvent for observability.
      *
@@ -229,6 +247,9 @@ export const llmConfigFromEnv = LLMConfig.of({
   timeoutMs: Number(process.env.LLM_TIMEOUT_MS ?? 30_000),
   defaultMaxTokens: 4096,
   defaultTemperature: Number(process.env.LLM_DEFAULT_TEMPERATURE ?? 0.7),
+  ...(process.env.LLM_DEFAULT_NUM_CTX !== undefined
+    ? { defaultNumCtx: Number(process.env.LLM_DEFAULT_NUM_CTX) }
+    : {}),
   observabilityVerbosity: (process.env.LLM_OBSERVABILITY_VERBOSITY as ObservabilityVerbosity | undefined) ?? "full",
   pricingRegistry: {},
 });

@@ -750,6 +750,17 @@ export type CompletionRequest = {
   readonly logprobs?: boolean;
   /** Number of most likely tokens to return log probabilities for (optional, 1-20) */
   readonly topLogprobs?: number;
+  /**
+   * Context window size for local providers (Ollama `options.num_ctx`).
+   * When omitted, falls back to `LLMConfig.defaultNumCtx`, then to the provider's
+   * own default. For Ollama this matters — its own default is 2048 tokens, which
+   * silently truncates long conversations and tool results. Setting this to 8192
+   * or higher is recommended for any non-trivial task.
+   *
+   * No-op for cloud providers (Anthropic, OpenAI, Gemini, etc.) which derive
+   * context size from the model ID.
+   */
+  readonly numCtx?: number;
 };
 
 // ─── Completion Response ───

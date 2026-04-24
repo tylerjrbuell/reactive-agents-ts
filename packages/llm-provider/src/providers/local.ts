@@ -261,6 +261,9 @@ export const LocalProviderLive = Layer.effect(
                   stop: request.stopSequences
                     ? [...request.stopSequences]
                     : undefined,
+                  ...((request.numCtx ?? config.defaultNumCtx) !== undefined
+                    ? { num_ctx: request.numCtx ?? config.defaultNumCtx }
+                    : {}),
                   ...(request.logprobs ? { logprobs: true } : {}),
                   ...(request.topLogprobs != null
                     ? { top_logprobs: request.topLogprobs }
@@ -385,6 +388,9 @@ export const LocalProviderLive = Layer.effect(
                     temperature:
                       request.temperature ?? config.defaultTemperature,
                     num_predict: request.maxTokens ?? config.defaultMaxTokens,
+                    ...((request.numCtx ?? config.defaultNumCtx) !== undefined
+                      ? { num_ctx: request.numCtx ?? config.defaultNumCtx }
+                      : {}),
                     ...(wantLogprobs ? { logprobs: true } : {}),
                   },
                 });
@@ -548,6 +554,9 @@ export const LocalProviderLive = Layer.effect(
                     temperature:
                       request.temperature ?? config.defaultTemperature,
                     num_predict: request.maxTokens ?? config.defaultMaxTokens,
+                    ...((request.numCtx ?? config.defaultNumCtx) !== undefined
+                      ? { num_ctx: request.numCtx ?? config.defaultNumCtx }
+                      : {}),
                   },
                 });
               },
