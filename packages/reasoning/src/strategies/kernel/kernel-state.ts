@@ -11,6 +11,7 @@ import type { ReasoningStep } from "../../types/index.js";
 import type { ContextProfile } from "../../context/context-profile.js";
 import type { ResultCompressionConfig, ToolCallSpec, FinalAnswerCapture, ToolCallResolver, ToolCallingDriver } from "@reactive-agents/tools";
 import type { LLMService } from "@reactive-agents/llm-provider";
+import type { SemanticEntry, MemoryId } from "@reactive-agents/memory";
 import type { ToolSchema } from "./utils/tool-formatting.js";
 import type { EntropyScoreLike } from "./output-assembly.js";
 import type { KernelMetaToolsConfig } from "../../types/kernel-meta-tools.js";
@@ -382,6 +383,20 @@ export type EventBusInstance = {
   readonly publish: (event: unknown) => Effect.Effect<void, unknown>;
 };
 
+/**
+ * Minimal MemoryService surface used by kernel tool-execution.
+ *
+ * Only `storeSemantic` is needed — tool-execution populates the semantic memory
+ * layer during reasoning so cross-iteration recall works. Other memory methods
+ * (bootstrap, flush, snapshot, logEpisode) are used exclusively by the runtime
+ * execution engine, not by the kernel itself.
+ */
+export type MemoryServiceInstance = {
+  readonly storeSemantic: (
+    entry: SemanticEntry,
+  ) => Effect.Effect<MemoryId, unknown>;
+};
+
 // ── KernelHooks — Lifecycle hooks for observability wiring ───────────────────
 
 export interface KernelHooks {
@@ -427,6 +442,9 @@ export interface KernelContext {
   readonly hooks: KernelHooks;
   /** Driver selected from calibration toolCallDialect ("native-fc" → NativeFCDriver, else TextParseDriver). */
   readonly toolCallingDriver: ToolCallingDriver;
+  /** Memory service for semantic storage of successful tool results. None when
+   *  the memory layer is not registered. Store calls are forked (non-blocking). */
+  readonly memoryService: MaybeService<MemoryServiceInstance>;
 }
 
 // ── ThoughtKernel — The core computation type ────────────────────────────────

@@ -12,6 +12,7 @@ import { Effect, Schema } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { EventBus } from "@reactive-agents/core";
 import { extractStructuredOutput } from "./pipeline.js";
+import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
 // ── Schema for the inference result ──
 
@@ -181,10 +182,10 @@ Respond with JSON matching this schema:
                 totalSteps: 1,
                 thought: `Inferred ${validated.length} required tool(s): ${validated.map((t) => t.name).join(", ") || "(none)"}. ${result.data.reasoning}`,
               })
-              .pipe(Effect.catchAll(() => Effect.void))
+              .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/structured-output/infer-required-tools.ts:184", tag: errorTag(err) })))
           : Effect.void,
       ),
-      Effect.catchAll(() => Effect.void),
+      Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/structured-output/infer-required-tools.ts:187", tag: errorTag(err) })),
     );
 
     return validated.map((t) => t.name);
@@ -321,10 +322,10 @@ Rules:
                   return quantity > 1 ? `${toolName}×${quantity}` : toolName;
                 }).join(", ")}], relevant: [${relevant.join(", ")}]`,
               })
-              .pipe(Effect.catchAll(() => Effect.void))
+              .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/structured-output/infer-required-tools.ts:324", tag: errorTag(err) })))
           : Effect.void,
       ),
-      Effect.catchAll(() => Effect.void),
+      Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/structured-output/infer-required-tools.ts:327", tag: errorTag(err) })),
     );
 
     return { required, relevant, requiredToolQuantities };

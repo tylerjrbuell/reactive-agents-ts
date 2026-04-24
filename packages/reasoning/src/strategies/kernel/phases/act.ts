@@ -40,6 +40,7 @@ import {
 } from "../utils/requirement-state.js";
 import { checkToolCall, defaultGuards } from "./guard.js";
 import { META_TOOLS, INTROSPECTION_META_TOOLS } from "../kernel-constants.js";
+import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
 const REQUIRED_TOOLS_SATISFIED_PREFIX = "Required tool calls are satisfied";
 
@@ -61,7 +62,7 @@ const emitLog = (event: LogEvent): Effect.Effect<void, never> =>
   Effect.serviceOption(ObservableLogger).pipe(
     Effect.flatMap((opt) =>
       opt._tag === "Some"
-        ? opt.value.emit(event).pipe(Effect.catchAll(() => Effect.void))
+        ? opt.value.emit(event).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/strategies/kernel/phases/act.ts:64", tag: errorTag(err) })))
         : Effect.void,
     ),
   );
@@ -242,7 +243,7 @@ export function handleActing(
   context: KernelContext,
 ): Effect.Effect<KernelState, never, LLMService> {
   return Effect.gen(function* () {
-    const { input, profile, compression, toolService, hooks } = context;
+    const { input, profile, compression, toolService, hooks, memoryService } = context;
     // profileOverrides were already merged into `profile` by kernel-runner;
     // here we only need the adapter.
     const { adapter } = selectAdapter({ supportsToolCalling: true }, profile.tier, input.modelId);
@@ -564,7 +565,7 @@ export function handleActing(
                   batchCall,
                   input.agentId ?? "reasoning-agent",
                   input.sessionId ?? "reasoning-session",
-                  { compression, scratchpad: sharedScratchpad },
+                  { compression, scratchpad: sharedScratchpad, memoryService },
                 );
                 const durationMs = Date.now() - startMs;
                 yield* emitLog({

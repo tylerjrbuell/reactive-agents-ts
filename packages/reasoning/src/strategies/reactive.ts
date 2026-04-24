@@ -18,6 +18,7 @@ import type { KernelInput, KernelMessage } from "./kernel/kernel-state.js";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
 import type { TerminatedBy } from "@reactive-agents/core";
 import { resolveExecutableToolCapabilities } from "./kernel/utils/tool-capabilities.js";
+import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
 // ── Re-exports for backwards compatibility ────────────────────────────────────
 
@@ -116,7 +117,7 @@ export const executeReactive = (
       Effect.serviceOption(ObservableLogger).pipe(
         Effect.flatMap((opt) =>
           opt._tag === "Some"
-            ? opt.value.emit(event).pipe(Effect.catchAll(() => Effect.void))
+            ? opt.value.emit(event).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/strategies/reactive.ts:119", tag: errorTag(err) })))
             : Effect.void
         )
       );

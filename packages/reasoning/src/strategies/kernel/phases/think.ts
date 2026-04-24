@@ -62,6 +62,7 @@ import {
 import type { GuidanceContext } from "../../../context/context-manager.js";
 
 import { META_TOOLS as META_TOOL_SET } from "../kernel-constants.js";
+import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
 /** Per-tier context pressure thresholds — local models get narrowed earlier. */
 export const CONTEXT_PRESSURE_THRESHOLDS: Record<string, number> = {
@@ -339,7 +340,7 @@ export function handleThinking(
         if (event.type === "text_delta") {
           accumulatedContent += event.text;
           if (textDeltaCb) {
-            yield* textDeltaCb(event.text).pipe(Effect.catchAll(() => Effect.void));
+            yield* textDeltaCb(event.text).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/strategies/kernel/phases/think.ts:342", tag: errorTag(err) })));
           }
         } else if (event.type === "content_complete") {
           accumulatedContent = event.content;

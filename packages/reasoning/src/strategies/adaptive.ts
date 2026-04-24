@@ -25,6 +25,7 @@ import type { ToolSchema } from "./kernel/utils/tool-formatting.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { ContextProfile } from "../context/context-profile.js";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
+import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
 /** Record of a past strategy execution outcome for self-improvement. */
 export interface StrategyOutcome {
@@ -95,7 +96,7 @@ export const executeAdaptive = (
       Effect.serviceOption(ObservableLogger).pipe(
         Effect.flatMap((opt) =>
           opt._tag === "Some"
-            ? opt.value.emit(event).pipe(Effect.catchAll(() => Effect.void))
+            ? opt.value.emit(event).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/strategies/adaptive.ts:98", tag: errorTag(err) })))
             : Effect.void
         )
       );

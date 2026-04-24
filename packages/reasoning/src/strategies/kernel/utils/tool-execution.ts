@@ -26,8 +26,10 @@ import { ToolNotFoundError } from "@reactive-agents/tools";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import { evaluateTransform } from "./tool-parsing.js";
 import { compressToolResult, nextToolResultKey } from "./tool-formatting.js";
-import type { MaybeService, ToolServiceInstance } from "../kernel-state.js";
+import type { MaybeService, ToolServiceInstance, MemoryServiceInstance } from "../kernel-state.js";
 import type { ToolCallSpec } from "@reactive-agents/tools";
+import type { SemanticEntry, MemoryId } from "@reactive-agents/memory";
+import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
 // ── Result type ──────────────────────────────────────────────────────────────
 
@@ -53,6 +55,82 @@ export interface ToolExecutionConfig {
   readonly scratchpad?: Map<string, string>;
   readonly agentId?: string;
   readonly sessionId?: string;
+  /**
+   * Optional MemoryService for semantic storage of successful tool results.
+   * When present, each successful tool execution forks a daemon fiber to store
+   * the observation into semantic memory. Failures inside the daemon are
+   * silently swallowed via `emitErrorSwallowed` — memory store latency
+   * (embedding + SQLite write) must never block the kernel hot path.
+   */
+  readonly memoryService?: MaybeService<MemoryServiceInstance>;
+}
+
+// ── Semantic memory persistence — forked daemon helper ───────────────────────
+
+let semanticIdCounter = 0;
+
+/** Deterministic-ish MemoryId for semantic entries derived from tool results.
+ *  Not cryptographic — collisions across restarts are fine; SQLite row id is
+ *  the real uniqueness guarantee. */
+function nextSemanticId(): MemoryId {
+  return `tool-obs-${Date.now()}-${++semanticIdCounter}` as MemoryId;
+}
+
+/**
+ * Fork a daemon fiber that stores a successful tool result in semantic memory.
+ *
+ * Uses `Effect.forkDaemon` so the kernel hot path is NEVER blocked by memory
+ * store latency (embedding + SQLite write can take 8-12s on local models).
+ * All errors are swallowed via `emitErrorSwallowed` — memory failures must
+ * never propagate back to the kernel.
+ *
+ * Prefers `extractedFact` (higher signal, deterministic one-liner) when
+ * provided. Otherwise truncates the raw content to 2000 chars to bound
+ * SQLite row size and embedding cost.
+ */
+function storeToolObservationSemantic(
+  memoryServiceOpt: MaybeService<MemoryServiceInstance>,
+  toolName: string,
+  content: string,
+  agentId: string,
+  extractedFact?: string,
+): Effect.Effect<void, never> {
+  if (memoryServiceOpt._tag === "None") return Effect.void;
+
+  const factSummary = extractedFact?.trim();
+  const bodyContent = factSummary && factSummary.length > 0
+    ? factSummary
+    : content.length > 2000
+      ? `${content.slice(0, 2000)}\n[...${content.length - 2000} chars truncated]`
+      : content;
+
+  const now = new Date();
+  const entry: SemanticEntry = {
+    id: nextSemanticId(),
+    agentId,
+    content: `Tool ${toolName}: ${bodyContent}`,
+    summary: factSummary ?? `${toolName} observation`,
+    importance: 0.3,
+    verified: false,
+    tags: ["tool-observation", toolName],
+    createdAt: now,
+    updatedAt: now,
+    accessCount: 0,
+    lastAccessedAt: now,
+  };
+
+  const storeEffect = memoryServiceOpt.value
+    .storeSemantic(entry)
+    .pipe(
+      Effect.asVoid,
+      Effect.catchAll((err) =>
+        emitErrorSwallowed({
+          site: "reasoning/src/strategies/kernel/utils/tool-execution.ts:storeToolObservationSemantic",
+          tag: errorTag(err),
+        }),
+      ),
+    );
+  return Effect.forkDaemon(storeEffect).pipe(Effect.asVoid);
 }
 
 // ── Exported utilities ───────────────────────────────────────────────────────
@@ -408,7 +486,14 @@ export function executeToolCall(
   toolRequest: { tool: string; input: string; transform?: string },
   config: ToolExecutionConfig,
 ): Effect.Effect<ToolExecutionResult, never> {
-  const { profile, compression: compressionConfig, scratchpad: scratchpadStore, agentId, sessionId } = config;
+  const {
+    profile,
+    compression: compressionConfig,
+    scratchpad: scratchpadStore,
+    agentId,
+    sessionId,
+    memoryService: memoryServiceOpt,
+  } = config;
 
   if (toolServiceOpt._tag === "None") {
     const content = `[Tool "${toolRequest.tool}" requested but ToolService is not available — add .withTools() to agent builder]`;
@@ -424,7 +509,7 @@ export function executeToolCall(
     Effect.serviceOption(ObservableLogger).pipe(
       Effect.flatMap((opt) =>
         opt._tag === "Some"
-          ? opt.value.emit(event).pipe(Effect.catchAll(() => Effect.void))
+          ? opt.value.emit(event).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/strategies/kernel/utils/tool-execution.ts:427", tag: errorTag(err) })))
           : Effect.void
       )
     );
@@ -528,6 +613,16 @@ export function executeToolCall(
       timestamp: new Date(),
     });
 
+    // Fire-and-forget semantic memory store — never blocks kernel hot path.
+    if (memoryServiceOpt && result.observationResult.success) {
+      yield* storeToolObservationSemantic(
+        memoryServiceOpt,
+        toolRequest.tool,
+        result.content,
+        agentId ?? "reasoning-agent",
+      );
+    }
+
     return result;
   }).pipe(
     Effect.catchAll((e) => {
@@ -558,7 +653,17 @@ export function executeNativeToolCall(
   toolCall: ToolCallSpec,
   agentId: string,
   sessionId: string,
-  config?: { compression?: ResultCompressionConfig; scratchpad?: Map<string, string> },
+  config?: {
+    compression?: ResultCompressionConfig;
+    scratchpad?: Map<string, string>;
+    /**
+     * Optional MemoryService for semantic storage of successful tool results.
+     * When present, each successful tool execution forks a daemon fiber to
+     * store the observation into semantic memory. The kernel hot path is
+     * unaffected — see `storeToolObservationSemantic`.
+     */
+    memoryService?: MaybeService<MemoryServiceInstance>;
+  },
 ): Effect.Effect<{ content: string; success: boolean; storedKey?: string; delegatedToolsUsed?: readonly string[]; extractedFact?: string }, never> {
   return toolService
     .execute({
@@ -621,6 +726,20 @@ export function executeNativeToolCall(
 
         return { content, success, storedKey, delegatedToolsUsed, extractedFact };
       }),
+      // Fire-and-forget semantic memory store on successful tool results.
+      // Uses Effect.forkDaemon inside storeToolObservationSemantic so this
+      // never blocks the kernel hot path (embedding + SQLite can take 8-12s).
+      Effect.tap((result) =>
+        config?.memoryService && result.success
+          ? storeToolObservationSemantic(
+              config.memoryService,
+              toolCall.name,
+              result.content,
+              agentId,
+              result.extractedFact,
+            )
+          : Effect.void,
+      ),
       Effect.catchAll((e) => {
         const msg = e instanceof Error ? e.message : String(e);
         // ToolNotFoundError carries availableTools — surface them so the model can self-correct.

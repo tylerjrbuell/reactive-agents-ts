@@ -36,6 +36,7 @@ import type { ToolSchema } from "./kernel/utils/tool-formatting.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
 import { resolveExecutableToolCapabilities } from "./kernel/utils/tool-capabilities.js";
+import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
 interface ReflexionInput {
   readonly taskDescription: string;
@@ -92,7 +93,7 @@ export const executeReflexion = (
       Effect.serviceOption(ObservableLogger).pipe(
         Effect.flatMap((opt) =>
           opt._tag === "Some"
-            ? opt.value.emit(event).pipe(Effect.catchAll(() => Effect.void))
+            ? opt.value.emit(event).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/strategies/reflexion.ts:95", tag: errorTag(err) })))
             : Effect.void
         )
       );

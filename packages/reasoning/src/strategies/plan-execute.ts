@@ -51,6 +51,7 @@ import {
 } from "./kernel/utils/output-synthesis.js";
 import type { ToolSchema } from "./kernel/utils/tool-formatting.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
+import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
 interface PlanExecuteInput {
   readonly taskDescription: string;
@@ -98,7 +99,7 @@ export const executePlanExecute = (
       Effect.serviceOption(ObservableLogger).pipe(
         Effect.flatMap((opt) =>
           opt._tag === "Some"
-            ? opt.value.emit(event).pipe(Effect.catchAll(() => Effect.void))
+            ? opt.value.emit(event).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/strategies/plan-execute.ts:101", tag: errorTag(err) })))
             : Effect.void
         )
       );
@@ -280,7 +281,7 @@ export const executePlanExecute = (
     if (Option.isSome(planStoreOpt)) {
       yield* planStoreOpt.value
         .savePlan(plan as unknown as Parameters<typeof planStoreOpt.value.savePlan>[0])
-        .pipe(Effect.catchAll(() => Effect.void));
+        .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/strategies/plan-execute.ts:283", tag: errorTag(err) })));
     }
 
     // Track completed step results across refinements to avoid re-execution
@@ -436,7 +437,7 @@ export const executePlanExecute = (
               yield* planStoreOpt.value.updateStepStatus(
                 step.id,
                 { status: "completed", result: result.output },
-              ).pipe(Effect.catchAll(() => Effect.void));
+              ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/strategies/plan-execute.ts:439", tag: errorTag(err) })));
             }
           } else {
             step.status = "failed";
@@ -457,7 +458,7 @@ export const executePlanExecute = (
               yield* planStoreOpt.value.updateStepStatus(
                 step.id,
                 { status: "failed", error: result.output },
-              ).pipe(Effect.catchAll(() => Effect.void));
+              ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/strategies/plan-execute.ts:460", tag: errorTag(err) })));
             }
 
             // Attempt inline patch
@@ -656,7 +657,7 @@ export const executePlanExecute = (
               confidence: richScore["confidence"],
               modelTier: richScore["modelTier"],
               iterationWeight: richScore["iterationWeight"],
-            }).pipe(Effect.catchAll(() => Effect.void));
+            }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/strategies/plan-execute.ts:659", tag: errorTag(err) })));
           }
 
           if (services.reactiveController._tag === "Some" && perEntropyHistory.length > 0) {
@@ -710,7 +711,7 @@ export const executePlanExecute = (
                     patchKind: patch.kind,
                     cost: { tokensEstimated: dispatchResult.totalCost.tokens, latencyMsEstimated: dispatchResult.totalCost.latencyMs },
                     telemetry: {},
-                  }).pipe(Effect.catchAll(() => Effect.void));
+                  }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/strategies/plan-execute.ts:713", tag: errorTag(err) })));
                 }
                 if (patch.kind === "early-stop") perRIEarlyStop = true;
               }
@@ -730,7 +731,7 @@ export const executePlanExecute = (
                       | "mode-advisory"
                       | "mode-off"
                       | "no-handler",
-                  }).pipe(Effect.catchAll(() => Effect.void));
+                  }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/strategies/plan-execute.ts:733", tag: errorTag(err) })));
                 }
               }
             }

@@ -17,6 +17,7 @@ import { EpisodicMemoryService } from "./episodic-memory.js";
 import { ProceduralMemoryService } from "./procedural-memory.js";
 import { MemoryFileSystem } from "../fs/memory-file-system.js";
 import { ZettelkastenService } from "../indexing/zettelkasten.js";
+import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
 // ─── Service Tag ───
 
@@ -104,7 +105,7 @@ export const MemoryServiceLive = (config: MemoryConfig, memoryLLM?: MemoryLLM) =
             // Ensure directory exists
             yield* fileSystem
               .ensureDirectory(agentId, basePath)
-              .pipe(Effect.catchAll(() => Effect.void));
+              .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "memory/src/services/memory-service.ts:107", tag: errorTag(err) })));
 
             // Generate semantic context from live SQLite (not stale memory.md)
             const semanticContext = yield* semantic
@@ -137,7 +138,7 @@ export const MemoryServiceLive = (config: MemoryConfig, memoryLLM?: MemoryLLM) =
 
             if (eb) {
               yield* eb.publish({ _tag: "MemoryBootstrapped", agentId, tier: config.tier })
-                .pipe(Effect.catchAll(() => Effect.void));
+                .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "memory/src/services/memory-service.ts:140", tag: errorTag(err) })));
             }
 
             return result;
@@ -152,7 +153,7 @@ export const MemoryServiceLive = (config: MemoryConfig, memoryLLM?: MemoryLLM) =
             yield* fileSystem.writeMarkdown(agentId, markdown, basePath);
             if (eb) {
               yield* eb.publish({ _tag: "MemoryFlushed", agentId })
-                .pipe(Effect.catchAll(() => Effect.void));
+                .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "memory/src/services/memory-service.ts:155", tag: errorTag(err) })));
             }
           }),
 

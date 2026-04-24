@@ -25,6 +25,7 @@ import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
 import { makeStep, buildStrategyResult } from "./kernel/utils/step-utils.js";
 import { resolveExecutableToolCapabilities } from "./kernel/utils/tool-capabilities.js";
+import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
 // ── Tier-Adaptive ToT Limits ─────────────────────────────────────────────────
 
@@ -109,7 +110,7 @@ export const executeTreeOfThought = (
       Effect.serviceOption(ObservableLogger).pipe(
         Effect.flatMap((opt) =>
           opt._tag === "Some"
-            ? opt.value.emit(event).pipe(Effect.catchAll(() => Effect.void))
+            ? opt.value.emit(event).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/strategies/tree-of-thought.ts:112", tag: errorTag(err) })))
             : Effect.void
         )
       );

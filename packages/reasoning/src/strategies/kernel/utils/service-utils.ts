@@ -9,10 +9,17 @@ import { Context, Effect } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { ToolService } from "@reactive-agents/tools";
 import { EventBus, EntropySensorService } from "@reactive-agents/core";
+import { MemoryService } from "@reactive-agents/memory";
 
 // ── Narrow types — shared types from kernel-state, prompt type local ─────────
 
-import type { MaybeService, ToolServiceInstance, EventBusInstance } from "../kernel-state.js";
+import type {
+  MaybeService,
+  ToolServiceInstance,
+  EventBusInstance,
+  MemoryServiceInstance,
+} from "../kernel-state.js";
+import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
 /** Minimal PromptService surface used by strategies */
 type PromptServiceInstance = {
@@ -118,6 +125,10 @@ export type StrategyServices = {
   reactiveController: MaybeService<ReactiveControllerInstance>;
   /** Intervention dispatcher — None when reactive intelligence controller is absent */
   dispatcher: MaybeService<DispatcherInstance>;
+  /** Memory service — None when memory layer is absent. Used by tool-execution
+   *  to populate semantic memory from successful tool results (fire-and-forget
+   *  via Effect.forkDaemon — does not block the kernel hot path). */
+  memoryService: MaybeService<MemoryServiceInstance>;
 };
 
 /**
@@ -169,7 +180,21 @@ export const resolveStrategyServices: Effect.Effect<
   );
   const dispatcher = dispatcherOptRaw as MaybeService<DispatcherInstance>;
 
-  return { llm, toolService, promptService, eventBus, entropySensor, reactiveController, dispatcher };
+  const memoryServiceOptRaw = yield* Effect.serviceOption(MemoryService).pipe(
+    Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
+  );
+  const memoryService = memoryServiceOptRaw as MaybeService<MemoryServiceInstance>;
+
+  return {
+    llm,
+    toolService,
+    promptService,
+    eventBus,
+    entropySensor,
+    reactiveController,
+    dispatcher,
+    memoryService,
+  };
 });
 
 /**
@@ -213,5 +238,5 @@ export function publishReasoningStep(
   payload: unknown,
 ): Effect.Effect<void, never> {
   if (eventBus._tag === "None") return Effect.void;
-  return eventBus.value.publish(payload).pipe(Effect.catchAll(() => Effect.void));
+  return eventBus.value.publish(payload).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/strategies/kernel/utils/service-utils.ts:216", tag: errorTag(err) })));
 }

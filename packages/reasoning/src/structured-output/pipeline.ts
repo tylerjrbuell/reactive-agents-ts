@@ -20,6 +20,7 @@ import { LLMService } from "@reactive-agents/llm-provider";
 import { EventBus } from "@reactive-agents/core";
 import { extractJsonBlock, repairJson } from "./json-repair.js";
 import { stripThinking } from "../strategies/kernel/utils/stream-parser.js";
+import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
 export interface StructuredOutputConfig<T> {
   readonly schema: Schema.Schema<T>;
@@ -113,7 +114,7 @@ export const extractStructuredOutput = <T>(
           totalSteps: 1,
           prompt: { system: config.systemPrompt ?? "", user: config.prompt },
           thought: nativeResult.raw,
-        }).pipe(Effect.catchAll(() => Effect.void));
+        }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/structured-output/pipeline.ts:116", tag: errorTag(err) })));
       }
       return nativeResult;
     }
@@ -151,7 +152,7 @@ export const extractStructuredOutput = <T>(
           totalSteps: maxRetries + 1,
           prompt: { system: systemPrompt, user: prompt },
           thought: response.content,
-        }).pipe(Effect.catchAll(() => Effect.void));
+        }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/structured-output/pipeline.ts:154", tag: errorTag(err) })));
       }
 
       // Strip <think>...</think> blocks before JSON extraction (thinking models)

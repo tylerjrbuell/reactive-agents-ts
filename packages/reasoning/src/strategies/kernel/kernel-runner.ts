@@ -59,6 +59,7 @@ import {
 } from "./utils/output-synthesis.js";
 
 import { META_TOOLS as RUNNER_META_TOOLS } from "./kernel-constants.js";
+import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
 /** Keys embedded in compressed tool observations (`[STORED: _tool_result_N | tool]`) */
 const STORED_TOOL_KEY_RE = /\[STORED:\s*(_tool_result_\d+)\s*\|/g;
@@ -422,7 +423,7 @@ export function runKernel(
   return Effect.gen(function* () {
     // ── 1. Resolve services ──────────────────────────────────────────────────
     const services = yield* resolveStrategyServices;
-    const { toolService, eventBus } = services;
+    const { toolService, eventBus, memoryService } = services;
 
     // ── Auto-inject ToolCallResolver ─────────────────────────────────────────
     // When the provider supports native FC, create a resolver and inject it
@@ -489,6 +490,7 @@ export function runKernel(
       toolService,
       hooks,
       toolCallingDriver,
+      memoryService,
     };
 
     // ── 5. Extract task intent for output quality gate ─────────────────────
@@ -577,7 +579,7 @@ export function runKernel(
       Effect.serviceOption(ObservableLogger).pipe(
         Effect.flatMap((opt) =>
           opt._tag === "Some"
-            ? opt.value.emit(event).pipe(Effect.catchAll(() => Effect.void))
+            ? opt.value.emit(event).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/strategies/kernel/kernel-runner.ts:580", tag: errorTag(err) })))
             : Effect.void
         )
       );
