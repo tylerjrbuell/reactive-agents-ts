@@ -11,11 +11,63 @@
  */
 import { Schema } from "effect";
 
-// ─── Model Tier ───
+// ─── Telemetry Model Tier ───
 
-/** Coarse model classification — no exact model name leaks. */
-export const ModelTier = Schema.Literal("local", "small", "medium", "large", "frontier");
-export type ModelTier = typeof ModelTier.Type;
+/**
+ * Coarse model classification for privacy-preserving telemetry aggregation.
+ *
+ * **Five buckets** — collapses exact model names into k-anonymous groups so
+ * telemetry records can be exported/compared without revealing which specific
+ * model a user ran.
+ *
+ * **Distinct from the operational `ModelTier`** in `@reactive-agents/reasoning`,
+ * which has **four buckets** (`local | mid | large | frontier`) used to drive
+ * runtime behavior (context profiles, compression budgets, temperature tuning).
+ * The operational `mid` bucket maps to either `small` or `medium` here depending
+ * on the exact model family — see {@link toTelemetryTier}.
+ *
+ * Phase 1 Capability port will unify both by deriving from `Capability.tier`;
+ * until then the two schemas coexist with a documented mapping. See North Star
+ * v2.3 §1.2 G-2.
+ */
+export const TelemetryModelTier = Schema.Literal("local", "small", "medium", "large", "frontier");
+export type TelemetryModelTier = typeof TelemetryModelTier.Type;
+
+/**
+ * @deprecated Use {@link TelemetryModelTier} instead. Kept as an alias to avoid
+ * a breaking rename during Phase 0; will be removed when the Capability port
+ * lands in Phase 1.
+ */
+export const ModelTier = TelemetryModelTier;
+/**
+ * @deprecated Use {@link TelemetryModelTier} instead. Kept as an alias to avoid
+ * a breaking rename during Phase 0.
+ */
+export type ModelTier = TelemetryModelTier;
+
+/**
+ * Map an operational ModelTier (from `@reactive-agents/reasoning`) to the
+ * coarser TelemetryModelTier used for privacy-preserving aggregation.
+ *
+ * The only bucket that splits is operational `"mid"`, which could reasonably
+ * be either `"small"` or `"medium"` depending on the model family. Until the
+ * Capability port lands, we conservatively map `"mid"` → `"medium"` so the
+ * resulting TelemetryRecord is always decodeable.
+ */
+export function toTelemetryTier(
+  operationalTier: "local" | "mid" | "large" | "frontier",
+): TelemetryModelTier {
+  switch (operationalTier) {
+    case "local":
+      return "local";
+    case "mid":
+      return "medium";
+    case "large":
+      return "large";
+    case "frontier":
+      return "frontier";
+  }
+}
 
 // ─── Telemetry Record ───
 
