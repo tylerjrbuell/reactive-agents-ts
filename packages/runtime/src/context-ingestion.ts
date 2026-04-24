@@ -5,6 +5,7 @@ import {
   makeRagIngestHandler,
   makeInMemoryStoreCallback,
 } from "@reactive-agents/tools";
+import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
 /**
  * Specification for a document to ingest into the RAG memory store.
@@ -79,7 +80,7 @@ export function ingestDocuments(
         ...(doc.format ? { format: doc.format } : {}),
         ...(doc.chunkStrategy ? { chunkStrategy: doc.chunkStrategy } : {}),
         ...(doc.maxChunkSize ? { maxChunkSize: doc.maxChunkSize } : {}),
-      }).pipe(Effect.asVoid, Effect.catchAll(() => Effect.void));
+      }).pipe(Effect.asVoid, Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/context-ingestion.ts:82", tag: errorTag(err) })));
     },
     { discard: true },
   );

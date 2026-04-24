@@ -13,6 +13,7 @@ import type {
   InterventionDispatchedEvent,
   InterventionSuppressedEvent,
 } from "./events.js"
+import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
 // ─── Sequence counter ───
 
@@ -176,7 +177,7 @@ export const TraceBridgeLayer: Layer.Layer<
 
     yield* Effect.addFinalizer(() =>
       recorder.flushAll().pipe(
-        Effect.catchAll(() => Effect.void),
+        Effect.catchAll((err) => emitErrorSwallowed({ site: "trace/src/layer.ts:179", tag: errorTag(err) })),
         Effect.andThen(Effect.sync(() => unsubscribe())),
       )
     )

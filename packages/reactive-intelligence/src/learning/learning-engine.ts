@@ -10,6 +10,7 @@ import {
 import { updateArm } from "./bandit.js";
 import type { BanditStore } from "./bandit-store.js";
 import { classifyTaskCategory } from "./task-classifier.js";
+import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
 export type RunCompletedData = {
   readonly modelId: string;
@@ -161,7 +162,7 @@ export const LearningEngineServiceLive = (
               taskCategory,
               modelId: data.modelId,
             });
-            yield* Effect.catchAll(() => Effect.void)(
+            yield* Effect.catchAll((err) => emitErrorSwallowed({ site: "reactive-intelligence/src/learning/learning-engine.ts:164", tag: errorTag(err) }))(
               skillStore.store(entry),
             );
           }

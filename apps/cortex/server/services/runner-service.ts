@@ -18,6 +18,7 @@ import type {
 } from "./cortex-agent-config.js";
 import { buildCortexAgent } from "./build-cortex-agent.js";
 import type { ReactiveAgent } from "@reactive-agents/runtime";
+import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
 export interface LaunchParams {
   readonly prompt: string;
@@ -195,7 +196,7 @@ export const CortexRunnerServiceLive = Layer.effect(
                       runId,
                       event,
                     })
-                    .pipe(Effect.catchAll(() => Effect.void)),
+                    .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "cortex/server/services/runner-service.ts:198", tag: errorTag(err) }))),
                 );
               }),
             catch: (e) =>
@@ -245,7 +246,7 @@ export const CortexRunnerServiceLive = Layer.effect(
                         debrief,
                       } as any,
                     })
-                    .pipe(Effect.catchAll(() => Effect.void)),
+                    .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "cortex/server/services/runner-service.ts:248", tag: errorTag(err) }))),
                 );
               }
             })
@@ -274,7 +275,7 @@ export const CortexRunnerServiceLive = Layer.effect(
                       error: errorMessage,
                     } as any,
                   })
-                  .pipe(Effect.catchAll(() => Effect.void)),
+                  .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "cortex/server/services/runner-service.ts:277", tag: errorTag(err) }))),
               );
             })
             .finally(() => {
@@ -303,7 +304,7 @@ export const CortexRunnerServiceLive = Layer.effect(
             cortexLog("debug", "runner", "pause: run not active (already finished?)", { runId });
             return;
           }
-          yield* Effect.promise(() => entry.agent.pause()).pipe(Effect.catchAll(() => Effect.void));
+          yield* Effect.promise(() => entry.agent.pause()).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "cortex/server/services/runner-service.ts:306", tag: errorTag(err) })));
         }),
 
       resume: (runId) =>
@@ -314,7 +315,7 @@ export const CortexRunnerServiceLive = Layer.effect(
             cortexLog("debug", "runner", "resume: run not active", { runId });
             return;
           }
-          yield* Effect.promise(() => entry.agent.resume()).pipe(Effect.catchAll(() => Effect.void));
+          yield* Effect.promise(() => entry.agent.resume()).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "cortex/server/services/runner-service.ts:317", tag: errorTag(err) })));
         }),
 
       stop: (runId) =>
@@ -326,7 +327,7 @@ export const CortexRunnerServiceLive = Layer.effect(
             return;
           }
           yield* Effect.promise(() => entry.agent.stop("Cortex UI stop")).pipe(
-            Effect.catchAll(() => Effect.void),
+            Effect.catchAll((err) => emitErrorSwallowed({ site: "cortex/server/services/runner-service.ts:329", tag: errorTag(err) })),
           );
         }),
 

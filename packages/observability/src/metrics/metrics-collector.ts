@@ -1,6 +1,7 @@
 import { Effect, Ref, Context, Layer, Option } from "effect";
 import type { Metric, ToolMetric, ToolMetricStatus } from "../types.js";
 import { EventBus } from "@reactive-agents/core";
+import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
 export interface ToolSummary {
   readonly callCount: number;
@@ -143,7 +144,7 @@ export const MetricsCollectorLive: Layer.Layer<MetricsCollectorTag, never> = Lay
                 event.durationMs,
                 event.success ? "success" : "error",
               )
-              .pipe(Effect.catchAll(() => Effect.void))
+              .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "observability/src/metrics/metrics-collector.ts:146", tag: errorTag(err) })))
           : Effect.void,
       );
 
@@ -167,7 +168,7 @@ export const MetricsCollectorLive: Layer.Layer<MetricsCollectorTag, never> = Lay
             model: event.model,
             provider: event.provider,
           }),
-        ], { concurrency: "unbounded" }).pipe(Effect.asVoid, Effect.catchAll(() => Effect.void)),
+        ], { concurrency: "unbounded" }).pipe(Effect.asVoid, Effect.catchAll((err) => emitErrorSwallowed({ site: "observability/src/metrics/metrics-collector.ts:170", tag: errorTag(err) }))),
       );
 
       // ── Execution phase durations ──
@@ -176,7 +177,7 @@ export const MetricsCollectorLive: Layer.Layer<MetricsCollectorTag, never> = Lay
           .recordHistogram("execution.phase_duration_ms", event.durationMs, {
             phase: event.phase,
           })
-          .pipe(Effect.catchAll(() => Effect.void)),
+          .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "observability/src/metrics/metrics-collector.ts:179", tag: errorTag(err) }))),
       );
 
       // ── Agent completion: success/fail rate ──
@@ -197,7 +198,7 @@ export const MetricsCollectorLive: Layer.Layer<MetricsCollectorTag, never> = Lay
             agentId: event.agentId,
             taskId: event.taskId,
           }),
-        ], { concurrency: "unbounded" }).pipe(Effect.asVoid, Effect.catchAll(() => Effect.void)),
+        ], { concurrency: "unbounded" }).pipe(Effect.asVoid, Effect.catchAll((err) => emitErrorSwallowed({ site: "observability/src/metrics/metrics-collector.ts:200", tag: errorTag(err) }))),
       );
 
       // ── Guardrail violations ──
@@ -209,7 +210,7 @@ export const MetricsCollectorLive: Layer.Layer<MetricsCollectorTag, never> = Lay
           ...event.violations.map((v) =>
             collector.incrementCounter("guardrail.violation_type", 1, { type: v }),
           ),
-        ], { concurrency: "unbounded" }).pipe(Effect.asVoid, Effect.catchAll(() => Effect.void)),
+        ], { concurrency: "unbounded" }).pipe(Effect.asVoid, Effect.catchAll((err) => emitErrorSwallowed({ site: "observability/src/metrics/metrics-collector.ts:212", tag: errorTag(err) }))),
       );
 
       // ── Reasoning step tracking ──
@@ -219,7 +220,7 @@ export const MetricsCollectorLive: Layer.Layer<MetricsCollectorTag, never> = Lay
             strategy: event.strategy,
             ...(event.kernelPass ? { kernelPass: event.kernelPass } : {}),
           })
-          .pipe(Effect.catchAll(() => Effect.void)),
+          .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "observability/src/metrics/metrics-collector.ts:222", tag: errorTag(err) }))),
       );
 
       // ── Final answer produced ──
@@ -232,14 +233,14 @@ export const MetricsCollectorLive: Layer.Layer<MetricsCollectorTag, never> = Lay
             strategy: event.strategy,
             taskId: event.taskId,
           }),
-        ], { concurrency: "unbounded" }).pipe(Effect.asVoid, Effect.catchAll(() => Effect.void)),
+        ], { concurrency: "unbounded" }).pipe(Effect.asVoid, Effect.catchAll((err) => emitErrorSwallowed({ site: "observability/src/metrics/metrics-collector.ts:235", tag: errorTag(err) }))),
       );
 
       // ── Streaming metrics: TTFT proxy ──
       yield* eb.on("AgentStreamStarted", (event) =>
         collector
           .incrementCounter("stream.started", 1, { agentId: event.agentId })
-          .pipe(Effect.catchAll(() => Effect.void)),
+          .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "observability/src/metrics/metrics-collector.ts:242", tag: errorTag(err) }))),
       );
 
       yield* eb.on("AgentStreamCompleted", (event) =>
@@ -251,7 +252,7 @@ export const MetricsCollectorLive: Layer.Layer<MetricsCollectorTag, never> = Lay
           collector.recordHistogram("stream.duration_ms", event.durationMs, {
             agentId: event.agentId,
           }),
-        ], { concurrency: "unbounded" }).pipe(Effect.asVoid, Effect.catchAll(() => Effect.void)),
+        ], { concurrency: "unbounded" }).pipe(Effect.asVoid, Effect.catchAll((err) => emitErrorSwallowed({ site: "observability/src/metrics/metrics-collector.ts:254", tag: errorTag(err) }))),
       );
 
       // ── Gateway events ──
@@ -267,7 +268,7 @@ export const MetricsCollectorLive: Layer.Layer<MetricsCollectorTag, never> = Lay
           collector.setGauge("gateway.action_tokens", event.tokensUsed, {
             source: event.source,
           }),
-        ], { concurrency: "unbounded" }).pipe(Effect.asVoid, Effect.catchAll(() => Effect.void)),
+        ], { concurrency: "unbounded" }).pipe(Effect.asVoid, Effect.catchAll((err) => emitErrorSwallowed({ site: "observability/src/metrics/metrics-collector.ts:270", tag: errorTag(err) }))),
       );
 
       yield* eb.on("ProactiveActionSuppressed", (event) =>
@@ -276,7 +277,7 @@ export const MetricsCollectorLive: Layer.Layer<MetricsCollectorTag, never> = Lay
             policy: event.policy,
             source: event.source,
           })
-          .pipe(Effect.catchAll(() => Effect.void)),
+          .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "observability/src/metrics/metrics-collector.ts:279", tag: errorTag(err) }))),
       );
 
       yield* eb.on("BudgetExhausted", (event) =>
@@ -284,7 +285,7 @@ export const MetricsCollectorLive: Layer.Layer<MetricsCollectorTag, never> = Lay
           .incrementCounter("budget.exhausted", 1, {
             budgetType: event.budgetType,
           })
-          .pipe(Effect.catchAll(() => Effect.void)),
+          .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "observability/src/metrics/metrics-collector.ts:287", tag: errorTag(err) }))),
       );
     }
 

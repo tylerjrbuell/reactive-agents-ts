@@ -852,6 +852,37 @@ export type AgentEvent =
       readonly success: boolean;
       readonly durationMs: number;
     }
+  // ─── Silent-failure instrumentation (Phase 0 S0.2) ───
+  | {
+      /**
+       * A framework site caught and swallowed an error, preserving the
+       * previous `Effect.catchAll(() => Effect.void)` behaviour while making
+       * the swallow observable via telemetry.
+       *
+       * Emitted by the `emitErrorSwallowed` helper; every replacement of a
+       * silent `catchAll` in production code publishes one of these.
+       */
+      readonly _tag: "ErrorSwallowed";
+      /**
+       * Canonical site identifier, formatted as
+       * `<package-name>/<relative-file>:<line>`. Line numbers reflect the
+       * pre-migration source position and do not update when adjacent code
+       * shifts — treat the string as a stable identifier.
+       */
+      readonly site: string;
+      /**
+       * Error discriminator — typically the caught error's `_tag` or, for
+       * native `Error` instances, the constructor name. Unknown inputs
+       * surface as `"UnknownError"`.
+       */
+      readonly tag: string;
+      /** Task identifier when the swallow occurred inside a task-scoped Effect. */
+      readonly taskId?: string;
+      /** Short human-readable error message, when known. Not redacted. */
+      readonly message?: string;
+      /** Unix timestamp in milliseconds when the swallow fired. */
+      readonly timestamp: number;
+    }
   // ─── Skill lifecycle events ───
   | SkillActivated
   | SkillRefined

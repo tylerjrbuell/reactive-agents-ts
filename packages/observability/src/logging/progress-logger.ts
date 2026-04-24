@@ -1,5 +1,6 @@
 import { Effect } from "effect";
 import { ObservabilityService } from "../observability-service.js";
+import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
 export interface IterationProgress {
   readonly iteration: number;
@@ -59,7 +60,7 @@ export class ProgressLogger {
           // Show current thinking at normal verbosity
           const summary = progress.content.substring(0, 80);
           const msg = `  ┄ ${iterLabel} [thought] ${summary}${progress.content.length > 80 ? "..." : ""}`;
-          yield* obs.info(msg).pipe(Effect.catchAll(() => Effect.void));
+          yield* obs.info(msg).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "observability/src/logging/progress-logger.ts:62", tag: errorTag(err) })));
           break;
         }
 
@@ -68,7 +69,7 @@ export class ProgressLogger {
           if (progress.toolName) {
             const status = progress.toolStatus === "error" ? "❌" : "→";
             const msg = `  ┄ ${iterLabel} [action]  ${progress.toolName}() ${status}`;
-            yield* obs.info(msg).pipe(Effect.catchAll(() => Effect.void));
+            yield* obs.info(msg).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "observability/src/logging/progress-logger.ts:71", tag: errorTag(err) })));
           }
           break;
         }
@@ -78,10 +79,10 @@ export class ProgressLogger {
           if (isVerbose && progress.toolName) {
             const status = progress.toolStatus === "success" ? "✓" : "⚠";
             const msg = `  ┄ ${iterLabel} [obs]     ${progress.toolName}: ${status}`;
-            yield* obs.debug(msg).pipe(Effect.catchAll(() => Effect.void));
+            yield* obs.debug(msg).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "observability/src/logging/progress-logger.ts:81", tag: errorTag(err) })));
           } else if (progress.toolStatus === "error" && progress.errorMessage) {
             const msg = `  ✗ ${iterLabel} [error]   ${progress.toolName ?? "unknown"}: ${progress.errorMessage}`;
-            yield* obs.warn(msg).pipe(Effect.catchAll(() => Effect.void));
+            yield* obs.warn(msg).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "observability/src/logging/progress-logger.ts:84", tag: errorTag(err) })));
           }
           break;
         }
@@ -111,9 +112,9 @@ export class ProgressLogger {
       const msg = `    ${statusIcon} ${toolName.padEnd(15)} ${durationMs.toString().padStart(4)}ms${errorMessage ? ` — ${errorMessage}` : ""}`;
 
       if (status === "error" || status === "timeout") {
-        yield* obs.warn(msg).pipe(Effect.catchAll(() => Effect.void));
+        yield* obs.warn(msg).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "observability/src/logging/progress-logger.ts:114", tag: errorTag(err) })));
       } else {
-        yield* obs.info(msg).pipe(Effect.catchAll(() => Effect.void));
+        yield* obs.info(msg).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "observability/src/logging/progress-logger.ts:116", tag: errorTag(err) })));
       }
     });
   }
@@ -136,7 +137,7 @@ export class ProgressLogger {
       if (!isVerbose) return;
 
       const msg = `  📍 [${iteration}] ${label}${details ? ` ${JSON.stringify(details)}` : ""}`;
-      yield* obs.info(msg).pipe(Effect.catchAll(() => Effect.void));
+      yield* obs.info(msg).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "observability/src/logging/progress-logger.ts:139", tag: errorTag(err) })));
     });
   }
 
@@ -164,7 +165,7 @@ export class ProgressLogger {
       const reason = completionReason ? ` — ${completionReason}` : "";
       const msg = `  ✓ Iter ${iteration}: ${tokensUsed} tok, ${tools}${reason}`;
 
-      yield* obs.info(msg).pipe(Effect.catchAll(() => Effect.void));
+      yield* obs.info(msg).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "observability/src/logging/progress-logger.ts:167", tag: errorTag(err) })));
     });
   }
 }

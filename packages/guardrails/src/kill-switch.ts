@@ -1,5 +1,6 @@
 import { Effect, Context, Layer, Ref, Deferred } from "effect";
 import { EventBus } from "@reactive-agents/core";
+import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
 /**
  * KillSwitchService — emergency stop for agent execution.
@@ -172,7 +173,7 @@ export const KillSwitchServiceLive = () =>
               // is actually about to block, so the event carries the real taskId.
               if (eb) {
                 yield* eb.publish({ _tag: "AgentPaused", agentId, taskId })
-                  .pipe(Effect.catchAll(() => Effect.void));
+                  .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "guardrails/src/kill-switch.ts:175", tag: errorTag(err) })));
               }
               const deferreds = yield* Ref.get(pauseDeferreds);
               const d = deferreds.get(agentId);
@@ -182,7 +183,7 @@ export const KillSwitchServiceLive = () =>
               // Emit AgentResumed now — execution is actually continuing.
               if (eb) {
                 yield* eb.publish({ _tag: "AgentResumed", agentId, taskId })
-                  .pipe(Effect.catchAll(() => Effect.void));
+                  .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "guardrails/src/kill-switch.ts:185", tag: errorTag(err) })));
               }
             }
             const newLifecycle = yield* Ref.get(lifecycleRef).pipe(

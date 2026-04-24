@@ -1,6 +1,7 @@
 import { Context, Effect, Layer, Ref } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
 import type { CompletionRequest, CompletionResponse, LLMErrors } from "@reactive-agents/llm-provider";
+import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
 type LLMCompleter = {
   readonly complete: (request: CompletionRequest) => Effect.Effect<CompletionResponse, LLMErrors>;
@@ -218,7 +219,7 @@ export const makeEvalServiceLive = (store?: EvalStore) =>
 
             // Persist to store if available
             if (store) {
-              yield* store.saveRun(run).pipe(Effect.catchAll(() => Effect.void));
+              yield* store.saveRun(run).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "eval/src/services/eval-service.ts:221", tag: errorTag(err) })));
             }
 
             return run;

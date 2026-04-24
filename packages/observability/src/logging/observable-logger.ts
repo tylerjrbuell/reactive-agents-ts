@@ -1,6 +1,7 @@
 import { Effect, Context, Stream as EStream, Ref, Chunk } from "effect";
 import type { LogEvent, RunSummary } from "../types.js";
 import { formatEvent } from "./event-formatter.js";
+import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
 /**
  * ObservableLogger — Unified logging service for Reactive Agents
@@ -121,7 +122,7 @@ export function makeObservableLogger(config: {
 
         // Notify subscribers
         for (const sub of subscribers) {
-          yield* sub(event, formatted).pipe(Effect.catchAll(() => Effect.void));
+          yield* sub(event, formatted).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "observability/src/logging/observable-logger.ts:124", tag: errorTag(err) })));
         }
 
         // If live, print to console

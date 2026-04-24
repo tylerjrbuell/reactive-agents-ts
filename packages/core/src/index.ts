@@ -67,6 +67,13 @@ export type {
   EventHandler,
   TypedEventHandler,
 } from "./services/event-bus.js";
+// ErrorSwallowed instrumentation (Phase 0 S0.2) — replaces silent
+// `catchAll(() => Effect.void)` sites with an observable event.
+export {
+  emitErrorSwallowed,
+  errorTag,
+} from "./services/error-swallowed.js";
+export type { ErrorSwallowedPayload } from "./services/error-swallowed.js";
 export {
   ContextWindowManager,
   ContextWindowManagerLive,

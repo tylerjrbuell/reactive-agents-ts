@@ -1,6 +1,7 @@
 import { Context, Data, Effect, Layer, Ref } from "effect";
 import { EventBus } from "@reactive-agents/core";
 import type { AgentEvent } from "@reactive-agents/core";
+import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
 /** Aligns with Cortex server `CORTEX_LOG` (error | warn | info | debug | off). Default: info. */
 type ReporterLogFloor = "error" | "warn" | "info" | "debug" | "off";
@@ -108,14 +109,14 @@ export const CortexReporterLive = (cortexUrl: string) =>
               Ref.set(connectedRef, true).pipe(
                 Effect.zipRight(Ref.set(retryAttemptRef, 0)),
                 Effect.zipRight(clearRetryTimer),
-                Effect.catchAll(() => Effect.void),
+                Effect.catchAll((err) => emitErrorSwallowed({ site: "observability/src/cortex/cortex-reporter.ts:111", tag: errorTag(err) })),
               ),
             );
           };
           socket.onerror = () => {
             repLog("warn", "ingest WebSocket error", { url: ingestUrl });
             Effect.runFork(
-              Ref.set(connectedRef, false).pipe(Effect.catchAll(() => Effect.void)),
+              Ref.set(connectedRef, false).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "observability/src/cortex/cortex-reporter.ts:118", tag: errorTag(err) }))),
             );
           };
           socket.onclose = () => {
@@ -132,12 +133,12 @@ export const CortexReporterLive = (cortexUrl: string) =>
                   Effect.runFork(connectSocket());
                 }, delayMs);
                 yield* Ref.set(retryTimerRef, timer);
-              }).pipe(Effect.catchAll(() => Effect.void)),
+              }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "observability/src/cortex/cortex-reporter.ts:135", tag: errorTag(err) }))),
             );
           };
-          Effect.runFork(Ref.set(socketRef, socket).pipe(Effect.catchAll(() => Effect.void)));
+          Effect.runFork(Ref.set(socketRef, socket).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "observability/src/cortex/cortex-reporter.ts:138", tag: errorTag(err) }))));
           })),
-          Effect.catchAll(() => Effect.void),
+          Effect.catchAll((err) => emitErrorSwallowed({ site: "observability/src/cortex/cortex-reporter.ts:140", tag: errorTag(err) })),
         );
 
       const toIngestMessage = (event: AgentEvent): CortexIngestMessage => {
@@ -192,8 +193,8 @@ export const CortexReporterLive = (cortexUrl: string) =>
           }
           yield* Effect.sync(() => {
             socket.send(JSON.stringify(toIngestMessage(event)));
-          }).pipe(Effect.catchAll(() => Effect.void));
-        }).pipe(Effect.catchAll(() => Effect.void)),
+          }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "observability/src/cortex/cortex-reporter.ts:195", tag: errorTag(err) })));
+        }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "observability/src/cortex/cortex-reporter.ts:196", tag: errorTag(err) }))),
       );
 
       yield* Ref.set(reconnectEnabledRef, true);
@@ -216,7 +217,7 @@ export const CortexReporterLive = (cortexUrl: string) =>
             yield* clearRetryTimer;
             const socket = yield* Ref.get(socketRef);
             if (socket) {
-              yield* Effect.sync(() => socket.close()).pipe(Effect.catchAll(() => Effect.void));
+              yield* Effect.sync(() => socket.close()).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "observability/src/cortex/cortex-reporter.ts:219", tag: errorTag(err) })));
             }
             yield* Ref.set(socketRef, null);
             yield* Ref.set(connectedRef, false);

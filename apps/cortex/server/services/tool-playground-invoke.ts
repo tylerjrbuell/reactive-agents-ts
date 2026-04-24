@@ -4,6 +4,7 @@ import { ToolService, createToolsLayer, type ToolOutput } from "@reactive-agents
 import { getMcpServer, parseMcpConfig } from "../db/mcp-queries.js";
 import { getLabCustomTool } from "../db/lab-custom-tools-queries.js";
 import { labCustomToDefinition, parseCatalogToolId } from "./tool-catalog.js";
+import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
 const PLAYGROUND_AGENT = "cortex-lab";
 const PLAYGROUND_SESSION = "tool-playground";
@@ -118,7 +119,7 @@ export function invokeCatalogTool(
       sessionId: PLAYGROUND_SESSION,
     });
     const disconnectQuiet = tools.disconnectMCPServer(cfg.name).pipe(
-      Effect.catchAll(() => Effect.void),
+      Effect.catchAll((err) => emitErrorSwallowed({ site: "cortex/server/services/tool-playground-invoke.ts:121", tag: errorTag(err) })),
     );
     return yield* exec.pipe(Effect.ensuring(disconnectQuiet));
   });

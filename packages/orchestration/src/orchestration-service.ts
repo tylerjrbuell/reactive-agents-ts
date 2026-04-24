@@ -13,6 +13,7 @@ import { WorkflowError, WorkflowStepError, CheckpointError, WorkerPoolError } fr
 import { makeWorkflowEngine, type WorkflowEngine } from "./workflows/workflow-engine.js";
 import { makeEventSourcing, type EventSourcing } from "./durable/event-sourcing.js";
 import { makeWorkerPool, type WorkerPool } from "./multi-agent/worker-pool.js";
+import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
 export class OrchestrationService extends Context.Tag("OrchestrationService")<
   OrchestrationService,
@@ -135,7 +136,7 @@ export const OrchestrationServiceLive = Effect.gen(function* () {
 
       // Save a final checkpoint (best-effort, don't fail the workflow)
       const cp = yield* engine.createCheckpoint(result);
-      yield* eventSourcing.saveCheckpoint(cp).pipe(Effect.catchAll(() => Effect.void));
+      yield* eventSourcing.saveCheckpoint(cp).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "orchestration/src/orchestration-service.ts:138", tag: errorTag(err) })));
 
       return result;
     });

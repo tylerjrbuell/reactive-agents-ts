@@ -1,5 +1,6 @@
 import { Context, Effect, Layer, Option, Ref } from "effect";
 import { EventBus } from "@reactive-agents/core";
+import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
 // ─── Types ───
 
@@ -90,7 +91,7 @@ export const ThoughtTracerLive = Layer.effect(
           action: event.action,
           observation: event.observation,
         }),
-      ).pipe(Effect.catchAll(() => Effect.void));
+      ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "observability/src/debugging/thought-tracer.ts:93", tag: errorTag(err) })));
     }
 
     return tracer;

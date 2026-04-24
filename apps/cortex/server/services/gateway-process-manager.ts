@@ -29,6 +29,7 @@ import { CortexIngestService } from "./ingest-service.js";
 import type { Layer } from "effect";
 import { generateTaskId } from "@reactive-agents/core";
 import { buildCortexAgent } from "./build-cortex-agent.js";
+import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
 interface AgentProcess {
   readonly agentId: string;
@@ -298,7 +299,7 @@ export class GatewayProcessManager {
       const unsubscribe = await agent.subscribe((event) => {
         Effect.runFork(
           ingest.handleEvent(agentId_, runId, { v: 1, agentId: agentId_, runId, event })
-            .pipe(Effect.catchAll(() => Effect.void)),
+            .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "cortex/server/services/gateway-process-manager.ts:301", tag: errorTag(err) }))),
         );
       });
 
@@ -313,7 +314,7 @@ export class GatewayProcessManager {
               ingest.handleEvent(agentId_, runId, {
                 v: 1, agentId: agentId_, runId,
                 event: { _tag: "DebriefCompleted" as const, taskId: runId, agentId: agentId_, debrief } as any,
-              }).pipe(Effect.catchAll(() => Effect.void)),
+              }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "cortex/server/services/gateway-process-manager.ts:316", tag: errorTag(err) }))),
             );
           }
         })

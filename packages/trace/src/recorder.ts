@@ -3,6 +3,7 @@ import { Context, Effect, Layer, Ref } from "effect"
 import { mkdir, appendFile } from "node:fs/promises"
 import { join } from "node:path"
 import type { TraceEvent } from "./events.js"
+import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
 // ─── Service Interface ───
 
@@ -72,13 +73,13 @@ export function TraceRecorderServiceLive(opts: TraceRecorderOptions): Layer.Laye
           yield* Effect.tryPromise({
             try: () => mkdir(dir, { recursive: true }),
             catch: (e) => new Error(String(e)),
-          }).pipe(Effect.catchAll(() => Effect.void))
+          }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "trace/src/recorder.ts:75", tag: errorTag(err) })))
           const path = join(dir, `${runId}.jsonl`)
           const body = events.map((e) => JSON.stringify(e)).join("\n") + "\n"
           yield* Effect.tryPromise({
             try: () => appendFile(path, body),
             catch: (e) => new Error(String(e)),
-          }).pipe(Effect.catchAll(() => Effect.void))
+          }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "trace/src/recorder.ts:81", tag: errorTag(err) })))
           yield* Ref.update(pending, (m) => {
             const next = new Map(m)
             next.set(runId, [])

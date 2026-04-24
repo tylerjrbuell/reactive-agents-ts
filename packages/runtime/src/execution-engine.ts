@@ -46,6 +46,7 @@ import {
 import { diffClassifierAccuracy } from "./classifier-accuracy.js";
 import { isSubagentCall } from "./subagent-telemetry.js";
 import { computeArgValidityRate } from "./arg-validity.js";
+import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
 // ─── Narrow service types for optional deps ───
 
@@ -384,7 +385,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
 
           if (eb) {
             yield* eb.publish({ _tag: "ExecutionHookFired", taskId: ctx.taskId, phase: String(phase), timing: "before" })
-              .pipe(Effect.catchAll(() => Effect.void));
+              .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:387", tag: errorTag(err) })));
           }
 
           // Check cancellation
@@ -392,7 +393,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
           if (cancelled.has(ctx.taskId)) {
             if (eb) {
               yield* eb.publish({ _tag: "ExecutionCancelled", taskId: ctx.taskId })
-                .pipe(Effect.catchAll(() => Effect.void));
+                .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:395", tag: errorTag(err) })));
             }
             return yield* Effect.fail(
               new ExecutionError({
@@ -411,7 +412,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   ...ctxAfterBefore,
                   metadata: { ...ctxAfterBefore.metadata, error: e },
                 })
-                .pipe(Effect.catchAll(() => Effect.void)),
+                .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:414", tag: errorTag(err) }))),
             ),
           );
 
@@ -422,7 +423,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
 
           if (eb) {
             yield* eb.publish({ _tag: "ExecutionHookFired", taskId: ctx.taskId, phase: String(phase), timing: "after" })
-              .pipe(Effect.catchAll(() => Effect.void));
+              .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:425", tag: errorTag(err) })));
           }
 
           return ctxFinal;
@@ -444,7 +445,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
         // Publish phase entered event (fire and forget)
         const publishEntered = eb
           ? eb.publish({ _tag: "ExecutionPhaseEntered", taskId: ctx.taskId, phase })
-              .pipe(Effect.catchAll(() => Effect.void))
+              .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:447", tag: errorTag(err) })))
           : Effect.void;
 
         const phaseEffect = runPhase(ctx, phase, body, eb).pipe(
@@ -456,17 +457,17 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
             if (obs) {
               sideEffects.push(
                 obs.incrementCounter("execution.phase.count", 1, { phase })
-                  .pipe(Effect.catchAll(() => Effect.void)),
+                  .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:459", tag: errorTag(err) }))),
               );
               sideEffects.push(
                 obs.recordHistogram("execution.phase.duration_ms", durationMs, { phase })
-                  .pipe(Effect.catchAll(() => Effect.void)),
+                  .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:463", tag: errorTag(err) }))),
               );
             }
             if (eb) {
               sideEffects.push(
                 eb.publish({ _tag: "ExecutionPhaseCompleted", taskId: ctx.taskId, phase, durationMs })
-                  .pipe(Effect.catchAll(() => Effect.void)),
+                  .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:469", tag: errorTag(err) }))),
               );
             }
 
@@ -486,7 +487,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 iteration: result.iteration,
                 tokensUsed: result.tokensUsed,
                 cost: result.cost,
-              }).pipe(Effect.catchAll(() => Effect.void)),
+              }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:489", tag: errorTag(err) }))),
             ),
           ),
           { taskId: ctx.taskId, agentId: ctx.agentId, phase },
@@ -638,7 +639,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       confidence: score.confidence,
                       modelTier: score.modelTier, iterationWeight: score.iterationWeight,
                     });
-                  }).pipe(Effect.catchAll(() => Effect.void)),
+                  }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:641", tag: errorTag(err) }))),
                 );
               }
             }
@@ -694,7 +695,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     }
                     return Effect.void;
                   }),
-                  Effect.catchAll(() => Effect.void),
+                  Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:697", tag: errorTag(err) })),
                 );
 
                 // Emit RI telemetry notice once per process via structured log
@@ -721,7 +722,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         }
                         return Effect.void;
                       }),
-                      Effect.catchAll(() => Effect.void),
+                      Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:724", tag: errorTag(err) })),
                     );
                   }
                 }
@@ -734,9 +735,9 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       .pipe(Effect.catchAll(() => Effect.succeed("ok" as const)));
                     if (status === "stopping") {
                       if (eb) yield* eb.publish({ _tag: "AgentStopping", agentId: config.agentId,
-                        taskId, reason: "stop() requested" }).pipe(Effect.catchAll(() => Effect.void));
+                        taskId, reason: "stop() requested" }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:737", tag: errorTag(err) })));
                       if (eb) yield* eb.publish({ _tag: "AgentStopped", agentId: config.agentId,
-                        taskId, reason: "stop() requested" }).pipe(Effect.catchAll(() => Effect.void));
+                        taskId, reason: "stop() requested" }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:739", tag: errorTag(err) })));
                       return yield* Effect.fail(new KillSwitchTriggeredError({
                         message: `Agent ${config.agentId} stopping gracefully`,
                         taskId, agentId: config.agentId, reason: "stop() requested",
@@ -746,7 +747,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       .pipe(Effect.catchAll(() => Effect.succeed({ triggered: false })))) as { triggered: boolean; reason?: string };
                     if (ksStatus.triggered) {
                       if (eb) yield* eb.publish({ _tag: "AgentTerminated", agentId: config.agentId,
-                        taskId, reason: ksStatus.reason ?? "terminated" }).pipe(Effect.catchAll(() => Effect.void));
+                        taskId, reason: ksStatus.reason ?? "terminated" }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:749", tag: errorTag(err) })));
                       return yield* Effect.fail(new KillSwitchTriggeredError({
                         message: `Kill switch triggered for agent ${config.agentId}: ${ksStatus.reason ?? "no reason"}`,
                         taskId, agentId: config.agentId, reason: ksStatus.reason ?? "no reason",
@@ -768,7 +769,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   yield* obs.info("Execution started", {
                     taskId: task.id,
                     agentId: task.agentId,
-                  }).pipe(Effect.catchAll(() => Effect.void));
+                  }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:771", tag: errorTag(err) })));
                 }
 
                 if (eb) {
@@ -789,7 +790,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       ? { parentAgentId: String(task.metadata.context["parentAgentId"]) }
                       : {}),
                     ...(agentDisplayName ? { agentDisplayName } : {}),
-                  }).pipe(Effect.catchAll(() => Effect.void));
+                  }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:792", tag: errorTag(err) })));
                 }
 
                 // ── Phase 1: BOOTSTRAP ──
@@ -838,7 +839,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                             strategy: fragment.reasoningConfig?.strategy,
                             successRate: matchingSkill.successRate,
                             useCount: matchingSkill.useCount,
-                          }).pipe(Effect.catchAll(() => Effect.void));
+                          }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:841", tag: errorTag(err) })));
                         }
                         // Store skill reference on context metadata for downstream use
                         ctx = { ...ctx, metadata: { ...ctx.metadata, appliedSkill: matchingSkill.name, appliedSkillId: matchingSkill.id, appliedSkillMeanEntropy: fragment.meanComposite } };
@@ -882,7 +883,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       };
 
                       if (obs) {
-                        yield* obs.info(`Skills resolved: ${resolved.all.length} total, ${resolved.autoActivate.length} auto-activate`).pipe(Effect.catchAll(() => Effect.void));
+                        yield* obs.info(`Skills resolved: ${resolved.all.length} total, ${resolved.autoActivate.length} auto-activate`).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:885", tag: errorTag(err) })));
                       }
                     }
                   }
@@ -898,7 +899,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   const episodicCount = (mc?.recentEpisodes as unknown[] | undefined)?.length ?? 0;
                   const memInfo = `${semanticLines} semantic lines, ${episodicCount} episodic`;
                   yield* obs.info(`◉ [bootstrap]  ${memInfo} | ${bootstrapMs}ms`)
-                    .pipe(Effect.catchAll(() => Effect.void));
+                    .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:901", tag: errorTag(err) })));
                 }
 
                 // ── Experience tip injection (optional) ──
@@ -919,7 +920,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       ctx = { ...ctx, metadata: { ...ctx.metadata, experienceTips: tips.tips } };
                       if (obs && isNormal) {
                         yield* obs.info(`◉ [experience]  ${tips.tips.length} tip(s) from prior runs`)
-                          .pipe(Effect.catchAll(() => Effect.void));
+                          .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:922", tag: errorTag(err) })));
                       }
                     }
                   }
@@ -951,7 +952,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     skillsActive: resolvedSkills
                       .map((s) => s?.name ?? s?.id ?? "")
                       .filter(Boolean),
-                  } as any).pipe(Effect.catchAll(() => Effect.void));
+                  } as any).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:954", tag: errorTag(err) })));
                 }
 
                 // ── Phase 2: GUARDRAIL (optional) ── H2
@@ -992,7 +993,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                               violations: result.violations.map((v: any) => `${v.type}: ${v.message}`),
                               score: result.score,
                               blocked: true,
-                            }).pipe(Effect.catchAll(() => Effect.void));
+                            }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:995", tag: errorTag(err) })));
                           }
                           return yield* Effect.fail(
                             new GuardrailViolationError({
@@ -1125,7 +1126,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     yield* obs.info(
                       `[allowedTools] These tools were specified but are NOT registered: ${mismatches.join(", ")}. ` +
                       `Registered tools: ${cachedToolDefs.map((t: any) => t.name).join(", ")}`
-                    ).pipe(Effect.catchAll(() => Effect.void))
+                    ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:1128", tag: errorTag(err) })))
                   }
                 }
 
@@ -1145,7 +1146,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     .join(", ");
                   const toolsInfo = toolNames ? ` | tools: ${toolNames}` : "";
                   yield* obs.info(`◉ [strategy]   ${ctx.selectedStrategy ?? "reactive"}${toolsInfo}`)
-                    .pipe(Effect.catchAll(() => Effect.void));
+                    .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:1148", tag: errorTag(err) })));
                 }
 
                 // ── Phase 5: AGENT_LOOP ──
@@ -1201,7 +1202,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     effectiveRequiredTools = [...literalMentions];
                     if (obs && isNormal) {
                       yield* obs.info(`◉ [classify]   skipped (reliability=low); literal mentions: ${literalMentions.join(", ")}`)
-                        .pipe(Effect.catchAll(() => Effect.void));
+                        .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:1204", tag: errorTag(err) })));
                     }
                   }
                 }
@@ -1250,14 +1251,14 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         .map(([t, n]) => `${t}×${n}`)
                         .join(", ");
                       yield* obs.info(`◉ [classify]   required: ${classifyResult.required.join(", ")}${qHint ? ` (${qHint})` : ""}`)
-                        .pipe(Effect.catchAll(() => Effect.void));
+                        .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:1253", tag: errorTag(err) })));
                     }
                   }
                   if (classifyResult.relevant.length > 0) {
                     classifiedRelevantTools = classifyResult.relevant;
                     if (obs && isNormal) {
                       yield* obs.info(`◉ [classify]   relevant: ${classifyResult.relevant.join(", ")}`)
-                        .pipe(Effect.catchAll(() => Effect.void));
+                        .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:1260", tag: errorTag(err) })));
                     }
                   }
                 }
@@ -1297,7 +1298,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       };
                       if (obs && isNormal) {
                         yield* obs.info("◉ [cache]      HIT — skipping reasoning")
-                          .pipe(Effect.catchAll(() => Effect.void));
+                          .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:1300", tag: errorTag(err) })));
                       }
                     }
                   }
@@ -1434,7 +1435,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       availableToolNames = filtered.map(t => t.name);
                       if (obs && isNormal) {
                         yield* obs.info(`◉ [adaptive-tools] showing ${filtered.length} of ${filtered.length + hiddenCount} tools (${hiddenCount} hidden)`)
-                          .pipe(Effect.catchAll(() => Effect.void));
+                          .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:1437", tag: errorTag(err) })));
                       }
                     }
                   }
@@ -1464,7 +1465,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                               : "";
                             return capturedObs
                               .debug(`  ┄ [model-io:${pass}]\n    ${sysLine}\n    ── thread (${event.messages.length} msg) ──\n    ${indent(threadLines)}${rawLine}`)
-                              .pipe(Effect.catchAll(() => Effect.void));
+                              .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:1467", tag: errorTag(err) })));
                           }
 
                           // Fallback: legacy system+user flat format
@@ -1472,7 +1473,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                           const userPreview = event.prompt.user;
                           return capturedObs
                             .debug(`  ┄ [model-io:${pass}]\n    ── system ──\n    ${indent(sysPreview)}\n    ── user ──\n    ${indent(userPreview)}`)
-                            .pipe(Effect.catchAll(() => Effect.void));
+                            .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:1475", tag: errorTag(err) })));
                         }
                         const rawContent = event.thought ?? event.action ?? event.observation ?? "";
                         // Skip events with no displayable content (e.g. prompt-only events when logModelIO is off)
@@ -1488,7 +1489,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                             : rawContent.slice(0, 180) + "...";
                         return capturedObs
                           .debug(`  ${prefix}  ${content}`)
-                          .pipe(Effect.catchAll(() => Effect.void));
+                          .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:1491", tag: errorTag(err) })));
                       },
                     );
                   }
@@ -1639,7 +1640,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                           yield* obs.info(
                             `[engine] WARN: normalizeReasoningResult returned null — strategyFallback triggered. ` +
                             `classify.required=${effectiveRequiredTools?.join(",") ?? "(none)"}`
-                          ).pipe(Effect.catchAll(() => Effect.void));
+                          ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:1642", tag: errorTag(err) })));
                         }
                         result = normalizedResult ?? {
                           output: "Strategy returned an invalid result shape",
@@ -1650,12 +1651,12 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       } else {
                         const strategyError = strategyOutcome.cause;
                         if (obs) {
-                          yield* obs.info(`⚠ Strategy failed, using fallback: ${String(strategyError)}`).pipe(Effect.catchAll(() => Effect.void));
+                          yield* obs.info(`⚠ Strategy failed, using fallback: ${String(strategyError)}`).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:1653", tag: errorTag(err) })));
                           yield* obs.info(
                             `[engine] WARN: strategy failed — strategyFallback triggered. ` +
                             `classify.required=${effectiveRequiredTools?.join(",") ?? "(none)"}. ` +
                             `error=${String(strategyError)}`
-                          ).pipe(Effect.catchAll(() => Effect.void));
+                          ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:1658", tag: errorTag(err) })));
                         }
                         result = {
                           output: `Strategy execution failed: ${String(strategyError)}`,
@@ -1829,7 +1830,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   // Note: "loop" mode is not yet implemented — configured but silently ignored with a warning.
                   if (config.verificationStep && config.verificationStep.mode !== "reflect" && obs) {
                     yield* obs.info(`⚠ withVerificationStep: mode "${config.verificationStep.mode}" is not yet implemented — only "reflect" is supported. Skipping verification.`)
-                      .pipe(Effect.catchAll(() => Effect.void));
+                      .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:1832", tag: errorTag(err) })));
                   }
                   if (config.verificationStep?.mode === "reflect" && !cacheHit && reasoningOpt._tag === "Some") {
                     const outputToVerify = String(ctx.metadata.lastResponse ?? "");
@@ -1950,7 +1951,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       ? ` (adaptive→${activeStrat})`
                       : "";
                     yield* obs.info(`◉ [think]      ${stepsCount} steps | ${tokTot.toLocaleString()} tok | ${(thinkMs / 1000).toFixed(1)}s${stratSuffix}`)
-                      .pipe(Effect.catchAll(() => Effect.void));
+                      .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:1953", tag: errorTag(err) })));
                   }
 
                   // ── Bridge reasoning path → episodic memory ──
@@ -1992,7 +1993,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                               taskType: task.type,
                             } : {}),
                           },
-                        }).pipe(Effect.catchAll(() => Effect.void));
+                        }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:1995", tag: errorTag(err) })));
 
                         // ── Persist reflexion critiques for cross-run learning ──
                         const reflexionCritiques = thinkRes.metadata?.reflexionCritiques;
@@ -2011,7 +2012,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                               critiqueCount: reflexionCritiques.length,
                               taskDescription: String(task.input).slice(0, 500),
                             },
-                          }).pipe(Effect.catchAll(() => Effect.void));
+                          }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2014", tag: errorTag(err) })));
                         }
                       }
                     }
@@ -2045,7 +2046,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         totalTokens: ctx.tokensUsed,
                         errors: [],
                         modelTier: config.contextProfile?.tier ?? "mid",
-                      }).pipe(Effect.catchAll(() => Effect.void));
+                      }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2048", tag: errorTag(err) })));
                     }
                   }
 
@@ -2067,7 +2068,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         .map((s) => s.metadata?.toolUsed ?? s.content.split("(")[0]?.trim() ?? "?")
                         .join(", ");
                       yield* obs.info(`◉ [act]        ${toolsUsed} (${actionSteps.length} tools)`)
-                        .pipe(Effect.catchAll(() => Effect.void));
+                        .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2070", tag: errorTag(err) })));
                     }
 
                     const syntheticToolResults = actionSteps.map((s) => {
@@ -2117,7 +2118,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                           String(ctx.metadata.lastResponse),
                           String(ctx.selectedModel ?? "unknown"),
                         )
-                        .pipe(Effect.catchAll(() => Effect.void));
+                        .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2120", tag: errorTag(err) })));
                     }
                   }
                 } else if (!cacheHit) {
@@ -2215,7 +2216,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                               if (obs) {
                                 const msg = "message" in budgetErr ? String(budgetErr.message) : "Budget exceeded";
                                 return obs.info(`⚠ [budget] ${msg} — stopping execution`).pipe(
-                                  Effect.catchAll(() => Effect.void),
+                                  Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2218", tag: errorTag(err) })),
                                   Effect.map(() => false),
                                 );
                               }
@@ -2245,12 +2246,12 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         _tag: "ExecutionLoopIteration",
                         taskId: ctx.taskId,
                         iteration: ctx.iteration,
-                      }).pipe(Effect.catchAll(() => Effect.void));
+                      }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2248", tag: errorTag(err) })));
                     }
                     // Phase 0.5: Track iteration gauge
                     if (obs) {
                       yield* obs.setGauge("execution.iteration", ctx.iteration, { taskId: ctx.taskId })
-                        .pipe(Effect.catchAll(() => Effect.void));
+                        .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2253", tag: errorTag(err) })));
                     }
 
                     // 5a. THINK
@@ -2342,7 +2343,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                               model: String(c.selectedModel ?? "unknown"),
                               provider: String(c.provider ?? "unknown"),
                               contextSize: messagesToSend.length,
-                            }).pipe(Effect.catchAll(() => Effect.void));
+                            }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2345", tag: errorTag(err) })));
                           }
 
                           const llmCallStart = performance.now();
@@ -2359,7 +2360,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                               Effect.gen(function* () {
                                 if (event.type === "text_delta" && event.text) {
                                   content += event.text;
-                                  yield* streamCb(event.text).pipe(Effect.catchAll(() => Effect.void));
+                                  yield* streamCb(event.text).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2362", tag: errorTag(err) })));
                                 } else if (event.type === "content_complete") {
                                   if (event.content) content = event.content;
                                   if (event.stopReason) stopReason = event.stopReason;
@@ -2368,7 +2369,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                                   usage = { totalTokens: event.usage?.totalTokens, estimatedCost: event.usage?.estimatedCost };
                                 }
                               }),
-                            ).pipe(Effect.catchAll(() => Effect.void));
+                            ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2371", tag: errorTag(err) })));
                             response = { content, stopReason, ...(toolCalls ? { toolCalls } : {}), ...(usage ? { usage } : {}) };
                           } else {
                             response = yield* llm.complete(llmRequest);
@@ -2390,7 +2391,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                                 toProvider: transition.toProvider,
                                 reason: transition.reason,
                                 attemptNumber: transition.attemptNumber,
-                              }).pipe(Effect.catchAll(() => Effect.void));
+                              }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2393", tag: errorTag(err) })));
                             }
                           }
 
@@ -2411,7 +2412,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                               durationMs: llmDurationMs,
                               tokensUsed: response.usage?.totalTokens ?? 0,
                               estimatedCost: response.usage?.estimatedCost ?? 0,
-                            }).pipe(Effect.catchAll(() => Effect.void));
+                            }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2414", tag: errorTag(err) })));
                           }
 
                           // Phase 0.5: Record LLM timing histogram
@@ -2420,7 +2421,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                               "llm.request.duration_ms",
                               llmDurationMs,
                               { model: String(c.selectedModel ?? "unknown") },
-                            ).pipe(Effect.catchAll(() => Effect.void));
+                            ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2423", tag: errorTag(err) })));
                           }
 
                           // Verbose: log LLM call details
@@ -2430,11 +2431,11 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                             const stopReason = response.stopReason ?? "?";
                             yield* obs.debug(
                               `  ┄ [llm]    ${modelName} | ${toks.toLocaleString()} tok | ${stopReason} | ${(llmDurationMs / 1000).toFixed(1)}s`,
-                            ).pipe(Effect.catchAll(() => Effect.void));
+                            ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2433", tag: errorTag(err) })));
                             const ctxSize = messagesToSend.length;
                             yield* obs.debug(
                               `  ┄ [ctx]    ${ctxSize} msgs | ~${toks.toLocaleString()} tok used`,
-                            ).pipe(Effect.catchAll(() => Effect.void));
+                            ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2437", tag: errorTag(err) })));
                           }
 
                           // Phase 1.3: Log LLM interaction as episodic memory
@@ -2465,7 +2466,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                                   durationMs: llmDurationMs,
                                 },
                               } as any)
-                              .pipe(Effect.catchAll(() => Effect.void));
+                              .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2468", tag: errorTag(err) })));
                           }
 
                           // When the response includes tool calls, store them as
@@ -2532,7 +2533,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       maxIterations: ctx.maxIterations,
                       phase: "thought",
                       content: ctx.metadata.lastResponse as string,
-                    }).pipe(Effect.catchAll(() => Effect.void));
+                    }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2535", tag: errorTag(err) })));
 
                     // 5b. ACT (if tool calls present) — call real ToolService
                     const pendingCalls =
@@ -2595,7 +2596,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                                     const nameSuffix = typeof args.name === "string" ? ` [${args.name}]` : "";
                                     yield* obs.info(
                                       `  ◉ [act]        ↓ ${toolName}${nameSuffix}: "${taskArg}"`,
-                                    ).pipe(Effect.catchAll(() => Effect.void));
+                                    ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2598", tag: errorTag(err) })));
                                   } else {
                                     const argPreview = Object.entries(args)
                                       .slice(0, 2)
@@ -2603,7 +2604,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                                       .join(", ");
                                     yield* obs.info(
                                       `  ◉ [act]        → ${toolName}(${argPreview})`,
-                                    ).pipe(Effect.catchAll(() => Effect.void));
+                                    ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2606", tag: errorTag(err) })));
                                   }
                                 }
 
@@ -2616,7 +2617,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                                     taskId: c.taskId,
                                     toolName,
                                     callId,
-                                  }).pipe(Effect.catchAll(() => Effect.void));
+                                  }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2619", tag: errorTag(err) })));
                                 }
 
                                 if (toolServiceOpt._tag === "None") {
@@ -2629,7 +2630,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                                       callId,
                                       durationMs,
                                       success: false,
-                                    }).pipe(Effect.catchAll(() => Effect.void));
+                                    }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2632", tag: errorTag(err) })));
                                   }
                                   return {
                                     toolCallId: callId,
@@ -2671,7 +2672,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                                   toolResult.success ? "success" : "error",
                                   toolResult.durationMs,
                                   toolResult.success ? undefined : (toolResult.result as string),
-                                ).pipe(Effect.catchAll(() => Effect.void));
+                                ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2674", tag: errorTag(err) })));
 
                                 // Phase 0.2: Publish ToolCallCompleted
                                 if (eb) {
@@ -2682,7 +2683,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                                     callId,
                                     durationMs: toolResult.durationMs,
                                     success: toolResult.success,
-                                  }).pipe(Effect.catchAll(() => Effect.void));
+                                  }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2685", tag: errorTag(err) })));
                                 }
 
                                 return toolResult;
@@ -2707,7 +2708,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                           content: `Tool: ${toolResult.toolName}`,
                           toolName: toolResult.toolName,
                           toolStatus: toolResult.success ? "success" : "error",
-                        }).pipe(Effect.catchAll(() => Effect.void));
+                        }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2710", tag: errorTag(err) })));
                       }
 
                       // 5c. OBSERVE — H5: also log episodic memories
@@ -2745,7 +2746,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                                     durationMs: (r as any).durationMs ?? 0,
                                   },
                                 } as any)
-                                .pipe(Effect.catchAll(() => Effect.void));
+                                .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2748", tag: errorTag(err) })));
                             }
                           }
 
@@ -2765,7 +2766,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                                 const subTok = sub.tokensUsed ?? 0;
                                 yield* obs.info(
                                   `  ◉ [sub-agent: ${subName}] ${subIcon} ${subTok} tok | "${subSummary}"`,
-                                ).pipe(Effect.catchAll(() => Effect.void));
+                                ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2768", tag: errorTag(err) })));
                               } else {
                                 const resultStr = typeof rResult === "string"
                                   ? rResult
@@ -2774,7 +2775,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                                 const charCount = resultStr.length;
                                 yield* obs.debug(
                                   `  ┄ [obs]    ${rToolName}: ${preview} [${charCount} chars]`,
-                                ).pipe(Effect.catchAll(() => Effect.void));
+                                ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2777", tag: errorTag(err) })));
                               }
                             }
                           }
@@ -2825,7 +2826,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                           toolName: toolResult.toolName,
                           toolStatus: toolResult.success ? "success" : "error",
                           errorMessage: toolResult.success ? undefined : (toolResult.result as string),
-                        }).pipe(Effect.catchAll(() => Effect.void));
+                        }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2828", tag: errorTag(err) })));
                       }
 
                       // Log iteration summary
@@ -2833,7 +2834,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         ctx.iteration,
                         ctx.tokensUsed,
                         recentResults.map((r: any) => r.toolName),
-                      ).pipe(Effect.catchAll(() => Effect.void));
+                      ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2836", tag: errorTag(err) })));
                     } else {
                       // 5d. LOOP_CHECK
                       isComplete = Boolean(ctx.metadata.isComplete);
@@ -2845,7 +2846,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         ctx.tokensUsed,
                         [],
                         isComplete ? "final-answer" : "no-tools",
-                      ).pipe(Effect.catchAll(() => Effect.void));
+                      ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2848", tag: errorTag(err) })));
                     }
                   }
 
@@ -2934,7 +2935,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     // "loop" mode is not yet implemented — warn and skip.
                     if (config.verificationStep && config.verificationStep.mode !== "reflect" && obs) {
                       yield* obs.info(`⚠ withVerificationStep: mode "${config.verificationStep.mode}" is not yet implemented — only "reflect" is supported. Skipping verification.`)
-                        .pipe(Effect.catchAll(() => Effect.void));
+                        .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2937", tag: errorTag(err) })));
                     }
                     if (config.verificationStep?.mode === "reflect" && !cacheHit && llmHookOpt._tag === "Some") {
                       const outputToVerify = String(ctx.metadata.lastResponse ?? "");
@@ -2989,7 +2990,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         contextWindowMax: 200_000,
                       },
                       costAccumulated: ctx.cost,
-                    }).pipe(Effect.asVoid, Effect.catchAll(() => Effect.void));
+                    }).pipe(Effect.asVoid, Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2992", tag: errorTag(err) })));
                   }
                 }
 
@@ -3067,13 +3068,13 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         .info(
                           `◉ [verify]     score=${(vr.overallScore ?? 0).toFixed(2)} passed=${String(vr.passed)} recommendation=${String(vr.recommendation ?? "?")}${failHint}`,
                         )
-                        .pipe(Effect.catchAll(() => Effect.void));
+                        .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3070", tag: errorTag(err) })));
                     } else {
                       yield* obs
                         .info(
                           "◉ [verify]     skipped — VerificationService not in runtime (check createRuntime / .withVerification wiring)",
                         )
-                        .pipe(Effect.catchAll(() => Effect.void));
+                        .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3076", tag: errorTag(err) })));
                     }
                   }
                 }
@@ -3097,7 +3098,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     if (obs) {
                       yield* obs.info(
                         `⚠ [verify] Response rejected (score: ${vResult.overallScore?.toFixed(2) ?? "?"}) — retrying think phase (attempt ${vRetryCount + 1}/${maxVRetries})`,
-                      ).pipe(Effect.catchAll(() => Effect.void));
+                      ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3100", tag: errorTag(err) })));
                     }
 
                     // Build verification feedback for the next think iteration
@@ -3173,7 +3174,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                               toProvider: transition.toProvider,
                               reason: transition.reason,
                               attemptNumber: transition.attemptNumber,
-                            }).pipe(Effect.catchAll(() => Effect.void));
+                            }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3176", tag: errorTag(err) })));
                           }
                         }
 
@@ -3262,7 +3263,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       if (obs) {
                         yield* obs.info(
                           `⚠ [verify] Response still rejected after ${vRetryCount + 1} retry(s) (score: ${vResultAfterRetry.overallScore?.toFixed(2) ?? "?"}) — proceeding anyway`,
-                        ).pipe(Effect.catchAll(() => Effect.void));
+                        ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3265", tag: errorTag(err) })));
                       }
                     }
                   }
@@ -3340,12 +3341,12 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                                 if (opt.value.flush) {
                                   yield* opt.value
                                     .flush(c.agentId)
-                                    .pipe(Effect.catchAll(() => Effect.void));
+                                    .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3343", tag: errorTag(err) })));
                                 }
                               })
                             : Effect.void,
                         ),
-                        Effect.catchAll(() => Effect.void),
+                        Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3348", tag: errorTag(err) })),
                       );
 
                       // Lightweight consolidation: decay unused memory entries
@@ -3404,13 +3405,13 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                                   for (const entry of entries) {
                                     yield* memStoreOpt.value
                                       .storeSemantic(entry)
-                                      .pipe(Effect.catchAll(() => Effect.void));
+                                      .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3407", tag: errorTag(err) })));
                                   }
                                 }
                               }
                             });
                           }),
-                          Effect.catchAll(() => Effect.void),
+                          Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3413", tag: errorTag(err) })),
                         );
                       }
 
@@ -3454,7 +3455,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                             taskType: task.type,
                             latencyMs: Date.now() - c.startedAt.getTime(),
                           })
-                          .pipe(Effect.catchAll(() => Effect.void));
+                          .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3457", tag: errorTag(err) })));
                       }
 
                       return c;
@@ -3476,7 +3477,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                           strategy: c.selectedStrategy,
                           duration: Date.now() - c.startedAt.getTime(),
                           phase: "audit",
-                        }).pipe(Effect.catchAll(() => Effect.void));
+                        }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3479", tag: errorTag(err) })));
                       }
                       return c;
                     }),
@@ -3547,7 +3548,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     answer: capture?.output ?? sanitizedOutput ?? "",
                     iteration: ctx.iteration,
                     totalTokens: ctx.tokensUsed,
-                  }).pipe(Effect.catchAll(() => Effect.void));
+                  }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3550", tag: errorTag(err) })));
                 }
 
                 // Collect tool stats from ToolCallCompleted events (deterministic,
@@ -3627,7 +3628,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                               agentId: debriefInput.agentId,
                               debrief,
                             }).pipe(
-                              Effect.catchAll(() => Effect.void),
+                              Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3630", tag: errorTag(err) })),
                               Effect.as(debrief),
                             );
                           }),
@@ -3651,9 +3652,9 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         output: String(sanitizedOutput ?? ""),
                         outputFormat: "text",
                         debrief: debrief as any,
-                      }).pipe(Effect.catchAll(() => Effect.void));
+                      }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3654", tag: errorTag(err) })));
                     }),
-                    Effect.catchAll(() => Effect.void),
+                    Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3656", tag: errorTag(err) })),
                   );
                 }
 
@@ -3717,7 +3718,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     tokensUsed: ctx.tokensUsed,
                     cost: ctx.cost,
                     duration: result.metadata.duration,
-                  }).pipe(Effect.catchAll(() => Effect.void));
+                  }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3720", tag: errorTag(err) })));
                 }
 
                 if (obs && isNormal) {
@@ -3726,7 +3727,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   const toks = ctx.tokensUsed.toLocaleString();
                   yield* obs.info(
                     `◉ [complete]   ✓ ${task.id} | ${toks} tok | ${costStr} | ${durationSec}s`,
-                  ).pipe(Effect.catchAll(() => Effect.void));
+                  ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3729", tag: errorTag(err) })));
                 }
 
                 // Calibration provenance (Task 21)
@@ -3747,7 +3748,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         classifierReliability: resolvedCalibration.classifierReliability,
                       },
                     });
-                    yield* obs.info(`◉ [calibration] ${provenance}`).pipe(Effect.catchAll(() => Effect.void));
+                    yield* obs.info(`◉ [calibration] ${provenance}`).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3750", tag: errorTag(err) })));
                   } catch {
                     // Provenance rendering is best-effort
                   }
@@ -3756,18 +3757,18 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 // Record final metrics for dashboard
                 if (obs) {
                   yield* obs.setGauge("execution.tokens_used", ctx.tokensUsed, { taskId: ctx.taskId })
-                    .pipe(Effect.catchAll(() => Effect.void));
+                    .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3759", tag: errorTag(err) })));
                   yield* obs.setGauge("execution.total_duration", result.metadata.duration, { taskId: ctx.taskId })
-                    .pipe(Effect.catchAll(() => Effect.void));
+                    .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3761", tag: errorTag(err) })));
                   yield* obs.setGauge("execution.iteration", ctx.iteration, { taskId: ctx.taskId })
-                    .pipe(Effect.catchAll(() => Effect.void));
+                    .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3763", tag: errorTag(err) })));
 
                   // Record model used (updated to actual model from LLM provider response)
                   const modelName = String(ctx.selectedModel ?? "unknown");
                   const provider = String(config.provider ?? "unknown");
 
                   yield* obs.incrementCounter("execution.model_name", 0, { model: modelName, provider, taskId: ctx.taskId })
-                    .pipe(Effect.catchAll(() => Effect.void));
+                    .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3770", tag: errorTag(err) })));
                 }
 
                 // ── Record entropy metrics for dashboard ──
@@ -3778,7 +3779,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       iteration: String(pt.iteration),
                       shape: pt.trajectory.shape,
                       confidence: pt.confidence,
-                    }).pipe(Effect.catchAll(() => Effect.void));
+                    }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3781", tag: errorTag(err) })));
                   }
                 }
 
@@ -3974,15 +3975,15 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                             Effect.flatMap((svcOpt) => {
                               if (svcOpt._tag !== "Some") return Effect.void;
                               return svcOpt.value.store(entry).pipe(
-                                Effect.catchAll(() => Effect.void),
+                                Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3977", tag: errorTag(err) })),
                               );
                             }),
-                            Effect.catchAll(() => Effect.void),
+                            Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3980", tag: errorTag(err) })),
                           );
                         }
                       });
                     }),
-                    Effect.catchAll(() => Effect.void),
+                    Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3985", tag: errorTag(err) })),
                   );
                 }
 
@@ -4000,7 +4001,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         return Effect.gen(function* () {
                           // Change 2: record outcome (success rate update)
                           yield* svcOpt.value.recordOutcome(appliedSkillId, skillOutcome !== "failure").pipe(
-                            Effect.catchAll(() => Effect.void),
+                            Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:4003", tag: errorTag(err) })),
                           );
 
                           // Change 3: re-store improved fragment when entropy improved on a full success
@@ -4022,13 +4023,13 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                                 modelId,
                               });
                               yield* svcOpt.value.store(entry).pipe(
-                                Effect.catchAll(() => Effect.void),
+                                Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:4025", tag: errorTag(err) })),
                               );
                             }
                           }
                         });
                       }),
-                      Effect.catchAll(() => Effect.void),
+                      Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:4031", tag: errorTag(err) })),
                     );
                   }
                 }
@@ -4044,12 +4045,12 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     totalTokens: ctx.tokensUsed,
                     durationMs: Date.now() - executionStartMs,
                     ...(!executionSucceeded && result.error ? { error: result.error } : {}),
-                  }).pipe(Effect.catchAll(() => Effect.void));
+                  }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:4047", tag: errorTag(err) })));
                   yield* eb.publish({
                     _tag: "TaskCompleted",
                     taskId: task.id,
                     success: executionSucceeded,
-                  }).pipe(Effect.catchAll(() => Effect.void));
+                  }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:4052", tag: errorTag(err) })));
                 }
 
                 // Attach entropy trace to result metadata for dashboard consumption
@@ -4080,7 +4081,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     }
                     return Effect.void;
                   }),
-                  Effect.catchAll(() => Effect.void),
+                  Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:4083", tag: errorTag(err) })),
                 );
 
                 // Emit completion event
@@ -4097,7 +4098,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     }
                     return Effect.void;
                   }),
-                  Effect.catchAll(() => Effect.void),
+                  Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:4100", tag: errorTag(err) })),
                 );
 
                 // Handle non-live mode output
@@ -4125,7 +4126,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       }
                       return Effect.void;
                     }),
-                    Effect.catchAll(() => Effect.void),
+                    Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:4128", tag: errorTag(err) })),
                   );
                 }
 
@@ -4169,7 +4170,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   message,
                   error: cause ? { name: cause.name, message: cause.message, stack: cause.stack } : undefined,
                   timestamp: new Date(),
-                }).pipe(Effect.catchAll(() => Effect.void));
+                }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:4172", tag: errorTag(err) })));
               }),
               Effect.ensuring(Effect.sync(() => { renderer?.stop(); })),
             );
@@ -4195,7 +4196,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 { taskId: task.id, agentId: task.agentId },
               );
               // Flush after the root span closes so spans are fully recorded
-              yield* obs.flush().pipe(Effect.catchAll(() => Effect.void));
+              yield* obs.flush().pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:4198", tag: errorTag(err) })));
               return taskResult;
             }
             return yield* executeCoreWithLogger;
@@ -4274,7 +4275,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 agentId: config.agentId,
                 density,
                 timestamp: startMs,
-              } as AgentEvent).pipe(Effect.catchAll(() => Effect.void));
+              } as AgentEvent).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:4277", tag: errorTag(err) })));
             }
 
             // Subscribe to ReasoningIterationProgress events — push them as IterationProgress stream events
@@ -4291,9 +4292,9 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     maxIterations: event.maxIterations,
                     toolsCalledThisStep: event.toolsThisStep,
                     status: `iteration ${event.iteration}/${event.maxIterations}`,
-                  } as AgentStreamEvent).pipe(Effect.catchAll(() => Effect.void));
+                  } as AgentStreamEvent).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:4294", tag: errorTag(err) })));
                 }),
-              ).pipe(Effect.catchAll(() => Effect.void));
+              ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:4296", tag: errorTag(err) })));
             }
 
             // Full density: emit live thought text for each reasoning step.
@@ -4319,9 +4320,9 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     _tag: "ThoughtEmitted",
                     content: thought,
                     iteration,
-                  } as AgentStreamEvent).pipe(Effect.catchAll(() => Effect.void));
+                  } as AgentStreamEvent).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:4322", tag: errorTag(err) })));
                 }),
-              ).pipe(Effect.catchAll(() => Effect.void));
+              ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:4324", tag: errorTag(err) })));
             }
 
             // Set the streaming callback inside the daemon so the FiberRef is
@@ -4358,7 +4359,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       agentId: config.agentId,
                       success: true,
                       durationMs: Date.now() - startMs,
-                    } as AgentEvent).pipe(Effect.catchAll(() => Effect.void)),
+                    } as AgentEvent).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:4361", tag: errorTag(err) }))),
                   ),
                 );
               }),
@@ -4378,7 +4379,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       agentId: config.agentId,
                       success: false,
                       durationMs: Date.now() - startMs,
-                    } as AgentEvent).pipe(Effect.catchAll(() => Effect.void)),
+                    } as AgentEvent).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:4381", tag: errorTag(err) }))),
                   ),
                 );
               }),

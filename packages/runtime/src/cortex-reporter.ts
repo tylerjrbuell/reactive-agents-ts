@@ -1,6 +1,7 @@
 import { Data, Effect, Layer, Ref } from "effect";
 import { EventBus } from "@reactive-agents/core";
 import type { AgentEvent } from "@reactive-agents/core";
+import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
 export class RuntimeCortexReporterError extends Data.TaggedError("RuntimeCortexReporterError")<{
   readonly message: string;
@@ -73,17 +74,17 @@ export const RuntimeCortexReporterLive = (cortexUrl: string) =>
                         if (!payload) continue;
                         if (socket.readyState !== WebSocket.OPEN) break;
                         yield* Effect.sync(() => socket.send(payload)).pipe(
-                          Effect.catchAll(() => Effect.void),
+                          Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/cortex-reporter.ts:76", tag: errorTag(err) })),
                         );
                       }
                       yield* Ref.set(bufferedMessagesRef, []);
                     }
-                  }).pipe(Effect.catchAll(() => Effect.void)),
+                  }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/cortex-reporter.ts:81", tag: errorTag(err) }))),
                 );
               };
               socket.onerror = () => {
                 Effect.runFork(
-                  Ref.set(connectedRef, false).pipe(Effect.catchAll(() => Effect.void)),
+                  Ref.set(connectedRef, false).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/cortex-reporter.ts:86", tag: errorTag(err) }))),
                 );
               };
               socket.onclose = () => {
@@ -101,13 +102,13 @@ export const RuntimeCortexReporterLive = (cortexUrl: string) =>
                       Effect.runFork(connectSocket());
                     }, delayMs);
                     yield* Ref.set(retryTimerRef, timer);
-                  }).pipe(Effect.catchAll(() => Effect.void)),
+                  }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/cortex-reporter.ts:104", tag: errorTag(err) }))),
                 );
               };
-              Effect.runFork(Ref.set(socketRef, socket).pipe(Effect.catchAll(() => Effect.void)));
+              Effect.runFork(Ref.set(socketRef, socket).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/cortex-reporter.ts:107", tag: errorTag(err) }))));
             }),
           ),
-          Effect.catchAll(() => Effect.void),
+          Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/cortex-reporter.ts:110", tag: errorTag(err) })),
         );
 
       const toIngestMessage = (event: AgentEvent): CortexIngestMessage => {
@@ -147,8 +148,8 @@ export const RuntimeCortexReporterLive = (cortexUrl: string) =>
             });
             return;
           }
-          yield* Effect.sync(() => socket.send(payload)).pipe(Effect.catchAll(() => Effect.void));
-        }).pipe(Effect.catchAll(() => Effect.void)),
+          yield* Effect.sync(() => socket.send(payload)).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/cortex-reporter.ts:150", tag: errorTag(err) })));
+        }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/cortex-reporter.ts:151", tag: errorTag(err) }))),
       );
 
       yield* Ref.set(reconnectEnabledRef, true);
@@ -166,16 +167,16 @@ export const RuntimeCortexReporterLive = (cortexUrl: string) =>
           yield* Ref.set(reconnectEnabledRef, false);
           const timer = yield* Ref.get(retryTimerRef);
           if (timer) {
-            yield* Effect.sync(() => clearTimeout(timer)).pipe(Effect.catchAll(() => Effect.void));
+            yield* Effect.sync(() => clearTimeout(timer)).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/cortex-reporter.ts:169", tag: errorTag(err) })));
             yield* Ref.set(retryTimerRef, null);
           }
           const socket = yield* Ref.get(socketRef);
           if (socket) {
-            yield* Effect.sync(() => socket.close()).pipe(Effect.catchAll(() => Effect.void));
+            yield* Effect.sync(() => socket.close()).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/cortex-reporter.ts:174", tag: errorTag(err) })));
             yield* Ref.set(socketRef, null);
           }
           yield* Ref.set(connectedRef, false);
-          yield* Effect.sync(() => unsubscribe()).pipe(Effect.catchAll(() => Effect.void));
+          yield* Effect.sync(() => unsubscribe()).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/cortex-reporter.ts:178", tag: errorTag(err) })));
         }),
     ),
   );
