@@ -11,6 +11,17 @@ export function evaluateEarlyStop(
   const { entropyHistory, config, calibration, iteration, maxIterations } = params;
   const convergenceCount = config.earlyStopConvergenceCount ?? 2;
 
+  // Overflow guard: fire early-stop when approaching maxIterations regardless of trajectory.
+  const iterationsBeforeMax = config.earlyStopIterationsBeforeMax ?? 2;
+  if (maxIterations > 0 && iteration >= maxIterations - iterationsBeforeMax) {
+    const latest = entropyHistory[entropyHistory.length - 1];
+    return {
+      decision: "early-stop",
+      reason: `Approaching maxIterations (iter=${iteration}, max=${maxIterations})`,
+      iterationsSaved: maxIterations - iteration,
+    };
+  }
+
   // Need enough history and must be past iteration 1 (too early to stop)
   if (entropyHistory.length < convergenceCount || iteration < 2) return null;
 

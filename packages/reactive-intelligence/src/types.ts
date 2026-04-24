@@ -186,6 +186,7 @@ export type ReactiveControllerConfig = {
   readonly contextCompression: boolean;
   readonly strategySwitch: boolean;
   readonly earlyStopConvergenceCount?: number;
+  readonly earlyStopIterationsBeforeMax?: number;
   readonly flatIterationsBeforeSwitch?: number;
   readonly compressionThreshold?: number;
 };
