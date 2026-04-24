@@ -67,6 +67,7 @@ import type { AgentDebrief } from './debrief.js'
 import type { DocumentSpec } from './context-ingestion.js'
 import { Health } from '@reactive-agents/health'
 import { makeHealthService } from '@reactive-agents/health'
+import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
 // ─── Provider Types ──────────────────────────────────────────────────────────
 
@@ -629,10 +630,43 @@ export interface AgentResult {
     readonly format?: OutputFormat
     /** How the agent loop was terminated. */
     readonly terminatedBy?: TerminatedBy
+    /**
+     * Whether the agent semantically achieved the task's goal.
+     *
+     * Distinct from {@link success} — `success` reflects whether the run
+     * terminated cleanly (no exception, status === "done"), whereas
+     * `goalAchieved` reflects whether the agent actually delivered an answer
+     * it considered final.
+     *
+     * - `true` — agent produced a final answer (`terminatedBy` ∈ `{final_answer_tool, final_answer}`)
+     * - `false` — agent exhausted iterations or errored (`terminatedBy` ∈ `{max_iterations, llm_error}`)
+     * - `null` — goal achievement is ambiguous (`terminatedBy === "end_turn"` or unknown);
+     *   the model finished its turn without explicitly signaling completion. Treat as "maybe".
+     */
+    readonly goalAchieved?: boolean | null
     /** Structured post-run debrief synthesized after the kernel exits. */
     readonly debrief?: AgentDebrief
     /** Error message when `success` is false. */
     readonly error?: string
+}
+
+/**
+ * Derive the `goalAchieved` signal from the kernel's `terminatedBy` value.
+ *
+ * See {@link AgentResult.goalAchieved} for semantics.
+ */
+export function deriveGoalAchieved(terminatedBy: TerminatedBy | undefined): boolean | null {
+    switch (terminatedBy) {
+        case "final_answer_tool":
+        case "final_answer":
+            return true
+        case "max_iterations":
+        case "llm_error":
+            return false
+        case "end_turn":
+        case undefined:
+            return null
+    }
 }
 
 // ─── Persona Composition Helper ───────────────────────────────────────────────
@@ -4179,9 +4213,9 @@ export class ReactiveAgent {
                     for (const name of serverNames) {
                         yield* (ts as any)
                             .disconnectMCPServer(name)
-                            .pipe(Effect.catchAll(() => Effect.void))
+                            .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/builder.ts:4182", tag: errorTag(err) })))
                     }
-                }).pipe(Effect.catchAll(() => Effect.void))
+                }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/builder.ts:4184", tag: errorTag(err) })))
             )
         }
         await this.runtime.dispose()
@@ -4638,6 +4672,7 @@ export class ReactiveAgent {
                     ...(r.terminatedBy !== undefined
                         ? { terminatedBy: r.terminatedBy }
                         : {}),
+                    goalAchieved: deriveGoalAchieved(r.terminatedBy),
                     ...(r.debrief !== undefined ? { debrief: r.debrief } : {}),
                     ...(r.error !== undefined ? { error: r.error } : {}),
                 }
@@ -4913,7 +4948,7 @@ export class ReactiveAgent {
                     await this.runtime.runPromise(
                         EventBus.pipe(
                             Effect.flatMap((bus) => bus.publish(event)),
-                            Effect.catchAll(() => Effect.void)
+                            Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/builder.ts:4916", tag: errorTag(err) }))
                         )
                     )
                 },
@@ -5020,7 +5055,7 @@ export class ReactiveAgent {
                               agentId: self.agentId,
                               messages: history,
                           })
-                      }).pipe(Effect.catchAll(() => Effect.void))
+                      }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/builder.ts:5023", tag: errorTag(err) })))
                   )
               }
             : undefined
@@ -5054,7 +5089,7 @@ export class ReactiveAgent {
                     (e: RuntimeErrors) =>
                         new Error('message' in e ? e.message : String(e))
                 ),
-                Effect.catchAll(() => Effect.void)
+                Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/builder.ts:5057", tag: errorTag(err) }))
             ) as Effect.Effect<void>
         )
     }
@@ -5102,7 +5137,7 @@ export class ReactiveAgent {
         return this.runtime.runPromise(
             KillSwitchService.pipe(
                 Effect.flatMap((ks) => ks.pause(this.agentId)),
-                Effect.catchAll(() => Effect.void)
+                Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/builder.ts:5105", tag: errorTag(err) }))
             ) as Effect.Effect<void>
         )
     }
@@ -5126,7 +5161,7 @@ export class ReactiveAgent {
         return this.runtime.runPromise(
             KillSwitchService.pipe(
                 Effect.flatMap((ks) => ks.resume(this.agentId)),
-                Effect.catchAll(() => Effect.void)
+                Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/builder.ts:5129", tag: errorTag(err) }))
             ) as Effect.Effect<void>
         )
     }
@@ -5149,7 +5184,7 @@ export class ReactiveAgent {
         return this.runtime.runPromise(
             KillSwitchService.pipe(
                 Effect.flatMap((ks) => ks.stop(this.agentId, reason)),
-                Effect.catchAll(() => Effect.void)
+                Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/builder.ts:5152", tag: errorTag(err) }))
             ) as Effect.Effect<void>
         )
     }
@@ -5172,7 +5207,7 @@ export class ReactiveAgent {
         return this.runtime.runPromise(
             KillSwitchService.pipe(
                 Effect.flatMap((ks) => ks.terminate(this.agentId, reason)),
-                Effect.catchAll(() => Effect.void)
+                Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/builder.ts:5175", tag: errorTag(err) }))
             ) as Effect.Effect<void>
         )
     }
