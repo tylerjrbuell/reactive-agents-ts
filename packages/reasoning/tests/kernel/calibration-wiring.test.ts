@@ -375,3 +375,169 @@ describe("CalibrationDrift event emission", () => {
     expect(driftEvent).toBeUndefined();
   }, 15000);
 });
+
+describe("IC-16: entropy iteration off-by-one (trivial-1step regression)", () => {
+  // think.ts pre-increments state.iteration on every exit path (terminal and continuing).
+  // When a fast-path or oracle exit returns, state.iteration is already bumped to 1.
+  // runReactiveObserver must score entropy with completedIteration = s.iteration - 1 = 0,
+  // so that the EntropyScored trace event carries iter=0.
+  // traceStats().iterations = Math.max(0, maxIter + 1) = Math.max(0, 0 + 1) = 1 ✓
+  // Before the fix, iter=1 was used → traceStats reported 2 iterations on a 1-step run.
+  it("entropy sensor receives completedIteration (s.iteration - 1), not post-increment value", async () => {
+    let capturedIteration: number | null = null;
+
+    const mockEntropySensor = {
+      score: (params: Record<string, unknown>) => {
+        capturedIteration = params.iteration as number;
+        return Effect.succeed({
+          composite: 0.3,
+          sources: { token: 0.2, structural: 0.3, semantic: 0.3, behavioral: 0.1, contextPressure: 0.05 },
+          trajectory: { derivative: -0.05, shape: "converging", momentum: -0.02 },
+          confidence: "high" as const,
+          modelTier: "mid" as const,
+          iteration: params.iteration as number,
+          iterationWeight: 1.0,
+          timestamp: Date.now(),
+        });
+      },
+      scoreContext: () => Effect.succeed({
+        utilizationPct: 0.1,
+        sections: [],
+        atRiskSections: [],
+        compressionHeadroom: 0.9,
+      }),
+      getCalibration: (_modelId: string) => Effect.succeed({
+        modelId: "test-model",
+        calibrated: false,
+        sampleCount: 0,
+        highEntropyThreshold: 0.8,
+        convergenceThreshold: 0.4,
+      }),
+      updateCalibration: (_modelId: string, _runScores: readonly number[]) => Effect.succeed({
+        modelId: "test-model",
+        calibrated: false,
+        sampleCount: 1,
+        highEntropyThreshold: 0.8,
+        convergenceThreshold: 0.4,
+      }),
+      getTrajectory: (_taskId: string) => Effect.succeed({
+        history: [],
+        derivative: 0,
+        momentum: 0,
+        shape: "insufficient-data" as const,
+      }),
+    };
+
+    const services: StrategyServices = {
+      llm: {} as any,
+      toolService: noneService(),
+      promptService: noneService(),
+      eventBus: noneService(),
+      entropySensor: someService(mockEntropySensor),
+      reactiveController: noneService(),
+      dispatcher: noneService(),
+    };
+
+    // Simulate the state as returned by think.ts fast-path:
+    // - iteration has been pre-incremented from 0 → 1
+    // - status is "done" (fast-path terminal exit)
+    // - steps contains one thought step (added before fast-path fires)
+    const state = makeKernelState({
+      iteration: 1, // post-increment from fast-path (was 0 when LLM was called)
+      status: "done" as const,
+      steps: [
+        { type: "thought", content: "Paris is the capital of France.", metadata: {} },
+      ],
+    });
+    const options = makeRunOptions();
+
+    await Effect.runPromise(
+      runReactiveObserver(state, services, noneService(), 0, options),
+    );
+
+    // The entropy sensor must receive the completed iteration (0), not the
+    // post-incremented value (1). Using 1 would make traceStats report 2 iterations.
+    expect(capturedIteration).toBe(0);
+  }, 15000);
+
+  it("EntropyScored event carries completedIteration when eventBus is present", async () => {
+    const publishedEvents: unknown[] = [];
+
+    const mockEntropySensor = {
+      score: (_params: Record<string, unknown>) => Effect.succeed({
+        composite: 0.3,
+        sources: { token: 0.2, structural: 0.3, semantic: 0.3, behavioral: 0.1, contextPressure: 0.05 },
+        trajectory: { derivative: -0.05, shape: "converging", momentum: -0.02 },
+        confidence: "high" as const,
+        modelTier: "mid" as const,
+        // No iteration field — forces the ternary in reactive-observer.ts to use
+        // the completedIteration fallback, which is what this test validates.
+        iterationWeight: 1.0,
+        timestamp: Date.now(),
+      }),
+      scoreContext: () => Effect.succeed({
+        utilizationPct: 0.1,
+        sections: [],
+        atRiskSections: [],
+        compressionHeadroom: 0.9,
+      }),
+      getCalibration: (_modelId: string) => Effect.succeed({
+        modelId: "test-model",
+        calibrated: false,
+        sampleCount: 0,
+        highEntropyThreshold: 0.8,
+        convergenceThreshold: 0.4,
+      }),
+      updateCalibration: (_modelId: string, _runScores: readonly number[]) => Effect.succeed({
+        modelId: "test-model",
+        calibrated: false,
+        sampleCount: 1,
+        highEntropyThreshold: 0.8,
+        convergenceThreshold: 0.4,
+      }),
+      getTrajectory: (_taskId: string) => Effect.succeed({
+        history: [],
+        derivative: 0,
+        momentum: 0,
+        shape: "insufficient-data" as const,
+      }),
+    };
+
+    const mockEventBus: EventBusInstance = {
+      publish: (event: unknown) => {
+        publishedEvents.push(event);
+        return Effect.void;
+      },
+    };
+
+    const services: StrategyServices = {
+      llm: {} as any,
+      toolService: noneService(),
+      promptService: noneService(),
+      eventBus: someService(mockEventBus),
+      entropySensor: someService(mockEntropySensor),
+      reactiveController: noneService(),
+      dispatcher: noneService(),
+    };
+
+    // state.iteration=1 simulates post-increment from think.ts fast-path
+    const state = makeKernelState({
+      iteration: 1,
+      status: "done" as const,
+      steps: [
+        { type: "thought", content: "Paris is the capital of France.", metadata: {} },
+      ],
+    });
+
+    await Effect.runPromise(
+      runReactiveObserver(state, services, someService(mockEventBus), 0, makeRunOptions()),
+    );
+
+    const entropyEvent = publishedEvents.find(
+      (e: any) => e._tag === "EntropyScored",
+    ) as any;
+    expect(entropyEvent).toBeDefined();
+    // iter must be 0 (the completed iteration), not 1 (the post-incremented value)
+    expect(entropyEvent.iteration).toBe(0);
+  }, 15000);
+});

@@ -69,12 +69,20 @@ export function runReactiveObserver(
           ? priorThoughts[priorThoughts.length - 1]!.content
           : undefined;
 
+        // think.ts pre-increments state.iteration on every exit path (both terminal
+        // and continuing), so by the time runReactiveObserver is called, s.iteration
+        // is already "next iteration index". Subtract 1 to get the iteration that
+        // just produced the thought being scored. This keeps the entropy-scored trace
+        // event's `iter` field at the correct 0-based completed-iteration index,
+        // so traceStats().iterations = maxIter + 1 = 1 for a single-iteration run.
+        const completedIteration = Math.max(0, s.iteration - 1);
+
         yield* services.entropySensor.value
           .score({
             thought: latestThought.content ?? "",
             taskDescription: s.meta.entropy?.taskDescription ?? "",
             strategy: s.strategy,
-            iteration: s.iteration,
+            iteration: completedIteration,
             maxIterations: (s.meta.maxIterations as number) ?? 10,
             modelId: s.meta.entropy?.modelId ?? "unknown",
             temperature: s.meta.entropy?.temperature ?? 0,
@@ -114,7 +122,7 @@ export function runReactiveObserver(
                   eventBus.value.publish({
                     _tag: "EntropyScored",
                     taskId: s.taskId,
-                    iteration: typeof richScore["iteration"] === "number" ? richScore["iteration"] : s.iteration,
+                    iteration: typeof richScore["iteration"] === "number" ? richScore["iteration"] : completedIteration,
                     composite: entropyScore.composite,
                     sources: richScore["sources"],
                     trajectory: richScore["trajectory"],
