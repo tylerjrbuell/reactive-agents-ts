@@ -341,7 +341,7 @@ function updateMetricRegistry(
   const now = new Date().toISOString();
 
   for (const a of analyses) {
-    for (const name of a.discoveredMetricNames) {
+    for (const name of a.discoveredEventKinds) {
       if (!knownNames.has(name)) {
         state.metricRegistry.push({
           name,
