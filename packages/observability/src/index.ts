@@ -121,3 +121,7 @@ export type {
   TelemetryMode,
   TelemetryConfig,
 } from "./telemetry/index.js";
+
+// ─── Redaction (P0 S0.3) ───
+export { applyRedactors, defaultRedactors } from "./redaction/index.js";
+export type { Redactor } from "./redaction/index.js";

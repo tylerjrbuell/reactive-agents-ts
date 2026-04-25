@@ -1,5 +1,6 @@
 import { Effect, Ref } from "effect";
 import type { LogEntry, LogLevel } from "../types.js";
+import type { Redactor } from "../redaction/index.js";
 
 export type LiveLogWriter = (entry: LogEntry) => void;
 
@@ -19,10 +20,63 @@ const LOG_LEVEL_ORDER: Record<LogLevel, number> = {
   error: 3,
 };
 
-export const makeStructuredLogger = (options?: { liveWriter?: LiveLogWriter }) =>
+/**
+ * Apply a chain of redactors to a single string, in order. The last replacement
+ * wins for any byte range covered by multiple patterns. Pure / synchronous.
+ */
+const redactString = (value: string, redactors: readonly Redactor[]): string => {
+  let out = value;
+  for (const r of redactors) {
+    if (r.pattern.test(out)) {
+      r.pattern.lastIndex = 0;
+      out = out.replace(r.pattern, r.replacement);
+    }
+  }
+  return out;
+};
+
+/**
+ * Walk a metadata record and redact every string-valued leaf. Non-string values
+ * (numbers, booleans, nested objects, arrays) pass through untouched — secrets
+ * embedded inside them are caller's responsibility to surface as strings.
+ *
+ * Returns a new record only if any field was rewritten; otherwise returns the
+ * original reference for cheap referential-equality checks downstream.
+ */
+const redactMetadata = (
+  metadata: Record<string, unknown> | undefined,
+  redactors: readonly Redactor[],
+): Record<string, unknown> | undefined => {
+  if (!metadata || redactors.length === 0) return metadata;
+  let mutated: Record<string, unknown> | null = null;
+  for (const [k, v] of Object.entries(metadata)) {
+    if (typeof v === "string") {
+      const redacted = redactString(v, redactors);
+      if (redacted !== v) {
+        mutated ??= { ...metadata };
+        mutated[k] = redacted;
+      }
+    }
+  }
+  return mutated ?? metadata;
+};
+
+export const makeStructuredLogger = (options?: {
+  liveWriter?: LiveLogWriter;
+  /**
+   * Redactors applied to every log message and string-valued metadata field
+   * before the entry is persisted or forwarded to the live writer. Empty /
+   * absent → no redaction (backward-compat for callers that don't opt in).
+   *
+   * For Phase 0 S0.3 the framework wires `defaultRedactors` here automatically;
+   * users can extend via `withObservability({ redactors: [...] })`.
+   */
+  redactors?: readonly Redactor[];
+}) =>
   Effect.gen(function* () {
     const logsRef = yield* Ref.make<LogEntry[]>([]);
     const liveWriter = options?.liveWriter;
+    const redactors = options?.redactors ?? [];
 
     const log = (
       level: LogLevel,
@@ -30,7 +84,15 @@ export const makeStructuredLogger = (options?: { liveWriter?: LiveLogWriter }) =
       metadata?: Record<string, unknown>,
     ): Effect.Effect<void, never> =>
       Effect.suspend(() => {
-        const entry: LogEntry = { timestamp: new Date(), level, message, metadata };
+        const redactedMessage =
+          redactors.length > 0 ? redactString(message, redactors) : message;
+        const redactedMetadata = redactMetadata(metadata, redactors);
+        const entry: LogEntry = {
+          timestamp: new Date(),
+          level,
+          message: redactedMessage,
+          metadata: redactedMetadata,
+        };
         if (liveWriter) {
           liveWriter(entry);
         }

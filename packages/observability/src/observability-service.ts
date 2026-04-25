@@ -7,6 +7,8 @@ import { makeMetricsCollector, MetricsCollectorTag } from "./metrics/metrics-col
 import { makeStateInspector } from "./debugging/state-inspector.js";
 import { makeConsoleExporter, makeFileExporter, makeLiveLogWriter, setupOTLPExporter } from "./exporters/index.js";
 import type { ConsoleExporterOptions, FileExporterOptions, OTLPExporterConfig } from "./exporters/index.js";
+import { defaultRedactors } from "./redaction/index.js";
+import type { Redactor } from "./redaction/index.js";
 
 // ─── Verbosity / Exporter Config ───
 
@@ -84,6 +86,19 @@ export type ExporterConfig = {
    * ```
    */
   readonly otlp?: OTLPExporterConfig;
+
+  /**
+   * Custom secret redactors appended to the default OWASP-aligned set
+   * (anthropic / openai / github / jwt / aws / google API keys). Defaults
+   * always run first, then user-supplied patterns. Set to an empty array
+   * to *replace* — not extend — defaults; that is discouraged.
+   *
+   * Applied to every log message and string-valued metadata field before
+   * the entry is persisted or sent to the live writer. Phase 0 S0.3.
+   *
+   * @default `defaultRedactors` (always-on, 8 default patterns)
+   */
+  readonly redactors?: readonly Redactor[];
 };
 
 // ─── Service Tag ───
@@ -450,7 +465,14 @@ export const ObservabilityServiceLive = (exporterConfig: ExporterConfig = {}) =>
         : undefined;
 
       const tracer = yield* makeTracer;
-      const logger = yield* makeStructuredLogger(liveWriter ? { liveWriter } : undefined);
+      const redactors: readonly Redactor[] = [
+        ...defaultRedactors,
+        ...(exporterConfig.redactors ?? []),
+      ];
+      const logger = yield* makeStructuredLogger({
+        ...(liveWriter ? { liveWriter } : {}),
+        redactors,
+      });
       // Use provided MetricsCollectorTag if available, otherwise create a new one
       // This ensures shared instance across ExecutionEngine and ObservabilityService
       const metrics = yield* Effect.serviceOption(MetricsCollectorTag).pipe(
