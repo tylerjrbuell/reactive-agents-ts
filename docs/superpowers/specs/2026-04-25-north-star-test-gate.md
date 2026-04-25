@@ -4,6 +4,7 @@
 >   - Schema (§2.3, §3.3) — accepted as drafted, sensible/useful fields only
 >   - Tier 2 runner (§3.5) — **Option B (self-hosted Ollama on developer GPU machine)**
 >   - Scenario list — **PRUNED**: only failure-mode regression scenarios; drop generic competency coverage. Each scenario must map to a specific weakness ID (W#) or gap (G#/IC#/S0.#) the gate is designed to catch.
+>   - **Design principle (added 2026-04-24):** the gate must be **extensible** — adding a new scenario is a single-file drop-in, never a registry edit — and designed for **self-improvement iteration sessions** so the harness-improvement-loop can self-heal (auto-update baselines with audit trail) and self-maintain (track per-scenario value, surface candidates for retirement or reinforcement).
 >
 > **Author:** 2026-04-24 session. Advisor-reviewed.
 >
@@ -317,6 +318,87 @@ No "find it yourself in the logs" failure modes.
 1. Add the gate test to `.github/workflows/ci.yml`.
 2. Add the staleness check.
 3. Document the workflow in `AGENTS.md`.
+
+---
+
+## 6.5 Extensibility & self-improvement architecture (added 2026-04-24)
+
+The gate must serve harness-improvement-loop sessions as a **living quality surface**, not as static fence. Three architectural commitments make that possible:
+
+### 6.5.1 Single-file scenario drop-in
+
+Every scenario is a self-contained module exporting a `ScenarioModule`:
+
+```typescript
+// packages/testing/src/gate/scenarios/cf-01-iteration-off-by-one.ts
+import type { ScenarioModule } from "../types.js";
+
+export const scenario: ScenarioModule = {
+  id: "cf-01-iteration-off-by-one",
+  targetedWeakness: "W6",            // map to harness-reports/loop-state.json weakness ID
+  closingCommit: "0c79a350",          // commit that closed the gap; gate fails point here
+  description: "Single-step task reports iterations === 1, not 2. Protects IC-16.",
+  config: { /* runScenario config */ },
+  customAssertions: (result) => ({ /* optional scenario-specific metrics */ }),
+};
+```
+
+The runner auto-discovers files matching `scenarios/cf-*.ts` and `scenarios/b-*.ts` via filesystem glob. **No central registry to edit.** A new scenario is a one-file PR. A retired scenario is one-file delete.
+
+### 6.5.2 Self-healing baseline updates
+
+When a scenario's expected outcome changes intentionally (e.g., a refactor that legitimately reduces an iteration count from 3 to 2), the gate offers a guided path rather than just failing:
+
+1. **Failure message names the change**: which scenarios diverged, what fields changed, which weakness ID the scenario protects, and the closing commit.
+2. **`bun run gate:update`** regenerates the baseline. The script *prompts the user* for a `BASELINE-UPDATE:` reason and writes it as a git note attached to the new baseline commit.
+3. **Audit trail per scenario**: each `Tier1ScenarioOutcome` carries `lastUpdatedCommit` and `lastUpdatedReason` so a later session can answer "when and why did this scenario's expected output last change?" without spelunking git log.
+4. **CI lint enforces the trailer**: PRs that change the baseline file without `BASELINE-UPDATE:` in the commit message fail.
+
+### 6.5.3 Self-maintenance via scenario health tracking
+
+A sidecar file tracks per-scenario value over time:
+
+```typescript
+// harness-reports/integration-control-flow-scenario-health.json
+interface ScenarioHealth {
+  readonly schemaVersion: 1;
+  readonly scenarios: Record<string, {
+    readonly executions: number;
+    readonly lastExecutedAt: string;
+    readonly regressionsCaught: number;        // increments every time the gate fails on this scenario
+    readonly lastRegressionAt: string | null;
+    readonly baselineUpdatedAt: string;
+    readonly baselineUpdateCount: number;       // intentional updates (high churn = hot scenario)
+  }>;
+}
+```
+
+Harness-improvement-loop sessions (`/skill:harness-improvement-loop`) read this file to:
+- **Surface stale scenarios** ("haven't caught a regression in 90+ days; consider retiring or reinforcing")
+- **Surface high-churn scenarios** ("baseline updated 5 times this month; the underlying behavior is unstable")
+- **Surface uncovered weaknesses** (cross-reference `loop-state.json` weaknesses against `targetedWeakness` field; gaps suggest new scenarios needed)
+
+The gate runner increments `executions` every run and `regressionsCaught` whenever a scenario fails. Health updates are committed alongside baseline updates.
+
+### 6.5.4 CLI surface
+
+```bash
+bun run gate:check              # run all tier-1 scenarios, diff against baseline (used by `bun test`)
+bun run gate:update             # regenerate baseline (interactive: prompts for reason)
+bun run gate:explain <id>       # dump trace + outcome for one scenario, useful for debugging
+bun run gate:health             # print scenario-health table, sorted by stale → fresh
+bun run gate:behavior           # tier-2 (real LLM, Option B); writes dated baseline
+bun run gate:behavior:check     # tier-2 floor enforcement against latest baseline
+```
+
+### 6.5.5 What this means for harness-improvement-loop integration
+
+A future iteration session reads:
+- `loop-state.json` weaknesses (current) ↔ `scenario-health.json` `targetedWeakness` (covered)
+- Surfaces gaps: `W17` exists in loop-state but no `cf-*.ts` scenario targets it → recommend adding one
+- Surfaces redundancy: 3 scenarios target `W6` with no recent regressions caught → consider consolidating
+
+This makes the gate **co-evolve** with the harness's understanding of what can fail. The loop continuously refines the gate; the gate continuously protects the loop's prior wins.
 
 ---
 
