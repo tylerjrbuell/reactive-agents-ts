@@ -1,0 +1,43 @@
+{
+  "timestamp": "2026-04-25T00:24:33.993Z",
+  "bunVersion": "1.3.10",
+  "platform": "linux",
+  "arch": "x64",
+  "results": [
+    {
+      "name": "applyRedactors:no-secret:short",
+      "description": "redactors over a short log line with no secret matches",
+      "opsPerSec": 857022,
+      "nsPerOp": 1167,
+      "samples": 171427
+    },
+    {
+      "name": "applyRedactors:single-secret:short",
+      "description": "redactors over a short log line with one matching secret",
+      "opsPerSec": 761825,
+      "nsPerOp": 1313,
+      "samples": 152366
+    },
+    {
+      "name": "applyRedactors:single-secret:long",
+      "description": "redactors over a 5KB log line with secrets — pathological case",
+      "opsPerSec": 138630,
+      "nsPerOp": 7213,
+      "samples": 27727
+    },
+    {
+      "name": "deriveGoalAchieved:final_answer_tool",
+      "description": "compute goalAchieved from terminatedBy=final_answer_tool",
+      "opsPerSec": 31746920,
+      "nsPerOp": 31,
+      "samples": 6350211
+    },
+    {
+      "name": "deriveGoalAchieved:max_iterations",
+      "description": "compute goalAchieved from terminatedBy=max_iterations",
+      "opsPerSec": 32296068,
+      "nsPerOp": 31,
+      "samples": 6459216
+    }
+  ]
+}

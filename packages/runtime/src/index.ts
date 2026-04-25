@@ -64,6 +64,7 @@ export {
   ReactiveAgents,
   ReactiveAgentBuilder,
   ReactiveAgent,
+  deriveGoalAchieved,
 } from "./builder.js";
 export type {
   AgentResult,
