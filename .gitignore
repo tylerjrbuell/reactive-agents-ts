@@ -29,6 +29,12 @@ harness-reports/*.txt
 harness-reports/*.json
 harness-reports/improvement-report-*.md
 
+# North Star Test Gate baselines (committed — they ARE the contract)
+!harness-reports/integration-control-flow-baseline.json
+!harness-reports/integration-control-flow-scenario-health.json
+!harness-reports/integration-behavior-baseline-*.json
+!harness-reports/benchmarks/baseline-*.json
+
 # HN gateway example output
 hn-gateway-reports/
 
@@ -41,3 +47,10 @@ signal-data/
 .env.telegram
 apps/meta-agent/.env.production
 .claude/scheduled_tasks.lock
+
+# Obsidian vault — track shared config; ignore per-user UI state and caches
+wiki/.obsidian/workspace.json
+wiki/.obsidian/workspace-mobile.json
+wiki/.obsidian/cache
+wiki/.obsidian/plugins/*/data.json
+wiki/.trash/

@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "scenarios": {
+    "cf-04-goal-achieved-from-end-turn": {
+      "executions": 3,
+      "lastExecutedAt": "2026-04-25T00:53:10.213Z",
+      "regressionsCaught": 0,
+      "lastRegressionAt": null,
+      "baselineUpdatedAt": "2026-04-25T00:50:15.640Z",
+      "baselineUpdateCount": 0,
+      "targetedWeakness": "W11/IC-17"
+    },
+    "cf-13-no-advisory-only-dispatches": {
+      "executions": 3,
+      "lastExecutedAt": "2026-04-25T00:53:10.213Z",
+      "regressionsCaught": 0,
+      "lastRegressionAt": null,
+      "baselineUpdatedAt": "2026-04-25T00:50:15.640Z",
+      "baselineUpdateCount": 0,
+      "targetedWeakness": "Principle-11"
+    }
+  }
+}

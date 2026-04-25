@@ -40,3 +40,31 @@ export type {
   ScenarioResult,
   CounterfactualResult,
 } from "./harness/scenario.js";
+
+// ─── North Star Test Gate (Tier 1) ───
+export {
+  runGate,
+  captureOutcome,
+  diffOutcomes,
+  formatFailure,
+  archiveFailingTrace,
+  readBaseline,
+  writeBaseline,
+  readHealth,
+  writeHealth,
+  bumpHealth,
+  REPORTS_DIR,
+  BASELINE_PATH,
+  HEALTH_PATH,
+  REGRESSIONS_DIR,
+} from "./gate/runner.js";
+export type {
+  Tier1Baseline,
+  Tier1ScenarioOutcome,
+  ScenarioModule,
+  ScenarioDiff,
+  FieldDiff,
+  ScenarioHealth,
+  ScenarioHealthEntry,
+} from "./gate/types.js";
+export { discoverScenarios, summarizeCoverage } from "./gate/registry.js";
