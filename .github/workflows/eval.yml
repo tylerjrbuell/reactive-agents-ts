@@ -3,7 +3,16 @@ name: Eval Suite
 on:
   pull_request:
     branches: [main]
+  # T1.6 — Run on push to main as well so post-merge eval regressions surface
+  # before the next PR opens. Previously eval skipped main.
+  push:
+    branches: [main]
   workflow_dispatch:
+
+# T1.1 — Concurrency cancellation for the same workflow + ref.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   eval:
@@ -16,6 +25,15 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
+
+      # T1.2 — Cache Bun's install dir.
+      - name: Cache Bun install
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            bun-${{ runner.os }}-
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
