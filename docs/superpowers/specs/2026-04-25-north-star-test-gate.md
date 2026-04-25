@@ -1,6 +1,9 @@
 # North Star Test Gate — Design Spec
 
-> **Status:** DRAFT. Awaiting user sign-off on schema, tolerance policy, scenario list, and tier-2 runner choice before any implementation work begins.
+> **Status:** APPROVED 2026-04-24. User sign-off:
+>   - Schema (§2.3, §3.3) — accepted as drafted, sensible/useful fields only
+>   - Tier 2 runner (§3.5) — **Option B (self-hosted Ollama on developer GPU machine)**
+>   - Scenario list — **PRUNED**: only failure-mode regression scenarios; drop generic competency coverage. Each scenario must map to a specific weakness ID (W#) or gap (G#/IC#/S0.#) the gate is designed to catch.
 >
 > **Author:** 2026-04-24 session. Advisor-reviewed.
 >
@@ -89,34 +92,36 @@ When an intentional change ships:
 
 This makes baseline drift impossible-by-omission: every change is visible, named, and reviewed.
 
-### 2.6 v0 scenario list — derived from marketed competencies (per `README.md`)
+### 2.6 v0 scenario list — failure-mode regressions only
 
-> **Excluded by design:** scenarios sourced from "what just shipped" (recency bias). Each entry below maps to a feature explicitly marketed in `README.md` Features section.
+> **Pruning rule (per user 2026-04-24):** every scenario must map to a documented weakness ID (W#) or architectural gap (G#/IC#/S0.#). Generic competency coverage (e.g., "all 5 strategies fire") is excluded — those belong in unit tests, not the gate. The gate exists to catch the **specific failures** that have surfaced or could plausibly surface, not to inventory features.
 
-| Scenario ID | Marketed Competency | Asserts |
-|-------------|---------------------|---------|
-| `cf-01-strategy-react` | "5 reasoning strategies" | reactive strategy fires; `terminatedBy: "final_answer_tool"` |
-| `cf-02-strategy-plan-execute` | "5 reasoning strategies" | plan-execute strategy fires; iterations > 1 |
-| `cf-03-strategy-tot` | "5 reasoning strategies" | tree-of-thought strategy fires; multi-branch trace |
-| `cf-04-strategy-reflexion` | "5 reasoning strategies" | reflexion strategy fires |
-| `cf-05-strategy-adaptive` | "5 reasoning strategies + adaptive meta-strategy" | adaptive strategy selects an inner strategy |
-| `cf-06-tool-call-roundtrip` | "Adaptive tool calling" | tool requested → executed → result observed |
-| `cf-07-memory-recall` | "4-layer memory" | store → recall returns the stored value |
-| `cf-08-memory-tool-to-semantic` | "4-layer memory" | tool result triggers `storeSemantic` (G-3 closed by 72c322bd) |
-| `cf-09-early-stop-overflow` | "Reactive intelligence — early-stop" | iteration ≥ maxIter-2 triggers early-stop dispatch |
-| `cf-10-stall-detect` | "Reactive intelligence — stall-detect" | flat low-entropy window triggers stall-detect |
-| `cf-11-tool-failure-redirect` | "Reactive intelligence — tool-failure-redirect" | 2 consecutive tool failures dispatch redirect |
-| `cf-12-result-goalAchieved` | "Result shape" | `terminatedBy=max_iterations` → `goalAchieved=false` |
-| `cf-13-error-swallowed-emitted` | "ErrorSwallowed (P0 S0.2)" | forced site emits `ErrorSwallowed` with correct tag |
-| `cf-14-redactor-applied` | "Default secrets redactor (P0 S0.3)" | secret in log message replaced by `[redacted-...]` |
-| `cf-15-num-ctx-passed-to-ollama` | "Model-adaptive context" / G-1 | when `defaultNumCtx` set, Ollama request includes `options.num_ctx` |
-| `cf-16-builder-fromConfig-roundtrip` | "Agent as Data" | `builder.toConfig() → fromConfig` is structurally identical |
-| `cf-17-fallback-chain` | "Provider fallback chains" | fallback to second provider when first errors |
-| `cf-18-streaming-abort` | "Streaming + AbortSignal" | aborted run emits `StreamCancelled` and stops |
-| `cf-19-required-tools-guard` | "Required tools guard" | `withRequiredTools(['x'])` blocks final-answer until `x` called |
-| `cf-20-cost-budget-enforced` | "Cost tracking — budget enforcement" | `withBudget(0)` halts before LLM call |
+| Scenario ID | Targeted Failure | Regression Triggered When |
+|-------------|------------------|---------------------------|
+| `cf-01-iteration-counter-off-by-one` | **W6 / IC-16** (`completedIteration` off-by-one in `reactive-observer.ts`) | Single-step task reports `iterations === 1`, not 2 |
+| `cf-02-early-stop-overflow-fires` | **W4 / W13 / IC-13** (early-stop never dispatched in failure loops) | Forced near-`maxIterations` run dispatches `early-stop` |
+| `cf-03-early-stop-respects-convergence` | **IC-13 ordering regression** (overflow before convergence is wrong) | Converging trace produces `reason: "Entropy converging…"`, not overflow reason |
+| `cf-04-goal-achieved-from-final-answer` | **W11 / IC-17** (`result.success` always true masks failures) | `terminatedBy: "final_answer_tool"` → `goalAchieved === true` |
+| `cf-05-goal-achieved-from-overflow` | **W11 / IC-17** | `terminatedBy: "max_iterations"` → `goalAchieved === false` |
+| `cf-06-goal-achieved-null-on-end-turn` | **W11 / IC-17** | `terminatedBy: "end_turn"` → `goalAchieved === null` (ambiguity preserved) |
+| `cf-07-tool-result-emits-semantic-store` | **G-3 / IC-15** (tool observations dead-end at scratchpad) | Successful tool execution causes `storeSemantic` to fire (forked, non-blocking) |
+| `cf-08-memory-recall-roundtrip` | **W7 / W8** (model fails to invoke recall; recalled content corrupted) | Stored fact retrievable via `recall(key)` round-trip |
+| `cf-09-num-ctx-on-ollama-request` | **G-1** (silent 2048-token truncation) | `defaultNumCtx: 8192` configured → Ollama request includes `options.num_ctx: 8192` |
+| `cf-10-error-swallowed-event-emitted` | **S0.2** (silent `catchAll(() => Effect.void)` sites) | Forced throw at instrumented site emits `ErrorSwallowed` with correct `site` literal |
+| `cf-11-redactor-strips-secrets-from-logs` | **S0.3** (secrets leak through structured logger) | `info("token: ghp_…")` stored as `[redacted-github-token]` in `getLogs()` |
+| `cf-12-redactor-strips-from-metadata` | **S0.3 metadata path** | `info("…", { token: "ghp_…" })` → redacted in metadata |
+| `cf-13-no-advisory-only-dispatches` | **Principle 11** (4 removed evaluators must stay removed) | None of `prompt-switch`/`memory-boost`/`skill-reinject`/`human-escalate` ever appear in `recentDecisions` |
+| `cf-14-stall-detect-fires-on-flat-entropy` | **W2** (loop detector reset by ICS) | Flat low-entropy window across N iters dispatches `stall-detect` |
+| `cf-15-tool-failure-redirect-fires` | **Tool-failure-redirect intervention regression** | 2+ consecutive same-tool failures dispatch `tool-failure-redirect` |
+| `cf-16-max-iterations-honored` | **W4** (`withReasoning({ maxIterations })` silently dropped) | Configured `maxIterations: N` → kernel cannot exceed N outer iterations |
+| `cf-17-known-swallow-sites-format` | **S0.2 wiring drift** (sites renamed silently) | All `emitErrorSwallowed` site strings in production code follow `<package>/<path>:<line\|anchor>` shape |
 
-20 scenarios. Each <2 seconds. Total Tier 1 budget: **≤45 seconds wall clock**.
+17 scenarios. Each ≤2 seconds. Total Tier 1 budget: **≤40 seconds wall clock**.
+
+**Each scenario file is structured as a regression test for a specific commit:**
+- Header comment names the failure ID it protects (`W6`, `G-1`, `IC-13`, etc.)
+- Header comment names the commit that closed the gap (`72c322bd`, `838fb721`, etc.)
+- If a future change reverts the protection, the scenario fails with a message pointing to which weakness has returned.
 
 ### 2.7 What Tier 1 does NOT detect
 
@@ -209,44 +214,36 @@ No exact-value comparison on `iterations`, `maxEntropy`, etc. Those are captured
 
 The advisor flagged this as the discriminating decision. Options:
 
-**Option A — Manual pre-release ritual (RECOMMENDED for now)**
-- Developer runs `bun run integration:gate:behavior` before tagging a release.
-- Script writes today's dated baseline file (`integration-behavior-baseline-YYYY-MM-DD.json`).
-- CI does NOT run Tier 2; instead, a CI lint step rejects releases where the most recent baseline file is older than 14 days.
-- Pro: zero infra cost. Con: discipline required.
+**Option B — Self-hosted Ollama runner (CHOSEN)**
 
-**Option B — Self-hosted Ollama runner (deferred)**
-- Requires a always-on machine with a GPU.
-- Most hobbyist projects don't have this.
-- Con: maintenance burden.
+User-confirmed 2026-04-24: developer machine has an Ollama-capable GPU. Tier 2 runs against that machine.
 
-**Option C — Cloud Anthropic gate via secrets**
-- Use `claude-haiku-4-5` (cheapest frontier model) for Tier 2.
-- Estimated cost: ~$0.50 per CI run.
-- Pro: real LLM, hands-off. Con: ongoing cost; ties gate to one provider's behavior.
+Implementation:
+- A `bun run integration:gate:behavior` script runs locally against `cogito:14b` at temp=0, num_ctx=8192. Script writes `harness-reports/integration-behavior-baseline-YYYY-MM-DD.json`.
+- A `bun run integration:gate:behavior:check` script reads the most recent dated baseline and asserts the §3.4 hard floors. Exits non-zero on regression.
+- A CI lint step rejects release tags where the most recent baseline file is older than 14 days, ensuring the ritual is performed before each release rather than skipped silently.
+- Optional future: GitHub Actions self-hosted runner registered against the same GPU machine, so Tier 2 can run on a `behavior-gate.yml` workflow triggered by `release/*` branch pushes. Out of scope for v0.
 
-**Decision needed from user:** A, B, or C?
+### 3.6 Tier 2 scenario list — failure-mode-targeted only
 
-### 3.6 Tier 2 scenario list — initial set
+Inherits the **4 failure-labeled scenarios** from `failure-corpus.ts` and the **4 memory probes** from `harness-probe.ts`. Success-labeled scenarios from the corpus are kept ONLY because they're needed as the AUC denominator (you can't compute "fraction of failure runs whose entropy exceeds every success run's entropy" without a success class). They're not assertion targets in their own right.
 
-Inherits from `failure-corpus.ts` (8 scenarios — 4 success-labeled, 4 failure-labeled) **plus** 4 new memory probes from existing `harness-probe.ts`:
+| Scenario ID | Targeted Failure | Triggered When |
+|-------------|------------------|----------------|
+| `b-01-rate-limit-loop` (failure) | **W4 / W13 / IC-13** under real LLM | Persistent rate-limit errors → `early-stop` dispatched, `iterations ≤ maxIterations`, `goalAchieved === false` |
+| `b-02-save-loop` (failure) | **W14** dispatch threshold + W4 | Save fails → `interventionsDispatched ≥ 1`, `goalAchieved === false` |
+| `b-03-verify-loop` (failure) | **Strategy-switch evaluator regression** | Verify fails → either `switch-strategy` or `early-stop` dispatched |
+| `b-04-contradictory-data` (failure) | **Dispatcher under behavioral entropy** | Source disagreement → ≥1 intervention dispatched |
+| `b-05-success-trivial-recall` (success, AUC denominator) | **W6 / IC-16 under real LLM** | "What is the capital of France?" → `iterations ≤ 2`, `maxEntropy ≤ 0.20` |
+| `b-06-success-list-recall` (success, AUC denominator) | **W6 / IC-16** for list-shaped output | "List 3 RGB colors" → `iterations ≤ 2` |
+| `b-07-success-technical-recall` (success, AUC denominator) | **W8** task-intent under real LLM | TypeScript paradigm question → `iterations ≤ 4` |
+| `b-08-success-days-of-week` (success, AUC denominator) | Lowest-noise success anchor | "Days of the week" → `iterations === 1` ideally, `≤ 2` floor |
+| `b-09-memory-recall-invocation` (failure-mode probe) | **W7** model fails to invoke recall | Stored fact → next agent run retrieves it without explicit `recall: true` flag |
+| `b-10-memory-retrieval-fidelity` (failure-mode probe) | **W7 / W8** recalled content corruption | Recalled content's relevant facts match stored facts (substring assertion) |
+| `b-11-memory-multi-observation-synthesis` (failure-mode probe) | **G-3 under real LLM** | Multi-step research consults semantic memory across iterations, output references multi-source synthesis |
+| `b-12-memory-context-pressure-degradation` (failure-mode probe) | **G-1 under real LLM** | High-context task with `defaultNumCtx: 8192` doesn't truncate critical facts in the output |
 
-| Scenario ID | From | Purpose |
-|-------------|------|---------|
-| `b-01-success-days-of-week` | failure-corpus | trivial recall, ≤2 iter, low entropy |
-| `b-02-success-capital-france` | failure-corpus | single-fact, ≤2 iter |
-| `b-03-success-rgb-colors` | failure-corpus | list-recall, ≤2 iter |
-| `b-04-success-typescript-paradigm` | failure-corpus | technical recall, ≤4 iter |
-| `b-05-failure-rate-limit-loop` | failure-corpus | tool always errors → expect early-stop, `goalAchieved=false` |
-| `b-06-failure-save-loop` | failure-corpus | save tool fails → expect early-stop |
-| `b-07-failure-verify-loop` | failure-corpus | verify tool fails → expect strategy-switch or early-stop |
-| `b-08-failure-contradictory-data` | failure-corpus | sources disagree → expect dispatch |
-| `b-09-memory-recall-invocation` | harness-probe | recall fires without explicit `recall: true` |
-| `b-10-memory-retrieval-fidelity` | harness-probe | recalled content matches stored content |
-| `b-11-memory-multi-observation-synthesis` | harness-probe | multi-step research uses memory across iters |
-| `b-12-memory-context-pressure-degradation` | harness-probe | high-context task doesn't truncate critical facts |
-
-12 scenarios total.
+12 scenarios. Each with explicit failure-ID provenance. Success scenarios serve dual purpose: anchor the AUC denominator AND regression-test the "trivial task ≤ N iters" promise.
 
 ---
 
@@ -323,17 +320,13 @@ No "find it yourself in the logs" failure modes.
 
 ---
 
-## 7. What this spec asks of the user
+## 7. Sign-off received 2026-04-24
 
-Three sign-offs before any code is written:
+- **Schema** (§2.3 / §3.3) — accepted. Use sensible / useful fields only.
+- **Tier 2 runner** (§3.5) — Option B (self-hosted Ollama on developer GPU machine).
+- **Scenario list** — pruned per user direction: every scenario must target a specific documented failure mode. §2.6 trimmed from 20 generic competency scenarios to 17 failure-mode regressions; §3.6 reframed so each scenario lists its targeted weakness ID.
 
-**1. Schema shape** (§2.3 and §3.3) — are `Tier1ScenarioOutcome` and `Tier2ScenarioOutcome` capturing the right metrics for your purposes? Anything missing? Anything redundant?
-
-**2. Tier 2 runner choice** (§3.5) — Option A (manual pre-release), Option B (self-hosted), or Option C (cloud Anthropic)?
-
-**3. Scenario list** (§2.6 and §3.6) — are 20 Tier 1 + 12 Tier 2 the right v0 set? Any scenario that's load-bearing for your use case but missing? Any that's noise and should be cut?
-
-After sign-off, Phase A (Tier 1) starts in the next session with TDD discipline (RED test that asserts schema shape, GREEN runner, baseline captured, CI lint added).
+Phase A implementation starts in the next session.
 
 ---
 
