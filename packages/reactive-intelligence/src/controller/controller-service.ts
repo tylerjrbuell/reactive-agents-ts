@@ -5,13 +5,20 @@ import { evaluateStrategySwitch } from "./strategy-switch.js";
 import { evaluateCompression } from "./context-compressor.js";
 import { evaluateTempAdjust } from "./evaluators/temp-adjust.js";
 import { evaluateSkillActivate } from "./evaluators/skill-activate.js";
-import { evaluatePromptSwitch } from "./evaluators/prompt-switch.js";
 import { evaluateToolInject } from "./evaluators/tool-inject.js";
-import { evaluateMemoryBoost } from "./evaluators/memory-boost.js";
-import { evaluateSkillReinject } from "./evaluators/skill-reinject.js";
-import { evaluateHumanEscalate } from "./evaluators/human-escalate.js";
 import { evaluateToolFailureStreak } from "./evaluators/tool-failure-streak.js";
 import { evaluateStallDetect } from "./evaluators/stall-detect.js";
+
+// ─── Removed evaluators (North Star principle 11) ───
+//
+// `evaluatePromptSwitch`, `evaluateMemoryBoost`, `evaluateSkillReinject`,
+// `evaluateHumanEscalate` were registered as advisory-only ControllerDecisions
+// with no dispatch handler. They produced telemetry noise and burned
+// evaluator cycles every iteration without ever causing an action.
+//
+// Removed from the evaluate chain in this commit. The evaluator source
+// files remain in `evaluators/` so the logic is recoverable; re-add them
+// only when a real dispatch handler ships alongside.
 
 export class ReactiveControllerService extends Context.Tag("ReactiveControllerService")<
   ReactiveControllerService,
@@ -21,7 +28,7 @@ export class ReactiveControllerService extends Context.Tag("ReactiveControllerSe
 >() {}
 
 export const ReactiveControllerServiceLive = (
-  config: ReactiveControllerConfig,
+  _config: ReactiveControllerConfig,
 ): Layer.Layer<ReactiveControllerService> =>
   Layer.succeed(ReactiveControllerService, {
     evaluate: (params) =>
@@ -42,27 +49,15 @@ export const ReactiveControllerServiceLive = (
           const compression = evaluateCompression(params);
           if (compression) decisions.push(compression);
         }
-        // ─── Living Intelligence evaluators ───
+        // ─── Living Intelligence evaluators (handler-backed only) ───
         const tempAdj = evaluateTempAdjust(params);
         if (tempAdj) decisions.push(tempAdj);
 
         const skillAct = evaluateSkillActivate(params);
         if (skillAct) decisions.push(skillAct);
 
-        const promptSw = evaluatePromptSwitch(params);
-        if (promptSw) decisions.push(promptSw);
-
         const toolInj = evaluateToolInject(params);
         if (toolInj) decisions.push(toolInj);
-
-        const memBoost = evaluateMemoryBoost(params);
-        if (memBoost) decisions.push(memBoost);
-
-        const skillReinj = evaluateSkillReinject(params);
-        if (skillReinj) decisions.push(skillReinj);
-
-        const humanEsc = evaluateHumanEscalate(params);
-        if (humanEsc) decisions.push(humanEsc);
 
         const toolFailure = evaluateToolFailureStreak(params);
         if (toolFailure) decisions.push(toolFailure);

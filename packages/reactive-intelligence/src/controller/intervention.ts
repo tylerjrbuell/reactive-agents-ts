@@ -82,16 +82,15 @@ export interface InterventionConfig {
 
 export const defaultInterventionConfig: InterventionConfig = {
   modes: {
+    // Only decisions with registered handlers (in defaultInterventionRegistry)
+    // appear here. Advisory-only modes that never dispatched were removed in
+    // P0 cleanup (see controller-service.ts header comment).
     "early-stop": "dispatch",
     "temp-adjust": "dispatch",
     "switch-strategy": "dispatch",
     "skill-activate": "dispatch",
-    "prompt-switch": "advisory",
     "tool-inject": "dispatch",
     "tool-failure-redirect": "dispatch",
-    "memory-boost": "advisory",
-    "skill-reinject": "advisory",
-    "human-escalate": "advisory",
     "compress": "dispatch",
     "stall-detect": "dispatch",
     "harness-harm": "dispatch",
