@@ -508,10 +508,16 @@ Identified during Zeus integration report — honest audit of what's implemented
 
 ## Local Model Adaptation Layer (Apr 21, 2026)
 Architecture spec for fixing local model failures surfaced by live benchmark session (qwen3:4b, cogito:8b, rw-2/3/6/8/9). Spec: `docs/superpowers/specs/2026-04-21-local-model-adaptation-layer.md`.
-- **6 components**: HealingPipeline (ToolNameHealer + ParamNameHealer + ParamInferenceHealer), FileSandbox, ModelTierProfile, SchemaSimplifier+tool examples, StallDetector RI handler, HarnessHarmDetector
+- **6 spec components — shipped status (verified 2026-04-24)**:
+  - ✅ HealingPipeline (ToolNameHealer + ParamNameHealer + ParamInferenceHealer) — shipped
+  - ✅ StallDetector RI handler — `packages/reactive-intelligence/src/controller/handlers/stall-detector.ts`
+  - ✅ HarnessHarmDetector — `packages/reactive-intelligence/src/controller/handlers/harness-harm-detector.ts`
+  - ❌ FileSandbox — spec only, not implemented
+  - ❌ ModelTierProfile — spec only, not implemented (deferred to Phase 1 Capability port)
+  - ❌ SchemaSimplifier + tool examples — spec only, not implemented
 - **Evidence**: cogito:8b uses `input`/`command` universally (100% tool failure rate), hallucinates `typescript/compile`; qwen3:4b generates wrong absolute paths deterministically; ra-full causes Grade D diverging on cogito:8b (rw-2 × 3, rw-8 × 1)
-- **Packages**: `packages/tools/src/healing/`, `packages/tools/src/sandbox/`, `packages/runtime/src/profiles/`, new RI handlers
-- **Priority 1-2** (highest ROI, independent): ParamNameHealer + ToolNameHealer, FileSandbox — fix without full profile infrastructure
+- **Packages**: `packages/tools/src/healing/` (shipped), `packages/tools/src/sandbox/` (NOT created), `packages/runtime/src/profiles/` (NOT created), `packages/reactive-intelligence/src/controller/handlers/` (StallDetector + HarnessHarmDetector shipped here, not as a new package)
+- **Priority 1-2** (highest ROI, independent): ParamNameHealer + ToolNameHealer (✅ shipped), FileSandbox (❌ pending) — fix without full profile infrastructure
 
 ## Benchmark Suite v2 (Apr 19, 2026)
 **SHIPPED** — 13-task implementation in `packages/benchmarks/`. Plan: `docs/superpowers/plans/2026-04-19-benchmark-suite-v2.md`. 50 tests pass, build clean.
