@@ -50,7 +50,7 @@ import { EventBus } from '@reactive-agents/core'
 import { KillSwitchService } from '@reactive-agents/guardrails'
 import type { AgentStreamEvent, StreamDensity } from './stream-types.js'
 import { AgentStream } from './agent-stream.js'
-import type { TelemetryConfig } from '@reactive-agents/observability'
+import type { Redactor, TelemetryConfig } from '@reactive-agents/observability'
 import {
     AgentSession,
     directChat,
@@ -406,6 +406,28 @@ export interface ObservabilityOptions {
      * Default: `true` when `verbosity` is `"debug"`, `false` otherwise.
      */
     readonly logModelIO?: boolean
+    /**
+     * Custom secret redactors appended to the OWASP-aligned default set.
+     *
+     * The framework always applies a default redactor list to log messages
+     * and string-valued metadata (anthropic / openai / github / jwt / aws /
+     * google API keys). Patterns supplied here run *after* defaults, so user
+     * patterns operate on already-redacted output.
+     *
+     * Use to redact organization-specific secret formats (e.g., internal
+     * deployment tokens, request IDs that embed user IDs) without disabling
+     * the default protection.
+     *
+     * @example
+     * ```typescript
+     * .withObservability({
+     *   redactors: [
+     *     { name: "internal-deploy-token", pattern: /dpl_\w{32,}/g, replacement: "[redacted-deploy]" },
+     *   ],
+     * })
+     * ```
+     */
+    readonly redactors?: readonly Redactor[]
 }
 
 /**

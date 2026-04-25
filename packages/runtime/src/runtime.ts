@@ -1353,6 +1353,9 @@ export const createRuntime = (options: RuntimeOptions) => {
       file: options.observabilityOptions?.file
         ? { filePath: options.observabilityOptions.file }
         : undefined,
+      ...(options.observabilityOptions?.redactors !== undefined
+        ? { redactors: options.observabilityOptions.redactors }
+        : {}),
     };
     // Provide the shared metricsCollectorLayer so ObservabilityService uses the same instance
     // as ExecutionEngine, ensuring metrics flow through properly
@@ -1873,6 +1876,9 @@ export const createLightRuntime = (options: LightRuntimeOptions) => {
     const obsExporterConfig = {
       verbosity: options.observabilityOptions?.verbosity,
       live: options.observabilityOptions?.live,
+      ...(options.observabilityOptions?.redactors !== undefined
+        ? { redactors: options.observabilityOptions.redactors }
+        : {}),
     };
     const obsLayer = createObservabilityLayer(
       obsExporterConfig,
