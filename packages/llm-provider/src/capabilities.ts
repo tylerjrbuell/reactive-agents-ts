@@ -5,6 +5,12 @@
  * provider's API reliably supports. They let the framework choose between
  * native function calling and structured-output fallback paths without
  * querying the provider at runtime.
+ *
+ * @deprecated Phase 1 introduces the per-(provider, model) {@link Capability}
+ * struct in `./capability.ts` with 12 fields and probe + static-table +
+ * fallback resolution. `ProviderCapabilities` will be removed in Phase 2 once
+ * all internal callers migrate to `Capability`. New code should consume
+ * `Capability` directly via the resolver (S1.3).
  */
 export interface ProviderCapabilities {
   /** Provider supports native function / tool calling (structured tool_use). */

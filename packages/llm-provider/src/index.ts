@@ -1,6 +1,27 @@
 // ─── Provider Capabilities ───
+// @deprecated — see Capability below (Phase 1 S1.1).
 export type { ProviderCapabilities } from "./capabilities.js";
 export { DEFAULT_CAPABILITIES } from "./capabilities.js";
+
+// ─── Capability port (Phase 1 S1.1) ───
+// Per-(provider, model) capability descriptor; supersedes ProviderCapabilities.
+// Resolution (probe → static-table → fallback) ships in S1.3.
+export {
+  CapabilitySchema,
+  ModelTierSchema,
+  TokenizerFamilySchema,
+  ToolCallDialectSchema,
+  CapabilitySourceSchema,
+  STATIC_CAPABILITIES,
+  fallbackCapability,
+} from "./capability.js";
+export type {
+  Capability,
+  ModelTier,
+  TokenizerFamily,
+  ToolCallDialect,
+  CapabilitySource,
+} from "./capability.js";
 
 // ─── Types ───
 export type {
