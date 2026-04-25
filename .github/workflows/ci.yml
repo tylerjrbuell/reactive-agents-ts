@@ -39,6 +39,12 @@ jobs:
       - name: Check capability manifest
         run: bun run scripts/check-capabilities.ts
       - run: bun test
+      # North Star Test Gate (Tier 1) — control-flow regression check.
+      # Spec: docs/superpowers/specs/2026-04-25-north-star-test-gate.md
+      # Failure here means a wiring regression for a documented weakness;
+      # the failure message names the weakness ID and the closing commit.
+      - name: North Star Test Gate (Tier 1)
+        run: bun run gate:check
 
   docs-links:
     name: Docs Link Check

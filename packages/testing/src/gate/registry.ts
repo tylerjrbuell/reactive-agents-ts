@@ -32,7 +32,14 @@ export async function discoverScenarios(): Promise<readonly ScenarioModule[]> {
   if (cached !== null) return cached;
 
   const files = readdirSync(SCENARIOS_DIR).filter(
-    (f) => f.endsWith(".ts") && !f.endsWith(".d.ts") && !f.endsWith(".test.ts"),
+    (f) =>
+      f.endsWith(".ts") &&
+      !f.endsWith(".d.ts") &&
+      !f.endsWith(".test.ts") &&
+      // Scaffolds emitted by `gate:propose --emit` aren't real scenarios — they
+      // live in the tree as TODO reminders. Excluded from discovery so the
+      // baseline stays clean until a developer fills one in and renames it.
+      !f.startsWith("cf-TODO-"),
   );
 
   const scenarios: ScenarioModule[] = [];

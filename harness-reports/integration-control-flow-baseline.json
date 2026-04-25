@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "capturedAt": "2026-04-25T00:50:15.640Z",
+  "capturedAt": "2026-04-25T02:31:27.369Z",
   "bunVersion": "1.3.10",
   "scenarios": {
     "cf-04-goal-achieved-from-end-turn": {
@@ -15,6 +15,40 @@
       "customAssertions": {
         "sawRunCompleted": true,
         "terminatedByCaptured": "missing"
+      }
+    },
+    "cf-10-error-swallowed-event-emitted": {
+      "status": "success",
+      "iterations": 0,
+      "terminatedBy": "unknown",
+      "goalAchieved": null,
+      "toolCallsObserved": [],
+      "interventionsDispatched": [],
+      "errorSwallowedSites": [],
+      "redactorsTriggered": [],
+      "customAssertions": {
+        "wiringTestExists": true,
+        "wiringTestAssertsMinimum": true,
+        "wiringTestAssertsUniqueness": true,
+        "wiringTestAssertsFormat": true,
+        "wiringTestUsesEmitErrorSwallowed": true
+      }
+    },
+    "cf-11-redactor-strips-secrets": {
+      "status": "success",
+      "iterations": 0,
+      "terminatedBy": "unknown",
+      "goalAchieved": null,
+      "toolCallsObserved": [],
+      "interventionsDispatched": [],
+      "errorSwallowedSites": [],
+      "redactorsTriggered": [],
+      "customAssertions": {
+        "messageLeakedSecret": false,
+        "messageContainsRedactionTag": true,
+        "metaTokenLeakedSecret": false,
+        "metaTokenIsRedacted": true,
+        "metaRequestIdPreserved": true
       }
     },
     "cf-13-no-advisory-only-dispatches": {
