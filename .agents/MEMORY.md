@@ -7,6 +7,15 @@
 - [Skip plans for content/skill writing](feedback_skip_plans_for_content.md) — don't write formal implementation plans for SKILL.md or doc writing tasks; implement directly
 - [Clean types, no any](feedback_clean_types.md) — strict TypeScript required; no `any` casts, use `unknown` + guards or proper types
 - [Starlight link patterns](feedback_starlight_link_patterns.md) — use absolute paths for internal doc links; relative paths cause CI link-checker failures
+- **Don't `rm -rf` untracked dirs with content** — confirm before deleting any `??` directory with >5 files; git can't recover untracked content. Cost: lost `wiki/` (user restoring) + 3 `obsidian-vault-*` skill modules (permanent, user did not back them up) on 2026-04-24 cleanup pass.
+
+## Lost / pending re-implementation (2026-04-24)
+The three Obsidian-vault skill modules under `.agents/skills/` were deleted in the Phase-0-close cleanup and are NOT recoverable from any backup:
+- `.agents/skills/obsidian-vault-query/` — read the vault at session start
+- `.agents/skills/obsidian-vault-sync/` — write decisions/experiments/sessions back to the vault
+- `.agents/skills/obsidian-vault-hygiene/` — orphan/bitrot/duplicate loop maintenance
+
+`AGENTS.md` and `.agents/skills/update-docs/SKILL.md` still reference these by name as part of the documented vault workflow. They need to be re-implemented before agents can act on those references. The vault's own `wiki/CLAUDE.md` and `wiki/Playbooks/Vault Operations.md` (when restored) carry the canonical protocols the skills should encode.
 
 ## Current Status (Apr 22, 2026)
 - **v0.10.0 release prep complete** — CHANGELOG written, release doc at `docs/releases/v0.10.0.md`, docs updated (27 packages, ~4,350 tests). Changeset step pending. Build ✅ Tests 4353 pass / 0 fail ✅ Typecheck 54/54 ✅

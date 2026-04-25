@@ -182,9 +182,10 @@ Before you add or modify code, confirm:
 ### Before Starting Work
 
 1. Read this `AGENTS.md` for project status, build commands, architecture overview, and workflow rules
-2. Read the relevant spec in `spec/docs/` for the feature you're implementing
-3. Check `spec/docs/14-v0.5-comprehensive-plan.md` for current sprint context
-4. Load relevant skills (`effect-ts-patterns`, `architecture-reference`, `llm-api-contract`)
+2. Query the Obsidian oracle via `obsidian-vault-query` — check prior [[Decisions]], [[Experiments]], [[Running Issues Log]], and any concept notes touching your work
+3. Read the relevant spec in `spec/docs/` for the feature you're implementing
+4. Check `spec/docs/14-v0.5-comprehensive-plan.md` for current sprint context
+5. Load relevant skills (`effect-ts-patterns`, `architecture-reference`, `llm-api-contract`)
 
 ### Build & Test Cycle
 
@@ -413,6 +414,7 @@ All 22 publishable packages move together (fixed group) — bumping any one pack
 | Category             | Path                                                                                                                                     |
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | **Memory**           | `.agents/MEMORY.md` — **read first** for project context, status, patterns, and roadmap                                                  |
+| **Oracle vault**     | `wiki/` — in-repo Obsidian knowledge base; query via `obsidian-vault-query`, write via `obsidian-vault-sync`. Read `wiki/Hot.md` first, then `wiki/Home.md` |
 | **Cortex app**       | `apps/cortex/AGENTS.md` — Bun/Elysia desk server + SvelteKit UI (Stage/Run), WS ingest/live, SQLite; read before changing `apps/cortex/` |
 | Specs                | `spec/docs/`, `docs/superpowers/specs/`                                                                                                  |
 | Plans                | `docs/superpowers/plans/`                                                                                                                |
@@ -426,6 +428,8 @@ All 22 publishable packages move together (fixed group) — bumping any one pack
 | v0.5 Plan            | `spec/docs/14-v0.5-comprehensive-plan.md`                                                                                                |
 
 > **Note:** `.agents/MEMORY.md` contains cross-agent project memory — current status, build patterns, architecture decisions, known issues, and roadmap. All agents should read it before starting work and update it after completing significant features.
+>
+> **Oracle vault:** lives in the repo at `wiki/`. Typed-frontmatter notes for every package, concept, decision, experiment, failure mode, and release. **Read `wiki/Hot.md` first** (≤500-word recent-context cache), then `wiki/Home.md` for the index, then drill into the relevant MOC. At session close, regenerate `wiki/Hot.md` and append to `wiki/Log.md`. Use `obsidian-vault-query` to query, `obsidian-vault-sync` to write durable artifacts (Decisions, Experiments, Sessions, Concept updates), and `obsidian-vault-hygiene` for periodic graph health (orphan / bitrot / duplicate / broken-link loops). The vault's own `wiki/CLAUDE.md` and `wiki/Playbooks/Vault Operations.md` are the canonical protocols.
 
 ## Project Skills Index
 
@@ -451,6 +455,9 @@ Canonical project skills live in `.agents/skills/`:
 -   `validate-build` — quality gate checklist for build/test/review
 -   `effect-abstraction-audit` — architectural analysis for abstraction opportunities, composability gaps, and Effect-TS engineering quality
 -   `architecture-audit` — system-level architecture health check: dead code, layer violations, over-abstraction, documentation drift, and simplification opportunities
+-   `obsidian-vault-query` — read the Obsidian vault (external project oracle) at session start
+-   `obsidian-vault-sync` — write durable artifacts (decisions, experiments, sessions) to the vault
+-   `obsidian-vault-hygiene` — orphan / bitrot / duplicate loops keeping the vault graph coherent
 
 ---
 

@@ -175,6 +175,9 @@ The `.agents/skills/` directory contains skills used by agents to build with thi
 | `review-patterns/SKILL.md`        | 9-category compliance checks (incl. kernel extension)                  |
 | `update-docs/SKILL.md`            | This workflow, docs + memory synchronization                           |
 | `validate-build/SKILL.md`         | Build/test/review quality gates                                        |
+| `obsidian-vault-query/SKILL.md`   | Read the Obsidian vault (external project oracle) at session start     |
+| `obsidian-vault-sync/SKILL.md`    | Write durable artifacts (decisions, experiments, sessions) to the vault|
+| `obsidian-vault-hygiene/SKILL.md` | Orphan/bitrot/duplicate loops keeping the vault graph coherent         |
 
 ### How to update
 
@@ -199,6 +202,21 @@ After any significant feature or architecture change:
 -   Update `.agents/MEMORY.md` with new capabilities, patterns, or status
 -   Update Claude project memory at `~/.claude/projects/*/memory/` if session-level context has changed
 -   These two files keep future agents oriented without re-discovering project state
+
+## Step 7b: Sync to the Obsidian Vault (External Oracle)
+
+The `reactive-agents-ts` Obsidian vault at `<repo>/wiki/` is the project's external long-running oracle — compounding knowledge across sessions. Any doc update that reflects real project evolution should also land here so future agents discover it on query.
+
+Delegate the write-back to `obsidian-vault-sync`. Rough protocol:
+
+1. **Decision-class change** (architecture, canonical rename, public-API break) → create a note in `Decisions/YYYY-MM-DD-<slug>.md` from `Templates/Decision Template`.
+2. **Experiment-class change** (benchmark result, failure-corpus finding, calibration update) → create a note in `Experiments/YYYY-MM-DD-<slug>.md`.
+3. **Concept / Package / Architecture refinement** → edit the matching note in `Concepts/` / `Packages/` / `Architecture/`; bump `updated: YYYY-MM-DD` in frontmatter.
+4. **New failure mode** → add an entry in `Failure-Modes/` and update `Failure-Modes/W-series Catalog.md`.
+5. **Release** → update `Releases/vX.Y.Z.md` + pointer in `MOCs/Releases MOC.md`.
+6. **Running Issues Log** — if the change fixes or surfaces an issue, append to `Issues/Running Issues Log.md`.
+
+Keep writes minimal and frontmatter-disciplined. See `obsidian-vault-sync/SKILL.md` for the full protocol and `Playbooks/Agent Query API.md` inside the vault for the schema.
 
 ## Step 8: Update ROADMAP.md
 

@@ -31,9 +31,18 @@ harness-reports/improvement-report-*.md
 
 # North Star Test Gate baselines (committed — they ARE the contract)
 !harness-reports/integration-control-flow-baseline.json
-!harness-reports/integration-control-flow-scenario-health.json
 !harness-reports/integration-behavior-baseline-*.json
 !harness-reports/benchmarks/baseline-*.json
+
+# Test gate runtime artifacts — re-derived on every run, no value in committing
+harness-reports/integration-control-flow-scenario-health.json
+harness-reports/gate-traces/
+harness-reports/regressions/
+harness-reports/probe-candidates-*.ts
+.gate-baseline-reason
+
+# Local scratch
+scratch.ts
 
 # HN gateway example output
 hn-gateway-reports/
