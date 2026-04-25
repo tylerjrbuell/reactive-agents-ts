@@ -22,6 +22,11 @@ export type {
   ToolCallDialect,
   CapabilitySource,
 } from "./capability.js";
+// Capability resolver (Phase 1 S1.3) — three-tier lookup: cached probe →
+// static table → conservative fallback. Ollama provider consumes this to
+// drive options.num_ctx per (provider, model).
+export { resolveCapability } from "./capability-resolver.js";
+export type { CapabilityCache, ResolveCapabilityOptions } from "./capability-resolver.js";
 
 // ─── Types ───
 export type {

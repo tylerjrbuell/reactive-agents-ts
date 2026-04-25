@@ -78,7 +78,13 @@ describe("Ollama provider — num_ctx wiring (G-1)", () => {
     expect(chatArgs.options?.num_ctx).toBe(8192);
   }, 15000);
 
-  it("omits num_ctx when defaultNumCtx is not configured (respects Ollama default)", async () => {
+  // Phase 1 S1.3 changed this assertion: capability-driven resolution now
+  // always supplies num_ctx for known models. Static table for cogito:14b
+  // declares recommendedNumCtx=8192 — that's what the Ollama request gets,
+  // even with no defaultNumCtx config and no explicit request.numCtx. The
+  // Phase 0 surgical fix's "respect Ollama default 2048" path is replaced
+  // by Phase 1's "respect the model's documented context window".
+  it("uses capability.recommendedNumCtx when defaultNumCtx is not configured (cogito:14b → 8192 from static table)", async () => {
     mockChat.mockClear();
 
     await Effect.runPromise(
@@ -95,7 +101,54 @@ describe("Ollama provider — num_ctx wiring (G-1)", () => {
     const chatArgs = mockChat.mock.calls[0]![0] as {
       options?: { num_ctx?: number };
     };
-    expect(chatArgs.options?.num_ctx).toBeUndefined();
+    expect(chatArgs.options?.num_ctx).toBe(8192);
+  }, 15000);
+
+  it("unknown model falls back to capability fallback (2048) when no other override", async () => {
+    mockChat.mockClear();
+
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const llm = yield* LLMService;
+        return yield* llm.complete({
+          messages: [{ role: "user", content: "Say hi" }],
+          // Force a model NOT in the static table → fallback path
+          model: { provider: "ollama", model: "private-model:custom" },
+        });
+      }).pipe(
+        Effect.provide(LocalProviderLive.pipe(Layer.provide(makeTestConfigLayer()))),
+      ),
+    );
+
+    const chatArgs = mockChat.mock.calls[0]![0] as {
+      options?: { num_ctx?: number };
+    };
+    // Fallback Capability has recommendedNumCtx: 2048 — matches Ollama's
+    // silent default but is now explicit + observable in telemetry.
+    expect(chatArgs.options?.num_ctx).toBe(2048);
+  }, 15000);
+
+  it("capability.recommendedNumCtx wins over config.defaultNumCtx (defaultNumCtx is deprecated fallback)", async () => {
+    mockChat.mockClear();
+
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const llm = yield* LLMService;
+        return yield* llm.complete({
+          messages: [{ role: "user", content: "Say hi" }],
+        });
+      }).pipe(
+        // defaultNumCtx=99999 set high to prove it does NOT win over capability
+        Effect.provide(LocalProviderLive.pipe(Layer.provide(makeTestConfigLayer({ defaultNumCtx: 99999 })))),
+      ),
+    );
+
+    const chatArgs = mockChat.mock.calls[0]![0] as {
+      options?: { num_ctx?: number };
+    };
+    // cogito:14b's capability.recommendedNumCtx=8192 must win over the
+    // deprecated config.defaultNumCtx=99999. Confirms the new precedence.
+    expect(chatArgs.options?.num_ctx).toBe(8192);
   }, 15000);
 
   it("allows per-request override via request.numCtx", async () => {

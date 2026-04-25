@@ -15,6 +15,7 @@ import type {
 import { estimateTokenCount } from "../token-counter.js";
 import { retryPolicy } from "../retry.js";
 import { getProviderDefaultModel } from "../provider-defaults.js";
+import { resolveCapability } from "../capability-resolver.js";
 
 // ─── Ollama SDK types (from the `ollama` npm package) ───
 
@@ -248,6 +249,15 @@ export const LocalProviderLive = Layer.effect(
                 config.thinking,
               );
 
+              // Phase 1 S1.3 — Resolve Capability for this (provider, model).
+              // Static-table hit gives us the model's recommended num_ctx;
+              // fallback yields a conservative 2048 with source: "fallback".
+              // Precedence: request.numCtx (explicit) → capability.recommendedNumCtx
+              // → config.defaultNumCtx (deprecated, kept for backwards-compat).
+              const capability = resolveCapability("ollama", model);
+              const numCtx =
+                request.numCtx ?? capability.recommendedNumCtx ?? config.defaultNumCtx;
+
               return client.chat({
                 model,
                 messages: msgs,
@@ -261,9 +271,7 @@ export const LocalProviderLive = Layer.effect(
                   stop: request.stopSequences
                     ? [...request.stopSequences]
                     : undefined,
-                  ...((request.numCtx ?? config.defaultNumCtx) !== undefined
-                    ? { num_ctx: request.numCtx ?? config.defaultNumCtx }
-                    : {}),
+                  ...(numCtx !== undefined ? { num_ctx: numCtx } : {}),
                   ...(request.logprobs ? { logprobs: true } : {}),
                   ...(request.topLogprobs != null
                     ? { top_logprobs: request.topLogprobs }
@@ -377,6 +385,11 @@ export const LocalProviderLive = Layer.effect(
                 );
 
                 const wantLogprobs = request.logprobs ?? false;
+                // Phase 1 S1.3 — capability-driven num_ctx (see complete() path above)
+                const capability = resolveCapability("ollama", model);
+                const numCtx =
+                  request.numCtx ?? capability.recommendedNumCtx ?? config.defaultNumCtx;
+
                 const stream = await client.chat({
                   model,
                   messages: msgs,
@@ -388,9 +401,7 @@ export const LocalProviderLive = Layer.effect(
                     temperature:
                       request.temperature ?? config.defaultTemperature,
                     num_predict: request.maxTokens ?? config.defaultMaxTokens,
-                    ...((request.numCtx ?? config.defaultNumCtx) !== undefined
-                      ? { num_ctx: request.numCtx ?? config.defaultNumCtx }
-                      : {}),
+                    ...(numCtx !== undefined ? { num_ctx: numCtx } : {}),
                     ...(wantLogprobs ? { logprobs: true } : {}),
                   },
                 });
@@ -541,6 +552,11 @@ export const LocalProviderLive = Layer.effect(
               msgs.unshift({ role: "system", content: request.systemPrompt });
             }
 
+            // Phase 1 S1.3 — capability-driven num_ctx (see complete() path)
+            const capability = resolveCapability("ollama", model);
+            const numCtx =
+              request.numCtx ?? capability.recommendedNumCtx ?? config.defaultNumCtx;
+
             const response = yield* Effect.tryPromise({
               try: async () => {
                 const client = await getClient();
@@ -554,9 +570,7 @@ export const LocalProviderLive = Layer.effect(
                     temperature:
                       request.temperature ?? config.defaultTemperature,
                     num_predict: request.maxTokens ?? config.defaultMaxTokens,
-                    ...((request.numCtx ?? config.defaultNumCtx) !== undefined
-                      ? { num_ctx: request.numCtx ?? config.defaultNumCtx }
-                      : {}),
+                    ...(numCtx !== undefined ? { num_ctx: numCtx } : {}),
                   },
                 });
               },

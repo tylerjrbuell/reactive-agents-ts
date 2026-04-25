@@ -140,18 +140,17 @@ export class LLMConfig extends Context.Tag("LLMConfig")<
     /**
      * Default context window size (in tokens) for local providers.
      *
-     * Wired into Ollama's `options.num_ctx` on every chat request. Without
-     * this, Ollama silently caps context at its built-in default of 2048
-     * tokens, causing silent truncation of long conversations and tool
-     * results. Setting to 8192 or higher is strongly recommended for any
-     * non-trivial task on a local model.
+     * @deprecated Phase 1 S1.3 introduced the `Capability` port — Ollama
+     * `options.num_ctx` now resolves from `capability.recommendedNumCtx`
+     * via `resolveCapability(provider, model)` for known models, with a
+     * conservative 2048 fallback for unknowns. This `defaultNumCtx` field
+     * remains as the lowest-priority fallback for backwards compatibility
+     * (precedence: `request.numCtx` → `capability.recommendedNumCtx` →
+     * `defaultNumCtx`) but in practice the capability path always supplies
+     * a value, making this field effectively dead code. Removal in Phase 2
+     * once all callers migrate.
      *
-     * Cloud providers (Anthropic, OpenAI, Gemini, etc.) ignore this — their
-     * context size is derived from the model ID.
-     *
-     * Per-request override: `CompletionRequest.numCtx`.
-     *
-     * @default undefined (defer to provider default — for Ollama, that's 2048)
+     * @default undefined (capability-driven resolution always wins)
      */
     readonly defaultNumCtx?: number;
 
