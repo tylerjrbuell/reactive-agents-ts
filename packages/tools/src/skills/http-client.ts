@@ -39,6 +39,10 @@ export const httpGetTool: ToolDefinition = {
   timeoutMs: 15_000,
   requiresApproval: false,
   source: "builtin",
+  // Sprint 3.4 Scaffold 1 — http-get fetches ONE URL per call. When a
+  // task mentions multiple URLs (the per-entity case), the classifier
+  // should multiply minCalls accordingly.
+  cardinality: "per-entity",
 };
 
 export const httpGetHandler = (

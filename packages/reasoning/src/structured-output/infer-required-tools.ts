@@ -92,6 +92,12 @@ export interface ToolSummary {
     description: string;
     required: boolean;
   }[];
+  /**
+   * Sprint 3.4 Scaffold 1 — call cardinality.
+   * Optional declaration of how many calls produce one logical answer.
+   * See ToolDefinition.cardinality for full semantics.
+   */
+  readonly cardinality?: "single" | "batch" | "per-entity";
 }
 
 /** Configuration for the inference step. */
@@ -297,11 +303,36 @@ Rules:
     const required = requiredEntries.map((e) => e.name);
     const requiredToolQuantities: Record<string, number> = {};
     const entityCount = estimateEntityCount(config.taskDescription);
+    // Sprint 3.4 Scaffold 1 — Tool Cardinality respect.
+    // When a tool author declared cardinality, honor it. Batch tools NEVER
+    // get multiplied (one call returns N items by definition). Per-entity
+    // tools always get multiplied to entity count when > 1. Single tools
+    // and undeclared tools fall back to existing heuristics.
+    const toolByName = new Map(
+      config.availableTools.map((t) => [t.name, t] as const),
+    );
     for (const e of requiredEntries) {
       const llmMinCalls = Math.max(1, e.minCalls);
-      const minCalls = isPerEntityLookupTool(e.name) && entityCount > 1
-        ? Math.max(llmMinCalls, entityCount)
-        : llmMinCalls;
+      const tool = toolByName.get(e.name);
+      const cardinality = (tool as { cardinality?: "single" | "batch" | "per-entity" } | undefined)
+        ?.cardinality;
+
+      let minCalls: number;
+      if (cardinality === "batch") {
+        // Batch tools: one call returns N items. Never multiply.
+        minCalls = llmMinCalls;
+      } else if (cardinality === "per-entity") {
+        // Per-entity tools: always scale to entity count.
+        minCalls = Math.max(llmMinCalls, entityCount);
+      } else if (cardinality === "single") {
+        // Single tools: one call → one answer. Never multiply.
+        minCalls = llmMinCalls;
+      } else {
+        // Fall back to existing name-heuristic when undeclared (backward compat).
+        minCalls = isPerEntityLookupTool(e.name) && entityCount > 1
+          ? Math.max(llmMinCalls, entityCount)
+          : llmMinCalls;
+      }
       requiredToolQuantities[e.name] = minCalls;
     }
     const relevant = result.data.relevant.filter((n) => availableNames.has(n));

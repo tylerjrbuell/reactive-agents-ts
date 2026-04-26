@@ -392,6 +392,10 @@ export const webSearchTool: ToolDefinition = {
   timeoutMs: 30_000,
   requiresApproval: false,
   source: "builtin",
+  // Sprint 3.4 Scaffold 1 — web-search returns N results in one call.
+  // Mark as "batch" so the classifier doesn't multiply minCalls based on
+  // entity count (e.g. "search 5 currencies" doesn't need 5 separate calls).
+  cardinality: "batch",
 };
 
 export const webSearchHandler = (

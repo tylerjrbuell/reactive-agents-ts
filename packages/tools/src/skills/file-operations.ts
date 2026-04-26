@@ -37,6 +37,9 @@ export const fileReadTool: ToolDefinition = {
   timeoutMs: 5_000,
   requiresApproval: false,
   source: "builtin",
+  // Sprint 3.4 Scaffold 1 — file-read reads ONE file per call. When a task
+  // mentions multiple files, the classifier should multiply minCalls.
+  cardinality: "per-entity",
 };
 
 export const fileReadHandler = (

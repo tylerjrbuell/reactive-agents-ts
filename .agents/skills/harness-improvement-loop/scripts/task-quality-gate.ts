@@ -101,6 +101,10 @@ const hnTool = {
     timeoutMs: 5_000,
     requiresApproval: false,
     source: "function" as const,
+    // Sprint 3.4 Scaffold 1 — single call returns N posts (batch). Tells
+    // the classifier NOT to multiply minCalls based on entity count
+    // ("summarize 15 posts" doesn't mean 15 invocations).
+    cardinality: "batch" as const,
   },
   handler: (args: Record<string, unknown>) =>
     Effect.succeed(

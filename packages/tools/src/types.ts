@@ -179,6 +179,32 @@ export const ToolDefinitionSchema = Schema.Struct({
    */
   requiresApproval: Schema.Boolean,
   /**
+   * Sprint 3.4 (Synthesis Scaffold 1) — Call-vs-result cardinality declaration.
+   *
+   * Tells the framework's required-tools classifier how to interpret the
+   * relationship between tool invocations and logical answers. Solves the
+   * general failure shape where tools that batch results were being
+   * misclassified as needing N invocations.
+   *
+   * - `"single"`: one call returns one logical answer (default semantics
+   *   for facts, single-target lookups, etc.)
+   * - `"batch"`: one call returns N items based on a count/limit/page
+   *   parameter. The classifier MUST NOT multiply minCalls based on entity
+   *   count when this is set. Examples: web-search(num_results),
+   *   list-files(directory), get-hn-posts(count), db-query(SELECT *).
+   * - `"per-entity"`: must be called once per entity in the task. Examples:
+   *   fetch-user-by-id (one call per user ID), translate(text) when many
+   *   distinct texts are needed.
+   *
+   * When omitted, the framework falls back to its existing name-based
+   * heuristic (`isPerEntityLookupTool`) which is intentionally conservative
+   * but can over-classify batch tools. Tool authors who care about correct
+   * classification SHOULD declare cardinality explicitly.
+   */
+  cardinality: Schema.optional(
+    Schema.Literal("single", "batch", "per-entity"),
+  ),
+  /**
    * Origin of the tool — indicates where the implementation comes from.
    *
    * - `"builtin"` — Built into the framework (file-write, web-search, code-execute, etc.)

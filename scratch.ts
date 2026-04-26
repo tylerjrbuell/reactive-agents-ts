@@ -67,7 +67,7 @@ const getHnPostsTool = {
 const agent = await ReactiveAgents.create()
     .withName('my-agent')
     .withProvider('ollama')
-    .withModel('cogito')
+    .withModel('qwen3:14b')
     .withMemory()
     .withReasoning()
     // S2.5 Slice C: turn the curator's trust-aware "Recent tool observations:"

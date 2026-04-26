@@ -1219,6 +1219,10 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         description: (p.description ?? "") as string,
                         required: Boolean(p.required),
                       })),
+                      // Sprint 3.4 Scaffold 1 — pass cardinality through to the
+                      // classifier so it can respect tool-author declarations
+                      // for batch tools (no minCalls multiplication).
+                      ...(t.cardinality ? { cardinality: t.cardinality } : {}),
                     })),
                     systemPrompt: config.systemPrompt,
                   }).pipe(
