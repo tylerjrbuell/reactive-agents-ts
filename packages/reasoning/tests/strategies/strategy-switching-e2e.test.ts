@@ -26,7 +26,7 @@ import { Effect } from "effect";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 import { executeReactive } from "../../src/strategies/reactive.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
-import { runKernel } from "../../src/strategies/kernel/kernel-runner.js";
+import { runKernel } from "../../src/kernel/loop/runner.js";
 import {
   transitionState,
   type KernelState,

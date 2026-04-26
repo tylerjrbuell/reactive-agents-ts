@@ -157,8 +157,8 @@ The runner handles nine steps internally:
 The built-in `reactKernel` implements the Think → Act → Observe loop and is the default kernel used by all five strategies:
 
 ```typescript
-import { runKernel } from "./strategies/kernel/kernel-runner.js";
-import { reactKernel } from "./strategies/kernel/react-kernel.js";
+import { runKernel } from "./kernel/loop/runner.js";
+import { reactKernel } from "./kernel/loop/react-kernel.js";
 
 const finalState = yield* runKernel(
   reactKernel,
@@ -178,7 +178,7 @@ const finalState = yield* runKernel(
 For backwards compatibility, a wrapped form is also available:
 
 ```typescript
-import { executeReActKernel } from "./strategies/kernel/react-kernel.js";
+import { executeReActKernel } from "./kernel/loop/react-kernel.js";
 
 const result: ReActKernelResult = yield* executeReActKernel({
   task: "Summarize the latest release notes",

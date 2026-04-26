@@ -5,7 +5,7 @@ import {
   shouldForceOracleExit,
   resolveMaxSameTool,
   TIER_GUARD_THRESHOLDS,
-} from "../../../../src/strategies/kernel/kernel-runner.js"
+} from "../../../../src/kernel/loop/runner.js"
 
 describe("TIER_GUARD_THRESHOLDS", () => {
   it("exposes all four tiers", () => {

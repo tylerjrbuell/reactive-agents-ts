@@ -23,7 +23,7 @@ const kernelStateSrc = readFileSync(
   "utf8"
 );
 const kernelRunnerSrc = readFileSync(
-  new URL("../../../../src/strategies/kernel/kernel-runner.ts", import.meta.url),
+  new URL("../../../../src/kernel/loop/runner.ts", import.meta.url),
   "utf8"
 );
 

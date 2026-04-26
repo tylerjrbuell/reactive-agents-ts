@@ -1,6 +1,6 @@
 import { Effect, Ref } from "effect";
-import { CONTEXT_PRESSURE_THRESHOLDS } from "../phases/think.js";
-import { META_TOOLS } from "../../../kernel/state/kernel-constants.js";
+import { CONTEXT_PRESSURE_THRESHOLDS } from "../../strategies/kernel/phases/think.js";
+import { META_TOOLS } from "../state/kernel-constants.js";
 
 /**
  * How far below the hard pressure gate the auto-checkpoint fires.

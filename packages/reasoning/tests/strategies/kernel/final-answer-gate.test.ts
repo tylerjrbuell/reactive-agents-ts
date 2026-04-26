@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { Effect, Layer, Stream } from "effect";
 import { LLMService, DEFAULT_CAPABILITIES } from "@reactive-agents/llm-provider";
 import type { CompletionResponse, StreamEvent } from "@reactive-agents/llm-provider";
-import { executeReActKernel } from "../../../src/strategies/kernel/react-kernel.js";
+import { executeReActKernel } from "../../../src/kernel/loop/react-kernel.js";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

@@ -49,7 +49,7 @@ import {
   getMissingRequiredToolsFromSteps,
 } from "../utils/requirement-state.js";
 import { evaluateTermination, defaultEvaluators, type TerminationContext } from "../utils/termination-oracle.js";
-import { assembleOutput } from "../output-assembly.js";
+import { assembleOutput } from "../../../kernel/loop/output-assembly.js";
 import { extractThinking, rescueFromThinking } from "../utils/stream-parser.js";
 import { makeStep } from "../utils/step-utils.js";
 import { makeObservationResult } from "../utils/tool-execution.js";

@@ -1,6 +1,6 @@
 // packages/reasoning/tests/strategies/kernel/utils/token-delta-guard.test.ts
 import { describe, it, expect } from "bun:test"
-import { shouldExitOnLowDelta } from "../../../../src/strategies/kernel/kernel-runner.js"
+import { shouldExitOnLowDelta } from "../../../../src/kernel/loop/runner.js"
 
 describe("token-delta diminishing-returns guard", () => {
   it("returns false when iteration < 3", () => {

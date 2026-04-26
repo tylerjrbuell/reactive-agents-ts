@@ -1,7 +1,7 @@
 import { describe, test, expect } from "bun:test";
 import { Effect, Layer, Stream } from "effect";
-import { runKernel } from "../../../src/strategies/kernel/kernel-runner.js";
-import { reactKernel } from "../../../src/strategies/kernel/react-kernel.js";
+import { runKernel } from "../../../src/kernel/loop/runner.js";
+import { reactKernel } from "../../../src/kernel/loop/react-kernel.js";
 import { LLMService } from "@reactive-agents/llm-provider";
 import type { StreamEvent } from "@reactive-agents/llm-provider";
 

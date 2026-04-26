@@ -13,7 +13,7 @@ import type { LogEvent } from "@reactive-agents/observability";
 import { transitionState } from "../../../kernel/state/kernel-state.js";
 import type { KernelState, KernelRunOptions, MaybeService, EventBusInstance } from "../../../kernel/state/kernel-state.js";
 import type { StrategyServices } from "./service-utils.js";
-import type { EntropyScoreLike } from "../output-assembly.js";
+import type { EntropyScoreLike } from "../../../kernel/loop/output-assembly.js";
 
 /**
  * Compute the adaptive entropy floor for the intervention suppression gate.

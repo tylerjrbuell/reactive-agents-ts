@@ -35,7 +35,7 @@ import {
   buildAugmentPrompt,
 } from "./plan-prompts.js";
 import type { ToolSummary, StepResult } from "./plan-prompts.js";
-import { executeReActKernel } from "./kernel/react-kernel.js";
+import { executeReActKernel } from "../kernel/loop/react-kernel.js";
 import {
   resolveStrategyServices,
   publishReasoningStep,
@@ -48,7 +48,7 @@ import { extractOutputFormat } from "./kernel/utils/task-intent.js";
 import {
   validateOutputFormat,
   buildSynthesisPrompt,
-} from "./kernel/utils/output-synthesis.js";
+} from "../kernel/loop/output-synthesis.js";
 import type { ToolSchema } from "./kernel/utils/tool-formatting.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";

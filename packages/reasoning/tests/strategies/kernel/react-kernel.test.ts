@@ -1,6 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import { Effect } from "effect";
-import { executeReActKernel, reactKernel, detectCompletionGaps } from "../../../src/strategies/kernel/react-kernel.js";
+import { executeReActKernel, reactKernel, detectCompletionGaps } from "../../../src/kernel/loop/react-kernel.js";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 import {
   initialKernelState,

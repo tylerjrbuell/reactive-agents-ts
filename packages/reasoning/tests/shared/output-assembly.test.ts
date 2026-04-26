@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test";
-import { assembleOutput, extractCodeBlocks } from "../../src/strategies/kernel/output-assembly.js";
+import { assembleOutput, extractCodeBlocks } from "../../src/kernel/loop/output-assembly.js";
 import type { ReasoningStep } from "../../src/types/index.js";
 
 describe("extractCodeBlocks", () => {

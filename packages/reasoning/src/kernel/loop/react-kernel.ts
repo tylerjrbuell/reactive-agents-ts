@@ -24,7 +24,7 @@ import {
 // Re-export for test and consumer backward compatibility
 export { detectCompletionGaps } from "@reactive-agents/tools";
 
-import { runKernel } from "./kernel-runner.js";
+import { runKernel } from "./runner.js";
 import {
   type KernelState,
   type KernelContext,
@@ -32,15 +32,15 @@ import {
   type ThoughtKernel,
   type Phase,
 } from "../../kernel/state/kernel-state.js";
-import { handleThinking } from "./phases/think.js";
-import { handleActing } from "./phases/act.js";
+import { handleThinking } from "../../strategies/kernel/phases/think.js";
+import { handleActing } from "../../strategies/kernel/phases/act.js";
 
 // ── Public input / output types ──────────────────────────────────────────────
 
 // Defined in kernel-state to avoid circular imports; re-exported here for backward compatibility
 import type { ReActKernelInput, ReActKernelResult } from "../../kernel/state/kernel-state.js";
 export type { ReActKernelInput, ReActKernelResult };
-import { resolveExecutableToolCapabilities } from "./utils/tool-capabilities.js";
+import { resolveExecutableToolCapabilities } from "../../strategies/kernel/utils/tool-capabilities.js";
 
 // ── makeKernel / reactKernel ─────────────────────────────────────────────────
 

@@ -1,4 +1,4 @@
-// File: tests/strategies/kernel/utils/output-synthesis.test.ts
+// File: tests/kernel/loop/output-synthesis.test.ts
 import { describe, it, expect } from "bun:test";
 import { Effect } from "effect";
 import {
@@ -6,7 +6,7 @@ import {
   buildFinalAnswerCandidate,
   finalizeOutput,
   type FinalAnswerCandidate,
-} from "../../../../src/strategies/kernel/utils/output-synthesis.js";
+} from "../../../../src/kernel/loop/output-synthesis.js";
 import type { TaskIntent } from "../../../../src/strategies/kernel/utils/task-intent.js";
 
 // ── validateOutputFormat ─────────────────────────────────────────────────────

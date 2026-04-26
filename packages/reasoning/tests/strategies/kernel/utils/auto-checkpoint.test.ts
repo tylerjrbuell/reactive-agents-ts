@@ -6,7 +6,7 @@ import {
   buildAutoCheckpointContent,
   autoCheckpoint,
   AUTO_CHECKPOINT_OFFSET,
-} from "../../../../src/strategies/kernel/utils/auto-checkpoint.js";
+} from "../../../../src/kernel/loop/auto-checkpoint.js";
 
 describe("auto-checkpoint before pressure gate", () => {
   // ── shouldAutoCheckpoint ────────────────────────────────────────────

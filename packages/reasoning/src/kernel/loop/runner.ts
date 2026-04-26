@@ -21,9 +21,9 @@ import { createToolCallResolver, NativeFCDriver, TextParseDriver } from "@reacti
 import { checkpointStoreRef } from "@reactive-agents/tools";
 import { CONTEXT_PROFILES } from "../../context/context-profile.js";
 import type { ContextProfile } from "../../context/context-profile.js";
-import { resolveStrategyServices } from "./utils/service-utils.js";
+import { resolveStrategyServices } from "../../strategies/kernel/utils/service-utils.js";
 import { buildKernelHooks } from "../../kernel/state/kernel-hooks.js";
-import { makeStep } from "./utils/step-utils.js";
+import { makeStep } from "../../strategies/kernel/utils/step-utils.js";
 import {
   initialKernelState,
   transitionState,
@@ -33,22 +33,22 @@ import {
   type KernelRunOptions,
   type ThoughtKernel,
 } from "../../kernel/state/kernel-state.js";
-import { evaluateStrategySwitch, buildHandoff } from "./utils/strategy-evaluator.js";
-import { coordinateICS } from "./utils/ics-coordinator.js";
-import { runReactiveObserver } from "./utils/reactive-observer.js";
-import { detectLoop, checkAllToolsCalled } from "./utils/loop-detector.js";
+import { evaluateStrategySwitch, buildHandoff } from "../../strategies/kernel/utils/strategy-evaluator.js";
+import { coordinateICS } from "../../strategies/kernel/utils/ics-coordinator.js";
+import { runReactiveObserver } from "../../strategies/kernel/utils/reactive-observer.js";
+import { detectLoop, checkAllToolsCalled } from "../../strategies/kernel/utils/loop-detector.js";
 import {
   buildSuccessfulToolCallCounts,
   getMissingRequiredToolsByCount,
   getEffectiveMissingRequiredTools,
   getPermanentlyFailedRequiredTools,
-} from "./utils/requirement-state.js";
+} from "../../strategies/kernel/utils/requirement-state.js";
 import {
   decideExecutionLane,
   shouldInjectOracleNudge,
-} from "./utils/lane-controller.js";
-import { extractOutputFormat, type TaskIntent } from "./utils/task-intent.js";
-import { shouldAutoCheckpoint, autoCheckpoint } from "./utils/auto-checkpoint.js";
+} from "../../strategies/kernel/utils/lane-controller.js";
+import { extractOutputFormat, type TaskIntent } from "../../strategies/kernel/utils/task-intent.js";
+import { shouldAutoCheckpoint, autoCheckpoint } from "./auto-checkpoint.js";
 import {
   validateOutputFormat,
   validateContentCompleteness,
@@ -56,7 +56,7 @@ import {
   finalizeOutput,
   buildSynthesisPrompt,
   type FinalizedOutput,
-} from "./utils/output-synthesis.js";
+} from "./output-synthesis.js";
 
 import { META_TOOLS as RUNNER_META_TOOLS } from "../../kernel/state/kernel-constants.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
@@ -579,7 +579,7 @@ export function runKernel(
       Effect.serviceOption(ObservableLogger).pipe(
         Effect.flatMap((opt) =>
           opt._tag === "Some"
-            ? opt.value.emit(event).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/strategies/kernel/kernel-runner.ts:580", tag: errorTag(err) })))
+            ? opt.value.emit(event).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/kernel/loop/runner.ts:580", tag: errorTag(err) })))
             : Effect.void
         )
       );

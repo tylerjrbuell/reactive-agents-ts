@@ -17,8 +17,8 @@ import { ExecutionError } from "../errors/errors.js";
 import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { ObservableLogger, type LogEvent } from "@reactive-agents/observability";
-import { runKernel } from "./kernel/kernel-runner.js";
-import { reactKernel } from "./kernel/react-kernel.js";
+import { runKernel } from "../kernel/loop/runner.js";
+import { reactKernel } from "../kernel/loop/react-kernel.js";
 import {
   resolveStrategyServices,
   compilePromptOrFallback,
@@ -31,7 +31,7 @@ import { extractOutputFormat } from "./kernel/utils/task-intent.js";
 import {
   validateOutputFormat,
   buildSynthesisPrompt,
-} from "./kernel/utils/output-synthesis.js";
+} from "../kernel/loop/output-synthesis.js";
 import type { ToolSchema } from "./kernel/utils/tool-formatting.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";

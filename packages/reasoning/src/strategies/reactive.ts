@@ -11,8 +11,8 @@ import { ObservableLogger, type LogEvent } from "@reactive-agents/observability"
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { ContextProfile } from "../context/context-profile.js";
 import type { ToolSchema } from "./kernel/utils/tool-formatting.js";
-import { runKernel } from "./kernel/kernel-runner.js";
-import { reactKernel } from "./kernel/react-kernel.js";
+import { runKernel } from "../kernel/loop/runner.js";
+import { reactKernel } from "../kernel/loop/react-kernel.js";
 import { buildStrategyResult } from "./kernel/utils/step-utils.js";
 import type { KernelInput, KernelMessage } from "../kernel/state/kernel-state.js";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";

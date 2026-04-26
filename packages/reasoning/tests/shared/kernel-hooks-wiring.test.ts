@@ -33,7 +33,7 @@ import { describe, it, expect } from "bun:test";
 import { Effect, Layer } from "effect";
 import { EventBus } from "@reactive-agents/core";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
-import { runKernel } from "../../src/strategies/kernel/kernel-runner.js";
+import { runKernel } from "../../src/kernel/loop/runner.js";
 import { buildKernelHooks } from "../../src/kernel/state/kernel-hooks.js";
 import {
   transitionState,

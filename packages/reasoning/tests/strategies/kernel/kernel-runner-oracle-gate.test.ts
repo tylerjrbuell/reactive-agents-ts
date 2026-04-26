@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test"
-import { shouldForceOracleExit } from "../../../src/strategies/kernel/kernel-runner.js"
+import { shouldForceOracleExit } from "../../../src/kernel/loop/runner.js"
 
 describe("oracle hard gate", () => {
   it("returns false when oracle not ready", () => {

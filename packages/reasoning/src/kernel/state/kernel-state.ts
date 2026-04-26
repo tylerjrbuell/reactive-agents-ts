@@ -13,7 +13,7 @@ import type { ResultCompressionConfig, ToolCallSpec, FinalAnswerCapture, ToolCal
 import type { LLMService } from "@reactive-agents/llm-provider";
 import type { SemanticEntry, MemoryId } from "@reactive-agents/memory";
 import type { ToolSchema } from "../../strategies/kernel/utils/tool-formatting.js";
-import type { EntropyScoreLike } from "../../strategies/kernel/output-assembly.js";
+import type { EntropyScoreLike } from "../../kernel/loop/output-assembly.js";
 import type { KernelMetaToolsConfig } from "../../types/kernel-meta-tools.js";
 import type {
   ToolElaborationInjectionConfig,
