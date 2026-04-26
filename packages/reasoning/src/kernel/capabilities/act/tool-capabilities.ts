@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Effect, Ref } from "effect";
 import {
   ToolService,
   briefTool,
@@ -9,6 +9,9 @@ import {
   makeFindHandler,
   checkpointTool,
   makeCheckpointHandler,
+  discoverToolsTool,
+  makeDiscoverToolsHandler,
+  discoveredToolsStoreRef,
   scratchpadStoreRef,
   checkpointStoreRef,
   ragMemoryStore,
@@ -101,6 +104,33 @@ export const resolveExecutableToolCapabilities = (input: {
           .register(checkpointTool, makeCheckpointHandler(checkpointStoreRef))
           .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/kernel/capabilities/act/tool-capabilities.ts:101", tag: errorTag(err) })));
         append(toToolSchema(checkpointTool));
+      }
+
+      // Lazy-tool-disclosure escape hatch. When the agent's visible schema is
+      // pruned (required + relevant + meta-tools), `discover-tools` lets the
+      // model surface anything else it needs at runtime. Schemas already carry
+      // name/description/parameters — pass them straight through.
+      // Default-on as of 2026-04-26 (curator empirical validation —
+      // harness-reports/bare-vs-harness-curation-2026-04-26.md). Opt out via
+      // RA_LAZY_TOOLS=0 for backward compatibility while downstream agents
+      // adapt.
+      if (process.env.RA_LAZY_TOOLS !== "0") {
+        // Reset discovered-set at the start of each run (idempotent across
+        // re-resolutions). The kernel calls resolveExecutableToolCapabilities
+        // once per run, so this fires on initial wiring.
+        yield* Ref.set(discoveredToolsStoreRef, new Set<string>());
+
+        const catalog = input.allToolSchemas ?? [];
+        yield* toolService
+          .register(
+            discoverToolsTool,
+            makeDiscoverToolsHandler({
+              getAllToolDefinitions: () => catalog,
+              discoveredRef: discoveredToolsStoreRef,
+            }),
+          )
+          .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/kernel/capabilities/act/tool-capabilities.ts:discover-tools", tag: errorTag(err) })));
+        append(toToolSchema(discoverToolsTool));
       }
     }
 

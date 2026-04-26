@@ -10,7 +10,8 @@
  * - Termination oracle evaluation
  * - Fast-path trivial task exit
  */
-import { Effect, Stream, FiberRef, Either } from "effect";
+import { Effect, Stream, FiberRef, Either, Ref } from "effect";
+import { discoveredToolsStoreRef } from "@reactive-agents/tools";
 import { ExecutionError } from "../../../errors/errors.js";
 import { LLMService, selectAdapter } from "@reactive-agents/llm-provider";
 import type { StopReason } from "@reactive-agents/llm-provider";
@@ -148,7 +149,14 @@ export function handleThinking(
         tier: profile.tier,
       });
 
-    const effectiveSchemas: readonly ToolSchema[] = pressureCritical
+    // When lazy mode is active (default) the curator owns visibility — keep
+    // the full augmentedToolSchemas in effectiveSchemas and let the
+    // lazy-tools filter below produce the actual visible set (which already
+    // includes state.toolsUsed so the model can re-invoke tools it's
+    // already used). Pressure-narrowing-to-final-answer-only induces panic
+    // dumps on local models when fired prematurely.
+    const lazyMode = process.env.RA_LAZY_TOOLS !== "0";
+    const effectiveSchemas: readonly ToolSchema[] = pressureCritical && !lazyMode
       ? [{ name: finalAnswerTool.name, description: finalAnswerTool.description, parameters: finalAnswerTool.parameters }]
       : augmentedToolSchemas;
 
@@ -166,14 +174,36 @@ export function handleThinking(
     const classifiedRelevant = input.relevantTools ?? [];
     const hasClassification = classifiedRequired.length > 0 || classifiedRelevant.length > 0;
 
-    const promptSchemas: readonly ToolSchema[] =
-      hasClassification && !pressureCritical && effectiveSchemas.length > PRUNE_MIN_TOOLS
-        ? effectiveSchemas.filter((ts) =>
-            classifiedRequired.includes(ts.name) ||
-            classifiedRelevant.includes(ts.name) ||
-            META_TOOL_SET.has(ts.name),
-          )
-        : effectiveSchemas;
+    // ── RA_LAZY_TOOLS — per-iteration lazy tool disclosure ───────────────────
+    // ALWAYS prune (no PRUNE_MIN_TOOLS gate, no classification requirement).
+    // Visible set = required + relevant + already-used + discovered +
+    // meta-tools. Anything else is reachable via discover-tools.
+    // Pydantic-AI-style per-step Toolset.get_tools() — see
+    // harness-reports/oss-prompt-curation-research-2026-04-26.md.
+    // Default-on as of 2026-04-26 (curator empirical validation). Opt out
+    // via RA_LAZY_TOOLS=0.
+    let promptSchemas: readonly ToolSchema[];
+    if (process.env.RA_LAZY_TOOLS !== "0") {
+      const discovered = yield* Ref.get(discoveredToolsStoreRef);
+      const allowed = new Set<string>([
+        ...classifiedRequired,
+        ...classifiedRelevant,
+        ...state.toolsUsed,
+        ...discovered,
+      ]);
+      promptSchemas = effectiveSchemas.filter(
+        (ts) => allowed.has(ts.name) || META_TOOL_SET.has(ts.name),
+      );
+    } else {
+      promptSchemas =
+        hasClassification && !pressureCritical && effectiveSchemas.length > PRUNE_MIN_TOOLS
+          ? effectiveSchemas.filter((ts) =>
+              classifiedRequired.includes(ts.name) ||
+              classifiedRelevant.includes(ts.name) ||
+              META_TOOL_SET.has(ts.name),
+            )
+          : effectiveSchemas;
+    }
 
     // ── Harness skill injection ──────────────────────────────────────────────
     const harnessContent = input.metaTools?.harnessContent;

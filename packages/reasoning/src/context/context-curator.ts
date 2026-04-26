@@ -126,14 +126,22 @@ export const defaultContextCurator: ContextCurator = {
     // to navigate "[STORED:]" markers via recall(). Per-observation cap
     // prevents context-budget blowup; recall() stays as ad-hoc retrieval
     // for older observations not surfaced by curator.
-    const obsSection = buildRecentObservationsSection(
-      state.steps,
-      options?.includeRecentObservations ?? 0,
-      {
-        scratchpad: state.scratchpad,
-        maxCharsPerObservation: profile.toolResultMaxChars,
-      },
-    );
+    // Lazy mode (default) skips the curator's recent-observations section.
+    // The conversation thread already carries the tool result via
+    // tool_result messages — the section is duplicate signal that primes
+    // structurally-weird outputs on local models. Opt out via
+    // RA_LAZY_TOOLS=0 to restore the section.
+    const lazyMode = process.env.RA_LAZY_TOOLS !== "0";
+    const obsSection = lazyMode
+      ? null
+      : buildRecentObservationsSection(
+          state.steps,
+          options?.includeRecentObservations ?? 0,
+          {
+            scratchpad: state.scratchpad,
+            maxCharsPerObservation: profile.toolResultMaxChars,
+          },
+        );
 
     const systemPrompt = obsSection
       ? `${out.systemPrompt}\n\n${obsSection}`

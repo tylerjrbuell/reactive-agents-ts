@@ -205,6 +205,31 @@ function buildIterationSystemPrompt(
     options?.availableTools ??
     ((input.availableToolSchemas ?? []) as readonly ToolSchema[]);
 
+  // ── EXPERIMENT: minimal-signal prompt ─────────────────────────────────────
+  // When RA_MINIMAL_PROMPT=1, bypass ALL prompt sections and emit just task +
+  // compact tool list. Used to validate the curator-as-signal-optimizer
+  // hypothesis: bare Ollama with this shape hits 100%; harness over-scaffolds
+  // and induces structurally-weird outputs on local models.
+  // See harness-reports/bare-vs-harness-curation-2026-04-26.md.
+  if (process.env.RA_MINIMAL_PROMPT === "1") {
+    const minimal: string[] = [];
+    if (availableTools.length > 0) {
+      const compact = availableTools
+        .map((t) => {
+          const params = (t.parameters ?? [])
+            .map((p) => `${p.name}: ${p.type}${p.required ? "" : "?"}`)
+            .join(", ");
+          return `- ${t.name}(${params})`;
+        })
+        .join("\n");
+      minimal.push(`Tools:\n${compact}`);
+    }
+    minimal.push(`Task: ${input.task}`);
+    const guidanceLine = buildShortGuidanceReminder(guidance);
+    if (guidanceLine) minimal.push(guidanceLine);
+    return minimal.join("\n\n");
+  }
+
   // 1. Agent identity. Prefer buildSystemPrompt (honors custom systemPrompt) so
   //    callers that supply input.systemPrompt keep their identity text.
   const base = buildSystemPrompt(
