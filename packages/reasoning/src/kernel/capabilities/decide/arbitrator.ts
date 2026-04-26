@@ -509,6 +509,12 @@ export interface ArbitrationContext {
   readonly entropyComposite?: number;
   /** Verifier output for the most recent observation, if any. */
   readonly latestVerification?: { readonly verified: boolean; readonly summary: string };
+  /**
+   * Sprint 3.4 Scaffold 3 — synthesis-grounding retry counter. Tracks how
+   * many corrective iterations have already been triggered for this run.
+   * The Arbitrator escalates only when this is below the cap (default 1).
+   */
+  readonly synthesisRetryCount?: number;
 }
 
 // ─── Veto evaluator (Sprint 3.3 — uses controllerDecisionLog patterns) ───────
@@ -582,6 +588,60 @@ function shouldVetoSuccess(ctx: ArbitrationContext): { readonly veto: true; read
 // ─── arbitrate(): the single decision function ───────────────────────────────
 
 /**
+ * Sprint 3.4 Scaffold 3 — synthesis-quality gate at the Arbitrator.
+ *
+ * For agent-final-answer intents, run the generalized grounding check on the
+ * intent's output against the run's evidence corpus. When the synthesis is
+ * ungrounded (or contains framework compression-marker echo) AND we haven't
+ * yet retried, return an escalate("retry-with-feedback") Verdict instead of
+ * exit-success. The runner consumes the escalation and runs ONE more
+ * reasoning iteration with the feedback injected as guidance.
+ *
+ * Bounded by maxRetries (default 1) — first revision usually fixes it.
+ */
+function synthesisQualityRetry(
+  intent: { readonly output: string },
+  ctx: ArbitrationContext,
+): { readonly retry: false } | { readonly retry: true; readonly feedback: string } {
+  // Cap at 1 retry — bounded cost; the model's first revision is usually
+  // the right one. If a second pass also fails, accept the failure outcome
+  // rather than looping.
+  const SYNTHESIS_RETRY_MAX = 1;
+  const currentRetries = ctx.synthesisRetryCount ?? 0;
+  if (currentRetries >= SYNTHESIS_RETRY_MAX) return { retry: false };
+
+  // Build the evidence corpus from prior observations.
+  const corpus = ctx.steps
+    .filter(
+      (s) =>
+        s.type === "observation" &&
+        typeof s.content === "string" &&
+        s.content.trim().length > 0,
+    )
+    .map((s) => s.content)
+    .join("\n\n");
+
+  if (corpus.length < 20) return { retry: false }; // no evidence → can't ground
+
+  // Use lazy-require pattern to avoid runtime cycle (verify ↔ decide).
+  // Since we're in the same package, a static import is fine — both modules
+  // are siblings under capabilities/.
+  const grounding = validateGroundingForRetry(intent.output, corpus);
+  if (grounding.verified) return { retry: false };
+
+  // Build feedback the model can act on.
+  const feedback = grounding.compressionEchoDetected
+    ? `Your previous answer contained framework internal markers (compressed preview / [STORED:] / _tool_result_N) instead of synthesized content. Please regenerate the answer using the actual data from the tool observations above. Do not echo any "[recall result — compressed preview]" or "Type: Array" structures — write a real synthesis.`
+    : `Your previous answer contained claims that don't appear in the tool observations: ${grounding.ungroundedClaims.slice(0, 5).map((c) => `"${c.slice(0, 50)}"`).join(", ")}. Please regenerate the answer citing only specific values found in the tool results above.`;
+
+  return { retry: true, feedback };
+}
+
+// Late binding to avoid cycle ambiguity in tooling. Both files compile fine
+// either way; this keeps the import block at the top tidy.
+import { validateGeneralizedGrounding as validateGroundingForRetry } from "../verify/evidence-grounding.js";
+
+/**
  * The Arbitrator's resolution function. Takes a TerminationIntent (what a
  * phase observed) and an ArbitrationContext (run-wide signals), and returns
  * exactly ONE Verdict. This is the function that closes G-5: every code path
@@ -593,14 +653,14 @@ function shouldVetoSuccess(ctx: ArbitrationContext): { readonly veto: true; read
  * - kernel-error → always exit-failure (unrecoverable)
  * - controller-early-stop → exit-success with output (controller chose to stop)
  * - loop-detected → exit-success when output present + no veto, else exit-failure
- * - fast-path-completed → exit-success when no veto fires
- * - agent-final-answer → exit-success when no veto fires; veto → exit-failure
- * - oracle-decision → forward the oracle's verdict (which already considers
- *   its own evaluator chain including controllerSignalVeto)
+ * - fast-path-completed → exit-success when no veto fires + synthesis grounded
+ * - agent-final-answer → exit-success when no veto fires + synthesis grounded;
+ *                        veto → exit-failure; ungrounded → escalate (retry once)
+ * - oracle-decision → forward the oracle's verdict
  *
- * The veto applies to ALL agent-claimed-success intents (final-answer, fast-path).
- * It does NOT apply to controller-driven exits (early-stop, max-iterations,
- * loop-detected) — those are framework decisions, not agent self-reports.
+ * Sprint 3.4 Scaffold 3 — synthesis-grounding retry escalation:
+ * agent-final-answer + ungrounded synthesis → escalate("retry-with-feedback").
+ * Bounded by ctx.synthesisRetryCount (default cap: 1).
  */
 export function arbitrate(intent: TerminationIntent, ctx: ArbitrationContext): Verdict {
   switch (intent.kind) {
@@ -692,6 +752,20 @@ export function arbitrate(intent: TerminationIntent, ctx: ArbitrationContext): V
           terminatedBy: "controller_signal_veto",
         };
       }
+
+      // Sprint 3.4 Scaffold 3 — synthesis-grounding gate. If the answer
+      // contains framework compression markers OR systematically lacks
+      // claims that appear in the evidence corpus, escalate for ONE
+      // corrective iteration with explicit feedback.
+      const retryCheck = synthesisQualityRetry(intent, ctx);
+      if (retryCheck.retry) {
+        return {
+          action: "escalate",
+          nextStrategy: "retry-with-feedback",
+          reason: retryCheck.feedback,
+        };
+      }
+
       // Preserve the existing terminatedBy strings for downstream consumers
       // (react-kernel.ts, tests, telemetry): "final_answer_tool" / "final_answer"
       // / "end_turn" — the via discriminator picks the legacy name.
@@ -799,9 +873,31 @@ export function applyTermination(
           ...(extraMeta ?? {}),
         },
       });
-    case "escalate":
-      // Escalation is signaled in meta; the loop runner consumes it to
-      // trigger a strategy switch. State.status stays "thinking".
+    case "escalate": {
+      // Escalation is signaled in meta. State.status stays "thinking".
+      // Sprint 3.4 Scaffold 3 — when nextStrategy === "retry-with-feedback",
+      // inject feedback as pendingGuidance so think.ts surfaces it next
+      // iteration AND increment the retry counter so we don't loop forever.
+      // For other escalations (legacy strategy switch), preserve the
+      // existing behavior.
+      if (verdict.nextStrategy === "retry-with-feedback") {
+        const currentRetry =
+          ((state.meta as Record<string, unknown>).synthesisRetryCount as number | undefined) ?? 0;
+        return transitionState(state, {
+          pendingGuidance: {
+            ...(state.pendingGuidance ?? { requiredToolsPending: [], loopDetected: false }),
+            errorRecovery: verdict.reason, // surfaced in system prompt's Guidance section
+          },
+          meta: {
+            ...state.meta,
+            synthesisRetryCount: currentRetry + 1,
+            // Don't set escalateTo for retry-with-feedback so the runner's
+            // strategy-switch handler doesn't fire on this.
+            ...(extraMeta ?? {}),
+          },
+        });
+      }
+      // Legacy escalate (strategy switch): keep existing semantics.
       return transitionState(state, {
         meta: {
           ...state.meta,
@@ -810,6 +906,7 @@ export function applyTermination(
           ...(extraMeta ?? {}),
         },
       });
+    }
   }
 }
 
@@ -856,5 +953,9 @@ export function arbitrationContextFromState(
     controllerDecisionLog: state.controllerDecisionLog,
     entropyComposite: entropyMeta?.latestScore?.composite,
     latestVerification: lastVerif,
+    // Sprint 3.4 Scaffold 3 — surface the synthesis retry counter so the
+    // Arbitrator can decide whether to escalate again.
+    synthesisRetryCount:
+      (state.meta as Record<string, unknown>).synthesisRetryCount as number | undefined,
   };
 }

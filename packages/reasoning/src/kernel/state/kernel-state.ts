@@ -151,6 +151,14 @@ export interface KernelMeta {
   /** Reason the Arbitrator emitted with the escalate Verdict. */
   readonly escalationReason?: string;
 
+  // ── Sprint 3.4 Scaffold 3 — synthesis-grounding retry counter ──
+  /**
+   * How many corrective iterations the Arbitrator has triggered for
+   * synthesis-grounding failures. Capped at 1 by default; the Arbitrator
+   * stops escalating once this exceeds the cap.
+   */
+  readonly synthesisRetryCount?: number;
+
 }
 
 // ── KernelState — Immutable, serializable reasoning state ────────────────────
