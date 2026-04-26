@@ -1,3 +1,7 @@
+> **SUPERSEDED 2026-04-26** by `docs/spec/docs/15-design-north-star.md` (v3.0). This document is preserved as historical evidence; the authoritative architecture lives in the North Star.
+
+---
+
 # What Makes a Good AI Agent — and What the Harness Must Deliver
 
 **Frame:** Step away from the codebase. Imagine an agent succeeding at a hard task. What did it just *do*? What systems made each step reliable? Now reverse-engineer: what must the harness guarantee for each capability?

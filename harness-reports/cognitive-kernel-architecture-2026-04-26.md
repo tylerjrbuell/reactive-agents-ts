@@ -1,3 +1,7 @@
+> **SUPERSEDED 2026-04-26** by `docs/spec/docs/15-design-north-star.md` (v3.0). This document is preserved as historical evidence; the authoritative architecture lives in the North Star.
+
+---
+
 # Cognitive Kernel — Target Architecture Design (2026-04-26)
 
 **Frame:** Evidence-anchored architectural design, not another "should." Three inputs:
