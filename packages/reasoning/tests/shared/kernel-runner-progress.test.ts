@@ -9,7 +9,7 @@ import {
   type KernelContext,
   type KernelHooks,
   type ThoughtKernel,
-} from "../../src/strategies/kernel/kernel-state.js";
+} from "../../src/kernel/state/kernel-state.js";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

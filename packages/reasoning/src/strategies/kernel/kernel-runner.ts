@@ -22,7 +22,7 @@ import { checkpointStoreRef } from "@reactive-agents/tools";
 import { CONTEXT_PROFILES } from "../../context/context-profile.js";
 import type { ContextProfile } from "../../context/context-profile.js";
 import { resolveStrategyServices } from "./utils/service-utils.js";
-import { buildKernelHooks } from "./kernel-hooks.js";
+import { buildKernelHooks } from "../../kernel/state/kernel-hooks.js";
 import { makeStep } from "./utils/step-utils.js";
 import {
   initialKernelState,
@@ -32,7 +32,7 @@ import {
   type KernelInput,
   type KernelRunOptions,
   type ThoughtKernel,
-} from "./kernel-state.js";
+} from "../../kernel/state/kernel-state.js";
 import { evaluateStrategySwitch, buildHandoff } from "./utils/strategy-evaluator.js";
 import { coordinateICS } from "./utils/ics-coordinator.js";
 import { runReactiveObserver } from "./utils/reactive-observer.js";
@@ -58,7 +58,7 @@ import {
   type FinalizedOutput,
 } from "./utils/output-synthesis.js";
 
-import { META_TOOLS as RUNNER_META_TOOLS } from "./kernel-constants.js";
+import { META_TOOLS as RUNNER_META_TOOLS } from "../../kernel/state/kernel-constants.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
 /** Keys embedded in compressed tool observations (`[STORED: _tool_result_N | tool]`) */

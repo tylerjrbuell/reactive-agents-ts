@@ -10,7 +10,7 @@
  * - large/frontier: only nudge in the last 30% of iterations
  */
 import { Effect } from "effect"
-import type { KernelState } from "../kernel-state.js"
+import type { KernelState } from "../../../kernel/state/kernel-state.js"
 
 export interface ICSInput {
   readonly task: string

@@ -39,7 +39,7 @@ import {
   type KernelState,
   type KernelInput,
   type KernelHooks,
-} from "../kernel-state.js";
+} from "../../../kernel/state/kernel-state.js";
 import type { ReasoningStep } from "../../../types/index.js";
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -12,13 +12,13 @@ import type { ContextProfile } from "../../context/context-profile.js";
 import type { ResultCompressionConfig, ToolCallSpec, FinalAnswerCapture, ToolCallResolver, ToolCallingDriver } from "@reactive-agents/tools";
 import type { LLMService } from "@reactive-agents/llm-provider";
 import type { SemanticEntry, MemoryId } from "@reactive-agents/memory";
-import type { ToolSchema } from "./utils/tool-formatting.js";
-import type { EntropyScoreLike } from "./output-assembly.js";
+import type { ToolSchema } from "../../strategies/kernel/utils/tool-formatting.js";
+import type { EntropyScoreLike } from "../../strategies/kernel/output-assembly.js";
 import type { KernelMetaToolsConfig } from "../../types/kernel-meta-tools.js";
 import type {
   ToolElaborationInjectionConfig,
   NextMovesPlanningConfig,
-} from "./utils/tool-gating.js";
+} from "../../strategies/kernel/utils/tool-gating.js";
 
 // ── Kernel Status ────────────────────────────────────────────────────────────
 

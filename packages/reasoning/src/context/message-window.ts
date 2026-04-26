@@ -1,4 +1,4 @@
-import type { KernelMessage } from "../strategies/kernel/kernel-state.js";
+import type { KernelMessage } from "../kernel/state/kernel-state.js";
 
 // ── applyMessageWindowWithCompact ─────────────────────────────────────────────
 

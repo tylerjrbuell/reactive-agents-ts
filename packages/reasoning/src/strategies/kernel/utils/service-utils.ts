@@ -18,7 +18,7 @@ import type {
   ToolServiceInstance,
   EventBusInstance,
   MemoryServiceInstance,
-} from "../kernel-state.js";
+} from "../../../kernel/state/kernel-state.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
 /** Minimal PromptService surface used by strategies */

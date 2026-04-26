@@ -22,7 +22,7 @@ import {
   CONTEXT_PROFILES,
   type GuidanceContext,
 } from "../../src/index.js";
-import type { KernelState } from "../../src/strategies/kernel/kernel-state.js";
+import type { KernelState } from "../../src/kernel/state/kernel-state.js";
 import type { ReasoningStep } from "../../src/types/step.js";
 import type { ObservationResult } from "../../src/types/observation.js";
 

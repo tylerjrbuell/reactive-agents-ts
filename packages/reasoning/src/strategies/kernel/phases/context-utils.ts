@@ -12,9 +12,9 @@ import type { LLMMessage, ProviderAdapter } from "@reactive-agents/llm-provider"
 import type { ContextProfile } from "../../../context/context-profile.js";
 import { applyMessageWindowWithCompact } from "../../../context/message-window.js";
 import type { ToolSchema } from "../utils/tool-formatting.js";
-import type { KernelState, KernelMessage, KernelInput } from "../kernel-state.js";
+import type { KernelState, KernelMessage, KernelInput } from "../../../kernel/state/kernel-state.js";
 import { getMissingRequiredToolsFromSteps } from "../utils/requirement-state.js";
-import { META_TOOLS as META_TOOL_NAMES } from "../kernel-constants.js";
+import { META_TOOLS as META_TOOL_NAMES } from "../../../kernel/state/kernel-constants.js";
 
 // ── buildSystemPrompt ─────────────────────────────────────────────────────────
 

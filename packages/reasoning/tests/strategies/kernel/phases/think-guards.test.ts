@@ -11,8 +11,8 @@ import {
   type KernelState,
   type KernelInput,
   type KernelHooks,
-} from "../../../../src/strategies/kernel/kernel-state.js";
-import { noopHooks } from "../../../../src/strategies/kernel/kernel-state.js";
+} from "../../../../src/kernel/state/kernel-state.js";
+import { noopHooks } from "../../../../src/kernel/state/kernel-state.js";
 import type { ContextProfile } from "../../../../src/context/context-profile.js";
 import type { ProviderAdapter } from "@reactive-agents/llm-provider";
 import type { ToolCallSpec } from "@reactive-agents/tools";

@@ -5,7 +5,7 @@
  */
 import { describe, it, expect } from "bun:test";
 import { guardEvidenceGrounding } from "../../../../src/strategies/kernel/phases/think-guards.js";
-import type { KernelState } from "../../../../src/strategies/kernel/kernel-state.js";
+import type { KernelState } from "../../../../src/kernel/state/kernel-state.js";
 import type { ReasoningStep } from "../../../../src/types/index.js";
 
 function makeState(overrides: Partial<KernelState> = {}): KernelState {

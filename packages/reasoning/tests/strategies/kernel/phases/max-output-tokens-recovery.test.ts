@@ -19,7 +19,7 @@ import {
   noopHooks,
   type KernelState,
   type KernelContext,
-} from "../../../../src/strategies/kernel/kernel-state.js";
+} from "../../../../src/kernel/state/kernel-state.js";
 import { CONTEXT_PROFILES } from "../../../../src/context/context-profile.js";
 import { TextParseDriver } from "@reactive-agents/tools";
 

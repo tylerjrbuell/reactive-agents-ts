@@ -138,8 +138,8 @@ export type { KernelMetaToolsConfig } from "./types/kernel-meta-tools.js";
 export { filterToolsByRelevance } from "./strategies/kernel/utils/tool-formatting.js";
 export { planNextMoveBatches } from "./strategies/kernel/utils/tool-gating.js";
 export type { ToolSchema, ToolParamSchema } from "./strategies/kernel/utils/tool-formatting.js";
-export type { KernelMessage } from "./strategies/kernel/kernel-state.js";
-export { META_TOOLS, INTROSPECTION_META_TOOLS } from "./strategies/kernel/kernel-constants.js";
+export type { KernelMessage } from "./kernel/state/kernel-state.js";
+export { META_TOOLS, INTROSPECTION_META_TOOLS } from "./kernel/state/kernel-constants.js";
 
 // ─── Termination Oracle (CHANGE A — Verdict-Override) ───
 export {

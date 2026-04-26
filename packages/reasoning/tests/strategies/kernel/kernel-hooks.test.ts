@@ -1,13 +1,13 @@
 import { describe, it, expect } from "bun:test";
 import { Effect } from "effect";
-import { buildKernelHooks } from "../../../src/strategies/kernel/kernel-hooks.js";
+import { buildKernelHooks } from "../../../src/kernel/state/kernel-hooks.js";
 import {
   initialKernelState,
   transitionState,
   type MaybeService,
   type EventBusInstance,
   type KernelState,
-} from "../../../src/strategies/kernel/kernel-state.js";
+} from "../../../src/kernel/state/kernel-state.js";
 import type { StepId } from "../../../src/types/step.js";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

@@ -12,8 +12,8 @@
  *
  * Extracted from kernel-runner.ts to keep the main loop focused on control flow.
  */
-import { transitionState } from "../kernel-state.js";
-import type { KernelState, KernelInput, KernelRunOptions } from "../kernel-state.js";
+import { transitionState } from "../../../kernel/state/kernel-state.js";
+import type { KernelState, KernelInput, KernelRunOptions } from "../../../kernel/state/kernel-state.js";
 import type { ReasoningStep } from "../../../types/index.js";
 
 /**

@@ -31,7 +31,7 @@ import {
   type KernelState,
   type KernelContext,
   type KernelMessage,
-} from "../kernel-state.js";
+} from "../../../kernel/state/kernel-state.js";
 import { planNextMoveBatches } from "../utils/tool-gating.js";
 import {
   buildSuccessfulToolCallCounts,
@@ -39,7 +39,7 @@ import {
   getEffectiveMissingRequiredTools,
 } from "../utils/requirement-state.js";
 import { checkToolCall, defaultGuards } from "./guard.js";
-import { META_TOOLS, INTROSPECTION_META_TOOLS } from "../kernel-constants.js";
+import { META_TOOLS, INTROSPECTION_META_TOOLS } from "../../../kernel/state/kernel-constants.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
 const REQUIRED_TOOLS_SATISFIED_PREFIX = "Required tool calls are satisfied";

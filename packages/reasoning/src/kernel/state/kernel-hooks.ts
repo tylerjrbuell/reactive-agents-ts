@@ -14,7 +14,7 @@ import type { AgentEvent } from "@reactive-agents/core";
 import type { LLMMessage } from "@reactive-agents/llm-provider";
 import type { KernelHooks, KernelState, EventBusInstance, MaybeService } from "./kernel-state.js";
 import type { SynthesizedContext } from "../../context/synthesis-types.js";
-import { publishReasoningStep } from "./utils/service-utils.js";
+import { publishReasoningStep } from "../../strategies/kernel/utils/service-utils.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
 function llmMessageToSynthesisPayload(m: LLMMessage): { readonly role: string; readonly content: string | null } {
@@ -195,7 +195,7 @@ export function buildKernelHooks(eventBus: MaybeService<EventBusInstance>): Kern
                 lastErrors: synthesized.signalsSnapshot.lastErrors,
               },
             } as AgentEvent)
-            .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/strategies/kernel/kernel-hooks.ts:197", tag: errorTag(err) })))
+            .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/kernel/state/kernel-hooks.ts:197", tag: errorTag(err) })))
         : Effect.void,
   };
 }

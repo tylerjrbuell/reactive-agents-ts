@@ -10,8 +10,8 @@
 import { Effect } from "effect";
 import { ObservableLogger } from "@reactive-agents/observability";
 import type { LogEvent } from "@reactive-agents/observability";
-import { transitionState } from "../kernel-state.js";
-import type { KernelState, KernelRunOptions, MaybeService, EventBusInstance } from "../kernel-state.js";
+import { transitionState } from "../../../kernel/state/kernel-state.js";
+import type { KernelState, KernelRunOptions, MaybeService, EventBusInstance } from "../../../kernel/state/kernel-state.js";
 import type { StrategyServices } from "./service-utils.js";
 import type { EntropyScoreLike } from "../output-assembly.js";
 

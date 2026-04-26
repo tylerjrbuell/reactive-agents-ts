@@ -7,7 +7,7 @@
  *
  * Strategies configure their own chain by passing a custom Guard[] to checkToolCall().
  */
-import type { KernelState, KernelInput } from "../kernel-state.js";
+import type { KernelState, KernelInput } from "../../../kernel/state/kernel-state.js";
 import type { ToolCallSpec } from "@reactive-agents/tools";
 import { isParallelBatchSafeTool } from "../utils/tool-gating.js";
 import {
@@ -15,7 +15,7 @@ import {
   getMissingRequiredToolsByCount,
   getEffectiveMissingRequiredTools,
 } from "../utils/requirement-state.js";
-import { META_TOOLS as META_TOOL_NAMES, INTROSPECTION_META_TOOLS, isDelegationTool } from "../kernel-constants.js";
+import { META_TOOLS as META_TOOL_NAMES, INTROSPECTION_META_TOOLS, isDelegationTool } from "../../../kernel/state/kernel-constants.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

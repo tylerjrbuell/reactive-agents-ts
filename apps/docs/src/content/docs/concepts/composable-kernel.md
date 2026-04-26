@@ -220,7 +220,7 @@ When no EventBus is present, `buildKernelHooks()` returns hooks that silently no
 For tests and simple runs, `noopHooks` is exported from `kernel-state.ts`:
 
 ```typescript
-import { noopHooks } from "./strategies/kernel/kernel-state.js";
+import { noopHooks } from "./kernel/state/kernel-state.js";
 // All five hook methods are Effect.void — safe, no EventBus required
 ```
 

@@ -9,7 +9,7 @@ import {
   checkToolCall,
   type GuardOutcome,
 } from "../../../../src/strategies/kernel/phases/guard.js";
-import type { KernelState } from "../../../../src/strategies/kernel/kernel-state.js";
+import type { KernelState } from "../../../../src/kernel/state/kernel-state.js";
 
 // ── Minimal state factory ─────────────────────────────────────────────────────
 

@@ -10,7 +10,7 @@ import {
   type ThoughtKernel,
   type MaybeService,
   type EventBusInstance,
-} from "../../../src/strategies/kernel/kernel-state.js";
+} from "../../../src/kernel/state/kernel-state.js";
 import { makeStep } from "../../../src/strategies/kernel/utils/step-utils.js";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

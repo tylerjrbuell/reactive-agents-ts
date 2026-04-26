@@ -1,7 +1,7 @@
 // Run: bun test packages/reasoning/tests/context/message-window.test.ts --timeout 15000
 import { describe, it, expect } from "bun:test";
 import { applyMessageWindowWithCompact } from "../../src/context/message-window.js";
-import type { KernelMessage } from "../../src/strategies/kernel/kernel-state.js";
+import type { KernelMessage } from "../../src/kernel/state/kernel-state.js";
 
 // ── applyMessageWindowWithCompact — sliding window behavior ──────────────────
 

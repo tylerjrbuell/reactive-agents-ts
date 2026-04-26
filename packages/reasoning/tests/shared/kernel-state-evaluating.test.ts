@@ -1,6 +1,6 @@
 import { describe, it, expect } from "bun:test";
-import { transitionState, initialKernelState } from "../../src/strategies/kernel/kernel-state.js";
-import type { KernelRunOptions } from "../../src/strategies/kernel/kernel-state.js";
+import { transitionState, initialKernelState } from "../../src/kernel/state/kernel-state.js";
+import type { KernelRunOptions } from "../../src/kernel/state/kernel-state.js";
 
 const defaultOpts: KernelRunOptions = {
   maxIterations: 10,

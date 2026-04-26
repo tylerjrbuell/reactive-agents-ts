@@ -1,5 +1,5 @@
 import type { ReasoningStep } from "../../../types/index.js";
-import { META_TOOLS as META_TOOL_NAMES } from "../kernel-constants.js";
+import { META_TOOLS as META_TOOL_NAMES } from "../../../kernel/state/kernel-constants.js";
 
 interface ObservationResultLike {
   readonly success?: boolean;

@@ -31,7 +31,7 @@ import { ToolNotFoundError } from "@reactive-agents/tools";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import { evaluateTransform } from "./tool-parsing.js";
 import { compressToolResult, nextToolResultKey } from "./tool-formatting.js";
-import type { MaybeService, ToolServiceInstance, MemoryServiceInstance } from "../kernel-state.js";
+import type { MaybeService, ToolServiceInstance, MemoryServiceInstance } from "../../../kernel/state/kernel-state.js";
 import type { ToolCallSpec } from "@reactive-agents/tools";
 import type { SemanticEntry, MemoryId } from "@reactive-agents/memory";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";

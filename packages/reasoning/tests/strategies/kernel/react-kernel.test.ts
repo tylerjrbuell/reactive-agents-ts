@@ -8,7 +8,7 @@ import {
   noopHooks,
   type KernelContext,
   type KernelState,
-} from "../../../src/strategies/kernel/kernel-state.js";
+} from "../../../src/kernel/state/kernel-state.js";
 import { CONTEXT_PROFILES } from "../../../src/context/context-profile.js";
 import { createToolCallResolver, TextParseDriver } from "@reactive-agents/tools";
 

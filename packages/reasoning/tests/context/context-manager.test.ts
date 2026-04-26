@@ -8,7 +8,7 @@ import {
   type GuidanceContext,
 } from "../../src/context/context-manager.js";
 import { CONTEXT_PROFILES } from "../../src/context/context-profile.js";
-import type { KernelState } from "../../src/strategies/kernel/kernel-state.js";
+import type { KernelState } from "../../src/kernel/state/kernel-state.js";
 
 // ── Test helpers ─────────────────────────────────────────────────────────────
 

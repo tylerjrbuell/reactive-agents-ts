@@ -14,7 +14,7 @@ import type { ToolSchema } from "./kernel/utils/tool-formatting.js";
 import { runKernel } from "./kernel/kernel-runner.js";
 import { reactKernel } from "./kernel/react-kernel.js";
 import { buildStrategyResult } from "./kernel/utils/step-utils.js";
-import type { KernelInput, KernelMessage } from "./kernel/kernel-state.js";
+import type { KernelInput, KernelMessage } from "../kernel/state/kernel-state.js";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
 import type { TerminatedBy } from "@reactive-agents/core";
 import { resolveExecutableToolCapabilities } from "./kernel/utils/tool-capabilities.js";

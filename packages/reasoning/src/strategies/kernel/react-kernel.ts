@@ -31,14 +31,14 @@ import {
   type KernelInput,
   type ThoughtKernel,
   type Phase,
-} from "./kernel-state.js";
+} from "../../kernel/state/kernel-state.js";
 import { handleThinking } from "./phases/think.js";
 import { handleActing } from "./phases/act.js";
 
 // ── Public input / output types ──────────────────────────────────────────────
 
 // Defined in kernel-state to avoid circular imports; re-exported here for backward compatibility
-import type { ReActKernelInput, ReActKernelResult } from "./kernel-state.js";
+import type { ReActKernelInput, ReActKernelResult } from "../../kernel/state/kernel-state.js";
 export type { ReActKernelInput, ReActKernelResult };
 import { resolveExecutableToolCapabilities } from "./utils/tool-capabilities.js";
 

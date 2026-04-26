@@ -58,10 +58,10 @@ import {
   type KernelState,
   type KernelContext,
   type KernelMessage,
-} from "../kernel-state.js";
+} from "../../../kernel/state/kernel-state.js";
 import type { GuidanceContext } from "../../../context/context-manager.js";
 
-import { META_TOOLS as META_TOOL_SET } from "../kernel-constants.js";
+import { META_TOOLS as META_TOOL_SET } from "../../../kernel/state/kernel-constants.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
 /** Per-tier context pressure thresholds — local models get narrowed earlier. */

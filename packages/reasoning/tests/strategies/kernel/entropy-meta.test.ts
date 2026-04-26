@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test";
-import { initialKernelState } from "../../../src/strategies/kernel/kernel-state.js";
+import { initialKernelState } from "../../../src/kernel/state/kernel-state.js";
 
 describe("KernelRunOptions entropy fields", () => {
   test("initialKernelState stores taskDescription, modelId, temperature in meta.entropy", () => {

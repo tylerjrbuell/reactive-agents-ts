@@ -19,7 +19,7 @@ import {
 } from "../../src/context/context-curator.js";
 import { ContextManager, type GuidanceContext } from "../../src/context/context-manager.js";
 import { CONTEXT_PROFILES } from "../../src/context/context-profile.js";
-import type { KernelState } from "../../src/strategies/kernel/kernel-state.js";
+import type { KernelState } from "../../src/kernel/state/kernel-state.js";
 import type { ReasoningStep } from "../../src/types/step.js";
 import type { ObservationResult } from "../../src/types/observation.js";
 

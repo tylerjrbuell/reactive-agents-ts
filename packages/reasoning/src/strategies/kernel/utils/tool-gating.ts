@@ -6,7 +6,7 @@
  * Extracted from tool-utils.ts. All functions are pure (no Effect dependencies).
  */
 
-import { META_TOOLS as META_TOOLS_SET } from "../kernel-constants.js";
+import { META_TOOLS as META_TOOLS_SET } from "../../../kernel/state/kernel-constants.js";
 
 // ── Config / Conflict types ───────────────────────────────────────────────────
 
