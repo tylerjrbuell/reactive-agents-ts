@@ -726,6 +726,10 @@ export function runKernel(
                     category: "error" as const,
                     resultKind: "error" as const,
                     preserveOnCompaction: false,
+                    // S2.3 — error observations carry framework-generated text only,
+                    // safe to render inline. Mark as trusted with grandfather note.
+                    trustLevel: "trusted" as const,
+                    trustJustification: "grandfather-phase-1",
                   },
                 },
               ),
@@ -1046,6 +1050,10 @@ export function runKernel(
                     category: "error" as const,
                     resultKind: "error" as const,
                     preserveOnCompaction: false,
+                    // S2.3 — error observations carry framework-generated text only,
+                    // safe to render inline. Mark as trusted with grandfather note.
+                    trustLevel: "trusted" as const,
+                    trustJustification: "grandfather-phase-1",
                   },
                 },
                   ),

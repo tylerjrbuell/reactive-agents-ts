@@ -14,14 +14,17 @@ export type {
 
 export type { StrategyEffectiveness } from "./types/effectiveness.js";
 
-export type { ObservationResult } from "./types/observation.js";
+export type { ObservationResult, TrustLevel } from "./types/observation.js";
 
 export {
   ObservationCategory,
   ResultKind,
+  TrustLevel as TrustLevelSchema,
   ObservationResultSchema,
   categorizeToolName,
   deriveResultKind,
+  KNOWN_TRUSTED_TOOL_NAMES,
+  GRANDFATHER_TRUST_JUSTIFICATION,
 } from "./types/observation.js";
 
 export type {

@@ -20,7 +20,12 @@ import { ObservableLogger } from "@reactive-agents/observability";
 import type { LogEvent } from "@reactive-agents/observability";
 import { LLMService } from "@reactive-agents/llm-provider";
 import type { ObservationResult } from "../../../types/observation.js";
-import { categorizeToolName, deriveResultKind } from "../../../types/observation.js";
+import {
+  categorizeToolName,
+  deriveResultKind,
+  KNOWN_TRUSTED_TOOL_NAMES,
+  GRANDFATHER_TRUST_JUSTIFICATION,
+} from "../../../types/observation.js";
 import type { ContextProfile } from "../../../context/context-profile.js";
 import { ToolNotFoundError } from "@reactive-agents/tools";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
@@ -147,6 +152,10 @@ export function makeObservationResult(
   const category = categorizeToolName(toolName);
   const resultKind = deriveResultKind(category, success);
   const preserveOnCompaction = !success || category === "error";
+  // Phase 1 S2.3 — derive trustLevel from KNOWN_TRUSTED_TOOL_NAMES set in
+  // observation.ts. ContextCurator (S2.5) consumes this to decide whether
+  // to render the observation inline or in a <tool_output> block.
+  const isTrusted = KNOWN_TRUSTED_TOOL_NAMES.has(toolName);
   return {
     success,
     toolName,
@@ -157,6 +166,8 @@ export function makeObservationResult(
     ...(options?.delegatedToolsUsed && options.delegatedToolsUsed.length > 0
       ? { delegatedToolsUsed: [...new Set(options.delegatedToolsUsed)] }
       : {}),
+    trustLevel: isTrusted ? "trusted" : "untrusted",
+    ...(isTrusted ? { trustJustification: GRANDFATHER_TRUST_JUSTIFICATION } : {}),
   };
 }
 

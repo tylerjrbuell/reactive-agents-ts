@@ -17,6 +17,7 @@ describe("ObservationResult schema", () => {
       category: "file-write",
       resultKind: "side-effect",
       preserveOnCompaction: false,
+      trustLevel: "untrusted", // Phase 1 S2.3 — required field; user-defined tools default untrusted
     };
     const encoded = Schema.encodeSync(ObservationResultSchema)(obs);
     const decoded = Schema.decodeSync(ObservationResultSchema)(encoded);

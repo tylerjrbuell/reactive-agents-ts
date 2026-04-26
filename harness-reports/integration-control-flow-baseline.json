@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "capturedAt": "2026-04-26T00:15:22.702Z",
+  "capturedAt": "2026-04-26T00:25:12.909Z",
   "bunVersion": "1.3.10",
   "scenarios": {
     "cf-04-goal-achieved-from-end-turn": {
@@ -130,6 +130,33 @@
       "customAssertions": {
         "reasoning.tier === llmProvider.tier": true,
         "tierLiteralCount": 4
+      }
+    },
+    "cf-18-meta-tools-trusted": {
+      "status": "success",
+      "iterations": 0,
+      "terminatedBy": "unknown",
+      "goalAchieved": null,
+      "toolCallsObserved": [],
+      "interventionsDispatched": [],
+      "errorSwallowedSites": [],
+      "redactorsTriggered": [],
+      "customAssertions": {
+        "trusted.recall.in_set": true,
+        "trusted.brief.in_set": true,
+        "trusted.pulse.in_set": true,
+        "trusted.activate-skill.in_set": true,
+        "trusted.final-answer.in_set": true,
+        "trusted.find.in_set": true,
+        "trusted.checkpoint.in_set": true,
+        "trusted.harness-deliverable.in_set": true,
+        "untrusted.web-search.in_set": false,
+        "untrusted.file-read.in_set": false,
+        "untrusted.file-write.in_set": false,
+        "untrusted.http-get.in_set": false,
+        "untrusted.code-execute.in_set": false,
+        "set.size": 8,
+        "grandfather.justification": "grandfather-phase-1"
       }
     }
   }
