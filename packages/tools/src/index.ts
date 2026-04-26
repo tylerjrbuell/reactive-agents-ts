@@ -76,6 +76,7 @@ export {
   ragMemoryStore,
   scratchpadStoreRef,
   checkpointStoreRef,
+  discoveredToolsStoreRef,
 } from "./skills/builtin.js";
 export {
   webSearchTool,
@@ -244,6 +245,11 @@ export {
   makeCheckpointHandler,
   type CheckpointConfig,
 } from "./skills/checkpoint.js";
+export {
+  discoverToolsTool,
+  makeDiscoverToolsHandler,
+  type DiscoverToolsState,
+} from "./skills/discover-tools.js";
 export {
   briefTool,
   buildBriefResponse,

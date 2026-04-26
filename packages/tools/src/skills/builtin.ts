@@ -33,6 +33,11 @@ import { checkpointTool, makeCheckpointHandler, type CheckpointConfig } from "./
 import { briefTool, buildBriefResponse, computeEntropyGrade, type BriefInput } from "./brief.js";
 import { pulseTool, buildPulseResponse, type PulseInput } from "./pulse.js";
 import {
+  discoverToolsTool,
+  makeDiscoverToolsHandler,
+  type DiscoverToolsState,
+} from "./discover-tools.js";
+import {
   shellExecuteTool,
   shellExecuteHandler,
   DEFAULT_ALLOWED_COMMANDS,
@@ -104,6 +109,11 @@ export {
   type PulseInput,
 } from "./pulse.js";
 export {
+  discoverToolsTool,
+  makeDiscoverToolsHandler,
+  type DiscoverToolsState,
+} from "./discover-tools.js";
+export {
   shellExecuteTool,
   shellExecuteHandler,
   DEFAULT_ALLOWED_COMMANDS,
@@ -122,6 +132,11 @@ export const scratchpadStoreRef = Ref.unsafeMake(new Map<string, string>());
 // Shared checkpoint store — separate from scratchpad/recall to survive context compaction.
 // Exported so the reasoning kernel can auto-checkpoint before compaction.
 export const checkpointStoreRef = Ref.unsafeMake(new Map<string, string>());
+
+// Shared discovered-tools set — populated by the discover-tools meta-tool;
+// consulted by the kernel's schema-pruning logic so newly-surfaced tools become
+// visible in the next iteration's tool list. Reset per agent run.
+export const discoveredToolsStoreRef = Ref.unsafeMake(new Set<string>());
 
 // Shared RAG in-memory store — one per tool service instance (reset per agent run).
 // Exported so that the runtime builder can pre-populate it via .withDocuments() / agent.ingest().
@@ -166,4 +181,5 @@ export const metaToolDefinitions: ReadonlyArray<ToolDefinition> = [
   pulseTool,
   recallTool,
   checkpointTool,
+  discoverToolsTool,
 ];
