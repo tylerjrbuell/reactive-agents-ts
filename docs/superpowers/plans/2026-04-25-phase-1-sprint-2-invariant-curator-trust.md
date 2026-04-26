@@ -78,22 +78,21 @@ This sprint **does not** cover: Task primitive, embedding batching in AgentMemor
 
 ### S2.4 — Builder probe-on-first-use → cache write-through
 
-**Why now:** Sprint 1 shipped the cache (`saveCapability`) and the resolver (reads from cache). The missing piece is the *writer* — the builder must probe a model on first use and persist the result so subsequent runs skip the probe.
+**Status:** PARTIALLY SHIPPED (`e139b7ee`). User feedback during a real-world `scratch.ts` run on `gemma4:e4b` exposed that the static-table approach didn't scale; lifted the probe forward into the same session.
 
-**Files:**
-- New: `packages/llm-provider/src/probe-capability.ts` — provider-specific probe orchestration
-- Modify: `packages/runtime/src/builder.ts` `build()` — wire the probe + cache write before the runtime layer constructs
-- New: `packages/llm-provider/tests/probe-capability.test.ts`
-- New: `packages/runtime/tests/builder-probe-write-through.test.ts`
+**What shipped (`e139b7ee`):**
+- `packages/llm-provider/src/providers/local-probe.ts` — `probeOllamaCapability(model, baseUrl)` translates Ollama's `/api/show` response (capabilities array, family, parameter size, `model_info.<family>.context_length`) into a Capability descriptor.
+- `local.ts` integrates the probe inline in all 3 request paths (complete / stream / structured-output) with module-scope caching so probes happen at most once per (baseUrl, model) per process.
+- Static table pruned back to "tested baseline" models only (cogito:14b, qwen3:14b for Ollama); probe handles the long tail.
+- 6 fixture-based tests pinning the translation logic + cache behavior + error handling.
+- Verified end-to-end: `scratch.ts` that failed before now succeeds (gemma4:e4b correctly identified as 128K context, native-fc tools support → produced full markdown HN summary in 37s).
 
-**Approach:**
-- Probe surface: `probeCapability(provider, model, opts) → Effect<Capability, ProbeError>`. Each provider's adapter implements its own probe (Ollama via `/api/show`, Anthropic via capability discovery, etc.). Conservative initial set: only Ollama + a no-op for cloud providers (their static-table entries are good enough for now).
-- Builder calls probe once at `build()` time; on success writes through with `source: "probe"`; on failure swallows the error and lets resolver fall through to static-table.
-
-**Acceptance:**
-- Probed capability persists to disk via CalibrationStore (covered by `bb55fc26` tests; this story exercises end-to-end)
-- Subsequent `build()` for the same (provider, model) skips re-probing
-- Probe failure does not block builder (`CapabilityProbeFailed` event emitted via `onProbeFailed`)
+**What still needs to ship (small follow-up, ~30 LOC):**
+- Cross-process persistence via `CalibrationStore.saveCapability` write-through. Currently the probe cache lives in module scope (lost on process restart). The follow-up wires:
+  1. Builder calls `probeOllamaCapability` once at `build()` time when the configured provider is `ollama`
+  2. On success, write through to CalibrationStore via `saveCapability`
+  3. Subsequent builds in fresh processes hit the SQLite cache via `loadCapability`, skipping the network probe entirely
+- Slot this after S2.5 (ContextCurator) lands, or pick up as opportunistic cleanup.
 
 ### S2.5 — ContextCurator becomes sole prompt author + absorbs compression
 
