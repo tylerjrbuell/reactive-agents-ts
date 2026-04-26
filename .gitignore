@@ -50,6 +50,7 @@ hn-gateway-reports/
 # Scratch files
 output.txt
 scratch.ts
+scratch-*.ts
 
 # Messaging secrets
 signal-data/
