@@ -275,6 +275,14 @@ export const STATIC_CAPABILITIES: Readonly<Record<string, Capability>> = Object.
     toolCallDialect: "native-fc",
     source: "static-table",
   },
+  // ── Static table is intentionally small ─────────────────────────────────
+  //
+  // Only "tested baseline" models the framework has explicitly validated
+  // belong here. The long tail of community Ollama models is handled by
+  // probe-on-first-use (S2.4) — see providers/local-probe.ts. Probing
+  // /api/show extracts the actual context_length, capabilities[], family,
+  // and parameter size for any model the user has pulled, removing the
+  // need to manually enumerate the world.
 });
 
 // ─── Conservative fallback ───────────────────────────────────────────────────

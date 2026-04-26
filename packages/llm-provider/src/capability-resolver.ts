@@ -33,6 +33,30 @@ import {
 } from "./capability.js";
 
 /**
+ * One-shot tracker so the fallback warning fires at most once per
+ * (provider, model) pair per process. Repeated agent runs in a long-lived
+ * process don't spam the console; the user sees the message once and
+ * either ignores it or fixes their config.
+ */
+const warnedFallbacks = new Set<string>();
+
+function warnFallbackOnce(provider: string, model: string): void {
+  const key = `${provider}/${model}`;
+  if (warnedFallbacks.has(key)) return;
+  warnedFallbacks.add(key);
+  // eslint-disable-next-line no-console
+  console.warn(
+    `[reactive-agents] Capability fallback fired for ${provider}/${model}: ` +
+      `using conservative defaults (recommendedNumCtx=2048, toolCallDialect="none"). ` +
+      `Local models with 2048 num_ctx commonly fail to call tools because the ` +
+      `system prompt + tool schema overflows the context window. Either: ` +
+      `(a) add ${model} to STATIC_CAPABILITIES in @reactive-agents/llm-provider/capability.ts, ` +
+      `(b) override at request-time via { numCtx: 8192 } on agent.run options, or ` +
+      `(c) wait for builder probe-on-first-use (Phase 1 Sprint 2 S2.4).`,
+  );
+}
+
+/**
  * Minimal contract a Capability cache must satisfy. Implemented structurally
  * by `CalibrationStore` in `@reactive-agents/reactive-intelligence` —
  * declared here so `llm-provider` doesn't import from RI (would be a
@@ -98,9 +122,13 @@ export function resolveCapability(
   const fromTable = STATIC_CAPABILITIES[key];
   if (fromTable !== undefined) return fromTable;
 
-  // Tier 3 — conservative fallback
+  // Tier 3 — conservative fallback. Fires the user-supplied onProbeFailed
+  // for telemetry AND emits a one-shot console warning so users notice
+  // when their model isn't in the static table (silent fallback was the
+  // root cause of failures like scratch.ts hitting gemma4:e4b on 2026-04-25).
   if (opts.onProbeFailed) {
     opts.onProbeFailed({ provider, model });
   }
+  warnFallbackOnce(provider, model);
   return fallbackCapability(provider, model);
 }

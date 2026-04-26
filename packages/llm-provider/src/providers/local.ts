@@ -16,6 +16,48 @@ import { estimateTokenCount } from "../token-counter.js";
 import { retryPolicy } from "../retry.js";
 import { getProviderDefaultModel } from "../provider-defaults.js";
 import { resolveCapability } from "../capability-resolver.js";
+import { probeOllamaCapability } from "./local-probe.js";
+import type { Capability } from "../capability.js";
+
+// Module-scope cache so the inline probe runs at most once per (baseUrl, model)
+// per process. CalibrationStore write-through (cross-process) lands in S2.4.
+const inlineProbeCache = new Map<string, Capability>();
+
+/**
+ * Resolve Capability for an Ollama model with probe-on-first-use.
+ *
+ * Order of attempts (each takes the first hit):
+ *   1. In-process cache (this Map) — instant, no I/O
+ *   2. Static-table entry via resolveCapability — instant, no I/O
+ *   3. Live probe of /api/show — ~50-100ms first time per model
+ *   4. Conservative fallback via resolveCapability — emits warning
+ *
+ * Step 3 is the scaling win: any model the user has pulled gets accurate
+ * capabilities without anyone editing the static table.
+ */
+async function resolveOllamaCapability(model: string, baseUrl: string): Promise<Capability> {
+  const key = `${baseUrl}::${model}`;
+  const cached = inlineProbeCache.get(key);
+  if (cached) return cached;
+
+  // Static-table fast path — avoids the probe round-trip for hand-curated models
+  const staticOrFallback = resolveCapability("ollama", model);
+  if (staticOrFallback.source === "static-table") {
+    inlineProbeCache.set(key, staticOrFallback);
+    return staticOrFallback;
+  }
+
+  // Static path missed; try probe before settling for fallback
+  const probed = await probeOllamaCapability(model, baseUrl);
+  if (probed) {
+    inlineProbeCache.set(key, probed);
+    return probed;
+  }
+
+  // Probe failed (model not pulled, Ollama down, malformed response) — accept fallback
+  inlineProbeCache.set(key, staticOrFallback);
+  return staticOrFallback;
+}
 
 // ─── Ollama SDK types (from the `ollama` npm package) ───
 
@@ -249,12 +291,14 @@ export const LocalProviderLive = Layer.effect(
                 config.thinking,
               );
 
-              // Phase 1 S1.3 — Resolve Capability for this (provider, model).
-              // Static-table hit gives us the model's recommended num_ctx;
-              // fallback yields a conservative 2048 with source: "fallback".
-              // Precedence: request.numCtx (explicit) → capability.recommendedNumCtx
-              // → config.defaultNumCtx (deprecated, kept for backwards-compat).
-              const capability = resolveCapability("ollama", model);
+              // Phase 1 S2.4 — Probe-on-first-use Capability resolution.
+              // Order: in-process cache → static table → /api/show probe →
+              // conservative fallback. Static table is now an optional
+              // fast-path; probe handles the long tail of community models
+              // without anyone editing capability.ts.
+              // Precedence on num_ctx: request.numCtx → capability.recommendedNumCtx
+              // → config.defaultNumCtx (deprecated).
+              const capability = await resolveOllamaCapability(model, endpoint);
               const numCtx =
                 request.numCtx ?? capability.recommendedNumCtx ?? config.defaultNumCtx;
 
@@ -385,8 +429,8 @@ export const LocalProviderLive = Layer.effect(
                 );
 
                 const wantLogprobs = request.logprobs ?? false;
-                // Phase 1 S1.3 — capability-driven num_ctx (see complete() path above)
-                const capability = resolveCapability("ollama", model);
+                // Phase 1 S2.4 — probe-aware capability (see complete() path)
+                const capability = await resolveOllamaCapability(model, endpoint);
                 const numCtx =
                   request.numCtx ?? capability.recommendedNumCtx ?? config.defaultNumCtx;
 
@@ -552,8 +596,15 @@ export const LocalProviderLive = Layer.effect(
               msgs.unshift({ role: "system", content: request.systemPrompt });
             }
 
-            // Phase 1 S1.3 — capability-driven num_ctx (see complete() path)
-            const capability = resolveCapability("ollama", model);
+            // Phase 1 S2.4 — probe-aware capability (see complete() path)
+            const capability = yield* Effect.tryPromise({
+              try: () => resolveOllamaCapability(model, endpoint),
+              catch: () => new Error("capability resolution failed"),
+            }).pipe(
+              Effect.catchAll(() =>
+                Effect.succeed(resolveCapability("ollama", model)),
+              ),
+            );
             const numCtx =
               request.numCtx ?? capability.recommendedNumCtx ?? config.defaultNumCtx;
 
