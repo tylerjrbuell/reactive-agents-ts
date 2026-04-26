@@ -120,9 +120,19 @@ export const defaultContextCurator: ContextCurator = {
   curate(state, input, profile, guidance, adapter, options) {
     const out = ContextManager.build(state, input, profile, guidance, adapter, options);
 
+    // Sprint 3.4 (G-4 closure) — Curator owns compression decisions.
+    // Pass scratchpad + per-tier budget so the section can render FULL
+    // tool content (looked up via storedKey) instead of forcing the model
+    // to navigate "[STORED:]" markers via recall(). Per-observation cap
+    // prevents context-budget blowup; recall() stays as ad-hoc retrieval
+    // for older observations not surfaced by curator.
     const obsSection = buildRecentObservationsSection(
       state.steps,
       options?.includeRecentObservations ?? 0,
+      {
+        scratchpad: state.scratchpad,
+        maxCharsPerObservation: profile.toolResultMaxChars,
+      },
     );
 
     const systemPrompt = obsSection
@@ -154,15 +164,54 @@ export const defaultContextCurator: ContextCurator = {
  *   - cf-NN gate scenarios can pin the wrapping behavior
  *   - Alternate curators (compression-aware, embedding-aware) reuse it
  */
-export function renderObservationForPrompt(obs: ObservationResult): string {
+export function renderObservationForPrompt(
+  obs: ObservationResult,
+  /**
+   * Sprint 3.4 (G-4) — when provided, render this content instead of
+   * obs.displayText. Used by buildRecentObservationsSection to substitute
+   * full scratchpad-stored content for the compressed-preview displayText
+   * that tool-execution writes for context-budget reasons.
+   */
+  contentOverride?: string,
+): string {
+  const content = contentOverride ?? obs.displayText;
   if (obs.trustLevel === "trusted") {
-    return obs.displayText;
+    return content;
   }
   // Untrusted: wrap so adversarial content can't masquerade as instructions.
   // The closing tag is a literal — even if the tool output contained
   // </tool_output>, the LLM treats the wrapping as a content boundary marker
   // rather than a privileged instruction frame.
-  return `<tool_output tool="${obs.toolName}">\n${obs.displayText}\n</tool_output>`;
+  return `<tool_output tool="${obs.toolName}">\n${content}\n</tool_output>`;
+}
+
+/**
+ * Sprint 3.4 (G-4) — pick the BEST content to render for an observation.
+ * Looks up full content from scratchpad when the observation has a
+ * storedKey; falls back to the (possibly compressed) displayText. Caps to
+ * `maxChars` and adds a truncation marker if exceeded.
+ *
+ * This is the core mechanism by which the curator owns compression
+ * decisions: tool-execution stores the full content; the curator decides
+ * what to surface per iteration based on profile budget.
+ */
+function selectObservationContent(
+  obs: ObservationResult,
+  step: ReasoningStep,
+  scratchpad: ReadonlyMap<string, string> | undefined,
+  maxChars: number,
+): string {
+  const storedKey = step.metadata?.storedKey as string | undefined;
+  const fullFromScratchpad =
+    storedKey && scratchpad ? scratchpad.get(storedKey) : undefined;
+  const candidate = fullFromScratchpad ?? obs.displayText;
+  if (candidate.length <= maxChars) return candidate;
+  // Truncate and signal the model that more is available via recall.
+  const head = candidate.slice(0, maxChars);
+  const recallHint = storedKey
+    ? `\n  ...truncated (${candidate.length - maxChars} chars). Full content available via recall("${storedKey}").`
+    : `\n  ...truncated (${candidate.length - maxChars} chars).`;
+  return head + recallHint;
 }
 
 // ─── Recent observations section (Slice B) ─────────────────────────────────────
@@ -189,17 +238,48 @@ function hasObservationResult(
  * Returning null (rather than "") lets the caller distinguish "no section"
  * from "empty section" cleanly when composing the final prompt string.
  */
+export interface RecentObservationsOptions {
+  /**
+   * Sprint 3.4 (G-4) — scratchpad map for full-content lookup. Tool-execution
+   * stores complete tool output here keyed by storedKey; the curator looks up
+   * the full content and renders it (capped) instead of the compressed-preview
+   * displayText. When omitted, falls back to displayText.
+   */
+  readonly scratchpad?: ReadonlyMap<string, string>;
+  /**
+   * Per-observation character cap. Defaults to 2000 if omitted. The
+   * defaultContextCurator passes profile.toolResultMaxChars (tier-aware:
+   * local=2000, mid=1200, large=800, frontier=600).
+   */
+  readonly maxCharsPerObservation?: number;
+}
+
 export function buildRecentObservationsSection(
   steps: readonly ReasoningStep[],
   limit: number,
+  options?: RecentObservationsOptions,
 ): string | null {
   if (limit <= 0) return null;
 
   const recent = steps.filter(hasObservationResult).slice(-limit);
   if (recent.length === 0) return null;
 
+  const maxChars = options?.maxCharsPerObservation ?? 2000;
+  const scratchpad = options?.scratchpad;
+
   const body = recent
-    .map((s) => renderObservationForPrompt(s.metadata.observationResult))
+    .map((s) => {
+      // Sprint 3.4 (G-4) — pull full content from scratchpad when storedKey
+      // is present + cap to per-tier budget. The model sees real data, not
+      // a compression marker pointing it at recall().
+      const content = selectObservationContent(
+        s.metadata.observationResult,
+        s,
+        scratchpad,
+        maxChars,
+      );
+      return renderObservationForPrompt(s.metadata.observationResult, content);
+    })
     .join("\n\n");
 
   return `${RECENT_OBSERVATIONS_HEADER}\n${body}`;

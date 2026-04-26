@@ -1,0 +1,135 @@
+{
+  "model": "gemma4:e4b",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-04-26T15-25-27",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 333,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 2296.696672,
+      "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": true,
+      "tokensUsed": 10794,
+      "stepsCount": 6,
+      "toolCallCount": 0,
+      "wallMs": 20671.753399999998,
+      "output": "1. Asahi Linux Progress Linux 7.0 (score: 298)\n2. Why SWE-bench Verified no longer measures frontier coding capabilities (score: 33)\n3. Statecharts: hierarchical state machines (score: 158)\n4. Amateur armed with ChatGPT solves an Erdős problem (score: 544)\n5. The Nintendo Switch Switch (2019) (score: 28)\n6. Show HN: Turning a Gaussian Splat into a videogame (score: 100)\n7. Why has there been so little progress on Alzheimer's disease? (score: 317)\n8. The West forgot how to make things, now it’s forgetting how to code (score: 767)\n9. Tell HN: An app is silently installing itself on my iPhone every day (score: 400)\n10. USB Cheat Sheet (2022) (score: 400)\n11. GnuPG – post-quantum crypto landing in mainline (score: 110)\n12. Cheating at Tetris (score: 33)\n13. Show HN: HNswered – watches for replies to your Hacker News posts and comments (score: 23)\n14. Exposing Floating Point – Bartosz Ciechanowski (2019) (score: 51)\n15. Mahjong: A Visual Guide (score: 150)",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "15/15 titles cited",
+          "15/15 scores cited",
+          "15 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": true,
+      "tokensUsed": 12290,
+      "stepsCount": 4,
+      "toolCallCount": 0,
+      "wallMs": 45535.888702000004,
+      "output": "[get-hn-posts result — compressed preview]\nType: Array(25) | Schema: id, title, score, by, descendants, url\nPreview (first 8):\n  [0] id=47909226  title=Asahi Linux Progress Linux 7.0  score=298  by=elisaado\n  [1] id=47910388  title=Why SWE-bench Verified no longer measures frontier coding ca  score=33  by=kmdupree\n  [2] id=47908833  title=Statecharts: hierarchical state machines  score=158  by=sph\n  [3] id=47903126  title=Amateur armed with ChatGPT solves an Erdős problem  score=544  by=pr337h4m\n  [4] id=47894124  title=The Nintendo Switch Switch (2019)  score=28  by=zdw\n  [5] id=47876071  title=Show HN: Turning a Gaussian Splat into a videogame  score=100  by=yak32\n  [6] id=47905984  title=Why has there been so little progress on Alzheimer's disease  score=317  by=chiefalchemist\n  [7] id=47907879  title=The West forgot how to make things, now it’s forgetting how   score=767  by=milkglass\n  ...17 more\n  — full text is stored. Use recall(\"_tool_result_2\") to retrieve.",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0.3,
+        "faithfulness": 0.5,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "3/3 correct titles",
+          "0/3 correct comment counts",
+          "no confusion"
+        ],
+        "composite": 0.52
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": false,
+      "tokensUsed": 13582,
+      "stepsCount": 5,
+      "toolCallCount": 0,
+      "wallMs": 61493.770397,
+      "output": "Task incomplete — missing_required_tool: required tool(s) not called: get-hn-posts×3 (1/3 satisfied).\nrequired=[get-hn-posts×3 (1/3 satisfied)]\ncalled=[get-hn-posts]\navailable=[web-search, crypto-price, http-get, file-read, file-write, code-execute, git-cli, gh-cli, gws-cli, get-hn-posts, brief, pulse, recall, find]\nvisible=[web-search, crypto-price, http-get, file-read, file-write, code-execute, git-cli, gh-cli, gws-cli, get-hn-posts, brief, pulse, recall, find]\nterminatedBy=controller_early_stop:dispatcher_early_stop",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "★ missing Highest Score section",
+          "★ missing Most Comments section",
+          "0/6 correct titles"
+        ],
+        "composite": 0.3
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 11621,
+      "stepsCount": 4,
+      "toolCallCount": 0,
+      "wallMs": 46390.56272199999,
+      "output": "# Today on Hacker News\n\nThe top stories on Hacker News this cycle reveal a deep dive into the intersection of advanced computation, critical technological theory, and the ongoing evolution of software infrastructure. A major theme dominating the discussion is the rapid, sometimes unsettling, progress of Artificial Intelligence. The most striking story in this domain is the report detailing how an amateur, armed with ChatGPT, successfully solved a complex Erdős problem, highlighting the powerful new capabilities of generative AI in scientific research. This theme also included a necessary discussion about",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0.5,
+        "faithfulness": 0,
+        "completeness": 0.2,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "title ✓",
+          "0 category sections",
+          "0/15 titles cited",
+          "90 words"
+        ],
+        "composite": 0.415
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.6469999999999999,
+    "recallSmellCount": 0,
+    "taskCount": 5
+  }
+}

@@ -888,17 +888,35 @@ export function handleActing(
         // Build tool result messages — match each tool call to its observation by toolCallId.
         // Parallel batches layout steps as [a1,a2,a3,o1,o2,o3] so positional +1 adjacency
         // doesn't work; toolCallId metadata is the stable link.
+        //
+        // Sprint 3.4 (G-4 closure) — when an observation has a storedKey, look up
+        // the FULL content from the shared scratchpad and use that instead of the
+        // compressed [STORED:] marker that obsStep.content carries. This is the
+        // critical fix: the model's conversation thread now sees real tool data,
+        // not a compression marker forcing it to call recall(). Per-tool cap
+        // prevents context blowup; older observations get their natural context-
+        // window decay via applyMessageWindowWithCompact.
+        const TOOL_RESULT_INLINE_CAP = 4000;
         const toolResultMessages: KernelMessage[] = normalizedPendingCalls.flatMap((tc) => {
           const obsStep = newStepsThisTurn.find(
             (s) => s.type === "observation" && s.metadata?.toolCallId === tc.id,
           );
           if (!obsStep) return [];
+          const storedKey = obsStep.metadata?.storedKey as string | undefined;
+          const fullFromScratchpad = storedKey ? sharedScratchpad.get(storedKey) : undefined;
+          let resolvedContent = fullFromScratchpad ?? obsStep.content;
+          if (fullFromScratchpad && fullFromScratchpad.length > TOOL_RESULT_INLINE_CAP) {
+            resolvedContent =
+              fullFromScratchpad.slice(0, TOOL_RESULT_INLINE_CAP) +
+              `\n  ...truncated (${fullFromScratchpad.length - TOOL_RESULT_INLINE_CAP} chars).` +
+              (storedKey ? ` Full available via recall("${storedKey}", full: true).` : "");
+          }
           const msg: KernelMessage = {
             role: "tool_result" as const,
             toolCallId: tc.id,
             toolName: tc.name,
-            content: obsStep.content,
-            ...(obsStep.metadata?.storedKey ? { storedKey: obsStep.metadata.storedKey as string } : {}),
+            content: resolvedContent,
+            ...(storedKey ? { storedKey } : {}),
           };
           return [msg];
         });
