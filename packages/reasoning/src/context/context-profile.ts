@@ -1,10 +1,22 @@
 // File: src/context/context-profile.ts
 import { Schema } from "effect";
+import { ModelTierSchema, type ModelTier as CapabilityModelTier } from "@reactive-agents/llm-provider";
 
 // ─── Model Tier ───
+//
+// Phase 1 Sprint 2 S2.2 — G-2 structurally closed.
+// ModelTier is now re-exported from @reactive-agents/llm-provider (where
+// it's defined as `Capability.tier`'s literal union). Before S2.2 this file
+// declared its own `Schema.Literal(...)` with the same 4 literals — equal
+// by value but a separate Schema AST node, which made it possible for the
+// two definitions to drift independently. Re-exporting forces them to
+// stay identical by construction.
+//
+// Test pin: packages/reasoning/tests/context/tier-source-of-truth.test.ts
+// Gate scenario: cf-NN-tier-derived-from-capability
 
-export const ModelTier = Schema.Literal("local", "mid", "large", "frontier");
-export type ModelTier = typeof ModelTier.Type;
+export const ModelTier = ModelTierSchema;
+export type ModelTier = CapabilityModelTier;
 
 // ─── Context Profile ───
 

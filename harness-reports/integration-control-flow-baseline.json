@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "capturedAt": "2026-04-25T13:08:51.559Z",
+  "capturedAt": "2026-04-26T00:15:22.702Z",
   "bunVersion": "1.3.10",
   "scenarios": {
     "cf-04-goal-achieved-from-end-turn": {
@@ -116,6 +116,20 @@
         "cache.source": "probe",
         "noCache.recommendedNumCtx": 8192,
         "noCache.source": "static-table"
+      }
+    },
+    "cf-17-tier-derived-from-capability": {
+      "status": "success",
+      "iterations": 0,
+      "terminatedBy": "unknown",
+      "goalAchieved": null,
+      "toolCallsObserved": [],
+      "interventionsDispatched": [],
+      "errorSwallowedSites": [],
+      "redactorsTriggered": [],
+      "customAssertions": {
+        "reasoning.tier === llmProvider.tier": true,
+        "tierLiteralCount": 4
       }
     }
   }
