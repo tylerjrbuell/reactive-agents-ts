@@ -31,6 +31,15 @@ import { executeNativeToolCall, makeObservationResult, extractObservationFacts }
 // attached to the observation step's metadata. Future sprints (Arbitrator
 // in S3.3, Reflection in S3.4) read this signal.
 import { defaultVerifier, contextFromObservation } from "../verify/verifier.js";
+// Sprint 3.3 — Sole Termination Authority: the final-answer-tool path
+// emits an "agent-final-answer" intent and lets the Arbitrator decide
+// success/failure. The Arbitrator applies the controller-signal veto
+// (CHANGE A) — if controller activity contradicts the agent's success
+// claim, the Verdict converts to exit-failure.
+import {
+  arbitrateAndApply,
+  arbitrationContextFromState,
+} from "../decide/arbitrator.js";
 import {
   transitionState,
   type KernelState,
@@ -435,21 +444,34 @@ export function handleActing(
             );
 
             newToolsUsed.add(tc.name);
-            return transitionState(state, {
+            // Sprint 3.3 — flow through the Arbitrator. Build state with
+            // the new steps + toolsUsed first, then let arbitrateAndApply
+            // resolve the Verdict (which may convert to exit-failure if
+            // the controller-signal veto fires).
+            const stateWithSteps = transitionState(state, {
               steps: [...allSteps, actionStep, finalObsStep],
               toolsUsed: newToolsUsed,
-              status: "done",
-              output: capture.output,
               iteration: state.iteration + 1,
               meta: {
                 ...state.meta,
-                terminatedBy: "final_answer_tool" as const,
                 finalAnswerCapture: capture,
                 pendingNativeToolCalls: undefined,
                 lastThought: undefined,
                 lastThinking: undefined,
               },
             });
+            return arbitrateAndApply(
+              stateWithSteps,
+              {
+                kind: "agent-final-answer",
+                via: "tool",
+                output: capture.output,
+              },
+              arbitrationContextFromState(stateWithSteps, {
+                task: input.task,
+                requiredTools: input.requiredTools,
+              }),
+            );
           }
 
           // Rejected — produce error observation and continue

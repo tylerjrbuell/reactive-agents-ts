@@ -37,6 +37,13 @@ import { evaluateStrategySwitch, buildHandoff } from "../../kernel/capabilities/
 import { coordinateICS } from "../../kernel/utils/ics-coordinator.js";
 import { runReactiveObserver } from "../../kernel/capabilities/reflect/reactive-observer.js";
 import { detectLoop, checkAllToolsCalled } from "../../kernel/capabilities/reflect/loop-detector.js";
+// Sprint 3.3 — Sole Termination Authority: dispatcher-early-stop now flows
+// through the Arbitrator so the veto applies (catches "framework giving
+// up due to maxIterations approach with tool failures" as exit-failure).
+import {
+  arbitrateAndApply,
+  arbitrationContextFromState,
+} from "../../kernel/capabilities/decide/arbitrator.js";
 import {
   buildSuccessfulToolCallCounts,
   getMissingRequiredToolsByCount,
@@ -670,9 +677,23 @@ export function runKernel(
         state, services, eventBus, prevStepCount, currentOptions,
       ));
 
-      // Honor early-stop dispatched by the intervention dispatcher
+      // Honor early-stop dispatched by the intervention dispatcher.
+      // Sprint 3.3 — flow through the Arbitrator so the veto can convert
+      // a "framework giving up because of approaching maxIterations"
+      // early-stop into status:failed when there's tool-failure evidence.
       if (state.meta.terminatedBy === "dispatcher-early-stop") {
-        state = transitionState(state, { status: "done", output: state.output ?? "" });
+        state = arbitrateAndApply(
+          state,
+          {
+            kind: "controller-early-stop",
+            output: state.output ?? "",
+            reason: "dispatcher_early_stop",
+          },
+          arbitrationContextFromState(state, {
+            task: input.task,
+            requiredTools: input.requiredTools,
+          }),
+        );
         break;
       }
 

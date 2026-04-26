@@ -48,7 +48,13 @@ import {
   buildSuccessfulToolCallCounts,
   getMissingRequiredToolsFromSteps,
 } from "../verify/requirement-state.js";
-import { evaluateTermination, defaultEvaluators, type TerminationContext } from "../decide/arbitrator.js";
+import {
+  evaluateTermination,
+  defaultEvaluators,
+  arbitrateAndApply,
+  arbitrationContextFromState,
+  type TerminationContext,
+} from "../decide/arbitrator.js";
 import { assembleOutput } from "../../../kernel/loop/output-assembly.js";
 import { extractThinking, rescueFromThinking } from "../reason/stream-parser.js";
 import { makeStep } from "../sense/step-utils.js";
@@ -546,19 +552,25 @@ export function handleThinking(
       thoughtResponse.stopReason === "end_turn"
     ) {
       const output = thought.trim();
-      return transitionState(state, {
+      // Sprint 3.3 — flow through the Arbitrator. Fast-path is a "trivial
+      // task completed immediately" signal; Arbitrator vetoes if controller
+      // showed pathological activity (which shouldn't happen on a fast-path
+      // but the veto runs uniformly to keep the contract simple).
+      const stateWithSteps = transitionState(state, {
         steps: newSteps,
         tokens: newTokens,
         cost: newCost,
-        status: "done" as const,
-        output,
         priorThought: output,
         iteration: state.iteration + 1,
-        meta: {
-          ...state.meta,
-          terminatedBy: "end_turn",
-        },
       });
+      return arbitrateAndApply(
+        stateWithSteps,
+        { kind: "fast-path-completed", output },
+        arbitrationContextFromState(stateWithSteps, {
+          task: input.task,
+          requiredTools: input.requiredTools,
+        }),
+      );
     }
 
     // ── NATIVE FUNCTION CALLING BRANCH ─────────────────────────────────────
@@ -681,7 +693,6 @@ export function handleThinking(
             ? extractFinalAnswer(resolverResult.content)
             : resolverResult.content,
         );
-        const terminatedBy = hasFA ? "final_answer" : "end_turn";
 
         const assembled = assembleOutput({
           steps: newSteps,
@@ -689,19 +700,29 @@ export function handleThinking(
           terminatedBy: "llm_end_turn",
           entropyScores: state.meta.entropy?.entropyHistory,
         });
-        return transitionState(state, {
+        // Sprint 3.3 — flow through the Arbitrator. The agent emitted either
+        // a FINAL ANSWER: regex match (via=regex) or a plain end_turn
+        // (via=end-turn). The Arbitrator's veto applies if the controller
+        // showed pathological activity.
+        const stateWithSteps = transitionState(state, {
           steps: newSteps,
           tokens: newTokens,
           cost: newCost,
-          status: "done" as const,
-          output: assembled.text,
           priorThought: thought.trim(),
           iteration: state.iteration + 1,
-          meta: {
-            ...state.meta,
-            terminatedBy,
-          },
         });
+        return arbitrateAndApply(
+          stateWithSteps,
+          {
+            kind: "agent-final-answer",
+            via: hasFA ? "regex" : "end-turn",
+            output: assembled.text,
+          },
+          arbitrationContextFromState(stateWithSteps, {
+            task: input.task,
+            requiredTools: input.requiredTools,
+          }),
+        );
       } else if (resolverResult._tag === "thinking") {
         const thinkingContent = resolverResult.content.trim();
         const reqTools = input.requiredTools ?? [];
@@ -877,47 +898,42 @@ export function handleThinking(
       // status:"failed" — the kernel terminates and result.success becomes
       // false. The agent's textual output (if any) is discarded; the
       // veto reason becomes state.error.
-      if (decision.shouldExit && decision.action === "fail") {
-        return transitionState(state, {
+      // Sprint 3.3 — both fail and exit verdicts now flow through the
+      // Arbitrator via the oracle-decision intent. The Arbitrator
+      // forwards the oracle's action and applies status:failed for fail,
+      // status:done for exit. Output is assembled either way.
+      if (decision.shouldExit) {
+        const assembled = decision.output
+          ? assembleOutput({
+              steps: state.steps,
+              finalAnswer: decision.output,
+              terminatedBy: decision.reason,
+              entropyScores: state.meta.entropy?.entropyHistory,
+            })
+          : { text: "" };
+        const stateWithSteps = transitionState(state, {
           steps: newSteps,
           tokens: newTokens,
           cost: newCost,
-          status: "failed" as const,
-          error: decision.reason,
-          output: null,
           priorThought: thought.trim(),
           iteration: state.iteration + 1,
-          meta: {
-            ...state.meta,
-            terminatedBy: "controller_signal_veto",
+        });
+        return arbitrateAndApply(
+          stateWithSteps,
+          {
+            kind: "oracle-decision",
+            decision,
+            output: assembled.text,
+          },
+          arbitrationContextFromState(stateWithSteps, {
+            task: input.task,
+            requiredTools: input.requiredTools,
+          }),
+          {
             evaluator: decision.evaluator,
             allVerdicts: decision.allVerdicts,
           },
-        });
-      }
-
-      if (decision.shouldExit && decision.output) {
-        const assembled = assembleOutput({
-          steps: state.steps,
-          finalAnswer: decision.output,
-          terminatedBy: decision.reason,
-          entropyScores: state.meta.entropy?.entropyHistory,
-        });
-        return transitionState(state, {
-          steps: newSteps,
-          tokens: newTokens,
-          cost: newCost,
-          status: "done" as const,
-          output: assembled.text,
-          priorThought: thought.trim(),
-          iteration: state.iteration + 1,
-          meta: {
-            ...state.meta,
-            terminatedBy: decision.reason,
-            evaluator: decision.evaluator,
-            allVerdicts: decision.allVerdicts,
-          },
-        });
+        );
       }
 
       if (decision.action === "redirect") {

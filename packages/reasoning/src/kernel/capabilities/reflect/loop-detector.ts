@@ -13,6 +13,12 @@
  * Extracted from kernel-runner.ts to keep the main loop focused on control flow.
  */
 import { transitionState } from "../../../kernel/state/kernel-state.js";
+// Sprint 3.3 — Sole Termination Authority: loop detector emits a
+// "loop-detected" intent and lets the Arbitrator decide success/failure.
+import {
+  arbitrateAndApply,
+  arbitrationContextFromState,
+} from "../decide/arbitrator.js";
 import type { KernelState, KernelInput, KernelRunOptions } from "../../../kernel/state/kernel-state.js";
 import type { ReasoningStep } from "../../../types/index.js";
 
@@ -141,9 +147,17 @@ export function checkAllToolsCalled(
   if (!allPrimaryCalled) return state;
 
   const lastObs = [...state.steps].reverse().find((s) => s.type === "observation");
-  return transitionState(state, {
-    status: "done",
-    output: lastObs?.content ?? state.output ?? "[All tools executed successfully]",
-    meta: { ...state.meta, terminatedBy: "all_tools_called" },
-  });
+  const output = lastObs?.content ?? state.output ?? "[All tools executed successfully]";
+  // Sprint 3.3 — flow through the Arbitrator. "All required tools called"
+  // is a controller-style signal (the loop-detector decided), so the veto
+  // applies — if the controller history shows pathological activity, the
+  // Arbitrator converts to exit-failure.
+  return arbitrateAndApply(
+    state,
+    { kind: "loop-detected", output, reason: "all_tools_called" },
+    arbitrationContextFromState(state, {
+      task: currentInput.task,
+      requiredTools: currentInput.requiredTools,
+    }),
+  );
 }

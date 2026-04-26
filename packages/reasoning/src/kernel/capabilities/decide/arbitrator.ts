@@ -515,9 +515,26 @@ export interface ArbitrationContext {
 
 /**
  * Detects pathological tactical activity that should override an apparent
- * agent success. Mirrors controllerSignalVetoEvaluator's logic but consumes
- * ArbitrationContext directly so the Arbitrator can run it for any intent
- * (not just oracle-decision).
+ * agent success.
+ *
+ * Critical refinement (Sprint 3.3 — corpus run 1 result):
+ * controllerDecisionLog includes BOTH dispatched and suppressed
+ * interventions. Suppressed interventions on success scenarios (knowledge
+ * recall tasks with low entropy) were producing false-positive vetoes.
+ * The differentiator between success and failure scenarios is whether the
+ * agent encountered ACTUAL TOOL FAILURES — failure scenarios have
+ * always-error tools that produce failed observations; success scenarios
+ * (no tools or successful tools) don't.
+ *
+ * The veto now requires THREE conditions:
+ *   1. Pathological controller activity pattern (stall/inject thresholds)
+ *   2. No switch-strategy escalation
+ *   3. AT LEAST ONE failed tool observation in the run's steps (concrete
+ *      evidence the agent's success claim is contradicted by reality)
+ *
+ * This eliminates the false-veto regression on knowledge-recall successes
+ * while preserving the corpus signal on real failures (which always have
+ * failed tool observations).
  */
 function shouldVetoSuccess(ctx: ArbitrationContext): { readonly veto: true; readonly reason: string } | { readonly veto: false } {
   const log = ctx.controllerDecisionLog ?? [];
@@ -538,10 +555,23 @@ function shouldVetoSuccess(ctx: ArbitrationContext): { readonly veto: true; read
     return { veto: false };
   }
 
+  // Concrete evidence: at least one observation step where the tool returned
+  // success=false. Without tool failures, the controller activity is most
+  // likely benign suppression on a clean run.
+  const hasFailedToolObservation = ctx.steps.some(
+    (s) =>
+      s.type === "observation" &&
+      s.metadata?.observationResult?.success === false,
+  );
+  if (!hasFailedToolObservation) {
+    return { veto: false };
+  }
+
   const reasons: string[] = [];
   if (repeatedStall) reasons.push(`${stallCount} stall-detect`);
   if (repeatedInject) reasons.push(`${injectCount} tool-inject`);
   if (stallWithHighEntropy) reasons.push(`stall+entropy=${entropy.toFixed(2)}`);
+  reasons.push("with tool-failure evidence");
 
   return {
     veto: true,
@@ -589,13 +619,26 @@ export function arbitrate(intent: TerminationIntent, ctx: ArbitrationContext): V
         terminatedBy: "kernel_error",
       };
 
-    case "controller-early-stop":
-      // Controller already made a deliberate decision to stop. Trust it.
+    case "controller-early-stop": {
+      // Controller chose to stop. The DISPATCH itself is trustworthy, but
+      // the OUTCOME interpretation depends on whether the run was healthy.
+      // If tool-failure evidence + pathological controller log are present,
+      // the early-stop is "framework giving up" not "task complete" → veto.
+      const veto = shouldVetoSuccess(ctx);
+      if (veto.veto) {
+        return {
+          action: "exit-failure",
+          error: `controller_early_stop_with_failure_evidence: ${veto.reason}`,
+          terminatedBy: "controller_signal_veto",
+          output: intent.output,
+        };
+      }
       return {
         action: "exit-success",
         output: intent.output,
         terminatedBy: `controller_early_stop:${intent.reason}`,
       };
+    }
 
     case "loop-detected": {
       // Loop detection is a controller decision, not an agent claim. But if
@@ -629,10 +672,12 @@ export function arbitrate(intent: TerminationIntent, ctx: ArbitrationContext): V
           terminatedBy: "controller_signal_veto",
         };
       }
+      // Use "end_turn" — react-kernel.ts maps it to the canonical
+      // terminatedBy enum value matching pre-Sprint-3.3 behavior.
       return {
         action: "exit-success",
         output: intent.output,
-        terminatedBy: "fast_path",
+        terminatedBy: "end_turn",
       };
     }
 
@@ -647,30 +692,49 @@ export function arbitrate(intent: TerminationIntent, ctx: ArbitrationContext): V
           terminatedBy: "controller_signal_veto",
         };
       }
+      // Preserve the existing terminatedBy strings for downstream consumers
+      // (react-kernel.ts, tests, telemetry): "final_answer_tool" / "final_answer"
+      // / "end_turn" — the via discriminator picks the legacy name.
+      const terminatedBy =
+        intent.via === "tool"
+          ? "final_answer_tool"
+          : intent.via === "regex"
+            ? "final_answer"
+            : "end_turn";
       return {
         action: "exit-success",
         output: intent.output,
-        terminatedBy: `final_answer:${intent.via}`,
+        terminatedBy,
       };
     }
 
     case "oracle-decision": {
       // Oracle already ran the evaluator chain (including the veto evaluator).
-      // Trust its action — but if the oracle's action is "fail", convert to
-      // exit-failure here so the Verdict shape is uniform.
+      // Use decision.reason for terminatedBy — react-kernel.ts maps these
+      // canonical reason strings ("llm_end_turn", "final_answer_regex",
+      // etc.) to the public terminatedBy enum.
       if (intent.decision.action === "fail") {
         return {
           action: "exit-failure",
           error: intent.decision.reason,
-          terminatedBy: intent.decision.evaluator ?? "oracle",
+          terminatedBy: "controller_signal_veto",
           output: intent.output,
         };
       }
       if (intent.decision.action === "exit") {
+        // Map oracle's evaluator reasons to terminatedBy strings that
+        // react-kernel.ts's existing mapping already understands. Any
+        // reason starting with "content_stable" or "entropy_converged"
+        // is a stability-based exit ⇒ "end_turn" downstream.
+        const reason = intent.decision.reason ?? "oracle";
+        const terminatedBy =
+          reason === "content_stable" || reason.startsWith("entropy_converged")
+            ? "llm_end_turn"
+            : reason;
         return {
           action: "exit-success",
           output: intent.decision.output ?? intent.output,
-          terminatedBy: intent.decision.evaluator ?? intent.decision.reason ?? "oracle",
+          terminatedBy,
         };
       }
       // continue / redirect from the oracle

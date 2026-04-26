@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "capturedAt": "2026-04-26T13:47:09.653Z",
+  "capturedAt": "2026-04-26T14:29:30.971Z",
   "bunVersion": "1.3.10",
   "scenarios": {
     "cf-04-goal-achieved-from-end-turn": {
@@ -263,6 +263,32 @@
         "v4.required_check_present": true,
         "v4.required_check_failed_for_missing": true,
         "v4.reason_names_missing_tool": true
+      }
+    },
+    "cf-24-all-termination-flows-through-arbitrator": {
+      "status": "success",
+      "iterations": 0,
+      "terminatedBy": "unknown",
+      "goalAchieved": null,
+      "toolCallsObserved": [],
+      "interventionsDispatched": [],
+      "errorSwallowedSites": [],
+      "redactorsTriggered": [],
+      "customAssertions": {
+        "act.final_answer.clean_succeeds": true,
+        "act.final_answer.veto_fires_on_corpus_pattern": true,
+        "act.final_answer.veto_silent_when_escalated": true,
+        "act.final_answer.veto_silent_without_tool_failures": true,
+        "act.final_answer.veto_terminatedBy": true,
+        "think.fast_path.clean_succeeds": true,
+        "think.fast_path.veto_fires_on_pathological_log": true,
+        "think.fast_path.terminatedBy_is_end_turn": true,
+        "think.oracle.exit_passes_through": true,
+        "think.oracle.fail_passes_through": true,
+        "think.oracle.fail_terminatedBy_is_veto": true,
+        "reflect.loop_detected.clean_succeeds": true,
+        "framework.max_iterations.is_exit_failure": true,
+        "framework.early_stop.is_trusted_exit_success": true
       }
     }
   }

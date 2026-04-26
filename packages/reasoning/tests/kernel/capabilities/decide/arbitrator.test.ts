@@ -16,11 +16,37 @@ import {
   type ArbitrationContext,
 } from "../../../../src/kernel/capabilities/decide/arbitrator.js";
 import type { KernelState } from "../../../../src/kernel/state/kernel-state.js";
+import type { ReasoningStep } from "../../../../src/types/index.js";
+import type { ObservationResult } from "../../../../src/types/observation.js";
+
+// A failed tool observation — the concrete evidence the veto requires
+// (Sprint 3.3 corpus run 1 refinement: prevents false-positive vetoes
+// on success scenarios that have benign suppressed-dispatch logs).
+const failedToolStep: ReasoningStep = {
+  id: "s-failed" as ReasoningStep["id"],
+  type: "observation",
+  content: "Error: rate limit exceeded",
+  timestamp: new Date(),
+  metadata: {
+    observationResult: {
+      success: false,
+      toolName: "web-search",
+      displayText: "Error: rate limit exceeded",
+      category: "error",
+      resultKind: "error",
+      preserveOnCompaction: true,
+      trustLevel: "untrusted",
+    } as ObservationResult,
+  },
+};
 
 const baseCtx: ArbitrationContext = {
   iteration: 1,
   task: "test",
-  steps: [],
+  // Default to having a failed tool observation so veto-eligibility is
+  // unblocked for the veto-trigger tests. Tests that need to assert
+  // "veto silent on clean runs" override steps to []  explicitly.
+  steps: [failedToolStep],
   toolsUsed: new Set(),
   requiredTools: [],
 };
@@ -105,11 +131,11 @@ describe("arbitrate — controller-early-stop", () => {
 });
 
 describe("arbitrate — fast-path-completed", () => {
-  it("returns exit-success when no controller activity", () => {
+  it("returns exit-success when no controller activity (terminatedBy=end_turn for legacy mapping)", () => {
     const v = arbitrate({ kind: "fast-path-completed", output: "Paris" }, baseCtx);
     expect(v.action).toBe("exit-success");
     if (v.action === "exit-success") {
-      expect(v.terminatedBy).toBe("fast_path");
+      expect(v.terminatedBy).toBe("end_turn");
     }
   });
 
@@ -137,18 +163,25 @@ describe("arbitrate — agent-final-answer (Verdict-Override pattern)", () => {
     );
     expect(v.action).toBe("exit-success");
     if (v.action === "exit-success") {
-      expect(v.terminatedBy).toBe("final_answer:tool");
+      // Backwards-compat naming: tool→final_answer_tool, regex→final_answer,
+      // end-turn→end_turn (matches pre-Sprint-3.3 terminatedBy strings).
+      expect(v.terminatedBy).toBe("final_answer_tool");
     }
   });
 
-  it("preserves the via discriminator in terminatedBy (tool / regex / end-turn)", () => {
+  it("maps via discriminator to legacy terminatedBy strings (backwards compat)", () => {
+    const expectedMap: Record<"tool" | "regex" | "end-turn", string> = {
+      tool: "final_answer_tool",
+      regex: "final_answer",
+      "end-turn": "end_turn",
+    };
     for (const via of ["tool", "regex", "end-turn"] as const) {
       const v = arbitrate(
         { kind: "agent-final-answer", via, output: "x" },
         baseCtx,
       );
       if (v.action === "exit-success") {
-        expect(v.terminatedBy).toBe(`final_answer:${via}`);
+        expect(v.terminatedBy).toBe(expectedMap[via]);
       }
     }
   });
@@ -227,6 +260,40 @@ describe("arbitrate — agent-final-answer (Verdict-Override pattern)", () => {
     );
     expect(v.action).toBe("exit-success");
   });
+
+  // Sprint 3.3 corpus run 1 regression fix (false-positive on success scenarios)
+  it("does NOT veto when stall-detect logged but NO tool failures observed (success-scenario protection)", () => {
+    const v = arbitrate(
+      { kind: "agent-final-answer", via: "tool", output: "Paris" },
+      {
+        ...baseCtx,
+        steps: [], // no tool failures — clean knowledge-recall task
+        controllerDecisionLog: [
+          "stall-detect: low entropy delta",
+          "stall-detect: still low",
+        ],
+      },
+    );
+    expect(v.action).toBe("exit-success");
+  });
+
+  it("DOES veto when stall-detect AND failed tool observations both present (failure pattern)", () => {
+    const v = arbitrate(
+      { kind: "agent-final-answer", via: "tool", output: "best effort" },
+      {
+        ...baseCtx,
+        steps: [failedToolStep], // has tool failure evidence
+        controllerDecisionLog: [
+          "stall-detect: stuck",
+          "stall-detect: still stuck",
+        ],
+      },
+    );
+    expect(v.action).toBe("exit-failure");
+    if (v.action === "exit-failure") {
+      expect(v.error).toContain("tool-failure evidence");
+    }
+  });
 });
 
 describe("arbitrate — loop-detected", () => {
@@ -258,7 +325,7 @@ describe("arbitrate — loop-detected", () => {
 });
 
 describe("arbitrate — oracle-decision passthrough", () => {
-  it("converts oracle 'fail' verdict to exit-failure", () => {
+  it("converts oracle 'fail' verdict to exit-failure with controller_signal_veto terminatedBy", () => {
     const v = arbitrate(
       {
         kind: "oracle-decision",
@@ -276,7 +343,7 @@ describe("arbitrate — oracle-decision passthrough", () => {
     );
     expect(v.action).toBe("exit-failure");
     if (v.action === "exit-failure") {
-      expect(v.terminatedBy).toBe("ControllerSignalVeto");
+      expect(v.terminatedBy).toBe("controller_signal_veto");
       expect(v.error).toContain("controller veto");
     }
   });
