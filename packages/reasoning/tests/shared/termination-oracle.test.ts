@@ -12,7 +12,7 @@ import {
   defaultEvaluators,
   type TerminationContext,
   type TerminationSignalEvaluator,
-} from "../../src/kernel/capabilities/decide/termination-oracle.js";
+} from "../../src/kernel/capabilities/decide/arbitrator.js";
 
 // Helper to build minimal context with overrides
 function makeCtx(overrides: Partial<TerminationContext> = {}): TerminationContext {
@@ -678,7 +678,7 @@ describe("tier-aware ContentStability", () => {
 });
 
 // ── controllerSignalVetoEvaluator (CHANGE A — Verdict-Override) ─────────────
-import { controllerSignalVetoEvaluator } from "../../src/kernel/capabilities/decide/termination-oracle.js";
+import { controllerSignalVetoEvaluator } from "../../src/kernel/capabilities/decide/arbitrator.js";
 
 describe("controllerSignalVetoEvaluator (CHANGE A — Verdict-Override)", () => {
   test("vetoes when ≥2 stall-detect decisions and no switch-strategy escalation", () => {

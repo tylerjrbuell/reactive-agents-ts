@@ -48,7 +48,7 @@ import {
   buildSuccessfulToolCallCounts,
   getMissingRequiredToolsFromSteps,
 } from "../verify/requirement-state.js";
-import { evaluateTermination, defaultEvaluators, type TerminationContext } from "../decide/termination-oracle.js";
+import { evaluateTermination, defaultEvaluators, type TerminationContext } from "../decide/arbitrator.js";
 import { assembleOutput } from "../../../kernel/loop/output-assembly.js";
 import { extractThinking, rescueFromThinking } from "../reason/stream-parser.js";
 import { makeStep } from "../sense/step-utils.js";

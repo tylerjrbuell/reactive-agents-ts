@@ -146,13 +146,13 @@ export {
   evaluateTermination,
   defaultEvaluators,
   controllerSignalVetoEvaluator,
-} from "./kernel/capabilities/decide/termination-oracle.js";
+} from "./kernel/capabilities/decide/arbitrator.js";
 export type {
   TerminationContext,
   TerminationDecision,
   TerminationSignalEvaluator,
   SignalVerdict,
-} from "./kernel/capabilities/decide/termination-oracle.js";
+} from "./kernel/capabilities/decide/arbitrator.js";
 
 // ─── Verifier (Sprint 3.2 — Verify capability promotion) ───
 export {
