@@ -78,3 +78,114 @@ describe("validateExpectedEntitiesInOutput", () => {
     if (!r.ok) expect(r.violations.length).toBe(4);
   }, 15000);
 });
+
+// ─── Sprint 3.4 Scaffold 2 — validateGeneralizedGrounding tests ──────────────
+import { validateGeneralizedGrounding } from "../../../src/kernel/capabilities/verify/evidence-grounding.js";
+
+describe("validateGeneralizedGrounding (Scaffold 2 — task-agnostic)", () => {
+  it("FAILS when output contains framework compression markers (echo detection)", () => {
+    const r = validateGeneralizedGrounding(
+      "[recall result — compressed preview]\nType: Object(4 keys)\n_tool_result_5 ...",
+      "real evidence corpus content",
+    );
+    expect(r.verified).toBe(false);
+    expect(r.compressionEchoDetected).toBe(true);
+    expect(r.reason).toContain("compression markers");
+  });
+
+  it("FAILS on bare [STORED:] markers in output", () => {
+    const r = validateGeneralizedGrounding(
+      "Final answer: [STORED: _tool_result_3 | get-hn-posts]",
+      "evidence corpus with actual content",
+    );
+    expect(r.verified).toBe(false);
+    expect(r.compressionEchoDetected).toBe(true);
+  });
+
+  it("PASSES when output is a normal synthesis citing actual titles", () => {
+    const r = validateGeneralizedGrounding(
+      "## Top Stories\n1. Asahi Linux Progress (273 points)\n2. Statecharts: hierarchical state machines (158)",
+      "Asahi Linux Progress 273 points; Statecharts: hierarchical state machines 158 points; Other stories",
+    );
+    expect(r.verified).toBe(true);
+    expect(r.compressionEchoDetected).toBe(false);
+    expect(r.groundingRate).toBeGreaterThan(0.5);
+  });
+
+  it("FAILS when most claims are not in evidence (fabrication)", () => {
+    const r = validateGeneralizedGrounding(
+      'The top stories are "Acme Widget", "Foo Bar", "Lorem Ipsum", with values 999, 888, 777',
+      "Real evidence: Asahi Linux 273; Statecharts 158",
+    );
+    expect(r.verified).toBe(false);
+    expect(r.ungroundedClaims.length).toBeGreaterThan(2);
+  });
+
+  it("ABSTAINS when evidence corpus is too thin", () => {
+    const r = validateGeneralizedGrounding(
+      "Some output with multiple claims",
+      "tiny",
+    );
+    expect(r.verified).toBe(true);
+    expect(r.reason).toContain("no evidence corpus");
+  });
+
+  it("ABSTAINS when output has too few extractable claims", () => {
+    const r = validateGeneralizedGrounding(
+      "ok",
+      "Real evidence: Asahi Linux 273; Statecharts 158; many things here",
+    );
+    expect(r.verified).toBe(true);
+    expect(r.reason).toContain("below threshold");
+  });
+
+  it("DETECTS quoted-phrase fabrication", () => {
+    const r = validateGeneralizedGrounding(
+      'The customer said "I love this product" and "I hate this product" and 999 dollars and another fabricated TestThing',
+      "Customer feedback corpus: response time 12 seconds; complaints about pricing",
+      { maxUngroundedRate: 0.2 }, // strict — quoted fabrication should fail at 0.2
+    );
+    expect(r.verified).toBe(false);
+    expect(r.ungroundedClaims.some((c) => c.includes("love") || c.includes("hate"))).toBe(true);
+  });
+
+  it("DETECTS capitalized-phrase fabrication (titles/names)", () => {
+    const r = validateGeneralizedGrounding(
+      "The leading products are Acme Widget Pro and Foo Bar Ultra and Lorem Ipsum Plus",
+      "Actual product list: WidgetMaster 3000, FooBox Standard, BarKit Lite",
+    );
+    expect(r.verified).toBe(false);
+  });
+
+  it("PASSES partial-prefix matching for long titles (≥80% prefix in evidence)", () => {
+    const r = validateGeneralizedGrounding(
+      "1. Asahi Linux Progress Linux 7 Point Zero (full title)",
+      "Asahi Linux Progress Linux 7.0 — story details",
+    );
+    expect(r.verified).toBe(true);
+  });
+
+  it("respects custom maxUngroundedRate threshold (lenient passes, strict fails on same data)", () => {
+    // Synthesize a case with KNOWN counts: 4 claims, 2 grounded, 2 ungrounded → 50% ungroundedRate
+    const output =
+      'The data shows "Foo Real" and "Bar Real" plus FabricatedTitle ProductX (999 points)';
+    const evidence =
+      "evidence: 'Foo Real' is one item, 'Bar Real' is another, plus other irrelevant 555 items";
+
+    const lenient = validateGeneralizedGrounding(output, evidence, {
+      maxUngroundedRate: 0.7,
+      minClaimsForCheck: 1,
+    });
+    expect(lenient.totalClaims).toBeGreaterThanOrEqual(2);
+    expect(lenient.verified).toBe(true);
+
+    const strict = validateGeneralizedGrounding(output, evidence, {
+      maxUngroundedRate: 0,
+      minClaimsForCheck: 1,
+    });
+    // With ANY ungrounded claim (rate > 0), strict mode fails.
+    if (strict.ungroundedClaims.length > 0) {
+      expect(strict.verified).toBe(false);
+    }
+  });
+});

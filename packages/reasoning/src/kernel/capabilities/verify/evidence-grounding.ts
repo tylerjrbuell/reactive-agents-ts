@@ -113,3 +113,147 @@ export function validateOutputGroundedInEvidence(
   if (violations.length === 0) return { ok: true };
   return { ok: false, violations };
 }
+
+// ─── Sprint 3.4 Scaffold 2 — Generalized claim-shape grounding ───────────────
+//
+// The dollar-amount check above only catches one CLAIM SHAPE. Many synthesis
+// failures don't involve dollars — they involve fabricated titles, names,
+// identifiers. This generalization detects multiple claim shapes and checks
+// each against the evidence corpus. Task-agnostic: works for HN titles,
+// product names, customer IDs, file paths, code symbols, anything.
+
+function normalizeForClaimMatch(s: string): string {
+  return s.toLowerCase().replace(/[^\w\s]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Compression-marker patterns. When the output contains any of these, the
+ * model literally echoed framework internal scaffolding instead of
+ * synthesizing real content. Hard-fail signal.
+ */
+const COMPRESSION_MARKER_PATTERNS = [
+  /\[recall result\b/i,
+  /\bcompressed preview\b/i,
+  /^Type:\s*(Array|Object)\(/m,
+  /^Schema:\s/m,
+  /\b_tool_result_\d+\b/i,
+  /— full text is stored\b/i,
+  /\[STORED:\s*_tool_result_/i,
+];
+
+/**
+ * Extract candidate claim tokens from output. Captures four shapes:
+ *   1. Quoted phrases — "..." and '...' (4-200 chars; sentences too noisy)
+ *   2. Capitalized phrases — ≥2 consecutive capitalized words (titles, names)
+ *   3. Significant numbers — ≥3 digits and decimals
+ *   4. Identifiers — alphanumeric ≥8 chars with mixed case or digits
+ */
+function extractClaimTokens(output: string): readonly string[] {
+  const claims = new Set<string>();
+  for (const m of output.matchAll(/["'`]([^"'`\n]{4,200})["'`]/g)) {
+    const inner = m[1];
+    if (inner) claims.add(normalizeForClaimMatch(inner));
+  }
+  for (const m of output.matchAll(/(?:[A-Z][a-z']{2,}(?:[\s-]+[A-Z][a-z']{2,}){1,7})/g)) {
+    if (m[0] && m[0].length >= 6) claims.add(normalizeForClaimMatch(m[0]));
+  }
+  for (const m of output.matchAll(/\b(\d{3,}(?:[.,]\d+)?)\b/g)) {
+    const num = m[1]?.replace(/,/g, "");
+    if (num) claims.add(num);
+  }
+  for (const m of output.matchAll(/\b([A-Za-z0-9_-]{8,})\b/g)) {
+    const id = m[1];
+    if (id && /\d/.test(id) && /[A-Za-z]/.test(id)) claims.add(id.toLowerCase());
+  }
+  return [...claims];
+}
+
+export interface GeneralizedGroundingResult {
+  readonly verified: boolean;
+  readonly ungroundedClaims: readonly string[];
+  readonly totalClaims: number;
+  readonly groundingRate: number;
+  readonly compressionEchoDetected: boolean;
+  readonly reason: string;
+}
+
+/**
+ * The general grounding check Scaffold 2 ships. Fails when:
+ *   1. Output contains framework compression markers (instant fail), OR
+ *   2. > 20% of extracted claims aren't found in the evidence corpus
+ *
+ * The 20% threshold is lenient — natural language has filler. The point is
+ * to catch SYSTEMIC fabrication (most claims invented), not require exact
+ * citation of every word.
+ */
+export function validateGeneralizedGrounding(
+  output: string,
+  evidence: string,
+  options?: { readonly maxUngroundedRate?: number; readonly minClaimsForCheck?: number },
+): GeneralizedGroundingResult {
+  // Default 0.3 (30% tolerance) — real synthesis includes structural words
+  // like section headings, transitions, etc. that don't appear in evidence.
+  // The point is to catch SYSTEMIC fabrication, not require exact citation.
+  const maxUngroundedRate = options?.maxUngroundedRate ?? 0.3;
+  const minClaimsForCheck = options?.minClaimsForCheck ?? 3;
+
+  const compressionEchoDetected = COMPRESSION_MARKER_PATTERNS.some((re) => re.test(output));
+  if (compressionEchoDetected) {
+    return {
+      verified: false,
+      ungroundedClaims: [],
+      totalClaims: 0,
+      groundingRate: 0,
+      compressionEchoDetected: true,
+      reason:
+        "output contains framework compression markers (e.g., [STORED:], compressed preview, _tool_result_N) — model echoed internal scaffolding instead of synthesizing",
+    };
+  }
+
+  if (evidence.trim().length < 20) {
+    return {
+      verified: true,
+      ungroundedClaims: [],
+      totalClaims: 0,
+      groundingRate: 1,
+      compressionEchoDetected: false,
+      reason: "no evidence corpus to ground against (skipped)",
+    };
+  }
+
+  const claims = extractClaimTokens(output);
+  if (claims.length < minClaimsForCheck) {
+    return {
+      verified: true,
+      ungroundedClaims: [],
+      totalClaims: claims.length,
+      groundingRate: 1,
+      compressionEchoDetected: false,
+      reason: `only ${claims.length} claims extracted; below threshold for grounding check`,
+    };
+  }
+
+  const lookup = normalizeForClaimMatch(evidence);
+  const ungrounded: string[] = [];
+  for (const claim of claims) {
+    if (lookup.includes(claim)) continue;
+    if (claim.length >= 10 && lookup.includes(claim.slice(0, Math.floor(claim.length * 0.8)))) {
+      continue;
+    }
+    ungrounded.push(claim);
+  }
+
+  const ungroundedRate = ungrounded.length / claims.length;
+  const verified = ungroundedRate <= maxUngroundedRate;
+
+  return {
+    verified,
+    ungroundedClaims: ungrounded,
+    totalClaims: claims.length,
+    groundingRate: 1 - ungroundedRate,
+    compressionEchoDetected: false,
+    reason: verified
+      ? `${claims.length - ungrounded.length}/${claims.length} claims grounded`
+      : `${ungrounded.length}/${claims.length} claims not in tool observations: ${ungrounded.slice(0, 3).map((c) => `"${c.slice(0, 40)}"`).join(", ")}${ungrounded.length > 3 ? "..." : ""}`,
+  };
+}

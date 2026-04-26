@@ -33,6 +33,7 @@ import { isSatisfied } from "./quality-utils.js";
 import {
   buildEvidenceCorpusFromSteps,
   validateOutputGroundedInEvidence,
+  validateGeneralizedGrounding,
 } from "./evidence-grounding.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -186,9 +187,8 @@ export const defaultVerifier: Verifier = {
           : "no explicit completion-claim phrasing detected (informational)",
       });
 
-      // Check 5: evidence-grounding
-      // For terminal outputs, validate that dollar-amount claims trace back
-      // to tool observations. Skip when there's no evidence to ground in.
+      // Check 5: evidence-grounding (legacy: dollar amounts only)
+      // Kept for backward compat — financial-task-specific signal.
       if (ctx.priorSteps.length > 0) {
         const corpus = buildEvidenceCorpusFromSteps(ctx.priorSteps);
         if (corpus.length > 0) {
@@ -202,6 +202,20 @@ export const defaultVerifier: Verifier = {
             reason: grounding.ok
               ? undefined
               : `ungrounded amounts: ${grounding.violations.join(", ")}`,
+          });
+
+          // Check 6: Sprint 3.4 Scaffold 2 — generalized grounding.
+          // Catches the WHOLE class of fabrication (titles, names, IDs, not just
+          // dollar amounts) AND the framework-compression-marker echo failure
+          // mode. Task-agnostic: works for any synthesis task.
+          const generalGrounding = validateGeneralizedGrounding(
+            ctx.content,
+            corpus,
+          );
+          checks.push({
+            name: "synthesis-grounded",
+            passed: generalGrounding.verified,
+            reason: generalGrounding.verified ? undefined : generalGrounding.reason,
           });
         }
       }
