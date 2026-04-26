@@ -154,6 +154,18 @@ export type {
   SignalVerdict,
 } from "./kernel/capabilities/decide/termination-oracle.js";
 
+// ─── Verifier (Sprint 3.2 — Verify capability promotion) ───
+export {
+  defaultVerifier,
+  contextFromObservation,
+} from "./kernel/capabilities/verify/verifier.js";
+export type {
+  Verifier,
+  VerificationContext,
+  VerificationCheck,
+  VerificationResult,
+} from "./kernel/capabilities/verify/verifier.js";
+
 // ─── Structured Output ───
 export { inferRequiredTools, classifyToolRelevance } from "./structured-output/infer-required-tools.js";
 export type { ToolSummary, InferRequiredToolsConfig, ToolClassificationResult } from "./structured-output/infer-required-tools.js";

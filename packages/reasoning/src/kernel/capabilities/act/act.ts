@@ -26,6 +26,11 @@ import {
 } from "@reactive-agents/tools";
 import { makeStep } from "../sense/step-utils.js";
 import { executeNativeToolCall, makeObservationResult, extractObservationFacts } from "../act/tool-execution.js";
+// Sprint 3.2 — Verifier promotion: every effector output flows through
+// defaultVerifier.verify() so the structured VerificationResult is
+// attached to the observation step's metadata. Future sprints (Arbitrator
+// in S3.3, Reflection in S3.4) read this signal.
+import { defaultVerifier, contextFromObservation } from "../verify/verifier.js";
 import {
   transitionState,
   type KernelState,
@@ -639,13 +644,27 @@ export function handleActing(
               }
             }
 
+            const obsResult = makeObservationResult(result.toolName, result.execResult.success, obsContent, {
+              delegatedToolsUsed: result.execResult.delegatedToolsUsed,
+            });
+            // Sprint 3.2 — Verifier promotion: every standard tool execution
+            // gets a structured VerificationResult attached. Read by Arbitrator
+            // (S3.3) + Reflection (S3.4) downstream consumers.
+            const verification = defaultVerifier.verify(
+              contextFromObservation({
+                observation: obsResult,
+                task: input.task,
+                priorSteps: allSteps,
+                requiredTools: input.requiredTools,
+                toolsUsed: newToolsUsed,
+              }),
+            );
             const obsStep = makeStep("observation", obsContent, {
               toolCallId: result.callId,
               storedKey: result.execResult.storedKey,
               extractedFact: result.execResult.extractedFact,
-              observationResult: makeObservationResult(result.toolName, result.execResult.success, obsContent, {
-                delegatedToolsUsed: result.execResult.delegatedToolsUsed,
-              }),
+              observationResult: obsResult,
+              verification,
             });
 
             // Pass state with the action step as the last entry so

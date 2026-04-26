@@ -41,6 +41,15 @@ export const StepMetadataSchema = Schema.Struct({
   toolCallId: Schema.optional(Schema.String),
   /** Distilled key fact extracted from raw tool results — surfaced in the system prompt Prior work section */
   extractedFact: Schema.optional(Schema.String),
+  /**
+   * Sprint 3.2 — Verifier output for this step. Attached by act.ts after
+   * every effector output via defaultVerifier.verify(). Read by Arbitrator
+   * (S3.3) and Reflection (S3.4) to make decisions consistent with
+   * verification verdicts. Untyped here to avoid a cyclic schema import;
+   * runtime callers cast to VerificationResult from
+   * @reactive-agents/reasoning.
+   */
+  verification: Schema.optional(Schema.Unknown),
 });
 export type StepMetadata = typeof StepMetadataSchema.Type;
 

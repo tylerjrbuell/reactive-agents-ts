@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "capturedAt": "2026-04-26T13:33:41.833Z",
+  "capturedAt": "2026-04-26T13:47:09.653Z",
   "bunVersion": "1.3.10",
   "scenarios": {
     "cf-04-goal-achieved-from-end-turn": {
@@ -237,6 +237,32 @@
         "act.planNextMoveBatches_is_function": true,
         "curator.defaultContextCurator_curate_is_function": true,
         "curator.RECENT_OBSERVATIONS_HEADER_is_string": true
+      }
+    },
+    "cf-23-verifier-runs-after-effector": {
+      "status": "success",
+      "iterations": 0,
+      "terminatedBy": "unknown",
+      "goalAchieved": null,
+      "toolCallsObserved": [],
+      "interventionsDispatched": [],
+      "errorSwallowedSites": [],
+      "redactorsTriggered": [],
+      "customAssertions": {
+        "verifier.is_callable": true,
+        "context_helper.is_callable": true,
+        "v1.verified_true": true,
+        "v1.action_preserved": true,
+        "v1.has_action_success_check": true,
+        "v1.has_summary": true,
+        "v2.verified_false": true,
+        "v2.action_success_failed": true,
+        "v2.summary_names_failed_check": true,
+        "v3.verified_false": true,
+        "v3.empty_content_flagged": true,
+        "v4.required_check_present": true,
+        "v4.required_check_failed_for_missing": true,
+        "v4.reason_names_missing_tool": true
       }
     }
   }
