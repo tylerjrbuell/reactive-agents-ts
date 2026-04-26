@@ -213,10 +213,11 @@ export function handleThinking(
     const filteredToolSchemas = buildToolSchemas(state, input, profile, promptSchemas);
 
     // ContextCurator (S2.5): sole authority for the per-iteration prompt.
-    // defaultContextCurator currently delegates to ContextManager.build so
-    // behavior is byte-identical; the indirection makes "single author" a
-    // structural property — alternate curators (compression-aware,
-    // embedding-aware) can be swapped without touching think.ts.
+    // - Slice A: port + default wrapper (byte-identical with ContextManager).
+    // - Slice B: curator owns the trust-aware "Recent tool observations" section.
+    // - Slice C: profile.recentObservationsLimit threads through here so agents
+    //   can opt-in via profileOverrides without touching kernel internals.
+    //   Defaults to 0 across all tiers → off by default, preserves prior shape.
     const {
       systemPrompt: systemPromptText,
       messages: conversationMessages,
@@ -224,6 +225,7 @@ export function handleThinking(
       availableTools: promptSchemas,
       systemPromptBody: effectiveSystemPrompt,
       toolElaboration: input.toolElaboration,
+      includeRecentObservations: profile.recentObservationsLimit ?? 0,
     });
 
     // ── TextParseDriver: inject format instructions into system prompt ────────

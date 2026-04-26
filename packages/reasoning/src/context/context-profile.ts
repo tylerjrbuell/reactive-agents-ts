@@ -34,6 +34,19 @@ export const ContextProfileSchema = Schema.Struct({
   temperature: Schema.optional(Schema.Number),
   /** Maximum context window tokens for this tier. Used by pressure gates and message compaction. */
   maxTokens: Schema.optional(Schema.Number),
+  /**
+   * S2.5 Slice C — opt-in production wiring for the curator's trust-aware
+   * "Recent tool observations:" section. When > 0, the kernel asks
+   * defaultContextCurator to append the last N observation steps (untrusted
+   * wrapped in <tool_output>, trusted plain) to the system prompt.
+   *
+   * Default 0 across all tiers — preserves byte-identical Slice A/B behavior.
+   * Agents enable per-run via profileOverrides: { recentObservationsLimit: 5 }.
+   * Tier defaults stay at 0 deliberately — turning this on globally would
+   * change every prompt's token budget, which is a per-agent decision, not
+   * a per-tier one.
+   */
+  recentObservationsLimit: Schema.optional(Schema.Number),
 });
 export type ContextProfile = typeof ContextProfileSchema.Type;
 

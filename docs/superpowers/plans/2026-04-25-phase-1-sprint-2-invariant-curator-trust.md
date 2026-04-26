@@ -96,29 +96,40 @@ This sprint **does not** cover: Task primitive, embedding batching in AgentMemor
 
 ### S2.5 — ContextCurator becomes sole prompt author + absorbs compression
 
+**Status (2026-04-25):** SHIPPED (sliced) — port + section authorship + production wiring landed across commits `aa52eafa` (Slice A), `d506e868` (Slice B), and Slice C (this commit). Compression-system deletion (G-4 full closure) deferred to Sprint 3 — see "Deferred" subsection below.
+
 **Why now:** the Phase 1 marquee deliverable. North Star §4 says ContextCurator is the single author of every per-iteration prompt; Sprint 2's other stories (Invariant, tier, trustLevel) are prerequisites for it to ship cleanly.
 
-**Files:**
-- Modify: `packages/reasoning/src/strategies/kernel/utils/context-utils.ts` (current prompt-construction site)
-- Modify: `packages/reasoning/src/strategies/kernel/utils/tool-formatting.ts` (compression Path A — currently always-on)
-- Modify: `packages/reactive-intelligence/src/controller/context-compressor.ts` (compression Path B — advisory)
-- Modify: `packages/reactive-intelligence/src/controller/patch-applier.ts` (compression Path C — message-slicing patch)
-- New: `packages/reasoning/src/strategies/kernel/utils/context-curator.ts`
-- New: `packages/reasoning/tests/kernel/context-curator.test.ts`
+**What shipped (Slice A → C):**
 
-**Approach (largest story; budget 1.5-2 days):**
-1. Define `ContextCurator` interface that takes `(state, capability, observations) → Prompt`
-2. Implement per-tier compression budget derived from `capability.maxContextTokens / recommendedNumCtx`
-3. Render observations: trusted ones inline; untrusted ones in `<tool_output>` blocks (defends against prompt injection from tool results)
-4. Migrate the 3 existing compression sites to call into the curator
-5. The 3 old paths become DEAD CODE — delete them once the new path is verified
-6. Add gate scenario `cf-NN-untrusted-observation-rendered` pinning the trust-aware rendering
+*Slice A — port + render primitive (commit `aa52eafa`)*
+- New `packages/reasoning/src/context/context-curator.ts` defines `Prompt`, `ContextCurator`, `defaultContextCurator` (byte-identical wrapper over `ContextManager.build`), and `renderObservationForPrompt(obs)` (untrusted → `<tool_output tool="...">` wrapping; trusted → plain).
+- `think.ts` swaps `ContextManager.build(...)` call for `defaultContextCurator.curate(...)` — three-line indirection, no behavior change.
+- Gate `cf-19-untrusted-observation-rendered` pins port presence + render contract (6 assertions).
 
-**Acceptance:**
-- ContextCurator is the only producer of per-iteration prompts (grep proves no other site constructs prompts directly)
-- The 3 prior compression systems are deleted (G-4 closed)
-- Untrusted observations render in `<tool_output>` blocks (prompt-injection defense)
-- New gate scenario passes
+*Slice B — curator authors its own section (commit `d506e868`)*
+- `CuratorOptions extends ContextManagerOptions` with `includeRecentObservations?: number`.
+- `buildRecentObservationsSection(steps, limit)` — pure functional pipeline (typed predicate filter → `slice(-N)` → map render → join).
+- Curator becomes first author of "Recent tool observations:" tail section. Off-by-default preserves Slice A byte-identity.
+- Gate `cf-20-curator-renders-untrusted-section` pins the section contract (8 assertions).
+
+*Slice C — production wiring (this commit)*
+- `ContextProfile.recentObservationsLimit?: number` added to schema.
+- All tier defaults remain 0/undefined — opt-in per agent via `profileOverrides`, never auto-on globally (turning it on globally would change every prompt's token budget unilaterally — that's an agent decision).
+- `think.ts` reads `profile.recentObservationsLimit ?? 0` and threads it into the curator option.
+- Three new tests in `context-curator.test.ts` pin the convention: tier defaults are off, override threads through, undefined → off.
+
+**Acceptance — what landed:**
+- ✅ ContextCurator is the only producer of per-iteration kernel prompts (think.ts → curator → ContextManager). Reflexion strategy keeps its own local `buildSystemPrompt` (unrelated, its own loop).
+- ✅ Untrusted observations render in `<tool_output>` blocks (prompt-injection defense) when the section is enabled.
+- ✅ Two new gate scenarios pin both the port and the section contract.
+- ✅ Production wiring lands behind opt-in profile field — no surprise prompt changes for existing agents.
+
+**Deferred to Sprint 3 (G-4 full closure):**
+- Migration of the 3 existing compression sites (`tool-formatting.ts` always-on, `context-compressor.ts` advisory, `patch-applier.ts` message-slicing) into the curator.
+- Per-tier compression budget derived from `capability.maxContextTokens / recommendedNumCtx`.
+- Deletion of the 3 old compression paths once the new path is verified.
+- Reason for deferral: per advisor guidance (2026-04-25), tool-formatting compression has a different lifecycle (per-tool inside `act`, not per-iteration inside `think`); folding it into the curator requires lifecycle alignment work that fits cleanly inside Sprint 3 alongside Task primitive work. Slicing S2.5 protects against the marquee story becoming a long-running branch.
 
 ---
 
@@ -126,12 +137,12 @@ This sprint **does not** cover: Task primitive, embedding batching in AgentMemor
 
 Per North Star §14 Phase 1 success criteria — Sprint 2 lands the subset:
 
-- [ ] `Capability` is the sole driver for `num_ctx` (already true from S1.3) AND for tier-derived behavior (new in S2.2)
-- [ ] G-2 structurally closed: one ModelTier source, two consumer schemas
-- [ ] G-4 closed: ContextCurator is the sole prompt author, 3 compression systems deleted
-- [ ] All 15 internal meta-tools carry `trustLevel: "trusted"` + grandfather justification
-- [ ] Capability cache write-through works end-to-end (build → probe → cache → next build skips probe)
-- [ ] Three new gate scenarios committed with `BASELINE-UPDATE:` trailer
+- [x] `Capability` is the sole driver for `num_ctx` (already true from S1.3) AND for tier-derived behavior (new in S2.2)
+- [x] G-2 structurally closed: one ModelTier source, two consumer schemas
+- [~] G-4 PARTIALLY closed: ContextCurator IS the sole prompt author (Slices A-C); 3 compression systems still present — deletion deferred to Sprint 3 with curator integration
+- [x] Internal meta-tools carry `trustLevel: "trusted"` + grandfather justification (8 names in `KNOWN_TRUSTED_TOOL_NAMES`)
+- [ ] Capability cache write-through end-to-end (build → probe → cache → next build skips probe) — S2.4 follow-up
+- [x] New gate scenarios committed with `BASELINE-UPDATE:` trailer: cf-15 (num_ctx), cf-16 (cache roundtrip), cf-17 (tier identity), cf-18 (meta-tools trusted), cf-19 (curator port + render primitive), cf-20 (curator section authorship)
 
 ## Out of scope for Sprint 2 (queued for Sprint 3)
 

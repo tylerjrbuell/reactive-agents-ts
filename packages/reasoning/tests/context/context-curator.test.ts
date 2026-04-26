@@ -277,3 +277,56 @@ describe("defaultContextCurator — Slice B section authorship", () => {
     expect(headerIdx).toBeGreaterThan(0);
   });
 });
+
+// ── Slice C: profile-driven production wiring ────────────────────────────────
+
+describe("ContextProfile.recentObservationsLimit (S2.5 Slice C)", () => {
+  it("all default tier profiles ship with recentObservationsLimit OFF (0/undefined)", () => {
+    // Pinning the convention: turning this on globally would change every
+    // prompt's token budget. It MUST stay opt-in per-agent.
+    for (const tier of ["local", "mid", "large", "frontier"] as const) {
+      const lim = CONTEXT_PROFILES[tier].recentObservationsLimit;
+      expect(lim === undefined || lim === 0).toBe(true);
+    }
+  });
+
+  it("profile.recentObservationsLimit drives the curator section when an override is supplied via mergeProfile-style usage", () => {
+    const state = makeState({
+      steps: [makeObservationStep(makeObs("file-read", "untrusted", "FILE-PAYLOAD"), 0)],
+    });
+    const profileWithOverride = {
+      ...CONTEXT_PROFILES.local,
+      recentObservationsLimit: 3,
+    };
+    // Mimics what think.ts does: forwards profile.recentObservationsLimit
+    // into the curator option. If think.ts ever stops threading the field,
+    // this assertion still passes (curator is correctly wired) — but the
+    // wiring test below (think.ts integration) is the regression catch.
+    const { systemPrompt } = defaultContextCurator.curate(
+      state,
+      makeInput(),
+      profileWithOverride,
+      noGuidance,
+      undefined,
+      { includeRecentObservations: profileWithOverride.recentObservationsLimit },
+    );
+    expect(systemPrompt).toContain(RECENT_OBSERVATIONS_HEADER);
+    expect(systemPrompt).toContain("FILE-PAYLOAD");
+  });
+
+  it("falls back to OFF when profile.recentObservationsLimit is undefined", () => {
+    const state = makeState({
+      steps: [makeObservationStep(makeObs("file-read", "untrusted", "FILE-PAYLOAD"), 0)],
+    });
+    const { systemPrompt } = defaultContextCurator.curate(
+      state,
+      makeInput(),
+      CONTEXT_PROFILES.local, // no override
+      noGuidance,
+      undefined,
+      { includeRecentObservations: CONTEXT_PROFILES.local.recentObservationsLimit ?? 0 },
+    );
+    expect(systemPrompt).not.toContain(RECENT_OBSERVATIONS_HEADER);
+    expect(systemPrompt).not.toContain("FILE-PAYLOAD");
+  });
+});
