@@ -145,6 +145,12 @@ export interface KernelMeta {
   /** Which resolver dialect tier fired for the most recent tool call (if any). */
   readonly lastDialectObserved?: string;
 
+  // ── Arbitrator escalation (Sprint 3.3 — Sole Termination Authority) ──
+  /** Strategy the Arbitrator chose to escalate to via its "escalate" Verdict. */
+  readonly escalateTo?: string;
+  /** Reason the Arbitrator emitted with the escalate Verdict. */
+  readonly escalationReason?: string;
+
 }
 
 // ── KernelState — Immutable, serializable reasoning state ────────────────────

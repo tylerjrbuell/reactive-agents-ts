@@ -154,6 +154,19 @@ export type {
   SignalVerdict,
 } from "./kernel/capabilities/decide/arbitrator.js";
 
+// ─── Arbitrator — Sole Termination Authority (Sprint 3.3 — closes G-5) ───
+export {
+  arbitrate,
+  applyTermination,
+  arbitrateAndApply,
+  arbitrationContextFromState,
+} from "./kernel/capabilities/decide/arbitrator.js";
+export type {
+  TerminationIntent,
+  Verdict,
+  ArbitrationContext,
+} from "./kernel/capabilities/decide/arbitrator.js";
+
 // ─── Verifier (Sprint 3.2 — Verify capability promotion) ───
 export {
   defaultVerifier,

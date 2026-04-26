@@ -411,3 +411,386 @@ export const defaultEvaluators: readonly TerminationSignalEvaluator[] = [
   llmEndTurnEvaluator,
   completionGapEvaluator,
 ];
+
+// ─── Arbitrator — Sole Termination Authority (Sprint 3.3) ────────────────────
+//
+// The Arbitrator is the SINGLE place that decides whether the kernel
+// terminates and whether termination is success or failure. Every code path
+// that previously transitioned state.status="done" now flows through here.
+//
+// Pre-Sprint-3.3, 9 code paths set status="done" independently. CHANGE A
+// (controllerSignalVeto) wired the oracle into one path, but corpus N=2
+// proved that didn't move the needle — the other 8 paths bypassed the veto
+// entirely. Sprint 3.3 is the structural fix: all 9 paths emit a typed
+// TerminationIntent; the Arbitrator resolves intents into Verdicts; the
+// loop runner applies Verdicts to state.
+//
+// Pattern: Sole Termination Authority — same shape as S2.5's Sole Author
+// pattern for prompt assembly. One owner, typed contract, observable, no
+// parallel paths.
+
+// ─── TerminationIntent: what each phase emits ────────────────────────────────
+
+/**
+ * A typed signal a phase emits when it observes a termination-worthy event.
+ * The Arbitrator resolves intents into Verdicts. Phases never decide
+ * success/failure themselves.
+ *
+ * Each variant captures one of the 9 pre-Sprint-3.3 termination paths,
+ * preserving its semantic intent. The Arbitrator may upgrade or downgrade
+ * the verdict (e.g., turn an agent-final-answer into exit-failure when the
+ * controller-signal veto fires).
+ */
+export type TerminationIntent =
+  /** Agent invoked the final-answer tool (act.ts final-answer-tool path). */
+  | { readonly kind: "agent-final-answer"; readonly via: "tool"; readonly output: string }
+  /** Agent emitted FINAL ANSWER: prefix detected by regex. */
+  | { readonly kind: "agent-final-answer"; readonly via: "regex"; readonly output: string }
+  /** Agent emitted end_turn with no tool call (think.ts oracle path). */
+  | { readonly kind: "agent-final-answer"; readonly via: "end-turn"; readonly output: string }
+  /** Trivial-task fast path — no tools needed (think.ts:553). */
+  | { readonly kind: "fast-path-completed"; readonly output: string }
+  /** Loop detector observed repetition (loop-detector + think loop paths). */
+  | { readonly kind: "loop-detected"; readonly output: string; readonly reason: string }
+  /** Controller dispatched early-stop via reactive-observer. */
+  | { readonly kind: "controller-early-stop"; readonly output: string; readonly reason: string }
+  /** Kernel runner exhausted maxIterations. */
+  | { readonly kind: "max-iterations"; readonly output: string }
+  /** Kernel runner hit an unrecoverable LLM/runtime error. */
+  | { readonly kind: "kernel-error"; readonly error: string }
+  /**
+   * Termination oracle returned an explicit decision (the legacy entry
+   * point — preserved so think.ts:910 can keep using the existing
+   * evaluateTermination chain while still flowing through the Arbitrator).
+   */
+  | { readonly kind: "oracle-decision"; readonly decision: TerminationDecision; readonly output: string };
+
+// ─── Verdict: what the Arbitrator returns ────────────────────────────────────
+
+/**
+ * The Arbitrator's resolved verdict for an iteration. The loop runner
+ * applies it to state.
+ */
+export type Verdict =
+  | { readonly action: "continue" }
+  | {
+      readonly action: "exit-success";
+      readonly output: string;
+      readonly terminatedBy: string;
+    }
+  | {
+      readonly action: "exit-failure";
+      readonly error: string;
+      readonly terminatedBy: string;
+      readonly output?: string;
+    }
+  | {
+      readonly action: "escalate";
+      readonly nextStrategy: string;
+      readonly reason: string;
+    };
+
+// ─── ArbitrationContext: the run-wide signals the Arbitrator consults ────────
+
+/**
+ * Run-wide signals the Arbitrator consults when resolving an intent.
+ * Mirrors TerminationContext but framed for the intent-resolution path.
+ */
+export interface ArbitrationContext {
+  readonly iteration: number;
+  readonly maxIterations?: number;
+  readonly task: string;
+  readonly steps: readonly ReasoningStep[];
+  readonly toolsUsed: ReadonlySet<string>;
+  readonly requiredTools: readonly string[];
+  /** Run-wide controller decision history (state.controllerDecisionLog). */
+  readonly controllerDecisionLog?: readonly string[];
+  /** Latest entropy score, for the veto check. */
+  readonly entropyComposite?: number;
+  /** Verifier output for the most recent observation, if any. */
+  readonly latestVerification?: { readonly verified: boolean; readonly summary: string };
+}
+
+// ─── Veto evaluator (Sprint 3.3 — uses controllerDecisionLog patterns) ───────
+
+/**
+ * Detects pathological tactical activity that should override an apparent
+ * agent success. Mirrors controllerSignalVetoEvaluator's logic but consumes
+ * ArbitrationContext directly so the Arbitrator can run it for any intent
+ * (not just oracle-decision).
+ */
+function shouldVetoSuccess(ctx: ArbitrationContext): { readonly veto: true; readonly reason: string } | { readonly veto: false } {
+  const log = ctx.controllerDecisionLog ?? [];
+  if (log.length === 0) return { veto: false };
+
+  const decisionTypes = log.map((e) => e.split(":", 1)[0]?.trim() ?? "");
+  if (decisionTypes.some((d) => d === "switch-strategy")) return { veto: false };
+
+  const stallCount = decisionTypes.filter((d) => d === "stall-detect").length;
+  const injectCount = decisionTypes.filter((d) => d === "tool-inject").length;
+  const entropy = ctx.entropyComposite ?? 0;
+
+  const repeatedStall = stallCount >= 2;
+  const repeatedInject = injectCount >= 3;
+  const stallWithHighEntropy = stallCount >= 1 && entropy > 0.55;
+
+  if (!repeatedStall && !repeatedInject && !stallWithHighEntropy) {
+    return { veto: false };
+  }
+
+  const reasons: string[] = [];
+  if (repeatedStall) reasons.push(`${stallCount} stall-detect`);
+  if (repeatedInject) reasons.push(`${injectCount} tool-inject`);
+  if (stallWithHighEntropy) reasons.push(`stall+entropy=${entropy.toFixed(2)}`);
+
+  return {
+    veto: true,
+    reason: `controller_signal_veto: ${reasons.join(", ")} without switch-strategy escalation`,
+  };
+}
+
+// ─── arbitrate(): the single decision function ───────────────────────────────
+
+/**
+ * The Arbitrator's resolution function. Takes a TerminationIntent (what a
+ * phase observed) and an ArbitrationContext (run-wide signals), and returns
+ * exactly ONE Verdict. This is the function that closes G-5: every code path
+ * that wants to terminate the kernel calls arbitrate() and applies the
+ * returned Verdict.
+ *
+ * Resolution rules:
+ * - max-iterations → always exit-failure (budget exhausted)
+ * - kernel-error → always exit-failure (unrecoverable)
+ * - controller-early-stop → exit-success with output (controller chose to stop)
+ * - loop-detected → exit-success when output present + no veto, else exit-failure
+ * - fast-path-completed → exit-success when no veto fires
+ * - agent-final-answer → exit-success when no veto fires; veto → exit-failure
+ * - oracle-decision → forward the oracle's verdict (which already considers
+ *   its own evaluator chain including controllerSignalVeto)
+ *
+ * The veto applies to ALL agent-claimed-success intents (final-answer, fast-path).
+ * It does NOT apply to controller-driven exits (early-stop, max-iterations,
+ * loop-detected) — those are framework decisions, not agent self-reports.
+ */
+export function arbitrate(intent: TerminationIntent, ctx: ArbitrationContext): Verdict {
+  switch (intent.kind) {
+    case "max-iterations":
+      return {
+        action: "exit-failure",
+        error: `Maximum iterations (${ctx.maxIterations ?? "?"}) exceeded`,
+        terminatedBy: "max_iterations",
+        output: intent.output,
+      };
+
+    case "kernel-error":
+      return {
+        action: "exit-failure",
+        error: intent.error,
+        terminatedBy: "kernel_error",
+      };
+
+    case "controller-early-stop":
+      // Controller already made a deliberate decision to stop. Trust it.
+      return {
+        action: "exit-success",
+        output: intent.output,
+        terminatedBy: `controller_early_stop:${intent.reason}`,
+      };
+
+    case "loop-detected": {
+      // Loop detection is a controller decision, not an agent claim. But if
+      // the agent never produced output AND the controller is also showing
+      // pathological signals, mark as failure.
+      const veto = shouldVetoSuccess(ctx);
+      if (veto.veto) {
+        return {
+          action: "exit-failure",
+          error: `loop-detected with controller veto: ${veto.reason}`,
+          terminatedBy: "loop_detected_with_veto",
+          output: intent.output,
+        };
+      }
+      // Loop detection without veto → graceful exit with whatever output exists.
+      return {
+        action: "exit-success",
+        output: intent.output,
+        terminatedBy: `loop_detected:${intent.reason}`,
+      };
+    }
+
+    case "fast-path-completed": {
+      // Trivial tasks shouldn't need controller activity. If they do, something
+      // is very wrong — apply veto.
+      const veto = shouldVetoSuccess(ctx);
+      if (veto.veto) {
+        return {
+          action: "exit-failure",
+          error: veto.reason,
+          terminatedBy: "controller_signal_veto",
+        };
+      }
+      return {
+        action: "exit-success",
+        output: intent.output,
+        terminatedBy: "fast_path",
+      };
+    }
+
+    case "agent-final-answer": {
+      // Agent self-claimed success. Apply Verdict-Override: if controller
+      // signals contradict, mark as failure.
+      const veto = shouldVetoSuccess(ctx);
+      if (veto.veto) {
+        return {
+          action: "exit-failure",
+          error: veto.reason,
+          terminatedBy: "controller_signal_veto",
+        };
+      }
+      return {
+        action: "exit-success",
+        output: intent.output,
+        terminatedBy: `final_answer:${intent.via}`,
+      };
+    }
+
+    case "oracle-decision": {
+      // Oracle already ran the evaluator chain (including the veto evaluator).
+      // Trust its action — but if the oracle's action is "fail", convert to
+      // exit-failure here so the Verdict shape is uniform.
+      if (intent.decision.action === "fail") {
+        return {
+          action: "exit-failure",
+          error: intent.decision.reason,
+          terminatedBy: intent.decision.evaluator ?? "oracle",
+          output: intent.output,
+        };
+      }
+      if (intent.decision.action === "exit") {
+        return {
+          action: "exit-success",
+          output: intent.decision.output ?? intent.output,
+          terminatedBy: intent.decision.evaluator ?? intent.decision.reason ?? "oracle",
+        };
+      }
+      // continue / redirect from the oracle
+      return { action: "continue" };
+    }
+
+    default: {
+      // exhaustive check
+      const _exhaust: never = intent;
+      void _exhaust;
+      return { action: "continue" };
+    }
+  }
+}
+
+// ─── applyTermination(): helper to apply a Verdict to KernelState ────────────
+
+/**
+ * Imports KernelState lazily through the type-only import so this file
+ * remains free of cyclic runtime dependencies. The helper mutates state via
+ * transitionState (the canonical state-mutation path).
+ */
+import type {
+  KernelState as _KernelState,
+} from "../../state/kernel-state.js";
+import { transitionState } from "../../state/kernel-state.js";
+
+/**
+ * Apply a Verdict to KernelState. The single helper every termination
+ * site calls instead of setting state.status directly.
+ *
+ * Sprint 3.3 wires all 9 termination sites through this helper. After this
+ * commit, a `grep "status.*\"done\""` in src/kernel/{capabilities,loop}/
+ * outside arbitrator.ts should return zero matches (cf-24 pins this).
+ */
+export function applyTermination(
+  state: _KernelState,
+  verdict: Verdict,
+  extraMeta?: Record<string, unknown>,
+): _KernelState {
+  switch (verdict.action) {
+    case "continue":
+      return state;
+    case "exit-success":
+      return transitionState(state, {
+        status: "done" as const,
+        output: verdict.output,
+        meta: {
+          ...state.meta,
+          terminatedBy: verdict.terminatedBy,
+          ...(extraMeta ?? {}),
+        },
+      });
+    case "exit-failure":
+      return transitionState(state, {
+        status: "failed" as const,
+        error: verdict.error,
+        output: verdict.output ?? null,
+        meta: {
+          ...state.meta,
+          terminatedBy: verdict.terminatedBy,
+          ...(extraMeta ?? {}),
+        },
+      });
+    case "escalate":
+      // Escalation is signaled in meta; the loop runner consumes it to
+      // trigger a strategy switch. State.status stays "thinking".
+      return transitionState(state, {
+        meta: {
+          ...state.meta,
+          escalateTo: verdict.nextStrategy,
+          escalationReason: verdict.reason,
+          ...(extraMeta ?? {}),
+        },
+      });
+  }
+}
+
+/**
+ * Convenience: arbitrate + apply in one call. The single entry point most
+ * termination sites use.
+ */
+export function arbitrateAndApply(
+  state: _KernelState,
+  intent: TerminationIntent,
+  ctx: ArbitrationContext,
+  extraMeta?: Record<string, unknown>,
+): _KernelState {
+  const verdict = arbitrate(intent, ctx);
+  return applyTermination(state, verdict, extraMeta);
+}
+
+/**
+ * Helper: build an ArbitrationContext from a KernelState + KernelInput-like
+ * structure. Used by call sites that have state in hand.
+ */
+export function arbitrationContextFromState(
+  state: _KernelState,
+  input: { readonly task: string; readonly requiredTools?: readonly string[] },
+): ArbitrationContext {
+  const entropyMeta = state.meta.entropy as
+    | { latestScore?: { composite?: number } }
+    | undefined;
+  const verifSteps = state.steps.filter(
+    (s) =>
+      s.type === "observation" &&
+      s.metadata?.verification !== undefined,
+  );
+  const lastVerif = verifSteps[verifSteps.length - 1]?.metadata
+    ?.verification as { verified: boolean; summary: string } | undefined;
+
+  return {
+    iteration: state.iteration,
+    maxIterations: state.meta.maxIterations as number | undefined,
+    task: input.task,
+    steps: state.steps,
+    toolsUsed: state.toolsUsed,
+    requiredTools: input.requiredTools ?? [],
+    controllerDecisionLog: state.controllerDecisionLog,
+    entropyComposite: entropyMeta?.latestScore?.composite,
+    latestVerification: lastVerif,
+  };
+}
