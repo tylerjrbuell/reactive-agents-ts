@@ -3,7 +3,7 @@ import { Effect } from "effect";
 import { describe, it, expect } from "bun:test";
 import { runReactiveObserver } from "../../src/kernel/capabilities/reflect/reactive-observer.js";
 import type { KernelState, KernelRunOptions, MaybeService, EventBusInstance } from "../../src/kernel/state/kernel-state.js";
-import type { StrategyServices } from "../../src/strategies/kernel/utils/service-utils.js";
+import type { StrategyServices } from "../../src/kernel/utils/service-utils.js";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 

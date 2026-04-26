@@ -23,7 +23,7 @@ import {
   resolveStrategyServices,
   compilePromptOrFallback,
   publishReasoningStep,
-} from "./kernel/utils/service-utils.js";
+} from "../kernel/utils/service-utils.js";
 import { makeStep, buildStrategyResult } from "../kernel/capabilities/sense/step-utils.js";
 import { isSatisfied, isCritiqueStagnant } from "../kernel/capabilities/verify/quality-utils.js";
 import { extractThinking } from "../kernel/capabilities/reason/stream-parser.js";

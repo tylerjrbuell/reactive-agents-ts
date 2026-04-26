@@ -18,7 +18,7 @@ import type {
   ToolServiceInstance,
   EventBusInstance,
   MemoryServiceInstance,
-} from "../../../kernel/state/kernel-state.js";
+} from "../state/kernel-state.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
 /** Minimal PromptService surface used by strategies */
@@ -238,5 +238,5 @@ export function publishReasoningStep(
   payload: unknown,
 ): Effect.Effect<void, never> {
   if (eventBus._tag === "None") return Effect.void;
-  return eventBus.value.publish(payload).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/strategies/kernel/utils/service-utils.ts:216", tag: errorTag(err) })));
+  return eventBus.value.publish(payload).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/kernel/utils/service-utils.ts:216", tag: errorTag(err) })));
 }

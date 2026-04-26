@@ -21,7 +21,7 @@ import { createToolCallResolver, NativeFCDriver, TextParseDriver } from "@reacti
 import { checkpointStoreRef } from "@reactive-agents/tools";
 import { CONTEXT_PROFILES } from "../../context/context-profile.js";
 import type { ContextProfile } from "../../context/context-profile.js";
-import { resolveStrategyServices } from "../../strategies/kernel/utils/service-utils.js";
+import { resolveStrategyServices } from "../../kernel/utils/service-utils.js";
 import { buildKernelHooks } from "../../kernel/state/kernel-hooks.js";
 import { makeStep } from "../../kernel/capabilities/sense/step-utils.js";
 import {
@@ -34,7 +34,7 @@ import {
   type ThoughtKernel,
 } from "../../kernel/state/kernel-state.js";
 import { evaluateStrategySwitch, buildHandoff } from "../../kernel/capabilities/reflect/strategy-evaluator.js";
-import { coordinateICS } from "../../strategies/kernel/utils/ics-coordinator.js";
+import { coordinateICS } from "../../kernel/utils/ics-coordinator.js";
 import { runReactiveObserver } from "../../kernel/capabilities/reflect/reactive-observer.js";
 import { detectLoop, checkAllToolsCalled } from "../../kernel/capabilities/reflect/loop-detector.js";
 import {
@@ -46,7 +46,7 @@ import {
 import {
   decideExecutionLane,
   shouldInjectOracleNudge,
-} from "../../strategies/kernel/utils/lane-controller.js";
+} from "../../kernel/utils/lane-controller.js";
 import { extractOutputFormat, type TaskIntent } from "../../kernel/capabilities/comprehend/task-intent.js";
 import { shouldAutoCheckpoint, autoCheckpoint } from "./auto-checkpoint.js";
 import {

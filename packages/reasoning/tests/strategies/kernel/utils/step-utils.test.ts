@@ -1,7 +1,7 @@
 import { describe, it, expect } from "bun:test";
 import { Effect } from "effect";
 import { makeStep, buildStrategyResult } from "../../../../src/kernel/capabilities/sense/step-utils.js";
-import { publishReasoningStep } from "../../../../src/strategies/kernel/utils/service-utils.js";
+import { publishReasoningStep } from "../../../../src/kernel/utils/service-utils.js";
 
 describe("makeStep", () => {
   it("creates step with correct type and content", () => {

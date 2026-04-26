@@ -18,7 +18,7 @@ import { executeReactive } from "./reactive.js";
 import { executeReflexion } from "./reflexion.js";
 import { executePlanExecute } from "./plan-execute.js";
 import { executeTreeOfThought } from "./tree-of-thought.js";
-import { resolveStrategyServices, compilePromptOrFallback, publishReasoningStep } from "./kernel/utils/service-utils.js";
+import { resolveStrategyServices, compilePromptOrFallback, publishReasoningStep } from "../kernel/utils/service-utils.js";
 import { makeStep, buildStrategyResult } from "../kernel/capabilities/sense/step-utils.js";
 import { stripThinking } from "../kernel/capabilities/reason/stream-parser.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";

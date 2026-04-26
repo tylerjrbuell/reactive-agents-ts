@@ -39,8 +39,8 @@ import { executeReActKernel } from "../kernel/loop/react-kernel.js";
 import {
   resolveStrategyServices,
   publishReasoningStep,
-} from "./kernel/utils/service-utils.js";
-import type { StrategyServices } from "./kernel/utils/service-utils.js";
+} from "../kernel/utils/service-utils.js";
+import type { StrategyServices } from "../kernel/utils/service-utils.js";
 import { makeStep, buildStrategyResult } from "../kernel/capabilities/sense/step-utils.js";
 import { isSatisfied } from "../kernel/capabilities/verify/quality-utils.js";
 import { stripThinking } from "../kernel/capabilities/reason/stream-parser.js";

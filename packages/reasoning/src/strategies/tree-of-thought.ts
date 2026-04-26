@@ -17,7 +17,7 @@ import { LLMService } from "@reactive-agents/llm-provider";
 import { ObservableLogger, type LogEvent } from "@reactive-agents/observability";
 import { runKernel } from "../kernel/loop/runner.js";
 import { reactKernel } from "../kernel/loop/react-kernel.js";
-import { resolveStrategyServices, compilePromptOrFallback, publishReasoningStep } from "./kernel/utils/service-utils.js";
+import { resolveStrategyServices, compilePromptOrFallback, publishReasoningStep } from "../kernel/utils/service-utils.js";
 import { parseScore } from "../kernel/capabilities/verify/quality-utils.js";
 import { stripThinking } from "../kernel/capabilities/reason/stream-parser.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";

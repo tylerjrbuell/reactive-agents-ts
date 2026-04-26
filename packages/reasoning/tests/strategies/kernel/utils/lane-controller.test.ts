@@ -1,10 +1,10 @@
-// Run: bun test packages/reasoning/tests/strategies/kernel/utils/lane-controller.test.ts --timeout 15000
+// Run: bun test packages/reasoning/tests/kernel/utils/lane-controller.test.ts --timeout 15000
 import { describe, it, expect } from "bun:test";
 import type { ReasoningStep } from "../../../../src/types/index.js";
 import {
   decideExecutionLane,
   shouldInjectOracleNudge,
-} from "../../../../src/strategies/kernel/utils/lane-controller.js";
+} from "../../../../src/kernel/utils/lane-controller.js";
 
 function makeSuccessObs(toolName: string): ReasoningStep {
   return {

@@ -12,7 +12,7 @@ import { ObservableLogger } from "@reactive-agents/observability";
 import type { LogEvent } from "@reactive-agents/observability";
 import { transitionState } from "../../../kernel/state/kernel-state.js";
 import type { KernelState, KernelRunOptions, MaybeService, EventBusInstance } from "../../../kernel/state/kernel-state.js";
-import type { StrategyServices } from "../../../strategies/kernel/utils/service-utils.js";
+import type { StrategyServices } from "../../../kernel/utils/service-utils.js";
 import type { EntropyScoreLike } from "../../../kernel/loop/output-assembly.js";
 
 /**

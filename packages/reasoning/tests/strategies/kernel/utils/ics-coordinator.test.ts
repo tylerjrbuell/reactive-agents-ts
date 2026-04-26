@@ -1,6 +1,6 @@
 import { describe, it, expect } from "bun:test"
 import { Effect } from "effect"
-import { coordinateICS } from "../../../../src/strategies/kernel/utils/ics-coordinator.js"
+import { coordinateICS } from "../../../../src/kernel/utils/ics-coordinator.js"
 import { initialKernelState } from "../../../../src/kernel/state/kernel-state.js"
 
 const baseState = initialKernelState({
