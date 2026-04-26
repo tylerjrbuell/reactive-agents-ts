@@ -24,5 +24,7 @@ export type { GuidanceContext, ContextManagerOutput } from "./context-manager.js
 export {
   defaultContextCurator,
   renderObservationForPrompt,
+  buildRecentObservationsSection,
+  RECENT_OBSERVATIONS_HEADER,
 } from "./context-curator.js";
-export type { Prompt, ContextCurator } from "./context-curator.js";
+export type { Prompt, ContextCurator, CuratorOptions } from "./context-curator.js";

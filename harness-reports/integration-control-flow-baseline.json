@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "capturedAt": "2026-04-26T02:34:38.975Z",
+  "capturedAt": "2026-04-26T02:44:43.834Z",
   "bunVersion": "1.3.10",
   "scenarios": {
     "cf-04-goal-achieved-from-end-turn": {
@@ -175,6 +175,26 @@
         "untrusted.opens_with_wrapper": true,
         "untrusted.closes_with_wrapper": true,
         "untrusted.preserves_payload": true
+      }
+    },
+    "cf-20-curator-renders-untrusted-section": {
+      "status": "success",
+      "iterations": 0,
+      "terminatedBy": "unknown",
+      "goalAchieved": null,
+      "toolCallsObserved": [],
+      "interventionsDispatched": [],
+      "errorSwallowedSites": [],
+      "redactorsTriggered": [],
+      "customAssertions": {
+        "off_when_limit_zero": true,
+        "limit2_excludes_oldest": true,
+        "limit2_includes_search_payload": true,
+        "limit2_includes_file_payload": true,
+        "section_uses_header_constant": true,
+        "untrusted_wrapped_with_toolname": true,
+        "untrusted_closes_block": true,
+        "trusted_remains_plain_when_included": true
       }
     }
   }

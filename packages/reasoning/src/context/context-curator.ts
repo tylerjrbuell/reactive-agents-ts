@@ -30,6 +30,7 @@ import type { KernelState, KernelInput } from "../strategies/kernel/kernel-state
 import type { ContextProfile } from "./context-profile.js";
 import type { ToolSchema } from "../strategies/kernel/utils/tool-formatting.js";
 import type { ObservationResult } from "../types/observation.js";
+import type { ReasoningStep } from "../types/step.js";
 import {
   ContextManager,
   type ContextManagerOptions,
@@ -59,6 +60,31 @@ export interface Prompt {
   readonly messages: LLMMessage[];
 }
 
+// ─── CuratorOptions ────────────────────────────────────────────────────────────
+
+/**
+ * Curator-specific options. Extends ContextManagerOptions so callers can
+ * still pass the underlying tool/system-prompt overrides without juggling
+ * two option bags.
+ *
+ * S2.5 Slice B introduces `includeRecentObservations` — when set, the curator
+ * authors a "Recent tool observations:" section at the tail of the system
+ * prompt, rendering each step through {@link renderObservationForPrompt} so
+ * untrusted tool output is wrapped in `<tool_output>` blocks before inlining.
+ *
+ * Default off — Slice A's byte-identical wrapping behavior is preserved when
+ * the option is absent or zero.
+ */
+export interface CuratorOptions extends ContextManagerOptions {
+  /**
+   * When > 0, append a "Recent tool observations:" section showing the last
+   * N observation steps (each rendered with trust-aware wrapping). When
+   * absent or 0, no section is appended and the curator is byte-identical
+   * to ContextManager.build (Slice A semantics).
+   */
+  readonly includeRecentObservations?: number;
+}
+
 // ─── ContextCurator port ───────────────────────────────────────────────────────
 
 /**
@@ -75,21 +101,35 @@ export interface ContextCurator {
     profile: ContextProfile,
     guidance: GuidanceContext,
     adapter?: ProviderAdapter,
-    options?: ContextManagerOptions,
+    options?: CuratorOptions,
   ): Prompt;
 }
 
 // ─── Default implementation ────────────────────────────────────────────────────
 
 /**
- * Slice A: thin wrapper over ContextManager.build so the seam is observable
- * without changing rendering. Future slices migrate sectional concerns
- * (Prior work, Progress, tool elaboration) inside the curator boundary.
+ * Slice A: byte-identical wrapper over ContextManager.build (preserved
+ * when `includeRecentObservations` is absent).
+ *
+ * Slice B (this commit): the curator OWNS one section directly — the
+ * "Recent tool observations:" tail. ContextManager renders the headers /
+ * body / guidance; the curator then appends the trust-aware observations
+ * section. Future slices migrate more sections out of ContextManager.
  */
 export const defaultContextCurator: ContextCurator = {
   curate(state, input, profile, guidance, adapter, options) {
     const out = ContextManager.build(state, input, profile, guidance, adapter, options);
-    return { systemPrompt: out.systemPrompt, messages: out.messages };
+
+    const obsSection = buildRecentObservationsSection(
+      state.steps,
+      options?.includeRecentObservations ?? 0,
+    );
+
+    const systemPrompt = obsSection
+      ? `${out.systemPrompt}\n\n${obsSection}`
+      : out.systemPrompt;
+
+    return { systemPrompt, messages: out.messages };
   },
 };
 
@@ -123,4 +163,44 @@ export function renderObservationForPrompt(obs: ObservationResult): string {
   // </tool_output>, the LLM treats the wrapping as a content boundary marker
   // rather than a privileged instruction frame.
   return `<tool_output tool="${obs.toolName}">\n${obs.displayText}\n</tool_output>`;
+}
+
+// ─── Recent observations section (Slice B) ─────────────────────────────────────
+
+/** Section header — kept as a constant so gate scenarios can pin it. */
+export const RECENT_OBSERVATIONS_HEADER = "Recent tool observations:";
+
+/**
+ * Type predicate narrowing a step to "observation step with an
+ * ObservationResult attached." Keeps the pipeline below straightforwardly
+ * typed (no `!` non-null assertions on metadata).
+ */
+function hasObservationResult(
+  step: ReasoningStep,
+): step is ReasoningStep & { metadata: { observationResult: ObservationResult } } {
+  return step.type === "observation" && step.metadata?.observationResult !== undefined;
+}
+
+/**
+ * Build the "Recent tool observations:" tail section, or null when nothing
+ * to render. Pipeline: filter to observation steps with results → take last
+ * `limit` → render each through the trust-aware primitive → join.
+ *
+ * Returning null (rather than "") lets the caller distinguish "no section"
+ * from "empty section" cleanly when composing the final prompt string.
+ */
+export function buildRecentObservationsSection(
+  steps: readonly ReasoningStep[],
+  limit: number,
+): string | null {
+  if (limit <= 0) return null;
+
+  const recent = steps.filter(hasObservationResult).slice(-limit);
+  if (recent.length === 0) return null;
+
+  const body = recent
+    .map((s) => renderObservationForPrompt(s.metadata.observationResult))
+    .join("\n\n");
+
+  return `${RECENT_OBSERVATIONS_HEADER}\n${body}`;
 }

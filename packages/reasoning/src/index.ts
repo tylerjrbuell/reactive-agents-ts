@@ -114,8 +114,10 @@ export { applyMessageWindowWithCompact } from "./context/message-window.js";
 export {
   defaultContextCurator,
   renderObservationForPrompt,
+  buildRecentObservationsSection,
+  RECENT_OBSERVATIONS_HEADER,
 } from "./context/context-curator.js";
-export type { Prompt, ContextCurator } from "./context/context-curator.js";
+export type { Prompt, ContextCurator, CuratorOptions } from "./context/context-curator.js";
 
 // ─── Intelligent Context Synthesis (ICS) ───
 export type {
