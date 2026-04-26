@@ -515,6 +515,14 @@ export interface ArbitrationContext {
    * The Arbitrator escalates only when this is below the cap (default 1).
    */
   readonly synthesisRetryCount?: number;
+  /**
+   * Per-run scratchpad — full tool result content keyed by `_tool_result_N`.
+   * The grounding check uses this to look up COMPLETE tool data when an
+   * observation step's content is a compressed preview. Without this, the
+   * grounding corpus only contains the preview's first ~5 items and falsely
+   * rejects synthesized claims that reference items 6-N.
+   */
+  readonly scratchpad?: ReadonlyMap<string, string>;
 }
 
 // ─── Veto evaluator (Sprint 3.3 — uses controllerDecisionLog patterns) ───────
@@ -610,7 +618,10 @@ function synthesisQualityRetry(
   const currentRetries = ctx.synthesisRetryCount ?? 0;
   if (currentRetries >= SYNTHESIS_RETRY_MAX) return { retry: false };
 
-  // Build the evidence corpus from prior observations.
+  // Build the evidence corpus from prior observations. Look up scratchpad
+  // for COMPLETE content when an observation has a `storedKey` — without
+  // this the corpus only contains the compressed preview's first ~5 items
+  // and the grounding check falsely rejects claims about items 6-N.
   const corpus = ctx.steps
     .filter(
       (s) =>
@@ -618,7 +629,12 @@ function synthesisQualityRetry(
         typeof s.content === "string" &&
         s.content.trim().length > 0,
     )
-    .map((s) => s.content)
+    .map((s) => {
+      const storedKey = s.metadata?.storedKey as string | undefined;
+      const fullFromScratchpad =
+        storedKey && ctx.scratchpad ? ctx.scratchpad.get(storedKey) : undefined;
+      return fullFromScratchpad ?? s.content;
+    })
     .join("\n\n");
 
   if (corpus.length < 20) return { retry: false }; // no evidence → can't ground
@@ -630,8 +646,11 @@ function synthesisQualityRetry(
   if (grounding.verified) return { retry: false };
 
   // Build feedback the model can act on.
+  // IMPORTANT: do not include literal example strings of the bad output —
+  // local models often copy quoted negative examples verbatim. Describe the
+  // failure abstractly and instruct the model toward the desired shape.
   const feedback = grounding.compressionEchoDetected
-    ? `Your previous answer contained framework internal markers (compressed preview / [STORED:] / _tool_result_N) instead of synthesized content. Please regenerate the answer using the actual data from the tool observations above. Do not echo any "[recall result — compressed preview]" or "Type: Array" structures — write a real synthesis.`
+    ? `Your previous answer was rejected because it described the structure of the tool result instead of synthesizing the actual values. Use the concrete fields (titles, scores, names, numbers) from the tool observations above and produce the answer the user requested. Do not describe the data — present it.`
     : `Your previous answer contained claims that don't appear in the tool observations: ${grounding.ungroundedClaims.slice(0, 5).map((c) => `"${c.slice(0, 50)}"`).join(", ")}. Please regenerate the answer citing only specific values found in the tool results above.`;
 
   return { retry: true, feedback };
@@ -957,5 +976,8 @@ export function arbitrationContextFromState(
     // Arbitrator can decide whether to escalate again.
     synthesisRetryCount:
       (state.meta as Record<string, unknown>).synthesisRetryCount as number | undefined,
+    // Surface scratchpad so the grounding check sees full tool data, not
+    // the compressed-preview content stored on observation steps.
+    scratchpad: state.scratchpad,
   };
 }

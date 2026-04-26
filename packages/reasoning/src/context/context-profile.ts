@@ -60,7 +60,15 @@ export const CONTEXT_PROFILES: Record<ModelTier, ContextProfile> = {
     toolSchemaDetail: "names-and-types",
     maxIterations: 8,
     temperature: 0.3,
-    maxTokens: 4096,
+    // Modern local models (gemma3+, llama3.x+, qwen2.5+) ship 32K-128K context
+    // windows. The dynamic Ollama probe returns 32K+ for almost everything;
+    // the 4096 default here forced pressure-narrowing-to-final-answer to fire
+    // at ~3K tokens, panicking models on any non-trivial tool result. The
+    // probe-resolved capability.recommendedNumCtx should override this when
+    // wired (Sprint 1 S1.4 — see runner.ts profile resolution); 32K matches
+    // the conservative probe ceiling so the pressure gate doesn't trip
+    // prematurely even before that wiring lands.
+    maxTokens: 32_768,
   },
   mid: {
     tier: "mid",
@@ -69,7 +77,7 @@ export const CONTEXT_PROFILES: Record<ModelTier, ContextProfile> = {
     toolSchemaDetail: "full",
     maxIterations: 10,
     temperature: 0.5,
-    maxTokens: 8192,
+    maxTokens: 32_768,
   },
   large: {
     tier: "large",

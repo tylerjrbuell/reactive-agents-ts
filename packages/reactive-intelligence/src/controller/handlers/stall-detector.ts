@@ -57,7 +57,12 @@ export const stallDetectorHandler: InterventionHandler<"stall-detect"> = {
       applied: true,
       patches: [{
         kind: "append-system-nudge" as const,
-        text: "IMPORTANT: You appear to be stuck repeating the same reasoning. Try a completely different approach: call a tool you haven't used yet, or call final-answer with what you know so far.",
+        // Avoid "final-answer with what you know" — that wording primes local
+        // models to dump a structural summary (Type:Array(N), Preview(first 5))
+        // into the answer instead of synthesizing actual values. Point at the
+        // tool observations as the source of truth and ask for synthesis from
+        // the concrete fields. Discovery and other tools remain reachable.
+        text: "You appear to be repeating the same reasoning. The tool observations above contain the actual data — read the specific values from them and write the answer in the format the user requested. If you need additional information, call a tool you haven't used yet.",
       }],
       cost: { tokensEstimated: 50, latencyMsEstimated: 0 },
       reason: "stall-nudge",
