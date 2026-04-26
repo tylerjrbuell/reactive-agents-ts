@@ -6,7 +6,7 @@ import { Effect } from "effect";
 import { executeTreeOfThought } from "../../src/strategies/tree-of-thought.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
-import { sanitizeAgentOutput } from "../../src/strategies/kernel/utils/quality-utils.js";
+import { sanitizeAgentOutput } from "../../src/kernel/capabilities/verify/quality-utils.js";
 import { TOT_TIER_LIMITS, getToTDepthForTier } from "../../src/strategies/tree-of-thought.js";
 
 // ── Phase 2.1: TOT_TIER_LIMITS config ────────────────────────────────────────

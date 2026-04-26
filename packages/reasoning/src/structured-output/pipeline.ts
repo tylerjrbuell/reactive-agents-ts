@@ -19,7 +19,7 @@ import { Effect, Option, Schema } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { EventBus } from "@reactive-agents/core";
 import { extractJsonBlock, repairJson } from "./json-repair.js";
-import { stripThinking } from "../strategies/kernel/utils/stream-parser.js";
+import { stripThinking } from "../kernel/capabilities/reason/stream-parser.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
 export interface StructuredOutputConfig<T> {

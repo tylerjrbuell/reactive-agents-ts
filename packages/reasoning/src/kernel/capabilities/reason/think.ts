@@ -17,7 +17,7 @@ import type { StopReason } from "@reactive-agents/llm-provider";
 import {
   toProviderMessage,
   buildToolSchemas,
-} from "./context-utils.js";
+} from "../attend/context-utils.js";
 import { defaultContextCurator } from "../../../context/context-curator.js";
 import { StreamingTextCallback } from "@reactive-agents/core";
 import {
@@ -35,24 +35,24 @@ import {
   guardEvidenceGrounding,
 } from "./think-guards.js";
 
-import type { ToolSchema } from "../utils/tool-formatting.js";
+import type { ToolSchema } from "../attend/tool-formatting.js";
 import {
   hasFinalAnswer,
   extractFinalAnswer,
   stripPreamble,
-} from "../utils/tool-parsing.js";
+} from "../act/tool-parsing.js";
 import {
   gateNativeToolCallsForRequiredTools,
-} from "../utils/tool-gating.js";
+} from "../act/tool-gating.js";
 import {
   buildSuccessfulToolCallCounts,
   getMissingRequiredToolsFromSteps,
-} from "../utils/requirement-state.js";
-import { evaluateTermination, defaultEvaluators, type TerminationContext } from "../utils/termination-oracle.js";
+} from "../verify/requirement-state.js";
+import { evaluateTermination, defaultEvaluators, type TerminationContext } from "../decide/termination-oracle.js";
 import { assembleOutput } from "../../../kernel/loop/output-assembly.js";
-import { extractThinking, rescueFromThinking } from "../utils/stream-parser.js";
-import { makeStep } from "../utils/step-utils.js";
-import { makeObservationResult } from "../utils/tool-execution.js";
+import { extractThinking, rescueFromThinking } from "../reason/stream-parser.js";
+import { makeStep } from "../sense/step-utils.js";
+import { makeObservationResult } from "../act/tool-execution.js";
 import {
   transitionState,
   type KernelState,
@@ -347,7 +347,7 @@ export function handleThinking(
         if (event.type === "text_delta") {
           accumulatedContent += event.text;
           if (textDeltaCb) {
-            yield* textDeltaCb(event.text).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/strategies/kernel/phases/think.ts:342", tag: errorTag(err) })));
+            yield* textDeltaCb(event.text).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/kernel/capabilities/reason/think.ts:342", tag: errorTag(err) })));
           }
         } else if (event.type === "content_complete") {
           accumulatedContent = event.content;

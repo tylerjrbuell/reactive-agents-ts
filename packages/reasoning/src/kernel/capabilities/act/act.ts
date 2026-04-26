@@ -24,20 +24,20 @@ import {
   activateSkillHandler,
   runHealingPipeline,
 } from "@reactive-agents/tools";
-import { makeStep } from "../utils/step-utils.js";
-import { executeNativeToolCall, makeObservationResult, extractObservationFacts } from "../utils/tool-execution.js";
+import { makeStep } from "../sense/step-utils.js";
+import { executeNativeToolCall, makeObservationResult, extractObservationFacts } from "../act/tool-execution.js";
 import {
   transitionState,
   type KernelState,
   type KernelContext,
   type KernelMessage,
 } from "../../../kernel/state/kernel-state.js";
-import { planNextMoveBatches } from "../utils/tool-gating.js";
+import { planNextMoveBatches } from "../act/tool-gating.js";
 import {
   buildSuccessfulToolCallCounts,
   getMissingRequiredToolsByCount,
   getEffectiveMissingRequiredTools,
-} from "../utils/requirement-state.js";
+} from "../verify/requirement-state.js";
 import { checkToolCall, defaultGuards } from "./guard.js";
 import { META_TOOLS, INTROSPECTION_META_TOOLS } from "../../../kernel/state/kernel-constants.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
@@ -62,7 +62,7 @@ const emitLog = (event: LogEvent): Effect.Effect<void, never> =>
   Effect.serviceOption(ObservableLogger).pipe(
     Effect.flatMap((opt) =>
       opt._tag === "Some"
-        ? opt.value.emit(event).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/strategies/kernel/phases/act.ts:64", tag: errorTag(err) })))
+        ? opt.value.emit(event).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/kernel/capabilities/act/act.ts:64", tag: errorTag(err) })))
         : Effect.void,
     ),
   );

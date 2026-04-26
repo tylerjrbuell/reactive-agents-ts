@@ -100,7 +100,7 @@ describe("ErrorSwallowed wiring — site conventions (P0 S0.2)", () => {
     // Format: one or more path segments ending in `<file>.ts:<line-or-identifier>`.
     // Examples of valid shapes (from actual migrated code):
     //   "memory/src/services/memory-service.ts:107"
-    //   "reasoning/src/strategies/kernel/utils/tool-execution.ts:storeToolObservationSemantic"
+    //   "reasoning/src/kernel/capabilities/act/tool-execution.ts:storeToolObservationSemantic"
     //   "runtime/src/builder.ts:4182"
     // The fixture strings "test-site" and "no-bus" used inside the
     // error-swallowed.test.ts are allowed and excluded here.

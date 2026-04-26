@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { extractFactDeterministic } from "../../../../src/strategies/kernel/utils/tool-execution.js";
+import { extractFactDeterministic } from "../../../../src/kernel/capabilities/act/tool-execution.js";
 
 describe("extractFactDeterministic", () => {
   it("should extract dollar amount with entity context", () => {

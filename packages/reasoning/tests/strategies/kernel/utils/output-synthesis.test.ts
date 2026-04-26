@@ -7,7 +7,7 @@ import {
   finalizeOutput,
   type FinalAnswerCandidate,
 } from "../../../../src/kernel/loop/output-synthesis.js";
-import type { TaskIntent } from "../../../../src/strategies/kernel/utils/task-intent.js";
+import type { TaskIntent } from "../../../../src/kernel/capabilities/comprehend/task-intent.js";
 
 // ── validateOutputFormat ─────────────────────────────────────────────────────
 

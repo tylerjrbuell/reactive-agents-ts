@@ -5,7 +5,7 @@ import {
   guardCompletionGaps,
   guardQualityCheck,
   guardDiminishingReturns,
-} from "../../../../src/strategies/kernel/phases/think-guards.js";
+} from "../../../../src/kernel/capabilities/reason/think-guards.js";
 import {
   initialKernelState,
   type KernelState,
@@ -16,8 +16,8 @@ import { noopHooks } from "../../../../src/kernel/state/kernel-state.js";
 import type { ContextProfile } from "../../../../src/context/context-profile.js";
 import type { ProviderAdapter } from "@reactive-agents/llm-provider";
 import type { ToolCallSpec } from "@reactive-agents/tools";
-import { makeStep } from "../../../../src/strategies/kernel/utils/step-utils.js";
-import { makeObservationResult } from "../../../../src/strategies/kernel/utils/tool-execution.js";
+import { makeStep } from "../../../../src/kernel/capabilities/sense/step-utils.js";
+import { makeObservationResult } from "../../../../src/kernel/capabilities/act/tool-execution.js";
 
 // ── Fixtures ────────────────────────────────────────────────────────────────
 

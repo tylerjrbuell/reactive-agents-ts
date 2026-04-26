@@ -17,7 +17,7 @@ import {
   ObservationResultSchema,
   KNOWN_TRUSTED_TOOL_NAMES,
 } from "../../src/types/observation.js";
-import { makeObservationResult } from "../../src/strategies/kernel/utils/tool-execution.js";
+import { makeObservationResult } from "../../src/kernel/capabilities/act/tool-execution.js";
 
 describe("ObservationResult.trustLevel (Phase 1 S2.3)", () => {
   it("schema requires trustLevel field (one of 'trusted' | 'untrusted')", () => {

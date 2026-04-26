@@ -24,18 +24,18 @@ import {
   compilePromptOrFallback,
   publishReasoningStep,
 } from "./kernel/utils/service-utils.js";
-import { makeStep, buildStrategyResult } from "./kernel/utils/step-utils.js";
-import { isSatisfied, isCritiqueStagnant } from "./kernel/utils/quality-utils.js";
-import { extractThinking } from "./kernel/utils/stream-parser.js";
-import { extractOutputFormat } from "./kernel/utils/task-intent.js";
+import { makeStep, buildStrategyResult } from "../kernel/capabilities/sense/step-utils.js";
+import { isSatisfied, isCritiqueStagnant } from "../kernel/capabilities/verify/quality-utils.js";
+import { extractThinking } from "../kernel/capabilities/reason/stream-parser.js";
+import { extractOutputFormat } from "../kernel/capabilities/comprehend/task-intent.js";
 import {
   validateOutputFormat,
   buildSynthesisPrompt,
 } from "../kernel/loop/output-synthesis.js";
-import type { ToolSchema } from "./kernel/utils/tool-formatting.js";
+import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
-import { resolveExecutableToolCapabilities } from "./kernel/utils/tool-capabilities.js";
+import { resolveExecutableToolCapabilities } from "../kernel/capabilities/act/tool-capabilities.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
 interface ReflexionInput {

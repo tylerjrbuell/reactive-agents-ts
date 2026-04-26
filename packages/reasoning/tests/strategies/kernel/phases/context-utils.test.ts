@@ -1,4 +1,4 @@
-// Run: bun test packages/reasoning/tests/strategies/kernel/phases/context-utils.test.ts --timeout 15000
+// Run: bun test packages/reasoning/tests/kernel/capabilities/attend/context-utils.test.ts --timeout 15000
 import { describe, it, expect } from "bun:test";
 import { readFileSync } from "fs";
 import {
@@ -6,7 +6,7 @@ import {
   toProviderMessage,
   buildToolSchemas,
   buildConversationMessages,
-} from "../../../../src/strategies/kernel/phases/context-utils.js";
+} from "../../../../src/kernel/capabilities/attend/context-utils.js";
 import { defaultAdapter } from "@reactive-agents/llm-provider";
 import { initialKernelState } from "../../../../src/kernel/state/kernel-state.js";
 import type { KernelMessage, KernelState } from "../../../../src/kernel/state/kernel-state.js";
@@ -15,7 +15,7 @@ import { CONTEXT_PROFILES } from "../../../../src/context/context-profile.js";
 // ── Structural checks ─────────────────────────────────────────────────────────
 
 const src = readFileSync(
-  new URL("../../../../src/strategies/kernel/phases/context-utils.ts", import.meta.url),
+  new URL("../../../../src/kernel/capabilities/attend/context-utils.ts", import.meta.url),
   "utf8"
 );
 const kernelStateSrc = readFileSync(

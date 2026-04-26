@@ -32,15 +32,15 @@ import {
   type ThoughtKernel,
   type Phase,
 } from "../../kernel/state/kernel-state.js";
-import { handleThinking } from "../../strategies/kernel/phases/think.js";
-import { handleActing } from "../../strategies/kernel/phases/act.js";
+import { handleThinking } from "../../kernel/capabilities/reason/think.js";
+import { handleActing } from "../../kernel/capabilities/act/act.js";
 
 // ── Public input / output types ──────────────────────────────────────────────
 
 // Defined in kernel-state to avoid circular imports; re-exported here for backward compatibility
 import type { ReActKernelInput, ReActKernelResult } from "../../kernel/state/kernel-state.js";
 export type { ReActKernelInput, ReActKernelResult };
-import { resolveExecutableToolCapabilities } from "../../strategies/kernel/utils/tool-capabilities.js";
+import { resolveExecutableToolCapabilities } from "../../kernel/capabilities/act/tool-capabilities.js";
 
 // ── makeKernel / reactKernel ─────────────────────────────────────────────────
 

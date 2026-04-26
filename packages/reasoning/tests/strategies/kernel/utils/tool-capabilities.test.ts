@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { Effect } from "effect";
 import { ToolService, createToolsLayer } from "@reactive-agents/tools";
-import { resolveExecutableToolCapabilities } from "../../../../src/strategies/kernel/utils/tool-capabilities.js";
+import { resolveExecutableToolCapabilities } from "../../../../src/kernel/capabilities/act/tool-capabilities.js";
 
 describe("resolveExecutableToolCapabilities", () => {
   it("registers ToolService-backed meta-tools before advertising them", async () => {

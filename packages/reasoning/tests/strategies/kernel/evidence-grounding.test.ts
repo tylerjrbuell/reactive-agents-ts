@@ -3,7 +3,7 @@ import {
   buildEvidenceCorpusFromSteps,
   validateOutputGroundedInEvidence,
   validateExpectedEntitiesInOutput,
-} from "../../../src/strategies/kernel/utils/evidence-grounding.js";
+} from "../../../src/kernel/capabilities/verify/evidence-grounding.js";
 import type { ReasoningStep } from "../../../src/types/index.js";
 
 function obs(

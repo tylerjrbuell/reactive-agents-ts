@@ -21,18 +21,18 @@ import {
   detectCompletionGaps,
   type ToolCallSpec,
 } from "@reactive-agents/tools";
-import { computeNoveltyRatio } from "../utils/tool-formatting.js";
+import { computeNoveltyRatio } from "../attend/tool-formatting.js";
 import {
   buildEvidenceCorpusFromSteps,
   validateOutputGroundedInEvidence,
-} from "../utils/evidence-grounding.js";
-import { gateNativeToolCallsForRequiredTools } from "../utils/tool-gating.js";
+} from "../verify/evidence-grounding.js";
+import { gateNativeToolCallsForRequiredTools } from "../act/tool-gating.js";
 import {
   buildSuccessfulToolCallCounts,
   getMissingRequiredToolsFromSteps,
-} from "../utils/requirement-state.js";
-import { makeStep } from "../utils/step-utils.js";
-import { makeObservationResult } from "../utils/tool-execution.js";
+} from "../verify/requirement-state.js";
+import { makeStep } from "../sense/step-utils.js";
+import { makeObservationResult } from "../act/tool-execution.js";
 import type { ContextProfile } from "../../../context/context-profile.js";
 import {
   transitionState,

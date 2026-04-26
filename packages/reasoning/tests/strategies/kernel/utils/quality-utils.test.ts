@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { isSatisfied, isCritiqueStagnant, parseScore, sanitizeAgentOutput } from "../../../../src/strategies/kernel/utils/quality-utils.js";
+import { isSatisfied, isCritiqueStagnant, parseScore, sanitizeAgentOutput } from "../../../../src/kernel/capabilities/verify/quality-utils.js";
 
 describe("isSatisfied", () => {
   it("returns true for SATISFIED: prefix", () => {

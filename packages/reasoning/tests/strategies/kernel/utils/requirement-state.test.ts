@@ -1,13 +1,13 @@
-// Run: bun test packages/reasoning/tests/strategies/kernel/utils/requirement-state.test.ts --timeout 15000
+// Run: bun test packages/reasoning/tests/kernel/capabilities/verify/requirement-state.test.ts --timeout 15000
 import { describe, it, expect } from "bun:test";
-import { makeStep } from "../../../../src/strategies/kernel/utils/step-utils.js";
+import { makeStep } from "../../../../src/kernel/capabilities/sense/step-utils.js";
 import {
   buildSuccessfulToolCallCounts,
   getMissingRequiredToolsFromSteps,
   buildAttemptedToolCallCounts,
   getPermanentlyFailedRequiredTools,
   getEffectiveMissingRequiredTools,
-} from "../../../../src/strategies/kernel/utils/requirement-state.js";
+} from "../../../../src/kernel/capabilities/verify/requirement-state.js";
 
 describe("requirement-state", () => {
   it("counts successful observations by tool name", () => {

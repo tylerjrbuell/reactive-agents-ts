@@ -15,7 +15,7 @@ import {
   webSearchHandler,
 } from "@reactive-agents/tools";
 import type { KernelMetaToolsConfig } from "../../../types/kernel-meta-tools.js";
-import type { ToolSchema } from "./tool-formatting.js";
+import type { ToolSchema } from "../attend/tool-formatting.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
 type ToolCapabilitySnapshot = {
@@ -77,7 +77,7 @@ export const resolveExecutableToolCapabilities = (input: {
       if (input.metaTools?.recall) {
         yield* toolService
           .register(recallTool, makeRecallHandler(scratchpadStoreRef))
-          .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/strategies/kernel/utils/tool-capabilities.ts:79", tag: errorTag(err) })));
+          .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/kernel/capabilities/act/tool-capabilities.ts:79", tag: errorTag(err) })));
         append(toToolSchema(recallTool));
       }
 
@@ -92,14 +92,14 @@ export const resolveExecutableToolCapabilities = (input: {
               config: {},
             }),
           )
-          .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/strategies/kernel/utils/tool-capabilities.ts:94", tag: errorTag(err) })));
+          .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/kernel/capabilities/act/tool-capabilities.ts:94", tag: errorTag(err) })));
         append(toToolSchema(findTool));
       }
 
       if (input.metaTools?.checkpoint) {
         yield* toolService
           .register(checkpointTool, makeCheckpointHandler(checkpointStoreRef))
-          .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/strategies/kernel/utils/tool-capabilities.ts:101", tag: errorTag(err) })));
+          .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/kernel/capabilities/act/tool-capabilities.ts:101", tag: errorTag(err) })));
         append(toToolSchema(checkpointTool));
       }
     }

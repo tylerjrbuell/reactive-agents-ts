@@ -11,7 +11,7 @@
  * output passes through with `formatValidated: false` rather than failing.
  */
 import { Effect } from "effect";
-import type { OutputFormat, TaskIntent } from "../../strategies/kernel/utils/task-intent.js";
+import type { OutputFormat, TaskIntent } from "../../kernel/capabilities/comprehend/task-intent.js";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 

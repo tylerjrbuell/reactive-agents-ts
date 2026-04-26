@@ -1,5 +1,5 @@
 import { Effect, Ref } from "effect";
-import { CONTEXT_PRESSURE_THRESHOLDS } from "../../strategies/kernel/phases/think.js";
+import { CONTEXT_PRESSURE_THRESHOLDS } from "../../kernel/capabilities/reason/think.js";
 import { META_TOOLS } from "../state/kernel-constants.js";
 
 /**

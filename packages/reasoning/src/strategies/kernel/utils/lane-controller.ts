@@ -1,5 +1,5 @@
 import type { ReasoningStep } from "../../../types/index.js";
-import { getEffectiveMissingRequiredTools } from "./requirement-state.js";
+import { getEffectiveMissingRequiredTools } from "../../../kernel/capabilities/verify/requirement-state.js";
 
 export type ExecutionLane = "gather" | "synthesize";
 

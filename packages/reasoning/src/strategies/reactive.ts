@@ -10,23 +10,23 @@ import { LLMService } from "@reactive-agents/llm-provider";
 import { ObservableLogger, type LogEvent } from "@reactive-agents/observability";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { ContextProfile } from "../context/context-profile.js";
-import type { ToolSchema } from "./kernel/utils/tool-formatting.js";
+import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
 import { runKernel } from "../kernel/loop/runner.js";
 import { reactKernel } from "../kernel/loop/react-kernel.js";
-import { buildStrategyResult } from "./kernel/utils/step-utils.js";
+import { buildStrategyResult } from "../kernel/capabilities/sense/step-utils.js";
 import type { KernelInput, KernelMessage } from "../kernel/state/kernel-state.js";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
 import type { TerminatedBy } from "@reactive-agents/core";
-import { resolveExecutableToolCapabilities } from "./kernel/utils/tool-capabilities.js";
+import { resolveExecutableToolCapabilities } from "../kernel/capabilities/act/tool-capabilities.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
 // ── Re-exports for backwards compatibility ────────────────────────────────────
 
-export type { CompressResult } from "./kernel/utils/tool-formatting.js";
-export { compressToolResult } from "./kernel/utils/tool-formatting.js";
-export { evaluateTransform } from "./kernel/utils/tool-parsing.js";
+export type { CompressResult } from "../kernel/capabilities/attend/tool-formatting.js";
+export { compressToolResult } from "../kernel/capabilities/attend/tool-formatting.js";
+export { evaluateTransform } from "../kernel/capabilities/act/tool-parsing.js";
 // parseToolRequestWithTransform re-export removed — use parseToolRequest from kernel/tool-utils directly
-export { truncateForDisplay } from "./kernel/utils/tool-execution.js";
+export { truncateForDisplay } from "../kernel/capabilities/act/tool-execution.js";
 
 // ── ReactiveInput ─────────────────────────────────────────────────────────────
 

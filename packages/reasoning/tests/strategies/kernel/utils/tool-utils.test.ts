@@ -3,19 +3,19 @@ import {
   hasFinalAnswer,
   extractFinalAnswer,
   evaluateTransform,
-} from "../../../../src/strategies/kernel/utils/tool-parsing.js";
+} from "../../../../src/kernel/capabilities/act/tool-parsing.js";
 import {
   compressToolResult,
   formatToolSchemas,
   formatToolSchemaCompact,
   formatToolSchemaMicro,
   filterToolsByRelevance,
-} from "../../../../src/strategies/kernel/utils/tool-formatting.js";
+} from "../../../../src/kernel/capabilities/attend/tool-formatting.js";
 import {
   gateNativeToolCallsForRequiredTools,
   buildToolElaborationInjection,
   planNextMoveBatches,
-} from "../../../../src/strategies/kernel/utils/tool-gating.js";
+} from "../../../../src/kernel/capabilities/act/tool-gating.js";
 
 describe("hasFinalAnswer", () => {
   it("returns true for FINAL ANSWER: prefix", () => {

@@ -1,9 +1,9 @@
-// File: tests/strategies/kernel/utils/task-intent.test.ts
+// File: tests/kernel/capabilities/comprehend/task-intent.test.ts
 import { describe, it, expect } from "bun:test";
 import {
   extractOutputFormat,
   type OutputFormat,
-} from "../../../../src/strategies/kernel/utils/task-intent.js";
+} from "../../../../src/kernel/capabilities/comprehend/task-intent.js";
 
 describe("extractOutputFormat", () => {
   // ── Markdown detection ──

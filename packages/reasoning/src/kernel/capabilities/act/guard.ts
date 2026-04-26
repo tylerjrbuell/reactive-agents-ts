@@ -9,12 +9,12 @@
  */
 import type { KernelState, KernelInput } from "../../../kernel/state/kernel-state.js";
 import type { ToolCallSpec } from "@reactive-agents/tools";
-import { isParallelBatchSafeTool } from "../utils/tool-gating.js";
+import { isParallelBatchSafeTool } from "../act/tool-gating.js";
 import {
   buildSuccessfulToolCallCounts,
   getMissingRequiredToolsByCount,
   getEffectiveMissingRequiredTools,
-} from "../utils/requirement-state.js";
+} from "../verify/requirement-state.js";
 import { META_TOOLS as META_TOOL_NAMES, INTROSPECTION_META_TOOLS, isDelegationTool } from "../../../kernel/state/kernel-constants.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────

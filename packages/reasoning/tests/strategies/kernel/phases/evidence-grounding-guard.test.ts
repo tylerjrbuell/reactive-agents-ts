@@ -4,7 +4,7 @@
  * Unit tests for guardEvidenceGrounding in think-guards.ts.
  */
 import { describe, it, expect } from "bun:test";
-import { guardEvidenceGrounding } from "../../../../src/strategies/kernel/phases/think-guards.js";
+import { guardEvidenceGrounding } from "../../../../src/kernel/capabilities/reason/think-guards.js";
 import type { KernelState } from "../../../../src/kernel/state/kernel-state.js";
 import type { ReasoningStep } from "../../../../src/types/index.js";
 

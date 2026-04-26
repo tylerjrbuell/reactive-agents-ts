@@ -9,7 +9,7 @@ import { ulid } from "ulid";
 import type { ReasoningResult, ReasoningStep } from "../../../types/index.js";
 import type { StepId } from "../../../types/step.js";
 import type { ReasoningStrategy } from "../../../types/index.js";
-import { sanitizeAgentOutput } from "./quality-utils.js";
+import { sanitizeAgentOutput } from "../verify/quality-utils.js";
 
 /**
  * Create a ReasoningStep with auto-generated ulid id and current timestamp.

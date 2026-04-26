@@ -28,7 +28,7 @@
 import type { LLMMessage, ProviderAdapter } from "@reactive-agents/llm-provider";
 import type { KernelState, KernelInput } from "../kernel/state/kernel-state.js";
 import type { ContextProfile } from "./context-profile.js";
-import type { ToolSchema } from "../strategies/kernel/utils/tool-formatting.js";
+import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
 import type { ObservationResult } from "../types/observation.js";
 import type { ReasoningStep } from "../types/step.js";
 import {

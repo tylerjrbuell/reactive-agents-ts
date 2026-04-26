@@ -1,7 +1,7 @@
 // Run: bun test packages/reasoning/tests/kernel/recall-registration.test.ts --timeout 15000
 import { Effect } from "effect";
 import { describe, it, expect } from "bun:test";
-import { resolveExecutableToolCapabilities } from "../../src/strategies/kernel/utils/tool-capabilities.js";
+import { resolveExecutableToolCapabilities } from "../../src/kernel/capabilities/act/tool-capabilities.js";
 import { ToolService, ToolServiceLive } from "@reactive-agents/tools";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { EventBus } from "@reactive-agents/core";

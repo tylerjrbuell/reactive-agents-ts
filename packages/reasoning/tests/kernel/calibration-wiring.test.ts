@@ -1,7 +1,7 @@
 // Run: bun test packages/reasoning/tests/kernel/calibration-wiring.test.ts --timeout 15000
 import { Effect } from "effect";
 import { describe, it, expect } from "bun:test";
-import { runReactiveObserver } from "../../src/strategies/kernel/utils/reactive-observer.js";
+import { runReactiveObserver } from "../../src/kernel/capabilities/reflect/reactive-observer.js";
 import type { KernelState, KernelRunOptions, MaybeService, EventBusInstance } from "../../src/kernel/state/kernel-state.js";
 import type { StrategyServices } from "../../src/strategies/kernel/utils/service-utils.js";
 

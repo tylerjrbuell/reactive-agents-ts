@@ -3,7 +3,7 @@ import { readFileSync } from "fs"
 import { join } from "path"
 
 const src = readFileSync(
-  join(import.meta.dir, "../../../../src/strategies/kernel/phases/think.ts"),
+  join(import.meta.dir, "../../../../src/kernel/capabilities/reason/think.ts"),
   "utf8"
 )
 

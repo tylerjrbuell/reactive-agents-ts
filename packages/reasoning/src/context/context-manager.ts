@@ -17,15 +17,15 @@ import type { KernelState, KernelInput } from "../kernel/state/kernel-state.js";
 import type { ContextProfile } from "./context-profile.js";
 import { buildStaticContext } from "./context-engine.js";
 import type { KernelMessage } from "../kernel/state/kernel-state.js";
-import type { ToolSchema } from "../strategies/kernel/utils/tool-formatting.js";
+import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
 import {
   buildSystemPrompt,
   buildConversationMessages,
-} from "../strategies/kernel/phases/context-utils.js";
+} from "../kernel/capabilities/attend/context-utils.js";
 import {
   buildToolElaborationInjection,
   type ToolElaborationInjectionConfig,
-} from "../strategies/kernel/utils/tool-gating.js";
+} from "../kernel/capabilities/act/tool-gating.js";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

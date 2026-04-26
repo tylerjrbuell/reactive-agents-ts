@@ -23,7 +23,7 @@ import { CONTEXT_PROFILES } from "../../context/context-profile.js";
 import type { ContextProfile } from "../../context/context-profile.js";
 import { resolveStrategyServices } from "../../strategies/kernel/utils/service-utils.js";
 import { buildKernelHooks } from "../../kernel/state/kernel-hooks.js";
-import { makeStep } from "../../strategies/kernel/utils/step-utils.js";
+import { makeStep } from "../../kernel/capabilities/sense/step-utils.js";
 import {
   initialKernelState,
   transitionState,
@@ -33,21 +33,21 @@ import {
   type KernelRunOptions,
   type ThoughtKernel,
 } from "../../kernel/state/kernel-state.js";
-import { evaluateStrategySwitch, buildHandoff } from "../../strategies/kernel/utils/strategy-evaluator.js";
+import { evaluateStrategySwitch, buildHandoff } from "../../kernel/capabilities/reflect/strategy-evaluator.js";
 import { coordinateICS } from "../../strategies/kernel/utils/ics-coordinator.js";
-import { runReactiveObserver } from "../../strategies/kernel/utils/reactive-observer.js";
-import { detectLoop, checkAllToolsCalled } from "../../strategies/kernel/utils/loop-detector.js";
+import { runReactiveObserver } from "../../kernel/capabilities/reflect/reactive-observer.js";
+import { detectLoop, checkAllToolsCalled } from "../../kernel/capabilities/reflect/loop-detector.js";
 import {
   buildSuccessfulToolCallCounts,
   getMissingRequiredToolsByCount,
   getEffectiveMissingRequiredTools,
   getPermanentlyFailedRequiredTools,
-} from "../../strategies/kernel/utils/requirement-state.js";
+} from "../../kernel/capabilities/verify/requirement-state.js";
 import {
   decideExecutionLane,
   shouldInjectOracleNudge,
 } from "../../strategies/kernel/utils/lane-controller.js";
-import { extractOutputFormat, type TaskIntent } from "../../strategies/kernel/utils/task-intent.js";
+import { extractOutputFormat, type TaskIntent } from "../../kernel/capabilities/comprehend/task-intent.js";
 import { shouldAutoCheckpoint, autoCheckpoint } from "./auto-checkpoint.js";
 import {
   validateOutputFormat,

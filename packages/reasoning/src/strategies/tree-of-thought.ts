@@ -18,13 +18,13 @@ import { ObservableLogger, type LogEvent } from "@reactive-agents/observability"
 import { runKernel } from "../kernel/loop/runner.js";
 import { reactKernel } from "../kernel/loop/react-kernel.js";
 import { resolveStrategyServices, compilePromptOrFallback, publishReasoningStep } from "./kernel/utils/service-utils.js";
-import { parseScore } from "./kernel/utils/quality-utils.js";
-import { stripThinking } from "./kernel/utils/stream-parser.js";
-import type { ToolSchema } from "./kernel/utils/tool-formatting.js";
+import { parseScore } from "../kernel/capabilities/verify/quality-utils.js";
+import { stripThinking } from "../kernel/capabilities/reason/stream-parser.js";
+import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
-import { makeStep, buildStrategyResult } from "./kernel/utils/step-utils.js";
-import { resolveExecutableToolCapabilities } from "./kernel/utils/tool-capabilities.js";
+import { makeStep, buildStrategyResult } from "../kernel/capabilities/sense/step-utils.js";
+import { resolveExecutableToolCapabilities } from "../kernel/capabilities/act/tool-capabilities.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
 // ── Tier-Adaptive ToT Limits ─────────────────────────────────────────────────

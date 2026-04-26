@@ -12,7 +12,7 @@
 import { Effect } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
 import type { KernelState } from "../../../kernel/state/kernel-state.js";
-import { getPermanentlyFailedRequiredTools } from "./requirement-state.js";
+import { getPermanentlyFailedRequiredTools } from "../verify/requirement-state.js";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

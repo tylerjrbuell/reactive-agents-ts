@@ -41,15 +41,15 @@ import {
   publishReasoningStep,
 } from "./kernel/utils/service-utils.js";
 import type { StrategyServices } from "./kernel/utils/service-utils.js";
-import { makeStep, buildStrategyResult } from "./kernel/utils/step-utils.js";
-import { isSatisfied } from "./kernel/utils/quality-utils.js";
-import { stripThinking } from "./kernel/utils/stream-parser.js";
-import { extractOutputFormat } from "./kernel/utils/task-intent.js";
+import { makeStep, buildStrategyResult } from "../kernel/capabilities/sense/step-utils.js";
+import { isSatisfied } from "../kernel/capabilities/verify/quality-utils.js";
+import { stripThinking } from "../kernel/capabilities/reason/stream-parser.js";
+import { extractOutputFormat } from "../kernel/capabilities/comprehend/task-intent.js";
 import {
   validateOutputFormat,
   buildSynthesisPrompt,
 } from "../kernel/loop/output-synthesis.js";
-import type { ToolSchema } from "./kernel/utils/tool-formatting.js";
+import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 

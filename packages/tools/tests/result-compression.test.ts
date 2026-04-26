@@ -14,7 +14,7 @@
 import { describe, it, expect } from "bun:test";
 import {
   compressToolResult,
-} from "../../reasoning/src/strategies/kernel/utils/tool-formatting.js";
+} from "../../reasoning/src/kernel/capabilities/attend/tool-formatting.js";
 
 const BUDGET = 200;
 const PREVIEW_ITEMS = 3;

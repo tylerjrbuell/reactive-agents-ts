@@ -30,7 +30,7 @@ import type { ContextProfile } from "../../../context/context-profile.js";
 import { ToolNotFoundError } from "@reactive-agents/tools";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import { evaluateTransform } from "./tool-parsing.js";
-import { compressToolResult, nextToolResultKey } from "./tool-formatting.js";
+import { compressToolResult, nextToolResultKey } from "../attend/tool-formatting.js";
 import type { MaybeService, ToolServiceInstance, MemoryServiceInstance } from "../../../kernel/state/kernel-state.js";
 import type { ToolCallSpec } from "@reactive-agents/tools";
 import type { SemanticEntry, MemoryId } from "@reactive-agents/memory";
@@ -130,7 +130,7 @@ function storeToolObservationSemantic(
       Effect.asVoid,
       Effect.catchAll((err) =>
         emitErrorSwallowed({
-          site: "reasoning/src/strategies/kernel/utils/tool-execution.ts:storeToolObservationSemantic",
+          site: "reasoning/src/kernel/capabilities/act/tool-execution.ts:storeToolObservationSemantic",
           tag: errorTag(err),
         }),
       ),
@@ -520,7 +520,7 @@ export function executeToolCall(
     Effect.serviceOption(ObservableLogger).pipe(
       Effect.flatMap((opt) =>
         opt._tag === "Some"
-          ? opt.value.emit(event).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/strategies/kernel/utils/tool-execution.ts:427", tag: errorTag(err) })))
+          ? opt.value.emit(event).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/kernel/capabilities/act/tool-execution.ts:427", tag: errorTag(err) })))
           : Effect.void
       )
     );

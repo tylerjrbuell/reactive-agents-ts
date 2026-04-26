@@ -6,7 +6,7 @@ import {
   executeToolCall,
   executeNativeToolCall,
   type ToolExecutionResult,
-} from "../../../../src/strategies/kernel/utils/tool-execution.js";
+} from "../../../../src/kernel/capabilities/act/tool-execution.js";
 import type { MaybeService, ToolServiceInstance } from "../../../../src/kernel/state/kernel-state.js";
 import { scratchpadStoreRef, makeRecallHandler } from "@reactive-agents/tools";
 
@@ -464,7 +464,7 @@ describe("executeNativeToolCall FC recall hint preservation", () => {
 
 // ── extractObservationFacts ─────────────────────────────────────────────────
 
-import { extractObservationFacts } from "../../../../src/strategies/kernel/utils/tool-execution.js";
+import { extractObservationFacts } from "../../../../src/kernel/capabilities/act/tool-execution.js";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { Layer } from "effect";
 

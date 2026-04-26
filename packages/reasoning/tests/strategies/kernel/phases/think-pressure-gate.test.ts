@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test"
-import { shouldNarrowToFinalAnswerOnly, CONTEXT_PRESSURE_THRESHOLDS } from "../../../../src/strategies/kernel/phases/think.js"
+import { shouldNarrowToFinalAnswerOnly, CONTEXT_PRESSURE_THRESHOLDS } from "../../../../src/kernel/capabilities/reason/think.js"
 
 describe("context pressure hard gate", () => {
   it("returns false when under budget", () => {

@@ -13,7 +13,7 @@ import { describe, it, expect } from "bun:test";
 import { Effect, Layer, Stream } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
 import type { StreamEvent } from "@reactive-agents/llm-provider";
-import { handleThinking } from "../../../../src/strategies/kernel/phases/think.js";
+import { handleThinking } from "../../../../src/kernel/capabilities/reason/think.js";
 import {
   transitionState,
   noopHooks,

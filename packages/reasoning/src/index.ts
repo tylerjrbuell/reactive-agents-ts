@@ -135,9 +135,9 @@ export { KernelMetaToolsSchema, StaticBriefInfoSchema } from "./types/kernel-met
 export type { KernelMetaToolsConfig } from "./types/kernel-meta-tools.js";
 
 // ─── Shared Utilities ───
-export { filterToolsByRelevance } from "./strategies/kernel/utils/tool-formatting.js";
-export { planNextMoveBatches } from "./strategies/kernel/utils/tool-gating.js";
-export type { ToolSchema, ToolParamSchema } from "./strategies/kernel/utils/tool-formatting.js";
+export { filterToolsByRelevance } from "./kernel/capabilities/attend/tool-formatting.js";
+export { planNextMoveBatches } from "./kernel/capabilities/act/tool-gating.js";
+export type { ToolSchema, ToolParamSchema } from "./kernel/capabilities/attend/tool-formatting.js";
 export type { KernelMessage } from "./kernel/state/kernel-state.js";
 export { META_TOOLS, INTROSPECTION_META_TOOLS } from "./kernel/state/kernel-constants.js";
 
@@ -146,13 +146,13 @@ export {
   evaluateTermination,
   defaultEvaluators,
   controllerSignalVetoEvaluator,
-} from "./strategies/kernel/utils/termination-oracle.js";
+} from "./kernel/capabilities/decide/termination-oracle.js";
 export type {
   TerminationContext,
   TerminationDecision,
   TerminationSignalEvaluator,
   SignalVerdict,
-} from "./strategies/kernel/utils/termination-oracle.js";
+} from "./kernel/capabilities/decide/termination-oracle.js";
 
 // ─── Structured Output ───
 export { inferRequiredTools, classifyToolRelevance } from "./structured-output/infer-required-tools.js";

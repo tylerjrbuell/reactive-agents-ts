@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test"
-import { isConsecutiveMetaToolSpam } from "../../../../src/strategies/kernel/phases/guard.js"
+import { isConsecutiveMetaToolSpam } from "../../../../src/kernel/capabilities/act/guard.js"
 
 describe("meta-tool deduplication guard", () => {
   it("returns false on first meta-tool call", () => {

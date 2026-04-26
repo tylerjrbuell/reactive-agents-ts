@@ -11,7 +11,7 @@ import {
   type MaybeService,
   type EventBusInstance,
 } from "../../../src/kernel/state/kernel-state.js";
-import { makeStep } from "../../../src/strategies/kernel/utils/step-utils.js";
+import { makeStep } from "../../../src/kernel/capabilities/sense/step-utils.js";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 

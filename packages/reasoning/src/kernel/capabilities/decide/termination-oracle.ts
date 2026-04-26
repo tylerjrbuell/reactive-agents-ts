@@ -8,8 +8,8 @@
  */
 
 import type { ReasoningStep } from "../../../types/index.js";
-import type { ToolSchema } from "./tool-formatting.js";
-import { FINAL_ANSWER_RE, extractFinalAnswer } from "./tool-parsing.js";
+import type { ToolSchema } from "../attend/tool-formatting.js";
+import { FINAL_ANSWER_RE, extractFinalAnswer } from "../act/tool-parsing.js";
 
 // ── Local structural types ──────────────────────────────────────────────
 // These mirror shapes from @reactive-agents/reactive-intelligence without
