@@ -59,10 +59,24 @@ export interface TerminationContext {
   readonly redirectCount: number;
   readonly priorFinalAnswerAttempts: number;
   readonly taskDescription: string;
+  /**
+   * Run-wide accumulated controller decision strings (from
+   * state.controllerDecisionLog). Each entry is "decisionType: reason".
+   * Used by controllerSignalVetoEvaluator to detect pathological controller
+   * activity that should override an apparent successful exit.
+   */
+  readonly controllerDecisionLog?: readonly string[];
 }
 
 export interface SignalVerdict {
-  readonly action: "exit" | "redirect" | "continue";
+  /**
+   * "fail" (S2.5 Slice C+ / CHANGE A — Verdict-Override pattern):
+   * Exit the kernel AND mark the run as failed (status="failed", success=false),
+   * regardless of the agent's own success claim. Used when the controller's
+   * accumulated activity (repeated tactical interventions without escalation,
+   * high entropy, tool-failure streaks) contradicts the agent's exit signal.
+   */
+  readonly action: "exit" | "redirect" | "continue" | "fail";
   readonly confidence: "high" | "medium" | "low";
   readonly reason: string;
   readonly output?: string;
@@ -75,7 +89,7 @@ export interface TerminationSignalEvaluator {
 
 export interface TerminationDecision {
   readonly shouldExit: boolean;
-  readonly action: "exit" | "redirect" | "continue";
+  readonly action: SignalVerdict["action"];
   readonly confidence: "high" | "medium" | "low";
   readonly reason: string;
   readonly evaluator: string;
@@ -101,6 +115,14 @@ export function evaluateTermination(
 
     verdicts.push({ evaluator: ev.name, verdict });
 
+    // Short-circuit: high-confidence FAIL veto (CHANGE A — Verdict-Override).
+    // Wins over any subsequent exit/continue verdict because controller-level
+    // failure detection trumps the agent's own success claim. shouldExit=true
+    // so the kernel terminates this iteration; the action="fail" tells
+    // think.ts to set status="failed" not status="done".
+    if (verdict.action === "fail" && verdict.confidence === "high") {
+      return { shouldExit: true, ...verdict, evaluator: ev.name, allVerdicts: verdicts };
+    }
     // Short-circuit: high-confidence exit
     if (verdict.action === "exit" && verdict.confidence === "high") {
       return { shouldExit: true, ...verdict, evaluator: ev.name, allVerdicts: verdicts };
@@ -109,6 +131,22 @@ export function evaluateTermination(
     if (verdict.action === "continue" && verdict.confidence === "high") {
       return { shouldExit: false, ...verdict, evaluator: ev.name, allVerdicts: verdicts };
     }
+  }
+
+  // Failure verdicts trump exits at the same confidence band — the
+  // Verdict-Override pattern says: when the controller signals failure, the
+  // kernel terminates as failed even if another evaluator wanted a success exit.
+  const fails = verdicts
+    .filter((v) => v.verdict.action === "fail")
+    .sort((a, b) => confidenceRank(b.verdict.confidence) - confidenceRank(a.verdict.confidence));
+  const bestFail = fails[0];
+  if (bestFail) {
+    return {
+      shouldExit: true,
+      ...bestFail.verdict,
+      evaluator: bestFail.evaluator,
+      allVerdicts: verdicts,
+    };
   }
 
   const exits = verdicts
@@ -286,11 +324,85 @@ export const completionGapEvaluator: TerminationSignalEvaluator = {
   },
 };
 
+// ── controllerSignalVetoEvaluator (CHANGE A — Verdict-Override) ──────────────
+//
+// Why: corpus traces (2026-04-25) showed 3 of 4 labeled-failure scenarios
+// terminated with success=true at iter 3-9 — well within budget. The agents
+// stopped while STILL FAILING and the framework declared success because the
+// only termination signal it consulted was the agent's own end_turn. Yet the
+// controller had been firing tactical interventions repeatedly without ever
+// escalating to switch-strategy. The veto reads that controller history and
+// converts the would-be success into a correct failure.
+//
+// Trigger conditions (all must hold to veto):
+//   1. Agent is signaling exit (stopReason === "end_turn" OR has a textual
+//      thought ready to be the final answer)
+//   2. controllerDecisionLog shows pathological tactical activity:
+//        - ≥2 stall-detect decisions, OR
+//        - ≥3 tool-inject decisions, OR
+//        - high entropy (composite > 0.55) AND ≥1 stall-detect
+//   3. switch-strategy NEVER fired in this run (no escalation occurred)
+//
+// Conservative on purpose — false vetoes (rejecting a correct success) are
+// worse than missed vetoes. If success-typescript-paradigm-style runs (1
+// stall-detect + recovery) start tripping the veto, raise thresholds.
+//
+// Pattern: Verdict-Override. The agent's self-report is one signal; the
+// controller's aggregate history is another; the meta-controller produces the
+// final verdict by reconciling them.
+export const controllerSignalVetoEvaluator: TerminationSignalEvaluator = {
+  name: "ControllerSignalVeto",
+  evaluate: (ctx) => {
+    const log = ctx.controllerDecisionLog ?? [];
+    if (log.length === 0) return null;
+
+    // Extract decision types — entries are formatted "decisionType: reason".
+    const decisionTypes = log.map((e) => e.split(":", 1)[0]?.trim() ?? "");
+
+    // Escalation already happened — trust the controller's own escalation path.
+    const hasEscalation = decisionTypes.some((d) => d === "switch-strategy");
+    if (hasEscalation) return null;
+
+    const stallCount = decisionTypes.filter((d) => d === "stall-detect").length;
+    const injectCount = decisionTypes.filter((d) => d === "tool-inject").length;
+    const entropy = ctx.entropy?.composite ?? 0;
+
+    const repeatedStall = stallCount >= 2;
+    const repeatedInject = injectCount >= 3;
+    const stallWithHighEntropy = stallCount >= 1 && entropy > 0.55;
+
+    if (!repeatedStall && !repeatedInject && !stallWithHighEntropy) return null;
+
+    // Only veto if the agent is actually trying to exit. If the kernel is
+    // mid-loop and we'd just continue anyway, the veto adds no value.
+    const lookingToExit =
+      ctx.stopReason === "end_turn" || ctx.thought.trim().length > 0;
+    if (!lookingToExit) return null;
+
+    const reasons: string[] = [];
+    if (repeatedStall) reasons.push(`${stallCount} stall-detect`);
+    if (repeatedInject) reasons.push(`${injectCount} tool-inject`);
+    if (stallWithHighEntropy)
+      reasons.push(`stall+entropy=${entropy.toFixed(2)}`);
+
+    return {
+      action: "fail",
+      confidence: "high",
+      reason: `controller_signal_veto: ${reasons.join(", ")} without switch-strategy escalation`,
+      // No output — the run is being marked as failed; the kernel surfaces
+      // the veto reason as state.error instead.
+    };
+  },
+};
+
 /** Default evaluator chain — ordered for short-circuit performance.
+ *  controllerSignalVeto runs FIRST so its high-confidence "fail" verdict can
+ *  short-circuit before any successful-exit evaluator gets a chance to fire.
  *  finalAnswerRegex runs before llmEndTurn because it extracts a clean answer
  *  (stripping the "FINAL ANSWER:" prefix), while end_turn returns raw thought. */
 export const defaultEvaluators: readonly TerminationSignalEvaluator[] = [
   pendingToolCallEvaluator,
+  controllerSignalVetoEvaluator,
   finalAnswerToolEvaluator,
   entropyConvergenceEvaluator,
   reactiveControllerEarlyStopEvaluator,

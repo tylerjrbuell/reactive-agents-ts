@@ -676,3 +676,114 @@ describe("tier-aware ContentStability", () => {
     }
   });
 });
+
+// ── controllerSignalVetoEvaluator (CHANGE A — Verdict-Override) ─────────────
+import { controllerSignalVetoEvaluator } from "../../src/strategies/kernel/utils/termination-oracle.js";
+
+describe("controllerSignalVetoEvaluator (CHANGE A — Verdict-Override)", () => {
+  test("vetoes when ≥2 stall-detect decisions and no switch-strategy escalation", () => {
+    const ctx = makeCtx({
+      controllerDecisionLog: ["stall-detect: low entropy delta", "stall-detect: still stuck"],
+    });
+    const v = controllerSignalVetoEvaluator.evaluate(ctx);
+    expect(v).not.toBeNull();
+    expect(v!.action).toBe("fail");
+    expect(v!.confidence).toBe("high");
+    expect(v!.reason).toContain("2 stall-detect");
+    expect(v!.reason).toContain("without switch-strategy");
+  });
+
+  test("vetoes when ≥3 tool-inject decisions and no escalation", () => {
+    const ctx = makeCtx({
+      controllerDecisionLog: [
+        "tool-inject: more tools",
+        "tool-inject: more tools",
+        "tool-inject: more tools",
+      ],
+    });
+    const v = controllerSignalVetoEvaluator.evaluate(ctx);
+    expect(v).not.toBeNull();
+    expect(v!.action).toBe("fail");
+    expect(v!.reason).toContain("3 tool-inject");
+  });
+
+  test("vetoes on 1 stall-detect when entropy > 0.55", () => {
+    const ctx = makeCtx({
+      controllerDecisionLog: ["stall-detect: stuck"],
+      entropy: { composite: 0.7 },
+    });
+    const v = controllerSignalVetoEvaluator.evaluate(ctx);
+    expect(v).not.toBeNull();
+    expect(v!.action).toBe("fail");
+    expect(v!.reason).toContain("stall+entropy");
+  });
+
+  test("does NOT veto if switch-strategy already fired (controller already escalated)", () => {
+    const ctx = makeCtx({
+      controllerDecisionLog: [
+        "stall-detect: stuck",
+        "stall-detect: stuck",
+        "switch-strategy: escalating to plan-execute",
+      ],
+    });
+    const v = controllerSignalVetoEvaluator.evaluate(ctx);
+    expect(v).toBeNull();
+  });
+
+  test("does NOT veto on 1 stall-detect with low entropy (the W4 false-positive guardrail)", () => {
+    const ctx = makeCtx({
+      controllerDecisionLog: ["stall-detect: low entropy delta"],
+      entropy: { composite: 0.15 },
+    });
+    const v = controllerSignalVetoEvaluator.evaluate(ctx);
+    expect(v).toBeNull();
+  });
+
+  test("does NOT veto with empty decision log (not enough signal)", () => {
+    const ctx = makeCtx({ controllerDecisionLog: [] });
+    expect(controllerSignalVetoEvaluator.evaluate(ctx)).toBeNull();
+  });
+
+  test("does NOT veto when there's no exit attempt (mid-loop, no thought, no end_turn)", () => {
+    const ctx = makeCtx({
+      controllerDecisionLog: ["stall-detect", "stall-detect"],
+      thought: "",
+      stopReason: "tool_use",
+    });
+    const v = controllerSignalVetoEvaluator.evaluate(ctx);
+    expect(v).toBeNull();
+  });
+
+  test("resolver: high-confidence fail short-circuits over a high-confidence exit", () => {
+    const ctx = makeCtx({
+      controllerDecisionLog: ["stall-detect", "stall-detect"],
+    });
+    const result = evaluateTermination(ctx, [
+      controllerSignalVetoEvaluator,
+      exitHigh,
+    ]);
+    expect(result.shouldExit).toBe(true);
+    expect(result.action).toBe("fail");
+    expect(result.evaluator).toBe("ControllerSignalVeto");
+  });
+
+  test("resolver: medium fail still wins over medium exit (Verdict-Override aggregation)", () => {
+    const failMedium: TerminationSignalEvaluator = {
+      name: "fail-medium",
+      evaluate: () => ({ action: "fail", confidence: "medium", reason: "soft-veto" }),
+    };
+    const result = evaluateTermination(makeCtx(), [failMedium, exitMedium]);
+    expect(result.shouldExit).toBe(true);
+    expect(result.action).toBe("fail");
+  });
+
+  test("resolver: when veto doesn't fire, normal exit path still works", () => {
+    const ctx = makeCtx({
+      controllerDecisionLog: ["stall-detect"], // only 1, low entropy → no veto
+      entropy: { composite: 0.15 },
+    });
+    const result = evaluateTermination(ctx, [controllerSignalVetoEvaluator, exitMedium]);
+    expect(result.shouldExit).toBe(true);
+    expect(result.action).toBe("exit"); // not "fail"
+  });
+});

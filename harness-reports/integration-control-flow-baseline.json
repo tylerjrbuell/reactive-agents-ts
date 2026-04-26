@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "capturedAt": "2026-04-26T02:44:43.834Z",
+  "capturedAt": "2026-04-26T04:04:53.369Z",
   "bunVersion": "1.3.10",
   "scenarios": {
     "cf-04-goal-achieved-from-end-turn": {
@@ -195,6 +195,27 @@
         "untrusted_wrapped_with_toolname": true,
         "untrusted_closes_block": true,
         "trusted_remains_plain_when_included": true
+      }
+    },
+    "cf-21-failure-detected-from-controller-signal": {
+      "status": "success",
+      "iterations": 0,
+      "terminatedBy": "unknown",
+      "goalAchieved": null,
+      "toolCallsObserved": [],
+      "interventionsDispatched": [],
+      "errorSwallowedSites": [],
+      "redactorsTriggered": [],
+      "customAssertions": {
+        "veto.in_default_evaluators": true,
+        "T1.fires_on_2_stall_detect": true,
+        "T2.silent_when_escalated": true,
+        "T3.fires_on_stall_with_high_entropy": true,
+        "T4.silent_on_low_entropy_with_one_stall": true,
+        "T5.fires_on_3_tool_inject": true,
+        "resolver.returns_fail": true,
+        "resolver.shouldExit": true,
+        "resolver.evaluator_is_veto": true
       }
     }
   }

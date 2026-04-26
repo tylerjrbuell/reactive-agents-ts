@@ -859,6 +859,10 @@ export function handleThinking(
         entropy: state.meta.entropy?.latestScore as TerminationContext["entropy"],
         trajectory: state.meta.entropy?.latestTrajectory as TerminationContext["trajectory"],
         controllerDecisions: state.meta.controllerDecisions as TerminationContext["controllerDecisions"],
+        // CHANGE A: hand the run-wide controller history to the oracle so
+        // controllerSignalVetoEvaluator can detect pathological tactical
+        // activity that should override an apparent successful exit.
+        controllerDecisionLog: state.controllerDecisionLog,
         toolsUsed: state.toolsUsed,
         requiredTools: (state.meta.requiredTools as string[]) ?? (input.requiredTools as string[]) ?? [],
         allToolSchemas: input.allToolSchemas ?? input.availableToolSchemas ?? [],
@@ -868,6 +872,29 @@ export function handleThinking(
       };
 
       const decision = evaluateTermination(oracleCtx, defaultEvaluators);
+
+      // CHANGE A: a "fail" verdict from the veto evaluator transitions to
+      // status:"failed" — the kernel terminates and result.success becomes
+      // false. The agent's textual output (if any) is discarded; the
+      // veto reason becomes state.error.
+      if (decision.shouldExit && decision.action === "fail") {
+        return transitionState(state, {
+          steps: newSteps,
+          tokens: newTokens,
+          cost: newCost,
+          status: "failed" as const,
+          error: decision.reason,
+          output: null,
+          priorThought: thought.trim(),
+          iteration: state.iteration + 1,
+          meta: {
+            ...state.meta,
+            terminatedBy: "controller_signal_veto",
+            evaluator: decision.evaluator,
+            allVerdicts: decision.allVerdicts,
+          },
+        });
+      }
 
       if (decision.shouldExit && decision.output) {
         const assembled = assembleOutput({

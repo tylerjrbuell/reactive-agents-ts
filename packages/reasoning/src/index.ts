@@ -141,6 +141,19 @@ export type { ToolSchema, ToolParamSchema } from "./strategies/kernel/utils/tool
 export type { KernelMessage } from "./strategies/kernel/kernel-state.js";
 export { META_TOOLS, INTROSPECTION_META_TOOLS } from "./strategies/kernel/kernel-constants.js";
 
+// ─── Termination Oracle (CHANGE A — Verdict-Override) ───
+export {
+  evaluateTermination,
+  defaultEvaluators,
+  controllerSignalVetoEvaluator,
+} from "./strategies/kernel/utils/termination-oracle.js";
+export type {
+  TerminationContext,
+  TerminationDecision,
+  TerminationSignalEvaluator,
+  SignalVerdict,
+} from "./strategies/kernel/utils/termination-oracle.js";
+
 // ─── Structured Output ───
 export { inferRequiredTools, classifyToolRelevance } from "./structured-output/infer-required-tools.js";
 export type { ToolSummary, InferRequiredToolsConfig, ToolClassificationResult } from "./structured-output/infer-required-tools.js";
