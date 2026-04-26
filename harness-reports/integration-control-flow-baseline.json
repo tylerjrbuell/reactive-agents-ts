@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "capturedAt": "2026-04-26T00:25:12.909Z",
+  "capturedAt": "2026-04-26T02:34:38.975Z",
   "bunVersion": "1.3.10",
   "scenarios": {
     "cf-04-goal-achieved-from-end-turn": {
@@ -157,6 +157,24 @@
         "untrusted.code-execute.in_set": false,
         "set.size": 8,
         "grandfather.justification": "grandfather-phase-1"
+      }
+    },
+    "cf-19-untrusted-observation-rendered": {
+      "status": "success",
+      "iterations": 0,
+      "terminatedBy": "unknown",
+      "goalAchieved": null,
+      "toolCallsObserved": [],
+      "interventionsDispatched": [],
+      "errorSwallowedSites": [],
+      "redactorsTriggered": [],
+      "customAssertions": {
+        "curator.port_exists": true,
+        "trusted.is_plain": true,
+        "trusted.no_tool_output_wrapper": true,
+        "untrusted.opens_with_wrapper": true,
+        "untrusted.closes_with_wrapper": true,
+        "untrusted.preserves_payload": true
       }
     }
   }

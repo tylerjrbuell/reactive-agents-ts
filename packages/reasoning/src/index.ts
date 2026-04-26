@@ -110,6 +110,13 @@ export type {
 // ─── Message Window Compaction ───
 export { applyMessageWindowWithCompact } from "./context/message-window.js";
 
+// ─── ContextCurator (Phase 1 Sprint 2 S2.5) ───
+export {
+  defaultContextCurator,
+  renderObservationForPrompt,
+} from "./context/context-curator.js";
+export type { Prompt, ContextCurator } from "./context/context-curator.js";
+
 // ─── Intelligent Context Synthesis (ICS) ───
 export type {
   TaskPhase,

@@ -18,7 +18,7 @@ import {
   toProviderMessage,
   buildToolSchemas,
 } from "./context-utils.js";
-import { ContextManager } from "../../../context/context-manager.js";
+import { defaultContextCurator } from "../../../context/context-curator.js";
 import { StreamingTextCallback } from "@reactive-agents/core";
 import {
   finalAnswerTool,
@@ -212,10 +212,15 @@ export function handleThinking(
     // system prompt — the model can only call tools it can actually see.
     const filteredToolSchemas = buildToolSchemas(state, input, profile, promptSchemas);
 
+    // ContextCurator (S2.5): sole authority for the per-iteration prompt.
+    // defaultContextCurator currently delegates to ContextManager.build so
+    // behavior is byte-identical; the indirection makes "single author" a
+    // structural property — alternate curators (compression-aware,
+    // embedding-aware) can be swapped without touching think.ts.
     const {
       systemPrompt: systemPromptText,
       messages: conversationMessages,
-    } = ContextManager.build(state, input, profile, guidance, adapter, {
+    } = defaultContextCurator.curate(state, input, profile, guidance, adapter, {
       availableTools: promptSchemas,
       systemPromptBody: effectiveSystemPrompt,
       toolElaboration: input.toolElaboration,

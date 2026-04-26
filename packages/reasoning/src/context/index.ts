@@ -20,3 +20,9 @@ export { applyMessageWindowWithCompact } from "./message-window.js";
 
 export { ContextManager } from "./context-manager.js";
 export type { GuidanceContext, ContextManagerOutput } from "./context-manager.js";
+
+export {
+  defaultContextCurator,
+  renderObservationForPrompt,
+} from "./context-curator.js";
+export type { Prompt, ContextCurator } from "./context-curator.js";
