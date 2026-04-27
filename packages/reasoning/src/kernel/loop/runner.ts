@@ -121,40 +121,6 @@ function resolveStoredToolObservation(
  * (only actually-executed tools are added to that set) and excluding known
  * guard-block text patterns.
  */
-/**
- * Detect outputs that obviously aren't a real answer to the task. Triggers
- * forced resynthesis at the output gate. Cross-model failure-mode analysis
- * (harness-reports/cross-model-failure-modes-2026-04-26.md) catalogued these
- * shapes:
- *   - lone filename strings (qwen3:14b T5: `./today-on-hacker-news.md`)
- *   - control-token leaks (gemma4 T5: `.<channel|>`)
- *   - harness control strings reaching the user (`controller_signal_veto: ...`,
- *     `loop-detected: ...`, `Task incomplete — missing_required_tool: ...`)
- *   - empty / whitespace-only
- */
-function isLikelyGarbageOutput(output: string | null | undefined): boolean {
-  if (!output) return true;
-  const trimmed = output.trim();
-  if (trimmed.length === 0) return true;
-  // Harness control strings — never the model's actual answer.
-  if (
-    /^(?:controller_signal_veto|Task incomplete|Loop detected|missing_required_tool)/i.test(trimmed)
-  ) {
-    return true;
-  }
-  // Control-token leaks — e.g. `<channel|>`, `<|im_end|>`, lone `./path.md`.
-  // Heuristic: <100 chars AND mostly non-letter tokens, OR contains LLM
-  // delimiter sequences without surrounding prose.
-  if (trimmed.length < 80) {
-    const letterRatio = (trimmed.match(/[a-zA-Z]/g)?.length ?? 0) / trimmed.length;
-    if (letterRatio < 0.4) return true;
-    if (/<\|[^|]*\|>|<channel\|>|<\/?response>/i.test(trimmed)) return true;
-    // Lone filename / single-token reference (e.g. `./today.md`).
-    if (/^\.?\/?[\w./-]+\.[a-z]+$/i.test(trimmed)) return true;
-  }
-  return false;
-}
-
 export function assembleDeliverable(state: KernelState): string {
   const artifacts = collectDeliverableArtifacts(state);
   if (artifacts.length > 0) return artifacts.join("\n\n");
@@ -1364,15 +1330,8 @@ export function runKernel(
       // Determine if synthesis is needed:
       // 1. Explicit format requested but validation failed
       // 2. Harness/oracle source — raw tool artifacts need professional formatting
-      // 3. Output is obviously garbage (control-token leak, lone filename,
-      //    very-short ungrounded text, harness error strings) — observed on
-      //    gemma4 T5 (`.<channel|>`), qwen3 T5 (`./today-on-hacker-news.md`),
-      //    gpt-oss T2/T3 (`controller_signal_veto: ...`). Force resynthesis
-      //    from the observation corpus rather than handing the garbage back
-      //    as the agent's answer.
-      const needsSynthesis = (!finalized.formatValidated &&
-        (taskIntent.format || terminationSource === "harness" || terminationSource === "oracle"))
-        || isLikelyGarbageOutput(state.output);
+      const needsSynthesis = !finalized.formatValidated &&
+        (taskIntent.format || terminationSource === "harness" || terminationSource === "oracle");
 
       if (needsSynthesis) {
         const llmOpt = yield* Effect.serviceOption(LLMService);

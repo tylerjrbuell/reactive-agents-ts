@@ -562,15 +562,9 @@ function shouldVetoSuccess(ctx: ArbitrationContext): { readonly veto: true; read
   const injectCount = decisionTypes.filter((d) => d === "tool-inject").length;
   const entropy = ctx.entropyComposite ?? 0;
 
-  // Stall threshold bumped 2 → 3 to match the stall-detector's own
-  // escalation threshold (see stall-detector.ts). Previously the stall
-  // detector would emit 2 nudges and this veto would fire on observation 2,
-  // killing runs while the soft nudge revision was still mid-flight.
-  // High-entropy threshold lifted 1 → 2 so a single benign restatement
-  // no longer pairs with momentary high entropy to fire the veto.
-  const repeatedStall = stallCount >= 3;
+  const repeatedStall = stallCount >= 2;
   const repeatedInject = injectCount >= 3;
-  const stallWithHighEntropy = stallCount >= 2 && entropy > 0.55;
+  const stallWithHighEntropy = stallCount >= 1 && entropy > 0.55;
 
   if (!repeatedStall && !repeatedInject && !stallWithHighEntropy) {
     return { veto: false };
