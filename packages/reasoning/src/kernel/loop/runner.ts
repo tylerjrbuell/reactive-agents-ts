@@ -1288,6 +1288,18 @@ export function runKernel(
           // Continue the loop — kernel will see the feedback in steps
         }
       }
+
+      // ── Post-iteration snapshot ──────────────────────────────────────────
+      // Capture state AFTER kernel() ran and post-processing finalized.
+      // Without this, traces only show iter-start (steps=0) and the verifier
+      // verdict — no visibility into step composition, output, or terminatedBy
+      // for the iter that actually produced output. See diagnostic gap found
+      // 2026-04-27 (T4: 6 events, status=done invisible).
+      yield* emitKernelStateSnapshot({
+        state,
+        taskId: currentOptions.taskId,
+        iteration: state.iteration,
+      });
     }
 
     // ── 8. Post-loop required tools check ───────────────────────────────────
@@ -1410,6 +1422,19 @@ export function runKernel(
     if (process.env.DEBUG_VERIFIER === "1") {
       console.error(`[VERIFIER-PRE] status=${state.status} hasOutput=${!!state.output} terminatedBy=${state.meta.terminatedBy} outLen=${(state.output ?? "").length} stepsCount=${state.steps.length}`);
     }
+
+    // ── Terminal snapshot (pre-verifier) ─────────────────────────────────────
+    // Records the exact state the verifier gate inspects. With both an iter-end
+    // snapshot AND this terminal one, a trace narrative becomes complete:
+    // iter-start → iter-end → terminal → verifier-verdict. Without this, you
+    // can't tell whether the verifier rejected the kernel's true final state
+    // or some intermediate state.
+    yield* emitKernelStateSnapshot({
+      state,
+      taskId: currentOptions.taskId,
+      iteration: state.iteration,
+    });
+
     if (state.status === "done" && state.output) {
       if (process.env.DEBUG_VERIFIER === "1") {
         console.error(`[VERIFIER] required=${JSON.stringify(effectiveInput.requiredTools)} relevant=${JSON.stringify(effectiveInput.relevantTools)} used=${JSON.stringify([...state.toolsUsed])} output.head=${state.output.slice(0, 80)}`);
