@@ -3551,16 +3551,31 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 const rr = ctx.metadata.reasoningResult as {
                   output?: unknown;
                   status?: string;
-                  steps?: ReadonlyArray<{ type?: string; content?: string }>;
+                  steps?: ReadonlyArray<{
+                    type?: string;
+                    content?: string;
+                    metadata?: { observationResult?: { success?: boolean; toolName?: string } };
+                  }>;
                   metadata?: { confidence?: number; strategyFallback?: boolean; terminatedBy?: string; finalAnswerCapture?: unknown; llmCalls?: number };
                 } | undefined;
                 let rawOutput: unknown = ctx.metadata.lastResponse ?? null;
                 if (
                   (rawOutput === null || rawOutput === "") &&
                   rr?.steps &&
-                  rr.steps.length > 0
+                  rr.steps.length > 0 &&
+                  rr.status !== "failed"
                 ) {
-                  const lastObs = [...rr.steps].reverse().find((s) => s.type === "observation");
+                  // Fall back to last *genuine* tool observation. Skip harness-injected
+                  // observations (toolName="system", success=false) — those carry harness
+                  // guidance text the model parrots ("Your next step: call X..."), not
+                  // user-visible deliverables. Without this filter, on a failed/empty
+                  // run we ship the last harness nudge as the answer.
+                  const lastObs = [...rr.steps].reverse().find((s) => {
+                    if (s.type !== "observation") return false;
+                    const obs = s.metadata?.observationResult;
+                    if (obs && (obs.success === false || obs.toolName === "system")) return false;
+                    return true;
+                  });
                   if (lastObs?.content) rawOutput = lastObs.content;
                 }
                 const sanitizedOutput = typeof rawOutput === "string" ? sanitizeOutput(rawOutput) : rawOutput;

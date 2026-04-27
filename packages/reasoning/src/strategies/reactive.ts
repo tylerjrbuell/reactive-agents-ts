@@ -203,21 +203,12 @@ export const executeReactive = (
         : undefined,
     });
 
-    // Output ownership rule (Sprint 3.4):
-    //   - state.output IS the answer when set
-    //   - On a successful run, fall back to the last thought (model produced
-    //     content even if it didn't reach state.output)
-    //   - On a FAILED run, output stays null. The diagnostic lives in
-    //     state.error and the public result surfaces it as result.error.
-    //     Do NOT use state.error as output, do NOT use lastThought as output:
-    //     models often parrot harness guidance in their thoughts (especially
-    //     cogito-class) so the last thought is unreliable on failure.
-    const output =
-      state.output ??
-      (state.status === "failed"
-        ? null
-        : [...state.steps].filter((s) => s.type === "thought").pop()?.content ??
-          null);
+    // Output ownership rule (Sprint 3.5):
+    // The kernel is single source of truth for state.output. runner.ts §8.7
+    // synthesizes lastThought into state.output before the verifier gate, so
+    // strategy adapters return state.output verbatim. Failed runs have
+    // output=null per the transitionState invariant.
+    const output = state.output ?? null;
 
     // Derive terminatedBy from kernel state — map oracle reasons to canonical types
     const rawTerminatedBy = state.meta.terminatedBy as string | undefined;

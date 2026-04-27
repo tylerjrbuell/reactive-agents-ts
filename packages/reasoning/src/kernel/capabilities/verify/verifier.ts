@@ -57,8 +57,24 @@ export interface VerificationContext {
   readonly priorSteps: readonly ReasoningStep[];
   /** Required tools the harness expects to be called before completion. */
   readonly requiredTools?: readonly string[];
+  /**
+   * Relevant tools — classifier-inferred set the agent likely needs for the
+   * task. Distinct from requiredTools (which is enforced by the dispatcher).
+   * The Verifier consults this to detect "agent took no action despite
+   * classifier suggesting tools were needed" — a common failure mode where
+   * the model parrots system guidance without invoking any tool.
+   */
+  readonly relevantTools?: readonly string[];
   /** Tools called so far this run. */
   readonly toolsUsed?: ReadonlySet<string>;
+  /**
+   * Tool names the user actually registered for the agent (excluding meta-tools).
+   * Distinct from requiredTools/relevantTools (classifier output). The Verifier
+   * uses this for a classifier-independent "agent took action" check: if the
+   * user gave the agent data tools but the agent shipped output without
+   * invoking any of them, the answer is suspect — common parrot failure mode.
+   */
+  readonly availableUserTools?: readonly string[];
   /**
    * When true, the action represents a terminal output (final answer,
    * task-complete, etc.) and the Verifier should run completion + grounding
@@ -161,16 +177,52 @@ export const defaultVerifier: Verifier = {
     // Skip these for non-terminal actions. They're expensive and only
     // meaningful when evaluating a candidate final answer.
     if (ctx.terminal && ctx.actionSuccess && hasContent) {
-      // Check 3: required-tools-satisfied
-      if (ctx.requiredTools && ctx.requiredTools.length > 0) {
+      // NOTE: required-tools-satisfied was removed — runner's post-loop required-tools
+      // check (runner.ts §8) already enforces this with delegation awareness
+      // (sub-agent tools satisfy parent requirements). The verifier's flat
+      // `requiredTools.filter((t) => !used.has(t))` lacked that awareness and
+      // double-rejected legitimate delegated runs. Output structural verification
+      // stays in §8; the verifier focuses on output-quality signals below.
+
+      // Check 3b: agent-took-action (classifier-independent)
+      // Stricter signal than required-tools-satisfied. Distinguishes
+      // "agent ran the task" from "agent shipped a parroted answer".
+      //
+      // The rule: if the USER registered data tools (availableUserTools is
+      // non-empty), the agent must have called at least one non-meta tool.
+      // If no non-meta tool was called, the agent didn't actually do the
+      // work — its answer is either a parroted system instruction, a
+      // hallucinated answer, or a meta-tool return value. Reject.
+      //
+      // Classifier-independent: doesn't rely on requiredTools/relevantTools
+      // inference (which can be empty due to LLM variance). The signal is
+      // purely structural — what the user wired vs what the agent invoked.
+      // Falls back to the classifier-suggested set when availableUserTools
+      // wasn't passed (older callers).
+      const META_TOOL_SET = new Set([
+        "final-answer",
+        "task-complete",
+        "context-status",
+        "brief",
+        "pulse",
+        "find",
+        "recall",
+        "checkpoint",
+        "activate-skill",
+        "discover-tools",
+      ]);
+      const dataToolsAvailable = ctx.availableUserTools && ctx.availableUserTools.length > 0
+        ? ctx.availableUserTools.filter((t) => !META_TOOL_SET.has(t))
+        : [...(ctx.requiredTools ?? []), ...(ctx.relevantTools ?? [])];
+      if (dataToolsAvailable.length > 0) {
         const used = ctx.toolsUsed ?? new Set<string>();
-        const missing = ctx.requiredTools.filter((t) => !used.has(t));
+        const nonMetaUsed = [...used].filter((t) => !META_TOOL_SET.has(t));
         checks.push({
-          name: "required-tools-satisfied",
-          passed: missing.length === 0,
+          name: "agent-took-action",
+          passed: nonMetaUsed.length > 0,
           reason:
-            missing.length > 0
-              ? `missing required tools: ${missing.join(", ")}`
+            nonMetaUsed.length === 0
+              ? `agent shipped output without calling any data tool (available: ${dataToolsAvailable.join(", ")})`
               : undefined,
         });
       }

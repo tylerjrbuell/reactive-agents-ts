@@ -570,18 +570,31 @@ export function initialKernelState(opts: KernelRunOptions): KernelState {
  *
  * Since ReadonlySet and ReadonlyMap are not spreadable, they must be explicitly
  * carried forward unless overridden in the patch.
+ *
+ * State-machine invariant: status="failed" implies output=null. A failed run
+ * has no valid deliverable; whatever was pre-populated (lastThought from a
+ * loop_graceful path, harness-assembled artifacts, etc.) is invalidated by
+ * the failure. Callers who need to preserve a payload alongside a failure
+ * (e.g. arbitrator.applyTermination forwarding verdict.output) MUST pass
+ * `output` explicitly in the patch — `undefined` triggers the invariant.
  */
 export function transitionState(
   state: KernelState,
   patch: Partial<KernelState>,
 ): KernelState {
-  return {
+  const transitionToFailed =
+    patch.status === "failed" && state.status !== "failed";
+  const outputUnspecified = !("output" in patch);
+  const next = {
     ...state,
     ...patch,
-    // Preserve non-spreadable collection types — patch wins if present
     toolsUsed: patch.toolsUsed ?? state.toolsUsed,
     scratchpad: patch.scratchpad ?? state.scratchpad,
   };
+  if (transitionToFailed && outputUnspecified) {
+    return { ...next, output: null };
+  }
+  return next;
 }
 
 // ── Serialization ────────────────────────────────────────────────────────────

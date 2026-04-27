@@ -78,28 +78,19 @@ describe("defaultVerifier — non-terminal vs terminal checks", () => {
     expect(names).not.toContain("evidence-grounded");
   });
 
-  it("terminal actions add required-tools-satisfied when requiredTools provided", () => {
+  it("does NOT add required-tools-satisfied — that check moved to runner §8 for delegation awareness", () => {
     const r = defaultVerifier.verify({
       ...baseCtx,
       terminal: true,
       requiredTools: ["web-search"],
       toolsUsed: new Set(["web-search"]),
     });
-    expect(r.verified).toBe(true);
-    expect(r.checks.find((c) => c.name === "required-tools-satisfied")?.passed).toBe(true);
-  });
-
-  it("terminal actions fail required-tools-satisfied when a required tool wasn't used", () => {
-    const r = defaultVerifier.verify({
-      ...baseCtx,
-      terminal: true,
-      requiredTools: ["web-search", "calculator"],
-      toolsUsed: new Set(["web-search"]),
-    });
-    expect(r.verified).toBe(false);
-    const check = r.checks.find((c) => c.name === "required-tools-satisfied");
-    expect(check?.passed).toBe(false);
-    expect(check?.reason).toContain("calculator");
+    // The verifier's flat requiredTools.filter check lacked sub-agent-delegation
+    // awareness (where a child kernel's tool call satisfies the parent's
+    // requirement). That logic now lives in runner.ts post-loop check.
+    // The verifier focuses on output-quality signals (agent-took-action,
+    // synthesis-grounded, completion-claim).
+    expect(r.checks.find((c) => c.name === "required-tools-satisfied")).toBeUndefined();
   });
 
   it("terminal actions skip required-tools check when no requiredTools given", () => {

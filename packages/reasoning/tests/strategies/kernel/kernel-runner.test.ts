@@ -1150,11 +1150,18 @@ describe("runKernel — tool classification lifecycle", () => {
           }),
         );
       }
+      // Mark a non-meta tool as used so the verifier's agent-took-action
+      // check passes — this synthetic kernel doesn't actually execute tools,
+      // but the test isn't gating on tool execution; it gates on the
+      // classifier never re-firing.
+      const tools = new Set(state.toolsUsed);
+      tools.add("web-search");
       return Effect.succeed(
         transitionState(state, {
           status: "done",
           output: "Completed without reclassification",
           iteration: nextIteration,
+          toolsUsed: tools,
         }),
       );
     };

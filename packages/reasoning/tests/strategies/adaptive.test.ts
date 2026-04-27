@@ -169,7 +169,11 @@ describe("AdaptiveStrategy", () => {
       taskDescription: "Build a multi-step data pipeline",
       taskType: "complex-task",
       memoryContext: "",
-      availableTools: ["file-read", "file-write", "code-execute"],
+      // Empty tools — this test asserts past-experience flow into analysis,
+      // not tool execution. With non-empty tools, the verifier's
+      // agent-took-action check would fail because the mock LLM produces
+      // textual final-answer rather than an actual tool call.
+      availableTools: [],
       config: defaultReasoningConfig,
       pastExperience: [
         {

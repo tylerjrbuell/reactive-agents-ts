@@ -55,6 +55,7 @@ import {
   shouldInjectOracleNudge,
 } from "../../kernel/utils/lane-controller.js";
 import { extractOutputFormat, type TaskIntent } from "../../kernel/capabilities/comprehend/task-intent.js";
+import { defaultVerifier } from "../../kernel/capabilities/verify/verifier.js";
 import { shouldAutoCheckpoint, autoCheckpoint } from "./auto-checkpoint.js";
 import {
   validateOutputFormat,
@@ -1261,8 +1262,15 @@ export function runKernel(
           const have = successCounts[name] ?? 0;
           return need > 1 ? `${name}×${need} (${have}/${need} satisfied)` : name;
         };
+        // Invariant: status=failed implies output=null. Earlier paths
+        // (loop_graceful, harness_deliverable) may have populated state.output
+        // with a lastThought or assembled artifacts; once required-tool
+        // satisfaction fails the run, those become invalid deliverables and
+        // must be discarded — otherwise they leak as the user-visible answer
+        // even though the run is structurally a failure.
         state = transitionState(state, {
           status: "failed",
+          output: null,
           error:
             `Task incomplete — missing_required_tool: required tool(s) not called: ${missingTools.map(renderRequirement).join(", ")}.\n` +
             `required=[${requiredTools.map(renderRequirement).join(", ")}]\n` +
@@ -1308,6 +1316,88 @@ export function runKernel(
             terminatedBy: "harness_deliverable",
             previousTerminatedBy,
           },
+        });
+      }
+    }
+
+    // ── 8.7. Output ownership consolidation ──────────────────────────────────
+    // The kernel must own the final output. Strategy adapters (reactive.ts,
+    // plan-execute.ts, etc.) historically had their own fallback chains
+    // (state.output ?? lastThought ?? null) that ran AFTER runKernel returned
+    // — bypassing the verifier gate below. Pull those fallbacks here so:
+    //   1. state.output reflects exactly what the user will receive
+    //   2. the verifier sees the actual deliverable before it ships
+    //   3. strategy adapters can return state.output directly with no synthesis
+    //
+    // Only fills from lastThought when status=done. Failed runs were already
+    // forced to output=null by the transitionState invariant.
+    if (state.status === "done" && !state.output) {
+      const lastThought = [...state.steps]
+        .filter((s) => s.type === "thought")
+        .pop();
+      if (lastThought?.content && lastThought.content.trim().length > 0) {
+        state = transitionState(state, { output: lastThought.content });
+      }
+    }
+
+    // ── 9.0. Sprint 3.5 — Verifier gate before shipping any output ───────────
+    // Per North Star §3 (Verify capability) — the harness MUST verify the
+    // final output satisfies the task before declaring success. Without this,
+    // the model can ship parroted system guidance ("Your next step: call X")
+    // as its answer because the output is in state.output and status is "done".
+    //
+    // The defaultVerifier with terminal=true runs:
+    //   - required-tools-satisfied (catches "no tool was called" parrots)
+    //   - synthesis-grounded (catches fabricated content)
+    //
+    // On verifier rejection: transition to status="failed" with the verdict
+    // in state.error. The reactive.ts strategy adapter (Sprint 3.4 stage 2)
+    // already ensures state.error doesn't leak as state.output; user sees
+    // null output + structured error.
+    if (process.env.DEBUG_VERIFIER === "1") {
+      console.error(`[VERIFIER-PRE] status=${state.status} hasOutput=${!!state.output} terminatedBy=${state.meta.terminatedBy} outLen=${(state.output ?? "").length} stepsCount=${state.steps.length}`);
+    }
+    if (state.status === "done" && state.output) {
+      if (process.env.DEBUG_VERIFIER === "1") {
+        console.error(`[VERIFIER] required=${JSON.stringify(effectiveInput.requiredTools)} relevant=${JSON.stringify(effectiveInput.relevantTools)} used=${JSON.stringify([...state.toolsUsed])} output.head=${state.output.slice(0, 80)}`);
+      }
+      // availableUserTools — pass through the user-registered tool list
+      // so the verifier can run classifier-independent "agent-took-action"
+      // checks (rejects parrots / hallucinated answers / meta-tool dumps
+      // when the user wired data tools but the agent never invoked them).
+      const availableUserTools = (effectiveInput.availableToolSchemas ?? []).map(
+        (t) => t.name,
+      );
+      const verdict = defaultVerifier.verify({
+        action: "final-answer",
+        content: state.output,
+        actionSuccess: true,
+        task: effectiveInput.task,
+        priorSteps: state.steps,
+        requiredTools: effectiveInput.requiredTools,
+        relevantTools: effectiveInput.relevantTools,
+        toolsUsed: state.toolsUsed,
+        availableUserTools,
+        terminal: true,
+      });
+      if (process.env.DEBUG_VERIFIER === "1") {
+        console.error(`[VERIFIER] verdict=${verdict.verified} summary=${verdict.summary}`);
+        for (const c of verdict.checks) console.error(`  - ${c.name}: ${c.passed} ${c.reason ?? ''}`);
+      }
+      if (!verdict.verified) {
+        yield* emitLog({
+          _tag: "warning",
+          message: `[verifier] terminal output rejected: ${verdict.summary}`,
+          timestamp: new Date(),
+        });
+        state = transitionState(state, {
+          status: "failed",
+          error: `Verifier rejected output: ${verdict.summary}`,
+          meta: {
+            ...state.meta,
+            verifierRejected: true,
+            verifierVerdict: verdict.summary,
+          } as KernelState["meta"],
         });
       }
     }
