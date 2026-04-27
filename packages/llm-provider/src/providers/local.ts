@@ -17,6 +17,7 @@ import { retryPolicy } from "../retry.js";
 import { getProviderDefaultModel } from "../provider-defaults.js";
 import { resolveCapability } from "../capability-resolver.js";
 import { probeOllamaCapability } from "./local-probe.js";
+import { warnCapabilityFallback } from "../capability-resolver.js";
 import type { Capability } from "../capability.js";
 
 // Module-scope cache so the inline probe runs at most once per (baseUrl, model)
@@ -54,7 +55,12 @@ async function resolveOllamaCapability(model: string, baseUrl: string): Promise<
     return probed;
   }
 
-  // Probe failed (model not pulled, Ollama down, malformed response) — accept fallback
+  // Probe failed (model not pulled, Ollama down, malformed response) — accept
+  // fallback. NOW emit the one-shot warning since neither static-table nor
+  // probe yielded a real capability. Without the probe-failure gate, the
+  // warning misleads users when the probe later succeeds (it almost always
+  // does for any model the user has actually pulled via Ollama).
+  warnCapabilityFallback("ollama", model);
   inlineProbeCache.set(key, staticOrFallback);
   return staticOrFallback;
 }
@@ -176,7 +182,14 @@ const thinkingCapabilityCache = new Map<string, boolean>();
 
 /**
  * Check if an Ollama model supports thinking mode via /api/show.
- * Results are cached per model name.
+ *
+ * Uses the canonical `capabilities` array which Ollama populates from the
+ * model card. The previous template-string heuristic (checking for the word
+ * "think") false-positived on models that mention "think" generically in
+ * their chat template — granite3.3 is the smoking-gun case: the template
+ * contains "think" but the model lacks the thinking capability, and sending
+ * `think: true` causes "does not support thinking" errors that abort the
+ * whole agent run.
  */
 async function supportsThinking(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -188,9 +201,8 @@ async function supportsThinking(
 
   try {
     const info = await client.show({ model });
-    const template = (info.template ?? "") as string;
-    const result =
-      template.includes("think") || template.includes("<|thinking|>");
+    const capabilities = (info.capabilities ?? []) as readonly string[];
+    const result = capabilities.includes("thinking");
     thinkingCapabilityCache.set(model, result);
     return result;
   } catch {
@@ -205,6 +217,12 @@ async function supportsThinking(
  * - config.thinking === false → always disable (omit param)
  * - config.thinking === undefined → auto-detect via /api/show
  */
+/**
+ * One-shot tracker so we warn at most once per model when an explicit
+ * `thinking: true` config conflicts with the model's actual capability.
+ */
+const thinkingMismatchWarned = new Set<string>();
+
 async function resolveThinking(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   client: { show: (opts: { model: string }) => Promise<any> },
@@ -212,9 +230,23 @@ async function resolveThinking(
   configThinking: boolean | undefined,
 ): Promise<boolean | undefined> {
   if (configThinking === false) return undefined; // omit think param entirely
-  if (configThinking === true) return true;
-  // Auto-detect
+  // ALWAYS verify capability, even when thinking is requested explicitly.
+  // Sending `think: true` to a model that doesn't support it produces an
+  // immediate Ollama error ("granite3.3:latest does not support thinking")
+  // and aborts the entire run. Capability comes from /api/show.
   const capable = await supportsThinking(client, model);
+  if (configThinking === true && !capable) {
+    if (!thinkingMismatchWarned.has(model)) {
+      thinkingMismatchWarned.add(model);
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[reactive-agents] thinking mode requested for ${model} but the ` +
+          `model does not advertise the "thinking" capability via /api/show. ` +
+          `Omitting the think parameter to prevent runtime errors.`,
+      );
+    }
+    return undefined;
+  }
   return capable ? true : undefined;
 }
 

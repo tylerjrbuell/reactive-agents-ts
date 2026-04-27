@@ -123,12 +123,22 @@ export function resolveCapability(
   if (fromTable !== undefined) return fromTable;
 
   // Tier 3 — conservative fallback. Fires the user-supplied onProbeFailed
-  // for telemetry AND emits a one-shot console warning so users notice
-  // when their model isn't in the static table (silent fallback was the
-  // root cause of failures like scratch.ts hitting gemma4:e4b on 2026-04-25).
+  // for telemetry. The console warning is NOT emitted here because callers
+  // (e.g. local.ts) typically attempt a runtime probe AFTER this fallback
+  // and only need the warning when probe ALSO fails. They invoke
+  // `warnFallbackOnce` directly when truly using the fallback.
   if (opts.onProbeFailed) {
     opts.onProbeFailed({ provider, model });
   }
-  warnFallbackOnce(provider, model);
   return fallbackCapability(provider, model);
+}
+
+/**
+ * Public version of the one-shot fallback warning so callers that probe
+ * after `resolveCapability` returns the fallback can emit the warning only
+ * when their probe ALSO fails. This prevents the warning from misleading
+ * users when the dynamic probe ultimately succeeds.
+ */
+export function warnCapabilityFallback(provider: string, model: string): void {
+  warnFallbackOnce(provider, model);
 }
