@@ -123,6 +123,83 @@ export interface Verifier {
   verify(ctx: VerificationContext): VerificationResult;
 }
 
+// ─── Retry policy ─────────────────────────────────────────────────────────────
+//
+// Sprint 3.5 Stage 2.5 — verifier-driven retry is developer-controllable.
+// The runner ships with `defaultVerifierRetryPolicy` (retry on any rejection,
+// once per run). Developers needing finer control can supply their own:
+//
+//   .withReasoning({
+//     verifierRetryPolicy: ({ verdict, retriesUsed, state }) => {
+//       // e.g. don't retry on long-form synthesis where the model adds more
+//       // fabrication when re-rolling (empirical: T5 regressions, 2026-04-27).
+//       if (state.steps.length > 6 && verdict.summary.includes("synthesis-grounded")) {
+//         return { retry: false, reason: "long-form synthesis: retry empirically regresses" };
+//       }
+//       return { retry: retriesUsed < 1, signalText: customNudge(verdict) };
+//     },
+//   })
+//
+// The policy is consulted on every verifier rejection. `retry: false` lets
+// the §9.0 outer gate fail the run definitively; `retry: true` injects a
+// harness signal and re-enters the kernel loop.
+
+/**
+ * Inputs the retry policy consults to decide whether a rejected output
+ * should trigger another iteration with verifier feedback.
+ */
+export interface VerifierRetryPolicyContext {
+  /** The rejection verdict from this iteration. */
+  readonly verdict: VerificationResult;
+  /** Iteration number when the verdict fired. */
+  readonly iteration: number;
+  /** Retries already consumed on this run (0 on first rejection). */
+  readonly retriesUsed: number;
+  /** Configured maxVerifierRetries (the upper bound). */
+  readonly maxRetries: number;
+  /** Step count — useful proxy for output complexity. */
+  readonly stepCount: number;
+  /** Tools called so far — useful for "agent took action" reasoning. */
+  readonly toolsUsed: ReadonlySet<string>;
+}
+
+/**
+ * The decision the policy returns.
+ *
+ * `retry: true` → kernel injects a feedback step (defaults to verdict-based
+ * text; override via `signalText`) and continues the loop.
+ *
+ * `retry: false` → outer §9.0 verifier gate fails the run definitively.
+ *
+ * `reason` is purely for observability — surfaces in the trace event so
+ * developers can audit policy decisions.
+ */
+export interface VerifierRetryDecision {
+  readonly retry: boolean;
+  readonly signalText?: string;
+  readonly reason?: string;
+}
+
+/**
+ * Pure function: rejection + context → retry decision. Developers can
+ * compose / wrap / swap freely.
+ */
+export type VerifierRetryPolicy = (
+  ctx: VerifierRetryPolicyContext,
+) => VerifierRetryDecision;
+
+/**
+ * Default retry policy — retry on any rejection while the budget allows.
+ * Mirrors pre-injection behavior so existing runs are unaffected when no
+ * custom policy is supplied.
+ */
+export const defaultVerifierRetryPolicy: VerifierRetryPolicy = (ctx) => {
+  if (ctx.retriesUsed >= ctx.maxRetries) {
+    return { retry: false, reason: "retry budget exhausted" };
+  }
+  return { retry: true, reason: "default policy: retry on any rejection" };
+};
+
 // ─── Default implementation ───────────────────────────────────────────────────
 
 /**

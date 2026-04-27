@@ -170,6 +170,7 @@ export type {
 // ─── Verifier (Sprint 3.2 — Verify capability promotion) ───
 export {
   defaultVerifier,
+  defaultVerifierRetryPolicy,
   contextFromObservation,
 } from "./kernel/capabilities/verify/verifier.js";
 export type {
@@ -177,6 +178,9 @@ export type {
   VerificationContext,
   VerificationCheck,
   VerificationResult,
+  VerifierRetryPolicy,
+  VerifierRetryPolicyContext,
+  VerifierRetryDecision,
 } from "./kernel/capabilities/verify/verifier.js";
 
 // ─── Structured Output ───

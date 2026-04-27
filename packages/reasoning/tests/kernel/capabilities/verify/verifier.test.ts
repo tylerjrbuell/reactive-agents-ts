@@ -8,8 +8,11 @@
 import { describe, it, expect } from "bun:test";
 import {
   defaultVerifier,
+  defaultVerifierRetryPolicy,
   contextFromObservation,
   type VerificationContext,
+  type Verifier,
+  type VerifierRetryPolicy,
 } from "../../../../src/kernel/capabilities/verify/verifier.js";
 import type { ReasoningStep } from "../../../../src/types/index.js";
 import type { ObservationResult } from "../../../../src/types/observation.js";
@@ -225,5 +228,117 @@ describe("contextFromObservation helper", () => {
     });
     expect(ctx.requiredTools).toEqual(["web-search"]);
     expect(ctx.toolsUsed?.has("web-search")).toBe(true);
+  });
+});
+
+// ─── Sprint 3.5 Stage 2.5 — verifier-driven retry policy hooks ──────────────
+//
+// Pins the developer-overridable contract: custom Verifier and custom
+// VerifierRetryPolicy can replace defaults without touching kernel internals.
+// Vision §1 (Pillar: Control) requires that every harness primitive be
+// hookable; these tests make that contractual.
+
+describe("defaultVerifierRetryPolicy — pins default behavior", () => {
+  const verdict = defaultVerifier.verify({
+    action: "final-answer",
+    content: "x",
+    actionSuccess: true,
+    task: "t",
+    priorSteps: [],
+    terminal: true,
+  });
+
+  it("retries while budget remains", () => {
+    const decision = defaultVerifierRetryPolicy({
+      verdict,
+      iteration: 1,
+      retriesUsed: 0,
+      maxRetries: 1,
+      stepCount: 3,
+      toolsUsed: new Set(),
+    });
+    expect(decision.retry).toBe(true);
+    expect(decision.reason).toBeDefined();
+  });
+
+  it("stops retrying when budget is exhausted", () => {
+    const decision = defaultVerifierRetryPolicy({
+      verdict,
+      iteration: 2,
+      retriesUsed: 1,
+      maxRetries: 1,
+      stepCount: 3,
+      toolsUsed: new Set(),
+    });
+    expect(decision.retry).toBe(false);
+    expect(decision.reason).toContain("exhausted");
+  });
+});
+
+describe("VerifierRetryPolicy contract — developer overrides", () => {
+  it("policy can suppress retry for specific failure shapes", () => {
+    // E.g. don't retry long-form synthesis (T5 regression class).
+    const policy: VerifierRetryPolicy = (ctx) => {
+      if (ctx.stepCount > 6 && ctx.verdict.summary.includes("synthesis")) {
+        return { retry: false, reason: "long-form synthesis: retry regresses" };
+      }
+      return defaultVerifierRetryPolicy(ctx);
+    };
+
+    const verdict = {
+      verified: false,
+      summary: "final-answer: failed at synthesis-grounded",
+      action: "final-answer",
+      checks: [{ name: "synthesis-grounded", passed: false, reason: "fab" }],
+    };
+    const decision = policy({
+      verdict,
+      iteration: 4,
+      retriesUsed: 0,
+      maxRetries: 3,
+      stepCount: 8,
+      toolsUsed: new Set(),
+    });
+    expect(decision.retry).toBe(false);
+    expect(decision.reason).toContain("regresses");
+  });
+
+  it("policy can customize the harness signal text", () => {
+    const policy: VerifierRetryPolicy = () => ({
+      retry: true,
+      signalText: "🛠 retry with extra hint: try calling tool X first",
+    });
+    const decision = policy({
+      verdict: { verified: false, summary: "x", action: "y", checks: [] },
+      iteration: 1,
+      retriesUsed: 0,
+      maxRetries: 1,
+      stepCount: 1,
+      toolsUsed: new Set(),
+    });
+    expect(decision.signalText).toContain("extra hint");
+  });
+});
+
+describe("Verifier contract — developer overrides", () => {
+  it("custom verifier can replace defaultVerifier without touching kernel", () => {
+    const customVerifier: Verifier = {
+      verify: () => ({
+        verified: true,
+        action: "always-pass",
+        summary: "domain-specific check passed",
+        checks: [{ name: "custom", passed: true }],
+      }),
+    };
+    const verdict = customVerifier.verify({
+      action: "anything",
+      content: "anything",
+      actionSuccess: false, // even with actionSuccess=false, custom says verified
+      task: "x",
+      priorSteps: [],
+      terminal: true,
+    });
+    expect(verdict.verified).toBe(true);
+    expect(verdict.summary).toContain("domain-specific");
   });
 });

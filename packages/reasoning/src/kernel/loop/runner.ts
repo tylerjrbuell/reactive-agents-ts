@@ -55,7 +55,7 @@ import {
   shouldInjectOracleNudge,
 } from "../../kernel/utils/lane-controller.js";
 import { extractOutputFormat, type TaskIntent } from "../../kernel/capabilities/comprehend/task-intent.js";
-import { defaultVerifier } from "../../kernel/capabilities/verify/verifier.js";
+import { defaultVerifier, defaultVerifierRetryPolicy } from "../../kernel/capabilities/verify/verifier.js";
 import {
   emitKernelStateSnapshot,
   emitVerifierVerdict,
@@ -547,8 +547,16 @@ export function runKernel(
     // Cap is intentionally low (1) — the architectural mechanism is one
     // chance to recover from a rejection. If the model ignores even specific
     // verifier feedback, the failure mode is compliance, not chance to retry.
+    //
+    // Both the verifier and the retry policy are developer-injectable
+    // (Sprint 3.5 Stage 2.5 — control pillar): swap `defaultVerifier` for a
+    // domain-specific check, swap `defaultVerifierRetryPolicy` to suppress
+    // retry on known-regressing task shapes (e.g., long-form synthesis).
     let verifierRetries = 0;
     const maxVerifierRetries = effectiveInput.maxVerifierRetries ?? 1;
+    const verifier = effectiveInput.verifier ?? defaultVerifier;
+    const verifierRetryPolicy =
+      effectiveInput.verifierRetryPolicy ?? defaultVerifierRetryPolicy;
 
     // Unified nudge budget — caps the total number of "missing required tool"
     // nudges injected by stall detection and loop detection paths combined.
@@ -1324,7 +1332,7 @@ export function runKernel(
         const availableUserTools = (currentInput.availableToolSchemas ?? []).map(
           (t) => t.name,
         );
-        const verdict = defaultVerifier.verify({
+        const verdict = verifier.verify({
           action: "final-answer",
           content: state.output,
           actionSuccess: true,
@@ -1349,25 +1357,38 @@ export function runKernel(
             summary: verdict.summary,
             checks: verdict.checks,
           });
-          verifierRetries++;
-          const failedCheck = verdict.checks.find((c) => !c.passed);
-          const reason = failedCheck?.reason ?? verdict.summary;
-          const signalText =
-            `[verifier] Your draft answer was rejected at "${failedCheck?.name ?? "verification"}": ${reason}\n` +
-            `Address this specific gap and try again. (retry ${verifierRetries}/${maxVerifierRetries})`;
-          const signalStep = makeStep("observation", signalText);
-          yield* emitHarnessSignalInjected({
-            taskId: currentOptions.taskId,
+          // Consult the (possibly developer-overridden) retry policy. The
+          // policy can suppress retry for known-regressing task shapes,
+          // customize the harness signal, or surface a reason for audit.
+          const decision = verifierRetryPolicy({
+            verdict,
             iteration: state.iteration,
-            signalKind: "redirect",
-            content: signalText,
-            origin: "runner.ts:verifier-retry",
+            retriesUsed: verifierRetries,
+            maxRetries: maxVerifierRetries,
+            stepCount: state.steps.length,
+            toolsUsed: state.toolsUsed,
           });
-          state = transitionState(state, {
-            status: "thinking",
-            output: null,
-            steps: [...state.steps, signalStep],
-          });
+          if (decision.retry) {
+            verifierRetries++;
+            const failedCheck = verdict.checks.find((c) => !c.passed);
+            const fallbackText =
+              `[verifier] Your draft answer was rejected at "${failedCheck?.name ?? "verification"}": ${failedCheck?.reason ?? verdict.summary}\n` +
+              `Address this specific gap and try again. (retry ${verifierRetries}/${maxVerifierRetries})`;
+            const signalText = decision.signalText ?? fallbackText;
+            const signalStep = makeStep("observation", signalText);
+            yield* emitHarnessSignalInjected({
+              taskId: currentOptions.taskId,
+              iteration: state.iteration,
+              signalKind: "redirect",
+              content: signalText,
+              origin: `runner.ts:verifier-retry${decision.reason ? ` (${decision.reason})` : ""}`,
+            });
+            state = transitionState(state, {
+              status: "thinking",
+              output: null,
+              steps: [...state.steps, signalStep],
+            });
+          }
         }
       }
 
@@ -1528,7 +1549,7 @@ export function runKernel(
       const availableUserTools = (effectiveInput.availableToolSchemas ?? []).map(
         (t) => t.name,
       );
-      const verdict = defaultVerifier.verify({
+      const verdict = verifier.verify({
         action: "final-answer",
         content: state.output,
         actionSuccess: true,

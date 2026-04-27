@@ -321,6 +321,25 @@ export interface KernelInput {
    * gate that fails the run on rejection.
    */
   readonly maxVerifierRetries?: number;
+  /**
+   * Custom verifier — overrides {@link defaultVerifier} for both the in-loop
+   * retry gate and the §9.0 terminal gate. Developers can implement domain-
+   * specific verification (e.g., schema-validated outputs, JSON-shape checks,
+   * regex-based grounding) without touching kernel internals.
+   *
+   * Pass-through types are exported from `@reactive-agents/reasoning`:
+   *   import { type Verifier, defaultVerifier } from "@reactive-agents/reasoning";
+   */
+  readonly verifier?: import("../capabilities/verify/verifier.js").Verifier;
+  /**
+   * Custom retry policy — controls WHEN the kernel retries on verifier
+   * rejection. Returns `{ retry, signalText?, reason? }`. The default policy
+   * retries any rejection while the budget allows; developers can suppress
+   * retry for known-regressing task classes (e.g., long-form synthesis where
+   * re-rolling adds more fabricated content) or customize the harness
+   * signal text per failure mode.
+   */
+  readonly verifierRetryPolicy?: import("../capabilities/verify/verifier.js").VerifierRetryPolicy;
   /** Custom environment context key-value pairs injected into the system prompt */
   readonly environmentContext?: Readonly<Record<string, string>>;
   /**
