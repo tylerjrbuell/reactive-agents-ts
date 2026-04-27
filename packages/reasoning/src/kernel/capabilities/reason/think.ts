@@ -89,6 +89,44 @@ export function shouldNarrowToFinalAnswerOnly(opts: {
   return opts.estimatedTokens / opts.maxTokens >= threshold
 }
 
+/**
+ * Heuristic: does this thought look like a model's actual answer (vs. an
+ * intermediate planning thought)? Used to auto-promote substantive thoughts
+ * to final-answer when the model produces a complete response but never
+ * calls the final-answer tool — common pattern on local models.
+ *
+ * Conservative — false negatives (treat real answer as planning) just
+ * keep the loop going, costing one extra iteration. False positives (treat
+ * planning as answer) are caught by the arbitrator's grounding check.
+ */
+export function looksLikeFinalAnswer(content: string): boolean {
+  const trimmed = content.trim();
+  if (trimmed.length < 100) return false;
+
+  // Strong negative signals — these are planning patterns, not answers.
+  // Use word-boundary matches so the heuristic doesn't fire on substring
+  // mentions like "I should explain..." in a real answer.
+  const planningPatterns = [
+    /\b(?:i (?:should|need to|will|am going to|'ll|'m going to) (?:call|use|invoke|fetch|search|look up|check)\b)/i,
+    /\b(?:let me (?:call|use|invoke|fetch|try|check|verify|search)\b)/i,
+    /\bnext (?:step|i'll|i will|i should)\b/i,
+    /\b(?:i (?:don't|do not) have (?:enough|the)) (?:information|data|context)\b/i,
+    /^(?:thinking|reasoning|planning|analysis)\b/i,
+  ];
+  if (planningPatterns.some((re) => re.test(trimmed))) return false;
+
+  // Positive signals — structural indicators that this IS the answer.
+  const positiveSignals = [
+    /^#{1,3}\s+\w/m,                          // markdown header at line start
+    /^\s*\d+\.\s+\w/m,                         // numbered list
+    /^\s*[-*]\s+\w/m,                          // bulleted list
+    /^\s*\|.+\|/m,                             // markdown table row
+    /```/,                                     // code block
+    /\b(?:final answer|in (?:summary|conclusion)|here (?:is|are)|the (?:result|answer|output) is)\b/i,
+  ];
+  return positiveSignals.some((re) => re.test(trimmed));
+}
+
 export function handleThinking(
   state: KernelState,
   context: KernelContext,
@@ -761,6 +799,54 @@ export function handleThinking(
           reqTools,
           input.requiredToolQuantities,
         );
+
+        // ── Auto-promote substantive thought to final answer ────────────────
+        // Many local models produce a complete, well-formatted answer in
+        // their thought content but never call final-answer explicitly. The
+        // harness then loops, the model regenerates the same answer 3-5
+        // times, burns tokens, and ultimately fails on max-iterations or
+        // dispatcher veto. This short-circuit recognizes when the thought
+        // IS the answer and routes it through the same arbitrator gates as
+        // an explicit final-answer call. Conditions (all must hold):
+        //   1. At least one non-meta tool has been called (real work done)
+        //   2. All required tools are satisfied
+        //   3. Thinking content is substantial (≥100 chars) and structured
+        //   4. We're not on iteration 0 (give the model at least one chance
+        //      to call tools before promoting)
+        //
+        // The arbitrator's synthesisQualityRetry path applies normally — if
+        // the auto-promoted answer fails grounding, retry feedback fires
+        // exactly as if the model had called final-answer itself. So this
+        // change can't make outputs WORSE; it just stops needless loops.
+        const hasRealToolWork = [...state.toolsUsed].some(
+          (t) => !META_TOOL_SET.has(t),
+        );
+        if (
+          hasRealToolWork &&
+          missingReq.length === 0 &&
+          state.iteration > 0 &&
+          looksLikeFinalAnswer(thinkingContent)
+        ) {
+          const stateWithThought = transitionState(state, {
+            steps: [...newSteps, makeStep("thought", thinkingContent)],
+            tokens: newTokens,
+            cost: newCost,
+            iteration: state.iteration + 1,
+            priorThought: thinkingContent,
+          });
+          return arbitrateAndApply(
+            stateWithThought,
+            {
+              kind: "agent-final-answer",
+              via: "end-turn",
+              output: thinkingContent,
+            },
+            arbitrationContextFromState(stateWithThought, {
+              task: input.task,
+              requiredTools: input.requiredTools,
+            }),
+          );
+        }
 
         // ── Standard thinking handler ──────────────────────────────────────
         // Note: Even if all required tools are met, we continue the loop to

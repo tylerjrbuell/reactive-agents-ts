@@ -10,6 +10,7 @@
 import type { ReasoningStep } from "../../../types/index.js";
 import type { ToolSchema } from "../attend/tool-formatting.js";
 import { FINAL_ANSWER_RE, extractFinalAnswer } from "../act/tool-parsing.js";
+import { META_TOOLS } from "../../state/kernel-constants.js";
 
 // ── Local structural types ──────────────────────────────────────────────
 // These mirror shapes from @reactive-agents/reactive-intelligence without
@@ -561,22 +562,36 @@ function shouldVetoSuccess(ctx: ArbitrationContext): { readonly veto: true; read
   const injectCount = decisionTypes.filter((d) => d === "tool-inject").length;
   const entropy = ctx.entropyComposite ?? 0;
 
-  const repeatedStall = stallCount >= 2;
+  // Stall threshold bumped 2 → 3 to match the stall-detector's own
+  // escalation threshold (see stall-detector.ts). Previously the stall
+  // detector would emit 2 nudges and this veto would fire on observation 2,
+  // killing runs while the soft nudge revision was still mid-flight.
+  // High-entropy threshold lifted 1 → 2 so a single benign restatement
+  // no longer pairs with momentary high entropy to fire the veto.
+  const repeatedStall = stallCount >= 3;
   const repeatedInject = injectCount >= 3;
-  const stallWithHighEntropy = stallCount >= 1 && entropy > 0.55;
+  const stallWithHighEntropy = stallCount >= 2 && entropy > 0.55;
 
   if (!repeatedStall && !repeatedInject && !stallWithHighEntropy) {
     return { veto: false };
   }
 
-  // Concrete evidence: at least one observation step where the tool returned
-  // success=false. Without tool failures, the controller activity is most
-  // likely benign suppression on a clean run.
-  const hasFailedToolObservation = ctx.steps.some(
-    (s) =>
-      s.type === "observation" &&
-      s.metadata?.observationResult?.success === false,
-  );
+  // Concrete evidence: at least one observation step where a USER-FACING
+  // tool returned success=false. Meta-tool rejections (final-answer
+  // refused because required tools missing, recall() hitting an absent
+  // key, etc.) are framework signaling, not real "the agent's claim
+  // contradicts reality" evidence. Without filtering these out, ANY run
+  // that calls final-answer prematurely produces a "failed observation"
+  // and triggers the veto on stall threshold.
+  const hasFailedToolObservation = ctx.steps.some((s) => {
+    if (s.type !== "observation") return false;
+    const obs = s.metadata?.observationResult;
+    if (!obs || obs.success !== false) return false;
+    const toolName = obs.toolName;
+    // Drop meta-tool rejections — they're not concrete tool failures.
+    if (typeof toolName === "string" && META_TOOLS.has(toolName)) return false;
+    return true;
+  });
   if (!hasFailedToolObservation) {
     return { veto: false };
   }
