@@ -906,27 +906,11 @@ export function handleThinking(
           // soft "use the tool" nudges. Override with a hard imperative.
           const isPlaceholderLoop =
             !!thinkingContent && isPlaceholderTemplate(thinkingContent);
-          // Detect meta-tool wandering: model called brief / pulse / recall /
-          // find / discover-tools BUT NOT the actual data tool. This is the
-          // cogito:14b T4 / qwen3.5 T4 regression pattern — model treats a
-          // meta-tool return as the answer (echoes JSON). Hard-steer them
-          // toward the data tool with explicit "do not call meta-tools".
-          const calledMeta = [...state.toolsUsed].filter((t) =>
-            META_TOOL_SET.has(t),
-          );
-          const calledNonMeta = [...state.toolsUsed].filter(
-            (t) => !META_TOOL_SET.has(t),
-          );
-          const isMetaToolWandering =
-            calledMeta.length > 0 && calledNonMeta.length === 0;
-          const antiMetaSuffix = isMetaToolWandering
-            ? ` Do NOT call recall, brief, pulse, find, or discover-tools — those are framework helpers. The data tool is ${missingWithProgress[0]}; call it directly.`
-            : "";
           const defaultNudge = isPlaceholderLoop
-            ? `⚠️ STOP. Your previous response contained PLACEHOLDER brackets like [Title], [Score], [URL] — you cannot guess the data. CALL the ${missingWithProgress.join(", ")} tool NOW with the required parameters. After the tool returns real data, write the answer using those exact values. Do not write any more placeholder text.${antiMetaSuffix}`
+            ? `⚠️ STOP. Your previous response contained PLACEHOLDER brackets like [Title], [Score], [URL] — you cannot guess the data. CALL the ${missingWithProgress.join(", ")} tool NOW with the required parameters. After the tool returns real data, write the answer using those exact values. Do not write any more placeholder text.`
             : isStuck
-            ? `⚠️ ACTION REQUIRED: You have not made progress. You MUST call: ${missingWithProgress.join(", ")} RIGHT NOW. Stop waiting and use the tool immediately.${antiMetaSuffix}`
-            : `Continue working on the task. You still need to call: ${missingWithProgress.join(", ")}. Use the available tools to complete the task.${antiMetaSuffix}`;
+            ? `⚠️ ACTION REQUIRED: You have not made progress. You MUST call: ${missingWithProgress.join(", ")} RIGHT NOW. Stop waiting and use the tool immediately.`
+            : `Continue working on the task. You still need to call: ${missingWithProgress.join(", ")}. Use the available tools to complete the task.`;
 
           const lastObsForHint = state.steps.filter((s) => s.type === "observation").pop();
           const lastActionForHint = state.steps.filter((s) => s.type === "action").pop();
