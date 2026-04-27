@@ -883,6 +883,105 @@ export type AgentEvent =
       /** Unix timestamp in milliseconds when the swallow fired. */
       readonly timestamp: number;
     }
+  // ─── Diagnostic events (Sprint 3.6 — harness diagnostic system) ───
+  // Together these answer the diagnostic questions a developer asks when an
+  // agent run goes wrong: what did the model see, why did the verifier
+  // accept/reject, which guard fired and why, what was the kernel state at
+  // iteration N, and which steps were harness-injected (not model-produced).
+  // Mapped 1:1 by the trace bridge layer to TraceEvent kinds for JSONL
+  // recording and Cortex UI consumption.
+  | {
+      readonly _tag: "KernelStateSnapshotEmitted";
+      readonly taskId: string;
+      readonly iteration: number;
+      readonly status: "thinking" | "done" | "failed" | "paused";
+      readonly toolsUsed: readonly string[];
+      readonly scratchpadKeys: readonly string[];
+      readonly stepsCount: number;
+      readonly stepsByType: Readonly<Record<string, number>>;
+      readonly outputPreview: string | null;
+      readonly outputLen: number;
+      readonly messagesCount: number;
+      readonly tokens: number;
+      readonly cost: number;
+      readonly llmCalls: number;
+      readonly terminatedBy: string | undefined;
+      readonly pendingGuidance: Record<string, unknown> | undefined;
+      readonly timestamp: number;
+    }
+  | {
+      readonly _tag: "VerifierVerdictEmitted";
+      readonly taskId: string;
+      readonly iteration: number;
+      readonly action: string;
+      readonly terminal: boolean;
+      readonly verified: boolean;
+      readonly summary: string;
+      readonly checks: readonly {
+        readonly name: string;
+        readonly passed: boolean;
+        readonly reason?: string;
+      }[];
+      readonly timestamp: number;
+    }
+  | {
+      readonly _tag: "GuardFiredEmitted";
+      readonly taskId: string;
+      readonly iteration: number;
+      readonly guard: string;
+      readonly outcome: "pass" | "redirect" | "terminate" | "block" | "warn";
+      readonly reason: string;
+      readonly metadata?: Record<string, unknown>;
+      readonly timestamp: number;
+    }
+  | {
+      readonly _tag: "LLMExchangeEmitted";
+      readonly taskId: string;
+      readonly iteration: number;
+      readonly provider: string;
+      readonly model: string;
+      readonly requestKind: "complete" | "stream" | "completeStructured";
+      readonly systemPrompt: string | undefined;
+      readonly systemPromptTruncated?: boolean;
+      readonly messages: readonly {
+        readonly role: "system" | "user" | "assistant" | "tool";
+        readonly content: string;
+        readonly truncated?: boolean;
+      }[];
+      readonly toolSchemaNames: readonly string[];
+      readonly temperature?: number;
+      readonly maxTokens?: number;
+      readonly response: {
+        readonly content: string;
+        readonly truncated?: boolean;
+        readonly toolCalls?: readonly { readonly name: string; readonly arguments?: unknown }[];
+        readonly stopReason?: string;
+        readonly tokensIn?: number;
+        readonly tokensOut?: number;
+        readonly costUsd?: number;
+        readonly durationMs?: number;
+      };
+      readonly timestamp: number;
+    }
+  | {
+      readonly _tag: "HarnessSignalInjectedEmitted";
+      readonly taskId: string;
+      readonly iteration: number;
+      readonly signalKind:
+        | "redirect"
+        | "nudge"
+        | "block"
+        | "completion-gap"
+        | "rule-violation"
+        | "dispatcher-status"
+        | "loop-graceful"
+        | "other";
+      readonly origin: string;
+      readonly contentPreview: string;
+      readonly contentLen: number;
+      readonly metadata?: Record<string, unknown>;
+      readonly timestamp: number;
+    }
   // ─── Skill lifecycle events ───
   | SkillActivated
   | SkillRefined

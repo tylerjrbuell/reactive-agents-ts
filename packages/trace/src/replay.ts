@@ -38,6 +38,13 @@ export interface TraceStats {
   readonly toolCalls: number
   readonly durationMs: number
   readonly totalTokens: number
+  // Diagnostic stats (Sprint 3.6)
+  readonly llmExchanges: number
+  readonly verifierVerdicts: number
+  readonly verifierRejections: number
+  readonly guardsFired: number
+  readonly harnessSignalsInjected: number
+  readonly stateSnapshots: number
 }
 
 /**
@@ -54,6 +61,12 @@ export function traceStats(trace: Trace): TraceStats {
   let maxIter = -1
   let durationMs = 0
   let totalTokens = 0
+  let llmExchanges = 0
+  let verifierVerdicts = 0
+  let verifierRejections = 0
+  let guardsFired = 0
+  let harnessSignalsInjected = 0
+  let stateSnapshots = 0
 
   for (const ev of trace.events) {
     switch (ev.kind) {
@@ -76,6 +89,23 @@ export function traceStats(trace: Trace): TraceStats {
         durationMs = ev.durationMs
         totalTokens = ev.totalTokens
         break
+      case "llm-exchange":
+        llmExchanges++
+        break
+      case "verifier-verdict":
+        verifierVerdicts++
+        if (!ev.verified) verifierRejections++
+        break
+      case "guard-fired":
+        guardsFired++
+        break
+      case "harness-signal-injected":
+        harnessSignalsInjected++
+        break
+      case "kernel-state-snapshot":
+        stateSnapshots++
+        if (ev.iter > maxIter) maxIter = ev.iter
+        break
       default:
         break
     }
@@ -91,5 +121,11 @@ export function traceStats(trace: Trace): TraceStats {
     toolCalls,
     durationMs,
     totalTokens,
+    llmExchanges,
+    verifierVerdicts,
+    verifierRejections,
+    guardsFired,
+    harnessSignalsInjected,
+    stateSnapshots,
   }
 }

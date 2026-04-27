@@ -1,0 +1,48 @@
+{
+  "name": "@reactive-agents/diagnose",
+  "version": "0.9.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "rax-diagnose": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsup --config ../../tsup.config.base.ts && tsup src/cli.ts --format esm --out-dir dist",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test --reporter=dots"
+  },
+  "dependencies": {
+    "@reactive-agents/trace": "0.9.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "bun-types": "latest",
+    "tsup": "*"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tylerjrbuell/reactive-agents-ts.git",
+    "directory": "packages/diagnose"
+  },
+  "homepage": "https://docs.reactiveagents.dev/",
+  "bugs": {
+    "url": "https://github.com/tylerjrbuell/reactive-agents-ts/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

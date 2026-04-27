@@ -12,6 +12,11 @@ import type {
   StrategySwitchedEvent,
   InterventionDispatchedEvent,
   InterventionSuppressedEvent,
+  KernelStateSnapshotEvent,
+  VerifierVerdictEvent,
+  GuardFiredEvent,
+  LLMExchangeEvent,
+  HarnessSignalInjectedEvent,
 } from "./events.js"
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
@@ -132,6 +137,99 @@ function toTraceEvent(raw: AgentEvent): TraceEvent | null {
         seq: nextSeq(),
         decisionType: raw.decisionType,
         reason: raw.reason,
+      }
+      return ev
+    }
+
+    // ─── Diagnostic events (Sprint 3.6) ───
+    case "KernelStateSnapshotEmitted": {
+      const ev: KernelStateSnapshotEvent = {
+        kind: "kernel-state-snapshot",
+        runId: raw.taskId,
+        timestamp: raw.timestamp,
+        iter: raw.iteration,
+        seq: nextSeq(),
+        status: raw.status,
+        toolsUsed: raw.toolsUsed,
+        scratchpadKeys: raw.scratchpadKeys,
+        stepsCount: raw.stepsCount,
+        stepsByType: raw.stepsByType,
+        outputPreview: raw.outputPreview,
+        outputLen: raw.outputLen,
+        messagesCount: raw.messagesCount,
+        tokens: raw.tokens,
+        cost: raw.cost,
+        llmCalls: raw.llmCalls,
+        terminatedBy: raw.terminatedBy,
+        pendingGuidance: raw.pendingGuidance,
+      }
+      return ev
+    }
+
+    case "VerifierVerdictEmitted": {
+      const ev: VerifierVerdictEvent = {
+        kind: "verifier-verdict",
+        runId: raw.taskId,
+        timestamp: raw.timestamp,
+        iter: raw.iteration,
+        seq: nextSeq(),
+        action: raw.action,
+        terminal: raw.terminal,
+        verified: raw.verified,
+        summary: raw.summary,
+        checks: raw.checks,
+      }
+      return ev
+    }
+
+    case "GuardFiredEmitted": {
+      const ev: GuardFiredEvent = {
+        kind: "guard-fired",
+        runId: raw.taskId,
+        timestamp: raw.timestamp,
+        iter: raw.iteration,
+        seq: nextSeq(),
+        guard: raw.guard,
+        outcome: raw.outcome,
+        reason: raw.reason,
+        metadata: raw.metadata,
+      }
+      return ev
+    }
+
+    case "LLMExchangeEmitted": {
+      const ev: LLMExchangeEvent = {
+        kind: "llm-exchange",
+        runId: raw.taskId,
+        timestamp: raw.timestamp,
+        iter: raw.iteration,
+        seq: nextSeq(),
+        provider: raw.provider,
+        model: raw.model,
+        requestKind: raw.requestKind,
+        systemPrompt: raw.systemPrompt,
+        systemPromptTruncated: raw.systemPromptTruncated,
+        messages: raw.messages,
+        toolSchemaNames: raw.toolSchemaNames,
+        temperature: raw.temperature,
+        maxTokens: raw.maxTokens,
+        response: raw.response,
+      }
+      return ev
+    }
+
+    case "HarnessSignalInjectedEmitted": {
+      const ev: HarnessSignalInjectedEvent = {
+        kind: "harness-signal-injected",
+        runId: raw.taskId,
+        timestamp: raw.timestamp,
+        iter: raw.iteration,
+        seq: nextSeq(),
+        signalKind: raw.signalKind,
+        origin: raw.origin,
+        contentPreview: raw.contentPreview,
+        contentLen: raw.contentLen,
+        metadata: raw.metadata,
       }
       return ev
     }

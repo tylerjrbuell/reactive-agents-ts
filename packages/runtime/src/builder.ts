@@ -10,8 +10,29 @@ import {
     Queue,
     Option,
 } from 'effect'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import { createRuntime, createLightRuntime } from './runtime.js'
 import type { MCPServerConfig } from './runtime.js'
+
+/**
+ * Resolve the default tracing config (Sprint 3.6).
+ *
+ * Tracing is **on by default** so `rax diagnose <runId>` always has a JSONL
+ * file to inspect. Users disable explicitly via `.withoutTracing()` on the
+ * builder or `REACTIVE_AGENTS_TRACE=off` in the env (the env switch covers
+ * CI, container, or one-off scripted runs that shouldn't write to disk).
+ *
+ * Default location is `~/.reactive-agents/traces` so multiple agents in the
+ * same workspace don't pollute the project directory.
+ */
+function defaultTracingConfig(): { dir: string } | null {
+  const envFlag = (process.env.REACTIVE_AGENTS_TRACE ?? "").toLowerCase()
+  if (envFlag === "off" || envFlag === "false" || envFlag === "0") return null
+  const customDir = process.env.REACTIVE_AGENTS_TRACE_DIR
+  if (customDir && customDir.length > 0) return { dir: customDir }
+  return { dir: join(homedir(), ".reactive-agents", "traces") }
+}
 import { builderToConfig } from './agent-config.js'
 import type { TestTurn } from '@reactive-agents/llm-provider'
 import { ExecutionEngine } from './execution-engine.js'
@@ -883,7 +904,11 @@ export class ReactiveAgentBuilder {
     private _enableOrchestration: boolean = false
     private _testScenario?: TestTurn[]
     private _extraLayers?: Layer.Layer<any, any, any>
-    private _tracingConfig: { dir: string } | null = null
+    // Tracing is on by default (Sprint 3.6) so `rax diagnose <runId>` always
+    // has data to inspect — a productized DX win. Disable explicitly with
+    // .withoutTracing() or by setting REACTIVE_AGENTS_TRACE=off in the env.
+    // Resolved lazily in defaultTracingConfig() so env changes apply per build.
+    private _tracingConfig: { dir: string } | null = defaultTracingConfig()
     private _mcpServers: MCPServerConfig[] = []
     private _systemPrompt?: string
     private _environmentContext?: Record<string, string>
@@ -2450,6 +2475,19 @@ export class ReactiveAgentBuilder {
      */
     withTracing(opts: { dir?: string } = {}): this {
         this._tracingConfig = { dir: opts.dir ?? `.reactive-agents/traces` }
+        return this
+    }
+
+    /**
+     * Disable JSONL trace persistence (Sprint 3.6).
+     *
+     * Tracing is on by default at `~/.reactive-agents/traces`. Use this when
+     * you don't want disk writes (CI, ephemeral containers, sensitive runs
+     * where you'd rather rely on in-memory observability only). For a
+     * process-wide off switch, set `REACTIVE_AGENTS_TRACE=off` in the env.
+     */
+    withoutTracing(): this {
+        this._tracingConfig = null
         return this
     }
 

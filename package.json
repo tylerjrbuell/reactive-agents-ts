@@ -21,6 +21,7 @@
     "typecheck": "turbo run typecheck",
     "clean": "find packages apps -name 'dist' -type d -exec rm -rf {} + 2>/dev/null || true && rm -rf .turbo && CLEAN=true turbo run build --force",
     "rax": "bun ./apps/cli/src/index.ts",
+    "rax:diagnose": "bun ./packages/diagnose/src/cli.ts",
     "probe:ollama-fc": "bun .agents/skills/harness-improvement-loop/scripts/ollama-native-fc-context-probe.ts",
     "probe:ollama-fc:replay": "PROBE_SCENARIOS=replay-failing-thread-shape PROBE_REPEATS=3 bun .agents/skills/harness-improvement-loop/scripts/ollama-native-fc-context-probe.ts",
     "probe:ollama-fc:gate": "bun .agents/skills/harness-improvement-loop/scripts/ollama-native-fc-gate.ts",

@@ -219,6 +219,21 @@
         "effect": "^3.10.0",
       },
     },
+    "packages/diagnose": {
+      "name": "@reactive-agents/diagnose",
+      "version": "0.9.0",
+      "bin": {
+        "rax-diagnose": "./dist/cli.js",
+      },
+      "dependencies": {
+        "@reactive-agents/trace": "0.9.0",
+      },
+      "devDependencies": {
+        "bun-types": "latest",
+        "tsup": "*",
+        "typescript": "^5.7.0",
+      },
+    },
     "packages/eval": {
       "name": "@reactive-agents/eval",
       "version": "0.9.0",
@@ -1379,6 +1394,8 @@
     "@reactive-agents/cortex-ui": ["@reactive-agents/cortex-ui@workspace:apps/cortex/ui"],
 
     "@reactive-agents/cost": ["@reactive-agents/cost@workspace:packages/cost"],
+
+    "@reactive-agents/diagnose": ["@reactive-agents/diagnose@workspace:packages/diagnose"],
 
     "@reactive-agents/docs": ["@reactive-agents/docs@workspace:apps/docs"],
 
@@ -3995,6 +4012,8 @@
     "@reactive-agents/cortex/@types/bun": ["@types/bun@1.3.11", "", { "dependencies": { "bun-types": "1.3.11" } }, "sha512-5vPne5QvtpjGpsGYXiFyycfpDF2ECyPcTSsFBMa0fraoxiQyMJ3SmuQIGhzPg2WJuWxVBoxWJ2kClYTcw/4fAg=="],
 
     "@reactive-agents/cost/bun-types": ["bun-types@1.3.13", "", { "dependencies": { "@types/node": "*" } }, "sha512-QXKeHLlOLqQX9LgYaHJfzdBaV21T63HhFJnvuRCcjZiaUDpbs5ED1MgxbMra71CsryN/1dAoXuJJJwIv/2drVA=="],
+
+    "@reactive-agents/diagnose/bun-types": ["bun-types@1.3.13", "", { "dependencies": { "@types/node": "*" } }, "sha512-QXKeHLlOLqQX9LgYaHJfzdBaV21T63HhFJnvuRCcjZiaUDpbs5ED1MgxbMra71CsryN/1dAoXuJJJwIv/2drVA=="],
 
     "@reactive-agents/eval/bun-types": ["bun-types@1.3.13", "", { "dependencies": { "@types/node": "*" } }, "sha512-QXKeHLlOLqQX9LgYaHJfzdBaV21T63HhFJnvuRCcjZiaUDpbs5ED1MgxbMra71CsryN/1dAoXuJJJwIv/2drVA=="],
 

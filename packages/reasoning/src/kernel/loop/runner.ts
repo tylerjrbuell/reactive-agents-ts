@@ -56,6 +56,11 @@ import {
 } from "../../kernel/utils/lane-controller.js";
 import { extractOutputFormat, type TaskIntent } from "../../kernel/capabilities/comprehend/task-intent.js";
 import { defaultVerifier } from "../../kernel/capabilities/verify/verifier.js";
+import {
+  emitKernelStateSnapshot,
+  emitVerifierVerdict,
+  emitHarnessSignalInjected,
+} from "../../kernel/utils/diagnostics.js";
 import { shouldAutoCheckpoint, autoCheckpoint } from "./auto-checkpoint.js";
 import {
   validateOutputFormat,
@@ -607,6 +612,14 @@ export function runKernel(
         timestamp: new Date(),
       });
 
+      // Snapshot kernel state at iteration start — gives `rax diagnose` and
+      // Cortex UI a per-iteration baseline of what the agent saw.
+      yield* emitKernelStateSnapshot({
+        state,
+        taskId: currentOptions.taskId,
+        iteration: state.iteration,
+      });
+
       const kernelPhaseStart = Date.now();
       yield* emitLog({ _tag: "phase_started", phase: "think", timestamp: new Date() });
       state = yield* kernel(state, currentContext);
@@ -857,6 +870,14 @@ export function runKernel(
           const guidance =
             `Required tool quota not met: ${missingRequiredByCount.join(", ")}. ` +
             `Continue calling the missing required tool(s) before attempting completion.`;
+          yield* emitHarnessSignalInjected({
+            taskId: currentOptions.taskId,
+            iteration: state.iteration,
+            signalKind: "nudge",
+            origin: "runner.ts:875",
+            content: guidance,
+            metadata: { missingTools: missingRequiredByCount, nudgeCount: requiredToolNudgeCount },
+          });
           state = transitionState(state, {
             status: "thinking",
             steps: [...state.steps, makeStep("harness_signal", `⚠️ ${guidance}`)],
@@ -879,6 +900,18 @@ export function runKernel(
             "stall",
           );
 
+          yield* emitHarnessSignalInjected({
+            taskId: currentOptions.taskId,
+            iteration: state.iteration,
+            signalKind: "redirect",
+            origin: "runner.ts:897",
+            content: guidance,
+            metadata: {
+              failedTools: recovery.failedUnresolved,
+              alternatives: recovery.alternativeCandidates,
+              redirectCount: failureRecoveryRedirects,
+            },
+          });
           state = transitionState(state, {
             status: "thinking",
             steps: [...state.steps, makeStep("harness_signal", `⚠️ ${guidance}`)],
@@ -1135,6 +1168,18 @@ export function runKernel(
               maxFailureRecoveryRedirects,
               "loop",
             );
+            yield* emitHarnessSignalInjected({
+              taskId: currentOptions.taskId,
+              iteration: state.iteration,
+              signalKind: "redirect",
+              origin: "runner.ts:1173",
+              content: guidance,
+              metadata: {
+                failedTools: recovery.failedUnresolved,
+                redirectCount: failureRecoveryRedirects,
+                trigger: "loop",
+              },
+            });
             state = transitionState(state, {
               status: "thinking",
               steps: [...state.steps, makeStep("harness_signal", `⚠️ ${guidance}`)],
@@ -1161,6 +1206,14 @@ export function runKernel(
               const guidance =
                 `Loop detected but required tool quota is still missing: ${missingRequiredByCount.join(", ")}. ` +
                 `Call the missing required tool(s) now instead of finalizing.`;
+              yield* emitHarnessSignalInjected({
+                taskId: currentOptions.taskId,
+                iteration: state.iteration,
+                signalKind: "nudge",
+                origin: "runner.ts:1199",
+                content: guidance,
+                metadata: { missingTools: missingRequiredByCount, trigger: "loop-with-missing-tools" },
+              });
               state = transitionState(state, {
                 status: "thinking",
                 steps: [...state.steps, makeStep("harness_signal", `⚠️ ${guidance}`)],
@@ -1379,6 +1432,16 @@ export function runKernel(
         toolsUsed: state.toolsUsed,
         availableUserTools,
         terminal: true,
+      });
+      // Emit structured verdict to trace stream (replaces DEBUG_VERIFIER console).
+      yield* emitVerifierVerdict({
+        taskId: currentOptions.taskId,
+        iteration: state.iteration,
+        action: verdict.action,
+        terminal: true,
+        verified: verdict.verified,
+        summary: verdict.summary,
+        checks: verdict.checks,
       });
       if (process.env.DEBUG_VERIFIER === "1") {
         console.error(`[VERIFIER] verdict=${verdict.verified} summary=${verdict.summary}`);
