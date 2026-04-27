@@ -537,6 +537,19 @@ export function runKernel(
     const maxRequiredToolRetries = effectiveInput.maxRequiredToolRetries ?? 2;
     let requiredToolRedirects = 0;
 
+    // Verifier-driven retry budget (Sprint 3.5 Stage 2) — converts honest
+    // verifier rejections into recovery attempts. When the model ships a
+    // candidate final-answer that fails verification (e.g., agent-took-action
+    // because no data tool was invoked, or synthesis-grounded because the
+    // output fabricates content), we inject the verdict reason as a feedback
+    // step and let the kernel try once more with that guidance.
+    //
+    // Cap is intentionally low (1) — the architectural mechanism is one
+    // chance to recover from a rejection. If the model ignores even specific
+    // verifier feedback, the failure mode is compliance, not chance to retry.
+    let verifierRetries = 0;
+    const maxVerifierRetries = effectiveInput.maxVerifierRetries ?? 1;
+
     // Unified nudge budget — caps the total number of "missing required tool"
     // nudges injected by stall detection and loop detection paths combined.
     // Without this, the stall and loop paths can compound nudges indefinitely
@@ -1286,6 +1299,75 @@ export function runKernel(
             steps: [...state.steps, feedbackStep],
           });
           // Continue the loop — kernel will see the feedback in steps
+        }
+      }
+
+      // ── Verifier-driven retry (in-loop, Sprint 3.5 Stage 2) ──────────────
+      // When the kernel declares "done" with a candidate final-answer but the
+      // verifier rejects it (agent-took-action, synthesis-grounded, etc.),
+      // give the model one more iteration with the verdict reason injected
+      // as a feedback step. This converts the verifier from a pure terminal
+      // gate (fail on rejection) into a guided retry — the highest-leverage
+      // move for raising actual task success rates without changing the
+      // verifier's strict pass/fail semantics.
+      //
+      // Cap is intentionally tight (default 1). If the model ignores even
+      // verifier-specific feedback, the failure mode is compliance, not
+      // chance to retry — and the next §9.0 outer gate will fail the run
+      // definitively after this redirect's iter.
+      if (
+        state.status === "done" &&
+        state.output &&
+        verifierRetries < maxVerifierRetries &&
+        state.iteration < currentOptions.maxIterations - 1
+      ) {
+        const availableUserTools = (currentInput.availableToolSchemas ?? []).map(
+          (t) => t.name,
+        );
+        const verdict = defaultVerifier.verify({
+          action: "final-answer",
+          content: state.output,
+          actionSuccess: true,
+          task: currentInput.task,
+          priorSteps: state.steps,
+          requiredTools: currentInput.requiredTools,
+          relevantTools: currentInput.relevantTools,
+          toolsUsed: state.toolsUsed,
+          availableUserTools,
+          terminal: true,
+        });
+        if (!verdict.verified) {
+          // Emit only on rejection — §9.0 outer gate handles the success
+          // case, so without this branch every run would record 2 identical
+          // verdict events for the same output.
+          yield* emitVerifierVerdict({
+            taskId: currentOptions.taskId,
+            iteration: state.iteration,
+            action: verdict.action,
+            terminal: true,
+            verified: verdict.verified,
+            summary: verdict.summary,
+            checks: verdict.checks,
+          });
+          verifierRetries++;
+          const failedCheck = verdict.checks.find((c) => !c.passed);
+          const reason = failedCheck?.reason ?? verdict.summary;
+          const signalText =
+            `[verifier] Your draft answer was rejected at "${failedCheck?.name ?? "verification"}": ${reason}\n` +
+            `Address this specific gap and try again. (retry ${verifierRetries}/${maxVerifierRetries})`;
+          const signalStep = makeStep("observation", signalText);
+          yield* emitHarnessSignalInjected({
+            taskId: currentOptions.taskId,
+            iteration: state.iteration,
+            signalKind: "redirect",
+            content: signalText,
+            origin: "runner.ts:verifier-retry",
+          });
+          state = transitionState(state, {
+            status: "thinking",
+            output: null,
+            steps: [...state.steps, signalStep],
+          });
         }
       }
 

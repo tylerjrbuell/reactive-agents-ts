@@ -309,6 +309,18 @@ export interface KernelInput {
    * the tools that were never called.
    */
   readonly maxRequiredToolRetries?: number;
+  /**
+   * Maximum number of times the kernel will redirect the agent back to
+   * "thinking" when the verifier rejects a candidate final-answer
+   * (Sprint 3.5 Stage 2 — verifier-driven retry). Default: 1.
+   *
+   * On rejection, the kernel injects the verdict's failure reason as a
+   * harness signal step so the model gets specific feedback (e.g., "agent
+   * shipped output without calling any data tool") rather than retrying
+   * blind. Setting to 0 disables retry — the verifier remains a final
+   * gate that fails the run on rejection.
+   */
+  readonly maxVerifierRetries?: number;
   /** Custom environment context key-value pairs injected into the system prompt */
   readonly environmentContext?: Readonly<Record<string, string>>;
   /**
