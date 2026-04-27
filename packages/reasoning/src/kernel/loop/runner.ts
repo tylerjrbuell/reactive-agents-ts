@@ -137,8 +137,11 @@ function isLikelyGarbageOutput(output: string | null | undefined): boolean {
   const trimmed = output.trim();
   if (trimmed.length === 0) return true;
   // Harness control strings — never the model's actual answer.
+  // Includes both kernel-level termination strings and the recovery-steering
+  // nudges injected as observations (which can leak through as the answer
+  // when assembleDeliverable picks them up after a failed run).
   if (
-    /^(?:controller_signal_veto|Task incomplete|Loop detected|missing_required_tool)/i.test(trimmed)
+    /^(?:controller_signal_veto|Task incomplete|Loop detected|missing_required_tool|Recovery required|⚠️\s+Recovery required|⚠️\s+ACTION REQUIRED|\[Harness\])/i.test(trimmed)
   ) {
     return true;
   }
@@ -1369,6 +1372,22 @@ export function runKernel(
     // Route all successful outputs through the canonical finalization pipeline.
     // Validates format, optionally synthesizes when LLM is available.
     // Harness-assembled output (raw tool artifacts) always attempts synthesis.
+    //
+    // Now ALSO runs on status === "failed" when state.output OR state.error
+    // contains a harness control string — those should never reach the user
+    // as the answer. Cross-model failure analysis (cogito:latest T2/T5)
+    // showed dispatcher control strings becoming the user-visible output.
+    // The gate's synthesis path generates a clean answer from observation
+    // corpus when one exists, or surfaces a friendlier error otherwise.
+    const failedWithGarbageOutput =
+      state.status === "failed" &&
+      (isLikelyGarbageOutput(state.output) || isLikelyGarbageOutput(state.error));
+    if (failedWithGarbageOutput && !state.output) {
+      // Failed runs frequently put the harness control string in state.error
+      // and leave state.output empty. Promote a placeholder so the gate
+      // attempts synthesis rather than falling through to the empty path.
+      state = transitionState(state, { status: "done", output: state.error ?? "" });
+    }
     if (state.status === "done" && state.output) {
       const terminationSource = (state.meta.terminatedBy === "oracle_forced" ? "oracle"
         : state.meta.terminatedBy === "harness_deliverable" || state.meta.terminatedBy === "low_delta_guard" ? "harness"
@@ -1444,6 +1463,21 @@ export function runKernel(
           meta: { ...state.meta, outputFormatValidated: true },
         });
       }
+    }
+
+    // ── 9.5. Final scrub — never let a harness control string ship as the
+    // user-visible output. If everything else failed (synthesis empty, no
+    // observations to ground on, model never produced real content), replace
+    // the harness control string with a clean human-readable status. Keep
+    // the original detail in state.error for downstream debugging.
+    if (state.output && isLikelyGarbageOutput(state.output)) {
+      const original = state.output;
+      state = transitionState(state, {
+        output:
+          "Task could not be completed. The model did not produce a valid answer in the available iterations. " +
+          "Try rephrasing the request, providing the tool name explicitly, or using a different model.",
+        error: state.error ?? original,
+      });
     }
 
     // ── 10. Terminal hooks ────────────────────────────────────────────────────
