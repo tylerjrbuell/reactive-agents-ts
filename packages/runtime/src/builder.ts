@@ -619,6 +619,28 @@ export interface AgentResultMetadata {
     readonly stepsCount: number
     /** Confidence level of the result. */
     readonly confidence?: 'high' | 'medium' | 'low'
+    /**
+     * Full reasoning trace — thought / action / observation steps as they
+     * were executed. Populated by the execution engine. Useful for
+     * post-run analysis, evals, and downstream debriefing. May be omitted
+     * when the engine didn't surface a step trace (e.g. direct-LLM path).
+     */
+    readonly reasoningSteps?: ReadonlyArray<{
+        readonly id?: string
+        readonly type: string
+        readonly content: string
+        readonly metadata?: Record<string, unknown>
+    }>
+    /**
+     * Derived array of tool calls extracted from `reasoningSteps`. One entry
+     * per `type === "action"` step. Convenient for tests / evals that just
+     * want "which tools did the agent use" without filtering steps.
+     */
+    readonly toolCalls?: ReadonlyArray<{
+        readonly name: string
+        readonly arguments?: unknown
+        readonly id?: string
+    }>
 }
 
 /**
@@ -4684,12 +4706,44 @@ export class ReactiveAgent {
                     terminatedBy?: TerminatedBy
                     debrief?: AgentDebrief
                 }
+                // Derive toolCalls from reasoning steps so consumers don't
+                // have to filter `metadata.reasoningSteps` themselves. The
+                // public AgentResult never exposed steps until now — task
+                // gate / eval scripts were reading `result.steps` (undefined)
+                // and seeing empty toolCalls arrays even when tools ran.
+                const rawMetadata = r.metadata as AgentResultMetadata
+                const reasoningSteps = (rawMetadata as { reasoningSteps?: ReadonlyArray<{
+                    readonly id?: string
+                    readonly type: string
+                    readonly content: string
+                    readonly metadata?: Record<string, unknown>
+                }> }).reasoningSteps
+                const derivedToolCalls = (reasoningSteps ?? [])
+                    .filter((s) => s.type === 'action')
+                    .map((s) => {
+                        const tc = s.metadata?.toolCall as
+                            | { name?: string; arguments?: unknown; id?: string }
+                            | undefined
+                        return tc?.name
+                            ? {
+                                  name: tc.name,
+                                  ...(tc.arguments !== undefined ? { arguments: tc.arguments } : {}),
+                                  ...(tc.id !== undefined ? { id: tc.id } : {}),
+                              }
+                            : null
+                    })
+                    .filter((x): x is { name: string; arguments?: unknown; id?: string } => x !== null)
+                const enrichedMetadata: AgentResultMetadata = {
+                    ...rawMetadata,
+                    ...(reasoningSteps !== undefined ? { reasoningSteps } : {}),
+                    ...(derivedToolCalls.length > 0 ? { toolCalls: derivedToolCalls } : {}),
+                }
                 const agentResult: AgentResult = {
                     output: String(r.output ?? ''),
                     success: r.success,
                     taskId: String(r.taskId),
                     agentId: String(r.agentId),
-                    metadata: r.metadata as AgentResultMetadata,
+                    metadata: enrichedMetadata,
                     ...(r.format !== undefined ? { format: r.format } : {}),
                     ...(r.terminatedBy !== undefined
                         ? { terminatedBy: r.terminatedBy }

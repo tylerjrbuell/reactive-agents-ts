@@ -43,7 +43,7 @@ import { Effect } from "effect";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-const MODEL = process.env.TASK_GATE_MODEL ?? "gemma4:e4b";
+const MODEL = process.env.TASK_GATE_MODEL ?? process.env.PROBE_MODEL ?? "gemma4:e4b";
 const PROVIDER = process.env.TASK_GATE_PROVIDER ?? "ollama";
 const RECENT_OBS_LIMIT = Number(process.env.TASK_GATE_RECENT_OBS_LIMIT ?? "5");
 const REPORTS_DIR = resolve(process.cwd(), "harness-reports");
@@ -414,13 +414,19 @@ async function runTask(task: TaskDef): Promise<TaskResult> {
   const tokensUsed = (result.metadata?.tokensUsed as number | undefined) ?? 0;
   const stepsCount = (result.metadata?.stepsCount as number | undefined) ?? 0;
 
-  const toolCalls: Array<{ name: string }> = [];
-  for (const step of result.steps ?? []) {
-    if (step.type === "action") {
-      const toolCallMeta = step.metadata?.toolCall as { name?: string } | undefined;
-      if (toolCallMeta?.name) toolCalls.push({ name: toolCallMeta.name });
-    }
-  }
+  // Tool calls now derived in builder.ts and exposed at result.metadata.toolCalls.
+  // Falls back to scanning result.metadata.reasoningSteps for older runs.
+  const md = result.metadata as {
+    toolCalls?: ReadonlyArray<{ name: string }>;
+    reasoningSteps?: ReadonlyArray<{ type: string; metadata?: Record<string, unknown> }>;
+  };
+  const toolCalls: Array<{ name: string }> = md.toolCalls
+    ? md.toolCalls.map((c) => ({ name: c.name }))
+    : (md.reasoningSteps ?? [])
+        .filter((s) => s.type === "action")
+        .map((s) => (s.metadata?.toolCall as { name?: string } | undefined)?.name)
+        .filter((n): n is string => !!n)
+        .map((name) => ({ name }));
 
   const quality = task.score(output, toolCalls);
 
