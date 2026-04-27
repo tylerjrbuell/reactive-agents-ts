@@ -8,6 +8,7 @@
 - [Clean types, no any](feedback_clean_types.md) — strict TypeScript required; no `any` casts, use `unknown` + guards or proper types
 - [Starlight link patterns](feedback_starlight_link_patterns.md) — use absolute paths for internal doc links; relative paths cause CI link-checker failures
 - **Don't `rm -rf` untracked dirs with content** — confirm before deleting any `??` directory with >5 files; git can't recover untracked content. Cost: lost `wiki/` (user restoring) + 3 `obsidian-vault-*` skill modules (permanent, user did not back them up) on 2026-04-24 cleanup pass.
+- **Control pillar — every harness primitive must be developer-overridable** (2026-04-27). Vision §1 Pillar 1 requires every harness decision be controllable, hookable, observable. New behaviors ship from inception with: (a) `defaultFoo` preserving prior behavior, (b) `KernelInput.foo?: FooHookType` injection field, (c) public type export. Reference: `Verifier` + `VerifierRetryPolicy` in commit `14135d6d`. Hardcoded harness logic = black box = anti-pattern.
 
 ## Lost / pending re-implementation (2026-04-24)
 The three Obsidian-vault skill modules under `.agents/skills/` were deleted in the Phase-0-close cleanup and are NOT recoverable from any backup:
