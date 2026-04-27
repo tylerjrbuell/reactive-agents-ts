@@ -90,23 +90,6 @@ export function shouldNarrowToFinalAnswerOnly(opts: {
 }
 
 /**
- * Detect placeholder-template outputs — model emitting structural skeleton
- * with `[Title]`, `[Score]`, `[URL]`, `[Post Title]`, `[Score Number]`,
- * `[insert X here]` style brackets instead of real values. Common cogito
- * failure mode: model "writes the answer it would produce" without calling
- * the tool to get real data. Counts bracketed placeholders; >= 3 of them
- * means this is a template, not an answer.
- */
-export function isPlaceholderTemplate(content: string): boolean {
-  // Match capitalized-word placeholders inside square brackets, optionally
-  // followed by another capitalized word (e.g. [Title], [Post Title],
-  // [Score Number]). Excludes URLs / file paths / numeric refs.
-  const placeholderRe = /\[(?:[A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3}|insert[^\]]*here)\]/g;
-  const matches = content.match(placeholderRe) ?? [];
-  return matches.length >= 3;
-}
-
-/**
  * Heuristic: does this thought look like a model's actual answer (vs. an
  * intermediate planning thought)? Used to auto-promote substantive thoughts
  * to final-answer when the model produces a complete response but never
@@ -120,10 +103,6 @@ export function looksLikeFinalAnswer(content: string): boolean {
   const trimmed = content.trim();
   if (trimmed.length < 100) return false;
 
-  // Reject placeholder-template outputs. Model is role-playing the answer
-  // instead of calling the tool — auto-promoting these would ship junk.
-  if (isPlaceholderTemplate(trimmed)) return false;
-
   // Strong negative signals — these are planning patterns, not answers.
   // Use word-boundary matches so the heuristic doesn't fire on substring
   // mentions like "I should explain..." in a real answer.
@@ -132,8 +111,6 @@ export function looksLikeFinalAnswer(content: string): boolean {
     /\b(?:let me (?:call|use|invoke|fetch|try|check|verify|search)\b)/i,
     /\bnext (?:step|i'll|i will|i should)\b/i,
     /\b(?:i (?:don't|do not) have (?:enough|the)) (?:information|data|context)\b/i,
-    /\bwould you like me to\b/i,
-    /\bplease (?:call|invoke) (?:the )?[`'\w-]+(?:tool|function|method)\b/i,
     /^(?:thinking|reasoning|planning|analysis)\b/i,
   ];
   if (planningPatterns.some((re) => re.test(trimmed))) return false;
@@ -900,15 +877,7 @@ export function handleThinking(
             return `${t} (${actual}/${needed} calls done)`;
           });
           const isStuck = consecutiveEmpty >= 2;
-          // Detect placeholder-template pattern (model role-playing the
-          // answer with [Title] [Score] [URL] brackets instead of calling
-          // the tool). Some local models fall into this loop and ignore
-          // soft "use the tool" nudges. Override with a hard imperative.
-          const isPlaceholderLoop =
-            !!thinkingContent && isPlaceholderTemplate(thinkingContent);
-          const defaultNudge = isPlaceholderLoop
-            ? `⚠️ STOP. Your previous response contained PLACEHOLDER brackets like [Title], [Score], [URL] — you cannot guess the data. CALL the ${missingWithProgress.join(", ")} tool NOW with the required parameters. After the tool returns real data, write the answer using those exact values. Do not write any more placeholder text.`
-            : isStuck
+          const defaultNudge = isStuck
             ? `⚠️ ACTION REQUIRED: You have not made progress. You MUST call: ${missingWithProgress.join(", ")} RIGHT NOW. Stop waiting and use the tool immediately.`
             : `Continue working on the task. You still need to call: ${missingWithProgress.join(", ")}. Use the available tools to complete the task.`;
 
