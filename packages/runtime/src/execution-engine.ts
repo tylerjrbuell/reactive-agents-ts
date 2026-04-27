@@ -1230,9 +1230,52 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     Effect.catchAll(() => Effect.succeed({ required: [] as readonly string[], relevant: [] as readonly string[], requiredToolQuantities: {} as Readonly<Record<string, number>> })),
                   );
 
-                  if (classifyResult.required.length > 0 && !config.requiredTools?.tools?.length) {
-                    effectiveRequiredTools = [...classifyResult.required];
-                    effectiveRequiredToolQuantities = classifyResult.requiredToolQuantities;
+                  // Sanity-check classifier "required" against task text.
+                  // The classifier sometimes hallucinates required tools that
+                  // share no keyword overlap with the task (observed: gpt-oss
+                  // got `required=[web-search, crypto-price, http-get×3]` for
+                  // a Hacker News fetch task — none mentioned in the task).
+                  // Tools the user didn't literally invoke are demoted to
+                  // "relevant" — still visible/usable, but not enforced by
+                  // the dispatcher early-stop. Cross-model failure analysis:
+                  // harness-reports/cross-model-failure-modes-2026-04-26.md.
+                  const taskTextLower = extractTaskText(task.input);
+                  const literalMentions = literalMentionRequired(
+                    taskTextLower,
+                    classifyResult.required,
+                  );
+                  let effectiveRequired = classifyResult.required;
+                  if (
+                    classifyResult.required.length > 1 &&
+                    literalMentions.length < classifyResult.required.length
+                  ) {
+                    // At least one inferred required tool wasn't literally
+                    // mentioned. Demote the unmentioned ones to relevant.
+                    effectiveRequired = literalMentions;
+                    if (obs && isNormal) {
+                      const demoted = classifyResult.required.filter(
+                        (t) => !literalMentions.includes(t),
+                      );
+                      yield* obs
+                        .info(
+                          `◉ [classify]   demoted to relevant (no literal mention): ${demoted.join(", ")}`,
+                        )
+                        .pipe(Effect.catchAll((err) =>
+                          emitErrorSwallowed({
+                            site: "runtime/src/execution-engine.ts:classify-demote",
+                            tag: errorTag(err),
+                          }),
+                        ));
+                    }
+                  }
+
+                  if (effectiveRequired.length > 0 && !config.requiredTools?.tools?.length) {
+                    effectiveRequiredTools = [...effectiveRequired];
+                    effectiveRequiredToolQuantities = Object.fromEntries(
+                      Object.entries(classifyResult.requiredToolQuantities).filter(
+                        ([t]) => effectiveRequired.includes(t),
+                      ),
+                    );
 
                     // Sequential mode: clamp per-tool quantities to 1.
                     // The classifier may recommend N calls (e.g. web-search×4 for 4 currencies),
@@ -1254,14 +1297,23 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         .filter(([, n]) => n > 1)
                         .map(([t, n]) => `${t}×${n}`)
                         .join(", ");
-                      yield* obs.info(`◉ [classify]   required: ${classifyResult.required.join(", ")}${qHint ? ` (${qHint})` : ""}`)
+                      yield* obs.info(`◉ [classify]   required: ${effectiveRequired.join(", ")}${qHint ? ` (${qHint})` : ""}`)
                         .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:1253", tag: errorTag(err) })));
                     }
                   }
-                  if (classifyResult.relevant.length > 0) {
-                    classifiedRelevantTools = classifyResult.relevant;
+                  // Demoted tools also surface in the relevant set (they're
+                  // visible/usable but not enforced).
+                  const demotedRelevant = classifyResult.required.filter(
+                    (t) => !effectiveRequired.includes(t),
+                  );
+                  const mergedRelevant = [
+                    ...classifyResult.relevant,
+                    ...demotedRelevant.filter((t) => !classifyResult.relevant.includes(t)),
+                  ];
+                  if (mergedRelevant.length > 0) {
+                    classifiedRelevantTools = mergedRelevant;
                     if (obs && isNormal) {
-                      yield* obs.info(`◉ [classify]   relevant: ${classifyResult.relevant.join(", ")}`)
+                      yield* obs.info(`◉ [classify]   relevant: ${mergedRelevant.join(", ")}`)
                         .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:1260", tag: errorTag(err) })));
                     }
                   }
