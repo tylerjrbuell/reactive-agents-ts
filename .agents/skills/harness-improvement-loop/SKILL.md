@@ -1,546 +1,365 @@
 ---
 name: harness-improvement-loop
-description: Self-contained framework harness improvement loop. Runs instrumented agent probes, analyzes real runtime output to pinpoint harness weaknesses, and produces a templated actionable improvement report each pass. Use at the start of a harness improvement session. The fix phase uses agent-tdd separately.
+description: Agentic harness diagnostic + improvement loop. Probes the framework with real model runs, uses the rax-diagnose CLI to root-cause failures from structured trace data, ships ONE coordinated architectural fix, verifies via before/after diff, commits with empirical evidence. Use at the start of any harness improvement session — replaces ad-hoc grep + log-spelunking with a deterministic feedback loop.
 user-invocable: true
 ---
 
 # Harness Improvement Loop
 
-## Purpose
+## What this is
 
-This skill drives harness improvement from **actual framework output** — not from reading code alone. The loop is:
+A tight feedback loop for fixing harness failure modes using the framework's own diagnostic tooling (`@reactive-agents/diagnose`). Optimized for short iteration cycles — minutes per pass, not days. Every change lands with an empirical before/after trace as evidence.
 
 ```
-Orient → Instrument → Probe → Analyze → Report → Loop
+Probe → Diagnose → Hypothesize → Fix → Verify → Commit
+  ↑                                              │
+  └──────────────────────────────────────────────┘
+                    iterate
 ```
 
-Each pass produces a structured improvement report grounded in observed runtime behavior. Reports accumulate across passes. The fix phase (implementing improvements) is handled separately by `agent-tdd` + `reactive-feature-dev`.
+This skill replaces the previous "wide-scan probe + giant report template" workflow. The diagnose CLI now does the heavy lifting that hand-rolled jq queries used to do.
 
-**Report template:** `.agents/skills/harness-improvement-loop/REPORT-TEMPLATE.md`
-Copy it to `harness-reports/improvement-report-YYYYMMDD-N.md` at the start of each pass and fill it in with real probe data.
+## Prerequisites — the framework's diagnostic system
 
-## What "the Harness" Means
+Tracing is **on by default** since Sprint 3.6. Every agent run writes a typed JSONL to `~/.reactive-agents/traces/<runId>.jsonl`. The `rax-diagnose` CLI is the primary inspection surface:
 
-The harness is every system that sits between a task string and a high-quality final answer:
+```bash
+bun run rax:diagnose list                     # recent runs (most-recent first)
+bun run rax:diagnose replay latest            # pretty timeline of the most recent run
+bun run rax:diagnose replay <runId> --only=verifier-verdict,harness-signal-injected
+bun run --silent rax:diagnose grep <runId> "<js-expr>" # JSONL filter — pipe to jq for further work
+bun run rax:diagnose diff <runIdA> <runIdB>   # structural diff: stats, kinds, verdicts, final state
+```
 
-| Component | Location |
-|-----------|----------|
-| Kernel loop | `packages/reasoning/src/strategies/kernel/kernel-runner.ts` |
-| Phase pipeline | `packages/reasoning/src/strategies/kernel/phases/` (think, act, guard, context-builder) |
-| Kernel utilities | `packages/reasoning/src/strategies/kernel/utils/` (termination-oracle, quality-utils, auto-checkpoint, output-synthesis, task-intent, tool-capabilities) |
-| Reasoning strategies | `packages/reasoning/src/strategies/` (adaptive, reactive, plan-execute-reflect, tree-of-thought) |
-| Provider adapters | `packages/llm-provider/src/adapters/` |
-| Context pressure system | `packages/reasoning/src/context/` (context-profile, profile-resolver) |
-| Trace infrastructure | `packages/trace/src/` (recorder, layer, replay, events) — typed JSONL trace capture |
-| Intervention dispatcher | `packages/reactive-intelligence/src/controller/` (dispatcher, handlers/, patch-applier) |
-
-The builder, tools, memory, MCP, and UI layers are **out of scope**. Focus on kernel → strategy → output.
+If you're going to remember one thing: **`rax:diagnose replay <runId> --only=kernel-state-snapshot,harness-signal-injected,verifier-verdict`** tells the failure narrative of any run at a glance.
 
 ---
 
-## Phase 1: Orient (Do Not Skip)
+## Phase 1 — Orient (5 minutes, do not skip)
 
-Read these in order before running probes. Understanding current state prevents misdiagnosing results.
+Read these before forming hypotheses. Misdiagnosing happens when you reason about runtime behavior without knowing what the kernel is supposed to do.
 
-```bash
-# Architecture and recent changes
-cat AGENTS.md | head -120
-git log --oneline -20
+| What | File |
+|------|------|
+| Kernel main loop | `packages/reasoning/src/kernel/loop/runner.ts` |
+| Reasoning phases | `packages/reasoning/src/kernel/capabilities/{reason,act,verify,decide}/` |
+| Verifier (output gate) | `packages/reasoning/src/kernel/capabilities/verify/verifier.ts` |
+| Strategy adapters | `packages/reasoning/src/strategies/` |
+| Provider adapters (per-tier guidance) | `packages/llm-provider/src/adapters/` |
+| Context profiles (per-tier knobs) | `packages/reasoning/src/context/context-profile.ts` |
+| Diagnostic emit helpers | `packages/reasoning/src/kernel/utils/diagnostics.ts` |
+| AGENTS.md root + memory | `AGENTS.md`, `~/.claude/projects/.../memory/MEMORY.md` |
 
-# Kernel runner — the main loop
-cat packages/reasoning/src/strategies/kernel/kernel-runner.ts
+Also check `git log --oneline -20` so you know what shipped recently and aren't reinventing a fix that was reverted last week.
 
-# Four phases
-cat packages/reasoning/src/strategies/kernel/phases/think.ts
-cat packages/reasoning/src/strategies/kernel/phases/act.ts
-cat packages/reasoning/src/strategies/kernel/phases/guard.ts
-cat packages/reasoning/src/strategies/kernel/phases/context-builder.ts
-
-# Key decision-making utilities
-cat packages/reasoning/src/strategies/kernel/utils/termination-oracle.ts
-cat packages/reasoning/src/strategies/kernel/utils/quality-utils.ts
-cat packages/reasoning/src/strategies/kernel/utils/auto-checkpoint.ts
-cat packages/reasoning/src/strategies/kernel/utils/output-synthesis.ts
-cat packages/reasoning/src/strategies/kernel/utils/task-intent.ts
-
-# Context pressure thresholds
-cat packages/reasoning/src/context/context-profile.ts
-```
-
-**Record before proceeding:** current maxIterations defaults, context pressure thresholds (local/mid/large/frontier), quality score thresholds, termination conditions. You will need these to evaluate whether probe output is a bug or expected behavior.
+**Record before proceeding:** which model tier you're targeting (local / mid / large / frontier), the maxIterations default, the verifier check list (`agent-took-action`, `synthesis-grounded`, etc.). You'll need these to evaluate what trace evidence actually means.
 
 ---
 
-## Phase 2: Instrument (Probe Runner Setup)
+## Phase 2 — Probe (run a scenario, capture trace)
 
-### Available scripts
+The probe is a small TypeScript script that exercises the harness via the public builder API. The point is to surface a failure mode in a real run, not to construct a synthetic test fixture.
 
-- **`.agents/skills/harness-improvement-loop/scripts/harness-probe.ts`** — Runs all 5 probes, writes per-probe JSONL and a pass summary JSON. Uses Ollama by default (`qwen2.5:7b`). Override with `PROBE_MODEL=<name>` env var.
-- **`.agents/skills/harness-improvement-loop/scripts/harness-probe-analyze.ts`** — Analyzes a JSONL probe file and extracts structured metrics.
-- **`.agents/skills/harness-improvement-loop/scripts/harness-probe-confirm.ts`** — Runs targeted confirmation probes for specific weaknesses.
-- **`.agents/skills/harness-improvement-loop/scripts/harness-probe-wide.ts`** — Runs the full wide-scan probe suite.
-- **`.agents/skills/harness-improvement-loop/scripts/harness-evolve.ts`** — Analyzes all probes, updates loop-state.json, generates next-pass candidates.
+**Existing probes** (`.agents/skills/harness-improvement-loop/scripts/`):
 
-### Setup
+| Script | Purpose |
+|--------|---------|
+| `task-quality-gate.ts` | 5 tasks (T1–T5) covering pure synthesis, single-tool, selective filter, multi-criteria, long-form. Strong general-purpose first probe. |
+| `harness-probe.ts` | Wider 5-probe baseline (trivial-1step → termination-quality). Use when you don't know which subsystem is broken. |
+| `harness-probe-wide.ts` | Wide-scan suite — only run when you need cross-strategy evidence. |
 
-```bash
-mkdir -p harness-reports
-cp .agents/skills/harness-improvement-loop/REPORT-TEMPLATE.md \
-   harness-reports/improvement-report-$(date +%Y%m%d)-1.md
-```
-
-Create the probe runner:
-
-The probe runner and all supporting scripts live in `.agents/skills/harness-improvement-loop/scripts/`. Run them directly from the project root:
-
-Key configuration at the top of the file — the only things you should need to change:
-
-```typescript
-const PROBE_MODEL = "qwen2.5:7b"; // local Ollama model, no API cost
-// Override at runtime: PROBE_MODEL=cogito:8b bun run .agents/skills/harness-improvement-loop/scripts/harness-probe.ts
-
-// Each probe: { id, strategy, maxIterations, task, expectation }
-// Edit PROBES[] to add domain-specific tasks or adjust iteration budgets
-```
-
-The script:
-- Runs 5 probes sequentially (trivial-1step → termination-quality)
-- Writes per-probe JSONL to `harness-reports/probe-{id}.jsonl`
-- Writes a summary JSON to `harness-reports/probe-summary-{datetime}.json`
-- Streams live debug output to console during each run
-
-To run all probes with live output captured:
+Pick one model and run it. Examples:
 
 ```bash
-bun run .agents/skills/harness-improvement-loop/scripts/harness-probe.ts 2>&1 | tee harness-reports/probe-run-$(date +%Y%m%d-%H%M).txt
+TASK_GATE_MODEL=cogito:latest bun .agents/skills/harness-improvement-loop/scripts/task-quality-gate.ts
+PROBE_MODEL=qwen3:14b          bun .agents/skills/harness-improvement-loop/scripts/harness-probe.ts
 ```
 
-### Adapting the probe script for better output
+The probe writes a JSON summary under `harness-reports/`. Tracing is automatic — one `<runId>.jsonl` per task run lands in `~/.reactive-agents/traces/`.
 
-The 5 default probes are a starting baseline. Whenever the default probes don't exercise the specific behavior you're investigating, edit `.agents/skills/harness-improvement-loop/scripts/harness-probe.ts` directly. The script is a first-class artifact — updating it is expected and required to get actionable results.
-
-**When to adapt:**
-- A weakness from the report isn't exercised by any default probe — add a probe that directly triggers it
-- A probe's task is too easy/hard for the current model — adjust the task or `maxIterations`
-- You want to re-run a single probe after a fix — comment out the others or add a `--probe` CLI flag
-- The default tasks don't represent your actual workload — replace with domain-specific tasks
-
-**Targeted single-probe run** (fastest feedback loop after a fix):
-
-```typescript
-// In harness-probe.ts: temporarily filter PROBES to run just the failing one
-const PROBES: ProbeConfig[] = [
-  // comment out others, or:
-].filter((p) => p.id === "termination-quality");
-```
-
-Or add a quick CLI filter at the bottom of `main()`:
-
-```typescript
-const targetId = process.argv[2]; // bun run .agents/skills/harness-improvement-loop/scripts/harness-probe.ts termination-quality
-const toRun = targetId ? PROBES.filter((p) => p.id === targetId) : PROBES;
-```
-
-**Improving task specificity:** if a probe's `expectation` field doesn't match what you're testing, change it — the expectation is what you paste into the report's "Expected behavior" field. A mismatched expectation produces a misleading report.
-
-**After adapting:** run the modified script, confirm live output matches the new expectation, then restore any removed probes before the next full-pass run.
+**Adapting probes is expected, not an anti-pattern.** If the existing scripts don't exercise the failure mode you suspect, add a task or tweak `maxIterations` directly. Just commit the change with the run that justifies it.
 
 ---
 
-## Phase 2b: Trace-Based Observability
+## Phase 3 — Diagnose (use the trace, not the source)
 
-Probes use `.withTracing()` — the typed `TraceEvent` JSONL pipeline — as the primary observability mechanism. This replaced `.withObservability()` in v0.10. Traces land in `.reactive-agents/traces/<runId>.jsonl` and carry typed events across kernel, entropy, intervention, and run lifecycle.
+This is the phase where the new tooling pays off. The trace JSONL has already captured every state transition, verifier verdict, harness signal, and (when wired) LLM exchange. You don't have to read kernel source to know what happened — read the trace.
 
-### Builder config for probes
+### Default first move
 
-```typescript
-const agent = await ReactiveAgents.create()
-  .withProvider("ollama")
-  .withModel("qwen2.5:7b")
-  .withReasoning({ defaultStrategy: "adaptive", maxIterations: 12 })
-  .withReactiveIntelligence()      // enables intervention dispatcher
-  .withTracing({ dir: ".reactive-agents/traces" })
-  .build()
-```
-
-The trace dir is created automatically. Each run writes one `<runId>.jsonl` file.
-
-### TraceEvent kinds (what lands in the JSONL)
-
-| kind | When | Key fields |
-|------|------|-----------|
-| `run-started` | run open | `runId`, `model`, `provider` |
-| `run-completed` | run close | `status: "success"\|"failure"`, `totalTokens`, `durationMs` |
-| `entropy-scored` | each iteration | `composite`, `sources.{token,structural,semantic,behavioral,contextPressure}` |
-| `decision-evaluated` | each RI decision | `decisionType`, `confidence`, `reason` |
-| `intervention-dispatched` | handler fires | `decisionType`, `patchKind`, `cost`, `telemetry` |
-| `intervention-suppressed` | suppression gate | `decisionType`, `reason` (below-entropy-threshold / below-iteration-threshold / mode-advisory / ...) |
-| `strategy-switched` | strategy change | `from`, `to`, `reason` |
-
-### Reading traces
-
-**CLI — human inspection:**
 ```bash
-# Timeline with entropy, interventions, strategy switches
-rax trace inspect .reactive-agents/traces/<runId>.jsonl
-
-# Side-by-side stats comparison (e.g. RI on vs off)
-rax trace compare .reactive-agents/traces/<run-a>.jsonl .reactive-agents/traces/<run-b>.jsonl
+bun run rax:diagnose list                                        # which runs are recent?
+bun run rax:diagnose replay latest                               # full timeline
+bun run rax:diagnose replay latest --only=kernel-state-snapshot,verifier-verdict,harness-signal-injected
 ```
 
-**Script — structured analysis:**
-```typescript
-import { loadTrace, traceStats } from "@reactive-agents/trace"
-const trace = await loadTrace(".reactive-agents/traces/<runId>.jsonl")
-const stats = traceStats(trace)
-// stats: { totalEvents, iterations, interventionsDispatched, interventionsSuppressed,
-//           maxEntropy, toolCalls, durationMs, totalTokens }
-```
+The filtered replay surfaces three high-signal narratives:
+- **kernel-state-snapshot per iteration** — step composition, status, output length
+- **verifier-verdict** — every gate firing with check breakdown and reason
+- **harness-signal-injected** — every harness-authored step with file:line origin
 
-**Entropy AUC across a corpus:**
+If the failure isn't obvious from those three event kinds, broaden:
+
 ```bash
-bun run scripts/validate-entropy.ts .reactive-agents/traces/
-# Prints AUC (max-entropy → failure), success rate, interpretation guide
+bun run rax:diagnose replay latest --only=verifier-verdict,strategy-switched,intervention-dispatched,intervention-suppressed
 ```
 
-### Signals to watch for
+### Structured queries — patterns that pay off
 
-- `maxEntropy > 0.7` and `interventionsDispatched = 0` → dispatcher suppression or no-handler gap
-- `status: "failure"` with `iterations = maxIterations` → agent did not self-terminate
-- `strategy-switched` absent when expected → strategy routing not triggering
-- `intervention-suppressed` with `reason: "below-entropy-threshold"` repeatedly → suppression threshold too high for probe model
-- `contextPressure` climbing fast before iter 6 → context pressure building faster than expected
+```bash
+# Did the verifier reject any output, and why?
+bun run --silent rax:diagnose grep latest "e.kind === 'verifier-verdict' && !e.verified"
+
+# Which harness signals fired and from where?
+bun run --silent rax:diagnose grep latest "e.kind === 'harness-signal-injected'" | jq -c '{iter, signalKind, origin, len: .contentLen}'
+
+# Did the agent ever actually call a tool?
+bun run --silent rax:diagnose grep latest "e.kind === 'kernel-state-snapshot' && e.toolsUsed.length > 0" | jq '.iter'
+
+# What's the output trajectory across iterations?
+bun run --silent rax:diagnose grep latest "e.kind === 'kernel-state-snapshot'" | jq -c '{iter, status, outputLen, terminatedBy}'
+
+# Was strategy-switching responsible for failure?
+bun run --silent rax:diagnose grep latest "e.kind === 'strategy-switched' || e.kind === 'intervention-dispatched'"
+```
+
+### Cross-run comparison
+
+When you suspect a recent change broke something:
+
+```bash
+bun run rax:diagnose diff <good-runId> <bad-runId>
+```
+
+The diff prints a stat table (iterations, tool calls, verifier rejections, harness signals, tokens, duration) plus event-kind histogram and final-state comparison. Use it to confirm "did my change move the needle in the right direction" without eyeballing scoring functions that move slowly.
+
+### What you're looking for
+
+| Signature | Likely cause |
+|-----------|--------------|
+| `kernel-state-snapshot.toolsUsed = []` across all iterations + `verifier-verdict.checks[].name = "agent-took-action" passed=false` | Model never called any data tool — parrot/hallucination output suppressed by the verifier (working as designed). Investigate WHY model didn't call: prompt, schema, tier-specific FC issue. |
+| Multiple `harness-signal-injected` with same `origin` and same content | Harness nudge is firing repeatedly without effect. Either the nudge is wrong, the model can't parse it, or the kernel control flow ignores model compliance. |
+| `verifier-verdict.checks[].name = "synthesis-grounded" passed=false` | Output contains claims not present in tool observations — fabrication. |
+| `kernel-state-snapshot.outputLen > 0` while `status="failed"` | Output ownership invariant broken — kernel is letting a populated state.output ride past a failure transition. |
+| `intervention-suppressed` repeatedly with `reason="below-entropy-threshold"` on a stuck run | RI threshold too high for this model tier. |
+| Final `kernel-state-snapshot.terminatedBy = "dispatcher-strategy-switch"` and the next strategy never recovers | Strategy-switching escape hatch isn't actually escaping — investigate the sub-strategy. |
+
+### Anti-pattern to retire
+
+The old jq cookbook (`jq 'select(.kind == "...")' .reactive-agents/traces/...`) is now redundant. Use `rax:diagnose grep` — it's faster to type and survives schema changes. If you find yourself reaching for raw jq against a `~/.reactive-agents/traces/*.jsonl`, ask whether `rax:diagnose replay --only=...` or a `grep` predicate would express it more cleanly.
 
 ---
 
-## Phase 3: Analyze Output
+## Phase 4 — Hypothesize (one structural change, not a band-aid)
 
-Use `rax trace inspect` and `harness-probe-analyze.ts` as the primary analysis tools. The output of these commands fills the "Observed behavior" and "Evidence" fields in the report.
+Before writing any code, write down:
 
-### Primary: trace inspect
+1. **The failure mode in one sentence.** "T2/T4/T5 ship harness-redirect text as the final answer."
+2. **The mechanism.** "When the kernel terminates `dispatcher-strategy-switch` with `state.status=failed` but state.output is unset, reactive.ts's `lastThought ?? state.error ?? null` fallback grabs the parroted recovery nudge from a thought step and ships it."
+3. **The structural fix candidate.** "Establish a kernel invariant: `status=failed → output=null` (no exceptions). Move the lastThought→state.output synthesis INTO the kernel before the verifier gate so the verifier always sees what the user will see."
+4. **What you expect the after-trace to show.** "T2/T4/T5 → outputLen=0; T3/T5 → verifier-verdict.verified=false on agent-took-action; verifier-verdict event count goes up because the gate now fires on more terminations."
 
-```bash
-# Per-run timeline — entropy, interventions, strategy switches
-rax trace inspect .reactive-agents/traces/<runId>.jsonl
+If you can't fill in (4), you don't have a falsifiable hypothesis yet — keep diagnosing.
 
-# Compare two runs side-by-side (e.g. RI enabled vs disabled)
-rax trace compare .reactive-agents/traces/<run-a>.jsonl .reactive-agents/traces/<run-b>.jsonl
-```
+**Call advisor() before committing to the fix** when the hypothesis is non-trivial. The advisor sees the full trace evidence; their independent reading often surfaces alternative root causes (H1 vs H2) that look the same in the immediate symptom.
 
-### Primary: probe analysis script
+### Anti-patterns at this phase
 
-```bash
-# Structured metric extraction (uses real TraceEvent schema)
-bun run .agents/skills/harness-improvement-loop/scripts/harness-probe-analyze.ts \
-  .reactive-agents/traces/<runId>.jsonl
-
-# All probes + metric registry
-bun run .agents/skills/harness-improvement-loop/scripts/harness-probe-analyze.ts --registry
-```
-
-### Termination quality
-
-```bash
-# Did run hit maxIterations or self-terminate?
-jq 'select(.kind == "run-completed") | {status, totalTokens, durationMs}' \
-  .reactive-agents/traces/<runId>.jsonl
-
-# Entropy progression — was composite rising toward the end?
-jq 'select(.kind == "entropy-scored") | {iter, composite, sources}' \
-  .reactive-agents/traces/<runId>.jsonl
-```
-
-### Intervention dispatcher activity
-
-```bash
-# Did the dispatcher fire?
-jq 'select(.kind == "intervention-dispatched") | {iter, decisionType, patchKind}' \
-  .reactive-agents/traces/<runId>.jsonl
-
-# What was suppressed and why?
-jq 'select(.kind == "intervention-suppressed") | {iter, decisionType, reason}' \
-  .reactive-agents/traces/<runId>.jsonl
-```
-
-### Strategy selection
-
-```bash
-# Did strategy switch occur?
-jq 'select(.kind == "strategy-switched") | {iter, from, to, reason}' \
-  .reactive-agents/traces/<runId>.jsonl
-
-# Decision types evaluated this run
-jq 'select(.kind == "decision-evaluated") | {iter, decisionType, confidence, reason}' \
-  .reactive-agents/traces/<runId>.jsonl
-```
-
-### Cross-probe comparison
-
-```bash
-# Stats summary across all traces in a dir
-bun run scripts/validate-entropy.ts .reactive-agents/traces/
-# Prints AUC, success rate, per-run entropy vs outcome
-
-# Compare probe summary JSON (still written by harness-probe.ts)
-jq -s '[.[] | {id: .id, iters: .iterationsUsed, cost: .costUsd, quality: .qualityScore}]' \
-  harness-reports/probe-summary-*.json | jq '.[-1]'
-```
-
-**Note on legacy jq patterns:** older versions of this skill used event schemas like `{event: "ThinkStart"}`, `{qualityScore: ...}`, `{contextRatio: ...}`. Those fields do not exist in the v0.10 TraceEvent schema. Always use `harness-probe-analyze.ts` or the jq patterns above (keyed on `.kind`) — do not adapt the legacy jq patterns.
+- "Add a guard in execution-engine.ts to filter the parroted text" — band-aid; the leak is the kernel's output ownership being unclear.
+- "Bump the recovery nudge budget" — symptom-papering; doesn't address why the model parrots in the first place.
+- "Disable strategy switching for this case" — disabling a feature to make a probe pass is reactive, not architectural.
+- "Just delete the failing test" — never. Test failures are signal.
 
 ---
 
-## Phase 3b: Intervention Dispatcher Verification
+## Phase 5 — Fix (one coordinated change, then stop)
 
-When probing with `.withReactiveIntelligence()` enabled, verify the dispatcher is actually firing — not just evaluating decisions in advisory mode.
+Make the minimum coordinated set of edits that implements the hypothesis. Don't fold in adjacent cleanups — those are a separate commit.
 
-```bash
-# Quick check: did any intervention get dispatched?
-jq 'select(.kind == "intervention-dispatched")' .reactive-agents/traces/<runId>.jsonl | wc -l
-
-# Full dispatcher activity for a run
-jq 'select(.kind == "intervention-dispatched" or .kind == "intervention-suppressed") | {kind, iter, decisionType, .reason, .patchKind}' \
-  .reactive-agents/traces/<runId>.jsonl
-```
-
-**Expected for a loop-prone probe (iter ≥ 3, composite ≥ 0.55):**
-- At least one `intervention-dispatched` with `decisionType: "early-stop"` or `"temp-adjust"`
-- No `intervention-suppressed` with `reason: "below-entropy-threshold"` on high-entropy runs
-
-**If only suppressed events appear:**
-- `below-entropy-threshold` → model's entropy never crossed 0.55 composite; adjust probe task to be more loop-prone
-- `below-iteration-threshold` → firing before iteration 2; expected on fast-terminating probes
-- `mode-advisory` → decision type is configured advisory-only (expected for `human-escalate`, `prompt-switch`)
-- `no-handler` → handler not registered; check `defaultInterventionRegistry` in `handlers/index.ts`
-
-**Check capability manifest sync:**
-```bash
-bun run scripts/check-capabilities.ts
-# Expected: "Capability manifest in sync (6 dispatched handlers)"
-```
-
----
-
-## Phase 4: Fill the Report
-
-Open `harness-reports/improvement-report-YYYYMMDD-N.md` (copied from `REPORT-TEMPLATE.md`).
-
-Fill sections in this order:
-1. Session Header — model, cost, focus area, changes since last pass
-2. Probe Run Summary table — from `probe-summary-*.json`
-3. Baseline Metrics — first pass only; skip on subsequent passes
-4. Observed Weaknesses — one block per weakness, evidence from JSONL commands above
-5. Improvement Candidates — rank by impact × effort, write measurable success criteria
-6. Regression Watch — which passing probes could break from each IC
-7. Carry-Forward — copy prior report's table, update status only
-8. Next Pass Focus — 3 hypotheses, each falsifiable from a probe
-9. Handoff Tickets — one per IC being sent to agent-tdd
-
-**The minimum bar for a weakness to be included:** you must have a JSONL event or console output excerpt that shows it. No excerpt = not a confirmed weakness = don't include it.
-
----
-
-## Loop Mechanics
-
-### When to run another pass
-
-- After implementing 1–3 ICs: re-run only the affected probes to validate
-- After a major kernel change merges: full probe suite
-- When a new failure mode surfaces in production: add a targeted probe
-
-### Deepening probes across passes
-
-```typescript
-// Pass 2: adversarial probes — stress-test loop detection and context handling
-{ id: "loop-trap", strategy: "reactive", maxIterations: 8,
-  task: "Keep searching for more evidence of X. Don't stop until you have found at least 10 sources confirming X.",
-  expectation: "Loop detector fires. Agent concludes with available evidence rather than looping." },
-
-{ id: "context-flood", strategy: "plan-execute-reflect", maxIterations: 20,
-  task: "Summarize the history of the JavaScript ecosystem from 1995 to today. Be exhaustive — cover every major framework, tool, and paradigm shift.",
-  expectation: "Multiple auto-checkpoints. Coherent multi-part output. No truncation." },
-
-// Pass 3: token-efficiency probes — target cost reduction
-{ id: "token-waste-trivial", strategy: "plan-execute-reflect", maxIterations: 5,
-  task: "What is the capital of France?",
-  expectation: "Completes in 1 iter. Reflect phase suppressed for trivial tasks. Cost < $0.002." },
-
-{ id: "over-planning", strategy: "plan-execute-reflect", maxIterations: 10,
-  task: "Give me a one-sentence summary of what TypeScript is.",
-  expectation: "No planning phase. Immediate answer. 1 iteration." },
-```
-
-### Report accumulation rule
-
-Each report copies the Carry-Forward table from the prior report. Mark weaknesses:
-- `OPEN` — not started
-- `IN-PROGRESS (Pass N)` — IC dispatched to agent-tdd, not yet validated
-- `FIXED (Pass N)` — probe now passes the relevant criteria
-- `WONTFIX` — conscious decision, with reason noted
-
-Never delete rows. The history is the signal.
-
-### Session stop condition
-
-Stop when:
-- All high-severity weaknesses are `FIXED` or `WONTFIX`, AND
-- No new high-severity weaknesses appeared in this pass's probes
-
----
-
-## Phase 5: Evolve (Self-Improving Loop)
-
-Run this phase **after** Phase 4 (filling the report) and **before** the next pass begins.
-
-### What it does
-
-The evolution engine reads all probe JSONL outputs, compares against known pass criteria, updates the persistent loop state, and generates next-pass probe candidates — automatically.
+After editing, **rebuild every package whose dist a probe consumes**. The most painful diagnostic time-sink is "my edit isn't reaching the running code" because dist is stale:
 
 ```bash
-# After each pass, run:
-bun run .agents/skills/harness-improvement-loop/scripts/harness-evolve.ts
-
-# Dry-run (print plan, no writes):
-bun run .agents/skills/harness-improvement-loop/scripts/harness-evolve.ts --dry-run
-
-# Analyze a single JSONL file:
-bun run .agents/skills/harness-improvement-loop/scripts/harness-probe-analyze.ts .reactive-agents/traces/<runId>.jsonl
-
-# Analyze all probes + print metric registry:
-bun run .agents/skills/harness-improvement-loop/scripts/harness-probe-analyze.ts --registry
-
-# Entropy AUC validation — validates "reactive signal is real" claim across a corpus of traces:
-bun run scripts/validate-entropy.ts .reactive-agents/traces/
-# AUC > 0.7 = entropy is a real signal. 0.5 = noise. < 0.5 = inverted.
-# Run after accumulating ≥10 traces across pass probes.
+cd packages/reasoning && bun run build
+cd packages/runtime   && bun run build
+cd packages/trace     && bun run build
+cd packages/diagnose  && bun run build
 ```
 
-### What evolves between passes
+(Or just `bun run build` from the root — the turbo cache makes it cheap when nothing changed.)
 
-**1. Failing probes → drill-down variants**
-When a probe fails its pass criteria, the evolution engine generates a targeted drill-down probe that isolates the root cause. Example: `tool-heavy` failing because `actPhaseCount=0` generates a `tool-heavy-fc-drill` probe comparing cogito:8b vs qwen3:14b on the same task to isolate whether the failure is W1 (text-format FC) or a deeper bug.
-
-**2. Consistently-passing probes → graduated variants**
-After a probe passes 2+ passes in a row, the engine marks it as a graduation candidate and generates a harder variant. Example: `trivial-1step` (passes 3×) graduates to `trivial-multistep-math` with multi-step arithmetic. This raises the bar continuously rather than letting the suite go stale.
-
-**3. Coverage gap detection**
-The engine tracks `harness-reports/loop-state.json::coverageMap` — a map of all known framework feature areas to `covered | partial | uncovered`. After each pass it identifies which high-priority areas have no probes yet and surfaces them in the "Next Pass Focus" output.
-
-### Persistent loop state
-
-`harness-reports/loop-state.json` accumulates across passes:
-
-```
-knownWeaknesses[]    — all W{n} across all passes, with status: open|confirmed|fixed|wont-fix
-regressionBaselines[]— metrics that must not regress (e.g. trivial-1step iterations=1 exactly)
-metricRegistry[]     — all JSONL metric names discovered + their schema (labels, type, meaning)
-probeHistory[]       — per-probe pass/fail history, confirmedBug flag, graduated flag
-coverageMap{}        — feature area → coverage status
-nextPassFocus[]      — top 10 focus areas for next pass (auto-computed)
-```
-
-Never edit `loop-state.json` by hand during a pass. The engine writes it atomically after analysis.
-
-### TraceEvent JSONL schema (v0.10+)
-
-All trace files use the typed `TraceEvent` discriminated union. Every event shares base fields: `kind`, `runId`, `timestamp`, `iter`, `seq`.
-
-| kind | Key fields | Notes |
-|---|---|---|
-| `run-started` | `model`, `provider`, `config` | iter = -1 |
-| `run-completed` | `status`, `totalTokens`, `durationMs` | iter = -1; `status` is `"success"\|"failure"` |
-| `entropy-scored` | `composite`, `sources.{token,structural,semantic,behavioral,contextPressure}` | per iteration |
-| `decision-evaluated` | `decisionType`, `confidence`, `reason` | per RI decision |
-| `intervention-dispatched` | `decisionType`, `patchKind`, `cost`, `telemetry` | handler fired |
-| `intervention-suppressed` | `decisionType`, `reason` | suppression gate hit |
-| `strategy-switched` | `from`, `to`, `reason` | iter = -1 |
-
-To get per-iteration data, use `entropy-scored` events (one per iteration, keyed on `iter`). To get intervention activity, use `intervention-dispatched` and `intervention-suppressed`. To check run outcome, use `run-completed.status`.
-
-**Legacy metric names** (`execution.iteration`, `reasoning.steps`, `entropy.composite` with `labels`) are from the pre-v0.10 observability system and no longer apply. Do not use them.
-
-### Adding regression baselines
-
-After a probe has passed cleanly for 2+ passes, add a baseline to `loop-state.json::regressionBaselines`:
-
-```json
-{
-  "probeId": "trivial-1step",
-  "metric": "iterations",
-  "expected": 1,
-  "tolerance": 0,
-  "direction": "exactly"
-}
-```
-
-The evolution engine checks all baselines on every run and flags regressions immediately.
-
-### Coverage-driven probe expansion
-
-The `ALL_FEATURE_AREAS` map in `harness-evolve.ts` defines all framework feature areas. The engine automatically surfaces high-priority uncovered areas after each pass. Priority order for coverage:
-
-1. `text-fc-fallback` (W1 — stream-parser.ts text tool call recovery)
-2. `max-iterations-wiring` (W4 — builder.ts withReasoning propagation)
-3. `loop-detector` (W2 — loop-detector.ts ICS masking)
-4. `strategy-switching` (kernel-runner.ts loop-triggered escalation)
-5. `quality-early-exit` (termination-oracle.ts threshold gate)
-6. `reflexion`, `tree-of-thought` (strategy-level features)
-7. `context-pressure-narrowing`, `auto-checkpoint`
+Then re-run the probe with the same model + scenario as Phase 2.
 
 ---
 
-## Pass Cleanup (After Each Pass)
+## Phase 6 — Verify (before/after, structurally)
 
-After the evolution engine has written `loop-state.json` and you have a complete improvement report, trim `harness-reports/` so it stays navigable.
+Two checks every fix must pass before commit:
 
-**Keep in `harness-reports/` root:**
-- `loop-state.json` — canonical state; never archive or delete
-- The 5 current baseline probe files: `probe-<id>.jsonl` + `probe-<id>-analysis.json`
-- `probe-summary-<latest-date>.json`
-- `probe-candidates-<latest-date>.ts`
-- The current pass improvement report: `improvement-report-<date>-<N>.md`
+**(A) The targeted failure mode is gone, by trace evidence.** Use `rax:diagnose diff <before-runId> <after-runId>`. The diff should show:
+- Verifier rejections moved in the predicted direction (more → fewer for a fix that actually solves the problem; more → more for a fix that exposes new issues that were being masked)
+- Output length / status / terminatedBy on the final snapshot match the prediction in Phase 4 step (4)
+- No unexpected new harness-signal kinds firing
 
-**Archive (move to `harness-reports/archive/passN/`):**
-- Wide-scan JSONL and analysis files from the completed pass
-- Confirm JSONL and analysis files from the completed pass
-- Raw `.txt` run logs (`probe-run-*.txt`, `probe-confirm-*.txt`, `probe-wide-*.txt`) — large, redundant with summaries
-- The previous pass improvement reports
-- The superseded `probe-candidates-<older-date>.ts` file
-- Older `probe-summary-*.json` files
+**(B) Test suite is no worse than baseline.** Run `bun test` from the package whose source you edited. Tally failures vs the pre-edit baseline (often there are pre-existing failures unrelated to your change — record them with `git stash; bun test; git stash pop` if you're not sure). **Net new failures = blocker, not an excuse to commit.**
+
+If a test that was passing now fails, three options in priority order:
+1. The test reveals a real regression — fix the regression
+2. The test was asserting a behavior the fix legitimately changes — update the test with a comment explaining why the new behavior is correct
+3. (Rare) The test depends on something tangential to the fix — split the unrelated change out of this commit
+
+### When to call advisor() again
+
+Before declaring done. The advisor sees your full trace evidence, the diff, and the test results. They catch "your fix made the targeted thing better but broke something else" cases that aren't visible from inside the iteration.
+
+---
+
+## Phase 7 — Commit (evidence in the message, no co-authors)
+
+Commit messages for harness fixes should answer:
+1. What failure mode was observed (with empirical evidence: trace runId, verifier verdict, etc.)
+2. What the mechanism was (root cause, not symptom)
+3. What changed structurally (the invariant or contract being established)
+4. Verification: before/after numbers + tests pass/fail counts
+
+Template:
+
+```
+fix(<package>): <one-line summary of structural change>
+
+Empirical: <model> × <probe> trace <before-runId> showed <symptom>.
+
+Root cause: <mechanism — one paragraph max>.
+
+Structural fix:
+  1. <coordinated change 1>
+  2. <coordinated change 2>
+  ...
+
+Verification:
+  - Trace diff <before-runId> → <after-runId>: <key delta>
+  - Tests: N ran, M fail (= baseline of M, zero new regressions)
+  - Verifier behavior: <expected verdict change>
+
+<Optional: what this DOESN'T fix and what's deferred>.
+```
+
+**Do not add `Co-Authored-By` lines.** This is in user memory.
+
+---
+
+## Anti-Patterns (carry-over from old skill — still valid)
+
+- **Don't fill hypotheses from code reading alone.** Every claim about runtime behavior needs a trace event or test output backing it.
+- **Don't fix while diagnosing.** Probe → diagnose → hypothesize THEN edit. Editing during diagnosis pollutes the symptom.
+- **Don't accept "close enough" verification.** If the trace diff doesn't show the predicted shape, the fix probably doesn't do what you think — even if a probe score happens to improve.
+- **Don't skip the orient phase on a session you're returning to.** Codebases drift; the file you remember may have moved.
+- **Don't bypass the verifier or invariants to make a probe pass.** Disabling a guard to "see what happens" is a diagnostic move, not a fix.
+- **Don't run multiple unrelated changes in the same fix commit.** Each commit should have ONE structural hypothesis attached.
+
+---
+
+## Reference — `rax:diagnose` command cookbook
 
 ```bash
-# Create archive for completed pass N
-mkdir -p harness-reports/archive/passN
+# List recent runs (default trace dir is ~/.reactive-agents/traces)
+bun run rax:diagnose list
 
-# Move pass-specific wide/confirm probes
-mv harness-reports/probe-wide-*.jsonl harness-reports/probe-wide-*-analysis.json harness-reports/archive/passN/ 2>/dev/null || true
-mv harness-reports/probe-confirm-*.jsonl harness-reports/probe-confirm-*-analysis.json harness-reports/archive/passN/ 2>/dev/null || true
+# Pretty timeline with iteration grouping
+bun run rax:diagnose replay latest
+bun run rax:diagnose replay <runId>
 
-# Move raw txt logs
-mv harness-reports/probe-run-*.txt harness-reports/probe-confirm-*.txt harness-reports/probe-wide-*.txt harness-reports/archive/passN/ 2>/dev/null || true
+# Filtered replay (most useful default for diagnosis)
+bun run rax:diagnose replay latest --only=kernel-state-snapshot,verifier-verdict,harness-signal-injected
 
-# Move superseded candidates and summaries
-mv harness-reports/probe-candidates-<prev-date>.ts harness-reports/archive/passN/
-mv harness-reports/probe-summary-<prev-date>.json harness-reports/archive/passN/
+# Raw JSONL stream (for piping — note: use --silent to strip the bun wrapper line)
+bun run --silent rax:diagnose replay latest --json | jq 'select(.iter > 5)'
+bun run rax:diagnose replay latest --raw
+
+# Predicate-based filter (e is the event)
+bun run --silent rax:diagnose grep latest "e.kind === 'verifier-verdict' && !e.verified"
+bun run --silent rax:diagnose grep latest "e.kind === 'harness-signal-injected' && e.signalKind === 'redirect'"
+bun run --silent rax:diagnose grep latest "e.kind === 'kernel-state-snapshot' && e.outputLen > 0 && e.status === 'failed'"
+
+# Two-trace structural diff
+bun run rax:diagnose diff <runIdA> <runIdB>
+
+# Help
+bun run rax:diagnose --help
 ```
 
-**Do not archive:** the 5 baseline probe JSONL files (`probe-trivial-1step.jsonl`, etc.) — they carry forward as the regression baselines for the next pass and will be overwritten in-place when re-run.
+**Run-id resolution:** bare ULID (resolves under `~/.reactive-agents/traces/`), absolute path to a `.jsonl`, or the literal `latest`.
+
+**Env switches:**
+- `REACTIVE_AGENTS_TRACE=off` — disable trace recording for a run
+- `REACTIVE_AGENTS_TRACE_DIR=<path>` — custom trace directory
+- `DEBUG_VERIFIER=1` — also stream verifier verdicts to stderr (legacy; prefer the trace)
 
 ---
 
-## Handoff to Fix Phase
+## Reference — diagnostic event types
 
-Copy the ticket from the Handoff Tickets section of the report directly into a new `agent-tdd` session. The ticket format in the template is designed to give `agent-tdd` everything it needs without additional context.
+The trace JSONL captures these structured events. Schema lives in `packages/trace/src/events.ts`:
 
-Do not implement fixes within this skill. Analysis and implementation are separate concerns — mixing them creates untested changes and loses the feedback signal.
+| Kind | Captures | Useful for |
+|------|----------|-----------|
+| `run-started` / `run-completed` | Lifecycle endpoints | Total tokens, duration, status |
+| `kernel-state-snapshot` | Per-iteration kernel state | Step composition, output length, tools used, terminatedBy |
+| `verifier-verdict` | Verifier gate firings | Output rejection reasons (failed checks) |
+| `guard-fired` | Guard/phase decisions | Which control-flow branch took the path (when wired) |
+| `harness-signal-injected` | Harness-authored steps | File:line origin of nudges/redirects |
+| `llm-exchange` | LLM round-trip | Prompt + response capture (when wired at provider level) |
+| `entropy-scored` | Per-iteration entropy | Composite + per-source breakdown |
+| `decision-evaluated` | RI controller decisions | Decision type + confidence |
+| `intervention-dispatched` / `-suppressed` | Dispatcher activity | Which interventions fired vs were gated |
+| `strategy-switched` | Strategy escapes | from/to/reason |
+| `tool-call-start` / `-end` | Tool invocations | Per-call duration + ok/error |
+
+`guard-fired` and `llm-exchange` are framework-ready (helpers exported from `@reactive-agents/reasoning`) but emit sites are not yet wired across all guards / providers. Wire as needed; this is non-blocking for most diagnoses.
 
 ---
 
-## Anti-Patterns
+## Deferred — when to revisit
 
-- **Do not fill the report from code reading alone.** Every weakness needs a JSONL excerpt. Code reading is for root cause hypothesis only.
-- **Do not fix while analyzing.** Finish probe → analyze → report before touching any source file.
-- **Do not skip trivial-1step.** Kernel regressions appear here first.
-- **Do not write vague improvement candidates.** "Improve termination" is not a candidate. "Add early-exit in termination-oracle.ts when qualityScore ≥ 0.90 before maxIterations" is.
-- **Do not delete carry-forward rows.** Accumulation is the point.
-- **Do not add new probes mid-pass.** Once you've started filling the report for a pass, finish it with the same probe set. Log additions under Next Pass Focus and run them next time. Adapting the probe script between passes is expected — adapting it while writing the current report corrupts the baseline.
+These were scoped out of the skill rewrite to keep iteration fast. Add them when the cost of NOT having them shows up:
+
+- **`rax:diagnose explain` (LLM-as-judge taxonomy)** — emits `{ legitimate | parrot-of-harness | fabrication | incomplete-honest | empty-but-failed }` plus root-cause hint. Add when hand-rolled `noFabrication` regex misses real fabrications (it has — see T4 in 2026-04-27 session).
+- **Deterministic LLM replay fixtures (`record` / `replay-fixture`)** — record an LLM stream from a real failure, replay it deterministically against the kernel to test fixes. Add when probe variance becomes the bottleneck for regression confidence.
+- **Step-type migration of remaining `makeStep("observation", ...)` sites in `think-guards.ts` and `think.ts`** — Sprint 3.4 Stage 2; 9 sites still inject harness messages as `type: "observation"`. Currently masked by `execution-engine.ts:3563` filter on `toolName === "system" || success === false`. Migrate when it stops being functionally equivalent.
+- **Verifier-driven retry loop (Sprint 3.5 Stage 2/3)** — when verdict=false, inject the failed check's reason as a `harness_signal` and continue for one more iteration with that guidance. This is the highest-leverage next move for raising actual task success rates (the current architecture is honest about failure but doesn't help the agent recover).
+
+---
+
+## Pass cleanup (lighter than before)
+
+Per session you'll accumulate JSONL traces and probe summaries. The diagnose CLI is happy with hundreds of files in `~/.reactive-agents/traces/`, but for archival hygiene:
+
+```bash
+# Keep last 50 traces; archive older
+ls -t ~/.reactive-agents/traces/*.jsonl | tail -n +51 | xargs -I{} mv {} ~/.reactive-agents/traces/archive/ 2>/dev/null || true
+```
+
+`harness-reports/` should keep the latest probe summary per model and the current improvement log. Older runs can move to `harness-reports/archive/`.
+
+No formal "pass close-out" template anymore — the diagnostic evidence lives in the trace JSONL and the commit message. If you want a session log, write a single `harness-reports/improvement-YYYY-MM-DD.md` with a paragraph per fix; don't reach for the heavy template.
+
+---
+
+## Summary — the loop in one screen
+
+```
+1. ORIENT       Read kernel + recent commits.
+2. PROBE        Pick a probe script; pick a model; run.
+                → traces written to ~/.reactive-agents/traces/<runId>.jsonl
+3. DIAGNOSE     bun run rax:diagnose replay latest --only=...
+                bun run --silent rax:diagnose grep latest "<predicate>"
+                Identify failure mode + mechanism from trace evidence.
+4. HYPOTHESIZE  Write down: failure / mechanism / structural fix / expected after-state.
+                Call advisor() if non-trivial. No band-aids.
+5. FIX          One coordinated change. Rebuild affected packages.
+6. VERIFY       Re-run same probe. bun run rax:diagnose diff <before> <after>.
+                bun test → no net new regressions.
+                Call advisor() to confirm.
+7. COMMIT       Evidence in the message. No Co-Authored-By.
+
+Repeat until hypothesis-list is exhausted or new evidence demands re-orienting.
+```
