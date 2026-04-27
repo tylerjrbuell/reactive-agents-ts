@@ -858,7 +858,7 @@ export function runKernel(
             `Continue calling the missing required tool(s) before attempting completion.`;
           state = transitionState(state, {
             status: "thinking",
-            steps: [...state.steps, makeStep("observation", `⚠️ ${guidance}`)],
+            steps: [...state.steps, makeStep("harness_signal", `⚠️ ${guidance}`)],
             pendingGuidance: { requiredToolsPending: missingRequiredByCount, errorRecovery: guidance },
           });
           continue;
@@ -880,7 +880,7 @@ export function runKernel(
 
           state = transitionState(state, {
             status: "thinking",
-            steps: [...state.steps, makeStep("observation", `⚠️ ${guidance}`)],
+            steps: [...state.steps, makeStep("harness_signal", `⚠️ ${guidance}`)],
             pendingGuidance: { errorRecovery: guidance },
             meta: {
               ...state.meta,
@@ -1136,7 +1136,7 @@ export function runKernel(
             );
             state = transitionState(state, {
               status: "thinking",
-              steps: [...state.steps, makeStep("observation", `⚠️ ${guidance}`)],
+              steps: [...state.steps, makeStep("harness_signal", `⚠️ ${guidance}`)],
               pendingGuidance: { errorRecovery: guidance },
               error: null,
             });
@@ -1162,7 +1162,7 @@ export function runKernel(
                 `Call the missing required tool(s) now instead of finalizing.`;
               state = transitionState(state, {
                 status: "thinking",
-                steps: [...state.steps, makeStep("observation", `⚠️ ${guidance}`)],
+                steps: [...state.steps, makeStep("harness_signal", `⚠️ ${guidance}`)],
                 pendingGuidance: { loopDetected: true, requiredToolsPending: missingRequiredByCount, errorRecovery: guidance },
                 error: null,
               });

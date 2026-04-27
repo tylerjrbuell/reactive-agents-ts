@@ -12,12 +12,26 @@ export type StepId = typeof StepId.Type;
 export const StepType = Schema.Literal(
   "thought", // Thinking/reasoning
   "action", // Tool call
-  "observation", // Tool result
+  "observation", // Tool result (real data from a tool execution)
+  "harness_signal", // Harness-injected signal (recovery nudge, guard message, dispatcher status) — NOT model-produced data; never assembled into a deliverable
   "plan", // Planning step
   "reflection", // Self-reflection
   "critique", // Self-critique
 );
 export type StepType = typeof StepType.Type;
+
+/**
+ * Type predicate: is this step real model/tool output the user might see in
+ * the final answer? Excludes harness-injected signals like recovery nudges,
+ * guard messages, and dispatcher status updates that are routed through
+ * step storage purely so think-phase prompt construction can read them.
+ *
+ * The deliverable assembler and the evidence-grounding corpus MUST filter
+ * via this predicate. Without it, harness control strings leak into
+ * user-visible output (e.g. "Task incomplete — missing_required_tool: ...").
+ */
+export const isUserVisibleStep = (s: { type: string }): boolean =>
+  s.type !== "harness_signal";
 
 // ─── Step Metadata ───
 
