@@ -142,6 +142,25 @@ function isLikelyGarbageOutput(output: string | null | undefined): boolean {
   ) {
     return true;
   }
+  // Framework meta-tool return values that the model echoed as its answer.
+  // Cross-model probe surfaced this pattern: cogito called pulse() or
+  // brief() and dumped the JSON status object as final-answer; qwen3.5
+  // called recall() and dumped the storage descriptor. None of these are
+  // real answers — they're internal harness shapes the model captured by
+  // calling a meta-tool instead of the actual data tool.
+  if (trimmed.startsWith("{") || trimmed.startsWith("[{")) {
+    const head = trimmed.slice(0, 400);
+    const frameworkShapes = [
+      /"signal"\s*:\s*\{[^}]*"grade"/,            // pulse() return
+      /"behavior"\s*:\s*\{[^}]*"loopScore"/,        // pulse() return
+      /"composite"\s*:\s*-?[\d.]+\s*,\s*"shape"/,   // pulse() entropy block
+      /"key"\s*:\s*"_tool_result_/,                 // recall() return on stored key
+      /"available"\s*:.*"recall"/,                   // brief() return
+      /"controllerDecisionLog"/,                     // any state-dump leakage
+      /"availableSkills"\s*:\s*\[/,                  // brief() skills section
+    ];
+    if (frameworkShapes.some((re) => re.test(head))) return true;
+  }
   // Control-token leaks — e.g. `<channel|>`, `<|im_end|>`, lone `./path.md`.
   // Heuristic: <100 chars AND mostly non-letter tokens, OR contains LLM
   // delimiter sequences without surrounding prose.
