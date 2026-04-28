@@ -11,12 +11,12 @@
     "test:watch": "bun test --watch"
   },
   "dependencies": {
+    "effect": "^3.10.0",
     "ulid": "^2.3.0"
   },
   "devDependencies": {
     "typescript": "^5.7.0",
-    "bun-types": "latest",
-    "effect": "^3.10.0"
+    "bun-types": "latest"
   },
   "license": "MIT",
   "repository": {
