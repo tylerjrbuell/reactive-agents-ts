@@ -196,28 +196,43 @@ These are the **named harness mechanisms** that span multiple packages. The audi
 
 ### 7.4 Other spec dir files
 
-- `docs/spec/REACTIVE_AGENTS_BUSINESS_MODEL.md` — _pending review_
-- `docs/spec/REACTIVE_AGENTS_TECHNICAL_SPECS.md` — _pending review_
-- `docs/spec/TOOL_SYSCALL_PROPOSAL.md` — _pending review_
-- `docs/spec/docs/explorations/` — keep, these are speculative/exploration docs by design
+- `docs/spec/REACTIVE_AGENTS_BUSINESS_MODEL.md` — **archive** unless actively used for positioning; not architectural.
+- `docs/spec/REACTIVE_AGENTS_TECHNICAL_SPECS.md` — **archive** if superseded by `15-design-north-star.md` v3.0 (likely yes — needs spot check).
+- `docs/spec/TOOL_SYSTEM_PROPOSAL.md` — **archive** if pre-current tool system; spot check first.
+- `docs/spec/docs/explorations/` — **keep** as-is. Speculative/exploration docs by design.
 
-**Default plan:** create `docs/spec/docs/_archive/` and move March-era stale docs there. Keep canonical 7. Update `DOCUMENT_INDEX.md` and `START_HERE_AI_AGENTS.md` to point at PROJECT-STATE.md as the entry point.
+### 7.5 Stage 4 archival plan
+
+**Action:** create `docs/spec/docs/_archive/` and move March-era + superseded docs there with a one-line banner at top of each: `> Status: archived 2026-04-28; pre-overhaul. See PROJECT-STATE.md for current state.`
+
+**Files to archive (28):** all `2026-03-11` dated files in `docs/spec/docs/` (full list in §7.3) plus:
+- `docs/spec/REACTIVE_AGENTS_BUSINESS_MODEL.md`
+- `docs/spec/REACTIVE_AGENTS_TECHNICAL_SPECS.md` (pending spot check)
+- `docs/spec/TOOL_SYSTEM_PROPOSAL.md` (pending spot check)
+
+**Files to FIX (regenerate, don't archive):**
+- `START_HERE_AI_AGENTS.md` → first paragraph points at `PROJECT-STATE.md`; remove pre-overhaul guidance
+- `DOCUMENT_INDEX.md` → regenerate to list only the canonical 7 + this audit + `_archive/` link
+
+**Files to keep as-is:**
+- The canonical 7 in §7.1 (PROJECT-STATE, 15-design-north-star, 01-FAILURE-MODES, 00-RESEARCH-DISCIPLINE, 02-IMPROVEMENT-PIPELINE, 00-VISION, AUDIT-overhaul-2026)
+- `docs/spec/docs/explorations/`
 
 ---
 
 ## 8. Inventory — Top-level repo docs
 
-| File | Likely verdict |
-|---|---|
-| `README.md` | KEEP — needs accuracy sweep against current state |
-| `AGENTS.md` | KEEP — the canonical agent workflow doc |
-| `CLAUDE.md` | KEEP — already a thin pointer to AGENTS.md |
-| `CHANGELOG.md` | KEEP — append v0.10.0 release notes |
-| `CONTRIBUTING.md` | KEEP — review for accuracy |
-| `CODING_STANDARDS.md` | KEEP — review for accuracy |
-| `CAPABILITIES.md` | _pending_ — verify against package matrix |
-| `FRAMEWORK_INDEX.md` | **FIX or DELETE** — Apr 17 audit flagged "all kernel paths broken" (5/5 stale) |
-| `ROADMAP.md` | _pending_ — likely needs full rewrite for v0.10.0 |
+| File | Verdict | Stage 5 action |
+|---|---|---|
+| `README.md` | **KEEP + FIX** | Accuracy sweep against current state (kernel paths, npm install instructions once umbrella publishes, removal of stale claims) |
+| `AGENTS.md` | **KEEP + FIX** | Sweep for stale section refs to deleted/renamed files; verify "Before Starting Work" still cites canonical docs |
+| `CLAUDE.md` | **KEEP** | Already a thin pointer to AGENTS.md |
+| `CHANGELOG.md` | **KEEP + FIX** | Append v0.10.0 entry capturing the overhaul: deletions/_unstable_*/breaking changes |
+| `CONTRIBUTING.md` | **KEEP** | Review-only for accuracy after overhaul lands |
+| `CODING_STANDARDS.md` | **KEEP** | Review-only |
+| `CAPABILITIES.md` | **KEEP + FIX** | Verify against §10.1 package matrix; remove anything not actually shipping in v0.10.0 |
+| `FRAMEWORK_INDEX.md` | **DELETE** | Apr 17 audit confirmed "all kernel paths broken" (5/5 stale). Replaced by `PROJECT-STATE.md` + `AUDIT-overhaul-2026.md` + `15-design-north-star.md`. Don't try to fix; delete and rely on canonical 7. |
+| `ROADMAP.md` | **FIX (rewrite)** | Full rewrite for v0.10.0: what shipped, what's `_unstable_*`, what's deferred to v0.11+ (multi-agent orchestration, healing-pipeline spike validation, frontier verifier expansion). |
 
 ---
 
@@ -228,7 +243,27 @@ These are the **named harness mechanisms** that span multiple packages. The audi
 | `~/.claude/projects/.../memory/*.md` | 35 + `MEMORY.md` index | reconcile against current code |
 | `.agents/MEMORY.md` (in repo) | 1 | reconcile, sync with personal |
 
-**Plan:** in Stage 4, walk every entry. Delete entries that no longer reflect reality (most entries are commit-snapshot logs that decay fast — `project_*` for older sprints). Keep cross-cutting feedback + project context that's still load-bearing.
+### 9.1 Stage 3 corrections (entries known to be stale or wrong)
+
+| Memory entry | Status | Action in Stage 4 |
+|---|---|---|
+| `project_v010_audit_blockers` (Apr 18) — claim "AgentEvents missing" | 🟡 partial-stale | Update: events exist at `core/services/event-bus.ts:986-990`; **3/6 hooks lack subscribers** is the real issue. Fix at `builder.ts:2657-2681`. |
+| `project_v010_audit_blockers` — claim "calibration defaults to `:memory:`" | ❌ stale | Delete or correct: defaults already at `~/.reactive-agents/calibration.db` (`reactive-intelligence/types.ts:246`). |
+| `project_running_issues` — claim "ToT outer loop doesn't honor early-stop" | ✅ confirmed | Keep, link to FIX-5 + M2 verdict. |
+| `project_running_issues` — claim "dual compression uncoordinated" | ✅ confirmed | Keep, link to FIX-4/M5 verdict. |
+| Memory `MEMORY.md` line "Local is 118 commits ahead of origin" | ❌ stale | Update: `refactor/overhaul` is 100 commits ahead of `main` and now pushed; previous `feat/phase-*` branches archived. |
+| Memory `Current Status (Apr 22, 2026)` block — "v0.10.0 release prep complete" | 🟡 misleading | The release prep was docs/changeset, NOT version bumps. All 28 packages still at `0.9.0` locally. Correct phrasing: "v0.10.0 release docs drafted; version bumps + npm publish deferred to overhaul completion." |
+| Memory entries about Phase-0 / Phase-1 sprints (multiple `project_*`) | ⏸️ context | Keep historical sprint context as archive but flag with "see AUDIT-overhaul-2026.md §10 for current package state." |
+
+### 9.2 Stage 4 walk-through plan
+
+For each of 35+ memory files:
+1. Read the entry
+2. Cross-reference against §10.1 (packages), §10.2 (mechanisms), §11 (FIX backlog)
+3. Verdict: **KEEP** (still true and load-bearing), **CORRECT** (truth has shifted; update content), **ARCHIVE** (historical, not load-bearing — move to MEMORY-ARCHIVE.md), **DELETE** (false or duplicated).
+4. Sync `.agents/MEMORY.md` (in-repo) with personal `~/.claude/projects/.../memory/MEMORY.md` after updates.
+
+Stage 4 produces a single MEMORY-RECONCILIATION.md log of all changes for traceability.
 
 ---
 
@@ -833,16 +868,41 @@ Stage 3 first pass (synthesized from per-package audits in §10.1).
 
 Audit is complete when:
 
-- [ ] All 28 packages have a verdict in §10.1 with reason + evidence.
-- [ ] All 13 mechanisms in §6 have a verdict in §10.2 with reason + evidence.
-- [ ] All 35 spec docs have a verdict in §7 (KEEP / archive / fix).
-- [ ] All 9 top-level docs in §8 have a verdict.
-- [ ] FIX backlog §11 reviewed item-by-item; each confirmed, deleted, or annotated.
-- [ ] Test suite triage §12 produces per-package verdicts.
-- [ ] Memory reconciliation list ready for Stage 4.
+- [x] All 28 packages have a verdict in §10.1 with reason + evidence.
+- [x] All 13 mechanisms in §6 have a verdict in §10.2 with reason + evidence.
+- [x] All 35 spec docs have a verdict in §7 (KEEP / archive / fix).
+- [x] All 9 top-level docs in §8 have a verdict.
+- [x] FIX backlog §11 reviewed item-by-item; each confirmed, deleted, or annotated. 44 items total (20 carried + 24 newly discovered), prioritized P0-P3.
+- [x] Test suite triage §12 produces per-package verdicts and 15-test addition list.
+- [x] Memory reconciliation list ready for Stage 4 in §9.1.
 
-After completion, Stage 5 executes and Stage 6 ships.
+**Stage 3 audit complete: 2026-04-28.** Stage 4 (doc + memory reset) and Stage 5 (overhaul execution) are the next two stages. Stage 6 validates and ships v0.10.0.
 
 ---
 
-*Last updated: 2026-04-28 (framework + inventory complete; verdicts pending Stage 3).*
+## 15. Stage 5 execution sequencing (preview)
+
+Stage 5 executes the verdicts in waves. Each wave is a discrete commit on `refactor/overhaul`. Waves are sequenced so test suite stays green at every commit.
+
+| Wave | Focus | Backlog items | Target commits |
+|---|---|---|---|
+| **W0 — Memory + doc hygiene** | Stage 4 outputs: archive 28 March-era spec docs, regenerate START_HERE/DOCUMENT_INDEX, delete FRAMEWORK_INDEX, rewrite ROADMAP, reconcile memory entries | docs/§7, §8; memory/§9.1 | 4–6 commits |
+| **W1 — `_unstable_*` markers (Rule 10)** | Mechanical: tag every newly-added or unvalidated public API per the package audits. No behavior change. | #15 (broad), #38, #39, #40, #41, #42, #43 | 8–10 commits, one per package |
+| **W2 — Stale corrections (low risk)** | #9 memory FIX, #6 hook subscriber wiring, #25 duplicate AgentConfigSchema rename, #26 effect dependency hygiene, #37 delete 4 dead RI handler files, #38 delete dead `recommendStrategyForTier` | #6, #9, #25, #26, #37, #38 | 5–6 commits |
+| **W3 — RI dispatcher fix** | #23 thread budget through `KernelState.meta.riBudget`. Add T5 30-task dispatch-rate probe. | #23 | 2 commits |
+| **W4 — Architectural blocker (M9)** | **#18 collapse 9 termination paths to single-owner via Arbitrator.** Add T3 CI lint. Re-run failure corpus, report delta. **The single highest-value action in the overhaul.** | #18 | 3–4 commits + corpus rerun |
+| **W5 — Strategy switching parity** | #5 ToT early-stop wiring. T4 regression test. Audit other strategies for parent-budget inheritance. | #5 | 2 commits |
+| **W6 — Compression coordination** | #4 / #20 pick curator as canonical compression; delete or hard-disable `tool-execution.ts` parallel path. Long-context probe. | #4, #20 | 2–3 commits |
+| **W7 — Provider + tool fixes** | #3 qwen3 thinking auto-enable + T1 regression. #7/#8 MAX_RECURSION_DEPTH config + maxIterations cap removal + T8/T9 tests. #11 memory bun:sqlite engines/Node fallback + T14. | #3, #7, #8, #11 | 4–6 commits |
+| **W8 — Observability defaults** | #10 default-on. #27 TTY-conditional Logger.none. #28/#29/#30/#31 telemetry-collector defects + T7. T15. | #10, #27, #28, #29, #30, #31 | 4–5 commits |
+| **W9 — Eval Rule 4** | #21 frozen-judge: `JudgeLLMService` Tag, `judge.model !== sut.model` guard. #22 fix or delete `runSuite`. T10. | #21, #22 | 3 commits |
+| **W10 — Cost router calibration coupling** | #32 calibration consultation. #33 SHA refresh. | #32, #33 | 2 commits |
+| **W11 — SHRINK heavyweights** | #19 ExecutionEngine extraction (telemetry/debrief/classifier/skill-loading) target < 1,500 LOC. #24 builder.ts extraction target < 2,500 LOC. Test suite must stay green at every commit. | #19, #24 | 8–15 commits (multi-session) |
+| **W12 — Publish + smoke gate** | #1 publish umbrella reactive-agents. #2 publish @reactive-agents/diagnose. T11/T12/T13 smoke tests. Re-run AUC corpus (#17). | #1, #2, #17, T11, T12, T13 | 4–5 commits + npm publish |
+| **W13 — Stage 6 validation** | bench, typecheck, full test suite, README/CHANGELOG/ROADMAP polish, tag v0.10.0 | — | 3 commits + tag |
+
+Estimated: 50–75 commits across 6–10 sessions for Stages 4–6. P0 items (#1, #2, #3, #18, #21) are the gating set for v0.10.0; everything else is "should land for clean release" but the P3 tier can defer to v0.10.1 if scope creeps.
+
+---
+
+*Last updated: 2026-04-28 (Stage 3 audit complete; all sections populated; ready for Stage 4 execution).*
