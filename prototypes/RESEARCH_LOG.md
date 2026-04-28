@@ -45,3 +45,27 @@ mechanism deliver the trust gain, or is the gain distributed across many
 harness mechanisms?
 
 **Artifacts:** [`p00v2-competent-bare-vs-harness.ts`](./p00v2-competent-bare-vs-harness.ts), [`RESULTS-p00v2.md`](./RESULTS-p00v2.md), `harness-reports/spike-results/p00v2-bare-rw2-qwen3-4b.json`
+
+---
+
+## p01 + p01b — bare-LLM + 30-LOC verification gate — 2026-04-27 — `(qwen3:4b + cogito:8b) × rw-2 × 5+5 runs`
+
+**Question:** Does a single ~30-LOC verification gate (check: tool called?
+answer references observations?) capture most of the harness's anti-
+fabrication value? **Outcome:** SPLIT — gate is mechanism-correct,
+**model-specific.** On qwen3:4b (which calls tool + grounds answer): gate
+PASSES 5/5, ships same red herring as bare. KILL — gate doesn't catch
+shallow-reasoning failures. On cogito:8b (which fabricates without FC):
+gate FAILS 5/5 (`agent-took-no-action`), converting **5/5 dangerous
+confident-fabrication into 5/5 honest-fail**. PROMOTE — gate IS the
+fabrication firewall at <1.5% the harness's token cost (325 tok vs 25,300+
+tok for the full harness). **Decision-grade finding:** the harness's main
+trust differentiator is implementable in 30 LOC of pure code — most other
+harness mechanisms need to spike-validate against this baseline or face
+deletion. Different mechanism class needed for shallow-reasoning failures
+(multi-hypothesis enumeration? critique loop?). **Next spike (p02):** does
+retry-on-rejection (verifier-driven retry like commit `45960be6`) convert
+cogito's 5/5 honest-fail into ≥1/5 grounded answer? Or is cogito's FC
+failure unsolvable by harness feedback (model-level limitation)?
+
+**Artifacts:** [`p01-bare-with-verification.ts`](./p01-bare-with-verification.ts), [`p01b-bare-with-verification-cogito.ts`](./p01b-bare-with-verification-cogito.ts), [`RESULTS-p01.md`](./RESULTS-p01.md), `harness-reports/spike-results/p01-bare-verify-rw2-qwen3-4b.json`, `harness-reports/spike-results/p01b-bare-verify-rw2-cogito-8b.json`

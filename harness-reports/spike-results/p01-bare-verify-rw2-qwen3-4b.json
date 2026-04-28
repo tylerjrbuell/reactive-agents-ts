@@ -1,0 +1,78 @@
+{
+  "model": "qwen3:4b",
+  "task": "rw-2",
+  "n_runs": 5,
+  "generated_at": "2026-04-28T02:23:16.490Z",
+  "results": [
+    {
+      "runIdx": 0,
+      "iters": 2,
+      "rawAnswer": "The revenue drop on day 2 (2025-03-11) compared to day 1 (2025-03-10) is primarily due to a 15% discount applied to all orders on day 2. This discount reduced the net revenue for each order.\n\nTo quantify the dollar impact, let's calculate the difference in revenue between day 1 and day 2:\n\n1. Day 1 (2025-03-10) revenue:\n   - ELEC-4K-TV-001: 849.99 * 10 = 8499.90\n   - BOOK-DESIGN-01: 34.99 * 6 = 209.94\n   - FURN-CHAIR-ERG: 299.99 * 4 = 1199.96\n   - Total revenue on day 1: 8499.90 + 209.94 + 1199.96 = 9909.80\n\n2. Day 2 (2025-03-11) revenue:\n   - ELEC-4K-TV-001: 722.49 * 6 = 4334.94\n   - APPL-IPAD-AIR: 280.49 * 3 = 841.47\n   - FURN-CHAIR-ERG: 254.99 * 4 = 1019.96\n   - BOOK-DESIGN-01: 29.74 * 4 = 118.96\n   - CLTH-JACKET-L: 76.49 * 2 = 152.98\n   - Total revenue on day 2: 4334.94 + 841.47 + 1019.96 + 118.96 + 152.98 = 6468.21\n\nThe revenue drop on day 2 compared to day 1 is: 9909.80 - 6468.21 = 3441.59\n\nTo fix this issue, the discount applied on day 2 should be removed or adjusted to ensure that the revenue is not reduced by 15%.",
+      "shippedAnswer": "The revenue drop on day 2 (2025-03-11) compared to day 1 (2025-03-10) is primarily due to a 15% discount applied to all orders on day 2. This discount reduced the net revenue for each order.\n\nTo quantify the dollar impact, let's calculate the difference in revenue between day 1 and day 2:\n\n1. Day 1 (2025-03-10) revenue:\n   - ELEC-4K-TV-001: 849.99 * 10 = 8499.90\n   - BOOK-DESIGN-01: 34.99 * 6 = 209.94\n   - FURN-CHAIR-ERG: 299.99 * 4 = 1199.96\n   - Total revenue on day 1: 8499.90 + 209.94 + 1199.96 = 9909.80\n\n2. Day 2 (2025-03-11) revenue:\n   - ELEC-4K-TV-001: 722.49 * 6 = 4334.94\n   - APPL-IPAD-AIR: 280.49 * 3 = 841.47\n   - FURN-CHAIR-ERG: 254.99 * 4 = 1019.96\n   - BOOK-DESIGN-01: 29.74 * 4 = 118.96\n   - CLTH-JACKET-L: 76.49 * 2 = 152.98\n   - Total revenue on day 2: 4334.94 + 841.47 + 1019.96 + 118.96 + 152.98 = 6468.21\n\nThe revenue drop on day 2 compared to day 1 is: 9909.80 - 6468.21 = 3441.59\n\nTo fix this issue, the discount applied on day 2 should be removed or adjusted to ensure that the revenue is not reduced by 15%.",
+      "verification": {
+        "passed": true,
+        "reason": "20/41 references grounded"
+      },
+      "toolCallCount": 1,
+      "totalEvalCount": 563,
+      "totalPromptCount": 2695,
+      "durationMs": 4356
+    },
+    {
+      "runIdx": 1,
+      "iters": 2,
+      "rawAnswer": "The revenue drop on day 2 (2025-03-11) compared to day 1 (2025-03-10) is primarily due to a 15% discount applied to all orders on day 2. This discount reduced the net revenue for each order.\n\nTo quantify the dollar impact, let's calculate the difference in revenue between day 1 and day 2:\n\n1. Day 1 (2025-03-10) revenue:\n   - ELEC-4K-TV-001: 849.99 * 10 = 8499.90\n   - BOOK-DESIGN-01: 34.99 * 6 = 209.94\n   - FURN-CHAIR-ERG: 299.99 * 4 = 1199.96\n   - Total revenue on day 1: 8499.90 + 209.94 + 1199.96 = 9909.80\n\n2. Day 2 (2025-03-11) revenue:\n   - ELEC-4K-TV-001: 722.49 * 6 = 4334.94\n   - APPL-IPAD-AIR: 280.49 * 3 = 841.47\n   - FURN-CHAIR-ERG: 254.99 * 4 = 1019.96\n   - BOOK-DESIGN-01: 29.74 * 4 = 118.96\n   - CLTH-JACKET-L: 76.49 * 2 = 152.98\n   - Total revenue on day 2: 4334.94 + 841.47 + 1019.96 + 118.96 + 152.98 = 6468.21\n\nThe revenue drop on day 2 compared to day 1 is: 9909.80 - 6468.21 = 3441.59\n\nTo fix this issue, the discount applied on day 2 should be removed or adjusted to ensure that the revenue is not reduced by 15%.",
+      "shippedAnswer": "The revenue drop on day 2 (2025-03-11) compared to day 1 (2025-03-10) is primarily due to a 15% discount applied to all orders on day 2. This discount reduced the net revenue for each order.\n\nTo quantify the dollar impact, let's calculate the difference in revenue between day 1 and day 2:\n\n1. Day 1 (2025-03-10) revenue:\n   - ELEC-4K-TV-001: 849.99 * 10 = 8499.90\n   - BOOK-DESIGN-01: 34.99 * 6 = 209.94\n   - FURN-CHAIR-ERG: 299.99 * 4 = 1199.96\n   - Total revenue on day 1: 8499.90 + 209.94 + 1199.96 = 9909.80\n\n2. Day 2 (2025-03-11) revenue:\n   - ELEC-4K-TV-001: 722.49 * 6 = 4334.94\n   - APPL-IPAD-AIR: 280.49 * 3 = 841.47\n   - FURN-CHAIR-ERG: 254.99 * 4 = 1019.96\n   - BOOK-DESIGN-01: 29.74 * 4 = 118.96\n   - CLTH-JACKET-L: 76.49 * 2 = 152.98\n   - Total revenue on day 2: 4334.94 + 841.47 + 1019.96 + 118.96 + 152.98 = 6468.21\n\nThe revenue drop on day 2 compared to day 1 is: 9909.80 - 6468.21 = 3441.59\n\nTo fix this issue, the discount applied on day 2 should be removed or adjusted to ensure that the revenue is not reduced by 15%.",
+      "verification": {
+        "passed": true,
+        "reason": "20/41 references grounded"
+      },
+      "toolCallCount": 1,
+      "totalEvalCount": 563,
+      "totalPromptCount": 2695,
+      "durationMs": 4237
+    },
+    {
+      "runIdx": 2,
+      "iters": 2,
+      "rawAnswer": "The revenue drop on day 2 (2025-03-11) compared to day 1 (2025-03-10) is primarily due to a 15% discount applied to all orders on day 2. This discount reduced the net revenue for each order.\n\nTo quantify the dollar impact, let's calculate the difference in revenue between day 1 and day 2:\n\n1. Day 1 (2025-03-10) revenue:\n   - ELEC-4K-TV-001: 849.99 * 10 = 8499.90\n   - BOOK-DESIGN-01: 34.99 * 6 = 209.94\n   - FURN-CHAIR-ERG: 299.99 * 4 = 1199.96\n   - Total revenue on day 1: 8499.90 + 209.94 + 1199.96 = 9909.80\n\n2. Day 2 (2025-03-11) revenue:\n   - ELEC-4K-TV-001: 722.49 * 6 = 4334.94\n   - APPL-IPAD-AIR: 280.49 * 3 = 841.47\n   - FURN-CHAIR-ERG: 254.99 * 4 = 1019.96\n   - BOOK-DESIGN-01: 29.74 * 4 = 118.96\n   - CLTH-JACKET-L: 76.49 * 2 = 152.98\n   - Total revenue on day 2: 4334.94 + 841.47 + 1019.96 + 118.96 + 152.98 = 6468.21\n\nThe revenue drop on day 2 compared to day 1 is: 9909.80 - 6468.21 = 3441.59\n\nTo fix this issue, the discount applied on day 2 should be removed or adjusted to ensure that the revenue is not reduced by 15%.",
+      "shippedAnswer": "The revenue drop on day 2 (2025-03-11) compared to day 1 (2025-03-10) is primarily due to a 15% discount applied to all orders on day 2. This discount reduced the net revenue for each order.\n\nTo quantify the dollar impact, let's calculate the difference in revenue between day 1 and day 2:\n\n1. Day 1 (2025-03-10) revenue:\n   - ELEC-4K-TV-001: 849.99 * 10 = 8499.90\n   - BOOK-DESIGN-01: 34.99 * 6 = 209.94\n   - FURN-CHAIR-ERG: 299.99 * 4 = 1199.96\n   - Total revenue on day 1: 8499.90 + 209.94 + 1199.96 = 9909.80\n\n2. Day 2 (2025-03-11) revenue:\n   - ELEC-4K-TV-001: 722.49 * 6 = 4334.94\n   - APPL-IPAD-AIR: 280.49 * 3 = 841.47\n   - FURN-CHAIR-ERG: 254.99 * 4 = 1019.96\n   - BOOK-DESIGN-01: 29.74 * 4 = 118.96\n   - CLTH-JACKET-L: 76.49 * 2 = 152.98\n   - Total revenue on day 2: 4334.94 + 841.47 + 1019.96 + 118.96 + 152.98 = 6468.21\n\nThe revenue drop on day 2 compared to day 1 is: 9909.80 - 6468.21 = 3441.59\n\nTo fix this issue, the discount applied on day 2 should be removed or adjusted to ensure that the revenue is not reduced by 15%.",
+      "verification": {
+        "passed": true,
+        "reason": "20/41 references grounded"
+      },
+      "toolCallCount": 1,
+      "totalEvalCount": 563,
+      "totalPromptCount": 2695,
+      "durationMs": 4246
+    },
+    {
+      "runIdx": 3,
+      "iters": 2,
+      "rawAnswer": "The revenue drop on day 2 (2025-03-11) compared to day 1 (2025-03-10) is primarily due to a 15% discount applied to all orders on day 2. This discount reduced the net revenue for each order.\n\nTo quantify the dollar impact, let's calculate the difference in revenue between day 1 and day 2:\n\n1. Day 1 (2025-03-10) revenue:\n   - ELEC-4K-TV-001: 849.99 * 10 = 8499.90\n   - BOOK-DESIGN-01: 34.99 * 6 = 209.94\n   - FURN-CHAIR-ERG: 299.99 * 4 = 1199.96\n   - Total revenue on day 1: 8499.90 + 209.94 + 1199.96 = 9909.80\n\n2. Day 2 (2025-03-11) revenue:\n   - ELEC-4K-TV-001: 722.49 * 6 = 4334.94\n   - APPL-IPAD-AIR: 280.49 * 3 = 841.47\n   - FURN-CHAIR-ERG: 254.99 * 4 = 1019.96\n   - BOOK-DESIGN-01: 29.74 * 4 = 118.96\n   - CLTH-JACKET-L: 76.49 * 2 = 152.98\n   - Total revenue on day 2: 4334.94 + 841.47 + 1019.96 + 118.96 + 152.98 = 6468.21\n\nThe revenue drop on day 2 compared to day 1 is: 9909.80 - 6468.21 = 3441.59\n\nTo fix this issue, the discount applied on day 2 should be removed or adjusted to ensure that the revenue is not reduced by 15%.",
+      "shippedAnswer": "The revenue drop on day 2 (2025-03-11) compared to day 1 (2025-03-10) is primarily due to a 15% discount applied to all orders on day 2. This discount reduced the net revenue for each order.\n\nTo quantify the dollar impact, let's calculate the difference in revenue between day 1 and day 2:\n\n1. Day 1 (2025-03-10) revenue:\n   - ELEC-4K-TV-001: 849.99 * 10 = 8499.90\n   - BOOK-DESIGN-01: 34.99 * 6 = 209.94\n   - FURN-CHAIR-ERG: 299.99 * 4 = 1199.96\n   - Total revenue on day 1: 8499.90 + 209.94 + 1199.96 = 9909.80\n\n2. Day 2 (2025-03-11) revenue:\n   - ELEC-4K-TV-001: 722.49 * 6 = 4334.94\n   - APPL-IPAD-AIR: 280.49 * 3 = 841.47\n   - FURN-CHAIR-ERG: 254.99 * 4 = 1019.96\n   - BOOK-DESIGN-01: 29.74 * 4 = 118.96\n   - CLTH-JACKET-L: 76.49 * 2 = 152.98\n   - Total revenue on day 2: 4334.94 + 841.47 + 1019.96 + 118.96 + 152.98 = 6468.21\n\nThe revenue drop on day 2 compared to day 1 is: 9909.80 - 6468.21 = 3441.59\n\nTo fix this issue, the discount applied on day 2 should be removed or adjusted to ensure that the revenue is not reduced by 15%.",
+      "verification": {
+        "passed": true,
+        "reason": "20/41 references grounded"
+      },
+      "toolCallCount": 1,
+      "totalEvalCount": 563,
+      "totalPromptCount": 2695,
+      "durationMs": 4244
+    },
+    {
+      "runIdx": 4,
+      "iters": 2,
+      "rawAnswer": "The revenue drop on day 2 (2025-03-11) compared to day 1 (2025-03-10) is primarily due to a 15% discount applied to all orders on day 2. This discount reduced the net revenue for each order.\n\nTo quantify the dollar impact, let's calculate the difference in revenue between day 1 and day 2:\n\n1. Day 1 (2025-03-10) revenue:\n   - ELEC-4K-TV-001: 849.99 * 10 = 8499.90\n   - BOOK-DESIGN-01: 34.99 * 6 = 209.94\n   - FURN-CHAIR-ERG: 299.99 * 4 = 1199.96\n   - Total revenue on day 1: 8499.90 + 209.94 + 1199.96 = 9909.80\n\n2. Day 2 (2025-03-11) revenue:\n   - ELEC-4K-TV-001: 722.49 * 6 = 4334.94\n   - APPL-IPAD-AIR: 280.49 * 3 = 841.47\n   - FURN-CHAIR-ERG: 254.99 * 4 = 1019.96\n   - BOOK-DESIGN-01: 29.74 * 4 = 118.96\n   - CLTH-JACKET-L: 76.49 * 2 = 152.98\n   - Total revenue on day 2: 4334.94 + 841.47 + 1019.96 + 118.96 + 152.98 = 6468.21\n\nThe revenue drop on day 2 compared to day 1 is: 9909.80 - 6468.21 = 3441.59\n\nTo fix this issue, the discount applied on day 2 should be removed or adjusted to ensure that the revenue is not reduced by 15%.",
+      "shippedAnswer": "The revenue drop on day 2 (2025-03-11) compared to day 1 (2025-03-10) is primarily due to a 15% discount applied to all orders on day 2. This discount reduced the net revenue for each order.\n\nTo quantify the dollar impact, let's calculate the difference in revenue between day 1 and day 2:\n\n1. Day 1 (2025-03-10) revenue:\n   - ELEC-4K-TV-001: 849.99 * 10 = 8499.90\n   - BOOK-DESIGN-01: 34.99 * 6 = 209.94\n   - FURN-CHAIR-ERG: 299.99 * 4 = 1199.96\n   - Total revenue on day 1: 8499.90 + 209.94 + 1199.96 = 9909.80\n\n2. Day 2 (2025-03-11) revenue:\n   - ELEC-4K-TV-001: 722.49 * 6 = 4334.94\n   - APPL-IPAD-AIR: 280.49 * 3 = 841.47\n   - FURN-CHAIR-ERG: 254.99 * 4 = 1019.96\n   - BOOK-DESIGN-01: 29.74 * 4 = 118.96\n   - CLTH-JACKET-L: 76.49 * 2 = 152.98\n   - Total revenue on day 2: 4334.94 + 841.47 + 1019.96 + 118.96 + 152.98 = 6468.21\n\nThe revenue drop on day 2 compared to day 1 is: 9909.80 - 6468.21 = 3441.59\n\nTo fix this issue, the discount applied on day 2 should be removed or adjusted to ensure that the revenue is not reduced by 15%.",
+      "verification": {
+        "passed": true,
+        "reason": "20/41 references grounded"
+      },
+      "toolCallCount": 1,
+      "totalEvalCount": 563,
+      "totalPromptCount": 2695,
+      "durationMs": 4250
+    }
+  ]
+}
