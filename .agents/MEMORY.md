@@ -1,564 +1,122 @@
 # Reactive Agents Build Memory
 
-## Feedback
-- [No Co-Authored-By lines in commits](feedback_no_coauthor.md) — never add Claude co-author trailers; shows publicly on GitHub contributors page
-- [Commit before branching](feedback_commit_before_branch.md) — always commit/stash exploratory changes before creating feature branches
-- [Keep .agents/MEMORY.md in sync](feedback_agents_memory_sync.md) — update both Claude memory AND `.agents/MEMORY.md` so other AI agents have context
-- [Skip plans for content/skill writing](feedback_skip_plans_for_content.md) — don't write formal implementation plans for SKILL.md or doc writing tasks; implement directly
-- [Clean types, no any](feedback_clean_types.md) — strict TypeScript required; no `any` casts, use `unknown` + guards or proper types
-- [Starlight link patterns](feedback_starlight_link_patterns.md) — use absolute paths for internal doc links; relative paths cause CI link-checker failures
-- **Don't `rm -rf` untracked dirs with content** — confirm before deleting any `??` directory with >5 files; git can't recover untracked content. Cost: lost `wiki/` (user restoring) + 3 `obsidian-vault-*` skill modules (permanent, user did not back them up) on 2026-04-24 cleanup pass.
-- **Workspace packages run from `src/` under Bun — rebuild only for dist-target validation** (2026-04-28). Every `packages/*` (26 of 27 — facade `@reactive-agents/reactive-agents` and private `@reactive-agents/benchmarks` excluded) now declares a `"bun": "./src/index.ts"` exports condition listed first. When code runs under Bun, imports of `@reactive-agents/<pkg>` resolve to `src/index.ts` directly — **edits picked up at next `bun run`, no rebuild needed**. Validate with `bun -e "console.log(Bun.resolveSync('@reactive-agents/<pkg>', process.cwd()))"` (should print `.../src/index.ts`). Rebuild via `bun run build:packages` only when: (a) validating npm-publish output, (b) Node-runtime consumers, (c) refreshing `.d.ts` for downstream `tsc --noEmit`. Detection if regressed: probe output identical PRE/POST despite real src edit → check the `bun` condition is still present in that package's `exports`.
-- **Control pillar — every harness primitive must be developer-overridable** (2026-04-27). Vision §1 Pillar 1 requires every harness decision be controllable, hookable, observable. New behaviors ship from inception with: (a) `defaultFoo` preserving prior behavior, (b) `KernelInput.foo?: FooHookType` injection field, (c) public type export. Reference: `Verifier` + `VerifierRetryPolicy` in commit `14135d6d`. Hardcoded harness logic = black box = anti-pattern.
-- **Research discipline contract — spike-validated harness changes only** (pinned 2026-04-27). Read `docs/spec/docs/PROJECT-STATE.md` first at session start — it's the synthesis of where the project is empirically + methodologically. Authoritative doc hierarchy: PROJECT-STATE → 00-VISION → 15-design-north-star v3.0 (architecture) → 00-RESEARCH-DISCIPLINE (12 rules) → 01-FAILURE-MODES (catalog) → 02-IMPROVEMENT-PIPELINE (operational rhythm). Hard rules 1-12: (1) no harness change without prior spike; (2) hypothesis-first; (3) cross-provider min 2; (4) frozen judge; (5) negative results mandatory; (6) Promote/Kill/Refactor only; (7) single-mechanism isolation; (8) bottom-up demand-driven abstraction; (9) control-pillar override hooks; (10) `_unstable_*` for new APIs; (11) scope-of-claims (spikes are evidence not verdicts; a spike validates ONE mechanism × ONE failure-mode × ≤2 models × ONE task); (12) failure-mode-first investigation. Pipeline: DISCOVERY → CATALOG → PRIORITIZE → DISSECT → DESIGN → INTEGRATE+VALIDATE → DEPRECATE. The harness's complexity exists for reasons spikes haven't touched yet; deletion candidates need evidence across the failure-mode surface, not just one spike.
+> **Status:** Reset 2026-04-28 on `refactor/overhaul`. Prior version (564 lines of layered sprint logs) preserved at commit `949bf81f^` — recover via `git show <sha>:.agents/MEMORY.md` if a specific historical claim needs lookup.
 
-## Lost / pending re-implementation (2026-04-24)
-The three Obsidian-vault skill modules under `.agents/skills/` were deleted in the Phase-0-close cleanup and are NOT recoverable from any backup:
+## Read first
+
+Before doing any work in this repo:
+
+1. **`docs/spec/docs/PROJECT-STATE.md`** — current empirical state of the framework.
+2. **`docs/spec/docs/AUDIT-overhaul-2026.md`** — the v0.10.0 overhaul plan. 28 packages + 13 mechanisms + 44-item FIX backlog + W0-W13 execution sequencing. **This is the single source of truth for what's broken, deferred, fixed, or shipping.** If anything in this memory file conflicts with the audit, the audit wins.
+3. **`docs/spec/docs/00-RESEARCH-DISCIPLINE.md`** — 12 rules. Every harness change requires prior spike validation. No exceptions.
+
+The full canonical doc set is listed in `docs/spec/docs/DOCUMENT_INDEX.md`.
+
+---
+
+## Current state (Apr 28, 2026)
+
+- **Branch:** `refactor/overhaul` (100+ commits ahead of `main`). All prior `feat/*` branches archived as `archive/*` tags.
+- **Release target:** v0.10.0 clean-break. Stage 4 (doc + memory reset) in progress. Stages 5–6 follow.
+- **Published on npm:** all packages at `0.9.0`. Umbrella `reactive-agents` and `@reactive-agents/diagnose` have **never been published** — top-priority FIX items.
+- **Tests:** ~4,353 pass / 23 skip / 0 fail across 494 files (last clean count). Will re-run during Stage 6.
+- **Architecture target:** `15-design-north-star.md` v3.0 (10 capabilities + cognitive kernel + 3 ports).
+
+---
+
+## Working rules (cross-cutting feedback — keep applying)
+
+- **No Co-Authored-By trailers in commits.** Shows publicly on GitHub contributors.
+- **Commit before branching.** Always commit/stash exploratory changes before creating feature branches.
+- **Keep `.agents/MEMORY.md` (this file) in sync with personal memory** so other AI agents have context.
+- **Skip plans for content/skill writing.** No formal implementation plan for SKILL.md or doc tasks; implement directly.
+- **Strict TypeScript — no `any` casts.** Use `unknown` + guards or proper types.
+- **Don't `rm -rf` untracked dirs with content.** Confirm before deleting any `??` directory with >5 files; git can't recover untracked content. Cost: lost `wiki/` + 3 `obsidian-vault-*` skill modules on 2026-04-24 cleanup.
+- **Workspace runs from `src/` under Bun.** Every `packages/*` declares `"bun": "./src/index.ts"` first in `exports`. Edits picked up at next `bun run`, no rebuild needed. Rebuild only for: (a) npm-publish validation, (b) Node-runtime consumers, (c) `.d.ts` refresh.
+- **Control pillar — every harness primitive must be developer-overridable.** Vision Pillar 1. New behaviors ship with: `defaultFoo` preserving prior behavior, `KernelInput.foo?: FooHookType` injection field, public type export. Hardcoded harness logic = black box = anti-pattern.
+- **Research discipline — spike-validated harness changes only.** Read `00-RESEARCH-DISCIPLINE.md` for the 12 rules. Notable: spike validates ONE mechanism × ONE failure-mode × ≤2 models × ONE task (Rule 11); single-spike findings shape the next spike, not harness-level decisions.
+
+---
+
+## Memory reconciliation — corrections from Stage 3 audit
+
+Two prior memory entries are demonstrably stale or wrong. Do not propagate these in future memory:
+
+| Stale claim | Actual state | Source |
+|---|---|---|
+| "3/6 skill lifecycle AgentEvents missing" | **Events exist** at `core/services/event-bus.ts:986-990` (`SkillActivated`, `SkillRefined`, `SkillConflictDetected`). What's missing: 3/6 RI hooks have **no event subscriber**. Fix at `builder.ts:2657-2681`. | AUDIT §11 item 6, M6 mechanism |
+| "Calibration defaults to `:memory:`" | **Already correct** at `reactive-intelligence/types.ts:246` (`~/.reactive-agents/calibration.db`). Apr 21 fix. | AUDIT §11 item 9 |
+
+Memory descriptions to update or rewrite if you encounter them in personal memory:
+- `project_v010_audit_blockers` — both stale claims above appear here.
+- `project_running_issues` — older entries; cross-reference against AUDIT §11 before acting on any item.
+
+---
+
+## Architecture summary (high signal, low detail)
+
+**Kernel composable phase architecture (shipped Apr 3, 2026):**
+- `strategies/kernel/phases/` — `context-builder.ts`, `think.ts`, `guard.ts`, `act.ts` (4 single-concern phase files)
+- `strategies/kernel/utils/` — 11 utility files (ICS, reactive-observer, loop-detector, etc.)
+- `Phase` type, `Guard` type, `MetaToolHandler` registry — extensions are one-line additions
+- `kernel/loop/runner.ts` is the largest file in the harness and houses 8 of 9 termination paths (M9 architectural blocker)
+
+**Two records, distinct purposes:**
+- `state.messages[]` — what the LLM sees (provider conversation thread)
+- `state.steps[]` — what systems observe (entropy, metrics, debrief)
+
+**FC conversation thread flow:**
+1. Execution engine seeds `state.messages` with `[{role:"user", content: task}]`
+2. `think.ts` reads messages → `applyMessageWindow` → provider LLM call
+3. `act.ts` appends: `assistant(thought+toolCalls)` + `tool_result(s)` + progress/completion message
+
+**Critical build patterns:**
+- All providers pass `tools` to both `complete()` AND `stream()` methods
+- Anthropic streaming: use raw `streamEvent` not helper events (`inputJson` fires before `contentBlock`)
+- Gemini tool results: `functionResponse.name` must use `msg.toolName` not hard-coded "tool"
+- Ollama streaming: `chunk.message.tool_calls` on `chunk.done`, emit `tool_use_start` + `tool_use_delta`
+- Loop detection: `maxConsecutiveThoughts: 3` — only ACTION steps reset the streak; observations do NOT (IC-1 fix)
+
+---
+
+## Architecture debt (current top items)
+
+The full list lives in `AUDIT-overhaul-2026.md` §11 (44 items). Top 5:
+
+1. **9 termination paths in kernel** — oracle wired to 1 (M9). Single highest-leverage Stage 5 action.
+2. **`builder.ts` 5,877 LOC + `execution-engine.ts` 4,476 LOC** — orchestration SHRINK targets.
+3. **RI dispatcher budget counters dead-zeroed** at `reactive-observer.ts:294`, `plan-execute.ts:698` → suppression gates unreachable.
+4. **3/6 RI hooks have no subscriber** at `builder.ts:2657-2681` (events exist; subscribers don't).
+5. **Eval Rule 4 frozen-judge fails** at `eval/src/eval-service.ts:159` (judge resolves from same context as SUT). Blocks any benchmark claim.
+
+---
+
+## Restoring sprint context
+
+If you need the historical sprint logs (Mar–Apr 2026 stage-by-stage commits, IC-1/IC-2/IC-3 fixes, MCP client rewrite details, kernel composable phase shipment notes, the 6-handler RI dispatcher wiring sessions, etc.):
+
+```bash
+git log --diff-filter=M -- .agents/MEMORY.md | head -20  # find the rewrite commit
+git show <sha>:.agents/MEMORY.md                          # read the prior version
+```
+
+The sprint logs are intentionally not carried forward in this reset because:
+- Most sprint findings are now reflected in code or in `AUDIT-overhaul-2026.md`.
+- Per-day "what shipped" entries decay fast and create noise for cold-start agents.
+- The audit is the consolidated view; this memory is the index pointing to it.
+
+---
+
+## Lost / pending re-implementation (carried forward)
+
+Three Obsidian-vault skill modules under `.agents/skills/` were deleted in the Phase-0-close cleanup on 2026-04-24 and are NOT recoverable from any backup:
+
 - `.agents/skills/obsidian-vault-query/` — read the vault at session start
 - `.agents/skills/obsidian-vault-sync/` — write decisions/experiments/sessions back to the vault
 - `.agents/skills/obsidian-vault-hygiene/` — orphan/bitrot/duplicate loop maintenance
 
-`AGENTS.md` and `.agents/skills/update-docs/SKILL.md` still reference these by name as part of the documented vault workflow. They need to be re-implemented before agents can act on those references. The vault's own `wiki/CLAUDE.md` and `wiki/Playbooks/Vault Operations.md` (when restored) carry the canonical protocols the skills should encode.
+`AGENTS.md` and `.agents/skills/update-docs/SKILL.md` may still reference these by name. Re-implement before agents can act on those references.
 
-## Current Status (Apr 22, 2026)
-- **v0.10.0 release prep complete** — CHANGELOG written, release doc at `docs/releases/v0.10.0.md`, docs updated (27 packages, ~4,350 tests). Changeset step pending. Build ✅ Tests 4353 pass / 0 fail ✅ Typecheck 54/54 ✅
-- **Adaptive Tool Calling System shipped** — ToolCallingDriver (NativeFCDriver + TextParseDriver), HealingPipeline (4 stages), FC calibration probe, ToolCallObservation + alias accumulation, ExperienceSummary, StallDetector, HarnessHarmDetector
-- **RI dispatcher fully wired** — 6 handlers active, all 6 patches applied, escalating redirect + tool-failure-streak live
-- **Local** is 118 commits ahead of origin/main — push required before tagging
+---
 
-## Adaptive Calibration (Apr 2026)
-- [Adaptive Harness Framework](project_adaptive_harness.md) — three-tier calibration, 24-task plan shipped on feat/adaptive-harness-framework
-
-## Design North Star (Apr 23, 2026) — Canonical Architecture Plan
-- **[Design North Star v2.2](project_north_star_v22.md)** — `docs/spec/docs/15-design-north-star.md` (~1,550 lines). Carve: **1 invariant + 3 ports + 2 disciplines**.
-  - **Invariant:** `AgentConfig × Capability → ResolvedRuntime` pure function. Builder edits config; runtime interprets. W4 fixed by construction.
-  - **Port Capability** (per-model, probed, 12 fields) — backed by existing calibration store. Kills silent `num_ctx=2048` truncation.
-  - **Port AgentMemory** — tool → semantic path wired (dead today); scratchpad collapses into adapter cache; `trustLevel` on Observation for prompt-injection defense.
-  - **Port Verification** (added v2.2) — typed `VerificationResult`, composes with Rules for self-correcting agents via `verifyBeforeFinalize` rule, cross-model verification (cheap verifier + expensive primary).
-  - **Discipline Decision Rules** — terminate/compress/retry/intervene as named `Rule<D>[]` pipelines; every decision emits `DecisionMade`. Typed error taxonomy (§5.3, v2.2) backs retry — 6 top kinds: Transient/Capacity/Capability/Contract/Task/Security.
-  - **Discipline Thin Orchestrator** — extract telemetry/debrief/classifier/skill-loading from 4,404-LOC ExecutionEngine → ~1,500 LOC.
-  - **Fixture recording** (§11.6, v2.2) — record once live, replay deterministically in CI, 100 fixtures/sec, enables regression tests + time-travel debugging.
-  - **Per-tier expectations (v2.1 §11.3):** local tier ≥90% trivial-1step, ≥75% memory, ≥65% multi-step, σ ≤15%, self-learning ≥30% iter-reduction second run.
-  - **Migration:** P0 (1w foundations) → P1 (3w invariant+capability+curator) → P2 (2w rules+reliability+verification+fixtures) → P3 (2w orchestrator+⭐ items) → P4 (gated, skill retrieval).
-  - **Open questions (blocking Phase 0):** Q5 trust-level grandfather, Q6 capability scope enforcement timing, Q7 budget-exceeded default, Q8 priority ordering, Q9 hook granularity, Q10 error-swallowing migration.
-- **[Multi-Agent Orchestration (deferred)](project_multi_agent_orchestration.md)** — agent teams, A2A, gateway patterns. Separate spec `16-multi-agent-orchestration.md` after v1.0. Depends on all 5 north-star pivots landing first. ~4-6 weeks scope.
-- **[Agent Sessions / Conversation Lifecycle (deferred)](project_agent_sessions.md)** — multi-turn conversations, session-scoped memory, persistent agents. Separate spec `17-agent-sessions.md` after v1.0. Current `AgentMemory` port is ~90% of plumbing needed. ~3-4 weeks scope.
-- **[North Star Sprint Plan (Apr 23)](project_north_star_sprint_plan.md)** — 6 files under `docs/superpowers/plans/2026-04-23-north-star-sprint-plan-*.md`. 10 sprints / 5 phases / 57 stories. TDD-focused (RED → GREEN → REFACTOR → INTEGRATION). Phase 0 (1w, 7 stories) = foundations (typed errors seed, ErrorSwallowed event, log redactor, CI probes, microbench baseline, MEMORY.md reconciliation, debrief-quality spike). Phase 1 (3w, 17 stories) = Invariant + Capability + Curator + Task + Phase 4a. Phase 2 (2w, 12 stories) = Rules + Verification + Claim/Evidence + Skill + Fixtures + zero-catchAll migration. Phase 3 (2w, 13 stories) = ExecutionEngine extraction (4404→1800 LOC) + Budget<T> + Invariant + CI lint rules. **v1.0 cut at end of P3.** Phase 4 (2w, 8 stories, conditional on S0.7 spike) = active skill retrieval → v1.1. Critical-path stories: S0.1 error taxonomy, P1.S1 Invariant, P1.S2 Capability. Open Q5-Q14 defaults recommended in overview; need user answers before Phase 0 start. Quality gates: bun test + bun run build + bun run typecheck + /review-patterns 9/9 + changesets per PR. NO LLM-mock tests during P0-P3.
-
-## Projects
-- [Project Dispatch](project_dispatch.md) — NL automation builder product, separate repo, Elysia + Svelte + SQLite
-- [Composable Strategy Architecture](project_composable_strategies.md) — V1.1: strategies as composable capabilities, not exclusive modes
-- [Composable Provider Adapters](project_composable_adapters.md) — V1.1 DONE in v0.8.5: all 7 hooks implemented
-- [Composable Reasoning Phases](project_composable_phases.md) — ✅ SHIPPED Apr 3, 2026: `strategies/kernel/` composable phase architecture merged to main
-
-## V1.0 Readiness Audit (Apr 17, 2026)
-
-Full 4-agent audit run. Architecture solid; gaps are wiring, DX, and trust. First-run UX: **6.5/10**.
-
-### CRITICAL blockers
-1. **Bun-only, zero docs** — `bun:sqlite`/`Bun.*` in published packages, no `engines` field. Node users: `ReferenceError: Bun is not defined`. Fix: add `"engines": {"bun":">=1.0"}` + prominent docs.
-2. **`rax demo` is fake** — scripted responses, hardcoded token count (314), fake sleep padding. CLI says "live demo." Fix: use real provider or clearly label as example output.
-3. **Sub-agent `maxIterations` silently capped at 3** — `agent-tool-adapter.ts:214-217`: `Math.min(userValue, 3)`. Builder docs say `.withDynamicSubAgents({ maxIterations: 8 })` works — it doesn't.
-4. **`MAX_RECURSION_DEPTH = 3` not configurable** — `agent-tool-adapter.ts:6`. Deep agent hierarchies silently fail.
-5. **Calibration defaults to `:memory:`** — `reactive-intelligence/types.ts:164`. Learning lost every restart. Should default to `.reactive-agents/calibration.db`.
-6. **Observability OFF by default** — requires `.withObservability()`. Should be on by default.
-
-### HIGH friction
-- `rax init` hardcodes Anthropic — OpenAI/Ollama users fail on first `bun run dev`
-- `FRAMEWORK_INDEX.md` ALL paths broken — `strategies/shared/*` → `strategies/kernel/*` (dir renamed Apr 3)
-- `concepts/composable-kernel.md` — same stale paths, still describes pre-refactor architecture
-- ~20 undocumented env vars (only 6 of 26 in README): `LLM_MAX_RETRIES`, `LLM_TIMEOUT_MS`, `TAVILY_API_KEY`, `CORTEX_URL`, `LITELLM_BASE_URL`, `OLLAMA_ENDPOINT` vs `OLLAMA_BASE` (duplicate)
-- `effect` in `dependencies` not `peerDependencies` — dual-copy risk; move to peer
-- Provider SDKs not declared as peer deps — `Cannot find module '@anthropic-ai/sdk'` with no hint
-- `StatusRenderer` replaces Effect `Logger` with `Logger.none` on TTY — logs vanish silently
-- Ollama default model `cogito:14b` — most users get silent 404; change to `llama3.2`
-- Duplicate `AgentConfig` type (core skeletal vs runtime full) — autocomplete confusion
-- `rax demo` circular dep — imports `reactive-agents` but not in CLI package.json deps
-
-### Stale docs priority (5/5 = worst)
-- `FRAMEWORK_INDEX.md` 5/5 — all kernel paths broken
-- `concepts/composable-kernel.md` 5/5 — old import paths
-- `ROADMAP.md` 5/5 — last updated Mar 11, lists shipped features as future
-- `CONTRIBUTING.md` 5/5 — claims 15 packages / 283 tests
-- `packages/reactive-agents/README.md` 5/5 — 14 packages, deprecated `withMemory("1")`
-
-### Repo cleanup needed
-Delete before v1.0: `test.ts` (46KB!), `main.ts`, `scratch.ts`, `scratch/`, `output.txt`, `harness-reports/`
-
-## Running Issues Log (Apr 19–21, 2026+)
-
-Open harness issues tracked across sessions. Fix order: wiring > validation > regressions.
-
-### Open — Intervention Dispatcher Wiring
-1. **Remaining patches not applied** — ✅ ALL 6 DISPATCHED PATCHES WIRED (Apr 21 late):
-   - `inject-tool-guidance` / `append-system-nudge` → `pendingGuidance.errorRecovery` (think.ts renders in Guidance: block)
-   - `inject-skill-content` → `pendingGuidance.errorRecovery` (same path as inject-tool-guidance)
-   - `set-temperature` → `state.meta.dispatchedTemperature`; kernel-runner reads after `runReactiveObserver` and updates `currentOptions.temperature`
-   - `request-strategy-switch` → `state.meta.terminatedBy="dispatcher-strategy-switch"` + `dispatchedStrategySwitch:{to,reason}`; kernel-runner runs full `buildHandoff`+state-reset+`continue` when strategy switching is enabled
-   - `KernelMeta` extended with `dispatchedTemperature?: number` and `dispatchedStrategySwitch?: {to,reason}`
-2. **ToT outer loop early-stop propagation** — ✅ PER fixed Apr 19 (`perRIEarlyStop` flag at `plan-execute.ts:715,740`). ToT still open: each branch is a separate sub-kernel; outer ToT loop continues spawning regardless.
-3. **Skill hooks not wired** — `onSkillActivated`, `onSkillRefined`, `onSkillConflict` in `_riHooks` have no AgentEvent types yet.
-
-### Open — Compression
-4. **Dual compression** — ✅ FIXED Apr 19 (compress-messages patch in reactive-observer.ts; tool-execution.ts per-result compression is complementary). Previously listed as open due to stale copy in this log.
-5. **compress-messages count-based fallback** — ~200 tok/msg estimate; no real token counts at kernel state layer.
-
-### Open — Validation
-6. **AUC failure corpus** — ✅ FIXED Apr 21. `failure-corpus.ts` + `validate-entropy.ts` in `.agents/skills/harness-improvement-loop/scripts/`. Dispatch AUC = 1.000 (RI fires on all 4 failure scenarios, never on 4 success scenarios). Entropy AUC = 0.625 (local models without logprobs — entropy measures complexity not failure; dispatch is the right signal).
-7. **Per-tier RI cost-benefit unmeasured** — no data on RI net-positive vs net-negative by tier.
-8. **Local learning engine unverified E2E** — writes to `~/.reactive-agents/observations/` but influence on behavior unconfirmed.
-
-### Open — New (Apr 21)
-9. **AUC stability** — ✅ CONFIRMED Apr 21 (3 runs): dispatch AUC = 1.000 on 2/3 runs; 1 measurement artifact from stale labels file (fixed). Entropy AUC = 1.000 on same runs (labels-first computation credits untraced success scenarios correctly as entropy=0/dispatch=0). Tool-failure-streak threshold lowered 3→2; fresh labels per run eliminates stale taskId contamination.
-10. **Nudge effectiveness** — ✅ CONFIRMED Apr 21. `failure-save-loop` iters-after-first-dispatch=1 (model complies immediately). `failure-contradictory-data` iters-after=3. Escalating handler: soft nudge on first fire, early-stop patch on second fire (detects re-fire via `state.controllerDecisionLog` — `budget.interventionsFiredThisRun` was hardcoded 0, never tracked). Entropy AUC = 0.781 (crossed 0.7 threshold after escalation reduced failure run length).
-11. **Calibration self-improvement loop not validated** — CalibrationStore persists to disk. But `calibration.calibrated` flag and `highEntropyThreshold` auto-update from real run data not confirmed end-to-end.
-14. **Intervention responsiveness not in CalibrationStore** — `firstDispatchIter` and `iterationsAfterFirstDispatch` (how quickly a model responds to nudges) are the right data for per-model calibration profiles, but the CalibrationStore only records `highEntropyThreshold`. A model that ignores soft nudges needs `early-stop` immediately; a responsive model can use softer redirects. `interventionResponseRate` per model should be a CalibrationStore field.
-
-### Open — Regressions / Low Priority
-12. **cogito:14b 2.3× token regression with RI on** — self-gating should fix but unverified post-Apr-21 changes.
-13. **Quickstart telemetry opt-out printed twice** — cosmetic, low priority.
-
-## V0.10 Hands-On Audit (Apr 18, 2026)
-
-Skeptical audit running framework as a new user against real Ollama + frontier APIs. Surfaced significant marketing/code drift on the reactive-intelligence layer. Full report + run logs: `/tmp/ra-audit/AUDIT.md`.
-
-### Core finding
-"Reactive intelligence" is **mostly real infrastructure wrapped around partially-wired intelligence**. The entropy sensor exists, the controller evaluates decisions, but **only `early-stop` mutates agent behavior**. The other 9 `ControllerDecision` types are advisory-only (logged to `pulse` meta-tool, emitted as events, never executed). The central "10 reactive interventions" pitch is 1/10 dispatched.
-
-### Architectural (redesign, not patch)
-1. **Intervention dispatcher missing** — `termination-oracle.ts:222-230` is the only consumer of `ControllerDecision`. Need handler registry (like `metaToolRegistry` in `act.ts:191-194`) for `temp-adjust`, `switch-strategy`, `skill-activate`, `prompt-switch`, `tool-inject`, `memory-boost`, `skill-reinject`, `human-escalate`, `context-compress`.
-2. **RI all-or-nothing engagement** — `.withReactiveIntelligence()` fires every turn. Ablation (haiku task): qwen3.5 flipped fail→pass (-38% tokens, -46% wall) but cogito:14b regressed 2.3× and qwen3:4b regressed 3.4× on tasks they solved unassisted. Dispatcher must self-gate on entropy/iteration threshold.
-3. **Dual compression systems** — ✅ FIXED (Apr 19) — `compress-messages` patch now applied in reactive-observer.ts switch (count-based trimming since KernelMessage has no token annotations). tool-execution.ts per-result compression is complementary, not conflicting.
-4. **Config capture without propagation** — ✅ FIXED (Apr 19) — `build()` now subscribes `onEntropyScored`→`EntropyScored`, `onControllerDecision`→`ReactiveDecision`, `onMidRunAdjustment`→`InterventionDispatched`. Skill hooks deferred (no AgentEvent types yet).
-5. **Tools leak runtime assumptions** — `code-execute` uses CJS `require` in Bun ESM subprocess; every Ollama model fails tool use. Need tier-aware tool substitution via existing `contextProfile` plumbing.
-6. **No doc↔code truthiness enforcement** — README advertises handlers that don't exist. Need capability manifest + CI check that fails build on drift.
-
-### Tactical bugs — updated Apr 19
-1. `code-execute` `require` ESM mismatch — ✅ FIXED (Apr 18)
-2. `contextPressure` hard-coded `0` — ✅ FIXED (Apr 18)
-3. `AbortSignal` silent no-op on `runStream()` — ✅ FIXED (Apr 18)
-4. `result.metadata.llmCalls` always `0` — ✅ FIXED (Apr 18)
-5. `activate_skill` meta-tool had no handler — ✅ FIXED (Apr 18)
-6. 9/10 controller decision types had no handler — ✅ FIXED (Apr 18) — 6 dispatched, 4 advisory by design
-7. Quickstart prints telemetry opt-out notice twice — ❌ OPEN (low priority)
-8. **Reactive observer not generating ControllerDecisions** — ✅ FIXED (Apr 19) — Root cause: `evaluate()` call was missing 3 optional params (`currentTemperature`, `availableToolNames`, `priorDecisionsThisRun`), causing 7/10 evaluators to always short-circuit. Also wired entropy scoring into PER main loop (reflection content scored as "thought" after each refinement). 852 reasoning tests green.
-9. **early-stop not terminating kernel loop** — ✅ FIXED (Apr 19) — `kernel-runner.ts` now breaks when `state.meta.terminatedBy === "dispatcher-early-stop"` after `runReactiveObserver`. `reactive-observer.ts` always uses "dispatcher-early-stop" sentinel. Dispatcher early-stop exempt from minEntropyComposite gate. Limitation: only terminates the current sub-kernel; ToT/PER outer loops need separate wiring.
-
-### Validation gaps — updated Apr 19
-- AUC: does entropy predict failure? — ⚠️ INFRA READY — `scripts/validate-entropy.ts` built. First corpus: 10/10 successes → AUC=0.000 (correct; needs failure-producing runs)
-- Local learning engine verified? — ❌ OPEN
-- Intervention precision/recall counterfactuals — ⚠️ INFRA READY — `runCounterfactual()` in `@reactive-agents/testing`, E2E ablation test gated on OLLAMA_E2E
-- Per-tier RI cost-benefit — ❌ OPEN
-
-### Positioning drift — updated Apr 19
-- "10 mid-run decisions" → ✅ FIXED (Apr 19) — README now reads "6 dispatched + 4 advisory via pulse tool"
-- "5-source entropy sensor" → ✅ now accurate (contextPressure wired Apr 18)
-- "AbortSignal cancellation" → ✅ now accurate
-- "Works on local Ollama — same code, same features" → ✅ now accurate for tool-using agents
-
-### Good news surfaced by audit
-- Provider adapter **7/7 hooks wired** (memory said 2/7 — stale). `taskFraming`, `toolGuidance`, `continuationHint`, `errorRecovery`, `synthesisPrompt`, `qualityCheck`, `systemPromptPatch` all called from kernel phases.
-- Execution engine is **12 phases**, not 10 (`bootstrap, guardrail, cost-route, strategy-select, think, act, observe, verify, memory-flush, cost-track, audit, complete`).
-- **4,161 tests / 22 skip / 0 fail** across 461 files in 61.8s.
-- Quickstart: **1.6s install + 8.8s first run** — 60s claim defensible.
-- Local learning engine writes real samples per-model to `~/.reactive-agents/observations/` — persistence is live.
-- Kernel composable phase architecture (context-builder → think → guard → act) is clean and extensible.
-
-### Priority sequence pre-v0.10 — updated Apr 21
-1. ✅ Intervention dispatcher (architectural — unblocks central pitch)
-2. ✅ Self-gating RI (architectural — fixes cogito:14b/qwen3:4b regression)
-3. ✅ `code-execute` require/ESM fix (tactical — unblocks local-model demos)
-4. ✅ Offline entropy validation infra (measure before shipping "reactive" claim)
-5. ✅ Capability manifest + CI check (prevents future drift)
-6. ✅ Reactive observer param wiring + PER entropy scoring (Apr 19)
-7. ✅ `_riHooks` 3/6 wired (Apr 19). Skill callbacks (3/6) deferred.
-8. ✅ Dual compression coordination (Apr 19)
-9. ⚠️ ToT outer-loop early-stop propagation — PER ✅, ToT ❌
-10. ✅ AUC validation with real failure corpus (Apr 21) — dispatch AUC = 1.000
-11. ✅ All 6 reactive-observer patches wired (Apr 21 late) — inject-tool-guidance, append-system-nudge, inject-skill-content, set-temperature, request-strategy-switch, compress-messages. All 6 dispatched patches now mutate kernel state.
-12. ✅ Permanently-failed required tools no longer block strategy handoffs (Apr 21 late) — `StrategyHandoff.permanentlyFailedTools` carried forward; `buildHandoff` accepts `requiredTools` param; both switch paths prune `currentInput.requiredTools` + inject synthetic observation steps so new strategy never re-nudges for a tool proven unavailable.
-13. ✅ AUC stability confirmed (3 runs, 2/3 = 1.000). ✅ Nudge effectiveness confirmed (iters-after=1). Calibration self-improvement loop still unvalidated.
-14. ❌ Intervention responsiveness in CalibrationStore — `interventionResponseRate` per model not yet tracked. Required for multi-model calibration profiles.
-
-## Current Status (Apr 21, 2026 — Late) — All 6 Dispatcher Patches Wired, Tests Clean
-
-**4271 pass / 23 skip / 0 fail** across 483 files (up from 4265/7fail at session start).
-
-### What shipped Apr 21 (late session)
-
-#### Test failures resolved (7 → 0)
-- **`evaluateStrategySwitch` threshold tests** — implementation lowered threshold from `> 0.7` to `> 0.45` (Apr 19 evaluator gate fixes) but tests weren't updated; fixed test values and descriptions
-- **Calibration wiring tests (4)** — `StrategyServices.dispatcher` added as required field after these tests were written; caused `undefined._tag` crash at runtime; added `dispatcher: noneService()` + `messages: []` to test helper
-- **`cryptoPriceHandler` retry test** — 2000ms real sleep caused intermittent failure in parallel test suite; exported `setRetryBaseMs()` setter; test zeroes delay
-
-#### All 6 dispatcher patches now live
-- `inject-tool-guidance` / `append-system-nudge` → `pendingGuidance.errorRecovery` ✅ (earlier today)
-- `inject-skill-content` → `pendingGuidance.errorRecovery` ✅
-- `set-temperature` → `state.meta.dispatchedTemperature`; kernel-runner applies to `currentOptions.temperature` next iteration ✅
-- `request-strategy-switch` → `state.meta.terminatedBy="dispatcher-strategy-switch"` + `dispatchedStrategySwitch:{to,reason}`; kernel-runner runs full `buildHandoff`+reset+`continue` ✅
-- `KernelMeta` extended: `dispatchedTemperature?`, `dispatchedStrategySwitch?`
-
-#### Permanently-failed required tools no longer block strategy handoffs
-- `StrategyHandoff` gains `permanentlyFailedTools: readonly string[]`
-- `buildHandoff(state, task, from, reason, n, requiredTools?)` computes them via `getPermanentlyFailedRequiredTools`
-- Both switch paths (loop-detection + dispatcher): (1) inject synthetic observation steps so new kernel `steps[]` immediately shows the tool as attempted-and-failed; (2) prune permanently-failed tools from `currentInput.requiredTools` so the lane controller never nudges the new strategy to retry a dead tool
-- Handoff summary text includes "Permanently unavailable tools: X" so LLM context also knows to synthesize without them
-
-#### Builder API clarifications (from scratch testing)
-- `_riHooks` inside `withReasoning({...})` is **dead** — RI hooks go in `.withReactiveIntelligence({ onEntropyScored, onControllerDecision, onMidRunAdjustment })`
-- `.withReactiveIntelligence()` must be called to inject the reactive controller service; without it, `reactiveController._tag === "None"` and the controller never evaluates
-- Strategy switching uses flat `ReasoningOptions` fields: `enableStrategySwitching: true`, `maxStrategySwitches: 1`, `fallbackStrategy: "plan-execute-reflect"` (NOT `strategySwitching: { enabled: true }`)
-- Custom tool definition format: `{ definition: { name, description, parameters: [{name, type, required, description}] }, handler }` — flat object with all `ObservationResult` fields required
-- `onEntropyScored` second arg is raw `iteration: number` (not a context object); `onControllerDecision` event has `.decision` (not `.decisionType`)
-- Ollama provider: `.withProvider("ollama").withModel("cogito:latest")` — two separate calls; `.withModel({ model, provider })` object form resolves to "test" provider
-
-#### RI end-to-end confirmed with cogito:latest (scratch run)
-- Entropy scoring fires every iteration via `withReactiveIntelligence` ✅
-- `switch-strategy` decision fires at iter=3 with `behavioral=0.667` > 0.45 threshold ✅
-- `request-strategy-switch` patch dispatched → kernel-runner resets state, calls `buildHandoff`, injects synthetic steps, prunes `requiredTools` ✅
-- `inject-tool-guidance` and `compress` decisions fire in second strategy pass ✅
-- No "required-tool nudge budget exhausted" on permanently failing tool ✅
-
-### What shipped Apr 21 (evening — previous entry)
-- **Escalating redirect handler** — `tool-failure-redirect`: soft nudge on first fire ("IMPORTANT: stop calling X, use final-answer"), early-stop patch on second fire. Detects re-fire via `state.controllerDecisionLog` (not `budget.interventionsFiredThisRun` which was hardcoded 0 — never implemented).
-- **Nudge effectiveness confirmed** — `failure-save-loop` iters-after-first-dispatch=**1**: model calls final-answer immediately after nudge. `failure-contradictory-data`: iters-after=3. The guidance propagation from Apr 21 morning is working.
-- **Entropy AUC = 0.781** — crossed the 0.7 "real signal" threshold (up from 0.625). Escalation reduces failure run length → tighter entropy spread between success/failure.
-- **`firstDispatchIter` + `iterationsAfterFirstDispatch` metrics** — added to `failure-corpus.ts` output. Direct measure of intervention effectiveness per scenario.
-- **Streak threshold 2, fresh labels per run** — dispatch AUC confirmed stable at 1.000 across 3 corpus runs.
-- **Tool-failure-streak threshold 3→2** — catches models that give up after 2 failures.
-
-### Key new finding (Apr 21 evening)
-`budget.interventionsFiredThisRun` was hardcoded to 0 in reactive-observer.ts `dispatchContext` — the budget tracking system was never implemented. Use `state.controllerDecisionLog` as proxy for "has an intervention already fired this run." This affects any handler that needs to escalate based on prior fires.
-
-## Current Status (Apr 21, 2026) — RI Dispatch Validated
-
-**Core finding:** Reactive intelligence is now demonstrably reactive on local Ollama models. Starting from 0 interventions dispatched, through iterative improvement, dispatch AUC = 1.000 — RI fires on 100% of failure scenarios and 0% of success scenarios.
-
-### What shipped Apr 21
-- **CalibrationStore persistence** — default changed from `:memory:` to `~/.reactive-agents/calibration.db`. Calibration data now accumulates across restarts. `expandPath()` handles `~/` tilde expansion.
-- **Adaptive entropy threshold** — `calibratedMinEntropy()` in reactive-observer.ts: tier-based fallback (local=0.12, frontier=0.45) until `sampleCount >= 20`, then `highEntropyThreshold * 0.6`. Overrides hardcoded 0.55 suppression floor in dispatcher via `context.adaptiveMinEntropy`.
-- **Stall detector RI-aware** — threshold 2→4 when `services.reactiveController._tag === "Some"`. Gives RI runway to reach `iteration >= 2` before harness delivers. No circular import — uses Effect Option discriminant.
-- **`tool-failure-streak` evaluator + handler** — fires when same tool fails 3+ consecutive times (`isError=true` in message history). `tool-failure-redirect` handler injects system nudge via `append-system-nudge` patch.
-- **`append-system-nudge` / `inject-tool-guidance` patches implemented** — were no-ops (`default: break`). Now propagate to `pendingGuidance.errorRecovery`; think.ts renders in next Guidance: block.
-- **Evaluator gate tuning** — `tool-inject`: threshold 0.7→0.5, requires 2 consecutive iters ≥ 0.5. `strategy-switch`: `behavioralLoopScore` threshold 0.7→0.45, `iteration >= 3` gate, `flatEntropy >= 0.35` (no switch at floor 0.15).
-- **`traceStats` fix** — iterations count was 0-based max; now `maxIter + 1`. Added `avgEntropy`.
-- **Failure corpus infrastructure** — `failure-corpus.ts` + `validate-entropy.ts` in `.agents/skills/harness-improvement-loop/scripts/`. 8 scenarios (4 success / 4 failure). `corpus-labels.json` sidecar. Dispatch AUC + entropy AUC metrics. Fixed ROC trapezoid formula (was sweeping wrong direction).
-- **`alwaysErrorTool` uses `Effect.die`** — marks `isError=true` in KernelMessage history (previously `Effect.succeed` with error content never set the flag).
-
-### Key architectural finding (Apr 21)
-Entropy composite does NOT discriminate between "complex correct reasoning" and "stuck tool loop" for logprob-less local models — both produce 0.5–0.6 entropy. Dispatch is the right signal: failure scenarios receive 2–6 interventions each; success scenarios receive 0. Use dispatch AUC (not entropy AUC) to measure RI effectiveness on local models.
-
-## Current Status (Apr 17–18, 2026)
-- **3 CLI built-in tools shipped** — `git-cli`, `gh-cli`, `gws-cli` in `@reactive-agents/tools`; brings capability tool count to **9** (webSearch, cryptoPrice, httpGet, fileRead, fileWrite, codeExecute, git-cli, gh-cli, gws-cli) alongside 8 meta-tools; injectable `CliRunner` type for testability; `ENOENT` produces human-readable error
-- **Permanently-failed required tools fix** — `getEffectiveMissingRequiredTools()` excludes tools that were attempted but never succeeded; prevents loop-until-maxIterations on ENOENT/unavailable tools; fixes act.ts, guard.ts, kernel-runner.ts, lane-controller.ts
-- **Tool pruning guard** — `PRUNE_MIN_TOOLS = 15` in think.ts; classification-based pruning only activates above 15 tools, preventing git-cli/etc. from being hidden on small tool sets
-- **Sub-agent maxIterations un-capped** — removed `Math.min(userValue, 3)` from agent-tool-adapter.ts; user config honored
-- **Turborepo integrated (Apr 18)** — serial `bun run --filter ... build` chain replaced with `turbo run build`; cold build 34s, warm rebuild **0.18s** (FULL TURBO, 28/28 cached). Root `turbo.json` + `apps/cortex/ui/turbo.json` override (SvelteKit outputs to `build/` + `.svelte-kit/`). Task order derived from package.json `dependencies` — no manual script chain to maintain.
-- **False circular deps removed (Apr 18)** — turbo surfaced a cycle between `@reactive-agents/a2a` ↔ `@reactive-agents/tools`. Neither package's `src/` imports the other; the old serial chain masked it because tsup builds each package standalone. Removed `@reactive-agents/tools` from a2a's deps and `@reactive-agents/a2a` from tools' deps. **Publishing-behavior change**: consumers who installed either package no longer get the other auto-installed transitively. Needs a changeset before the next release (patch-level: declarations were wrong, no runtime behavior changed).
-- **4,153 tests across 461 files** — 852/852 reasoning, 656/656 tools, all passing
-
-## Current Status (Apr 13, 2026)
-- **Context Engineering Overhaul complete** — dead code removed (`compaction.ts`, `context-budget.ts`, `buildDynamicContext`, `autoForwardSection`); `ContextManager` service introduced as deterministic context assembly authority; `steeringNudge` fully migrated to typed `PendingGuidance` → system prompt `Guidance:` section
-- **Plan-Execute-Reflect fixes shipped** — planner decomposition, quantity enforcement, reflection augmentation, satisfaction override removal
-- **Observation Quality Pipeline shipped** — FC recall hint preservation, storedKey threading, tier-adaptive compression, optional LLM extraction
-- **Parallel/Sequential tool calling hardened** — infinite loop fix, sequential quantity clamping, softened required-tools nudge in sequential mode
-- **3,879 tests across 430 files** — all passing, 0 regressions, build clean
-
-## Current Status (Apr 12, 2026)
-- **Pass 2 complete** — 18 probes (6 confirm + 12 wide), 18 pass / 5 fail, 0 regressions
-- W2 + W4 confirmed with JSONL evidence; W6 (recovery nudges compound W2), W7 (ICS over-tool-classifies), W8 (strategy switching unreachable) newly discovered
-- IC-1 (loop-detector.ts L94 one-line fix) and IC-2 (builder.ts withReasoning maxIter propagation) ready for agent-tdd handoff
-- Coverage improved: 7 covered / 15 partial / 3 uncovered (was 8 uncovered in Pass 1)
-- Report: `harness-reports/improvement-report-20260412-2.md`
-
-## What Shipped Apr 12, 2026
-
-### Self-Improving Harness Loop (Pass 1 — Apr 12 AM)
-- **`scripts/harness-probe-analyze.ts`** — JSONL analyzer with correct metric schema; safe to import (`import.meta.main` guard); outputs `-analysis.json` per probe
-- **`scripts/harness-evolve.ts`** — evolution engine: evaluates pass criteria, generates drill-down/graduation probe candidates, tracks coverage gaps across 26 feature areas, checks regression baselines; `--dry-run` flag
-- **`harness-reports/loop-state.json`** — persistent state: `knownWeaknesses[]`, `regressionBaselines[]`, `metricRegistry[]` (36 names after Pass 2), `coverageMap{}`, `probeHistory[]`
-- **SKILL.md Phase 5: Evolve** — new section in `.agents/skills/harness-improvement-loop/SKILL.md`
-
-### Pass 2 Probe Results (Apr 12 PM)
-- **W2 confirmed** (loop-detector.ts L94): `else break` resets streak on ANY non-thought step — JSONL shows duplicate web-search calls (same query twice) not triggering detection; `w2-ics-required-tool` ran 6 iters, no loop
-- **W4 confirmed** (builder.ts withReasoning): `w4-reasoning-opt-maxiter` ran 16 iters with configured maxIterations=3; `w4-direct-maxiter` (withMaxIterations) correctly stopped at 2
-- **W2 root cause detail**: default tier is "mid" → `maxSameTool=3` (needs 3 identical calls); Ollama probes without `withContextProfile({ tier: "local" })` never trigger duplicate-tool detection
-- **W6 NEW**: `getToolFailureRecovery()` (4f809a2d) adds `type="observation"` nudges that reset W2 streak — fixed by IC-1
-- **W7 NEW**: ICS over-classifies tools for knowledge tasks — qwen3:14b called tool for "explain a monad" (direct-answer-efficiency: iter=6 expected ≤1)
-- **W8 NEW**: Strategy switching is dead code — W2 prevents loop detection from firing, so `if (loopMsg !== null)` branch never runs; `strategy-switch-on-loop` probe: 15 iters, no switch
-- **IC-1 ticket ready**: loop-detector.ts L94: `else break` → `else if (steps[i]!.type === "action") break` — fixes W2+W6+W8
-- **IC-2 ticket ready**: builder.ts ~L1328: add `if (options?.maxIterations !== undefined) this._maxIterations = options.maxIterations;` in withReasoning()
-
-**Confirmed JSONL metric schema** (use these, never `{event: "ThinkStart"}`):
-- `execution.iteration` — gauge, ONE record at end (not per-iter)
-- `reasoning.steps` — counter, fires per kernel step (value=1); labels: `strategy`, `kernelPass`
-- `entropy.composite` — gauge per iter; labels: `iteration`, `shape`, `confidence`
-- `execution.phase.count` — counter per phase; labels: `phase` (think/act/observe/bootstrap/complete…)
-- `execution.tool.execution` — counter per tool call
-
-## Current Status (Apr 10, 2026)
-- **Cortex Lab parity** — Builder wires **runtime verification** (`withVerification`) and **host shell** (`terminalTools` → `shell-execute` + `terminal: true`) with explicit UI + docs disclaimers; config parity test + POST `/api/runs` + gateway normalized config updated
-- **Harness Reliability Engineering Complete** — all phases from plan.md implemented: tier classification, expert strategy efficiency, output quality gates, checkpoint meta-tool, tier-adaptive kernel guards, terminal execution, calibration drift detection
-- **Terminal execution tool integrated** — `.withTerminalTools()` builder method + shell-execute registered with security allowlist/blocklist
-- **Calibration drift infrastructure wired** — `subscribeCalibrationUpdates()` initialized in runtime layer, emits CalibrationDrift events via EventBus when model entropy behavior shifts
-- **AGENTS.md updated** — snapshot now includes terminal execution + calibration drift in recently shipped highlights
-- **Production-ready**: all 9 kernel guards + oracle + context pressure gates now tier-aware; tier-specific behavior: local models exit sooner (conservative), frontier models get more iterations (bounded)
-
-## What Shipped Apr 10, 2026
-
-### Harness Reliability & Efficiency Hardening (Plan.md Phases 1-9)
-- **Phase 1 - Tier Classification** ✅: gemini-2.5-flash resolves to "large" tier via PROVIDER_TIER_PATTERNS prefix matching
-- **Phase 2 - Expert Strategy Efficiency** ✅: ToT tier budgets (6-12 iterations) + stagnation convergence; assembleDeliverable strips ToT prefixes
-- **Phase 3 - Output Quality Gate** ✅: task-intent extraction → format validation → synthesis repair pipeline; all kernel exits route through single `finalizeOutput()` path
-- **Phase 4 - Checkpoint Meta-Tool** ✅: auto-checkpoint integrated before context compaction; survives across window boundaries
-- **Phase 5 - Tier-Adaptive Kernel** ✅: entropy thresholds, token deltas, context pressure gates all scale by tier (local/mid/large/frontier)
-- **Phase 6 - Terminal Execution** ✅: shell-execute tool with security allowlist (git, ls, cat, grep, find, node, bun, npm, python, curl, echo, mkdir, cp, mv, wc, head, tail, sort, jq)
-  - New builder method: `.withTerminalTools()` or `.withTools({ terminal: true })`
-  - Files: `packages/runtime/src/builder.ts` (method + imports), `packages/runtime/src/agent-config.ts` (config), `packages/runtime/tests/builder-terminal-tools.test.ts` (3/3 tests pass)
-- **Phase 7 - Calibration System** ✅: drift detection infrastructure complete + wired to runtime
-  - New: `packages/reactive-intelligence/src/sensor/calibration-update-subscriber.ts` (listens TaskCompleted, emits CalibrationDrift on drift)
-  - Wiring: `subscribeCalibrationUpdates()` initialized in `createReactiveIntelligenceLayer()`
-  - Tests: `packages/reactive-intelligence/tests/calibration-drift.test.ts` (3/3 pass) — drift detection, event emission verified
-  - Files: `packages/reactive-intelligence/src/runtime.ts` (Layer initialization), `packages/reactive-intelligence/src/index.ts` (export)
-- **Phase 8 - Recall Audit** ✅: verified recall=true in meta-tools defaults; propagates to FC schemas
-- **Phase 9 - Docs** ✅: harness-control-flow.md + local-model-performance.md accurate; AGENTS.md updated with shipped capabilities
-
-### Implementation Summary
-- **Files Modified**: 7 (builder.ts, agent-config.ts, runtime.ts, index.ts, AGENTS.md + 2 new source files + 2 new test files)
-- **Tests Added**: 6 new tests, all passing (builder-terminal-tools: 3/3, calibration-drift: 3/3)
-- **Code Quality**: Effect-TS patterns, TypeScript verified, security enforced, documentation synchronized
-
-## Current Status (Apr 8, 2026)
-- **v0.9.0 docs canonicalization pass** — `AGENTS.md` is canonical; `CLAUDE.md` reduced to compatibility pointer
-- **Documentation workflow upgraded** — `update-docs` skill now explicitly includes `.agents/MEMORY.md` + repo memory updates and audits all 13 project skills in `.agents/skills/`
-- **`harness-improvement-loop` skill added** — runs instrumented agent probes (5 probe types, debug verbosity, JSONL output), analyzes real runtime output against expected harness behavior, produces accumulating improvement reports; fix phase delegated to `agent-tdd`
-- **Governance docs synchronized** — root/cortex AGENTS, spec `DOCUMENT_INDEX.md`, contributing guide, and reasoning guide aligned with latest changelog behaviors
-- **Preparing for Show HN** — architecture solid, DX polished
-
-## What Shipped Apr 8, 2026
-
-### Documentation and Guidance Consolidation
-- `CLAUDE.md` converted to compatibility pointer only; no duplicate operational truth
-- `AGENTS.md` now includes current v0.9.0 snapshot + recent shipped highlights and explicit docs cross-reference rules
-- `docs/spec/docs/DOCUMENT_INDEX.md` rewritten to reflect canonical docs + modern reading order
-- `apps/docs/src/content/docs/guides/contributing.md` updated with current test counts and AGENTS-first doc policy
-- `apps/docs/src/content/docs/guides/reasoning.md` expanded with required-tools gate hardening and native FC text JSON fallback behavior
-
-## What Shipped Apr 7, 2026
-
-### MCP Client Production Hardening
-- `packages/tools/src/mcp/mcp-client.ts` rewritten on `@modelcontextprotocol/sdk` (Client, StdioClientTransport, StreamableHTTPClientTransport, SSEClientTransport)
-- **Two docker MCP patterns**: (A) stdio MCP — reads JSON-RPC from stdin (GitHub MCP, filesystem); (B) HTTP-only — starts HTTP server, ignores stdin (mcp/context7)
-- **Smart auto-detection**: stdio connect races against HTTP URL detection in stderr; when HTTP wins, client switches to port-mapped HTTP mode automatically
-- **`docker rm -f` is the ONLY reliable container stop** — `subprocess.kill()` leaves the container running; Docker daemon keeps it alive independently
-- **Two-phase docker containers**: probe `rax-probe-<name>-<pid>` (initial stdio attempt), managed `rax-mcp-<name>-<pid>` (port-mapped HTTP); PID ensures no conflicts between concurrent agents
-- Transport auto-inferred: `command` → `"stdio"`, endpoint `/mcp` → `"streamable-http"`, other endpoint → `"sse"`
-- `transport` field is now optional in `MCPServerConfig`, `runtime.ts`, `agent-config.ts`
-- `cleanupMcpTransport(serverName)` calls `docker rm -f <containerName>` then `transport.close()`; called by Cortex DELETE and agent dispose
-- Cortex: `parseConfigBody` + `expandMcpConfigsFromJson` handle Cursor/Claude JSON mcpServers shapes
-- Full test coverage: 27 mcp-client tests in tools package, 29 tests in Cortex mcp-config-import + api-mcp-servers
-
-## What Shipped Apr 3, 2026
-
-### Kernel Composable Phase Architecture
-- `strategies/shared/` renamed to `strategies/kernel/` — name describes what it is, not who uses it
-- `react-kernel.ts` 1,700 → 181 lines; thin orchestrator + `makeKernel({ phases?: Phase[] })` factory
-- `kernel-runner.ts` 612 → ~1,107 lines (grew with ICS, tier-adaptive, output synthesis, lane controller, auto-checkpoint)
-- **`kernel/phases/`** — four phase files, each answers one question:
-  - `context-builder.ts` — what will the LLM see this turn? (pure data, no LLM calls)
-  - `think.ts` — what did the LLM decide to do? (stream, FC parsing, fast-path, loop detection)
-  - `guard.ts` — is this tool call allowed? (`Guard[]` pipeline, `checkToolCall(guards)`)
-  - `act.ts` — what happened when tools ran? (`MetaToolHandler` registry, final-answer gate)
-- **`kernel/utils/`** — 11 utility files + `ics-coordinator.ts`, `reactive-observer.ts`, `loop-detector.ts`
-- `Phase` type: `(state: KernelState, context: KernelContext) => Effect<KernelState, never, LLMService>`
-- `Guard` type: `(tc, state, input) => GuardOutcome` — strategies pass custom chains to `checkToolCall()`
-- `MetaToolHandler` registry in `act.ts` — new inline meta-tools are one-line additions
-- Spec: `docs/superpowers/specs/2026-03-30-kernel-refactor-design.md`
-
-## What Shipped Mar 29, 2026
-
-### Harness Quality Controls (6 new builder methods)
-- `withMinIterations(n)` — blocks fast-path exit before N iterations
-- `withVerificationStep({ mode: "reflect" })` — LLM self-review pass after initial answer
-- `withOutputValidator(fn)` — structural validation with retry on failure (up to 2x by default)
-- `withCustomTermination(fn)` — user-defined done predicate, re-runs until true (max 3x)
-- `withProgressCheckpoint(n)` — checkpoint config stored; execution integration deferred to V1.1
-- `withTaskContext(record)` — background data injected into reasoning memory context
-
-### Memory Consolidation Improvements
-- Date normalization in MemoryExtractor (Tier 1 + Tier 2 + heuristic fallback) — "yesterday" → ISO date
-- Near-duplicate decay in MemoryConsolidatorLive Step 4 — SQL substr(content,1,40) matching
-
-## Architecture (Post Apr 3 Refactor) — CRITICAL PATTERNS
-
-### Kernel Directory Layout
-```
-strategies/kernel/
-  kernel-state.ts      ← KernelState, Phase type, KernelContext, ThoughtKernel
-  kernel-runner.ts     ← the loop (runKernel) — ~1,184 lines
-  kernel-hooks.ts      ← KernelHooks lifecycle hooks
-  kernel-constants.ts  ← META_TOOLS, INTROSPECTION_META_TOOLS
-  react-kernel.ts      ← makeKernel() + reactKernel + executeReActKernel (~181 lines)
-  output-assembly.ts   ← output formatting/synthesis helpers
-  index.ts             ← barrel exports
-  phases/
-    context-builder.ts ← pure data: buildSystemPrompt, toProviderMessage, buildConversationMessages, buildToolSchemas
-    think.ts           ← LLM stream, FC parsing, system prompt + guidance assembly, termination oracle
-    guard.ts           ← Guard[], defaultGuards, checkToolCall()
-    act.ts             ← MetaToolHandler registry, final-answer gate, tool dispatch
-  utils/ (20 files)
-    ics-coordinator.ts, reactive-observer.ts, loop-detector.ts
-    tool-execution.ts, tool-formatting.ts, tool-gating.ts, tool-parsing.ts, tool-capabilities.ts
-    termination-oracle.ts, strategy-evaluator.ts, requirement-state.ts, lane-controller.ts
-    stream-parser.ts, context-utils.ts, quality-utils.ts, service-utils.ts, step-utils.ts
-    auto-checkpoint.ts, task-intent.ts, evidence-grounding.ts, output-synthesis.ts
-```
-
-### Two Independent Records (unchanged)
-```
-state.messages[]  ← What LLM sees (proper multi-turn FC conversation thread)
-state.steps[]     ← What systems observe (entropy, metrics, debrief)
-```
-
-### Extending the Kernel
-- **New phase**: add `phases/reflect.ts`, insert into `makeKernel({ phases: [..., reflect] })`
-- **New guard**: add `Guard` fn to `guard.ts`, add to `defaultGuards[]`
-- **New inline meta-tool**: add one entry to `metaToolRegistry` in `act.ts`
-- **Custom kernel**: `makeKernel({ phases: [myThink, act] })`
-
-### Provider Adapter Hook Points (all 7)
-- systemPromptPatch, toolGuidance, taskFraming, continuationHint, errorRecovery, synthesisPrompt, qualityCheck
-- `selectAdapter(capabilities, tier)` picks adapter by tier
-
-## Critical Build Patterns
-- **Native FC**: All providers pass `tools` to both `complete()` AND `stream()` methods
-- **Anthropic streaming**: Use raw `streamEvent` not helper events (`inputJson` fires before `contentBlock`)
-- **Gemini tool results**: `functionResponse.name` must use `msg.toolName` not hard-coded "tool"
-- **Ollama streaming**: `chunk.message.tool_calls` on `chunk.done`, emit `tool_use_start` + `tool_use_delta`
-- **Loop detection**: `maxConsecutiveThoughts: 3` — only ACTION steps reset the streak; observations do NOT (IC-1 fix Apr 12, loop-detector.ts:94)
-- See [build-patterns.md](build-patterns.md) for tsconfig, package.json, Effect-TS patterns
-
-## What Shipped Apr 13, 2026 — Context Engineering Overhaul
-
-### Phase 1 — Dead Code Removal
-- Deleted `compaction.ts` + `context-budget.ts` (never used on FC kernel path)
-- Stripped `buildDynamicContext`, scoring helpers, and dead fields from `context-engine.ts`
-- Cleaned `context-profile.ts`, `message-window.ts`, `context-utils.ts` — removed dead exports
-
-### Phase 2 — autoForwardSection Removed
-- Deleted entire `autoForwardSection` block from `think.ts`; signature simplified in `context-builder.ts`
-- Tool results no longer double-injected as USER messages into the conversation thread
-
-### Phase 3 — ContextManager Service
-- New `packages/reasoning/src/context/context-manager.ts` — deterministic, pure-function context assembly
-- `ContextManager.build(state, input)` returns `{ systemPrompt, messages }` ready for LLM
-- Exports `GuidanceContext`, `ContextManagerOutput`, `buildGuidanceSection()`
-- 13 TDD tests (all pass on first run)
-
-### Phase 4 — steeringNudge → PendingGuidance
-- `KernelState.steeringNudge` removed; replaced by typed `PendingGuidance` interface + `pendingGuidance?` field
-- All 6 write sites in `kernel-runner.ts` updated to set `pendingGuidance` fields
-- `context-builder.ts` no longer injects steering signals as USER messages
-- `think.ts` reads `state.pendingGuidance`, constructs `GuidanceContext`, appends `Guidance:` section to system prompt, then clears field
-- `extractedFact?: string` added to `StepMetadataSchema` (required for `buildPriorWorkSection`)
-
-**Tests:** 3,879 pass / 22 skip / 0 fail across 430 files. Build clean.
-
-## What Shipped Apr 12, 2026 — IC-1/IC-2/IC-3 Loop & Builder Fixes
-
-### IC-1 — loop-detector.ts:94 (W2 + W6 + W8 simultaneously)
-- `else break` → `else if (steps[i]!.type === "action") break`
-- Observation steps no longer reset consecutive-thought streak; strategy switching now reachable
-
-### IC-2 — builder.ts withReasoning() (W4)
-- Added `if (options?.maxIterations !== undefined) this._maxIterations = options.maxIterations;`
-- `withReasoning({ maxIterations: N })` now correctly limits execution (was silently ignored)
-
-### IC-3 — Ollama defaults to local tier (W2-secondary)
-- Added `providerName?: string` to `KernelInput`
-- `kernel-runner.ts`: auto-selects "local" profile when `providerName === "ollama"` (maxSameTool=2)
-- `execution-engine.ts` (5 sites): passes `providerName: String(config.provider ?? "")`
-
-**Test coverage:** 3 new behavioral tests in `loop-detection-behavioral.test.ts` + 2 in `max-iterations-enforcement.test.ts`. 1,384 tests total, 0 failures.
-
-## Architecture Debt (Remaining)
-> Last reconciled with code: 2026-04-18. See `AGENTS.md` "Architecture Debt" table for the full audited register.
-
-1. cogito:14b still inconsistent on reactive strategy (8B works fine, 14B doesn't)
-2. Strategy routing disabled — no clean solution for local model multi-step tasks
-3. Optional: ModelCalibration schema + 6-probe calibration-runner.ts for pre-baked local model profiles
-4. Barrel leak in `packages/reasoning/src/strategies/kernel/index.ts` — `export *` leaks internal utils as public API
-5. ✅ FIXED Apr 12 (IC-1) — Loop detector streak: `else if (steps[i]!.type === "action") break` at `loop-detector.ts:94`. Duplicate-tool patterns now detectable; strategy-switching reachable.
-6. `synthesisConfig` dead pass-through on `KernelState` / `KernelInput` — naming is misleading; not consumed by ICS
-
-**Fixed (Apr 2026) — removed from this list:**
-- `ContextManager.build()` is now the sole live context-assembly path (`phases/think.ts:208`)
-- `ReActKernelInput` duplicate fields resolved — zero `as ReActKernelInput` casts remain
-- `state.meta` `as any` reduced from 34+ to 4 occurrences in 2 files (mostly resolved)
-
-## Safety & Security Gaps (Apr 16, 2026 Audit)
-Identified during Zeus integration report — honest audit of what's implemented vs. what's missing.
-
-### Working but limited
-- **Guardrails (injection/PII/toxicity)**: All regex-based pattern matching, no ML classifiers. Catches known attacks; novel/obfuscated attacks can bypass.
-- **Behavioral contracts**: Runtime-enforced tool blocks and iteration limits work. Denied-topic detection is substring `includes()` — can be rephrased around.
-- **Kill switch**: Phase-boundary halt only. Cannot interrupt an in-flight LLM call or tool execution mid-operation.
-- **Budget enforcement**: Hard stop works, but costs are estimated locally from token counts × model pricing — not synced with actual provider billing. Overage possible on final call before check triggers.
-- **Loop detection**: Iteration counter only, not semantic. Can't detect oscillation between same states — just counts turns.
-
-### Ephemeral / not persisted
-- **Identity (Ed25519 certs)**: Implemented but in-memory only. Process restart loses all certificates, roles, delegations.
-- **RBAC (roles/permissions)**: Implemented but in-memory only. No automatic tool-name-to-resource mapping.
-- **Audit logging**: Records all actions but stored in-memory by default. No persistence without explicit JSONL export via observability layer.
-
-### Missing entirely
-- **ML-powered content filtering**: No semantic jailbreak detection, no embedding-based PII detection.
-- **MCP container resource limits**: MCP Docker containers have no `--memory`/`--cpus` caps. HTTP MCP servers run with default networking (not `--network none` like code sandbox).
-- **Mid-operation abort**: No way to forcibly interrupt a long-running LLM call or tool execution.
-- **Real-time provider cost sync**: No integration with provider billing APIs for actual spend tracking.
-- **Tool approval enforcement at runtime**: Risk levels and `requiresApproval` flags are defined on tools but approval gate wiring to InteractionManager not fully visible in execution engine.
-
-## Local Model Adaptation Layer (Apr 21, 2026)
-Architecture spec for fixing local model failures surfaced by live benchmark session (qwen3:4b, cogito:8b, rw-2/3/6/8/9). Spec: `docs/superpowers/specs/2026-04-21-local-model-adaptation-layer.md`.
-- **6 spec components — shipped status (verified 2026-04-24)**:
-  - ✅ HealingPipeline (ToolNameHealer + ParamNameHealer + ParamInferenceHealer) — shipped
-  - ✅ StallDetector RI handler — `packages/reactive-intelligence/src/controller/handlers/stall-detector.ts`
-  - ✅ HarnessHarmDetector — `packages/reactive-intelligence/src/controller/handlers/harness-harm-detector.ts`
-  - ❌ FileSandbox — spec only, not implemented
-  - ❌ ModelTierProfile — spec only, not implemented (deferred to Phase 1 Capability port)
-  - ❌ SchemaSimplifier + tool examples — spec only, not implemented
-- **Evidence**: cogito:8b uses `input`/`command` universally (100% tool failure rate), hallucinates `typescript/compile`; qwen3:4b generates wrong absolute paths deterministically; ra-full causes Grade D diverging on cogito:8b (rw-2 × 3, rw-8 × 1)
-- **Packages**: `packages/tools/src/healing/` (shipped), `packages/tools/src/sandbox/` (NOT created), `packages/runtime/src/profiles/` (NOT created), `packages/reactive-intelligence/src/controller/handlers/` (StallDetector + HarnessHarmDetector shipped here, not as a new package)
-- **Priority 1-2** (highest ROI, independent): ParamNameHealer + ToolNameHealer (✅ shipped), FileSandbox (❌ pending) — fix without full profile infrastructure
-
-## Benchmark Suite v2 (Apr 19, 2026)
-**SHIPPED** — 13-task implementation in `packages/benchmarks/`. Plan: `docs/superpowers/plans/2026-04-19-benchmark-suite-v2.md`. 50 tests pass, build clean.
-- **10-quality-dimension scoring** — accuracy, reasoning, tool-mastery, memory-fidelity, loop-intelligence, resilience, efficiency, reliability, scope-discipline, honest-uncertainty
-- **9-variant ablation ladder** — bare-llm, manual-react | langchain, vercel-ai, openai-agents, mastra, llamaindex | ra-reasoning, ra-full
-- **10 real-world tasks** — `packages/benchmarks/src/tasks/real-world.ts` with fixtures, verifiable criteria, LLM judge rubrics
-- **5 competitor runners** — `packages/benchmarks/src/competitors/` (LangChain, Vercel AI, OpenAI Agents, Mastra, LlamaIndex)
-- **4 pre-built sessions** — regression-gate, real-world-full, competitor-comparison, local-models
-- **CI drift gate** — `computeDrift()`, `exceedsThreshold()`, `saveBaseline()`, `loadBaseline()` in `ci.ts`
-- **CLI v2 flags** — `--session`, `--runs`, `--save-baseline`, `--ci` in `run.ts`
-- **Docs display** — harness lift card + ablation table + drift banner in `BenchmarkResults.astro`
-- **Build fix** — `tsup.config.ts` marks competitor packages as external (pgvector transitive dep)
-- Tests: 4,294 pass / 23 skip / 7 fail (7 pre-existing entropy calibration failures) across 483 files
-
-## Show HN Readiness
-- ✅ Kernel composable phase architecture (clean codebase for contributors)
-- ✅ Text tool call fallback for models that output JSON in text
-- ✅ Gate hardening: relevant + satisfied-required tools pass through
-- ✅ Dynamic stopping: novelty signal + per-tool budget
-- ✅ Full prompt observability (logModelIO)
-- ✅ Actionable failure messages with Fix: suggestions
-- ✅ Provider adapter 7/7 hooks
-- ✅ React/Vue/Svelte web hooks
-- ✅ Benchmark suite v2 — 10-dimension scoring, competitor comparison, CI drift gate
-- 🔲 Docs refresh (in progress)
-
-## Post-v0.8.5 Roadmap
-- [Composable Strategy Architecture](project_composable_strategies.md) — V1.1
-- Phase 5: Evolutionary Intelligence (`@reactive-agents/evolution`, v1.1+)
-
-## Archive
-Historical memories (completed work, patterns): [MEMORY-ARCHIVE.md](MEMORY-ARCHIVE.md)
+*If you find this file stale, update it directly. Keep it short — the audit doc is where detailed plans live.*
