@@ -672,45 +672,149 @@ These are the **named harness mechanisms** that span multiple packages. The audi
 
 ---
 
-## 11. Known FIX backlog (carried from prior audits, to be confirmed Stage 3)
+## 11. FIX backlog — Stage 3 reconciled
 
-These items are flagged in `PROJECT-STATE.md`, the Apr 17 audit (memory `project_v1_audit_apr17`), and the Apr 18 V0.10 blockers (memory `project_v010_audit_blockers`):
+Status legend: ✅ confirmed | 🟡 partial / corrected | ❌ stale (no action needed) | 🆕 newly discovered.
 
-1. **Umbrella `reactive-agents` package never published to npm** — anyone trying `npm install reactive-agents` gets nothing. Top priority.
-2. **`@reactive-agents/diagnose` never published** — Sprint 3.6 system not on npm.
-3. **qwen3 thinking-mode auto-enabled** at `llm-provider/src/providers/local.ts:215` → empties output.
-4. **Dual compression systems uncoordinated** (`tool-execution.ts` always-on + `context-compressor.ts` advisory).
-5. **ToT outer loop ignores early-stop** (`plan-execute.ts:740`).
-6. **3 of 6 skill lifecycle AgentEvents missing** — `SkillActivated`/`SkillRefined`/`SkillConflict` undefined → `_riHooks` callbacks dead.
-7. **`MAX_RECURSION_DEPTH = 3` not configurable** (`agent-tool-adapter.ts:6`).
-8. **Sub-agent `maxIterations` capped at 3 silently** (`agent-tool-adapter.ts:214-217`).
-9. **Calibration defaults to `:memory:`** (`reactive-intelligence/types.ts:164`) — learning lost on restart.
-10. **Observability OFF by default** — should be on.
-11. **`bun:sqlite` and `Bun.*` in published packages** with no `engines` field — Node users get `ReferenceError: Bun is not defined`.
-12. **`rax demo` is fake** — scripted responses, hardcoded token count.
-13. **`rax init` hardcodes Anthropic** — OpenAI/Ollama users fail on first run.
-14. **`FRAMEWORK_INDEX.md` paths broken** — `strategies/shared/*` → `strategies/kernel/*` (renamed Apr 3).
-15. **`VerifierRetryPolicy` + new trace event types not marked `_unstable_*`** — Rule 10 violation.
-16. **`RESULTS-p01.md` + `RESULTS-p02.md` overclaim language** — Rule 11 calibration needed.
-17. **AUC validation unproven** — failure-corpus AUC=0.000 on first probe.
-18. **9 termination paths** in kernel; oracle wired to 1 (NS §2.5).
-19. **`ExecutionEngine` 4,404 LOC unchanged** — NS §6 target ~1,500 LOC.
-20. **3 compression systems** (per NS §2.7 G-4) — partially closed via curator, deletion deferred.
+### 11.1 Carried-forward items (1–20)
 
-Stage 3 confirms each, Stage 5 fixes them.
+| # | Item | Status | Resolution / file:line |
+|---|---|---|---|
+| 1 | Umbrella `reactive-agents` package never published | ✅ | **P0 release blocker.** Action in `reactive-agents` (umbrella) §10.1. |
+| 2 | `@reactive-agents/diagnose` never published | ✅ | Action in diagnose §10.1. |
+| 3 | qwen3 thinking-mode auto-enabled at `local.ts:215` | ✅ | Actual location: `providers/local.ts:226-251` `resolveThinking`. Action in llm-provider §10.1. |
+| 4 | Dual compression systems uncoordinated | ✅ | M5 mechanism. Pick curator as canonical; delete or hard-disable parallel `tool-execution.ts` compression. |
+| 5 | ToT outer loop ignores early-stop | ✅ | Zero matches in `tree-of-thought.ts`. Mirror `plan-execute.ts:605,716,741` pattern. M2 mechanism. |
+| 6 | 3/6 skill lifecycle AgentEvents missing | 🟡 **stale** | Events DO exist at `core/services/event-bus.ts:986-990`. **Hooks have no subscriber.** Fix at `builder.ts:2657-2681`. M6 mechanism. |
+| 7 | `MAX_RECURSION_DEPTH = 3` not configurable | ✅ | Confirmed at `tools/src/adapters/agent-tool-adapter.ts:6`. M8 mechanism. |
+| 8 | Sub-agent `maxIterations` capped silently | ✅ | Apr 17 finding carried; verify `Math.min(userValue, 3)` at `agent-tool-adapter.ts:214-217`. M8. |
+| 9 | Calibration defaults to `:memory:` | ❌ **stale** | `types.ts:246` already defaults to `~/.reactive-agents/calibration.db`. **Memory note FIX-9 needs correction.** |
+| 10 | Observability OFF by default | ✅ | `runtime.ts:1349`. Action in observability §10.1. |
+| 11 | `bun:sqlite` + `Bun.*` without `engines` field | ✅ | Confirmed `database.ts:2`. Action in memory §10.1. Audit also needed in tools/caching, tools/registry. |
+| 12 | `rax demo` is fake (scripted responses, hardcoded token count) | ⏸️ | Not re-audited. Apr 17 finding carry-forward; Stage 5 fix in CLI. |
+| 13 | `rax init` hardcodes Anthropic | ⏸️ | Not re-audited. Apr 17 finding carry-forward. |
+| 14 | `FRAMEWORK_INDEX.md` paths broken (`strategies/shared/*`) | ⏸️ | Apr 17 finding. Top-level doc verdict in §8: **FIX or DELETE**. |
+| 15 | `VerifierRetryPolicy` + new trace event types not `_unstable_*` | ✅ **bigger than reported** | llm-provider has 14+ surfaces missing markers. M3 mechanism + llm-provider §10.1 action. |
+| 16 | `RESULTS-p01.md` + `RESULTS-p02.md` overclaim language | ✅ | Rule 11 calibration. M3 action. |
+| 17 | AUC validation unproven (corpus AUC = 0.000) | ✅ | Confirms M1 unvalidated. Post-RI-fix, re-run. |
+| 18 | 9 termination paths in kernel; oracle wired to 1 | ✅ | **Single highest-leverage action.** M9 mechanism. Sites enumerated at `kernel/loop/runner.ts:679,817,879,953,1011,1234,1262,1291` + `kernel/capabilities/decide/arbitrator.ts:885`. |
+| 19 | ExecutionEngine 4,404 LOC unchanged | ✅ **actual 4,476 LOC** | Plus newly discovered: **`builder.ts` is 5,877 LOC** — even larger orchestration surface. Combined: 10,353 LOC. Action in runtime §10.1. |
+| 20 | 3 compression systems (NS §2.7 G-4) | ✅ | Same as #4. M5. |
+
+### 11.2 Newly discovered (Stage 3 audit)
+
+| # | Item | Severity | File:line |
+|---|---|---|---|
+| 21 | **Eval Rule 4 frozen-judge fails 3/4** — judge model not pinned, code path not isolated, code SHA not pinned | **Blocker for any benchmark claim** | `eval/src/eval-service.ts:159` resolves `LLMService` from same context as SUT |
+| 22 | **`runSuite` is broken** — hardcodes `actualOutput: "[evaluated via LLM-as-judge]"` placeholder; doesn't actually run the agent | High | `eval/src/eval-service.ts:174` |
+| 23 | **RI budget counters dead-zeroed every iteration** → suppression gates unreachable | High | `reactive-observer.ts:294`, `plan-execute.ts:698`; in-source comment at `tool-failure-redirect.ts:12` |
+| 24 | **`builder.ts` is 5,877 LOC** — biggest single orchestration surface, undocumented prior to this audit | High (top SHRINK target with ExecutionEngine) | `runtime/src/builder.ts` |
+| 25 | **Duplicate `AgentConfigSchema`** | Medium | `core/types/agent.ts:8-22` (skeletal) vs `runtime/agent-config.ts:198,276` (full) |
+| 26 | **`effect` not in core's `dependencies`** — only `devDependencies` + `peerDependencies` → dual-copy risk | Medium | `core/package.json` |
+| 27 | **Blanket `Logger.replace(Logger.defaultLogger, Logger.none)`** at execution-engine silences all `Effect.log*` calls | High | `runtime/src/execution-engine.ts:4252` |
+| 28 | **Telemetry token split is 70/30 estimate**, not from `LLMRequestCompleted` | Medium | `observability/src/telemetry/telemetry-collector.ts:103-104` |
+| 29 | **`cacheHits` declared but never incremented** → `cacheHitRate` always 0 | Medium | `observability/src/telemetry/telemetry-collector.ts:86-89,147` |
+| 30 | **`strategy` only captured on `FinalAnswerProduced`** → failed tasks attribute as "unknown", biases stats | Medium | `observability/src/telemetry/telemetry-collector.ts:122-129` |
+| 31 | **MetricsCollector silent fallback** to fresh collector if shared layer missing → undetectable divergence | Medium | `observability/src/observability-service.ts:478-484` |
+| 32 | **Cost router does NOT consult calibration** — tier choice ignores model FC reliability | Medium | `cost/src/complexity-router.ts:192-215` |
+| 33 | **Hardcoded model SHAs in cost are stale** (mid-2025 pin: `claude-haiku-4-5-20251001`, `gpt-4o`, `o3`, `gemini-2.5-pro-preview-03-25`) | Medium | `cost/src/complexity-router.ts` |
+| 34 | **AgentMemory port not defined or wired** — services export Effect Tags directly; reasoning couples to `MemoryServiceLive` | Medium | NS §3.1; `core/src/services/` (missing) |
+| 35 | **Sync-only memory DB layer** (`Effect.sync` over bun:sqlite) blocks event loop | Medium | `memory/src/database.ts`, NS G-3 |
+| 36 | **Identity service merged into runtime layer but no consumer reads it** — `IdentityService`, `PermissionManager`, `AuditLogger`, `CertificateAuth` all dormant | Low (DEFER) | `runtime/src/runtime.ts:1346` is sole reference |
+| 37 | **4 dead RI handler files** in `controller/handlers/` (`human-escalate.ts`, `memory-boost.ts`, `prompt-switch.ts`, `skill-reinject.ts`) — removed from registry, files remain | Low (cleanup) | per `controller-service.ts:12-21` |
+| 38 | **`recommendStrategyForTier` returns `undefined` always** — dead exported surface | Low (cleanup) | `llm-provider/src/adapter.ts:301-307` |
+| 39 | **`ProviderCapabilities` `@deprecated` but still exported as supported** | Low | `llm-provider/src/index.ts:2` |
+| 40 | **Testing pkg `gate/` runner has zero CI invocations** — 13.5K LOC unvalidated by external callers | Medium (SHRINK) | `testing/src/gate/runner.ts`; mark `_unstable_gate_*` |
+| 41 | **`ExperimentService` (in prompts) used by only one example** — needs `_unstable_*` | Low | `prompts` package |
+| 42 | **react/svelte/vue zero in-repo consumers** — Cortex UI uses its own framework, not the published packages | Low (DX gap) | dogfooding gap; mark `_unstable_*` |
+| 43 | **svelte unused `derived` imports** (lint flag) and **peerDep `>=4.0.0` vs devDep `^5.0.0`** version mismatch | Low | `svelte/src/agent.ts`, `agent-stream.ts` |
+| 44 | **diagnose `__tests__/` directory exists empty** — Sprint 3.6 shipped CLI without tests | High (zero coverage) | `diagnose/__tests__/` |
+
+### 11.3 Backlog priority for Stage 5
+
+**P0 (release blocker — must ship for v0.10.0 to be "clean"):**
+- #1 Publish umbrella `reactive-agents`
+- #2 Publish `@reactive-agents/diagnose`
+- #3 Fix qwen3 thinking auto-enable
+- #18 Collapse 9 termination paths to single-owner
+- #21 Eval frozen-judge (if v0.10.0 claims benchmark numbers)
+
+**P1 (high — strongly degrades release quality):**
+- #4/#20 Pick canonical compression system
+- #5 ToT outer loop early-stop
+- #6 Wire 3 missing skill-hook subscribers
+- #7 Make `MAX_RECURSION_DEPTH` configurable
+- #15 Mark `_unstable_*` per Rule 10 (multiple packages)
+- #19/#24 SHRINK ExecutionEngine + builder.ts
+- #23 Thread RI budget through dispatch context
+- #25 Resolve duplicate `AgentConfigSchema`
+
+**P2 (medium — quality-of-life):**
+- #10 Default observability ON
+- #11 `engines: { bun: ">=1.1" }` + Node fallback
+- #14 Fix or delete FRAMEWORK_INDEX.md
+- #16 Calibrate p01/p02 RESULTS overclaim
+- #22 Fix or delete `runSuite` placeholder
+- #27/#28/#29/#30/#31 Observability/telemetry defects
+- #32/#33 Cost router calibration coupling + SHA refresh
+- #34 Define `AgentMemory` port
+- #44 Add diagnose smoke tests
+
+**P3 (low — cleanup, post-v0.10.0 OK):**
+- #8 Sub-agent maxIterations cap
+- #9 Update memory FIX-9 (stale claim)
+- #12 `rax demo` authenticity
+- #13 `rax init` provider neutrality
+- #17 Re-run AUC after #23 lands
+- #26 effect dependency hygiene
+- #35 Async memory DB
+- #36 Wire identity into tool exec
+- #37/#38 Delete dead handler files + dead `recommendStrategyForTier`
+- #39 Resolve ProviderCapabilities deprecation
+- #40 `_unstable_gate_*` markers
+- #41/#42/#43 UI integration `_unstable_*` + svelte cleanup
 
 ---
 
 ## 12. Test suite triage
 
-Stage 3 will pass through every package and answer:
+Stage 3 first pass (synthesized from per-package audits in §10.1).
 
-- Does the test exercise behavior, or just typecheck a shape?
-- Does the test depend on real LLM/tool calls (and fail flakily)?
-- Does the test mock something that should be real?
-- Coverage gap: any major code path with no test?
+### 12.1 Coverage by tier
 
-Output: a per-package test verdict in §10.1, plus a list of tests to add or strengthen.
+| Tier | Packages | Verdict |
+|---|---|---|
+| **Strong** (real behavioral tests, healthy ratio) | core, runtime, reasoning, tools, gateway, a2a (HTTP/SSE), health, prompts, guardrails, verification | KEEP — no action needed beyond fix-driven test additions |
+| **Adequate-but-shape-heavy** | reactive-intelligence (61 tests cover shapes, not behavioral lift), observability (21 tests, OTLP shutdown path missing), memory (21 unit tests, no cross-run probe), llm-provider (27 / 8K LOC ≈ 1 per 300), trace, identity, interaction (0.6% coverage ratio), cost, orchestration, scenarios, umbrella | FIX — add behavioral / regression tests per Stage 5 actions |
+| **Zero coverage** (release-blocker for npm publish at v0.10.0) | `diagnose` (empty `__tests__/`), `react`, `svelte`, `vue` | FIX — add minimum smoke + contract tests |
+| **Coverage producing wrong signal** | `eval` (Rule 4 frozen-judge fails; `runSuite` is broken), `benchmarks` (private, 2 test files for 3K LOC), `testing` (`gate/` has zero CI invocations) | FIX (eval), `_unstable_*` markers (benchmarks/testing/gate) |
+
+### 12.2 Specific tests to add (cross-package)
+
+| # | Test | Package(s) | Why |
+|---|---|---|---|
+| T1 | `resolveThinking(client, "qwen3:14b", undefined)` returns `undefined` | llm-provider | Closes FIX-3 regression |
+| T2 | Cross-provider verifier `agent-took-action` test (claude-haiku + cogito + qwen3) | reasoning | Validates M3 generalizes (Rule 3 cross-provider) |
+| T3 | Single-owner termination lint: fail CI if `transitionState({status:"done"})` appears outside the helper | reasoning | Defends M9 architectural invariant |
+| T4 | ToT early-stop regression: parent issues early-stop, ToT sub-kernel terminates | reasoning | Closes FIX-5 |
+| T5 | RI dispatcher 30-task corpus probe with budget threading enabled | reactive-intelligence | Validates M1 post-fix; replaces 0.000 AUC probe |
+| T6 | Cross-run memory pollution probe (agent A's recall never returns agent B's entries) | memory | Converts FM-F2 unvalidated → mitigated/known-defect |
+| T7 | OTLP shutdown error-path test | observability | Closes coverage gap |
+| T8 | `MAX_RECURSION_DEPTH` configurable: builder override propagates to adapter | tools | Closes FIX-7 |
+| T9 | Sub-agent `maxIterations` no longer silently capped: bad value errors or warns | tools | Closes FIX-8 |
+| T10 | Eval judge model differs from SUT model assertion | eval | Enforces Rule 4 |
+| T11 | Diagnose CLI smoke: `resolveTracePath`, `replay --json` round-trip, `grep` predicate parsing, `diff` outputs | diagnose | Closes diagnose 0-test gap |
+| T12 | UI SSE parser contract test (one shared parser, exercised by react+svelte+vue) | react/svelte/vue | Closes 0-test gap; prevents silent runtime/UI drift |
+| T13 | Umbrella `npm install reactive-agents` clean-dir CI smoke | umbrella | Gates GitHub release |
+| T14 | Memory `bun:sqlite` import behind runtime detection (Bun ↔ Node fallback) | memory | Closes FIX-11 |
+| T15 | `enableObservability=true` default: spans + metrics fire on every run without explicit opt-in | observability | Closes FIX-10 |
+
+### 12.3 Tests that should be deleted or rewritten
+
+| # | Test | Reason |
+|---|---|---|
+| TR1 | `eval/runSuite` test (if any) hitting `actualOutput: "[evaluated via LLM-as-judge]"` placeholder | Tests broken behavior; either fix `runSuite` or delete |
+| TR2 | Any RI test asserting suppression-gate behavior (`maxFiresPerRun`, `maxInterventionTokenBudget`) | Currently passes only because budget counters are dead-zeroed; rewrite after fix #23 |
 
 ---
 
