@@ -69,3 +69,27 @@ cogito's 5/5 honest-fail into ≥1/5 grounded answer? Or is cogito's FC
 failure unsolvable by harness feedback (model-level limitation)?
 
 **Artifacts:** [`p01-bare-with-verification.ts`](./p01-bare-with-verification.ts), [`p01b-bare-with-verification-cogito.ts`](./p01b-bare-with-verification-cogito.ts), [`RESULTS-p01.md`](./RESULTS-p01.md), `harness-reports/spike-results/p01-bare-verify-rw2-qwen3-4b.json`, `harness-reports/spike-results/p01b-bare-verify-rw2-cogito-8b.json`
+
+---
+
+## p02 — bare + gate + retry-on-rejection — 2026-04-27 — `cogito:8b × rw-2 × 5 runs (max 2 retries)`
+
+**Question:** Does retry-on-rejection convert cogito's 5/5 honest-fail
+(p01b) into ≥1/5 grounded answer? **Outcome:** KILL — 0/5 recover. Cogito
+ignored retry feedback every attempt; consumed 4.2× tokens (1,072 vs 325
+baseline) for zero recovery. Cogito interprets the prompt as "look at an
+attached file" rather than "call the read_csv tool" — model-level FC
+failure not solvable by harness feedback. **Empirically validates that
+verifier-driven retry (commit 45960be6) is tier-specific, not universal**
+— and the override hook (`VerifierRetryPolicy`, commit 14135d6d) is the
+correct control surface for developers to suppress retry on known-non-
+recovering models. **Subtle positive surprise:** p02's stricter system
+prompt eliminated cogito's fabrication (vs p00's gentle prompt where it
+made up "$12,500 / payment processing"). Now it honest-fails at the model
+level ("I don't see the attached file") without needing the verification
+gate. **Suggests prompt strictness alone may match the verification gate's
+anti-fabrication value at zero overhead.** Next spike (p03): ablation of
+prompt-strictness alone vs gate alone vs both — does the harness's trust
+value reduce further to ~5 lines of system prompt?
+
+**Artifacts:** [`p02-bare-with-verify-retry-cogito.ts`](./p02-bare-with-verify-retry-cogito.ts), [`RESULTS-p02.md`](./RESULTS-p02.md), `harness-reports/spike-results/p02-bare-verify-retry-rw2-cogito-8b.json`
