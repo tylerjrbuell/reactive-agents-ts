@@ -8,7 +8,7 @@
     "rax": "bin/rax.js",
     "reactive-agents": "bin/rax.js"
   },
-  "description": "The composable AI agent framework built on Effect-TS \u2014 install everything with one package",
+  "description": "The composable AI agent framework built on Effect-TS — install everything with one package",
   "keywords": [
     "ai",
     "agents",
@@ -76,6 +76,7 @@
   },
   "exports": {
     ".": {
+      "bun": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"

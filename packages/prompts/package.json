@@ -34,12 +34,13 @@
   ],
   "exports": {
     ".": {
+      "bun": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     }
   },
-  "description": "Prompt management for Reactive Agents \u2014 template engine and built-in prompt library",
+  "description": "Prompt management for Reactive Agents — template engine and built-in prompt library",
   "homepage": "https://docs.reactiveagents.dev/",
   "bugs": {
     "url": "https://github.com/tylerjrbuell/reactive-agents-ts/issues"

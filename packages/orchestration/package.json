@@ -38,12 +38,13 @@
   ],
   "exports": {
     ".": {
+      "bun": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     }
   },
-  "description": "Multi-agent orchestration for Reactive Agents \u2014 workflow engine and agent coordination",
+  "description": "Multi-agent orchestration for Reactive Agents — workflow engine and agent coordination",
   "homepage": "https://docs.reactiveagents.dev/",
   "bugs": {
     "url": "https://github.com/tylerjrbuell/reactive-agents-ts/issues"

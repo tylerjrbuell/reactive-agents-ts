@@ -35,12 +35,13 @@
   ],
   "exports": {
     ".": {
+      "bun": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     }
   },
-  "description": "Identity and access control for Reactive Agents \u2014 agent certificates and RBAC",
+  "description": "Identity and access control for Reactive Agents — agent certificates and RBAC",
   "homepage": "https://docs.reactiveagents.dev/",
   "bugs": {
     "url": "https://github.com/tylerjrbuell/reactive-agents-ts/issues"

@@ -36,12 +36,13 @@
   ],
   "exports": {
     ".": {
+      "bun": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     }
   },
-  "description": "Output verification for Reactive Agents \u2014 semantic entropy and fact decomposition",
+  "description": "Output verification for Reactive Agents — semantic entropy and fact decomposition",
   "homepage": "https://docs.reactiveagents.dev/",
   "bugs": {
     "url": "https://github.com/tylerjrbuell/reactive-agents-ts/issues"

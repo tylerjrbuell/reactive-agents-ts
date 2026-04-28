@@ -35,12 +35,13 @@
   ],
   "exports": {
     ".": {
+      "bun": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     }
   },
-  "description": "Safety guardrails for Reactive Agents \u2014 prompt injection detection, PII scanning, and toxicity filtering",
+  "description": "Safety guardrails for Reactive Agents — prompt injection detection, PII scanning, and toxicity filtering",
   "homepage": "https://docs.reactiveagents.dev/",
   "bugs": {
     "url": "https://github.com/tylerjrbuell/reactive-agents-ts/issues"

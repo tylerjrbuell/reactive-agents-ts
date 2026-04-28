@@ -43,12 +43,13 @@
   ],
   "exports": {
     ".": {
+      "bun": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     }
   },
-  "description": "Observability for Reactive Agents \u2014 distributed tracing, metrics, and structured logging",
+  "description": "Observability for Reactive Agents — distributed tracing, metrics, and structured logging",
   "homepage": "https://docs.reactiveagents.dev/",
   "bugs": {
     "url": "https://github.com/tylerjrbuell/reactive-agents-ts/issues"
