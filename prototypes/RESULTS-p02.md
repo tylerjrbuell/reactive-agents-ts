@@ -53,21 +53,32 @@ This is its own next-spike candidate: "does prompt strictness alone
 (system: 'never invent values') match the verification gate's anti-
 fabrication value at zero overhead?"
 
-## Empirical mandate for the harness
+## Empirical mandate for the harness — scope-limited per Rule 11
 
-This spike empirically validates the design decision in commit `14135d6d`
+> **Scope-of-claims calibration (Rule 11):** This spike tests retry-on-rejection
+> on cogito:8b × rw-2 specifically. The finding "retry doesn't recover cogito"
+> is bounded to that combination. Retry on other models or other failure modes
+> may behave differently — earlier today (Pass B), retry helped qwen3 recover
+> on a synthesis task (trace `01KQ84GK70AX1HG485ZRY9QMAS`).
+
+This spike empirically supports the design intent of commit `14135d6d`
 (the `VerifierRetryPolicy` injection hook):
 
-> **Retry is NOT a universal recovery mechanism.** For cogito-class models
-> that fail at the FC layer entirely, retry burns 4× tokens for zero gain.
+**Permitted claim:** Retry-on-rejection on cogito:8b × rw-2 produces 0/5
+recovery and consumes 4.2× the tokens of the gate-only baseline. Cogito
+ignores explicit retry feedback for this failure mode.
 
-The control-pillar override hook is the right answer: developers can supply
-a `VerifierRetryPolicy` that suppresses retry for known-non-recovering models
-(e.g., `(ctx) => ctx.modelId.includes("cogito") ? { retry: false } : default`).
+**NOT a permitted claim:** "Retry is universally useless" — qwen3 evidence
+contradicts that.
 
-The `defaultVerifierRetryPolicy` (commit 14135d6d) uses budget-based logic.
-For tier-aware behavior, developers can compose their own. **This is exactly
-the surface area control-pillar discipline was designed to provide.**
+**NOT a permitted claim:** "Cogito should be removed from supported models" —
+that's a routing decision requiring much broader evidence.
+
+**Implication for the harness:** the `VerifierRetryPolicy` injection hook
+is the correct control surface — developers can suppress retry per-model
+where evidence shows it doesn't recover. The `defaultVerifierRetryPolicy`
+uses budget-based logic; tier-aware composition is left to integrators
+until enough evidence accumulates to ship a smarter default.
 
 ## Six-level signal taxonomy
 
@@ -98,17 +109,20 @@ It's NOT valuable when:
 - Token budget is tight relative to expected recovery rate
 - Better alternatives exist (text-parse driver, model swap, prompt engineering)
 
-## Updated minimum kernel sketch
+## Updated minimum kernel sketch (calibrated)
 
 The kernel sketch in `00-RESEARCH-DISCIPLINE.md §2` was:
 > tool-loop + verify-retry + episodic memory
 
-Refining post p01+p02:
+Refining post p01+p02 (with appropriate caveats per Rule 11):
 > tool-loop + **verify-gate** + (optional, tier-specific) retry + episodic memory
 
-The verify-GATE is the core mechanism (p01b promoted, ~30 LOC). Retry is
-an OPTIONAL enhancement that needs tier-aware policy (developer-provided
-or smart default that detects "model not responding to feedback").
+The verify-GATE has spike evidence for FM-A1 on cogito:8b. Retry has spike
+evidence as tier-specific (helps qwen3 sometimes, doesn't help cogito ever).
+**The minimum kernel is a convergence target subject to broader failure-mode
+evidence**, not a finished claim. Other mechanisms (compression, RI dispatch,
+strategy switching, etc.) need their own spikes against the failure modes
+in `01-FAILURE-MODES.md` before the kernel sketch can be fully validated.
 
 ## Promote / Kill / Refactor (per Rule 6)
 

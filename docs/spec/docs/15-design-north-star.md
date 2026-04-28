@@ -1,10 +1,16 @@
 # Reactive Agents — Design North Star v3.0
 
-**Status:** AUTHORITATIVE. This document supersedes v2.3 and consolidates all architecture, code-organization, and implementation-plan thinking into one source of truth.
+**Status:** AUTHORITATIVE for ARCHITECTURE. This document supersedes v2.3 and consolidates all architecture, code-organization, and implementation-plan thinking into one source of truth.
 
-**Date:** 2026-04-26
+**Date:** 2026-04-26 (architecture); 2026-04-27 (methodology layer added — see companion docs below)
 **Author:** Tyler Buell + Claude
 **Mandate:** v0.10.0 release is **deferred** until this architecture is in place. No exceptions. The framework's reliability problem is structural, not surface, and shipping more features on a fractured foundation only multiplies the debt.
+
+**Companion documents (added 2026-04-27):**
+- `PROJECT-STATE.md` — current empirical state of the project. **Read first at session start.**
+- `00-RESEARCH-DISCIPLINE.md` — the 12 rules governing any harness change. Every architectural change in §6 is subject to spike validation per Rule 1.
+- `01-FAILURE-MODES.md` — catalog of failure modes. The §7 validation discipline operates against this catalog.
+- `02-IMPROVEMENT-PIPELINE.md` — operational rhythm: how discoveries flow into harness changes.
 
 ---
 

@@ -134,3 +134,19 @@ overflow, etc.).
 **RESULTS-p01.md / RESULTS-p02.md need follow-up calibration edit** —
 language to be updated from "captures X% of harness value" to
 "addresses failure mode F-X on model M for task T."
+
+---
+
+## Calibration completed — 2026-04-27 (same session)
+
+`RESULTS-p01.md` and `RESULTS-p02.md` updated per Rule 11. Overclaim
+language ("captures 98% of harness trust value", "harness is mostly dead
+weight") replaced with scope-bounded claims ("addresses failure mode
+FM-A1 on cogito:8b × rw-2"). The "minimum kernel sketch" framed as
+convergence target subject to broader failure-mode evidence, not a
+finished claim. Spikes now read as evidence-contributing, not verdict-
+producing — consistent with Rule 11.
+
+Also created `PROJECT-STATE.md` as the single landing doc for any new
+session (human or AI). Synthesizes empirical state, methodology, what's
+validated, what's stale, what's next. Pointed to from north star.

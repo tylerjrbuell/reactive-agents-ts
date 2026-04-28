@@ -49,17 +49,27 @@ confident-fabrication into 5/5 honest-fail. **Zero LLM cost** — the gate
 itself runs in pure JS (~25 LOC), the only token delta is the model
 producing slightly more or different output text.
 
-## The combined finding — re-frames the harness's economics
+## The combined finding — scope-limited per Rule 11
 
-| Approach | Token cost | Trust outcome on cogito:8b/rw-2 |
+> **Scope-of-claims calibration (added 2026-04-27 per discipline contract Rule 11):**
+> The numbers below describe ONE failure mode (FM-A1: no-tool-fabrication) on ONE task (rw-2) on TWO models. They do NOT support claims about the harness's overall value vs the verification gate, because the harness handles many other failure modes (compression, multi-turn, sub-agents, MCP lifecycle, tool errors, memory) that this spike doesn't touch.
+
+| Approach | Token cost | Outcome on **fabrication failure** (FM-A1) on **cogito:8b × rw-2** |
 |---|---|---|
-| Bare LLM | 256 tok | 5/5 confident-wrong (DANGEROUS) |
-| **Bare LLM + 30-LOC gate** | **325 tok (+27%)** | **5/5 honest-fail (SAFE)** |
-| Full @reactive-agents harness | 25,300+ tok (98× more) | 2/3 honest-fail, 1/3 grounded-wrong |
+| Bare LLM | 256 tok | 5/5 confident-wrong (FM-A1 manifests) |
+| **Bare LLM + 30-LOC gate** | **325 tok (+27%)** | **5/5 honest-fail (FM-A1 caught)** |
+| Full @reactive-agents harness | 25,300+ tok | 2/3 honest-fail, 1/3 grounded-wrong on rw-2 |
 
-**A 30-LOC verification gate captures the harness's trust differentiator at
-<1.5% the token cost.** The harness's other ~30 packages are doing... not
-that. (For this task. For this model. For this failure mode.)
+**Permitted claim (Rule 11):** A 30-LOC verification gate addresses
+failure mode FM-A1 (no-tool-fabrication) on cogito:8b × rw-2 at near-zero
+LLM token cost.
+
+**NOT a permitted claim:** "30-LOC gate captures harness's trust differentiator."
+The harness does many other things this spike didn't measure. The harness's
+larger token footprint goes to mechanisms (compression, retry loops, RI dispatch,
+strategy switching, etc.) that target other failure modes catalogued in
+`01-FAILURE-MODES.md`. Each of those mechanisms needs its own spike before
+its value can be assessed.
 
 ## What the gate captures vs misses
 
@@ -95,29 +105,23 @@ explicit "what other causes could explain this?" prompts.
 - For shallow-reasoning failures (qwen3-class): **KILL** — gate is necessary
   but not sufficient. Need a different mechanism.
 
-**Implications for the minimum kernel** (per discipline contract §2):
+**Implications for the minimum kernel** (per discipline contract §2 — calibrated per Rule 11):
 
-The minimum kernel sketch was:
-> tool-loop + verify-retry + episodic memory
+The minimum kernel sketch is:
+> tool-loop + verify-gate + (optional, tier-specific) retry + episodic memory
 
-This spike validates the `verify` half of `verify-retry`:
-- ✅ Verification gate IS the trust differentiator (when fabrication is the failure mode)
-- ✅ It's implementable in ~30 LOC, near-zero LLM cost
-- ✅ Captures the harness's main anti-fabrication value
+This spike contributes evidence for the `verify-gate` mechanism specifically:
+- ✅ Verification gate addresses FM-A1 (no-tool-fabrication) on cogito:8b × rw-2
+- ✅ Implementable in ~30 LOC, near-zero LLM cost
+- ⚠️ Did NOT address shallow-reasoning failures on qwen3:4b × rw-2 (see p01)
+- ❓ Untested on other failure modes (FM-B*, FM-C*, FM-D*, FM-E*, FM-F*, FM-G*, FM-H*)
+- ❓ Untested on frontier providers
 
-The `retry` part isn't tested yet. Next spike (p02): does adding retry to the
-gate (reject → inject reason → try again) help shallow-reasoning failures?
-Predicted outcome: probably not (the model would just regenerate the same
-wrong answer), but worth confirming. If retry doesn't help, the harness's
-verifier-retry mechanism (commit `45960be6`) is also of limited value beyond
-fabrication recovery.
-
-**The bigger question p01b raises:** Does the harness's full machinery
-(reactive intelligence dispatcher, strategy switching, context compression,
-healing pipeline, AUC validation, etc.) provide value BEYOND the 30-LOC
-verification gate? Empirically: probably not on this task class. We have
-empirical mandate to investigate which harness mechanisms survive their own
-spike test, and which are deletion candidates.
+The `retry` part is tested in p02. **The harness's broader machinery
+(RI dispatcher, strategy switching, compression, healing pipeline, etc.)
+each needs its own spike against its target failure modes** — see
+`01-FAILURE-MODES.md` for the catalog and `02-IMPROVEMENT-PIPELINE.md`
+for the operational rhythm.
 
 ## Next spike priority (p02)
 
