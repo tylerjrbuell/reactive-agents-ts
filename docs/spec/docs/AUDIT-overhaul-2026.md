@@ -720,11 +720,11 @@ Status legend: ✅ confirmed | 🟡 partial / corrected | ❌ stale (no action n
 | 3 | qwen3 thinking-mode auto-enabled at `local.ts:215` | ✅ | Actual location: `providers/local.ts:226-251` `resolveThinking`. Action in llm-provider §10.1. |
 | 4 | Dual compression systems uncoordinated | ✅ | M5 mechanism. Pick curator as canonical; delete or hard-disable parallel `tool-execution.ts` compression. |
 | 5 | ToT outer loop ignores early-stop | ✅ | Zero matches in `tree-of-thought.ts`. Mirror `plan-execute.ts:605,716,741` pattern. M2 mechanism. |
-| 6 | 3/6 skill lifecycle AgentEvents missing | 🟡 **stale** | Events DO exist at `core/services/event-bus.ts:986-990`. **Hooks have no subscriber.** Fix at `builder.ts:2657-2681`. M6 mechanism. |
+| 6 | 3/6 skill lifecycle AgentEvents missing | ✅ **resolved W2** | Events DO exist at `core/services/event-bus.ts:986-990`. Subscribers wired at `builder.ts:2682-2716` (commit on `refactor/overhaul`). |
 | 7 | `MAX_RECURSION_DEPTH = 3` not configurable | ✅ | Confirmed at `tools/src/adapters/agent-tool-adapter.ts:6`. M8 mechanism. |
-| 8 | Sub-agent `maxIterations` capped silently | ✅ | Apr 17 finding carried; verify `Math.min(userValue, 3)` at `agent-tool-adapter.ts:214-217`. M8. |
+| 8 | Sub-agent `maxIterations` capped silently | ✅ **already resolved (Apr 17)** | W2 verification: cap is gone. `agent-tool-adapter.ts:212` reads `const effectiveMaxIter = config.maxIterations ?? subAgentDefaults.maxIterations` — user config fully honored. Comment at line 92 confirms. |
 | 9 | Calibration defaults to `:memory:` | ❌ **stale** | `types.ts:246` already defaults to `~/.reactive-agents/calibration.db`. **Memory note FIX-9 needs correction.** |
-| 10 | Observability OFF by default | ✅ | `runtime.ts:1349`. Action in observability §10.1. |
+| 10 | Observability OFF by default | ✅ **already resolved (Apr 17)** | W2 verification: `builder.ts:896` reads `private _enableObservability: boolean = true`. Default is ON with `verbosity: "minimal"` (line 898). The blanket `Logger.none` silencing at execution-engine.ts:4244 is a separate item (#27, W8). |
 | 11 | `bun:sqlite` + `Bun.*` without `engines` field | ✅ | Confirmed `database.ts:2`. Action in memory §10.1. Audit also needed in tools/caching, tools/registry. |
 | 12 | `rax demo` is fake (scripted responses, hardcoded token count) | ⏸️ | Not re-audited. Apr 17 finding carry-forward; Stage 5 fix in CLI. |
 | 13 | `rax init` hardcodes Anthropic | ⏸️ | Not re-audited. Apr 17 finding carry-forward. |
@@ -744,8 +744,8 @@ Status legend: ✅ confirmed | 🟡 partial / corrected | ❌ stale (no action n
 | 22 | **`runSuite` is broken** — hardcodes `actualOutput: "[evaluated via LLM-as-judge]"` placeholder; doesn't actually run the agent | High | `eval/src/eval-service.ts:174` |
 | 23 | **RI budget counters dead-zeroed every iteration** → suppression gates unreachable | High | `reactive-observer.ts:294`, `plan-execute.ts:698`; in-source comment at `tool-failure-redirect.ts:12` |
 | 24 | **`builder.ts` is 5,877 LOC** — biggest single orchestration surface, undocumented prior to this audit | High (top SHRINK target with ExecutionEngine) | `runtime/src/builder.ts` |
-| 25 | **Duplicate `AgentConfigSchema`** | Medium | `core/types/agent.ts:8-22` (skeletal) vs `runtime/agent-config.ts:198,276` (full) |
-| 26 | **`effect` not in core's `dependencies`** — only `devDependencies` + `peerDependencies` → dual-copy risk | Medium | `core/package.json` |
+| 25 | ~~Duplicate `AgentConfigSchema`~~ | ✅ **resolved W2** | core renamed `AgentConfigSchema` → `AgentDefinitionSchema` and `AgentConfig` → `AgentDefinition`; runtime's full version is now unambiguous. Consumer updated at `tools/src/adapters/agent-tool-adapter.ts:2,477`. |
+| 26 | ~~`effect` not in core's `dependencies`~~ | ✅ **resolved W2** | Moved from `devDependencies` to `dependencies`; `peerDependencies` retained. Conservative library pattern — package works standalone if peer not satisfied; npm dedupes overlapping versions. |
 | 27 | **Blanket `Logger.replace(Logger.defaultLogger, Logger.none)`** at execution-engine silences all `Effect.log*` calls | High | `runtime/src/execution-engine.ts:4252` |
 | 28 | **Telemetry token split is 70/30 estimate**, not from `LLMRequestCompleted` | Medium | `observability/src/telemetry/telemetry-collector.ts:103-104` |
 | 29 | **`cacheHits` declared but never incremented** → `cacheHitRate` always 0 | Medium | `observability/src/telemetry/telemetry-collector.ts:86-89,147` |
@@ -756,8 +756,8 @@ Status legend: ✅ confirmed | 🟡 partial / corrected | ❌ stale (no action n
 | 34 | **AgentMemory port not defined or wired** — services export Effect Tags directly; reasoning couples to `MemoryServiceLive` | Medium | NS §3.1; `core/src/services/` (missing) |
 | 35 | **Sync-only memory DB layer** (`Effect.sync` over bun:sqlite) blocks event loop | Medium | `memory/src/database.ts`, NS G-3 |
 | 36 | **Identity service merged into runtime layer but no consumer reads it** — `IdentityService`, `PermissionManager`, `AuditLogger`, `CertificateAuth` all dormant | Low (DEFER) | `runtime/src/runtime.ts:1346` is sole reference |
-| 37 | **4 dead RI handler files** in `controller/handlers/` (`human-escalate.ts`, `memory-boost.ts`, `prompt-switch.ts`, `skill-reinject.ts`) — removed from registry, files remain | Low (cleanup) | per `controller-service.ts:12-21` |
-| 38 | **`recommendStrategyForTier` returns `undefined` always** — dead exported surface | Low (cleanup) | `llm-provider/src/adapter.ts:301-307` |
+| 37 | ~~4 dead RI handler files~~ ❌ **stale** — Stage 5 W2 verification found no such files. The 4 names are *evaluators* in `controller/evaluators/`, intentionally kept per explicit source comment at `controller-service.ts:12-21`: "evaluator source files remain so the logic is recoverable; re-add them only when a real dispatch handler ships alongside." Test `tests/controller/new-evaluators.test.ts` still references them. **No action needed.** | resolved | — |
+| 38 | ~~`recommendStrategyForTier` returns `undefined` always~~ | ✅ **resolved W2** | Function deleted from `llm-provider/src/adapter.ts`; export removed from index; call site at `runtime/execution-engine.ts:1647` simplified to `const effectiveStrategy = c.selectedStrategy ?? "reactive"`. |
 | 39 | **`ProviderCapabilities` `@deprecated` but still exported as supported** | Low | `llm-provider/src/index.ts:2` |
 | 40 | **Testing pkg `gate/` runner has zero CI invocations** — 13.5K LOC unvalidated by external callers | Medium (SHRINK) | `testing/src/gate/runner.ts`; mark `_unstable_gate_*` |
 | 41 | **`ExperimentService` (in prompts) used by only one example** — needs `_unstable_*` | Low | `prompts` package |
