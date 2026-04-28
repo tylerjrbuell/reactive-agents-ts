@@ -2,7 +2,7 @@ import { describe, it, expect } from "bun:test";
 import { Schema } from "effect";
 import {
   AgentSchema,
-  AgentConfigSchema,
+  AgentDefinitionSchema,
   TaskSchema,
   TaskConfigSchema,
   MessageSchema,
@@ -43,13 +43,13 @@ describe("Types & Schemas", () => {
     });
   });
 
-  describe("AgentConfigSchema", () => {
-    it("should decode a valid agent config", () => {
+  describe("AgentDefinitionSchema", () => {
+    it("should decode a valid agent definition", () => {
       const input = {
         name: "TestAgent",
         capabilities: [{ type: "tool", name: "search" }],
       };
-      const decoded = Schema.decodeUnknownSync(AgentConfigSchema)(input);
+      const decoded = Schema.decodeUnknownSync(AgentDefinitionSchema)(input);
       expect(decoded.name).toBe("TestAgent");
       expect(decoded.capabilities.length).toBe(1);
     });
@@ -60,7 +60,7 @@ describe("Types & Schemas", () => {
         capabilities: [{ type: "invalid", name: "x" }],
       };
       expect(() =>
-        Schema.decodeUnknownSync(AgentConfigSchema)(input),
+        Schema.decodeUnknownSync(AgentDefinitionSchema)(input),
       ).toThrow();
     });
   });

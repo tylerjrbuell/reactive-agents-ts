@@ -1,5 +1,5 @@
 import { Effect, Context, Layer, Ref } from "effect";
-import type { Agent, AgentConfig, AgentId } from "../types/agent.js";
+import type { Agent, AgentDefinition, AgentId } from "../types/agent.js";
 import { generateAgentId } from "../id.js";
 import { AgentError, AgentNotFoundError } from "../errors/errors.js";
 import { EventBus } from "./event-bus.js";
@@ -10,7 +10,7 @@ export class AgentService extends Context.Tag("AgentService")<
   AgentService,
   {
     /** Create a new agent from config. */
-    readonly create: (config: AgentConfig) => Effect.Effect<Agent, AgentError>;
+    readonly create: (config: AgentDefinition) => Effect.Effect<Agent, AgentError>;
 
     /** Retrieve an agent by ID. */
     readonly get: (id: AgentId) => Effect.Effect<Agent, AgentNotFoundError>;
@@ -32,7 +32,7 @@ export const AgentServiceLive = Layer.effect(
     const store = yield* Ref.make<Map<string, Agent>>(new Map());
 
     return {
-      create: (config: AgentConfig) =>
+      create: (config: AgentDefinition) =>
         Effect.gen(function* () {
           const now = new Date();
           const agent: Agent = {

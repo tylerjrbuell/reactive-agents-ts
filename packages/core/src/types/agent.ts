@@ -57,13 +57,16 @@ export const AgentSchema = Schema.Struct({
 });
 export type Agent = typeof AgentSchema.Type;
 
-// ─── Agent Config (input for creating agents) ───
+// ─── Agent Definition (input shape for creating agents) ───
+// Renamed from AgentConfig (W2 FIX-25) to disambiguate from runtime's
+// full `AgentConfig` (17 nested config schemas). This is the skeletal
+// declaration surface; runtime/agent-config.ts owns the rich config.
 
-export const AgentConfigSchema = Schema.Struct({
+export const AgentDefinitionSchema = Schema.Struct({
   name: Schema.String,
   description: Schema.optional(Schema.String),
   capabilities: Schema.Array(CapabilitySchema),
   config: Schema.optional(Schema.Unknown),
   initialState: Schema.optional(Schema.Unknown),
 });
-export type AgentConfig = typeof AgentConfigSchema.Type;
+export type AgentDefinition = typeof AgentDefinitionSchema.Type;

@@ -1,5 +1,5 @@
 import { Effect, Schema } from "effect";
-import type { AgentConfig, Capability } from "@reactive-agents/core";
+import type { AgentDefinition, Capability } from "@reactive-agents/core";
 import type { ToolDefinition, ToolParameter } from "../types.js";
 import { ToolExecutionError } from "../errors.js";
 
@@ -474,7 +474,7 @@ export const createSpawnAgentsTool = (): ToolDefinition => ({
 
 export const createAgentTool = (
   name: string,
-  agent: AgentConfig,
+  agent: AgentDefinition,
   _execute?: (input: Record<string, unknown>) => Promise<unknown>
 ): ToolDefinition => {
   const description = agent.description ?? `Agent: ${agent.name}`;
