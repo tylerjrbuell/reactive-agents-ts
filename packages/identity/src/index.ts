@@ -1,3 +1,13 @@
+/**
+ * @reactive-agents/identity — Agent identity, authn/z, audit, delegation.
+ *
+ * @unstable All exports unstable. Scaffolding shipped and runtime layer merged,
+ * but no consumer reads it: `IdentityService`, `PermissionManager`,
+ * `AuditLogger`, `CertificateAuth` are all dormant. Verdict DEFER per audit.
+ * Surface may change in v0.10.x without notice.
+ * See AUDIT-overhaul-2026.md §10.1 (identity verdict) + §11 #36.
+ */
+
 // ─── Types ───
 export type {
   AgentIdentity,

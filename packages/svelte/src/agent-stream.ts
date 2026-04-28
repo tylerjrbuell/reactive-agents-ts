@@ -1,4 +1,4 @@
-import { writable, derived } from "svelte/store";
+import { writable } from "svelte/store";
 import type { AgentStreamEvent } from "./types.js";
 
 export interface AgentStreamState {

@@ -1,7 +1,10 @@
 /**
- * @reactive-agents/react
+ * @reactive-agents/react — React hooks for agent UI integration.
  *
- * React hooks for consuming Reactive Agents from client-side components.
+ * @unstable All exports unstable. Zero in-repo consumers (Cortex UI uses its
+ * own framework), zero tests, SSE contract hand-coupled to runtime via `_tag`
+ * strings — runtime change breaks silently. May change in v0.10.x without
+ * notice. See AUDIT-overhaul-2026.md §11 #42.
  *
  * Server setup (Next.js App Router example):
  * ```typescript
