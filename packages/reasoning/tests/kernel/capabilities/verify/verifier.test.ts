@@ -185,6 +185,79 @@ describe("defaultVerifier — evidence grounding (terminal)", () => {
   });
 });
 
+describe("defaultVerifier — output-not-harness-parrot (terminal)", () => {
+  const harnessSignal = (text: string): ReasoningStep => ({
+    id: "hs1" as ReasoningStep["id"],
+    type: "harness_signal",
+    content: text,
+    timestamp: new Date(),
+  });
+  const thought = (text: string): ReasoningStep => ({
+    id: "t1" as ReasoningStep["id"],
+    type: "thought",
+    content: text,
+    timestamp: new Date(),
+  });
+
+  it("rejects output that begins with the harness '⚠️ ' prefix", () => {
+    const r = defaultVerifier.verify({
+      ...baseCtx,
+      terminal: true,
+      content: "⚠️ Recovery required: prior tool path failed (file-read). Try an alternate path now: web-search. Do not finalize yet. (1/2)",
+      priorSteps: [harnessSignal("⚠️ Recovery required: prior tool path failed (file-read). Try an alternate path now: web-search. Do not finalize yet. (1/2)")],
+    });
+    const check = r.checks.find((c) => c.name === "output-not-harness-parrot");
+    expect(check?.passed).toBe(false);
+    expect(r.verified).toBe(false);
+  });
+
+  it("rejects output that echoes a recent harness_signal verbatim (no prefix)", () => {
+    const sig = "Loop detected but required tool quota is still missing: read-file. Call the missing required tool(s) now instead of finalizing.";
+    const r = defaultVerifier.verify({
+      ...baseCtx,
+      terminal: true,
+      content: sig,
+      priorSteps: [harnessSignal(`⚠️ ${sig}`)],
+    });
+    const check = r.checks.find((c) => c.name === "output-not-harness-parrot");
+    expect(check?.passed).toBe(false);
+  });
+
+  it("passes a real answer that does not match any recent harness_signal", () => {
+    const r = defaultVerifier.verify({
+      ...baseCtx,
+      terminal: true,
+      content: "The TV ELEC-4K-TV-001 went out of stock after order 3 on day 2, costing roughly $4,200 in lost revenue. Recommend pre-buying inventory ahead of promotional periods.",
+      priorSteps: [harnessSignal("⚠️ Required tools not yet used: read-file. (Redirect 1/3)"), thought("Looking at the data...")],
+    });
+    const check = r.checks.find((c) => c.name === "output-not-harness-parrot");
+    expect(check?.passed).toBe(true);
+    expect(r.verified).toBe(true);
+  });
+
+  it("passes when there are no recent harness_signal steps", () => {
+    const r = defaultVerifier.verify({
+      ...baseCtx,
+      terminal: true,
+      content: "Plain answer with no harness echo.",
+      priorSteps: [thought("My reasoning here.")],
+    });
+    expect(r.checks.find((c) => c.name === "output-not-harness-parrot")?.passed).toBe(true);
+  });
+
+  it("only looks back at the last 10 steps for harness signals", () => {
+    const oldSig = harnessSignal("⚠️ Old recovery message that should not match");
+    const filler = Array.from({ length: 11 }, (_, i) => thought(`filler thought ${i}`));
+    const r = defaultVerifier.verify({
+      ...baseCtx,
+      terminal: true,
+      content: "Old recovery message that should not match",
+      priorSteps: [oldSig, ...filler],
+    });
+    expect(r.checks.find((c) => c.name === "output-not-harness-parrot")?.passed).toBe(true);
+  });
+});
+
 describe("contextFromObservation helper", () => {
   const obs: ObservationResult = {
     success: true,

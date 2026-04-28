@@ -150,3 +150,90 @@ producing — consistent with Rule 11.
 Also created `PROJECT-STATE.md` as the single landing doc for any new
 session (human or AI). Synthesizes empirical state, methodology, what's
 validated, what's stale, what's next. Pointed to from north star.
+
+---
+
+## p03 — harness × qwen3:4b × rw-2 (probe-gate for wiring-gap fix) — 2026-04-28
+
+**Question:** Does the harness on qwen3:4b auto-enable thinking-mode and
+produce empty `message.content`, degrading rw-2 output? **Pre-registered
+hypothesis (gap):** `resolveThinking(undefined)` in
+`packages/llm-provider/src/providers/local.ts:226-251` returns `true` for
+any thinking-capable model when the caller doesn't specify, so the harness
+silently turns thinking on for qwen3 and the harness then sees empty
+content (thinking mode routes content into `message.thinking` not
+`message.content`). PROMOTE: 2/3 runs show `output.length > 0` after
+fixing the auto-enable. KILL: empty-output failure not reproduced.
+
+**Outcome:** **HYPOTHESIS FALSIFIED** — and the probe revealed something
+worse and more interesting. All 3 runs produced non-empty output (123,
+123, 305 chars) — not the empty-content failure mode. But the outputs
+were **harness-internal control strings leaking as the agent's final
+answer**:
+- runs 0/1: `"⚠️ Recovery required: prior tool path failed (file-read).
+  Try an alternate path now: web-search. Do not finalize yet. (1/2)"` —
+  the LLM parroted a `harness_signal` step (runner.ts:904) back as a
+  thought; the thought reached `state.output` via §8.7 consolidation
+  (runner.ts:1502-1509); the verifier's `agent-took-action` check passed
+  because `toolsUsed` includes the failed `file-read` call.
+- run 2: `"Loop detected: 3 consecutive thinking steps with no tool
+  calls.\nFix: ..."` — runner.ts:1270 fallback
+  `output: lastThought?.content ?? loopMsg` directly leaks the
+  loop-detector diagnostic when no thought step exists.
+
+This is a **decision-grade outcome from a probe-gate**: the empty-content
+fix would have shipped a wrong patch. The probe caught it before commit,
+exactly as Rule 7 (single-mechanism isolation) and the "real integration
+proof before we commit" directive intend. Two distinct leak paths
+catalogued: parrot-via-consolidation (FM new — propose FM-A3
+"harness-signal output leak") and direct-loop-fallback. Per advisor's
+post-investigation read: these are **two enforcement points of one
+principle** ("harness internals never reach `result.output`" — see
+`types/step.ts:isUserVisibleStep`), and probe evidence shows the
+verifier check alone is insufficient because verifier-rejection on this
+model retries until the loop-detector fires, then the loop_graceful
+fallback re-leaks. Bundle both fixes; document each enforcement point's
+contribution against the same probe data. Also documented separately:
+`agent.subscribe()` does not expose `LLMRequestCompleted` /
+`LLMExchangeEmitted` events to external subscribers despite token
+metadata being recorded — telemetry surface gap, deferred to its own
+spike.
+
+**Fix shipped — POST-FIX results (probe re-run, same 3-run config):**
+- Two enforcement points of one principle ("harness internals never reach
+  `result.output`"):
+  1. `output-not-harness-parrot` check added to `defaultVerifier` —
+     rejects terminal output that begins with the `⚠️ ` harness signal
+     prefix OR matches a recent `harness_signal` step content (look back
+     ≤10 steps). Conservative two-matcher design; `examples/test cases`
+     in 5 new unit tests (`verifier.test.ts`, 24→29 tests, 29 pass).
+  2. `lastThought` fallback paths in `runner.ts` (oracle-forced exit at
+     line 1003; loop_graceful exit at line 1267-1273): when no real
+     thought content is available, set `status: "failed"` with a
+     structured `error` instead of substituting the harness's loop
+     diagnostic / "Task complete." literal as user-visible output. The
+     `transitionState` invariant nulls `output` on failure.
+- Empirical: 3/3 runs now return `outputLength=0`, `success=false`,
+  structured `error` populated. No more harness-internals in the
+  user-visible answer. Saved at
+  `harness-reports/spike-results/p03-harness-qwen3-POST-FIX.json`.
+- A residual UX issue surfaced: when verifier rejects, the kernel's
+  specific reason (e.g. "Verifier rejected output: failed at
+  synthesis-grounded") is in `state.error` but the runtime's
+  `AgentResult.error` falls back to the generic `"Reasoning failed"` for
+  the user. Different mechanism (runtime → AgentResult error
+  forwarding); deferred to its own iteration.
+
+**Methodology footgun caught (and added as feedback memory):** the FIRST
+post-fix probes (POST-VERIFIER-PARROT-CHECK, POST-BOTH-FIXES) ran
+against STALE `packages/reasoning/dist/index.js` and so reflected
+PRE-FIX behavior despite the source edits. `packages/*` declare
+`"main": "./dist/index.js"`; runtime imports go through dist. Rule of
+thumb saved: after editing `packages/*/src/`, run `bun run
+build:packages` (≈15s with turbo cache) before re-probing. Detection
+quick-check: `grep -c "<NEW-IDENTIFIER>" packages/<pkg>/dist/index.js`.
+
+**Artifacts:**
+- [`p03-harness-qwen3-thinking-bug.ts`](./p03-harness-qwen3-thinking-bug.ts)
+- `harness-reports/spike-results/p03-harness-qwen3-PRE-FIX.json` (pre-edit baseline; 3/3 leak harness internals)
+- `harness-reports/spike-results/p03-harness-qwen3-POST-FIX.json` (post-edit, post-rebuild; 3/3 clean empty output + structured failure)

@@ -1000,12 +1000,25 @@ export function runKernel(
         ) {
           // Stage 2: force exit — model has been nudged twice and still hasn't called final-answer
           yield* emitLog({ _tag: "warning", message: `[oracle-gate] Forcing exit after ${nudgeCount} ignored readyToAnswer signals`, timestamp: new Date() });
-          const forcedOutput = state.output ?? state.steps.filter((s) => s.type === "thought").slice(-1)[0]?.content ?? "Task complete.";
-          state = transitionState(state, {
-            status: "done",
-            output: forcedOutput,
-            meta: { ...state.meta, terminatedBy: "oracle_forced" },
-          });
+          // Output-boundary discipline (per types/step.ts isUserVisibleStep):
+          // never substitute a hard-coded harness phrase ("Task complete.")
+          // for missing model output. If neither state.output nor a real
+          // thought exists, fail with a structured reason — the
+          // transitionState invariant nulls the output for the user.
+          const oracleForcedOutput = state.output ?? state.steps.filter((s) => s.type === "thought").slice(-1)[0]?.content;
+          if (oracleForcedOutput && oracleForcedOutput.trim().length > 0) {
+            state = transitionState(state, {
+              status: "done",
+              output: oracleForcedOutput,
+              meta: { ...state.meta, terminatedBy: "oracle_forced" },
+            });
+          } else {
+            state = transitionState(state, {
+              status: "failed",
+              error: `Oracle forced exit after ${nudgeCount} ignored readyToAnswer signals, but the model never produced a deliverable answer.`,
+              meta: { ...state.meta, terminatedBy: "oracle_forced" },
+            });
+          }
         } else if (shouldNudgeForOracle) {
           // Stage 1: inject mandatory oracle guidance, increment count
           const mandatoryNudge = "You are ready to answer. Call `final-answer` now with your complete response. This is mandatory.";
@@ -1257,6 +1270,13 @@ export function runKernel(
           // Degrade gracefully — deliver the last thought rather than a cryptic error.
           // If tool calls were attempted but produced no deliverable results, it IS
           // a genuine failure (the agent tried tools and got stuck).
+          //
+          // Output-boundary discipline (per types/step.ts isUserVisibleStep):
+          // when the lastThought has no real content, do NOT substitute the
+          // loop-detector diagnostic as the user-visible answer — that's a
+          // harness internal. Instead, fail with the diagnostic in `error`
+          // so the transitionState invariant nulls the output and the user
+          // sees a structured failure rather than developer-targeted advice.
           const hasToolAttempts = state.steps.some((s) => s.type === "action");
           if (hasToolAttempts) {
             state = transitionState(state, {
@@ -1265,11 +1285,19 @@ export function runKernel(
             });
           } else {
             const lastThought = [...state.steps].reverse().find((s) => s.type === "thought");
-            state = transitionState(state, {
-              status: "done",
-              output: lastThought?.content ?? loopMsg,
-              meta: { ...state.meta, terminatedBy: "loop_graceful" },
-            });
+            const lastThoughtContent = lastThought?.content;
+            if (lastThoughtContent && lastThoughtContent.trim().length > 0) {
+              state = transitionState(state, {
+                status: "done",
+                output: lastThoughtContent,
+                meta: { ...state.meta, terminatedBy: "loop_graceful" },
+              });
+            } else {
+              state = transitionState(state, {
+                status: "failed",
+                error: loopMsg,
+              });
+            }
           }
           break;
         }

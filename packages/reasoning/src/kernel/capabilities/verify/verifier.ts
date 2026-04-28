@@ -304,6 +304,66 @@ export const defaultVerifier: Verifier = {
         });
       }
 
+      // Check 3c: output-not-harness-parrot
+      // Detect when the agent's "answer" is a near-verbatim echo of a
+      // recent harness_signal step (recovery nudge, oracle nudge, loop-
+      // detector follow-up, dispatcher status). Per types/step.ts:
+      // `isUserVisibleStep` — harness_signal content "MUST" be filtered
+      // from deliverables; without enforcement here it leaks to the user
+      // when the LLM, presented with a steering signal in its context,
+      // echoes it back as a thought that subsequently gets promoted to
+      // state.output via §8.7 consolidation.
+      //
+      // Two matchers, both deliberately conservative:
+      //   (a) output starts with the harness's distinctive "⚠️ " prefix
+      //       (real LLM answers virtually never do).
+      //   (b) stripped output exactly equals or is contained in / contains
+      //       the stripped content of a recent harness_signal step (look
+      //       back ≤10 steps).
+      //
+      // Conservative bounds: only fires on terminal verification where
+      // the agent has produced a candidate final answer; would-be false
+      // positive only when an LLM legitimately reproduces a system
+      // notice verbatim — extremely rare in practice.
+      const HARNESS_SIGNAL_PREFIX = "⚠️ "; // "⚠️ "
+      const stripPrefix = (s: string): string =>
+        s.replace(/^[\s⚠️]+/, "").trim();
+      const strippedOutput = stripPrefix(ctx.content);
+      const startsWithHarnessPrefix = ctx.content.trimStart().startsWith(
+        HARNESS_SIGNAL_PREFIX,
+      );
+
+      const recentHarnessSignals = ctx.priorSteps
+        .slice(-10)
+        .filter((s) => s.type === "harness_signal")
+        .map((s) => stripPrefix(s.content))
+        .filter((c) => c.length > 0);
+
+      let parrotMatch: string | null = null;
+      if (strippedOutput.length > 0) {
+        for (const sig of recentHarnessSignals) {
+          if (
+            strippedOutput === sig ||
+            strippedOutput.includes(sig) ||
+            sig.includes(strippedOutput)
+          ) {
+            parrotMatch = sig;
+            break;
+          }
+        }
+      }
+
+      const isParrot = startsWithHarnessPrefix || parrotMatch !== null;
+      checks.push({
+        name: "output-not-harness-parrot",
+        passed: !isParrot,
+        reason: isParrot
+          ? startsWithHarnessPrefix
+            ? "output begins with the harness signal prefix \"⚠️ \" — likely a parroted recovery / loop / oracle nudge"
+            : `output echoes a recent harness_signal step verbatim: "${(parrotMatch ?? "").slice(0, 80)}${(parrotMatch ?? "").length > 80 ? "…" : ""}"`
+          : undefined,
+      });
+
       // Check 4: completion-claim
       // If the model's content includes "satisfied" / completion language,
       // record that as a positive signal. Absence is not a failure — many
