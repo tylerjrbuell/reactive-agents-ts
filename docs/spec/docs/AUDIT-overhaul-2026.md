@@ -536,7 +536,139 @@ These are the **named harness mechanisms** that span multiple packages. The audi
 
 ### 10.2 Mechanisms
 
-_(filled during Stage 3)_
+> Cross-cutting verdicts that span multiple packages. Most file:line evidence is in §10.1; these focus on whether each mechanism *as a whole* earns its keep against the failure modes it claims to address.
+
+##### M1 — Reactive Intelligence dispatcher (entropy → intervention)
+
+- **Failure modes addressed:** FM-B1 (mitigated via tool-failure-streak handler), FM-A2 (claimed via tool-failure-redirect), FM-D1 (claimed via early-stop), FM-H1 (escalating-redirect handler).
+- **Evidence:** Spike-corpus dispatcher AUC = 0.750 (Apr 24); failure-corpus AUC validation probe = 0.000 (memory). Apr 19 trace: 0 decisions at entropy 0.150. **No clean spike that fixes one mechanism in isolation.**
+- **Health:** Two structural defects (per `reactive-intelligence` package): dead budget counters at `reactive-observer.ts:294` and `plan-execute.ts:698` make suppression gates unreachable; 3/6 RI hooks have no event subscriber. 4 dead handler files in `controller/handlers/`. ToT outer loop never reaches `runReactiveObserver` (per M2 verdict below).
+- **Verdict:** **FIX**
+- **Reason:** Capability is real but two structural defects make dispatch near-useless in production; the empirical evidence for net contribution is absent.
+- **Stage 5 actions:** Inherited from `reactive-intelligence` package §10.1 — fix budget counter threading, wire 3 missing hooks, delete 4 dead handler files, spike-validate dispatch rate post-fixes. After fixes, run a 30-task corpus reporting dispatched/skipped per skip-reason.
+
+##### M2 — Strategy switching (ReAct ↔ Plan-Execute ↔ ToT ↔ Reflexion ↔ Adaptive)
+
+- **Failure modes addressed:** FM-B2 (verify-loop never converges — claimed), FM-D2 (strategy switch that doesn't recover — known limitation per memory).
+- **Evidence:** Strategy registry in `reasoning/services/strategy-registry.ts`. **Unvalidated end-to-end** — no spike validates that a strategy switch actually breaks the failing pattern.
+- **Health:** **ToT outer loop bypasses early-stop** (FIX-5): zero matches for `earlyStop|perRIEarlyStop` in `strategies/tree-of-thought.ts`; `plan-execute.ts:605,716,741` is the only strategy honoring it. Strategy switch infrastructure works but the new strategy spawns as a sub-kernel that doesn't inherit the parent's intervention budget or early-stop signals.
+- **Verdict:** **FIX**
+- **Reason:** Mechanism partially wired; known unrecoverable bypass on ToT.
+- **Stage 5 actions:** Mirror `plan-execute.ts:605,716,741` perRIEarlyStop pattern in `tree-of-thought.ts`. Audit all strategies for parent-budget inheritance. Add a regression test that confirms a parent-issued early-stop terminates a ToT sub-kernel.
+
+##### M3 — Verifier (`agent-took-action` + grounding) + Verifier-driven retry
+
+- **Failure modes addressed:** FM-A1 mitigated for cogito (spike `p01b`: 5/5 reject); FM-C2 (control hook for long-form synthesis fabrication regression on retry).
+- **Evidence:** **Spike-validated, mechanism-isolated.** Verifier converts cogito:8b confident-fabrication → honest-fail. Verifier-driven retry HELPS qwen3 (1/1 recovery on rw-2 trace `01KQ84GK70AX1HG485ZRY9QMAS`) and **KILLs cogito** (`p02`: 0/5 + 4× tokens). Control-pillar retry policy injection commit `14135d6d`.
+- **Health:** Working. Verifier capability lives at `reasoning/kernel/capabilities/verify/verifier.ts`. `VerifierRetryPolicy` + new trace event types from Sprint 3.6 are missing `_unstable_*` markers (Rule 10 violation).
+- **Verdict:** **KEEP + FIX (markers)**
+- **Reason:** The harness's clearest empirically-validated lift. Marker hygiene is the only issue.
+- **Stage 5 actions:** Mark `VerifierRetryPolicy` + Sprint 3.6 trace event types `_unstable_*`. Calibrate `RESULTS-p01.md` + `RESULTS-p02.md` overclaim language per Rule 11 (FIX-16). Add cross-provider expansion (claude-haiku) before claiming the gate generalizes. Note distinction: this is the **action-outcome verifier** (per-step); `@reactive-agents/verification` package is the complementary **output verifier** (final response). Both kept.
+
+##### M4 — Healing pipeline (4 stages) for FC failures
+
+- **Failure modes addressed:** FM-A2 (persistent FC failure — claimed).
+- **Evidence:** **Unvalidated per-tier.** Spike `p02` shows cogito:8b ignores feedback → retry KILL — implication for the healing pipeline is that downstream stages probably also don't help cogito. Stages: tool-name-healer (edit distance), param-name-healer, path-resolver, healing-pipeline orchestrator.
+- **Health:** Working as a pipeline shape. Routing decisions and per-stage effectiveness untested.
+- **Verdict:** **DEFER (post-release spike validation)**
+- **Reason:** Plausible mechanism, no harm, but claims exceed evidence.
+- **Stage 5 actions:** Mark Sprint 3.x healing-pipeline surfaces `_unstable_*`. Post-release: design 4 spike scenarios (one per stage) — does each stage actually unstick a stuck FC? On which models?
+
+##### M5 — Context curation: dual compression (`tool-execution.ts` + `context-compressor.ts`)
+
+- **Failure modes addressed:** FM-F1 (context overflow with information loss).
+- **Evidence:** **Known problem** per memory `project_running_issues #4` — two compression systems may both fire on the same run; G-4 in NS §2.7 says "curator IS sole prompt author; deletion deferred."
+- **Health:** Both systems exist; coordination unclear.
+- **Verdict:** **FIX**
+- **Reason:** Two uncoordinated compression mechanisms producing unpredictable behavior on long tasks.
+- **Stage 5 actions:** Pick one as canonical. Per NS, the curator is now sole prompt author — that's the keeper. Delete (or hard-disable) the parallel `tool-execution.ts` compression path; or document why both fire and add a coordination check. Add a probe: long-context task, compare with each compression system disabled; pick the better.
+
+##### M6 — Skill system (lifecycle, AgentEvents, RI hooks)
+
+- **Failure modes addressed:** None directly; learning-pillar capability (NS §3.1 cap #10).
+- **Evidence:** Skills exist (resolver, distiller, compression, registry, injection in `reactive-intelligence/`). **Lifecycle wiring incomplete.**
+- **Health:** **3/6 RI hooks have no subscriber** (`onSkillActivated`/`onSkillRefined`/`onSkillConflict`). The events themselves exist in `core/services/event-bus.ts:986-990`. Memory note about "AgentEvents missing" is stale — events exist; subscribers don't.
+- **Verdict:** **FIX**
+- **Reason:** Half-wired. Either complete the wiring or remove the hooks from the public API.
+- **Stage 5 actions:** Subscribe `SkillActivated` → `onSkillActivated`, `SkillRefined` → `onSkillRefined`, `SkillConflictDetected` → `onSkillConflict` at `builder.ts:2657-2681`. If no producer ever emits these events from real agent runs, document and either DEFER the hooks or remove them.
+
+##### M7 — Calibration (3-tier resolver, observation store, classifier reliability)
+
+- **Failure modes addressed:** FM-A2 (calibration says native-fc but FC unreliable for cogito — known).
+- **Evidence:** Three-tier resolver works; observation store uses 50-run window; `classifierReliability` derived from FP rate.
+- **Health:** **Calibration default is correct** at `types.ts:246` (`~/.reactive-agents/calibration.db`) — the memory note about `:memory:` is stale. **Cost router does NOT consult calibration** (`@reactive-agents/cost` audit) — when a tier scores poorly on tool-call reliability, cost-tier choice ignores it.
+- **Verdict:** **FIX**
+- **Reason:** Calibration data exists but isn't read where it should bias decisions; calibration's claim about cogito (`native-fc`) is itself wrong.
+- **Stage 5 actions:** (1) Bias cost router away from tiers with low `toolCallReliability` for tool-heavy tasks (cross-pkg integration). (2) Auto-detect FC unreliability in calibration and downgrade to `text-parse` for cogito-class models. (3) Update memory entry FIX-9 — `:memory:` claim is stale.
+
+##### M8 — Sub-agent delegation (`agent-tool-adapter`)
+
+- **Failure modes addressed:** FM-G1 (sub-agent delegation produces unusable output — unvalidated).
+- **Evidence:** `tools/src/adapters/agent-tool-adapter.ts` confirmed. **Unvalidated** — no real multi-agent run trace mining.
+- **Health:** **`MAX_RECURSION_DEPTH = 3`** hardcoded at `agent-tool-adapter.ts:6` (FIX-7 confirmed). Sub-agent `maxIterations` cap (`Math.min(userValue, 3)` per Apr 17 audit) silently degrades user values.
+- **Verdict:** **FIX**
+- **Reason:** Hidden caps + unvalidated capability.
+- **Stage 5 actions:** Make `MAX_RECURSION_DEPTH` configurable via builder/runtime config (default 3). Remove silent `Math.min` cap on `maxIterations` — error or warn, don't degrade. Post-release: trace-mine multi-agent runs to estimate FM-G1 prevalence.
+
+##### M9 — Termination oracle (Arbitrator)
+
+- **Failure modes addressed:** FM-D1 (premature termination — mitigated/unvalidated). The 9-path scatter problem.
+- **Evidence:** **Architectural blocker confirmed.** 9 `status:"done"` transition sites: 1 oracle (`capabilities/decide/arbitrator.ts:885`) + 8 bypass sites in `kernel/loop/runner.ts:679,817,879,953,1011,1234,1262,1291`. CHANGE A wired the oracle into 1 of 9. Most failure-corpus failure scenarios call `final-answer` as a tool, exiting through act/runner paths that bypass the veto entirely.
+- **Health:** Oracle works at the one site it's wired into. The other 8 are dispersed unilateral terminations.
+- **Verdict:** **FIX (single highest-value architectural action in the overhaul)**
+- **Reason:** This is the corpus-failure root cause per NS §2.5. Until termination is single-owner, the dispatcher / verifier / oracle can't coordinate.
+- **Stage 5 actions:** Refactor to a single `terminate(state, reason)` helper in `kernel/loop/` that always consults the arbitrator before transitioning. Replace the 8 direct sites with calls to the helper. Add a CI lint that fails on direct `transitionState({status:"done"})` outside the helper. Re-run failure corpus post-fix and report delta.
+
+##### M10 — Memory system (Working / Semantic / Episodic / Procedural)
+
+- **Failure modes addressed:** FM-F2 (memory pollution across runs — unvalidated theoretical).
+- **Evidence:** Per-package audit: 21 unit tests, no cross-run probe. SQLite + FTS5 + consolidation. **AgentMemory port not defined or wired.**
+- **Health:** `bun:sqlite` hard import breaks Node consumers; sync DB blocks event loop.
+- **Verdict:** **FIX** (verdict from `@reactive-agents/memory` package).
+- **Reason:** Capability shape matches NS §2.7 but the runtime is Bun-only and the port is dead.
+- **Stage 5 actions:** Inherited from package §10.1.
+
+##### M11 — Diagnostic system (Sprint 3.6)
+
+- **Failure modes addressed:** FM-A3 (output-leak diagnosis — addressed by recent commit `5e654e5c`).
+- **Evidence:** TraceEvent stream + JSONL recorder + `rax diagnose` CLI. Sprint 3.6 added 5 diagnostic event types. **`@reactive-agents/diagnose` never published** to npm — external users cannot run `rax diagnose`.
+- **Health:** Working internally; 0 tests for the 595-LOC CLI.
+- **Verdict:** **FIX**
+- **Reason:** Critical for Rule 11 spike-validation flywheel; not externally accessible.
+- **Stage 5 actions:** Inherited from `@reactive-agents/diagnose` package §10.1 (publish + 4 smoke tests).
+
+##### M12 — Provider adapter system (7 hooks)
+
+- **Failure modes addressed:** FM-A1 (no-tool fabrication — partly via taskFraming/qualityCheck/synthesisPrompt), FM-H1 (required-tool nudges — via continuationHint), broader DX across tiers.
+- **Evidence:** All 7 hooks wired (memory `project_composable_adapters`); native FC migration shipped Mar 2026. 35/35 Sonnet bench. Tier-specific adapters (`defaultAdapter`/`localModelAdapter`/`midModelAdapter`).
+- **Health:** Hooks work; calibration → tier resolution at `selectAdapter`. qwen3 thinking auto-enable bug is in the same package but a different code path.
+- **Verdict:** **KEEP**
+- **Reason:** The cleanest validated end-to-end mechanism in the harness.
+- **Stage 5 actions:** None at the mechanism level. Package-level fixes (qwen3 thinking + `_unstable_*` markers) are in §10.1.
+
+##### M13 — Guards + meta-tools registry
+
+- **Failure modes addressed:** FM-D1 (premature termination — required-tools guard).
+- **Evidence:** Guards live in `kernel/capabilities/decide/` (or similar — verify). Required-tools guard at `runner.ts:1260-1290` per memory; in-loop redirect.
+- **Health:** **Required-tool nudges don't work for non-compliant models** (FM-H1 — empirical: `p02` shows cogito ignores nudge feedback). The guard fires; the model doesn't comply. This is FM-H1's "requires-model-swap" controllability.
+- **Verdict:** **KEEP + FIX**
+- **Reason:** Mechanism fires correctly; the issue is downstream — non-compliant models. Auto-detection of non-compliance + text-parse fallback would help.
+- **Stage 5 actions:** Add auto-detection: after N nudge-without-comply events for a session, switch the driver to text-parse for that model (if calibration permits). Tie into M7 calibration.
+
+---
+
+#### Mechanism tally
+
+| Verdict | Count | Mechanisms |
+|---|---|---|
+| **KEEP** | 1 | M12 (provider adapter system) |
+| **KEEP + FIX** | 2 | M3 (verifier+retry — markers only), M13 (guards — auto-detect non-compliance) |
+| **FIX** | 8 | M1 (RI dispatcher), M2 (strategy switching), M5 (dual compression), M6 (skill hooks), M7 (calibration→cost integration), M8 (sub-agent caps), M9 (**9-termination-path scatter — top action**), M11 (diagnose publish) |
+| **FIX (inherited)** | 1 | M10 (memory) — verdict from package |
+| **DEFER** | 1 | M4 (healing pipeline — needs spikes) |
+| **DELETE** | 0 | none |
+
+**The single highest-leverage Stage 5 action is M9** — collapsing the 9 termination paths to single-owner via the arbitrator. NS §2.5 calls this the architectural blocker; the failure corpus confirms it; CHANGE A is "a gate at one door of a building with nine doors."
 
 ---
 
