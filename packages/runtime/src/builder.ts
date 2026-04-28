@@ -2678,6 +2678,40 @@ export class ReactiveAgentBuilder {
                     )
                 )
             }
+            // Skill lifecycle hooks (W2 FIX-6) — events defined at
+            // core/services/event-bus.ts:986-990; subscribers added here so the
+            // 3 advertised hooks (onSkillActivated/onSkillRefined/onSkillConflict)
+            // actually fire instead of silently storing dead callbacks.
+            if (hooks.onSkillActivated) {
+                await agent.subscribe('SkillActivated', (event) =>
+                    hooks.onSkillActivated!(
+                        {
+                            name: event.skillName,
+                            version: event.version,
+                            confidence: event.confidence,
+                            iteration: event.iteration,
+                        },
+                        event.trigger
+                    )
+                )
+            }
+            if (hooks.onSkillRefined) {
+                await agent.subscribe('SkillRefined', (event) =>
+                    hooks.onSkillRefined!(
+                        {
+                            name: event.skillName,
+                            version: event.newVersion,
+                            taskCategory: event.taskCategory,
+                        },
+                        event.previousVersion
+                    )
+                )
+            }
+            if (hooks.onSkillConflict) {
+                await agent.subscribe('SkillConflictDetected', (event) =>
+                    hooks.onSkillConflict!(event.skillA, event.skillB)
+                )
+            }
         }
 
         return agent
@@ -3211,7 +3245,7 @@ export class ReactiveAgentBuilder {
                         registrations.push({ def: toolDef, handler })
                     } else if (agentTool.agent) {
                         // Local agent tool — real sub-agent delegation
-                        const agentConfig: import('@reactive-agents/core').AgentConfig =
+                        const agentConfig: import('@reactive-agents/core').AgentDefinition =
                             {
                                 name: agentTool.agent.name,
                                 description:
