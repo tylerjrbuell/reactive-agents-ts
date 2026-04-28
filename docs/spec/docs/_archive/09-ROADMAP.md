@@ -1,3 +1,5 @@
+> **Status:** archived 2026-04-28; pre-overhaul. See `PROJECT-STATE.md` and `AUDIT-overhaul-2026.md` for current architecture and package state.
+
 # Reactive Agents V2: Development Roadmap
 
 > **⚠️ HISTORICAL DOCUMENT** — This was the original planning roadmap. Phases 1-4 completed in 3 days (Feb 20-22, 2026) using agent-assisted development. For the current forward-looking roadmap, see:

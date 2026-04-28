@@ -1,3 +1,5 @@
+> **Status:** archived 2026-04-28; pre-overhaul. See `PROJECT-STATE.md` and `AUDIT-overhaul-2026.md` for current architecture and package state.
+
 # Reactive Agents: Complete API Design
 
 > **Dual API, reasoning patterns, and real-world use cases**

@@ -1,3 +1,5 @@
+> **Status:** archived 2026-04-28; pre-overhaul. See `PROJECT-STATE.md` and `AUDIT-overhaul-2026.md` for current architecture and package state.
+
 # Market Validation & Competitive Intelligence Update
 
 ### February 2026 — Live Research Findings

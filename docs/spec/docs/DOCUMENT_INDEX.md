@@ -1,104 +1,42 @@
-# Reactive Agents Documentation Index
+# Document Index — `docs/spec/docs/`
 
-## Canonical Sources
-
-Use these as source of truth in this order:
-
-1. `AGENTS.md` (root) — operational workflow, quality gates, package map, build/test commands
-2. `README.md` — public product overview and quickstart
-3. `apps/docs/src/content/docs/` — API and behavior truth (Starlight docs)
-4. `CHANGELOG.md` — release-level capability history and migration context
-
-`CLAUDE.md` is a compatibility pointer only and should not be treated as a separate canonical guide.
+> **Last updated:** 2026-04-28 (post-archive pass on `refactor/overhaul`).
+> **Purpose:** Map every document in this directory to its purpose. Ranked from "read first" to "reference when needed."
 
 ---
 
-## Recommended Reading Order for AI Agents
-
-### 1) Entry and Orientation
-
-| # | File | Why read it |
-|---|---|---|
-| 0 | `AGENTS.md` | Build workflow, architecture quick reference, mandatory quality gates |
-| 1 | `README.md` | Public-facing framework capabilities and examples |
-| 2 | `START_HERE_AI_AGENTS.md` | Spec build sequencing and agent team launch workflow |
-| 3 | `00-master-architecture.md` | Layered architecture and system data flow |
-| 4 | `FRAMEWORK_USAGE_GUIDE.md` | API usage patterns and end-to-end framework examples |
-
-### 2) Core Specs
-
-| # | File | Layer / Package |
-|---|---|---|
-| 5 | `layer-01-core-detailed-design.md` | L1 core (`@reactive-agents/core`) |
-| 6 | `01.5-layer-llm-provider.md` | L1.5 llm-provider (`@reactive-agents/llm-provider`) |
-| 7 | `02-layer-memory.md` | L2 memory (`@reactive-agents/memory`) |
-| 8 | `03-layer-reasoning.md` | L3 reasoning (`@reactive-agents/reasoning`) |
-| 9 | `04-layer-verification.md` | L4 verification (`@reactive-agents/verification`) |
-| 10 | `05-layer-cost.md` | L5 cost (`@reactive-agents/cost`) |
-| 11 | `06-layer-identity.md` | L6 identity (`@reactive-agents/identity`) |
-| 12 | `07-layer-orchestration.md` | L7 orchestration (`@reactive-agents/orchestration`) |
-| 13 | `08-layer-tools.md` | L8 tools (`@reactive-agents/tools`) |
-| 14 | `09-layer-observability.md` | L9 observability (`@reactive-agents/observability`) |
-| 15 | `layer-10-interaction-revolutionary-design.md` | L10 interaction (`@reactive-agents/interaction`) |
-| 16 | `layer-01b-execution-engine.md` | Runtime execution (`@reactive-agents/runtime`) |
-
-### 3) Enhancement and Evolution Specs
-
-| # | File | Focus |
-|---|---|---|
-| 17 | `11-missing-capabilities-enhancement.md` | guardrails, eval, prompts, CLI enhancement path |
-| 18 | `14-v0.5-comprehensive-plan.md` | A2A + MCP + harness hardening roadmap history |
-| 19 | `00-VISION.md` | Product philosophy and strategic direction |
-| 20 | `09-ROADMAP.md` | Roadmap framing and evolution context |
-
-### 4) Historical Context (Reference Only)
+## Canonical documents (read in this order)
 
 | # | File | Purpose |
 |---|---|---|
-| 21 | `12-market-validation-feb-2026.md` | Market validation snapshot |
-| 22 | `reactive-agents-complete-competitive-analysis-2026.md` | Competitive analysis |
-| 23 | `implementation-ready-summary.md` | Historical synthesis |
-| 24 | `PLAN_REVIEW.md`, `SPEC_REVIEW.md` | Audit trail and historical corrections |
+| 1 | `START_HERE_AI_AGENTS.md` | Agent session-start entry point — points at `PROJECT-STATE.md` |
+| 2 | `PROJECT-STATE.md` | Current empirical state of the project; updated on meaningful state change |
+| 3 | `AUDIT-overhaul-2026.md` | **The overhaul plan** — 28 packages + 13 mechanisms + 44-item FIX backlog + W0-W13 |
+| 4 | `00-VISION.md` | What we're building toward — 4 pillars (Reliability, Control, Security, Performance) |
+| 5 | `15-design-north-star.md` | v3.0 architecture target — 10 capabilities + cognitive kernel + ports |
+| 6 | `00-RESEARCH-DISCIPLINE.md` | 12 rules for every harness change |
+| 7 | `01-FAILURE-MODES.md` | Living catalog of harness failure modes |
+| 8 | `02-IMPROVEMENT-PIPELINE.md` | Operational rhythm — DISCOVERY → DEPRECATE flywheel |
+
+**That's the entire active set.** If a question isn't answered above, the answer either (a) lives in code (read it), (b) lives in `apps/docs/src/content/docs/` (Starlight), or (c) is in `_archive/` history.
 
 ---
 
-## Starlight Docs Map (Current API Truth)
+## Subdirectories
 
-Primary docs live under `apps/docs/src/content/docs/`:
-
-- `reference/` — builder API, CLI API, configuration defaults
-- `guides/` — quickstart, reasoning, tools, memory, local models, security, troubleshooting
-- `features/` — reactive intelligence, streaming, providers, gateway, orchestration, verification
-- `concepts/` — architecture, lifecycle, composable kernel, Effect-TS model
-- `cookbook/` — practical, copy-paste patterns
-
-When API behavior changes, update Starlight docs and then align `README.md` + `AGENTS.md` summaries.
+- `explorations/` — speculative, in-flight design exploration. Not authoritative; don't cite as architecture.
+- `_archive/` — pre-overhaul docs (March-era and earlier). Preserved for traceability. **Do not treat as authoritative.** Each archived file has a banner noting its archive date.
 
 ---
 
-## Spec Format Convention
+## What's NOT in this directory
 
-Most layer specs follow this pattern:
-
-1. Overview
-2. Package structure
-3. Build order
-4. Types (`Schema.Struct`)
-5. Errors (`Data.TaggedError`)
-6. Services (`Context.Tag` + `Layer.effect`)
-7. Runtime layer factory
-8. Tests
-9. Package dependencies
+- Build commands, package matrix, quality gates → `AGENTS.md` (root)
+- Public framework usage / quickstart → `README.md` (root)
+- API and behavior reference → `apps/docs/src/content/docs/`
+- Release history → `CHANGELOG.md` (root)
+- Roadmap → `ROADMAP.md` (root)
 
 ---
 
-## Current Project Scale (v0.9.0)
-
-| Category | Count |
-|---|---|
-| Workspace packages | 25 |
-| Publishable packages | 20 |
-| Apps | 2 |
-| Test suite | 3,472 tests / 409 files |
-
-For current release details, use `CHANGELOG.md`.
+*If you add a new spec doc, update this index. Don't grow the canonical set lightly — every new file is one more thing for future agents to keep in their head.*
