@@ -108,6 +108,35 @@ Every promoted mechanism ships with developer-overridable hooks from inception (
 
 New types added during research-phase work are marked `@internal` or `_unstable_*`. Promotion to stable requires ≥3 external validations (real users, real domains). This protects downstream from breaking changes when mechanisms turn out to need different shapes.
 
+### Rule 11: Scope of claims — spikes are evidence, not verdicts
+
+A spike's findings apply ONLY to the specific mechanism × model × task × failure-mode tested. Generalizations require multiple corroborating spikes across the failure-mode space PLUS integration-layer evidence (bench, observation in real harness deployment).
+
+Forbidden inferences from a single spike:
+- "Mechanism X replaces harness component Y" — needs many spikes covering Y's full failure surface
+- "The harness is mostly dead weight" — based on one mechanism not lifting one task
+- "Prompt engineering matches mechanism Z" — needs cross-task variance, not single observation
+
+Permitted claims from a single spike:
+- "Mechanism X addresses failure mode F on model M for task T (with this measurement)"
+- "Mechanism X did NOT address failure mode F on model M for task T" (negative result)
+- "Surprising interaction observed: I → O" (flagged for follow-up, not generalized)
+
+The harness handles a wide failure-mode surface that no single spike can simulate (multi-turn coherence, MCP lifecycle, sub-agents, memory persistence, context overflow, gateway runs, etc.). Killing harness mechanisms based on spike evidence requires corroboration across the failure modes that mechanism is designed to address — not just one.
+
+### Rule 12: Failure-mode-first investigation
+
+Spikes are scoped to known failure modes (cataloged in `01-FAILURE-MODES.md`), not "let's see what happens." Each spike asks: **"How does mechanism Y address failure mode X — and how well, on which models, at what cost?"**
+
+The investigation cycle is:
+1. **DISCOVERY** — observe failures across the agent test surface; new failure modes get cataloged
+2. **DIAGNOSIS** — for each failure mode: pin the root cause, write a reproduction recipe
+3. **DISSECTION** — design controlled spikes that test candidate mechanisms (one mechanism per spike) against the failure mode
+4. **EVIDENCE** — accumulate spikes across the model × task matrix until the mechanism's effective scope is mapped
+5. **PROMOTION** — when evidence shows mechanism Y reliably addresses failure mode X within scope S, integrate with overridable hooks per Rule 9
+
+Without this discipline, spikes become opportunistic curiosity rather than systematic harness improvement.
+
 ---
 
 ## 4. The Signal Taxonomy — what to measure

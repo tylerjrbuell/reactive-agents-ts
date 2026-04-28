@@ -93,3 +93,44 @@ prompt-strictness alone vs gate alone vs both — does the harness's trust
 value reduce further to ~5 lines of system prompt?
 
 **Artifacts:** [`p02-bare-with-verify-retry-cogito.ts`](./p02-bare-with-verify-retry-cogito.ts), [`RESULTS-p02.md`](./RESULTS-p02.md), `harness-reports/spike-results/p02-bare-verify-retry-rw2-cogito-8b.json`
+
+---
+
+## Methodology calibration — 2026-04-27 (post-p02)
+
+User correction: spikes were treated as if they could justify harness-level
+deletion claims. They can't. A spike validates ONE mechanism × ONE failure
+mode × ONE-or-two models × ONE task — it does NOT survey the harness's
+full failure-mode surface. Overclaims like "30 LOC captures 98% of harness
+trust value" need walking back to "30 LOC catches no-tool fabrication on
+cogito × rw-2." The harness's complexity exists for reasons spikes haven't
+touched yet (multi-turn, MCP, sub-agents, memory persistence, context
+overflow, etc.).
+
+**Discipline contract updated:**
+- Rule 11 added: scope-of-claims ("spikes are evidence, not verdicts")
+- Rule 12 added: failure-mode-first investigation cycle (DISCOVERY →
+  DIAGNOSIS → DISSECTION → EVIDENCE → PROMOTION)
+
+**New foundational artifacts:**
+- `docs/spec/docs/01-FAILURE-MODES.md` — failure-mode catalog (14 seed
+  entries, categorized A-H, prioritized by frequency × severity ×
+  controllability)
+- `docs/spec/docs/02-IMPROVEMENT-PIPELINE.md` — operational rhythm
+  doc: how DISCOVERY feeds CATALOG feeds PRIORITIZATION feeds DISSECTION
+  feeds DESIGN feeds INTEGRATE+VALIDATE feeds DEPRECATE → loop
+
+**Reframing per-spike question:**
+- Old: "Can mechanism X replace harness?"
+- New: "How does mechanism Y address failure mode X — on which models, at
+  what cost, with what scope?"
+
+**Active spike queue (per failure-mode catalog priority):**
+1. FM-C1 (shallow reasoning over real data) — UNMITIGATED, high impact
+2. FM-D1 (premature termination) — claimed-mitigated, needs validation
+3. FM-F1 (context overflow / dual compression) — known issue, mechanism
+   selection unclear
+
+**RESULTS-p01.md / RESULTS-p02.md need follow-up calibration edit** —
+language to be updated from "captures X% of harness value" to
+"addresses failure mode F-X on model M for task T."
