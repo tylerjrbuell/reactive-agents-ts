@@ -3,9 +3,15 @@
 export type { ProviderCapabilities } from "./capabilities.js";
 export { DEFAULT_CAPABILITIES } from "./capabilities.js";
 
-// ─── Capability port (Phase 1 S1.1) ───
-// Per-(provider, model) capability descriptor; supersedes ProviderCapabilities.
-// Resolution (probe → static-table → fallback) ships in S1.3.
+/**
+ * ─── Capability port (Phase 1 S1.1) ───
+ * Per-(provider, model) capability descriptor; supersedes ProviderCapabilities.
+ * Resolution (probe → static-table → fallback) ships in S1.3.
+ *
+ * @unstable Added post-v0.9.0 on `refactor/overhaul`. Surface may change in
+ * v0.10.x without notice. Track stabilization in
+ * `docs/spec/docs/AUDIT-overhaul-2026.md` §11 #15.
+ */
 export {
   CapabilitySchema,
   ModelTierSchema,
@@ -22,9 +28,13 @@ export type {
   ToolCallDialect,
   CapabilitySource,
 } from "./capability.js";
-// Capability resolver (Phase 1 S1.3) — three-tier lookup: cached probe →
-// static table → conservative fallback. Ollama provider consumes this to
-// drive options.num_ctx per (provider, model).
+/**
+ * Capability resolver (Phase 1 S1.3) — three-tier lookup: cached probe →
+ * static table → conservative fallback. Ollama provider consumes this to
+ * drive options.num_ctx per (provider, model).
+ *
+ * @unstable See note above on Capability port.
+ */
 export { resolveCapability } from "./capability-resolver.js";
 export type { CapabilityCache, ResolveCapabilityOptions } from "./capability-resolver.js";
 
@@ -160,7 +170,14 @@ export type { FallbackConfig, FallbackCallback } from "./fallback-chain.js";
 // ─── Validation ───
 export { validateAndRepairMessages } from "./validation.js";
 
-// ─── Provider Behavior Adapters ───
+/**
+ * ─── Provider Behavior Adapters ───
+ * Composable per-tier prompt/guidance hooks (7 hooks: taskFraming, toolGuidance,
+ * continuationHint, errorRecovery, synthesisPrompt, qualityCheck, systemPromptPatch).
+ *
+ * @unstable Phase 1 surface. `selectAdapter` resolution + tier dispatch may change
+ * in v0.10.x. See AUDIT-overhaul-2026.md §11 #15.
+ */
 export {
   type ProviderAdapter,
   type AdapterSelection,
@@ -168,10 +185,22 @@ export {
   localModelAdapter,
   midModelAdapter,
   selectAdapter,
+  /**
+   * @deprecated Returns `undefined` for all inputs since the composable-strategy
+   * decision (audit FIX-38). Remove in W2 (stale corrections) — call site at
+   * runtime/execution-engine.ts:1647 must be updated first to drop the override path.
+   */
   recommendStrategyForTier,
 } from "./adapter.js";
 
-// ─── Calibration ───
+/**
+ * ─── Calibration ───
+ * Three-tier calibration store + alias accumulation (N≥3 gate) + ExperienceSummary
+ * materialization. Drives `buildCalibratedAdapter` selection.
+ *
+ * @unstable Sprint 3.x surface; not external-validated. May change in v0.10.x.
+ * See AUDIT-overhaul-2026.md §11 #15 + M7 mechanism verdict.
+ */
 export {
   ModelCalibrationSchema,
   loadCalibration,
@@ -192,5 +221,8 @@ export type {
   ExperienceSummary,
 } from "./calibration.js";
 
-// ─── Calibration Runner ───
+/**
+ * ─── Calibration Runner ───
+ * @unstable See Calibration section above.
+ */
 export { runCalibrationProbes, majority, median } from "./calibration-runner.js";
