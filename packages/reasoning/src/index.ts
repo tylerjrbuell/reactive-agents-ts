@@ -14,8 +14,16 @@ export type {
 
 export type { StrategyEffectiveness } from "./types/effectiveness.js";
 
+/**
+ * ─── Observation + TrustLevel (Sprint 3.x trust-level work) ───
+ * `ObservationResult` carries categorized tool-call evidence with a `trustLevel`
+ * tag (Q5 grandfather decision); `TrustLevel` schema, derivation helpers, and
+ * the grandfather constants are all post-v0.9.0 surfaces.
+ *
+ * @unstable Sprint 3.x surface; not external-validated. May change in v0.10.x
+ * without notice. See AUDIT-overhaul-2026.md §10.1 reasoning + §11 #15.
+ */
 export type { ObservationResult, TrustLevel } from "./types/observation.js";
-
 export {
   ObservationCategory,
   ResultKind,
@@ -170,7 +178,6 @@ export type {
 // ─── Verifier (Sprint 3.2 — Verify capability promotion) ───
 export {
   defaultVerifier,
-  defaultVerifierRetryPolicy,
   contextFromObservation,
 } from "./kernel/capabilities/verify/verifier.js";
 export type {
@@ -178,6 +185,19 @@ export type {
   VerificationContext,
   VerificationCheck,
   VerificationResult,
+} from "./kernel/capabilities/verify/verifier.js";
+
+/**
+ * ─── Verifier Retry Policy (Sprint 3.5 — developer-overridable retry) ───
+ * Pure-function policy consulted on every verifier rejection — controls retry/
+ * skip + custom signal text. `defaultVerifierRetryPolicy` preserves pre-3.5
+ * behavior (retry while budget remains).
+ *
+ * @unstable Sprint 3.5 surface (commit 14135d6d); not external-validated. May
+ * change in v0.10.x. See AUDIT-overhaul-2026.md §11 #15.
+ */
+export { defaultVerifierRetryPolicy } from "./kernel/capabilities/verify/verifier.js";
+export type {
   VerifierRetryPolicy,
   VerifierRetryPolicyContext,
   VerifierRetryDecision,
