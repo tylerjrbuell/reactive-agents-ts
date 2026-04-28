@@ -185,12 +185,6 @@ export {
   localModelAdapter,
   midModelAdapter,
   selectAdapter,
-  /**
-   * @deprecated Returns `undefined` for all inputs since the composable-strategy
-   * decision (audit FIX-38). Remove in W2 (stale corrections) — call site at
-   * runtime/execution-engine.ts:1647 must be updated first to drop the override path.
-   */
-  recommendStrategyForTier,
 } from "./adapter.js";
 
 /**

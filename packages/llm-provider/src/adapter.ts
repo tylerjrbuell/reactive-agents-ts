@@ -298,10 +298,3 @@ export function selectAdapter(
   return { adapter: defaultAdapter };
 }
 
-export function recommendStrategyForTier(
-  _tier: string | undefined,
-  _configuredStrategy: string,
-  _requiredTools?: readonly string[],
-): string | undefined {
-  return undefined;
-}

@@ -31,7 +31,6 @@ import type { AgentEvent, KernelStateLike } from "@reactive-agents/core";
 import { synthesizeDebrief, type DebriefInput, type AgentDebrief } from "./debrief.js";
 import { DebriefStoreService, PlanStoreService, ProceduralMemoryService } from "@reactive-agents/memory";
 import { TelemetryClient as TelemetryClientImpl, classifyTaskCategory as classifyTaskCategoryFn, lookupModel as lookupModelFn, skillFragmentToProceduralEntry, loadObservations } from "@reactive-agents/reactive-intelligence";
-import { recommendStrategyForTier } from "@reactive-agents/llm-provider";
 import { resolveModelCalibration, resolveModelCalibrationAsync } from "./calibration-resolver.js";
 import type { ModelCalibration } from "@reactive-agents/llm-provider";
 import { buildTrajectoryFingerprint, abstractifyToolName, firstConvergenceIteration, peakContextPressure, deriveTaskComplexity, deriveFailurePattern, deriveThoughtToActionRatio, entropyVariance, entropyOscillationCount, finalCompositeEntropy, entropyAreaUnderCurve } from "./telemetry-enrichment.js";
@@ -1642,14 +1641,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       const initialMessages: readonly { readonly role: "user" | "assistant"; readonly content: string }[] = [
                         { role: "user", content: extractTaskText(task.input) },
                       ];
-                      // Local-tier strategy routing: plan-execute-reflect for multi-step tool tasks
-                      const configuredStrategy = c.selectedStrategy ?? "reactive";
-                      const tierOverride = recommendStrategyForTier(
-                        config.contextProfile?.tier,
-                        configuredStrategy,
-                        effectiveRequiredTools,
-                      );
-                      const effectiveStrategy = tierOverride ?? configuredStrategy;
+                      const effectiveStrategy = c.selectedStrategy ?? "reactive";
 
                       const strategyEffect = reasoningOpt.value.execute({
                         taskDescription: extractTaskText(task.input),
