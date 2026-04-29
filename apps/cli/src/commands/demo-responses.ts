@@ -1,33 +1,45 @@
 /**
- * Pre-scripted response for `rax demo`.
- * The test provider matches keys as substrings against the prompt.
- * We use a single direct response to keep the demo clean and fast.
+ * Recorded response for `rax demo` when no LLM provider is detected.
+ *
+ * This is shown ONLY in the no-provider fallback path (no API key, no
+ * Ollama running). The live demo path uses a real agent with a real tool
+ * call against the Hacker News API and will produce different output on
+ * every run reflecting whatever's actually trending. This recorded
+ * response is a representative example of what the live run produces.
  */
 export const demoResponses: Record<string, string> = {
-  "Find the top 3 TypeScript testing frameworks":
-    `## Top 3 TypeScript Testing Frameworks (2026)
+  "fetch the top 5 stories on Hacker News":
+    `## Hacker News — Top 5 (snapshot)
 
-| Framework | Speed | DX | Ecosystem | TypeScript |
-|-----------|-------|-----|-----------|------------|
-| **Vitest** | ⚡ Fast | Excellent | Growing | Native |
-| **Bun Test** | ⚡⚡ Fastest | Great | Emerging | Native |
-| **Jest** | Moderate | Good | Mature | Via ts-jest |
+1. **Show HN: I built a search engine for arXiv papers** — 412 points
+   https://news.ycombinator.com/item?id=39024716
+2. **The hidden cost of context-switching in distributed teams** — 287 points
+   https://blog.example.com/context-switching
+3. **Why Effect-TS finally clicked for our backend** — 251 points
+   https://hashnode.example.dev/effect-ts-clicked
+4. **A practical guide to writing your own database** — 198 points
+   https://example.io/build-a-database
+5. **OpenAI releases new reasoning model: o4-mini** — 173 points
+   https://openai.com/blog/o4-mini
 
-### 1. Vitest
-The leading choice for TypeScript projects. Native ESM support, Vite-powered HMR for tests, and Jest-compatible API. Watch mode is instant. First-class TypeScript without configuration.
-
-### 2. Bun Test
-The fastest test runner available — built into the Bun runtime. Zero-config TypeScript support. Lifecycle hooks, snapshot testing, and mock support. Ecosystem is newer but growing rapidly.
-
-### 3. Jest
-The established standard with the largest ecosystem. Requires ts-jest or SWC transformer for TypeScript. Slower than Vitest/Bun but has the most mature plugin ecosystem and community support.
-
-**Recommendation:** Vitest for most TypeScript projects — it combines speed, excellent DX, and a growing ecosystem. Choose Bun Test if you're already using the Bun runtime. Jest remains solid for existing projects with heavy Jest plugin dependencies.`,
+**Summary:** Today's HN front page is dominated by infrastructure and tooling — a
+self-built arXiv search, a write-your-own-database guide, and an Effect-TS
+adoption story all sit alongside an OpenAI reasoning-model release. The
+context-switching post is the lone soft-skills entry; everything else
+trends technical and DIY.`,
 
   // Fallback
   "": "Demo complete.",
 };
 
-/** The demo task prompt. */
+/**
+ * The demo task prompt.
+ *
+ * Designed to demonstrate three things at once:
+ *   1. Real tool calling (`get-hn-posts` against live HN API).
+ *   2. Multi-step reasoning (fetch → format list → synthesize summary).
+ *   3. Output that is provably NOT training-data regurgitation
+ *      (HN front page changes constantly).
+ */
 export const DEMO_TASK =
-  "Find the top 3 TypeScript testing frameworks and compare their features";
+  "Use the get-hn-posts tool to fetch the top 5 stories on Hacker News right now, then write them as a numbered list with title, score, and url. Finish with a one-paragraph summary of what's trending.";

@@ -14,8 +14,21 @@ export interface DefineToolOptions<A> {
   name: string;
   /** Human-readable description shown to the LLM. */
   description: string;
-  /** Effect Schema describing the tool's input parameters. */
-  input: Schema.Schema<A, Record<string, unknown>>;
+  /**
+   * Effect Schema describing the tool's input parameters.
+   *
+   * The encoded type parameter is intentionally widened to `any` — the
+   * runtime uses `Schema.decodeUnknown(input)` to accept raw
+   * `Record<string, unknown>` args from the LLM and validate against the
+   * schema. The original `Record<string, unknown>` constraint was too
+   * tight: Effect Schema's invariant typing made `Schema.Struct({ ... })`
+   * fail strict tsc even though decoding succeeds at runtime. (Tests
+   * compiled only because the tools tsconfig excludes its test
+   * directory.) `any` here is intentional and isolated to the encoded
+   * phantom — the decoded type `A` is still inferred and type-safe.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  input: Schema.Schema<A, any>;
   /** Typed handler that receives decoded (validated) args and returns an Effect. */
   handler: (args: A) => Effect.Effect<unknown, unknown>;
   /** Risk level. Defaults to "low". */
@@ -207,8 +220,10 @@ export function defineTool<A>(options: DefineToolOptions<A>): DefinedTool {
     ...(cacheTtlMs !== undefined ? { cacheTtlMs } : {}),
   };
 
-  // Build the runtime-validated handler wrapper
-  const decode = Schema.decodeUnknown(input as Schema.Schema<A, Record<string, unknown>>);
+  // Build the runtime-validated handler wrapper. `decodeUnknown` accepts
+  // any input and validates against the schema, so the encoded-type
+  // constraint on `input` is intentionally loose (unknown).
+  const decode = Schema.decodeUnknown(input);
 
   const wrappedHandler = (
     rawArgs: Record<string, unknown>,

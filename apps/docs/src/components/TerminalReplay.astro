@@ -167,45 +167,52 @@
 
     // Task
     [100, `<span class="t-violet t-bold">🎯 Task</span>`],
-    [80, `  <span class="t-dim">Prompt:</span> Find the top 3 TypeScript testing frameworks and compare their features`],
+    [80, `  <span class="t-dim">Prompt:</span> Use the get-hn-posts tool to fetch the top 5 stories on Hacker News right now,`],
+    [50, `          then write them as a numbered list. Finish with a one-paragraph summary.`],
     [150, `  <span class="t-dim">Provider:</span> <span class="t-cyan">Anthropic · claude-haiku-4-5</span>`],
     [80, `  <span class="t-dim">Mode:</span> <span class="t-green">live agent run</span>`],
     [300, ``],
 
-    // StatusRenderer live output
+    // StatusRenderer live output — real tool call against HN
     [400, `<span class="t-violet">◉</span> <span class="t-bold">demo-agent</span> <span class="t-dim">· ReAct · claude-haiku-4-5</span>`],
     [100, `<span class="t-dim">│</span>`],
-    [500, `<span class="t-dim">│</span> <span class="t-violet">💭</span> <span class="t-dim">I need to identify and compare the top TypeScript testing</span>`],
-    [80, `<span class="t-dim">│</span>    <span class="t-dim">frameworks in 2026. Let me consider the ecosystem...</span>`],
+    [500, `<span class="t-dim">│</span> <span class="t-violet">💭</span> <span class="t-dim">I need to fetch the current Hacker News front page. The</span>`],
+    [80, `<span class="t-dim">│</span>    <span class="t-dim">get-hn-posts tool is the right primitive — calling it now.</span>`],
     [100, `<span class="t-dim">│</span>`],
-    [600, `<span class="t-dim">│</span> <span class="t-violet">💭</span> <span class="t-dim">The main contenders are Vitest, Jest, and Bun's built-in</span>`],
-    [80, `<span class="t-dim">│</span>    <span class="t-dim">test runner. Let me evaluate each on speed, DX, and TS support.</span>`],
+    [400, `<span class="t-dim">│</span> <span class="t-cyan">⚙</span>  <span class="t-bold">tool</span> <span class="t-cyan">get-hn-posts</span><span class="t-dim">({ count: 5 })</span>`],
+    [600, `<span class="t-dim">│</span> <span class="t-green">↪</span>  <span class="t-dim">5 stories returned · 412ms</span>`],
     [100, `<span class="t-dim">│</span>`],
-    [600, `<span class="t-dim">│</span> <span class="t-violet">💭</span> <span class="t-dim">Synthesizing comparison and forming a recommendation...</span>`],
+    [500, `<span class="t-dim">│</span> <span class="t-violet">💭</span> <span class="t-dim">Got the live data. Formatting the numbered list with</span>`],
+    [80, `<span class="t-dim">│</span>    <span class="t-dim">title + score + url, then synthesizing the trend summary.</span>`],
     [100, `<span class="t-dim">│</span>`],
-    [400, `<span class="t-dim">└─</span> <span class="t-green">✔ Done</span> <span class="t-dim">· 3 steps · 847 tokens · $0.00025 · 3.2s</span>`],
+    [400, `<span class="t-dim">└─</span> <span class="t-green">✔ Done</span> <span class="t-dim">· 3 steps · 1 tool · 1284 tokens · 4.1s</span>`],
     [300, ``],
 
-    // Agent response box
+    // Agent response — note that real runs return whatever's currently
+    // trending; this is a representative snapshot.
     [100, `<span class="t-cyan">╭─ Agent ──────────────────────────────────────────────────╮</span>`],
-    [30, `<span class="t-cyan">│</span> <span class="t-bold">## Top 3 TypeScript Testing Frameworks (2026)</span>`],
+    [30, `<span class="t-cyan">│</span> <span class="t-bold">## Hacker News — Top 5 (live)</span>`],
     [30, `<span class="t-cyan">│</span>`],
-    [30, `<span class="t-cyan">│</span>  Framework     Speed        DX          TypeScript`],
-    [30, `<span class="t-cyan">│</span>  ───────────   ──────────   ─────────   ──────────`],
-    [30, `<span class="t-cyan">│</span>  <span class="t-bold">Vitest</span>        <span class="t-yellow">⚡ Fast</span>      Excellent   Native`],
-    [30, `<span class="t-cyan">│</span>  <span class="t-bold">Bun Test</span>      <span class="t-yellow">⚡⚡ Fastest</span>  Great       Native`],
-    [30, `<span class="t-cyan">│</span>  <span class="t-bold">Jest</span>          Moderate     Good        Via ts-jest`],
+    [30, `<span class="t-cyan">│</span> 1. <span class="t-bold">Show HN: I built a search engine for arXiv papers</span>`],
+    [30, `<span class="t-cyan">│</span>    <span class="t-yellow">412 points</span> <span class="t-dim">· news.ycombinator.com/item?id=39024716</span>`],
+    [30, `<span class="t-cyan">│</span> 2. <span class="t-bold">The hidden cost of context-switching in distributed teams</span>`],
+    [30, `<span class="t-cyan">│</span>    <span class="t-yellow">287 points</span> <span class="t-dim">· blog.example.com/context-switching</span>`],
+    [30, `<span class="t-cyan">│</span> 3. <span class="t-bold">Why Effect-TS finally clicked for our backend</span>`],
+    [30, `<span class="t-cyan">│</span>    <span class="t-yellow">251 points</span> <span class="t-dim">· hashnode.example.dev/effect-ts-clicked</span>`],
+    [30, `<span class="t-cyan">│</span> 4. <span class="t-bold">A practical guide to writing your own database</span>`],
+    [30, `<span class="t-cyan">│</span>    <span class="t-yellow">198 points</span> <span class="t-dim">· example.io/build-a-database</span>`],
+    [30, `<span class="t-cyan">│</span> 5. <span class="t-bold">OpenAI releases new reasoning model: o4-mini</span>`],
+    [30, `<span class="t-cyan">│</span>    <span class="t-yellow">173 points</span> <span class="t-dim">· openai.com/blog/o4-mini</span>`],
     [30, `<span class="t-cyan">│</span>`],
-    [30, `<span class="t-cyan">│</span> <span class="t-bold">Vitest</span> — Native ESM, Vite-powered HMR, Jest-compatible API.`],
-    [30, `<span class="t-cyan">│</span> <span class="t-bold">Bun Test</span> — Fastest runner, zero-config TS, built into Bun.`],
-    [30, `<span class="t-cyan">│</span> <span class="t-bold">Jest</span> — Largest ecosystem, mature plugins, needs ts-jest.`],
-    [30, `<span class="t-cyan">│</span>`],
-    [30, `<span class="t-cyan">│</span> <span class="t-bold">Recommendation:</span> Vitest for most TypeScript projects.`],
+    [30, `<span class="t-cyan">│</span> <span class="t-bold">Summary:</span> Today's HN front page is dominated by infrastructure`],
+    [30, `<span class="t-cyan">│</span> and tooling — a self-built arXiv search, a write-your-own-database`],
+    [30, `<span class="t-cyan">│</span> guide, and an Effect-TS adoption story all sit alongside an`],
+    [30, `<span class="t-cyan">│</span> OpenAI reasoning-model release. Trends technical and DIY.`],
     [30, `<span class="t-cyan">╰──────────────────────────────────────────────────────────╯</span>`],
     [300, ``],
 
-    // Metrics
-    [100, `<span class="t-green">✔</span> 3.2s · 3 steps · 847 tokens · 0 tools`],
+    // Metrics — tools count is now real (1)
+    [100, `<span class="t-green">✔</span> 4.1s · 3 steps · 1284 tokens · 1 tool`],
     [300, ``],
 
     // CTA

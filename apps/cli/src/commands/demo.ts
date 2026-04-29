@@ -1,6 +1,8 @@
 import * as readline from 'node:readline'
 import chalk from 'chalk'
+import { Effect, Schema } from 'effect'
 import { ReactiveAgents } from 'reactive-agents'
+import { defineTool } from '@reactive-agents/tools'
 import {
     banner,
     kv,
@@ -10,6 +12,60 @@ import {
     metricsSummary,
 } from '../ui.js'
 import { demoResponses, DEMO_TASK } from './demo-responses.js'
+
+// ── Hacker News tool — self-contained, no API key required ─────────────────
+// Live demo proof: the agent fetches the current HN front page (live data,
+// not training-data regurgitation) and summarizes it. Defined with the
+// canonical `defineTool` factory + Effect Schema so it follows the same
+// patterns the rest of the framework recommends.
+const getHnPostsTool = defineTool({
+    name: 'get-hn-posts',
+    description:
+        'Fetch current Hacker News front-page stories (title, score, url) via the official API.',
+    input: Schema.Struct({
+        count: Schema.Number,
+    }),
+    riskLevel: 'low',
+    timeoutMs: 20_000,
+    handler: ({ count }) =>
+        Effect.tryPromise({
+            try: async () => {
+                const n = Math.min(10, Math.max(1, count || 5))
+                const listRes = await fetch(
+                    'https://hacker-news.firebaseio.com/v0/topstories.json'
+                )
+                if (!listRes.ok) {
+                    throw new Error(`HN topstories HTTP ${listRes.status}`)
+                }
+                const ids = (await listRes.json()) as number[]
+                const slice = ids.slice(0, n)
+                const items = await Promise.all(
+                    slice.map(async (id) => {
+                        const r = await fetch(
+                            `https://hacker-news.firebaseio.com/v0/item/${id}.json`
+                        )
+                        if (!r.ok) {
+                            throw new Error(`HN item ${id} HTTP ${r.status}`)
+                        }
+                        return r.json() as Promise<{
+                            title?: string
+                            score?: number
+                            url?: string
+                        }>
+                    })
+                )
+                return items.map((it, i) => ({
+                    id: slice[i],
+                    title: it.title ?? '(no title)',
+                    score: it.score ?? 0,
+                    url:
+                        it.url ??
+                        `https://news.ycombinator.com/item?id=${slice[i]}`,
+                }))
+            },
+            catch: (e) => (e instanceof Error ? e : new Error(String(e))),
+        }),
+})
 
 const VIOLET = '#8b5cf6'
 const CYAN = '#06b6d4'
@@ -181,6 +237,7 @@ async function runLiveDemo(detected: ProviderInfo): Promise<void> {
         .withModel(detected.model)
         .withReasoning()
         .withObservability()
+        .withTools({ tools: [getHnPostsTool] })
         .build()
 
     const startTime = Date.now()
@@ -191,11 +248,30 @@ async function runLiveDemo(detected: ProviderInfo): Promise<void> {
     agentResponse(result.output ? String(result.output) : '(no output)')
     console.log()
 
+    // Read real metadata where available — fall back gracefully if a field
+    // is missing. `toolsUsed` is set by the runtime debrief; for older
+    // metadata shapes we count distinct names from toolCallHistory.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const meta = (result.metadata ?? {}) as any
+    const toolsUsedArr: unknown =
+        meta.toolsUsed ??
+        meta.debrief?.toolsUsed ??
+        (Array.isArray(meta.toolCallHistory)
+            ? Array.from(
+                  new Set(
+                      meta.toolCallHistory.map(
+                          (t: { name?: string }) => t?.name ?? ''
+                      )
+                  )
+              )
+            : [])
+    const toolsCount = Array.isArray(toolsUsedArr) ? toolsUsedArr.length : 0
+
     metricsSummary({
-        duration: result.metadata?.duration ?? duration,
-        steps: result.metadata?.stepsCount ?? 1,
-        tokens: result.metadata?.tokensUsed ?? 0,
-        tools: 0,
+        duration: meta.duration ?? duration,
+        steps: meta.stepsCount ?? 1,
+        tokens: meta.tokensUsed ?? 0,
+        tools: toolsCount,
         success: result.success,
     })
     console.log()
@@ -223,23 +299,23 @@ async function runReplayDemo(): Promise<void> {
     console.log()
 
     for (const step of [
-        'Planning approach to research testing frameworks',
-        'Evaluating Vitest, Jest, Bun test runner',
-        'Synthesizing comparison',
+        'Calling get-hn-posts to fetch the current HN front page',
+        'Tool returned 5 stories — formatting as numbered list',
+        'Synthesizing one-paragraph summary of trending themes',
     ]) {
         console.log(`  ${chalk.hex(VIOLET)('💭')} ${chalk.dim(step)}`)
         await sleep(420)
     }
     console.log()
 
-    agentResponse(demoResponses['Find the top 3 TypeScript testing frameworks'])
+    agentResponse(demoResponses['fetch the top 5 stories on Hacker News'])
     console.log()
 
     metricsSummary({
         duration: 4200,
         steps: 3,
-        tokens: 314,
-        tools: 0,
+        tokens: 412,
+        tools: 1,
         success: true,
     })
     console.log()
