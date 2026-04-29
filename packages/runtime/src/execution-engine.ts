@@ -3825,6 +3825,13 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3761", tag: errorTag(err) })));
                   yield* obs.setGauge("execution.iteration", ctx.iteration, { taskId: ctx.taskId })
                     .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3763", tag: errorTag(err) })));
+                  // Stage 5 quality fix: expose actual task success as a metric
+                  // so the console exporter can display the correct status.
+                  // Prior: exporter inferred success from phase health (always
+                  // succeeded for verifier-rejected runs), causing the
+                  // "Status: Success" lie when the task actually failed.
+                  yield* obs.setGauge("execution.success", executionSucceeded ? 1 : 0, { taskId: ctx.taskId })
+                    .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:execution.success", tag: errorTag(err) })));
 
                   // Record model used (updated to actual model from LLM provider response)
                   const modelName = String(ctx.selectedModel ?? "unknown");

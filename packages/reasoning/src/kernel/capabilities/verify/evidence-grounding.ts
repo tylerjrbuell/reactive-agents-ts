@@ -189,14 +189,33 @@ export interface GeneralizedGroundingResult {
 export function validateGeneralizedGrounding(
   output: string,
   evidence: string,
-  options?: { readonly maxUngroundedRate?: number; readonly minClaimsForCheck?: number },
+  options?: {
+    readonly maxUngroundedRate?: number;
+    readonly minClaimsForCheck?: number;
+    /**
+     * Opt in to the substring claim-grounding pass. Defaults to FALSE because
+     * the Title-Case claim extractor over-matches structural language (section
+     * labels, transitions, paraphrased titles) and rejects legitimate
+     * summaries on tasks that paraphrase tool output (HN summaries, search
+     * digests, etc.). The compression-marker check below is always on — it
+     * catches genuine framework leakage and has no false-positive rate.
+     *
+     * Stage 5 quality fix: prior default `true` produced 64-73% reject rates
+     * on legitimate summarization tasks; the gate was net-negative for
+     * everyday use. Re-enable per-agent via `withVerification({ syntheGrounding: true })`
+     * for tasks where exact-substring grounding is required (e.g., financial
+     * figures, structured-data extraction).
+     */
+    readonly enableClaimGrounding?: boolean;
+  },
 ): GeneralizedGroundingResult {
-  // Default 0.3 (30% tolerance) — real synthesis includes structural words
-  // like section headings, transitions, etc. that don't appear in evidence.
-  // The point is to catch SYSTEMIC fabrication, not require exact citation.
-  const maxUngroundedRate = options?.maxUngroundedRate ?? 0.3;
+  const maxUngroundedRate = options?.maxUngroundedRate ?? 0.5;
   const minClaimsForCheck = options?.minClaimsForCheck ?? 3;
+  const claimGroundingEnabled = options?.enableClaimGrounding ?? false;
 
+  // Compression-marker check (always on) — catches the model literally
+  // parroting framework internal scaffolding ([STORED:], compressed preview,
+  // _tool_result_N, etc.). Hard fail, no false-positive risk.
   const compressionEchoDetected = COMPRESSION_MARKER_PATTERNS.some((re) => re.test(output));
   if (compressionEchoDetected) {
     return {
@@ -207,6 +226,18 @@ export function validateGeneralizedGrounding(
       compressionEchoDetected: true,
       reason:
         "output contains framework compression markers (e.g., [STORED:], compressed preview, _tool_result_N) — model echoed internal scaffolding instead of synthesizing",
+    };
+  }
+
+  // Claim-grounding pass — only run when explicitly opted in.
+  if (!claimGroundingEnabled) {
+    return {
+      verified: true,
+      ungroundedClaims: [],
+      totalClaims: 0,
+      groundingRate: 1,
+      compressionEchoDetected: false,
+      reason: "claim-grounding pass disabled (opt-in via syntheGrounding option)",
     };
   }
 

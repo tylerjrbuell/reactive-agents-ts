@@ -261,21 +261,21 @@ export const defaultVerifier: Verifier = {
       // double-rejected legitimate delegated runs. Output structural verification
       // stays in §8; the verifier focuses on output-quality signals below.
 
-      // Check 3b: agent-took-action (classifier-independent)
-      // Stricter signal than required-tools-satisfied. Distinguishes
-      // "agent ran the task" from "agent shipped a parroted answer".
+      // Check 3b: agent-took-action (only when user REQUIRED tools).
       //
-      // The rule: if the USER registered data tools (availableUserTools is
-      // non-empty), the agent must have called at least one non-meta tool.
-      // If no non-meta tool was called, the agent didn't actually do the
-      // work — its answer is either a parroted system instruction, a
-      // hallucinated answer, or a meta-tool return value. Reject.
+      // History: this check originally fired whenever the user had ANY data
+      // tools wired (availableUserTools non-empty). That was tuned for the
+      // p01b spike (cogito:8b on rw-2) where the agent fabricated answers
+      // without calling required tools. Generalized as default, the check
+      // false-positives on every task that doesn't need tools — e.g. asking
+      // for the capital of France while a `recall` tool is also wired
+      // produces a verifier rejection because no data tool was called, even
+      // though the agent answered correctly from prior knowledge.
       //
-      // Classifier-independent: doesn't rely on requiredTools/relevantTools
-      // inference (which can be empty due to LLM variance). The signal is
-      // purely structural — what the user wired vs what the agent invoked.
-      // Falls back to the classifier-suggested set when availableUserTools
-      // wasn't passed (older callers).
+      // Stage 5 quality fix: gate on explicit user intent. If the user
+      // declared `requiredTools`, enforce. Otherwise, the agent is free to
+      // answer from knowledge. The p01b case is preserved because that
+      // scenario has explicit `requiredTools: ["search-orders"]`.
       const META_TOOL_SET = new Set([
         "final-answer",
         "task-complete",
@@ -288,10 +288,10 @@ export const defaultVerifier: Verifier = {
         "activate-skill",
         "discover-tools",
       ]);
-      const dataToolsAvailable = ctx.availableUserTools && ctx.availableUserTools.length > 0
-        ? ctx.availableUserTools.filter((t) => !META_TOOL_SET.has(t))
-        : [...(ctx.requiredTools ?? []), ...(ctx.relevantTools ?? [])];
-      if (dataToolsAvailable.length > 0) {
+      const requiredDataTools = (ctx.requiredTools ?? []).filter(
+        (t) => !META_TOOL_SET.has(t),
+      );
+      if (requiredDataTools.length > 0) {
         const used = ctx.toolsUsed ?? new Set<string>();
         const nonMetaUsed = [...used].filter((t) => !META_TOOL_SET.has(t));
         checks.push({
@@ -299,7 +299,7 @@ export const defaultVerifier: Verifier = {
           passed: nonMetaUsed.length > 0,
           reason:
             nonMetaUsed.length === 0
-              ? `agent shipped output without calling any data tool (available: ${dataToolsAvailable.join(", ")})`
+              ? `agent shipped output without calling any required data tool (required: ${requiredDataTools.join(", ")})`
               : undefined,
         });
       }

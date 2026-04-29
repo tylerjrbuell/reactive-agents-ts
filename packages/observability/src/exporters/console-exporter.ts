@@ -385,13 +385,32 @@ export const buildDashboardData = (
     totalDuration = phases.reduce((sum, p) => sum + p.duration, 0);
   }
 
-  // Determine status — only actual errors affect overall status.
-  // Timing warnings (slow phases) are informational and don't indicate partial completion.
+  // Determine status. Priority order:
+  //   1. `execution.success` gauge from runtime — authoritative task outcome
+  //      (covers verifier-rejected runs where every phase ran cleanly but
+  //      the kernel ultimately failed).
+  //   2. Phase-level errors — older fallback for runs without the gauge.
+  //   3. Default "success".
+  //
+  // Stage 5 quality fix: prior implementation only checked phases, which
+  // produced the "Status: Success" lie on verifier-rejected runs.
   let status: "success" | "error" | "partial" = "success";
-  for (const phase of phases) {
-    if (phase.status === "error") {
-      status = "error";
+  let sawSuccessGauge = false;
+  for (const metric of metrics) {
+    if (metric.type === "gauge" && metric.name === "execution.success") {
+      sawSuccessGauge = true;
+      if (metric.value !== 1) {
+        status = "error";
+      }
       break;
+    }
+  }
+  if (!sawSuccessGauge) {
+    for (const phase of phases) {
+      if (phase.status === "error") {
+        status = "error";
+        break;
+      }
     }
   }
 
