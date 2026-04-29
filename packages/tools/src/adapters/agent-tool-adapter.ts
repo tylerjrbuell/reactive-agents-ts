@@ -3,7 +3,32 @@ import type { AgentDefinition, Capability } from "@reactive-agents/core";
 import type { ToolDefinition, ToolParameter } from "../types.js";
 import { ToolExecutionError } from "../errors.js";
 
-export const MAX_RECURSION_DEPTH = 3;
+/**
+ * Default sub-agent recursion depth cap.
+ *
+ * Override per-agent via `withDynamicSubAgents({ maxRecursionDepth: N })`,
+ * or globally via the `REACTIVE_AGENTS_MAX_RECURSION_DEPTH` env var. The
+ * default of 3 protects against runaway agent fanout while allowing
+ * non-trivial multi-agent hierarchies.
+ *
+ * Stage 5 fix (FIX-7): prior to W7 this was a fixed compile-time constant,
+ * silently capping any deep agent hierarchy regardless of user intent.
+ */
+export const DEFAULT_MAX_RECURSION_DEPTH = 3;
+
+/** Resolve the recursion depth cap from env / explicit config / default. */
+export function resolveMaxRecursionDepth(override?: number): number {
+  if (typeof override === "number" && override > 0) return override;
+  const envVal = process.env["REACTIVE_AGENTS_MAX_RECURSION_DEPTH"];
+  if (envVal) {
+    const parsed = Number(envVal);
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  }
+  return DEFAULT_MAX_RECURSION_DEPTH;
+}
+
+/** @deprecated Use `resolveMaxRecursionDepth()` for read-time configurability. */
+export const MAX_RECURSION_DEPTH = DEFAULT_MAX_RECURSION_DEPTH;
 
 /** Maximum characters of parent context to forward to sub-agents. */
 export const MAX_PARENT_CONTEXT_CHARS = 2000;
@@ -91,6 +116,12 @@ export interface SubAgentConfig {
   readonly tools?: readonly string[];
   /** Max reasoning iterations (default: 3 when not set; user-configured value is fully honored) */
   readonly maxIterations?: number;
+  /**
+   * Max recursion depth for nested sub-agent delegation (default: 3, override
+   * via `REACTIVE_AGENTS_MAX_RECURSION_DEPTH` env var). Stage 5 W7 FIX-7:
+   * configurable instead of the prior compile-time hardcode.
+   */
+  readonly maxRecursionDepth?: number;
   /** Focused system prompt for this sub-agent */
   readonly systemPrompt?: string;
   /** Optional persona for steering sub-agent behavior */
@@ -169,11 +200,12 @@ export const createSubAgentExecutor = (
           : typeof (rawTask as Record<string, unknown>).task === "string"
             ? ((rawTask as Record<string, unknown>).task as string)
             : JSON.stringify(rawTask);
-    if (depth >= MAX_RECURSION_DEPTH) {
+    const maxRecursionDepth = resolveMaxRecursionDepth(config.maxRecursionDepth);
+    if (depth >= maxRecursionDepth) {
       return {
         subAgentName: config.name,
         success: false,
-        summary: `Maximum agent recursion depth (${MAX_RECURSION_DEPTH}) exceeded`,
+        summary: `Maximum agent recursion depth (${maxRecursionDepth}) exceeded`,
         tokensUsed: 0,
       };
     }
@@ -530,9 +562,10 @@ export const executeAgentTool = async (
   executeFn: (input: Record<string, unknown>) => Promise<unknown>,
   depth: number = 0
 ): Promise<unknown> => {
-  if (depth >= MAX_RECURSION_DEPTH) {
+  const maxRecursionDepth = resolveMaxRecursionDepth();
+  if (depth >= maxRecursionDepth) {
     throw new ToolExecutionError({
-      message: `Maximum agent recursion depth (${MAX_RECURSION_DEPTH}) exceeded`,
+      message: `Maximum agent recursion depth (${maxRecursionDepth}) exceeded`,
       toolName: tool.name,
       input,
     });

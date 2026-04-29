@@ -229,13 +229,29 @@ async function resolveThinking(
   model: string,
   configThinking: boolean | undefined,
 ): Promise<boolean | undefined> {
-  if (configThinking === false) return undefined; // omit think param entirely
-  // ALWAYS verify capability, even when thinking is requested explicitly.
+  // Stage 5 quality fix (FIX-3): thinking is OPT-IN, not auto-enabled by
+  // capability detection.
+  //
+  // Background: prior logic auto-enabled `think: true` for any model whose
+  // /api/show advertised the capability, even when the user didn't request
+  // it. This broke qwen3:14b and similar reasoning models — they emit
+  // content inside <think>...</think> tags only, leaving the assistant
+  // content empty, which the harness saw as "no output produced." The
+  // invariant was: capability ⇒ enable. The reality is: capability is
+  // necessary but not sufficient; only explicit user opt-in should enable.
+  //
+  // Matches the control-pillar discipline (Vision §1 Pillar 1): every
+  // harness behavior must be developer-overridable from inception. Auto-
+  // enabling a feature based on inference is exactly the black-box
+  // anti-pattern the pillar forbids.
+  if (configThinking === undefined) return undefined; // default: do not enable
+  if (configThinking === false) return undefined;
+  // configThinking === true — verify capability before passing through.
   // Sending `think: true` to a model that doesn't support it produces an
   // immediate Ollama error ("granite3.3:latest does not support thinking")
-  // and aborts the entire run. Capability comes from /api/show.
+  // and aborts the entire run.
   const capable = await supportsThinking(client, model);
-  if (configThinking === true && !capable) {
+  if (!capable) {
     if (!thinkingMismatchWarned.has(model)) {
       thinkingMismatchWarned.add(model);
       // eslint-disable-next-line no-console
@@ -247,7 +263,7 @@ async function resolveThinking(
     }
     return undefined;
   }
-  return capable ? true : undefined;
+  return true;
 }
 
 // ─── Error Helpers ───
