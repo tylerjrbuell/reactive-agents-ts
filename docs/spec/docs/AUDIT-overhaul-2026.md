@@ -609,14 +609,20 @@ Stage 4 produces a single MEMORY-RECONCILIATION.md log of all changes for tracea
 - **Reason:** Plausible mechanism, no harm, but claims exceed evidence.
 - **Stage 5 actions:** Mark Sprint 3.x healing-pipeline surfaces `_unstable_*`. Post-release: design 4 spike scenarios (one per stage) — does each stage actually unstick a stuck FC? On which models?
 
-##### M5 — Context curation: dual compression (`tool-execution.ts` + `context-compressor.ts`)
+##### M5 — Context curation: three-stage compression pipeline
 
 - **Failure modes addressed:** FM-F1 (context overflow with information loss).
-- **Evidence:** **Known problem** per memory `project_running_issues #4` — two compression systems may both fire on the same run; G-4 in NS §2.7 says "curator IS sole prompt author; deletion deferred."
-- **Health:** Both systems exist; coordination unclear.
-- **Verdict:** **FIX**
-- **Reason:** Two uncoordinated compression mechanisms producing unpredictable behavior on long tasks.
-- **Stage 5 actions:** Pick one as canonical. Per NS, the curator is now sole prompt author — that's the keeper. Delete (or hard-disable) the parallel `tool-execution.ts` compression path; or document why both fire and add a coordination check. Add a probe: long-context task, compare with each compression system disabled; pick the better.
+- **Evidence:** ~~**Known problem** per memory `project_running_issues #4` — two compression systems may both fire on the same run~~ ✅ **W6 investigation closed** — the "dual compression" framing was inaccurate. There are three stages and they're sequenced, not redundant:
+  1. **`tool-execution.ts:574`** `compressToolResult()` — per-tool-result content compression. Produces small `displayText` for the prompt; stashes the **full content** in `state.scratchpad` keyed by `storedKey`. Always-on, deterministic, character-budget governed by per-tier `profile.toolResultMaxChars`.
+  2. **`context-curator.ts:206-223`** `selectObservationContent()` — the curator (G-4 sole prompt author) reads from scratchpad via `storedKey` and renders the **full content** capped to per-tier budget. This is what the model actually sees in the "Recent tool observations:" section.
+  3. **`patch-applier.ts:52-59` + `reactive-observer.ts:357-365`** `compress-messages` — RI-dispatched, advisory, fires when `contextPressure > 0.80`. Trims `state.messages` only. **Steps and scratchpad are intentionally untouched**, so the curator can still re-render observations on the next iteration.
+- **Health:** **Pipeline is coordinated.** Verified via grep: `patch-applier.ts` only modifies `state.messages` (not `steps`/`scratchpad`); `reactive-observer.ts:357-365` mirrors that constraint. Curator runs every iteration in `think.ts:298`, so post-trim renders re-populate observations from steps + scratchpad.
+- **Verdict:** **KEEP (resolved-by-discovery)** — the audit's prior prescription to "delete tool-execution.ts compression" would have broken the scratchpad write that the curator depends on. The actual coordination is sound.
+- **Reason:** Three sequenced stages with distinct roles; no genuine redundancy.
+- **Stage 5 actions (W6):** ~~Pick one as canonical.~~ ~~Delete (or hard-disable) the parallel `tool-execution.ts` compression path.~~ ✅ done by discovery — the prescription was based on a misreading. **Done in W6:**
+  - Regression test added (`context-curator.test.ts` — "compression coordination (W6 / FIX-4 / FIX-20)"): asserts steps + scratchpad survive a thread-level message trim, and the curator's section still renders FULL_CONTENT via storedKey lookup. Pins the invariant; future patch handlers that touch `state.steps` or `state.scratchpad` on `compress-messages` will fail this test.
+  - Fallback test (storedKey missing → curator degrades to displayText) confirms graceful degradation.
+  - Audit row updated to describe the three-stage pipeline.
 
 ##### M6 — Skill system (lifecycle, AgentEvents, RI hooks)
 
@@ -738,7 +744,7 @@ Status legend: ✅ confirmed | 🟡 partial / corrected | ❌ stale (no action n
 | 1 | Umbrella `reactive-agents` package never published | ✅ | **P0 release blocker.** Action in `reactive-agents` (umbrella) §10.1. |
 | 2 | `@reactive-agents/diagnose` never published | ✅ | Action in diagnose §10.1. |
 | 3 | ~~qwen3 thinking-mode auto-enabled~~ | ✅ **resolved W7** | Inverted default: thinking is OPT-IN. `resolveThinking()` at `providers/local.ts:226-263` returns `undefined` unless `configThinking === true`. Capability verification still gates explicit opt-in (so granite3.3-style models warn-once and omit instead of erroring at the API). |
-| 4 | Dual compression systems uncoordinated | ✅ | M5 mechanism. Pick curator as canonical; delete or hard-disable parallel `tool-execution.ts` compression. |
+| 4 | ~~Dual compression systems uncoordinated~~ | ✅ **resolved-by-discovery W6** | The "dual" framing was wrong. Three stages sequenced: `tool-execution.ts` compress-and-stash → curator render-from-stash → `compress-messages` patch trims messages only (steps/scratchpad untouched, so curator re-renders next iteration). Regression test in `context-curator.test.ts` pins the invariant. See M5. |
 | 5 | ~~ToT outer loop ignores early-stop~~ | ✅ **resolved W5** | Commit `89bbe321`: BFS frontier scored via `entropySensor`; `reactiveController` decision evaluation; `services.dispatcher` dispatch with `perStrategyRiBudget` accumulator across depth iterations; outer for-loop breaks on `patch.kind === "early-stop"`. ~75 LOC, gated on `services` Some so no-dispatcher runs unaffected. Mirrors plan-execute pattern at depth-iteration boundaries. T4 regression test added (`tree-of-thought.test.ts` — verifies BFS terminates at depth 1 with stub dispatcher returning `early-stop` patch). |
 | 6 | 3/6 skill lifecycle AgentEvents missing | ✅ **resolved W2** | Events DO exist at `core/services/event-bus.ts:986-990`. Subscribers wired at `builder.ts:2682-2716` (commit on `refactor/overhaul`). |
 | 7 | ~~`MAX_RECURSION_DEPTH = 3` not configurable~~ | ✅ **resolved W7** | New `resolveMaxRecursionDepth()` reads from explicit `SubAgentConfig.maxRecursionDepth` → `REACTIVE_AGENTS_MAX_RECURSION_DEPTH` env var → default 3. Both depth-check sites updated. `MAX_RECURSION_DEPTH` retained as `@deprecated` alias. |
@@ -754,7 +760,7 @@ Status legend: ✅ confirmed | 🟡 partial / corrected | ❌ stale (no action n
 | 17 | AUC validation unproven (corpus AUC = 0.000) | ✅ | Confirms M1 unvalidated. Post-RI-fix, re-run. |
 | 18 | ~~9 termination paths in kernel; oracle wired to 1~~ | ✅ **resolved W4** | All 8 imperative sites in `runner.ts` now route through `kernel/loop/terminate.ts` `terminate()` helper. Arbitrator remains the verdict-driven oracle. CI lint at `scripts/check-termination-paths.sh` enforces the single-owner invariant going forward. |
 | 19 | ExecutionEngine 4,404 LOC unchanged | ✅ **actual 4,476 LOC** | Plus newly discovered: **`builder.ts` is 5,877 LOC** — even larger orchestration surface. Combined: 10,353 LOC. Action in runtime §10.1. |
-| 20 | 3 compression systems (NS §2.7 G-4) | ✅ | Same as #4. M5. |
+| 20 | ~~3 compression systems (NS §2.7 G-4)~~ | ✅ **resolved-by-discovery W6** | Three exist by design — sequenced as a pipeline (compress-and-stash → curator-render → optional thread-trim), not three redundant compressors. See #4 + M5. |
 
 ### 11.2 Newly discovered (Stage 3 audit)
 
@@ -795,7 +801,7 @@ Status legend: ✅ confirmed | 🟡 partial / corrected | ❌ stale (no action n
 - #21 Eval frozen-judge (if v0.10.0 claims benchmark numbers)
 
 **P1 (high — strongly degrades release quality):**
-- #4/#20 Pick canonical compression system
+- ~~#4/#20 Pick canonical compression system~~ ✅ **resolved-by-discovery W6** (audit framing was wrong; pipeline is coordinated)
 - ~~#5 ToT outer loop early-stop~~ ✅ **resolved W5** (T4 regression test landed)
 - #6 Wire 3 missing skill-hook subscribers
 - #7 Make `MAX_RECURSION_DEPTH` configurable

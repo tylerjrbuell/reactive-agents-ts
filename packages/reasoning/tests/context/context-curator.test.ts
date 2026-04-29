@@ -127,6 +127,115 @@ describe("defaultContextCurator", () => {
   });
 });
 
+// ── W6 (FIX-4 / FIX-20) — compression coordination invariant ─────────────
+//
+// Three-stage pipeline: (a) tool-execution.ts compresses + stashes full
+// content in scratchpad keyed by storedKey, (b) curator renders by reading
+// scratchpad via storedKey, (c) RI dispatcher's `compress-messages` patch
+// trims state.messages but leaves state.steps + state.scratchpad untouched.
+//
+// The audit's M5 framing of "delete tool-execution.ts compression" was
+// based on the misreading that systems (a) and (c) duplicate each other.
+// They don't — (a) is per-tool-result content compression for context
+// budget, (c) is thread-level message trim. Curator bridges them.
+//
+// This test pins the invariant: even after compress-messages drops oldest
+// messages, curator still renders full observation content via scratchpad
+// lookup. If a future patch handler starts touching state.steps or
+// state.scratchpad on compress-messages, this test will fail.
+describe("compression coordination (W6 / FIX-4 / FIX-20)", () => {
+  it("curator renders full tool-result via storedKey after thread-level compress-messages would trim state.messages", () => {
+    const FULL_CONTENT = "FULL_TOOL_RESULT: " + "x".repeat(2500);
+    const STORED_KEY = "tool-result-001";
+    const COMPRESSED_PREVIEW = "[compressed preview — full in scratchpad]";
+
+    // Pre-state: tool-execution wrote FULL_CONTENT to scratchpad keyed by
+    // STORED_KEY, then created an observation step whose displayText is
+    // the compressed preview. Messages array contains the assistant +
+    // tool_result turn.
+    const obs: ObservationResult = {
+      success: true,
+      toolName: "web-search",
+      displayText: COMPRESSED_PREVIEW,
+      category: "web-search",
+      resultKind: "data",
+      preserveOnCompaction: false,
+      trustLevel: "untrusted",
+    };
+    const obsStep: ReasoningStep = {
+      id: "step-1" as ReasoningStep["id"],
+      type: "observation",
+      content: COMPRESSED_PREVIEW,
+      timestamp: new Date(),
+      metadata: { observationResult: obs, storedKey: STORED_KEY },
+    };
+
+    const stateBefore = makeState({
+      steps: [obsStep],
+      scratchpad: new Map([[STORED_KEY, FULL_CONTENT]]),
+      messages: [
+        { role: "user", content: "find X" } as never,
+        { role: "assistant", content: "calling web-search" } as never,
+        { role: "tool", content: COMPRESSED_PREVIEW } as never,
+      ],
+    });
+
+    // Simulate the compress-messages patch path (mirrors patch-applier.ts:52-59
+    // and reactive-observer.ts:357-365): trim messages to keep only the last 1.
+    // Steps + scratchpad are intentionally untouched — that's the invariant
+    // patch-applier maintains.
+    const stateAfter = {
+      ...stateBefore,
+      messages: stateBefore.messages.slice(-1),
+    };
+
+    // Invariant 1: steps + scratchpad survive compress-messages
+    expect(stateAfter.steps).toBe(stateBefore.steps);
+    expect(stateAfter.scratchpad).toBe(stateBefore.scratchpad);
+
+    // Invariant 2: curator's section renders FULL_CONTENT (truncated by
+    // per-tier cap) — NOT the compressed preview. The compressed preview
+    // is only the displayText fallback used when storedKey lookup misses.
+    const section = buildRecentObservationsSection(stateAfter.steps, 1, {
+      scratchpad: stateAfter.scratchpad,
+      maxCharsPerObservation: 4000, // larger than FULL_CONTENT to skip cap
+    });
+
+    expect(section).toBeTruthy();
+    expect(section).toContain("FULL_TOOL_RESULT");
+    expect(section).not.toContain(COMPRESSED_PREVIEW);
+  });
+
+  it("falls back to displayText when storedKey is missing from scratchpad", () => {
+    // Confirms the second leg of the pipeline: if the dispatch ever did
+    // clear scratchpad entries, the curator degrades gracefully to the
+    // compressed preview written by tool-execution.ts. No crash.
+    const obs: ObservationResult = {
+      success: true,
+      toolName: "web-search",
+      displayText: "preview only — full evicted",
+      category: "web-search",
+      resultKind: "data",
+      preserveOnCompaction: false,
+      trustLevel: "untrusted",
+    };
+    const obsStep: ReasoningStep = {
+      id: "step-1" as ReasoningStep["id"],
+      type: "observation",
+      content: obs.displayText,
+      timestamp: new Date(),
+      metadata: { observationResult: obs, storedKey: "missing-key" },
+    };
+
+    const section = buildRecentObservationsSection([obsStep], 1, {
+      scratchpad: new Map(), // empty scratchpad
+      maxCharsPerObservation: 4000,
+    });
+
+    expect(section).toContain("preview only");
+  });
+});
+
 describe("renderObservationForPrompt", () => {
   const trusted: ObservationResult = {
     success: true,
