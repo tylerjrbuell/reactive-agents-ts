@@ -94,16 +94,31 @@ export const TelemetryCollectorLive = (config: TelemetryConfig = {}) =>
       };
 
       // ── Subscribe to LLMRequestCompleted for per-call metrics ──
+      // Stage 5 fixes: prefer provider-reported tokensIn/tokensOut/cached when
+      // present; fall back to the 70/30 split for older providers that don't
+      // report them. cacheHits increments on every cached response so
+      // cacheHitRate becomes meaningful (was hardcoded zero before W8).
       yield* eb.on("LLMRequestCompleted", (event) =>
         Ref.update(accumulators, (map) => {
           const next = new Map(map);
           const acc = getOrCreate(event.taskId, next);
           acc.model = event.model;
           acc.provider = event.provider;
-          acc.tokensIn += Math.round(event.tokensUsed * 0.7); // estimate input ~70%
-          acc.tokensOut += Math.round(event.tokensUsed * 0.3);
+          if (typeof event.tokensIn === "number") {
+            acc.tokensIn += event.tokensIn;
+          } else {
+            acc.tokensIn += Math.round(event.tokensUsed * 0.7);
+          }
+          if (typeof event.tokensOut === "number") {
+            acc.tokensOut += event.tokensOut;
+          } else {
+            acc.tokensOut += Math.round(event.tokensUsed * 0.3);
+          }
           acc.totalCost += event.estimatedCost;
           acc.totalRequests += 1;
+          if (event.cached === true) {
+            acc.cacheHits += 1;
+          }
           return next;
         }),
       );
@@ -118,12 +133,31 @@ export const TelemetryCollectorLive = (config: TelemetryConfig = {}) =>
         }),
       );
 
-      // ── Subscribe to FinalAnswerProduced for strategy ──
+      // ── Subscribe to ReasoningIterationProgress for strategy ──
+      // Stage 5 fix: this fires on every iteration regardless of outcome, so
+      // failed tasks get strategy attribution too. FinalAnswerProduced (the
+      // prior subscription) only fires on success, biasing aggregate stats
+      // toward successful runs and labeling all failures as "unknown."
+      yield* eb.on("ReasoningIterationProgress", (event) =>
+        Ref.update(accumulators, (map) => {
+          const next = new Map(map);
+          const acc = getOrCreate(event.taskId, next);
+          if (acc.strategy === "unknown") {
+            acc.strategy = event.strategy;
+          }
+          return next;
+        }),
+      );
+
+      // ── FinalAnswerProduced kept as a fallback for runs that produce a
+      //    final answer before any iteration progress event (rare but legal). ──
       yield* eb.on("FinalAnswerProduced", (event) =>
         Ref.update(accumulators, (map) => {
           const next = new Map(map);
           const acc = getOrCreate(event.taskId, next);
-          acc.strategy = event.strategy;
+          if (acc.strategy === "unknown") {
+            acc.strategy = event.strategy;
+          }
           return next;
         }),
       );

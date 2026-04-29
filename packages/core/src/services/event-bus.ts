@@ -191,6 +191,12 @@ export type AgentEvent =
       readonly durationMs: number;
       /** Total tokens used in request + response */
       readonly tokensUsed: number;
+      /** Input tokens (prompt) when the provider reports them; falls back to 70% estimate of tokensUsed at consumers when absent. */
+      readonly tokensIn?: number;
+      /** Output tokens (completion) when the provider reports them; falls back to 30% estimate of tokensUsed at consumers when absent. */
+      readonly tokensOut?: number;
+      /** True when the response was served from prompt cache (Anthropic ephemeral cache, OpenAI cached input, etc.). */
+      readonly cached?: boolean;
       /** Estimated cost in USD */
       readonly estimatedCost: number;
     }
