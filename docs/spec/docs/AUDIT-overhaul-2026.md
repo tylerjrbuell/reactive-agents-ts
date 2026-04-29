@@ -751,7 +751,7 @@ Status legend: ✅ confirmed | 🟡 partial / corrected | ❌ stale (no action n
 | 8 | Sub-agent `maxIterations` capped silently | ✅ **already resolved (Apr 17)** | W2 verification: cap is gone. `agent-tool-adapter.ts:212` reads `const effectiveMaxIter = config.maxIterations ?? subAgentDefaults.maxIterations` — user config fully honored. Comment at line 92 confirms. |
 | 9 | Calibration defaults to `:memory:` | ❌ **stale** | `types.ts:246` already defaults to `~/.reactive-agents/calibration.db`. **Memory note FIX-9 needs correction.** |
 | 10 | Observability OFF by default | ✅ **already resolved (Apr 17)** | W2 verification: `builder.ts:896` reads `private _enableObservability: boolean = true`. Default is ON with `verbosity: "minimal"` (line 898). The blanket `Logger.none` silencing at execution-engine.ts:4244 is a separate item (#27, W8). |
-| 11 | `bun:sqlite` + `Bun.*` without `engines` field | ✅ | Confirmed `database.ts:2`. Action in memory §10.1. Audit also needed in tools/caching, tools/registry. |
+| 11 | ~~`bun:sqlite` + `Bun.*` without `engines` field~~ | ✅ **resolved W12 (part a; Node fallback deferred to v0.11)** | `engines: { bun: ">=1.1.0" }` added to 8 published packages with direct Bun runtime usage (a2a, cost, eval, health, llm-provider, memory, reactive-intelligence, tools) plus the umbrella `reactive-agents`. Audit by grep: `bun:sqlite` imports in `cost/budgets/budget-db.ts`, `memory/database.ts`, `reactive-intelligence/calibration-store.ts` + `bandit-store.ts`; real `Bun.*` calls (excluding doc comments) in 9 src files across the package set. `runtime` excluded — only JSDoc references. `benchmarks` excluded — `private: true` (workspace-internal). Umbrella standardized from `>=1.0.0` → `>=1.1.0`. Guard test at `core/tests/engines-field.test.ts` pins the contract going forward. **Node fallback (T14: lazy-load `bun:sqlite` vs `better-sqlite3`) is the v0.11 follow-up** — Bun is the primary engine for v0.10.0, conversion plan is separate. |
 | 12 | `rax demo` is fake (scripted responses, hardcoded token count) | ⏸️ | Not re-audited. Apr 17 finding carry-forward; Stage 5 fix in CLI. |
 | 13 | `rax init` hardcodes Anthropic | ⏸️ | Not re-audited. Apr 17 finding carry-forward. |
 | 14 | `FRAMEWORK_INDEX.md` paths broken (`strategies/shared/*`) | ⏸️ | Apr 17 finding. Top-level doc verdict in §8: **FIX or DELETE**. |
@@ -812,7 +812,7 @@ Status legend: ✅ confirmed | 🟡 partial / corrected | ❌ stale (no action n
 
 **P2 (medium — quality-of-life):**
 - #10 Default observability ON
-- #11 `engines: { bun: ">=1.1" }` + Node fallback
+- ~~#11 `engines: { bun: ">=1.1" }`~~ ✅ **resolved W12** (part a — engines field landed; Node fallback deferred to v0.11 per "Bun is primary engine" direction)
 - #14 Fix or delete FRAMEWORK_INDEX.md
 - #16 Calibrate p01/p02 RESULTS overclaim
 - ~~#22 Fix or delete `runSuite` placeholder~~ ✅ **resolved W6.5** (FIX-22, T10)

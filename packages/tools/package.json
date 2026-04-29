@@ -21,6 +21,9 @@
     "effect": "^3.10.0"
   },
   "license": "MIT",
+  "engines": {
+    "bun": ">=1.1.0"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/tylerjrbuell/reactive-agents-ts.git",
