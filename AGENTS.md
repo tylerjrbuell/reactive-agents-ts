@@ -122,14 +122,16 @@ After 5+ runs, empirical observations override shipped priors for `parallelCallC
 
 Key references:
 
--   `FRAMEWORK_INDEX.md` — comprehensive system map with file-level navigation, data flows, and architecture diagrams
+-   `docs/spec/docs/PROJECT-STATE.md` — canonical landing doc + system map (replaces deleted FRAMEWORK_INDEX.md)
+-   `docs/spec/docs/AUDIT-overhaul-2026.md` — Stage-3+ audit findings, FIX backlog, mechanism inventory
+-   `docs/spec/docs/15-design-north-star.md` — architectural target
 -   `CODING_STANDARDS.md` — authoritative coding standards (types, services, errors, testing, naming, performance)
 -   `.claude/skills/effect-ts-patterns/SKILL.md` — Effect-TS pattern reference (Schema.Struct, Context.Tag, Layer, Ref)
 -   `.claude/skills/review-patterns/SKILL.md` — 9-category compliance checklist for code review
 
 ## Runtime Policy
 
-**Required runtime: Bun ≥1.0.0.** The framework uses `bun:sqlite`, `Bun.spawn`, and `Bun.serve` in core packages. Node.js support is planned — see `docs/superpowers/plans/2026-04-17-nodejs-support.md` for the migration plan.
+**Required runtime: Bun ≥1.1.0** (W12 — `engines.bun` declared on the 8 published packages with direct `bun:sqlite` or `Bun.*` runtime usage, plus the umbrella). The framework uses `bun:sqlite`, `Bun.spawn`, and `Bun.serve` in core packages. Node.js support is planned — see `docs/superpowers/plans/2026-04-17-nodejs-support.md` for the migration plan.
 
 **Do not introduce new Bun-specific APIs in new code.** When adding features, prefer `node:` built-ins (`node:crypto`, `node:fs/promises`, `node:child_process`) over Bun globals — Bun supports all `node:` modules natively, and using them keeps each file one import-swap away from Node compatibility. Reserve `bun:sqlite`, `Bun.serve`, and `Bun.spawn` only for files already using them.
 

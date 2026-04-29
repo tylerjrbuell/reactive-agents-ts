@@ -1,6 +1,19 @@
 // ─── Provider Capabilities ───
-// @deprecated — see Capability below (Phase 1 S1.1).
+/**
+ * @deprecated v0.10.0 — superseded by `Capability` (Phase 1 S1.1, see below).
+ *
+ * **Scheduled removal: v0.11.0.** Per AUDIT-overhaul-2026.md §11 #39, this
+ * surface remains exported in v0.10.0 to preserve binary compatibility for
+ * external consumers; the v0.11 release will delete it. New code must use
+ * `Capability` + `resolveCapability(provider, model)` from this same module.
+ *
+ * Migration: replace `import type { ProviderCapabilities }` with
+ * `import type { Capability }`, and any `DEFAULT_CAPABILITIES` lookup with
+ * `resolveCapability("anthropic" | "openai" | "ollama", modelId)` which
+ * returns the validated per-(provider, model) descriptor.
+ */
 export type { ProviderCapabilities } from "./capabilities.js";
+/** @deprecated v0.10.0 — see ProviderCapabilities above. Removed in v0.11.0. */
 export { DEFAULT_CAPABILITIES } from "./capabilities.js";
 
 /**

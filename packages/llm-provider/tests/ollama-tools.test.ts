@@ -276,9 +276,18 @@ describe("OllamaProviderLive (ollama SDK)", () => {
   });
 
   it("complete() passes think:true when config.thinking is true", async () => {
+    // W7 / FIX-3: thinking is opt-in AND capability-gated. The static mock
+    // /api/show returns a template without thinking; for THIS test we
+    // override show to advertise the capability so resolveThinking()
+    // confirms it can pass `think: true` through.
+    mockShow.mockImplementationOnce(async () => ({
+      template: "qwen3 thinking template",
+      capabilities: ["thinking"],
+    }));
+
     const configWithThinking = LLMConfig.of({
       defaultProvider: "ollama",
-      defaultModel: "qwen3.5",
+      defaultModel: "qwen3.5-thinking-test",
       ollamaEndpoint: "http://localhost:11434",
       embeddingConfig: {
         model: "nomic-embed-text",

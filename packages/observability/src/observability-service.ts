@@ -473,14 +473,29 @@ export const ObservabilityServiceLive = (exporterConfig: ExporterConfig = {}) =>
         ...(liveWriter ? { liveWriter } : {}),
         redactors,
       });
-      // Use provided MetricsCollectorTag if available, otherwise create a new one
-      // This ensures shared instance across ExecutionEngine and ObservabilityService
+      // Use provided MetricsCollectorTag if available, otherwise create a new one.
+      // Sharing the collector across ExecutionEngine and ObservabilityService
+      // is the supported configuration; the runtime layer wires it that way.
+      //
+      // FIX-31 / W13 — when the Tag is missing, this used to silently fall
+      // back to a fresh collector, producing undetectable divergence: the
+      // engine writes to its own collector, the service reads from another,
+      // metrics never agree, no error surfaces. We still tolerate the
+      // missing-Tag case (tests and bare wirings can omit it), but emit a
+      // structured Effect.logWarning so the divergence is visible in logs
+      // and operators can spot a misconfigured layer.
       const metrics = yield* Effect.serviceOption(MetricsCollectorTag).pipe(
-        Effect.flatMap((opt) =>
-          opt._tag === "Some"
-            ? Effect.succeed(opt.value)
-            : makeMetricsCollector,
-        ),
+        Effect.flatMap((opt) => {
+          if (opt._tag === "Some") return Effect.succeed(opt.value);
+          return Effect.gen(function* () {
+            yield* Effect.logWarning(
+              "[observability] MetricsCollectorTag not provided in Layer — creating a fresh collector. " +
+                "ExecutionEngine writes and ObservabilityService reads will diverge. " +
+                "Wire MetricsCollectorTag in the shared Layer to suppress this warning.",
+            );
+            return yield* makeMetricsCollector;
+          });
+        }),
       );
       const inspector = yield* makeStateInspector;
 

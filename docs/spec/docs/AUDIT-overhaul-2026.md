@@ -749,14 +749,14 @@ Status legend: ✅ confirmed | 🟡 partial / corrected | ❌ stale (no action n
 | 6 | 3/6 skill lifecycle AgentEvents missing | ✅ **resolved W2** | Events DO exist at `core/services/event-bus.ts:986-990`. Subscribers wired at `builder.ts:2682-2716` (commit on `refactor/overhaul`). |
 | 7 | ~~`MAX_RECURSION_DEPTH = 3` not configurable~~ | ✅ **resolved W7** | New `resolveMaxRecursionDepth()` reads from explicit `SubAgentConfig.maxRecursionDepth` → `REACTIVE_AGENTS_MAX_RECURSION_DEPTH` env var → default 3. Both depth-check sites updated. `MAX_RECURSION_DEPTH` retained as `@deprecated` alias. |
 | 8 | Sub-agent `maxIterations` capped silently | ✅ **already resolved (Apr 17)** | W2 verification: cap is gone. `agent-tool-adapter.ts:212` reads `const effectiveMaxIter = config.maxIterations ?? subAgentDefaults.maxIterations` — user config fully honored. Comment at line 92 confirms. |
-| 9 | Calibration defaults to `:memory:` | ❌ **stale** | `types.ts:246` already defaults to `~/.reactive-agents/calibration.db`. **Memory note FIX-9 needs correction.** |
+| 9 | ~~Calibration defaults to `:memory:`~~ | ❌ **stale (memory note corrected W13)** | `types.ts:246` defaults to `~/.reactive-agents/calibration.db`. `.agents/MEMORY.md:48` now correctly captures the truth as a "stale claim" entry referencing this audit row. No code change required. |
 | 10 | Observability OFF by default | ✅ **already resolved (Apr 17)** | W2 verification: `builder.ts:896` reads `private _enableObservability: boolean = true`. Default is ON with `verbosity: "minimal"` (line 898). The blanket `Logger.none` silencing at execution-engine.ts:4244 is a separate item (#27, W8). |
 | 11 | ~~`bun:sqlite` + `Bun.*` without `engines` field~~ | ✅ **resolved W12 (part a; Node fallback deferred to v0.11)** | `engines: { bun: ">=1.1.0" }` added to 8 published packages with direct Bun runtime usage (a2a, cost, eval, health, llm-provider, memory, reactive-intelligence, tools) plus the umbrella `reactive-agents`. Audit by grep: `bun:sqlite` imports in `cost/budgets/budget-db.ts`, `memory/database.ts`, `reactive-intelligence/calibration-store.ts` + `bandit-store.ts`; real `Bun.*` calls (excluding doc comments) in 9 src files across the package set. `runtime` excluded — only JSDoc references. `benchmarks` excluded — `private: true` (workspace-internal). Umbrella standardized from `>=1.0.0` → `>=1.1.0`. Guard test at `core/tests/engines-field.test.ts` pins the contract going forward. **Node fallback (T14: lazy-load `bun:sqlite` vs `better-sqlite3`) is the v0.11 follow-up** — Bun is the primary engine for v0.10.0, conversion plan is separate. |
 | 12 | `rax demo` is fake (scripted responses, hardcoded token count) | ⏸️ | Not re-audited. Apr 17 finding carry-forward; Stage 5 fix in CLI. |
 | 13 | `rax init` hardcodes Anthropic | ⏸️ | Not re-audited. Apr 17 finding carry-forward. |
-| 14 | `FRAMEWORK_INDEX.md` paths broken (`strategies/shared/*`) | ⏸️ | Apr 17 finding. Top-level doc verdict in §8: **FIX or DELETE**. |
+| 14 | ~~`FRAMEWORK_INDEX.md` paths broken~~ | ✅ **resolved W13 (file deleted Stage 4; references purged W13)** | File no longer exists in repo. AGENTS.md "Key references" section updated to point at `docs/spec/docs/PROJECT-STATE.md` + `AUDIT-overhaul-2026.md` + `15-design-north-star.md` instead. Historical references in CHANGELOG (added/removed entries) and ROADMAP.md (deletion note) intentionally retained as record. |
 | 15 | `VerifierRetryPolicy` + new trace event types not `_unstable_*` | ✅ **bigger than reported** | llm-provider has 14+ surfaces missing markers. M3 mechanism + llm-provider §10.1 action. |
-| 16 | `RESULTS-p01.md` + `RESULTS-p02.md` overclaim language | ✅ | Rule 11 calibration. M3 action. |
+| 16 | ~~`RESULTS-p01.md` + `RESULTS-p02.md` overclaim language~~ | ✅ **resolved W13 (audit-only — calibration was already in place)** | Both files already carry "Scope-of-claims calibration (Rule 11)" sections (p01.md:54-67, p02.md:56-83) with explicit permitted-vs-not-permitted claim framing. No edit required; row marked closed. |
 | 17 | AUC validation unproven (corpus AUC = 0.000) | ✅ | Confirms M1 unvalidated. Post-RI-fix, re-run. |
 | 18 | ~~9 termination paths in kernel; oracle wired to 1~~ | ✅ **resolved W4** | All 8 imperative sites in `runner.ts` now route through `kernel/loop/terminate.ts` `terminate()` helper. Arbitrator remains the verdict-driven oracle. CI lint at `scripts/check-termination-paths.sh` enforces the single-owner invariant going forward. |
 | 19 | ExecutionEngine 4,404 LOC unchanged | ✅ **actual 4,476 LOC** | Plus newly discovered: **`builder.ts` is 5,877 LOC** — even larger orchestration surface. Combined: 10,353 LOC. Action in runtime §10.1. |
@@ -776,7 +776,7 @@ Status legend: ✅ confirmed | 🟡 partial / corrected | ❌ stale (no action n
 | 28 | ~~Telemetry token split is 70/30 estimate~~ | ✅ **resolved W8** | `LLMRequestCompleted` gains optional `tokensIn`/`tokensOut` fields. Telemetry collector prefers provider-reported values; falls back to 70/30 estimate for providers that don't report them yet (incremental rollout per provider). |
 | 29 | ~~`cacheHits` declared but never incremented~~ | ✅ **resolved W8** | `LLMRequestCompleted` gains optional `cached?: boolean`. Collector increments `acc.cacheHits` when `event.cached === true`. `cacheHitRate` now reflects real cache behavior. |
 | 30 | ~~`strategy` only captured on `FinalAnswerProduced`~~ | ✅ **resolved W8** | Subscribed to `ReasoningIterationProgress` (fires every iteration regardless of outcome) so failed tasks get strategy attribution. `FinalAnswerProduced` retained as no-op fallback. First-write-wins (`unknown` guard). |
-| 31 | **MetricsCollector silent fallback** to fresh collector if shared layer missing → undetectable divergence | Medium | `observability/src/observability-service.ts:478-484` |
+| 31 | ~~**MetricsCollector silent fallback**~~ | ✅ **resolved W13** | `observability-service.ts:476-499`: when `MetricsCollectorTag` is absent the service still falls back to a fresh collector (tests + bare wirings need that), but now emits a structured `Effect.logWarning` describing the divergence and pointing operators at the fix. The undetectable-divergence shape is gone — misconfigured Layers surface in standard log output. |
 | 32 | ~~**Cost router does NOT consult calibration**~~ | ✅ **resolved W10** | New `RoutingContext` parameter on `analyzeComplexity` / `routeToModel` carries `requiresTools` + per-tier `calibration.toolCallReliability` + `toolReliabilityThreshold` (default 0.5). `escalateForToolReliability()` walks the haiku→sonnet→opus ladder, returning the first tier whose calibration is missing (unknown → assume usable) or meets threshold; falls back to most-reliable tier when all are below. Adds factor `tool-reliability-escalation:<from>-><to>` or `tool-reliability-confirmed`. Pure function, no service lookup; caller translates from their calibration store into the narrow shape. Six new tests in `complexity-router.test.ts`. |
 | 33 | ~~**Hardcoded model SHAs in cost are stale**~~ | ✅ **resolved W10** | Anthropic sonnet → `claude-sonnet-4-6`, opus → `claude-opus-4-7`; gemini sonnet/opus moved off `gemini-2.5-pro-preview-03-25` pin to stable `gemini-2.5-pro`; litellm opus → `claude-opus-4-7`. Sonnet `maxContext` bumped to 1M to match Sonnet 4.6 capability. Haiku already current at `claude-haiku-4-5-20251001`. SHA-refresh sanity test added. |
 | 34 | ~~**AgentMemory port not defined or wired**~~ | ✅ **resolved W11 (scoped to tool-execution semantic write; PlanStoreService coupling deferred)** | New `AgentMemory` Tag in `@reactive-agents/core/src/services/agent-memory.ts` with narrow surface (`storeSemantic` only — what kernel actually consumes today). New `AgentMemoryEntry` input type (port-level shape). Adapter Layer `AgentMemoryFromMemoryService` at `memory/src/services/agent-memory-adapter.ts` bridges the heavy `MemoryService` impl to the port. Wired into `createMemoryLayer` so the standard happy path satisfies the port without extra setup. Kernel resolves `AgentMemory` (not `MemoryService`) at `reasoning/src/kernel/utils/service-utils.ts:185-190`. Phase-2 prep: payoff arrives when a second `AgentMemory` provider (user agent without the memory package) wires up. Tests: `core/tests/agent-memory.test.ts` proves a no-`MemoryService`-Layer satisfies the port; `memory/tests/agent-memory-adapter.test.ts` pins the SemanticEntry conversion. **Scope flag:** `plan-execute.ts:21` still imports `PlanStoreService` from `@reactive-agents/memory` — separate plan-store decoupling deferred to v0.11. |
@@ -784,7 +784,7 @@ Status legend: ✅ confirmed | 🟡 partial / corrected | ❌ stale (no action n
 | 36 | **Identity service merged into runtime layer but no consumer reads it** — `IdentityService`, `PermissionManager`, `AuditLogger`, `CertificateAuth` all dormant | Low (DEFER) | `runtime/src/runtime.ts:1346` is sole reference |
 | 37 | ~~4 dead RI handler files~~ ❌ **stale** — Stage 5 W2 verification found no such files. The 4 names are *evaluators* in `controller/evaluators/`, intentionally kept per explicit source comment at `controller-service.ts:12-21`: "evaluator source files remain so the logic is recoverable; re-add them only when a real dispatch handler ships alongside." Test `tests/controller/new-evaluators.test.ts` still references them. **No action needed.** | resolved | — |
 | 38 | ~~`recommendStrategyForTier` returns `undefined` always~~ | ✅ **resolved W2** | Function deleted from `llm-provider/src/adapter.ts`; export removed from index; call site at `runtime/execution-engine.ts:1647` simplified to `const effectiveStrategy = c.selectedStrategy ?? "reactive"`. |
-| 39 | **`ProviderCapabilities` `@deprecated` but still exported as supported** | Low | `llm-provider/src/index.ts:2` |
+| 39 | ~~**`ProviderCapabilities` `@deprecated` but still exported as supported**~~ | ✅ **resolved W13** | `llm-provider/src/index.ts` now carries a full deprecation block on both `ProviderCapabilities` and `DEFAULT_CAPABILITIES`: `@deprecated v0.10.0`, **scheduled removal v0.11.0**, migration guide pointing at `Capability` + `resolveCapability`. Export retained for v0.10 binary compat per audit policy (no DELETE verdicts). Also unblocked a stale W7 regression test in `tests/ollama-tools.test.ts` ("complete() passes think:true when config.thinking is true") — the test pre-dated W7's capability-gating, so the show-mock now advertises the `thinking` capability for the qwen3.5 fixture. |
 | 40 | **Testing pkg `gate/` runner has zero CI invocations** — 13.5K LOC unvalidated by external callers | Medium (SHRINK) | `testing/src/gate/runner.ts`; mark `_unstable_gate_*` |
 | 41 | **`ExperimentService` (in prompts) used by only one example** — needs `_unstable_*` | Low | `prompts` package |
 | 42 | **react/svelte/vue zero in-repo consumers** — Cortex UI uses its own framework, not the published packages | Low (DX gap) | dogfooding gap; mark `_unstable_*` |
@@ -813,17 +813,17 @@ Status legend: ✅ confirmed | 🟡 partial / corrected | ❌ stale (no action n
 **P2 (medium — quality-of-life):**
 - #10 Default observability ON
 - ~~#11 `engines: { bun: ">=1.1" }`~~ ✅ **resolved W12** (part a — engines field landed; Node fallback deferred to v0.11 per "Bun is primary engine" direction)
-- #14 Fix or delete FRAMEWORK_INDEX.md
-- #16 Calibrate p01/p02 RESULTS overclaim
+- ~~#14 Fix or delete FRAMEWORK_INDEX.md~~ ✅ **W13** (deleted Stage 4; AGENTS.md references purged)
+- ~~#16 Calibrate p01/p02 RESULTS overclaim~~ ✅ **W13** (calibration already in place — audit-only)
 - ~~#22 Fix or delete `runSuite` placeholder~~ ✅ **resolved W6.5** (FIX-22, T10)
-- #27/#28/#29/#30/#31 Observability/telemetry defects
+- ~~#27/#28/#29/#30/#31 Observability/telemetry defects~~ — #28/#29/#30 ✅ W8; #31 ✅ **W13**; #27 documented as v0.11 follow-up (TTY-conditional Logger.none — designed-as-intended tradeoff)
 - ~~#32/#33 Cost router calibration coupling + SHA refresh~~ ✅ **resolved W10**
 - ~~#34 Define `AgentMemory` port~~ ✅ **resolved W11** (Phase-2 prep — pays off when a second consumer/provider lands)
 - ~~#44 Add diagnose smoke tests~~ ✅ **resolved W6.6** (T11 landed; 12/12 pass)
 
 **P3 (low — cleanup, post-v0.10.0 OK):**
 - #8 Sub-agent maxIterations cap
-- #9 Update memory FIX-9 (stale claim)
+- ~~#9 Update memory FIX-9 (stale claim)~~ ✅ **W13** (`.agents/MEMORY.md:48` already corrected)
 - #12 `rax demo` authenticity
 - #13 `rax init` provider neutrality
 - #17 Re-run AUC after #23 lands
@@ -831,7 +831,7 @@ Status legend: ✅ confirmed | 🟡 partial / corrected | ❌ stale (no action n
 - #35 Async memory DB
 - #36 Wire identity into tool exec
 - #37/#38 Delete dead handler files + dead `recommendStrategyForTier`
-- #39 Resolve ProviderCapabilities deprecation
+- ~~#39 Resolve ProviderCapabilities deprecation~~ ✅ **W13** (deprecation block + scheduled v0.11.0 removal target + migration guide; W7 regression test repaired)
 - #40 `_unstable_gate_*` markers
 - #41/#42/#43 UI integration `_unstable_*` + svelte cleanup
 
