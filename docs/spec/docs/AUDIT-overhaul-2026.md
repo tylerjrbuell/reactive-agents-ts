@@ -732,7 +732,7 @@ Status legend: ✅ confirmed | 🟡 partial / corrected | ❌ stale (no action n
 | 15 | `VerifierRetryPolicy` + new trace event types not `_unstable_*` | ✅ **bigger than reported** | llm-provider has 14+ surfaces missing markers. M3 mechanism + llm-provider §10.1 action. |
 | 16 | `RESULTS-p01.md` + `RESULTS-p02.md` overclaim language | ✅ | Rule 11 calibration. M3 action. |
 | 17 | AUC validation unproven (corpus AUC = 0.000) | ✅ | Confirms M1 unvalidated. Post-RI-fix, re-run. |
-| 18 | 9 termination paths in kernel; oracle wired to 1 | ✅ | **Single highest-leverage action.** M9 mechanism. Sites enumerated at `kernel/loop/runner.ts:679,817,879,953,1011,1234,1262,1291` + `kernel/capabilities/decide/arbitrator.ts:885`. |
+| 18 | ~~9 termination paths in kernel; oracle wired to 1~~ | ✅ **resolved W4** | All 8 imperative sites in `runner.ts` now route through `kernel/loop/terminate.ts` `terminate()` helper. Arbitrator remains the verdict-driven oracle. CI lint at `scripts/check-termination-paths.sh` enforces the single-owner invariant going forward. |
 | 19 | ExecutionEngine 4,404 LOC unchanged | ✅ **actual 4,476 LOC** | Plus newly discovered: **`builder.ts` is 5,877 LOC** — even larger orchestration surface. Combined: 10,353 LOC. Action in runtime §10.1. |
 | 20 | 3 compression systems (NS §2.7 G-4) | ✅ | Same as #4. M5. |
 

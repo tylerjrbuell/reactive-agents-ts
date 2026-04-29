@@ -23,6 +23,7 @@ import { CONTEXT_PROFILES } from "../../context/context-profile.js";
 import type { ContextProfile } from "../../context/context-profile.js";
 import { resolveStrategyServices } from "../../kernel/utils/service-utils.js";
 import { buildKernelHooks } from "../../kernel/state/kernel-hooks.js";
+import { terminate } from "./terminate.js";
 import { makeStep } from "../../kernel/capabilities/sense/step-utils.js";
 import {
   initialKernelState,
@@ -675,9 +676,9 @@ export function runKernel(
           shouldExitOnLowDelta({ iteration: state.iteration, tokenDelta, consecutiveLowDeltaCount: newConsecutiveLowDelta, tier: profile.tier })
         ) {
           yield* Effect.log(`[token-delta-guard] Early exit: 2 consecutive iterations with <${tierGuards.tokenDeltaThreshold} token delta (delta=${tokenDelta}, iter=${state.iteration})`);
-          state = transitionState(state, {
-            status: "done",
-            meta: { ...state.meta, terminatedBy: "low_delta_guard" },
+          state = terminate(state, {
+            reason: "low_delta_guard",
+            output: state.output ?? "",
           });
           break;
         }
@@ -814,7 +815,10 @@ export function runKernel(
           continue;
         }
         // Switching not enabled or exhausted — deliver what we have
-        state = transitionState(state, { status: "done", output: state.output ?? "" });
+        state = terminate(state, {
+          reason: "switching_exhausted",
+          output: state.output ?? "",
+        });
         break;
       }
 
@@ -875,10 +879,9 @@ export function runKernel(
           if (requiredToolNudgeCount > maxRequiredToolNudges) {
             if (totalArtifacts > 0) {
               yield* emitLog({ _tag: "warning", message: `[harness-deliverable] Required-tool nudge budget exhausted (${maxRequiredToolNudges}) — delivering ${totalArtifacts} artifacts`, timestamp: new Date() });
-              state = transitionState(state, {
-                status: "done",
+              state = terminate(state, {
+                reason: "harness_deliverable",
                 output: assembleDeliverable(state),
-                meta: { ...state.meta, terminatedBy: "harness_deliverable" },
               });
               break;
             }
@@ -949,10 +952,9 @@ export function runKernel(
 
         if (totalArtifacts > 0) {
           yield* emitLog({ _tag: "warning", message: `[harness-deliverable] Assembling output from ${totalArtifacts} tool artifacts after ${consecutiveStalled} stalled iterations`, timestamp: new Date() });
-          state = transitionState(state, {
-            status: "done",
+          state = terminate(state, {
+            reason: "harness_deliverable",
             output: assembleDeliverable(state),
-            meta: { ...state.meta, terminatedBy: "harness_deliverable" },
           });
           break;
         }
@@ -1007,10 +1009,9 @@ export function runKernel(
           // transitionState invariant nulls the output for the user.
           const oracleForcedOutput = state.output ?? state.steps.filter((s) => s.type === "thought").slice(-1)[0]?.content;
           if (oracleForcedOutput && oracleForcedOutput.trim().length > 0) {
-            state = transitionState(state, {
-              status: "done",
+            state = terminate(state, {
+              reason: "oracle_forced",
               output: oracleForcedOutput,
-              meta: { ...state.meta, terminatedBy: "oracle_forced" },
             });
           } else {
             state = transitionState(state, {
@@ -1230,10 +1231,9 @@ export function runKernel(
               requiredToolNudgeCount++;
               if (requiredToolNudgeCount > maxRequiredToolNudges) {
                 yield* emitLog({ _tag: "warning", message: `[harness-deliverable] Required-tool nudge budget exhausted in loop detection (${maxRequiredToolNudges}) — delivering ${loopArtifactCount} artifacts`, timestamp: new Date() });
-                state = transitionState(state, {
-                  status: "done",
+                state = terminate(state, {
+                  reason: "harness_deliverable",
                   output: assembleDeliverable(state),
-                  meta: { ...state.meta, terminatedBy: "harness_deliverable" },
                 });
                 break;
               }
@@ -1258,10 +1258,9 @@ export function runKernel(
             }
 
             yield* emitLog({ _tag: "warning", message: `[harness-deliverable] Loop detected but ${loopArtifactCount} artifacts gathered — delivering instead of failing`, timestamp: new Date() });
-            state = transitionState(state, {
-              status: "done",
+            state = terminate(state, {
+              reason: "harness_deliverable",
               output: assembleDeliverable(state),
-              meta: { ...state.meta, terminatedBy: "harness_deliverable" },
             });
             break;
           }
@@ -1287,10 +1286,9 @@ export function runKernel(
             const lastThought = [...state.steps].reverse().find((s) => s.type === "thought");
             const lastThoughtContent = lastThought?.content;
             if (lastThoughtContent && lastThoughtContent.trim().length > 0) {
-              state = transitionState(state, {
-                status: "done",
+              state = terminate(state, {
+                reason: "loop_graceful",
                 output: lastThoughtContent,
-                meta: { ...state.meta, terminatedBy: "loop_graceful" },
               });
             } else {
               state = transitionState(state, {
