@@ -65,6 +65,93 @@ describe("Project Generator", () => {
     expect(entryCode).toContain(".withGuardrails()");
     expect(entryCode).toContain(".withHealthCheck()");
   });
+
+  // ── FIX-13 / W16 — provider neutrality ──────────────────────────────────
+  // The generator must produce provider-correct scaffolds for each detected
+  // provider: the entry file's `.withProvider()` + `.withModel()` lines, the
+  // README setup blurb, and `.env.example`'s active env-var line all agree
+  // with the `provider` argument. Stale "ANTHROPIC_API_KEY first regardless
+  // of detected provider" was the audit finding.
+
+  it("scaffolds an ollama project with no API-key requirement", () => {
+    generateProject({
+      name: "ollama-proj",
+      template: "minimal",
+      targetDir: TEST_DIR,
+      provider: "ollama",
+    });
+
+    const entry = readFileSync(join(TEST_DIR, "src", "index.ts"), "utf-8");
+    expect(entry).toContain('.withProvider("ollama")');
+    expect(entry).toContain('.withModel("qwen3.5")');
+
+    const env = readFileSync(join(TEST_DIR, ".env.example"), "utf-8");
+    // Active OLLAMA hint (commented because localhost is the default)
+    expect(env).toContain("OLLAMA_HOST");
+    // Anthropic / OpenAI / Gemini keys appear ONLY as commented alternatives
+    expect(env).toContain("# ANTHROPIC_API_KEY=");
+    expect(env).not.toMatch(/^ANTHROPIC_API_KEY=/m);
+
+    const readme = readFileSync(join(TEST_DIR, "README.md"), "utf-8");
+    expect(readme).toContain("Ollama");
+    expect(readme).toContain("ollama pull qwen3.5");
+  });
+
+  it("scaffolds an anthropic project with the Anthropic env var as the active line", () => {
+    generateProject({
+      name: "anthropic-proj",
+      template: "minimal",
+      targetDir: TEST_DIR,
+      provider: "anthropic",
+    });
+
+    const entry = readFileSync(join(TEST_DIR, "src", "index.ts"), "utf-8");
+    expect(entry).toContain('.withProvider("anthropic")');
+    expect(entry).toContain('.withModel("claude-haiku-4-5-20251001")');
+
+    const env = readFileSync(join(TEST_DIR, ".env.example"), "utf-8");
+    // ANTHROPIC_API_KEY is the active uncommented line
+    expect(env).toMatch(/^ANTHROPIC_API_KEY=sk-ant-/m);
+    // OpenAI / Gemini appear only as commented alternatives
+    expect(env).toContain("# OPENAI_API_KEY=");
+    expect(env).not.toMatch(/^OPENAI_API_KEY=/m);
+    // No stale W10-superseded sonnet SHA pin
+    expect(env).not.toContain("claude-sonnet-4-20250514");
+  });
+
+  it("scaffolds an openai project with the OpenAI env var as the active line", () => {
+    generateProject({
+      name: "openai-proj",
+      template: "minimal",
+      targetDir: TEST_DIR,
+      provider: "openai",
+    });
+
+    const entry = readFileSync(join(TEST_DIR, "src", "index.ts"), "utf-8");
+    expect(entry).toContain('.withProvider("openai")');
+    expect(entry).toContain('.withModel("gpt-4o-mini")');
+
+    const env = readFileSync(join(TEST_DIR, ".env.example"), "utf-8");
+    expect(env).toMatch(/^OPENAI_API_KEY=sk-/m);
+    expect(env).toContain("# ANTHROPIC_API_KEY=");
+    expect(env).not.toMatch(/^ANTHROPIC_API_KEY=/m);
+  });
+
+  it("scaffolds a gemini project with the Google env var as the active line", () => {
+    generateProject({
+      name: "gemini-proj",
+      template: "minimal",
+      targetDir: TEST_DIR,
+      provider: "gemini",
+    });
+
+    const entry = readFileSync(join(TEST_DIR, "src", "index.ts"), "utf-8");
+    expect(entry).toContain('.withProvider("gemini")');
+    expect(entry).toContain('.withModel("gemini-2.0-flash")');
+
+    const env = readFileSync(join(TEST_DIR, ".env.example"), "utf-8");
+    expect(env).toMatch(/^GOOGLE_API_KEY=AIza/m);
+  });
 });
 
 describe("Agent Generator", () => {

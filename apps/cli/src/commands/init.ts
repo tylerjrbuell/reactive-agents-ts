@@ -43,6 +43,16 @@ export function runInit(args: string[]): void {
   console.log(section("Next Steps"));
   console.log(kv("1", `cd ${name}`));
   console.log(kv("2", "bun install"));
-  console.log(kv("3", "cp .env.example .env  # Add your API keys"));
-  console.log(kv("4", "bun run dev"));
+  if (detectedProvider === "ollama") {
+    // No API key path — just remind the user to have ollama running.
+    console.log(
+      kv("3", "ensure `ollama serve` is running (no API key needed)"),
+    );
+    console.log(kv("4", "bun run dev"));
+  } else {
+    console.log(
+      kv("3", "cp .env.example .env  # then fill in your provider API key"),
+    );
+    console.log(kv("4", "bun run dev"));
+  }
 }

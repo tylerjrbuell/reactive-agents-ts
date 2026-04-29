@@ -11,6 +11,62 @@ interface ProjectConfig {
   provider?: string;
 }
 
+// ── Per-provider defaults ────────────────────────────────────────────────
+//
+// FIX-13 / W16 — when scaffolding, the chosen provider drives:
+//   1. the model passed to `.withModel(...)` in the entry file,
+//   2. which env var is the *active* line in `.env.example` (others are
+//      commented as alternatives, not suppressed entirely),
+//   3. README setup notes.
+//
+// SHAs match the cost router's W10 refresh (claude-sonnet-4-6, claude-opus-4-7).
+// Haiku stays at the dated SHA per Anthropic's own recommendation.
+interface ProviderProfile {
+  /** Default model id for this provider. */
+  readonly model: string;
+  /** Required env var (or null for ollama which uses a local server). */
+  readonly envVar: string | null;
+  /** Example placeholder shown in .env.example. */
+  readonly envPlaceholder: string;
+  /** Short setup blurb for the README. */
+  readonly setupNote: string;
+}
+
+const PROVIDER_PROFILES: Record<string, ProviderProfile> = {
+  ollama: {
+    model: "qwen3.5",
+    envVar: null,
+    envPlaceholder: "# OLLAMA_HOST=http://localhost:11434  (default — only set if your Ollama is elsewhere)",
+    setupNote:
+      "This project uses Ollama (local). Make sure `ollama serve` is running and the model is pulled:\n\n```sh\nollama pull qwen3.5\n```",
+  },
+  anthropic: {
+    model: "claude-haiku-4-5-20251001",
+    envVar: "ANTHROPIC_API_KEY",
+    envPlaceholder: "sk-ant-...",
+    setupNote:
+      "This project uses Anthropic Claude. Get an API key at https://console.anthropic.com/ and set `ANTHROPIC_API_KEY` in `.env`.",
+  },
+  openai: {
+    model: "gpt-4o-mini",
+    envVar: "OPENAI_API_KEY",
+    envPlaceholder: "sk-...",
+    setupNote:
+      "This project uses OpenAI. Get an API key at https://platform.openai.com/api-keys and set `OPENAI_API_KEY` in `.env`.",
+  },
+  gemini: {
+    model: "gemini-2.0-flash",
+    envVar: "GOOGLE_API_KEY",
+    envPlaceholder: "AIza...",
+    setupNote:
+      "This project uses Google Gemini. Get an API key at https://aistudio.google.com/apikey and set `GOOGLE_API_KEY` in `.env`.",
+  },
+};
+
+function resolveProfile(provider: string): ProviderProfile {
+  return PROVIDER_PROFILES[provider] ?? PROVIDER_PROFILES.ollama!;
+}
+
 export function generateProject(config: ProjectConfig): { files: string[] } {
   const { name, template, targetDir, provider = "ollama" } = config;
   const files: string[] = [];
@@ -55,32 +111,89 @@ export function generateProject(config: ProjectConfig): { files: string[] } {
   writeFileSync(tscPath, JSON.stringify(tsconfig, null, 2) + "\n");
   files.push(tscPath);
 
+  const profile = resolveProfile(provider);
+
   const entryPath = join(targetDir, "src", "index.ts");
-  writeFileSync(entryPath, generateEntryPoint(template, provider));
+  writeFileSync(entryPath, generateEntryPoint(template, provider, profile));
   files.push(entryPath);
 
   const envPath = join(targetDir, ".env.example");
-  writeFileSync(envPath, [
-    "# Add your LLM provider API key:",
-    "ANTHROPIC_API_KEY=sk-ant-...",
-    "# OPENAI_API_KEY=sk-...",
-    "# GOOGLE_API_KEY=...",
-    "",
-    "# Optional — override default model",
-    "# LLM_DEFAULT_MODEL=claude-sonnet-4-20250514",
-    "",
-  ].join("\n"));
+  writeFileSync(envPath, generateEnvExample(provider, profile));
   files.push(envPath);
 
   const gitignorePath = join(targetDir, ".gitignore");
   writeFileSync(gitignorePath, ".env\nnode_modules/\ndist/\n*.log\n");
   files.push(gitignorePath);
 
+  const readmePath = join(targetDir, "README.md");
+  writeFileSync(readmePath, generateReadme(name, template, provider, profile));
+  files.push(readmePath);
+
   return { files };
 }
 
-function generateEntryPoint(template: ProjectTemplate, provider: string): string {
+function generateEnvExample(provider: string, profile: ProviderProfile): string {
+  const lines: string[] = ["# Environment variables for this project."];
+  lines.push("");
+
+  if (profile.envVar) {
+    lines.push(`# ${provider} is the detected provider — fill in the key below.`);
+    lines.push(`${profile.envVar}=${profile.envPlaceholder}`);
+  } else {
+    // ollama — no API key needed
+    lines.push("# ollama is the detected provider — no API key required.");
+    lines.push(profile.envPlaceholder);
+  }
+  lines.push("");
+
+  // List the alternative providers as commented hints so users can swap
+  // without re-running `rax init`.
+  lines.push("# Alternative providers (uncomment + change .withProvider/.withModel in src/index.ts to use):");
+  for (const [name, p] of Object.entries(PROVIDER_PROFILES)) {
+    if (name === provider || !p.envVar) continue;
+    lines.push(`# ${p.envVar}=${p.envPlaceholder}`);
+  }
+  lines.push("");
+  return lines.join("\n");
+}
+
+function generateReadme(
+  name: string,
+  template: ProjectTemplate,
+  provider: string,
+  profile: ProviderProfile,
+): string {
+  return `# ${name}
+
+A reactive-agents project scaffolded with \`rax init --template ${template}\`.
+
+## Setup
+
+${profile.setupNote}
+
+\`\`\`sh
+bun install
+${profile.envVar ? "cp .env.example .env  # then fill in your key\n" : ""}bun run dev
+\`\`\`
+
+## Stack
+
+- **Provider:** \`${provider}\`
+- **Default model:** \`${profile.model}\`
+- **Template:** \`${template}\`
+
+The entry point is at \`src/index.ts\`. The framework's full builder API is
+documented at https://docs.reactiveagents.dev/.
+`;
+}
+
+function generateEntryPoint(
+  template: ProjectTemplate,
+  provider: string,
+  profile: ProviderProfile,
+): string {
   const providerLine = `  .withProvider("${provider}")`;
+  const modelLine = `  .withModel("${profile.model}")`;
 
   if (template === "minimal") {
     return [
@@ -88,6 +201,7 @@ function generateEntryPoint(template: ProjectTemplate, provider: string): string
       "",
       "const agent = await ReactiveAgents.create()",
       providerLine,
+      modelLine,
       "  .build();",
       "",
       'const result = await agent.run("Explain the difference between TCP and UDP in one paragraph.");',
@@ -102,6 +216,7 @@ function generateEntryPoint(template: ProjectTemplate, provider: string): string
       "",
       "const agent = await ReactiveAgents.create()",
       providerLine,
+      modelLine,
       '  .withReasoning({ defaultStrategy: "adaptive" })',
       "  .withTools()",
       '  .withObservability({ verbosity: "normal", live: true })',
@@ -124,6 +239,7 @@ function generateEntryPoint(template: ProjectTemplate, provider: string): string
     "",
     "const agent = await ReactiveAgents.create()",
     providerLine,
+    modelLine,
     '  .withName("production-agent")',
     "  .withReasoning({",
     '    defaultStrategy: "adaptive",',
