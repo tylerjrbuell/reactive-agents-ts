@@ -24,6 +24,7 @@ export { scoreCostEfficiency } from "./dimensions/cost-efficiency.js";
 
 // Services
 export { EvalService, EvalServiceLive, makeEvalServiceLive, makeEvalServicePersistentLive } from "./services/eval-service.js";
+export type { SuiteAgentRunner } from "./services/eval-service.js";
 export { DatasetService, DatasetServiceLive } from "./services/dataset-service.js";
 export { JudgeLLMService } from "./services/judge-llm-service.js";
 export type { JudgeLLMServiceShape } from "./services/judge-llm-service.js";

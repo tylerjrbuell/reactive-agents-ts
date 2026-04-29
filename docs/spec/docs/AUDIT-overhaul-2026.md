@@ -767,7 +767,7 @@ Status legend: ✅ confirmed | 🟡 partial / corrected | ❌ stale (no action n
 | # | Item | Severity | File:line |
 |---|---|---|---|
 | 21 | ~~Eval Rule 4 frozen-judge fails 3/4~~ | ✅ **resolved W9** | New `JudgeLLMService` Tag at `eval/src/services/judge-llm-service.ts` distinct from SUT's `LLMService`; eval-service yields the judge tag instead. `JudgeConfig` schema (model + provider + optional codeSha) added to `EvalConfig`. `createEvalLayer` doc block now describes the separate-provider wiring pattern. Code-path isolation enforced by Tag distinction. |
-| 22 | **`runSuite` is broken** — hardcodes `actualOutput: "[evaluated via LLM-as-judge]"` placeholder; doesn't actually run the agent | High | `eval/src/eval-service.ts:174` |
+| 22 | ~~**`runSuite` is broken**~~ | ✅ **resolved W6.5** | New required `agentRunner: SuiteAgentRunner` parameter on `runSuite(suite, agentConfig, agentRunner, config?)` — caller supplies the SUT runner, output flows through to dimension scoring + `EvalResult.actualOutput`. Placeholder `"[evaluated via LLM-as-judge]"` removed. Rule-4 guard added: `runSuite` fails with `BenchmarkError` when `config.judge.model === agentConfig`. Tests rewritten to (a) provide `JudgeLLMService` (W9 left them broken on `LLMService`) and (b) pass a stub `SuiteAgentRunner`. T10 happy + sad path landed. apps/cli/eval updated to wire `JudgeLLMService` via `buildJudgeLayer()` + builds an `LLMService`-backed `SuiteAgentRunner`. README example updated to show the new signature. |
 | 23 | ~~RI budget counters dead-zeroed every iteration~~ | ✅ **resolved W3** | Added `riBudget` to `KernelMeta` (kernel-state.ts:160-176); reactive-observer threads through `KernelState.meta.riBudget`; plan-execute declares `perStrategyRiBudget` outside refinement loop. Suppression gates (`maxFiresPerRun=5`, `maxInterventionTokenBudget=1500`) now reachable. Stale comment in `tool-failure-redirect.ts:12` updated. |
 | 24 | **`builder.ts` is 5,877 LOC** — biggest single orchestration surface, undocumented prior to this audit | High (top SHRINK target with ExecutionEngine) | `runtime/src/builder.ts` |
 | 25 | ~~Duplicate `AgentConfigSchema`~~ | ✅ **resolved W2** | core renamed `AgentConfigSchema` → `AgentDefinitionSchema` and `AgentConfig` → `AgentDefinition`; runtime's full version is now unambiguous. Consumer updated at `tools/src/adapters/agent-tool-adapter.ts:2,477`. |
@@ -815,7 +815,7 @@ Status legend: ✅ confirmed | 🟡 partial / corrected | ❌ stale (no action n
 - #11 `engines: { bun: ">=1.1" }` + Node fallback
 - #14 Fix or delete FRAMEWORK_INDEX.md
 - #16 Calibrate p01/p02 RESULTS overclaim
-- #22 Fix or delete `runSuite` placeholder
+- ~~#22 Fix or delete `runSuite` placeholder~~ ✅ **resolved W6.5** (FIX-22, T10)
 - #27/#28/#29/#30/#31 Observability/telemetry defects
 - #32/#33 Cost router calibration coupling + SHA refresh
 - #34 Define `AgentMemory` port

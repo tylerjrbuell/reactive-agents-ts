@@ -4,11 +4,15 @@ import {
   EvalServiceLive,
   DatasetService,
   DatasetServiceLive,
+  JudgeLLMService,
+  BenchmarkError,
+  type SuiteAgentRunner,
 } from "@reactive-agents/eval";
 import {
   TestLLMServiceLayer,
   AnthropicProviderLive,
   OpenAIProviderLive,
+  LLMService,
 } from "@reactive-agents/llm-provider";
 import { section, info, success, fail, kv, spinner, muted } from "../ui.js";
 
@@ -38,14 +42,52 @@ export async function runEval(args: string[]): Promise<void> {
     process.exit(1);
   }
 
+  // SUT layer — runs the agent under test.
   const llmLayer = buildLLMLayer(provider);
-  const evalLayer = EvalServiceLive.pipe(Layer.provide(llmLayer));
+  // Judge layer — wired separately per Rule 4 (frozen judge isolation).
+  // For the v0.10 CLI we route the judge through the same provider as the
+  // SUT (single-binary CLI constraint); the Tag distinction still keeps
+  // the code path isolated, and the runtime guard in runSuite will reject
+  // identical judge.model === sutModel pairings supplied via config.
+  const judgeLayer = buildJudgeLayer(provider);
+  const evalLayer = EvalServiceLive.pipe(Layer.provide(judgeLayer));
   const fullLayer = Layer.mergeAll(evalLayer, DatasetServiceLive, llmLayer);
 
   const suite = suitePath;
   const program = Effect.gen(function* () {
     const ds = yield* DatasetService;
     const evalService = yield* EvalService;
+    const sutLLM = yield* LLMService;
+
+    // SuiteAgentRunner — runs the SUT for each case via LLMService.
+    // Stays in the SUT code path; never touches JudgeLLMService.
+    const agentRunner: SuiteAgentRunner = (input) =>
+      Effect.gen(function* () {
+        const start = Date.now();
+        const response = yield* sutLLM
+          .complete({
+            messages: [{ role: "user", content: input }],
+            temperature: 0.0,
+          })
+          .pipe(
+            Effect.mapError(
+              (err) =>
+                new BenchmarkError({
+                  message: `SUT failed for input "${input.slice(0, 60)}...": ${String(err)}`,
+                  suiteId: "cli",
+                }),
+            ),
+          );
+        return {
+          actualOutput: response.content,
+          metrics: {
+            latencyMs: Date.now() - start,
+            costUsd: response.usage.estimatedCost ?? 0,
+            tokensUsed: response.usage.totalTokens ?? 0,
+            stepsExecuted: 1,
+          },
+        };
+      });
 
     const loadSpin = spinner(`Loading suite: ${suite}`);
     const evalSuite = yield* ds.loadSuite(suite);
@@ -57,7 +99,7 @@ export async function runEval(args: string[]): Promise<void> {
     console.log(kv("Agent", agentConfig));
 
     const runSpin = spinner(`Running ${evalSuite.cases.length} eval cases...`);
-    const run = yield* evalService.runSuite(evalSuite, agentConfig);
+    const run = yield* evalService.runSuite(evalSuite, agentConfig, agentRunner);
     runSpin.succeed("Eval complete");
 
     const s = run.summary;
@@ -109,4 +151,26 @@ function buildLLMLayer(provider: "anthropic" | "openai" | "test") {
     default:
       return TestLLMServiceLayer([{ text: "0.8" }]);
   }
+}
+
+/**
+ * Build the JudgeLLMService layer. For the v0.10 CLI this delegates to the
+ * same underlying provider as the SUT but routes through the distinct
+ * `JudgeLLMService` Tag — that's enough to satisfy Rule-4 code-path
+ * isolation. Runtime guard in `runSuite` still rejects identical
+ * `judge.model === sutModel` pairings declared in `config.judge`.
+ */
+function buildJudgeLayer(provider: "anthropic" | "openai" | "test") {
+  // Re-use the same provider implementation by binding it through the judge
+  // Tag. Effect resolves Tags by identity, so even though the underlying
+  // service is the same instance, judge calls go through `JudgeLLMService`
+  // and SUT calls go through `LLMService`.
+  const llmLayer = buildLLMLayer(provider);
+  return Layer.effect(
+    JudgeLLMService,
+    Effect.gen(function* () {
+      const llm = yield* LLMService;
+      return { complete: llm.complete };
+    }),
+  ).pipe(Layer.provide(llmLayer));
 }

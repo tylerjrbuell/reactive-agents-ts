@@ -1,28 +1,33 @@
 import { describe, it, expect } from "bun:test";
-import { Effect, Layer, Stream } from "effect";
-import { LLMService } from "@reactive-agents/llm-provider";
-import { EvalService, EvalServiceLive } from "../src/services/eval-service.js";
+import { Effect, Layer } from "effect";
+import { EvalService, EvalServiceLive, type SuiteAgentRunner } from "../src/services/eval-service.js";
+import { JudgeLLMService } from "../src/services/judge-llm-service.js";
+import { BenchmarkError } from "../src/errors/errors.js";
 import type { EvalSuite } from "../src/types/eval-case.js";
 
-// Deterministic LLM that returns "0.8" for all scoring prompts
-const TestLLMLayer = Layer.succeed(LLMService, {
+// W9 frozen judge — provide JudgeLLMService (NOT LLMService) so the judge
+// code path is isolated from the SUT per Rule 4 of 00-RESEARCH-DISCIPLINE.md.
+// Deterministic judge returns "0.8" for every scoring prompt.
+const TestJudgeLayer = Layer.succeed(JudgeLLMService, {
   complete: (_params) =>
     Effect.succeed({
       content: "0.8",
       stopReason: "end_turn" as const,
-      model: "test",
+      model: "judge-test",
       usage: { inputTokens: 10, outputTokens: 2, totalTokens: 12, estimatedCost: 0 },
     }),
-  stream: (_params) => Effect.succeed(Stream.empty),
-  completeStructured: (_params) => Effect.succeed({} as never),
-  embed: (_texts, _model) => Effect.succeed([[]]),
-  countTokens: (_messages) => Effect.succeed(0),
-  getModelConfig: () =>
-    Effect.succeed({ provider: "test", model: "test", costPer1MInput: 0, costPer1MOutput: 0 }),
 });
 
-// Provide LLMService to EvalServiceLive during construction (llm captured in closure)
-const EvalLayer = EvalServiceLive.pipe(Layer.provide(TestLLMLayer));
+const EvalLayer = EvalServiceLive.pipe(Layer.provide(TestJudgeLayer));
+
+// Stub SuiteAgentRunner — pretends to "run the SUT" by returning a
+// deterministic actualOutput per input. Tests that do not care about
+// specific output content use this.
+const stubAgentRunner: SuiteAgentRunner = (input) =>
+  Effect.succeed({
+    actualOutput: `SUT response to: ${input}`,
+    metrics: { latencyMs: 50, costUsd: 0.0001, tokensUsed: 25, stepsExecuted: 1 },
+  });
 
 const makeSuite = (id: string, dimensions: string[]): EvalSuite => ({
   id,
@@ -49,7 +54,7 @@ describe("EvalService", () => {
     const program = Effect.gen(function* () {
       const evalService = yield* EvalService;
       const suite = makeSuite("suite-1", ["accuracy", "relevance"]);
-      const run = yield* evalService.runSuite(suite, "anthropic/claude");
+      const run = yield* evalService.runSuite(suite, "anthropic/claude", stubAgentRunner);
       return run;
     });
 
@@ -64,6 +69,12 @@ describe("EvalService", () => {
     expect(run.summary.totalCases).toBe(2);
     expect(run.summary.passed).toBe(2);
     expect(run.summary.avgScore).toBeCloseTo(0.8);
+
+    // FIX-22: actualOutput is the SUT runner's real output, not a placeholder
+    expect(run.results[0].actualOutput).toBe("SUT response to: What is 2+2?");
+    expect(run.results[1].actualOutput).toBe("SUT response to: Tell me about Paris.");
+    expect(run.results[0].costUsd).toBeCloseTo(0.0001);
+    expect(run.results[0].tokensUsed).toBe(25);
   });
 
   it("runCase scores a single case with real output", async () => {
@@ -100,7 +111,7 @@ describe("EvalService", () => {
       const suite = makeSuite("suite-compare", ["accuracy", "safety"]);
 
       // Run A (baseline)
-      const runA = yield* evalService.runSuite(suite, "anthropic/claude-haiku");
+      const runA = yield* evalService.runSuite(suite, "anthropic/claude-haiku", stubAgentRunner);
 
       // Run B with injected overrides — simulate a better accuracy, worse safety
       const runB: typeof runA = {
@@ -126,7 +137,7 @@ describe("EvalService", () => {
     const program = Effect.gen(function* () {
       const evalService = yield* EvalService;
       const suite = makeSuite("suite-reg", ["relevance"]);
-      const baseline = yield* evalService.runSuite(suite, "anthropic/claude-sonnet");
+      const baseline = yield* evalService.runSuite(suite, "anthropic/claude-sonnet", stubAgentRunner);
 
       const degraded: typeof baseline = {
         ...baseline,
@@ -148,7 +159,7 @@ describe("EvalService", () => {
     const program = Effect.gen(function* () {
       const evalService = yield* EvalService;
       const suite = makeSuite("suite-stable", ["accuracy"]);
-      const baseline = yield* evalService.runSuite(suite, "anthropic/claude-sonnet");
+      const baseline = yield* evalService.runSuite(suite, "anthropic/claude-sonnet", stubAgentRunner);
       // Same run = no regression
       return yield* evalService.checkRegression(baseline, baseline, 0.05);
     });
@@ -163,9 +174,9 @@ describe("EvalService", () => {
     const program = Effect.gen(function* () {
       const evalService = yield* EvalService;
       const suite = makeSuite("suite-history", ["relevance"]);
-      yield* evalService.runSuite(suite, "anthropic/claude");
-      yield* evalService.runSuite(suite, "openai/gpt-4o");
-      yield* evalService.runSuite(makeSuite("other-suite", ["accuracy"]), "anthropic/claude");
+      yield* evalService.runSuite(suite, "anthropic/claude", stubAgentRunner);
+      yield* evalService.runSuite(suite, "openai/gpt-4o", stubAgentRunner);
+      yield* evalService.runSuite(makeSuite("other-suite", ["accuracy"]), "anthropic/claude", stubAgentRunner);
       return yield* evalService.getHistory("suite-history");
     });
 
@@ -173,6 +184,45 @@ describe("EvalService", () => {
 
     expect(history).toHaveLength(2);
     expect(history.every((r) => r.suiteId === "suite-history")).toBe(true);
+  });
+
+  // ── T10 (Rule 4 frozen judge) — judge model must differ from SUT ────────
+  // FIX-22 added a runtime guard: if `config.judge.model` equals
+  // `agentConfig`, runSuite fails with BenchmarkError. This pins the
+  // contract so wiring both Tags to the same provider/model is rejected.
+  it("runSuite rejects judge.model === sutModel (Rule 4 / T10 / FIX-22)", async () => {
+    const program = Effect.gen(function* () {
+      const evalService = yield* EvalService;
+      const suite = makeSuite("rule4-suite", ["accuracy"]);
+      const sameModel = "anthropic/claude-haiku-4-5";
+
+      return yield* evalService
+        .runSuite(suite, sameModel, stubAgentRunner, {
+          judge: { model: sameModel, provider: "anthropic" },
+        })
+        .pipe(Effect.flip);
+    });
+
+    const err = await Effect.runPromise(program.pipe(Effect.provide(EvalLayer)));
+    expect(err).toBeInstanceOf(BenchmarkError);
+    expect(err.message).toContain("Rule 4 violation");
+    expect(err.message).toContain(`"anthropic/claude-haiku-4-5"`);
+  });
+
+  it("runSuite accepts judge.model !== sutModel (Rule 4 / T10 happy path)", async () => {
+    const program = Effect.gen(function* () {
+      const evalService = yield* EvalService;
+      const suite = makeSuite("rule4-ok", ["accuracy"]);
+      return yield* evalService.runSuite(
+        suite,
+        "openai/gpt-4o",
+        stubAgentRunner,
+        { judge: { model: "claude-haiku-4-5", provider: "anthropic" } },
+      );
+    });
+
+    const run = await Effect.runPromise(program.pipe(Effect.provide(EvalLayer)));
+    expect(run.results).toHaveLength(2);
   });
 
   it("scores cost-efficiency dimension without LLM call", async () => {

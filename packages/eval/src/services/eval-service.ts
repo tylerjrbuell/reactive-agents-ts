@@ -18,12 +18,38 @@ import { scoreCompleteness } from "../dimensions/completeness.js";
 import { scoreSafety } from "../dimensions/safety.js";
 import { scoreCostEfficiency } from "../dimensions/cost-efficiency.js";
 
+/**
+ * Per-case SUT runner. Invoked by `runSuite` for each `EvalCase` to produce
+ * the real `actualOutput` the judge will score. Pre-W6.5 (FIX-22), `runSuite`
+ * hardcoded `"[evaluated via LLM-as-judge]"` as the actualOutput, which meant
+ * the judge scored a placeholder string for every case — the suite was
+ * structurally broken. Callers now supply this runner; it exercises the SUT
+ * (the agent under test) and returns the captured output + metrics.
+ *
+ * The runner MUST NOT use `JudgeLLMService` (Rule 4 of 00-RESEARCH-DISCIPLINE.md
+ * — judge code path is isolated from the SUT). Use `LLMService` or a higher-
+ * level builder layer to run the agent.
+ */
+export type SuiteAgentRunner = (input: string) => Effect.Effect<
+  {
+    readonly actualOutput: string;
+    readonly metrics?: {
+      readonly latencyMs?: number;
+      readonly costUsd?: number;
+      readonly tokensUsed?: number;
+      readonly stepsExecuted?: number;
+    };
+  },
+  BenchmarkError
+>;
+
 export class EvalService extends Context.Tag("EvalService")<
   EvalService,
   {
     readonly runSuite: (
       suite: EvalSuite,
       agentConfig: string,
+      agentRunner: SuiteAgentRunner,
       config?: Partial<EvalConfig>,
     ) => Effect.Effect<EvalRun, BenchmarkError>;
 
@@ -164,21 +190,55 @@ export const makeEvalServiceLive = (store?: EvalStore) =>
       const historyRef = yield* Ref.make<EvalRun[]>([]);
 
       return {
-        runSuite: (suite, agentConfig, configOverride) =>
+        runSuite: (suite, agentConfig, agentRunner, configOverride) =>
           Effect.gen(function* () {
             const config = { ...DEFAULT_EVAL_CONFIG, ...configOverride };
+
+            // Rule 4 (frozen judge) — when a judge model is configured, it
+            // MUST differ from the SUT (`agentConfig`). Catches the most
+            // common Rule-4 violation: someone wires both Tags to the same
+            // provider/model thinking "it'll work for now."
+            if (config.judge?.model && config.judge.model === agentConfig) {
+              return yield* Effect.fail(
+                new BenchmarkError({
+                  message: `Rule 4 violation: judge model "${config.judge.model}" matches SUT "${agentConfig}". The judge MUST differ from the system under test (00-RESEARCH-DISCIPLINE.md §4 — frozen judge).`,
+                  suiteId: suite.id,
+                }),
+              );
+            }
+
             const results: EvalResult[] = [];
 
             for (const evalCase of suite.cases) {
               const start = Date.now();
+
+              // FIX-22: actually run the agent on each case. Pre-W6.5,
+              // runSuite hardcoded a placeholder string here so the judge
+              // scored an identical placeholder for every case — the
+              // overall metric was meaningless. Now the caller supplies
+              // a SuiteAgentRunner that exercises the SUT.
+              const sutRun = yield* agentRunner(evalCase.input).pipe(
+                Effect.mapError(
+                  (err) =>
+                    err instanceof BenchmarkError
+                      ? err
+                      : new BenchmarkError({
+                          message: `Suite "${suite.id}" case "${evalCase.id}" SUT runner failed: ${String(err)}`,
+                          suiteId: suite.id,
+                        }),
+                ),
+              );
+
+              const sutCostUsd = sutRun.metrics?.costUsd ?? 0;
+
               const scores = yield* Effect.all(
                 suite.dimensions.map((dim) =>
                   scoreDimension(llm, dim, {
                     input: evalCase.input,
-                    actualOutput: "[evaluated via LLM-as-judge]",
+                    actualOutput: sutRun.actualOutput,
                     expectedOutput: evalCase.expectedOutput,
                     caseId: evalCase.id,
-                    costUsd: 0,
+                    costUsd: sutCostUsd,
                   }),
                 ),
                 { concurrency: config.parallelism },
@@ -201,11 +261,11 @@ export const makeEvalServiceLive = (store?: EvalStore) =>
                 agentConfig,
                 scores,
                 overallScore,
-                actualOutput: "[evaluated via LLM-as-judge]",
-                latencyMs: Date.now() - start,
-                costUsd: 0,
-                tokensUsed: 0,
-                stepsExecuted: 0,
+                actualOutput: sutRun.actualOutput,
+                latencyMs: sutRun.metrics?.latencyMs ?? Date.now() - start,
+                costUsd: sutCostUsd,
+                tokensUsed: sutRun.metrics?.tokensUsed ?? 0,
+                stepsExecuted: sutRun.metrics?.stepsExecuted ?? 0,
                 passed: overallScore >= config.passThreshold,
               });
             }
