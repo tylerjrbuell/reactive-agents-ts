@@ -789,7 +789,7 @@ Status legend: ✅ confirmed | 🟡 partial / corrected | ❌ stale (no action n
 | 41 | **`ExperimentService` (in prompts) used by only one example** — needs `_unstable_*` | Low | `prompts` package |
 | 42 | **react/svelte/vue zero in-repo consumers** — Cortex UI uses its own framework, not the published packages | Low (DX gap) | dogfooding gap; mark `_unstable_*` |
 | 43 | **svelte unused `derived` imports** (lint flag) and **peerDep `>=4.0.0` vs devDep `^5.0.0`** version mismatch | Low | `svelte/src/agent.ts`, `agent-stream.ts` |
-| 44 | **diagnose `__tests__/` directory exists empty** — Sprint 3.6 shipped CLI without tests | High (zero coverage) | `diagnose/__tests__/` |
+| 44 | ~~**diagnose `__tests__/` directory exists empty**~~ | ✅ **resolved W6.6** | New `packages/diagnose/tests/diagnose.test.ts` lands T11: 12 smoke tests covering `resolveTracePath` (absolute/missing/bare-id/did-you-mean), `listTraces` (mtime-desc sort), `replayCommand --json` (JSONL round-trip + default timeline header), `grepCommand` (predicate match, empty-expr reject, invalid-expr reject, silent skip on field errors), `diffCommand` (stat block emit). 12/12 pass. The empty `__tests__/` directory referenced by the original finding never existed in src; tests now live under `tests/` matching the rest of the workspace convention. |
 
 ### 11.3 Backlog priority for Stage 5
 
@@ -819,7 +819,7 @@ Status legend: ✅ confirmed | 🟡 partial / corrected | ❌ stale (no action n
 - #27/#28/#29/#30/#31 Observability/telemetry defects
 - #32/#33 Cost router calibration coupling + SHA refresh
 - #34 Define `AgentMemory` port
-- #44 Add diagnose smoke tests
+- ~~#44 Add diagnose smoke tests~~ ✅ **resolved W6.6** (T11 landed; 12/12 pass)
 
 **P3 (low — cleanup, post-v0.10.0 OK):**
 - #8 Sub-agent maxIterations cap
