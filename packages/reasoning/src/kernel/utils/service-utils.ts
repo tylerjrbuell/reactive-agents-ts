@@ -8,8 +8,7 @@
 import { Context, Effect } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { ToolService } from "@reactive-agents/tools";
-import { EventBus, EntropySensorService } from "@reactive-agents/core";
-import { MemoryService } from "@reactive-agents/memory";
+import { EventBus, EntropySensorService, AgentMemory } from "@reactive-agents/core";
 
 // ── Narrow types — shared types from kernel-state, prompt type local ─────────
 
@@ -180,7 +179,12 @@ export const resolveStrategyServices: Effect.Effect<
   );
   const dispatcher = dispatcherOptRaw as MaybeService<DispatcherInstance>;
 
-  const memoryServiceOptRaw = yield* Effect.serviceOption(MemoryService).pipe(
+  // FIX-34 / W11 — resolve via the narrow AgentMemory port in core, not
+  // the heavy MemoryService Tag in @reactive-agents/memory. Adapter Layers
+  // (e.g. AgentMemoryFromMemoryService in the memory package) bridge the
+  // two; user code that wants a custom AgentMemory provider can supply
+  // it directly without dragging in the memory package.
+  const memoryServiceOptRaw = yield* Effect.serviceOption(AgentMemory).pipe(
     Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
   );
   const memoryService = memoryServiceOptRaw as MaybeService<MemoryServiceInstance>;

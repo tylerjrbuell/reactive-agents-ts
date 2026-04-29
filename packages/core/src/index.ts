@@ -118,6 +118,13 @@ export { CoreServicesLive } from "./runtime.js";
 // ─── Streaming ───
 export { StreamingTextCallback } from "./streaming.js";
 
+// ─── AgentMemory port (NS §3.1 — FIX-34) ───
+// Narrow port the kernel resolves so it does NOT depend on
+// @reactive-agents/memory at runtime. Adapter Layer lives in the memory
+// package; user code is also free to ship its own AgentMemory provider.
+export { AgentMemory } from "./services/agent-memory.js";
+export type { AgentMemoryEntry } from "./services/agent-memory.js";
+
 // ─── Entropy Sensor Tag (for reactive-intelligence layer) ───
 export { EntropySensorService } from "./services/entropy-sensor-tag.js";
 export type {

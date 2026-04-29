@@ -663,7 +663,7 @@ Stage 4 produces a single MEMORY-RECONCILIATION.md log of all changes for tracea
 ##### M10 — Memory system (Working / Semantic / Episodic / Procedural)
 
 - **Failure modes addressed:** FM-F2 (memory pollution across runs — unvalidated theoretical).
-- **Evidence:** Per-package audit: 21 unit tests, no cross-run probe. SQLite + FTS5 + consolidation. **AgentMemory port not defined or wired.**
+- **Evidence:** Per-package audit: 21 unit tests, no cross-run probe. SQLite + FTS5 + consolidation. ~~**AgentMemory port not defined or wired.**~~ ✅ **resolved W11** — `AgentMemory` Tag now in `@reactive-agents/core` with adapter in `memory/src/services/agent-memory-adapter.ts`; kernel resolves the port. PlanStoreService coupling at `plan-execute.ts:21` remains and is deferred.
 - **Health:** `bun:sqlite` hard import breaks Node consumers; sync DB blocks event loop.
 - **Verdict:** **FIX** (verdict from `@reactive-agents/memory` package).
 - **Reason:** Capability shape matches NS §2.7 but the runtime is Bun-only and the port is dead.
@@ -779,7 +779,7 @@ Status legend: ✅ confirmed | 🟡 partial / corrected | ❌ stale (no action n
 | 31 | **MetricsCollector silent fallback** to fresh collector if shared layer missing → undetectable divergence | Medium | `observability/src/observability-service.ts:478-484` |
 | 32 | ~~**Cost router does NOT consult calibration**~~ | ✅ **resolved W10** | New `RoutingContext` parameter on `analyzeComplexity` / `routeToModel` carries `requiresTools` + per-tier `calibration.toolCallReliability` + `toolReliabilityThreshold` (default 0.5). `escalateForToolReliability()` walks the haiku→sonnet→opus ladder, returning the first tier whose calibration is missing (unknown → assume usable) or meets threshold; falls back to most-reliable tier when all are below. Adds factor `tool-reliability-escalation:<from>-><to>` or `tool-reliability-confirmed`. Pure function, no service lookup; caller translates from their calibration store into the narrow shape. Six new tests in `complexity-router.test.ts`. |
 | 33 | ~~**Hardcoded model SHAs in cost are stale**~~ | ✅ **resolved W10** | Anthropic sonnet → `claude-sonnet-4-6`, opus → `claude-opus-4-7`; gemini sonnet/opus moved off `gemini-2.5-pro-preview-03-25` pin to stable `gemini-2.5-pro`; litellm opus → `claude-opus-4-7`. Sonnet `maxContext` bumped to 1M to match Sonnet 4.6 capability. Haiku already current at `claude-haiku-4-5-20251001`. SHA-refresh sanity test added. |
-| 34 | **AgentMemory port not defined or wired** — services export Effect Tags directly; reasoning couples to `MemoryServiceLive` | Medium | NS §3.1; `core/src/services/` (missing) |
+| 34 | ~~**AgentMemory port not defined or wired**~~ | ✅ **resolved W11 (scoped to tool-execution semantic write; PlanStoreService coupling deferred)** | New `AgentMemory` Tag in `@reactive-agents/core/src/services/agent-memory.ts` with narrow surface (`storeSemantic` only — what kernel actually consumes today). New `AgentMemoryEntry` input type (port-level shape). Adapter Layer `AgentMemoryFromMemoryService` at `memory/src/services/agent-memory-adapter.ts` bridges the heavy `MemoryService` impl to the port. Wired into `createMemoryLayer` so the standard happy path satisfies the port without extra setup. Kernel resolves `AgentMemory` (not `MemoryService`) at `reasoning/src/kernel/utils/service-utils.ts:185-190`. Phase-2 prep: payoff arrives when a second `AgentMemory` provider (user agent without the memory package) wires up. Tests: `core/tests/agent-memory.test.ts` proves a no-`MemoryService`-Layer satisfies the port; `memory/tests/agent-memory-adapter.test.ts` pins the SemanticEntry conversion. **Scope flag:** `plan-execute.ts:21` still imports `PlanStoreService` from `@reactive-agents/memory` — separate plan-store decoupling deferred to v0.11. |
 | 35 | **Sync-only memory DB layer** (`Effect.sync` over bun:sqlite) blocks event loop | Medium | `memory/src/database.ts`, NS G-3 |
 | 36 | **Identity service merged into runtime layer but no consumer reads it** — `IdentityService`, `PermissionManager`, `AuditLogger`, `CertificateAuth` all dormant | Low (DEFER) | `runtime/src/runtime.ts:1346` is sole reference |
 | 37 | ~~4 dead RI handler files~~ ❌ **stale** — Stage 5 W2 verification found no such files. The 4 names are *evaluators* in `controller/evaluators/`, intentionally kept per explicit source comment at `controller-service.ts:12-21`: "evaluator source files remain so the logic is recoverable; re-add them only when a real dispatch handler ships alongside." Test `tests/controller/new-evaluators.test.ts` still references them. **No action needed.** | resolved | — |
@@ -818,7 +818,7 @@ Status legend: ✅ confirmed | 🟡 partial / corrected | ❌ stale (no action n
 - ~~#22 Fix or delete `runSuite` placeholder~~ ✅ **resolved W6.5** (FIX-22, T10)
 - #27/#28/#29/#30/#31 Observability/telemetry defects
 - ~~#32/#33 Cost router calibration coupling + SHA refresh~~ ✅ **resolved W10**
-- #34 Define `AgentMemory` port
+- ~~#34 Define `AgentMemory` port~~ ✅ **resolved W11** (Phase-2 prep — pays off when a second consumer/provider lands)
 - ~~#44 Add diagnose smoke tests~~ ✅ **resolved W6.6** (T11 landed; 12/12 pass)
 
 **P3 (low — cleanup, post-v0.10.0 OK):**

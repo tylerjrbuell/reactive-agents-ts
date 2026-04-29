@@ -63,6 +63,9 @@ export { MemorySearchService, MemorySearchServiceLive } from "./search.js";
 
 // ─── Services ───
 export { MemoryService, MemoryServiceLive } from "./services/memory-service.js";
+// AgentMemory port adapter (NS §3.1, FIX-34) — fulfills the narrow
+// `AgentMemory` Tag in @reactive-agents/core from a `MemoryService` provider.
+export { AgentMemoryFromMemoryService } from "./services/agent-memory-adapter.js";
 export {
   WorkingMemoryService,
   WorkingMemoryServiceLive,

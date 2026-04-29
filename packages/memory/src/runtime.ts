@@ -8,6 +8,7 @@ import { MemorySearchServiceLive } from "./search.js";
 import { ZettelkastenServiceLive } from "./indexing/zettelkasten.js";
 import { PlanStoreServiceLive } from "./services/plan-store.js";
 import { MemoryServiceLive } from "./services/memory-service.js";
+import { AgentMemoryFromMemoryService } from "./services/agent-memory-adapter.js";
 import { MemoryDatabaseLive } from "./database.js";
 import { MemoryConsolidatorLive } from "./extraction/memory-consolidator.js";
 import { MemoryExtractorLive, MemoryExtractorTier2Live } from "./extraction/memory-extractor.js";
@@ -77,12 +78,22 @@ export const createMemoryLayer = (
     Layer.provide(Layer.mergeAll(workingLayer, coreServices, fsLayer)),
   );
 
+  // AgentMemory port adapter (FIX-34 / W11). Bridges the heavy MemoryService
+  // implementation to the narrow `AgentMemory` Tag in @reactive-agents/core
+  // that the kernel actually consumes. Provided here so any consumer of
+  // `createMemoryLayer` automatically satisfies the kernel's port lookup —
+  // no extra wiring required for the standard happy path.
+  const agentMemoryAdapter = AgentMemoryFromMemoryService.pipe(
+    Layer.provide(memoryServiceLayer),
+  );
+
   return Layer.mergeAll(
     dbLayer,
     workingLayer,
     coreServices,
     fsLayer,
     memoryServiceLayer,
+    agentMemoryAdapter,
     consolidatorLayer,
     compactionLayer,
     extractorLayer,

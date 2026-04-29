@@ -452,6 +452,13 @@ export type EventBusInstance = {
  * layer during reasoning so cross-iteration recall works. Other memory methods
  * (bootstrap, flush, snapshot, logEpisode) are used exclusively by the runtime
  * execution engine, not by the kernel itself.
+ *
+ * FIX-34 / W11 — this surface intentionally accepts a `SemanticEntry` (with
+ * branded `MemoryId`) for backward compatibility with existing tool-execution
+ * call sites. The `AgentMemory` port in `@reactive-agents/core` defines a
+ * narrower `AgentMemoryEntry` input shape; the structural compatibility lets
+ * a `SemanticEntry` flow through the port unchanged. Kernel resolves
+ * `AgentMemory` (port), not `MemoryService` (heavy implementation), per NS §3.1.
  */
 export type MemoryServiceInstance = {
   readonly storeSemantic: (
