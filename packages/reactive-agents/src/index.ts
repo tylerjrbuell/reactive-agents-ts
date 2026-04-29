@@ -103,7 +103,7 @@ export {
 export type {
   Agent,
   AgentId,
-  AgentConfig,
+  AgentDefinition,
   Task,
   TaskId,
   TaskResult,
