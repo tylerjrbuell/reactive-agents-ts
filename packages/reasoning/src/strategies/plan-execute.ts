@@ -121,6 +121,19 @@ export const executePlanExecute = (
     let totalTokens = 0;
     let totalCost = 0;
 
+    // W3 FIX-23: per-strategy RI budget. Accumulates across refinement
+    // iterations so dispatcher suppression gates (maxFiresPerRun,
+    // maxInterventionTokenBudget) actually trip. Prior to W3 this was
+    // hardcoded to {0,0} every refinement, making the gates unreachable.
+    // Note: plan-execute spawns sub-kernels per step but the strategy
+    // itself runs the reflection-iteration outer loop; budget is scoped
+    // to that outer loop here. Sub-kernel-level budget tracking is in
+    // reactive-observer.ts via KernelState.meta.riBudget.
+    const perStrategyRiBudget = {
+      interventionsFiredThisRun: 0,
+      tokensSpentOnInterventions: 0,
+    };
+
     let refinement = 0;
     let finalOutput: string | null = null;
 
@@ -695,11 +708,19 @@ export const executePlanExecute = (
                   contextPressure: sources?.["contextPressure"] ?? 0,
                 },
                 recentDecisions: decisions as readonly { readonly decision: string; readonly reason: string }[],
-                budget: { tokensSpentOnInterventions: 0, interventionsFiredThisRun: 0 },
+                budget: {
+                  interventionsFiredThisRun: perStrategyRiBudget.interventionsFiredThisRun,
+                  tokensSpentOnInterventions: perStrategyRiBudget.tokensSpentOnInterventions,
+                },
               };
               const dispatchResult = yield* services.dispatcher.value
                 .dispatch(decisions as readonly { readonly decision: string; readonly reason: string }[], {}, dispatchContext)
                 .pipe(Effect.catchAll(() => Effect.succeed({ appliedPatches: [], skipped: [], totalCost: { tokens: 0, latencyMs: 0 } })));
+
+              // W3 FIX-23: accumulate per-strategy budget so the next refinement
+              // iteration's dispatch sees real counts at the suppression gates.
+              perStrategyRiBudget.interventionsFiredThisRun += dispatchResult.appliedPatches.length;
+              perStrategyRiBudget.tokensSpentOnInterventions += dispatchResult.totalCost.tokens;
 
               for (const patch of dispatchResult.appliedPatches) {
                 if (services.eventBus._tag === "Some") {

@@ -8,8 +8,10 @@ export const toolFailureRedirectHandler: InterventionHandler<"tool-failure-redir
   execute: (decision, state, _ctx) => {
     // First dispatch: soft redirect nudge — ask the model to try a different approach
     // Second+ dispatch: hard stop — the model ignored the soft nudge, terminate the loop.
-    // Use controllerDecisionLog (populated from prior dispatches) instead of budget
-    // (budget.interventionsFiredThisRun is currently hardcoded to 0 — not yet tracked).
+    // Use controllerDecisionLog to count prior fires of THIS decision specifically;
+    // budget.interventionsFiredThisRun (now tracked in W3 FIX-23 via
+    // KernelState.meta.riBudget) counts ALL prior fires across decision types,
+    // which is too broad for re-fire detection of a single decision class.
     const decisionLog = (state as unknown as { controllerDecisionLog?: readonly string[] }).controllerDecisionLog ?? [];
     const priorRedirects = decisionLog.filter((e) => e.startsWith("tool-failure-redirect")).length;
     const isEscalation = priorRedirects >= 1;

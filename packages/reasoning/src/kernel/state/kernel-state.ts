@@ -159,6 +159,23 @@ export interface KernelMeta {
    */
   readonly synthesisRetryCount?: number;
 
+  // ── Stage 5 W3 — RI dispatcher budget (FIX-23) ──
+  /**
+   * Per-run intervention budget threaded through dispatch context. Each
+   * dispatched patch increments `interventionsFiredThisRun`; the total
+   * cost reported by the dispatcher accumulates into
+   * `tokensSpentOnInterventions`. Suppression gates at
+   * `dispatcher.ts:69-76` (`maxFiresPerRun`, `maxInterventionTokenBudget`)
+   * read these values to decide whether to fire or suppress.
+   *
+   * Prior to W3 these were hardcoded to 0 every iteration, making the
+   * gates unreachable. See AUDIT-overhaul-2026.md §11 #23 + M1 mechanism.
+   */
+  readonly riBudget?: {
+    readonly interventionsFiredThisRun: number;
+    readonly tokensSpentOnInterventions: number;
+  };
+
 }
 
 // ── KernelState — Immutable, serializable reasoning state ────────────────────

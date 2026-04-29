@@ -280,6 +280,13 @@ export function runReactiveObserver(
               sources?: { contextPressure?: number };
             } | undefined;
             const modelTier = (latestScore as Record<string, unknown>)?.modelTier as string | undefined;
+            // W3 FIX-23: read accumulated RI budget from KernelState.meta.riBudget so
+            // suppression gates at dispatcher.ts:69-76 can actually trip. Prior to W3
+            // this was hardcoded to {0,0} every iteration → gates unreachable.
+            const priorBudget = s.meta.riBudget ?? {
+              interventionsFiredThisRun: 0,
+              tokensSpentOnInterventions: 0,
+            };
             const dispatchContext = {
               iteration: s.iteration,
               entropyScore: {
@@ -291,7 +298,7 @@ export function runReactiveObserver(
                 contextPressure: richLatest?.sources?.contextPressure ?? 0,
               },
               recentDecisions: decisions as readonly { readonly decision: string; readonly reason: string }[],
-              budget: { tokensSpentOnInterventions: 0, interventionsFiredThisRun: 0 },
+              budget: priorBudget,
               adaptiveMinEntropy: calibratedMinEntropy(calibration, modelTier),
             };
             const dispatchResult = yield* services.dispatcher.value
@@ -301,6 +308,25 @@ export function runReactiveObserver(
                 dispatchContext,
               )
               .pipe(Effect.catchAll(() => Effect.succeed({ appliedPatches: [], skipped: [], totalCost: { tokens: 0, latencyMs: 0 } })));
+
+            // W3 FIX-23: accumulate budget from this iteration's dispatch into
+            // KernelState.meta.riBudget so the next iteration's suppression gates
+            // see real counts. interventionsFiredThisRun increments by patches
+            // applied; tokensSpentOnInterventions accumulates the totalCost reported
+            // by the dispatcher.
+            if (dispatchResult.appliedPatches.length > 0 || dispatchResult.totalCost.tokens > 0) {
+              s = transitionState(s, {
+                meta: {
+                  ...s.meta,
+                  riBudget: {
+                    interventionsFiredThisRun:
+                      priorBudget.interventionsFiredThisRun + dispatchResult.appliedPatches.length,
+                    tokensSpentOnInterventions:
+                      priorBudget.tokensSpentOnInterventions + dispatchResult.totalCost.tokens,
+                  },
+                },
+              });
+            }
 
             // Emit InterventionDispatched events for applied patches
             for (const patch of dispatchResult.appliedPatches) {
