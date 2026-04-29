@@ -546,13 +546,13 @@ Stage 4 produces a single MEMORY-RECONCILIATION.md log of all changes for tracea
 - **Reason:** Not a stub — fixture catalog supporting RI evidence collection.
 - **Stage 5 actions:** Optional belt-and-suspenders union-coverage test on `allScenarios`.
 
-##### `reactive-agents` (umbrella) — **TOP-PRIORITY P0 RELEASE BLOCKER**
+##### `reactive-agents` (umbrella)
 - **Purpose:** Single-install entry point (`bun add reactive-agents` / `npm install reactive-agents`). 173 LOC pure re-exports across 15 sub-packages + 14 deep import paths via `exports` map. Ships `rax`/`reactive-agents` bin via `@reactive-agents/cli`.
-- **Evidence:** **Massive in-repo footprint** — every example (`apps/examples/**`), all CLI commands (serve/demo/playground/run), `apps/cli` project generators all emit `import { ReactiveAgents } from "reactive-agents"`. Umbrella integration test (382 LOC) covers re-exports/build/run/streaming/health/error-handling/fallbacks. **Never published to npm.**
-- **Health:** Package itself is healthy (test passes, exports map matches dist outputs, bin forwards correctly). External harm: every doc / blog / generated project references `npm install reactive-agents` — which **returns 404**. Single highest-leverage release blocker.
-- **Verdict:** **FIX (P0 release blocker)**
-- **Reason:** Anyone discovering the framework today hits a 404 on the canonical install command.
-- **Stage 5 actions:** (1) Verify `dist/` contains every sub-export listed (incl. `core.js`, `memory.js`, …, `a2a.js`); ensure `tsup` config emits all 14 sub-paths. (2) **Publish to npm at v0.10.0 with `--access public`** — must be first publish in release sequence, after all 17 deps at v0.10.0. (3) Add post-publish CI smoke job: clean dir, `npm install reactive-agents`, `import { ReactiveAgents }` — gates GitHub release. (4) Confirm `bin/rax.js` in `files`.
+- **Evidence:** **Massive in-repo footprint** — every example (`apps/examples/**`), all CLI commands (serve/demo/playground/run), `apps/cli` project generators all emit `import { ReactiveAgents } from "reactive-agents"`. Umbrella integration test (382 LOC) covers re-exports/build/run/streaming/health/error-handling/fallbacks. **Published at v0.9.0** (~180 downloads/last-30d per `api.npmjs.org`).
+- **Health:** Package itself is healthy (test passes, exports map matches dist outputs, bin forwards correctly). The "404 today" claim from the original audit was **stale** — the umbrella has been published since at least v0.9.0. Real release-time concern is only that the v0.10.0 update ships with the rest of the workspace.
+- **Verdict:** **FIX (CI-handled)** — version bump + publish runs through the CI release workflow alongside the rest of the packages; not a manual P0.
+- **Reason:** Stale 404 claim corrected by direct npm registry query (W14, 2026-04-29).
+- **Stage 5 actions:** (1) Verify `dist/` contains every sub-export listed (incl. `core.js`, `memory.js`, …, `a2a.js`); ensure `tsup` config emits all 14 sub-paths. (2) **CI release workflow** publishes v0.10.0 — no manual `npm publish` per user direction. (3) Post-publish smoke is part of the standard release validation. (4) Confirm `bin/rax.js` in `files`.
 
 ---
 
@@ -741,7 +741,7 @@ Status legend: ✅ confirmed | 🟡 partial / corrected | ❌ stale (no action n
 
 | # | Item | Status | Resolution / file:line |
 |---|---|---|---|
-| 1 | Umbrella `reactive-agents` package never published | ✅ | **P0 release blocker.** Action in `reactive-agents` (umbrella) §10.1. |
+| 1 | ~~Umbrella `reactive-agents` package never published~~ | ❌ **stale (W14)** | Direct `api.npmjs.org` query confirms umbrella is published at v0.9.0 with ~180 downloads/last-30d. The "404 today" claim was stale. v0.10.0 update ships through the CI release workflow alongside the rest of the workspace — not a manual P0. See `reactive-agents` (umbrella) §10.1. |
 | 2 | `@reactive-agents/diagnose` never published | ✅ | Action in diagnose §10.1. |
 | 3 | ~~qwen3 thinking-mode auto-enabled~~ | ✅ **resolved W7** | Inverted default: thinking is OPT-IN. `resolveThinking()` at `providers/local.ts:226-263` returns `undefined` unless `configThinking === true`. Capability verification still gates explicit opt-in (so granite3.3-style models warn-once and omit instead of erroring at the API). |
 | 4 | ~~Dual compression systems uncoordinated~~ | ✅ **resolved-by-discovery W6** | The "dual" framing was wrong. Three stages sequenced: `tool-execution.ts` compress-and-stash → curator render-from-stash → `compress-messages` patch trims messages only (steps/scratchpad untouched, so curator re-renders next iteration). Regression test in `context-curator.test.ts` pins the invariant. See M5. |
@@ -794,8 +794,8 @@ Status legend: ✅ confirmed | 🟡 partial / corrected | ❌ stale (no action n
 ### 11.3 Backlog priority for Stage 5
 
 **P0 (release blocker — must ship for v0.10.0 to be "clean"):**
-- #1 Publish umbrella `reactive-agents`
-- #2 Publish `@reactive-agents/diagnose`
+- ~~#1 Publish umbrella `reactive-agents`~~ ❌ **stale (W14)** — already published at v0.9.0; v0.10.0 update ships via CI release workflow
+- #2 Publish `@reactive-agents/diagnose` — confirmed not yet on registry; ships via CI release workflow at v0.10.0
 - #3 Fix qwen3 thinking auto-enable
 - #18 Collapse 9 termination paths to single-owner
 - #21 Eval frozen-judge (if v0.10.0 claims benchmark numbers)
@@ -805,7 +805,7 @@ Status legend: ✅ confirmed | 🟡 partial / corrected | ❌ stale (no action n
 - ~~#5 ToT outer loop early-stop~~ ✅ **resolved W5** (T4 regression test landed)
 - #6 Wire 3 missing skill-hook subscribers
 - #7 Make `MAX_RECURSION_DEPTH` configurable
-- #15 Mark `_unstable_*` per Rule 10 (multiple packages)
+- ~~#15 Mark `_unstable_*` per Rule 10~~ ⏸️ **deferred (W14, 2026-04-29)** — explicitly skipped for v0.10.0 after npm download check showed adoption ~135-400/30d per package (mostly registry mirrors / CI bots, not real consumers). Pure consumer-signaling work with zero runtime change; revisit when adoption justifies the semver discipline. Track for v0.11+.
 - #19/#24 SHRINK ExecutionEngine + builder.ts
 - #23 Thread RI budget through dispatch context
 - #25 Resolve duplicate `AgentConfigSchema`
