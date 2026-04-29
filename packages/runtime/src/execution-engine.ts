@@ -4245,8 +4245,18 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
               Effect.ensuring(Effect.sync(() => { renderer?.stop(); })),
             );
 
-            // Always silence Effect's built-in logger — ObservableLogger owns all output.
-            // Silencing only in TTY caused divergence where Effect.log* calls appeared in CI but not terminal.
+            // Effect built-in logger: silenced unconditionally because
+            // ObservableLogger owns the structured-output channel. Internal
+            // code paths should NEVER call Effect.log* directly — every event
+            // goes through ObservableLogger.info/.error/.emit so consumers
+            // (TTY renderer, OTLP exporter, JSONL trace) see a single ordered
+            // stream. Silencing only in TTY produced CI/terminal divergence.
+            //
+            // Tradeoff (audit FIX-27): direct Effect.log* calls in our code
+            // disappear here, which can mask bugs. The deeper fix is to wrap
+            // ObservableLogger as a custom Effect Logger so Effect.log* events
+            // become structured ObservableLogger events instead of being
+            // silenced. Out of scope for W8; tracked in audit §11 #27.
             const executeCoreQuiet = executeCoreRaw.pipe(
               Effect.provide(Logger.replace(Logger.defaultLogger, Logger.none)),
             );

@@ -1,7 +1,7 @@
 import { Context, Effect, Layer, Ref } from "effect";
-import { LLMService } from "@reactive-agents/llm-provider";
 import type { CompletionRequest, CompletionResponse, LLMErrors } from "@reactive-agents/llm-provider";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
+import { JudgeLLMService } from "./judge-llm-service.js";
 
 type LLMCompleter = {
   readonly complete: (request: CompletionRequest) => Effect.Effect<CompletionResponse, LLMErrors>;
@@ -156,7 +156,11 @@ export const makeEvalServiceLive = (store?: EvalStore) =>
   Layer.effect(
     EvalService,
     Effect.gen(function* () {
-      const llm = yield* LLMService;
+      // W9 FIX-21: judge resolves from JudgeLLMService Tag, not LLMService.
+      // The Tags must be wired to different providers in the runtime layer.
+      // The SUT's LLMService is invoked separately when running the agent;
+      // the judge is invoked here when scoring. No code-path overlap.
+      const llm = yield* JudgeLLMService;
       const historyRef = yield* Ref.make<EvalRun[]>([]);
 
       return {
