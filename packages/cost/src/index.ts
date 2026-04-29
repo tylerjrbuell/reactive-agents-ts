@@ -32,6 +32,7 @@ export {
   estimateTokens,
   estimateCost,
 } from "./routing/complexity-router.js";
+export type { RoutingContext } from "./routing/complexity-router.js";
 
 // ─── Caching ───
 export { makeSemanticCache } from "./caching/semantic-cache.js";

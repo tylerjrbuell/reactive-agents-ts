@@ -777,8 +777,8 @@ Status legend: ✅ confirmed | 🟡 partial / corrected | ❌ stale (no action n
 | 29 | ~~`cacheHits` declared but never incremented~~ | ✅ **resolved W8** | `LLMRequestCompleted` gains optional `cached?: boolean`. Collector increments `acc.cacheHits` when `event.cached === true`. `cacheHitRate` now reflects real cache behavior. |
 | 30 | ~~`strategy` only captured on `FinalAnswerProduced`~~ | ✅ **resolved W8** | Subscribed to `ReasoningIterationProgress` (fires every iteration regardless of outcome) so failed tasks get strategy attribution. `FinalAnswerProduced` retained as no-op fallback. First-write-wins (`unknown` guard). |
 | 31 | **MetricsCollector silent fallback** to fresh collector if shared layer missing → undetectable divergence | Medium | `observability/src/observability-service.ts:478-484` |
-| 32 | **Cost router does NOT consult calibration** — tier choice ignores model FC reliability | Medium | `cost/src/complexity-router.ts:192-215` |
-| 33 | **Hardcoded model SHAs in cost are stale** (mid-2025 pin: `claude-haiku-4-5-20251001`, `gpt-4o`, `o3`, `gemini-2.5-pro-preview-03-25`) | Medium | `cost/src/complexity-router.ts` |
+| 32 | ~~**Cost router does NOT consult calibration**~~ | ✅ **resolved W10** | New `RoutingContext` parameter on `analyzeComplexity` / `routeToModel` carries `requiresTools` + per-tier `calibration.toolCallReliability` + `toolReliabilityThreshold` (default 0.5). `escalateForToolReliability()` walks the haiku→sonnet→opus ladder, returning the first tier whose calibration is missing (unknown → assume usable) or meets threshold; falls back to most-reliable tier when all are below. Adds factor `tool-reliability-escalation:<from>-><to>` or `tool-reliability-confirmed`. Pure function, no service lookup; caller translates from their calibration store into the narrow shape. Six new tests in `complexity-router.test.ts`. |
+| 33 | ~~**Hardcoded model SHAs in cost are stale**~~ | ✅ **resolved W10** | Anthropic sonnet → `claude-sonnet-4-6`, opus → `claude-opus-4-7`; gemini sonnet/opus moved off `gemini-2.5-pro-preview-03-25` pin to stable `gemini-2.5-pro`; litellm opus → `claude-opus-4-7`. Sonnet `maxContext` bumped to 1M to match Sonnet 4.6 capability. Haiku already current at `claude-haiku-4-5-20251001`. SHA-refresh sanity test added. |
 | 34 | **AgentMemory port not defined or wired** — services export Effect Tags directly; reasoning couples to `MemoryServiceLive` | Medium | NS §3.1; `core/src/services/` (missing) |
 | 35 | **Sync-only memory DB layer** (`Effect.sync` over bun:sqlite) blocks event loop | Medium | `memory/src/database.ts`, NS G-3 |
 | 36 | **Identity service merged into runtime layer but no consumer reads it** — `IdentityService`, `PermissionManager`, `AuditLogger`, `CertificateAuth` all dormant | Low (DEFER) | `runtime/src/runtime.ts:1346` is sole reference |
@@ -817,7 +817,7 @@ Status legend: ✅ confirmed | 🟡 partial / corrected | ❌ stale (no action n
 - #16 Calibrate p01/p02 RESULTS overclaim
 - ~~#22 Fix or delete `runSuite` placeholder~~ ✅ **resolved W6.5** (FIX-22, T10)
 - #27/#28/#29/#30/#31 Observability/telemetry defects
-- #32/#33 Cost router calibration coupling + SHA refresh
+- ~~#32/#33 Cost router calibration coupling + SHA refresh~~ ✅ **resolved W10**
 - #34 Define `AgentMemory` port
 - ~~#44 Add diagnose smoke tests~~ ✅ **resolved W6.6** (T11 landed; 12/12 pass)
 

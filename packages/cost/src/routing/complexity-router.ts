@@ -24,17 +24,17 @@ const PROVIDER_CONFIGS: Record<Provider, Record<ModelTier, ModelCostConfig>> = {
     sonnet: {
       tier: "sonnet",
       provider: "anthropic",
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-6",
       costPer1MInput: 3.0,
       costPer1MOutput: 15.0,
-      maxContext: 200_000,
-      quality: 0.85,
+      maxContext: 1_000_000,
+      quality: 0.88,
       speedTokensPerSec: 80,
     },
     opus: {
       tier: "opus",
       provider: "anthropic",
-      model: "claude-opus-4-20250514",
+      model: "claude-opus-4-7",
       costPer1MInput: 15.0,
       costPer1MOutput: 75.0,
       maxContext: 1_000_000,
@@ -88,7 +88,7 @@ const PROVIDER_CONFIGS: Record<Provider, Record<ModelTier, ModelCostConfig>> = {
     sonnet: {
       tier: "sonnet",
       provider: "gemini",
-      model: "gemini-2.5-pro-preview-03-25",
+      model: "gemini-2.5-pro",
       costPer1MInput: 1.25,
       costPer1MOutput: 10.0,
       maxContext: 1_000_000,
@@ -98,7 +98,7 @@ const PROVIDER_CONFIGS: Record<Provider, Record<ModelTier, ModelCostConfig>> = {
     opus: {
       tier: "opus",
       provider: "gemini",
-      model: "gemini-2.5-pro-preview-03-25",
+      model: "gemini-2.5-pro",
       costPer1MInput: 1.25,
       costPer1MOutput: 10.0,
       maxContext: 1_000_000,
@@ -162,7 +162,7 @@ const PROVIDER_CONFIGS: Record<Provider, Record<ModelTier, ModelCostConfig>> = {
     opus: {
       tier: "opus",
       provider: "litellm",
-      model: "claude-opus-4-20250514",
+      model: "claude-opus-4-7",
       costPer1MInput: 15.0,
       costPer1MOutput: 75.0,
       maxContext: 1_000_000,
@@ -214,24 +214,105 @@ export const heuristicClassify = (task: string): ModelTier | null => {
   return null;
 };
 
+// ─── Calibration-aware routing context ──────────────────────────────────
+//
+// FIX-32: previously the router picked tiers from heuristics alone — if a
+// model's `toolCallReliability` was poor, the choice ignored that. Callers
+// can now supply `RoutingContext` to bias routing away from unreliable
+// tiers when the task needs reliable tool calls (e.g. agentic flows).
+//
+// The data shape is intentionally narrow (just the fields the router
+// actually consumes) so the cost package doesn't pull a hard dependency on
+// `@reactive-agents/reactive-intelligence` calibration types. Callers
+// translate from their calibration store into this shape.
+
+export interface RoutingContext {
+  /**
+   * When true, the router avoids tiers whose `calibration.toolCallReliability`
+   * is below `toolReliabilityThreshold`. Defaults to false (heuristic-only).
+   */
+  readonly requiresTools?: boolean;
+  /**
+   * Per-tier calibration data. Typically translated from the framework's
+   * calibration store. Tiers without an entry are treated as "unknown" and
+   * the router does NOT escalate past them on unknown-data alone.
+   */
+  readonly calibration?: Partial<
+    Record<ModelTier, { readonly toolCallReliability?: number }>
+  >;
+  /** Minimum acceptable toolCallReliability when requiresTools is true. Default: 0.5 */
+  readonly toolReliabilityThreshold?: number;
+}
+
+const TIER_ORDER: readonly ModelTier[] = ["haiku", "sonnet", "opus"];
+
+/**
+ * Walk the tier ladder from `start` upward, returning the first tier whose
+ * calibration data either is missing (unknown — assume usable) or meets the
+ * threshold. If every tier's calibration is below threshold, return the
+ * highest-reliability tier seen. Pure function — no Effect.
+ */
+function escalateForToolReliability(
+  start: ModelTier,
+  ctx: RoutingContext,
+): { tier: ModelTier; escalatedFrom?: ModelTier } {
+  const threshold = ctx.toolReliabilityThreshold ?? 0.5;
+  const startIdx = TIER_ORDER.indexOf(start);
+  let bestTier = start;
+  let bestReliability = -1;
+  for (let i = startIdx; i < TIER_ORDER.length; i++) {
+    const t = TIER_ORDER[i]!;
+    const r = ctx.calibration?.[t]?.toolCallReliability;
+    if (r === undefined) {
+      // Unknown — assume usable; don't penalize a tier on missing data.
+      return { tier: t, escalatedFrom: i === startIdx ? undefined : start };
+    }
+    if (r >= threshold) {
+      return { tier: t, escalatedFrom: i === startIdx ? undefined : start };
+    }
+    if (r > bestReliability) {
+      bestReliability = r;
+      bestTier = t;
+    }
+  }
+  // No tier met threshold — return the most-reliable tier seen.
+  return { tier: bestTier, escalatedFrom: bestTier === start ? undefined : start };
+}
+
 // ─── Complexity Analysis ───
 
 export const analyzeComplexity = (
   task: string,
   _context?: string,
   provider?: Provider,
+  routingContext?: RoutingContext,
 ): Effect.Effect<ComplexityAnalysis, RoutingError> =>
   Effect.try({
     try: () => {
       const heuristic = heuristicClassify(task);
-      const tier = heuristic ?? "sonnet";
+      let tier = heuristic ?? "sonnet";
+      const factors: string[] = ["heuristic-classification"];
+
+      // FIX-32: when caller supplies calibration + requiresTools, escalate
+      // away from tiers with poor tool-call reliability. Pure tier-ladder
+      // walk; no LLM calls, no service lookup. Caller translates calibration
+      // store data into the narrow shape declared in RoutingContext.
+      if (routingContext?.requiresTools && routingContext?.calibration) {
+        const escalated = escalateForToolReliability(tier, routingContext);
+        if (escalated.escalatedFrom !== undefined) {
+          factors.push(`tool-reliability-escalation:${escalated.escalatedFrom}->${escalated.tier}`);
+          tier = escalated.tier;
+        } else {
+          factors.push("tool-reliability-confirmed");
+        }
+      }
+
       const config = getModelCostConfig(tier, provider);
 
       const score =
         tier === "haiku" ? 0.2 :
         tier === "sonnet" ? 0.5 : 0.9;
 
-      const factors: string[] = ["heuristic-classification"];
       if (/```/.test(task)) factors.push("contains-code");
       if (/\b(step|then|next|finally)\b/i.test(task)) factors.push("multi-step");
       if (/\b(analyze|compare|evaluate)\b/i.test(task)) factors.push("analysis-required");
@@ -253,7 +334,8 @@ export const routeToModel = (
   task: string,
   context?: string,
   provider?: Provider,
+  routingContext?: RoutingContext,
 ): Effect.Effect<ModelCostConfig, RoutingError> =>
-  Effect.map(analyzeComplexity(task, context, provider), (analysis) =>
+  Effect.map(analyzeComplexity(task, context, provider, routingContext), (analysis) =>
     getModelCostConfig(analysis.recommendedTier, provider),
   );

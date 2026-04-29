@@ -7,6 +7,7 @@ import {
   getModelCostConfig,
   estimateTokens,
   estimateCost,
+  type RoutingContext,
 } from "../src/routing/complexity-router.js";
 
 describe("Complexity Router", () => {
@@ -167,6 +168,120 @@ describe("Complexity Router", () => {
     const opus = getModelCostConfig("opus");
     expect(opus.maxContext).toBe(1_000_000);
     expect(opus.speedTokensPerSec).toBe(40);
+  });
+
+  // ─── W10 / FIX-32: calibration-aware tier selection ────────────────────
+
+  test("calibration coupling: escalates haiku→sonnet when haiku tool-reliability is below threshold", async () => {
+    const ctx: RoutingContext = {
+      requiresTools: true,
+      calibration: {
+        haiku: { toolCallReliability: 0.3 },
+        sonnet: { toolCallReliability: 0.85 },
+        opus: { toolCallReliability: 0.95 },
+      },
+    };
+    const result = await Effect.runPromise(
+      analyzeComplexity("What is 2+2?", undefined, undefined, ctx),
+    );
+    // Heuristic would pick haiku for "What is 2+2?" — escalation moves it up.
+    expect(result.recommendedTier).toBe("sonnet");
+    expect(result.factors.some((f) => f.startsWith("tool-reliability-escalation:haiku->sonnet"))).toBe(true);
+  });
+
+  test("calibration coupling: skips escalation when requiresTools is false", async () => {
+    const ctx: RoutingContext = {
+      requiresTools: false,
+      calibration: { haiku: { toolCallReliability: 0.1 } },
+    };
+    const result = await Effect.runPromise(
+      analyzeComplexity("What is 2+2?", undefined, undefined, ctx),
+    );
+    expect(result.recommendedTier).toBe("haiku"); // no escalation
+    expect(result.factors.every((f) => !f.startsWith("tool-reliability-"))).toBe(true);
+  });
+
+  test("calibration coupling: confirms tier when reliability is already above threshold", async () => {
+    const ctx: RoutingContext = {
+      requiresTools: true,
+      calibration: { haiku: { toolCallReliability: 0.9 } },
+    };
+    const result = await Effect.runPromise(
+      analyzeComplexity("What is 2+2?", undefined, undefined, ctx),
+    );
+    expect(result.recommendedTier).toBe("haiku");
+    expect(result.factors).toContain("tool-reliability-confirmed");
+  });
+
+  test("calibration coupling: missing data on a tier does NOT trigger escalation past it", async () => {
+    // Haiku has no calibration entry — treat as unknown, assume usable.
+    const ctx: RoutingContext = {
+      requiresTools: true,
+      calibration: { sonnet: { toolCallReliability: 0.95 } },
+    };
+    const result = await Effect.runPromise(
+      analyzeComplexity("What is 2+2?", undefined, undefined, ctx),
+    );
+    expect(result.recommendedTier).toBe("haiku");
+  });
+
+  test("calibration coupling: when ALL tiers fall below threshold, picks the most reliable one", async () => {
+    const ctx: RoutingContext = {
+      requiresTools: true,
+      calibration: {
+        haiku: { toolCallReliability: 0.1 },
+        sonnet: { toolCallReliability: 0.3 },
+        opus: { toolCallReliability: 0.4 },
+      },
+    };
+    const result = await Effect.runPromise(
+      analyzeComplexity("What is 2+2?", undefined, undefined, ctx),
+    );
+    expect(result.recommendedTier).toBe("opus"); // best of a bad bunch
+    expect(result.factors.some((f) => f.startsWith("tool-reliability-escalation:"))).toBe(true);
+  });
+
+  test("calibration coupling: respects custom toolReliabilityThreshold", async () => {
+    const ctx: RoutingContext = {
+      requiresTools: true,
+      calibration: { haiku: { toolCallReliability: 0.6 } },
+      toolReliabilityThreshold: 0.8, // strict
+    };
+    const result = await Effect.runPromise(
+      analyzeComplexity("What is 2+2?", undefined, undefined, ctx),
+    );
+    expect(result.recommendedTier).not.toBe("haiku"); // 0.6 < 0.8
+  });
+
+  test("routeToModel with calibration context returns escalated tier config", async () => {
+    const ctx: RoutingContext = {
+      requiresTools: true,
+      calibration: {
+        haiku: { toolCallReliability: 0.2 },
+        sonnet: { toolCallReliability: 0.9 },
+      },
+    };
+    const config = await Effect.runPromise(
+      routeToModel("What is 2+2?", undefined, "anthropic", ctx),
+    );
+    expect(config.tier).toBe("sonnet");
+    expect(config.model).toBe("claude-sonnet-4-6"); // FIX-33 SHA refresh
+  });
+
+  // ─── W10 / FIX-33: model SHA refresh sanity ────────────────────────────
+
+  test("model SHAs are refreshed for v0.10 (no stale 2025-05 / preview pins)", () => {
+    const sonnet = getModelCostConfig("sonnet", "anthropic");
+    const opus = getModelCostConfig("opus", "anthropic");
+    const geminiSonnet = getModelCostConfig("sonnet", "gemini");
+
+    // Refresh of stale mid-2025 model IDs
+    expect(sonnet.model).toBe("claude-sonnet-4-6");
+    expect(opus.model).toBe("claude-opus-4-7");
+
+    // Gemini moved off preview pin to stable name
+    expect(geminiSonnet.model).not.toContain("preview");
+    expect(geminiSonnet.model).toBe("gemini-2.5-pro");
   });
 
   test("estimateCost is different for different tiers", () => {
