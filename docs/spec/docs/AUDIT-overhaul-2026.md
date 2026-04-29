@@ -587,9 +587,9 @@ Stage 4 produces a single MEMORY-RECONCILIATION.md log of all changes for tracea
 - **Failure modes addressed:** FM-B2 (verify-loop never converges — claimed), FM-D2 (strategy switch that doesn't recover — known limitation per memory).
 - **Evidence:** Strategy registry in `reasoning/services/strategy-registry.ts`. **Unvalidated end-to-end** — no spike validates that a strategy switch actually breaks the failing pattern.
 - **Health:** ~~**ToT outer loop bypasses early-stop** (FIX-5)~~ ✅ **resolved W5** — `tree-of-thought.ts` now declares `perStrategyRiBudget` + `perStrategyEarlyStop` after services resolution, scores the best frontier thought via `entropySensor`, evaluates decisions through `reactiveController`, dispatches via `services.dispatcher`, accumulates budget across BFS depth iterations, and breaks the outer for-loop when any patch.kind === `early-stop`. Mirrors plan-execute pattern at depth-iteration boundaries (~75 LOC, fully gated on `services` Some). Step record `[TOT] Dispatcher early-stop signal received at depth N — terminating exploration.` emitted on break. Strategy switch infrastructure works but the new strategy still spawns as a sub-kernel that doesn't inherit the parent's intervention budget or early-stop signals (separate concern, deferred).
-- **Verdict:** **FIX (largely complete; T4 regression test outstanding)**
-- **Reason:** ToT bypass closed; remaining work is the cross-strategy parent-budget audit and T4 test.
-- **Stage 5 actions:** ~~Mirror `plan-execute.ts:605,716,741` perRIEarlyStop pattern in `tree-of-thought.ts`.~~ ✅ done in commit `89bbe321`. Audit all strategies for parent-budget inheritance. Add T4 regression test confirming a parent-issued early-stop terminates a ToT sub-kernel.
+- **Verdict:** **FIX (resolved W5; cross-strategy budget-inheritance audit deferred)**
+- **Reason:** ToT bypass closed and regression-tested; remaining work is the cross-strategy parent-budget audit.
+- **Stage 5 actions:** ~~Mirror `plan-execute.ts:605,716,741` perRIEarlyStop pattern in `tree-of-thought.ts`.~~ ✅ done in commit `89bbe321`. ~~Add T4 regression test confirming a parent-issued early-stop terminates a ToT sub-kernel.~~ ✅ done — `tree-of-thought.test.ts` "dispatcher early-stop terminates BFS outer loop at depth 1 (T4 / FIX-5)" asserts dispatchCallCount, `[TOT] Dispatcher early-stop signal received at depth 1` step, and absence of `[TOT d=2]`/`[TOT d=3]` markers. Audit all strategies for parent-budget inheritance (deferred — Reflexion/Adaptive don't currently have nested budget threading).
 
 ##### M3 — Verifier (`agent-took-action` + grounding) + Verifier-driven retry
 
@@ -739,7 +739,7 @@ Status legend: ✅ confirmed | 🟡 partial / corrected | ❌ stale (no action n
 | 2 | `@reactive-agents/diagnose` never published | ✅ | Action in diagnose §10.1. |
 | 3 | ~~qwen3 thinking-mode auto-enabled~~ | ✅ **resolved W7** | Inverted default: thinking is OPT-IN. `resolveThinking()` at `providers/local.ts:226-263` returns `undefined` unless `configThinking === true`. Capability verification still gates explicit opt-in (so granite3.3-style models warn-once and omit instead of erroring at the API). |
 | 4 | Dual compression systems uncoordinated | ✅ | M5 mechanism. Pick curator as canonical; delete or hard-disable parallel `tool-execution.ts` compression. |
-| 5 | ~~ToT outer loop ignores early-stop~~ | ✅ **resolved W5** | Commit `89bbe321`: BFS frontier scored via `entropySensor`; `reactiveController` decision evaluation; `services.dispatcher` dispatch with `perStrategyRiBudget` accumulator across depth iterations; outer for-loop breaks on `patch.kind === "early-stop"`. ~75 LOC, gated on `services` Some so no-dispatcher runs unaffected. Mirrors plan-execute pattern at depth-iteration boundaries. T4 regression test outstanding. |
+| 5 | ~~ToT outer loop ignores early-stop~~ | ✅ **resolved W5** | Commit `89bbe321`: BFS frontier scored via `entropySensor`; `reactiveController` decision evaluation; `services.dispatcher` dispatch with `perStrategyRiBudget` accumulator across depth iterations; outer for-loop breaks on `patch.kind === "early-stop"`. ~75 LOC, gated on `services` Some so no-dispatcher runs unaffected. Mirrors plan-execute pattern at depth-iteration boundaries. T4 regression test added (`tree-of-thought.test.ts` — verifies BFS terminates at depth 1 with stub dispatcher returning `early-stop` patch). |
 | 6 | 3/6 skill lifecycle AgentEvents missing | ✅ **resolved W2** | Events DO exist at `core/services/event-bus.ts:986-990`. Subscribers wired at `builder.ts:2682-2716` (commit on `refactor/overhaul`). |
 | 7 | ~~`MAX_RECURSION_DEPTH = 3` not configurable~~ | ✅ **resolved W7** | New `resolveMaxRecursionDepth()` reads from explicit `SubAgentConfig.maxRecursionDepth` → `REACTIVE_AGENTS_MAX_RECURSION_DEPTH` env var → default 3. Both depth-check sites updated. `MAX_RECURSION_DEPTH` retained as `@deprecated` alias. |
 | 8 | Sub-agent `maxIterations` capped silently | ✅ **already resolved (Apr 17)** | W2 verification: cap is gone. `agent-tool-adapter.ts:212` reads `const effectiveMaxIter = config.maxIterations ?? subAgentDefaults.maxIterations` — user config fully honored. Comment at line 92 confirms. |
@@ -796,7 +796,7 @@ Status legend: ✅ confirmed | 🟡 partial / corrected | ❌ stale (no action n
 
 **P1 (high — strongly degrades release quality):**
 - #4/#20 Pick canonical compression system
-- ~~#5 ToT outer loop early-stop~~ ✅ resolved W5 (T4 regression test outstanding)
+- ~~#5 ToT outer loop early-stop~~ ✅ **resolved W5** (T4 regression test landed)
 - #6 Wire 3 missing skill-hook subscribers
 - #7 Make `MAX_RECURSION_DEPTH` configurable
 - #15 Mark `_unstable_*` per Rule 10 (multiple packages)
