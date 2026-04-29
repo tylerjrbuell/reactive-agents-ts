@@ -149,6 +149,19 @@ export const executeTreeOfThought = (
     const tierLimits = TOT_TIER_LIMITS[input.tier ?? "mid"];
     const effectiveDepth = Math.min(depth, tierLimits.maxBfsDepth);
 
+    // ── W5 FIX-5: ToT outer-loop early-stop wiring ──
+    // Per-strategy RI budget mirrors plan-execute's perStrategyRiBudget so the
+    // dispatcher's suppression gates (maxFiresPerRun, maxInterventionTokenBudget)
+    // see real counts across BFS depth levels. Pre-W5, ToT silently ignored
+    // dispatcher early-stop signals — the outer for-loop ran to completion
+    // even when the controller had decided to terminate. Audit M2 verdict +
+    // FIX-5 / NS §2.5 architectural alignment.
+    let perStrategyEarlyStop = false;
+    const perStrategyRiBudget = {
+      interventionsFiredThisRun: 0,
+      tokensSpentOnInterventions: 0,
+    };
+
     // ── BFS expansion ──
     let bestScorePerDepth: number[] = [];
     for (let d = 1; d <= effectiveDepth; d++) {
@@ -320,10 +333,102 @@ export const executeTreeOfThought = (
         break;
       }
 
+
       // Sort by score and keep top `breadth` nodes for next depth
       frontier = nextFrontier
         .sort((a, b) => b.score - a.score)
         .slice(0, breadth);
+
+      // ── W5 FIX-5: dispatcher early-stop check at end of depth ──
+      // Score the best thought of this depth via entropySensor, evaluate
+      // decisions through the reactive controller, dispatch any patches.
+      // Watch for early-stop. Mirrors plan-execute.ts:605,716,741.
+      if (
+        services.reactiveController._tag === "Some" &&
+        services.dispatcher._tag === "Some" &&
+        services.entropySensor._tag === "Some" &&
+        frontier.length > 0
+      ) {
+        const bestNode = frontier[0]!;
+        const syntheticState = {
+          taskId: input.taskId ?? "tree-of-thought",
+          strategy: "tree-of-thought",
+          kernelType: "tree-of-thought",
+          steps: steps.map((rs) => ({
+            type: rs.type,
+            ...(rs.content != null ? { content: rs.content } : {}),
+          })),
+          toolsUsed: new Set<string>(),
+          iteration: d,
+          tokens: totalTokens,
+          status: "observing",
+          output: null,
+          error: null,
+          meta: {} as Record<string, unknown>,
+        };
+        const scoreResult = yield* services.entropySensor.value
+          .score({
+            thought: bestNode.content,
+            taskDescription: input.taskDescription ?? "",
+            strategy: "tree-of-thought",
+            iteration: d,
+            maxIterations: effectiveDepth,
+            modelId: input.modelId ?? "unknown",
+            temperature: input.temperature ?? 0,
+            kernelState: syntheticState,
+          })
+          .pipe(Effect.catchAll(() => Effect.succeed(null)));
+        if (scoreResult !== null) {
+          const sources = (scoreResult as Record<string, unknown>)["sources"] as Record<string, number> | undefined;
+          const decisions = yield* services.reactiveController.value
+            .evaluate({
+              entropyHistory: [{
+                composite: scoreResult.composite,
+                trajectory: scoreResult.trajectory,
+              }],
+              iteration: d,
+              maxIterations: effectiveDepth,
+              strategy: "tree-of-thought",
+              calibration: { highEntropyThreshold: 0.8, convergenceThreshold: 0.4, calibrated: false, sampleCount: 0 },
+              config: { earlyStop: true, contextCompression: false, strategySwitch: false },
+              contextPressure: sources?.["contextPressure"] ?? 0,
+              behavioralLoopScore: sources?.["behavioral"] ?? 0,
+              currentTemperature: input.temperature,
+            })
+            .pipe(Effect.catchAll(() => Effect.succeed([])));
+          if (decisions.length > 0) {
+            const dispatchContext = {
+              iteration: d,
+              entropyScore: {
+                composite: scoreResult.composite,
+                token: 0,
+                structural: sources?.["structural"] ?? 0,
+                semantic: sources?.["semantic"] ?? 0,
+                behavioral: sources?.["behavioral"] ?? 0,
+                contextPressure: sources?.["contextPressure"] ?? 0,
+              },
+              recentDecisions: decisions as readonly { readonly decision: string; readonly reason: string }[],
+              budget: {
+                interventionsFiredThisRun: perStrategyRiBudget.interventionsFiredThisRun,
+                tokensSpentOnInterventions: perStrategyRiBudget.tokensSpentOnInterventions,
+              },
+            };
+            const dispatchResult = yield* services.dispatcher.value
+              .dispatch(decisions as readonly { readonly decision: string; readonly reason: string }[], {}, dispatchContext)
+              .pipe(Effect.catchAll(() => Effect.succeed({ appliedPatches: [], skipped: [], totalCost: { tokens: 0, latencyMs: 0 } })));
+            perStrategyRiBudget.interventionsFiredThisRun += dispatchResult.appliedPatches.length;
+            perStrategyRiBudget.tokensSpentOnInterventions += dispatchResult.totalCost.tokens;
+            for (const patch of dispatchResult.appliedPatches) {
+              if (patch.kind === "early-stop") perStrategyEarlyStop = true;
+            }
+          }
+        }
+      }
+
+      if (perStrategyEarlyStop) {
+        steps.push(makeStep("observation", `[TOT] Dispatcher early-stop signal received at depth ${d} — terminating exploration.`));
+        break;
+      }
     }
 
     // ── Select best path ──
