@@ -1,6 +1,6 @@
 # Reactive Agents — Roadmap
 
-> **Last updated:** 2026-04-28 (refactor/overhaul)
+> **Last updated:** 2026-04-29 (refactor/overhaul — Stage 5 nearly complete, Stage 6 next)
 > **The open-source agent framework built for control, not magic.**
 
 This roadmap describes what's shipping, what's `_unstable_*`, and what's deferred. The detailed execution plan for the current overhaul lives in `docs/spec/docs/AUDIT-overhaul-2026.md` §15 (Stage 5 Wave sequencing).
@@ -9,69 +9,84 @@ This roadmap describes what's shipping, what's `_unstable_*`, and what's deferre
 
 ## Current state
 
-- **v0.9.0** is published on npm (most workspace packages).
-- **`refactor/overhaul`** branch is the working trunk. 100+ commits since `main`. Audit complete (28 packages + 13 mechanisms + 44-item FIX backlog).
-- **v0.10.0** is the next release — a clean-break overhaul targeting verified quality gates. Detailed plan in `AUDIT-overhaul-2026.md`.
+- **v0.9.0** is published on npm (most workspace packages, including the `reactive-agents` umbrella — the prior "404 today" claim was stale per W14 npm-stats check).
+- **`refactor/overhaul`** branch is the working trunk. Audit complete (28 packages + 13 mechanisms + 44-item FIX backlog). Stage 5 closed waves W2–W19 — most backlog items resolved or deferred with rationale.
+- **v0.10.0** is the next release — a clean-break overhaul targeting verified quality gates. Detailed plan in `AUDIT-overhaul-2026.md`. CI release workflow handles publishing.
 
 ---
 
-## v0.10.0 — Overhaul Release (in progress)
+## v0.10.0 — Overhaul Release (Stage 5 → Stage 6)
 
 **Goal:** stable foundation that future work can build on. Verified quality gates, no half-broken systems.
 
-### P0 release blockers (must ship)
+### P0 release blockers — all closed or CI-handled
 
-1. Publish umbrella `reactive-agents` to npm (currently `npm install reactive-agents` returns 404).
-2. Publish `@reactive-agents/diagnose` to npm.
-3. Fix qwen3 thinking-mode auto-enable at `llm-provider/src/providers/local.ts:226-251` (empties output on qwen3 today).
-4. **Collapse 9 termination paths to single-owner via the Arbitrator.** NS §2.5 architectural blocker — the corpus-failure root cause. CHANGE A wired the oracle into 1 of 9; the other 8 bypass it.
-5. Fix eval Rule 4 frozen-judge — separate `JudgeLLMService` Tag, `judge.model !== sut.model` guard, code-SHA pinning. Required for any benchmark claim.
+1. ~~Publish umbrella `reactive-agents`~~ ❌ **stale claim (W14)** — already on npm at v0.9.0; v0.10 update ships via CI release workflow.
+2. ~~Publish `@reactive-agents/diagnose`~~ — confirmed absent from registry; ships via CI release workflow at v0.10.0.
+3. ~~Fix qwen3 thinking-mode auto-enable~~ ✅ **W7** (`resolveThinking` now opt-in + capability-gated).
+4. ~~Collapse 9 termination paths to single-owner via the Arbitrator~~ ✅ **W4** (8 imperative sites in `runner.ts` route through `kernel/loop/terminate.ts`; CI lint at `scripts/check-termination-paths.sh`).
+5. ~~Eval Rule 4 frozen-judge~~ ✅ **W9** (separate `JudgeLLMService` Tag, code-path isolation, runtime guard added in W6.5/T10).
 
-### P1 (high — strongly degrades release quality)
+### P1 (high) — closed
 
-- Pick canonical compression system (curator); delete or hard-disable parallel `tool-execution.ts` compression
-- ToT outer loop honors early-stop (mirror `plan-execute.ts` perRIEarlyStop pattern)
-- Wire 3 missing skill-hook subscribers (`onSkillActivated` / `onSkillRefined` / `onSkillConflict`)
-- Make `MAX_RECURSION_DEPTH` configurable; remove silent `Math.min(value, 3)` cap on sub-agent `maxIterations`
-- Mark `_unstable_*` per Rule 10 across multiple packages (llm-provider has 14+ surfaces missing markers)
-- SHRINK `execution-engine.ts` (4,476 LOC → ~1,500) and `builder.ts` (5,877 LOC → ~2,500) per NS §6
-- Thread RI budget counters through dispatch context (suppression gates currently unreachable)
-- Resolve duplicate `AgentConfigSchema` (rename core's to `AgentDefinitionSchema`)
+- ~~Pick canonical compression system~~ ✅ **W6** (resolved-by-discovery; the three mechanisms form a sequenced pipeline, not redundant compressors)
+- ~~ToT outer loop honors early-stop~~ ✅ **W5** (BFS frontier + dispatcher; T4 regression test landed)
+- ~~Wire 3 missing skill-hook subscribers~~ ✅ **W2**
+- ~~Make `MAX_RECURSION_DEPTH` configurable~~ ✅ **W7**
+- **#15 Mark `_unstable_*` per Rule 10** ⏸️ deferred to v0.11+ per W14 npm-stats check (~135–400 dl/30d per package; pure consumer-signaling work without a consumer population to discipline)
+- **#19/#24 SHRINK ExecutionEngine + builder.ts** ⏸️ deferred (multi-session work; not gating)
+- ~~Thread RI budget counters through dispatch context~~ ✅ **W3**
+- ~~Resolve duplicate `AgentConfigSchema`~~ ✅ **W2**
 
-### P2 (medium — quality-of-life)
+### P2 (medium) — closed or deferred with rationale
 
-- Default observability ON (currently OFF at `runtime.ts:1349`)
-- TTY-conditional `Logger.none` only (currently silences all `Effect.log*` unconditionally)
-- Add `engines: { bun: ">=1.1" }` + Node fallback for `bun:sqlite` consumers
-- Delete `FRAMEWORK_INDEX.md` (done — paths were broken)
-- Calibrate `RESULTS-p01.md` + `RESULTS-p02.md` overclaim language per Rule 11
-- Fix or delete eval `runSuite` placeholder
-- Fix telemetry-collector defects (token estimate, `cacheHits` unwired, strategy attribution biased, MetricsCollector silent fallback)
-- Cost router calibration coupling + model SHA refresh
-- Define `AgentMemory` port in `core` and wire reasoning to it
+- ~~Default observability ON~~ ✅ already true at `builder.ts:896` (audit row 10 stale claim)
+- **#27 TTY-conditional `Logger.none`** — designed-as-intended trade-off (W8 inspection); v0.11 follow-up if structured-logger wrapping ships
+- ~~`engines: { bun: ">=1.1.0" }`~~ ✅ **W12** (8 published packages + umbrella; guard test pins the contract)
+- ~~Delete `FRAMEWORK_INDEX.md`~~ ✅ done (Stage 4); ~~AGENTS.md references purged~~ ✅ **W13**
+- ~~Calibrate p01/p02 RESULTS overclaim~~ ✅ **W13** (Rule 11 calibration was already in place)
+- ~~Fix eval `runSuite` placeholder~~ ✅ **W6.5** (new `SuiteAgentRunner` parameter; T10 frozen-judge guard test)
+- ~~Telemetry-collector defects~~ ✅ **W8** (token split, `cacheHits`, strategy attribution); ~~MetricsCollector silent fallback~~ ✅ **W13**
+- ~~Cost router calibration coupling + SHA refresh~~ ✅ **W10**
+- ~~Define `AgentMemory` port in `core`~~ ✅ **W11** (Phase-2 prep; tool-execution semantic write decoupled, plan-store decoupling deferred to v0.11)
+- ~~Add diagnose smoke tests~~ ✅ **W6.6** (12 T11 tests covering resolve / replay / grep / diff)
 
-### P3 (low — cleanup, can defer to v0.10.1 if scope creeps)
+### P3 (low) — closed or explicitly deferred
 
-- `rax demo` authenticity (currently scripted)
-- `rax init` provider neutrality (currently hardcodes Anthropic)
-- Async memory DB layer (currently sync `Effect.sync` blocks event loop)
-- Delete 4 dead RI handler files; delete dead `recommendStrategyForTier`; resolve `ProviderCapabilities` deprecation
-- `_unstable_gate_*` / `_unstable_*` markers on testing/gate, prompts/ExperimentService, react/svelte/vue
-- Wire identity service into tool execution (currently dormant — `IdentityService`, `PermissionManager`, `AuditLogger`, `CertificateAuth` all merged into runtime layer but no consumer reads it)
+- ~~`rax demo` authenticity~~ ✅ **W15** (was already real; freshened to live HN tool call + canonical `defineTool`)
+- ~~`rax demo` TUI fidelity~~ ✅ **W15.1** (TerminalReplay rewrite — live-region with panel + status mirrors `StatusRenderer`)
+- ~~`rax init` provider neutrality~~ ✅ **W16** (PROVIDER_PROFILES, provider-aware `.env.example` + README, `.withModel` on all templates)
+- **#35 Async memory DB layer** ⏸️ deferred to v0.11 (W18 — `bun:sqlite` is sync-by-API; cosmetic `Effect.promise` rejected; trigger conditions in audit row)
+- ~~Delete 4 dead RI handler files~~ ❌ **stale (W2)** — 4 names are intentionally retained `controller/evaluators/` files
+- ~~Delete dead `recommendStrategyForTier`~~ ✅ **W2**
+- ~~Resolve `ProviderCapabilities` deprecation~~ ✅ **W13** (full deprecation block + scheduled v0.11.0 removal target + migration guide)
+- **#40-43 `_unstable_*` markers on testing/gate, prompts/ExperimentService, react/svelte/vue** ⏸️ deferred to v0.11+ (same npm-stats rationale as #15)
+- **#36 Wire identity into tool execution** ⏸️ deferred to v0.11 (W19 — `AuditLogger` needs durable backing first; `PermissionManager` seed policy unsettled; `CertificateAuth` gated on a2a)
+- ~~Re-run AUC after RI dispatcher fix~~ ✅ **W17** (dispatch AUC `0.000 → 1.000` on N=8; entropy AUC `0.500` — bigger corpus is v0.11 follow-up)
 
 ---
 
-## v0.11.0 — Post-Overhaul Validation (next)
+## v0.11.0 — Post-Overhaul Validation + Deferred Structural Work (next)
 
-After v0.10.0 ships clean, the work shifts from structural fixes to spike-driven validation per `00-RESEARCH-DISCIPLINE.md`.
+After v0.10.0 ships clean, the work shifts from structural fixes to spike-driven validation per `00-RESEARCH-DISCIPLINE.md`, plus the pieces v0.10 explicitly deferred.
+
+### Validation (Rule 6 spike-driven)
 
 - Spike-validate the healing pipeline (4 stages × per-tier matrix). Currently unvalidated — claims exceed evidence.
 - Spike-validate the verifier-driven retry mechanism on a frontier model (claude-haiku) — currently single-model evidence.
-- Re-run AUC corpus probe after RI dispatcher fix; report dispatched/skipped per skip-reason.
+- Expand AUC corpus from N=8 → ≥30 tasks across diverse failure modes. W17 confirmed dispatch AUC `1.000` on N=8 post-W3 (entropy AUC `0.500` — flat for local models without logprobs); generalization claim needs the bigger corpus.
 - Spike-validate FM-C1 (shallow reasoning / red herring) — currently `UNMITIGATED`. Top priority in `01-FAILURE-MODES.md` queue.
 - Spike-validate FM-D1 (premature termination) — claimed mitigation, never empirically tested.
 - Cross-provider expansion: add claude-haiku to spike matrix as one frontier reference.
-- Strengthen UI integrations: validate react/svelte/vue against runtime SSE contract.
+
+### Structural work deferred from v0.10
+
+- **`_unstable_*` markers per Rule 10** (#15, #40-43): re-evaluate when adoption justifies the semver discipline. v0.11 trigger if downloads cross 1k/30d/package or external consumers report API churn.
+- **SHRINK ExecutionEngine + builder.ts** (#19/#24): 4,476 + 5,877 LOC respectively. Multi-session work; preserve test green at every commit.
+- **Async memory DB layer** (#35, NS G-3): worker-thread architecture — Bun.Worker hosting bun:sqlite, message-passed queries. Triggers logged in audit row.
+- **Identity wiring** (#36): start with `AuditLogger` → EventBus subscriber once a durable backing store lands. `PermissionManager` + `CertificateAuth` follow the multi-agent orchestration spec.
+- **Plan-store decoupling**: W11 scoped FIX-34 to `tool-execution.storeSemantic`; `plan-execute.ts:21`'s `PlanStoreService` import remains and is the next AgentMemory-port surface.
+- **Strengthen UI integrations**: validate react/svelte/vue against runtime SSE contract.
 
 ---
 
