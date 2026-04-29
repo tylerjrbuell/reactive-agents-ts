@@ -1,9 +1,10 @@
 // File: tests/strategies/tree-of-thought.test.ts
 import { describe, it, expect } from "bun:test";
-import { Effect } from "effect";
+import { Context, Effect, Layer } from "effect";
 import { executeTreeOfThought } from "../../src/strategies/tree-of-thought.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
+import { EntropySensorService } from "@reactive-agents/core";
 
 describe("TreeOfThoughtStrategy", () => {
   it("should execute tree exploration and return completed result", async () => {
@@ -207,6 +208,129 @@ describe("TreeOfThoughtStrategy", () => {
     expect(result.strategy).toBe("tree-of-thought");
     expect(result.status).toBe("completed");
     expect(result.output).toBeTruthy();
+  });
+
+  // ── T4 (W5 FIX-5 regression) ────────────────────────────────────────────
+  // Verifies that a parent-issued early-stop dispatched at depth 1 terminates
+  // the BFS outer loop before reaching configured depth (3 here). Mirrors the
+  // wiring in tree-of-thought.ts:342-431 added in commit 89bbe321.
+  it("dispatcher early-stop terminates BFS outer loop at depth 1 (T4 / FIX-5)", async () => {
+    const llmLayer = TestLLMServiceLayer([
+      { match: "Generate exactly", text: "1. Approach A\n2. Approach B" },
+      { match: "Rate this thought", text: "0.9" },
+      { match: "Selected Approach", text: "FINAL ANSWER: stopped early." },
+    ]);
+
+    // Stub EntropySensorService — returns a single high-entropy score so the
+    // controller has a non-empty entropyHistory to act on. Phase 2 synthesis
+    // spawns a sub-kernel that also touches getCalibration / updateCalibration
+    // / getTrajectory / scoreContext, so those are stubbed too.
+    const calibrationStub = {
+      modelId: "test",
+      calibrated: false,
+      sampleCount: 0,
+      highEntropyThreshold: 0.8,
+      convergenceThreshold: 0.4,
+    };
+    const entropySensorLayer = Layer.succeed(EntropySensorService, {
+      score: () =>
+        Effect.succeed({
+          composite: 0.9,
+          sources: { token: 0, structural: 0.9, semantic: 0, behavioral: 0, contextPressure: 0 },
+          trajectory: { derivative: 0, shape: "stable", momentum: 0 },
+          confidence: "high" as const,
+          modelTier: "unknown" as const,
+          iteration: 0,
+          iterationWeight: 1,
+          timestamp: Date.now(),
+        }),
+      scoreContext: () =>
+        Effect.succeed({
+          utilizationPct: 0,
+          sections: [],
+          atRiskSections: [],
+          compressionHeadroom: 1,
+        }),
+      getCalibration: () => Effect.succeed(calibrationStub),
+      updateCalibration: () => Effect.succeed(calibrationStub),
+      getTrajectory: () =>
+        Effect.succeed({ history: [], derivative: 0, momentum: 0, shape: "stable" }),
+    } as any);
+
+    // Stub ReactiveControllerService via GenericTag matching the name in
+    // service-utils.ts:76. Returns a single early-stop decision.
+    const ReactiveControllerTag = Context.GenericTag<{
+      readonly evaluate: (...args: any[]) => Effect.Effect<readonly { decision: string; reason: string }[]>;
+    }>("ReactiveControllerService");
+    const controllerLayer = Layer.succeed(ReactiveControllerTag, {
+      evaluate: () =>
+        Effect.succeed([{ decision: "early-stop", reason: "T4 stub forces early-stop" }]),
+    });
+
+    // Stub InterventionDispatcherService via GenericTag matching the name in
+    // service-utils.ts:109. Returns appliedPatches with kind: "early-stop"
+    // — this is the signal tree-of-thought.ts:422 sets perStrategyEarlyStop on.
+    let dispatchCallCount = 0;
+    const InterventionDispatcherTag = Context.GenericTag<{
+      readonly dispatch: (...args: any[]) => Effect.Effect<{
+        readonly appliedPatches: readonly { readonly kind: string }[];
+        readonly skipped: readonly { decisionType: string; reason: string }[];
+        readonly totalCost: { tokens: number; latencyMs: number };
+      }>;
+    }>("InterventionDispatcherService");
+    const dispatcherLayer = Layer.succeed(InterventionDispatcherTag, {
+      dispatch: () => {
+        dispatchCallCount += 1;
+        return Effect.succeed({
+          appliedPatches: [{ kind: "early-stop" }],
+          skipped: [],
+          totalCost: { tokens: 50, latencyMs: 10 },
+        });
+      },
+    });
+
+    const fullLayer = Layer.mergeAll(llmLayer, entropySensorLayer, controllerLayer, dispatcherLayer);
+
+    const program = executeTreeOfThought({
+      taskDescription: "Test BFS early-stop",
+      taskType: "query",
+      memoryContext: "",
+      availableTools: [],
+      config: {
+        ...defaultReasoningConfig,
+        strategies: {
+          ...defaultReasoningConfig.strategies,
+          // depth: 3 so we can verify break before exhausting all depths
+          treeOfThought: { breadth: 2, depth: 3, pruningThreshold: 0.3 },
+        },
+      },
+    });
+
+    const result = await Effect.runPromise(program.pipe(Effect.provide(fullLayer)));
+
+    // 1. Dispatcher fired at least once (BFS loop dispatch at depth 1).
+    //    Phase 2 synthesis sub-kernel may also call dispatch independently,
+    //    so the assertion is >= 1 here.
+    expect(dispatchCallCount).toBeGreaterThanOrEqual(1);
+
+    // 2. Early-stop step record present (proves the BFS break ran)
+    const earlyStopStep = result.steps.find((s) =>
+      s.content.includes("Dispatcher early-stop signal received at depth 1"),
+    );
+    expect(earlyStopStep).toBeDefined();
+
+    // 3. BFS terminated at depth 1: scoring-step markers `[TOT d=N]` only
+    //    appear for d=1 — depths 2 and 3 are never explored.
+    const totDepthMarkers = result.steps.filter((s) =>
+      /\[TOT d=(\d+)\]/.test(s.content),
+    );
+    const maxDepthSeen = totDepthMarkers
+      .map((s) => Number(s.content.match(/\[TOT d=(\d+)\]/)?.[1] ?? 0))
+      .reduce((a, b) => Math.max(a, b), 0);
+    expect(maxDepthSeen).toBe(1);
+
+    // 4. Strategy still completes (Phase 2 synthesis runs on best-so-far)
+    expect(result.strategy).toBe("tree-of-thought");
   });
 
   it("Phase 2 execution produces a structured final answer via kernel", async () => {
