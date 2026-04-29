@@ -144,7 +144,15 @@ export interface StrategySwitchedEvent extends TraceEventBase {
  */
 export interface KernelStateSnapshotEvent extends TraceEventBase {
   readonly kind: "kernel-state-snapshot"
-  readonly status: "thinking" | "done" | "failed" | "paused"
+  // Mirror of KernelStatus (kernel-state.ts). "paused" reserved for future explicit-pause flows.
+  readonly status:
+    | "thinking"
+    | "acting"
+    | "observing"
+    | "done"
+    | "failed"
+    | "evaluating"
+    | "paused"
   readonly toolsUsed: readonly string[]
   readonly scratchpadKeys: readonly string[]
   readonly stepsCount: number

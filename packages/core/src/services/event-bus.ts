@@ -894,7 +894,16 @@ export type AgentEvent =
       readonly _tag: "KernelStateSnapshotEmitted";
       readonly taskId: string;
       readonly iteration: number;
-      readonly status: "thinking" | "done" | "failed" | "paused";
+      // Mirror of KernelStatus (kernel-state.ts:25). "paused" is reserved for
+      // future explicit-pause flows; the active runtime emits the other 6.
+      readonly status:
+        | "thinking"
+        | "acting"
+        | "observing"
+        | "done"
+        | "failed"
+        | "evaluating"
+        | "paused";
       readonly toolsUsed: readonly string[];
       readonly scratchpadKeys: readonly string[];
       readonly stepsCount: number;

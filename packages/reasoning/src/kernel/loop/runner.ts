@@ -638,7 +638,7 @@ export function runKernel(
       // Cortex UI a per-iteration baseline of what the agent saw.
       yield* emitKernelStateSnapshot({
         state,
-        taskId: currentOptions.taskId,
+        taskId: currentOptions.taskId ?? state.taskId,
         iteration: state.iteration,
       });
 
@@ -895,7 +895,7 @@ export function runKernel(
             `Required tool quota not met: ${missingRequiredByCount.join(", ")}. ` +
             `Continue calling the missing required tool(s) before attempting completion.`;
           yield* emitHarnessSignalInjected({
-            taskId: currentOptions.taskId,
+            taskId: currentOptions.taskId ?? state.taskId,
             iteration: state.iteration,
             signalKind: "nudge",
             origin: "runner.ts:875",
@@ -925,7 +925,7 @@ export function runKernel(
           );
 
           yield* emitHarnessSignalInjected({
-            taskId: currentOptions.taskId,
+            taskId: currentOptions.taskId ?? state.taskId,
             iteration: state.iteration,
             signalKind: "redirect",
             origin: "runner.ts:897",
@@ -1204,7 +1204,7 @@ export function runKernel(
               "loop",
             );
             yield* emitHarnessSignalInjected({
-              taskId: currentOptions.taskId,
+              taskId: currentOptions.taskId ?? state.taskId,
               iteration: state.iteration,
               signalKind: "redirect",
               origin: "runner.ts:1173",
@@ -1241,7 +1241,7 @@ export function runKernel(
                 `Loop detected but required tool quota is still missing: ${missingRequiredByCount.join(", ")}. ` +
                 `Call the missing required tool(s) now instead of finalizing.`;
               yield* emitHarnessSignalInjected({
-                taskId: currentOptions.taskId,
+                taskId: currentOptions.taskId ?? state.taskId,
                 iteration: state.iteration,
                 signalKind: "nudge",
                 origin: "runner.ts:1199",
@@ -1375,7 +1375,7 @@ export function runKernel(
           // case, so without this branch every run would record 2 identical
           // verdict events for the same output.
           yield* emitVerifierVerdict({
-            taskId: currentOptions.taskId,
+            taskId: currentOptions.taskId ?? state.taskId,
             iteration: state.iteration,
             action: verdict.action,
             terminal: true,
@@ -1403,7 +1403,7 @@ export function runKernel(
             const signalText = decision.signalText ?? fallbackText;
             const signalStep = makeStep("observation", signalText);
             yield* emitHarnessSignalInjected({
-              taskId: currentOptions.taskId,
+              taskId: currentOptions.taskId ?? state.taskId,
               iteration: state.iteration,
               signalKind: "redirect",
               content: signalText,
@@ -1426,7 +1426,7 @@ export function runKernel(
       // 2026-04-27 (T4: 6 events, status=done invisible).
       yield* emitKernelStateSnapshot({
         state,
-        taskId: currentOptions.taskId,
+        taskId: currentOptions.taskId ?? state.taskId,
         iteration: state.iteration,
       });
     }
@@ -1560,7 +1560,7 @@ export function runKernel(
     // or some intermediate state.
     yield* emitKernelStateSnapshot({
       state,
-      taskId: currentOptions.taskId,
+      taskId: currentOptions.taskId ?? state.taskId,
       iteration: state.iteration,
     });
 
@@ -1589,7 +1589,7 @@ export function runKernel(
       });
       // Emit structured verdict to trace stream (replaces DEBUG_VERIFIER console).
       yield* emitVerifierVerdict({
-        taskId: currentOptions.taskId,
+        taskId: currentOptions.taskId ?? state.taskId,
         iteration: state.iteration,
         action: verdict.action,
         terminal: true,
