@@ -707,6 +707,26 @@ Stage 4 produces a single MEMORY-RECONCILIATION.md log of all changes for tracea
 
 ---
 
+## 10.5 Empirical — failure-corpus 3/8 → 8/8 (Stage 5 quality fix, 2026-04-28)
+
+A scratch run on cogito:14b + failure-corpus rerun surfaced three independent verifier/observability defects compounding into systemic quality damage. Prior to fix, the framework was actively rejecting legitimate answers and showing "Status: Success" on failed runs.
+
+**Empirical delta:**
+
+| Run | Correct booleans | Entropy gap (success vs failure) |
+|---|---|---|
+| Before fix | 3/8 (4/4 successes incorrectly failed) | -0.038 (no signal) |
+| After fix | **8/8** | +0.257 (clear signal) |
+
+**Defects (all in same Stage-5 commit):**
+1. **`agent-took-action`** fired on every wired tool (not just `requiredTools`) — trivial tasks like "capital of France" got rejected because they didn't call any tool, even though answer was correct. Fix: gate on explicit user `requiredTools`.
+2. **`synthesis-grounded`** Title-Case extractor produced 64-73% ungrounded rates on legitimate paraphrased summaries (HN digests, search results) because section labels and abridged titles count as "claims." Fix: split the check — compression-marker detection stays always-on (zero false-positive risk); substring claim-grounding becomes opt-in via `enableClaimGrounding`.
+3. **Status display lie** — `console-exporter.ts` computed status from phase health, ignoring the actual kernel-level success. Showed "Status: Success" on verifier-rejected runs. Fix: emit `execution.success` gauge from runtime; exporter prefers it over phase inference.
+
+**This is the single largest quality improvement of the overhaul so far.** Nothing else moved the failure-corpus score this much.
+
+---
+
 ## 11. FIX backlog — Stage 3 reconciled
 
 Status legend: ✅ confirmed | 🟡 partial / corrected | ❌ stale (no action needed) | 🆕 newly discovered.
